@@ -83,8 +83,13 @@ prefix-1	3	7
 prefix-1	0	9
 
 # Test partitioning by all
-statement ok
+statement error
 COPY test TO 's3://test-bucket/partitioned3' (FORMAT PARQUET, PARTITION_BY '*', OVERWRITE_OR_IGNORE TRUE);
+----
+No column to write as all columns are specified as partition columns
+
+statement ok
+COPY test TO 's3://test-bucket/partitioned3' (FORMAT PARQUET, PARTITION_BY '*', OVERWRITE_OR_IGNORE TRUE, WRITE_PARTITION_COLUMNS 1);
 
 query I
 SELECT min(value2_col) as min_val

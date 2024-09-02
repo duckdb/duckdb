@@ -22,6 +22,7 @@ metrics = [
     "CUMULATIVE_ROWS_SCANNED",
     "OPERATOR_ROWS_SCANNED",
     "OPERATOR_TIMING",
+    "RESULT_SET_SIZE",
 ]
 
 phase_timing_metrics = [

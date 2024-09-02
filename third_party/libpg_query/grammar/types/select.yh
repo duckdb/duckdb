@@ -9,7 +9,7 @@
 %type <node> opt_collate_clause
 
 %type <node> indirection_expr indirection_expr_or_a_expr
-%type <node> struct_expr list_expr
+%type <node> struct_expr list_expr map_expr
 
 
 %type <lockwaitpolicy>	opt_nowait_or_skip

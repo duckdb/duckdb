@@ -6,6 +6,7 @@ add_library_unity(
   map_from_entries.cpp
   map_entries.cpp
   map_concat.cpp
+  map_contains.cpp
   map_keys_values.cpp
   cardinality.cpp)
 

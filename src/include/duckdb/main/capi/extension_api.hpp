@@ -263,7 +263,6 @@ typedef struct {
 	bool (*duckdb_task_state_is_finished)(duckdb_task_state state);
 	void (*duckdb_destroy_task_state)(duckdb_task_state state);
 	bool (*duckdb_execution_is_finished)(duckdb_connection con);
-	// v0.0.2
 	duckdb_profiling_info (*duckdb_get_profiling_info)(duckdb_connection connection);
 	duckdb_value (*duckdb_profiling_info_get_value)(duckdb_profiling_info info, const char *key);
 	idx_t (*duckdb_profiling_info_get_child_count)(duckdb_profiling_info info);
@@ -330,9 +329,6 @@ typedef struct {
 	idx_t (*duckdb_get_map_size)(duckdb_value value);
 	duckdb_value (*duckdb_get_map_key)(duckdb_value value, idx_t index);
 	duckdb_value (*duckdb_get_map_value)(duckdb_value value, idx_t index);
-	// dev
-	// WARNING! the functions below are not (yet) stable
-
 	duckdb_aggregate_function (*duckdb_create_aggregate_function)();
 	void (*duckdb_destroy_aggregate_function)(duckdb_aggregate_function *aggregate_function);
 	void (*duckdb_aggregate_function_set_name)(duckdb_aggregate_function aggregate_function, const char *name);
@@ -372,6 +368,60 @@ typedef struct {
 	                                           duckdb_vector output);
 	duckdb_state (*duckdb_register_cast_function)(duckdb_connection con, duckdb_cast_function cast_function);
 	void (*duckdb_destroy_cast_function)(duckdb_cast_function *cast_function);
+	idx_t (*duckdb_row_count)(duckdb_result *result);
+	void *(*duckdb_column_data)(duckdb_result *result, idx_t col);
+	bool *(*duckdb_nullmask_data)(duckdb_result *result, idx_t col);
+	duckdb_data_chunk (*duckdb_result_get_chunk)(duckdb_result result, idx_t chunk_index);
+	bool (*duckdb_result_is_streaming)(duckdb_result result);
+	idx_t (*duckdb_result_chunk_count)(duckdb_result result);
+	duckdb_result_type (*duckdb_result_return_type)(duckdb_result result);
+	bool (*duckdb_value_boolean)(duckdb_result *result, idx_t col, idx_t row);
+	int8_t (*duckdb_value_int8)(duckdb_result *result, idx_t col, idx_t row);
+	int16_t (*duckdb_value_int16)(duckdb_result *result, idx_t col, idx_t row);
+	int32_t (*duckdb_value_int32)(duckdb_result *result, idx_t col, idx_t row);
+	int64_t (*duckdb_value_int64)(duckdb_result *result, idx_t col, idx_t row);
+	duckdb_hugeint (*duckdb_value_hugeint)(duckdb_result *result, idx_t col, idx_t row);
+	duckdb_uhugeint (*duckdb_value_uhugeint)(duckdb_result *result, idx_t col, idx_t row);
+	duckdb_decimal (*duckdb_value_decimal)(duckdb_result *result, idx_t col, idx_t row);
+	uint8_t (*duckdb_value_uint8)(duckdb_result *result, idx_t col, idx_t row);
+	uint16_t (*duckdb_value_uint16)(duckdb_result *result, idx_t col, idx_t row);
+	uint32_t (*duckdb_value_uint32)(duckdb_result *result, idx_t col, idx_t row);
+	uint64_t (*duckdb_value_uint64)(duckdb_result *result, idx_t col, idx_t row);
+	float (*duckdb_value_float)(duckdb_result *result, idx_t col, idx_t row);
+	double (*duckdb_value_double)(duckdb_result *result, idx_t col, idx_t row);
+	duckdb_date (*duckdb_value_date)(duckdb_result *result, idx_t col, idx_t row);
+	duckdb_time (*duckdb_value_time)(duckdb_result *result, idx_t col, idx_t row);
+	duckdb_timestamp (*duckdb_value_timestamp)(duckdb_result *result, idx_t col, idx_t row);
+	duckdb_interval (*duckdb_value_interval)(duckdb_result *result, idx_t col, idx_t row);
+	char *(*duckdb_value_varchar)(duckdb_result *result, idx_t col, idx_t row);
+	duckdb_string (*duckdb_value_string)(duckdb_result *result, idx_t col, idx_t row);
+	char *(*duckdb_value_varchar_internal)(duckdb_result *result, idx_t col, idx_t row);
+	duckdb_string (*duckdb_value_string_internal)(duckdb_result *result, idx_t col, idx_t row);
+	duckdb_blob (*duckdb_value_blob)(duckdb_result *result, idx_t col, idx_t row);
+	bool (*duckdb_value_is_null)(duckdb_result *result, idx_t col, idx_t row);
+	duckdb_state (*duckdb_execute_prepared_streaming)(duckdb_prepared_statement prepared_statement,
+	                                                  duckdb_result *out_result);
+	duckdb_state (*duckdb_pending_prepared_streaming)(duckdb_prepared_statement prepared_statement,
+	                                                  duckdb_pending_result *out_result);
+	duckdb_state (*duckdb_column_has_default)(duckdb_table_description table_description, idx_t index, bool *out);
+	duckdb_state (*duckdb_query_arrow)(duckdb_connection connection, const char *query, duckdb_arrow *out_result);
+	duckdb_state (*duckdb_query_arrow_schema)(duckdb_arrow result, duckdb_arrow_schema *out_schema);
+	duckdb_state (*duckdb_prepared_arrow_schema)(duckdb_prepared_statement prepared, duckdb_arrow_schema *out_schema);
+	void (*duckdb_result_arrow_array)(duckdb_result result, duckdb_data_chunk chunk, duckdb_arrow_array *out_array);
+	duckdb_state (*duckdb_query_arrow_array)(duckdb_arrow result, duckdb_arrow_array *out_array);
+	idx_t (*duckdb_arrow_column_count)(duckdb_arrow result);
+	idx_t (*duckdb_arrow_row_count)(duckdb_arrow result);
+	idx_t (*duckdb_arrow_rows_changed)(duckdb_arrow result);
+	const char *(*duckdb_query_arrow_error)(duckdb_arrow result);
+	void (*duckdb_destroy_arrow)(duckdb_arrow *result);
+	void (*duckdb_destroy_arrow_stream)(duckdb_arrow_stream *stream_p);
+	duckdb_state (*duckdb_execute_prepared_arrow)(duckdb_prepared_statement prepared_statement,
+	                                              duckdb_arrow *out_result);
+	duckdb_state (*duckdb_arrow_scan)(duckdb_connection connection, const char *table_name, duckdb_arrow_stream arrow);
+	duckdb_state (*duckdb_arrow_array_scan)(duckdb_connection connection, const char *table_name,
+	                                        duckdb_arrow_schema arrow_schema, duckdb_arrow_array arrow_array,
+	                                        duckdb_arrow_stream *out_stream);
+	duckdb_data_chunk (*duckdb_stream_fetch_chunk)(duckdb_result result);
 } duckdb_ext_api_v0;
 
 //===--------------------------------------------------------------------===//
@@ -701,10 +751,59 @@ inline duckdb_ext_api_v0 CreateAPIv0() {
 	result.duckdb_cast_function_set_row_error = duckdb_cast_function_set_row_error;
 	result.duckdb_register_cast_function = duckdb_register_cast_function;
 	result.duckdb_destroy_cast_function = duckdb_destroy_cast_function;
+	result.duckdb_row_count = duckdb_row_count;
+	result.duckdb_column_data = duckdb_column_data;
+	result.duckdb_nullmask_data = duckdb_nullmask_data;
+	result.duckdb_result_get_chunk = duckdb_result_get_chunk;
+	result.duckdb_result_is_streaming = duckdb_result_is_streaming;
+	result.duckdb_result_chunk_count = duckdb_result_chunk_count;
+	result.duckdb_result_return_type = duckdb_result_return_type;
+	result.duckdb_value_boolean = duckdb_value_boolean;
+	result.duckdb_value_int8 = duckdb_value_int8;
+	result.duckdb_value_int16 = duckdb_value_int16;
+	result.duckdb_value_int32 = duckdb_value_int32;
+	result.duckdb_value_int64 = duckdb_value_int64;
+	result.duckdb_value_hugeint = duckdb_value_hugeint;
+	result.duckdb_value_uhugeint = duckdb_value_uhugeint;
+	result.duckdb_value_decimal = duckdb_value_decimal;
+	result.duckdb_value_uint8 = duckdb_value_uint8;
+	result.duckdb_value_uint16 = duckdb_value_uint16;
+	result.duckdb_value_uint32 = duckdb_value_uint32;
+	result.duckdb_value_uint64 = duckdb_value_uint64;
+	result.duckdb_value_float = duckdb_value_float;
+	result.duckdb_value_double = duckdb_value_double;
+	result.duckdb_value_date = duckdb_value_date;
+	result.duckdb_value_time = duckdb_value_time;
+	result.duckdb_value_timestamp = duckdb_value_timestamp;
+	result.duckdb_value_interval = duckdb_value_interval;
+	result.duckdb_value_varchar = duckdb_value_varchar;
+	result.duckdb_value_string = duckdb_value_string;
+	result.duckdb_value_varchar_internal = duckdb_value_varchar_internal;
+	result.duckdb_value_string_internal = duckdb_value_string_internal;
+	result.duckdb_value_blob = duckdb_value_blob;
+	result.duckdb_value_is_null = duckdb_value_is_null;
+	result.duckdb_execute_prepared_streaming = duckdb_execute_prepared_streaming;
+	result.duckdb_pending_prepared_streaming = duckdb_pending_prepared_streaming;
+	result.duckdb_column_has_default = duckdb_column_has_default;
+	result.duckdb_query_arrow = duckdb_query_arrow;
+	result.duckdb_query_arrow_schema = duckdb_query_arrow_schema;
+	result.duckdb_prepared_arrow_schema = duckdb_prepared_arrow_schema;
+	result.duckdb_result_arrow_array = duckdb_result_arrow_array;
+	result.duckdb_query_arrow_array = duckdb_query_arrow_array;
+	result.duckdb_arrow_column_count = duckdb_arrow_column_count;
+	result.duckdb_arrow_row_count = duckdb_arrow_row_count;
+	result.duckdb_arrow_rows_changed = duckdb_arrow_rows_changed;
+	result.duckdb_query_arrow_error = duckdb_query_arrow_error;
+	result.duckdb_destroy_arrow = duckdb_destroy_arrow;
+	result.duckdb_destroy_arrow_stream = duckdb_destroy_arrow_stream;
+	result.duckdb_execute_prepared_arrow = duckdb_execute_prepared_arrow;
+	result.duckdb_arrow_scan = duckdb_arrow_scan;
+	result.duckdb_arrow_array_scan = duckdb_arrow_array_scan;
+	result.duckdb_stream_fetch_chunk = duckdb_stream_fetch_chunk;
 	return result;
 }
 
 #define DUCKDB_EXTENSION_API_VERSION_MAJOR  0
 #define DUCKDB_EXTENSION_API_VERSION_MINOR  0
-#define DUCKDB_EXTENSION_API_VERSION_PATCH  2
-#define DUCKDB_EXTENSION_API_VERSION_STRING "v0.0.2"
+#define DUCKDB_EXTENSION_API_VERSION_PATCH  1
+#define DUCKDB_EXTENSION_API_VERSION_STRING "v0.0.1"

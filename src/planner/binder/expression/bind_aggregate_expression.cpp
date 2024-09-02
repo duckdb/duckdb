@@ -144,8 +144,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 			if (order.expression->type == ExpressionType::VALUE_CONSTANT) {
 				auto &const_expr = order.expression->Cast<ConstantExpression>();
 				if (!const_expr.value.type().IsIntegral()) {
-					auto &config = DBConfig::GetConfig(context);
-					if (!config.options.order_by_non_integer_literal) {
+					auto &config = ClientConfig::GetConfig(context);
+					if (!config.order_by_non_integer_literal) {
 						throw BinderException(
 						    *order.expression,
 						    "ORDER BY non-integer literal has no effect.\n* SET order_by_non_integer_literal=true to "

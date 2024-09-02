@@ -69,7 +69,7 @@ SELECT list_position(array_value(1,2,3), 2);
 query I
 SELECT list_position(array_value(1,2,3), 4);
 ----
-0
+NULL
 
 query I
 SELECT list_contains(array_value(1,2,3), 2);

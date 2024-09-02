@@ -2,6 +2,8 @@
 # description: Test the histogram table function
 # group: [aggregates]
 
+require 64bit
+
 statement ok
 pragma enable_verification
 

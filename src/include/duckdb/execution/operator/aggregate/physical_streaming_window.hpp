@@ -55,6 +55,8 @@ private:
 	                  GlobalOperatorState &gstate, OperatorState &state) const;
 	void ExecuteDelayed(ExecutionContext &context, DataChunk &delayed, DataChunk &input, DataChunk &chunk,
 	                    GlobalOperatorState &gstate, OperatorState &state) const;
+	void ExecuteShifted(ExecutionContext &context, DataChunk &delayed, DataChunk &input, DataChunk &chunk,
+	                    GlobalOperatorState &gstate, OperatorState &state) const;
 };
 
 } // namespace duckdb

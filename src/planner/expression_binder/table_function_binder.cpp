@@ -2,6 +2,7 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/table_binding.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
@@ -20,11 +21,16 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 	// try binding as a lambda parameter
 	auto &col_ref = expr_ptr->Cast<ColumnRefExpression>();
 	if (!col_ref.IsQualified()) {
-		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetName());
+		auto column_name = col_ref.GetName();
+		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, column_name);
 		if (lambda_ref) {
 			return BindLambdaReference(lambda_ref->Cast<LambdaRefExpression>(), depth);
 		}
+		if (binder.macro_binding && binder.macro_binding->HasMatchingBinding(column_name)) {
+			throw ParameterNotResolvedException();
+		}
 	}
+	auto query_location = col_ref.query_location;
 	auto column_names = col_ref.column_names;
 	auto result_name = StringUtil::Join(column_names, ".");
 	if (!table_function_name.empty()) {
@@ -32,8 +38,9 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 		auto result = BindCorrelatedColumns(expr_ptr, ErrorData("error"));
 		if (!result.HasError()) {
 			// it is a lateral join parameter - this is not supported in this type of table function
-			throw BinderException("Table function \"%s\" does not support lateral join column parameters - cannot use "
-			                      "column \"%s\" in this context",
+			throw BinderException(query_location,
+			                      "Table function \"%s\" does not support lateral join column parameters - cannot use "
+			                      "column \"%s\" in this context.\nThe function only supports literals as parameters.",
 			                      table_function_name, result_name);
 		}
 	}

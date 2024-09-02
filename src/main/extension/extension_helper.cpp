@@ -174,11 +174,13 @@ bool ExtensionHelper::CanAutoloadExtension(const string &ext_name) {
 string ExtensionHelper::AddExtensionInstallHintToErrorMsg(ClientContext &context, const string &base_error,
                                                           const string &extension_name) {
 
-	return AddExtensionInstallHintToErrorMsg(DBConfig::GetConfig(context), base_error, extension_name);
+	return AddExtensionInstallHintToErrorMsg(DatabaseInstance::GetDatabase(context), base_error, extension_name);
 }
-string ExtensionHelper::AddExtensionInstallHintToErrorMsg(DBConfig &config, const string &base_error,
+string ExtensionHelper::AddExtensionInstallHintToErrorMsg(DatabaseInstance &db, const string &base_error,
                                                           const string &extension_name) {
 	string install_hint;
+
+	auto &config = db.config;
 
 	if (!ExtensionHelper::CanAutoloadExtension(extension_name)) {
 		install_hint = "Please try installing and loading the " + extension_name + " extension:\nINSTALL " +
@@ -230,7 +232,7 @@ bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const str
 		if (dbconfig.options.autoinstall_known_extensions) {
 			auto autoinstall_repo =
 			    ExtensionRepository::GetRepositoryByUrl(dbconfig.options.autoinstall_extension_repo);
-			ExtensionHelper::InstallExtension(dbconfig, fs, extension_name, false, autoinstall_repo, false);
+			ExtensionHelper::InstallExtension(instance, fs, extension_name, false, autoinstall_repo, false);
 		}
 		ExtensionHelper::LoadExternalExtension(instance, fs, extension_name);
 		return true;
@@ -317,13 +319,11 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(ClientContext &c
 	vector<ExtensionUpdateResult> result;
 	DatabaseInstance &db = DatabaseInstance::GetDatabase(context);
 
-	auto &config = DBConfig::GetConfig(db);
-
 #ifndef WASM_LOADABLE_EXTENSIONS
 	case_insensitive_set_t seen_extensions;
 
 	// scan the install directory for installed extensions
-	auto ext_directory = ExtensionHelper::ExtensionDirectory(config, fs);
+	auto ext_directory = ExtensionHelper::ExtensionDirectory(db, fs);
 	fs.ListFiles(ext_directory, [&](const string &path, bool is_directory) {
 		if (!StringUtil::EndsWith(path, ".duckdb_extension")) {
 			return;
@@ -344,8 +344,7 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(ClientContext &c
 ExtensionUpdateResult ExtensionHelper::UpdateExtension(ClientContext &context, const string &extension_name) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	DatabaseInstance &db = DatabaseInstance::GetDatabase(context);
-	auto &config = DBConfig::GetConfig(db);
-	auto ext_directory = ExtensionHelper::ExtensionDirectory(config, fs);
+	auto ext_directory = ExtensionHelper::ExtensionDirectory(db, fs);
 
 	auto full_extension_path = fs.JoinPath(ext_directory, extension_name + ".duckdb_extension");
 
@@ -376,7 +375,7 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 		if (dbconfig.options.autoinstall_known_extensions) {
 			//! Get the autoloading repository
 			auto repository = ExtensionRepository::GetRepositoryByUrl(dbconfig.options.autoinstall_extension_repo);
-			ExtensionHelper::InstallExtension(db.config, *fs, extension_name, false, repository);
+			ExtensionHelper::InstallExtension(db, *fs, extension_name, false, repository);
 		}
 #endif
 		ExtensionHelper::LoadExternalExtension(db, *fs, extension_name);

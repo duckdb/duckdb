@@ -34,10 +34,10 @@ SELECT * FROM (VALUES
 	(NULL)
 ) tbl(i);
 
-query III
-select min(i), max(i), first(i) from list_int;
+query II
+select min(i), max(i) from list_int;
 ----
-[1]	[NULL, NULL]	[1]
+[1]	[NULL, NULL]
 
 query I
 select first([i]) from range(10) tbl(i);

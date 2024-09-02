@@ -70,7 +70,7 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, s
 	return new_block;
 }
 
-void BlockManager::UnregisterBlock(block_id_t block_id, bool can_destroy) {
+void BlockManager::UnregisterBlock(block_id_t block_id) {
 	if (block_id >= MAXIMUM_BLOCK) {
 		// in-memory buffer: buffer could have been offloaded to disk: remove the file
 		buffer_manager.DeleteTemporaryFile(block_id);

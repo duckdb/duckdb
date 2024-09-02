@@ -6,6 +6,7 @@
 #include "duckdb/common/vector_operations/generic_executor.hpp"
 #include "duckdb/core_functions/scalar/generic_functions.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -470,24 +471,36 @@ static void UnsupportedEquiWidth(DataChunk &args, ExpressionState &state, Vector
 	throw BinderException(state.expr, "Unsupported type \"%s\" for equi_width_bins", args.data[0].GetType());
 }
 
+void EquiWidthBinSerialize(Serializer &, const optional_ptr<FunctionData>, const ScalarFunction &) {
+	return;
+}
+
+unique_ptr<FunctionData> EquiWidthBinDeserialize(Deserializer &deserializer, ScalarFunction &function) {
+	function.return_type = deserializer.Get<const LogicalType &>();
+	return nullptr;
+}
+
 ScalarFunctionSet EquiWidthBinsFun::GetFunctions() {
 	ScalarFunctionSet functions("equi_width_bins");
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BOOLEAN},
-	                   LogicalType::LIST(LogicalType::BIGINT), EquiWidthBinFunction<int64_t, EquiWidthBinsInteger>,
+	                   LogicalType::LIST(LogicalType::ANY), EquiWidthBinFunction<int64_t, EquiWidthBinsInteger>,
 	                   BindEquiWidthFunction));
-	functions.AddFunction(
-	    ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::BIGINT, LogicalType::BOOLEAN},
-	                   LogicalType::LIST(LogicalType::DOUBLE), EquiWidthBinFunction<double, EquiWidthBinsDouble>,
-	                   BindEquiWidthFunction));
+	functions.AddFunction(ScalarFunction(
+	    {LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::BIGINT, LogicalType::BOOLEAN},
+	    LogicalType::LIST(LogicalType::ANY), EquiWidthBinFunction<double, EquiWidthBinsDouble>, BindEquiWidthFunction));
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::BIGINT, LogicalType::BOOLEAN},
-	                   LogicalType::LIST(LogicalType::DATE), EquiWidthBinFunction<timestamp_t, EquiWidthBinsTimestamp>,
+	                   LogicalType::LIST(LogicalType::ANY), EquiWidthBinFunction<timestamp_t, EquiWidthBinsTimestamp>,
 	                   BindEquiWidthFunction));
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::ANY_PARAMS(LogicalType::ANY, 150), LogicalType::ANY_PARAMS(LogicalType::ANY, 150),
 	                    LogicalType::BIGINT, LogicalType::BOOLEAN},
 	                   LogicalType::LIST(LogicalType::ANY), UnsupportedEquiWidth, BindEquiWidthFunction));
+	for (auto &function : functions.functions) {
+		function.serialize = EquiWidthBinSerialize;
+		function.deserialize = EquiWidthBinDeserialize;
+	}
 	return functions;
 }
 

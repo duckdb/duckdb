@@ -1,0 +1,31 @@
+# name: test/sql/copy/csv/test_non_unicode_header.test
+# description: Test CSV with non-unicode values in header
+# group: [csv]
+
+# Rejects tests must skip reload
+require skip_reload
+
+loop i 0 10
+
+statement ok
+drop table if exists reject_errors;
+
+query IIIIIII
+FROM read_csv('data/csv/error/banklist.csv', store_rejects=true) order by all limit 5
+----
+1st American State Bank of Minnesota	Hancock	MN	15448	Community Development Bank, FSB	5-Feb-10	10183
+1st Centennial Bank	Redlands	CA	33025	First California Bank	23-Jan-09	10030
+1st Commerce Bank	North Las Vegas	NV	58358	Plaza Bank	6-Jun-13	10482
+1st Pacific Bank of California	San Diego	CA	35517	City National Bank	7-May-10	10232
+1st Regents Bank	Andover	MN	57157	First Minnesota Bank	18-Jan-13	10469
+
+endloop
+
+query IIIIIIIII
+select * exclude(scan_id ) from reject_errors order by all limit 5
+----
+0	1	1	1	1	column0	INVALID UNICODE	Bank Name?,City?,State?,Cert?,Acquiring Institution?,Closing Date?,Fund	Invalid unicode (byte sequence mismatch) detected.
+0	1	1	12	2	column1	INVALID UNICODE	Bank Name?,City?,State?,Cert?,Acquiring Institution?,Closing Date?,Fund	Invalid unicode (byte sequence mismatch) detected.
+0	1	1	18	3	column2	INVALID UNICODE	Bank Name?,City?,State?,Cert?,Acquiring Institution?,Closing Date?,Fund	Invalid unicode (byte sequence mismatch) detected.
+0	1	1	25	4	column3	CAST	Bank Name?,City?,State?,Cert?,Acquiring Institution?,Closing Date?,Fund	Error when converting column "column3". Could not convert string "Cert?" to 'BIGINT'
+0	1	1	31	5	column4	INVALID UNICODE	Bank Name?,City?,State?,Cert?,Acquiring Institution?,Closing Date?,Fund	Invalid unicode (byte sequence mismatch) detected.

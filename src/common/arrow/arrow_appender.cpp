@@ -142,9 +142,14 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 	case LogicalTypeId::INTEGER:
 		InitializeAppenderForType<ArrowScalarData<int32_t>>(append_data);
 		break;
-	case LogicalTypeId::TIME_TZ:
-		InitializeAppenderForType<ArrowScalarData<int64_t, dtime_tz_t, ArrowTimeTzConverter>>(append_data);
+	case LogicalTypeId::TIME_TZ: {
+		if (append_data.options.arrow_lossless_conversion) {
+			InitializeAppenderForType<ArrowScalarData<int64_t>>(append_data);
+		} else {
+			InitializeAppenderForType<ArrowScalarData<int64_t, dtime_tz_t, ArrowTimeTzConverter>>(append_data);
+		}
 		break;
+	}
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
@@ -157,6 +162,9 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 	case LogicalTypeId::UUID:
 	case LogicalTypeId::HUGEINT:
 		InitializeAppenderForType<ArrowScalarData<hugeint_t>>(append_data);
+		break;
+	case LogicalTypeId::UHUGEINT:
+		InitializeAppenderForType<ArrowScalarData<uhugeint_t>>(append_data);
 		break;
 	case LogicalTypeId::UTINYINT:
 		InitializeAppenderForType<ArrowScalarData<uint8_t>>(append_data);

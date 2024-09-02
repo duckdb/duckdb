@@ -1,5 +1,5 @@
 # name: benchmark/micro/string/inet_unescape_codepoints.benchmark
-# description: inet's extension unescape function benchmark
+# description: inet's extension unescape function benchmark with Unicode codepoints
 # group: [string]
 
 name html_unescape benchmark with hexadecimal values

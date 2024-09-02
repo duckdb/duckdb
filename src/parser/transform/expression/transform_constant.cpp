@@ -130,6 +130,23 @@ bool Transformer::ConstructConstantFromExpression(const ParsedExpression &expr, 
 			// finally create the list
 			value = Value::LIST(child_type, values);
 			return true;
+		} else if (function.function_name == "map") {
+			Value keys;
+			if (!ConstructConstantFromExpression(*function.children[0], keys)) {
+				return false;
+			}
+
+			Value values;
+			if (!ConstructConstantFromExpression(*function.children[1], values)) {
+				return false;
+			}
+
+			vector<Value> keys_unpacked = ListValue::GetChildren(keys);
+			vector<Value> values_unpacked = ListValue::GetChildren(values);
+
+			value = Value::MAP(ListType::GetChildType(keys.type()), ListType::GetChildType(values.type()),
+			                   keys_unpacked, values_unpacked);
+			return true;
 		} else {
 			return false;
 		}

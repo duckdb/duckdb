@@ -169,6 +169,7 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 		}
 		break;
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BIT:
 		return false;
 	default:
 		break;

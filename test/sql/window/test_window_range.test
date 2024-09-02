@@ -982,6 +982,27 @@ NULL
 NULL
 NULL
 
+# Zero preceding
+query II
+SELECT 
+	x, 
+	SUM(x) OVER (
+		ORDER BY x 
+		RANGE BETWEEN 5 PRECEDING AND 0 PRECEDING
+	) AS y 
+FROM generate_series(1, 10) tbl(x);
+----
+1	1
+2	3
+3	6
+4	10
+5	15
+6	21
+7	27
+8	33
+9	39
+10	45
+
 #==========================================================================
 
 statement ok

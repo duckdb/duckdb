@@ -783,7 +783,8 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
-	case LogicalTypeId::TIMESTAMP_NS: {
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIME_TZ: {
 		DirectConversion(vector, array, scan_state, nested_offset, parent_offset);
 		break;
 	}
@@ -1002,7 +1003,8 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 		}
 		break;
 	}
-	case LogicalTypeId::BLOB: {
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::BIT: {
 		ArrowToDuckDBBlob(vector, array, scan_state, size, arrow_type, nested_offset,
 		                  NumericCast<int64_t>(parent_offset));
 		break;

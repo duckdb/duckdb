@@ -250,11 +250,16 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 		return pos == len;
 	}
 	// first parse the year
+	idx_t year_length = 0;
 	for (; pos < len && StringUtil::CharacterIsDigit(buf[pos]); pos++) {
 		if (year >= 100000000) {
 			return false;
 		}
 		year = (buf[pos] - '0') + year * 10;
+		year_length++;
+	}
+	if (year_length < 2 && strict) {
+		return false;
 	}
 	if (yearneg) {
 		year = -year;

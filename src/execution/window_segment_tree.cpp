@@ -1409,7 +1409,22 @@ public:
 	using ZippedTuple = std::tuple<idx_t, idx_t>;
 	using ZippedElements = vector<ZippedTuple>;
 
-	void Build(WindowDistinctAggregatorGlobalState &gdsink);
+	explicit WindowDistinctSortTree(WindowDistinctAggregatorGlobalState &gdastate, idx_t count) : gdastate(gdastate) {
+		//	Set up for parallel build
+		build_level = 0;
+		build_complete = 0;
+		build_run = 0;
+		build_run_length = 1;
+		build_num_runs = count;
+	}
+
+	void Build(WindowDistinctAggregatorLocalState &ldastate);
+
+protected:
+	bool TryNextRun(idx_t &level_idx, idx_t &run_idx);
+	void BuildRun(idx_t level_nr, idx_t i, WindowDistinctAggregatorLocalState &ldastate);
+
+	WindowDistinctAggregatorGlobalState &gdastate;
 };
 
 class WindowDistinctAggregatorGlobalState : public WindowAggregatorGlobalState {
@@ -1418,8 +1433,6 @@ public:
 	using ZippedTuple = WindowDistinctSortTree::ZippedTuple;
 	using ZippedElements = WindowDistinctSortTree::ZippedElements;
 
-	class DistinctSortTree;
-
 	WindowDistinctAggregatorGlobalState(const WindowDistinctAggregator &aggregator, idx_t group_count);
 
 	//! Compute the block starts
@@ -1427,8 +1440,6 @@ public:
 	//! Patch up the previous index block boundaries
 	void PatchPrevIdcs();
 	bool TryPrepareNextStage(WindowDistinctAggregatorLocalState &lstate);
-
-	void Finalize(const FrameStats &stats);
 
 	//	Single threaded sorting for now
 	ClientContext &context;
@@ -1471,7 +1482,8 @@ public:
 WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(const WindowDistinctAggregator &aggregator,
                                                                          idx_t group_count)
     : WindowAggregatorGlobalState(aggregator, group_count), context(aggregator.context),
-      stage(PartitionSortStage::INIT), tasks_completed(0), levels_flat_native(aggregator.aggr) {
+      stage(PartitionSortStage::INIT), tasks_completed(0), merge_sort_tree(*this, group_count),
+      levels_flat_native(aggregator.aggr) {
 	payload_types.emplace_back(LogicalType::UBIGINT);
 
 	//	1:	functionComputePrevIdcs(𝑖𝑛)
@@ -1505,6 +1517,25 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(const W
 	for (idx_t i = 0; i < group_count; ++i) {
 		prev_idcs[i] = ZippedTuple(i + 1, i);
 	}
+
+	// compute space required to store aggregation states of merge sort tree
+	// this is one aggregate state per entry per level
+	idx_t internal_nodes = 0;
+	levels_flat_start.push_back(internal_nodes);
+	for (idx_t level_nr = 0; level_nr < zipped_tree.tree.size(); ++level_nr) {
+		internal_nodes += zipped_tree.tree[level_nr].first.size();
+		levels_flat_start.push_back(internal_nodes);
+	}
+	levels_flat_native.Initialize(internal_nodes);
+
+	merge_sort_tree.tree.reserve(zipped_tree.tree.size());
+	for (idx_t level_nr = 0; level_nr < zipped_tree.tree.size(); ++level_nr) {
+		auto &zipped_level = zipped_tree.tree[level_nr].first;
+		WindowDistinctSortTree::Elements level;
+		WindowDistinctSortTree::Offsets cascades;
+		level.resize(zipped_level.size());
+		merge_sort_tree.tree.emplace_back(std::move(level), std::move(cascades));
+	}
 }
 
 class WindowDistinctAggregatorLocalState : public WindowAggregatorState {
@@ -1523,6 +1554,12 @@ public:
 	PartitionSortStage stage = PartitionSortStage::INIT;
 	//! Finalize scan block index
 	idx_t block_idx;
+	//! Thread-local tree aggregation
+	Vector update_v;
+	Vector source_v;
+	Vector target_v;
+	DataChunk leaves;
+	SelectionVector sel;
 
 protected:
 	//! Flush the accumulated intermediate states into the result states
@@ -1546,8 +1583,8 @@ protected:
 
 WindowDistinctAggregatorLocalState::WindowDistinctAggregatorLocalState(
     const WindowDistinctAggregatorGlobalState &gastate)
-    : gastate(gastate), statef(gastate.aggregator.aggr), statep(LogicalType::POINTER), statel(LogicalType::POINTER),
-      flush_count(0) {
+    : update_v(LogicalType::POINTER), source_v(LogicalType::POINTER), target_v(LogicalType::POINTER), gastate(gastate),
+      statef(gastate.aggregator.aggr), statep(LogicalType::POINTER), statel(LogicalType::POINTER), flush_count(0) {
 	InitSubFrames(frames, gastate.aggregator.exclude_mode);
 	payload_chunk.Initialize(Allocator::DefaultAllocator(), gastate.payload_types);
 
@@ -1556,6 +1593,10 @@ WindowDistinctAggregatorLocalState::WindowDistinctAggregatorLocalState(
 
 	sort_chunk.Initialize(Allocator::DefaultAllocator(), gastate.sort_types);
 	sort_chunk.data.back().Reference(payload_chunk.data[0]);
+
+	//! Input data chunk, used for leaf segment aggregation
+	leaves.Initialize(Allocator::DefaultAllocator(), gastate.inputs.GetTypes());
+	sel.Initialize();
 
 	gastate.locals++;
 }
@@ -1729,14 +1770,12 @@ void WindowDistinctAggregator::Finalize(WindowAggregatorState &gsink, WindowAggr
 		}
 	}
 
-	//	This is a parallel implementation,
-	//	so every thread can call it.
+	//	These are a parallel implementations,
+	//	so every thread can call them.
 	gdsink.zipped_tree.Build();
+	gdsink.merge_sort_tree.Build(ldstate);
 
-	//	Last one out turns off the lights!
-	if (++gdsink.finalized == gdsink.locals) {
-		gdsink.Finalize(stats);
-	}
+	++gdsink.finalized;
 }
 
 void WindowDistinctAggregatorLocalState::Sorted() {
@@ -1826,100 +1865,126 @@ void WindowDistinctAggregatorGlobalState::PatchPrevIdcs() {
 	}
 }
 
-void WindowDistinctAggregatorGlobalState::Finalize(const FrameStats &stats) {
-	merge_sort_tree.Build(*this);
+bool WindowDistinctSortTree::TryNextRun(idx_t &level_idx, idx_t &run_idx) {
+	const auto fanout = FANOUT;
+
+	lock_guard<mutex> stage_guard(build_lock);
+
+	//	Verify we are not done
+	if (build_level >= tree.size()) {
+		return false;
+	}
+
+	// Finished with this level?
+	if (build_complete >= build_num_runs) {
+		auto &zipped_tree = gdastate.zipped_tree;
+		std::swap(tree[build_level].second, zipped_tree.tree[build_level].second);
+
+		++build_level;
+		if (build_level >= tree.size()) {
+			zipped_tree.tree.clear();
+			return false;
+		}
+
+		const auto count = LowestLevel().size();
+		build_run_length *= fanout;
+		build_num_runs = (count + build_run_length - 1) / build_run_length;
+		build_run = 0;
+		build_complete = 0;
+	}
+
+	// If all runs are in flight,
+	// yield until the next level is ready
+	if (build_run >= build_num_runs) {
+		return false;
+	}
+
+	level_idx = build_level;
+	run_idx = build_run++;
+
+	return true;
 }
 
-void WindowDistinctSortTree::Build(WindowDistinctAggregatorGlobalState &gdsink) {
-	auto &aggr = gdsink.aggregator.aggr;
-	auto &allocator = gdsink.allocator;
-	auto &inputs = gdsink.inputs;
-	auto &levels_flat_native = gdsink.levels_flat_native;
-	auto &levels_flat_start = gdsink.levels_flat_start;
+void WindowDistinctSortTree::Build(WindowDistinctAggregatorLocalState &ldastate) {
+	//	Fan in parent levels until we are at the top
+	//	Note that we don't build the top layer as that would just be all the data.
+	while (build_level.load() < tree.size()) {
+		idx_t level_idx;
+		idx_t run_idx;
+		if (TryNextRun(level_idx, run_idx)) {
+			BuildRun(level_idx, run_idx, ldastate);
+		} else {
+			std::this_thread::yield();
+		}
+	}
+}
+
+void WindowDistinctSortTree::BuildRun(idx_t level_nr, idx_t run_idx, WindowDistinctAggregatorLocalState &ldastate) {
+	auto &aggr = gdastate.aggregator.aggr;
+	auto &allocator = gdastate.allocator;
+	auto &inputs = gdastate.inputs;
+	auto &levels_flat_native = gdastate.levels_flat_native;
 
 	//! Input data chunk, used for leaf segment aggregation
-	DataChunk leaves;
-	leaves.Initialize(Allocator::DefaultAllocator(), gdsink.inputs.GetTypes());
-	SelectionVector sel;
-	sel.Initialize();
+	auto &leaves = ldastate.leaves;
+	auto &sel = ldastate.sel;
 
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
 
 	//! The states to update
-	Vector update_v(LogicalType::POINTER);
+	auto &update_v = ldastate.update_v;
 	auto updates = FlatVector::GetData<data_ptr_t>(update_v);
-	idx_t nupdate = 0;
 
-	Vector source_v(LogicalType::POINTER);
+	auto &source_v = ldastate.source_v;
 	auto sources = FlatVector::GetData<data_ptr_t>(source_v);
-	Vector target_v(LogicalType::POINTER);
+	auto &target_v = ldastate.target_v;
 	auto targets = FlatVector::GetData<data_ptr_t>(target_v);
+
+	auto &zipped_tree = gdastate.zipped_tree;
+	auto &zipped_level = zipped_tree.tree[level_nr].first;
+	auto &level = tree[level_nr].first;
+
+	//	Reset the combine state
+	idx_t nupdate = 0;
 	idx_t ncombine = 0;
+	data_ptr_t prev_state = nullptr;
+	idx_t i = run_idx * build_run_length;
+	auto next_limit = MinValue<idx_t>(zipped_level.size(), i + build_run_length);
+	idx_t levels_flat_offset = level_nr * zipped_level.size() + i;
+	for (auto j = i; j < next_limit; ++j) {
+		//	Initialise the next aggregate
+		auto curr_state = levels_flat_native.GetStatePtr(levels_flat_offset++);
 
-	// compute space required to store aggregation states of merge sort tree
-	// this is one aggregate state per entry per level
-	auto &zipped_tree = gdsink.zipped_tree;
-	idx_t internal_nodes = 0;
-	for (idx_t level_nr = 0; level_nr < zipped_tree.tree.size(); ++level_nr) {
-		internal_nodes += zipped_tree.tree[level_nr].first.size();
-	}
-	levels_flat_native.Initialize(internal_nodes);
-	levels_flat_start.push_back(0);
-	idx_t levels_flat_offset = 0;
-
-	//	Walk the distinct value tree building the intermediate aggregates
-	tree.reserve(zipped_tree.tree.size());
-	idx_t level_width = 1;
-	for (idx_t level_nr = 0; level_nr < zipped_tree.tree.size(); ++level_nr) {
-		auto &zipped_level = zipped_tree.tree[level_nr].first;
-		vector<ElementType> level;
-		level.reserve(zipped_level.size());
-
-		for (idx_t i = 0; i < zipped_level.size(); i += level_width) {
-			//	Reset the combine state
-			data_ptr_t prev_state = nullptr;
-			auto next_limit = MinValue<idx_t>(zipped_level.size(), i + level_width);
-			for (auto j = i; j < next_limit; ++j) {
-				//	Initialise the next aggregate
-				auto curr_state = levels_flat_native.GetStatePtr(levels_flat_offset++);
-
-				//	Update this state (if it matches)
-				const auto prev_idx = std::get<0>(zipped_level[j]);
-				level.emplace_back(prev_idx);
-				if (prev_idx < i + 1) {
-					updates[nupdate] = curr_state;
-					//	input_idx
-					sel[nupdate] = UnsafeNumericCast<sel_t>(std::get<1>(zipped_level[j]));
-					++nupdate;
-				}
-
-				//	Merge the previous state (if any)
-				if (prev_state) {
-					sources[ncombine] = prev_state;
-					targets[ncombine] = curr_state;
-					++ncombine;
-				}
-				prev_state = curr_state;
-
-				//	Flush the states if one is maxed out.
-				if (MaxValue<idx_t>(ncombine, nupdate) >= STANDARD_VECTOR_SIZE) {
-					//	Push the updates first so they propagate
-					leaves.Reference(inputs);
-					leaves.Slice(sel, nupdate);
-					aggr.function.update(leaves.data.data(), aggr_input_data, leaves.ColumnCount(), update_v, nupdate);
-					nupdate = 0;
-
-					//	Combine the states sequentially
-					aggr.function.combine(source_v, target_v, aggr_input_data, ncombine);
-					ncombine = 0;
-				}
-			}
+		//	Update this state (if it matches)
+		const auto prev_idx = std::get<0>(zipped_level[j]);
+		level[j] = prev_idx;
+		if (prev_idx < i + 1) {
+			updates[nupdate] = curr_state;
+			//	input_idx
+			sel[nupdate] = UnsafeNumericCast<sel_t>(std::get<1>(zipped_level[j]));
+			++nupdate;
 		}
 
-		tree.emplace_back(std::move(level), std::move(zipped_tree.tree[level_nr].second));
+		//	Merge the previous state (if any)
+		if (prev_state) {
+			sources[ncombine] = prev_state;
+			targets[ncombine] = curr_state;
+			++ncombine;
+		}
+		prev_state = curr_state;
 
-		levels_flat_start.push_back(levels_flat_offset);
-		level_width *= FANOUT;
+		//	Flush the states if one is maxed out.
+		if (MaxValue<idx_t>(ncombine, nupdate) >= STANDARD_VECTOR_SIZE) {
+			//	Push the updates first so they propagate
+			leaves.Reference(inputs);
+			leaves.Slice(sel, nupdate);
+			aggr.function.update(leaves.data.data(), aggr_input_data, leaves.ColumnCount(), update_v, nupdate);
+			nupdate = 0;
+
+			//	Combine the states sequentially
+			aggr.function.combine(source_v, target_v, aggr_input_data, ncombine);
+			ncombine = 0;
+		}
 	}
 
 	//	Flush any remaining states
@@ -1935,7 +2000,7 @@ void WindowDistinctSortTree::Build(WindowDistinctAggregatorGlobalState &gdsink) 
 		ncombine = 0;
 	}
 
-	zipped_tree.tree.clear();
+	++build_complete;
 }
 
 void WindowDistinctAggregatorLocalState::FlushStates() {

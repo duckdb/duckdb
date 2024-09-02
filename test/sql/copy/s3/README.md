@@ -12,6 +12,10 @@ brew install docker --cask
 
 Then open `/Applications/Docker`. Note that the first time you open the application you need to go to the `Applications` folder, right-click `Docker` and select `open`.
 
+### Setting Up Docker
+
+In order to finish setting up Docker, you need to open the Docker application, and login to your Docker account. Create a Docker account if you do not have one and finish setting up.
+
 ### Running Minio
 
 Run the `install_s3_test_server` script. This requires root. This makes a few changes to your system, specifically to `/etc/hosts` to set up a few redirect interfaces to localhost. This only needs to be run once.

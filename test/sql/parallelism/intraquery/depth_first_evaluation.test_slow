@@ -78,7 +78,16 @@ CREATE TABLE doubles AS
 SELECT
     CASE WHEN range % 100_000 = 0 THEN range ELSE range + 0.5 END i,
     range::DOUBLE j,
-    range::DOUBLE k
+    range::DOUBLE k0,
+    range::DOUBLE k1,
+    range::DOUBLE k2,
+    range::DOUBLE k3,
+    range::DOUBLE k4,
+    range::DOUBLE k5,
+    range::DOUBLE k6,
+    range::DOUBLE k7,
+    range::DOUBLE k8,
+    range::DOUBLE k9
 FROM range(10_000_000)
 
 # one of these should always fit in memory
@@ -89,19 +98,19 @@ FROM range(10_000_000)
 # i.e., it has a higher cardinality than the selective join, which goes into a build
 query I
 WITH c AS NOT MATERIALIZED (
-    SELECT d0.k
+    SELECT d0.k0
     FROM doubles d0
     JOIN doubles d1
     ON (d0.i = d1.j)
 )
 SELECT count(*)
 FROM (
-    SELECT k FROM doubles
+    SELECT * FROM doubles
     UNION ALL
-    SELECT k FROM doubles
+    SELECT * FROM doubles
 ) d
 JOIN c
-ON (d.k = c.k)
+ON (d.k0 = c.k0)
 ----
 200
 
@@ -116,61 +125,61 @@ ON (d.k = c.k)
 # reducing the size of intermediates immediately, and the query completes!
 query I
 WITH c0 AS NOT MATERIALIZED (
-    SELECT d0.k
+    SELECT d0.k0
     FROM doubles d0
     JOIN doubles d1
     ON (d0.i = d1.j)
     LIMIT 100_000_000
 ), c1 AS NOT MATERIALIZED (
-    SELECT d0.k
+    SELECT d0.k1
     FROM doubles d0
     JOIN doubles d1
     ON (d0.i = d1.j)
     LIMIT 100_000_001
 ), c2 AS NOT MATERIALIZED (
-    SELECT d0.k
+    SELECT d0.k2
     FROM doubles d0
     JOIN doubles d1
     ON (d0.i = d1.j)
     LIMIT 100_000_002
 ), c3 AS NOT MATERIALIZED (
-    SELECT d0.k
+    SELECT d0.k3
     FROM doubles d0
     JOIN doubles d1
     ON (d0.i = d1.j)
     LIMIT 100_000_003
 ), c4 AS NOT MATERIALIZED (
-    SELECT d0.k
+    SELECT d0.k4
     FROM doubles d0
     JOIN doubles d1
     ON (d0.i = d1.j)
     LIMIT 100_000_004
 ), c5 AS NOT MATERIALIZED (
-    SELECT d0.k
+    SELECT d0.k5
     FROM doubles d0
     JOIN doubles d1
     ON (d0.i = d1.j)
     LIMIT 100_000_005
 ), c6 AS NOT MATERIALIZED (
-    SELECT d0.k
+    SELECT d0.k6
     FROM doubles d0
     JOIN doubles d1
     ON (d0.i = d1.j)
     LIMIT 100_000_006
 ), c7 AS NOT MATERIALIZED (
-    SELECT d0.k
+    SELECT d0.k7
     FROM doubles d0
     JOIN doubles d1
     ON (d0.i = d1.j)
     LIMIT 100_000_007
 ), c8 AS NOT MATERIALIZED (
-    SELECT d0.k
+    SELECT d0.k8
     FROM doubles d0
     JOIN doubles d1
     ON (d0.i = d1.j)
     LIMIT 100_000_008
 ), c9 AS NOT MATERIALIZED (
-    SELECT d0.k
+    SELECT d0.k9
     FROM doubles d0
     JOIN doubles d1
     ON (d0.i = d1.j)
@@ -178,29 +187,29 @@ WITH c0 AS NOT MATERIALIZED (
 )
 SELECT count(*)
 FROM (
-    SELECT k FROM doubles
+    SELECT * FROM doubles
     UNION ALL
-    SELECT k FROM doubles
+    SELECT * FROM doubles
 ) d
 JOIN c0
-ON (d.k = c0.k)
+ON (d.k0 = c0.k0)
 JOIN c1
-ON (d.k = c1.k)
+ON (d.k1 = c1.k1)
 JOIN c2
-ON (d.k = c2.k)
+ON (d.k2 = c2.k2)
 JOIN c3
-ON (d.k = c3.k)
+ON (d.k3 = c3.k3)
 JOIN c4
-ON (d.k = c4.k)
+ON (d.k4 = c4.k4)
 JOIN c5
-ON (d.k = c5.k)
+ON (d.k5 = c5.k5)
 JOIN c6
-ON (d.k = c6.k)
+ON (d.k6 = c6.k6)
 JOIN c7
-ON (d.k = c7.k)
+ON (d.k7 = c7.k7)
 JOIN c8
-ON (d.k = c8.k)
+ON (d.k8 = c8.k8)
 JOIN c9
-ON (d.k = c9.k)
+ON (d.k9 = c9.k9)
 ----
 200

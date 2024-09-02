@@ -163,12 +163,11 @@ SinkResultType PhysicalBatchCopyToFile::Sink(ExecutionContext &context, DataChun
 		FlushBatchData(context.client, gstate);
 
 		if (!memory_manager.IsMinimumBatchIndex(batch_index) && memory_manager.OutOfMemory(batch_index)) {
-			lock_guard<mutex> l(memory_manager.GetBlockedTaskLock());
+			auto guard = memory_manager.Lock();
 			if (!memory_manager.IsMinimumBatchIndex(batch_index)) {
 				// no tasks to process, we are not the minimum batch index and we have no memory available to buffer
 				// block the task for now
-				memory_manager.BlockTask(input.interrupt_state);
-				return SinkResultType::BLOCKED;
+				return memory_manager.BlockSink(guard, input.interrupt_state);
 			}
 		}
 		state.current_task = FixedBatchCopyState::SINKING_DATA;
@@ -556,7 +555,11 @@ void PhysicalBatchCopyToFile::AddLocalBatch(ClientContext &context, GlobalSinkSt
 	// attempt to repartition to our desired batch size
 	RepartitionBatches(context, gstate, min_batch_index);
 	// unblock tasks so they can help process batches (if any are blocked)
-	auto any_unblocked = memory_manager.UnblockTasks();
+	bool any_unblocked;
+	{
+		auto guard = memory_manager.Lock();
+		any_unblocked = memory_manager.UnblockTasks(guard);
+	}
 	// if any threads were unblocked they can pick up execution of the tasks
 	// otherwise we will execute a task and flush here
 	if (!any_unblocked) {

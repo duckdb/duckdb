@@ -9,12 +9,13 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/storage/storage_lock.hpp"
-#include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/transaction/transaction_data.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/storage/storage_lock.hpp"
+#include "duckdb/storage/table/table_statistics.hpp"
+#include "duckdb/transaction/transaction_data.hpp"
 
 namespace duckdb {
 class ColumnSegment;
@@ -69,6 +70,8 @@ struct TableAppendState {
 	RowGroup *start_row_group;
 	//! The transaction data
 	TransactionData transaction;
+	//! Table statistics
+	TableStatistics stats;
 };
 
 struct ConstraintState {

@@ -209,6 +209,17 @@ struct ICUCalendarDiff : public ICUDateFunc {
 		return sub_func(calendar, start_date, end_date);
 	}
 
+	static part_trunc_t DiffTruncationFactory(DatePartSpecifier type) {
+		switch (type) {
+		case DatePartSpecifier::WEEK:
+			//	Weeks are computed without anchors
+			return TruncationFactory(DatePartSpecifier::DAY);
+		default:
+			break;
+		}
+		return TruncationFactory(type);
+	}
+
 	template <typename T>
 	static void ICUDateDiffFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 3);
@@ -229,7 +240,7 @@ struct ICUCalendarDiff : public ICUDateFunc {
 			} else {
 				const auto specifier = ConstantVector::GetData<string_t>(part_arg)->GetString();
 				const auto part = GetDatePartSpecifier(specifier);
-				auto trunc_func = TruncationFactory(part);
+				auto trunc_func = DiffTruncationFactory(part);
 				auto sub_func = SubtractFactory(part);
 				BinaryExecutor::ExecuteWithNulls<T, T, int64_t>(
 				    startdate_arg, enddate_arg, result, args.size(),
@@ -248,7 +259,7 @@ struct ICUCalendarDiff : public ICUDateFunc {
 			    [&](string_t specifier, T start_date, T end_date, ValidityMask &mask, idx_t idx) {
 				    if (Timestamp::IsFinite(start_date) && Timestamp::IsFinite(end_date)) {
 					    const auto part = GetDatePartSpecifier(specifier.GetString());
-					    auto trunc_func = TruncationFactory(part);
+					    auto trunc_func = DiffTruncationFactory(part);
 					    auto sub_func = SubtractFactory(part);
 					    return DifferenceFunc<T>(calendar, start_date, end_date, trunc_func, sub_func);
 				    } else {

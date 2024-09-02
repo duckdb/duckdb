@@ -122,6 +122,21 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
 				break;
 			}
+			case LogicalTypeId::TINYINT: {
+				auto arg_data = FlatVector::GetData<int8_t>(col);
+				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
+				break;
+			}
+			case LogicalTypeId::SMALLINT: {
+				auto arg_data = FlatVector::GetData<int16_t>(col);
+				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
+				break;
+			}
+			case LogicalTypeId::INTEGER: {
+				auto arg_data = FlatVector::GetData<int32_t>(col);
+				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
+				break;
+			}
 			case LogicalTypeId::BIGINT: {
 				auto arg_data = FlatVector::GetData<int64_t>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
@@ -139,6 +154,11 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			}
 			case LogicalTypeId::UHUGEINT: {
 				auto arg_data = FlatVector::GetData<uhugeint_t>(col);
+				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
+				break;
+			}
+			case LogicalTypeId::FLOAT: {
+				auto arg_data = FlatVector::GetData<float>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
 				break;
 			}

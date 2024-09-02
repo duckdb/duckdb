@@ -65,6 +65,13 @@ struct ArrowBuffer {
 		count = bytes;
 	}
 
+	template <class T>
+	void push_back(T value) {
+		reserve(sizeof(T) * (count + 1));
+		reinterpret_cast<T *>(dataptr)[count] = value;
+		count++;
+	}
+
 	idx_t size() { // NOLINT
 		return count;
 	}

@@ -145,6 +145,9 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 	bind_data->Bind(context, input);
 
 	for (auto &kv : input.named_parameters) {
+		if (kv.second.IsNull()) {
+			throw BinderException("Cannot use NULL as function argument");
+		}
 		auto loption = StringUtil::Lower(kv.first);
 		if (kv.second.IsNull()) {
 			throw BinderException("read_json parameter \"%s\" cannot be NULL.", loption);

@@ -427,3 +427,16 @@ query II
 SELECT id, name FROM test WHERE id IN (2,3) AND name::text ILIKE '%2Pac%';
 ----
 3	[Oasis, 2Pac]
+
+# Test list_contains with NULLs inside list_filter.
+
+statement ok
+CREATE TABLE list_of_list(l1 int[][], l2 int[][]);
+
+statement ok
+INSERT INTO list_of_list VALUES ([NULL], [NULL]);
+
+query I
+SELECT list_filter(l1, (x) -> list_contains(l2, x)) FROM list_of_list;
+----
+[]

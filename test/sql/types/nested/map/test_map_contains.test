@@ -1,0 +1,90 @@
+# name: test/sql/types/nested/map/test_map_contains.test
+# group: [map]
+
+statement ok
+PRAGMA enable_verification;
+
+
+query I
+SELECT map_contains_entry(map([1,2,3],[4,5,6]), 2, 5) AS res;
+----
+true
+
+query I
+SELECT map_contains_value(map([1,2,3],[4,5,6]), 10) AS res;
+----
+false
+
+query I
+SELECT map_contains(map([1,2,3],[4,5,6]), 1) AS res;
+----
+true
+
+query I
+SELECT map_contains(map([1,2,3],[4,5,6]), 6) AS res;
+----
+false
+
+query I
+SELECT map_contains_value(map([1,2,3],[4,5,6]), 4) AS res;
+----
+true
+
+query I
+SELECT map_contains_value(map([1,2,3],[4,5,6]), 2) AS res;
+----
+false
+
+query I
+SELECT map_contains_entry(map([],[]), 1, 2) AS res;
+----
+false
+
+query I
+SELECT map_contains(map([],[]), 1) AS res;
+----
+false
+
+query I
+SELECT map_contains_value(map([],[]), 1) AS res;
+----
+false
+
+statement ok
+CREATE TABLE test_maps(m MAP(INT, INT), k INT, v INT, res_val BOOLEAN, res_key BOOLEAN);
+
+statement ok
+INSERT INTO test_maps(m, k, v, res_key, res_val) VALUES
+(map([1,2,3],[4,5,6]), 2, 5, true, true),
+(map([7,8,9],[10,11,12]), 8, 11, true, true),
+(map([13,14,15],[16,17,18]), 14, 17, true, true),
+(map([19,20,21],[22,23,24]), 20, 23, true, true),
+(map([25,26,27],[28,29,30]), 26, 29, true, true),
+(map([1,2,3],[4,5,6]), 10, 7, false, false),
+(map([7,8,9],[10,11,12]), 1, 13, false, false),
+(map([13,14,15],[16,17,18]), 19, 20, false, false),
+(map([19,20,21],[22,23,24]), 25, 26, false, false),
+(map([25,26,27],[28,29,30]), 31, 32, false, false),
+(map([1,2,3],[4,5,6]), 2, 7, true, false),
+(map([7,8,9],[10,11,12]), 10, 11, false, true),
+(map([13,14,15],[16,17,18]), 14, 20, true, false),
+(map([19,20,21],[22,23,24]), 25, 23, false, true),
+(map([25,26,27],[28,29,30]), 26, 31, true, false);
+
+query I
+SELECT bool_and(map_contains(m, k) = res_key) = bool_and(map_contains_value(m, v) = res_val)
+FROM test_maps;
+----
+true
+
+
+# IN operator test
+query I
+SELECT 'my_key' IN map(['my_key'], ['my_value']) AS res;
+----
+true
+
+query I
+SELECT 'my_keyz' IN map(['my_key'], ['my_value']) AS res;
+----
+false

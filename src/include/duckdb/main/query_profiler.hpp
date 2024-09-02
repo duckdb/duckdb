@@ -34,12 +34,14 @@ class PhysicalOperator;
 class SQLStatement;
 
 struct OperatorInformation {
-	explicit OperatorInformation(double time_p = 0, idx_t elements_returned_p = 0, idx_t elements_scanned_p = 0)
-	    : time(time_p), elements_returned(elements_returned_p) {
+	explicit OperatorInformation(double time_p = 0, idx_t elements_returned_p = 0, idx_t elements_scanned_p = 0,
+	                             idx_t result_set_size_p = 0)
+	    : time(time_p), elements_returned(elements_returned_p), result_set_size(result_set_size_p) {
 	}
 
 	double time;
 	idx_t elements_returned;
+	idx_t result_set_size;
 	string name;
 
 	void AddTime(double n_time) {
@@ -48,6 +50,10 @@ struct OperatorInformation {
 
 	void AddReturnedElements(idx_t n_elements) {
 		elements_returned += n_elements;
+	}
+
+	void AddResultSetSize(idx_t n_result_set_size) {
+		result_set_size += n_result_set_size;
 	}
 };
 

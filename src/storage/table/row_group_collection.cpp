@@ -1,20 +1,21 @@
 #include "duckdb/storage/table/row_group_collection.hpp"
-#include "duckdb/storage/table/persistent_table_data.hpp"
+
+#include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/index/bound_index.hpp"
+#include "duckdb/execution/task_error_manager.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/storage/data_table.hpp"
+#include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
-#include "duckdb/storage/table/row_group_segment_tree.hpp"
+#include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/table/column_checkpoint_state.hpp"
+#include "duckdb/storage/table/persistent_table_data.hpp"
+#include "duckdb/storage/table/row_group_segment_tree.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
-#include "duckdb/common/serializer/binary_deserializer.hpp"
-#include "duckdb/parallel/task_executor.hpp"
-#include "duckdb/execution/task_error_manager.hpp"
-#include "duckdb/storage/table/column_checkpoint_state.hpp"
-#include "duckdb/execution/index/bound_index.hpp"
 
 namespace duckdb {
 
@@ -332,6 +333,10 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 	D_ASSERT(this->row_start + total_rows == state.start_row_group->start + state.start_row_group->count);
 	state.start_row_group->InitializeAppend(state.row_group_append_state);
 	state.transaction = transaction;
+
+	// initialize thread-local stats so we have less lock contention when updating distinct statistics
+	state.stats = TableStatistics();
+	state.stats.InitializeEmpty(types);
 }
 
 void RowGroupCollection::InitializeAppend(TableAppendState &state) {
@@ -383,9 +388,9 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 		}
 	}
 	state.current_row += row_t(total_append_count);
-	auto stats_lock = stats.GetLock();
+	auto local_stats_lock = state.stats.GetLock();
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
-		stats.GetStats(*stats_lock, col_idx).UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
+		state.stats.GetStats(*local_stats_lock, col_idx).UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
 	}
 	return new_row_group;
 }
@@ -403,6 +408,17 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 
 	state.total_append_count = 0;
 	state.start_row_group = nullptr;
+
+	auto global_stats_lock = stats.GetLock();
+	auto local_stats_lock = state.stats.GetLock();
+	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
+		auto &global_stats = stats.GetStats(*global_stats_lock, col_idx);
+		if (!global_stats.HasDistinctStats()) {
+			continue;
+		}
+		auto &local_stats = state.stats.GetStats(*local_stats_lock, col_idx);
+		global_stats.DistinctStats().Merge(local_stats.DistinctStats());
+	}
 
 	Verify();
 }

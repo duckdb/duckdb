@@ -135,13 +135,11 @@ NULL
 NULL
 NULL
 
-query T
+statement error
 SELECT contains(NULL,NULL) FROM strings
 ----
-NULL
-NULL
-NULL
-NULL
+Binder Error: Could not choose a best candidate function
+
 
 # Test empty pattern
 query T

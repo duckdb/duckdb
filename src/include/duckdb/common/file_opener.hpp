@@ -43,6 +43,24 @@ public:
 	                                                           Value &result);
 	DUCKDB_API static SettingLookupResult TryGetCurrentSetting(optional_ptr<FileOpener> opener, const string &key,
 	                                                           Value &result, FileOpenerInfo &info);
+
+	template <class TYPE>
+	static SettingLookupResult TryGetCurrentSetting(optional_ptr<FileOpener> opener, const string &key, TYPE &result,
+	                                                optional_ptr<FileOpenerInfo> info) {
+		Value output;
+		SettingLookupResult lookup_result;
+
+		if (info) {
+			lookup_result = TryGetCurrentSetting(opener, key, output, *info);
+		} else {
+			lookup_result = TryGetCurrentSetting(opener, key, output, *info);
+		}
+
+		if (lookup_result) {
+			result = output.GetValue<TYPE>();
+		}
+		return lookup_result;
+	}
 };
 
 } // namespace duckdb

@@ -102,7 +102,7 @@ statement ok
 CREATE INDEX idx ON art USING ART(id);
 
 query I
-SELECT mem_to_bytes(memory_usage) < 4300000 FROM pragma_database_size();
+SELECT mem_to_bytes(memory_usage) < 4000000 FROM pragma_database_size();
 ----
 true
 

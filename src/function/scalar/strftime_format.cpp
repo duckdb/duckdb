@@ -807,7 +807,7 @@ int32_t StrpTimeFormat::TryParseCollection(const char *data, idx_t &pos, idx_t s
 	return -1;
 }
 
-bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result) const {
+bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result, bool strict) const {
 	auto &result_data = result.data;
 	auto &error_message = result.error_message;
 	auto &error_position = result.error_position;
@@ -956,6 +956,9 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result) c
 				}
 				// year without century..
 				// Python uses 69 as a crossover point (i.e. >= 69 is 19.., < 69 is 20..)
+				if (pos - start_pos < 2 && strict) {
+					return false;
+				}
 				if (number >= 100) {
 					// %y only supports numbers between [0..99]
 					error_message = "Year without century out of range, expected a value between 0 and 99";
@@ -979,6 +982,9 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result) c
 					break;
 				default:
 					break;
+				}
+				if (pos - start_pos < 2 && strict) {
+					return false;
 				}
 				// year as full number
 				result_data[0] = UnsafeNumericCast<int32_t>(number);
@@ -1387,10 +1393,10 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result) c
 }
 
 //! Parses a timestamp using the given specifier
-bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
+bool StrpTimeFormat::Parse(string_t str, ParseResult &result, bool strict) const {
 	auto data = str.GetData();
 	idx_t size = str.GetSize();
-	return Parse(data, size, result);
+	return Parse(data, size, result, strict);
 }
 
 StrpTimeFormat::ParseResult StrpTimeFormat::Parse(const string &format_string, const string &text) {

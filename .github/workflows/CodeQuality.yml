@@ -44,7 +44,7 @@ jobs:
       GEN: ninja
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -81,7 +81,7 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -108,7 +108,7 @@ jobs:
       TIDY_CHECKS: ${{ inputs.explicit_checks && inputs.explicit_checks || '' }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 

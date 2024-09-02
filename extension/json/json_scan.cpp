@@ -29,6 +29,9 @@ void JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
 	auto_detect = info.auto_detect;
 
 	for (auto &kv : input.named_parameters) {
+		if (kv.second.IsNull()) {
+			throw BinderException("Cannot use NULL as function argument");
+		}
 		if (MultiFileReader().ParseOption(kv.first, kv.second, options.file_options, context)) {
 			continue;
 		}

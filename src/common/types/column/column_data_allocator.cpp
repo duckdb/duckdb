@@ -220,8 +220,8 @@ void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector 
 	}
 }
 
-void ColumnDataAllocator::DeleteBlock(uint32_t block_id) {
-	blocks[block_id].handle->SetCanDestroy(true);
+void ColumnDataAllocator::SetDestroyBufferUponUnpin(uint32_t block_id) {
+	blocks[block_id].handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
 }
 
 Allocator &ColumnDataAllocator::GetAllocator() {

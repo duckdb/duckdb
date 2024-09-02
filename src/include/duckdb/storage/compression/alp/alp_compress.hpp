@@ -122,7 +122,7 @@ public:
 
 		if (vector_idx != nulls_idx) { //! At least there is one valid value in the vector
 			for (idx_t i = 0; i < vector_idx; i++) {
-				NumericStats::Update<T>(current_segment->stats.statistics, input_vector[i]);
+				current_segment->stats.statistics.UpdateNumericStats<T>(input_vector[i]);
 			}
 		}
 		current_segment->count += vector_idx;

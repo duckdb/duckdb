@@ -74,7 +74,7 @@ void MetadataManager::ConvertToTransient(MetadataBlock &block) {
 	block.block = std::move(new_block);
 
 	// unregister the old block
-	block_manager.UnregisterBlock(block.block_id, false);
+	block_manager.UnregisterBlock(block.block_id);
 }
 
 block_id_t MetadataManager::AllocateNewBlock() {

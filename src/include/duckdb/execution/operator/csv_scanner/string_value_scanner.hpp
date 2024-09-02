@@ -36,7 +36,7 @@ public:
 	    : buffer_pos(buffer_pos_p), buffer_size(buffer_size_p), buffer_idx(buffer_idx_p) {
 	}
 
-	idx_t operator-(const LinePosition &other) {
+	idx_t operator-(const LinePosition &other) const {
 		if (other.buffer_idx == buffer_idx) {
 			return buffer_pos - other.buffer_pos;
 		}
@@ -47,7 +47,7 @@ public:
 		return buffer_pos == other.buffer_pos && buffer_idx == other.buffer_idx && buffer_size == other.buffer_size;
 	}
 
-	idx_t GetGlobalPosition(idx_t requested_buffer_size, bool first_char_nl = false) {
+	idx_t GetGlobalPosition(idx_t requested_buffer_size, bool first_char_nl = false) const {
 		return requested_buffer_size * buffer_idx + buffer_pos + first_char_nl;
 	}
 	idx_t buffer_pos = 0;
@@ -65,14 +65,14 @@ public:
 	//! Reconstructs the current line to be used in error messages
 	string ReconstructCurrentLine(bool &first_char_nl,
 	                              unordered_map<idx_t, shared_ptr<CSVBufferHandle>> &buffer_handles,
-	                              bool reconstruct_line);
+	                              bool reconstruct_line) const;
 };
 
 class StringValueResult;
 
 class CurrentError {
 public:
-	CurrentError(CSVErrorType type, idx_t col_idx_p, idx_t chunk_idx_p, LinePosition error_position_p,
+	CurrentError(CSVErrorType type, idx_t col_idx_p, idx_t chunk_idx_p, const LinePosition &error_position_p,
 	             idx_t current_line_size_p)
 	    : type(type), col_idx(col_idx_p), chunk_idx(chunk_idx_p), current_line_size(current_line_size_p),
 	      error_position(error_position_p) {};
@@ -121,7 +121,7 @@ public:
 		current_errors.back().error_message = std::move(error_message);
 	}
 
-	bool HasErrorType(CSVErrorType type) {
+	bool HasErrorType(CSVErrorType type) const {
 		for (auto &error : current_errors) {
 			if (type == error.type) {
 				return true;
@@ -140,7 +140,7 @@ private:
 
 struct ParseTypeInfo {
 	ParseTypeInfo() {};
-	ParseTypeInfo(LogicalType &type, bool validate_utf_8_p) : validate_utf8(validate_utf_8_p) {
+	ParseTypeInfo(const LogicalType &type, bool validate_utf_8_p) : validate_utf8(validate_utf_8_p) {
 		type_id = type.id();
 		internal_type = type.InternalType();
 		if (type.id() == LogicalTypeId::DECIMAL) {
@@ -242,7 +242,7 @@ public:
 	static inline void InvalidState(StringValueResult &result);
 	//! Handles QuotedNewline State
 	static inline void QuotedNewLine(StringValueResult &result);
-	void NullPaddingQuotedNewlineCheck();
+	void NullPaddingQuotedNewlineCheck() const;
 	//! Handles EmptyLine states
 	static inline bool EmptyLine(StringValueResult &result, const idx_t buffer_pos);
 	inline bool AddRowInternal();
@@ -258,10 +258,10 @@ public:
 	void Reset();
 
 	//! BOM skipping (https://en.wikipedia.org/wiki/Byte_order_mark)
-	void SkipBOM();
+	void SkipBOM() const;
 	//! If we should Print Error Lines
 	//! We only really care about error lines if we are going to error or store them in a rejects table
-	bool PrintErrorLine();
+	bool PrintErrorLine() const;
 	//! Removes last added line, usually because we figured out later on that it's an ill-formed line
 	//! or that it does not fit our schema
 	void RemoveLastLine();
@@ -273,12 +273,13 @@ public:
 	StringValueScanner(idx_t scanner_idx, const shared_ptr<CSVBufferManager> &buffer_manager,
 	                   const shared_ptr<CSVStateMachine> &state_machine,
 	                   const shared_ptr<CSVErrorHandler> &error_handler, const shared_ptr<CSVFileScan> &csv_file_scan,
-	                   bool sniffing = false, CSVIterator boundary = {}, idx_t result_size = STANDARD_VECTOR_SIZE);
+	                   bool sniffing = false, const CSVIterator &boundary = {},
+	                   idx_t result_size = STANDARD_VECTOR_SIZE);
 
 	StringValueScanner(const shared_ptr<CSVBufferManager> &buffer_manager,
 	                   const shared_ptr<CSVStateMachine> &state_machine,
 	                   const shared_ptr<CSVErrorHandler> &error_handler, idx_t result_size = STANDARD_VECTOR_SIZE,
-	                   CSVIterator boundary = {});
+	                   const CSVIterator &boundary = {});
 
 	StringValueResult &ParseChunk() override;
 
@@ -288,7 +289,7 @@ public:
 	//! Function that creates and returns a non-boundary CSV Scanner, can be used for internal csv reading.
 	static unique_ptr<StringValueScanner> GetCSVScanner(ClientContext &context, CSVReaderOptions &options);
 
-	bool FinishedIterator();
+	bool FinishedIterator() const;
 
 	//! Creates a new string with all escaped values removed
 	static string_t RemoveEscape(const char *str_ptr, idx_t end, char escape, Vector &vector);

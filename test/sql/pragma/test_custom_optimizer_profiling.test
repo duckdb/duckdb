@@ -148,51 +148,10 @@ FROM metrics_output;
 ----
 true
 
-# Test Physical Plan and Planner Metrics
-statement ok
-PRAGMA custom_profiling_settings='{"PLANNER": "true", "PHYSICAL_PLANNER": "true"}'
-
-statement ok
-select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();
-
-statement ok
-PRAGMA disable_profiling
-
-query I rowsort
-SELECT unnest(res) from (
-	select current_setting('custom_profiling_settings') as raw_setting,
-	raw_setting.trim('{}') as setting,
-	string_split(setting, ', ') as res
-)
-----
-"PHYSICAL_PLANNER": "true"
-"PLANNER": "true"
-
-# test if physical planner and planner actually record timings
-statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM 'test/sql/pragma/output.json';
-
-query I
-SELECT 
-CASE 
-    WHEN physical_planner > 0 THEN 'true'
-    ELSE 'false'
-END
-FROM metrics_output;
-----
-true
-
-query I
-SELECT 
-CASE 
-    WHEN planner > 0 THEN 'true'
-    ELSE 'false'
-END
-FROM metrics_output;
-----
-true
-
 # test if all phase timings are added when detailed profiling is on
+statement ok
+RESET custom_profiling_settings;
+
 statement ok
 SET profiling_mode = 'detailed';
 
@@ -250,8 +209,12 @@ SELECT unnest(res) from (
 "PLANNER": "true"
 "PLANNER_BINDING": "true"
 "QUERY_NAME": "true"
+"RESULT_SET_SIZE": "true"
 
 # Test if phase timings are not added if detailed mode is off
+statement ok
+RESET custom_profiling_settings;
+
 statement ok
 PRAGMA profiling_mode = 'standard';
 
@@ -275,4 +238,6 @@ SELECT unnest(res) from (
 "OPERATOR_TIMING": "true"
 "OPERATOR_TYPE": "true"
 "QUERY_NAME": "true"
+"RESULT_SET_SIZE": "true"
+
 

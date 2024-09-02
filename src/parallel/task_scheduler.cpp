@@ -164,17 +164,25 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 	shared_ptr<Task> task;
 	// loop until the marker is set to false
 	while (*marker) {
-		if (!Allocator::SupportsFlush() || allocator_background_threads) {
-			// allocator can't flush, or background threads clean up allocations, just start an untimed wait
+		if (!Allocator::SupportsFlush()) {
+			// allocator can't flush, just start an untimed wait
 			queue->semaphore.wait();
 		} else if (!queue->semaphore.wait(INITIAL_FLUSH_WAIT)) {
-			// no background threads, flush this threads outstanding allocations after it was idle for 0.5s
-			Allocator::ThreadFlush(allocator_flush_threshold);
-			if (!queue->semaphore.wait(Allocator::DecayDelay() * 1000000 - INITIAL_FLUSH_WAIT)) {
-				// in total, the thread was idle for the entire decay delay (note: seconds converted to mus)
-				// mark it as idle and start an untimed wait
-				Allocator::ThreadIdle();
+			// allocator can flush, we flush this threads outstanding allocations after it was idle for 0.5s
+			Allocator::ThreadFlush(allocator_background_threads, allocator_flush_threshold,
+			                       NumericCast<idx_t>(requested_thread_count.load()));
+			auto decay_delay = Allocator::DecayDelay();
+			if (!decay_delay.IsValid()) {
+				// no decay delay specified - just wait
 				queue->semaphore.wait();
+			} else {
+				if (!queue->semaphore.wait(UnsafeNumericCast<int64_t>(decay_delay.GetIndex()) * 1000000 -
+				                           INITIAL_FLUSH_WAIT)) {
+					// in total, the thread was idle for the entire decay delay (note: seconds converted to mus)
+					// mark it as idle and start an untimed wait
+					Allocator::ThreadIdle();
+					queue->semaphore.wait();
+				}
 			}
 		}
 		if (queue->q.try_dequeue(task)) {
@@ -196,7 +204,7 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 	}
 	// this thread will exit, flush all of its outstanding allocations
 	if (Allocator::SupportsFlush()) {
-		Allocator::ThreadFlush(0);
+		Allocator::ThreadFlush(allocator_background_threads, 0, NumericCast<idx_t>(requested_thread_count.load()));
 		Allocator::ThreadIdle();
 	}
 #else

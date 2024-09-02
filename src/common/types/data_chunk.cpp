@@ -143,7 +143,7 @@ void DataChunk::Copy(DataChunk &other, idx_t offset) const {
 void DataChunk::Copy(DataChunk &other, const SelectionVector &sel, const idx_t source_count, const idx_t offset) const {
 	D_ASSERT(ColumnCount() == other.ColumnCount());
 	D_ASSERT(other.size() == 0);
-	D_ASSERT((offset + source_count) <= size());
+	D_ASSERT(source_count <= size());
 
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		D_ASSERT(other.data[i].GetVectorType() == VectorType::FLAT_VECTOR);

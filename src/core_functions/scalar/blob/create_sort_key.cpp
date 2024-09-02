@@ -729,6 +729,20 @@ void CreateSortKeyHelpers::CreateSortKey(Vector &input, idx_t input_count, Order
 	CreateSortKeyInternal(sort_key_data, modifiers, result, input_count);
 }
 
+void CreateSortKeyHelpers::CreateSortKeyWithValidity(Vector &input, Vector &result, const OrderModifiers &modifiers,
+                                                     const idx_t count) {
+	CreateSortKey(input, count, modifiers, result);
+	UnifiedVectorFormat format;
+	input.ToUnifiedFormat(count, format);
+	auto &validity = FlatVector::Validity(result);
+
+	for (idx_t i = 0; i < count; i++) {
+		if (!format.validity.RowIsValid(i)) {
+			validity.SetInvalid(i);
+		}
+	}
+}
+
 static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<CreateSortKeyBindData>();
 

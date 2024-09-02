@@ -513,6 +513,14 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 				//! This is a like function.
 				auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
 				auto &constant_value_expr = func.children[1]->Cast<BoundConstantExpression>();
+				auto column_index = column_ids[column_ref.binding.column_index];
+				// constant value expr can sometimes be null. if so, push is not null filter, which will
+				// make the filter unsatisfiable and return no results.
+				if (constant_value_expr.value.IsNull()) {
+					auto is_not_null = make_uniq<IsNotNullFilter>();
+					table_filters.PushFilter(column_index, std::move(is_not_null));
+					continue;
+				}
 				auto &like_string = StringValue::Get(constant_value_expr.value);
 				if (like_string[0] == '%' || like_string[0] == '_') {
 					//! We have no prefix so nothing to pushdown
@@ -527,7 +535,6 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 					}
 					prefix += c;
 				}
-				auto column_index = column_ids[column_ref.binding.column_index];
 				if (equality) {
 					//! Here the like can be transformed to an equality query
 					auto equal_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, Value(prefix));

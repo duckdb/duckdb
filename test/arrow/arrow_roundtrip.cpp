@@ -4,11 +4,16 @@
 
 using namespace duckdb;
 
-static void TestArrowRoundtrip(const string &query, bool export_large_buffer = false) {
+static void TestArrowRoundtrip(const string &query, bool export_large_buffer = false,
+                               bool loseless_conversion = false) {
 	DuckDB db;
 	Connection con(db);
 	if (export_large_buffer) {
 		auto res = con.Query("SET arrow_large_buffer_size=True");
+		REQUIRE(!res->HasError());
+	}
+	if (loseless_conversion) {
+		auto res = con.Query("SET arrow_lossless_conversion = true");
 		REQUIRE(!res->HasError());
 	}
 	REQUIRE(ArrowTestHelper::RunArrowComparison(con, query, true));
@@ -88,10 +93,35 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 
 TEST_CASE("Test Arrow Extension Types", "[arrow][.]") {
 	// UUID
-	TestArrowRoundtrip("SELECT '2d89ebe6-1e13-47e5-803a-b81c87660b66'::UUID str FROM range(5) tbl(i)");
+	TestArrowRoundtrip("SELECT '2d89ebe6-1e13-47e5-803a-b81c87660b66'::UUID str FROM range(5) tbl(i)", false, true);
+
+	// HUGEINT
+	TestArrowRoundtrip("SELECT '170141183460469231731687303715884105727'::HUGEINT str FROM range(5) tbl(i)", false,
+	                   true);
+
+	// UHUGEINT
+	TestArrowRoundtrip("SELECT '170141183460469231731687303715884105727'::UHUGEINT str FROM range(5) tbl(i)", false,
+	                   true);
+
+	// BIT
+	TestArrowRoundtrip("SELECT '0101011'::BIT str FROM range(5) tbl(i)", false, true);
+
+	// TIME_TZ
+	TestArrowRoundtrip("SELECT '02:30:00+04'::TIMETZ str FROM range(5) tbl(i)", false, true);
+}
+
+TEST_CASE("Test Arrow Extension Types - JSON", "[arrow][.]") {
+	DBConfig config;
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+
+	if (!db.ExtensionIsLoaded("json")) {
+		return;
+	}
 
 	// JSON
-	TestArrowRoundtrip("SELECT '{\"name\":\"Pedro\", \"age\":28, \"car\":\"VW Fox\"}'::JSON str FROM range(5) tbl(i)");
+	TestArrowRoundtrip("SELECT '{\"name\":\"Pedro\", \"age\":28, \"car\":\"VW Fox\"}'::JSON str FROM range(5) tbl(i)",
+	                   false, true);
 }
 
 TEST_CASE("Test Arrow String View", "[arrow][.]") {

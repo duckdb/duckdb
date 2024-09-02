@@ -90,6 +90,16 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	}
 	auto index_storage_infos = info->GetIndexes().GetStorageInfos(options);
 
+#ifdef DUCKDB_BLOCK_VERIFICATION
+	for (auto &entry : index_storage_infos) {
+		for (auto &allocator : entry.allocator_infos) {
+			for (auto &block : allocator.block_pointers) {
+				checkpoint_manager.verify_block_usage_count[block.block_id]++;
+			}
+		}
+	}
+#endif
+
 	// write empty block pointers for forwards compatibility
 	vector<BlockPointer> compat_block_pointers;
 	serializer.WriteProperty(103, "index_pointers", compat_block_pointers);

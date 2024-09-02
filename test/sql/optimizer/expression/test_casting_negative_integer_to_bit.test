@@ -1,0 +1,30 @@
+# name: test/sql/optimizer/expression/test_casting_negative_integer_to_bit.test
+# description: https://github.com/duckdb/duckdb/issues/13506
+# group: [expression]
+
+statement ok
+CREATE TABLE  t1 as select -1 c1 from range(1);
+
+query I
+SELECT t1.c1 FROM t1;
+----
+-1
+
+query II
+SELECT CAST(CAST(t1.c1 AS BIT) AS INTEGER), (1 BETWEEN -1 AND CAST(CAST(t1.c1 AS BIT) AS INTEGER)) FROM t1;
+----
+-1	false
+
+
+# also fails
+query II
+select cast(cast(c1 as BIT) as INTEGER) as cast_res,  1 between -1 and cast(cast(c1 as BIT) as INTEGER) as watever from t1;
+----
+-1	false
+
+
+query I
+SELECT t1.c1 FROM t1 WHERE (1 BETWEEN -1 AND CAST(CAST(t1.c1 AS BIT) AS INTEGER));
+----
+
+

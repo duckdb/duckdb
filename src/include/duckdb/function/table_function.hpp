@@ -204,6 +204,8 @@ typedef BindInfo (*table_function_get_bind_info_t)(const optional_ptr<FunctionDa
 
 typedef unique_ptr<MultiFileReader> (*table_function_get_multi_file_reader_t)();
 
+typedef bool (*table_function_supports_pushdown_type_t)(const LogicalType &type);
+
 typedef double (*table_function_progress_t)(ClientContext &context, const FunctionData *bind_data,
                                             const GlobalTableFunctionState *global_state);
 typedef void (*table_function_dependency_t)(LogicalDependencyList &dependencies, const FunctionData *bind_data);
@@ -280,6 +282,8 @@ public:
 	table_function_type_pushdown_t type_pushdown;
 	//! (Optional) allows injecting a custom MultiFileReader implementation
 	table_function_get_multi_file_reader_t get_multi_file_reader;
+	//! (Optional) If this scanner supports filter pushdown, but not to all data types
+	table_function_supports_pushdown_type_t supports_pushdown_type;
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;

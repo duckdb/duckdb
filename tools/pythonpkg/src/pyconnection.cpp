@@ -889,50 +889,172 @@ PathLike DuckDBPyConnection::GetPathLike(const py::object &object) {
 	return PathLike::Create(object, *this);
 }
 
-static py::object GetValueOrNone(py::kwargs &kwargs, const string &key) {
-	if (kwargs.contains(key)) {
-		return kwargs[key.c_str()];
+static void AcceptableCSVOptions(const string &unkown_parameter) {
+	// List of strings to match against
+	const unordered_set<string> valid_parameters = {"header",
+	                                                "compression",
+	                                                "sep",
+	                                                "delimiter",
+	                                                "dtype",
+	                                                "na_values",
+	                                                "skiprows",
+	                                                "quotechar",
+	                                                "escapechar",
+	                                                "encoding",
+	                                                "parallel",
+	                                                "date_format",
+	                                                "timestamp_format",
+	                                                "sample_size",
+	                                                "all_varchar",
+	                                                "normalize_names",
+	                                                "null_padding",
+	                                                "names",
+	                                                "lineterminator",
+	                                                "columns",
+	                                                "auto_type_candidates",
+	                                                "max_line_size",
+	                                                "ignore_errors",
+	                                                "store_rejects",
+	                                                "rejects_table",
+	                                                "rejects_scan",
+	                                                "rejects_limit",
+	                                                "force_not_null",
+	                                                "buffer_size",
+	                                                "decimal",
+	                                                "allow_quoted_nulls",
+	                                                "filename",
+	                                                "hive_partitioning",
+	                                                "union_by_name",
+	                                                "hive_types",
+	                                                "hive_types_autocast"};
+
+	std::ostringstream error;
+	error << "The methods read_csv and read_csv_auto do not have the \"" << unkown_parameter << "\" argument." << '\n';
+	error << "Possible arguments as suggestions: " << '\n';
+	vector<string> parameters(valid_parameters.begin(), valid_parameters.end());
+	auto suggestions = StringUtil::TopNJaroWinkler(parameters, unkown_parameter, 3);
+	for (auto &suggestion : suggestions) {
+		error << "* " << suggestion << '\n';
 	}
-	return py::none();
+	throw InvalidInputException(error.str());
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_p, py::kwargs &kwargs) {
-	auto header = GetValueOrNone(kwargs, "header");
-	auto compression = GetValueOrNone(kwargs, "compression");
-	auto sep = GetValueOrNone(kwargs, "sep");
-	auto delimiter = GetValueOrNone(kwargs, "delimiter");
-	auto dtype = GetValueOrNone(kwargs, "dtype");
-	auto na_values = GetValueOrNone(kwargs, "na_values");
-	auto skiprows = GetValueOrNone(kwargs, "skiprows");
-	auto quotechar = GetValueOrNone(kwargs, "quotechar");
-	auto escapechar = GetValueOrNone(kwargs, "escapechar");
-	auto encoding = GetValueOrNone(kwargs, "encoding");
-	auto parallel = GetValueOrNone(kwargs, "parallel");
-	auto date_format = GetValueOrNone(kwargs, "date_format");
-	auto timestamp_format = GetValueOrNone(kwargs, "timestamp_format");
-	auto sample_size = GetValueOrNone(kwargs, "sample_size");
-	auto all_varchar = GetValueOrNone(kwargs, "all_varchar");
-	auto normalize_names = GetValueOrNone(kwargs, "normalize_names");
-	auto null_padding = GetValueOrNone(kwargs, "null_padding");
-	auto names_p = GetValueOrNone(kwargs, "names");
-	auto lineterminator = GetValueOrNone(kwargs, "lineterminator");
-	auto columns = GetValueOrNone(kwargs, "columns");
-	auto auto_type_candidates = GetValueOrNone(kwargs, "auto_type_candidates");
-	auto max_line_size = GetValueOrNone(kwargs, "max_line_size");
-	auto ignore_errors = GetValueOrNone(kwargs, "ignore_errors");
-	auto store_rejects = GetValueOrNone(kwargs, "store_rejects");
-	auto rejects_table = GetValueOrNone(kwargs, "rejects_table");
-	auto rejects_scan = GetValueOrNone(kwargs, "rejects_scan");
-	auto rejects_limit = GetValueOrNone(kwargs, "rejects_limit");
-	auto force_not_null = GetValueOrNone(kwargs, "force_not_null");
-	auto buffer_size = GetValueOrNone(kwargs, "buffer_size");
-	auto decimal = GetValueOrNone(kwargs, "decimal");
-	auto allow_quoted_nulls = GetValueOrNone(kwargs, "allow_quoted_nulls");
-	auto filename = GetValueOrNone(kwargs, "filename");
-	auto hive_partitioning = GetValueOrNone(kwargs, "hive_partitioning");
-	auto union_by_name = GetValueOrNone(kwargs, "union_by_name");
-	auto hive_types = GetValueOrNone(kwargs, "hive_types");
-	auto hive_types_autocast = GetValueOrNone(kwargs, "hive_types_autocast");
+	py::object header = py::none();
+	py::object compression = py::none();
+	py::object sep = py::none();
+	py::object delimiter = py::none();
+	py::object dtype = py::none();
+	py::object na_values = py::none();
+	py::object skiprows = py::none();
+	py::object quotechar = py::none();
+	py::object escapechar = py::none();
+	py::object encoding = py::none();
+	py::object parallel = py::none();
+	py::object date_format = py::none();
+	py::object timestamp_format = py::none();
+	py::object sample_size = py::none();
+	py::object all_varchar = py::none();
+	py::object normalize_names = py::none();
+	py::object null_padding = py::none();
+	py::object names_p = py::none();
+	py::object lineterminator = py::none();
+	py::object columns = py::none();
+	py::object auto_type_candidates = py::none();
+	py::object max_line_size = py::none();
+	py::object ignore_errors = py::none();
+	py::object store_rejects = py::none();
+	py::object rejects_table = py::none();
+	py::object rejects_scan = py::none();
+	py::object rejects_limit = py::none();
+	py::object force_not_null = py::none();
+	py::object buffer_size = py::none();
+	py::object decimal = py::none();
+	py::object allow_quoted_nulls = py::none();
+	py::object filename = py::none();
+	py::object hive_partitioning = py::none();
+	py::object union_by_name = py::none();
+	py::object hive_types = py::none();
+	py::object hive_types_autocast = py::none();
+	for (auto &arg : kwargs) {
+		const auto &arg_name = py::str(arg.first).cast<std::string>();
+
+		if (arg_name == "header") {
+			header = kwargs[arg_name.c_str()];
+		} else if (arg_name == "compression") {
+			compression = kwargs[arg_name.c_str()];
+		} else if (arg_name == "sep") {
+			sep = kwargs[arg_name.c_str()];
+		} else if (arg_name == "delimiter") {
+			delimiter = kwargs[arg_name.c_str()];
+		} else if (arg_name == "dtype") {
+			dtype = kwargs[arg_name.c_str()];
+		} else if (arg_name == "na_values") {
+			na_values = kwargs[arg_name.c_str()];
+		} else if (arg_name == "skiprows") {
+			skiprows = kwargs[arg_name.c_str()];
+		} else if (arg_name == "quotechar") {
+			quotechar = kwargs[arg_name.c_str()];
+		} else if (arg_name == "escapechar") {
+			escapechar = kwargs[arg_name.c_str()];
+		} else if (arg_name == "encoding") {
+			encoding = kwargs[arg_name.c_str()];
+		} else if (arg_name == "parallel") {
+			parallel = kwargs[arg_name.c_str()];
+		} else if (arg_name == "date_format") {
+			date_format = kwargs[arg_name.c_str()];
+		} else if (arg_name == "timestamp_format") {
+			timestamp_format = kwargs[arg_name.c_str()];
+		} else if (arg_name == "sample_size") {
+			sample_size = kwargs[arg_name.c_str()];
+		} else if (arg_name == "all_varchar") {
+			all_varchar = kwargs[arg_name.c_str()];
+		} else if (arg_name == "normalize_names") {
+			normalize_names = kwargs[arg_name.c_str()];
+		} else if (arg_name == "null_padding") {
+			null_padding = kwargs[arg_name.c_str()];
+		} else if (arg_name == "names") {
+			names_p = kwargs[arg_name.c_str()];
+		} else if (arg_name == "lineterminator") {
+			lineterminator = kwargs[arg_name.c_str()];
+		} else if (arg_name == "columns") {
+			columns = kwargs[arg_name.c_str()];
+		} else if (arg_name == "auto_type_candidates") {
+			auto_type_candidates = kwargs[arg_name.c_str()];
+		} else if (arg_name == "max_line_size") {
+			max_line_size = kwargs[arg_name.c_str()];
+		} else if (arg_name == "ignore_errors") {
+			ignore_errors = kwargs[arg_name.c_str()];
+		} else if (arg_name == "store_rejects") {
+			store_rejects = kwargs[arg_name.c_str()];
+		} else if (arg_name == "rejects_table") {
+			rejects_table = kwargs[arg_name.c_str()];
+		} else if (arg_name == "rejects_scan") {
+			rejects_scan = kwargs[arg_name.c_str()];
+		} else if (arg_name == "rejects_limit") {
+			rejects_limit = kwargs[arg_name.c_str()];
+		} else if (arg_name == "force_not_null") {
+			force_not_null = kwargs[arg_name.c_str()];
+		} else if (arg_name == "buffer_size") {
+			buffer_size = kwargs[arg_name.c_str()];
+		} else if (arg_name == "decimal") {
+			decimal = kwargs[arg_name.c_str()];
+		} else if (arg_name == "allow_quoted_nulls") {
+			allow_quoted_nulls = kwargs[arg_name.c_str()];
+		} else if (arg_name == "filename") {
+			filename = kwargs[arg_name.c_str()];
+		} else if (arg_name == "hive_partitioning") {
+			hive_partitioning = kwargs[arg_name.c_str()];
+		} else if (arg_name == "union_by_name") {
+			union_by_name = kwargs[arg_name.c_str()];
+		} else if (arg_name == "hive_types") {
+			hive_types = kwargs[arg_name.c_str()];
+		} else if (arg_name == "hive_types_autocast") {
+			hive_types_autocast = kwargs[arg_name.c_str()];
+		} else {
+			AcceptableCSVOptions(arg_name);
+		}
+	}
 
 	auto &connection = con.GetConnection();
 	CSVReaderOptions options;

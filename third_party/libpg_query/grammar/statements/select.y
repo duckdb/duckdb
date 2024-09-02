@@ -2775,22 +2775,9 @@ indirection_expr:
 				{
 					$$ = $1;
 				}
-			| MAP '{' opt_map_arguments_opt_comma '}'
+			| map_expr
 				{
-					PGList *key_list = NULL;
-					PGList *value_list = NULL;
-					PGListCell *lc;
-					PGList *entry_list = $3;
-					foreach(lc, entry_list)
-					{
-						PGList *l = (PGList *) lc->data.ptr_value;
-						key_list = lappend(key_list, (PGNode *) l->head->data.ptr_value);
-						value_list = lappend(value_list, (PGNode *) l->tail->data.ptr_value);
-					}
-					PGNode *keys   = (PGNode *) makeFuncCall(SystemFuncName("list_value"), key_list, @3);
-					PGNode *values = (PGNode *) makeFuncCall(SystemFuncName("list_value"), value_list, @3);
-					PGFuncCall *f = makeFuncCall(SystemFuncName("map"), list_make2(keys, values), @3);
-					$$ = (PGNode *) f;
+					$$ = $1;
 				}
 			| func_expr
 				{
@@ -2845,6 +2832,24 @@ struct_expr:		'{' dict_arguments_opt_comma '}'
 					$$ = (PGNode *) f;
 				}
 		;
+
+map_expr:  MAP '{' opt_map_arguments_opt_comma '}'
+                {
+                    PGList *key_list = NULL;
+                    PGList *value_list = NULL;
+                    PGListCell *lc;
+                    PGList *entry_list = $3;
+                    foreach(lc, entry_list)
+                    {
+                        PGList *l = (PGList *) lc->data.ptr_value;
+                        key_list = lappend(key_list, (PGNode *) l->head->data.ptr_value);
+                        value_list = lappend(value_list, (PGNode *) l->tail->data.ptr_value);
+                    }
+                    PGNode *keys   = (PGNode *) makeFuncCall(SystemFuncName("list_value"), key_list, @3);
+                    PGNode *values = (PGNode *) makeFuncCall(SystemFuncName("list_value"), value_list, @3);
+                    PGFuncCall *f = makeFuncCall(SystemFuncName("map"), list_make2(keys, values), @3);
+                    $$ = (PGNode *) f;
+                }
 
 
 

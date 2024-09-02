@@ -43,14 +43,14 @@ jobs:
     CXX: g++-10
     GEN: ninja
     BUILD_BENCHMARK: 1
-    BUILD_INET: 1
     BUILD_TPCH: 1
     BUILD_TPCDS: 1
     BUILD_HTTPFS: 1
     BUILD_JEMALLOC: 1
+    CORE_EXTENSIONS: "inet"
 
   steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -141,7 +141,7 @@ jobs:
     BUILD_TPCDS: 1
 
   steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -220,13 +220,13 @@ jobs:
     GEN: ninja
 
   steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
     - uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: '3.12'
 
     - name: Install
       shell: bash
@@ -289,7 +289,7 @@ jobs:
     BUILD_HTTPFS: 1
 
   steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 

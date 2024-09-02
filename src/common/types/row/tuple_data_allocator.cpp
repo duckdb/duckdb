@@ -35,21 +35,21 @@ TupleDataAllocator::TupleDataAllocator(TupleDataAllocator &allocator)
     : buffer_manager(allocator.buffer_manager), layout(allocator.layout.Copy()) {
 }
 
-void TupleDataAllocator::SetCanDestroy() {
+void TupleDataAllocator::SetDestroyBufferUponUnpin() {
 	for (auto &block : row_blocks) {
 		if (block.handle) {
-			block.handle->SetCanDestroy(true);
+			block.handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
 		}
 	}
 	for (auto &block : heap_blocks) {
 		if (block.handle) {
-			block.handle->SetCanDestroy(true);
+			block.handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
 		}
 	}
 }
 
 TupleDataAllocator::~TupleDataAllocator() {
-	SetCanDestroy();
+	SetDestroyBufferUponUnpin();
 }
 
 BufferManager &TupleDataAllocator::GetBufferManager() {
@@ -459,7 +459,7 @@ void TupleDataAllocator::ReleaseOrStoreHandlesInternal(
 				break;
 			case TupleDataPinProperties::DESTROY_AFTER_DONE:
 				// Prevent it from being added to the eviction queue
-				blocks[block_id].handle->SetCanDestroy(true);
+				blocks[block_id].handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
 				// Destroy
 				blocks[block_id].handle.reset();
 				break;

@@ -86,7 +86,10 @@ void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, cons
 	SetAllocationSize(available_segments, segment_size, bitmask_offset);
 
 	// the buffer is in memory, so we copied it onto a new buffer when pinning
-	D_ASSERT(InMemory() && !OnDisk());
+	D_ASSERT(InMemory());
+	if (OnDisk()) {
+		block_manager.MarkBlockAsModified(block_pointer.block_id);
+	}
 
 	// now we write the changes, first get a partial block allocation
 	PartialBlockAllocation allocation =
@@ -132,17 +135,14 @@ void FixedSizeBuffer::Pin() {
 
 	buffer_handle = buffer_manager.Pin(block_handle);
 
-	// we need to copy the (partial) data into a new (not yet disk-backed) buffer handle
+	// Copy the (partial) data into a new (not yet disk-backed) buffer handle.
 	shared_ptr<BlockHandle> new_block_handle;
 	auto new_buffer_handle =
 	    buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager.GetBlockSize(), false, &new_block_handle);
-
 	memcpy(new_buffer_handle.Ptr(), buffer_handle.Ptr() + block_pointer.offset, allocation_size);
 
-	Destroy();
 	buffer_handle = std::move(new_buffer_handle);
 	block_handle = std::move(new_block_handle);
-	block_pointer = BlockPointer();
 }
 
 uint32_t FixedSizeBuffer::GetOffset(const idx_t bitmask_count) {

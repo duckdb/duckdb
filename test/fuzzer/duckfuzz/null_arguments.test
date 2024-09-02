@@ -1,0 +1,60 @@
+# name: test/fuzzer/duckfuzz/null_arguments.test
+# description: Null arguments do not throw internal exceptions
+# group: [duckfuzz]
+
+require json
+
+require tpch
+
+require parquet
+
+statement error
+SELECT NULL FROM parquet_scan(NULL, "schema" := NULL);
+----
+<REGEX>:.*Cannot use NULL.*
+
+statement ok
+create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types();
+
+statement error
+SELECT NULL FROM read_ndjson_auto(NULL, timestamp_format := 5469, "compression" := NULL)
+----
+<REGEX>:.*Cannot use NULL.*
+
+statement ok
+COPY (VALUES (NULL), (NULL)) TO '__TEST_DIR__/test_null_args.parquet' (FORMAT PARQUET);
+
+
+statement error
+SELECT NULL FROM read_parquet('__TEST_DIR__/test_null_args.parquet', filename = NULL);
+----
+<REGEX>:.*Cannot use NULL.*
+
+statement error
+FROM read_ndjson(NULL, filename := NULL) AS t14(c11, c12, c13)
+----
+<REGEX>:.*Cannot use NULL.*
+
+statement ok
+COPY (VALUES (NULL), (NULL)) TO '__TEST_DIR__/test_null_args.csv' (FORMAT CSV);
+
+statement error
+SELECT NULL FROM read_csv('__TEST_DIR__/test_null_args.csv', names=NULL);
+----
+<REGEX>:.*read_csv_auto names cannot be NULL.*
+
+statement ok
+call dbgen(sf=0.01);
+
+#https://github.com/duckdb/duckdb-fuzzer/issues/2703
+statement ok
+SELECT NULL FROM (
+	SELECT
+		hex(CAST(CAST(NULL AS BLOB) AS BLOB)) AS c7,
+		ref_0.r_comment AS c11
+	FROM main.region AS ref_0
+) AS subq_0
+WHERE (
+	(subq_0.c11 ~~ subq_0.c7)
+);
+

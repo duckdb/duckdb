@@ -1,10 +1,11 @@
 #include "duckdb/parallel/pipeline_executor.hpp"
-#include "duckdb/main/client_context.hpp"
+
 #include "duckdb/common/limits.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
-#include <thread>
 #include <chrono>
+#include <thread>
 #endif
 
 namespace duckdb {
@@ -260,6 +261,17 @@ OperatorResultType PipelineExecutor::ExecutePush(DataChunk &input) { // LCOV_EXC
 void PipelineExecutor::FinishProcessing(int32_t operator_idx) {
 	finished_processing_idx = operator_idx < 0 ? NumericLimits<int32_t>::Maximum() : operator_idx;
 	in_process_operators = stack<idx_t>();
+
+	if (pipeline.GetSource()) {
+		auto guard = pipeline.source_state->Lock();
+		pipeline.source_state->PreventBlocking(guard);
+		pipeline.source_state->UnblockTasks(guard);
+	}
+	if (pipeline.GetSink()) {
+		auto guard = pipeline.GetSink()->sink_state->Lock();
+		pipeline.GetSink()->sink_state->PreventBlocking(guard);
+		pipeline.GetSink()->sink_state->UnblockTasks(guard);
+	}
 }
 
 bool PipelineExecutor::IsFinished() {
