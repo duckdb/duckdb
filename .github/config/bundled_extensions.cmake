@@ -14,14 +14,14 @@
 #
 ## Extensions that are linked
 #
-duckdb_extension_load(icu EXTENSION_VERSION ${DUCKDB_NORMALIZED_VERSION})
-duckdb_extension_load(tpch EXTENSION_VERSION ${DUCKDB_NORMALIZED_VERSION})
-duckdb_extension_load(json EXTENSION_VERSION ${DUCKDB_NORMALIZED_VERSION})
-duckdb_extension_load(fts EXTENSION_VERSION ${DUCKDB_NORMALIZED_VERSION})
-duckdb_extension_load(parquet EXTENSION_VERSION ${DUCKDB_NORMALIZED_VERSION})
-duckdb_extension_load(autocomplete EXTENSION_VERSION ${DUCKDB_NORMALIZED_VERSION})
+duckdb_extension_load(icu)
+duckdb_extension_load(tpch)
+duckdb_extension_load(json)
+duckdb_extension_load(fts)
+duckdb_extension_load(parquet)
+duckdb_extension_load(autocomplete)
 
 #
 ## Extensions that are not linked, but we do want to test them as part of the release build
 #
-duckdb_extension_load(tpcds DONT_LINK EXTENSION_VERSION ${DUCKDB_NORMALIZED_VERSION})
+duckdb_extension_load(tpcds DONT_LINK)
