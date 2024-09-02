@@ -21,7 +21,7 @@ TEST_CASE("Basic appender tests", "[appender]") {
 	// append a bunch of values
 	{
 		Appender appender(con, "integers");
-		for (size_t i = 0; i < 2000; i++) {
+		for (idx_t i = 0; i < 2000; i++) {
 			appender.BeginRow();
 			appender.Append<int32_t>(1);
 			appender.EndRow();
@@ -39,7 +39,7 @@ TEST_CASE("Basic appender tests", "[appender]") {
 	{
 		Appender appender2(con, "integers");
 		// now append a bunch of values
-		for (size_t i = 0; i < 2000; i++) {
+		for (idx_t i = 0; i < 2000; i++) {
 			appender2.BeginRow();
 			appender2.Append<int32_t>(1);
 			appender2.EndRow();
@@ -59,7 +59,7 @@ TEST_CASE("Basic appender tests", "[appender]") {
 	{
 		Appender appender(con, "vals");
 
-		for (size_t i = 0; i < 2000; i++) {
+		for (idx_t i = 0; i < 2000; i++) {
 			appender.BeginRow();
 			appender.Append<int8_t>(1);
 			appender.Append<int16_t>(1);
@@ -102,7 +102,7 @@ TEST_CASE("Test AppendRow", "[appender]") {
 	// append a bunch of values
 	{
 		Appender appender(con, "integers");
-		for (size_t i = 0; i < 2000; i++) {
+		for (idx_t i = 0; i < 2000; i++) {
 			appender.AppendRow(1);
 		}
 		appender.Close();
@@ -123,7 +123,7 @@ TEST_CASE("Test AppendRow", "[appender]") {
 	// now append a bunch of values
 	{
 		Appender appender(con, "vals");
-		for (size_t i = 0; i < 2000; i++) {
+		for (idx_t i = 0; i < 2000; i++) {
 			appender.AppendRow(1, 1, 1, "hello", 3.33);
 			// append null values
 			appender.AppendRow(nullptr, nullptr, nullptr, nullptr, nullptr);
@@ -415,4 +415,26 @@ TEST_CASE("Test alter table in the middle of append", "[appender]") {
 		REQUIRE_NO_FAIL(con.Query("ALTER TABLE integers DROP COLUMN i"));
 		REQUIRE_THROWS(appender.Close());
 	}
+}
+
+TEST_CASE("Test appending to a different database file", "[appender]") {
+	duckdb::unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto test_dir = GetTestDirectory();
+	auto attach_query = "ATTACH '" + test_dir + "/append_to_other.db'";
+	REQUIRE_NO_FAIL(con.Query(attach_query));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE append_to_other.tbl(i INTEGER)"));
+
+	Appender appender(con, "append_to_other", "main", "tbl");
+	for (idx_t i = 0; i < 200; i++) {
+		appender.BeginRow();
+		appender.Append<int32_t>(2);
+		appender.EndRow();
+	}
+	appender.Close();
+
+	result = con.Query("SELECT SUM(i) FROM append_to_other.tbl");
+	REQUIRE(CHECK_COLUMN(result, 0, {400}));
 }
