@@ -793,8 +793,10 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
 	if (!state.file_handle || state.file_handle->path != file_handle->path) {
 		auto flags = FileFlags::FILE_FLAGS_READ;
+		Value always_prefetch_setting = false;
+		context.TryGetCurrentSetting("force_parquet_prefetching", always_prefetch_setting);
 
-		if (!file_handle->OnDiskFile() && file_handle->CanSeek()) {
+		if (file_handle->CanSeek() && (!file_handle->OnDiskFile() || always_prefetch_setting.GetValue<bool>())) {
 			state.prefetch_mode = true;
 			flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
 		} else {
@@ -1046,10 +1048,11 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			double scan_percentage = (double)(to_scan_compressed_bytes) / static_cast<double>(total_row_group_span);
 
 			if (to_scan_compressed_bytes > total_row_group_span) {
-				// This is actually a malfored parquet file: the sum of the compressed bytes should never exceed the span of the column
-				// chunk for obious reasons. However some parquet files may incorrectly have written the offsets leading to DuckDB
-				// failing to compute the correct byte ranges to prefetch here. Fortunately, we can still scan these columns albeit
-				// without the prefetching mechanism leading potentially to poor performance.
+				// This is actually a malfored parquet file: the sum of the compressed bytes should never exceed the
+				// span of the column chunk for obious reasons. However some parquet files may incorrectly have written
+				// the offsets leading to DuckDB failing to compute the correct byte ranges to prefetch here.
+				// Fortunately, we can still scan these columns albeit without the prefetching mechanism leading
+				// potentially to poor performance.
 				return true;
 			}
 
