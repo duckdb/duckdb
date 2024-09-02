@@ -61,21 +61,22 @@ unique_ptr<CSVFileHandle> FindFileToSniff(ClientContext &context, const CSVReade
 	auto files = file_list.Files();
 	auto it = files.begin();
 	unique_ptr<CSVFileHandle> max_file_handle = ReadCSV::OpenCSV(it.current_file, options.compression, context);
-
+	idx_t max_file_idx = 0;
 	for (idx_t i = 1; i < maximum_number_of_files; i++) {
 		// We are looking for a file that is at least 1MB
 		constexpr idx_t min_size = 1000000;
 		if (max_file_handle->FileSize() >= min_size) {
-			file_list.SwapToFirst(i);
+			file_list.SwapToFirst(i - 1);
 			return max_file_handle;
 		}
 		it.Next();
 		auto cur_file = ReadCSV::OpenCSV(it.current_file, options.compression, context);
 		if (max_file_handle->FileSize() < cur_file->FileSize()) {
 			max_file_handle = std::move(cur_file);
+			max_file_idx = i;
 		}
 	}
-	file_list.SwapToFirst(maximum_number_of_files - 1);
+	file_list.SwapToFirst(max_file_idx);
 	return max_file_handle;
 }
 
@@ -131,7 +132,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	if (options.auto_detect && !options.file_options.union_by_name) {
 		auto file_handle = FindFileToSniff(context, options, *multi_file_list);
 		options.file_path = multi_file_list->GetFirstFile();
-		result->buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0, false, std::move(file_handle));
+		result->buffer_manager =
+		    make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0, false, std::move(file_handle));
 		CSVSniffer sniffer(options, result->buffer_manager, CSVStateMachineCache::Get(context));
 		auto sniffer_result = sniffer.SniffCSV();
 		if (names.empty()) {
