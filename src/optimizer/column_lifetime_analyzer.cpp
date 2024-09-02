@@ -10,8 +10,7 @@
 
 namespace duckdb {
 
-void ColumnLifetimeAnalyzer::ExtractUnusedColumnBindings(const column_binding_set_t &column_references,
-                                                         const vector<ColumnBinding> &bindings,
+void ColumnLifetimeAnalyzer::ExtractUnusedColumnBindings(const vector<ColumnBinding> &bindings,
                                                          column_binding_set_t &unused_bindings) {
 	for (idx_t i = 0; i < bindings.size(); i++) {
 		if (column_references.find(bindings[i]) == column_references.end()) {
@@ -84,13 +83,12 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 			return;
 		}
 
-		auto column_references_copy = column_references;
-		StandardVisitOperator(op);
-
 		column_binding_set_t lhs_unused;
 		column_binding_set_t rhs_unused;
-		ExtractUnusedColumnBindings(column_references_copy, op.children[0]->GetColumnBindings(), lhs_unused);
-		ExtractUnusedColumnBindings(column_references_copy, op.children[1]->GetColumnBindings(), rhs_unused);
+		ExtractUnusedColumnBindings(op.children[0]->GetColumnBindings(), lhs_unused);
+		ExtractUnusedColumnBindings(op.children[1]->GetColumnBindings(), rhs_unused);
+
+		StandardVisitOperator(op);
 
 		// then generate the projection map
 		if (op.type != LogicalOperatorType::LOGICAL_ASOF_JOIN) {
@@ -124,11 +122,10 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 			break;
 		}
 
-		auto column_references_copy = column_references;
-		StandardVisitOperator(op);
-
 		column_binding_set_t unused_bindings;
-		ExtractUnusedColumnBindings(column_references_copy, op.children[0]->GetColumnBindings(), unused_bindings);
+		ExtractUnusedColumnBindings(op.children[0]->GetColumnBindings(), unused_bindings);
+
+		StandardVisitOperator(op);
 
 		GenerateProjectionMap(op.children[0]->GetColumnBindings(), unused_bindings, order.projection_map);
 		return;
@@ -147,12 +144,11 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 			break;
 		}
 
-		auto column_references_copy = column_references;
-		StandardVisitOperator(op);
-
 		// filter, figure out which columns are not needed after the filter
 		column_binding_set_t unused_bindings;
-		ExtractUnusedColumnBindings(column_references_copy, op.children[0]->GetColumnBindings(), unused_bindings);
+		ExtractUnusedColumnBindings(op.children[0]->GetColumnBindings(), unused_bindings);
+
+		StandardVisitOperator(op);
 
 		// then generate the projection map
 		GenerateProjectionMap(op.children[0]->GetColumnBindings(), unused_bindings, filter.projection_map);

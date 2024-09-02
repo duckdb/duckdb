@@ -41,9 +41,7 @@ private:
 
 private:
 	void StandardVisitOperator(LogicalOperator &op);
-	static void ExtractUnusedColumnBindings(const column_binding_set_t &column_references,
-	                                        const vector<ColumnBinding> &bindings,
-	                                        column_binding_set_t &unused_bindings);
+	void ExtractUnusedColumnBindings(const vector<ColumnBinding> &bindings, column_binding_set_t &unused_bindings);
 	static void GenerateProjectionMap(vector<ColumnBinding> bindings, column_binding_set_t &unused_bindings,
 	                                  vector<idx_t> &map);
 };
