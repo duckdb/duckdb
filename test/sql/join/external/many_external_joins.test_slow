@@ -19,7 +19,7 @@ SET memory_limit='500mb';
 
 # disable the join order optimizer to be sure we probe all HTs in a single pipeline
 statement ok
-SET disabled_optimizers TO 'join_order';
+SET disabled_optimizers TO 'join_order,build_side_probe_side';
 
 # we shouldn't run out of memory
 query IIIII
