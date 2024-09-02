@@ -185,11 +185,30 @@ bool MultiFileList::IsEmpty() {
 	return GetExpandResult() == FileExpandResult::NO_FILES;
 }
 
+idx_t MultiFileList::Size() const {
+	return paths.size();
+}
+
+void MultiFileList::SwapToFirst(const idx_t file_idx) {
+	D_ASSERT(file_idx < Size());
+	std::swap(paths[0], paths[file_idx]);
+}
+
 //===--------------------------------------------------------------------===//
 // SimpleMultiFileList
 //===--------------------------------------------------------------------===//
 SimpleMultiFileList::SimpleMultiFileList(vector<string> paths_p)
     : MultiFileList(std::move(paths_p), FileGlobOptions::ALLOW_EMPTY) {
+}
+
+//! Swap file from file_idx with 0
+void SimpleMultiFileList::SwapToFirst(const idx_t file_idx) {
+	D_ASSERT(file_idx < Size());
+	std::swap(paths[0], paths[file_idx]);
+}
+
+idx_t SimpleMultiFileList::Size() const {
+	return paths.size();
 }
 
 unique_ptr<MultiFileList> SimpleMultiFileList::ComplexFilterPushdown(ClientContext &context_p,
@@ -349,6 +368,16 @@ string GlobMultiFileList::GetFileInternal(idx_t i) {
 	}
 	D_ASSERT(expanded_files.size() > i);
 	return expanded_files[i];
+}
+
+void GlobMultiFileList::SwapToFirst(const idx_t file_idx) {
+	lock_guard<mutex> lck(lock);
+	D_ASSERT(file_idx < Size());
+	std::swap(expanded_files[0], expanded_files[file_idx]);
+}
+
+idx_t GlobMultiFileList::Size() const {
+	return expanded_files.size();
 }
 
 bool GlobMultiFileList::ExpandPathInternal(idx_t &current_path, vector<string> &result) const {

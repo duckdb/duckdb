@@ -43,6 +43,42 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 	BaseCSVData::Finalize();
 }
 
+// We try to figure out the right file to sniff for names and types
+// The right file should have a sufficient size
+// But we shouldn't open all possible files
+unique_ptr<CSVFileHandle> FindFileToSniff(ClientContext &context, const CSVReaderOptions &options,
+                                          MultiFileList &file_list) {
+	D_ASSERT(file_list.Size() > 0);
+	if (file_list.Size() == 1) {
+		// We only have one file, don't have to do anything
+		return ReadCSV::OpenCSV(file_list.GetFirstFile(), options.compression, context);
+	}
+
+	// But we also will only check up to 10 files
+	const idx_t maximum_number_of_files = std::min(static_cast<idx_t>(10), file_list.Size());
+
+	// auto paths = file_list.GetPaths();
+	auto files = file_list.Files();
+	auto it = files.begin();
+	unique_ptr<CSVFileHandle> max_file_handle = ReadCSV::OpenCSV(it.current_file, options.compression, context);
+
+	for (idx_t i = 1; i < maximum_number_of_files; i++) {
+		// We are looking for a file that is at least 1MB
+		constexpr idx_t min_size = 1000000;
+		if (max_file_handle->FileSize() >= min_size) {
+			file_list.SwapToFirst(i);
+			return max_file_handle;
+		}
+		it.Next();
+		auto cur_file = ReadCSV::OpenCSV(it.current_file, options.compression, context);
+		if (max_file_handle->FileSize() < cur_file->FileSize()) {
+			max_file_handle = std::move(cur_file);
+		}
+	}
+	file_list.SwapToFirst(maximum_number_of_files - 1);
+	return max_file_handle;
+}
+
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctionBindInput &input,
                                             vector<LogicalType> &return_types, vector<string> &names) {
 
@@ -93,6 +129,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		}
 	}
 	if (options.auto_detect && !options.file_options.union_by_name) {
+		auto file_handle = FindFileToSniff(context, options, *multi_file_list);
 		options.file_path = multi_file_list->GetFirstFile();
 		result->buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0);
 		CSVSniffer sniffer(options, result->buffer_manager, CSVStateMachineCache::Get(context));
@@ -138,7 +175,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	result->return_types = return_types;
 	result->return_names = names;
 	if (!options.force_not_null_names.empty()) {
-		// Lets first check all column names match
+		// Let's first check all column names match
 		duckdb::unordered_set<string> column_names;
 		for (auto &name : names) {
 			column_names.insert(name);
@@ -324,13 +361,11 @@ void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionD
 
 unique_ptr<NodeStatistics> CSVReaderCardinality(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = bind_data_p->Cast<ReadCSVData>();
-	idx_t per_file_cardinality = 0;
+	// determined through the scientific method as the average amount of rows in a CSV file
+	idx_t per_file_cardinality = 42;
 	if (bind_data.buffer_manager && bind_data.buffer_manager->file_handle) {
 		auto estimated_row_width = (bind_data.csv_types.size() * 5);
 		per_file_cardinality = bind_data.buffer_manager->file_handle->FileSize() / estimated_row_width;
-	} else {
-		// determined through the scientific method as the average amount of rows in a CSV file
-		per_file_cardinality = 42;
 	}
 	return make_uniq<NodeStatistics>(bind_data.files.size() * per_file_cardinality);
 }
