@@ -95,10 +95,6 @@ TEST_CASE("Test Arrow Extension Types", "[arrow][.]") {
 	// UUID
 	TestArrowRoundtrip("SELECT '2d89ebe6-1e13-47e5-803a-b81c87660b66'::UUID str FROM range(5) tbl(i)", false, true);
 
-	// JSON
-	TestArrowRoundtrip("SELECT '{\"name\":\"Pedro\", \"age\":28, \"car\":\"VW Fox\"}'::JSON str FROM range(5) tbl(i)",
-	                   false, true);
-
 	// HUGEINT
 	TestArrowRoundtrip("SELECT '170141183460469231731687303715884105727'::HUGEINT str FROM range(5) tbl(i)", false,
 	                   true);
@@ -112,6 +108,20 @@ TEST_CASE("Test Arrow Extension Types", "[arrow][.]") {
 
 	// TIME_TZ
 	TestArrowRoundtrip("SELECT '02:30:00+04'::TIMETZ str FROM range(5) tbl(i)", false, true);
+}
+
+TEST_CASE("Test Arrow Extension Types - JSON", "[arrow][.]") {
+	DBConfig config;
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+
+	if (!db.ExtensionIsLoaded("json")) {
+		return;
+	}
+
+	// JSON
+	TestArrowRoundtrip("SELECT '{\"name\":\"Pedro\", \"age\":28, \"car\":\"VW Fox\"}'::JSON str FROM range(5) tbl(i)",
+	                   false, true);
 }
 
 TEST_CASE("Test Arrow String View", "[arrow][.]") {
