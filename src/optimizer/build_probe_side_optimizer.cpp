@@ -7,8 +7,7 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
-
-#include <duckdb/planner/operator/logical_order.hpp>
+#include "duckdb/planner/operator/logical_order.hpp"
 
 namespace duckdb {
 
@@ -134,7 +133,7 @@ idx_t BuildProbeSideOptimizer::ChildHasJoins(LogicalOperator &op) {
 	return ChildHasJoins(*op.children[0]);
 }
 
-void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) {
+void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
 	auto &left_child = *op.children[0];
 	auto &right_child = *op.children[1];
 	const auto lhs_cardinality = left_child.has_estimated_cardinality ? left_child.estimated_cardinality
@@ -197,7 +196,6 @@ void VisitChildOfOperatorWithProjectionMap(LogicalOperator &child, vector<idx_t>
 	}
 	// Child binding order may have changed due to 'fun'.
 	const auto child_bindings_after = child.GetColumnBindings();
-	D_ASSERT(child_bindings_before.size() == child_bindings_after.size());
 	if (child_bindings_before == child_bindings_after) {
 		return; // Nothing changed
 	}
@@ -212,7 +210,7 @@ void VisitChildOfOperatorWithProjectionMap(LogicalOperator &child, vector<idx_t>
 				break;
 			}
 		}
-		D_ASSERT(proj_idx_after < child_bindings_after.size());
+		D_ASSERT(proj_idx_after < child_bindings_after.size()); // Must've found it in there
 		new_projection_map.push_back(proj_idx_after);
 	}
 	projection_map = new_projection_map;
@@ -247,25 +245,21 @@ void VisitOperatorWithProjectionMapChildren(LogicalOperator &op, const std::func
 
 void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		if (HasInverseJoinType(join.join_type)) {
+			FlipChildren(join);
+			join.delim_flipped = true;
+		}
+		break;
+	}
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		auto &join = op.Cast<LogicalJoin>();
-
+		auto &join = op.Cast<LogicalComparisonJoin>();
 		switch (join.join_type) {
-		case JoinType::INNER:
-		case JoinType::OUTER:
-			TryFlipJoinChildren(join);
-			break;
-		case JoinType::LEFT:
-		case JoinType::RIGHT:
-			if (join.HasProjectionMap()) {
-				TryFlipJoinChildren(join);
-			}
-			break;
 		case JoinType::SEMI:
 		case JoinType::ANTI: {
 			// if the conditions have no equality, do not flip the children.
-			// There is no physical join operator (yet) that can do a right_semi/anti join.
+			// There is no physical join operator (yet) that can do an inequality right_semi/anti join.
 			idx_t has_range = 0;
 			if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN ||
 			    (op.Cast<LogicalComparisonJoin>().HasEquality(has_range) && !context.config.prefer_range_joins)) {
@@ -274,20 +268,24 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 			break;
 		}
 		default:
-			break;
+			if (HasInverseJoinType(join.join_type)) {
+				TryFlipJoinChildren(op);
+			}
 		}
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN: {
+		auto &join = op.Cast<LogicalJoin>();
+		// We cannot flip if these are set (YET), but not flipping is worse than just clearing them
+		// They will be set in the 2nd round of ColumnLifetimeAnalyzer
+		join.left_projection_map.clear();
+		join.right_projection_map.clear();
+		TryFlipJoinChildren(op);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
 		TryFlipJoinChildren(op);
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
-		auto &join = op.Cast<LogicalComparisonJoin>();
-		if (HasInverseJoinType(join.join_type)) {
-			FlipChildren(join);
-			join.delim_flipped = true;
-		}
 		break;
 	}
 	default:

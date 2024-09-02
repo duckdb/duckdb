@@ -25,6 +25,7 @@ public:
 	    : optimizer(optimizer_p), everything_referenced(is_root) {
 	}
 
+	void ClearProjectionMaps(LogicalOperator &op);
 	void VisitOperator(LogicalOperator &op) override;
 
 protected:

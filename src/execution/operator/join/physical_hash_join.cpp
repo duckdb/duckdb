@@ -322,11 +322,7 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chun
 		ht.Build(lstate.append_state, lstate.join_keys, lstate.payload_chunk);
 	} else {
 		// there are payload columns
-		lstate.payload_chunk.Reset();
-		lstate.payload_chunk.SetCardinality(chunk);
-		for (idx_t i = 0; i < payload_columns.col_idxs.size(); i++) {
-			lstate.payload_chunk.data[i].Reference(chunk.data[payload_columns.col_idxs[i]]);
-		}
+		lstate.payload_chunk.ReferenceColumns(chunk, payload_columns.col_idxs);
 		ht.Build(lstate.append_state, lstate.join_keys, lstate.payload_chunk);
 	}
 
@@ -745,11 +741,7 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 
 	if (state.scan_structure.is_null || sink.perfect_join_executor) {
 		// place the lhs projected columns in the chunk
-		state.lhs_output.Reset();
-		state.lhs_output.SetCardinality(input);
-		for (idx_t i = 0; i < lhs_output_columns.col_idxs.size(); i++) {
-			state.lhs_output.data[i].Reference(input.data[lhs_output_columns.col_idxs[i]]);
-		}
+		state.lhs_output.ReferenceColumns(input, lhs_output_columns.col_idxs);
 	}
 
 	if (sink.hash_table->Count() == 0) {
@@ -890,14 +882,13 @@ public:
 	//! Local scan state for probe spill
 	ColumnDataConsumerScanState probe_local_scan;
 	//! Chunks for holding the scanned probe collection
-	DataChunk probe_chunk;
-	DataChunk join_keys;
-	DataChunk payload;
+	DataChunk lhs_probe_chunk;
+	DataChunk lhs_join_keys;
+	DataChunk lhs_output;
 	TupleDataChunkState join_key_state;
 
 	//! Column indices to easily reference the join keys/payload columns in probe_chunk
 	vector<idx_t> join_key_indices;
-	vector<idx_t> payload_indices;
 	//! Scan structure for the external probe
 	JoinHashTable::ScanStructure scan_structure;
 	JoinHashTable::ProbeState probe_state;
@@ -1079,18 +1070,14 @@ HashJoinLocalSourceState::HashJoinLocalSourceState(const PhysicalHashJoin &op, c
 	auto &chunk_state = probe_local_scan.current_chunk_state;
 	chunk_state.properties = ColumnDataScanProperties::ALLOW_ZERO_COPY;
 
-	probe_chunk.Initialize(allocator, sink.probe_types);
-	join_keys.Initialize(allocator, op.condition_types);
-	payload.Initialize(allocator, op.children[0]->types);
+	lhs_probe_chunk.Initialize(allocator, sink.probe_types);
+	lhs_join_keys.Initialize(allocator, op.condition_types);
+	lhs_output.Initialize(allocator, op.lhs_output_columns.col_types);
 	TupleDataCollection::InitializeChunkState(join_key_state, op.condition_types);
 
 	// Store the indices of the columns to reference them easily
-	idx_t col_idx = 0;
-	for (; col_idx < op.condition_types.size(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < op.condition_types.size(); col_idx++) {
 		join_key_indices.push_back(col_idx);
-	}
-	for (; col_idx < sink.probe_types.size() - 1; col_idx++) {
-		payload_indices.push_back(col_idx);
 	}
 }
 
@@ -1141,7 +1128,7 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 
 	if (!scan_structure.is_null) {
 		// Still have elements remaining (i.e. we got >STANDARD_VECTOR_SIZE elements in the previous probe)
-		scan_structure.Next(join_keys, payload, chunk);
+		scan_structure.Next(lhs_join_keys, lhs_output, chunk);
 		if (chunk.size() != 0 || !scan_structure.PointersExhausted()) {
 			return;
 		}
@@ -1158,22 +1145,22 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	}
 
 	// Scan input chunk for next probe
-	sink.probe_spill->consumer->ScanChunk(probe_local_scan, probe_chunk);
+	sink.probe_spill->consumer->ScanChunk(probe_local_scan, lhs_probe_chunk);
 
 	// Get the probe chunk columns/hashes
-	join_keys.ReferenceColumns(probe_chunk, join_key_indices);
-	payload.ReferenceColumns(probe_chunk, payload_indices);
-	auto precomputed_hashes = &probe_chunk.data.back();
+	lhs_join_keys.ReferenceColumns(lhs_probe_chunk, join_key_indices);
+	lhs_output.ReferenceColumns(lhs_probe_chunk, sink.op.lhs_output_columns.col_idxs);
+	auto precomputed_hashes = &lhs_probe_chunk.data.back();
 
 	if (sink.hash_table->Count() == 0 && !gstate.op.EmptyResultIfRHSIsEmpty()) {
-		gstate.op.ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, payload, chunk);
+		gstate.op.ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, lhs_output, chunk);
 		empty_ht_probe_in_progress = true;
 		return;
 	}
 
 	// Perform the probe
-	sink.hash_table->Probe(scan_structure, join_keys, join_key_state, probe_state, precomputed_hashes);
-	scan_structure.Next(join_keys, payload, chunk);
+	sink.hash_table->Probe(scan_structure, lhs_join_keys, join_key_state, probe_state, precomputed_hashes);
+	scan_structure.Next(lhs_join_keys, lhs_output, chunk);
 }
 
 void HashJoinLocalSourceState::ExternalScanHT(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate,

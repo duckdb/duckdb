@@ -173,6 +173,7 @@ void Optimizer::RunBuiltInOptimizers() {
 	// creates projection maps so unused columns are projected out early
 	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
 		ColumnLifetimeAnalyzer column_lifetime(*this, true);
+		column_lifetime.ClearProjectionMaps(*plan);
 		column_lifetime.VisitOperator(*plan);
 	});
 
@@ -212,6 +213,7 @@ void Optimizer::RunBuiltInOptimizers() {
 	// creates projection maps so unused columns are projected out early
 	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
 		ColumnLifetimeAnalyzer column_lifetime(*this, true);
+		column_lifetime.ClearProjectionMaps(*plan);
 		column_lifetime.VisitOperator(*plan);
 	});
 

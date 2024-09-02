@@ -58,7 +58,39 @@ void ExtractColumnBindings(Expression &expr, vector<ColumnBinding> &bindings) {
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ExtractColumnBindings(child, bindings); });
 }
 
+void ColumnLifetimeAnalyzer::ClearProjectionMaps(LogicalOperator &op) {
+	if (op.HasProjectionMap()) {
+		switch (op.type) {
+		case LogicalOperatorType::LOGICAL_ANY_JOIN:
+		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+		case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
+			auto &join = op.Cast<LogicalJoin>();
+			join.left_projection_map.clear();
+			join.right_projection_map.clear();
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_ORDER_BY: {
+			auto &order = op.Cast<LogicalOrder>();
+			order.projection_map.clear();
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_FILTER: {
+			auto &filter = op.Cast<LogicalFilter>();
+			filter.projection_map.clear();
+			break;
+		}
+		default:
+			throw NotImplementedException("ColumnLifetimeAnalyzer::ClearProjectionMaps for %s",
+			                              EnumUtil::ToString(op.type));
+		}
+	}
+	for (auto &child : op.children) {
+		ClearProjectionMaps(*child);
+	}
+}
+
 void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
+	D_ASSERT(!op.HasProjectionMap());
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		// FIXME: groups that are not referenced can be removed from projection
@@ -71,8 +103,6 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &comp_join = op.Cast<LogicalComparisonJoin>();
-		comp_join.left_projection_map.clear();
-		comp_join.right_projection_map.clear();
 		if (everything_referenced) {
 			break;
 		}
@@ -117,7 +147,6 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 	}
 	case LogicalOperatorType::LOGICAL_ORDER_BY: {
 		auto &order = op.Cast<LogicalOrder>();
-		order.projection_map.clear();
 		if (everything_referenced) {
 			break;
 		}
@@ -139,7 +168,6 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 	}
 	case LogicalOperatorType::LOGICAL_FILTER: {
 		auto &filter = op.Cast<LogicalFilter>();
-		filter.projection_map.clear();
 		if (everything_referenced) {
 			break;
 		}
