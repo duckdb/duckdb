@@ -1,0 +1,11 @@
+# name: test/sql/types/list/unnest_aggregate.test
+# description: Test unnest semantics with NULL and empty lists
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT SUM(a) FROM UNNEST(RANGE(1, 11)) t(a);
+----
+55
