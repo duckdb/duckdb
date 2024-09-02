@@ -207,6 +207,9 @@ struct DBConfigOptions {
 	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
 	//! Whether LISTs should produce Arrow ListViews
 	bool arrow_use_list_view = false;
+	//! Whenever a DuckDB type does not have a clear native or canonical extension match in Arrow, export the types
+	//! with a duckdb.type_name extension name
+	bool arrow_arrow_lossless_conversion = false;
 	//! Whether when producing arrow objects we produce string_views or regular strings
 	bool produce_arrow_string_views = false;
 	//! Database configuration variables as controlled by SET
@@ -269,12 +272,6 @@ struct DBConfigOptions {
 	idx_t catalog_error_max_schemas = 100;
 	//!  Whether or not to always write to the WAL file, even if this is not required
 	bool debug_skip_checkpoint_on_commit = false;
-	//! When a scalar subquery returns multiple rows - return a random row instead of returning an error
-	bool scalar_subquery_error_on_multiple_rows = true;
-	//! Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL)
-	bool ieee_floating_point_ops = true;
-	//! Allow ordering by non-integer literals - ordering by such literals has no effect
-	bool order_by_non_integer_literal = false;
 
 	bool operator==(const DBConfigOptions &other) const;
 };

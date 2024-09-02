@@ -77,8 +77,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		D_ASSERT(bindings.size() == 1);
 		idx_t table_idx = bindings[0].table_index;
 
-		auto &config = DBConfig::GetConfig(binder.context);
-		bool error_on_multiple_rows = config.options.scalar_subquery_error_on_multiple_rows;
+		auto &config = ClientConfig::GetConfig(binder.context);
+		bool error_on_multiple_rows = config.scalar_subquery_error_on_multiple_rows;
 
 		// we push an aggregate that returns the FIRST element
 		vector<unique_ptr<Expression>> expressions;
