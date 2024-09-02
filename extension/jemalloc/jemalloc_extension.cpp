@@ -2,6 +2,7 @@
 #include "jemalloc_extension.hpp"
 
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "jemalloc/jemalloc.h"
 
 namespace duckdb {
@@ -87,12 +88,17 @@ void JemallocExtension::ThreadIdle() {
 }
 
 void JemallocExtension::FlushAll() {
+	static mutex lock;
+
 	// Flush thread-local cache
 	SetJemallocCTL("thread.tcache.flush");
 
 	// Flush all arenas
 	const auto purge_arena = PurgeArenaString(MALLCTL_ARENAS_ALL);
-	SetJemallocCTL(purge_arena.c_str());
+	{
+		lock_guard<mutex> guard(lock);
+		SetJemallocCTL(purge_arena.c_str());
+	}
 
 	// Reset the peak after resetting
 	SetJemallocCTL("thread.peak.reset");
