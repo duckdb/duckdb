@@ -3717,6 +3717,21 @@ DUCKDB_API duckdb_state duckdb_table_description_create(duckdb_connection connec
                                                         const char *table, duckdb_table_description *out);
 
 /*!
+Creates a table description object. Note that `duckdb_table_description_destroy` must be called on the resulting
+table_description, even if the function returns `DuckDBError`.
+
+* @param connection The connection context.
+* @param catalog The catalog (database) name of the table, or `nullptr` for the default catalog.
+* @param schema The schema of the table, or `nullptr` for the default schema.
+* @param table The table name.
+* @param out The resulting table description object.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_table_description_create_ext(duckdb_connection connection, const char *catalog,
+                                                            const char *schema, const char *table,
+                                                            duckdb_table_description *out);
+
+/*!
 Destroy the TableDescription object.
 
 * @param table_description The table_description to destroy.
@@ -3742,6 +3757,17 @@ Check if the column at 'index' index of the table has a DEFAULT expression.
 * @return `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
 DUCKDB_API duckdb_state duckdb_column_has_default(duckdb_table_description table_description, idx_t index, bool *out);
+
+/*!
+Obtain the column name at 'index'.
+The out result must be destroyed with `duckdb_free`.
+
+* @param table_description The table_description to query.
+* @param index The index of the column to query.
+* @param out The out-parameter used to store the result.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_column_get_name(duckdb_table_description table_description, idx_t index, char *out);
 
 //===--------------------------------------------------------------------===//
 // Arrow Interface

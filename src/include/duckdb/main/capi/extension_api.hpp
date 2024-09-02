@@ -422,6 +422,13 @@ typedef struct {
 	                                        duckdb_arrow_schema arrow_schema, duckdb_arrow_array arrow_array,
 	                                        duckdb_arrow_stream *out_stream);
 	duckdb_data_chunk (*duckdb_stream_fetch_chunk)(duckdb_result result);
+	// dev
+	// WARNING! the functions below are not (yet) stable
+
+	duckdb_state (*duckdb_table_description_create_ext)(duckdb_connection connection, const char *catalog,
+	                                                    const char *schema, const char *table,
+	                                                    duckdb_table_description *out);
+	duckdb_state (*duckdb_column_get_name)(duckdb_table_description table_description, idx_t index, char *out);
 } duckdb_ext_api_v0;
 
 //===--------------------------------------------------------------------===//
@@ -800,6 +807,8 @@ inline duckdb_ext_api_v0 CreateAPIv0() {
 	result.duckdb_arrow_scan = duckdb_arrow_scan;
 	result.duckdb_arrow_array_scan = duckdb_arrow_array_scan;
 	result.duckdb_stream_fetch_chunk = duckdb_stream_fetch_chunk;
+	result.duckdb_table_description_create_ext = duckdb_table_description_create_ext;
+	result.duckdb_column_get_name = duckdb_column_get_name;
 	return result;
 }
 

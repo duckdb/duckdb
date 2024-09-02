@@ -8,22 +8,30 @@ using duckdb::TableDescriptionWrapper;
 
 duckdb_state duckdb_table_description_create(duckdb_connection connection, const char *schema, const char *table,
                                              duckdb_table_description *out) {
+	return duckdb_table_description_create_ext(connection, nullptr, schema, table, out);
+}
+
+duckdb_state duckdb_table_description_create_ext(duckdb_connection connection, const char *catalog, const char *schema,
+                                                 const char *table, duckdb_table_description *out) {
 	Connection *conn = reinterpret_cast<Connection *>(connection);
 
 	if (!out) {
 		return DuckDBError;
 	}
 	auto wrapper = new TableDescriptionWrapper();
-	*out = (duckdb_table_description)wrapper;
+	*out = reinterpret_cast<duckdb_table_description>(wrapper);
 
 	if (!connection || !table) {
 		return DuckDBError;
 	}
-
+	if (catalog == nullptr) {
+		catalog = INVALID_CATALOG;
+	}
 	if (schema == nullptr) {
 		schema = DEFAULT_SCHEMA;
 	}
 
+	// TODO: pass catalog.
 	try {
 		wrapper->description = conn->TableInfo(schema, table);
 	} catch (std::exception &ex) {
@@ -61,22 +69,47 @@ const char *duckdb_table_description_error(duckdb_table_description table) {
 	return wrapper->error.c_str();
 }
 
-duckdb_state duckdb_column_has_default(duckdb_table_description table_description, idx_t index, bool *out) {
-	auto wrapper = reinterpret_cast<TableDescriptionWrapper *>(table_description);
-	if (!wrapper || !out) {
+duckdb_state GetTableDescription(TableDescriptionWrapper *wrapper, idx_t index, bool valid) {
+	if (!wrapper || !valid) {
 		if (wrapper) {
 			wrapper->error = "Please provide a valid (non-null) 'out' variable";
 		}
 		return DuckDBError;
 	}
-
 	auto &table = wrapper->description;
 	if (index >= table->columns.size()) {
 		wrapper->error = duckdb::StringUtil::Format("Column index %d is out of range, table only has %d columns", index,
 		                                            table->columns.size());
 		return DuckDBError;
 	}
+	return DuckDBSuccess;
+}
+
+duckdb_state duckdb_column_has_default(duckdb_table_description table_description, idx_t index, bool *out) {
+	auto wrapper = reinterpret_cast<TableDescriptionWrapper *>(table_description);
+	if (GetTableDescription(wrapper, index, out != nullptr) == DuckDBError) {
+		return DuckDBError;
+	}
+
+	auto &table = wrapper->description;
 	auto &column = table->columns[index];
 	*out = column.HasDefaultValue();
+	return DuckDBSuccess;
+}
+
+duckdb_state duckdb_column_get_name(duckdb_table_description table_description, idx_t index, char *out) {
+	auto wrapper = reinterpret_cast<TableDescriptionWrapper *>(table_description);
+	if (GetTableDescription(wrapper, index, out != nullptr) == DuckDBError) {
+		return DuckDBError;
+	}
+
+	auto &table = wrapper->description;
+	auto &column = table->columns[index];
+
+	auto name = column.GetName();
+	out = reinterpret_cast<char *>(malloc(sizeof(char) * (name.size() + 1)));
+	memcpy(out, name.c_str(), name.size());
+	out[name.size()] = '\0';
+
 	return DuckDBSuccess;
 }
