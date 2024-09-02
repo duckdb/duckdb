@@ -131,7 +131,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	if (options.auto_detect && !options.file_options.union_by_name) {
 		auto file_handle = FindFileToSniff(context, options, *multi_file_list);
 		options.file_path = multi_file_list->GetFirstFile();
-		result->buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0);
+		result->buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0, false, std::move(file_handle));
 		CSVSniffer sniffer(options, result->buffer_manager, CSVStateMachineCache::Get(context));
 		auto sniffer_result = sniffer.SniffCSV();
 		if (names.empty()) {
