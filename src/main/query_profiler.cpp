@@ -214,6 +214,11 @@ void QueryProfiler::EndQuery() {
 			if (info.Enabled(MetricsType::OPERATOR_TYPE)) {
 				info.settings.erase(MetricsType::OPERATOR_TYPE);
 			}
+
+			if (info.Enabled(MetricsType::RESULT_SET_SIZE)) {
+				info.metrics[MetricsType::RESULT_SET_SIZE] =
+				    root->children[0]->GetProfilingInfo().metrics[MetricsType::RESULT_SET_SIZE];
+			}
 		}
 
 		string tree = ToString();
@@ -347,6 +352,10 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 		if (HasOperatorSetting(MetricsType::OPERATOR_CARDINALITY) && chunk) {
 			curr_operator_info.AddReturnedElements(chunk->size());
 		}
+		if (HasOperatorSetting(MetricsType::RESULT_SET_SIZE) && chunk) {
+			idx_t result_set_size = chunk->GetAllocationSize();
+			curr_operator_info.AddResultSetSize(result_set_size);
+		}
 	}
 	active_operator = nullptr;
 }
@@ -401,6 +410,9 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 					}
 				}
 			}
+		}
+		if (profiler.HasOperatorSetting(MetricsType::RESULT_SET_SIZE)) {
+			tree_node.GetProfilingInfo().AddToMetric<idx_t>(MetricsType::RESULT_SET_SIZE, node.second.result_set_size);
 		}
 	}
 	profiler.timings.clear();

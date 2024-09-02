@@ -1546,6 +1546,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		auto &child_types = StructType::GetChildTypes(type);
 		D_ASSERT(!child_types.empty());
+
 		// create a selection vector of the non-null entries of the struct vector
 		auto &children = StructVector::GetEntries(*vector);
 		D_ASSERT(child_types.size() == children.size());

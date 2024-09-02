@@ -105,8 +105,8 @@ JoinHashTable::JoinHashTable(ClientContext &context, const vector<JoinCondition>
 	memset(dead_end.get(), 0, layout.GetRowWidth());
 
 	if (join_type == JoinType::SINGLE) {
-		auto &config = DBConfig::GetConfig(context);
-		single_join_error_on_multiple_rows = config.options.scalar_subquery_error_on_multiple_rows;
+		auto &config = ClientConfig::GetConfig(context);
+		single_join_error_on_multiple_rows = config.scalar_subquery_error_on_multiple_rows;
 	}
 }
 
