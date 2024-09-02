@@ -195,10 +195,11 @@ NULL	200	Sunday	data/csv/union-by-name/ubn4.csv
 NULL	300	Friday	data/csv/union-by-name/ubn4.csv
 
 # Test hive_partition with union_by_name
-statement error
+query III
 SELECT * FROM read_csv_auto('data/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE, null_padding=0)
 ----
-If you are trying to read files with different schemas, try setting union_by_name=True
+2	value2	b
+1	value1	a
 
 query IIII
 SELECT id, value, a, part
