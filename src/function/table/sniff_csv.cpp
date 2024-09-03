@@ -110,13 +110,12 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	const CSVSniffFunctionData &data = data_p.bind_data->Cast<CSVSniffFunctionData>();
 	auto &fs = duckdb::FileSystem::GetFileSystem(context);
 
-	if (data.path.rfind("http://", 0) != 0 && data.path.rfind("https://", 0) != 0) {
-		throw NotImplementedException("sniff_csv does not operate on globs yet");
-	}
-
 	auto paths = fs.Glob(data.path);
 	if (paths.size() > 1) {
-		throw NotImplementedException("sniff_csv does not operate on globs yet");
+		throw NotImplementedException("sniff_csv does not operate on more than one file yet");
+	}
+	if (paths.empty()) {
+		throw InvalidInputException("Cannot open file \"%s\": No such file or directory", data.path);
 	}
 
 	// We must run the sniffer.
