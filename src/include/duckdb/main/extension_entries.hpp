@@ -400,6 +400,8 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"azure_storage_connection_string", "azure"},
     {"azure_transport_option_type", "azure"},
     {"binary_as_string", "parquet"},
+    {"disable_parquet_prefetching", "parquet"},
+    {"prefetch_all_parquet_files", "parquet"},
     {"ca_cert_file", "httpfs"},
     {"calendar", "icu"},
     {"enable_server_cert_verification", "httpfs"},
