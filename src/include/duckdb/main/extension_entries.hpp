@@ -497,6 +497,54 @@ static constexpr ExtensionEntry EXTENSION_FILE_CONTAINS[] = {{".parquet?", "parq
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
+static constexpr ExtensionEntry EXTENSION_OVERLOADS[] = {{"age", "icu"},
+                                                         {"century", "icu"},
+                                                         {"date_diff", "icu"},
+                                                         {"date_part", "icu"},
+                                                         {"date_sub", "icu"},
+                                                         {"date_trunc", "icu"},
+                                                         {"datediff", "icu"},
+                                                         {"datepart", "icu"},
+                                                         {"datesub", "icu"},
+                                                         {"datetrunc", "icu"},
+                                                         {"day", "icu"},
+                                                         {"dayname", "icu"},
+                                                         {"dayofmonth", "icu"},
+                                                         {"dayofweek", "icu"},
+                                                         {"dayofyear", "icu"},
+                                                         {"decade", "icu"},
+                                                         {"epoch", "icu"},
+                                                         {"era", "icu"},
+                                                         {"generate_series", "icu"},
+                                                         {"hour", "icu"},
+                                                         {"isodow", "icu"},
+                                                         {"isoyear", "icu"},
+                                                         {"julian", "icu"},
+                                                         {"last_day", "icu"},
+                                                         {"microsecond", "icu"},
+                                                         {"millennium", "icu"},
+                                                         {"millisecond", "icu"},
+                                                         {"minute", "icu"},
+                                                         {"month", "icu"},
+                                                         {"monthname", "icu"},
+                                                         {"quarter", "icu"},
+                                                         {"range", "icu"},
+                                                         {"second", "icu"},
+                                                         {"strftime", "icu"},
+                                                         {"time_bucket", "icu"},
+                                                         {"timezone", "icu"},
+                                                         {"timezone_hour", "icu"},
+                                                         {"timezone_minute", "icu"},
+                                                         {"week", "icu"},
+                                                         {"weekday", "icu"},
+                                                         {"weekofyear", "icu"},
+                                                         {"year", "icu"},
+                                                         {"yearweek", "icu"}
+
+}; // EXTENSION_OVERLOADS
+
+// Note: these are currently hardcoded in scripts/generate_extensions_function.py
+// TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
     {"s3", "httpfs"},   {"r2", "httpfs"},          {"gcs", "httpfs"},
     {"azure", "azure"}, {"huggingface", "httpfs"}, {"bearer", "httpfs"}}; // EXTENSION_SECRET_TYPES
