@@ -27,7 +27,7 @@ FROM sniff_csv('data/csv/real/lineitem_sample.csv');
 statement error
 FROM sniff_csv('data/csv/real/non_ecziste.csv');
 ----
-Cannot open file "data/csv/real/non_ecziste.csv": No such file or directory
+No files found that match the pattern "data/csv/real/non_ecziste.csv"
 
 # Test different sample sizes
 
