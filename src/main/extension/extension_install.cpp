@@ -391,7 +391,7 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 		duckdb_httplib::Headers headers = {
 		    {"User-Agent", StringUtil::Format("%s %s", db.config.UserAgent(), DuckDB::SourceID())}};
 
-		if (install_info && !install_info->etag.empty()) {
+		if (!force_install && install_info && !install_info->etag.empty()) {
 			headers.insert({"If-None-Match", StringUtil::Format("%s", install_info->etag)});
 		}
 

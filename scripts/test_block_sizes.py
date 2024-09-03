@@ -9,9 +9,6 @@ def execute_system_command(cmd):
         raise Exception
 
 
-current_dir = os.getcwd()
-build_dir = os.path.join(os.getcwd(), 'build', 'release')
-
 # run the fast tests and all storage-related tests
 # with a block size of 16KB and a standard vector size
 block_size = 16384
