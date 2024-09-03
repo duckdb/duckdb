@@ -110,13 +110,18 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	const CSVSniffFunctionData &data = data_p.bind_data->Cast<CSVSniffFunctionData>();
 	auto &fs = duckdb::FileSystem::GetFileSystem(context);
 
-	if (data.path.rfind("http://", 0) != 0 && data.path.rfind("https://", 0) != 0 && fs.HasGlob(data.path)) {
+	if (data.path.rfind("http://", 0) != 0 && data.path.rfind("https://", 0) != 0) {
+		throw NotImplementedException("sniff_csv does not operate on globs yet");
+	}
+
+	auto paths = fs.Glob(data.path);
+	if (paths.size() > 1) {
 		throw NotImplementedException("sniff_csv does not operate on globs yet");
 	}
 
 	// We must run the sniffer.
 	auto sniffer_options = data.options;
-	sniffer_options.file_path = data.path;
+	sniffer_options.file_path = paths[0];
 
 	auto buffer_manager = make_shared_ptr<CSVBufferManager>(context, sniffer_options, sniffer_options.file_path, 0);
 	if (sniffer_options.name_list.empty()) {
@@ -204,7 +209,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	std::ostringstream csv_read;
 
 	// Base, Path and auto_detect=false
-	csv_read << "FROM read_csv('" << data.path << "'" << separator << "auto_detect=false" << separator;
+	csv_read << "FROM read_csv('" << paths[0] << "'" << separator << "auto_detect=false" << separator;
 	// 10.1. Delimiter
 	if (!sniffer_options.dialect_options.state_machine_options.delimiter.IsSetByUser()) {
 		csv_read << "delim="
