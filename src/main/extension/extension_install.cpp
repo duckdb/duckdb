@@ -265,7 +265,8 @@ static void WriteExtensionFiles(FileSystem &fs, const string &temp_path, const s
 // Install an extension using a filesystem
 static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance &db, FileSystem &fs, const string &path,
                                                                const string &temp_path, const string &extension_name,
-                                                               const string &local_extension_path, ExtensionInstallOptions &options,
+                                                               const string &local_extension_path,
+                                                               ExtensionInstallOptions &options,
                                                                optional_ptr<ClientContext> context) {
 	string file = fs.ConvertSeparators(path);
 
@@ -334,7 +335,8 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance 
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db, const string &url,
                                                            const string &extension_name, const string &temp_path,
-                                                           const string &local_extension_path, ExtensionInstallOptions &options,
+                                                           const string &local_extension_path,
+                                                           ExtensionInstallOptions &options,
                                                            optional_ptr<HTTPLogger> http_logger) {
 	string no_http = StringUtil::Replace(url, "http://", "");
 
@@ -464,21 +466,22 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 }
 
 // Install an extension using a hand-rolled http request
-static unique_ptr<ExtensionInstallInfo> InstallFromRepository(DatabaseInstance &db, FileSystem &fs, const string &url,
-                                                              const string &extension_name, const string &temp_path,
-                                                              const string &local_extension_path, ExtensionInstallOptions &options,
-                                                              optional_ptr<HTTPLogger> http_logger,
-                                                              optional_ptr<ClientContext> context) {
+static unique_ptr<ExtensionInstallInfo>
+InstallFromRepository(DatabaseInstance &db, FileSystem &fs, const string &url, const string &extension_name,
+                      const string &temp_path, const string &local_extension_path, ExtensionInstallOptions &options,
+                      optional_ptr<HTTPLogger> http_logger, optional_ptr<ClientContext> context) {
 	string url_template = ExtensionHelper::ExtensionUrlTemplate(db, *options.repository, options.version);
 	string generated_url = ExtensionHelper::ExtensionFinalizeUrlTemplate(url_template, extension_name);
 
 	// Special handling for http repository: avoid using regular filesystem (note: the filesystem is not used here)
 	if (StringUtil::StartsWith(options.repository->path, "http://")) {
-		return InstallFromHttpUrl(db, generated_url, extension_name, temp_path, local_extension_path, options, http_logger);
+		return InstallFromHttpUrl(db, generated_url, extension_name, temp_path, local_extension_path, options,
+		                          http_logger);
 	}
 
 	// Default case, let the FileSystem figure it out
-	return DirectInstallExtension(db, fs, generated_url, temp_path, extension_name, local_extension_path, options, context);
+	return DirectInstallExtension(db, fs, generated_url, temp_path, extension_name, local_extension_path, options,
+	                              context);
 }
 
 static bool IsHTTP(const string &path) {
@@ -557,16 +560,15 @@ ExtensionHelper::InstallExtensionInternal(DatabaseInstance &db, FileSystem &fs, 
 	// Install extension from local, direct url
 	if (ExtensionHelper::IsFullPath(extension) && !IsHTTP(extension)) {
 		LocalFileSystem local_fs;
-		return DirectInstallExtension(db, local_fs, extension, temp_path, extension, local_extension_path,
-		                              options, context);
+		return DirectInstallExtension(db, local_fs, extension, temp_path, extension, local_extension_path, options,
+		                              context);
 	}
 
 	// Install extension from local url based on a repository (Note that this will install it as a local file)
 	if (options.repository && !IsHTTP(options.repository->path)) {
 		LocalFileSystem local_fs;
-		return InstallFromRepository(db, fs, extension, extension_name, temp_path,
-		                             local_extension_path, options, http_logger,
-		                             context);
+		return InstallFromRepository(db, fs, extension, extension_name, temp_path, local_extension_path, options,
+		                             http_logger, context);
 	}
 
 #ifdef DISABLE_DUCKDB_REMOTE_INSTALL
@@ -577,17 +579,17 @@ ExtensionHelper::InstallExtensionInternal(DatabaseInstance &db, FileSystem &fs, 
 	if (IsFullPath(extension)) {
 		if (StringUtil::StartsWith(extension, "http://")) {
 			// HTTP takes separate path to avoid dependency on httpfs extension
-			return InstallFromHttpUrl(db, extension, extension_name, temp_path, local_extension_path,
-			                          options, http_logger);
+			return InstallFromHttpUrl(db, extension, extension_name, temp_path, local_extension_path, options,
+			                          http_logger);
 		}
 
 		// Direct installation from local or remote path
-		return DirectInstallExtension(db, fs, extension, temp_path, extension, local_extension_path,
-		                              options, context);
+		return DirectInstallExtension(db, fs, extension, temp_path, extension, local_extension_path, options, context);
 	}
 
 	// Repository installation
-	return InstallFromRepository(db, fs, extension, extension_name, temp_path, local_extension_path, options, http_logger, context);
+	return InstallFromRepository(db, fs, extension, extension_name, temp_path, local_extension_path, options,
+	                             http_logger, context);
 #endif
 #endif
 }

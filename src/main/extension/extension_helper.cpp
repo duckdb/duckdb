@@ -295,7 +295,7 @@ static ExtensionUpdateResult UpdateExtensionInternal(ClientContext &context, Dat
 	auto repository_from_info = ExtensionRepository::GetRepositoryByUrl(extension_install_info->repository_url);
 	result.repository = repository_from_info.ToReadableString();
 
-	// We force install the full url found in this file, enabling etags to ensure efficient updating
+	// Force install the full url found in this file, enabling etags to ensure efficient updating
 	ExtensionInstallOptions options;
 	options.repository = repository_from_info;
 	options.force_install = true;

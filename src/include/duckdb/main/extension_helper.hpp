@@ -82,11 +82,11 @@ struct ExtensionInstallOptions {
 	//! Install a specific version of the extension
 	string version;
 
-	//! Overwrite any existing installation
+	//! Overwrite existing installation
 	bool force_install = false;
 	//! Use etags to avoid downloading unchanged extension files
 	bool use_etags = false;
-	//! Throw an error when INSTALL is called on an extension with a different origin than the one that is installed
+	//! Throw an error when installing an extension with a different origin than the one that is installed
 	bool throw_on_origin_mismatch = false;
 };
 
