@@ -1144,7 +1144,8 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	sink.probe_spill->consumer->ScanChunk(probe_local_scan, lhs_probe_chunk);
 
 	// Get the probe chunk columns/hashes
-	lhs_join_key_executor.Execute(chunk, lhs_probe_chunk);
+	lhs_join_keys.Reset();
+	lhs_join_key_executor.Execute(lhs_probe_chunk, lhs_join_keys);
 	lhs_output.ReferenceColumns(lhs_probe_chunk, sink.op.lhs_output_columns.col_idxs);
 	auto precomputed_hashes = &lhs_probe_chunk.data.back();
 

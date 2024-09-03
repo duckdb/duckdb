@@ -2,6 +2,7 @@
 
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
@@ -52,6 +53,13 @@ void ExtractColumnBindings(Expression &expr, vector<ColumnBinding> &bindings) {
 }
 
 void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
+	if (TopN::CanOptimize(op) && op.children[0]->type == LogicalOperatorType::LOGICAL_ORDER_BY) {
+		// Let's not mess with this, TopN is more important than projection maps
+		VisitOperatorExpressions(op);                        // Visit LIMIT
+		VisitOperatorExpressions(*op.children[0]);           // Visit ORDER
+		StandardVisitOperator(*op.children[0]->children[0]); // Recurse into child of ORDER
+		return;
+	}
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		// FIXME: groups that are not referenced can be removed from projection

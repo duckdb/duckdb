@@ -1,14 +1,45 @@
 #include "duckdb/optimizer/common_aggregate_optimizer.hpp"
 
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
-#include "duckdb/parser/expression_map.hpp"
-#include "duckdb/planner/column_binding_map.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/operator/logical_join.hpp"
+#include "duckdb/planner/operator/logical_order.hpp"
 
 namespace duckdb {
 
 void CommonAggregateOptimizer::VisitOperator(LogicalOperator &op) {
-	LogicalOperatorVisitor::VisitOperator(op);
+	if (op.HasProjectionMap()) {
+		// Removing aggregates will mess up projection maps. Better to just remove the the maps now
+		// They will be re-added by the 2nd pass of ColumnLifetimeAnalyzer
+		switch (op.type) {
+		case LogicalOperatorType::LOGICAL_ANY_JOIN:
+		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+		case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+		case LogicalOperatorType::LOGICAL_ASOF_JOIN: {
+			auto &join = op.Cast<LogicalJoin>();
+			join.left_projection_map.clear();
+			join.right_projection_map.clear();
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_ORDER_BY: {
+			auto &order = op.Cast<LogicalOrder>();
+			order.projection_map.clear();
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_FILTER: {
+			auto &filter = op.Cast<LogicalFilter>();
+			filter.projection_map.clear();
+			break;
+		}
+		default:
+			throw NotImplementedException("CommonAggregateOptimizer::VisitOperator for %s",
+			                              EnumUtil::ToString(op.type));
+		}
+	}
+	LogicalOperatorVisitor::VisitOperatorExpressions(op);
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		ExtractCommonAggregates(op.Cast<LogicalAggregate>());
