@@ -147,10 +147,25 @@ class TestCanonicalExtensionTypes(object):
 
         res_arrow = duckdb_cursor.execute("select uuid from test_all_types()").arrow()
         res_duck = duckdb_cursor.execute("from res_arrow").fetchall()
-        print(res_duck)
         assert res_duck == [
             (UUID('00000000-0000-0000-0000-000000000000'),),
             (UUID('ffffffff-ffff-ffff-ffff-ffffffffffff'),),
+            (None,),
+        ]
+
+    def test_uuid_no_def_lossless(self):
+        duckdb_cursor = duckdb.connect()
+        res_arrow = duckdb_cursor.execute("select uuid from test_all_types()").arrow()
+        assert res_arrow.to_pylist() == [
+            {'uuid': '00000000-0000-0000-0000-000000000000'},
+            {'uuid': 'ffffffff-ffff-ffff-ffff-ffffffffffff'},
+            {'uuid': None},
+        ]
+
+        res_duck = duckdb_cursor.execute("from res_arrow").fetchall()
+        assert res_duck == [
+            ('00000000-0000-0000-0000-000000000000',),
+            ('ffffffff-ffff-ffff-ffff-ffffffffffff',),
             (None,),
         ]
 
