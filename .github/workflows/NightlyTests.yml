@@ -530,7 +530,8 @@ jobs:
 
       - name: Test
         shell: bash
-        run: build/reldebug/test/unittest "*"
+        run: |
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "*" --no-exit --time_execution
 
   vector-verification:
     name: Vector Verification Tests (${{ matrix.vector_type }})
@@ -791,6 +792,7 @@ jobs:
     env:
       CC: gcc-10
       CXX: g++-10
+      BLOCK_ALLOC_SIZE: 16384
 
     steps:
       - uses: actions/checkout@v3
@@ -806,6 +808,16 @@ jobs:
         with:
           key: ${{ github.job }}
           save: ${{ env.CCACHE_SAVE }}
+
+      - name: Build
+        shell: bash
+        run: make relassert
+
+      - name: Test
+        shell: bash
+        run: |
+          python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest --no-exit --time_execution
+          python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest "test/sql/storage/*" --no-exit --time_execution
 
       - name: Test
         shell: bash
