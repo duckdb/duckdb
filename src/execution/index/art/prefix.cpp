@@ -251,7 +251,7 @@ void Prefix::Reduce(ART &art, Node &node, const idx_t pos) {
 GateStatus Prefix::Split(ART &art, reference<Node> &node, Node &child, const uint8_t pos) {
 	D_ASSERT(node.get().HasMetadata());
 
-	Prefix prefix(art, node);
+	Prefix prefix(art, node, true);
 
 	// The split is at the last prefix byte. Decrease the count and return.
 	if (pos + 1 == Count(art)) {
