@@ -40,8 +40,8 @@ struct CSVGlobalState : public GlobalTableFunctionState {
 
 	//! Calculates the Max Threads that will be used by this CSV Reader
 	idx_t MaxThreads() const override;
-	//! We hold information on the current scanner boundary
-	CSVIterator current_boundary;
+
+	bool IsDone() const;
 
 private:
 	//! Reference to the client context that created this scan
@@ -76,6 +76,8 @@ private:
 	shared_ptr<CSVBufferUsage> current_buffer_in_use;
 
 	unordered_map<idx_t, idx_t> threads_per_file;
+	//! We hold information on the current scanner boundary
+	CSVIterator current_boundary;
 };
 
 } // namespace duckdb
