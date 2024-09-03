@@ -12,7 +12,7 @@ namespace duckdb {
 
 void CommonAggregateOptimizer::VisitOperator(LogicalOperator &op) {
 	if (op.HasProjectionMap()) {
-		// Removing aggregates will mess up projection maps. Better to just remove the the maps now
+		// Removing aggregates will mess up projection maps. Better to just remove the maps now
 		// They will be re-added by the 2nd pass of ColumnLifetimeAnalyzer
 		switch (op.type) {
 		case LogicalOperatorType::LOGICAL_ANY_JOIN:
@@ -39,7 +39,7 @@ void CommonAggregateOptimizer::VisitOperator(LogicalOperator &op) {
 			                              EnumUtil::ToString(op.type));
 		}
 	}
-	LogicalOperatorVisitor::VisitOperatorExpressions(op);
+	LogicalOperatorVisitor::VisitOperator(op);
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		ExtractCommonAggregates(op.Cast<LogicalAggregate>());
