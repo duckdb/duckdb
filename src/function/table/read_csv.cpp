@@ -205,7 +205,7 @@ unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, 
 		return nullptr;
 	}
 	auto &global_state = global_state_p->Cast<CSVGlobalState>();
-	if (global_state.current_boundary.done) {
+	if (global_state.IsDone()) {
 		// nothing to do
 		return nullptr;
 	}
