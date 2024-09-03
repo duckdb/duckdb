@@ -1,11 +1,13 @@
-#include "duckdb/function/table/arrow.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/multiply.hpp"
-#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/arrow_aux_data.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
-#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/types/arrow_string_view_type.hpp"
+#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/function/table/arrow.hpp"
+
+#include "duckdb/common/bswap.hpp"
 
 namespace duckdb {
 
@@ -474,10 +476,10 @@ static void UUIDConversion(Vector &vector, const ArrowArray &array, const ArrowS
 		if (!validity_mask.RowIsValid(row)) {
 			continue;
 		}
-		tgt_ptr[row].lower = __builtin_bswap64(src_ptr[row].upper);
+		tgt_ptr[row].lower = BSwap(src_ptr[row].upper);
 		// flip Upper MSD
-		tgt_ptr[row].upper = static_cast<int64_t>(static_cast<uint64_t>(__builtin_bswap64(src_ptr[row].lower)) ^
-		                                          (static_cast<uint64_t>(1) << 63));
+		tgt_ptr[row].upper =
+		    static_cast<int64_t>(static_cast<uint64_t>(BSwap(src_ptr[row].lower)) ^ (static_cast<uint64_t>(1) << 63));
 	}
 }
 
