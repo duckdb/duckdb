@@ -1,9 +1,10 @@
-from settings_scripts import parse_and_sort_json, update_header_file, update_scopes, generate_funcs
-from settings_scripts.config import SettingsList
+from settings_scripts import parse_and_sort_json_file, update_header_file, update_scopes, update_definitions
+from settings_scripts.config import SettingsList, make_format
 
 if __name__ == '__main__':
-    parse_and_sort_json()
+    parse_and_sort_json_file()
     update_header_file()
     update_scopes()
-    generate_funcs()
-    print(f"Parsed and included {len(SettingsList)} setting(s)!")
+    update_definitions()
+    make_format()
+    print(f"- Successfully parsed and included {len(SettingsList)} setting(s)!")

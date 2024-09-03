@@ -61,13 +61,6 @@ Value AccessModeSetting::GetSetting(const ClientContext &context) {
 	}
 }
 
-
-
-
-
-
-
-
 //===--------------------------------------------------------------------===//
 // End of the auto-generated list of settings definitions
 //===--------------------------------------------------------------------===//

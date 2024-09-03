@@ -1,5 +1,7 @@
 import os
 import re
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import Set, List
 from functools import total_ordering
@@ -14,49 +16,8 @@ DUCKDB_SETTINGS_TYPES_FILE = os.path.join(DUCKDB_DIR, "src/include/duckdb/common
 JSON_PATH = os.path.join(DUCKDB_DIR, "src/common", "settings.json")
 
 # define scope values
-VALID_SCOPE_VALUES = ["GLOBAL", "LOCAL", "GLOBAL_LOCAL"]
+VALID_SCOPE_VALUES = ["GLOBAL", "LOCAL", "GLOBAL_LOCAL", "SECRET"]
 INVALID_SCOPE_VALUE = "INVALID"
-
-# mappin sql types to cpp # TODO: is the mapping correct?
-SQL_TYPES_MAPPING_TO_CPP = {
-    "VARCHAR": "string",
-    "BOOLEAN": "bool",
-    "TINYINT": "int8_t",
-    "SMALLINT": "int16_t",
-    "INTEGER": "int32_t",
-    "BIGINT": "int64_t",
-    "DATE": "string",
-    "TIME": "string",
-    "TIMESTAMP_SEC": "string",
-    "TIMESTAMP_MS": "string",
-    "TIMESTAMP": "string",
-    "TIMESTAMP_NS": "string",
-    "DECIMAL": "double",
-    "FLOAT": "float",
-    "DOUBLE": "double",
-    "CHAR": "string",
-    "BLOB": "string",
-    "INTERVAL": "string",
-    "UTINYINT": "uint8_t",
-    "USMALLINT": "uint16_t",
-    "UINTEGER": "uint32_t",
-    "UBIGINT": "uint64_t",
-    "TIMESTAMP_TZ": "string",
-    "TIME_TZ": "string",
-    "BIT": "bool",
-    "HUGEINT": "__int128",  # TODO: assuming support for 128-bit integers?
-    "POINTER": "void*",
-    "VALIDITY": "bool",
-    "UUID": "string",
-    "STRUCT": "struct",  # TODO: a custom struct definition?
-    "LIST": "vector",
-    "MAP": "duckdb_map",
-    "TABLE": "CustomTableType",
-    "ENUM": "enum",
-    "AGGREGATE_STATE": "CustomAggregateType",
-    "LAMBDA": "function",
-    "UNION": "variant",
-}
 
 
 # global Setting structure
@@ -68,23 +29,27 @@ class Setting:
     def __init__(
         self,
         name: str,
-        input_type: str,
-        scope: str,
         description: str,
+        type: str,
+        sql_type: str,
+        scope: str,
+        add_verification_in_SET: bool,
+        add_verification_in_RESET: bool,
+        custom_value_conversion: bool,
         aliases: List[str],
-        verification: bool = False,
-        auto_generate: bool = True,
     ):
-        self.__valid_input_types_list = self.__extract_valid_input_types(DUCKDB_SETTINGS_TYPES_FILE)
+        self.__valid_sql_types_list = self.__extract_valid_sql_types(DUCKDB_SETTINGS_TYPES_FILE)
+
         self.name = self._get_valid_name(name)
-        self.input_type = self._get_input_type(input_type)
-        self.setting_type = self._get_setting_type(input_type)
-        self.scope = self._get_valid_scope(scope)
         self.description = description
-        self.verification = verification
-        self.struct_name = self._get_struct_name()
+        self.type = self._get_setting_type(type)
+        self.sql_type = self._get_sql_type(sql_type)
+        self.scope = self._get_valid_scope(scope)
+        self.add_verification_in_SET = add_verification_in_SET
+        self.add_verification_in_RESET = add_verification_in_RESET
+        self.custom_value_conversion = custom_value_conversion
         self.aliases = self._get_aliases(aliases)
-        self.auto_generate = auto_generate
+        self.struct_name = self._get_struct_name()
 
     # define all comparisons to be based on the setting's name attribute
     def __eq__(self, other) -> bool:
@@ -97,7 +62,7 @@ class Setting:
         return hash(self.name)
 
     def __repr__(self):
-        return f"struct {self.struct_name} -> {self.name}, {self.type}, {self.scope}, {self.description}, {self.verification}, {self.aliases}"
+        return f"struct {self.struct_name} -> {self.name}, {self.sql_type}, {self.type}, {self.scope}, {self.description} {self.aliases}"
 
     # validate setting name for correct format and uniqueness
     def _get_valid_name(self, name: str) -> str:
@@ -116,14 +81,17 @@ class Setting:
         return INVALID_SCOPE_VALUE
 
     # validate and return the correct type format
-    def _get_input_type(self, type) -> str:
-        if type in self.__valid_input_types_list:
-            return f"LogicalTypeId::{type}"
-        raise ValueError(f"Invalid input type: '{type}'")
+    def _get_sql_type(self, sql_type) -> str:
+        if sql_type in self.__valid_sql_types_list:
+            return f"LogicalTypeId::{sql_type}"
+        raise ValueError(f"Invalid input type: '{sql_type}'")
 
-    # mapping SQL types to their corresponding cpp types
+    # validate and return the cpp input type
     def _get_setting_type(self, type) -> str:
-        return SQL_TYPES_MAPPING_TO_CPP.get(type.upper(), "UnknownType")
+        # TODO: now for empty parameter, returns void
+        if len(type) == 0:
+            return "void"
+        return type
 
     # validate and return the set of the aliases
     def _get_aliases(self, aliases: List[str]) -> List[str]:
@@ -136,7 +104,7 @@ class Setting:
             return f"{camel_case_name}"
         return f"{camel_case_name}Setting"
 
-    def __extract_valid_input_types(self, file_path: str) -> List[str]:
+    def __extract_valid_sql_types(self, file_path: str) -> List[str]:
         with open(file_path, 'r') as file:
             content = file.read()
         enum_block_match = re.search(r'enum class LogicalTypeId : uint8_t {([^}]*)}', content)
@@ -173,3 +141,7 @@ def find_start_end_indexes(source_code, start_marker, end_marker, file_path):
 def write_content_to_file(new_content, path):
     with open(path, 'w') as source_file:
         source_file.write("".join(new_content))
+
+
+def make_format():
+    os.system(f"python3 scripts/format.py {DUCKDB_SETTINGS_HEADER_FILE} --fix --force --noconfirm")

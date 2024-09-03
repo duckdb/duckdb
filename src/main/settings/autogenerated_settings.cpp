@@ -1,8 +1,8 @@
 #include "duckdb/main/settings.hpp"
 
 //===--------------------------------------------------------------------===//
-// Start of the auto-generated list of settings definitions//===--------------------------------------------------------------------===//
-
+// Start of the auto-generated list of settings definitions
+//===--------------------------------------------------------------------===//
 
 //===--------------------------------------------------------------------===//
 // Access Mode
@@ -31,7 +31,8 @@ void AllocatorBackgroundThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConf
 	config.options.allocator_background_threads = DBConfig().options.allocator_background_threads;
 }
 
-AllocatorBackgroundThreadsSetting::SETTING_TYPE AllocatorBackgroundThreadsSetting::GetSetting(const ClientContext &context) {
+AllocatorBackgroundThreadsSetting::SETTING_TYPE
+AllocatorBackgroundThreadsSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(*context.db);
 	return AllocatorBackgroundThreadsSetting::ToValue(config.options.allocator_background_threads);
 }
@@ -63,7 +64,8 @@ void AllowCommunityExtensionsSetting::ResetGlobal(DatabaseInstance *db, DBConfig
 	config.options.allow_community_extensions = DBConfig().options.allow_community_extensions;
 }
 
-AllowCommunityExtensionsSetting::SETTING_TYPE AllowCommunityExtensionsSetting::GetSetting(const ClientContext &context) {
+AllowCommunityExtensionsSetting::SETTING_TYPE
+AllowCommunityExtensionsSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(*context.db);
 	return AllowCommunityExtensionsSetting::ToValue(config.options.allow_community_extensions);
 }
@@ -79,24 +81,10 @@ void AllowExtensionsMetadataMismatchSetting::ResetGlobal(DatabaseInstance *db, D
 	config.options.allow_extensions_metadata_mismatch = DBConfig().options.allow_extensions_metadata_mismatch;
 }
 
-AllowExtensionsMetadataMismatchSetting::SETTING_TYPE AllowExtensionsMetadataMismatchSetting::GetSetting(const ClientContext &context) {
+AllowExtensionsMetadataMismatchSetting::SETTING_TYPE
+AllowExtensionsMetadataMismatchSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(*context.db);
 	return AllowExtensionsMetadataMismatchSetting::ToValue(config.options.allow_extensions_metadata_mismatch);
-}
-
-//===--------------------------------------------------------------------===//
-// Allow Persistent Secrets
-//===--------------------------------------------------------------------===//
-void AllowPersistentSecretsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	// *** implement the function *** /
-}
-
-void AllowPersistentSecretsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	// *** implement the function *** /
-}
-
-AllowPersistentSecretsSetting::SETTING_TYPE AllowPersistentSecretsSetting::GetSetting(const ClientContext &context) {
-	// *** implement the function *** /
 }
 
 //===--------------------------------------------------------------------===//
@@ -174,7 +162,8 @@ void AutoinstallExtensionRepositorySetting::ResetGlobal(DatabaseInstance *db, DB
 	config.options.autoinstall_extension_repository = DBConfig().options.autoinstall_extension_repository;
 }
 
-AutoinstallExtensionRepositorySetting::SETTING_TYPE AutoinstallExtensionRepositorySetting::GetSetting(const ClientContext &context) {
+AutoinstallExtensionRepositorySetting::SETTING_TYPE
+AutoinstallExtensionRepositorySetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(*context.db);
 	return AutoinstallExtensionRepositorySetting::ToValue(config.options.autoinstall_extension_repository);
 }
@@ -190,7 +179,8 @@ void AutoinstallKnownExtensionsSetting::ResetGlobal(DatabaseInstance *db, DBConf
 	config.options.autoinstall_known_extensions = DBConfig().options.autoinstall_known_extensions;
 }
 
-AutoinstallKnownExtensionsSetting::SETTING_TYPE AutoinstallKnownExtensionsSetting::GetSetting(const ClientContext &context) {
+AutoinstallKnownExtensionsSetting::SETTING_TYPE
+AutoinstallKnownExtensionsSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(*context.db);
 	return AutoinstallKnownExtensionsSetting::ToValue(config.options.autoinstall_known_extensions);
 }
@@ -254,7 +244,8 @@ void CustomExtensionRepositorySetting::ResetGlobal(DatabaseInstance *db, DBConfi
 	config.options.custom_extension_repository = DBConfig().options.custom_extension_repository;
 }
 
-CustomExtensionRepositorySetting::SETTING_TYPE CustomExtensionRepositorySetting::GetSetting(const ClientContext &context) {
+CustomExtensionRepositorySetting::SETTING_TYPE
+CustomExtensionRepositorySetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(*context.db);
 	return CustomExtensionRepositorySetting::ToValue(config.options.custom_extension_repository);
 }
@@ -358,7 +349,8 @@ void DebugForceNoCrossProductSetting::ResetLocal(ClientContext &context) {
 	config.debug_force_no_cross_product = ClientConfig().debug_force_no_cross_product;
 }
 
-DebugForceNoCrossProductSetting::SETTING_TYPE DebugForceNoCrossProductSetting::GetSetting(const ClientContext &context) {
+DebugForceNoCrossProductSetting::SETTING_TYPE
+DebugForceNoCrossProductSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(*context.db);
 	return DebugForceNoCrossProductSetting::ToValue(config.options.debug_force_no_cross_product);
 }
@@ -472,21 +464,6 @@ void DefaultSecretStorageSetting::ResetGlobal(DatabaseInstance *db, DBConfig &co
 DefaultSecretStorageSetting::SETTING_TYPE DefaultSecretStorageSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(*context.db);
 	return DefaultSecretStorageSetting::ToValue(config.options.default_secret_storage);
-}
-
-//===--------------------------------------------------------------------===//
-// Disabled Filesystems
-//===--------------------------------------------------------------------===//
-void DisabledFilesystemsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	// *** implement the function *** /
-}
-
-void DisabledFilesystemsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	// *** implement the function *** /
-}
-
-DisabledFilesystemsSetting::SETTING_TYPE DisabledFilesystemsSetting::GetSetting(const ClientContext &context) {
-	// *** implement the function *** /
 }
 
 //===--------------------------------------------------------------------===//
@@ -620,9 +597,6 @@ EnableObjectCacheSetting::SETTING_TYPE EnableObjectCacheSetting::GetSetting(cons
 }
 
 //===--------------------------------------------------------------------===//
-// Enable Profiling
-//===--------------------------------------------------------------------===//
-//===--------------------------------------------------------------------===//
 // Enable Progress Bar
 //===--------------------------------------------------------------------===//
 void EnableProgressBarSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -743,9 +717,6 @@ ExternalThreadsSetting::SETTING_TYPE ExternalThreadsSetting::GetSetting(const Cl
 }
 
 //===--------------------------------------------------------------------===//
-// File Search Path
-//===--------------------------------------------------------------------===//
-//===--------------------------------------------------------------------===//
 // Force Bitpacking Mode
 //===--------------------------------------------------------------------===//
 void ForceBitpackingModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -824,7 +795,8 @@ void ImmediateTransactionModeSetting::ResetGlobal(DatabaseInstance *db, DBConfig
 	config.options.immediate_transaction_mode = DBConfig().options.immediate_transaction_mode;
 }
 
-ImmediateTransactionModeSetting::SETTING_TYPE ImmediateTransactionModeSetting::GetSetting(const ClientContext &context) {
+ImmediateTransactionModeSetting::SETTING_TYPE
+ImmediateTransactionModeSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(*context.db);
 	return ImmediateTransactionModeSetting::ToValue(config.options.immediate_transaction_mode);
 }
@@ -896,9 +868,6 @@ LockConfigurationSetting::SETTING_TYPE LockConfigurationSetting::GetSetting(cons
 }
 
 //===--------------------------------------------------------------------===//
-// Log Query Path
-//===--------------------------------------------------------------------===//
-//===--------------------------------------------------------------------===//
 // Max Expression Depth
 //===--------------------------------------------------------------------===//
 void MaxExpressionDepthSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -914,36 +883,6 @@ void MaxExpressionDepthSetting::ResetLocal(ClientContext &context) {
 MaxExpressionDepthSetting::SETTING_TYPE MaxExpressionDepthSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(*context.db);
 	return MaxExpressionDepthSetting::ToValue(config.options.max_expression_depth);
-}
-
-//===--------------------------------------------------------------------===//
-// Max Memory
-//===--------------------------------------------------------------------===//
-void MaxMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	// *** implement the function *** /
-}
-
-void MaxMemorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	// *** implement the function *** /
-}
-
-MaxMemorySetting::SETTING_TYPE MaxMemorySetting::GetSetting(const ClientContext &context) {
-	// *** implement the function *** /
-}
-
-//===--------------------------------------------------------------------===//
-// Max Temp Directory Size
-//===--------------------------------------------------------------------===//
-void MaxTempDirectorySizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	// *** implement the function *** /
-}
-
-void MaxTempDirectorySizeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	// *** implement the function *** /
-}
-
-MaxTempDirectorySizeSetting::SETTING_TYPE MaxTempDirectorySizeSetting::GetSetting(const ClientContext &context) {
-	// *** implement the function *** /
 }
 
 //===--------------------------------------------------------------------===//
@@ -1011,7 +950,8 @@ void OrderedAggregateThresholdSetting::ResetLocal(ClientContext &context) {
 	config.ordered_aggregate_threshold = ClientConfig().ordered_aggregate_threshold;
 }
 
-OrderedAggregateThresholdSetting::SETTING_TYPE OrderedAggregateThresholdSetting::GetSetting(const ClientContext &context) {
+OrderedAggregateThresholdSetting::SETTING_TYPE
+OrderedAggregateThresholdSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(*context.db);
 	return OrderedAggregateThresholdSetting::ToValue(config.options.ordered_aggregate_threshold);
 }
@@ -1029,7 +969,8 @@ void PartitionedWriteFlushThresholdSetting::ResetLocal(ClientContext &context) {
 	config.partitioned_write_flush_threshold = ClientConfig().partitioned_write_flush_threshold;
 }
 
-PartitionedWriteFlushThresholdSetting::SETTING_TYPE PartitionedWriteFlushThresholdSetting::GetSetting(const ClientContext &context) {
+PartitionedWriteFlushThresholdSetting::SETTING_TYPE
+PartitionedWriteFlushThresholdSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(*context.db);
 	return PartitionedWriteFlushThresholdSetting::ToValue(config.options.partitioned_write_flush_threshold);
 }
@@ -1047,7 +988,8 @@ void PartitionedWriteMaxOpenFilesSetting::ResetLocal(ClientContext &context) {
 	config.partitioned_write_max_open_files = ClientConfig().partitioned_write_max_open_files;
 }
 
-PartitionedWriteMaxOpenFilesSetting::SETTING_TYPE PartitionedWriteMaxOpenFilesSetting::GetSetting(const ClientContext &context) {
+PartitionedWriteMaxOpenFilesSetting::SETTING_TYPE
+PartitionedWriteMaxOpenFilesSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(*context.db);
 	return PartitionedWriteMaxOpenFilesSetting::ToValue(config.options.partitioned_write_max_open_files);
 }
@@ -1307,14 +1249,12 @@ void StorageCompatibilityVersionSetting::ResetGlobal(DatabaseInstance *db, DBCon
 	config.options.storage_compatibility_version = DBConfig().options.storage_compatibility_version;
 }
 
-StorageCompatibilityVersionSetting::SETTING_TYPE StorageCompatibilityVersionSetting::GetSetting(const ClientContext &context) {
+StorageCompatibilityVersionSetting::SETTING_TYPE
+StorageCompatibilityVersionSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(*context.db);
 	return StorageCompatibilityVersionSetting::ToValue(config.options.storage_compatibility_version);
 }
 
-//===--------------------------------------------------------------------===//
-// Streaming Buffer Size
-//===--------------------------------------------------------------------===//
 //===--------------------------------------------------------------------===//
 // Temp Directory
 //===--------------------------------------------------------------------===//
@@ -1348,19 +1288,5 @@ ThreadsSetting::SETTING_TYPE ThreadsSetting::GetSetting(const ClientContext &con
 }
 
 //===--------------------------------------------------------------------===//
-// Username
+// End of the auto-generated list of settings definitions
 //===--------------------------------------------------------------------===//
-void UsernameSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	// *** implement the function *** /
-}
-
-void UsernameSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	// *** implement the function *** /
-}
-
-UsernameSetting::SETTING_TYPE UsernameSetting::GetSetting(const ClientContext &context) {
-	// *** implement the function *** /
-}
-
-//===--------------------------------------------------------------------===//
-// End of the auto-generated list of settings definitions//===--------------------------------------------------------------------===//
