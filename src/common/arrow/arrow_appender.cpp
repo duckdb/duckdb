@@ -168,7 +168,6 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 			} else {
 				InitializeAppenderForType<ArrowVarcharData<hugeint_t, ArrowUUIDConverter, int32_t>>(append_data);
 			}
-			break;
 		}
 		break;
 	case LogicalTypeId::HUGEINT:

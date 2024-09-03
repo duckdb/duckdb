@@ -463,6 +463,22 @@ static void TimeConversion(Vector &vector, ArrowArray &array, const ArrowScanLoc
 	}
 }
 
+static void UUIDConversion(Vector &vector, ArrowArray &array, const ArrowScanLocalState &scan_state,
+                           int64_t nested_offset, int64_t parent_offset, idx_t size) {
+	auto tgt_ptr = FlatVector::GetData<hugeint_t>(vector);
+	auto &validity_mask = FlatVector::Validity(vector);
+	auto src_ptr = (hugeint_t *)array.buffers[1] + GetEffectiveOffset(array, parent_offset, scan_state, nested_offset);
+	for (idx_t row = 0; row < size; row++) {
+		if (!validity_mask.RowIsValid(row)) {
+			continue;
+		}
+		tgt_ptr[row].lower = __builtin_bswap64(src_ptr[row].upper);
+		// flip Upper MSD
+		tgt_ptr[row].upper = static_cast<int64_t>(static_cast<uint64_t>(__builtin_bswap64(src_ptr[row].lower)) ^
+		                                          (static_cast<uint64_t>(1) << 63));
+	}
+}
+
 static void TimestampTZConversion(Vector &vector, ArrowArray &array, const ArrowScanLocalState &scan_state,
                                   int64_t nested_offset, int64_t parent_offset, idx_t size, int64_t conversion) {
 	auto tgt_ptr = FlatVector::GetData<timestamp_t>(vector);
@@ -778,7 +794,6 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::HUGEINT:
-	case LogicalTypeId::UUID:
 	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_SEC:
@@ -788,6 +803,9 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 		DirectConversion(vector, array, scan_state, nested_offset, parent_offset);
 		break;
 	}
+	case LogicalTypeId::UUID:
+		UUIDConversion(vector, array, scan_state, nested_offset, NumericCast<int64_t>(parent_offset), size);
+		break;
 	case LogicalTypeId::VARCHAR: {
 		auto &string_info = arrow_type.GetTypeInfo<ArrowStringInfo>();
 		auto size_type = string_info.GetSizeType();
