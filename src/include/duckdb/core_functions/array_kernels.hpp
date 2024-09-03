@@ -1,4 +1,6 @@
+#pragma once
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/algorithm.hpp"
 #include <cmath>
 
 namespace duckdb {
