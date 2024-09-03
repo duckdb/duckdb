@@ -57,6 +57,26 @@ struct ArrowTimeTzConverter {
 	}
 };
 
+struct ArrowUUIDBlobConverter {
+	template <class TGT, class SRC>
+	static TGT Operation(hugeint_t input) {
+		// Turn into big-end
+		auto upper = __builtin_bswap64(input.lower);
+		// flip Upper MSD
+		auto lower = __builtin_bswap64(
+		    static_cast<int64_t>(static_cast<uint64_t>(input.upper) ^ (static_cast<uint64_t>(1) << 63)));
+		return {static_cast<int64_t>(upper), lower};
+	}
+
+	static bool SkipNulls() {
+		return true;
+	}
+
+	template <class TGT>
+	static void SetNull(TGT &value) {
+	}
+};
+
 template <class TGT, class SRC = TGT, class OP = ArrowScalarConverter>
 struct ArrowScalarBaseData {
 	static void Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
