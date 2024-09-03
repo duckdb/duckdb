@@ -1,4 +1,4 @@
-This is the DuckDB Python package
+# DuckDB Python package
 
 ## Default installation
 
