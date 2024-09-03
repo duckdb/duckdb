@@ -1,6 +1,7 @@
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/function.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -24,7 +25,7 @@ BinderException BinderException::ColumnNotFound(const string &name, const vector
 }
 
 BinderException BinderException::NoMatchingFunction(const string &name, const vector<LogicalType> &arguments,
-                                                    const vector<string> &candidates) {
+                                                    const vector<string> &candidates, const ClientContext &context) {
 	auto extra_info = Exception::InitializeExtraInfo("NO_MATCHING_FUNCTION", optional_idx());
 	// no matching function was found, throw an error
 	string call_str = Function::CallToString(name, arguments);

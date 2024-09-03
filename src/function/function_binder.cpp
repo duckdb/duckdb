@@ -107,7 +107,7 @@ vector<idx_t> FunctionBinder::BindFunctionsFromArguments(const string &name, Fun
 		for (auto &f : functions.functions) {
 			candidates.push_back(f.ToString());
 		}
-		error = ErrorData(BinderException::NoMatchingFunction(name, arguments, candidates));
+		error = ErrorData(BinderException::NoMatchingFunction(name, arguments, candidates, context));
 		return candidate_functions;
 	}
 	candidate_functions.push_back(best_function.GetIndex());

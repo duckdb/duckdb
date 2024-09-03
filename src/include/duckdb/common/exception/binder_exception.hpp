@@ -13,6 +13,8 @@
 
 namespace duckdb {
 
+class ClientContext;
+
 class BinderException : public Exception {
 public:
 	DUCKDB_API explicit BinderException(const string &msg, const unordered_map<string, string> &extra_info);
@@ -45,7 +47,7 @@ public:
 	static BinderException ColumnNotFound(const string &name, const vector<string> &similar_bindings,
 	                                      QueryErrorContext context = QueryErrorContext());
 	static BinderException NoMatchingFunction(const string &name, const vector<LogicalType> &arguments,
-	                                          const vector<string> &candidates);
+	                                          const vector<string> &candidates, const ClientContext &context);
 	static BinderException Unsupported(ParsedExpression &expr, const string &message);
 };
 
