@@ -31,9 +31,8 @@ duckdb_state duckdb_table_description_create_ext(duckdb_connection connection, c
 		schema = DEFAULT_SCHEMA;
 	}
 
-	// TODO: pass catalog.
 	try {
-		wrapper->description = conn->TableInfo(schema, table);
+		wrapper->description = conn->TableInfo(catalog, schema, table);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		wrapper->error = error.RawMessage();
@@ -69,11 +68,8 @@ const char *duckdb_table_description_error(duckdb_table_description table) {
 	return wrapper->error.c_str();
 }
 
-duckdb_state GetTableDescription(TableDescriptionWrapper *wrapper, idx_t index, bool valid) {
-	if (!wrapper || !valid) {
-		if (wrapper) {
-			wrapper->error = "Please provide a valid (non-null) 'out' variable";
-		}
+duckdb_state GetTableDescription(TableDescriptionWrapper *wrapper, idx_t index) {
+	if (!wrapper) {
 		return DuckDBError;
 	}
 	auto &table = wrapper->description;
@@ -87,7 +83,11 @@ duckdb_state GetTableDescription(TableDescriptionWrapper *wrapper, idx_t index, 
 
 duckdb_state duckdb_column_has_default(duckdb_table_description table_description, idx_t index, bool *out) {
 	auto wrapper = reinterpret_cast<TableDescriptionWrapper *>(table_description);
-	if (GetTableDescription(wrapper, index, out != nullptr) == DuckDBError) {
+	if (GetTableDescription(wrapper, index) == DuckDBError) {
+		return DuckDBError;
+	}
+	if (!out) {
+		wrapper->error = "Please provide a valid (non-null) 'out' variable";
 		return DuckDBError;
 	}
 
@@ -97,19 +97,19 @@ duckdb_state duckdb_column_has_default(duckdb_table_description table_descriptio
 	return DuckDBSuccess;
 }
 
-duckdb_state duckdb_column_get_name(duckdb_table_description table_description, idx_t index, char *out) {
+char *duckdb_column_get_name(duckdb_table_description table_description, idx_t index) {
 	auto wrapper = reinterpret_cast<TableDescriptionWrapper *>(table_description);
-	if (GetTableDescription(wrapper, index, out != nullptr) == DuckDBError) {
-		return DuckDBError;
+	if (GetTableDescription(wrapper, index) == DuckDBError) {
+		return nullptr;
 	}
 
 	auto &table = wrapper->description;
 	auto &column = table->columns[index];
 
 	auto name = column.GetName();
-	out = reinterpret_cast<char *>(malloc(sizeof(char) * (name.size() + 1)));
-	memcpy(out, name.c_str(), name.size());
-	out[name.size()] = '\0';
+	auto result = reinterpret_cast<char *>(malloc(sizeof(char) * (name.size() + 1)));
+	memcpy(result, name.c_str(), name.size());
+	result[name.size()] = '\0';
 
-	return DuckDBSuccess;
+	return result;
 }

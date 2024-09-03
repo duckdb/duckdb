@@ -3764,10 +3764,9 @@ The out result must be destroyed with `duckdb_free`.
 
 * @param table_description The table_description to query.
 * @param index The index of the column to query.
-* @param out The out-parameter used to store the result.
-* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+* @return The column name.
 */
-DUCKDB_API duckdb_state duckdb_column_get_name(duckdb_table_description table_description, idx_t index, char *out);
+DUCKDB_API char *duckdb_column_get_name(duckdb_table_description table_description, idx_t index);
 
 //===--------------------------------------------------------------------===//
 // Arrow Interface

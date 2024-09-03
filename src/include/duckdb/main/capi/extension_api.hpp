@@ -428,7 +428,7 @@ typedef struct {
 	duckdb_state (*duckdb_table_description_create_ext)(duckdb_connection connection, const char *catalog,
 	                                                    const char *schema, const char *table,
 	                                                    duckdb_table_description *out);
-	duckdb_state (*duckdb_column_get_name)(duckdb_table_description table_description, idx_t index, char *out);
+	char *(*duckdb_column_get_name)(duckdb_table_description table_description, idx_t index);
 } duckdb_ext_api_v0;
 
 //===--------------------------------------------------------------------===//
