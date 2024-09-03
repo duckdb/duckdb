@@ -2,6 +2,8 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/extension_entries.hpp"
+#include "duckdb/main/extension_helper.hpp"
 
 namespace duckdb {
 
@@ -33,6 +35,16 @@ BinderException BinderException::NoMatchingFunction(const string &name, const ve
 	for (auto &candidate : candidates) {
 		candidate_str += "\t" + candidate + "\n";
 	}
+
+	{
+		auto extension_name = ExtensionHelper::FindExtensionInEntries(name, EXTENSION_OVERLOADS);
+		if (context.GetHasTriedAutoLoading(extension_name)) {
+			candidate_str += "\nImplicit installing and loading of '" + extension_name +
+			                 "' failed.\nExplcitly `INSTALL " + extension_name + "; LOAD " + extension_name +
+			                 ";` might provide relevant overloads.\n";
+		}
+	}
+
 	extra_info["name"] = name;
 	extra_info["call"] = call_str;
 	if (!candidates.empty()) {
