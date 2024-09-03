@@ -55,6 +55,7 @@ void ExtractColumnBindings(Expression &expr, vector<ColumnBinding> &bindings) {
 void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 	if (TopN::CanOptimize(op) && op.children[0]->type == LogicalOperatorType::LOGICAL_ORDER_BY) {
 		// Let's not mess with this, TopN is more important than projection maps
+		// TopN does not support a projection map like Order does
 		VisitOperatorExpressions(op);                        // Visit LIMIT
 		VisitOperatorExpressions(*op.children[0]);           // Visit ORDER
 		StandardVisitOperator(*op.children[0]->children[0]); // Recurse into child of ORDER

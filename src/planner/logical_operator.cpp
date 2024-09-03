@@ -1,5 +1,6 @@
 #include "duckdb/planner/logical_operator.hpp"
 
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
@@ -8,6 +9,9 @@
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/operator/logical_join.hpp"
+#include "duckdb/planner/operator/logical_order.hpp"
 
 namespace duckdb {
 
@@ -105,6 +109,32 @@ vector<ColumnBinding> LogicalOperator::MapBindings(const vector<ColumnBinding> &
 			result_bindings.push_back(bindings[index]);
 		}
 		return result_bindings;
+	}
+}
+
+void LogicalOperator::ClearProjectionMap(LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN: {
+		auto &join = op.Cast<LogicalJoin>();
+		join.left_projection_map.clear();
+		join.right_projection_map.clear();
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_ORDER_BY: {
+		auto &order = op.Cast<LogicalOrder>();
+		order.projection_map.clear();
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_FILTER: {
+		auto &filter = op.Cast<LogicalFilter>();
+		filter.projection_map.clear();
+		break;
+	}
+	default:
+		throw NotImplementedException("LogicalOperator::ClearProjectionMap for %s", EnumUtil::ToString(op.type));
 	}
 }
 
