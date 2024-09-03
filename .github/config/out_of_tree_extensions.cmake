@@ -38,19 +38,18 @@ if (NOT MINGW)
     duckdb_extension_load(azure
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_azure
-            GIT_TAG 49b63dc8cd166952a0a34dfd54e6cfe5b823e05e
-            APPLY_PATCHES
+            GIT_TAG eddc48422c76a2f02a57a45d31b650b2680168f5
             )
 endif()
 
 ################# DELTA
 # MinGW build is not available, and our current manylinux ci does not have enough storage space to run the rust build
 # for Delta
-if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux" AND NOT WIN32)
+if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux")
     duckdb_extension_load(delta
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_delta
-            GIT_TAG 0b981978e8450a43f3b0bfdb84d382d61afbb1d0
+            GIT_TAG 3933ebd800ad06a64656c9aef6ca7d62897fa4db
     )
 endif()
 
@@ -102,10 +101,9 @@ endif()
 duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb_spatial.git
-    GIT_TAG dbb9971c900c5888e3e3598af91de3b9b884aca6
+    GIT_TAG 0bc9dff490cff60526061e7c72dceed945d3b3a3
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
-    APPLY_PATCHES
     )
 
 ################# SQLITE_SCANNER
@@ -119,13 +117,13 @@ endif()
 duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/sqlite_scanner
-        GIT_TAG 1ee5404c4b9a62a572c9076ebf4cabb7f4181ea6
+        GIT_TAG 647f1403791890b65a1419841df02bf17d634639
         )
 
 duckdb_extension_load(sqlsmith
         DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb_sqlsmith
-        GIT_TAG 98fb00dcfc9413ffe58f58022344661e1b45623f
+        GIT_TAG 7b00307a0c00fbb85bef2010330946f11311ba4c
         )
 
 ################# SUBSTRAIT
@@ -153,6 +151,6 @@ if (NOT MINGW)
             DONT_LINK
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_mysql
-            GIT_TAG 6519c1953655b86f59884bb1b79f554b9fdf551b
+            GIT_TAG 64cb6aec994fbe441157086599c265eb86303c84
             )
 endif()

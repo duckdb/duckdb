@@ -264,20 +264,10 @@ struct DBConfigOptions {
 	//! If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count)
 	// rows match, we perform an index scan instead of a table scan.
 	idx_t index_scan_max_count = STANDARD_VECTOR_SIZE;
-	//! Whether or not we initialize table functions in the main thread
-	//! This is a work-around that exists for certain clients (specifically R)
-	//! Because those clients do not like it when threads other than the main thread call into R, for e.g., arrow scans
-	bool initialize_in_main_thread = false;
 	//! The maximum number of schemas we will look through for "did you mean..." style errors in the catalog
 	idx_t catalog_error_max_schemas = 100;
 	//!  Whether or not to always write to the WAL file, even if this is not required
 	bool debug_skip_checkpoint_on_commit = false;
-	//! When a scalar subquery returns multiple rows - return a random row instead of returning an error
-	bool scalar_subquery_error_on_multiple_rows = true;
-	//! Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL)
-	bool ieee_floating_point_ops = true;
-	//! Allow ordering by non-integer literals - ordering by such literals has no effect
-	bool order_by_non_integer_literal = false;
 
 	bool operator==(const DBConfigOptions &other) const;
 };

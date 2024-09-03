@@ -1,0 +1,35 @@
+# name: test/sql/catalog/function/macro_query_table.test
+# description: Test using a scalar macro with the query_table function
+# group: [function]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create macro min_from_tbl(tbl, col) as (select min(col) from query_table(tbl::VARCHAR));
+
+statement ok
+create table integers as from range(100) t(i)
+
+query I
+SELECT min_from_tbl(integers, i)
+----
+0
+
+# column does not exist
+statement error
+SELECT min_from_tbl(integers, k)
+----
+not found in FROM clause
+
+# table does not exist
+statement error
+SELECT min_from_tbl(integers2, i)
+----
+Table with name integers2 does not exist
+
+# using a non-scalar parameter is not supported
+statement error
+SELECT min_from_tbl(tbl_name, i) from (values ('integers')) t(tbl_name);
+----
+tbl_name
