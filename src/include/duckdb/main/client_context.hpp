@@ -78,6 +78,11 @@ public:
 	shared_ptr<DatabaseInstance> db;
 	//! Whether or not the query is interrupted
 	atomic<bool> interrupted;
+
+private:
+	atomic<bool> tried_autoloading_icu {false};
+
+public:
 	//! Set of optional states (e.g. Caches) that can be held by the ClientContext
 	unique_ptr<RegisteredStateManager> registered_state;
 	//! The client configuration
@@ -88,6 +93,17 @@ public:
 	TransactionContext transaction;
 
 public:
+	bool GetHasTriedAutoLoading(const string &extension_name) const {
+		if (extension_name == "icu") {
+			return tried_autoloading_icu;
+		}
+		return false;
+	}
+	void SetHasTriedAutoLoading(const string &extension_name) {
+		if (extension_name == "icu") {
+			tried_autoloading_icu = true;
+		}
+	}
 	MetaTransaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();
 	}
