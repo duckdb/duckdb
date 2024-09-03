@@ -1411,7 +1411,12 @@ unique_ptr<StorageLockKey> DataTable::GetSharedCheckpointLock() {
 }
 
 unique_ptr<StorageLockKey> DataTable::GetCheckpointLock() {
-	return info->checkpoint_lock.GetExclusiveLock();
+	while (true) {
+		auto lock = info->checkpoint_lock.GetExclusiveLock(100);
+		if (lock) {
+			return lock;
+		}
+	}
 }
 
 void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {

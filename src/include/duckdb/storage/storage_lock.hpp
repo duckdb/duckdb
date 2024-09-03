@@ -39,6 +39,8 @@ public:
 
 	//! Get an exclusive lock
 	unique_ptr<StorageLockKey> GetExclusiveLock();
+	//! Get an exclusive lock with a timeout
+	unique_ptr<StorageLockKey> GetExclusiveLock(idx_t timeout_ms);
 	//! Get a shared lock
 	unique_ptr<StorageLockKey> GetSharedLock();
 	//! Try to get an exclusive lock - if we cannot get it immediately we return `nullptr`

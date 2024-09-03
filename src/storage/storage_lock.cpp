@@ -1,6 +1,7 @@
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/profiler.hpp"
 
 namespace duckdb {
 
@@ -16,6 +17,18 @@ public:
 	unique_ptr<StorageLockKey> GetExclusiveLock() {
 		exclusive_lock.lock();
 		while (read_count != 0) {
+		}
+		return make_uniq<StorageLockKey>(shared_from_this(), StorageLockType::EXCLUSIVE);
+	}
+
+	unique_ptr<StorageLockKey> GetExclusiveLock(idx_t timeout_ms) {
+		Profiler profiler;
+		exclusive_lock.lock();
+		profiler.Start();
+		while (read_count != 0) {
+			if (static_cast<idx_t>(profiler.Elapsed() * 1000) >= timeout_ms) {
+				return nullptr;
+			}
 		}
 		return make_uniq<StorageLockKey>(shared_from_this(), StorageLockType::EXCLUSIVE);
 	}
@@ -87,6 +100,10 @@ StorageLock::~StorageLock() {
 
 unique_ptr<StorageLockKey> StorageLock::GetExclusiveLock() {
 	return internals->GetExclusiveLock();
+}
+
+unique_ptr<StorageLockKey> StorageLock::GetExclusiveLock(idx_t timeout_ms) {
+	return internals->GetExclusiveLock(timeout_ms);
 }
 
 unique_ptr<StorageLockKey> StorageLock::TryGetExclusiveLock() {
