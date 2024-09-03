@@ -773,6 +773,14 @@ CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, CatalogType t
 optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType type, const string &schema_name,
                                              const string &name, OnEntryNotFound if_not_found,
                                              QueryErrorContext error_context) {
+	{
+		auto extension_name = ExtensionHelper::FindExtensionInEntries(name, EXTENSION_OVERLOADS);
+		if (!context.GetHasTriedAutoLoading(extension_name)) {
+			TryAutoLoad(context, extension_name);
+			context.SetHasTriedAutoLoading(extension_name);
+		}
+	}
+
 	auto lookup_entry = TryLookupEntry(context, type, schema_name, name, if_not_found, error_context);
 
 	// Try autoloading extension to resolve lookup
