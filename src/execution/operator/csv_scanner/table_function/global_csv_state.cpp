@@ -44,7 +44,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 bool CSVGlobalState::IsDone() const {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	return current_boundary.done;
-};
+}
 
 double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 	lock_guard<mutex> parallel_lock(main_mutex);
