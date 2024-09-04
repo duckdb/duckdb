@@ -211,6 +211,10 @@ public:
 
 	StatementProperties &GetStatementProperties();
 
+	shared_ptr<Binder> GetParentBinder() {
+		return parent;
+	}
+
 private:
 	//! The parent binder (if any)
 	shared_ptr<Binder> parent;
