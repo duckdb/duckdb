@@ -45,11 +45,11 @@ endif()
 ################# DELTA
 # MinGW build is not available, and our current manylinux ci does not have enough storage space to run the rust build
 # for Delta
-if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux" AND NOT WIN32)
+if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux")
     duckdb_extension_load(delta
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_delta
-            GIT_TAG dfee8b31dfc56d0a25b88d50351389da0d67fdb0
+            GIT_TAG 3933ebd800ad06a64656c9aef6ca7d62897fa4db
     )
 endif()
 
