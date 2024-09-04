@@ -122,7 +122,7 @@ unique_ptr<SelectStatement> Transformer::TransformRecursiveCTE(duckdb_libpgquery
 	case duckdb_libpgquery::PG_SETOP_INTERSECT:
 	default: {
 		// This CTE is not recursive. Fallback to regular query transformation.
-		auto node = TransformSelectNode(*stmt.larg);
+		auto node = TransformSelectNode(*cte.ctequery);
 		auto result = make_uniq<SelectStatement>();
 		result->node = std::move(node);
 		return result;
