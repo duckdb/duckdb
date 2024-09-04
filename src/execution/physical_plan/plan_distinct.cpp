@@ -38,7 +38,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &
 		requires_projection = true;
 	}
 
-	unique_ptr<Expression> mid_sort_func;
+	unique_ptr<Expression> may_repeat_func;
 	// we need to create one aggregate per column in the select_list
 	for (idx_t i = 0; i < types.size(); ++i) {
 		auto logical_type = types[i];
@@ -73,11 +73,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &
 					D_ASSERT(new_expr->return_type == first_aggregate->return_type);
 					D_ASSERT(new_expr->type == ExpressionType::BOUND_AGGREGATE);
 					first_aggregate = unique_ptr_cast<Expression, BoundAggregateExpression>(std::move(new_expr));
-					if (!mid_sort_func) {
+					if (!may_repeat_func) {
 						for (auto &child : first_aggregate->children) {
 							if (child->type == ExpressionType::BOUND_FUNCTION &&
 							    child->Cast<BoundFunctionExpression>().function.name == "create_sort_key") {
-								mid_sort_func = child->Copy();
+								may_repeat_func = child->Copy();
 							}
 						}
 					}
@@ -92,7 +92,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &
 		}
 	}
 
-	if (mid_sort_func && aggregates.size() > 1) {
+	if (may_repeat_func && aggregates.size() > 1) {
 		vector<unique_ptr<Expression>> mid_expressions;
 		vector<LogicalType> mid_types;
 		for (auto &t : types) {
@@ -103,13 +103,13 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &
 			for (auto &child : aggr->Cast<BoundAggregateExpression>().children) {
 				if (child->type == ExpressionType::BOUND_FUNCTION &&
 				    child->Cast<BoundFunctionExpression>().function.name == "create_sort_key") {
-					D_ASSERT(child->Equals(*mid_sort_func));
+					D_ASSERT(child->Equals(*may_repeat_func));
 					child = make_uniq<BoundReferenceExpression>(child->return_type, mid_types.size());
 				}
 			}
 		}
-		mid_types.push_back(mid_sort_func->return_type);
-		mid_expressions.push_back(std::move(mid_sort_func));
+		mid_types.push_back(may_repeat_func->return_type);
+		mid_expressions.push_back(std::move(may_repeat_func));
 		auto mid_proj = make_uniq<PhysicalProjection>(std::move(mid_types), std::move(mid_expressions),
 		                                              child->estimated_cardinality);
 		mid_proj->children.push_back(std::move(child));
