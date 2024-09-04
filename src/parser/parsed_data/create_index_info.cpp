@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-CreateIndexInfo::CreateIndexInfo() : CreateInfo(CatalogType::INDEX_ENTRY) {
+CreateIndexInfo::CreateIndexInfo() : CreateInfo(CatalogType::INDEX_ENTRY, INVALID_SCHEMA) {
 }
 
 CreateIndexInfo::CreateIndexInfo(const duckdb::CreateIndexInfo &info)

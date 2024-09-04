@@ -1138,7 +1138,7 @@ function(duckdb_extension_load NAME)
   else()
     # For in-tree extensions of the default path, we set the extension version to GIT_COMMIT_HASH by default
     if ("${duckdb_extension_load_EXTENSION_VERSION}" STREQUAL "")
-      set(duckdb_extension_load_EXTENSION_VERSION ${GIT_COMMIT_HASH})
+      set(duckdb_extension_load_EXTENSION_VERSION ${DUCKDB_NORMALIZED_VERSION})
     endif()
 
     # Local extension, default path

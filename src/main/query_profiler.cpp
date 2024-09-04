@@ -214,6 +214,11 @@ void QueryProfiler::EndQuery() {
 			if (info.Enabled(MetricsType::OPERATOR_TYPE)) {
 				info.settings.erase(MetricsType::OPERATOR_TYPE);
 			}
+
+			if (info.Enabled(MetricsType::RESULT_SET_SIZE)) {
+				info.metrics[MetricsType::RESULT_SET_SIZE] =
+				    root->children[0]->GetProfilingInfo().metrics[MetricsType::RESULT_SET_SIZE];
+			}
 		}
 
 		string tree = ToString();
@@ -347,6 +352,10 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 		if (HasOperatorSetting(MetricsType::OPERATOR_CARDINALITY) && chunk) {
 			curr_operator_info.AddReturnedElements(chunk->size());
 		}
+		if (HasOperatorSetting(MetricsType::RESULT_SET_SIZE) && chunk) {
+			idx_t result_set_size = chunk->GetAllocationSize();
+			curr_operator_info.AddResultSetSize(result_set_size);
+		}
 	}
 	active_operator = nullptr;
 }
@@ -401,6 +410,9 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 					}
 				}
 			}
+		}
+		if (profiler.HasOperatorSetting(MetricsType::RESULT_SET_SIZE)) {
+			tree_node.GetProfilingInfo().AddToMetric<idx_t>(MetricsType::RESULT_SET_SIZE, node.second.result_set_size);
 		}
 	}
 	profiler.timings.clear();
@@ -672,11 +684,12 @@ void QueryProfiler::WriteToFile(const char *path, string &info) const {
 	}
 }
 
-profiler_settings_t ErasePhaseTimingSettings(profiler_settings_t settings) {
+profiler_settings_t EraseQueryRootSettings(profiler_settings_t settings) {
 	profiler_settings_t phase_timing_settings_to_erase;
 
 	for (auto &setting : settings) {
-		if (MetricsUtils::IsOptimizerMetric(setting) || MetricsUtils::IsPhaseTimingMetric(setting)) {
+		if (MetricsUtils::IsOptimizerMetric(setting) || MetricsUtils::IsPhaseTimingMetric(setting) ||
+		    setting == MetricsType::BLOCKED_THREAD_TIME) {
 			phase_timing_settings_to_erase.insert(setting);
 		}
 	}
@@ -699,7 +712,7 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	info = ProfilingInfo(settings, depth);
 	auto child_settings = settings;
 	if (depth == 0) {
-		child_settings = ErasePhaseTimingSettings(child_settings);
+		child_settings = EraseQueryRootSettings(child_settings);
 	}
 	node->depth = depth;
 

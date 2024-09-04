@@ -1217,17 +1217,17 @@ Value LockConfigurationSetting::GetSetting(const ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // IEEE Floating Points
 //===--------------------------------------------------------------------===//
-void IEEEFloatingPointOpsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.ieee_floating_point_ops = BooleanValue::Get(input);
+void IEEEFloatingPointOpsSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).ieee_floating_point_ops = ClientConfig().ieee_floating_point_ops;
 }
 
-void IEEEFloatingPointOpsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.ieee_floating_point_ops = DBConfig().options.ieee_floating_point_ops;
+void IEEEFloatingPointOpsSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).ieee_floating_point_ops = input.GetValue<bool>();
 }
 
 Value IEEEFloatingPointOpsSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.ieee_floating_point_ops);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::BOOLEAN(config.ieee_floating_point_ops);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1396,17 +1396,17 @@ Value OldImplicitCasting::GetSetting(const ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Old Implicit Casting
 //===--------------------------------------------------------------------===//
-void OrderByNonIntegerLiteral::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.order_by_non_integer_literal = input.GetValue<bool>();
+void OrderByNonIntegerLiteral::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).order_by_non_integer_literal = ClientConfig().order_by_non_integer_literal;
 }
 
-void OrderByNonIntegerLiteral::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.order_by_non_integer_literal = DBConfig().options.order_by_non_integer_literal;
+void OrderByNonIntegerLiteral::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).order_by_non_integer_literal = input.GetValue<bool>();
 }
 
 Value OrderByNonIntegerLiteral::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.order_by_non_integer_literal);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::BOOLEAN(config.order_by_non_integer_literal);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1629,6 +1629,25 @@ Value ArrowOutputListView::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// LosslessConversionArrow
+//===--------------------------------------------------------------------===//
+void LosslessConversionArrow::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto arrow_arrow_lossless_conversion = input.GetValue<bool>();
+
+	config.options.arrow_arrow_lossless_conversion = arrow_arrow_lossless_conversion;
+}
+
+void LosslessConversionArrow::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.arrow_arrow_lossless_conversion = DBConfig().options.arrow_arrow_lossless_conversion;
+}
+
+Value LosslessConversionArrow::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	bool arrow_arrow_lossless_conversion = config.options.arrow_arrow_lossless_conversion;
+	return Value::BOOLEAN(arrow_arrow_lossless_conversion);
+}
+
+//===--------------------------------------------------------------------===//
 // ProduceArrowStringView
 //===--------------------------------------------------------------------===//
 void ProduceArrowStringView::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -1646,16 +1665,17 @@ Value ProduceArrowStringView::GetSetting(const ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // ScalarSubqueryErrorOnMultipleRows
 //===--------------------------------------------------------------------===//
-void ScalarSubqueryErrorOnMultipleRows::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.scalar_subquery_error_on_multiple_rows = input.GetValue<bool>();
+void ScalarSubqueryErrorOnMultipleRows::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).scalar_subquery_error_on_multiple_rows =
+	    ClientConfig().scalar_subquery_error_on_multiple_rows;
 }
 
-void ScalarSubqueryErrorOnMultipleRows::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.scalar_subquery_error_on_multiple_rows = DBConfig().options.scalar_subquery_error_on_multiple_rows;
+void ScalarSubqueryErrorOnMultipleRows::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).scalar_subquery_error_on_multiple_rows = input.GetValue<bool>();
 }
 
 Value ScalarSubqueryErrorOnMultipleRows::GetSetting(const ClientContext &context) {
-	return Value::BOOLEAN(DBConfig::GetConfig(context).options.scalar_subquery_error_on_multiple_rows);
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).scalar_subquery_error_on_multiple_rows);
 }
 
 //===--------------------------------------------------------------------===//
