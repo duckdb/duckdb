@@ -3,26 +3,26 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/fsst.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/value_map.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
-#include "duckdb/common/types/value.hpp"
-#include "duckdb/common/fsst.hpp"
 #include "fsst.h"
-#include "duckdb/common/types/bit.hpp"
-#include "duckdb/common/types/value_map.hpp"
-#include "duckdb/common/type_visitor.hpp"
-
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/types/varint.hpp"
 
 #include <cstring> // strlen() on Solaris
 
@@ -204,7 +204,9 @@ void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 		auto &child_vec = ArrayVector::GetEntry(new_vector);
 		auto &other_child_vec = ArrayVector::GetEntry(other);
 		D_ASSERT(ArrayType::GetSize(GetType()) == ArrayType::GetSize(other.GetType()));
-		child_vec.Slice(other_child_vec, offset, end);
+		const auto array_size = ArrayType::GetSize(GetType());
+		// We need to slice the child vector with the multiplied offset and end
+		child_vec.Slice(other_child_vec, offset * array_size, end * array_size);
 		new_vector.validity.Slice(other.validity, offset, end - offset);
 		Reference(new_vector);
 	} else {
@@ -379,7 +381,7 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 		}
 
 		// Copy the data buffer to a resized buffer.
-		auto new_data = make_unsafe_uniq_array<data_t>(target_size);
+		auto new_data = make_unsafe_uniq_array_uninitialized<data_t>(target_size);
 		memcpy(new_data.get(), resize_info_entry.data, old_size);
 		resize_info_entry.buffer->SetData(std::move(new_data));
 		resize_info_entry.vec.data = resize_info_entry.buffer->GetData();
@@ -663,6 +665,10 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	case LogicalTypeId::BLOB: {
 		auto str = reinterpret_cast<string_t *>(data)[index];
 		return Value::BLOB(const_data_ptr_cast(str.GetData()), str.GetSize());
+	}
+	case LogicalTypeId::VARINT: {
+		auto str = reinterpret_cast<string_t *>(data)[index];
+		return Value::VARINT(const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
 	case LogicalTypeId::AGGREGATE_STATE: {
 		auto str = reinterpret_cast<string_t *>(data)[index];
@@ -988,9 +994,12 @@ void Vector::Flatten(idx_t count) {
 				validity.SetAllInvalid(count);
 				// Also invalidate the new child array
 				new_child.validity.SetAllInvalid(count * array_size);
+				// Recurse
+				new_child.Flatten(count * array_size);
+				// TODO: the fast path should exit here, but the part below it is somehow required for correctness
 				// Attach the flattened buffer and return
-				auxiliary = shared_ptr<VectorBuffer>(flattened_buffer.release());
-				return;
+				// auxiliary = shared_ptr<VectorBuffer>(flattened_buffer.release());
+				// return;
 			}
 
 			// Now we need to "unpack" the child vector.
@@ -1022,7 +1031,8 @@ void Vector::Flatten(idx_t count) {
 			VectorOperations::Copy(*child_vec, new_child, sel, count * array_size, 0, 0);
 			auxiliary = shared_ptr<VectorBuffer>(flattened_buffer.release());
 
-		} break;
+			break;
+		}
 		case PhysicalType::STRUCT: {
 			auto normalified_buffer = make_uniq<VectorStructBuffer>();
 
@@ -1036,7 +1046,8 @@ void Vector::Flatten(idx_t count) {
 				new_children.push_back(std::move(vector));
 			}
 			auxiliary = shared_ptr<VectorBuffer>(normalified_buffer.release());
-		} break;
+			break;
+		}
 		default:
 			throw InternalException("Unimplemented type for VectorOperations::Flatten");
 		}
@@ -1045,10 +1056,11 @@ void Vector::Flatten(idx_t count) {
 	case VectorType::SEQUENCE_VECTOR: {
 		int64_t start, increment, sequence_count;
 		SequenceVector::GetSequence(*this, start, increment, sequence_count);
+		auto seq_count = NumericCast<idx_t>(sequence_count);
 
-		buffer = VectorBuffer::CreateStandardVector(GetType());
+		buffer = VectorBuffer::CreateStandardVector(GetType(), MaxValue<idx_t>(STANDARD_VECTOR_SIZE, seq_count));
 		data = buffer->GetData();
-		VectorOperations::GenerateSequence(*this, NumericCast<idx_t>(sequence_count), start, increment);
+		VectorOperations::GenerateSequence(*this, seq_count, start, increment);
 		break;
 	}
 	default:
@@ -1168,9 +1180,9 @@ void Vector::Serialize(Serializer &serializer, idx_t count) {
 	UnifiedVectorFormat vdata;
 	ToUnifiedFormat(count, vdata);
 
-	const bool all_valid = (count > 0) && !vdata.validity.AllValid();
-	serializer.WriteProperty(100, "all_valid", all_valid);
-	if (all_valid) {
+	const bool has_validity_mask = (count > 0) && !vdata.validity.AllValid();
+	serializer.WriteProperty(100, "has_validity_mask", has_validity_mask);
+	if (has_validity_mask) {
 		ValidityMask flat_mask(count);
 		flat_mask.Initialize();
 		for (idx_t i = 0; i < count; ++i) {
@@ -1183,7 +1195,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count) {
 	if (TypeIsConstantSize(logical_type.InternalType())) {
 		// constant size type: simple copy
 		idx_t write_size = GetTypeIdSize(logical_type.InternalType()) * count;
-		auto ptr = make_unsafe_uniq_array<data_t>(write_size);
+		auto ptr = make_unsafe_uniq_array_uninitialized<data_t>(write_size);
 		VectorOperations::WriteToStorage(*this, count, ptr.get());
 		serializer.WriteProperty(102, "data", ptr.get(), write_size);
 	} else {
@@ -1213,7 +1225,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count) {
 			auto list_size = ListVector::GetListSize(*this);
 
 			// serialize the list entries in a flat array
-			auto entries = make_unsafe_uniq_array<list_entry_t>(count);
+			auto entries = make_unsafe_uniq_array_uninitialized<list_entry_t>(count);
 			auto source_array = UnifiedVectorFormat::GetData<list_entry_t>(vdata);
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = vdata.sel->get_index(i);
@@ -1258,8 +1270,8 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 
 	auto &validity = FlatVector::Validity(*this);
 	validity.Reset();
-	const auto has_validity = deserializer.ReadProperty<bool>(100, "all_valid");
-	if (has_validity) {
+	const auto has_validity_mask = deserializer.ReadProperty<bool>(100, "has_validity_mask");
+	if (has_validity_mask) {
 		validity.Initialize(MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE));
 		deserializer.ReadProperty(101, "validity", data_ptr_cast(validity.GetData()), validity.ValidityMaskSize(count));
 	}
@@ -1267,7 +1279,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 	if (TypeIsConstantSize(logical_type.InternalType())) {
 		// constant size type: read fixed amount of data
 		auto column_size = GetTypeIdSize(logical_type.InternalType()) * count;
-		auto ptr = make_unsafe_uniq_array<data_t>(column_size);
+		auto ptr = make_unsafe_uniq_array_uninitialized<data_t>(column_size);
 		deserializer.ReadProperty(102, "data", ptr.get(), column_size);
 
 		VectorOperations::ReadFromStorage(ptr.get(), count, *this);
@@ -1449,6 +1461,23 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 		}
 	}
 
+	if (type.id() == LogicalTypeId::VARINT) {
+		switch (vtype) {
+		case VectorType::FLAT_VECTOR: {
+			auto &validity = FlatVector::Validity(*vector);
+			auto strings = FlatVector::GetData<string_t>(*vector);
+			for (idx_t i = 0; i < count; i++) {
+				auto oidx = sel->get_index(i);
+				if (validity.RowIsValid(oidx)) {
+					Varint::Verify(strings[oidx]);
+				}
+			}
+		} break;
+		default:
+			break;
+		}
+	}
+
 	if (type.id() == LogicalTypeId::BIT) {
 		switch (vtype) {
 		case VectorType::FLAT_VECTOR: {
@@ -1519,6 +1548,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		auto &child_types = StructType::GetChildTypes(type);
 		D_ASSERT(!child_types.empty());
+
 		// create a selection vector of the non-null entries of the struct vector
 		auto &children = StructVector::GetEntries(*vector);
 		D_ASSERT(child_types.size() == children.size());
@@ -1905,7 +1935,7 @@ string_t StringVector::AddString(Vector &vector, string_t data) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
-	auto &string_buffer = vector.auxiliary->Cast<VectorStringBuffer>();
+	auto &string_buffer = vector.auxiliary.get()->Cast<VectorStringBuffer>();
 	return string_buffer.AddString(data);
 }
 
@@ -1919,7 +1949,7 @@ string_t StringVector::AddStringOrBlob(Vector &vector, string_t data) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
-	auto &string_buffer = vector.auxiliary->Cast<VectorStringBuffer>();
+	auto &string_buffer = vector.auxiliary.get()->Cast<VectorStringBuffer>();
 	return string_buffer.AddBlob(data);
 }
 
@@ -1932,7 +1962,7 @@ string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
-	auto &string_buffer = vector.auxiliary->Cast<VectorStringBuffer>();
+	auto &string_buffer = vector.auxiliary.get()->Cast<VectorStringBuffer>();
 	return string_buffer.EmptyString(len);
 }
 
@@ -1986,7 +2016,7 @@ string_t FSSTVector::AddCompressedString(Vector &vector, string_t data) {
 		vector.auxiliary = make_buffer<VectorFSSTStringBuffer>();
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::FSST_BUFFER);
-	auto &fsst_string_buffer = vector.auxiliary->Cast<VectorFSSTStringBuffer>();
+	auto &fsst_string_buffer = vector.auxiliary.get()->Cast<VectorFSSTStringBuffer>();
 	return fsst_string_buffer.AddBlob(data);
 }
 
@@ -2271,7 +2301,7 @@ void ListVector::Append(Vector &target, const Vector &source, const SelectionVec
 }
 
 void ListVector::PushBack(Vector &target, const Value &insert) {
-	auto &target_buffer = target.auxiliary->Cast<VectorListBuffer>();
+	auto &target_buffer = target.auxiliary.get()->Cast<VectorListBuffer>();
 	target_buffer.PushBack(insert);
 }
 

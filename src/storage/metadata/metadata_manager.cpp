@@ -52,7 +52,7 @@ MetadataHandle MetadataManager::AllocateHandle() {
 
 MetadataHandle MetadataManager::Pin(MetadataPointer pointer) {
 	D_ASSERT(pointer.index < METADATA_BLOCK_COUNT);
-	auto &block = blocks[pointer.block_index];
+	auto &block = blocks[UnsafeNumericCast<int64_t>(pointer.block_index)];
 
 	MetadataHandle handle;
 	handle.pointer.block_index = pointer.block_index;
@@ -74,7 +74,7 @@ void MetadataManager::ConvertToTransient(MetadataBlock &block) {
 	block.block = std::move(new_block);
 
 	// unregister the old block
-	block_manager.UnregisterBlock(block.block_id, false);
+	block_manager.UnregisterBlock(block.block_id);
 }
 
 block_id_t MetadataManager::AllocateNewBlock() {

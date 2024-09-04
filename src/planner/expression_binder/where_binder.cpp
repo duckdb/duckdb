@@ -29,9 +29,9 @@ BindResult WhereBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, i
 	auto &expr = *expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::DEFAULT:
-		return BindResult("WHERE clause cannot contain DEFAULT clause");
+		return BindUnsupportedExpression(expr, depth, "WHERE clause cannot contain DEFAULT clause");
 	case ExpressionClass::WINDOW:
-		return BindResult("WHERE clause cannot contain window functions!");
+		return BindUnsupportedExpression(expr, depth, "WHERE clause cannot contain window functions!");
 	case ExpressionClass::COLUMN_REF:
 		return BindColumnRef(expr_ptr, depth, root_expression);
 	default:
@@ -41,6 +41,13 @@ BindResult WhereBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, i
 
 string WhereBinder::UnsupportedAggregateMessage() {
 	return "WHERE clause cannot contain aggregates!";
+}
+
+bool WhereBinder::QualifyColumnAlias(const ColumnRefExpression &colref) {
+	if (column_alias_binder) {
+		return column_alias_binder->QualifyColumnAlias(colref);
+	}
+	return false;
 }
 
 } // namespace duckdb

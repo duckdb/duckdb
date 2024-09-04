@@ -1,0 +1,57 @@
+# name: test/sql/collate/test_collate_pivot.test
+# description: Test collation and PIVOT
+# group: [collate]
+
+statement ok
+PRAGMA default_collation=NOACCENT;
+
+statement ok
+CREATE TABLE Cities (
+    Country VARCHAR, Name VARCHAR, Year INTEGER, Population INTEGER
+);
+
+statement ok
+INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2010, 1005);
+
+statement ok
+INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2011, 1065);
+
+statement ok
+INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2012, 1158);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'Seattle', 2013, 564);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'Seattle', 2014, 608);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'Seattle', 2015, 738);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2016, 8015);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2017, 8175);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2018, 8772);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2019, 8772);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2020, 8772);
+
+statement ok
+SET pivot_filter_threshold=99
+
+loop i 0 2
+
+statement ok
+PIVOT Cities ON Year USING sum(Population);
+
+statement ok
+SET pivot_filter_threshold=0
+
+endloop

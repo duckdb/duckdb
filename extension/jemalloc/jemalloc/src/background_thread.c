@@ -48,9 +48,6 @@ pthread_create_wrapper(pthread_t *__restrict thread, const pthread_attr_t *attr,
 }
 
 #ifdef JEMALLOC_HAVE_DLSYM
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
 #include <dlfcn.h>
 #endif
 

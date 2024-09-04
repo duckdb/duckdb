@@ -1,5 +1,5 @@
 // taken from: https://github.com/yhirose/cpp-httplib/blob/v0.14.3/httplib.h
-// Note: some modifications are made to file
+// Note: some modifications are made to file (replace std::regex with RE2)
 
 //
 //  httplib.h
@@ -68,6 +68,10 @@
 
 #ifndef CPPHTTPLIB_REQUEST_URI_MAX_LENGTH
 #define CPPHTTPLIB_REQUEST_URI_MAX_LENGTH 8192
+#endif
+
+#ifndef CPPHTTPLIB_USE_POLL
+#define CPPHTTPLIB_USE_POLL
 #endif
 
 #ifndef CPPHTTPLIB_HEADER_MAX_LENGTH
@@ -272,6 +276,7 @@ using socket_t = int;
 #include <openssl/evp.h>
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
+#include <openssl/rand.h>
 
 #if defined(_WIN32) && defined(OPENSSL_USE_APPLINK)
 #include <openssl/applink.c>
@@ -2364,8 +2369,8 @@ inline std::string base64_encode(const std::string &in) {
   std::string out;
   out.reserve(in.size());
 
-  auto val = 0;
-  auto valb = -6;
+  unsigned int val = 0;
+  int valb = -6;
 
   for (auto c : in) {
     val = (val << 8) + static_cast<uint8_t>(c);
@@ -2464,7 +2469,7 @@ inline std::string encode_url(const std::string &s) {
   for (size_t i = 0; s[i]; i++) {
     switch (s[i]) {
     case ' ': result += "%20"; break;
-//    case '+': result += "%2B"; break;
+    case '+': result += "%2B"; break;
     case '\r': result += "%0D"; break;
     case '\n': result += "%0A"; break;
     case '\'': result += "%27"; break;
@@ -2510,12 +2515,7 @@ inline std::string decode_url(const std::string &s,
         auto val = 0;
         if (from_hex_to_i(s, i + 1, 2, val)) {
           // 2 digits hex codes
-          if (static_cast<char>(val) == '+'){
-            // We don't decode +
-            result += "%2B";
-          } else {
-            result += static_cast<char>(val);
-          }
+          result += static_cast<char>(val);
           i += 2; // '00'
         } else {
           result += s[i];
@@ -3789,7 +3789,7 @@ inline bool parse_header(const char *beg, const char *end, T fn) {
     if (!key_len) { return false; }
 
     auto key = std::string(beg, key_end);
-    auto val = compare_case_ignore(key, "Location")
+    auto val = compare_case_ignore(key, "Location") || compare_case_ignore(key, "Link")
                    ? std::string(p, end)
                    : decode_url(std::string(p, end), false);
     fn(std::move(key), std::move(val));

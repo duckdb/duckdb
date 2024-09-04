@@ -51,7 +51,7 @@ public:
 
 public:
 	string GetName() const override;
-	string ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
 	bool Equals(const PhysicalOperator &other) const override;
 
@@ -66,9 +66,7 @@ public:
 	bool IsSource() const override {
 		return true;
 	}
-	bool ParallelSource() const override {
-		return true;
-	}
+	bool ParallelSource() const override;
 
 	bool SupportsBatchIndex() const override {
 		return function.get_batch_index != nullptr;

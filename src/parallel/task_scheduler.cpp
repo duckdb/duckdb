@@ -69,7 +69,7 @@ bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task>
 
 #else
 struct ConcurrentQueue {
-	std::queue<shared_ptr<Task>> q;
+	reference_map_t<QueueProducerToken, std::queue<shared_ptr<Task>>> q;
 	mutex qlock;
 
 	void Enqueue(ProducerToken &token, shared_ptr<Task> task);
@@ -78,22 +78,35 @@ struct ConcurrentQueue {
 
 void ConcurrentQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
 	lock_guard<mutex> lock(qlock);
-	q.push(std::move(task));
+	q[std::ref(*token.token)].push(std::move(task));
 }
 
 bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
 	lock_guard<mutex> lock(qlock);
-	if (q.empty()) {
+	D_ASSERT(!q.empty());
+
+	const auto it = q.find(std::ref(*token.token));
+	if (it == q.end() || it->second.empty()) {
 		return false;
 	}
-	task = std::move(q.front());
-	q.pop();
+
+	task = std::move(it->second.front());
+	it->second.pop();
+
 	return true;
 }
 
 struct QueueProducerToken {
-	QueueProducerToken(ConcurrentQueue &queue) {
+	explicit QueueProducerToken(ConcurrentQueue &queue) : queue(&queue) {
 	}
+
+	~QueueProducerToken() {
+		lock_guard<mutex> lock(queue->qlock);
+		queue->q.erase(*this);
+	}
+
+private:
+	ConcurrentQueue *queue;
 };
 #endif
 
@@ -151,17 +164,25 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 	shared_ptr<Task> task;
 	// loop until the marker is set to false
 	while (*marker) {
-		if (!Allocator::SupportsFlush() || allocator_background_threads) {
-			// allocator can't flush, or background threads clean up allocations, just start an untimed wait
+		if (!Allocator::SupportsFlush()) {
+			// allocator can't flush, just start an untimed wait
 			queue->semaphore.wait();
 		} else if (!queue->semaphore.wait(INITIAL_FLUSH_WAIT)) {
-			// no background threads, flush this threads outstanding allocations after it was idle for 0.5s
-			Allocator::ThreadFlush(allocator_flush_threshold);
-			if (!queue->semaphore.wait(Allocator::DecayDelay() * 1000000 - INITIAL_FLUSH_WAIT)) {
-				// in total, the thread was idle for the entire decay delay (note: seconds converted to mus)
-				// mark it as idle and start an untimed wait
-				Allocator::ThreadIdle();
+			// allocator can flush, we flush this threads outstanding allocations after it was idle for 0.5s
+			Allocator::ThreadFlush(allocator_background_threads, allocator_flush_threshold,
+			                       NumericCast<idx_t>(requested_thread_count.load()));
+			auto decay_delay = Allocator::DecayDelay();
+			if (!decay_delay.IsValid()) {
+				// no decay delay specified - just wait
 				queue->semaphore.wait();
+			} else {
+				if (!queue->semaphore.wait(UnsafeNumericCast<int64_t>(decay_delay.GetIndex()) * 1000000 -
+				                           INITIAL_FLUSH_WAIT)) {
+					// in total, the thread was idle for the entire decay delay (note: seconds converted to mus)
+					// mark it as idle and start an untimed wait
+					Allocator::ThreadIdle();
+					queue->semaphore.wait();
+				}
 			}
 		}
 		if (queue->q.try_dequeue(task)) {
@@ -183,7 +204,7 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 	}
 	// this thread will exit, flush all of its outstanding allocations
 	if (Allocator::SupportsFlush()) {
-		Allocator::ThreadFlush(0);
+		Allocator::ThreadFlush(allocator_background_threads, 0, NumericCast<idx_t>(requested_thread_count.load()));
 		Allocator::ThreadIdle();
 	}
 #else
@@ -278,9 +299,6 @@ void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
 	}
 #endif
 	requested_thread_count = NumericCast<int32_t>(total_threads - external_threads);
-	if (Allocator::SupportsFlush()) {
-		Allocator::FlushAll();
-	}
 }
 
 void TaskScheduler::SetAllocatorFlushTreshold(idx_t threshold) {
@@ -382,6 +400,9 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 		}
 	}
 	current_thread_count = NumericCast<int32_t>(threads.size() + config.options.external_threads);
+	if (Allocator::SupportsFlush()) {
+		Allocator::FlushAll();
+	}
 #endif
 }
 

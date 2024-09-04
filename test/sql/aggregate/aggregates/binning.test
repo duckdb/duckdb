@@ -2,6 +2,8 @@
 # description: Test binning functions
 # group: [aggregates]
 
+require 64bit
+
 statement ok
 PRAGMA enable_verification
 
@@ -305,6 +307,16 @@ query I
 select equi_width_bins(timestamp '2024-06-21 15:00:00.123456', timestamp '2024-06-21 15:00:00.123458', 10, true);
 ----
 [2024-06-21 15:00:00.123456, 2024-06-21 15:00:00.123457, 2024-06-21 15:00:00.123458]
+
+query I
+SELECT EQUI_WIDTH_BINS(0, 10, 5999, TRUE)
+----
+[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+query I
+SELECT EQUI_WIDTH_BINS(0, 10, 5999, false)
+----
+[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 statement error
 SELECT equi_width_bins(-0.0, -1.0, 5, true);

@@ -797,7 +797,6 @@ public:
 	}
 
 	const PhysicalHashAggregate &op;
-	mutex lock;
 	atomic<idx_t> state_index;
 
 	vector<unique_ptr<GlobalSourceState>> radix_states;
@@ -871,7 +870,7 @@ SourceResultType PhysicalHashAggregate::GetData(ExecutionContext &context, DataC
 		}
 
 		// move to the next table
-		lock_guard<mutex> l(gstate.lock);
+		auto guard = gstate.Lock();
 		lstate.radix_idx = lstate.radix_idx.GetIndex() + 1;
 		if (lstate.radix_idx.GetIndex() > gstate.state_index) {
 			// we have not yet worked on the table
@@ -895,28 +894,32 @@ double PhysicalHashAggregate::GetProgress(ClientContext &context, GlobalSourceSt
 	return total_progress / double(groupings.size());
 }
 
-string PhysicalHashAggregate::ParamsToString() const {
-	string result;
+InsertionOrderPreservingMap<string> PhysicalHashAggregate::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	auto &groups = grouped_aggregate_data.groups;
 	auto &aggregates = grouped_aggregate_data.aggregates;
+	string groups_info;
 	for (idx_t i = 0; i < groups.size(); i++) {
 		if (i > 0) {
-			result += "\n";
+			groups_info += "\n";
 		}
-		result += groups[i]->GetName();
+		groups_info += groups[i]->GetName();
 	}
+	result["Groups"] = groups_info;
+
+	string aggregate_info;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggregate = aggregates[i]->Cast<BoundAggregateExpression>();
-		if (i > 0 || !groups.empty()) {
-			result += "\n";
+		if (i > 0) {
+			aggregate_info += "\n";
 		}
-		result += aggregates[i]->GetName();
+		aggregate_info += aggregates[i]->GetName();
 		if (aggregate.filter) {
-			result += " Filter: " + aggregate.filter->GetName();
+			aggregate_info += " Filter: " + aggregate.filter->GetName();
 		}
 	}
-	result += "\n[INFOSEPARATOR]\n";
-	result += StringUtil::Format("EC: %llu\n", estimated_cardinality);
+	result["Aggregates"] = aggregate_info;
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 

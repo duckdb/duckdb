@@ -17,6 +17,7 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
+#include "duckdb/parser/tableref/delimgetref.hpp"
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/planner/bind_context.hpp"
 #include "duckdb/planner/bound_statement.hpp"
@@ -24,6 +25,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/tableref/bound_delimgetref.hpp"
 
 namespace duckdb {
 class BoundResultModifier;
@@ -320,6 +322,7 @@ private:
 	unique_ptr<BoundTableRef> Bind(SubqueryRef &ref, optional_ptr<CommonTableExpressionInfo> cte = nullptr);
 	unique_ptr<BoundTableRef> Bind(TableFunctionRef &ref);
 	unique_ptr<BoundTableRef> Bind(EmptyTableRef &ref);
+	unique_ptr<BoundTableRef> Bind(DelimGetRef &ref);
 	unique_ptr<BoundTableRef> Bind(ExpressionListRef &ref);
 	unique_ptr<BoundTableRef> Bind(ColumnDataRef &ref);
 	unique_ptr<BoundTableRef> Bind(PivotRef &expr);
@@ -355,6 +358,7 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundColumnDataRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundCTERef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundPivotRef &ref);
+	unique_ptr<LogicalOperator> CreatePlan(BoundDelimGetRef &ref);
 
 	BoundStatement BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type);
 	BoundStatement BindCopyFrom(CopyStatement &stmt);
@@ -412,10 +416,8 @@ private:
 	unique_ptr<BoundTableRef> BindShowTable(ShowRef &ref);
 	unique_ptr<BoundTableRef> BindSummarize(ShowRef &ref);
 
-public:
-	// This should really be a private constructor, but make_shared_ptr does not allow it...
-	// If you are thinking about calling this, you should probably call Binder::CreateBinder
-	Binder(bool i_know_what_i_am_doing, ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);
+private:
+	Binder(ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);
 };
 
 } // namespace duckdb

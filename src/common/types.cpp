@@ -29,7 +29,6 @@
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/main/config.hpp"
-
 #include <cmath>
 
 namespace duckdb {
@@ -117,6 +116,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::CHAR:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
+	case LogicalTypeId::VARINT:
 		return PhysicalType::VARCHAR;
 	case LogicalTypeId::INTERVAL:
 		return PhysicalType::INTERVAL;
@@ -203,6 +203,8 @@ constexpr const LogicalTypeId LogicalType::VARCHAR;
 
 constexpr const LogicalTypeId LogicalType::BLOB;
 constexpr const LogicalTypeId LogicalType::BIT;
+constexpr const LogicalTypeId LogicalType::VARINT;
+
 constexpr const LogicalTypeId LogicalType::INTERVAL;
 constexpr const LogicalTypeId LogicalType::ROW_TYPE;
 
@@ -236,14 +238,14 @@ const vector<LogicalType> LogicalType::Real() {
 
 const vector<LogicalType> LogicalType::AllTypes() {
 	vector<LogicalType> types = {
-	    LogicalType::BOOLEAN,      LogicalType::TINYINT,  LogicalType::SMALLINT,  LogicalType::INTEGER,
-	    LogicalType::BIGINT,       LogicalType::DATE,     LogicalType::TIMESTAMP, LogicalType::DOUBLE,
-	    LogicalType::FLOAT,        LogicalType::VARCHAR,  LogicalType::BLOB,      LogicalType::BIT,
-	    LogicalType::INTERVAL,     LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,
-	    LogicalType::USMALLINT,    LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::UHUGEINT,
-	    LogicalType::TIME,         LogicalTypeId::LIST,   LogicalTypeId::STRUCT,  LogicalType::TIME_TZ,
-	    LogicalType::TIMESTAMP_TZ, LogicalTypeId::MAP,    LogicalTypeId::UNION,   LogicalType::UUID,
-	    LogicalTypeId::ARRAY};
+	    LogicalType::BOOLEAN,  LogicalType::TINYINT,      LogicalType::SMALLINT,  LogicalType::INTEGER,
+	    LogicalType::BIGINT,   LogicalType::DATE,         LogicalType::TIMESTAMP, LogicalType::DOUBLE,
+	    LogicalType::FLOAT,    LogicalType::VARCHAR,      LogicalType::BLOB,      LogicalType::BIT,
+	    LogicalType::VARINT,   LogicalType::INTERVAL,     LogicalType::HUGEINT,   LogicalTypeId::DECIMAL,
+	    LogicalType::UTINYINT, LogicalType::USMALLINT,    LogicalType::UINTEGER,  LogicalType::UBIGINT,
+	    LogicalType::UHUGEINT, LogicalType::TIME,         LogicalTypeId::LIST,    LogicalTypeId::STRUCT,
+	    LogicalType::TIME_TZ,  LogicalType::TIMESTAMP_TZ, LogicalTypeId::MAP,     LogicalTypeId::UNION,
+	    LogicalType::UUID,     LogicalTypeId::ARRAY};
 	return types;
 }
 
@@ -524,7 +526,67 @@ LogicalType TransformStringToLogicalType(const string &str) {
 	if (StringUtil::Lower(str) == "null") {
 		return LogicalType::SQLNULL;
 	}
-	return Parser::ParseColumnList("dummy " + str).GetColumn(LogicalIndex(0)).Type();
+	ColumnList column_list;
+	try {
+		column_list = Parser::ParseColumnList("dummy " + str);
+	} catch (const std::runtime_error &e) {
+		const vector<string> suggested_types {"BIGINT",
+		                                      "INT8",
+		                                      "LONG",
+		                                      "BIT",
+		                                      "BITSTRING",
+		                                      "BLOB",
+		                                      "BYTEA",
+		                                      "BINARY,",
+		                                      "VARBINARY",
+		                                      "BOOLEAN",
+		                                      "BOOL",
+		                                      "LOGICAL",
+		                                      "DATE",
+		                                      "DECIMAL(prec, scale)",
+		                                      "DOUBLE",
+		                                      "FLOAT8",
+		                                      "FLOAT",
+		                                      "FLOAT4",
+		                                      "REAL",
+		                                      "HUGEINT",
+		                                      "INTEGER",
+		                                      "INT4",
+		                                      "INT",
+		                                      "SIGNED",
+		                                      "INTERVAL",
+		                                      "SMALLINT",
+		                                      "INT2",
+		                                      "SHORT",
+		                                      "TIME",
+		                                      "TIMESTAMPTZ	",
+		                                      "TIMESTAMP",
+		                                      "DATETIME",
+		                                      "TINYINT",
+		                                      "INT1",
+		                                      "UBIGINT",
+		                                      "UHUGEINT",
+		                                      "UINTEGER",
+		                                      "USMALLINT",
+		                                      "UTINYINT",
+		                                      "UUID",
+		                                      "VARCHAR",
+		                                      "CHAR",
+		                                      "BPCHAR",
+		                                      "TEXT",
+		                                      "STRING",
+		                                      "MAP(INTEGER, VARCHAR)",
+		                                      "UNION(num INTEGER, text VARCHAR)"};
+		std::ostringstream error;
+		error << "Value \"" << str << "\" can not be converted to a DuckDB Type." << '\n';
+		error << "Possible examples as suggestions: " << '\n';
+		auto suggestions = StringUtil::TopNJaroWinkler(suggested_types, str);
+		for (auto &suggestion : suggestions) {
+			error << "* " << suggestion << '\n';
+		}
+		throw InvalidInputException(error.str());
+	}
+	return column_list.GetColumn(LogicalIndex(0)).Type();
 }
 
 LogicalType GetUserTypeRecursive(const LogicalType &type, ClientContext &context) {
@@ -1062,6 +1124,8 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 		return 101;
 	case LogicalTypeId::UUID:
 		return 102;
+	case LogicalTypeId::VARINT:
+		return 103;
 	// nested types
 	case LogicalTypeId::STRUCT:
 		return 125;

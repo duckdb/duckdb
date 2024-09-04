@@ -6,6 +6,7 @@
 #include "duckdb/common/vector_operations/generic_executor.hpp"
 #include "duckdb/core_functions/scalar/generic_functions.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -129,15 +130,15 @@ struct EquiWidthBinsInteger {
 		hugeint_t step = span / Hugeint::Convert(bin_count);
 		if (nice_rounding) {
 			// when doing nice rounding we try to make the max/step values nicer
-			step = MakeNumberNice(step, step, NiceRounding::ROUND);
-			max = RoundToNumber(max, step, NiceRounding::CEILING);
+			hugeint_t new_step = MakeNumberNice(step, step, NiceRounding::ROUND);
+			hugeint_t new_max = RoundToNumber(max, new_step, NiceRounding::CEILING);
+			if (new_max != min && new_step != 0) {
+				max = new_max;
+				step = new_step;
+			}
 			// we allow for more bins when doing nice rounding since the bin count is approximate
 			bin_count *= 2;
 		}
-		if (step == 0) {
-			throw InternalException("step is 0!?");
-		}
-
 		for (hugeint_t bin_boundary = max; bin_boundary > min; bin_boundary -= step) {
 			const hugeint_t target_boundary = bin_boundary / FACTOR;
 			int64_t real_boundary = Hugeint::Cast<int64_t>(target_boundary);
@@ -171,7 +172,7 @@ struct EquiWidthBinsDouble {
 		double step;
 		if (!Value::IsFinite(span)) {
 			// max - min does not fit
-			step = max / bin_count - min / bin_count;
+			step = max / static_cast<double>(bin_count) - min / static_cast<double>(bin_count);
 		} else {
 			step = span / static_cast<double>(bin_count);
 		}
@@ -296,7 +297,8 @@ int64_t RoundNumberToDivisor(int64_t number, int64_t divisor) {
 interval_t MakeIntervalNice(interval_t interval) {
 	if (interval.months >= 6) {
 		// if we have more than 6 months, we don't care about days
-		interval.days = interval.micros = 0;
+		interval.days = 0;
+		interval.micros = 0;
 	} else if (interval.months > 0 || interval.days >= 5) {
 		// if we have any months or more than 5 days, we don't care about micros
 		interval.micros = 0;
@@ -469,24 +471,36 @@ static void UnsupportedEquiWidth(DataChunk &args, ExpressionState &state, Vector
 	throw BinderException(state.expr, "Unsupported type \"%s\" for equi_width_bins", args.data[0].GetType());
 }
 
+void EquiWidthBinSerialize(Serializer &, const optional_ptr<FunctionData>, const ScalarFunction &) {
+	return;
+}
+
+unique_ptr<FunctionData> EquiWidthBinDeserialize(Deserializer &deserializer, ScalarFunction &function) {
+	function.return_type = deserializer.Get<const LogicalType &>();
+	return nullptr;
+}
+
 ScalarFunctionSet EquiWidthBinsFun::GetFunctions() {
 	ScalarFunctionSet functions("equi_width_bins");
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BOOLEAN},
-	                   LogicalType::LIST(LogicalType::BIGINT), EquiWidthBinFunction<int64_t, EquiWidthBinsInteger>,
+	                   LogicalType::LIST(LogicalType::ANY), EquiWidthBinFunction<int64_t, EquiWidthBinsInteger>,
 	                   BindEquiWidthFunction));
-	functions.AddFunction(
-	    ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::BIGINT, LogicalType::BOOLEAN},
-	                   LogicalType::LIST(LogicalType::DOUBLE), EquiWidthBinFunction<double, EquiWidthBinsDouble>,
-	                   BindEquiWidthFunction));
+	functions.AddFunction(ScalarFunction(
+	    {LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::BIGINT, LogicalType::BOOLEAN},
+	    LogicalType::LIST(LogicalType::ANY), EquiWidthBinFunction<double, EquiWidthBinsDouble>, BindEquiWidthFunction));
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::BIGINT, LogicalType::BOOLEAN},
-	                   LogicalType::LIST(LogicalType::DATE), EquiWidthBinFunction<timestamp_t, EquiWidthBinsTimestamp>,
+	                   LogicalType::LIST(LogicalType::ANY), EquiWidthBinFunction<timestamp_t, EquiWidthBinsTimestamp>,
 	                   BindEquiWidthFunction));
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::ANY_PARAMS(LogicalType::ANY, 150), LogicalType::ANY_PARAMS(LogicalType::ANY, 150),
 	                    LogicalType::BIGINT, LogicalType::BOOLEAN},
 	                   LogicalType::LIST(LogicalType::ANY), UnsupportedEquiWidth, BindEquiWidthFunction));
+	for (auto &function : functions.functions) {
+		function.serialize = EquiWidthBinSerialize;
+		function.deserialize = EquiWidthBinDeserialize;
+	}
 	return functions;
 }
 

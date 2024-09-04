@@ -100,7 +100,7 @@ void ZstdStreamWrapper::Write(CompressedFile &file, StreamData &sd, data_ptr_t u
 			sd.out_buff_start = sd.out_buff.get();
 		}
 		uncompressed_data += input_consumed;
-		remaining -= input_consumed;
+		remaining -= UnsafeNumericCast<int64_t>(input_consumed);
 	}
 }
 
@@ -158,6 +158,10 @@ public:
 	ZStdFile(unique_ptr<FileHandle> child_handle_p, const string &path, bool write)
 	    : CompressedFile(zstd_fs, std::move(child_handle_p), path) {
 		Initialize(write);
+	}
+
+	FileCompressionType GetFileCompressionType() override {
+		return FileCompressionType::ZSTD;
 	}
 
 	ZStdFileSystem zstd_fs;

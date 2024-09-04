@@ -64,7 +64,7 @@ const hugeint_t Hugeint::POWERS_OF_TEN[] {
 
 template <>
 void Hugeint::NegateInPlace<false>(hugeint_t &input) {
-	input.lower = NumericLimits<uint64_t>::Maximum() - input.lower + 1;
+	input.lower = NumericLimits<uint64_t>::Maximum() - input.lower + 1ull;
 	input.upper = -1 - input.upper + (input.lower == 0);
 }
 
@@ -654,7 +654,7 @@ bool CastBigintToFloating(hugeint_t input, REAL_T &result) {
 		result = -REAL_T(NumericLimits<uint64_t>::Maximum() - input.lower) - 1;
 		break;
 	default:
-		result = REAL_T(input.lower) + REAL_T(input.upper) * REAL_T(NumericLimits<uint64_t>::Maximum());
+		result = REAL_T(input.lower) + REAL_T(input.upper) * (REAL_T(NumericLimits<uint64_t>::Maximum()) + 1);
 		break;
 	}
 	return true;
@@ -872,7 +872,7 @@ hugeint_t hugeint_t::operator<<(const hugeint_t &rhs) const {
 	} else {
 		D_ASSERT(shift < 128);
 		result.lower = 0;
-		result.upper = (lower << (shift - 64)) & 0x7FFFFFFFFFFFFFFF;
+		result.upper = UnsafeNumericCast<int64_t>((lower << (shift - 64)) & 0x7FFFFFFFFFFFFFFF);
 	}
 	return result;
 }

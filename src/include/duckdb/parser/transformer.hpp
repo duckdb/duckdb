@@ -36,6 +36,7 @@ struct CommonTableExpressionInfo;
 struct GroupingExpressionMap;
 class OnConflictInfo;
 class UpdateSetInfo;
+class MacroFunction;
 struct ParserOptions;
 struct PivotColumn;
 struct PivotColumnEntry;
@@ -89,6 +90,7 @@ private:
 	Transformer &RootTransformer();
 	const Transformer &RootTransformer() const;
 	void SetParamCount(idx_t new_count);
+	void ClearParameters();
 	void SetParam(const string &name, idx_t index, PreparedParamType type);
 	bool GetParam(const string &name, idx_t &index, PreparedParamType type);
 
@@ -336,6 +338,9 @@ private:
 	//! Transform a Postgres ORDER BY expression into an OrderByDescription
 	bool TransformOrderBy(duckdb_libpgquery::PGList *order, vector<OrderByNode> &result);
 
+	//! Transform to a IN or NOT IN expression
+	unique_ptr<ParsedExpression> TransformInExpression(const string &name, duckdb_libpgquery::PGAExpr &root);
+
 	//! Transform a Postgres SELECT clause into a list of Expressions
 	void TransformExpressionList(duckdb_libpgquery::PGList &list, vector<unique_ptr<ParsedExpression>> &result);
 
@@ -353,6 +358,8 @@ private:
 
 	Vector PGListToVector(optional_ptr<duckdb_libpgquery::PGList> column_list, idx_t &size);
 	vector<string> TransformConflictTarget(duckdb_libpgquery::PGList &list);
+
+	unique_ptr<MacroFunction> TransformMacroFunction(duckdb_libpgquery::PGFunctionDefinition &function);
 
 	void ParseGenericOptionListEntry(case_insensitive_map_t<vector<Value>> &result_options, string &name,
 	                                 duckdb_libpgquery::PGNode *arg);

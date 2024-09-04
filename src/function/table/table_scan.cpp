@@ -86,7 +86,6 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &
 }
 
 unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
-
 	D_ASSERT(input.bind_data);
 	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
 	auto result = make_uniq<TableScanGlobalState>(context, input.bind_data.get());
@@ -167,7 +166,7 @@ double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p
 	}
 	idx_t scanned_rows = gstate.state.scan_state.processed_rows;
 	scanned_rows += gstate.state.local_state.processed_rows;
-	auto percentage = 100 * (double(scanned_rows) / total_rows);
+	auto percentage = 100 * (static_cast<double>(scanned_rows) / static_cast<double>(total_rows));
 	if (percentage > 100) {
 		//! In case the last chunk has less elements than STANDARD_VECTOR_SIZE, if our percentage is over 100
 		//! It means we finished this table.
@@ -278,10 +277,11 @@ static void RewriteIndexExpression(Index &index, LogicalGet &get, Expression &ex
 		// bound column ref: rewrite to fit in the current set of bound column ids
 		bound_colref.binding.table_index = get.table_index;
 		auto &column_ids = index.GetColumnIds();
+		auto &get_column_ids = get.GetColumnIds();
 		column_t referenced_column = column_ids[bound_colref.binding.column_index];
 		// search for the referenced column in the set of column_ids
-		for (idx_t i = 0; i < get.column_ids.size(); i++) {
-			if (get.column_ids[i] == referenced_column) {
+		for (idx_t i = 0; i < get_column_ids.size(); i++) {
+			if (get_column_ids[i] == referenced_column) {
 				bound_colref.binding.column_index = i;
 				return;
 			}
@@ -323,7 +323,6 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 
 	auto checkpoint_lock = storage.GetSharedCheckpointLock();
 	auto &info = storage.GetDataTableInfo();
-	auto &transaction = Transaction::Get(context, bind_data.table.catalog);
 
 	// bind and scan any ART indexes
 	info->GetIndexes().BindAndScan<ART>(context, *info, [&](ART &art_index) {
@@ -343,7 +342,7 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 
 		// Try to find a matching index for any of the filter expressions.
 		for (auto &filter : filters) {
-			auto index_state = art_index.TryInitializeScan(transaction, *index_expression, *filter);
+			auto index_state = art_index.TryInitializeScan(*index_expression, *filter);
 			if (index_state != nullptr) {
 
 				auto &db_config = DBConfig::GetConfig(context);
@@ -351,16 +350,17 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 				auto index_scan_max_count = db_config.options.index_scan_max_count;
 
 				auto total_rows = storage.GetTotalRows();
-				auto total_rows_from_percentage = NumericCast<idx_t>(double(total_rows) * index_scan_percentage);
+				auto total_rows_from_percentage = LossyNumericCast<idx_t>(double(total_rows) * index_scan_percentage);
 				auto max_count = MaxValue(index_scan_max_count, total_rows_from_percentage);
 
 				// Check if we can use an index scan, and already retrieve the matching row ids.
-				if (art_index.Scan(transaction, storage, *index_state, max_count, bind_data.row_ids)) {
+				if (art_index.Scan(*index_state, max_count, bind_data.row_ids)) {
 					bind_data.is_index_scan = true;
 					get.function = TableScanFunction::GetIndexScanFunction();
 					return true;
 				}
 
+				// Clear the row ids in case we exceeded the maximum count and stopped scanning.
 				bind_data.row_ids.clear();
 				return true;
 			}

@@ -119,12 +119,21 @@ struct ClientConfig {
 
 	//! Whether or not the "/" division operator defaults to integer division or floating point division
 	bool integer_division = false;
+	//! When a scalar subquery returns multiple rows - return a random row instead of returning an error
+	bool scalar_subquery_error_on_multiple_rows = true;
+	//! Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL)
+	bool ieee_floating_point_ops = true;
+	//! Allow ordering by non-integer literals - ordering by such literals has no effect
+	bool order_by_non_integer_literal = false;
 
 	//! Output error messages as structured JSON instead of as a raw string
 	bool errors_as_json = false;
 
 	//! Generic options
 	case_insensitive_map_t<Value> set_variables;
+
+	//! Variables set by the user
+	case_insensitive_map_t<Value> user_variables;
 
 	//! Function that is used to create the result collector for a materialized result
 	//! Defaults to PhysicalMaterializedCollector
@@ -142,6 +151,23 @@ public:
 
 	bool AnyVerification() {
 		return query_verification_enabled || verify_external || verify_serializer || verify_fetch_row;
+	}
+
+	void SetUserVariable(const string &name, Value value) {
+		user_variables[name] = std::move(value);
+	}
+
+	bool GetUserVariable(const string &name, Value &result) {
+		auto entry = user_variables.find(name);
+		if (entry == user_variables.end()) {
+			return false;
+		}
+		result = entry->second;
+		return true;
+	}
+
+	void ResetUserVariable(const string &name) {
+		user_variables.erase(name);
 	}
 
 public:

@@ -358,6 +358,15 @@ stats_arena_bins_print(emitter_t *emitter, bool mutex, unsigned i,
 	COL_HDR(row, nreslabs, NULL, right, 13, uint64)
 	COL_HDR(row, nreslabs_ps, "(#/sec)", right, 8, uint64)
 
+	COL_HDR(row, pops, NULL, right, 10, uint64)
+	COL_HDR(row, pops_ps, "(#/sec)", right, 8, uint64)
+	COL_HDR(row, failed_push, NULL, right, 13, uint64)
+	COL_HDR(row, failed_push_ps, "(#/sec)", right, 8, uint64)
+	COL_HDR(row, push, NULL, right, 7, uint64)
+	COL_HDR(row, push_ps, "(#/sec)", right, 8, uint64)
+	COL_HDR(row, push_elem, NULL, right, 12, uint64)
+	COL_HDR(row, push_elem_ps, "(#/sec)", right, 8, uint64)
+
 	/* Don't want to actually print the name. */
 	header_justify_spacer.str_val = " ";
 	col_justify_spacer.str_val = " ";
@@ -405,6 +414,8 @@ stats_arena_bins_print(emitter_t *emitter, bool mutex, unsigned i,
 		uint32_t nregs, nshards;
 		uint64_t nmalloc, ndalloc, nrequests, nfills, nflushes;
 		uint64_t nreslabs;
+		uint64_t batch_pops, batch_failed_pushes, batch_pushes,
+		    batch_pushed_elems;
 		prof_stats_t prof_live;
 		prof_stats_t prof_accum;
 
@@ -453,6 +464,15 @@ stats_arena_bins_print(emitter_t *emitter, bool mutex, unsigned i,
 		CTL_LEAF(stats_arenas_mib, 5, "nonfull_slabs", &nonfull_slabs,
 		    size_t);
 
+		CTL_LEAF(stats_arenas_mib, 5, "batch_pops", &batch_pops,
+		    uint64_t);
+		CTL_LEAF(stats_arenas_mib, 5, "batch_failed_pushes",
+		    &batch_failed_pushes, uint64_t);
+		CTL_LEAF(stats_arenas_mib, 5, "batch_pushes",
+		    &batch_pushes, uint64_t);
+		CTL_LEAF(stats_arenas_mib, 5, "batch_pushed_elems",
+		    &batch_pushed_elems, uint64_t);
+
 		if (mutex) {
 			mutex_stats_read_arena_bin(stats_arenas_mib, 5,
 			    col_mutex64, col_mutex32, uptime);
@@ -487,6 +507,14 @@ stats_arena_bins_print(emitter_t *emitter, bool mutex, unsigned i,
 		    &curslabs);
 		emitter_json_kv(emitter, "nonfull_slabs", emitter_type_size,
 		    &nonfull_slabs);
+		emitter_json_kv(emitter, "batch_pops",
+		    emitter_type_uint64, &batch_pops);
+		emitter_json_kv(emitter, "batch_failed_pushes",
+		    emitter_type_uint64, &batch_failed_pushes);
+		emitter_json_kv(emitter, "batch_pushes",
+		    emitter_type_uint64, &batch_pushes);
+		emitter_json_kv(emitter, "batch_pushed_elems",
+		    emitter_type_uint64, &batch_pushed_elems);
 		if (mutex) {
 			emitter_json_object_kv_begin(emitter, "mutex");
 			mutex_stats_emit(emitter, NULL, col_mutex64,
@@ -544,6 +572,21 @@ stats_arena_bins_print(emitter_t *emitter, bool mutex, unsigned i,
 		col_nslabs.uint64_val = nslabs;
 		col_nreslabs.uint64_val = nreslabs;
 		col_nreslabs_ps.uint64_val = rate_per_second(nreslabs, uptime);
+
+		col_pops.uint64_val = batch_pops;
+		col_pops_ps.uint64_val
+		    = rate_per_second(batch_pops, uptime);
+
+		col_failed_push.uint64_val = batch_failed_pushes;
+		col_failed_push_ps.uint64_val
+		    = rate_per_second(batch_failed_pushes, uptime);
+		col_push.uint64_val = batch_pushes;
+		col_push_ps.uint64_val
+		    = rate_per_second(batch_pushes, uptime);
+
+		col_push_elem.uint64_val = batch_pushed_elems;
+		col_push_elem_ps.uint64_val
+		    = rate_per_second(batch_pushed_elems, uptime);
 
 		/*
 		 * Note that mutex columns were initialized above, if mutex ==
@@ -1521,6 +1564,7 @@ stats_general_print(emitter_t *emitter) {
 	OPT_WRITE_SIZE_T("hpa_hugification_threshold")
 	OPT_WRITE_UINT64("hpa_hugify_delay_ms")
 	OPT_WRITE_UINT64("hpa_min_purge_interval_ms")
+	OPT_WRITE_BOOL("hpa_strict_min_purge_interval")
 	if (je_mallctl("opt.hpa_dirty_mult", (void *)&u32v, &u32sz, NULL, 0)
 	    == 0) {
 		/*
@@ -1555,6 +1599,9 @@ stats_general_print(emitter_t *emitter) {
 	OPT_WRITE_BOOL("utrace")
 	OPT_WRITE_BOOL("xmalloc")
 	OPT_WRITE_BOOL("experimental_infallible_new")
+	OPT_WRITE_SIZE_T("max_batched_size")
+	OPT_WRITE_SIZE_T("remote_free_max")
+	OPT_WRITE_SIZE_T("remote_free_max_batch")
 	OPT_WRITE_BOOL("tcache")
 	OPT_WRITE_SIZE_T("tcache_max")
 	OPT_WRITE_UNSIGNED("tcache_nslots_small_min")
@@ -1651,6 +1698,10 @@ stats_general_print(emitter_t *emitter) {
 
 	CTL_GET("arenas.page", &sv, size_t);
 	emitter_kv(emitter, "page", "Page size", emitter_type_size, &sv);
+
+	CTL_GET("arenas.hugepage", &sv, size_t);
+	emitter_kv(emitter, "hugepage", "Hugepage size", emitter_type_size,
+	    &sv);
 
 	if (je_mallctl("arenas.tcache_max", (void *)&sv, &ssz, NULL, 0) == 0) {
 		emitter_kv(emitter, "tcache_max",
@@ -1845,7 +1896,7 @@ stats_print_helper(emitter_t *emitter, bool merged, bool destroyed,
 		size_t mib[3];
 		size_t miblen = sizeof(mib) / sizeof(size_t);
 		size_t sz;
-		VARIABLE_ARRAY(bool, initialized, narenas);
+		VARIABLE_ARRAY_UNSAFE(bool, initialized, narenas);
 		bool destroyed_initialized;
 		unsigned i, ninitialized;
 

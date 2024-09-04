@@ -2,6 +2,8 @@
 # description: Test the histogram table function
 # group: [aggregates]
 
+require 64bit
+
 statement ok
 pragma enable_verification
 
@@ -21,6 +23,12 @@ SELECT * FROM histogram_values(integers, i, bin_count := 2)
 60	1
 80	0
 100	1
+
+# missing column
+statement error
+SELECT * FROM histogram_values(integers, k)
+----
+not found in FROM clause
 
 statement ok
 INSERT INTO integers FROM range(127)

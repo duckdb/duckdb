@@ -23,6 +23,7 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 	case JoinType::OUTER:
 	case JoinType::ANTI:
 	case JoinType::RIGHT_ANTI:
+	case JoinType::RIGHT_SEMI:
 		// cannot generate join filters for these join types
 		// mark/single - cannot change cardinality of probe side
 		// left/outer always need to include every row from probe side
@@ -46,6 +47,10 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 		}
 		if (cond.left->return_type.IsNested()) {
 			// nested columns are not supported for pushdown
+			continue;
+		}
+		if (cond.left->return_type.id() == LogicalTypeId::INTERVAL) {
+			// interval is not supported for pushdown
 			continue;
 		}
 		JoinFilterPushdownColumn pushdown_col;

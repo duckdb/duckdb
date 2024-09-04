@@ -22,7 +22,8 @@
 
 namespace duckdb {
 
-WALWriteState::WALWriteState(WriteAheadLog &log) : log(log), current_table_info(nullptr) {
+WALWriteState::WALWriteState(WriteAheadLog &log, optional_ptr<StorageCommitState> commit_state)
+    : log(log), commit_state(commit_state), current_table_info(nullptr) {
 }
 
 void WALWriteState::SwitchTable(DataTableInfo *table_info, UndoFlags new_op) {
@@ -258,7 +259,7 @@ void WALWriteState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		// append:
 		auto info = reinterpret_cast<AppendInfo *>(data);
 		if (!info->table->IsTemporary()) {
-			info->table->WriteToLog(log, info->start_row, info->count);
+			info->table->WriteToLog(log, info->start_row, info->count, commit_state.get());
 		}
 		break;
 	}

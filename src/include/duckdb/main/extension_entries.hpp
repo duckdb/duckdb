@@ -31,6 +31,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"->>", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"<<=", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
     {">>=", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"add_numbers_together", "demo_capi", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"add_parquet_key", "parquet", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"array_to_json", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"broadcast", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -199,6 +200,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"json_deserialize_sql", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_execute_serialized_sql", "json", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"json_execute_serialized_sql", "json", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"json_exists", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_extract", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_extract_path", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_extract_path_text", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -218,6 +220,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"json_transform_strict", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_type", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_valid", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"json_value", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"load_aws_credentials", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
     {"make_timestamptz", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"mysql_clear_cache", "mysql_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -378,6 +381,8 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"tpch", "tpch", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"tpch_answers", "tpch", CatalogType::TABLE_FUNCTION_ENTRY},
     {"tpch_queries", "tpch", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"vss_join", "vss", CatalogType::TABLE_MACRO_ENTRY},
+    {"vss_match", "vss", CatalogType::TABLE_MACRO_ENTRY},
 }; // END_OF_EXTENSION_FUNCTIONS
 
 static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {

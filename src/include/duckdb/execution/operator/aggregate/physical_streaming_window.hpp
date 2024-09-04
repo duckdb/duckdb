@@ -46,7 +46,7 @@ public:
 		return OrderPreservationType::FIXED_ORDER;
 	}
 
-	string ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
 private:
 	void ExecuteFunctions(ExecutionContext &context, DataChunk &chunk, DataChunk &delayed,
@@ -54,6 +54,8 @@ private:
 	void ExecuteInput(ExecutionContext &context, DataChunk &delayed, DataChunk &input, DataChunk &chunk,
 	                  GlobalOperatorState &gstate, OperatorState &state) const;
 	void ExecuteDelayed(ExecutionContext &context, DataChunk &delayed, DataChunk &input, DataChunk &chunk,
+	                    GlobalOperatorState &gstate, OperatorState &state) const;
+	void ExecuteShifted(ExecutionContext &context, DataChunk &delayed, DataChunk &input, DataChunk &chunk,
 	                    GlobalOperatorState &gstate, OperatorState &state) const;
 };
 

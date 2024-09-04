@@ -127,6 +127,9 @@ static bool FromNumpyType(const py::object &type, LogicalType &result) {
 	auto obj = type();
 	// We convert these to string because the underlying physical
 	// types of a numpy type aren't consistent on every platform
+	if (!py::hasattr(obj, "dtype")) {
+		return false;
+	}
 	string type_str = py::str(obj.attr("dtype"));
 	if (type_str == "bool") {
 		result = LogicalType::BOOLEAN;
@@ -185,7 +188,7 @@ static LogicalType FromType(const py::type &obj) {
 		return result;
 	}
 
-	throw py::type_error("Could not convert from unknown 'type' to DuckDBPyType");
+	throw py::cast_error("Could not convert from unknown 'type' to DuckDBPyType");
 }
 
 static bool IsMapType(const py::tuple &args) {

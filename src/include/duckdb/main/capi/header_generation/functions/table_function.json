@@ -1,0 +1,95 @@
+{
+    "group": "table_function",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_function_get_extra_info",
+            "return_type": "void *",
+            "params": [
+                {
+                    "type": "duckdb_function_info",
+                    "name": "info"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`.\n\n",
+                "param_comments": {
+                    "info": "The info object"
+                },
+                "return_value": "The extra info"
+            }
+        },
+        {
+            "name": "duckdb_function_get_bind_data",
+            "return_type": "void *",
+            "params": [
+                {
+                    "type": "duckdb_function_info",
+                    "name": "info"
+                }
+            ],
+            "comment": {
+                "description": "Gets the bind data set by `duckdb_bind_set_bind_data` during the bind.\n\nNote that the bind data should be considered as read-only.\nFor tracking state, use the init data instead.\n\n",
+                "param_comments": {
+                    "info": "The info object"
+                },
+                "return_value": "The bind data object"
+            }
+        },
+        {
+            "name": "duckdb_function_get_init_data",
+            "return_type": "void *",
+            "params": [
+                {
+                    "type": "duckdb_function_info",
+                    "name": "info"
+                }
+            ],
+            "comment": {
+                "description": "Gets the init data set by `duckdb_init_set_init_data` during the init.\n\n",
+                "param_comments": {
+                    "info": "The info object"
+                },
+                "return_value": "The init data object"
+            }
+        },
+        {
+            "name": "duckdb_function_get_local_init_data",
+            "return_type": "void *",
+            "params": [
+                {
+                    "type": "duckdb_function_info",
+                    "name": "info"
+                }
+            ],
+            "comment": {
+                "description": "Gets the thread-local init data set by `duckdb_init_set_init_data` during the local_init.\n\n",
+                "param_comments": {
+                    "info": "The info object"
+                },
+                "return_value": "The init data object"
+            }
+        },
+        {
+            "name": "duckdb_function_set_error",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_function_info",
+                    "name": "info"
+                },
+                {
+                    "type": "const char *",
+                    "name": "error"
+                }
+            ],
+            "comment": {
+                "description": "Report that an error has occurred while executing the function.\n\n",
+                "param_comments": {
+                    "info": "The info object",
+                    "error": "The error message"
+                }
+            }
+        }
+    ]
+}

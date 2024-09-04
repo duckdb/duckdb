@@ -315,7 +315,6 @@ struct CatalogEntryLookup {
 // Generic
 //===--------------------------------------------------------------------===//
 void Catalog::DropEntry(ClientContext &context, DropInfo &info) {
-	ModifyCatalog();
 	if (info.type == CatalogType::SCHEMA_ENTRY) {
 		// DROP SCHEMA
 		DropSchema(context, info);
@@ -364,7 +363,7 @@ SimilarCatalogEntry Catalog::SimilarEntryInSchemas(ClientContext &context, const
 			// no similar entry found
 			continue;
 		}
-		if (!result.Found() || result.distance > entry.distance) {
+		if (!result.Found() || result.score < entry.score) {
 			result = entry;
 			result.schema = &schema;
 		}
@@ -563,10 +562,19 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 	reference_set_t<SchemaCatalogEntry> unseen_schemas;
 	auto &db_manager = DatabaseManager::Get(context);
 	auto databases = db_manager.GetDatabases(context);
+	auto &config = DBConfig::GetConfig(context);
+
+	auto max_schema_count = config.options.catalog_error_max_schemas;
 	for (auto database : databases) {
+		if (unseen_schemas.size() >= max_schema_count) {
+			break;
+		}
 		auto &catalog = database.get().GetCatalog();
 		auto current_schemas = catalog.GetAllSchemas(context);
 		for (auto &current_schema : current_schemas) {
+			if (unseen_schemas.size() >= max_schema_count) {
+				break;
+			}
 			unseen_schemas.insert(current_schema.get());
 		}
 	}
@@ -626,9 +634,12 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 		return CatalogException(error_message);
 	}
 
+	// entries in other schemas get a penalty
+	// however, if there is an exact match in another schema, we will always show it
+	static constexpr const double UNSEEN_PENALTY = 0.2;
 	auto unseen_entry = SimilarEntryInSchemas(context, entry_name, type, unseen_schemas);
 	string did_you_mean;
-	if (unseen_entry.Found() && unseen_entry.distance < entry.distance) {
+	if (unseen_entry.Found() && (unseen_entry.score == 1.0 || unseen_entry.score - UNSEEN_PENALTY > entry.score)) {
 		// the closest matching entry requires qualification as it is not in the default search path
 		// check how to minimally qualify this entry
 		auto catalog_name = unseen_entry.schema->catalog.GetName();
@@ -884,8 +895,6 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetAllSchemas(ClientContext &cont
 }
 
 void Catalog::Alter(CatalogTransaction transaction, AlterInfo &info) {
-	ModifyCatalog();
-
 	if (transaction.HasContext()) {
 		auto lookup =
 		    LookupEntry(transaction.GetContext(), info.GetCatalogType(), info.schema, info.name, info.if_not_found);
@@ -908,17 +917,6 @@ vector<MetadataBlockInfo> Catalog::GetMetadataInfo(ClientContext &context) {
 }
 
 void Catalog::Verify() {
-}
-
-//===--------------------------------------------------------------------===//
-// Catalog Version
-//===--------------------------------------------------------------------===//
-idx_t Catalog::GetCatalogVersion() {
-	return GetDatabase().GetDatabaseManager().catalog_version;
-}
-
-idx_t Catalog::ModifyCatalog() {
-	return GetDatabase().GetDatabaseManager().ModifyCatalog();
 }
 
 bool Catalog::IsSystemCatalog() const {

@@ -1,6 +1,5 @@
 #include "catch.hpp"
 #define DUCKDB_API_NO_DEPRECATED
-#define DUCKDB_NO_EXTENSION_FUNCTIONS
 
 #include "duckdb.h"
 

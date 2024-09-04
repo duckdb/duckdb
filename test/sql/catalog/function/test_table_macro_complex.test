@@ -36,7 +36,7 @@ select * from dates_between('2021-01-01', '2021-02-04');
 
 # alternative verify turns this CTE into a materialized CTE,
 # which then does not terminate anymore.
-require noalternativeverify
+require no_alternative_verify
 
 statement ok
 CREATE MACRO fibonacci(n0, n1, nlimit, noffset) AS TABLE
