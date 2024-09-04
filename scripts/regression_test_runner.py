@@ -44,6 +44,7 @@ threads = None
 no_regression_fail = False
 disable_timeout = False
 max_timeout = 3600
+root_dir = ""
 for arg in sys.argv:
     if arg.startswith("--old="):
         old_runner = arg.replace("--old=", "")
@@ -59,6 +60,8 @@ for arg in sys.argv:
         no_regression_fail = True
     elif arg == "--disable-timeout":
         disable_timeout = True
+    elif arg.startswith("--root-dir="):
+        root_dir = arg.replace("--root-dir=", "")
 
 if old_runner is None or new_runner is None or benchmark_file is None:
     print(
@@ -79,6 +82,11 @@ complete_timings = {old_runner: [], new_runner: []}
 
 def run_benchmark(runner, benchmark):
     benchmark_args = [runner, benchmark]
+
+    if root_dir:
+        benchmark_args += [f"--root-dir" ]
+        benchmark_args += [root_dir]
+
     if threads is not None:
         benchmark_args += ["--threads=%d" % (threads,)]
     if disable_timeout:
@@ -174,7 +182,7 @@ for i in range(number_repetitions):
             # benchmark failed to run - always a regression
             error_list.append([benchmark, old_res, new_res])
         elif (no_regression_fail == False) and (
-            (old_res + regression_threshold_seconds) * multiply_percentage < new_res
+                (old_res + regression_threshold_seconds) * multiply_percentage < new_res
         ):
             regression_list.append([benchmark, old_res, new_res])
         else:
