@@ -3,6 +3,7 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/function/function_binder.hpp"
@@ -36,6 +37,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &
 	if (types.size() != group_count) {
 		requires_projection = true;
 	}
+
+	unique_ptr<Expression> mid_sort_func;
 	// we need to create one aggregate per column in the select_list
 	for (idx_t i = 0; i < types.size(); ++i) {
 		auto logical_type = types[i];
@@ -70,6 +73,14 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &
 					D_ASSERT(new_expr->return_type == first_aggregate->return_type);
 					D_ASSERT(new_expr->type == ExpressionType::BOUND_AGGREGATE);
 					first_aggregate = unique_ptr_cast<Expression, BoundAggregateExpression>(std::move(new_expr));
+					if (!mid_sort_func) {
+						for (auto &child : first_aggregate->children) {
+							if (child->type == ExpressionType::BOUND_FUNCTION &&
+							    child->Cast<BoundFunctionExpression>().function.name == "create_sort_key") {
+								mid_sort_func = child->Copy();
+							}
+						}
+					}
 				}
 			}
 			// add the projection
@@ -81,6 +92,29 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &
 		}
 	}
 
+	if (mid_sort_func && aggregates.size() > 1) {
+		vector<unique_ptr<Expression>> mid_expressions;
+		vector<LogicalType> mid_types;
+		for (auto &t : types) {
+			mid_types.push_back(t);
+			mid_expressions.push_back(make_uniq<BoundReferenceExpression>(t, mid_types.size() - 1));
+		}
+		for (auto &aggr : aggregates) {
+			for (auto &child : aggr->Cast<BoundAggregateExpression>().children) {
+				if (child->type == ExpressionType::BOUND_FUNCTION &&
+				    child->Cast<BoundFunctionExpression>().function.name == "create_sort_key") {
+					D_ASSERT(child->Equals(*mid_sort_func));
+					child = make_uniq<BoundReferenceExpression>(child->return_type, mid_types.size());
+				}
+			}
+		}
+		mid_types.push_back(mid_sort_func->return_type);
+		mid_expressions.push_back(std::move(mid_sort_func));
+		auto mid_proj = make_uniq<PhysicalProjection>(std::move(mid_types), std::move(mid_expressions),
+		                                              child->estimated_cardinality);
+		mid_proj->children.push_back(std::move(child));
+		child = std::move(mid_proj);
+	}
 	child = ExtractAggregateExpressions(std::move(child), aggregates, groups);
 
 	// we add a physical hash aggregation in the plan to select the distinct groups

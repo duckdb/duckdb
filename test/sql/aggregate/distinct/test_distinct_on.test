@@ -131,3 +131,18 @@ statement error
 SELECT DISTINCT ON (2) i FROM integers
 ----
 Binder Error: ORDER term out of range - should be between 1 and 1
+
+query III
+select distinct on (k) k, x, y
+from (
+    values
+        ('A', 'a', 13),
+        ('B', 'b', 12),
+        ('A', 'c', 11),
+        ('B', 'a', 10),
+        ('A', 'c',  9)
+) as t(k, x, y)
+order by x desc, y
+----
+A	c	9
+B	b	12
