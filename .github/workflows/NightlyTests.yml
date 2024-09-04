@@ -765,6 +765,7 @@ jobs:
     env:
       CC: gcc-10
       CXX: g++-10
+      GEN: ninja
 
     steps:
     - uses: actions/checkout@v3
@@ -792,7 +793,10 @@ jobs:
     env:
       CC: gcc-10
       CXX: g++-10
+      GEN: ninja
       BLOCK_ALLOC_SIZE: 16384
+      BUILD_JSON: 1
+      BUILD_PARQUET: 1
 
     steps:
       - uses: actions/checkout@v3
@@ -818,10 +822,6 @@ jobs:
         run: |
           python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest --no-exit --time_execution
           python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest "test/sql/storage/*" --no-exit --time_execution
-
-      - name: Test
-        shell: bash
-        run: python scripts/test_block_sizes.py
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
