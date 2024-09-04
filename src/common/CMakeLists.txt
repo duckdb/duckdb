@@ -35,6 +35,7 @@ add_library_unity(
   cgroups.cpp
   compressed_file_system.cpp
   constants.cpp
+  stl_allocator.cpp
   checksum.cpp
   encryption_state.cpp
   exception.cpp

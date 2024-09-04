@@ -1,20 +1,20 @@
 #pragma once
-#include <type_traits>
-#include <cstdint>
-#include <atomic>
-
-#include "duckdb/common/vector.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
 #include "duckdb/common/map.hpp"
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/optionally_owned_ptr.hpp"
+#include "duckdb/common/queue.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/unique_ptr.hpp"
-#include "duckdb/common/queue.hpp"
-#include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/common/optionally_owned_ptr.hpp"
-#include "duckdb/common/optional_idx.hpp"
-#include "duckdb/common/insertion_order_preserving_map.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/vector.hpp"
+
+#include <atomic>
+#include <cstdint>
+#include <type_traits>
 
 namespace duckdb {
 
@@ -84,22 +84,34 @@ struct is_unsafe_vector<typename duckdb::unsafe_vector<T>> : std::true_type {
 // Check if T is a unordered map, and provide access to the inner type
 template <typename T>
 struct is_unordered_map : std::false_type {};
-template <typename... Args>
-struct is_unordered_map<typename duckdb::unordered_map<Args...>> : std::true_type {
-	typedef typename std::tuple_element<0, std::tuple<Args...>>::type KEY_TYPE;
-	typedef typename std::tuple_element<1, std::tuple<Args...>>::type VALUE_TYPE;
-	typedef typename std::tuple_element<2, std::tuple<Args...>>::type HASH_TYPE;
-	typedef typename std::tuple_element<3, std::tuple<Args...>>::type EQUAL_TYPE;
+template <typename KEY, typename VALUE>
+struct is_unordered_map<typename duckdb::unordered_map<KEY, VALUE>> : std::true_type {
+	typedef KEY KEY_TYPE;
+	typedef VALUE VALUE_TYPE;
+	typedef typename std::hash<KEY> HASH_TYPE;
+	typedef typename std::equal_to<KEY> EQUAL_TYPE;
+};
+template <typename KEY, typename VALUE, typename HASH, typename EQUAL>
+struct is_unordered_map<typename duckdb::unordered_map<KEY, VALUE, HASH, EQUAL>> : std::true_type {
+	typedef KEY KEY_TYPE;
+	typedef VALUE VALUE_TYPE;
+	typedef HASH HASH_TYPE;
+	typedef EQUAL EQUAL_TYPE;
 };
 
 template <typename T>
 struct is_map : std::false_type {};
-template <typename... Args>
-struct is_map<typename duckdb::map<Args...>> : std::true_type {
-	typedef typename std::tuple_element<0, std::tuple<Args...>>::type KEY_TYPE;
-	typedef typename std::tuple_element<1, std::tuple<Args...>>::type VALUE_TYPE;
-	typedef typename std::tuple_element<2, std::tuple<Args...>>::type HASH_TYPE;
-	typedef typename std::tuple_element<3, std::tuple<Args...>>::type EQUAL_TYPE;
+template <typename KEY, typename VALUE>
+struct is_map<typename duckdb::map<KEY, VALUE>> : std::true_type {
+	typedef KEY KEY_TYPE;
+	typedef VALUE VALUE_TYPE;
+	typedef typename std::less<KEY_TYPE> COMPARE_TYPE;
+};
+template <typename KEY, typename VALUE, typename COMPARE>
+struct is_map<typename duckdb::map<KEY, VALUE, COMPARE>> : std::true_type {
+	typedef KEY KEY_TYPE;
+	typedef VALUE VALUE_TYPE;
+	typedef COMPARE COMPARE_TYPE;
 };
 
 template <typename T>
@@ -158,20 +170,30 @@ struct is_pair<std::pair<T, U>> : std::true_type {
 
 template <typename T>
 struct is_unordered_set : std::false_type {};
-template <typename... Args>
-struct is_unordered_set<duckdb::unordered_set<Args...>> : std::true_type {
-	typedef typename std::tuple_element<0, std::tuple<Args...>>::type ELEMENT_TYPE;
-	typedef typename std::tuple_element<1, std::tuple<Args...>>::type HASH_TYPE;
-	typedef typename std::tuple_element<2, std::tuple<Args...>>::type EQUAL_TYPE;
+template <typename ELEMENT>
+struct is_unordered_set<duckdb::unordered_set<ELEMENT>> : std::true_type {
+	typedef ELEMENT ELEMENT_TYPE;
+	typedef typename std::hash<ELEMENT> HASH_TYPE;
+	typedef typename std::equal_to<ELEMENT> EQUAL_TYPE;
+};
+template <typename ELEMENT, typename HASH, typename EQUAL>
+struct is_unordered_set<duckdb::unordered_set<ELEMENT, HASH, EQUAL>> : std::true_type {
+	typedef ELEMENT ELEMENT_TYPE;
+	typedef HASH HASH_TYPE;
+	typedef EQUAL EQUAL_TYPE;
 };
 
 template <typename T>
 struct is_set : std::false_type {};
-template <typename... Args>
-struct is_set<duckdb::set<Args...>> : std::true_type {
-	typedef typename std::tuple_element<0, std::tuple<Args...>>::type ELEMENT_TYPE;
-	typedef typename std::tuple_element<1, std::tuple<Args...>>::type HASH_TYPE;
-	typedef typename std::tuple_element<2, std::tuple<Args...>>::type EQUAL_TYPE;
+template <typename ELEMENT>
+struct is_set<duckdb::set<ELEMENT>> : std::true_type {
+	typedef ELEMENT ELEMENT_TYPE;
+	typedef typename std::less<ELEMENT> COMPARE_TYPE;
+};
+template <typename ELEMENT, typename COMPARE>
+struct is_set<duckdb::set<ELEMENT, COMPARE>> : std::true_type {
+	typedef ELEMENT ELEMENT_TYPE;
+	typedef COMPARE COMPARE_TYPE;
 };
 
 template <typename T>

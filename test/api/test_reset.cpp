@@ -44,7 +44,7 @@ void RequireValueEqual(ConfigurationOption *op, const Value &left, const Value &
 #define REQUIRE_VALUE_EQUAL(op, lhs, rhs) RequireValueEqual(op, lhs, rhs, __LINE__)
 
 OptionValueSet GetValueForOption(const string &name, LogicalTypeId type) {
-	static unordered_map<string, OptionValueSet> value_map = {
+	static duckdb::unordered_map<string, OptionValueSet> value_map = {
 	    {"threads", {Value::BIGINT(42), Value::BIGINT(42)}},
 	    {"checkpoint_threshold", {"4.0 GiB"}},
 	    {"debug_checkpoint_abort", {{"none", "before_truncate", "before_header", "after_free_list_write"}}},
@@ -129,7 +129,7 @@ OptionValueSet GetValueForOption(const string &name, LogicalTypeId type) {
 }
 
 bool OptionIsExcludedFromTest(const string &name) {
-	static unordered_set<string> excluded_options = {
+	static duckdb::unordered_set<string> excluded_options = {
 	    "access_mode",
 	    "schema",
 	    "search_path",
