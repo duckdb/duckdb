@@ -123,6 +123,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	if (sniffer_options.name_list.empty()) {
 		sniffer_options.name_list = data.names_csv;
 	}
+
 	if (sniffer_options.sql_type_list.empty()) {
 		sniffer_options.sql_type_list = data.return_types_csv;
 	}
