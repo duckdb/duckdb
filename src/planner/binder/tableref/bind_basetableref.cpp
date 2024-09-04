@@ -123,24 +123,6 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 				result->types = ctebinding->types;
 				result->bound_columns = std::move(names);
 
-				// Traverse the parent binders in order to find the recursive CTE node
-				// this CTE reads from. This is necessary to correctly bind correlated columns.
-				Binder *current = this;
-				while (current) {
-					auto rec_cte = current->bound_cte_nodes.find(ctebinding->index);
-					if (rec_cte != current->bound_cte_nodes.end()) {
-						if (rec_cte->second->type == QueryNodeType::RECURSIVE_CTE_NODE) {
-							auto &rec_cte_node = rec_cte->second->Cast<BoundRecursiveCTENode>();
-							for (auto corr : rec_cte_node.left_binder->correlated_columns) {
-								corr.depth += 1;
-								AddCorrelatedColumn(corr);
-							}
-						}
-						break;
-					}
-					current = current->parent.get();
-				}
-
 				return std::move(result);
 			} else {
 				if (CTEIsAlreadyBound(cte)) {
