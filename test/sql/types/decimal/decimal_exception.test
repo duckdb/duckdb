@@ -1,0 +1,16 @@
+# name: test/sql/types/decimal/decimal_exception.test
+# description: Test casting to decimal, if it does not fit it should throw
+# group: [decimal]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+select cast('9.99' as decimal(1,0));
+----
+Could not convert string "9.99" to DECIMAL(1,0)
+
+statement error
+Could not cast value 9.990000 to DECIMAL(1,0)
+----
+Could not cast value

@@ -2298,7 +2298,9 @@ bool TryCastToDecimal::Operation(uhugeint_t input, hugeint_t &result, CastParame
 template <class SRC, class DST>
 bool DoubleToDecimalCast(SRC input, DST &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
 	double value = input * NumericHelper::DOUBLE_POWERS_OF_TEN[scale];
-	if (value <= -NumericHelper::DOUBLE_POWERS_OF_TEN[width] || value >= NumericHelper::DOUBLE_POWERS_OF_TEN[width]) {
+	double roundedValue = round(value);
+	if (roundedValue <= -NumericHelper::DOUBLE_POWERS_OF_TEN[width] ||
+	    roundedValue >= NumericHelper::DOUBLE_POWERS_OF_TEN[width]) {
 		string error = StringUtil::Format("Could not cast value %f to DECIMAL(%d,%d)", value, width, scale);
 		HandleCastError::AssignError(error, parameters);
 		return false;
