@@ -40,13 +40,13 @@ struct CSVReaderOptions {
 	//===--------------------------------------------------------------------===//
 	//! See struct above.
 	DialectOptions dialect_options;
-	//! Whether or not we should ignore InvalidInput errors
+	//! Whether we should ignore InvalidInput errors
 	CSVOption<bool> ignore_errors = false;
 	//! Whether we store CSV Errors in the rejects table or not
 	CSVOption<bool> store_rejects = false;
 	//! Rejects table name (Name of the table the store rejects errors)
 	CSVOption<string> rejects_table_name = {"reject_errors"};
-	//! Rejects Scan name name  (Name of the table the store rejects scans)
+	//! Rejects Scan name  (Name of the table the store rejects scans)
 	CSVOption<string> rejects_scan_name = {"reject_scans"};
 	//! Rejects table entry limit (0 = no limit)
 	idx_t rejects_limit = 0;

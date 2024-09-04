@@ -209,6 +209,7 @@ SELECT unnest(res) from (
 "PLANNER": "true"
 "PLANNER_BINDING": "true"
 "QUERY_NAME": "true"
+"RESULT_SET_SIZE": "true"
 
 # Test if phase timings are not added if detailed mode is off
 statement ok
@@ -237,4 +238,6 @@ SELECT unnest(res) from (
 "OPERATOR_TIMING": "true"
 "OPERATOR_TYPE": "true"
 "QUERY_NAME": "true"
+"RESULT_SET_SIZE": "true"
+
 

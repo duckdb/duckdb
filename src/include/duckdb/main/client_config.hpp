@@ -119,6 +119,12 @@ struct ClientConfig {
 
 	//! Whether or not the "/" division operator defaults to integer division or floating point division
 	bool integer_division = false;
+	//! When a scalar subquery returns multiple rows - return a random row instead of returning an error
+	bool scalar_subquery_error_on_multiple_rows = true;
+	//! Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL)
+	bool ieee_floating_point_ops = true;
+	//! Allow ordering by non-integer literals - ordering by such literals has no effect
+	bool order_by_non_integer_literal = false;
 
 	//! Output error messages as structured JSON instead of as a raw string
 	bool errors_as_json = false;

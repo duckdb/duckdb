@@ -66,11 +66,12 @@ void ArrayColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row
 	validity.InitializeScanWithOffset(state.child_states[0], row_idx);
 
 	auto array_size = ArrayType::GetSize(type);
-	auto child_offset = (row_idx - start) * array_size;
+	auto child_count = (row_idx - start) * array_size;
 
-	D_ASSERT(child_offset <= child_column->GetMaxEntry());
-	if (child_offset < child_column->GetMaxEntry()) {
-		child_column->InitializeScanWithOffset(state.child_states[1], start + child_offset);
+	D_ASSERT(child_count <= child_column->GetMaxEntry());
+	if (child_count < child_column->GetMaxEntry()) {
+		const auto child_offset = start + child_count;
+		child_column->InitializeScanWithOffset(state.child_states[1], child_offset);
 	}
 }
 
@@ -171,7 +172,10 @@ void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &st
 	// We need to fetch between [row_id * array_size, (row_id + 1) * array_size)
 	auto child_state = make_uniq<ColumnScanState>();
 	child_state->Initialize(child_type, nullptr);
-	child_column->InitializeScanWithOffset(*child_state, (UnsafeNumericCast<idx_t>(row_id) - this->start) * array_size);
+
+	const auto child_offset = start + (UnsafeNumericCast<idx_t>(row_id) - start) * array_size;
+
+	child_column->InitializeScanWithOffset(*child_state, child_offset);
 	Vector child_scan(child_type, array_size);
 	child_column->ScanCount(*child_state, child_scan, array_size);
 	VectorOperations::Copy(child_scan, child_vec, array_size, 0, result_idx * array_size);

@@ -124,27 +124,50 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::FLOAT:
 		child.format = "f";
 		break;
-	case LogicalTypeId::HUGEINT:
-		child.format = "d:38,0";
+	case LogicalTypeId::HUGEINT: {
+		if (options.arrow_lossless_conversion) {
+			child.format = "w:16";
+			auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("duckdb.hugeint");
+			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+			child.metadata = root_holder.metadata_info.back().get();
+		} else {
+			child.format = "d:38,0";
+		}
 		break;
-	case LogicalTypeId::DOUBLE:
-		child.format = "g";
-		break;
-	case LogicalTypeId::UUID: {
-		// This is a canonical extension, hence needs the "arrow." prefix
+	}
+	case LogicalTypeId::UHUGEINT: {
 		child.format = "w:16";
-		auto schema_metadata = ArrowSchemaMetadata();
-		schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME, "arrow.uuid");
-		schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_METADATA_KEY, "");
+		auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("duckdb.uhugeint");
 		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
 		child.metadata = root_holder.metadata_info.back().get();
 		break;
 	}
+	case LogicalTypeId::DOUBLE:
+		child.format = "g";
+		break;
+	case LogicalTypeId::UUID: {
+		if (options.arrow_lossless_conversion) {
+			// This is a canonical extension, hence needs the "arrow." prefix
+			child.format = "w:16";
+			auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("arrow.uuid");
+			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+			child.metadata = root_holder.metadata_info.back().get();
+		} else {
+			if (options.produce_arrow_string_view) {
+				child.format = "vu";
+			} else {
+				if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+					child.format = "U";
+				} else {
+					child.format = "u";
+				}
+			}
+		}
+		break;
+	}
 	case LogicalTypeId::VARCHAR:
 		if (type.IsJSONType()) {
-			auto schema_metadata = ArrowSchemaMetadata();
-			schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME, "arrow.json");
-			schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_METADATA_KEY, "");
+			auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("arrow.json");
 			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
 			child.metadata = root_holder.metadata_info.back().get();
 		}
@@ -161,7 +184,17 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::DATE:
 		child.format = "tdD";
 		break;
-	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::TIME_TZ: {
+		if (options.arrow_lossless_conversion) {
+			child.format = "w:8";
+			auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("duckdb.time_tz");
+			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+			child.metadata = root_holder.metadata_info.back().get();
+		} else {
+			child.format = "ttu";
+		}
+		break;
+	}
 	case LogicalTypeId::TIME:
 		child.format = "ttu";
 		break;
@@ -199,15 +232,25 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	}
 	case LogicalTypeId::BLOB:
-	case LogicalTypeId::BIT:
-
 		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			child.format = "Z";
 		} else {
 			child.format = "z";
 		}
 		break;
-
+	case LogicalTypeId::BIT: {
+		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+			child.format = "Z";
+		} else {
+			child.format = "z";
+		}
+		if (options.arrow_lossless_conversion) {
+			auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("duckdb.bit");
+			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+			child.metadata = root_holder.metadata_info.back().get();
+		}
+		break;
+	}
 	case LogicalTypeId::LIST: {
 		if (options.arrow_use_list_view) {
 			if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
