@@ -26,10 +26,14 @@
 
 #ifndef DUCKDB_EXTENSION_API
 #ifdef _WIN32
+#ifdef DUCKDB_STATIC
+#define DUCKDB_API
+#else
 #ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
 #define DUCKDB_EXTENSION_API __declspec(dllexport)
 #else
 #define DUCKDB_EXTENSION_API
+#endif
 #endif
 #else
 #define DUCKDB_EXTENSION_API __attribute__((visibility("default")))

@@ -33,10 +33,14 @@
 //! duplicate of duckdb/main/winapi.hpp
 #ifndef DUCKDB_EXTENSION_API
 #ifdef _WIN32
+#ifdef DUCKDB_STATIC
+#define DUCKDB_API
+#else
 #ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
 #define DUCKDB_EXTENSION_API __declspec(dllexport)
 #else
 #define DUCKDB_EXTENSION_API
+#endif
 #endif
 #else
 #define DUCKDB_EXTENSION_API __attribute__((visibility("default")))
@@ -1412,12 +1416,12 @@ Note that after calling `duckdb_prepare`, the prepared statement should always b
 If the prepare fails, `duckdb_prepare_error` can be called to obtain the reason why the prepare failed.
 
 * @param connection The connection object
-        * @param query The SQL query to prepare
-            * @param out_prepared_statement The resulting prepared statement object
-                * @return `DuckDBSuccess` on success or `DuckDBError` on failure.
-                                                            */
-                                                            DUCKDB_API duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
-                                                                                                   duckdb_prepared_statement *out_prepared_statement);
+* @param query The SQL query to prepare
+* @param out_prepared_statement The resulting prepared statement object
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
+                                       duckdb_prepared_statement *out_prepared_statement);
 
 /*!
 Closes the prepared statement and de-allocates all memory allocated for the statement.
@@ -4154,4 +4158,3 @@ DUCKDB_API void duckdb_destroy_cast_function(duckdb_cast_function *cast_function
 #ifdef __cplusplus
 }
 #endif
-
