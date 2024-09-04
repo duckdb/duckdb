@@ -16,6 +16,57 @@ void *stl_malloc(size_t size); // NOLINT: not using camelcase on purpose here
 void stl_free(void *ptr);      // NOLINT: not using camelcase on purpose here
 
 template <class T>
+T *stl_new_array_uninitialized(size_t size) {
+	return static_cast<T *>(stl_malloc(size * sizeof(T)));
+}
+
+template <class T>
+T *stl_new_array(size_t size) {
+	auto result = stl_new_array_uninitialized<T>(size);
+	return new (result) T[size]();
+}
+
+template <typename T>
+struct stl_default_delete { // NOLINT: not using camelcase on purpose here
+	static_assert(!std::is_function<T>::value, "default_delete cannot be instantiated for function types");
+
+	stl_default_delete() noexcept = default;
+
+	template <class U>
+	stl_default_delete(const stl_default_delete<U> &, // NOLINT: allow implicit conversion
+	                   typename std::enable_if<std::is_convertible<U *, T *>::value>::type * = nullptr) noexcept {
+	}
+
+	void operator()(T *ptr) const noexcept {
+		static_assert(sizeof(T) != 0, "cannot delete an incomplete type");
+		static_assert(!std::is_void<T>::value, "cannot delete an incomplete type");
+		stl_free(ptr);
+	}
+};
+
+template <class T>
+struct stl_default_delete<T[]> { // NOLINT: not using camelcase on purpose here
+private:
+	template <class U>
+	struct _EnableIfConvertible // NOLINT: hiding on purpose
+	    : std::enable_if<std::is_convertible<U (*)[], T (*)[]>::value> {};
+
+public:
+	stl_default_delete() noexcept = default;
+
+	template <class U>
+	stl_default_delete(const stl_default_delete<U[]> &, // NOLINT: not using camelcase on purpose here
+	                   typename _EnableIfConvertible<U>::type * = nullptr) noexcept {
+	}
+
+	template <class U>
+	typename _EnableIfConvertible<U>::type operator()(U *ptr) const noexcept { // NOLINT: matching std
+		static_assert(sizeof(U) != 0, "cannot delete an incomplete type");
+		delete[] ptr;
+	}
+};
+
+template <class T>
 class stl_allocator { // NOLINT: not using camelcase on purpose here
 public:
 	using original = std::allocator<T>;
