@@ -19,4 +19,28 @@ FileCompressionType FileCompressionTypeFromString(const string &input) {
 	}
 }
 
+string CompressionExtensionFromType(const FileCompressionType type) {
+	switch (type) {
+	case FileCompressionType::GZIP:
+		return ".gz";
+	case FileCompressionType::ZSTD:
+		return ".zst";
+	default:
+		throw NotImplementedException("Compression Extension of file compression type is not implemented");
+	}
+}
+
+bool IsFileCompressed(string path, FileCompressionType type) {
+	auto extension = CompressionExtensionFromType(type);
+	std::size_t question_mark_pos = std::string::npos;
+	if (!StringUtil::StartsWith(path, "\\\\?\\")) {
+		question_mark_pos = path.find('?');
+	}
+	path = path.substr(0, question_mark_pos);
+	if (StringUtil::EndsWith(path, extension)) {
+		return true;
+	}
+	return false;
+}
+
 } // namespace duckdb

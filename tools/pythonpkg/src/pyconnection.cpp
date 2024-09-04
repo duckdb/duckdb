@@ -1695,7 +1695,10 @@ void DuckDBPyConnection::Interrupt() {
 
 void DuckDBPyConnection::InstallExtension(const string &extension, bool force_install) {
 	auto &connection = con.GetConnection();
-	ExtensionHelper::InstallExtension(*connection.context, extension, force_install);
+
+	ExtensionInstallOptions options;
+	options.force_install = force_install;
+	ExtensionHelper::InstallExtension(*connection.context, extension, options);
 }
 
 void DuckDBPyConnection::LoadExtension(const string &extension) {
