@@ -54,4 +54,14 @@ public:
 	}
 };
 
+template <class T1, class T2>
+bool operator==(const stl_allocator<T1> &, const stl_allocator<T2> &) noexcept {
+	return true;
+}
+
+template <class T1, class T2>
+bool operator!=(const stl_allocator<T1> &, const stl_allocator<T2> &) noexcept {
+	return false;
+}
+
 } // namespace duckdb
