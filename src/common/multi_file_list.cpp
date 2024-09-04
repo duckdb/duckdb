@@ -205,16 +205,6 @@ SimpleMultiFileList::SimpleMultiFileList(vector<string> paths_p)
     : MultiFileList(std::move(paths_p), FileGlobOptions::ALLOW_EMPTY) {
 }
 
-//! Swap file from file_idx with 0
-void SimpleMultiFileList::SwapToFirst(const idx_t file_idx) {
-	D_ASSERT(file_idx < Size());
-	std::swap(paths[0], paths[file_idx]);
-}
-
-idx_t SimpleMultiFileList::Size() const {
-	return paths.size();
-}
-
 unique_ptr<MultiFileList> SimpleMultiFileList::ComplexFilterPushdown(ClientContext &context_p,
                                                                      const MultiFileReaderOptions &options,
                                                                      MultiFilePushdownInfo &info,
@@ -276,10 +266,6 @@ string SimpleMultiFileList::GetFile(idx_t i) {
 
 idx_t SimpleMultiFileList::GetTotalFileCount() {
 	return paths.size();
-}
-
-bool SimpleMultiFileList::IsFirstPathGlob() const {
-	return false;
 }
 
 //===--------------------------------------------------------------------===//
