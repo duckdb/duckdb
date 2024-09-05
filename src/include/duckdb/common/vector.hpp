@@ -28,10 +28,12 @@ void ThrowEraseAtException(duckdb::idx_t index, duckdb::idx_t size);
 
 namespace duckdb {
 
-template <class DATA_TYPE, bool SAFE = true>
-class vector : public std::vector<DATA_TYPE, stl_allocator<DATA_TYPE>> { // NOLINT: matching name of std
+template <class DATA_TYPE, bool SAFE = true, // vector<bool> is evil so we work around it
+          class ALLOCATOR = typename std::conditional<std::is_same<DATA_TYPE, bool>::value, std::allocator<DATA_TYPE>,
+                                                      stl_allocator<DATA_TYPE>>::type>
+class vector : public std::vector<DATA_TYPE, ALLOCATOR> { // NOLINT: matching name of std
 public:
-	using original = std::vector<DATA_TYPE, stl_allocator<DATA_TYPE>>;
+	using original = std::vector<DATA_TYPE, ALLOCATOR>;
 	using original::original;
 	using size_type = typename original::size_type;
 	using const_reference = typename original::const_reference;
