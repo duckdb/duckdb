@@ -217,7 +217,11 @@ SELECT operator_cardinality, operator_rows_scanned, cumulative_cardinality, cumu
 
 # Make sure that the number of rows scanned is more than 0
 query I
-SELECT cumulative_rows_scanned > 0
+SELECT
+CASE
+	WHEN cumulative_rows_scanned > 0 THEN 'true'
+	ELSE 'false'
+END
 FROM metrics_output;
 ----
 true

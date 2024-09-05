@@ -986,7 +986,6 @@ class SQLLogicContext:
             conn.execute(sql_query)
             result = conn.fetchall()
             if expected_result.type == ExpectedResult.Type.ERROR:
-                print(result)
                 self.fail(f"Query unexpectedly succeeded")
             if expected_result.type != ExpectedResult.Type.UNKNOWN:
                 assert expected_result.lines == None

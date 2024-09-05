@@ -5,14 +5,14 @@
 #include "duckdb/catalog/catalog_entry/list.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/pair.hpp"
-#include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/cleanup_state.hpp"
 #include "duckdb/transaction/commit_state.hpp"
-#include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/rollback_state.hpp"
+#include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/transaction/wal_write_state.hpp"
+#include "duckdb/transaction/delete_info.hpp"
 
 namespace duckdb {
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);

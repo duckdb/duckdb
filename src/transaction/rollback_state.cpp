@@ -1,14 +1,15 @@
 #include "duckdb/transaction/rollback_state.hpp"
+#include "duckdb/transaction/append_info.hpp"
+#include "duckdb/transaction/delete_info.hpp"
+#include "duckdb/transaction/update_info.hpp"
+
+#include "duckdb/storage/table/chunk_info.hpp"
 
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/storage/table/chunk_info.hpp"
-#include "duckdb/storage/table/row_version_manager.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
-#include "duckdb/transaction/append_info.hpp"
-#include "duckdb/transaction/delete_info.hpp"
-#include "duckdb/transaction/update_info.hpp"
+#include "duckdb/storage/table/row_version_manager.hpp"
 
 namespace duckdb {
 

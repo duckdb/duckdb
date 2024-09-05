@@ -29,9 +29,6 @@ public:
 	static void Initialize(py::handle &m);
 
 private:
-	static py::list ExpectedResultTypeInternal(SQLStatement &statement);
-
-private:
 	unique_ptr<SQLStatement> statement;
 };
 

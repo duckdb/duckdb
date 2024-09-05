@@ -94,11 +94,15 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM 'test/sql/pragma/output.json';
 
 # test if optimizer_join_order actually records timings
-query II
-SELECT optimizer_join_order, optimizer_join_order > 0
+query I
+SELECT 
+CASE 
+    WHEN optimizer_join_order > 0 THEN 'true'
+    ELSE 'false'
+END
 FROM metrics_output;
 ----
-1	true
+true
 
 # disable join_order optimizer and check that it is not collected
 statement ok
