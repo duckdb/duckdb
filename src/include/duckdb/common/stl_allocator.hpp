@@ -111,27 +111,7 @@ bool operator==(const stl_allocator<T> &, const stl_allocator<U> &) noexcept {
 }
 
 template <class T, class U>
-bool operator==(stl_allocator<T> &, const stl_allocator<U> &) noexcept {
-	return true;
-}
-
-template <class T, class U>
-bool operator==(const stl_allocator<T> &, stl_allocator<U> &) noexcept {
-	return true;
-}
-
-template <class T, class U>
 bool operator!=(const stl_allocator<T> &, const stl_allocator<U> &) noexcept {
-	return false;
-}
-
-template <class T, class U>
-bool operator!=(stl_allocator<T> &, const stl_allocator<U> &) noexcept {
-	return false;
-}
-
-template <class T, class U>
-bool operator!=(const stl_allocator<T> &, stl_allocator<U> &) noexcept {
 	return false;
 }
 
