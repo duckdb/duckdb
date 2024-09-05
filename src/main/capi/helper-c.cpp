@@ -155,10 +155,20 @@ duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 		return DUCKDB_TYPE_ARRAY;
 	case LogicalTypeId::ANY:
 		return DUCKDB_TYPE_ANY;
-	default: // LCOV_EXCL_START
+	case LogicalTypeId::POINTER:
+	case LogicalTypeId::SQLNULL:
+	case LogicalTypeId::UNKNOWN:
+	case LogicalTypeId::USER:
+	case LogicalTypeId::CHAR:
+	case LogicalTypeId::STRING_LITERAL:
+	case LogicalTypeId::INTEGER_LITERAL:
+	case LogicalTypeId::VALIDITY:
+	case LogicalTypeId::TABLE:
+	case LogicalTypeId::AGGREGATE_STATE:
+	case LogicalTypeId::LAMBDA:
 		D_ASSERT(0);
 		return DUCKDB_TYPE_INVALID;
-	} // LCOV_EXCL_STOP
+	}
 }
 
 idx_t GetCTypeSize(duckdb_type type) {
