@@ -1436,15 +1436,18 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const py::object &quer
 	shared_ptr<Relation> relation;
 	if (py::none().is(params)) {
 		// FIXME: currently we can't create relations with prepared parameters
-		auto statement_type = last_statement->type;
-		switch (statement_type) {
-		case StatementType::SELECT_STATEMENT: {
-			auto select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(last_statement));
-			relation = connection.RelationFromQuery(std::move(select_statement), alias);
-			break;
-		}
-		default:
-			break;
+		{
+			py::gil_scoped_release gil;
+			auto statement_type = last_statement->type;
+			switch (statement_type) {
+			case StatementType::SELECT_STATEMENT: {
+				auto select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(last_statement));
+				relation = connection.RelationFromQuery(std::move(select_statement), alias);
+				break;
+			}
+			default:
+				break;
+			}
 		}
 	}
 
