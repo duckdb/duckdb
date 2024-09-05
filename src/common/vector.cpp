@@ -16,4 +16,4 @@ void ThrowEraseAtException(idx_t index, idx_t size) {
 	throw InternalException("Can't remove offset %d from vector of size %d", index, size);
 }
 
-} // duckdb_vector_exceptions
+} // namespace duckdb_vector_exceptions
