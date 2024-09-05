@@ -216,11 +216,24 @@ idx_t GetCTypeSize(duckdb_type type) {
 		return sizeof(duckdb_interval);
 	case DUCKDB_TYPE_DECIMAL:
 		return sizeof(duckdb_hugeint);
-	default: // LCOV_EXCL_START
+	case DUCKDB_TYPE_INVALID:
+	case DUCKDB_TYPE_ENUM:
+	case DUCKDB_TYPE_LIST:
+	case DUCKDB_TYPE_STRUCT:
+	case DUCKDB_TYPE_MAP:
+	case DUCKDB_TYPE_UNION:
+	case DUCKDB_TYPE_ARRAY:
+	case DUCKDB_TYPE_ANY:
 		// Unsupported nested or complex type. Internally, we set the null mask to NULL.
 		// This is a deprecated code path. Use the Vector Interface for nested and complex types.
 		return 0;
-	} // LCOV_EXCL_STOP
+	case DUCKDB_TYPE_VARINT:
+	case DUCKDB_TYPE_BIT:
+	case DUCKDB_TYPE_TIME_TZ:
+	case DUCKDB_TYPE_TIMESTAMP_TZ:
+		// FIXME?
+		return 0;
+	}
 }
 
 duckdb_statement_type StatementTypeToC(duckdb::StatementType statement_type) {
