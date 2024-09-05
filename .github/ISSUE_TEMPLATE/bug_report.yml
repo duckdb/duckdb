@@ -70,7 +70,7 @@ body:
     attributes:
       label: "OS:"
       placeholder: e.g., iOS
-      description: Please include operating system version and architecture (e.g., aarch64, x86, x64, etc)
+      description: Please include operating system version and architecture (e.g., aarch64, x86_64, etc.).
     validations:
       required: true
   - type: input
