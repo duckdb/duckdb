@@ -170,6 +170,7 @@ void PartialBlockManager::Merge(PartialBlockManager &other) {
 }
 
 void PartialBlockManager::AddWrittenBlock(block_id_t block) {
+	lock_guard<mutex> lock(written_block_lock);
 	auto entry = written_blocks.insert(block);
 	if (!entry.second) {
 		throw InternalException("Written block already exists");
