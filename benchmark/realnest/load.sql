@@ -13,11 +13,3 @@ CREATE TABLE singleMu as SELECT list_transform("Tau", x -> x.pt) AS tau_pt, list
     list_transform("Electron", x -> x.pt) AS el_pt, list_transform("Electron", x -> x.eta) AS el_eta, 
     list_transform("Photon", x -> x.pt) AS ph_pt, list_transform("Photon", x -> x.eta) AS ph_eta
 FROM run2012B_singleMu; 
-CREATE TABLE unnested_hlt AS (SELECT rowid, UNNEST(HLT) AS hlt FROM run2012B_singleMu);
-CREATE TABLE unnested_pv AS (SELECT rowid, UNNEST(PV) AS pv FROM run2012B_singleMu);
-CREATE TABLE unnested_met AS (SELECT rowid, UNNEST(MET) AS met FROM run2012B_singleMu);
-CREATE TABLE unnested_muon AS (SELECT rowid, UNNEST(Muon, recursive:=true) AS muon FROM run2012B_singleMu);
-CREATE TABLE unnested_electron AS (SELECT rowid, UNNEST(Electron, recursive:=true) AS electron FROM run2012B_singleMu);
-CREATE TABLE unnested_tau AS (SELECT rowid, UNNEST(Tau, recursive:=true) AS tau FROM run2012B_singleMu);
-CREATE TABLE unnested_photon AS (SELECT rowid, UNNEST(Photon, recursive:=true) AS photon FROM run2012B_singleMu);
-CREATE TABLE unnested_jet AS (SELECT rowid, UNNEST(Jet, recursive:=true) AS jet FROM run2012B_singleMu);

@@ -1,6 +1,6 @@
 benchmark/realnest/01_aggregate-on-one-deep-struct-members.benchmark
 benchmark/realnest/02_list_sort_text.benchmark
-benchmark/realnest/03_create_table_combined_all_json_fields.benchmark
+benchmark/realnest/03_create_table_from_unnested_structs.benchmark
 benchmark/realnest/04_list_transform_plus_list_aggregate.benchmark
 benchmark/realnest/05_list_filters.benchmark
 benchmark/realnest/06_list_filter_on_unnested_structure.benchmark
@@ -13,3 +13,5 @@ benchmark/realnest/12_map_list_values.benchmark
 benchmark/realnest/13_multi_join_nested_data_with_filtering.benchmark
 benchmark/realnest/14_list_slice.benchmark
 benchmark/realnest/15_list_sort.benchmark
+benchmark/realnest/16_most_common_list_aggregates.benchmark
+benchmark/realnest/17_list_aggregates_histogram_stddev_mode.benchmark
