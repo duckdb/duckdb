@@ -17,7 +17,6 @@ run
 SELECT map(tau_pt, tau_eta),
     map(jet_pt, jet_eta),
     map(muon_pt, muon_eta),
-    map(el_pt, el_eta),
     map(ph_pt, ph_eta)
 FROM singleMu
 ORDER BY ALL DESC

@@ -21,8 +21,6 @@ SELECT
   list_aggregate(jet_eta, 'stddev'),
   list_aggregate(muon_pt, 'stddev'),
   list_aggregate(muon_eta, 'stddev'),
-  list_aggregate(el_pt, 'stddev'),
-  list_aggregate(el_eta, 'stddev'),
   list_aggregate(ph_pt, 'stddev'),
   list_aggregate(ph_eta, 'stddev'),
   list_aggregate(tau_pt, 'mode'),
@@ -31,8 +29,6 @@ SELECT
   list_aggregate(jet_eta, 'mode'),
   list_aggregate(muon_pt, 'mode'),
   list_aggregate(muon_eta, 'mode'),
-  list_aggregate(el_pt, 'mode'),
-  list_aggregate(el_eta, 'mode'),
   list_aggregate(ph_pt, 'mode'),
   list_aggregate(ph_eta, 'mode'),
   list_aggregate(tau_pt, 'histogram'),
@@ -41,8 +37,6 @@ SELECT
   list_aggregate(jet_eta, 'histogram'),
   list_aggregate(muon_pt, 'histogram'),
   list_aggregate(muon_eta, 'histogram'),
-  list_aggregate(el_pt, 'histogram'),
-  list_aggregate(el_eta, 'histogram'),
   list_aggregate(ph_pt, 'histogram'),
   list_aggregate(ph_eta, 'histogram')  
 FROM singleMu;
