@@ -281,9 +281,12 @@ duckdb_statement_type StatementTypeToC(duckdb::StatementType statement_type) {
 		return DUCKDB_STATEMENT_TYPE_DETACH;
 	case duckdb::StatementType::MULTI_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_MULTI;
-	default:
-		return DUCKDB_STATEMENT_TYPE_INVALID;
+	case duckdb::StatementType::COPY_DATABASE_STATEMENT:
+	case duckdb::StatementType::UPDATE_EXTENSIONS_STATEMENT:
+		// FIXME ??
+		break;
 	}
+		return DUCKDB_STATEMENT_TYPE_INVALID;
 }
 
 } // namespace duckdb
