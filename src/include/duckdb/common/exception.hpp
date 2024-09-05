@@ -10,10 +10,10 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception_format_value.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/vector.hpp"
 
-#include <vector>
 #include <stdexcept>
 
 namespace duckdb {
@@ -107,7 +107,7 @@ public:
 		if (num_args == 0) {
 			return msg;
 		}
-		std::vector<ExceptionFormatValue> values;
+		vector<ExceptionFormatValue> values;
 		return ConstructMessageRecursive(msg, values, params...);
 	}
 
@@ -126,10 +126,10 @@ public:
 	DUCKDB_API static bool InvalidatesTransaction(ExceptionType exception_type);
 	DUCKDB_API static bool InvalidatesDatabase(ExceptionType exception_type);
 
-	DUCKDB_API static string ConstructMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values);
+	DUCKDB_API static string ConstructMessageRecursive(const string &msg, vector<ExceptionFormatValue> &values);
 
 	template <class T, typename... ARGS>
-	static string ConstructMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values, T param,
+	static string ConstructMessageRecursive(const string &msg, vector<ExceptionFormatValue> &values, T param,
 	                                        ARGS... params) {
 		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
 		return ConstructMessageRecursive(msg, values, params...);

@@ -14,9 +14,9 @@
  */
 #pragma once
 
+#include "duckdb/common/vector.hpp"
 #include "nodes/parsenodes.hpp"
 #include "pg_simplified_token.hpp"
-#include <vector>
 
 namespace duckdb_libpgquery {
 
@@ -30,12 +30,12 @@ typedef enum PGBackslashQuoteType {
 PGList *raw_parser(const char *str);
 
 bool is_keyword(const char *str);
-std::vector<PGKeyword> keyword_list();
+duckdb::vector<PGKeyword> keyword_list();
 
-std::vector<PGSimplifiedToken> tokenize(const char *str);
+duckdb::vector<PGSimplifiedToken> tokenize(const char *str);
 
 /* Utility functions exported by gram.y (perhaps these should be elsewhere) */
 PGList *SystemFuncName(const char *name);
 PGTypeName *SystemTypeName(const char *name);
 
-}
+} // namespace duckdb_libpgquery

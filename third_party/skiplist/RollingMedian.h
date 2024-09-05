@@ -177,7 +177,7 @@ namespace OrderedStructs {
             } else {
                 ROLLING_MEDIAN_ERROR_CHECK;
                 SkipList::HeadNode<T> sl;
-                std::vector<T> buffer;
+                duckdb::vector<T> buffer;
 
                 const T *tail = src;
                 for (size_t i = 0; i < count; ++i) {
