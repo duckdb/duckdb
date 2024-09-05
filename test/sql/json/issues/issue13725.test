@@ -4,6 +4,9 @@
 
 require json
 
+# path slashes
+require notwindows
+
 query III
 select *
 from read_json_objects('data/json/13725/month=*/*.json', hive_partitioning = true, format = auto, hive_types = {'month': int}, filename = true)
