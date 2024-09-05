@@ -197,10 +197,15 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind(statement.Cast<CopyDatabaseStatement>());
 	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
 		return Bind(statement.Cast<UpdateExtensionsStatement>());
-	default: // LCOV_EXCL_START
-		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
-		                              StatementTypeToString(statement.type));
-	} // LCOV_EXCL_STOP
+	case StatementType::INVALID_STATEMENT:
+	case StatementType::ANALYZE_STATEMENT:
+	case StatementType::VARIABLE_SET_STATEMENT:
+	case StatementType::CREATE_FUNC_STATEMENT:
+	case StatementType::MULTI_STATEMENT:
+		break;
+	}
+	throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
+				      StatementTypeToString(statement.type));
 }
 
 void Binder::AddCTEMap(CommonTableExpressionMap &cte_map) {
