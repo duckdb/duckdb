@@ -13,7 +13,7 @@ from pytest import raises, importorskip, fixture, MonkeyPatch, mark
 importorskip('fsspec', '2022.11.0')
 from fsspec import filesystem, AbstractFileSystem
 from fsspec.implementations.memory import MemoryFileSystem
-from fsspec.implementations.local import LocalFileOpener
+from fsspec.implementations.local import LocalFileOpener, LocalFileSystem
 
 FILENAME = 'integers.csv'
 
@@ -259,30 +259,28 @@ class TestPythonFilesystem:
         assert duckdb_cursor.fetchall() == [(2, '2')]
 
     def test_parallel_union_by_name(self, tmp_path):
-        import duckdb
-        import pyarrow
-        import pyarrow.parquet
-        import fsspec
-        import fsspec.implementations.local
+        pa = importorskip('pyarrow')
+        pq = importorskip('pyarrow.parquet')
+        fsspec = importorskip('fsspec')
 
-        table1 = pyarrow.Table.from_pylist(
+        table1 = pa.Table.from_pylist(
             [
                 {'time': 1719568210134107692, 'col1': 1},
             ]
         )
         table1_path = tmp_path / "table1.parquet"
-        pyarrow.parquet.write_table(table1, table1_path)
+        pa.parquet.write_table(table1, table1_path)
 
-        table2 = pyarrow.Table.from_pylist(
+        table2 = pa.Table.from_pylist(
             [
                 {'time': 1719568210134107692, 'col1': 1},
             ]
         )
         table2_path = tmp_path / "table2.parquet"
-        pyarrow.parquet.write_table(table2, table2_path)
+        pq.write_table(table2, table2_path)
 
         c = duckdb.connect()
-        c.register_filesystem(fsspec.implementations.local.LocalFileSystem())
+        c.register_filesystem(LocalFileSystem())
 
         q = f"SELECT * FROM read_parquet('file://{tmp_path}/table*.parquet', union_by_name = TRUE) ORDER BY time DESC LIMIT 1"
 
