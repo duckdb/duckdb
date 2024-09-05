@@ -140,8 +140,6 @@ protected:
 	//! This is a multimap because there might be outstanding partial blocks with
 	//! the same amount of left-over space
 	multimap<idx_t, unique_ptr<PartialBlock>> partially_filled_blocks;
-
-	mutex written_block_lock;
 	//! The set of written blocks
 	unordered_set<block_id_t> written_blocks;
 
