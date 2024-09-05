@@ -27,10 +27,12 @@ struct TableAppendState;
 class DuckTransaction;
 class BoundConstraint;
 class RowGroupSegmentTree;
+class StorageCommitState;
 struct ColumnSegmentInfo;
 class MetadataManager;
 struct VacuumState;
 struct CollectionCheckpointState;
+struct PersistentCollectionData;
 
 class RowGroupCollection {
 public:
@@ -41,6 +43,7 @@ public:
 	idx_t GetTotalRows() const;
 	Allocator &GetAllocator() const;
 
+	void Initialize(PersistentCollectionData &data);
 	void Initialize(PersistentTableData &data);
 	void InitializeEmpty();
 
@@ -80,7 +83,9 @@ public:
 	void RevertAppendInternal(idx_t start_row);
 	void CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count);
 
-	void MergeStorage(RowGroupCollection &data);
+	void MergeStorage(RowGroupCollection &data, optional_ptr<DataTable> table,
+	                  optional_ptr<StorageCommitState> commit_state);
+	bool IsPersistent() const;
 
 	void RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count);
 

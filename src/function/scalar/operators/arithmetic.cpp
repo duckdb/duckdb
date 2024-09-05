@@ -953,12 +953,24 @@ static scalar_function_t GetBinaryFunctionIgnoreZero(PhysicalType type) {
 	}
 }
 
+template <class OP>
+unique_ptr<FunctionData> BindBinaryFloatingPoint(ClientContext &context, ScalarFunction &bound_function,
+                                                 vector<unique_ptr<Expression>> &arguments) {
+	auto &config = ClientConfig::GetConfig(context);
+	if (config.ieee_floating_point_ops) {
+		bound_function.function = GetScalarBinaryFunction<OP>(bound_function.return_type.InternalType());
+	} else {
+		bound_function.function = GetBinaryFunctionIgnoreZero<OP>(bound_function.return_type.InternalType());
+	}
+	return nullptr;
+}
+
 void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet fp_divide("/");
-	fp_divide.AddFunction(ScalarFunction({LogicalType::FLOAT, LogicalType::FLOAT}, LogicalType::FLOAT,
-	                                     GetBinaryFunctionIgnoreZero<DivideOperator>(PhysicalType::FLOAT)));
-	fp_divide.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                                     GetBinaryFunctionIgnoreZero<DivideOperator>(PhysicalType::DOUBLE)));
+	fp_divide.AddFunction(ScalarFunction({LogicalType::FLOAT, LogicalType::FLOAT}, LogicalType::FLOAT, nullptr,
+	                                     BindBinaryFloatingPoint<DivideOperator>));
+	fp_divide.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                                     BindBinaryFloatingPoint<DivideOperator>));
 	fp_divide.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
 	                   BinaryScalarFunctionIgnoreZero<interval_t, int64_t, interval_t, DivideOperator>));
@@ -1001,14 +1013,12 @@ unique_ptr<FunctionData> BindDecimalModulo(ClientContext &context, ScalarFunctio
 
 template <>
 float ModuloOperator::Operation(float left, float right) {
-	D_ASSERT(right != 0);
 	auto result = std::fmod(left, right);
 	return result;
 }
 
 template <>
 double ModuloOperator::Operation(double left, double right) {
-	D_ASSERT(right != 0);
 	auto result = std::fmod(left, right);
 	return result;
 }
@@ -1024,7 +1034,9 @@ hugeint_t ModuloOperator::Operation(hugeint_t left, hugeint_t right) {
 void ModFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("%");
 	for (auto &type : LogicalType::Numeric()) {
-		if (type.id() == LogicalTypeId::DECIMAL) {
+		if (type.id() == LogicalTypeId::FLOAT || type.id() == LogicalTypeId::DOUBLE) {
+			functions.AddFunction(ScalarFunction({type, type}, type, nullptr, BindBinaryFloatingPoint<ModuloOperator>));
+		} else if (type.id() == LogicalTypeId::DECIMAL) {
 			functions.AddFunction(ScalarFunction({type, type}, type, nullptr, BindDecimalModulo<ModuloOperator>));
 		} else {
 			functions.AddFunction(

@@ -8,18 +8,16 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types/column/column_data_consumer.hpp"
+#include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/types/row/partitioned_tuple_data.hpp"
 #include "duckdb/common/types/row/tuple_data_iterator.hpp"
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/ht_entry.hpp"
-#include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 
@@ -98,7 +96,7 @@ public:
 		//! Next operator for the anti join
 		void NextAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 		//! Next operator for the RIGHT semi and anti join
-		void NextRightSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
+		void NextRightSemiOrAntiJoin(DataChunk &keys);
 		//! Next operator for the left outer join
 		void NextLeftJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 		//! Next operator for the mark join
@@ -150,16 +148,17 @@ public:
 	};
 
 	struct InsertState : SharedState {
-		InsertState(const unique_ptr<TupleDataCollection> &data_collection,
-		            const vector<column_t> &equality_predicate_columns);
+		explicit InsertState(const JoinHashTable &ht);
 		/// Because of the index hick up
 		SelectionVector remaining_sel;
 		SelectionVector key_match_sel;
+
+		DataChunk lhs_data;
 		TupleDataChunkState chunk_state;
 	};
 
-	JoinHashTable(BufferManager &buffer_manager, const vector<JoinCondition> &conditions,
-	              vector<LogicalType> build_types, JoinType type, const vector<idx_t> &output_columns);
+	JoinHashTable(ClientContext &context, const vector<JoinCondition> &conditions, vector<LogicalType> build_types,
+	              JoinType type, const vector<idx_t> &output_columns);
 	~JoinHashTable();
 
 	//! Add the given data to the HT
@@ -178,10 +177,10 @@ public:
 	void Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
 	           optional_ptr<Vector> precomputed_hashes = nullptr);
 	//! Scan the HT to construct the full outer join result
-	void ScanFullOuter(JoinHTScanState &state, Vector &addresses, DataChunk &result);
+	void ScanFullOuter(JoinHTScanState &state, Vector &addresses, DataChunk &result) const;
 
 	//! Fill the pointer with all the addresses from the hashtable for full scan
-	idx_t FillWithHTOffsets(JoinHTScanState &state, Vector &addresses);
+	static idx_t FillWithHTOffsets(JoinHTScanState &state, Vector &addresses);
 
 	idx_t Count() const {
 		return data_collection->Count();
@@ -196,6 +195,9 @@ public:
 
 	TupleDataCollection &GetDataCollection() {
 		return *data_collection;
+	}
+	bool NullValuesAreEqual(idx_t col_idx) const {
+		return null_values_are_equal[col_idx];
 	}
 
 	//! BufferManager
@@ -236,7 +238,7 @@ public:
 	bool chains_longer_than_one;
 
 	//! The capacity of the HT. Is the same as hash_map.GetSize() / sizeof(ht_entry_t)
-	idx_t capacity;
+	idx_t capacity = DConstants::INVALID_INDEX;
 	//! The size of an entry as stored in the HashTable
 	idx_t entry_size;
 	//! The total tuple size
@@ -252,7 +254,9 @@ public:
 	//! Whether or not any of the key elements contain NULL
 	bool has_null;
 	//! Bitmask for getting relevant bits from the hashes to determine the position
-	uint64_t bitmask;
+	uint64_t bitmask = DConstants::INVALID_INDEX;
+	//! Whether or not we error on multiple rows found per match in a SINGLE join
+	bool single_join_error_on_multiple_rows = true;
 
 	struct {
 		mutex mj_lock;
@@ -288,7 +292,7 @@ private:
 	//! Insert the given set of locations into the HT with the given set of hashes_v
 	void InsertHashes(Vector &hashes_v, idx_t count, TupleDataChunkState &chunk_state, InsertState &insert_statebool,
 	                  bool parallel);
-
+	//! Prepares keys by filtering NULLs
 	idx_t PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> &vector_data, const SelectionVector *&current_sel,
 	                  SelectionVector &sel, bool build_side);
 
@@ -301,7 +305,7 @@ private:
 
 	//! The hash map of the HT, created after finalization
 	AllocatedData hash_map;
-	ht_entry_t *entries;
+	ht_entry_t *entries = nullptr;
 	//! Whether or not NULL values are considered equal in each of the comparisons
 	vector<bool> null_values_are_equal;
 	//! An empty tuple that's a "dead end", can be used to stop chains early
@@ -386,15 +390,15 @@ public:
 	}
 
 	//! Get total size of HT if all partitions would be built
-	idx_t GetTotalSize(vector<unique_ptr<JoinHashTable>> &local_hts, idx_t &max_partition_size,
+	idx_t GetTotalSize(const vector<unique_ptr<JoinHashTable>> &local_hts, idx_t &max_partition_size,
 	                   idx_t &max_partition_count) const;
 	idx_t GetTotalSize(const vector<idx_t> &partition_sizes, const vector<idx_t> &partition_counts,
 	                   idx_t &max_partition_size, idx_t &max_partition_count) const;
 	//! Get the remaining size of the unbuilt partitions
-	idx_t GetRemainingSize();
+	idx_t GetRemainingSize() const;
 	//! Sets number of radix bits according to the max ht size
-	void SetRepartitionRadixBits(vector<unique_ptr<JoinHashTable>> &local_hts, const idx_t max_ht_size,
-	                             const idx_t max_partition_size, const idx_t max_partition_count);
+	void SetRepartitionRadixBits(const idx_t max_ht_size, const idx_t max_partition_size,
+	                             const idx_t max_partition_count);
 	//! Partition this HT
 	void Repartition(JoinHashTable &global_ht);
 

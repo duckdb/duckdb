@@ -28,7 +28,7 @@ InsertionOrderPreservingMap<string> LogicalOrder::ParamsToString() const {
 		}
 		orders_info += orders[i].expression->GetName();
 	}
-	result["Order By"] = orders_info;
+	result["__order_by__"] = orders_info;
 	return result;
 }
 

@@ -142,7 +142,8 @@ void TableStatistics::Deserialize(Deserializer &deserializer, ColumnList &column
 
 		deserializer.Unset<LogicalType>();
 	});
-	table_sample = deserializer.ReadPropertyWithDefault<unique_ptr<BlockingSample>>(101, "table_sample", nullptr);
+	table_sample =
+	    deserializer.ReadPropertyWithExplicitDefault<unique_ptr<BlockingSample>>(101, "table_sample", nullptr);
 }
 
 unique_ptr<TableStatisticsLock> TableStatistics::GetLock() {

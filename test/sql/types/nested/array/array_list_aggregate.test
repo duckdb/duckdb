@@ -1,0 +1,14 @@
+# name: test/sql/types/nested/array/array_list_aggregate.test
+# group: [array]
+
+statement ok
+CREATE TABLE t1 (a INT, b INT, c INT);
+
+statement ok
+INSERT INTO t1 VALUES (1,2,3), (4,5,6);
+
+query I
+SELECT list(array_value(a,b,c) ORDER By b) FROM t1 GROUP by c;
+----
+[[1, 2, 3]]
+[[4, 5, 6]]

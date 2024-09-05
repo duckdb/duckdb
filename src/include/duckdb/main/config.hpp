@@ -176,6 +176,12 @@ struct DBConfigOptions {
 	bool object_cache_enable = false;
 	//! Whether or not the global http metadata cache is used
 	bool http_metadata_cache_enable = false;
+	//! HTTP Proxy config as 'hostname:port'
+	string http_proxy;
+	//! HTTP Proxy username for basic auth
+	string http_proxy_username;
+	//! HTTP Proxy password for basic auth
+	string http_proxy_password;
 	//! Force checkpoint when CHECKPOINT is called or on shutdown, even if no changes have been made
 	bool force_checkpoint = false;
 	//! Run a checkpoint on successful shutdown and delete the WAL, to leave only a single database file behind
@@ -201,6 +207,9 @@ struct DBConfigOptions {
 	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
 	//! Whether LISTs should produce Arrow ListViews
 	bool arrow_use_list_view = false;
+	//! Whenever a DuckDB type does not have a clear native or canonical extension match in Arrow, export the types
+	//! with a duckdb.type_name extension name
+	bool arrow_arrow_lossless_conversion = false;
 	//! Whether when producing arrow objects we produce string_views or regular strings
 	bool produce_arrow_string_views = false;
 	//! Database configuration variables as controlled by SET
@@ -228,7 +237,7 @@ struct DBConfigOptions {
 	//! The set of user-provided options
 	case_insensitive_map_t<Value> user_options;
 	//! The set of unrecognized (other) options
-	unordered_map<string, Value> unrecognized_options;
+	case_insensitive_map_t<Value> unrecognized_options;
 	//! Whether or not the configuration settings can be altered
 	bool lock_configuration = false;
 	//! Whether to print bindings when printing the plan (debug mode only)
@@ -255,12 +264,10 @@ struct DBConfigOptions {
 	//! If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count)
 	// rows match, we perform an index scan instead of a table scan.
 	idx_t index_scan_max_count = STANDARD_VECTOR_SIZE;
-	//! Whether or not we initialize table functions in the main thread
-	//! This is a work-around that exists for certain clients (specifically R)
-	//! Because those clients do not like it when threads other than the main thread call into R, for e.g., arrow scans
-	bool initialize_in_main_thread = false;
 	//! The maximum number of schemas we will look through for "did you mean..." style errors in the catalog
 	idx_t catalog_error_max_schemas = 100;
+	//!  Whether or not to always write to the WAL file, even if this is not required
+	bool debug_skip_checkpoint_on_commit = false;
 
 	bool operator==(const DBConfigOptions &other) const;
 };

@@ -2,6 +2,7 @@
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -16,6 +17,7 @@
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
 #include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
+#include "duckdb/core_functions/scalar/generic_functions.hpp"
 
 namespace duckdb {
 
@@ -75,11 +77,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		D_ASSERT(bindings.size() == 1);
 		idx_t table_idx = bindings[0].table_index;
 
-		// in the uncorrelated case we are only interested in the first result of the query
-		// hence we simply push a LIMIT 1 to get the first row of the subquery
-		auto limit = make_uniq<LogicalLimit>(BoundLimitNode::ConstantValue(1), BoundLimitNode());
-		limit->AddChild(std::move(plan));
-		plan = std::move(limit);
+		auto &config = ClientConfig::GetConfig(binder.context);
+		bool error_on_multiple_rows = config.scalar_subquery_error_on_multiple_rows;
 
 		// we push an aggregate that returns the FIRST element
 		vector<unique_ptr<Expression>> expressions;
@@ -92,10 +91,50 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		    FirstFun::GetFunction(expr.return_type), std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
 
 		expressions.push_back(std::move(first_agg));
+		if (error_on_multiple_rows) {
+			vector<unique_ptr<Expression>> count_children;
+			auto count_agg = function_binder.BindAggregateFunction(
+			    CountStarFun::GetFunction(), std::move(count_children), nullptr, AggregateType::NON_DISTINCT);
+			expressions.push_back(std::move(count_agg));
+		}
 		auto aggr_index = binder.GenerateTableIndex();
+
 		auto aggr = make_uniq<LogicalAggregate>(binder.GenerateTableIndex(), aggr_index, std::move(expressions));
 		aggr->AddChild(std::move(plan));
 		plan = std::move(aggr);
+
+		if (error_on_multiple_rows) {
+			// CASE WHEN count > 1 THEN error('Scalar subquery can only return a single row') ELSE first_agg END
+			idx_t proj_index = binder.GenerateTableIndex();
+
+			auto first_ref =
+			    make_uniq<BoundColumnRefExpression>(plan->expressions[0]->return_type, ColumnBinding(aggr_index, 0));
+			auto count_ref =
+			    make_uniq<BoundColumnRefExpression>(plan->expressions[1]->return_type, ColumnBinding(aggr_index, 1));
+
+			auto constant_one = make_uniq<BoundConstantExpression>(Value::BIGINT(1));
+			auto count_check = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHAN,
+			                                                        std::move(count_ref), std::move(constant_one));
+
+			vector<unique_ptr<Expression>> error_children;
+			error_children.push_back(make_uniq<BoundConstantExpression>(
+			    Value("More than one row returned by a subquery used as an expression - scalar subqueries can only "
+			          "return a single row.\n\nUse \"SET scalar_subquery_error_on_multiple_rows=false\" to revert to "
+			          "previous behavior of returning a random row.")));
+			auto error_expr = function_binder.BindScalarFunction(ErrorFun::GetFunction(), std::move(error_children));
+			error_expr->return_type = first_ref->return_type;
+			auto case_expr =
+			    make_uniq<BoundCaseExpression>(std::move(count_check), std::move(error_expr), std::move(first_ref));
+
+			vector<unique_ptr<Expression>> proj_expressions;
+			proj_expressions.push_back(std::move(case_expr));
+
+			auto proj = make_uniq<LogicalProjection>(proj_index, std::move(proj_expressions));
+			proj->AddChild(std::move(plan));
+			plan = std::move(proj);
+
+			aggr_index = proj_index;
+		}
 
 		// in the uncorrelated case, we add the value to the main query through a cross product
 		// FIXME: should use something else besides cross product as we always add only one scalar constant and cross
@@ -397,7 +436,7 @@ void Binder::PlanSubqueries(unique_ptr<Expression> &expr_ptr, unique_ptr<Logical
 	if (expr.expression_class == ExpressionClass::BOUND_SUBQUERY) {
 		auto &subquery = expr.Cast<BoundSubqueryExpression>();
 		// subquery node! plan it
-		if (subquery.IsCorrelated() && !is_outside_flattened) {
+		if (!is_outside_flattened) {
 			// detected a nested correlated subquery
 			// we don't plan it yet here, we are currently planning a subquery
 			// nested subqueries will only be planned AFTER the current subquery has been flattened entirely

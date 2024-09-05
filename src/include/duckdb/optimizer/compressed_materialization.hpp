@@ -74,6 +74,11 @@ typedef column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map_t;
 //! The CompressedMaterialization optimizer compressed columns using projections, based on available statistics,
 //! but only if the data enters a materializing operator
 class CompressedMaterialization {
+private:
+	//! Somewhat defensive constants that try to limit when compressed materialization is triggered for joins
+	static constexpr idx_t JOIN_BUILD_CARDINALITY_THRESHOLD = 1048576;
+	static constexpr double JOIN_CARDINALITY_RATIO_THRESHOLD = 8;
+
 public:
 	CompressedMaterialization(Optimizer &optimizer, LogicalOperator &root, statistics_map_t &statistics_map);
 
@@ -82,11 +87,13 @@ public:
 private:
 	//! Compress materializing operators
 	void CompressAggregate(unique_ptr<LogicalOperator> &op);
+	void CompressComparisonJoin(unique_ptr<LogicalOperator> &op);
 	void CompressDistinct(unique_ptr<LogicalOperator> &op);
 	void CompressOrder(unique_ptr<LogicalOperator> &op);
 
 	//! Update statistics after compressing
 	void UpdateAggregateStats(unique_ptr<LogicalOperator> &op);
+	void UpdateComparisonJoinStats(unique_ptr<LogicalOperator> &op);
 	void UpdateOrderStats(unique_ptr<LogicalOperator> &op);
 
 	//! Adds bindings referenced in expression to referenced_bindings

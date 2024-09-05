@@ -129,6 +129,9 @@ public:
 	//! Returns a reference to the underlying block manager.
 	BlockManager &GetBlockManager() const;
 
+	//! Registers a block as "written" by this partial block manager
+	void AddWrittenBlock(block_id_t block);
+
 protected:
 	BlockManager &block_manager;
 	PartialBlockType partial_block_type;
@@ -152,7 +155,6 @@ protected:
 	bool GetPartialBlock(idx_t segment_size, unique_ptr<PartialBlock> &state);
 
 	bool HasBlockAllocation(uint32_t segment_size);
-	void AddWrittenBlock(block_id_t block);
 };
 
 } // namespace duckdb

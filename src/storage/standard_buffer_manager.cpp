@@ -139,8 +139,9 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(const idx_t s
 	auto buffer = ConstructManagedBuffer(size, nullptr, FileBufferType::TINY_BUFFER);
 
 	// Create a new block pointer for this block.
-	auto result = make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, MemoryTag::BASE_TABLE,
-	                                           std::move(buffer), false, size, std::move(reservation));
+	auto result =
+	    make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, MemoryTag::BASE_TABLE, std::move(buffer),
+	                                 DestroyBufferUpon::BLOCK, size, std::move(reservation));
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	// Initialize the memory with garbage data
 	WriteGarbageIntoBuffer(*result->buffer);
@@ -158,8 +159,9 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx
 
 	// Create a new buffer and a block to hold the buffer.
 	auto buffer = ConstructManagedBuffer(block_size, std::move(reusable_buffer));
-	return make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, tag, std::move(buffer), can_destroy,
-	                                    alloc_size, std::move(res));
+	DestroyBufferUpon destroy_buffer_upon = can_destroy ? DestroyBufferUpon::EVICTION : DestroyBufferUpon::BLOCK;
+	return make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, tag, std::move(buffer),
+	                                    destroy_buffer_upon, alloc_size, std::move(res));
 }
 
 BufferHandle StandardBufferManager::Allocate(MemoryTag tag, idx_t block_size, bool can_destroy,
@@ -337,8 +339,8 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 		} else {
 			// now we can actually load the current block
 			D_ASSERT(handle->readers == 0);
-			handle->readers = 1;
 			buf = handle->Load(handle, std::move(reusable_buffer));
+			handle->readers = 1;
 			handle->memory_charge = std::move(reservation);
 			// in the case of a variable sized block, the buffer may be smaller than a full block.
 			int64_t delta =
@@ -387,7 +389,11 @@ void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 		handle->readers--;
 		if (handle->readers == 0) {
 			VerifyZeroReaders(handle);
-			purge = buffer_pool.AddToEvictionQueue(handle);
+			if (handle->MustAddToEvictionQueue()) {
+				purge = buffer_pool.AddToEvictionQueue(handle);
+			} else {
+				handle->Unload();
+			}
 		}
 	}
 
@@ -399,9 +405,6 @@ void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 
 void StandardBufferManager::SetMemoryLimit(idx_t limit) {
 	buffer_pool.SetLimit(limit, InMemoryWarning());
-	if (Allocator::SupportsFlush()) {
-		Allocator::FlushAll();
-	}
 }
 
 void StandardBufferManager::SetSwapLimit(optional_idx limit) {
@@ -472,7 +475,7 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	// Create the file and write the size followed by the buffer contents.
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
-	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.size + sizeof(idx_t));
+	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + sizeof(idx_t));
 	handle->Write(&buffer.size, sizeof(idx_t), 0);
 	buffer.Write(*handle, sizeof(idx_t));
 }
@@ -520,6 +523,8 @@ void StandardBufferManager::DeleteTemporaryFile(block_id_t id) {
 		temporary_directory.handle->GetTempFile().DeleteTemporaryBuffer(id);
 		return;
 	}
+
+	// The file is not in the shared pool of files.
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto path = GetTemporaryPath(id);
 	if (fs.FileExists(path)) {

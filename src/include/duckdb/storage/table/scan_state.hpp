@@ -209,6 +209,15 @@ struct TableScanOptions {
 	bool force_fetch_row = false;
 };
 
+class CheckpointLock {
+public:
+	explicit CheckpointLock(unique_ptr<StorageLockKey> lock_p) : lock(std::move(lock_p)) {
+	}
+
+private:
+	unique_ptr<StorageLockKey> lock;
+};
+
 class TableScanState {
 public:
 	TableScanState();
@@ -221,7 +230,7 @@ public:
 	//! Options for scanning
 	TableScanOptions options;
 	//! Shared lock over the checkpoint to prevent checkpoints while reading
-	unique_ptr<StorageLockKey> checkpoint_lock;
+	shared_ptr<CheckpointLock> checkpoint_lock;
 	//! Filter info
 	ScanFilterInfo filters;
 
@@ -256,7 +265,7 @@ struct ParallelTableScanState {
 	//! Parallel scan state for the transaction-local state
 	ParallelCollectionScanState local_state;
 	//! Shared lock over the checkpoint to prevent checkpoints while reading
-	unique_ptr<StorageLockKey> checkpoint_lock;
+	shared_ptr<CheckpointLock> checkpoint_lock;
 };
 
 struct PrefetchState {

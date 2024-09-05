@@ -68,4 +68,5 @@ SELECT l_partkey, RTRIM(l_comment) FROM lineitem WHERE l_orderkey=1 ORDER BY l_l
 statement error
 SELECT * FROM read_csv('data/csv/real/lineitem_sample.csv', sep='|', columns=STRUCT_PACK(l_orderkey := 5))
 ----
+read_csv requires a type specification as string
 

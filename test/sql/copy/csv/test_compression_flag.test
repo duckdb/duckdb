@@ -55,7 +55,7 @@ DROP TABLE lineitem
 statement error
 COPY lineitem FROM 'data/csv/test/test_comp.csv.gz' COMPRESSION 'none';
 ----
-
+syntax error at or near "COMPRESSION"
 
 statement ok
 CREATE TABLE lineitem AS SELECT * FROM read_csv_auto('data/csv/test/test_comp.csv.gzz', compression='gzip');

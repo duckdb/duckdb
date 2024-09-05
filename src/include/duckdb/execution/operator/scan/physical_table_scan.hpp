@@ -67,9 +67,7 @@ public:
 	bool IsSource() const override {
 		return true;
 	}
-	bool ParallelSource() const override {
-		return true;
-	}
+	bool ParallelSource() const override;
 
 	bool SupportsBatchIndex() const override {
 		return function.get_batch_index != nullptr;

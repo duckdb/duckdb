@@ -149,6 +149,9 @@ void CommonSubExpressionOptimizer::ExtractCommonSubExpresions(LogicalOperator &o
 	D_ASSERT(state.expressions.size() > 0);
 	// create a projection node as the child of this node
 	auto projection = make_uniq<LogicalProjection>(state.projection_index, std::move(state.expressions));
+	if (op.children[0]->has_estimated_cardinality) {
+		projection->SetEstimatedCardinality(op.children[0]->estimated_cardinality);
+	}
 	projection->children.push_back(std::move(op.children[0]));
 	op.children[0] = std::move(projection);
 }

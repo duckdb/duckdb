@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-static inline uint64_t GetArrayLength(yyjson_val *val, yyjson_alc *alc, Vector &result) {
+static inline uint64_t GetArrayLength(yyjson_val *val, yyjson_alc *, Vector &, ValidityMask &, idx_t) {
 	return yyjson_arr_size(val);
 }
 

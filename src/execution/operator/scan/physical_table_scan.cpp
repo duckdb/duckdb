@@ -141,7 +141,9 @@ string PhysicalTableScan::GetName() const {
 InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	if (function.to_string) {
-		result["Stringified"] = function.to_string(bind_data.get());
+		result["__text__"] = function.to_string(bind_data.get());
+	} else {
+		result["Function"] = StringUtil::Upper(function.name);
 	}
 	if (function.projection_pushdown) {
 		if (function.filter_prune) {
@@ -197,7 +199,7 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 		}
 	}
 
-	result["Estimated Cardinality"] = StringUtil::Format("%llu", estimated_cardinality);
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 
@@ -213,6 +215,15 @@ bool PhysicalTableScan::Equals(const PhysicalOperator &other_p) const {
 		return false;
 	}
 	if (!FunctionData::Equals(bind_data.get(), other.bind_data.get())) {
+		return false;
+	}
+	return true;
+}
+
+bool PhysicalTableScan::ParallelSource() const {
+	if (!function.function) {
+		// table in-out functions cannot be executed in parallel as part of a PhysicalTableScan
+		// since they have only a single input row
 		return false;
 	}
 	return true;

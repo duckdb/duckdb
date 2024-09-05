@@ -9,34 +9,42 @@ PRAGMA enable_verification
 statement error
 SELECT CAST(1000 AS DECIMAL(3,0))
 ----
+<REGEX>:Conversion Error.*Could not cast value.*
 
 statement error
 SELECT CAST(100 AS DECIMAL(2,0))
 ----
+<REGEX>:Conversion Error.*Could not cast value.*
 
 statement error
 SELECT CAST('100' AS DECIMAL(2,0))
 ----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 statement error
 SELECT CAST('100'::DOUBLE AS DECIMAL(2,0))
 ----
+<REGEX>:Conversion Error.*Could not cast value.*
 
 statement error
 SELECT CAST(100::DECIMAL(3,0) AS DECIMAL(2,0))
 ----
+<REGEX>:Conversion Error.*Casting value.*failed.*
 
 statement error
 SELECT CAST(10000::DECIMAL(5,0) AS DECIMAL(2,0))
 ----
+<REGEX>:Conversion Error.*Casting value.*failed.*
 
 statement error
 SELECT CAST(1000000000::DECIMAL(10,0) AS DECIMAL(2,0))
 ----
+<REGEX>:Conversion Error.*Casting value.*failed.*
 
 statement error
 SELECT CAST(1000000000::DECIMAL(20,0) AS DECIMAL(2,0))
 ----
+<REGEX>:Conversion Error.*Casting value.*failed.*
 
 query I
 SELECT TRY_CAST(1000 AS DECIMAL(3,0))
@@ -82,26 +90,32 @@ NULL
 statement error
 SELECT CAST(1000000 AS DECIMAL(5,0))
 ----
+<REGEX>:Conversion Error.*Could not cast value.*
 
 statement error
 SELECT CAST('100000' AS DECIMAL(5,0))
 ----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 statement error
 SELECT CAST('100000'::DOUBLE AS DECIMAL(5,0))
 ----
+<REGEX>:Conversion Error.*Could not cast value.*
 
 statement error
 SELECT CAST(100000::DECIMAL(6,0) AS DECIMAL(5,0))
 ----
+<REGEX>:Conversion Error.*Casting value.*failed.*
 
 statement error
 SELECT CAST(1000000000::DECIMAL(10,0) AS DECIMAL(2,0))
 ----
+<REGEX>:Conversion Error.*Casting value.*failed.*
 
 statement error
 SELECT CAST(1000000000::DECIMAL(20,0) AS DECIMAL(5,0))
 ----
+<REGEX>:Conversion Error.*Casting value.*failed.*
 
 query I
 SELECT TRY_CAST(1000000 AS DECIMAL(5,0))

@@ -29,6 +29,9 @@ void JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
 	auto_detect = info.auto_detect;
 
 	for (auto &kv : input.named_parameters) {
+		if (kv.second.IsNull()) {
+			throw BinderException("Cannot use NULL as function argument");
+		}
 		if (MultiFileReader().ParseOption(kv.first, kv.second, options.file_options, context)) {
 			continue;
 		}
@@ -600,20 +603,18 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 		// Open the file if it is not yet open
 		if (!current_reader->IsOpen()) {
 			current_reader->OpenJSONFile();
-			if (current_reader->GetFileHandle().FileSize() == 0 && !current_reader->GetFileHandle().IsPipe()) {
-				current_reader->GetFileHandle().Close();
-				// Skip over empty files
-				if (gstate.enable_parallel_scans) {
-					TryIncrementFileIndex(gstate);
-				}
-				continue;
-			}
 		}
 
 		// Auto-detect if we haven't yet done this during the bind
 		if (gstate.bind_data.options.record_type == JSONRecordType::AUTO_DETECT ||
 		    current_reader->GetFormat() == JSONFormat::AUTO_DETECT) {
-			ReadAndAutoDetect(gstate, buffer, buffer_index);
+			bool file_done = false;
+			ReadAndAutoDetect(gstate, buffer, buffer_index, file_done);
+			if (file_done) {
+				TryIncrementFileIndex(gstate);
+				lock_guard<mutex> reader_guard(current_reader->lock);
+				current_reader->GetFileHandle().Close();
+			}
 		}
 
 		if (gstate.enable_parallel_scans) {
@@ -653,9 +654,8 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 }
 
 void JSONScanLocalState::ReadAndAutoDetect(JSONScanGlobalState &gstate, AllocatedData &buffer,
-                                           optional_idx &buffer_index) {
+                                           optional_idx &buffer_index, bool &file_done) {
 	// We have to detect the JSON format - hold the gstate lock while we do this
-	bool file_done = false;
 	if (!ReadNextBufferInternal(gstate, buffer, buffer_index, file_done)) {
 		return;
 	}

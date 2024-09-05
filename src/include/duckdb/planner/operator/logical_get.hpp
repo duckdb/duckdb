@@ -35,7 +35,7 @@ public:
 	vector<LogicalType> returned_types;
 	//! The names of ALL columns that can be returned by the table function
 	vector<string> names;
-	//! Columns that are used outside of the scan
+	//! Columns that are used outside the scan
 	vector<idx_t> projection_ids;
 	//! Filters pushed down for table scan
 	TableFilterSet table_filters;
