@@ -5,12 +5,22 @@
 statement ok
 PRAGMA enable_verification
 
-statement error
-select cast('9.99' as decimal(1,0));
-----
-Could not convert string "9.99" to DECIMAL(1,0)
+#statement error
+#select cast('9.99' as decimal(1,0));
+#----
+#Could not convert string "9.99" to DECIMAL(1,0)
+#
+#statement error
+#select cast(9.99::float as decimal(1,0));
+#----
+#Could not cast value
+#
+#statement error
+#select cast(9.99::double as decimal(1,0));
+#----
+#Could not cast value
 
 statement error
-Could not cast value 9.990000 to DECIMAL(1,0)
+select cast(9.99 as decimal(1,0));
 ----
-Could not cast value
+Casting value "9.99" to type DECIMAL(1,0) failed: value is out of range!

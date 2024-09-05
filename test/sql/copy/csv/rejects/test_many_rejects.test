@@ -1,0 +1,27 @@
+# name: test/sql/copy/csv/rejects/test_many_rejects.test
+# description: Test that invalid unicodes return correct info as rejects tables
+# group: [rejects]
+
+require skip_reload
+
+# Test will fail on windows because byte_position is slightly different due to \r\n instead of \n
+require notwindows
+
+
+statement ok
+select * from read_csv('/Users/holanda/Desktop/sample_data.csv.gz', HEADER=true, COMPRESSION=gzip, ALLOW_QUOTED_NULLS=false, PARALLEL=false, store_rejects=true);
+
+#statement ok
+#CREATE TABLE t1 AS select 'Pedro', 'bla';
+#
+#statement ok
+#insert into t1  values ('Pedro', '232');
+#
+#statement ok
+#insert into t1  select 'Pedro', 'bla' from range(0,10000000) tbl(i);
+#
+#statement ok
+#COPY t1 TO 'ignore_errors.csv.gz' (FORMAT CSV, HEADER 0 ,COMPRESSION GZIP);
+#
+#statement ok
+#from read_csv('ignore_errors.csv.gz',delim= ',',  header = 0, types=['VARCHAR', 'INTEGER'], store_rejects = true, parallel = false)
