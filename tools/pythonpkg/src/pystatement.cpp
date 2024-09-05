@@ -42,9 +42,9 @@ py::set DuckDBPyStatement::NamedParameters() const {
 	return result;
 }
 
-py::list DuckDBPyStatement::ExpectedResultType() const {
+py::list DuckDBPyStatement::ExpectedResultTypeInternal(SQLStatement &statement) {
 	py::list possibilities;
-	switch (statement->type) {
+	switch (statement.type) {
 	case StatementType::PREPARE_STATEMENT:
 	case StatementType::VACUUM_STATEMENT:
 	case StatementType::ALTER_STATEMENT:
@@ -94,10 +94,14 @@ py::list DuckDBPyStatement::ExpectedResultType() const {
 	}
 	default: {
 		throw InternalException("Unrecognized StatementType in ExpectedResultType: %s",
-		                        StatementTypeToString(statement->type));
+		                        StatementTypeToString(statement.type));
 	}
 	}
 	return possibilities;
+}
+
+py::list DuckDBPyStatement::ExpectedResultType() const {
+	return ExpectedResultTypeInternal(*statement);
 }
 
 StatementType DuckDBPyStatement::Type() const {
