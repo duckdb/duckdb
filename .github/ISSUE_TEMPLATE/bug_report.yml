@@ -85,7 +85,12 @@ body:
       placeholder: e.g., Python
     validations:
       required: true
-
+  - type: input
+    attributes:
+      label: "Hardware:"
+      placeholder: If your issue is performance-related, please include information on your CPU and memory.
+    validations:
+      required: false
   - type: markdown
     attributes:
       value: "# Identity Disclosure:"
