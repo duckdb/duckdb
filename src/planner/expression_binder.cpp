@@ -57,7 +57,7 @@ StackChecker<ExpressionBinder> ExpressionBinder::StackCheck(const ParsedExpressi
 }
 
 BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression) {
-	auto stack_checker = StackCheck(*expr, 2);
+	auto stack_checker = StackCheck(*expr);
 
 	auto &expr_ref = *expr;
 	switch (expr_ref.expression_class) {
