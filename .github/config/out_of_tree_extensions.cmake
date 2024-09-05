@@ -93,7 +93,7 @@ if (NOT MINGW)
     duckdb_extension_load(postgres_scanner
             DONT_LINK
             GIT_URL https://github.com/duckdb/postgres_scanner
-            GIT_TAG d0e0115f29a9dbe44f026aea7290a1c6d4622a73
+            GIT_TAG 58dc3d0c7620f3978c27d4a490563fd65884d103
             )
 endif()
 
@@ -117,7 +117,7 @@ endif()
 duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/sqlite_scanner
-        GIT_TAG 647f1403791890b65a1419841df02bf17d634639
+        GIT_TAG 315861963c8106397af36cbda10faebc8dae485a
         )
 
 duckdb_extension_load(sqlsmith
@@ -151,6 +151,6 @@ if (NOT MINGW)
             DONT_LINK
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_mysql
-            GIT_TAG 64cb6aec994fbe441157086599c265eb86303c84
+            GIT_TAG d0c56abf1169cca1c54f55448b68a85ae4279ea4
             )
 endif()
