@@ -824,7 +824,7 @@ jobs:
         shell: bash
         run: make relassert
 
-      - name: All tests and storage tests
+      - name: Fast and storage tests
         shell: bash
         run: |
           python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest --no-exit --time_execution
@@ -834,7 +834,7 @@ jobs:
         shell: bash
         run: STANDARD_VECTOR_SIZE=512 make relassert
 
-      - name: All tests and storage tests
+      - name: Fast and storage tests
         shell: bash
         run: |
           python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest --no-exit --time_execution
