@@ -1,0 +1,26 @@
+diff --git a/src/from_substrait.cpp b/src/from_substrait.cpp
+index eeccd60..79ab3bc 100644
+--- a/src/from_substrait.cpp
++++ b/src/from_substrait.cpp
+@@ -26,7 +26,7 @@
+ #include "duckdb/main/client_data.hpp"
+ 
+ namespace duckdb {
+-const std::unordered_map<std::string, std::string> SubstraitToDuckDB::function_names_remap = {
++const unordered_map<std::string, std::string> SubstraitToDuckDB::function_names_remap = {
+     {"modulus", "mod"},      {"std_dev", "stddev"},     {"starts_with", "prefix"},
+     {"ends_with", "suffix"}, {"substring", "substr"},   {"char_length", "length"},
+     {"is_nan", "isnan"},     {"is_finite", "isfinite"}, {"is_infinite", "isinf"},
+diff --git a/src/to_substrait.cpp b/src/to_substrait.cpp
+index 39044a2..3271038 100644
+--- a/src/to_substrait.cpp
++++ b/src/to_substrait.cpp
+@@ -20,7 +20,7 @@
+ #include "duckdb/execution/index/art/art_key.hpp"
+ 
+ namespace duckdb {
+-const std::unordered_map<std::string, std::string> DuckDBToSubstrait::function_names_remap = {
++const unordered_map<std::string, std::string> DuckDBToSubstrait::function_names_remap = {
+     {"mod", "modulus"},
+     {"stddev", "std_dev"},
+     {"prefix", "starts_with"},
