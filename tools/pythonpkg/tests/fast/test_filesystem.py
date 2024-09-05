@@ -257,3 +257,34 @@ class TestPythonFilesystem:
         # hive partitioning: no cast to int
         duckdb_cursor.execute(query + ', HIVE_PARTITIONING=1' + ', HIVE_TYPES_AUTOCAST=0' + ');')
         assert duckdb_cursor.fetchall() == [(2, '2')]
+
+    def test_parallel_union_by_name(self, tmp_path):
+        import duckdb
+        import pyarrow
+        import pyarrow.parquet
+        import fsspec
+        import fsspec.implementations.local
+
+        table1 = pyarrow.Table.from_pylist(
+            [
+                {'time': 1719568210134107692, 'col1': 1},
+            ]
+        )
+        table1_path = tmp_path / "table1.parquet"
+        pyarrow.parquet.write_table(table1, table1_path)
+
+        table2 = pyarrow.Table.from_pylist(
+            [
+                {'time': 1719568210134107692, 'col1': 1},
+            ]
+        )
+        table2_path = tmp_path / "table2.parquet"
+        pyarrow.parquet.write_table(table2, table2_path)
+
+        c = duckdb.connect()
+        c.register_filesystem(fsspec.implementations.local.LocalFileSystem())
+
+        q = f"SELECT * FROM read_parquet('file://{tmp_path}/table*.parquet', union_by_name = TRUE) ORDER BY time DESC LIMIT 1"
+
+        res = c.sql(q).fetchall()
+        assert res == [(1719568210134107692, 1)]
