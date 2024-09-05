@@ -84,7 +84,7 @@ def run_benchmark(runner, benchmark):
     benchmark_args = [runner, benchmark]
 
     if root_dir:
-        benchmark_args += [f"--root-dir" ]
+        benchmark_args += [f"--root-dir"]
         benchmark_args += [root_dir]
 
     if threads is not None:
@@ -182,7 +182,7 @@ for i in range(number_repetitions):
             # benchmark failed to run - always a regression
             error_list.append([benchmark, old_res, new_res])
         elif (no_regression_fail == False) and (
-                (old_res + regression_threshold_seconds) * multiply_percentage < new_res
+            (old_res + regression_threshold_seconds) * multiply_percentage < new_res
         ):
             regression_list.append([benchmark, old_res, new_res])
         else:
