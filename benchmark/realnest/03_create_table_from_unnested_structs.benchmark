@@ -39,4 +39,5 @@ FROM
     (SELECT rowid, UNNEST(Photon, recursive:=true) AS photon FROM run2012B_singleMu) as unnested_photon ON unnested_hlt.rowid = unnested_photon.rowid
     LEFT JOIN
     (SELECT rowid, UNNEST(Jet, recursive:=true) AS jet FROM run2012B_singleMu) as unnested_jet ON unnested_hlt.rowid = unnested_jet.rowid
+LIMIT 100000
 );
