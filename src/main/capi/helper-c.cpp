@@ -36,6 +36,8 @@ LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type) {
 		return LogicalTypeId::TIME;
 	case DUCKDB_TYPE_INTERVAL:
 		return LogicalTypeId::INTERVAL;
+        case DUCKDB_TYPE_VARINT:
+		return LogicalTypeId::VARINT;
 	case DUCKDB_TYPE_HUGEINT:
 		return LogicalTypeId::HUGEINT;
 	case DUCKDB_TYPE_UHUGEINT:
@@ -74,10 +76,9 @@ LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type) {
 		return LogicalTypeId::TIMESTAMP_TZ;
 	case DUCKDB_TYPE_ANY:
 		return LogicalTypeId::ANY;
-	default: // LCOV_EXCL_START
-		D_ASSERT(0);
-		return LogicalTypeId::INVALID;
-	} // LCOV_EXCL_STOP
+	}
+	D_ASSERT(0);
+	return LogicalTypeId::INVALID;
 }
 
 duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
