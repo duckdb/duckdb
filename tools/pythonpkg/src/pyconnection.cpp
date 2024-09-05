@@ -874,6 +874,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(
 		auto_detect = true;
 	}
 
+	py::gil_scoped_release gil;
 	auto read_json_relation =
 	    make_shared_ptr<ReadJSONRelation>(connection.context, name, std::move(options), auto_detect);
 	if (read_json_relation == nullptr) {
@@ -1383,6 +1384,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 
 	// Create the ReadCSV Relation using the 'options'
 
+	py::gil_scoped_release gil;
 	auto read_csv_p = connection.ReadCSV(name, std::move(bind_parameters));
 	auto &read_csv = read_csv_p->Cast<ReadCSVRelation>();
 	if (file_like_object_wrapper) {
@@ -1551,6 +1553,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &file_
 		}
 		named_parameters["compression"] = Value(py::str(compression));
 	}
+	py::gil_scoped_release gil;
 	return make_uniq<DuckDBPyRelation>(connection.TableFunction("parquet_scan", params, named_parameters)->Alias(name));
 }
 
