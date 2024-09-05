@@ -1,5 +1,5 @@
 # name: benchmark/realnest/17_list_aggregates_histogram_stddev_mode.benchmark
-# description: Combination of list_aggregate functions histogram, stddev, mode 
+# description: Combination of list_aggregate functions histogram, stddev, mode
 # group: [realnest]
 
 name list_aggregates_histogram_stddev_mode
