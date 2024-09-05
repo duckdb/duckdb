@@ -101,6 +101,8 @@ void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr
 
 BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func, idx_t depth,
                                        unique_ptr<ParsedExpression> &expr) {
+	auto stack_checker = StackCheck(*expr);
+
 	// validate the arguments and separate positional and default arguments
 	vector<unique_ptr<ParsedExpression>> positionals;
 	unordered_map<string, unique_ptr<ParsedExpression>> defaults;
