@@ -26,6 +26,17 @@ vector<ColumnBinding> LogicalOperator::GetColumnBindings() {
 	return {ColumnBinding(0, 0)};
 }
 
+void LogicalOperator::SetParamsEstimatedCardinality(InsertionOrderPreservingMap<string> &result) const {
+	if (has_estimated_cardinality) {
+		result[RenderTreeNode::ESTIMATED_CARDINALITY] = StringUtil::Format("%llu", estimated_cardinality);
+	}
+}
+
+void LogicalOperator::SetEstimatedCardinality(idx_t _estimated_cardinality) {
+	estimated_cardinality = _estimated_cardinality;
+	has_estimated_cardinality = true;
+}
+
 // LCOV_EXCL_START
 string LogicalOperator::ColumnBindingsToString(const vector<ColumnBinding> &bindings) {
 	string result = "{";
@@ -57,6 +68,7 @@ InsertionOrderPreservingMap<string> LogicalOperator::ParamsToString() const {
 		expressions_info += expressions[i]->GetName();
 	}
 	result["Expressions"] = expressions_info;
+	SetParamsEstimatedCardinality(result);
 	return result;
 }
 
@@ -189,11 +201,6 @@ idx_t LogicalOperator::EstimateCardinality(ClientContext &context) {
 	has_estimated_cardinality = true;
 	estimated_cardinality = max_cardinality;
 	return estimated_cardinality;
-}
-
-void LogicalOperator::SetEstimatedCardinality(idx_t _estimated_cardinality) {
-	estimated_cardinality = _estimated_cardinality;
-	has_estimated_cardinality = true;
 }
 
 void LogicalOperator::Print() {
