@@ -437,4 +437,35 @@ TEST_CASE("Test appending to a different database file", "[appender]") {
 
 	result = con.Query("SELECT SUM(i) FROM append_to_other.tbl");
 	REQUIRE(CHECK_COLUMN(result, 0, {400}));
+
+	try {
+		Appender appender_invalid(con, "invalid_database", "main", "tbl");
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		REQUIRE(error.Message().find("Catalog Exception") != 0);
+	} catch (...) { // LCOV_EXCL_START
+		FAIL("invalid exception");
+	} // LCOV_EXCL_STOP
+
+	try {
+		Appender appender_invalid(con, "append_to_other", "invalid_schema", "tbl");
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		REQUIRE(error.Message().find("Catalog Exception") != 0);
+	} catch (...) { // LCOV_EXCL_START
+		FAIL("invalid exception");
+	} // LCOV_EXCL_STOP
+
+	// Re-attach as readonly.
+	REQUIRE_NO_FAIL(con.Query("DETACH append_to_other"));
+	REQUIRE_NO_FAIL(con.Query(attach_query + " (readonly)"));
+
+	try {
+		Appender appender_invalid(con, "append_to_other", "main", "tbl");
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		REQUIRE(error.Message().find("is a readonly db") != 0);
+	} catch (...) { // LCOV_EXCL_START
+		FAIL("invalid exception");
+	} // LCOV_EXCL_STOP
 }
