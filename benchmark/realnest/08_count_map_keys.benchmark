@@ -17,4 +17,4 @@ run
 SELECT keys, count(*) mentions FROM (
     SELECT UNNEST(map_keys(tags)) AS keys 
 FROM open_street_map) GROUP BY keys 
-ORDER BY mentions DESC LIMIT 20;
+ORDER BY mentions DESC;
