@@ -873,7 +873,7 @@ bool ART::SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, unsafe_ve
 	it.FindMinimum(tree);
 
 	// Early-out, if the minimum value is higher than the upper bound.
-	if (it.current_key.GreaterThan(upper_bound, equal)) {
+	if (it.current_key.GreaterThan(upper_bound, equal, it.GetNestedDepth())) {
 		return true;
 	}
 
