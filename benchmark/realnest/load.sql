@@ -4,7 +4,7 @@ create table open_street_map as select * from read_json('https://github.com/cwid
 create table gh_issue as select * from read_json('https://github.com/cwida/RealNest/raw/cdaa85652bf187226706b321c29597673b2b7d86/sample-data/100mib/gharchive-IssuesEvent/data.jsonl');
 create table gh_pull as select * from read_json('https://github.com/cwida/RealNest/raw/cdaa85652bf187226706b321c29597673b2b7d86/sample-data/100mib/gharchive-PullRequestEvent/data.jsonl');
 
-attach 'https://duckdb-blobs.s3.amazonaws.com/data/realnest/singleMu_524k.duckdb' as rn_singleMu (READ_ONLY);
+attach 'https://duckdb-blobs.s3.amazonaws.com/data/realnest/singleMu_262k.duckdb' as rn_singleMu (READ_ONLY);
 create table run2012B_singleMu as select * from rn_singleMu.run2012B_singleMu;
 CREATE TABLE single_mu_lists AS SELECT * REPLACE(list_resize(Jet, 10, NULL) as Jet, list_resize(Muon, 10, NULL) as Muon, list_resize(Photon, 10, NULL) as Photon, list_resize(Tau, 10, NULL) as Tau) 
 FROM rn_singleMu.run2012B_singleMu;
