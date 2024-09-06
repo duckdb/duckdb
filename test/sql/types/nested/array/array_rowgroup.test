@@ -1,0 +1,13 @@
+# name: test/sql/types/nested/array/array_rowgroup.test
+# group: [array]
+
+statement ok
+create table arrays(id int primary key, a int[3]);
+
+statement ok
+insert into arrays select i, [i, i + 1, i +2] from range(200000) t(i);
+
+query II
+select * from arrays where id=150000;
+----
+150000	[150000, 150001, 150002]

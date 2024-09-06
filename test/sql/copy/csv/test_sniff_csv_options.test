@@ -118,7 +118,7 @@ FROM read_csv('data/csv/autotypecandidates.csv', auto_detect=false, delim='|', q
 statement error
 FROM sniff_csv('data/csv/hive-partitioning/simple/*/*/test.csv');
 ----
-sniff_csv does not operate on globs yet
+Not implemented Error: sniff_csv does not operate on more than one file yet
 
 # don't accept madeup options
 statement error

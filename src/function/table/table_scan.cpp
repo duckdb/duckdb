@@ -86,7 +86,6 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &
 }
 
 unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
-
 	D_ASSERT(input.bind_data);
 	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
 	auto result = make_uniq<TableScanGlobalState>(context, input.bind_data.get());
