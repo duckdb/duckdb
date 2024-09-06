@@ -93,7 +93,9 @@ void JemallocExtension::FlushAll() {
 }
 
 void JemallocExtension::SetBackgroundThreads(bool enable) {
+#ifndef __APPLE__
 	SetJemallocCTL("background_thread", enable);
+#endif
 }
 
 std::string JemallocExtension::Version() const {

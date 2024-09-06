@@ -70,6 +70,8 @@ public:
 
 template <class T>
 class stl_allocator { // NOLINT: not using camelcase on purpose here
+	static_assert(!std::is_volatile<T>::value, "stl_allocator does not support volatile types");
+
 public:
 	using original = std::allocator<T>;
 	using value_type = typename original::value_type;
@@ -96,6 +98,10 @@ public:
 	stl_allocator(const stl_allocator<U> &) noexcept { // NOLINT: allow implicit conversion
 	}
 	~stl_allocator() {
+	}
+
+	stl_allocator select_on_container_copy_construction() const { // NOLINT: matching name of std
+		return *this;
 	}
 
 	pointer allocate(size_type n, const void * = 0) { // NOLINT: matching name of std
