@@ -127,12 +127,26 @@ KeySpecification:
 		'(' name_list ')'			{ $$ = $2; }
 		;
 
-KeyDefinition:
-		KEY KeySpecification		{ $$ = $2; }
-		;
-
 KeyReference:
-		KeyDefinition REFERENCES	{ $$ = $1; }
+		KEY KeySpecification REFERENCES qualified_name '(' name_list ')'
+			{
+				/* Case where both KEY (id) and REFERENCES (id) are provided */
+				PGKeyReference *key_ref = makeNode(PGKeyReference);
+				key_ref->key_columns = $2;
+				key_ref->ref_table = $4;
+				key_ref->ref_columns = $6;
+				$$ = (PGNode *) key_ref;
+			}
+	|
+		qualified_name
+			{
+				/* Case where neither KEY (id) nor REFERENCES (id) are provided */
+				PGKeyReference *key_ref = makeNode(PGKeyReference);
+				key_ref->key_columns = NULL;
+				key_ref->ref_table = $1;
+				key_ref->ref_columns = NULL;
+				$$ = (PGNode *) key_ref;
+			}
 		;
 
 LabelList:
@@ -187,23 +201,25 @@ EdgeTableDefinitionList:
 
 EdgeTableDefinition:
 		QualifiednameOptionalAs
-		SOURCE KeyReference qualified_name KeySpecification
-		DESTINATION KeyReference qualified_name KeySpecification 
+		SOURCE KeyReference
+		DESTINATION KeyReference
 		PropertiesClause LabelOptional Discriminator
 			{
-				PGPropertyGraphTable *n = (PGPropertyGraphTable*) $12;
+				PGPropertyGraphTable *n = (PGPropertyGraphTable*) $8;
 				n->table = $1;
 				n->is_vertex_table = false;
-				n->src_fk = $3;
-				n->src_name = $4;
-				n->src_pk = $5;
-				n->dst_fk = $7;
-				n->dst_name = $8;
-				n->dst_pk = $9;
-				n->properties = $10;
-				/* Xth label in list is set iff discriminator Xth-bit==1 */
-				if (n->labels) n->labels = lappend(n->labels,makeString($11));
-				else n->labels = list_make1(makeString($11));
+				PGKeyReference *src_key_ref = (PGKeyReference *) $3;
+                n->src_fk = src_key_ref->key_columns;
+                n->src_name = src_key_ref->ref_table;
+                n->src_pk = src_key_ref->ref_columns;
+                PGKeyReference *dst_key_ref = (PGKeyReference *) $5;
+				n->dst_fk = dst_key_ref->key_columns;
+				n->dst_name = dst_key_ref->ref_table;
+				n->dst_pk = dst_key_ref->ref_columns;
+				n->properties = $6;
+				/* Handle labels and discriminator as before */
+				if (n->labels) n->labels = lappend(n->labels, makeString($7));
+				else n->labels = list_make1(makeString($7));
 				$$ = (PGNode *) n;
 			}
 		;

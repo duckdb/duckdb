@@ -502,6 +502,7 @@ typedef enum PGNodeTag {
     T_PGPathInfo,   /* SQL/PGQ extension */
     T_PGLabelTest,  /* SQL/PGQ extension */
     T_PGPathElement,/* SQL/PGQ extension */
+	T_PGKeyReference, /* SQL/PGQ extension */
 
 	/*
 	 * TAGS FOR REPLICATION GRAMMAR PARSE NODES (replnodes.h)
