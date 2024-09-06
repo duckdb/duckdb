@@ -61,6 +61,9 @@ Appender::Appender(Connection &con, const string &database_name, const string &s
 		// table could not be found
 		throw CatalogException(StringUtil::Format("Table \"%s.%s\" could not be found", schema_name, table_name));
 	}
+	if (description->readonly) {
+		throw InvalidInputException("Cannot append to a readonly database.");
+	}
 	vector<optional_ptr<const ParsedExpression>> defaults;
 	for (auto &column : description->columns) {
 		types.push_back(column.Type());
