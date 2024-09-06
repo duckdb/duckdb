@@ -77,10 +77,10 @@ jobs:
         make
         cd ..
 
-    - name: Set up benchmarks
-      shell: bash
-      run: |
-        cp -r benchmark duckdb/
+    # - name: Set up benchmarks
+    #   shell: bash
+    #   run: |
+    #     cp -r benchmark duckdb/
 
     # - name: Regression Test Micro
     #   if: always()
