@@ -120,7 +120,7 @@ bool Varint::VarcharFormatting(const string_t &value, idx_t &start_pos, idx_t &e
 			is_zero = true;
 			return true;
 		}
-		// This is either a '+' or '-'. Hence invalid.
+		// This is either a '+' or '-'. Hence, invalid.
 		return false;
 	}
 	idx_t cur_pos = start_pos;
@@ -262,9 +262,8 @@ string Varint::VarcharToVarInt(const string_t &value) {
 	return result;
 }
 
-bool Varint::VarintToDouble(string_t &blob, double &result, bool &strict) {
+bool Varint::VarintToDouble(const string_t &blob, double &result, bool &strict) {
 	result = 0;
-	bool is_negative;
 
 	if (blob.GetSize() < 4) {
 		throw InvalidInputException("Invalid blob size.");
@@ -272,7 +271,7 @@ bool Varint::VarintToDouble(string_t &blob, double &result, bool &strict) {
 	auto blob_ptr = blob.GetData();
 
 	// Determine if the number is negative
-	is_negative = (blob_ptr[0] & 0x80) == 0;
+	bool is_negative = (blob_ptr[0] & 0x80) == 0;
 	idx_t byte_pos = 0;
 	for (idx_t i = blob.GetSize() - 1; i > 2; i--) {
 		if (is_negative) {
@@ -286,7 +285,11 @@ bool Varint::VarintToDouble(string_t &blob, double &result, bool &strict) {
 	if (is_negative) {
 		result *= -1;
 	}
-	return std::isfinite(result);
+	if (!std::isfinite(result)) {
+		// We throw an error
+		throw ConversionException("Could not convert varint '%s' to Double", VarIntToVarchar(blob));
+	}
+	return true;
 }
 
 } // namespace duckdb
