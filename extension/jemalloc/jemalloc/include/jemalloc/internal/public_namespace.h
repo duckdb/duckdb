@@ -14,7 +14,7 @@
 #define je_malloc_stats_print JEMALLOC_N(malloc_stats_print)
 #define je_malloc_usable_size JEMALLOC_N(malloc_usable_size)
 #define je_mallocx JEMALLOC_N(mallocx)
-#define je_smallocx_a25b9b8ba91881964be3083db349991bbbbf1661 JEMALLOC_N(smallocx_a25b9b8ba91881964be3083db349991bbbbf1661)
+#define je_smallocx_3383b98f1b9a2e60ec0bda2fcf463ba271926596 JEMALLOC_N(smallocx_3383b98f1b9a2e60ec0bda2fcf463ba271926596)
 #define je_nallocx JEMALLOC_N(nallocx)
 #define je_posix_memalign JEMALLOC_N(posix_memalign)
 #define je_rallocx JEMALLOC_N(rallocx)

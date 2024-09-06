@@ -30,6 +30,7 @@ Restore these files:
 ```sh
 git checkout -- \
   include/jemalloc/internal/jemalloc_internal_defs.h \
+  include/jemalloc/internal/private_namespace.h \
   include/jemalloc/jemalloc.h \
   CMakeLists.txt
 ```

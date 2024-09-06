@@ -378,18 +378,6 @@ static bool
 hpa_try_purge(tsdn_t *tsdn, hpa_shard_t *shard) {
 	malloc_mutex_assert_owner(tsdn, &shard->mtx);
 
-	/*
-	 * Make sure we respect purge interval setting and don't purge
-	 * too frequently.
-	 */
-	if (shard->opts.strict_min_purge_interval) {
-		uint64_t since_last_purge_ms = shard->central->hooks.ms_since(
-		    &shard->last_purge);
-		if (since_last_purge_ms < shard->opts.min_purge_interval_ms) {
-		     return false;
-		}
-	}
-
 	hpdata_t *to_purge = psset_pick_purge(&shard->psset);
 	if (to_purge == NULL) {
 		return false;
@@ -521,6 +509,19 @@ hpa_try_hugify(tsdn_t *tsdn, hpa_shard_t *shard) {
 	return true;
 }
 
+static bool
+hpa_min_purge_interval_passed(tsdn_t *tsdn, hpa_shard_t *shard) {
+	malloc_mutex_assert_owner(tsdn, &shard->mtx);
+	if (shard->opts.experimental_strict_min_purge_interval) {
+		uint64_t since_last_purge_ms = shard->central->hooks.ms_since(
+		    &shard->last_purge);
+		if (since_last_purge_ms < shard->opts.min_purge_interval_ms) {
+		     return false;
+		}
+	}
+	return true;
+}
+
 /*
  * Execution of deferred work is forced if it's triggered by an explicit
  * hpa_shard_do_deferred_work() call.
@@ -532,24 +533,42 @@ hpa_shard_maybe_do_deferred_work(tsdn_t *tsdn, hpa_shard_t *shard,
 	if (!forced && shard->opts.deferral_allowed) {
 		return;
 	}
+
 	/*
 	 * If we're on a background thread, do work so long as there's work to
 	 * be done.  Otherwise, bound latency to not be *too* bad by doing at
 	 * most a small fixed number of operations.
 	 */
-	bool hugified = false;
-	bool purged = false;
 	size_t max_ops = (forced ? (size_t)-1 : 16);
 	size_t nops = 0;
-	do {
+
+	/*
+	 * Always purge before hugifying, to make sure we get some
+	 * ability to hit our quiescence targets.
+	 */
+
+	/*
+	 * Make sure we respect purge interval setting and don't purge
+	 * too frequently.
+	 */
+	if (hpa_min_purge_interval_passed(tsdn, shard)) {
+		size_t max_purges = max_ops;
 		/*
-		 * Always purge before hugifying, to make sure we get some
-		 * ability to hit our quiescence targets.
+		 * Limit number of hugepages (slabs) to purge.
+		 * When experimental_max_purge_nhp option is used, there is no
+		 * guarantee we'll always respect dirty_mult option.  Option
+		 * experimental_max_purge_nhp provides a way to configure same
+		 * behaviour as was possible before, with buggy implementation
+		 * of purging algorithm.
 		 */
-		purged = false;
-		while (hpa_should_purge(tsdn, shard) && nops < max_ops) {
-			purged = hpa_try_purge(tsdn, shard);
-			if (!purged) {
+		ssize_t max_purge_nhp = shard->opts.experimental_max_purge_nhp;
+		if (max_purge_nhp != -1 &&
+		    max_purges > (size_t)max_purge_nhp) {
+			max_purges = max_purge_nhp;
+		}
+
+		while (hpa_should_purge(tsdn, shard) && nops < max_purges) {
+			if (!hpa_try_purge(tsdn, shard)) {
 				/*
 				 * It is fine if we couldn't purge as sometimes
 				 * we try to purge just to unblock
@@ -558,15 +577,19 @@ hpa_shard_maybe_do_deferred_work(tsdn_t *tsdn, hpa_shard_t *shard,
 				 */
 				break;
 			}
+			malloc_mutex_assert_owner(tsdn, &shard->mtx);
 			nops++;
 		}
-		hugified = hpa_try_hugify(tsdn, shard);
-		if (hugified) {
-			nops++;
-		}
+	}
+
+	/*
+	 * Try to hugify at least once, even if we out of operations to make at
+	 * least some progress on hugification even at worst case.
+	 */
+	while (hpa_try_hugify(tsdn, shard) && nops < max_ops) {
 		malloc_mutex_assert_owner(tsdn, &shard->mtx);
-		malloc_mutex_assert_owner(tsdn, &shard->mtx);
-	} while ((hugified || purged) && nops < max_ops);
+		nops++;
+	}
 }
 
 static edata_t *

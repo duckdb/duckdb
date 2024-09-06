@@ -42,9 +42,17 @@ base_map(tsdn_t *tsdn, ehooks_t *ehooks, unsigned ind, size_t size) {
 	bool zero = true;
 	bool commit = true;
 
-	/* Use huge page sizes and alignment regardless of opt_metadata_thp. */
-	assert(size == HUGEPAGE_CEILING(size));
-	size_t alignment = HUGEPAGE;
+	/*
+	 * Use huge page sizes and alignment when opt_metadata_thp is enabled
+	 * or auto.
+	 */
+	size_t alignment;
+	if (opt_metadata_thp == metadata_thp_disabled) {
+		alignment = BASE_BLOCK_MIN_ALIGN;
+	} else {
+		assert(size == HUGEPAGE_CEILING(size));
+		alignment = HUGEPAGE;
+	}
 	if (ehooks_are_default(ehooks)) {
 		addr = extent_alloc_mmap(NULL, size, alignment, &zero, &commit);
 		if (have_madvise_huge && addr) {
@@ -277,6 +285,13 @@ base_extent_bump_alloc(tsdn_t *tsdn, base_t *base, edata_t *edata, size_t size,
 	return ret;
 }
 
+static size_t
+base_block_size_ceil(size_t block_size) {
+	return opt_metadata_thp == metadata_thp_disabled ?
+	    ALIGNMENT_CEILING(block_size, BASE_BLOCK_MIN_ALIGN) :
+	    HUGEPAGE_CEILING(block_size);
+}
+
 /*
  * Allocate a block of virtual memory that is large enough to start with a
  * base_block_t header, followed by an object of specified size and alignment.
@@ -295,14 +310,14 @@ base_block_alloc(tsdn_t *tsdn, base_t *base, ehooks_t *ehooks, unsigned ind,
 	 * Create increasingly larger blocks in order to limit the total number
 	 * of disjoint virtual memory ranges.  Choose the next size in the page
 	 * size class series (skipping size classes that are not a multiple of
-	 * HUGEPAGE), or a size large enough to satisfy the requested size and
-	 * alignment, whichever is larger.
+	 * HUGEPAGE when using metadata_thp), or a size large enough to satisfy
+	 * the requested size and alignment, whichever is larger.
 	 */
-	size_t min_block_size = HUGEPAGE_CEILING(sz_psz2u(header_size + gap_size
-	    + usize));
+	size_t min_block_size = base_block_size_ceil(sz_psz2u(header_size +
+	    gap_size + usize));
 	pszind_t pind_next = (*pind_last + 1 < sz_psz2ind(SC_LARGE_MAXCLASS)) ?
 	    *pind_last + 1 : *pind_last;
-	size_t next_block_size = HUGEPAGE_CEILING(sz_pind2sz(pind_next));
+	size_t next_block_size = base_block_size_ceil(sz_pind2sz(pind_next));
 	size_t block_size = (min_block_size > next_block_size) ? min_block_size
 	    : next_block_size;
 	base_block_t *block = (base_block_t *)base_map(tsdn, ehooks, ind,
