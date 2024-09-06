@@ -10,9 +10,13 @@ attach 'https://duckdb-blobs.s3.amazonaws.com/data/realnest/twitter_131k.duckdb'
 create table twitter as select * from tw.twitter;
 attach 'https://duckdb-blobs.s3.amazonaws.com/data/realnest/singleMu_524k.duckdb' as rn_singleMu (READ_ONLY);
 create table run2012B_singleMu as select * from rn_singleMu.run2012B_singleMu;
-CREATE TABLE single_mu_lists AS SELECT * REPLACE(list_resize(Jet, 10, NULL) as Jet, list_resize(Muon, 10, NULL) as Muon, list_resize(Photon, 10, NULL) as Photon, list_resize(Tau, 10, NULL) as Tau) 
+CREATE TABLE single_mu_lists AS SELECT * REPLACE(
+    list_resize(Jet, 10, NULL) as Jet, list_resize(Muon, 10, NULL) as Muon, 
+    list_resize(Photon, 10, NULL) as Photon, list_resize(Tau, 10, NULL) as Tau) 
 FROM rn_singleMu.run2012B_singleMu;
-CREATE or replace TABLE singleMu as SELECT list_distinct(list_transform("Tau", x -> x.pt)) AS tau_pt, list_distinct(list_transform("Tau", x -> x.eta)) AS tau_eta,
+CREATE or replace TABLE singleMu as 
+SELECT 
+    list_distinct(list_transform("Tau", x -> x.pt)) AS tau_pt, list_distinct(list_transform("Tau", x -> x.eta)) AS tau_eta,
     list_distinct(list_transform("Jet", x -> x.pt)) AS jet_pt, list_distinct(list_transform("Jet", x -> x.eta)) AS jet_eta, 
     list_distinct(list_transform("Muon", x -> x.pt)) AS muon_pt, list_distinct(list_transform("Muon", x -> x.eta)) AS muon_eta, 
     list_distinct(list_transform("Photon", x -> x.pt)) AS ph_pt, list_distinct(list_transform("Photon", x -> x.eta)) AS ph_eta
