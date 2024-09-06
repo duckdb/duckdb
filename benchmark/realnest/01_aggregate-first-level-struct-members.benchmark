@@ -1,8 +1,9 @@
-# name: benchmark/realnest/01_aggregate-on-one-deep-struct-members.benchmark
+# name: benchmark/realnest/01_aggregate-first-level-struct-members.benchmark
 # description: Aggregate functions on the struct, group by one parameter
 # group: [realnest]
 
-name aggregate-on-one-deep-struct-members
+name aggregate-first-level-struct-members
+
 group real_nest
 
 require json
