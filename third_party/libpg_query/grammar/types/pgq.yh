@@ -6,8 +6,7 @@
 %type <list> VertexTableDefinitionList 
 %type <list> LabelList
 %type <list> KeySpecification
-%type <list> KeyDefinition
-%type <list> KeyReference
+%type <node> KeyReference
 %type <node> Discriminator
 %type <node> VertexTableDefinition 
 %type <list> EdgeTableDefinitionList 

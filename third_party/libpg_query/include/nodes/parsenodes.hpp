@@ -2203,6 +2203,13 @@ typedef struct PGCreatePropertyGraphStmt {
 	PGOnCreateConflict onconflict;        /* what to do on create conflict */
 } PGCreatePropertyGraphStmt;
 
+typedef struct PGKeyReference {
+	PGNodeTag type;
+	PGList	   *key_columns;   /* List of key column names (optional) */
+	PGRangeVar	   *ref_table;     /* The referenced table (mandatory) */
+	PGList	   *ref_columns;   /* List of referenced columns (optional) */
+} PGKeyReference;
+
 typedef struct PGPropertyGraphTable {
     PGNodeTag type;
 

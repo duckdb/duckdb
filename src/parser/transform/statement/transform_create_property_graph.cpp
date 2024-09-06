@@ -100,24 +100,32 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 			pg_table->destination_reference = possible_dst_alias->second;
 		}
 
-		for (auto &src_key = graph_table->src_pk->head; src_key != nullptr; src_key = lnext(src_key)) {
-			auto key = reinterpret_cast<duckdb_libpgquery::PGValue *>(src_key->data.ptr_value);
-			pg_table->source_pk.emplace_back(key->val.str);
+		if (graph_table->src_pk) {
+			for (auto &src_key = graph_table->src_pk->head; src_key != nullptr; src_key = lnext(src_key)) {
+				auto key = reinterpret_cast<duckdb_libpgquery::PGValue *>(src_key->data.ptr_value);
+				pg_table->source_pk.emplace_back(key->val.str);
+			}
 		}
 
-		for (auto &dst_key = graph_table->dst_pk->head; dst_key != nullptr; dst_key = lnext(dst_key)) {
-			auto key = reinterpret_cast<duckdb_libpgquery::PGValue *>(dst_key->data.ptr_value);
-			pg_table->destination_pk.emplace_back(key->val.str);
+		if (graph_table->dst_pk) {
+			for (auto &dst_key = graph_table->dst_pk->head; dst_key != nullptr; dst_key = lnext(dst_key)) {
+				auto key = reinterpret_cast<duckdb_libpgquery::PGValue *>(dst_key->data.ptr_value);
+				pg_table->destination_pk.emplace_back(key->val.str);
+			}
 		}
 
-		for (auto &src_key = graph_table->src_fk->head; src_key != nullptr; src_key = lnext(src_key)) {
-			auto key = reinterpret_cast<duckdb_libpgquery::PGValue *>(src_key->data.ptr_value);
-			pg_table->source_fk.emplace_back(key->val.str);
+		if (graph_table->src_fk) {
+			for (auto &src_key = graph_table->src_fk->head; src_key != nullptr; src_key = lnext(src_key)) {
+				auto key = reinterpret_cast<duckdb_libpgquery::PGValue *>(src_key->data.ptr_value);
+				pg_table->source_fk.emplace_back(key->val.str);
+			}
 		}
 
-		for (auto &dst_key = graph_table->dst_fk->head; dst_key != nullptr; dst_key = lnext(dst_key)) {
-			auto key = reinterpret_cast<duckdb_libpgquery::PGValue *>(dst_key->data.ptr_value);
-			pg_table->destination_fk.emplace_back(key->val.str);
+		if (graph_table->dst_fk) {
+			for (auto &dst_key = graph_table->dst_fk->head; dst_key != nullptr; dst_key = lnext(dst_key)) {
+				auto key = reinterpret_cast<duckdb_libpgquery::PGValue *>(dst_key->data.ptr_value);
+				pg_table->destination_fk.emplace_back(key->val.str);
+			}
 		}
 	}
 	return pg_table;
