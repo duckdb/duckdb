@@ -417,6 +417,9 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 			continue;
 		}
 		auto &local_stats = state.stats.GetStats(*local_stats_lock, col_idx);
+		if (!local_stats.HasDistinctStats()) {
+			continue;
+		}
 		global_stats.DistinctStats().Merge(local_stats.DistinctStats());
 	}
 
