@@ -1090,7 +1090,7 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	      py::arg("database") = ":memory:", py::arg("read_only") = false, py::arg_v("config", py::dict(), "None"));
 	m.def("tokenize", PyTokenize,
 	      "Tokenizes a SQL string, returning a list of (position, type) tuples that can be "
-	      "used for e.g. syntax highlighting",
+	      "used for e.g., syntax highlighting",
 	      py::arg("query"));
 	py::enum_<PySQLTokenType>(m, "token_type", py::module_local())
 	    .value("identifier", PySQLTokenType::PY_SQL_TOKEN_IDENTIFIER)
