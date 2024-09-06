@@ -832,7 +832,9 @@ jobs:
 
       - name: Build with vector size of 512
         shell: bash
-        run: STANDARD_VECTOR_SIZE=512 make relassert
+        run: |
+          rm -r build/relassert
+          STANDARD_VECTOR_SIZE=512 make relassert
 
       - name: Fast and storage tests
         shell: bash

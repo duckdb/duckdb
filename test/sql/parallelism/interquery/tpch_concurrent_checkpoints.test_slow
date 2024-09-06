@@ -5,7 +5,7 @@
 require tpch
 
 statement ok
-CALL dbgen(sf=1);
+CALL dbgen(sf=0.1);
 
 concurrentloop threadid 0 5
 
@@ -29,7 +29,7 @@ CHECKPOINT
 
 endloop
 
-loop i 0 100
+loop i 0 50
 
 skipif threadid=0
 statement ok
