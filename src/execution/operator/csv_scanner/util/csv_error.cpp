@@ -226,12 +226,12 @@ CSVError CSVError::HeaderSniffingError(const CSVReaderOptions &options, const ve
 	return CSVError(error.str(), SNIFFING, {});
 }
 
-CSVError CSVError::DialectSniffingError(const CSVReaderOptions &options, const string &search_space) {
+CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &search_space) {
 	std::ostringstream error;
 	// 1. Which file
 	error << "Error when sniffing file \"" << options.file_path << "\"." << '\n';
 	// 2. What's the error
-	error << "It was not possible to automatically detect the CSV Parsing dialect" << '\n';
+	error << "It was not possible to automatically detect the CSV Parsing dialect/types" << '\n';
 
 	// 2. What was the search space?
 	error << "The search space used was:" << '\n';

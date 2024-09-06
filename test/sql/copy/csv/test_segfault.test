@@ -5,26 +5,23 @@
 statement ok
 PRAGMA enable_verification
 
-# Segfaults
-#query I
-#from 'data/csv/fuzzing/0.csv'
-#----
+statement error
+from 'data/csv/fuzzing/0.csv'
+----
+It was not possible to automatically detect the CSV Parsing
 
-# Segfaults
-#query I
-#from 'data/csv/fuzzing/1.csv'
-#----
+statement error
+from 'data/csv/fuzzing/1.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
 
 statement error
 from 'data/csv/fuzzing/2.csv'
 ----
-Expected Number of Columns: 5 Found: 1
+It was not possible to automatically detect the CSV Parsing dialect/types
 
-#weird result
-#query I
-#from 'data/csv/fuzzing/3.csv'
-#----
-#bla	eeee[~He@
+statement ok
+from 'data/csv/fuzzing/3.csv'
 
 query I
 from 'data/csv/fuzzing/4.csv'
@@ -32,21 +29,20 @@ from 'data/csv/fuzzing/4.csv'
 1;2;#
 1Y3#5:
 
-
 statement error
 from 'data/csv/fuzzing/5.csv'
 ----
-Expected Number of Columns: 2 Found: 1
+It was not possible to automatically detect the CSV Parsing dialect/types
 
-# Segfaults
-#query I
-#from 'data/csv/fuzzing/6.csv'
-#----
+statement error
+from 'data/csv/fuzzing/6.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
 
 statement error
 from 'data/csv/fuzzing/7.csv'
 ----
-Expected Number of Columns: 2 Found: 1
+It was not possible to automatically detect the CSV Parsing dialect/types
 
 statement error
 from 'data/csv/fuzzing/8.csv'
@@ -56,17 +52,17 @@ Invalid unicode (byte sequence mismatch) detected.
 statement error
 from 'data/csv/fuzzing/9.csv'
 ----
-Expected Number of Columns: 2 Found: 1
+It was not possible to automatically detect the CSV Parsing dialect/types
 
 statement error
 from 'data/csv/fuzzing/10.csv'
 ----
-Expected Number of Columns: 2 Found: 1
+It was not possible to automatically detect the CSV Parsing dialect/types
 
 statement error
 from 'data/csv/fuzzing/11.csv'
 ----
-Expected Number of Columns: 2 Found: 1
+It was not possible to automatically detect the CSV Parsing dialect/types
 
 statement error
 from 'data/csv/fuzzing/12.csv'
@@ -105,7 +101,7 @@ a;b
 statement error
 from 'data/csv/fuzzing/18.csv'
 ----
-Expected Number of Columns: 2 Found: 1
+It was not possible to automatically detect the CSV Parsing dialect/types
 
 query II
 from 'data/csv/fuzzing/19.csv'
@@ -144,7 +140,7 @@ Invalid unicode (byte sequence mismatch) detected.
 statement error
 from 'data/csv/fuzzing/25.csv'
 ----
-Expected Number of Columns: 2 Found: 1
+It was not possible to automatically detect the CSV Parsing dialect/types
 
 statement error
 from 'data/csv/fuzzing/26.csv'
@@ -159,18 +155,17 @@ Invalid unicode (byte sequence mismatch) detected.
 statement error
 from 'data/csv/fuzzing/28.csv'
 ----
-Expected Number of Columns: 2 Found: 1
+It was not possible to automatically detect the CSV Parsing dialect/types
 
-# SegFault
-#statement error
-#from 'data/csv/fuzzing/29.csv'
-#----
-#Invalid unicode (byte sequence mismatch) detected.
+statement error
+from 'data/csv/fuzzing/29.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
 
 statement error
 from 'data/csv/fuzzing/30.csv'
 ----
-Expected Number of Columns: 2 Found: 1
+It was not possible to automatically detect the CSV Parsing dialect/types
 
 query I
 from 'data/csv/fuzzing/31.csv'
@@ -188,40 +183,35 @@ a;b
 statement error
 from 'data/csv/fuzzing/32.csv'
 ----
-Expected Number of Columns: 2 Found: 1
+It was not possible to automatically detect the CSV Parsing dialect/types
 
 statement error
 from 'data/csv/fuzzing/33.csv'
 ----
-Expected Number of Columns: 4 Found: 1
+It was not possible to automatically detect the CSV Parsing dialect/types
 
 statement error
 from 'data/csv/fuzzing/34.csv'
 ----
-Expected Number of Columns: 5 Found: 1
+It was not possible to automatically detect the CSV Parsing dialect/types
 
-# SegFault
-#statement error
-#from 'data/csv/fuzzing/35.csv'
-#----
-#Invalid unicode (byte sequence mismatch) detected.
+statement error
+from 'data/csv/fuzzing/35.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
 
-# SegFault
-#statement error
-#from 'data/csv/fuzzing/36.csv'
-#----
-#Invalid unicode (byte sequence mismatch) detected.
+statement error
+from 'data/csv/fuzzing/36.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
 
-# SegFault
-#statement error
-#from 'data/csv/fuzzing/37.csv'
-#----
-#Invalid unicode (byte sequence mismatch) detected.
+statement error
+from 'data/csv/fuzzing/37.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
 
-# SegFault
-#statement error
-#from 'data/csv/fuzzing/38.csv'
-#----
-#Invalid unicode (byte sequence mismatch) detected.
-
+statement error
+from 'data/csv/fuzzing/38.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
 
