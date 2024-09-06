@@ -1,0 +1,22 @@
+# name: test/sql/copy/csv/test_segfault.test
+# description: Test CSV that is segfaulting
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+#query I
+#from 'data/csv/fuzzing/0.csv'
+#----
+
+query I
+from 'data/csv/fuzzing/2.csv'
+----
+1;2;#
+1Y3#5:
+
+query I
+from 'data/csv/crashing_csv.csv'
+----
+1;2;#
+1Y3#5:
