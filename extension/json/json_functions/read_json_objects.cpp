@@ -33,8 +33,9 @@ static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &
 
 	if (!gstate.names.empty()) {
 		// Create the strings without copying them
-		auto strings = FlatVector::GetData<string_t>(output.data[0]);
-		auto &validity = FlatVector::Validity(output.data[0]);
+		const auto col_idx = gstate.column_indices[0];
+		auto strings = FlatVector::GetData<string_t>(output.data[col_idx]);
+		auto &validity = FlatVector::Validity(output.data[col_idx]);
 		for (idx_t i = 0; i < count; i++) {
 			if (objects[i]) {
 				strings[i] = string_t(units[i].pointer, units[i].size);

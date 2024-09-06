@@ -154,8 +154,6 @@ public:
 	static LogicalType GetExpressionReturnType(const Expression &expr);
 
 private:
-	//! Maximum stack depth
-	static constexpr const idx_t MAXIMUM_STACK_DEPTH = 128;
 	//! Current stack depth
 	idx_t stack_depth = DConstants::INVALID_INDEX;
 
@@ -204,6 +202,8 @@ protected:
 	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth, bool root_expression);
 	virtual BindResult BindMacro(FunctionExpression &expr, ScalarMacroCatalogEntry &macro, idx_t depth,
 	                             unique_ptr<ParsedExpression> &expr_ptr);
+	void UnfoldMacroExpression(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func,
+	                           unique_ptr<ParsedExpression> &expr);
 
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedUnnestMessage();

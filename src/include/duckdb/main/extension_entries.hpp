@@ -421,6 +421,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"pg_connection_limit", "postgres_scanner"},
     {"pg_debug_show_queries", "postgres_scanner"},
     {"pg_experimental_filter_pushdown", "postgres_scanner"},
+    {"pg_null_byte_replacement", "postgres_scanner"},
     {"pg_pages_per_task", "postgres_scanner"},
     {"pg_use_binary_copy", "postgres_scanner"},
     {"pg_use_ctid_scan", "postgres_scanner"},
