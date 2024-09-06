@@ -1,5 +1,5 @@
 # name: benchmark/realnest/03_create_table_from_unnested_structs.benchmark
-# description: Create a table combining all the fields from a JSON file, unnesting all structures
+# description: Create a table by unnesting and joining the structs in a JSON file
 # group: [realnest]
 
 name create_table_from_unnested_structs
