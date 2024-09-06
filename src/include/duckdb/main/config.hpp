@@ -243,9 +243,9 @@ struct DBConfigOptions {
 	//! Whether to print bindings when printing the plan (debug mode only)
 	static bool debug_print_bindings; // NOLINT: debug setting
 	//! The peak allocation threshold at which to flush the allocator after completing a task (1 << 27, ~128MB)
-	idx_t allocator_flush_threshold = 134217728;
+	idx_t allocator_flush_threshold = 134217728ULL;
 	//! If bulk deallocation larger than this occurs, flush outstanding allocations (1 << 30, ~1GB)
-	idx_t allocator_bulk_deallocation_flush_threshold = 1073741824;
+	idx_t allocator_bulk_deallocation_flush_threshold = 1073741824ULL;
 	//! Whether the allocator background thread is enabled
 	bool allocator_background_threads = false;
 	//! DuckDB API surface

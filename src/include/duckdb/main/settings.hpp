@@ -878,9 +878,9 @@ struct UsernameSetting {
 };
 
 struct AllocatorFlushThreshold {
-	static constexpr const char *Name = "allocator_bulk_deallocation_flush_threshold";
+	static constexpr const char *Name = "allocator_flush_threshold";
 	static constexpr const char *Description =
-	    "If a bulk deallocation larger than this occurs, flush outstanding allocations";
+	    "Peak allocation threshold at which to flush the allocator after completing a task.";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
@@ -888,9 +888,9 @@ struct AllocatorFlushThreshold {
 };
 
 struct AllocatorBulkDeallocationFlushThreshold {
-	static constexpr const char *Name = "allocator_flush_threshold";
+	static constexpr const char *Name = "allocator_bulk_deallocation_flush_threshold";
 	static constexpr const char *Description =
-	    "Peak allocation threshold at which to flush the allocator after completing a task.";
+	    "If a bulk deallocation larger than this occurs, flush outstanding allocations.";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
