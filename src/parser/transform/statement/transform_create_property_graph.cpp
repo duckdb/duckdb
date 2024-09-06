@@ -105,8 +105,6 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 				auto key = reinterpret_cast<duckdb_libpgquery::PGValue *>(src_key->data.ptr_value);
 				pg_table->source_pk.emplace_back(key->val.str);
 			}
-		}  else {
-			pg_table->source_pk.emplace_back(string());
 		}
 
 		if (graph_table->dst_pk) {
@@ -114,18 +112,13 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 				auto key = reinterpret_cast<duckdb_libpgquery::PGValue *>(dst_key->data.ptr_value);
 				pg_table->destination_pk.emplace_back(key->val.str);
 			}
-		} else {
-			pg_table->destination_pk.emplace_back(string());
 		}
-
 
 		if (graph_table->src_fk) {
 			for (auto &src_key = graph_table->src_fk->head; src_key != nullptr; src_key = lnext(src_key)) {
 				auto key = reinterpret_cast<duckdb_libpgquery::PGValue *>(src_key->data.ptr_value);
 				pg_table->source_fk.emplace_back(key->val.str);
 			}
-		} else {
-			pg_table->source_fk.emplace_back(string());
 		}
 
 		if (graph_table->dst_fk) {
@@ -133,8 +126,6 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 				auto key = reinterpret_cast<duckdb_libpgquery::PGValue *>(dst_key->data.ptr_value);
 				pg_table->destination_fk.emplace_back(key->val.str);
 			}
-		} else {
-			pg_table->destination_fk.emplace_back(string());
 		}
 	}
 	return pg_table;
