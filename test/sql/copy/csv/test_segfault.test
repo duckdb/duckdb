@@ -5,18 +5,223 @@
 statement ok
 PRAGMA enable_verification
 
+# Segfaults
 #query I
 #from 'data/csv/fuzzing/0.csv'
 #----
 
-query I
+# Segfaults
+#query I
+#from 'data/csv/fuzzing/1.csv'
+#----
+
+statement error
 from 'data/csv/fuzzing/2.csv'
+----
+Expected Number of Columns: 5 Found: 1
+
+#weird result
+#query I
+#from 'data/csv/fuzzing/3.csv'
+#----
+#bla	eeee[~He@
+
+query I
+from 'data/csv/fuzzing/4.csv'
 ----
 1;2;#
 1Y3#5:
 
-query I
-from 'data/csv/crashing_csv.csv'
+
+statement error
+from 'data/csv/fuzzing/5.csv'
 ----
-1;2;#
-1Y3#5:
+Expected Number of Columns: 2 Found: 1
+
+# Segfaults
+#query I
+#from 'data/csv/fuzzing/6.csv'
+#----
+
+statement error
+from 'data/csv/fuzzing/7.csv'
+----
+Expected Number of Columns: 2 Found: 1
+
+statement error
+from 'data/csv/fuzzing/8.csv'
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+statement error
+from 'data/csv/fuzzing/9.csv'
+----
+Expected Number of Columns: 2 Found: 1
+
+statement error
+from 'data/csv/fuzzing/10.csv'
+----
+Expected Number of Columns: 2 Found: 1
+
+statement error
+from 'data/csv/fuzzing/11.csv'
+----
+Expected Number of Columns: 2 Found: 1
+
+statement error
+from 'data/csv/fuzzing/12.csv'
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+statement ok
+from 'data/csv/fuzzing/13.csv'
+
+statement error
+from 'data/csv/fuzzing/14.csv'
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+statement error
+from 'data/csv/fuzzing/15.csv'
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+statement error
+from 'data/csv/fuzzing/16.csv'
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+query I
+from 'data/csv/fuzzing/17.csv'
+----
+10-10-2020
+10-10-2020
+10-:02:03;0# this Ns i file
+10-# Aew com-ents
+# I'm a csv1:02:03;0# this Ns i file
+a;b
+# This is also a badd
+
+statement error
+from 'data/csv/fuzzing/18.csv'
+----
+Expected Number of Columns: 2 Found: 1
+
+query II
+from 'data/csv/fuzzing/19.csv'
+----
+
+statement error
+from 'data/csv/fuzzing/20.csv'
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+query I
+from 'data/csv/fuzzing/21.csv'
+----
+10 I'm a csv fe
+a;b
+#
+0-10-200YYYYYYYYYY# I'm a csv file
+a;b
+# This@is also a bad
+
+statement error
+from 'data/csv/fuzzing/22.csv'
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+statement error
+from 'data/csv/fuzzing/23.csv'
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+statement error
+from 'data/csv/fuzzing/24.csv'
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+statement error
+from 'data/csv/fuzzing/25.csv'
+----
+Expected Number of Columns: 2 Found: 1
+
+statement error
+from 'data/csv/fuzzing/26.csv'
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+statement error
+from 'data/csv/fuzzing/27.csv'
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+statement error
+from 'data/csv/fuzzing/28.csv'
+----
+Expected Number of Columns: 2 Found: 1
+
+# SegFault
+#statement error
+#from 'data/csv/fuzzing/29.csv'
+#----
+#Invalid unicode (byte sequence mismatch) detected.
+
+statement error
+from 'data/csv/fuzzing/30.csv'
+----
+Expected Number of Columns: 2 Found: 1
+
+query I
+from 'data/csv/fuzzing/31.csv'
+----
+10-10-2020
+10-10-2020
+e
+a;b
+0-# A few comments
+# I'm a -10-# A few comments
+# I'm a csv file
+a;b
+# This is also a badd
+
+statement error
+from 'data/csv/fuzzing/32.csv'
+----
+Expected Number of Columns: 2 Found: 1
+
+statement error
+from 'data/csv/fuzzing/33.csv'
+----
+Expected Number of Columns: 4 Found: 1
+
+statement error
+from 'data/csv/fuzzing/34.csv'
+----
+Expected Number of Columns: 5 Found: 1
+
+# SegFault
+#statement error
+#from 'data/csv/fuzzing/35.csv'
+#----
+#Invalid unicode (byte sequence mismatch) detected.
+
+# SegFault
+#statement error
+#from 'data/csv/fuzzing/36.csv'
+#----
+#Invalid unicode (byte sequence mismatch) detected.
+
+# SegFault
+#statement error
+#from 'data/csv/fuzzing/37.csv'
+#----
+#Invalid unicode (byte sequence mismatch) detected.
+
+# SegFault
+#statement error
+#from 'data/csv/fuzzing/38.csv'
+#----
+#Invalid unicode (byte sequence mismatch) detected.
+
+
