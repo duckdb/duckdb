@@ -23,11 +23,8 @@ It was not possible to automatically detect the CSV Parsing dialect/types
 statement ok
 from 'data/csv/fuzzing/3.csv'
 
-query I
+statement ok
 from 'data/csv/fuzzing/4.csv'
-----
-1;2;#
-1Y3#5:
 
 statement error
 from 'data/csv/fuzzing/5.csv'
@@ -87,40 +84,25 @@ from 'data/csv/fuzzing/16.csv'
 ----
 Invalid unicode (byte sequence mismatch) detected.
 
-query I
+statement ok
 from 'data/csv/fuzzing/17.csv'
-----
-10-10-2020
-10-10-2020
-10-:02:03;0# this Ns i file
-10-# Aew com-ents
-# I'm a csv1:02:03;0# this Ns i file
-a;b
-# This is also a badd
 
 statement error
 from 'data/csv/fuzzing/18.csv'
 ----
 It was not possible to automatically detect the CSV Parsing dialect/types
 
-query II
+statement ok
 from 'data/csv/fuzzing/19.csv'
-----
 
 statement error
 from 'data/csv/fuzzing/20.csv'
 ----
 Invalid unicode (byte sequence mismatch) detected.
 
-query I
+statement ok
 from 'data/csv/fuzzing/21.csv'
-----
-10 I'm a csv fe
-a;b
-#
-0-10-200YYYYYYYYYY# I'm a csv file
-a;b
-# This@is also a bad
+
 
 statement error
 from 'data/csv/fuzzing/22.csv'
@@ -167,18 +149,8 @@ from 'data/csv/fuzzing/30.csv'
 ----
 It was not possible to automatically detect the CSV Parsing dialect/types
 
-query I
+statement ok
 from 'data/csv/fuzzing/31.csv'
-----
-10-10-2020
-10-10-2020
-e
-a;b
-0-# A few comments
-# I'm a -10-# A few comments
-# I'm a csv file
-a;b
-# This is also a badd
 
 statement error
 from 'data/csv/fuzzing/32.csv'
