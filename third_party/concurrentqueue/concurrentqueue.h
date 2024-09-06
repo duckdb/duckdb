@@ -54,6 +54,8 @@
 #include <array>
 #include <thread>		// partly for __WINPTHREADS_VERSION if on MinGW-w64 w/ POSIX threading
 
+#include "duckdb/common/stl_allocator.hpp"
+
 // Platform-specific definitions of a numeric thread ID type and an invalid value
 namespace duckdb_moodycamel { namespace details {
 	template<typename thread_id_t> struct thread_id_converter {
@@ -335,8 +337,8 @@ struct ConcurrentQueueDefaultTraits
 	static inline void* (malloc)(size_t size) { return WORKAROUND_malloc(size); }
 	static inline void (free)(void* ptr) { return WORKAROUND_free(ptr); }
 #else
-	static inline void* malloc(size_t size) { return std::malloc(size); }
-	static inline void free(void* ptr) { return std::free(ptr); }
+	static inline void* malloc(size_t size) { return duckdb::stl_malloc(size); }
+	static inline void free(void* ptr) { return duckdb::stl_free(ptr); }
 #endif
 #else
 	// Debug versions when running under the Relacy race detector (ignore

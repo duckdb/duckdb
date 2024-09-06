@@ -1,8 +1,8 @@
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/function/cast/bound_cast_data.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
-#include "duckdb/function/cast/bound_cast_data.hpp"
 
 #include <algorithm> // for std::sort
 
@@ -24,8 +24,8 @@ unique_ptr<BoundCastData> BindToUnionCast(BindCastInput &input, const LogicalTyp
 		auto member_cast_cost = input.function_set.ImplicitCastCost(source, member_type);
 		if (member_cast_cost != -1) {
 			auto member_cast_info = input.GetCastFunction(source, member_type);
-			candidates.emplace_back(member_idx, member_name, member_type, member_cast_cost,
-			                        std::move(member_cast_info));
+			candidates.emplace_back(UnsafeNumericCast<union_tag_t>(member_idx), member_name, member_type,
+			                        member_cast_cost, std::move(member_cast_info));
 		}
 	};
 

@@ -1,7 +1,9 @@
 #include "crypto.hpp"
-#include "mbedtls_wrapper.hpp"
-#include <iostream>
+
 #include "duckdb/common/common.hpp"
+#include "mbedtls_wrapper.hpp"
+
+#include <iostream>
 #include <stdio.h>
 
 #define CPPHTTPLIB_OPENSSL_SUPPORT
@@ -111,7 +113,7 @@ size_t AESGCMStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, i
 	auto text_len = out_len;
 
 	switch (mode) {
-	case ENCRYPT:
+	case ENCRYPT: {
 		if (1 != EVP_EncryptFinal_ex(gcm_context, data_ptr_cast(out) + out_len, reinterpret_cast<int *>(&out_len))) {
 			throw InternalException("EncryptFinal failed");
 		}
@@ -121,7 +123,8 @@ size_t AESGCMStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, i
 			throw InternalException("Calculating the tag failed");
 		}
 		return text_len;
-	case DECRYPT:
+	}
+	case DECRYPT: {
 		// Set expected tag value
 		if (!EVP_CIPHER_CTX_ctrl(gcm_context, EVP_CTRL_GCM_SET_TAG, tag_len, tag)) {
 			throw InternalException("Finalizing tag failed");
@@ -135,6 +138,9 @@ size_t AESGCMStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, i
 			return text_len;
 		}
 		throw InvalidInputException("Computed AES tag differs from read AES tag, are you using the right key?");
+	}
+	default:
+		throw InternalException("Unknown mode in AESGCMStateSSL::Finalize");
 	}
 }
 

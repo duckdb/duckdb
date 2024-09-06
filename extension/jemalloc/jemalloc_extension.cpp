@@ -87,15 +87,9 @@ void JemallocExtension::ThreadIdle() {
 }
 
 void JemallocExtension::FlushAll() {
-	// Flush thread-local cache
-	SetJemallocCTL("thread.tcache.flush");
-
 	// Flush all arenas
 	const auto purge_arena = PurgeArenaString(MALLCTL_ARENAS_ALL);
 	SetJemallocCTL(purge_arena.c_str());
-
-	// Reset the peak after resetting
-	SetJemallocCTL("thread.peak.reset");
 }
 
 void JemallocExtension::SetBackgroundThreads(bool enable) {

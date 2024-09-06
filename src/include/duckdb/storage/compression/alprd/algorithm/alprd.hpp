@@ -80,7 +80,7 @@ struct AlpRDCompression {
 
 	template <bool PERSIST_DICT>
 	static double BuildLeftPartsDictionary(const vector<EXACT_TYPE> &values, uint8_t right_bit_width, State &state) {
-		unordered_map<EXACT_TYPE, int32_t> left_parts_hash;
+		unordered_map<EXACT_TYPE, uint32_t> left_parts_hash;
 		vector<AlpRDLeftPartInfo> left_parts_sorted_repetitions;
 
 		// Building a hash for all the left parts and how many times they appear

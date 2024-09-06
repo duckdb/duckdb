@@ -119,7 +119,7 @@ void Iterator::FindMinimum(const Node &node) {
 				D_ASSERT(nested_depth < Prefix::ROW_ID_SIZE);
 			}
 		}
-		nodes.emplace(node, 0);
+		nodes.emplace(node, static_cast<uint8_t>(0));
 		return FindMinimum(*prefix.ptr);
 	}
 
@@ -188,7 +188,7 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal,
 	for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
 		current_key.Push(prefix.data[i]);
 	}
-	nodes.emplace(node, 0);
+	nodes.emplace(node, static_cast<uint8_t>(0));
 
 	// We compare the prefix bytes with the key bytes.
 	for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {

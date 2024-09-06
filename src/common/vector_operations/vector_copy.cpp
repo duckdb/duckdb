@@ -227,7 +227,7 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 					auto source_idx = sel->get_index(source_offset + i);
 					auto &source_entry = sdata[source_idx];
 					for (idx_t j = 0; j < source_entry.length; ++j) {
-						child_rows.emplace_back(source_entry.offset + j);
+						child_rows.emplace_back(UnsafeNumericCast<sel_t>(source_entry.offset + j));
 					}
 				}
 			}
