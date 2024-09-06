@@ -1,8 +1,8 @@
-# name: benchmark/realnest/02_list_sort_text.benchmark
+# name: benchmark/realnest/02_list_sort.benchmark
 # description: list_sort text entries
 # group: [realnest]
 
-name list_sort_text
+name list_sort
 group real_nest
 
 require json
@@ -14,4 +14,4 @@ cache real_nest.duckdb
 load benchmark/realnest/load.sql
 
 run
-SELECT list_sort(list_transform(body_text, x -> x.text)) FROM cord;
+SELECT list_sort(body_text) FROM cord;
