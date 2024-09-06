@@ -8,9 +8,9 @@ PRAGMA enable_verification
 # casting 1.0 from various width/scales to different width/scales
 # these should all work
 query IIII
-SELECT 1.0::DECIMAL(4,3)::DECIMAL(2,1)
+SELECT 1.0::DECIMAL(4,3)::DECIMAL(2,1), 1.0::DECIMAL(4,3)::DECIMAL(9,1), 1.0::DECIMAL(4,3)::DECIMAL(18,1), 1.0::DECIMAL(4,3)::DECIMAL(38,1)
 ----
-1.0
+1.0	1.0	1.0	1.0
 
 query IIII
 SELECT 1.0::DECIMAL(9,8)::DECIMAL(2,1), 1.0::DECIMAL(9,8)::DECIMAL(9,1), 1.0::DECIMAL(9,8)::DECIMAL(18,1), 1.0::DECIMAL(9,8)::DECIMAL(38,1)

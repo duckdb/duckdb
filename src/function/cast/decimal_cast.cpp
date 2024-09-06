@@ -78,14 +78,6 @@ bool TemplatedDecimalScaleUp(Vector &source, Vector &result, idx_t count, CastPa
 	auto source_width = DecimalType::GetWidth(source.GetType());
 	auto result_scale = DecimalType::GetScale(result.GetType());
 	auto result_width = DecimalType::GetWidth(result.GetType());
-
-	// auto source_width = DecimalType::GetWidth(source.GetType());
-	// auto target_width = DecimalType::GetWidth(result.GetType());
-	// if (target_width < source_width){
-	// 	throw ConversionException("Could not convert DECIMAL with width of %d to DECIMAL with width of %d",source_width,
-	// target_width);
-	// }
-
 	D_ASSERT(result_scale >= source_scale);
 	idx_t scale_difference = result_scale - source_scale;
 	DEST multiply_factor = UnsafeNumericCast<DEST>(POWERS_DEST::POWERS_OF_TEN[scale_difference]);
@@ -136,51 +128,6 @@ struct DecimalScaleDownCheckOperator {
 	}
 };
 
-void RoundDecimal() {
-	int32_t round_value = IntegerValue::Get(val);
-	uint8_t target_scale;
-	auto width = DecimalType::GetWidth(decimal_type);
-	auto scale = DecimalType::GetScale(decimal_type);
-	if (round_value < 0) {
-		target_scale = 0;
-		switch (decimal_type.InternalType()) {
-		case PhysicalType::INT16:
-			bound_function.function = DecimalRoundNegativePrecisionFunction<int16_t, NumericHelper>;
-			break;
-		case PhysicalType::INT32:
-			bound_function.function = DecimalRoundNegativePrecisionFunction<int32_t, NumericHelper>;
-			break;
-		case PhysicalType::INT64:
-			bound_function.function = DecimalRoundNegativePrecisionFunction<int64_t, NumericHelper>;
-			break;
-		default:
-			bound_function.function = DecimalRoundNegativePrecisionFunction<hugeint_t, Hugeint>;
-			break;
-		}
-	} else {
-		if (round_value >= (int32_t)scale) {
-			// if round_value is bigger than or equal to scale we do nothing
-			bound_function.function = ScalarFunction::NopFunction;
-			target_scale = scale;
-		} else {
-			target_scale = NumericCast<uint8_t>(round_value);
-			switch (decimal_type.InternalType()) {
-			case PhysicalType::INT16:
-				bound_function.function = DecimalRoundPositivePrecisionFunction<int16_t, NumericHelper>;
-				break;
-			case PhysicalType::INT32:
-				bound_function.function = DecimalRoundPositivePrecisionFunction<int32_t, NumericHelper>;
-				break;
-			case PhysicalType::INT64:
-				bound_function.function = DecimalRoundPositivePrecisionFunction<int64_t, NumericHelper>;
-				break;
-			default:
-				bound_function.function = DecimalRoundPositivePrecisionFunction<hugeint_t, Hugeint>;
-				break;
-			}
-		}
-	}
-}
 template <class SOURCE, class DEST, class POWERS_SOURCE>
 bool TemplatedDecimalScaleDown(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto source_scale = DecimalType::GetScale(source.GetType());
@@ -199,7 +146,7 @@ bool TemplatedDecimalScaleDown(Vector &source, Vector &result, idx_t count, Cast
 	} else {
 		// type might not fit: check limit
 
-		auto limit = UnsafeNumericCast<SOURCE>(POWERS_SOURCE::POWERS_OF_TEN[result_width]);
+		auto limit = UnsafeNumericCast<SOURCE>(POWERS_SOURCE::POWERS_OF_TEN[target_width]);
 		DecimalScaleInput<SOURCE> input(result, limit, divide_factor, parameters, source_width, source_scale);
 		UnaryExecutor::GenericExecute<SOURCE, DEST, DecimalScaleDownCheckOperator>(source, result, count, &input,
 		                                                                           parameters.error_message);
