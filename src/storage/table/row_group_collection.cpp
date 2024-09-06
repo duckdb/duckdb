@@ -417,6 +417,9 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 			continue;
 		}
 		auto &local_stats = state.stats.GetStats(*local_stats_lock, col_idx);
+		if (!local_stats.HasDistinctStats()) {
+			continue;
+		}
 		global_stats.DistinctStats().Merge(local_stats.DistinctStats());
 	}
 
@@ -809,6 +812,7 @@ public:
 				if (scan_chunk.size() == 0) {
 					break;
 				}
+				scan_chunk.Flatten();
 				idx_t remaining = scan_chunk.size();
 				while (remaining > 0) {
 					idx_t append_count =
