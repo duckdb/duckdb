@@ -244,6 +244,8 @@ struct DBConfigOptions {
 	static bool debug_print_bindings; // NOLINT: debug setting
 	//! The peak allocation threshold at which to flush the allocator after completing a task (1 << 27, ~128MB)
 	idx_t allocator_flush_threshold = 134217728;
+	//! If bulk deallocation larger than this occurs, flush outstanding allocations (1 << 30, ~1GB)
+	idx_t allocator_bulk_deallocation_flush_threshold = 1073741824;
 	//! Whether the allocator background thread is enabled
 	bool allocator_background_threads = false;
 	//! DuckDB API surface
@@ -258,11 +260,11 @@ struct DBConfigOptions {
 	bool abort_on_wal_failure = false;
 	//! The index_scan_percentage sets a threshold for index scans.
 	//! If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count)
-	// rows match, we perform an index scan instead of a table scan.
+	//! rows match, we perform an index scan instead of a table scan.
 	double index_scan_percentage = 0.001;
 	//! The index_scan_max_count sets a threshold for index scans.
 	//! If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count)
-	// rows match, we perform an index scan instead of a table scan.
+	//! rows match, we perform an index scan instead of a table scan.
 	idx_t index_scan_max_count = STANDARD_VECTOR_SIZE;
 	//! The maximum number of schemas we will look through for "did you mean..." style errors in the catalog
 	idx_t catalog_error_max_schemas = 100;
