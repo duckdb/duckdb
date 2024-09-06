@@ -1,5 +1,5 @@
-create table cord as select * from read_json('https://github.com/cwida/RealNest/raw/cdaa85652bf187226706b321c29597673b2b7d86/sample-data/100mib/cord-19-document_parses/data.jsonl');
-
+attach 'https://duckdb-blobs.s3.amazonaws.com/data/realnest/cord_10k.duckdb' as cord (READ_ONLY);
+create table cord as select * from cord.cord;
 attach 'https://duckdb-blobs.s3.amazonaws.com/data/realnest/open_street_map_524k.duckdb' as osm (READ_ONLY);
 create table open_street_map as select * from osm.open_street_map;
 attach 'https://duckdb-blobs.s3.amazonaws.com/data/realnest/pull_131k.duckdb' as gh_pull (READ_ONLY);
