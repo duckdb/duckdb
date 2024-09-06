@@ -1,5 +1,5 @@
-# name: benchmark/realnest/07_select_text.benchmark
-# description: Creates a list of unnested texts, counts texts string's length and returns a number of unique values
+# name: benchmark/realnest/07_list_unique_on_transformed_and_aggregated_list.benchmark
+# description: Creates a list by unnesting and re-aggregating it, then performs list_transform and list_unique on that list
 # group: [realnest]
 
 name list_operations_on_strings
