@@ -966,12 +966,17 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	VacuumState vacuum_state;
 	InitializeVacuumState(checkpoint_state, vacuum_state, segments);
 	// schedule tasks
+	idx_t total_vacuum_tasks = 0;
+	auto &config = DBConfig::GetConfig(writer.GetDatabase());
 	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
 		auto &entry = segments[segment_idx];
-		auto vacuum_tasks = ScheduleVacuumTasks(checkpoint_state, vacuum_state, segment_idx);
-		if (vacuum_tasks) {
-			// vacuum tasks were scheduled - don't schedule a checkpoint task yet
-			continue;
+		if (total_vacuum_tasks < config.options.max_vacuum_tasks) {
+			auto vacuum_tasks = ScheduleVacuumTasks(checkpoint_state, vacuum_state, segment_idx);
+			if (vacuum_tasks) {
+				// vacuum tasks were scheduled - don't schedule a checkpoint task yet
+				total_vacuum_tasks++;
+				continue;
+			}
 		}
 		if (!entry.node) {
 			// row group was vacuumed/dropped - skip

@@ -111,6 +111,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(StreamingBufferSize),
     DUCKDB_GLOBAL(MaximumMemorySetting),
     DUCKDB_GLOBAL(MaximumTempDirectorySize),
+    DUCKDB_GLOBAL(MaximumVacuumTasks),
     DUCKDB_LOCAL(MergeJoinThreshold),
     DUCKDB_LOCAL(NestedLoopJoinThreshold),
     DUCKDB_GLOBAL(OldImplicitCasting),
