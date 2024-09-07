@@ -606,7 +606,7 @@ struct MaximumTempDirectorySize {
 struct MaximumVacuumTasks {
 	static constexpr const char *Name = "max_vacuum_tasks";
 	static constexpr const char *Description = "The maximum vacuum tasks to schedule during a checkpoint";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
