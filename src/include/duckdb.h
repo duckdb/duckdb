@@ -2905,8 +2905,9 @@ DUCKDB_API void duckdb_destroy_scalar_function_set(duckdb_scalar_function_set *s
 /*!
 Adds the scalar function as a new overload to the scalar function set.
 
-Returns DuckDBError if the function could not be added, for example if the overload already exists.* @param set The
-scalar function set
+Returns DuckDBError if the function could not be added, for example if the overload already exists.
+
+* @param set The scalar function set
 * @param function The function to add
 */
 DUCKDB_API duckdb_state duckdb_add_scalar_function_to_set(duckdb_scalar_function_set set,
@@ -3060,8 +3061,9 @@ DUCKDB_API void duckdb_destroy_aggregate_function_set(duckdb_aggregate_function_
 /*!
 Adds the aggregate function as a new overload to the aggregate function set.
 
-Returns DuckDBError if the function could not be added, for example if the overload already exists.* @param set The
-aggregate function set
+Returns DuckDBError if the function could not be added, for example if the overload already exists.
+
+* @param set The aggregate function set
 * @param function The function to add
 */
 DUCKDB_API duckdb_state duckdb_add_aggregate_function_to_set(duckdb_aggregate_function_set set,
