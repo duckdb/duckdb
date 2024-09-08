@@ -10,6 +10,9 @@ CREATE TABLE integers(i INTEGER);
 statement ok
 INSERT INTO integers SELECT * FROM range(1000000);
 
+statement ok
+SET max_vacuum_tasks=99
+
 query I
 SELECT SUM(i) FROM integers WHERE i%2<>0
 ----

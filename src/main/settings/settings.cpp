@@ -1344,6 +1344,22 @@ Value MaximumTempDirectorySize::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Maximum Vacuum Size
+//===--------------------------------------------------------------------===//
+void MaximumVacuumTasks::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.max_vacuum_tasks = input.GetValue<uint64_t>();
+}
+
+void MaximumVacuumTasks::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.max_vacuum_tasks = DBConfig().options.max_vacuum_tasks;
+}
+
+Value MaximumVacuumTasks::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::UBIGINT(config.options.max_vacuum_tasks);
+}
+
+//===--------------------------------------------------------------------===//
 // Merge Join Threshold
 //===--------------------------------------------------------------------===//
 void MergeJoinThreshold::SetLocal(ClientContext &context, const Value &input) {

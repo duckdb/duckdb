@@ -268,6 +268,8 @@ struct DBConfigOptions {
 	idx_t catalog_error_max_schemas = 100;
 	//!  Whether or not to always write to the WAL file, even if this is not required
 	bool debug_skip_checkpoint_on_commit = false;
+	//! The maximum amount of vacuum tasks to schedule during a checkpoint
+	idx_t max_vacuum_tasks = 100;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
