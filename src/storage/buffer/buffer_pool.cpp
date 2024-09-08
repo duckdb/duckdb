@@ -309,6 +309,8 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 
 	if (!found) {
 		r.Resize(0);
+	} else if (Allocator::SupportsFlush() && extra_memory > allocator_bulk_deallocation_flush_threshold) {
+		Allocator::FlushAll();
 	}
 
 	return {found, std::move(r)};
@@ -399,6 +401,10 @@ void BufferPool::SetLimit(idx_t limit, const char *exception_postscript) {
 	if (Allocator::SupportsFlush()) {
 		Allocator::FlushAll();
 	}
+}
+
+void BufferPool::SetAllocatorBulkDeallocationFlushThreshold(idx_t threshold) {
+	allocator_bulk_deallocation_flush_threshold = threshold;
 }
 
 BufferPool::MemoryUsage::MemoryUsage() {
