@@ -473,3 +473,38 @@ TEST_CASE("Test appending to a different database file", "[appender]") {
 	}
 	REQUIRE(failed);
 }
+
+TEST_CASE("Test appending to different database files", "[appender]") {
+	duckdb::unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto test_dir = GetTestDirectory();
+	auto attach_db1 = "ATTACH '" + test_dir + "/db1.db'";
+	auto attach_db2 = "ATTACH '" + test_dir + "/db2.db'";
+	REQUIRE_NO_FAIL(con.Query(attach_db1));
+	REQUIRE_NO_FAIL(con.Query(attach_db2));
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE db1.tbl(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE db2.tbl(i INTEGER)"));
+
+	REQUIRE_NO_FAIL(con.Query("START TRANSACTION"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO db1.tbl VALUES (1)"));
+
+	Appender appender(con, "db2", "main", "tbl");
+	appender.BeginRow();
+	appender.Append<int32_t>(2);
+	appender.EndRow();
+
+	bool failed;
+	try {
+		appender.Close();
+		failed = false;
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		REQUIRE(error.Message().find("a single transaction can only write to a single attached database") !=
+		        std::string::npos);
+		failed = true;
+	}
+	REQUIRE(failed);
+	REQUIRE_NO_FAIL(con.Query("COMMIT TRANSACTION"));
+}
