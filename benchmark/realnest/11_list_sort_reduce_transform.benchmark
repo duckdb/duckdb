@@ -14,5 +14,12 @@ cache real_nest.duckdb
 load benchmark/realnest/load.sql
 
 run
-SELECT list_sort(array_agg(list_reduce(list_transform(Photon, x -> x.pt), (x, y, z) -> (x + y)^z))) as List
-FROM run2012B_singleMu WHERE len(Photon) != 0;
+SELECT list_sort(
+    array_agg(
+        list_reduce(
+            list_transform(Photon, x -> x.pt),
+        (x, y, z) -> (x + y)^z)
+        )
+    ) AS List
+FROM run2012B_singleMu
+WHERE len(Photon) != 0;

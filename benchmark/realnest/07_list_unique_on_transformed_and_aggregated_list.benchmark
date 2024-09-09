@@ -15,4 +15,14 @@ load benchmark/realnest/load.sql
 
 run
 SELECT list_unique(list_transform(lt, s -> length(s))) 
-FROM (SELECT list(text) AS lt FROM (SELECT bm.text FROM (SELECT UNNEST(back_matter) AS bm FROM cord)));
+FROM (
+    SELECT list(text) AS lt 
+    FROM (
+        SELECT bm.text 
+        FROM (
+            SELECT UNNEST(back_matter) AS bm 
+            FROM cord
+            )
+        )
+    )
+;
