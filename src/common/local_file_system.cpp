@@ -1228,28 +1228,37 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 	if (path.empty()) {
 		return vector<string>();
 	}
+	// Check for "file://" prefix and remove it if present
+	auto file_path = path;
+	auto file_prefix = "file://";
+	if (StringUtil::StartsWith(path, file_prefix)) {
+		file_path = path.substr(strlen(file_prefix));
+	}
+#ifdef DEBUG
+	fprintf(stderr, "LocalFileSystem::Glob - path: %s, file_path: %s\n", path.c_str(), file_path.c_str());
+#endif
 	// split up the path into separate chunks
 	vector<string> splits;
 	idx_t last_pos = 0;
-	for (idx_t i = 0; i < path.size(); i++) {
-		if (path[i] == '\\' || path[i] == '/') {
+	for (idx_t i = 0; i < file_path.size(); i++) {
+		if (file_path[i] == '\\' || file_path[i] == '/') {
 			if (i == last_pos) {
 				// empty: skip this position
 				last_pos = i + 1;
 				continue;
 			}
 			if (splits.empty()) {
-				splits.push_back(path.substr(0, i));
+				splits.push_back(file_path.substr(0, i));
 			} else {
-				splits.push_back(path.substr(last_pos, i - last_pos));
+				splits.push_back(file_path.substr(last_pos, i - last_pos));
 			}
 			last_pos = i + 1;
 		}
 	}
-	splits.push_back(path.substr(last_pos, path.size() - last_pos));
+	splits.push_back(file_path.substr(last_pos, file_path.size() - last_pos));
 	// handle absolute paths
 	bool absolute_path = false;
-	if (path[0] == '/') {
+	if (file_path[0] == '/') {
 		// first character is a slash -  unix absolute path
 		absolute_path = true;
 	} else if (StringUtil::Contains(splits[0], ":")) {
@@ -1261,16 +1270,16 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 		if (!home_directory.empty()) {
 			absolute_path = true;
 			splits[0] = home_directory;
-			D_ASSERT(path[0] == '~');
-			if (!HasGlob(path)) {
-				return Glob(home_directory + path.substr(1));
+			D_ASSERT(file_path[0] == '~');
+			if (!HasGlob(file_path)) {
+				return Glob(home_directory + file_path.substr(1));
 			}
 		}
 	}
-	// Check if the path has a glob at all
-	if (!HasGlob(path)) {
+	// Check if the file_path has a glob at all
+	if (!HasGlob(file_path)) {
 		// no glob: return only the file (if it exists or is a pipe)
-		return FetchFileWithoutGlob(path, opener, absolute_path);
+		return FetchFileWithoutGlob(file_path, opener, absolute_path);
 	}
 	vector<string> previous_directories;
 	if (absolute_path) {
@@ -1344,7 +1353,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 		if (result.empty()) {
 			// no result found that matches the glob
 			// last ditch effort: search the path as a string literal
-			return FetchFileWithoutGlob(path, opener, absolute_path);
+			return FetchFileWithoutGlob(file_path, opener, absolute_path);
 		}
 		if (is_last_chunk) {
 			return result;

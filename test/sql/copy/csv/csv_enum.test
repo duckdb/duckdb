@@ -9,7 +9,7 @@ statement ok
 CREATE TYPE bla AS ENUM ('Y', 'N');
 
 query I
-select * from read_csv_auto('data/csv/response.csv', header = 0)
+select * from read_csv_auto('file://data/csv/response.csv', header = 0)
 ----
 Y
 Y
