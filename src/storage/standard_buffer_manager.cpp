@@ -253,7 +253,7 @@ void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, 
 			}
 			auto block_ptr =
 			    intermediate_buffer.GetFileBuffer().InternalBuffer() + block_idx * block_manager.GetBlockAllocSize();
-			buf = BlockHandle::LoadFromBuffer(handle, block_ptr, std::move(reusable_buffer));
+			buf = handle->LoadFromBuffer(block_ptr, std::move(reusable_buffer));
 			handle->readers = 1;
 			handle->memory_charge = std::move(reservation);
 		}
@@ -314,7 +314,7 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 		if (handle->state == BlockState::BLOCK_LOADED) {
 			// the block is loaded, increment the reader count and set the BufferHandle
 			handle->readers++;
-			buf = handle->Load(handle);
+			buf = handle->Load();
 		}
 		required_memory = handle->memory_usage;
 	}
@@ -335,11 +335,11 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 			// the block is loaded, increment the reader count and return a pointer to the handle
 			handle->readers++;
 			reservation.Resize(0);
-			buf = handle->Load(handle);
+			buf = handle->Load();
 		} else {
 			// now we can actually load the current block
 			D_ASSERT(handle->readers == 0);
-			buf = handle->Load(handle, std::move(reusable_buffer));
+			buf = handle->Load(std::move(reusable_buffer));
 			handle->readers = 1;
 			handle->memory_charge = std::move(reservation);
 			// in the case of a variable sized block, the buffer may be smaller than a full block.
