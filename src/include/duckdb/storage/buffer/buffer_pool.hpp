@@ -19,6 +19,7 @@ namespace duckdb {
 
 class TemporaryMemoryManager;
 struct EvictionQueue;
+struct DBConfigOptions;
 
 struct BufferEvictionNode {
 	BufferEvictionNode() {
@@ -41,7 +42,7 @@ class BufferPool {
 	friend class StandardBufferManager;
 
 public:
-	explicit BufferPool(idx_t maximum_memory, bool track_eviction_timestamps);
+	explicit BufferPool(const DBConfigOptions &options);
 	virtual ~BufferPool();
 
 	//! Set a new memory limit to the buffer pool, throws an exception if the new limit is too low and not enough
