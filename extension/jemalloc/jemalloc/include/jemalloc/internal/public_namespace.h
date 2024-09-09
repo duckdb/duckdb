@@ -1,9 +1,9 @@
-namespace duckdb_jemalloc {
-
 #define je_aligned_alloc JEMALLOC_N(aligned_alloc)
 #define je_calloc JEMALLOC_N(calloc)
 #define je_dallocx JEMALLOC_N(dallocx)
 #define je_free JEMALLOC_N(free)
+#define je_free_sized JEMALLOC_N(free_sized)
+#define je_free_aligned_sized JEMALLOC_N(free_aligned_sized)
 #define je_mallctl JEMALLOC_N(mallctl)
 #define je_mallctlbymib JEMALLOC_N(mallctlbymib)
 #define je_mallctlnametomib JEMALLOC_N(mallctlnametomib)
@@ -14,7 +14,7 @@ namespace duckdb_jemalloc {
 #define je_malloc_stats_print JEMALLOC_N(malloc_stats_print)
 #define je_malloc_usable_size JEMALLOC_N(malloc_usable_size)
 #define je_mallocx JEMALLOC_N(mallocx)
-#define je_smallocx_54eaed1d8b56b1aa528be3bdd1877e59c56fa90c JEMALLOC_N(smallocx_54eaed1d8b56b1aa528be3bdd1877e59c56fa90c)
+#define je_smallocx_a25b9b8ba91881964be3083db349991bbbbf1661 JEMALLOC_N(smallocx_a25b9b8ba91881964be3083db349991bbbbf1661)
 #define je_nallocx JEMALLOC_N(nallocx)
 #define je_posix_memalign JEMALLOC_N(posix_memalign)
 #define je_rallocx JEMALLOC_N(rallocx)
@@ -24,5 +24,3 @@ namespace duckdb_jemalloc {
 #define je_xallocx JEMALLOC_N(xallocx)
 #define je_valloc JEMALLOC_N(valloc)
 #define je_malloc_size JEMALLOC_N(malloc_size)
-
-} // namespace duckdb_jemalloc

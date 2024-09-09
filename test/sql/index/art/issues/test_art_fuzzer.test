@@ -7,16 +7,16 @@ PRAGMA enable_verification
 
 # issue 5984, number 21
 statement ok
-CREATE TABLE t1 (c1 DECIMAL(4,3));
+CREATE TABLE t1 (c1 DECIMAL(4, 3));
 
 statement ok
-INSERT INTO t1(c1) VALUES (1),(-0.505);
+INSERT INTO t1(c1) VALUES (1), (-0.505);
 
 statement ok
 CREATE INDEX i1 ON t1 (TRY_CAST(c1 AS USMALLINT));
 
 statement ok
-INSERT INTO t1(c1) VALUES (2),(3);
+INSERT INTO t1(c1) VALUES (2), (3);
 
 # issue 5984, number 22
 statement ok
@@ -40,7 +40,7 @@ statement ok
 CREATE TABLE t3(c1 INT);
 
 statement ok
-INSERT INTO t3 VALUES (0),(85491);
+INSERT INTO t3 VALUES (0), (85491);
 
 statement ok
 CREATE INDEX i3 ON t3 (c1, (TRY_CAST(c1 AS USMALLINT)));
@@ -54,7 +54,7 @@ statement ok
 CREATE INDEX i4 ON t4 (c1);
 
 statement ok
-INSERT INTO t4 VALUES (1),(0),(1),(1);
+INSERT INTO t4 VALUES (1), (0), (1), (1);
 
 statement ok
 UPDATE t4 SET c1 = NULL;

@@ -17,20 +17,6 @@ insert into orders values (1);
 statement ok
 insert into stg_orders values (1);
 
-statement error
-with
-orders as (
-    select * from stg_orders
-    where ordered_at >= (select max(ordered_at) from orders)
-),
-some_more_logic as (
-    select *
-    from orders
-)
-select * from some_more_logic;
-----
-Binder Error: Circular reference to CTE "orders", There are two possible solutions.
-
 query I
 with
 orders as (
@@ -44,3 +30,20 @@ some_more_logic as (
 select * from some_more_logic;
 ----
 1
+
+require noalternativeverify
+
+# this one needs 'noalternativeverify' otherwise the error message is different
+statement error
+with
+orders as (
+    select * from stg_orders
+    where ordered_at >= (select max(ordered_at) from orders)
+),
+some_more_logic as (
+    select *
+    from orders
+)
+select * from some_more_logic;
+----
+Binder Error: Circular reference to CTE "orders", There are two possible solutions.

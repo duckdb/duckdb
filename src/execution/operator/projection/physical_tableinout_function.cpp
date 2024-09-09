@@ -38,7 +38,16 @@ unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(Execution
 		result->local_state = function.init_local(context, input, gstate.global_state.get());
 	}
 	if (!projected_input.empty()) {
-		result->input_chunk.Initialize(context.client, children[0]->types);
+		vector<LogicalType> input_types;
+		auto &child_types = children[0]->types;
+		idx_t input_length = child_types.size() - projected_input.size();
+		for (idx_t k = 0; k < input_length; k++) {
+			input_types.push_back(child_types[k]);
+		}
+		for (idx_t k = 0; k < projected_input.size(); k++) {
+			D_ASSERT(projected_input[k] >= input_length);
+		}
+		result->input_chunk.Initialize(context.client, input_types);
 	}
 	return std::move(result);
 }
@@ -71,9 +80,8 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		}
 		// we are processing a new row: fetch the data for the current row
 		state.input_chunk.Reset();
-		D_ASSERT(input.ColumnCount() == state.input_chunk.ColumnCount());
 		// set up the input data to the table in-out function
-		for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
+		for (idx_t col_idx = 0; col_idx < state.input_chunk.ColumnCount(); col_idx++) {
 			ConstantVector::Reference(state.input_chunk.data[col_idx], input.data[col_idx], state.row_index, 1);
 		}
 		state.input_chunk.SetCardinality(1);
@@ -98,6 +106,17 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		state.new_row = true;
 	}
 	return OperatorResultType::HAVE_MORE_OUTPUT;
+}
+
+InsertionOrderPreservingMap<string> PhysicalTableInOutFunction::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	if (function.to_string) {
+		result["__text__"] = function.to_string(bind_data.get());
+	} else {
+		result["Name"] = function.name;
+	}
+	SetEstimatedCardinality(result, estimated_cardinality);
+	return result;
 }
 
 OperatorFinalizeResultType PhysicalTableInOutFunction::FinalExecute(ExecutionContext &context, DataChunk &chunk,

@@ -163,22 +163,25 @@ void LocalSortState::Initialize(GlobalSortState &global_sort_state, BufferManage
 	sort_layout = &global_sort_state.sort_layout;
 	payload_layout = &global_sort_state.payload_layout;
 	buffer_manager = &buffer_manager_p;
+	const auto block_size = buffer_manager->GetBlockSize();
+
 	// Radix sorting data
-	radix_sorting_data = make_uniq<RowDataCollection>(
-	    *buffer_manager, RowDataCollection::EntriesPerBlock(sort_layout->entry_size), sort_layout->entry_size);
+	auto entries_per_block = RowDataCollection::EntriesPerBlock(sort_layout->entry_size, block_size);
+	radix_sorting_data = make_uniq<RowDataCollection>(*buffer_manager, entries_per_block, sort_layout->entry_size);
+
 	// Blob sorting data
 	if (!sort_layout->all_constant) {
 		auto blob_row_width = sort_layout->blob_layout.GetRowWidth();
-		blob_sorting_data = make_uniq<RowDataCollection>(
-		    *buffer_manager, RowDataCollection::EntriesPerBlock(blob_row_width), blob_row_width);
-		blob_sorting_heap = make_uniq<RowDataCollection>(*buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1U, true);
+		entries_per_block = RowDataCollection::EntriesPerBlock(blob_row_width, block_size);
+		blob_sorting_data = make_uniq<RowDataCollection>(*buffer_manager, entries_per_block, blob_row_width);
+		blob_sorting_heap = make_uniq<RowDataCollection>(*buffer_manager, block_size, 1U, true);
 	}
+
 	// Payload data
 	auto payload_row_width = payload_layout->GetRowWidth();
-	payload_data = make_uniq<RowDataCollection>(*buffer_manager, RowDataCollection::EntriesPerBlock(payload_row_width),
-	                                            payload_row_width);
-	payload_heap = make_uniq<RowDataCollection>(*buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1U, true);
-	// Init done
+	entries_per_block = RowDataCollection::EntriesPerBlock(payload_row_width, block_size);
+	payload_data = make_uniq<RowDataCollection>(*buffer_manager, entries_per_block, payload_row_width);
+	payload_heap = make_uniq<RowDataCollection>(*buffer_manager, block_size, 1U, true);
 	initialized = true;
 }
 
@@ -266,17 +269,17 @@ unique_ptr<RowDataBlock> LocalSortState::ConcatenateBlocks(RowDataCollection &ro
 		return new_block;
 	}
 	// Create block with the correct capacity
-	auto buffer_manager = &row_data.buffer_manager;
+	auto &buffer_manager = row_data.buffer_manager;
 	const idx_t &entry_size = row_data.entry_size;
-	idx_t capacity = MaxValue(((idx_t)Storage::BLOCK_SIZE + entry_size - 1) / entry_size, row_data.count);
-	auto new_block = make_uniq<RowDataBlock>(MemoryTag::ORDER_BY, *buffer_manager, capacity, entry_size);
+	idx_t capacity = MaxValue((buffer_manager.GetBlockSize() + entry_size - 1) / entry_size, row_data.count);
+	auto new_block = make_uniq<RowDataBlock>(MemoryTag::ORDER_BY, buffer_manager, capacity, entry_size);
 	new_block->count = row_data.count;
-	auto new_block_handle = buffer_manager->Pin(new_block->block);
+	auto new_block_handle = buffer_manager.Pin(new_block->block);
 	data_ptr_t new_block_ptr = new_block_handle.Ptr();
 	// Copy the data of the blocks into a single block
 	for (idx_t i = 0; i < row_data.blocks.size(); i++) {
 		auto &block = row_data.blocks[i];
-		auto block_handle = buffer_manager->Pin(block->block);
+		auto block_handle = buffer_manager.Pin(block->block);
 		memcpy(new_block_ptr, block_handle.Ptr(), block->count * entry_size);
 		new_block_ptr += block->count * entry_size;
 		block.reset();
@@ -322,7 +325,7 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 		idx_t total_byte_offset =
 		    std::accumulate(heap.blocks.begin(), heap.blocks.end(), (idx_t)0,
 		                    [](idx_t a, const unique_ptr<RowDataBlock> &b) { return a + b->byte_offset; });
-		idx_t heap_block_size = MaxValue(total_byte_offset, (idx_t)Storage::BLOCK_SIZE);
+		idx_t heap_block_size = MaxValue(total_byte_offset, buffer_manager->GetBlockSize());
 		auto ordered_heap_block = make_uniq<RowDataBlock>(MemoryTag::ORDER_BY, *buffer_manager, heap_block_size, 1U);
 		ordered_heap_block->count = count;
 		ordered_heap_block->byte_offset = total_byte_offset;
@@ -401,7 +404,7 @@ void GlobalSortState::PrepareMergePhase() {
 	idx_t total_heap_size =
 	    std::accumulate(sorted_blocks.begin(), sorted_blocks.end(), (idx_t)0,
 	                    [](idx_t a, const unique_ptr<SortedBlock> &b) { return a + b->HeapSize(); });
-	if (external || (pinned_blocks.empty() && total_heap_size > 0.25 * buffer_manager.GetQueryMaxMemory())) {
+	if (external || (pinned_blocks.empty() && total_heap_size * 4 > buffer_manager.GetQueryMaxMemory())) {
 		external = true;
 	}
 	// Use the data that we have to determine which partition size to use during the merge

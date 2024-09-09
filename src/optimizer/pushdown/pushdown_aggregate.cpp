@@ -9,14 +9,6 @@ namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
-static void ExtractFilterBindings(Expression &expr, vector<ColumnBinding> &bindings) {
-	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = expr.Cast<BoundColumnRefExpression>();
-		bindings.push_back(colref.binding);
-	}
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ExtractFilterBindings(child, bindings); });
-}
-
 static unique_ptr<Expression> ReplaceGroupBindings(LogicalAggregate &proj, unique_ptr<Expression> expr) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expr->Cast<BoundColumnRefExpression>();
@@ -29,6 +21,14 @@ static unique_ptr<Expression> ReplaceGroupBindings(LogicalAggregate &proj, uniqu
 	ExpressionIterator::EnumerateChildren(
 	    *expr, [&](unique_ptr<Expression> &child) { child = ReplaceGroupBindings(proj, std::move(child)); });
 	return expr;
+}
+
+void FilterPushdown::ExtractFilterBindings(Expression &expr, vector<ColumnBinding> &bindings) {
+	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+		auto &colref = expr.Cast<BoundColumnRefExpression>();
+		bindings.push_back(colref.binding);
+	}
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ExtractFilterBindings(child, bindings); });
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<LogicalOperator> op) {
@@ -50,21 +50,21 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 		}
 		// no aggregate! we are filtering on a group
 		// we can only push this down if the filter is in all grouping sets
-		vector<ColumnBinding> bindings;
-		ExtractFilterBindings(*f.filter, bindings);
-
-		bool can_pushdown_filter = true;
 		if (aggr.grouping_sets.empty()) {
 			// empty grouping set - we cannot pushdown the filter
-			can_pushdown_filter = false;
+			continue;
 		}
+
+		vector<ColumnBinding> bindings;
+		ExtractFilterBindings(*f.filter, bindings);
+		if (bindings.empty()) {
+			// we can never push down empty grouping sets
+			continue;
+		}
+
+		bool can_pushdown_filter = true;
 		for (auto &grp : aggr.grouping_sets) {
 			// check for each of the grouping sets if they contain all groups
-			if (bindings.empty()) {
-				// we can never push down empty grouping sets
-				can_pushdown_filter = false;
-				break;
-			}
 			for (auto &binding : bindings) {
 				if (grp.find(binding.column_index) == grp.end()) {
 					can_pushdown_filter = false;

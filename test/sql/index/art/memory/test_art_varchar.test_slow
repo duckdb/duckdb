@@ -70,7 +70,7 @@ CREATE INDEX idx ON art USING ART(id);
 
 query I
 SELECT mem_to_bytes(current.memory_usage) > base.usage AND
-       	mem_to_bytes(current.memory_usage) < 4 * base.usage
+       	mem_to_bytes(current.memory_usage) < 5 * base.usage
 FROM base, pragma_database_size() current;
 ----
 1

@@ -1,11 +1,10 @@
 #ifndef JEMALLOC_INTERNAL_ECACHE_H
 #define JEMALLOC_INTERNAL_ECACHE_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/eset.h"
-#include "jemalloc/internal/san.h"
 #include "jemalloc/internal/mutex.h"
-
-namespace duckdb_jemalloc {
+#include "jemalloc/internal/san.h"
 
 typedef struct ecache_s ecache_t;
 struct ecache_s {
@@ -53,7 +52,5 @@ bool ecache_init(tsdn_t *tsdn, ecache_t *ecache, extent_state_t state,
 void ecache_prefork(tsdn_t *tsdn, ecache_t *ecache);
 void ecache_postfork_parent(tsdn_t *tsdn, ecache_t *ecache);
 void ecache_postfork_child(tsdn_t *tsdn, ecache_t *ecache);
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_ECACHE_H */

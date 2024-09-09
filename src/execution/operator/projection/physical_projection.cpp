@@ -15,7 +15,7 @@ public:
 
 public:
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
-		context.thread.profiler.Flush(op, executor, "projection", 0);
+		context.thread.profiler.Flush(op);
 	}
 };
 
@@ -69,12 +69,19 @@ PhysicalProjection::CreateJoinProjection(vector<LogicalType> proj_types, const v
 	return make_uniq<PhysicalProjection>(std::move(proj_types), std::move(proj_selects), estimated_cardinality);
 }
 
-string PhysicalProjection::ParamsToString() const {
-	string extra_info;
-	for (auto &expr : select_list) {
-		extra_info += expr->GetName() + "\n";
+InsertionOrderPreservingMap<string> PhysicalProjection::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	string projections;
+	for (idx_t i = 0; i < select_list.size(); i++) {
+		if (i > 0) {
+			projections += "\n";
+		}
+		auto &expr = select_list[i];
+		projections += expr->GetName();
 	}
-	return extra_info;
+	result["__projections__"] = projections;
+	SetEstimatedCardinality(result, estimated_cardinality);
+	return result;
 }
 
 } // namespace duckdb

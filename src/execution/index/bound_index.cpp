@@ -62,6 +62,12 @@ string BoundIndex::VerifyAndToString(const bool only_verify) {
 	return VerifyAndToString(state, only_verify);
 }
 
+void BoundIndex::VerifyAllocations() {
+	IndexLock state;
+	InitializeLock(state);
+	return VerifyAllocations(state);
+}
+
 void BoundIndex::Vacuum() {
 	IndexLock state;
 	InitializeLock(state);
@@ -97,7 +103,7 @@ bool BoundIndex::IndexIsUpdated(const vector<PhysicalIndex> &column_ids_p) const
 	return false;
 }
 
-IndexStorageInfo BoundIndex::GetStorageInfo(const bool get_buffers) {
+IndexStorageInfo BoundIndex::GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool to_wal) {
 	throw NotImplementedException("The implementation of this index serialization does not exist.");
 }
 

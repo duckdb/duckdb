@@ -5,7 +5,7 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
-#include "utf8proc.hpp"
+#include "utf8proc_wrapper.hpp"
 
 #include <string.h>
 
@@ -58,9 +58,10 @@ static idx_t GetResultLength(const char *input_data, idx_t input_length) {
 		if (input_data[i] & 0x80) {
 			// unicode
 			int sz = 0;
-			auto codepoint = utf8proc_codepoint(input_data + i, sz);
-			auto converted_codepoint = IS_UPPER ? utf8proc_toupper(codepoint) : utf8proc_tolower(codepoint);
-			auto new_sz = utf8proc_codepoint_length(converted_codepoint);
+			auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz);
+			auto converted_codepoint =
+			    IS_UPPER ? Utf8Proc::CodepointToUpper(codepoint) : Utf8Proc::CodepointToLower(codepoint);
+			auto new_sz = Utf8Proc::CodepointLength(converted_codepoint);
 			D_ASSERT(new_sz >= 0);
 			output_length += UnsafeNumericCast<idx_t>(new_sz);
 			i += UnsafeNumericCast<idx_t>(sz);
@@ -79,9 +80,10 @@ static void CaseConvert(const char *input_data, idx_t input_length, char *result
 		if (input_data[i] & 0x80) {
 			// non-ascii character
 			int sz = 0, new_sz = 0;
-			auto codepoint = utf8proc_codepoint(input_data + i, sz);
-			auto converted_codepoint = IS_UPPER ? utf8proc_toupper(codepoint) : utf8proc_tolower(codepoint);
-			auto success = utf8proc_codepoint_to_utf8(converted_codepoint, new_sz, result_data);
+			auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz);
+			auto converted_codepoint =
+			    IS_UPPER ? Utf8Proc::CodepointToUpper(codepoint) : Utf8Proc::CodepointToLower(codepoint);
+			auto success = Utf8Proc::CodepointToUtf8(converted_codepoint, new_sz, result_data);
 			D_ASSERT(success);
 			(void)success;
 			result_data += new_sz;

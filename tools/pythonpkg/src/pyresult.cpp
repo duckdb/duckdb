@@ -16,6 +16,7 @@
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb_python/numpy/array_wrapper.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/enums/stream_execution_result.hpp"
 #include "duckdb_python/arrow/arrow_export_utils.hpp"
 #include "duckdb/main/chunk_scan_state/query_result.hpp"
 
@@ -62,6 +63,28 @@ unique_ptr<DataChunk> DuckDBPyResult::FetchNext(QueryResult &query_result) {
 	    !query_result.Cast<StreamQueryResult>().IsOpen()) {
 		result_closed = true;
 		return nullptr;
+	}
+	if (query_result.type == QueryResultType::STREAM_RESULT) {
+		auto &stream_result = query_result.Cast<StreamQueryResult>();
+		StreamExecutionResult execution_result;
+		while (!StreamQueryResult::IsChunkReady(execution_result = stream_result.ExecuteTask())) {
+			{
+				py::gil_scoped_acquire gil;
+				if (PyErr_CheckSignals() != 0) {
+					throw std::runtime_error("Query interrupted");
+				}
+			}
+			if (execution_result == StreamExecutionResult::BLOCKED) {
+				stream_result.WaitForTask();
+			}
+		}
+		if (execution_result == StreamExecutionResult::EXECUTION_CANCELLED) {
+			throw InvalidInputException("The execution of the query was cancelled before it could finish, likely "
+			                            "caused by executing a different query");
+		}
+		if (execution_result == StreamExecutionResult::EXECUTION_ERROR) {
+			stream_result.ThrowError();
+		}
 	}
 	auto chunk = query_result.Fetch();
 	if (query_result.HasError()) {
@@ -152,6 +175,9 @@ void DuckDBPyResult::FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversi
 		res[name] = py::module::import("pandas")
 		                .attr("Categorical")
 		                .attr("from_codes")(conversion.ToArray(col_idx), py::arg("dtype") = categories_type[col_idx]);
+		if (!conversion.ToPandas()) {
+			res[name] = res[name].attr("to_numpy")();
+		}
 	} else {
 		res[name] = conversion.ToArray(col_idx);
 	}
@@ -353,6 +379,16 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch, boo
 	                             result->client_properties);
 }
 
+ArrowArrayStream DuckDBPyResult::FetchArrowArrayStream(idx_t rows_per_batch) {
+	if (!result) {
+		throw InvalidInputException("There is no query result");
+	}
+	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(std::move(result), rows_per_batch);
+	// The 'result_stream' is part of the 'private_data' of the ArrowArrayStream and its lifetime is bound to that of
+	// the ArrowArrayStream.
+	return result_stream->stream;
+}
+
 duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t rows_per_batch) {
 	if (!result) {
 		throw InvalidInputException("There is no query result");
@@ -360,10 +396,28 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t 
 	py::gil_scoped_acquire acquire;
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 	auto record_batch_reader_func = pyarrow_lib_module.attr("RecordBatchReader").attr("_import_from_c");
-	//! We have to construct an Arrow Array Stream
-	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(std::move(result), rows_per_batch);
-	py::object record_batch_reader = record_batch_reader_func((uint64_t)&result_stream->stream); // NOLINT
+	auto stream = FetchArrowArrayStream(rows_per_batch);
+	py::object record_batch_reader = record_batch_reader_func((uint64_t)&stream); // NOLINT
 	return py::cast<duckdb::pyarrow::RecordBatchReader>(record_batch_reader);
+}
+
+static void ArrowArrayStreamPyCapsuleDestructor(PyObject *object) {
+	auto data = PyCapsule_GetPointer(object, "arrow_array_stream");
+	if (!data) {
+		return;
+	}
+	auto stream = reinterpret_cast<ArrowArrayStream *>(data);
+	if (stream->release) {
+		stream->release(stream);
+	}
+	delete stream;
+}
+
+py::object DuckDBPyResult::FetchArrowCapsule(idx_t rows_per_batch) {
+	auto stream_p = FetchArrowArrayStream(rows_per_batch);
+	auto stream = new ArrowArrayStream();
+	*stream = stream_p;
+	return py::capsule(stream, "arrow_array_stream", ArrowArrayStreamPyCapsuleDestructor);
 }
 
 py::str GetTypeToPython(const LogicalType &type) {

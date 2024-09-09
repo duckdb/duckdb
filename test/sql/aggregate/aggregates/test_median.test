@@ -25,22 +25,22 @@ create table quantile as select range r, random() from range(10000) union all va
 query I
 SELECT median(r) FROM quantile
 ----
-4999
+4999.5
 
 query I
 SELECT median(r) FROM quantile
 ----
-4999
+4999.5
 
 query R
 SELECT median(r::float) FROM quantile
 ----
-4999
+4999.5
 
 query R
 SELECT median(r::double) FROM quantile
 ----
-4999
+4999.5
 
 query I
 SELECT median(r::tinyint) FROM quantile where r < 100
@@ -50,27 +50,50 @@ SELECT median(r::tinyint) FROM quantile where r < 100
 query I
 SELECT median(r::smallint) FROM quantile
 ----
-4999
+4999.5
 
 query I
 SELECT median(r::integer) FROM quantile
 ----
-4999
+4999.5
 
 query I
 SELECT median(r::bigint) FROM quantile
 ----
-4999
+4999.5
 
 query I
 SELECT median(r::hugeint) FROM quantile
 ----
-4999
+4999.5
 
 query I
 SELECT median(r::decimal(10,2)) FROM quantile
 ----
-4999
+4999.50
+
+query I
+SELECT median(case when r is null then null else [r] end) FROM quantile
+----
+[4999]
+
+query I
+SELECT median(case when r is null then null else {'i': r} end) FROM quantile
+----
+{'i': 4999}
+
+# sorting order is different for varchars and numbers
+# so a different result here is expected
+query I
+SELECT median(r::varchar) FROM quantile
+----
+5498
+
+# adding a prefix
+query I
+SELECT median(case when r is null then null else concat('thishasalongprefix_', r::varchar) end) FROM quantile
+----
+thishasalongprefix_5498
 
 query I
 SELECT median(NULL) FROM quantile

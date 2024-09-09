@@ -1,9 +1,8 @@
-#include "duckdb/function/compression/compression.hpp"
 #include "duckdb/common/types/vector.hpp"
-
-#include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
@@ -139,8 +138,8 @@ CompressionFunction ConstantFun::GetFunction(PhysicalType data_type) {
 	}
 }
 
-bool ConstantFun::TypeIsSupported(PhysicalType type) {
-	switch (type) {
+bool ConstantFun::TypeIsSupported(const PhysicalType physical_type) {
+	switch (physical_type) {
 	case PhysicalType::BIT:
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:

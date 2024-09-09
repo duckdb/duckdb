@@ -1,0 +1,16 @@
+# name: benchmark/micro/string/inet_unescape_charrefs.benchmark
+# description: inet's extension unescape function benchmark with character references
+# group: [string]
+
+name html_unescape benchmark for character references
+group string
+require inet
+
+load
+CREATE TABLE charrefs AS SELECT * FROM (VALUES ('&amp'), ('&Colon;'), ('&CounterClockwiseContourIntegral;'), ('&;'), ('&GreaterLess;'), ('&LeftArrowRightArrow;'), ('&downarrow;'), ('not &notin'), ('&quot;;'), ('&no charref'));
+INSERT INTO charrefs SELECT repeat('&nsucceq;', i%10) charref FROM range(1000) t(i);
+INSERT INTO charrefs SELECT repeat('&zfr;', i%10) charref FROM range(1000) t(i);
+INSERT INTO charrefs SELECT repeat('&Eacute;', i%7) html_text FROM range(997990) t(i);
+
+run
+SELECT html_unescape(charrefs.col0) FROM charrefs;

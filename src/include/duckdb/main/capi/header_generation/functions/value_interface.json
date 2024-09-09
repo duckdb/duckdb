@@ -1,0 +1,883 @@
+{
+    "group": "value_interface",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_destroy_value",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_value *",
+                    "name": "value"
+                }
+            ],
+            "comment": {
+                "description": "Destroys the value and de-allocates all memory allocated for that type.\n\n",
+                "param_comments": {
+                    "value": "The value to destroy."
+                }
+            }
+        },
+        {
+            "name": "duckdb_create_varchar",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "const char *",
+                    "name": "text"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from a null-terminated string\n\n",
+                "param_comments": {
+                    "text": "The null-terminated string"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_varchar_length",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "const char *",
+                    "name": "text"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "length"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from a string\n\n",
+                "param_comments": {
+                    "text": "The text",
+                    "length": "The length of the text"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_bool",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "bool",
+                    "name": "input"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from a boolean\n\n",
+                "param_comments": {
+                    "input": "The boolean value"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_int8",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "int8_t",
+                    "name": "input"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from a int8_t (a tinyint)\n\n",
+                "param_comments": {
+                    "input": "The tinyint value"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_uint8",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "uint8_t",
+                    "name": "input"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from a uint8_t (a utinyint)\n\n",
+                "param_comments": {
+                    "input": "The utinyint value"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_int16",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "int16_t",
+                    "name": "input"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from a int16_t (a smallint)\n\n",
+                "param_comments": {
+                    "input": "The smallint value"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_uint16",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "uint16_t",
+                    "name": "input"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from a uint16_t (a usmallint)\n\n",
+                "param_comments": {
+                    "input": "The usmallint value"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_int32",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "int32_t",
+                    "name": "input"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from a int32_t (an integer)\n\n",
+                "param_comments": {
+                    "input": "The integer value"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_uint32",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "uint32_t",
+                    "name": "input"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from a uint32_t (a uinteger)\n\n",
+                "param_comments": {
+                    "input": "The uinteger value"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_uint64",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "uint64_t",
+                    "name": "input"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from a uint64_t (a ubigint)\n\n",
+                "param_comments": {
+                    "input": "The ubigint value"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_int64",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "int64_t",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from an int64\n\n",
+                "param_comments": {
+                    "input": "The bigint value"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_hugeint",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_hugeint",
+                    "name": "input"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from a hugeint\n\n",
+                "param_comments": {
+                    "input": "The hugeint value"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_uhugeint",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_uhugeint",
+                    "name": "input"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from a uhugeint\n\n",
+                "param_comments": {
+                    "input": "The uhugeint value"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_float",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "float",
+                    "name": "input"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from a float\n\n",
+                "param_comments": {
+                    "input": "The float value"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_double",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "double",
+                    "name": "input"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from a double\n\n",
+                "param_comments": {
+                    "input": "The double value"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_date",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_date",
+                    "name": "input"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from a date\n\n",
+                "param_comments": {
+                    "input": "The date value"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_time",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_time",
+                    "name": "input"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from a time\n\n",
+                "param_comments": {
+                    "input": "The time value"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_time_tz_value",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_time_tz",
+                    "name": "value"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from a time_tz.\nNot to be confused with `duckdb_create_time_tz`, which creates a duckdb_time_tz_t.\n\n",
+                "param_comments": {
+                    "value": "The time_tz value"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_timestamp",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_timestamp",
+                    "name": "input"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from a timestamp\n\n",
+                "param_comments": {
+                    "input": "The timestamp value"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_interval",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_interval",
+                    "name": "input"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from an interval\n\n",
+                "param_comments": {
+                    "input": "The interval value"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_blob",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "const uint8_t *",
+                    "name": "data"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "length"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from a blob\n\n",
+                "param_comments": {
+                    "data": "The blob data",
+                    "length": "The length of the blob data"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_get_bool",
+            "return_type": "bool",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns the boolean value of the given value.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value containing a boolean"
+                },
+                "return_value": "A boolean, or false if the value cannot be converted"
+            }
+        },
+        {
+            "name": "duckdb_get_int8",
+            "return_type": "int8_t",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns the int8_t value of the given value.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value containing a tinyint"
+                },
+                "return_value": "A int8_t, or MinValue<int8> if the value cannot be converted"
+            }
+        },
+        {
+            "name": "duckdb_get_uint8",
+            "return_type": "uint8_t",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns the uint8_t value of the given value.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value containing a utinyint"
+                },
+                "return_value": "A uint8_t, or MinValue<uint8> if the value cannot be converted"
+            }
+        },
+        {
+            "name": "duckdb_get_int16",
+            "return_type": "int16_t",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns the int16_t value of the given value.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value containing a smallint"
+                },
+                "return_value": "A int16_t, or MinValue<int16> if the value cannot be converted"
+            }
+        },
+        {
+            "name": "duckdb_get_uint16",
+            "return_type": "uint16_t",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns the uint16_t value of the given value.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value containing a usmallint"
+                },
+                "return_value": "A uint16_t, or MinValue<uint16> if the value cannot be converted"
+            }
+        },
+        {
+            "name": "duckdb_get_int32",
+            "return_type": "int32_t",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns the int32_t value of the given value.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value containing a integer"
+                },
+                "return_value": "A int32_t, or MinValue<int32> if the value cannot be converted"
+            }
+        },
+        {
+            "name": "duckdb_get_uint32",
+            "return_type": "uint32_t",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns the uint32_t value of the given value.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value containing a uinteger"
+                },
+                "return_value": "A uint32_t, or MinValue<uint32> if the value cannot be converted"
+            }
+        },
+        {
+            "name": "duckdb_get_int64",
+            "return_type": "int64_t",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns the int64_t value of the given value.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value containing a bigint"
+                },
+                "return_value": "A int64_t, or MinValue<int64> if the value cannot be converted"
+            }
+        },
+        {
+            "name": "duckdb_get_uint64",
+            "return_type": "uint64_t",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns the uint64_t value of the given value.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value containing a ubigint"
+                },
+                "return_value": "A uint64_t, or MinValue<uint64> if the value cannot be converted"
+            }
+        },
+        {
+            "name": "duckdb_get_hugeint",
+            "return_type": "duckdb_hugeint",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns the hugeint value of the given value.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value containing a hugeint"
+                },
+                "return_value": "A duckdb_hugeint, or MinValue<hugeint> if the value cannot be converted"
+            }
+        },
+        {
+            "name": "duckdb_get_uhugeint",
+            "return_type": "duckdb_uhugeint",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns the uhugeint value of the given value.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value containing a uhugeint"
+                },
+                "return_value": "A duckdb_uhugeint, or MinValue<uhugeint> if the value cannot be converted"
+            }
+        },
+        {
+            "name": "duckdb_get_float",
+            "return_type": "float",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns the float value of the given value.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value containing a float"
+                },
+                "return_value": "A float, or NAN if the value cannot be converted"
+            }
+        },
+        {
+            "name": "duckdb_get_double",
+            "return_type": "double",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns the double value of the given value.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value containing a double"
+                },
+                "return_value": "A double, or NAN if the value cannot be converted"
+            }
+        },
+        {
+            "name": "duckdb_get_date",
+            "return_type": "duckdb_date",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns the date value of the given value.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value containing a date"
+                },
+                "return_value": "A duckdb_date, or MinValue<date> if the value cannot be converted"
+            }
+        },
+        {
+            "name": "duckdb_get_time",
+            "return_type": "duckdb_time",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns the time value of the given value.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value containing a time"
+                },
+                "return_value": "A duckdb_time, or MinValue<time> if the value cannot be converted"
+            }
+        },
+        {
+            "name": "duckdb_get_time_tz",
+            "return_type": "duckdb_time_tz",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns the time_tz value of the given value.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value containing a time_tz"
+                },
+                "return_value": "A duckdb_time_tz, or MinValue<time_tz> if the value cannot be converted"
+            }
+        },
+        {
+            "name": "duckdb_get_timestamp",
+            "return_type": "duckdb_timestamp",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns the timestamp value of the given value.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value containing a timestamp"
+                },
+                "return_value": "A duckdb_timestamp, or MinValue<timestamp> if the value cannot be converted"
+            }
+        },
+        {
+            "name": "duckdb_get_interval",
+            "return_type": "duckdb_interval",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns the interval value of the given value.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value containing a interval"
+                },
+                "return_value": "A duckdb_interval, or MinValue<interval> if the value cannot be converted"
+            }
+        },
+        {
+            "name": "duckdb_get_value_type",
+            "return_type": "duckdb_logical_type",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns the type of the given value. The type is valid as long as the value is not destroyed.\nThe type itself must not be destroyed.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value"
+                },
+                "return_value": "A duckdb_logical_type."
+            }
+        },
+        {
+            "name": "duckdb_get_blob",
+            "return_type": "duckdb_blob",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns the blob value of the given value.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value containing a blob"
+                },
+                "return_value": "A duckdb_blob"
+            }
+        },
+        {
+            "name": "duckdb_get_varchar",
+            "return_type": "char *",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "value"
+                }
+            ],
+            "comment": {
+                "description": "Obtains a string representation of the given value.\nThe result must be destroyed with `duckdb_free`.\n\n",
+                "param_comments": {
+                    "value": "The value"
+                },
+                "return_value": "The string value. This must be destroyed with `duckdb_free`."
+            }
+        },
+        {
+            "name": "duckdb_create_struct_value",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                },
+                {
+                    "type": "duckdb_value *",
+                    "name": "values"
+                }
+            ],
+            "comment": {
+                "description": "Creates a struct value from a type and an array of values. Must be destroyed with `duckdb_destroy_value`.\n\n",
+                "param_comments": {
+                    "type": "The type of the struct",
+                    "values": "The values for the struct fields"
+                },
+                "return_value": "The struct value, or nullptr, if any child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`."
+            }
+        },
+        {
+            "name": "duckdb_create_list_value",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                },
+                {
+                    "type": "duckdb_value *",
+                    "name": "values"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "value_count"
+                }
+            ],
+            "comment": {
+                "description": "Creates a list value from a child (element) type and an array of values of length `value_count`.\nMust be destroyed with `duckdb_destroy_value`.\n\n",
+                "param_comments": {
+                    "type": "The type of the list",
+                    "values": "The values for the list",
+                    "value_count": "The number of values in the list"
+                },
+                "return_value": "The list value, or nullptr, if the child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`."
+            }
+        },
+        {
+            "name": "duckdb_create_array_value",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                },
+                {
+                    "type": "duckdb_value *",
+                    "name": "values"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "value_count"
+                }
+            ],
+            "comment": {
+                "description": "Creates an array value from a child (element) type and an array of values of length `value_count`.\nMust be destroyed with `duckdb_destroy_value`.\n\n",
+                "param_comments": {
+                    "type": "The type of the array",
+                    "values": "The values for the array",
+                    "value_count": "The number of values in the array"
+                },
+                "return_value": "The array value, or nullptr, if the child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`."
+            }
+        },
+        {
+            "name": "duckdb_get_map_size",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "value"
+                }
+            ],
+            "comment": {
+                "description": "Returns the number of elements in a MAP value.\n\n",
+                "param_comments": {
+                    "value": "The MAP value."
+                },
+                "return_value": "The number of elements in the map."
+            }
+        },
+        {
+            "name": "duckdb_get_map_key",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "value"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                }
+            ],
+            "comment": {
+                "description": "Returns the MAP key at index as a duckdb_value.\n\n",
+                "param_comments": {
+                    "value": "The MAP value.",
+                    "index": "The index of the key."
+                },
+                "return_value": "The key as a duckdb_value."
+            }
+        },
+        {
+            "name": "duckdb_get_map_value",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "value"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                }
+            ],
+            "comment": {
+                "description": "Returns the MAP value at index as a duckdb_value.\n\n",
+                "param_comments": {
+                    "value": "The MAP value.",
+                    "index": "The index of the value."
+                },
+                "return_value": "The value as a duckdb_value."
+            }
+        }
+    ]
+}

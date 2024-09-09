@@ -2586,7 +2586,7 @@ Append a bool value to the appender.
 DUCKDB_API duckdb_state duckdb_append_bool(duckdb_appender appender, bool value);
 """
 function duckdb_append_bool(appender, value)
-    return ccall((:duckdb_append_bool, libduckdb), duckdb_state, (duckdb_appender, Int32), appender, value)
+    return ccall((:duckdb_append_bool, libduckdb), duckdb_state, (duckdb_appender, Bool), appender, value)
 end
 
 """
@@ -2594,7 +2594,7 @@ Append an int8_t value to the appender.
 DUCKDB_API duckdb_state duckdb_append_int8(duckdb_appender appender, int8_t value);
 """
 function duckdb_append_int8(appender, value)
-    return ccall((:duckdb_append_int8, libduckdb), duckdb_state, (duckdb_appender, Int16), appender, value)
+    return ccall((:duckdb_append_int8, libduckdb), duckdb_state, (duckdb_appender, Int8), appender, value)
 end
 
 """
@@ -2610,7 +2610,7 @@ Append an int32_t value to the appender.
 DUCKDB_API duckdb_state duckdb_append_int32(duckdb_appender appender, int32_t value);
 """
 function duckdb_append_int32(appender, value)
-    return ccall((:duckdb_append_int16, libduckdb), duckdb_state, (duckdb_appender, Int32), appender, value)
+    return ccall((:duckdb_append_int32, libduckdb), duckdb_state, (duckdb_appender, Int32), appender, value)
 end
 
 """
@@ -2626,7 +2626,7 @@ Append a duckdb_hugeint value to the appender.
 DUCKDB_API duckdb_state duckdb_append_hugeint(duckdb_appender appender, duckdb_hugeint value);
 """
 function duckdb_append_hugeint(appender, value)
-    return ccall((:duckdb_append_hugeint, libduckdb), duckdb_state, (duckdb_appender, Int64), appender, value)
+    return ccall((:duckdb_append_hugeint, libduckdb), duckdb_state, (duckdb_appender, Int128), appender, value)
 end
 
 """
@@ -2634,7 +2634,7 @@ Append a duckdb_uhugeint value to the appender.
 DUCKDB_API duckdb_state duckdb_append_uhugeint(duckdb_appender appender, duckdb_uhugeint value);
 """
 function duckdb_append_uhugeint(appender, value)
-    return ccall((:duckdb_append_uhugeint, libduckdb), duckdb_state, (duckdb_appender, UInt64), appender, value)
+    return ccall((:duckdb_append_uhugeint, libduckdb), duckdb_state, (duckdb_appender, UInt128), appender, value)
 end
 
 """
@@ -2642,7 +2642,7 @@ Append a uint8_t value to the appender.
 DUCKDB_API duckdb_state duckdb_append_uint8(duckdb_appender appender, uint8_t value);
 """
 function duckdb_append_uint8(appender, value)
-    return ccall((:duckdb_append_uint8, libduckdb), duckdb_state, (duckdb_appender, UInt16), appender, value)
+    return ccall((:duckdb_append_uint8, libduckdb), duckdb_state, (duckdb_appender, UInt8), appender, value)
 end
 
 """

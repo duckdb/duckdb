@@ -9,12 +9,12 @@
 #pragma once
 
 #include "duckdb/common/typedefs.hpp"
-#include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
+#include "duckdb/execution/operator/csv_scanner/header_value.hpp"
 
 namespace duckdb {
 
@@ -53,38 +53,43 @@ public:
 	CSVError() {};
 	CSVError(string error_message, CSVErrorType type, idx_t column_idx, string csv_row, LinesPerBoundary error_info,
 	         idx_t row_byte_position, optional_idx byte_position, const CSVReaderOptions &reader_options,
-	         const string &fixes);
+	         const string &fixes, const string &current_path);
 	CSVError(string error_message, CSVErrorType type, LinesPerBoundary error_info);
 	//! Produces error messages for column name -> type mismatch.
 	static CSVError ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names);
 	//! Produces error messages for casting errors
 	static CSVError CastError(const CSVReaderOptions &options, string &column_name, string &cast_error,
 	                          idx_t column_idx, string &csv_row, LinesPerBoundary error_info, idx_t row_byte_position,
-	                          optional_idx byte_position, LogicalTypeId type);
+	                          optional_idx byte_position, LogicalTypeId type, const string &current_path);
 	//! Produces error for when the line size exceeds the maximum line size option
 	static CSVError LineSizeError(const CSVReaderOptions &options, idx_t actual_size, LinesPerBoundary error_info,
-	                              string &csv_row, idx_t byte_position);
-	//! Produces error for when the sniffer couldn't find viable options
-	static CSVError SniffingError(string &file_path);
+	                              string &csv_row, idx_t byte_position, const string &current_path);
+	//! Produces an error message for a dialect sniffing error.
+	static CSVError SniffingError(const CSVReaderOptions &options, const string &search_space);
+	//! Produces an error message for a header sniffing error.
+	static CSVError HeaderSniffingError(const CSVReaderOptions &options, const vector<HeaderValue> &best_header_row,
+	                                    idx_t column_count, char delimiter);
 	//! Produces error messages for unterminated quoted values
 	static CSVError UnterminatedQuotesError(const CSVReaderOptions &options, idx_t current_column,
 	                                        LinesPerBoundary error_info, string &csv_row, idx_t row_byte_position,
-	                                        optional_idx byte_position);
+	                                        optional_idx byte_position, const string &current_path);
 	//! Produces error messages for null_padding option is set and we have quoted new values in parallel
-	static CSVError NullPaddingFail(const CSVReaderOptions &options, LinesPerBoundary error_info);
+	static CSVError NullPaddingFail(const CSVReaderOptions &options, LinesPerBoundary error_info,
+	                                const string &current_path);
 	//! Produces error for incorrect (e.g., smaller and lower than the predefined) number of columns in a CSV Line
 	static CSVError IncorrectColumnAmountError(const CSVReaderOptions &state_machine, idx_t actual_columns,
 	                                           LinesPerBoundary error_info, string &csv_row, idx_t row_byte_position,
-	                                           optional_idx byte_position);
+	                                           optional_idx byte_position, const string &current_path);
 	static CSVError InvalidUTF8(const CSVReaderOptions &options, idx_t current_column, LinesPerBoundary error_info,
-	                            string &csv_row, idx_t row_byte_position, optional_idx byte_position);
+	                            string &csv_row, idx_t row_byte_position, optional_idx byte_position,
+	                            const string &current_path);
 
-	idx_t GetBoundaryIndex() {
+	idx_t GetBoundaryIndex() const {
 		return error_info.boundary_idx;
 	}
 
 	//! We might want to remove newline in errors if we are doing them for the rejects tables
-	void RemoveNewLine(string &error);
+	static void RemoveNewLine(string &error);
 
 	//! Actual error message
 	string error_message;
@@ -94,15 +99,15 @@ public:
 	//! 3. Options that generated the error
 	string full_error_message;
 	//! Error Type
-	CSVErrorType type;
+	CSVErrorType type {};
 	//! Column Index where error happened
-	idx_t column_idx;
+	idx_t column_idx {};
 	//! Original CSV row where error happened
 	string csv_row;
 	//! Line information regarding this error
 	LinesPerBoundary error_info;
 	//! Byte position of where the row starts
-	idx_t row_byte_position;
+	idx_t row_byte_position {};
 	//! Byte Position where error occurred.
 	optional_idx byte_position;
 };
@@ -116,17 +121,14 @@ public:
 	void ErrorIfNeeded();
 	//! Inserts a finished error info
 	void Insert(idx_t boundary_idx, idx_t rows);
-	//! Method that actually throws the error
-	void ThrowError(CSVError csv_error);
-	//! If we processed all boundaries before the one that error-ed
-	bool CanGetLine(idx_t boundary_index);
-	//! Return the 1-indexed line number
 	idx_t GetLine(const LinesPerBoundary &error_info);
 	void NewMaxLineSize(idx_t scan_line_size);
+	//! Returns true if there are any errors
+	bool AnyErrors();
 	//! Set of errors
 	map<LinesPerBoundary, vector<CSVError>> errors;
 
-	idx_t GetMaxLineLength() {
+	idx_t GetMaxLineLength() const {
 		return max_line_length;
 	}
 	void DontPrintErrorLine() {
@@ -134,8 +136,15 @@ public:
 	}
 
 private:
+	//! Private methods should always be locked by parent method.
 	//! If we should print the line of an error
-	bool PrintLineNumber(CSVError &error);
+	bool PrintLineNumber(const CSVError &error) const;
+	//! Method that actually throws the error
+	void ThrowError(const CSVError &csv_error);
+	//! If we processed all boundaries before the one that error-ed
+	bool CanGetLine(idx_t boundary_index);
+	//! Return the 1-indexed line number
+	idx_t GetLineInternal(const LinesPerBoundary &error_info);
 	//! CSV Error Handler Mutex
 	mutex main_mutex;
 	//! Map of <boundary indexes> -> lines read

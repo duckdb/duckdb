@@ -25,7 +25,7 @@ bool PerfectHashJoinExecutor::BuildPerfectHashTable(LogicalType &key_type) {
 	}
 
 	// and for duplicate_checking
-	bitmap_build_idx = make_unsafe_uniq_array<bool>(build_size);
+	bitmap_build_idx = make_unsafe_uniq_array_uninitialized<bool>(build_size);
 	memset(bitmap_build_idx.get(), 0, sizeof(bool) * build_size); // set false
 
 	// Now fill columns with build data

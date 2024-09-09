@@ -43,7 +43,9 @@ public:
 
 	py::dict FetchTF();
 
-	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t rows_per_batch);
+	ArrowArrayStream FetchArrowArrayStream(idx_t rows_per_batch = 1000000);
+	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t rows_per_batch = 1000000);
+	py::object FetchArrowCapsule(idx_t rows_per_batch = 1000000);
 
 	static py::list GetDescription(const vector<string> &names, const vector<LogicalType> &types);
 

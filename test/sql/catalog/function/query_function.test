@@ -1,0 +1,283 @@
+# name: test/sql/catalog/function/query_function.test
+# description: test query() function
+# group: [function]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT * FROM query('SELECT 42');
+----
+42
+
+query I
+FROM query('SELECT 42 AS a');
+----
+42
+
+query I
+FROM query('SELECT 10 + 32;');
+----
+42
+
+query I
+FROM query('SELECT abs(-42)');
+----
+42
+
+query I
+SELECT * FROM query('SELECT * FROM (SELECT 1 + 2)');
+----
+3
+
+query III
+FROM query('SELECT 1, 2, 3');
+----
+1	2	3
+
+query I
+FROM query('SELECT 42;;;--- hello;');
+----
+42
+
+# query text
+query I
+SELECT * FROM query('SELECT ''hello''');
+----
+hello
+
+# query a table
+statement ok
+CREATE TABLE tbl (a INT, b INT, c INT);
+
+statement ok
+FROM query('SELECT *, 1 + 2 FROM tbl');
+
+statement ok
+INSERT INTO tbl VALUES (1, 2, 3), (4, 5, 6), (7, 8, 9);
+
+query III
+SELECT * FROM query('FROM tbl');
+----
+1	2	3
+4	5	6
+7	8	9
+
+query I
+SELECT * FROM query('SELECT a + b + c FROM tbl');
+----
+6
+15
+24
+
+# query multiple nested type tags
+query II
+SELECT * FROM query('WITH a(i) AS (SELECT 1) SELECT a1.i AS i1, a2.i AS i2 FROM a AS a1, a AS a2');
+----
+1	1
+
+# test incorrect usage
+statement error
+SELECT * FROM query(NULL);
+----
+<REGEX>:Parser Error.*NULL.*
+
+statement error
+SELECT * FROM query(' ');
+----
+Parser Error: Expected a single SELECT statement
+
+statement error
+SELECT * FROM query('');
+----
+Parser Error: Expected a single SELECT statement
+
+statement error
+SELECT * FROM query('FROM query(FROM)');
+----
+Parser Error: syntax error at or near "FROM"
+
+# multiple statements are not supported
+statement error
+SELECT * FROM query('SELECT 1; SELECT 2');
+----
+Parser Error: Expected a single SELECT statement
+
+# invalid input
+statement error
+SELECT query(SELECT 1);
+----
+Parser Error: syntax error at or near "SELECT"
+
+statement error
+SELECT * FROM query('CREATE TABLE tbl (a INT)');
+----
+Parser Error: Expected a single SELECT statement
+
+
+# test query_table()
+statement ok
+CREATE TABLE tbl_int AS SELECT 42;
+
+statement ok
+CREATE TABLE tbl_varchar AS SELECT 'duckdb';
+
+statement ok
+CREATE TABLE tbl2_varchar AS SELECT '1?ch@racter$';
+
+statement ok
+CREATE TABLE tbl_empty AS SELECT '';
+
+query I
+FROM query_table('tbl_int');
+----
+42
+
+query I
+FROM query_table(['tbl_int']);
+----
+42
+
+query III
+FROM query_table(tbl);
+----
+1	2	3
+4	5	6
+7	8	9
+
+statement ok
+CREATE TABLE tbl2 (a INT, b INT, c INT);
+
+statement ok
+INSERT INTO tbl2 VALUES (9, 8, 7), (6, 5, 4), (3, 2, 1);
+
+query III
+FROM query_table([tbl, tbl2]);
+----
+1	2	3
+4	5	6
+7	8	9
+9	8	7
+6	5	4
+3	2	1
+
+# test incorrect usage
+statement error
+FROM query_table();
+----
+No function matches the given name and argument types 'query_table()'.
+
+statement error
+FROM query_table(NULL);
+----
+<REGEX>:.*Cannot use NULL.*
+
+statement error
+FROM query_table([]);
+----
+Binder Error: No function matches the given name and argument types 'query_table(INTEGER[])'.
+
+statement error
+FROM query_table(['']);
+----
+Parser Error: syntax error at end of input
+
+statement error
+FROM query_table('tbl_int', 'tbl_varchar', tbl2_varchar);
+----
+Binder Error: No function matches the given name and argument types 'query_table(VARCHAR, VARCHAR, VARCHAR)'.
+
+statement error
+FROM query_table([tbl_int, tbl2]);
+----
+Binder Error: Set operations can only apply to expressions with the same number of result columns
+
+statement error
+FROM query_table(not_defined_tbl);
+----
+Catalog Error: Table with name not_defined_tbl does not exist!
+
+statement error
+FROM query_table('FROM query(''select 1 + 2;'')');
+----
+Catalog Error: Table with name FROM query('select 1 + 2;') does not exist!
+
+statement error
+FROM query_table('FROM query("select 1 + 2;")');
+----
+Catalog Error: Table with name FROM query("select 1 + 2;") does not exist!
+
+statement error
+FROM query_table('(SELECT 17 + 25)');
+----
+Catalog Error: Table with name (SELECT 17 + 25) does not exist!
+
+# tables with special table names
+statement ok
+CREATE TABLE "(SELECT 17 + 25)"(i int);
+
+statement ok
+insert into "(SELECT 17 + 25)" values (100);
+
+query I
+SELECT * FROM "(SELECT 17 + 25)";
+----
+100
+
+query I 
+FROM query_table("(SELECT 17 + 25)");
+----
+100
+
+query I 
+FROM query_table('(SELECT 17 + 25)');
+----
+100
+
+statement error
+FROM query_table(SELECT 17 + 25);
+----
+Parser Error: syntax error at or near "SELECT"
+
+statement error 
+FROM query_table("SELECT 4 + 2");
+----
+Catalog Error: Table with name SELECT 4 + 2 does not exist!
+
+statement error
+FROM query_table('SELECT 4 + 2');
+----
+Catalog Error: Table with name SELECT 4 + 2 does not exist!
+
+# test by_name argument
+query I
+FROM query_table(['tbl_int', 'tbl_varchar', 'tbl_empty', 'tbl2_varchar'], false);
+----
+42
+duckdb
+(empty)
+1?ch@racter$
+
+query IIII
+from query_table([tbl_int, tbl_varchar, tbl_empty, tbl2_varchar], true);
+----
+42	NULL	NULL	NULL
+NULL	duckdb	NULL	NULL
+NULL	NULL	(empty)	NULL
+NULL	NULL	NULL	1?ch@racter$
+
+# test incorrect usage
+statement error
+FROM query_table(true);
+----
+Binder Error: No function matches the given name and argument types 'query_table(BOOLEAN)'.
+
+statement error
+FROM query_table(tbl2, true);
+----
+Binder Error: No function matches the given name and argument types 'query_table(VARCHAR, BOOLEAN)'.
+
+statement error
+FROM query_table(['tbl_int', 'tbl_varchar', 'tbl_empty', '(select ''I am a subquery'')'], false);
+----
+Catalog Error: Table with name (select 'I am a subquery') does not exist!

@@ -92,8 +92,6 @@ enum class PartialBlockType { FULL_CHECKPOINT, APPEND_TO_TABLE };
 //! In any case, they must share a block manager.
 class PartialBlockManager {
 public:
-	//! 20% free / 80% utilization
-	static constexpr const idx_t DEFAULT_MAX_PARTIAL_BLOCK_SIZE = Storage::BLOCK_SIZE / 5 * 4;
 	//! Max number of shared references to a block. No effective limit by default.
 	static constexpr const idx_t DEFAULT_MAX_USE_COUNT = 1u << 20;
 	//! No point letting map size grow unbounded. We'll drop blocks with the
@@ -102,7 +100,7 @@ public:
 
 public:
 	PartialBlockManager(BlockManager &block_manager, PartialBlockType partial_block_type,
-	                    uint32_t max_partial_block_size = DEFAULT_MAX_PARTIAL_BLOCK_SIZE,
+	                    optional_idx max_partial_block_size = optional_idx(),
 	                    uint32_t max_use_count = DEFAULT_MAX_USE_COUNT);
 	virtual ~PartialBlockManager();
 
@@ -128,6 +126,12 @@ public:
 		return unique_lock<mutex>(partial_block_lock);
 	}
 
+	//! Returns a reference to the underlying block manager.
+	BlockManager &GetBlockManager() const;
+
+	//! Registers a block as "written" by this partial block manager
+	void AddWrittenBlock(block_id_t block);
+
 protected:
 	BlockManager &block_manager;
 	PartialBlockType partial_block_type;
@@ -151,7 +155,6 @@ protected:
 	bool GetPartialBlock(idx_t segment_size, unique_ptr<PartialBlock> &state);
 
 	bool HasBlockAllocation(uint32_t segment_size);
-	void AddWrittenBlock(block_id_t block);
 };
 
 } // namespace duckdb

@@ -31,7 +31,7 @@ public:
 
 public:
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
-		context.thread.profiler.Flush(op, executor, "filter", 0);
+		context.thread.profiler.Flush(op);
 	}
 };
 
@@ -52,10 +52,10 @@ OperatorResultType PhysicalFilter::ExecuteInternal(ExecutionContext &context, Da
 	return OperatorResultType::NEED_MORE_INPUT;
 }
 
-string PhysicalFilter::ParamsToString() const {
-	auto result = expression->GetName();
-	result += "\n[INFOSEPARATOR]\n";
-	result += StringUtil::Format("EC: %llu", estimated_cardinality);
+InsertionOrderPreservingMap<string> PhysicalFilter::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	result["__expression__"] = expression->GetName();
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 

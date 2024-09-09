@@ -49,7 +49,7 @@ bool UUID::FromString(const string &str, hugeint_t &result) {
 		count++;
 	}
 	// Flip the first bit to make `order by uuid` same as `order by uuid::varchar`
-	result.upper ^= (uint64_t(1) << 63);
+	result.upper ^= NumericLimits<int64_t>::Minimum();
 	return count == 32;
 }
 

@@ -100,8 +100,6 @@ private:
 	shared_ptr<BlockHandle> block_handle;
 
 private:
-	//! Returns the maximum non-free offset in a bitmask
-	uint32_t GetMaxOffset(const idx_t available_segments_per_buffer);
 	//! Sets all uninitialized regions of a buffer in the respective partial block allocation
 	void SetUninitializedRegions(PartialBlockForIndex &p_block_for_index, const idx_t segment_size, const idx_t offset,
 	                             const idx_t bitmask_offset);

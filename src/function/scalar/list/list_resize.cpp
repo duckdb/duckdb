@@ -6,104 +6,113 @@
 
 namespace duckdb {
 
-void ListResizeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	D_ASSERT(args.data[1].GetType().id() == LogicalTypeId::UBIGINT);
+void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &result) {
+
+	// Early-out, if the return value is a constant NULL.
 	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		ConstantVector::SetNull(result, true);
 		return;
 	}
-	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
-	auto count = args.size();
-
-	result.SetVectorType(VectorType::FLAT_VECTOR);
 
 	auto &lists = args.data[0];
-	auto &child = ListVector::GetEntry(args.data[0]);
 	auto &new_sizes = args.data[1];
+	auto row_count = args.size();
 
-	UnifiedVectorFormat list_data;
-	lists.ToUnifiedFormat(count, list_data);
-	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
+	UnifiedVectorFormat lists_data;
+	lists.ToUnifiedFormat(row_count, lists_data);
+	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
+	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(lists_data);
 
-	UnifiedVectorFormat new_size_data;
-	new_sizes.ToUnifiedFormat(count, new_size_data);
-	auto new_size_entries = UnifiedVectorFormat::GetData<uint64_t>(new_size_data);
-
+	auto &child_vector = ListVector::GetEntry(lists);
 	UnifiedVectorFormat child_data;
-	child.ToUnifiedFormat(count, child_data);
+	child_vector.ToUnifiedFormat(row_count, child_data);
 
-	// Find the new size of the result child vector
-	idx_t new_child_size = 0;
-	for (idx_t i = 0; i < count; i++) {
-		auto index = new_size_data.sel->get_index(i);
-		if (new_size_data.validity.RowIsValid(index)) {
-			new_child_size += new_size_entries[index];
+	UnifiedVectorFormat new_sizes_data;
+	new_sizes.ToUnifiedFormat(row_count, new_sizes_data);
+	D_ASSERT(new_sizes.GetType().id() == LogicalTypeId::UBIGINT);
+	auto new_size_entries = UnifiedVectorFormat::GetData<uint64_t>(new_sizes_data);
+
+	// Get the new size of the result child vector.
+	// We skip rows with NULL values in the input lists.
+	idx_t child_vector_size = 0;
+	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+		auto list_idx = lists_data.sel->get_index(row_idx);
+		auto new_size_idx = new_sizes_data.sel->get_index(row_idx);
+
+		if (lists_data.validity.RowIsValid(list_idx) && new_sizes_data.validity.RowIsValid(new_size_idx)) {
+			child_vector_size += new_size_entries[new_size_idx];
 		}
 	}
+	ListVector::Reserve(result, child_vector_size);
+	ListVector::SetListSize(result, child_vector_size);
 
-	// Create the default vector if it exists
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto result_entries = FlatVector::GetData<list_entry_t>(result);
+	auto &result_validity = FlatVector::Validity(result);
+	auto &result_child_vector = ListVector::GetEntry(result);
+
+	// Get the default values, if provided.
 	UnifiedVectorFormat default_data;
 	optional_ptr<Vector> default_vector;
 	if (args.ColumnCount() == 3) {
 		default_vector = &args.data[2];
-		default_vector->Flatten(count);
-		default_vector->ToUnifiedFormat(count, default_data);
-		default_vector->SetVectorType(VectorType::CONSTANT_VECTOR);
+		default_vector->ToUnifiedFormat(row_count, default_data);
 	}
 
-	ListVector::Reserve(result, new_child_size);
-	ListVector::SetListSize(result, new_child_size);
+	idx_t offset = 0;
+	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 
-	auto result_entries = FlatVector::GetData<list_entry_t>(result);
-	auto &result_child = ListVector::GetEntry(result);
+		auto list_idx = lists_data.sel->get_index(row_idx);
+		auto new_size_idx = new_sizes_data.sel->get_index(row_idx);
 
-	// for each lists in the args
-	idx_t result_child_offset = 0;
-	for (idx_t args_index = 0; args_index < count; args_index++) {
-		auto l_index = list_data.sel->get_index(args_index);
-		auto new_index = new_size_data.sel->get_index(args_index);
-
-		// set null if lists is null
-		if (!list_data.validity.RowIsValid(l_index)) {
-			FlatVector::SetNull(result, args_index, true);
+		// Set to NULL, if the list is NULL.
+		if (!lists_data.validity.RowIsValid(list_idx)) {
+			result_validity.SetInvalid(row_idx);
 			continue;
 		}
 
-		idx_t new_size_entry = 0;
-		if (new_size_data.validity.RowIsValid(new_index)) {
-			new_size_entry = new_size_entries[new_index];
+		idx_t new_size = 0;
+		if (new_sizes_data.validity.RowIsValid(new_size_idx)) {
+			new_size = new_size_entries[new_size_idx];
 		}
 
-		// find the smallest size between lists and new_sizes
-		auto values_to_copy = MinValue<idx_t>(list_entries[l_index].length, new_size_entry);
+		// If new_size >= length, then we copy [0, length) values.
+		// If new_size < length, then we copy [0, new_size) values.
+		auto copy_count = MinValue<idx_t>(list_entries[list_idx].length, new_size);
 
-		// set the result entry
-		result_entries[args_index].offset = result_child_offset;
-		result_entries[args_index].length = new_size_entry;
+		// Set the result entry.
+		result_entries[row_idx].offset = offset;
+		result_entries[row_idx].length = new_size;
 
-		// copy the values from the child vector
-		VectorOperations::Copy(child, result_child, list_entries[l_index].offset + values_to_copy,
-		                       list_entries[l_index].offset, result_child_offset);
-		result_child_offset += values_to_copy;
+		// Copy the child vector's values.
+		// The number of elements to copy is later determined like so: source_count - source_offset.
+		idx_t source_offset = list_entries[list_idx].offset;
+		idx_t source_count = source_offset + copy_count;
+		VectorOperations::Copy(child_vector, result_child_vector, source_count, source_offset, offset);
+		offset += copy_count;
 
-		// set default value if it exists
-		idx_t def_index = 0;
-		if (args.ColumnCount() == 3) {
-			def_index = default_data.sel->get_index(args_index);
-		}
+		// Fill the remaining space with the default values.
+		if (copy_count < new_size) {
+			idx_t remaining_count = new_size - copy_count;
 
-		// if the new size is larger than the old size, fill in the default value
-		if (values_to_copy < new_size_entry) {
-			if (default_vector && default_data.validity.RowIsValid(def_index)) {
-				VectorOperations::Copy(*default_vector, result_child, new_size_entry - values_to_copy, def_index,
-				                       result_child_offset);
-				result_child_offset += new_size_entry - values_to_copy;
-			} else {
-				for (idx_t j = values_to_copy; j < new_size_entry; j++) {
-					FlatVector::SetNull(result_child, result_child_offset, true);
-					result_child_offset++;
+			if (default_vector) {
+				auto default_idx = default_data.sel->get_index(row_idx);
+				if (default_data.validity.RowIsValid(default_idx)) {
+					SelectionVector sel(remaining_count);
+					for (idx_t j = 0; j < remaining_count; j++) {
+						sel.set_index(j, row_idx);
+					}
+					VectorOperations::Copy(*default_vector, result_child_vector, sel, remaining_count, 0, offset);
+					offset += remaining_count;
+					continue;
 				}
+			}
+
+			// Fill the remaining space with NULL.
+			for (idx_t j = copy_count; j < new_size; j++) {
+				FlatVector::SetNull(result_child_vector, offset, true);
+				offset++;
 			}
 		}
 	}
@@ -118,23 +127,23 @@ static unique_ptr<FunctionData> ListResizeBind(ClientContext &context, ScalarFun
 	D_ASSERT(bound_function.arguments.size() == 2 || arguments.size() == 3);
 	bound_function.arguments[1] = LogicalType::UBIGINT;
 
-	// If the first argument is an array, cast it to a list
+	// If the first argument is an array, cast it to a list.
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
-	// first argument is constant NULL
+	// Early-out, if the first argument is a constant NULL.
 	if (arguments[0]->return_type == LogicalType::SQLNULL) {
 		bound_function.arguments[0] = LogicalType::SQLNULL;
 		bound_function.return_type = LogicalType::SQLNULL;
 		return make_uniq<VariableReturnBindData>(bound_function.return_type);
 	}
 
-	// prepared statements
+	// Early-out, if the first argument is a prepared statement.
 	if (arguments[0]->return_type == LogicalType::UNKNOWN) {
 		bound_function.return_type = arguments[0]->return_type;
 		return make_uniq<VariableReturnBindData>(bound_function.return_type);
 	}
 
-	// default type does not match list type
+	// Attempt implicit casting, if the default type does not match list the list child type.
 	if (bound_function.arguments.size() == 3 &&
 	    ListType::GetChildType(arguments[0]->return_type) != arguments[2]->return_type &&
 	    arguments[2]->return_type != LogicalTypeId::SQLNULL) {
@@ -146,22 +155,22 @@ static unique_ptr<FunctionData> ListResizeBind(ClientContext &context, ScalarFun
 }
 
 void ListResizeFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunction sfun({LogicalType::LIST(LogicalTypeId::ANY), LogicalTypeId::ANY},
-	                    LogicalType::LIST(LogicalTypeId::ANY), ListResizeFunction, ListResizeBind);
-	sfun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	ScalarFunction simple_fun({LogicalType::LIST(LogicalTypeId::ANY), LogicalTypeId::ANY},
+	                          LogicalType::LIST(LogicalTypeId::ANY), ListResizeFunction, ListResizeBind);
+	simple_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 
-	ScalarFunction dfun({LogicalType::LIST(LogicalTypeId::ANY), LogicalTypeId::ANY, LogicalTypeId::ANY},
-	                    LogicalType::LIST(LogicalTypeId::ANY), ListResizeFunction, ListResizeBind);
-	dfun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	ScalarFunction default_value_fun({LogicalType::LIST(LogicalTypeId::ANY), LogicalTypeId::ANY, LogicalTypeId::ANY},
+	                                 LogicalType::LIST(LogicalTypeId::ANY), ListResizeFunction, ListResizeBind);
+	default_value_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 
 	ScalarFunctionSet list_resize("list_resize");
-	list_resize.AddFunction(sfun);
-	list_resize.AddFunction(dfun);
+	list_resize.AddFunction(simple_fun);
+	list_resize.AddFunction(default_value_fun);
 	set.AddFunction(list_resize);
 
 	ScalarFunctionSet array_resize("array_resize");
-	array_resize.AddFunction(sfun);
-	array_resize.AddFunction(dfun);
+	array_resize.AddFunction(simple_fun);
+	array_resize.AddFunction(default_value_fun);
 	set.AddFunction(array_resize);
 }
 

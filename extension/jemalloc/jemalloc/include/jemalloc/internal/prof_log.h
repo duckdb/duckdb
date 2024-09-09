@@ -1,9 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_PROF_LOG_H
 #define JEMALLOC_INTERNAL_PROF_LOG_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/mutex.h"
-
-namespace duckdb_jemalloc {
 
 extern malloc_mutex_t log_mtx;
 
@@ -20,7 +19,5 @@ void prof_log_dummy_set(bool new_value);
 
 bool prof_log_start(tsdn_t *tsdn, const char *filename);
 bool prof_log_stop(tsdn_t *tsdn);
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_PROF_LOG_H */

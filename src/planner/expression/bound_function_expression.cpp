@@ -73,7 +73,7 @@ bool BoundFunctionExpression::Equals(const BaseExpression &other_p) const {
 	return true;
 }
 
-unique_ptr<Expression> BoundFunctionExpression::Copy() {
+unique_ptr<Expression> BoundFunctionExpression::Copy() const {
 	vector<unique_ptr<Expression>> new_children;
 	new_children.reserve(children.size());
 	for (auto &child : children) {
@@ -104,9 +104,15 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deseri
 	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");
 	auto entry = FunctionSerializer::Deserialize<ScalarFunction, ScalarFunctionCatalogEntry>(
 	    deserializer, CatalogType::SCALAR_FUNCTION_ENTRY, children, return_type);
-	auto result = make_uniq<BoundFunctionExpression>(std::move(return_type), std::move(entry.first),
+	auto function_return_type = entry.first.return_type;
+	auto result = make_uniq<BoundFunctionExpression>(std::move(function_return_type), std::move(entry.first),
 	                                                 std::move(children), std::move(entry.second));
 	deserializer.ReadProperty(202, "is_operator", result->is_operator);
+	if (result->return_type != return_type) {
+		// return type mismatch - push a cast
+		auto &context = deserializer.Get<ClientContext &>();
+		return BoundCastExpression::AddCastToType(context, std::move(result), return_type);
+	}
 	return std::move(result);
 }
 

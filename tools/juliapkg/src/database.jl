@@ -108,7 +108,7 @@ DBInterface.connect(db::DB) = Connection(db.handle)
 DBInterface.close!(db::DB) = close_database(db)
 DBInterface.close!(con::Connection) = _close_connection(con)
 Base.close(db::DB) = close_database(db)
-Base.isopen(db::DB) = db.handle != C_NULL
+Base.isopen(db::DB) = db.handle.handle != C_NULL
 
 Base.show(io::IO, db::DuckDB.DB) = print(io, string("DuckDB.DB(", "\"$(db.handle.file)\"", ")"))
 Base.show(io::IO, con::DuckDB.Connection) = print(io, string("DuckDB.Connection(", "\"$(con.db.file)\"", ")"))

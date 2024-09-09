@@ -257,6 +257,9 @@ int mbedtls_internal_sha256_process( mbedtls_sha256_context *ctx,
     return( 0 );
 }
 
+#undef P
+#undef R
+
 #endif /* !MBEDTLS_SHA256_PROCESS_ALT */
 
 /*

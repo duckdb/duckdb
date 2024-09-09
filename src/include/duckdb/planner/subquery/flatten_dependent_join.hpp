@@ -29,7 +29,8 @@ struct FlattenDependentJoins {
 	bool MarkSubtreeCorrelated(LogicalOperator &op);
 
 	//! Push the dependent join down a LogicalOperator
-	unique_ptr<LogicalOperator> PushDownDependentJoin(unique_ptr<LogicalOperator> plan);
+	unique_ptr<LogicalOperator> PushDownDependentJoin(unique_ptr<LogicalOperator> plan,
+	                                                  bool propagates_null_values = true);
 
 	Binder &binder;
 	ColumnBinding base_binding;

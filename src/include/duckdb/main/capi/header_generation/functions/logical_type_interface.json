@@ -1,0 +1,594 @@
+{
+    "group": "logical_type_interface",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_create_logical_type",
+            "return_type": "duckdb_logical_type",
+            "params": [
+                {
+                    "type": "duckdb_type",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Creates a `duckdb_logical_type` from a primitive type.\nThe resulting logical type must be destroyed with `duckdb_destroy_logical_type`.\n\nReturns an invalid logical type, if type is: `DUCKDB_TYPE_INVALID`, `DUCKDB_TYPE_DECIMAL`, `DUCKDB_TYPE_ENUM`,\n`DUCKDB_TYPE_LIST`, `DUCKDB_TYPE_STRUCT`, `DUCKDB_TYPE_MAP`, `DUCKDB_TYPE_ARRAY`, or `DUCKDB_TYPE_UNION`.\n\n",
+                "param_comments": {
+                    "type": "The primitive type to create."
+                },
+                "return_value": "The logical type."
+            }
+        },
+        {
+            "name": "duckdb_logical_type_get_alias",
+            "return_type": "char *",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Returns the alias of a duckdb_logical_type, if set, else `nullptr`.\nThe result must be destroyed with `duckdb_free`.\n\n",
+                "param_comments": {
+                    "type": "The logical type"
+                },
+                "return_value": "The alias or `nullptr`"
+            }
+        },
+        {
+            "name": "duckdb_logical_type_set_alias",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                },
+                {
+                    "type": "const char *",
+                    "name": "alias"
+                }
+            ],
+            "comment": {
+                "description": "Sets the alias of a duckdb_logical_type.\n\n",
+                "param_comments": {
+                    "type": "The logical type",
+                    "alias": "The alias to set"
+                }
+            }
+        },
+        {
+            "name": "duckdb_create_list_type",
+            "return_type": "duckdb_logical_type",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Creates a LIST type from its child type.\nThe return type must be destroyed with `duckdb_destroy_logical_type`.\n\n",
+                "param_comments": {
+                    "type": "The child type of the list"
+                },
+                "return_value": "The logical type."
+            }
+        },
+        {
+            "name": "duckdb_create_array_type",
+            "return_type": "duckdb_logical_type",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "array_size"
+                }
+            ],
+            "comment": {
+                "description": "Creates an ARRAY type from its child type.\nThe return type must be destroyed with `duckdb_destroy_logical_type`.\n\n",
+                "param_comments": {
+                    "type": "The child type of the array.",
+                    "array_size": "The number of elements in the array."
+                },
+                "return_value": "The logical type."
+            }
+        },
+        {
+            "name": "duckdb_create_map_type",
+            "return_type": "duckdb_logical_type",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "key_type"
+                },
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "value_type"
+                }
+            ],
+            "comment": {
+                "description": "Creates a MAP type from its key type and value type.\nThe return type must be destroyed with `duckdb_destroy_logical_type`.\n\n",
+                "param_comments": {
+                    "key_type": "The map's key type.",
+                    "value_type": "The map's value type."
+                },
+                "return_value": "The logical type."
+            }
+        },
+        {
+            "name": "duckdb_create_union_type",
+            "return_type": "duckdb_logical_type",
+            "params": [
+                {
+                    "type": "duckdb_logical_type *",
+                    "name": "member_types"
+                },
+                {
+                    "type": "const char **",
+                    "name": "member_names"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "member_count"
+                }
+            ],
+            "comment": {
+                "description": "Creates a UNION type from the passed arrays.\nThe return type must be destroyed with `duckdb_destroy_logical_type`.\n\n",
+                "param_comments": {
+                    "member_types": "The array of union member types.",
+                    "member_names": "The union member names.",
+                    "member_count": "The number of union members."
+                },
+                "return_value": "The logical type."
+            }
+        },
+        {
+            "name": "duckdb_create_struct_type",
+            "return_type": "duckdb_logical_type",
+            "params": [
+                {
+                    "type": "duckdb_logical_type *",
+                    "name": "member_types"
+                },
+                {
+                    "type": "const char **",
+                    "name": "member_names"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "member_count"
+                }
+            ],
+            "comment": {
+                "description": "Creates a STRUCT type based on the member types and names.\nThe resulting type must be destroyed with `duckdb_destroy_logical_type`.\n\n",
+                "param_comments": {
+                    "member_types": "The array of types of the struct members.",
+                    "member_names": "The array of names of the struct members.",
+                    "member_count": "The number of members of the struct."
+                },
+                "return_value": "The logical type."
+            }
+        },
+        {
+            "name": "duckdb_create_enum_type",
+            "return_type": "duckdb_logical_type",
+            "params": [
+                {
+                    "type": "const char **",
+                    "name": "member_names"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "member_count"
+                }
+            ],
+            "comment": {
+                "description": "Creates an ENUM type from the passed member name array.\nThe resulting type should be destroyed with `duckdb_destroy_logical_type`.\n\n",
+                "param_comments": {
+                    "member_names": "The array of names that the enum should consist of.",
+                    "member_count": "The number of elements that were specified in the array."
+                },
+                "return_value": "The logical type."
+            }
+        },
+        {
+            "name": "duckdb_create_decimal_type",
+            "return_type": "duckdb_logical_type",
+            "params": [
+                {
+                    "type": "uint8_t",
+                    "name": "width"
+                },
+                {
+                    "type": "uint8_t",
+                    "name": "scale"
+                }
+            ],
+            "comment": {
+                "description": "Creates a DECIMAL type with the specified width and scale.\nThe resulting type should be destroyed with `duckdb_destroy_logical_type`.\n\n",
+                "param_comments": {
+                    "width": "The width of the decimal type",
+                    "scale": "The scale of the decimal type"
+                },
+                "return_value": "The logical type."
+            }
+        },
+        {
+            "name": "duckdb_get_type_id",
+            "return_type": "duckdb_type",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the enum `duckdb_type` of a `duckdb_logical_type`.\n\n",
+                "param_comments": {
+                    "type": "The logical type."
+                },
+                "return_value": "The `duckdb_type` id."
+            }
+        },
+        {
+            "name": "duckdb_decimal_width",
+            "return_type": "uint8_t",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the width of a decimal type.\n\n",
+                "param_comments": {
+                    "type": "The logical type object"
+                },
+                "return_value": "The width of the decimal type"
+            }
+        },
+        {
+            "name": "duckdb_decimal_scale",
+            "return_type": "uint8_t",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the scale of a decimal type.\n\n",
+                "param_comments": {
+                    "type": "The logical type object"
+                },
+                "return_value": "The scale of the decimal type"
+            }
+        },
+        {
+            "name": "duckdb_decimal_internal_type",
+            "return_type": "duckdb_type",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the internal storage type of a decimal type.\n\n",
+                "param_comments": {
+                    "type": "The logical type object"
+                },
+                "return_value": "The internal type of the decimal type"
+            }
+        },
+        {
+            "name": "duckdb_enum_internal_type",
+            "return_type": "duckdb_type",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the internal storage type of an enum type.\n\n",
+                "param_comments": {
+                    "type": "The logical type object"
+                },
+                "return_value": "The internal type of the enum type"
+            }
+        },
+        {
+            "name": "duckdb_enum_dictionary_size",
+            "return_type": "uint32_t",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the dictionary size of the enum type.\n\n",
+                "param_comments": {
+                    "type": "The logical type object"
+                },
+                "return_value": "The dictionary size of the enum type"
+            }
+        },
+        {
+            "name": "duckdb_enum_dictionary_value",
+            "return_type": "char *",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the dictionary value at the specified position from the enum.\n\nThe result must be freed with `duckdb_free`.\n\n",
+                "param_comments": {
+                    "type": "The logical type object",
+                    "index": "The index in the dictionary"
+                },
+                "return_value": "The string value of the enum type. Must be freed with `duckdb_free`."
+            }
+        },
+        {
+            "name": "duckdb_list_type_child_type",
+            "return_type": "duckdb_logical_type",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the child type of the given LIST type. Also accepts MAP types.\nThe result must be freed with `duckdb_destroy_logical_type`.\n\n",
+                "param_comments": {
+                    "type": "The logical type, either LIST or MAP."
+                },
+                "return_value": "The child type of the LIST or MAP type."
+            }
+        },
+        {
+            "name": "duckdb_array_type_child_type",
+            "return_type": "duckdb_logical_type",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the child type of the given ARRAY type.\n\nThe result must be freed with `duckdb_destroy_logical_type`.\n\n",
+                "param_comments": {
+                    "type": "The logical type. Must be ARRAY."
+                },
+                "return_value": "The child type of the ARRAY type."
+            }
+        },
+        {
+            "name": "duckdb_array_type_array_size",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the array size of the given array type.\n\n",
+                "param_comments": {
+                    "type": "The logical type object"
+                },
+                "return_value": "The fixed number of elements the values of this array type can store."
+            }
+        },
+        {
+            "name": "duckdb_map_type_key_type",
+            "return_type": "duckdb_logical_type",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the key type of the given map type.\n\nThe result must be freed with `duckdb_destroy_logical_type`.\n\n",
+                "param_comments": {
+                    "type": "The logical type object"
+                },
+                "return_value": "The key type of the map type. Must be destroyed with `duckdb_destroy_logical_type`."
+            }
+        },
+        {
+            "name": "duckdb_map_type_value_type",
+            "return_type": "duckdb_logical_type",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the value type of the given map type.\n\nThe result must be freed with `duckdb_destroy_logical_type`.\n\n",
+                "param_comments": {
+                    "type": "The logical type object"
+                },
+                "return_value": "The value type of the map type. Must be destroyed with `duckdb_destroy_logical_type`."
+            }
+        },
+        {
+            "name": "duckdb_struct_type_child_count",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Returns the number of children of a struct type.\n\n",
+                "param_comments": {
+                    "type": "The logical type object"
+                },
+                "return_value": "The number of children of a struct type."
+            }
+        },
+        {
+            "name": "duckdb_struct_type_child_name",
+            "return_type": "char *",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the name of the struct child.\n\nThe result must be freed with `duckdb_free`.\n\n",
+                "param_comments": {
+                    "type": "The logical type object",
+                    "index": "The child index"
+                },
+                "return_value": "The name of the struct type. Must be freed with `duckdb_free`."
+            }
+        },
+        {
+            "name": "duckdb_struct_type_child_type",
+            "return_type": "duckdb_logical_type",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the child type of the given struct type at the specified index.\n\nThe result must be freed with `duckdb_destroy_logical_type`.\n\n",
+                "param_comments": {
+                    "type": "The logical type object",
+                    "index": "The child index"
+                },
+                "return_value": "The child type of the struct type. Must be destroyed with `duckdb_destroy_logical_type`."
+            }
+        },
+        {
+            "name": "duckdb_union_type_member_count",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Returns the number of members that the union type has.\n\n",
+                "param_comments": {
+                    "type": "The logical type (union) object"
+                },
+                "return_value": "The number of members of a union type."
+            }
+        },
+        {
+            "name": "duckdb_union_type_member_name",
+            "return_type": "char *",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the name of the union member.\n\nThe result must be freed with `duckdb_free`.\n\n",
+                "param_comments": {
+                    "type": "The logical type object",
+                    "index": "The child index"
+                },
+                "return_value": "The name of the union member. Must be freed with `duckdb_free`."
+            }
+        },
+        {
+            "name": "duckdb_union_type_member_type",
+            "return_type": "duckdb_logical_type",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the child type of the given union member at the specified index.\n\nThe result must be freed with `duckdb_destroy_logical_type`.\n\n",
+                "param_comments": {
+                    "type": "The logical type object",
+                    "index": "The child index"
+                },
+                "return_value": "The child type of the union member. Must be destroyed with `duckdb_destroy_logical_type`."
+            }
+        },
+        {
+            "name": "duckdb_destroy_logical_type",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_logical_type *",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Destroys the logical type and de-allocates all memory allocated for that type.\n\n",
+                "param_comments": {
+                    "type": "The logical type to destroy."
+                }
+            }
+        },
+        {
+            "name": "duckdb_register_logical_type",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "con"
+                },
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                },
+                {
+                    "type": "duckdb_create_type_info",
+                    "name": "info"
+                }
+            ],
+            "comment": {
+                "description": "Registers a custom type within the given connection.\nThe type must have an alias\n\n",
+                "param_comments": {
+                    "con": "The connection to use",
+                    "type": "The custom type to register",
+                    "extra_info": "Optional extra information used when registering the custom type. Can be `NULL`."
+                },
+                "return_value": "Whether or not the registration was successful."
+            }
+        }
+    ]
+}

@@ -10,6 +10,7 @@
 
 #include "duckdb.h"
 #include "fast_float/fast_float.h"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 template <class T>
@@ -37,7 +38,7 @@ static bool TryDoubleCast(const char *buf, idx_t len, T &result, bool strict, ch
 		}
 	}
 	auto endptr = buf + len;
-	auto parse_result = duckdb_fast_float::from_chars(buf, buf + len, result, decimal_separator);
+	auto parse_result = duckdb_fast_float::from_chars(buf, buf + len, result, strict, decimal_separator);
 	if (parse_result.ec != std::errc()) {
 		return false;
 	}

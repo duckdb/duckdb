@@ -5,9 +5,7 @@
 # data/storage/index_0-9-1.db was written with a 64-bit version of duckdb
 require 64bit
 
-# cannot read a database with a different block size
-require block_size 262144
-
+# The database is written with a vector size of 2048.
 require vector_size 2048
 
 # SQL to create index_0-9-1.db
@@ -121,19 +119,14 @@ SELECT i FROM idx_tbl WHERE i = 11
 
 # now try to break it
 
-query I
-SELECT used_blocks < 10 FROM pragma_database_size();
-----
-1
+statement ok
+INSERT INTO idx_tbl SELECT range, range, range FROM range(300000);
 
 statement ok
-INSERT INTO idx_tbl SELECT range, range, range FROM range(30000);
-
-statement ok
-checkpoint;
+CHECKPOINT;
 
 query I
-SELECT used_blocks > 10 FROM pragma_database_size();
+SELECT used_blocks > 2621440 / get_block_size('test_art_import') FROM pragma_database_size();
 ----
 1
 
@@ -143,7 +136,7 @@ CREATE INDEX ART_index ON idx_tbl(i);
 statement error
 CREATE INDEX idx_1 ON idx_tbl(i);
 ----
-already exists
+<REGEX>:Catalog Error.*Index with name "idx_1" already exists.*
 
 # now try to use it again
 

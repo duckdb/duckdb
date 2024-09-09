@@ -88,13 +88,13 @@ void ColumnDataConsumer::ConsumeChunks(idx_t delete_index_start, idx_t delete_in
 		if (prev_allocator != curr_allocator) {
 			// Moved to the next allocator, delete all remaining blocks in the previous one
 			for (uint32_t block_id = prev_min_block_id; block_id < prev_allocator->BlockCount(); block_id++) {
-				prev_allocator->DeleteBlock(block_id);
+				prev_allocator->SetDestroyBufferUponUnpin(block_id);
 			}
 			continue;
 		}
 		// Same allocator, see if we can delete blocks
 		for (uint32_t block_id = prev_min_block_id; block_id < curr_min_block_id; block_id++) {
-			prev_allocator->DeleteBlock(block_id);
+			prev_allocator->SetDestroyBufferUponUnpin(block_id);
 		}
 	}
 }

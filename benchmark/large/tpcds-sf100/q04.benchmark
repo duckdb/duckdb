@@ -1,0 +1,7 @@
+# name: benchmark/large/tpcds-sf100/q04.benchmark
+# description: Run query 04 from the TPC-DS benchmark ()
+# group: [tpcds-sf100]
+
+template benchmark/large/tpcds-sf100/tpcds_sf100.benchmark.in
+QUERY_NUMBER=4
+QUERY_NUMBER_PADDED=04

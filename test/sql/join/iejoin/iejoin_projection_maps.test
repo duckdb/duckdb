@@ -11,25 +11,26 @@ statement ok
 SELECT SETSEED(0.8765309);
 
 statement ok
-CREATE TABLE df AS
+CREATE TABLE df (id INTEGER, id2 INTEGER, id3 INTEGER, value_double DOUBLE, value as (value_double::DECIMAL(4,3)), one_min_value as ((1.0 - value_double)::DECIMAL(4,3)))
+
+statement ok
+INSERT INTO df
     SELECT 
         (random() * 100)::INTEGER + 1 as id,
         (random() * 10)::INTEGER + 1 as id2,
         (random() * 5)::INTEGER + 1 as id3,
-        ROUND(random(), 4)::DECIMAL(4,3) as value,
+        (ROUND(random(), 4)) as value_double,
     FROM range(5000);
 
 # Verify table contents
-query IIII
-SELECT SUM(id) AS id, SUM(id2) AS id2, SUM(id3) AS id3, SUM(value) AS value
+query IIIIII
+SELECT SUM(id) AS id, SUM(id2) AS id2, SUM(id3) AS id3, SUM(value) AS sum_value, SUM(one_min_value) AS sum_one_min_value, sum_value + sum_one_min_value AS sum
 FROM df
 ----
-256630	29499	17606	2500.780
+256630	29499	17606	2500.532	2499.468	5000.000
 
 statement ok
 PRAGMA enable_verification
-
-# mode output_hash
 
 # Test right_projection_map
 foreach prefer False True
@@ -50,7 +51,7 @@ FROM (
 GROUP BY ALL
 ORDER BY ALL
 ----
-660 values hashing to db1b6d9d57480b5a833c62f586133915
+660 values hashing to 0acad7a6a360d48246479ab35572ecce
 
 endloop
 

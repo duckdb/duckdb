@@ -1,0 +1,15 @@
+# name: test/sql/function/timetz/timetz_group_by.test
+# description: Test grouping by TIMETZ
+# group: [timetz]
+
+require icu
+
+require no_extension_autoloading
+
+statement ok
+create table time_testtz as select i::timetz as t from generate_series(TIMESTAMPtz '2001-04-10', TIMESTAMPtz '2001-04-11', INTERVAL 30 MINUTE) as t(i);
+
+query I
+SELECT TYPEOF(t) FROM (select t from time_testtz group by t) LIMIT 1
+----
+TIME WITH TIME ZONE

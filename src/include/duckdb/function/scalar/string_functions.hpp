@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/function/function_set.hpp"
-#include "utf8proc.hpp"
+#include "utf8proc_wrapper.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 
 namespace duckdb_re2 {
@@ -44,6 +44,11 @@ struct StripAccentsFun {
 
 struct ConcatFun {
 	static void RegisterFunction(BuiltinFunctions &set);
+	static ScalarFunction GetFunction();
+};
+
+struct ConcatWSFun {
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct LengthFun {
@@ -69,13 +74,8 @@ struct LengthFun {
 		auto input_length = input.GetSize();
 		for (idx_t i = 0; i < input_length; i++) {
 			if (input_data[i] & 0x80) {
-				int64_t length = 0;
 				// non-ascii character: use grapheme iterator on remainder of string
-				utf8proc_grapheme_callback(input_data, input_length, [&](size_t start, size_t end) {
-					length++;
-					return true;
-				});
-				return length;
+				return UnsafeNumericCast<TR>(Utf8Proc::GraphemeCount(input_data, input_length));
 			}
 		}
 		return UnsafeNumericCast<TR>(input_length);
@@ -116,7 +116,8 @@ struct SuffixFun {
 };
 
 struct ContainsFun {
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
+	static ScalarFunction GetStringContains();
 	static void RegisterFunction(BuiltinFunctions &set);
 	static idx_t Find(const string_t &haystack, const string_t &needle);
 	static idx_t Find(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle,

@@ -200,12 +200,9 @@ SinkResultType PhysicalNestedLoopJoin::Sink(ExecutionContext &context, DataChunk
 
 SinkCombineResultType PhysicalNestedLoopJoin::Combine(ExecutionContext &context,
                                                       OperatorSinkCombineInput &input) const {
-	auto &state = input.local_state.Cast<NestedLoopJoinLocalState>();
 	auto &client_profiler = QueryProfiler::Get(context.client);
-
-	context.thread.profiler.Flush(*this, state.rhs_executor, "rhs_executor", 1);
+	context.thread.profiler.Flush(*this);
 	client_profiler.Flush(context.thread.profiler);
-
 	return SinkCombineResultType::FINISHED;
 }
 
@@ -266,7 +263,7 @@ public:
 
 public:
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
-		context.thread.profiler.Flush(op, lhs_executor, "lhs_executor", 0);
+		context.thread.profiler.Flush(op);
 	}
 };
 

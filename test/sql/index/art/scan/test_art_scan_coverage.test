@@ -87,3 +87,20 @@ DELETE FROM tab1 WHERE ((col0 > 32) AND col0 < 87)
 query I rowsort label-empty
 SELECT pk FROM tab1 WHERE ((col0 > 32) AND col0 < 87)
 ----
+
+# Issue #13785
+
+statement ok
+CREATE  TABLE  t0_varchar(c0 VARCHAR);
+
+statement ok
+INSERT INTO t0_varchar(c0) VALUES ('a'), ('a');
+
+statement ok
+CREATE INDEX t0i0_idx ON t0_varchar(c0 );
+
+query I
+SELECT c0 FROM t0_varchar WHERE t0_varchar.c0 <= 'a';
+----
+a
+a

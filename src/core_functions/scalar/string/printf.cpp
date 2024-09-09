@@ -27,15 +27,26 @@ unique_ptr<FunctionData> BindPrintfFunction(ClientContext &context, ScalarFuncti
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		switch (arguments[i]->return_type.id()) {
 		case LogicalTypeId::BOOLEAN:
+			bound_function.arguments.emplace_back(LogicalType::BOOLEAN);
+			break;
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
 		case LogicalTypeId::INTEGER:
 		case LogicalTypeId::BIGINT:
+			bound_function.arguments.emplace_back(LogicalType::BIGINT);
+			break;
+		case LogicalTypeId::UTINYINT:
+		case LogicalTypeId::USMALLINT:
+		case LogicalTypeId::UINTEGER:
+		case LogicalTypeId::UBIGINT:
+			bound_function.arguments.emplace_back(LogicalType::UBIGINT);
+			break;
 		case LogicalTypeId::FLOAT:
 		case LogicalTypeId::DOUBLE:
+			bound_function.arguments.emplace_back(LogicalType::DOUBLE);
+			break;
 		case LogicalTypeId::VARCHAR:
-			// these types are natively supported
-			bound_function.arguments.push_back(arguments[i]->return_type);
+			bound_function.arguments.push_back(LogicalType::VARCHAR);
 			break;
 		case LogicalTypeId::DECIMAL:
 			// decimal type: add cast to double
@@ -122,6 +133,11 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			}
 			case LogicalTypeId::BIGINT: {
 				auto arg_data = FlatVector::GetData<int64_t>(col);
+				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
+				break;
+			}
+			case LogicalTypeId::UBIGINT: {
+				auto arg_data = FlatVector::GetData<uint64_t>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
 				break;
 			}

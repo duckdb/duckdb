@@ -177,3 +177,14 @@ select MAP([1,2,3,4],['happy','ok','ok','sad']::mood[])
 statement error
 select MAP([1,2,3,4],['bla','ok','ok','sad']::mood[])
 ----
+
+statement ok
+drop type mood;
+
+statement ok
+CREATE TYPE mood AS ENUM ();
+
+query I
+SELECT enum_range(NULL::mood) AS my_enum_range;
+----
+[]

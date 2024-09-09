@@ -47,12 +47,6 @@ statement error
 with cte1 as (select 42), cte1 as (select 42) select * FROM cte1;
 ----
 
-# reference to CTE before its actually defined
-query I
-with cte3 as (select ref2.j as i from cte1 as ref2), cte1 as (Select i as j from a), cte2 as (select ref.j+1 as k from cte1 as ref) select * from cte2 union all select * FROM cte3;
-----
-43
-42
 
 # multiple uses of same CTE
 query II
@@ -130,3 +124,87 @@ from cte
 where alias2 > 0;
 ----
 1	1
+
+# recursive CTE and a non-recursive CTE with except
+query I
+WITH RECURSIVE t AS (
+  SELECT 1 AS a
+    UNION ALL
+  SELECT a+1
+  FROM t
+  WHERE a < 10
+), s AS (
+  (VALUES (5), (6), (7), (8), (9), (10), (11), (12), (13), (42))
+  EXCEPT
+  TABLE t
+)
+SELECT * FROM s AS _(x) ORDER BY x;
+----
+11
+12
+13
+42
+
+# recursive CTE with except in recursive part (but not as a recursive anchor)
+query I
+WITH RECURSIVE t AS (
+  select 1 as a
+  union all
+  (select a+1
+  from t
+  where a < 10
+  	except
+  SELECT 4)
+), s AS (
+  (values (5), (6), (7))
+  except
+  table t
+)
+SELECT * FROM s AS _(x) ORDER BY x;
+----
+5
+6
+7
+
+query I
+WITH RECURSIVE
+  t(b) AS MATERIALIZED (
+    (WITH helper(c) AS (
+      SELECT 5
+    ), h1 AS
+    (SELECT * FROM helper h
+    UNION
+    SELECT 7 FROM helper h)
+    SELECT * FROM h1)
+  )
+SELECT * FROM t ORDER BY b;
+----
+5
+7
+
+require noalternativeverify
+
+# FIXME: this one should work with ALTERNATIVE_VERIFY, but doesn't yet
+# something wrong with binding a CTE inside a recursive CTE
+query I
+WITH RECURSIVE
+  t(b) AS MATERIALIZED (
+    (WITH helper(c) AS (
+      SELECT 5
+    )
+    SELECT * FROM helper h
+    UNION
+    SELECT 7
+    )
+  )
+SELECT * FROM t ORDER BY b;
+----
+5
+7
+
+# reference to CTE before its actually defined, can't with ALTERNATIVE_VERIFY because everything gets materialized
+query I
+with cte3 as (select ref2.j as i from cte1 as ref2), cte1 as (Select i as j from a), cte2 as (select ref.j+1 as k from cte1 as ref) select * from cte2 union all select * FROM cte3;
+----
+43
+42

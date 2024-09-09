@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/enums/file_compression_type.hpp"
 
 namespace duckdb {
 
@@ -36,11 +37,13 @@ public:
 
 struct ReplacementScanInput {
 public:
-	ReplacementScanInput(TableRef &ref, const string &table_name) : ref(ref), table_name(table_name) {
+	explicit ReplacementScanInput(const string &catalog_name, const string &schema_name, const string &table_name)
+	    : catalog_name(catalog_name), schema_name(schema_name), table_name(table_name) {
 	}
 
 public:
-	TableRef &ref;
+	const string &catalog_name;
+	const string &schema_name;
 	const string &table_name;
 };
 
@@ -57,9 +60,9 @@ struct ReplacementScan {
 	static bool CanReplace(const string &table_name, const vector<string> &extensions) {
 		auto lower_name = StringUtil::Lower(table_name);
 
-		if (StringUtil::EndsWith(lower_name, ".gz")) {
+		if (StringUtil::EndsWith(lower_name, CompressionExtensionFromType(FileCompressionType::GZIP))) {
 			lower_name = lower_name.substr(0, lower_name.size() - 3);
-		} else if (StringUtil::EndsWith(lower_name, ".zst")) {
+		} else if (StringUtil::EndsWith(lower_name, CompressionExtensionFromType(FileCompressionType::ZSTD))) {
 			lower_name = lower_name.substr(0, lower_name.size() - 4);
 		}
 
@@ -71,6 +74,19 @@ struct ReplacementScan {
 		}
 
 		return false;
+	}
+
+	static string GetFullPath(const string &catalog, const string &schema, const string &table) {
+		string table_name = catalog;
+		if (!schema.empty()) {
+			table_name += (!table_name.empty() ? "." : "") + schema;
+		}
+		table_name += (!table_name.empty() ? "." : "") + table;
+		return table_name;
+	}
+
+	static string GetFullPath(ReplacementScanInput &input) {
+		return GetFullPath(input.catalog_name, input.schema_name, input.table_name);
 	}
 
 	replacement_scan_t function;

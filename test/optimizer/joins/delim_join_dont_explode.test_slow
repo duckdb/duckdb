@@ -44,6 +44,10 @@ exists(
 ----
 143 values hashing to dc5d1675d206057ccfe13739a38ee082
 
+# The query plan here used to join the two SEQ_SCANs first, and then join the DELIM_SCAN,
+# Since PR #12290, we can reorder DELIM_SCANS
+# Now the DELIM_SCAN is joined with a SEQ_SCAN first, and then with the SEQ_SCAN
+# Now that we reorder semi joins the ordering of the sequential scans has also changed
 query II
 EXPLAIN 
 SELECT *

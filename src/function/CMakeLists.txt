@@ -7,9 +7,11 @@ add_subdirectory(table)
 add_library_unity(
   duckdb_function
   OBJECT
+  aggregate_function.cpp
   built_in_functions.cpp
   cast_rules.cpp
   compression_config.cpp
+  copy_function.cpp
   function.cpp
   function_binder.cpp
   function_set.cpp
