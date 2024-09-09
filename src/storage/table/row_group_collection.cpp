@@ -887,7 +887,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 }
 
 bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoint_state, VacuumState &state,
-                                             idx_t segment_idx) {
+                                             idx_t segment_idx, bool schedule_vacuum) {
 	static constexpr const idx_t MAX_MERGE_COUNT = 3;
 
 	if (!state.can_vacuum_deletes) {
@@ -901,6 +901,9 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 	if (state.row_group_counts[segment_idx] == 0) {
 		// segment was already dropped - skip
 		D_ASSERT(!checkpoint_state.segments[segment_idx].node);
+		return false;
+	}
+	if (schedule_vacuum) {
 		return false;
 	}
 	idx_t merge_rows;
@@ -971,13 +974,12 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	auto &config = DBConfig::GetConfig(writer.GetDatabase());
 	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
 		auto &entry = segments[segment_idx];
-		if (total_vacuum_tasks < config.options.max_vacuum_tasks) {
-			auto vacuum_tasks = ScheduleVacuumTasks(checkpoint_state, vacuum_state, segment_idx);
-			if (vacuum_tasks) {
-				// vacuum tasks were scheduled - don't schedule a checkpoint task yet
-				total_vacuum_tasks++;
-				continue;
-			}
+		auto vacuum_tasks = ScheduleVacuumTasks(checkpoint_state, vacuum_state, segment_idx,
+		                                        total_vacuum_tasks < config.options.max_vacuum_tasks);
+		if (vacuum_tasks) {
+			// vacuum tasks were scheduled - don't schedule a checkpoint task yet
+			total_vacuum_tasks++;
+			continue;
 		}
 		if (!entry.node) {
 			// row group was vacuumed/dropped - skip
