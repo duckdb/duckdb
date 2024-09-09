@@ -47,6 +47,7 @@ jobs:
     BUILD_TPCDS: 1
     BUILD_HTTPFS: 1
     BUILD_JEMALLOC: 1
+    BUILD_JSON: 1
     CORE_EXTENSIONS: "inet"
 
   steps:
