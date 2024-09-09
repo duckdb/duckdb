@@ -68,7 +68,7 @@ select * from read_csv_auto('data/csv/auto/glob/[0-9].csv');
 8	8	1.8	eight
 9	9	1.9	nine
 
-query IIII rowsort
+ query IIII rowsort
 select * from read_csv_auto('data/csv/auto/glob/[0-9].csv', buffer_size=100)
 ----
 0	0	1.0	zero
