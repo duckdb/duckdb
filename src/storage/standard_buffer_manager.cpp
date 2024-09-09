@@ -126,9 +126,8 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(const idx
 		return RegisterSmallMemory(size);
 	}
 
-	shared_ptr<BlockHandle> block;
-	Allocate(MemoryTag::IN_MEMORY_TABLE, size, false, &block);
-	return block;
+	auto buffer_handle = Allocate(MemoryTag::IN_MEMORY_TABLE, size, false);
+	return buffer_handle.GetBlockHandle();
 }
 
 shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(const idx_t size) {
@@ -164,21 +163,14 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx
 	                                    destroy_buffer_upon, alloc_size, std::move(res));
 }
 
-BufferHandle StandardBufferManager::Allocate(MemoryTag tag, idx_t block_size, bool can_destroy,
-                                             optional_ptr<shared_ptr<BlockHandle>> provided_block) {
-	shared_ptr<BlockHandle> local_block;
-	reference<shared_ptr<BlockHandle>> block = local_block;
-	if (provided_block) {
-		// If possible, use the shared_ptr given so its updated for the calling function
-		block = *provided_block;
-	}
-	block.get() = RegisterMemory(tag, block_size, can_destroy);
+BufferHandle StandardBufferManager::Allocate(MemoryTag tag, idx_t block_size, bool can_destroy) {
+	auto block = RegisterMemory(tag, block_size, can_destroy);
 
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	// Initialize the memory with garbage data
-	WriteGarbageIntoBuffer(*block.get()->buffer);
+	WriteGarbageIntoBuffer(*block->buffer);
 #endif
-	return Pin(block.get());
+	return Pin(block);
 }
 
 void StandardBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) {
