@@ -15,7 +15,8 @@ bool ThreadLines::Validate() {
 			// First run, we just set the initialized to true
 			initialized = true;
 		} else {
-			if (last_end_pos + error_margin < line_info.second.start_pos) {
+			if (last_end_pos < line_info.second.start_pos) {
+				throw InternalException(to_string(last_end_pos) + "   " + to_string(line_info.second.start_pos));
 				// Start position of next thread can't be higher than end position of previous thread + error margin.
 				// Validation failed.
 				return false;

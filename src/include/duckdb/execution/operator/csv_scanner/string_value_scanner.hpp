@@ -12,7 +12,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/execution/operator/csv_scanner/scanner_boundary.hpp"
 #include "duckdb/execution/operator/csv_scanner/base_scanner.hpp"
-
+#include "duckdb/execution/operator/csv_scanner/csv_validator.hpp"
 namespace duckdb {
 
 struct CSVBufferUsage {
@@ -297,6 +297,9 @@ public:
 	//! If we can directly cast the type when consuming the CSV file, or we have to do it later
 	static bool CanDirectlyCast(const LogicalType &type, bool icu_loaded);
 
+	//! Gets validation line information
+	ValidatorLine GetValidationLine();
+
 	const idx_t scanner_idx;
 
 	//! Variable that manages buffer tracking
@@ -320,8 +323,9 @@ private:
 
 	StringValueResult result;
 	vector<LogicalType> types;
-
-	//! Pointer to the previous buffer handle, necessary for overbuffer values
+	//! True Position where this scanner started scanning(i.e., after figuring out where the first line starts)
+	idx_t start_pos;
+	//! Pointer to the previous buffer handle, necessary for over-buffer values
 	shared_ptr<CSVBufferHandle> previous_buffer_handle;
 };
 

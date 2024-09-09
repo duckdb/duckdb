@@ -28,6 +28,15 @@ public:
 
 	void Insert(idx_t thread, ValidatorLine line_info);
 
+	string Print() {
+		string result;
+		for (auto &line : thread_lines) {
+			result += "{start_pos: " + to_string(line.second.start_pos) +
+			          ", end_pos: " + to_string(line.second.end_pos) + "}";
+		}
+		return result;
+	}
+
 private:
 	map<idx_t, ValidatorLine> thread_lines;
 	//! We allow up to 2 bytes of error margin (basically \r\n)
@@ -44,7 +53,11 @@ struct CSVValidator {
 	//! Inserts line_info to a given thread index of a given file.
 	void Insert(idx_t file_idx, idx_t thread, ValidatorLine line_info);
 
-private:
+	string Print(idx_t file_idx) {
+		return per_file_thread_lines[file_idx].Print();
+	}
+
+	// private:
 	//! Per file thread lines.
 	vector<ThreadLines> per_file_thread_lines;
 };

@@ -870,6 +870,7 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSV
              iterator.pos.buffer_pos, *error_handler, iterator,
              buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan, lines_read, sniffing,
              buffer_manager->GetFilePath()) {
+	iterator.buffer_size = state_machine->options.buffer_size;
 }
 
 StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffer_manager,
@@ -881,6 +882,7 @@ StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffe
              iterator.pos.buffer_pos, *error_handler, iterator,
              buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan, lines_read, sniffing,
              buffer_manager->GetFilePath()) {
+	iterator.buffer_size = state_machine->options.buffer_size;
 }
 
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
@@ -1050,6 +1052,7 @@ void StringValueScanner::Initialize() {
 	result.current_line_position.begin = result.last_position;
 
 	result.current_line_position.end = result.current_line_position.begin;
+	start_pos = iterator.GetGlobalCurrentPos();
 }
 
 void StringValueScanner::ProcessExtraRow() {
@@ -1493,7 +1496,7 @@ void StringValueScanner::SetStart() {
 			}
 			if (iterator.pos.buffer_pos == cur_buffer_handle->actual_size ||
 			    scan_finder->iterator.GetBufferIdx() > iterator.GetBufferIdx()) {
-				// If things go terribly wrong, we never loop indefinetly.
+				// If things go terribly wrong, we never loop indefinitely.
 				iterator.pos.buffer_idx = scan_finder->iterator.pos.buffer_idx;
 				iterator.pos.buffer_pos = scan_finder->iterator.pos.buffer_pos;
 				result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
@@ -1539,9 +1542,8 @@ void StringValueScanner::FinalizeChunkProcess() {
 			if (cur_buffer_handle->is_last_buffer && iterator.pos.buffer_pos >= cur_buffer_handle->actual_size) {
 				MoveToNextBuffer();
 			}
-		} else {
-			result.current_errors.HandleErrors(result);
 		}
+		result.current_errors.HandleErrors(result);
 		if (!iterator.done) {
 			if (iterator.pos.buffer_pos >= iterator.GetEndPos() || iterator.pos.buffer_idx > iterator.GetBufferIdx() ||
 			    FinishedFile()) {
@@ -1570,4 +1572,9 @@ void StringValueScanner::FinalizeChunkProcess() {
 		}
 	}
 }
+
+ValidatorLine StringValueScanner::GetValidationLine() {
+	return {start_pos, result.iterator.GetGlobalCurrentPos()};
+}
+
 } // namespace duckdb

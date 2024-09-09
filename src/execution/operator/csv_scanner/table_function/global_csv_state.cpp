@@ -75,6 +75,12 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 }
 
 unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScanner> previous_scanner) {
+	if (previous_scanner) {
+		// We have to insert information for validation
+		lock_guard<mutex> parallel_lock(main_mutex);
+		validator.Insert(previous_scanner->csv_file_scan->file_idx, previous_scanner->scanner_idx,
+		                 previous_scanner->GetValidationLine());
+	}
 	if (single_threaded) {
 		idx_t cur_idx;
 		bool empty_file = false;
@@ -183,6 +189,12 @@ void CSVGlobalState::DecrementThread() {
 	D_ASSERT(running_threads > 0);
 	running_threads--;
 	if (running_threads == 0) {
+		// if (!single_threaded &&  !bind_data.options.IgnoreErrors()) {
+		// If we are running multithreaded and not ignoring errors, we must run the validator
+		if (!validator.Validate()) {
+			throw InternalException(validator.Print(0));
+		}
+		// }
 		for (auto &file : file_scans) {
 			file->error_handler->ErrorIfNeeded();
 		}
