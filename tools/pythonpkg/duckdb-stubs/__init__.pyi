@@ -6,6 +6,7 @@
 
 import duckdb.typing as typing
 import duckdb.functional as functional
+import duckdb.func as func
 from duckdb.typing import DuckDBPyType
 from duckdb.functional import FunctionNullHandling, PythonUDFType
 from duckdb.value.constant import (
