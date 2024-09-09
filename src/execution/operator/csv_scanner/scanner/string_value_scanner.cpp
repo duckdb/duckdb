@@ -1539,9 +1539,12 @@ void StringValueScanner::FinalizeChunkProcess() {
 			if (cur_buffer_handle->is_last_buffer && iterator.pos.buffer_pos >= cur_buffer_handle->actual_size) {
 				MoveToNextBuffer();
 			}
-		} else {
-			result.current_errors.HandleErrors(result);
 		}
+		if (states.IsQuotedCurrent() && !result.current_errors.HasErrorType(UNTERMINATED_QUOTES)) {
+			// If we finish the execution of a buffer, and we end in a quoted state, it means we have unterminated quotes
+			result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position);
+		}
+		result.current_errors.HandleErrors(result);
 		if (!iterator.done) {
 			if (iterator.pos.buffer_pos >= iterator.GetEndPos() || iterator.pos.buffer_idx > iterator.GetBufferIdx() ||
 			    FinishedFile()) {
