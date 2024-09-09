@@ -2,6 +2,9 @@
 # description: This test issue #7336 and #7337
 # group: [parallel]
 
+statement ok
+PRAGMA enable_verification
+
 require httpfs
 
 query IIII

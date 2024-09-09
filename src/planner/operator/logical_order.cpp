@@ -19,14 +19,17 @@ vector<ColumnBinding> LogicalOrder::GetColumnBindings() {
 	return result;
 }
 
-string LogicalOrder::ParamsToString() const {
-	string result = "ORDERS:\n";
+InsertionOrderPreservingMap<string> LogicalOrder::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	string orders_info;
 	for (idx_t i = 0; i < orders.size(); i++) {
 		if (i > 0) {
-			result += "\n";
+			orders_info += "\n";
 		}
-		result += orders[i].expression->GetName();
+		orders_info += orders[i].expression->GetName();
 	}
+	result["__order_by__"] = orders_info;
+	SetParamsEstimatedCardinality(result);
 	return result;
 }
 

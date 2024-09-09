@@ -10,9 +10,15 @@ require noforcestorage
 statement ok
 PRAGMA enable_verification
 
-# AES key must have one of the three specified lengths
+# AES key must have one of the three specified lengths or be valid Base64
 statement error
 PRAGMA add_parquet_key('my_cool_key', '42')
+----
+Invalid Input Error: Invalid AES key. Not a plain AES key NOR a base64 encoded string
+
+# Valid Base64 AES key must have one of the three specified lengths
+statement error
+PRAGMA add_parquet_key('my_invalid_duck_key', 'ZHVjaw==')
 ----
 Invalid Input Error: Invalid AES key. Must have a length of 128, 192, or 256 bits (16, 24, or 32 bytes)
 
@@ -21,12 +27,6 @@ statement error
 COPY (SELECT 42 i) to '__TEST_DIR__/encrypted.parquet' (ENCRYPTION_CONFIG {column_keys: {key_name: ['col0', 'col1']}})
 ----
 Not implemented Error: Parquet encryption_config column_keys not yet implemented
-
-# just some code coverage for transform_constant.cpp
-statement error
-COPY (SELECT 42 i) to '__TEST_DIR__/encrypted.parquet' (ENCRYPTION_CONFIG {column_keys: {key_name: map {}}})
-----
-Unsupported expression in option list
 
 statement error
 COPY (SELECT 42 i) to '__TEST_DIR__/encrypted.parquet' (ENCRYPTION_CONFIG {footer_key: 'nonexistant'})
@@ -87,3 +87,12 @@ statement error
 SELECT * FROM read_parquet('__TEST_DIR__/unencrypted.parquet', encryption_config={footer_key: 'key256'})
 ----
 Invalid Input Error
+
+# Use Base64 encoded key
+statement ok
+PRAGMA add_parquet_key('key256base64', 'MDEyMzQ1Njc4OTExMjM0NTAxMjM0NTY3ODkxMTIzNDU=')
+
+query I
+SELECT * FROM read_parquet('__TEST_DIR__/encrypted256.parquet', encryption_config={footer_key: 'key256base64'})
+----
+42

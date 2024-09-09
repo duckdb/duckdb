@@ -36,7 +36,7 @@ import IPython
 IPython.get_ipython
 IPython.display
 IPython.display.display
-
+IPython.display.HTML
 
 import ipywidgets
 
@@ -101,3 +101,9 @@ typing._UnionGenericAlias
 import uuid
 
 uuid.UUID
+
+import collections
+import collections.abc
+
+collections.abc.Iterable
+collections.abc.Mapping

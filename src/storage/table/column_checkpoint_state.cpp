@@ -113,7 +113,9 @@ void PartialBlockForCheckpoint::Clear() {
 }
 
 void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_t segment_size) {
-	D_ASSERT(segment_size <= Storage::BLOCK_SIZE);
+	auto block_size = partial_block_manager.GetBlockManager().GetBlockSize();
+	D_ASSERT(segment_size <= block_size);
+
 	auto tuple_count = segment->count.load();
 	if (tuple_count == 0) { // LCOV_EXCL_START
 		return;
@@ -151,11 +153,11 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 			pstate.AddSegmentToTail(column_data, *segment, offset_in_block);
 		} else {
 			// Create a new block for future reuse.
-			if (segment->SegmentSize() != Storage::BLOCK_SIZE) {
+			if (segment->SegmentSize() != block_size) {
 				// the segment is smaller than the block size
 				// allocate a new block and copy the data over
-				D_ASSERT(segment->SegmentSize() < Storage::BLOCK_SIZE);
-				segment->Resize(Storage::BLOCK_SIZE);
+				D_ASSERT(segment->SegmentSize() < block_size);
+				segment->Resize(block_size);
 			}
 			D_ASSERT(offset_in_block == 0);
 			allocation.partial_block = make_uniq<PartialBlockForCheckpoint>(column_data, *segment, allocation.state,
@@ -192,8 +194,10 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 	data_pointers.push_back(std::move(data_pointer));
 }
 
-void ColumnCheckpointState::WriteDataPointers(RowGroupWriter &writer, Serializer &serializer) {
-	writer.WriteColumnDataPointers(*this, serializer);
+PersistentColumnData ColumnCheckpointState::ToPersistentData() {
+	PersistentColumnData data(column_data.type.InternalType());
+	data.pointers = std::move(data_pointers);
+	return data;
 }
 
 } // namespace duckdb

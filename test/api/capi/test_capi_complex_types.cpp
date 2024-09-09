@@ -1,4 +1,5 @@
 #include "capi_tester.hpp"
+
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
@@ -299,6 +300,146 @@ TEST_CASE("Logical types with aliases", "[capi]") {
 		duckdb_free(alias);
 
 		duckdb_destroy_logical_type(&logical_type);
+	}
+}
+
+TEST_CASE("duckdb_create_value", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+#define TEST_VALUE(creator, getter, expected)                                                                          \
+	{                                                                                                                  \
+		auto value = creator;                                                                                          \
+		REQUIRE(getter(value) == expected);                                                                            \
+		duckdb_destroy_value(&value);                                                                                  \
+	}
+
+#define TEST_NUMERIC_INTERNAL(creator, value)                                                                          \
+	{                                                                                                                  \
+		TEST_VALUE(creator, duckdb_get_int8, value);                                                                   \
+		TEST_VALUE(creator, duckdb_get_uint8, value);                                                                  \
+		TEST_VALUE(creator, duckdb_get_int16, value);                                                                  \
+		TEST_VALUE(creator, duckdb_get_uint16, value);                                                                 \
+		TEST_VALUE(creator, duckdb_get_int32, value);                                                                  \
+		TEST_VALUE(creator, duckdb_get_uint32, value);                                                                 \
+		TEST_VALUE(creator, duckdb_get_int64, value);                                                                  \
+		TEST_VALUE(creator, duckdb_get_uint64, value);                                                                 \
+		TEST_VALUE(creator, duckdb_get_float, value);                                                                  \
+		TEST_VALUE(creator, duckdb_get_double, value);                                                                 \
+	}
+
+#define TEST_NUMERIC(value)                                                                                            \
+	{                                                                                                                  \
+		TEST_NUMERIC_INTERNAL(duckdb_create_int8(value), value);                                                       \
+		TEST_NUMERIC_INTERNAL(duckdb_create_uint8(value), value);                                                      \
+		TEST_NUMERIC_INTERNAL(duckdb_create_int16(value), value);                                                      \
+		TEST_NUMERIC_INTERNAL(duckdb_create_uint16(value), value);                                                     \
+		TEST_NUMERIC_INTERNAL(duckdb_create_int32(value), value);                                                      \
+		TEST_NUMERIC_INTERNAL(duckdb_create_uint32(value), value);                                                     \
+		TEST_NUMERIC_INTERNAL(duckdb_create_int64(value), value);                                                      \
+		TEST_NUMERIC_INTERNAL(duckdb_create_uint64(value), value);                                                     \
+		TEST_NUMERIC_INTERNAL(duckdb_create_float(value), value);                                                      \
+		TEST_NUMERIC_INTERNAL(duckdb_create_double(value), value);                                                     \
+	}
+
+	TEST_VALUE(duckdb_create_bool(true), duckdb_get_bool, true);
+	TEST_NUMERIC(42);
+
+	{
+		auto val = duckdb_create_hugeint({42, 42});
+		auto result = duckdb_get_hugeint(val);
+		REQUIRE(result.lower == 42);
+		REQUIRE(result.upper == 42);
+		duckdb_destroy_value(&val);
+	}
+	{
+		auto val = duckdb_create_uhugeint({42, 42});
+		auto result = duckdb_get_uhugeint(val);
+		REQUIRE(result.lower == 42);
+		REQUIRE(result.upper == 42);
+		duckdb_destroy_value(&val);
+	}
+
+	TEST_VALUE(duckdb_create_float(0.5), duckdb_get_float, 0.5);
+	TEST_VALUE(duckdb_create_float(0.5), duckdb_get_double, 0.5);
+	TEST_VALUE(duckdb_create_double(0.5), duckdb_get_double, 0.5);
+
+	{
+		auto val = duckdb_create_date({1});
+		auto result = duckdb_get_date(val);
+		REQUIRE(result.days == 1);
+		// conversion failure (date -> numeric)
+		REQUIRE(duckdb_get_int8(val) == NumericLimits<int8_t>::Minimum());
+		REQUIRE(duckdb_get_uint8(val) == NumericLimits<uint8_t>::Minimum());
+		REQUIRE(duckdb_get_int16(val) == NumericLimits<int16_t>::Minimum());
+		REQUIRE(duckdb_get_uint16(val) == NumericLimits<uint16_t>::Minimum());
+		REQUIRE(duckdb_get_int32(val) == NumericLimits<int32_t>::Minimum());
+		REQUIRE(duckdb_get_uint32(val) == NumericLimits<uint32_t>::Minimum());
+		REQUIRE(duckdb_get_int64(val) == NumericLimits<int64_t>::Minimum());
+		REQUIRE(duckdb_get_uint64(val) == NumericLimits<uint64_t>::Minimum());
+		REQUIRE(std::isnan(duckdb_get_float(val)));
+		REQUIRE(std::isnan(duckdb_get_double(val)));
+		auto min_hugeint = duckdb_get_hugeint(val);
+		REQUIRE(min_hugeint.lower == NumericLimits<uint64_t>::Minimum());
+		REQUIRE(min_hugeint.upper == NumericLimits<int64_t>::Minimum());
+		auto min_uhugeint = duckdb_get_uhugeint(val);
+		REQUIRE(min_uhugeint.lower == NumericLimits<uint64_t>::Minimum());
+		REQUIRE(min_uhugeint.upper == NumericLimits<uint64_t>::Minimum());
+		duckdb_destroy_value(&val);
+	}
+
+	{
+		auto val = duckdb_create_time({1});
+		auto result = duckdb_get_time(val);
+		REQUIRE(result.micros == 1);
+		duckdb_destroy_value(&val);
+	}
+
+	{
+		auto val = duckdb_create_timestamp({1});
+		auto result = duckdb_get_timestamp(val);
+		REQUIRE(result.micros == 1);
+		duckdb_destroy_value(&val);
+	}
+
+	{
+		auto val = duckdb_create_interval({1, 1, 1});
+		auto result = duckdb_get_interval(val);
+		REQUIRE(result.months == 1);
+		REQUIRE(result.days == 1);
+		REQUIRE(result.micros == 1);
+		REQUIRE(result.days == 1);
+		duckdb_destroy_value(&val);
+	}
+	{
+		auto val = duckdb_create_blob((const uint8_t *)"hello", 5);
+		auto result = duckdb_get_blob(val);
+		REQUIRE(result.size == 5);
+		REQUIRE(memcmp(result.data, "hello", 5) == 0);
+		duckdb_free(result.data);
+		duckdb_destroy_value(&val);
+	}
+
+	{
+		auto val = duckdb_create_time_tz_value({1});
+		auto result = duckdb_get_time_tz(val);
+		REQUIRE(result.bits == 1);
+		duckdb_destroy_value(&val);
+	}
+
+	{
+		auto val = duckdb_create_bool(true);
+		auto result = duckdb_get_value_type(val);
+		REQUIRE(duckdb_get_type_id(result) == DUCKDB_TYPE_BOOLEAN);
+		duckdb_destroy_value(&val);
+	}
+
+	{
+		auto val = duckdb_create_varchar("hello");
+		auto result = duckdb_get_varchar(val);
+		REQUIRE(string(result) == "hello");
+		duckdb_free(result);
+		duckdb_destroy_value(&val);
 	}
 }
 

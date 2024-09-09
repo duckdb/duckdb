@@ -223,6 +223,12 @@ struct CreateJSONValue<uhugeint_t, string_t> {
 	}
 };
 
+template <class T>
+inline yyjson_mut_val *CreateJSONValueFromJSON(yyjson_mut_doc *doc, const T &value) {
+	return nullptr; // This function should only be called with string_t as template
+}
+
+template <>
 inline yyjson_mut_val *CreateJSONValueFromJSON(yyjson_mut_doc *doc, const string_t &value) {
 	auto value_doc = JSONCommon::ReadDocument(value, JSONCommon::READ_FLAG, &doc->alc);
 	auto result = yyjson_val_mut_copy(doc, value_doc->root);
@@ -273,7 +279,7 @@ static void TemplatedCreateValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], V
 		if (!value_data.validity.RowIsValid(val_idx)) {
 			vals[i] = yyjson_mut_null(doc);
 		} else if (type_is_json) {
-			vals[i] = CreateJSONValueFromJSON(doc, (string_t &)values[val_idx]);
+			vals[i] = CreateJSONValueFromJSON(doc, values[val_idx]);
 		} else {
 			vals[i] = CreateJSONValue<INPUT_TYPE, TARGET_TYPE>::Operation(doc, values[val_idx]);
 		}
@@ -544,6 +550,7 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::VARINT:
 	case LogicalTypeId::UUID: {
 		Vector string_vector(LogicalTypeId::VARCHAR, count);
 		VectorOperations::DefaultCast(value_v, string_vector, count);
@@ -556,7 +563,17 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 		TemplatedCreateValues<double, double>(doc, vals, double_vector, count);
 		break;
 	}
-	default:
+	case LogicalTypeId::INVALID:
+	case LogicalTypeId::UNKNOWN:
+	case LogicalTypeId::ANY:
+	case LogicalTypeId::USER:
+	case LogicalTypeId::CHAR:
+	case LogicalTypeId::STRING_LITERAL:
+	case LogicalTypeId::INTEGER_LITERAL:
+	case LogicalTypeId::POINTER:
+	case LogicalTypeId::VALIDITY:
+	case LogicalTypeId::TABLE:
+	case LogicalTypeId::LAMBDA:
 		throw InternalException("Unsupported type arrived at JSON create function");
 	}
 }
@@ -647,7 +664,7 @@ static void ToJSONFunctionInternal(const StructNames &names, Vector &input, cons
 		}
 	}
 
-	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR || count == 1) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
@@ -749,7 +766,7 @@ void JSONFunctions::RegisterJSONCreateCastFunctions(CastFunctionSet &casts) {
 			source_type = LogicalType::UNION({{"any", LogicalType::ANY}});
 			break;
 		case LogicalTypeId::ARRAY:
-			source_type = LogicalType::ARRAY(LogicalType::ANY);
+			source_type = LogicalType::ARRAY(LogicalType::ANY, optional_idx());
 			break;
 		case LogicalTypeId::VARCHAR:
 			// We skip this one here as it's handled in json_functions.cpp

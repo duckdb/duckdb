@@ -130,8 +130,6 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	// get the child vector
 	auto lists_size = ListVector::GetListSize(sort_result_vec);
 	auto &child_vector = ListVector::GetEntry(sort_result_vec);
-	UnifiedVectorFormat child_data;
-	child_vector.ToUnifiedFormat(lists_size, child_data);
 
 	// get the lists data
 	UnifiedVectorFormat lists_data;

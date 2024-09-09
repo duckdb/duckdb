@@ -35,21 +35,25 @@ SELECT a FROM test LIMIT 2-1
 statement error
 SELECT a FROM test LIMIT a
 ----
+<REGEX>:Binder Error:.*Referenced column.*not found.*
 
 # LIMIT with non-scalar operation should also fail
 statement error
 SELECT a FROM test LIMIT a+1
 ----
+<REGEX>:Binder Error:.*Referenced column.*not found.*
 
 # aggregate in limit
 statement error
 SELECT a FROM test LIMIT SUM(42)
 ----
+<REGEX>:Binder Error:.*Aggregate functions are not supported.*
 
 # window function in limit
 statement error
 SELECT a FROM test LIMIT row_number() OVER ()
 ----
+<REGEX>:Not implemented Error:.*expression class.*
 
 # LIMIT Bug #321 Crazy Result
 statement ok
@@ -70,7 +74,7 @@ Hello World
 statement error
 select 1 limit date '1992-01-01';
 ----
-
+<REGEX>:Conversion Error.*Unimplemented type for cast.*
 
 # Test limits with no constants
 statement ok
@@ -186,11 +190,13 @@ SELECT * FROM integers as int LIMIT (SELECT NULL)
 statement error
 SELECT * FROM integers as int LIMIT (SELECT -1);
 ----
+<REGEX>:Invalid Input Error.*INT32.*out of range for.*UINT64.*
 
 #Subqueries that return strings that can't be converted to integers
 statement error
 SELECT * FROM integers as int LIMIT (SELECT 'ab');
 ----
+<REGEX>:Invalid Input Error.*Could not convert string.*
 
 # Test use subquery in limit and offset
 statement ok
@@ -270,11 +276,13 @@ SELECT * FROM t ORDER BY x LIMIT (SELECT 3) OFFSET 3;
 statement error
 SELECT * FROM t ORDER BY x LIMIT (SELECT -1);
 ----
+<REGEX>:Invalid Input Error.*INT32.*out of range for.*UINT64.*
 
 # negeive number in the offset
 statement error
 SELECT * FROM t ORDER BY x OFFSET (SELECT -1);
 ----
+<REGEX>:Invalid Input Error.*INT32.*out of range for.*UINT64.*
 
 statement ok
 create table t0(c0 int);
@@ -283,6 +291,14 @@ statement ok
 insert into t0 values (1), (2), (3), (4), (5), (6), (7);
 
 # some complex expression in the offset clause
+statement error
+SELECT * FROM t0 ORDER BY ALL OFFSET (SELECT DISTINCT 6.5 FROM (SELECT 1) t1(c0) UNION ALL SELECT 3);
+----
+More than one row returned by a subquery
+
+statement ok
+SET scalar_subquery_error_on_multiple_rows=false
+
 query I
 SELECT * FROM t0 ORDER BY ALL OFFSET (SELECT DISTINCT 6.5 FROM (SELECT 1) t1(c0) UNION ALL SELECT 3);
 ----

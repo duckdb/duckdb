@@ -87,16 +87,29 @@ class PlanCost:
         return self.total == other.total and self.build_side == other.build_side and self.probe_side == other.probe_side
 
 
+def is_measured_join(op) -> bool:
+    if 'name' not in op:
+        return False
+    if op['name'] != 'HASH_JOIN':
+        return False
+    if 'Join Type' not in op['extra_info']:
+        return False
+    if op['extra_info']['Join Type'].startswith('MARK'):
+        return False
+    return True
+
+
 def op_inspect(op) -> PlanCost:
     cost = PlanCost()
-    if op['name'] == "Query":
-        cost.time = op['timing']
-    if op['name'] == 'HASH_JOIN' and not op['extra_info'].startswith('MARK'):
-        cost.total = op['cardinality']
-        if 'cardinality' in op['children'][0]:
-            cost.probe_side += op['children'][0]['cardinality']
-        if 'cardinality' in op['children'][1]:
-            cost.build_side += op['children'][1]['cardinality']
+    if 'Query' in op:
+        cost.time = op['operator_timing']
+    if is_measured_join(op):
+        cost.total = op['operator_cardinality']
+        if 'operator_cardinality' in op['children'][0]:
+            cost.probe_side += op['children'][0]['operator_cardinality']
+        if 'operator_cardinality' in op['children'][1]:
+            cost.build_side += op['children'][1]['operator_cardinality']
+
         left_cost = op_inspect(op['children'][0])
         right_cost = op_inspect(op['children'][1])
         cost.probe_side += left_cost.probe_side + right_cost.probe_side

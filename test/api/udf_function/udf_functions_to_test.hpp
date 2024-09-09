@@ -137,10 +137,14 @@ static void udf_unary_function(DataChunk &input, ExpressionState &state, Vector 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetData<string_t>(result);
 		auto ldata = FlatVector::GetData<string_t>(input.data[0]);
+		auto &validity = FlatVector::Validity(input.data[0]);
 
 		FlatVector::SetValidity(result, FlatVector::Validity(input.data[0]));
 
 		for (idx_t i = 0; i < input.size(); i++) {
+			if (!validity.RowIsValid(i)) {
+				continue;
+			}
 			auto input_length = ldata[i].GetSize();
 			string_t target = StringVector::EmptyString(result, input_length);
 			auto target_data = target.GetDataWriteable();
@@ -178,10 +182,14 @@ static void udf_binary_function(DataChunk &input, ExpressionState &state, Vector
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetData<string_t>(result);
 		auto ldata = FlatVector::GetData<string_t>(input.data[1]);
+		auto &validity = FlatVector::Validity(input.data[0]);
 
 		FlatVector::SetValidity(result, FlatVector::Validity(input.data[1]));
 
 		for (idx_t i = 0; i < input.size(); i++) {
+			if (!validity.RowIsValid(i)) {
+				continue;
+			}
 			auto input_length = ldata[i].GetSize();
 			string_t target = StringVector::EmptyString(result, input_length);
 			auto target_data = target.GetDataWriteable();
@@ -219,10 +227,14 @@ static void udf_ternary_function(DataChunk &input, ExpressionState &state, Vecto
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetData<string_t>(result);
 		auto ldata = FlatVector::GetData<string_t>(input.data[2]);
+		auto &validity = FlatVector::Validity(input.data[0]);
 
 		FlatVector::SetValidity(result, FlatVector::Validity(input.data[2]));
 
 		for (idx_t i = 0; i < input.size(); i++) {
+			if (!validity.RowIsValid(i)) {
+				continue;
+			}
 			auto input_length = ldata[i].GetSize();
 			string_t target = StringVector::EmptyString(result, input_length);
 			auto target_data = target.GetDataWriteable();
@@ -442,12 +454,12 @@ struct UDFSum {
 	} sum_state_t;
 
 	template <class STATE>
-	static idx_t StateSize() {
+	static idx_t StateSize(const AggregateFunction &function) {
 		return sizeof(STATE);
 	}
 
 	template <class STATE>
-	static void Initialize(data_ptr_t state) {
+	static void Initialize(const AggregateFunction &function, data_ptr_t state) {
 		((STATE *)state)->value = 0;
 		((STATE *)state)->isset = false;
 	}

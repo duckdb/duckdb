@@ -1,0 +1,131 @@
+# name: test/sql/copy/hive_types.test_slow
+# description: basic tests hive_types flag + hive_types_autocast flag
+# group: [copy]
+
+# dir: data/csv/hive-partitioning/hive_types/
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+copy 'data/csv/hive-partitioning/hive_types/himym.csv' to '__TEST_DIR__/partition' (format parquet, partition_by(season,director,aired));
+
+statement error
+select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_partitioning=0, hive_types={'season':smallint}) limit 1;
+----
+Invalid Input Error: cannot disable hive_partitioning
+
+
+# basic tests with hive_types
+query III
+select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_partitioning=1, hive_types={'season':'smallint','director':'varchar','aired':'date'}) limit 1;
+----
+SMALLINT	VARCHAR	DATE
+
+query III
+select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_types={'season':smallint,'director':varchar,'aired':date}) limit 1;
+----
+SMALLINT	VARCHAR	DATE
+
+statement error
+select season,director,aired from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_types={'season':date}) limit 1;
+----
+Invalid Input Error: Unable to cast 
+
+statement error
+from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_types={'seasons':smallint});
+----
+Invalid Input Error: Unknown hive_type
+
+query I
+select typeof(season) from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_types={season:smallint}) limit 1;
+----
+SMALLINT
+
+statement error
+from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_types=true);
+----
+Invalid Input Error: 'hive_types' only accepts a STRUCT
+
+statement error
+from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_types={season:-42});
+----
+Invalid Input Error: hive_types: 'season' must be a VARCHAR, instead: 'INTEGER' was provided
+
+
+# basic tests with hive_types_autocast
+
+# when hive_partitioning=0, data won't be read from directory names unless partition columns are written to files.
+statement error
+select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_partitioning=0) limit 1;
+----
+Binder Error: Referenced column "season" not found in FROM clause!
+
+query III
+select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_partitioning=1, hive_types_autocast=0) limit 1;
+----
+VARCHAR	VARCHAR	VARCHAR
+
+query III
+select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_partitioning=1, hive_types_autocast=1) limit 1;
+----
+BIGINT	VARCHAR	DATE
+
+query III
+select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_partitioning=1) limit 1;
+----
+BIGINT	VARCHAR	DATE
+
+query III
+select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_types_autocast=0) limit 1;
+----
+VARCHAR	VARCHAR	VARCHAR
+
+query III
+select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/partition/**/*.parquet') limit 1;
+----
+BIGINT	VARCHAR	DATE
+
+# hive types mix
+statement ok
+copy (select 1 AS a, 1 AS b, '123' AS partition UNION ALL SELECT 2, 2, '1992-01-01' UNION ALL SELECT 3, 3, 'abc') TO '__TEST_DIR__/partition_types' (FORMAT PARQUET, PARTITION_BY(partition));
+
+query III
+SELECT * FROM '__TEST_DIR__/partition_types/**/*.parquet' ORDER BY 1
+----
+1	1	123
+2	2	1992-01-01
+3	3	abc
+
+# explicit overwrite
+statement error
+select * from read_parquet('__TEST_DIR__/partition_types/**/*.parquet', hive_types={'partition':smallint})
+----
+Unable to cast
+
+# Complex filter filtering first file, filter should be pruned completely if hive_partitioning=1
+statement error
+explain from parquet_scan('__TEST_DIR__/partition/**/*.parquet', HIVE_PARTITIONING=0, HIVE_TYPES_AUTOCAST=0) where aired < '2006-1-1';
+----
+Binder Error: Referenced column "aired" not found in FROM clause!
+
+query II
+explain (FORMAT JSON) from parquet_scan('__TEST_DIR__/partition/**/*.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where aired < '2006-1-1';
+----
+physical_plan	<REGEX>:.*(PARQUET_SCAN.*File Filters": "\(aired \<).*
+
+# When partition columns are written, partition columns can be read even with HIVE_PARTITIONING=0 
+statement ok
+copy 'data/csv/hive-partitioning/hive_types/himym.csv' to '__TEST_DIR__/partition-written' (format parquet, partition_by(season,director,aired), write_partition_columns);
+
+query III
+select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/partition-written/**/*.parquet', hive_partitioning=0) limit 1;
+----
+BIGINT	VARCHAR	DATE
+
+query II
+explain from parquet_scan('__TEST_DIR__/partition-written/**/*.parquet', HIVE_PARTITIONING=0, HIVE_TYPES_AUTOCAST=0) where aired < '2006-1-1';
+----
+physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters:.*aired.*

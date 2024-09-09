@@ -37,6 +37,15 @@ void DataChunk::Initialize(ClientContext &context, const vector<LogicalType> &ty
 	Initialize(Allocator::Get(context), types, capacity_p);
 }
 
+idx_t DataChunk::GetAllocationSize() const {
+	idx_t total_size = 0;
+	auto cardinality = size();
+	for (auto &vec : data) {
+		total_size += vec.GetAllocationSize(cardinality);
+	}
+	return total_size;
+}
+
 void DataChunk::Initialize(Allocator &allocator, vector<LogicalType>::const_iterator begin,
                            vector<LogicalType>::const_iterator end, idx_t capacity_p) {
 	D_ASSERT(data.empty());                   // can only be initialized once
@@ -134,7 +143,7 @@ void DataChunk::Copy(DataChunk &other, idx_t offset) const {
 void DataChunk::Copy(DataChunk &other, const SelectionVector &sel, const idx_t source_count, const idx_t offset) const {
 	D_ASSERT(ColumnCount() == other.ColumnCount());
 	D_ASSERT(other.size() == 0);
-	D_ASSERT((offset + source_count) <= size());
+	D_ASSERT(source_count <= size());
 
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		D_ASSERT(other.data[i].GetVectorType() == VectorType::FLAT_VECTOR);

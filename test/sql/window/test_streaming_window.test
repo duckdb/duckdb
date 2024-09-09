@@ -36,22 +36,19 @@ query TT
 EXPLAIN
 SELECT j, COUNT(j) FILTER(WHERE i = 2) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
 ----
-physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+EXPLAIN
+SELECT j, COUNT(*) FILTER(WHERE i = 2) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
 
 query TT
 EXPLAIN
 SELECT j, SUM(j) FILTER(WHERE i = 2) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
 ----
-physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
-
-# DISTINCT is not supported for  streaming windows
-query TT
-EXPLAIN
-SELECT
-   LIST(DISTINCT col0) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS result
-FROM (VALUES ({'key': 'A'}), ({'key': 'B'}), ({'key': 'A'}))
-----
-physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
 
 # Test each of the streaming window functions
 query TT
@@ -106,6 +103,94 @@ select percent_rank() over (), i, j from integers
 0.0	1	2
 0.0	1	NULL
 
+query TT
+EXPLAIN
+SELECT i, LAG(i, 1) OVER() AS i1
+FROM range(10) tbl(i);
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query II
+SELECT i, LAG(i, 1) OVER() AS i1
+FROM range(10) tbl(i);
+----
+0	NULL
+1	0
+2	1
+3	2
+4	3
+5	4
+6	5
+7	6
+8	7
+9	8
+
+query TT
+EXPLAIN
+SELECT i, LAG(i, -1) OVER() AS i1
+FROM range(10) tbl(i);
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+SELECT i, LAG(i, -1) OVER() AS i1
+FROM range(10) tbl(i);
+----
+0	1
+1	2
+2	3
+3	4
+4	5
+5	6
+6	7
+7	8
+8	9
+9	NULL
+
+query TT
+EXPLAIN
+SELECT i, LEAD(i, -1) OVER() AS i1
+FROM range(10) tbl(i);
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query II
+SELECT i, LEAD(i, -1) OVER() AS i1
+FROM range(10) tbl(i);
+----
+0	NULL
+1	0
+2	1
+3	2
+4	3
+5	4
+6	5
+7	6
+8	7
+9	8
+
+query TT
+EXPLAIN
+SELECT i, LEAD(i, 1) OVER() AS i1
+FROM range(10) tbl(i);
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+SELECT i, LEAD(i, 1) OVER() AS i1
+FROM range(10) tbl(i);
+----
+0	1
+1	2
+2	3
+3	4
+4	5
+5	6
+6	7
+7	8
+8	9
+9	NULL
+
 # Test running aggregates
 query TT
 EXPLAIN
@@ -120,6 +205,20 @@ SELECT i, COUNT(*) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM i
 2	2
 1	3
 1	4
+
+query TT
+EXPLAIN
+SELECT i, COUNT(*) FILTER(WHERE i = 2) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query II
+SELECT i, COUNT(*) FILTER(WHERE i = 2) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
+----
+2	1
+2	2
+1	2
+1	2
 
 query TT
 EXPLAIN

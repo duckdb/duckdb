@@ -34,10 +34,26 @@ struct FunctionLocalState {
 	}
 };
 
+struct ScalarFunctionInfo {
+	DUCKDB_API virtual ~ScalarFunctionInfo();
+
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+};
+
 class Binder;
 class BoundFunctionExpression;
 class LogicalDependencyList;
 class ScalarFunctionCatalogEntry;
+struct StatementProperties;
 
 struct FunctionStatisticsInput {
 	FunctionStatisticsInput(BoundFunctionExpression &expr_p, optional_ptr<FunctionData> bind_data_p,
@@ -52,12 +68,23 @@ struct FunctionStatisticsInput {
 };
 
 struct FunctionModifiedDatabasesInput {
-	FunctionModifiedDatabasesInput(optional_ptr<FunctionData> bind_data_p, unordered_set<string> &modified_databases_p)
-	    : bind_data(bind_data_p), modified_databases(modified_databases_p) {
+	FunctionModifiedDatabasesInput(optional_ptr<FunctionData> bind_data_p, StatementProperties &properties)
+	    : bind_data(bind_data_p), properties(properties) {
 	}
 
 	optional_ptr<FunctionData> bind_data;
-	unordered_set<string> &modified_databases;
+	StatementProperties &properties;
+};
+
+struct FunctionBindExpressionInput {
+	FunctionBindExpressionInput(ClientContext &context_p, optional_ptr<FunctionData> bind_data_p,
+	                            BoundFunctionExpression &function_p)
+	    : context(context_p), bind_data(bind_data_p), function(function_p) {
+	}
+
+	ClientContext &context;
+	optional_ptr<FunctionData> bind_data;
+	BoundFunctionExpression &function;
 };
 
 //! The scalar function type
@@ -76,11 +103,14 @@ typedef unique_ptr<BaseStatistics> (*function_statistics_t)(ClientContext &conte
 //! The type to bind lambda-specific parameter types
 typedef LogicalType (*bind_lambda_function_t)(const idx_t parameter_idx, const LogicalType &list_child_type);
 //! The type to bind lambda-specific parameter types
-typedef void (*get_modified_databases_t)(FunctionModifiedDatabasesInput &input);
+typedef void (*get_modified_databases_t)(ClientContext &context, FunctionModifiedDatabasesInput &input);
 
 typedef void (*function_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                      const ScalarFunction &function);
 typedef unique_ptr<FunctionData> (*function_deserialize_t)(Deserializer &deserializer, ScalarFunction &function);
+
+//! The type to bind lambda-specific parameter types
+typedef unique_ptr<Expression> (*function_bind_expression_t)(FunctionBindExpressionInput &input);
 
 class ScalarFunction : public BaseScalarFunction { // NOLINT: work-around bug in clang-tidy
 public:
@@ -113,11 +143,15 @@ public:
 	function_statistics_t statistics;
 	//! The lambda bind function (if any)
 	bind_lambda_function_t bind_lambda;
+	//! Function to bind the result function expression directly (if any)
+	function_bind_expression_t bind_expression;
 	//! Gets the modified databases (if any)
 	get_modified_databases_t get_modified_databases;
 
 	function_serialize_t serialize;
 	function_deserialize_t deserialize;
+	//! Additional function info, passed to the bind
+	shared_ptr<ScalarFunctionInfo> function_info;
 
 	DUCKDB_API bool operator==(const ScalarFunction &rhs) const;
 	DUCKDB_API bool operator!=(const ScalarFunction &rhs) const;

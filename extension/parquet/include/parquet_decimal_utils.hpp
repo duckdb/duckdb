@@ -32,6 +32,9 @@ public:
 		if (size > sizeof(PHYSICAL_TYPE)) {
 			for (idx_t i = sizeof(PHYSICAL_TYPE); i < size; i++) {
 				auto byte = *(pointer + (size - i - 1));
+				if (!positive) {
+					byte ^= 0xFF;
+				}
 				if (byte != 0) {
 					throw InvalidInputException("Invalid decimal encoding in Parquet file");
 				}

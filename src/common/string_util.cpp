@@ -5,6 +5,7 @@
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "jaro_winkler.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -27,9 +28,8 @@ string StringUtil::GenerateRandomName(idx_t length) {
 	std::uniform_int_distribution<> dis(0, 15);
 
 	std::stringstream ss;
-	ss << std::hex;
 	for (idx_t i = 0; i < length; i++) {
-		ss << dis(gen);
+		ss << "0123456789abcdef"[dis(gen)];
 	}
 	return ss.str();
 }
@@ -212,6 +212,26 @@ string StringUtil::Lower(const string &str) {
 	return (copy);
 }
 
+string StringUtil::Title(const string &str) {
+	string copy;
+	bool first_character = true;
+	for (auto c : str) {
+		bool is_alpha = StringUtil::CharacterIsAlpha(c);
+		if (is_alpha) {
+			if (first_character) {
+				copy += StringUtil::CharacterToUpper(c);
+				first_character = false;
+			} else {
+				copy += StringUtil::CharacterToLower(c);
+			}
+		} else {
+			first_character = true;
+			copy += c;
+		}
+	}
+	return copy;
+}
+
 bool StringUtil::IsLower(const string &str) {
 	return str == Lower(str);
 }
@@ -308,22 +328,43 @@ string StringUtil::Replace(string source, const string &from, const string &to) 
 	return source;
 }
 
-vector<string> StringUtil::TopNStrings(vector<pair<string, idx_t>> scores, idx_t n, idx_t threshold) {
+vector<string> StringUtil::TopNStrings(vector<pair<string, double>> scores, idx_t n, double threshold) {
 	if (scores.empty()) {
 		return vector<string>();
 	}
-	sort(scores.begin(), scores.end(), [](const pair<string, idx_t> &a, const pair<string, idx_t> &b) -> bool {
-		return a.second < b.second || (a.second == b.second && a.first.size() < b.first.size());
+	sort(scores.begin(), scores.end(), [](const pair<string, double> &a, const pair<string, double> &b) -> bool {
+		return a.second > b.second || (a.second == b.second && a.first.size() < b.first.size());
 	});
 	vector<string> result;
 	result.push_back(scores[0].first);
 	for (idx_t i = 1; i < MinValue<idx_t>(scores.size(), n); i++) {
-		if (scores[i].second > threshold) {
+		if (scores[i].second < threshold) {
 			break;
 		}
 		result.push_back(scores[i].first);
 	}
 	return result;
+}
+
+static double NormalizeScore(idx_t score, idx_t max_score) {
+	return 1.0 - static_cast<double>(score) / static_cast<double>(max_score);
+}
+
+vector<string> StringUtil::TopNStrings(const vector<pair<string, idx_t>> &scores, idx_t n, idx_t threshold) {
+	// obtain the max score to normalize
+	idx_t max_score = threshold;
+	for (auto &score : scores) {
+		if (score.second > max_score) {
+			max_score = score.second;
+		}
+	}
+
+	// normalize
+	vector<pair<string, double>> normalized_scores;
+	for (auto &score : scores) {
+		normalized_scores.push_back(make_pair(score.first, NormalizeScore(score.second, max_score)));
+	}
+	return TopNStrings(std::move(normalized_scores), n, NormalizeScore(threshold, max_score));
 }
 
 struct LevenshteinArray {
@@ -385,6 +426,11 @@ idx_t StringUtil::SimilarityScore(const string &s1, const string &s2) {
 	return LevenshteinDistance(s1, s2, 3);
 }
 
+double StringUtil::SimilarityRating(const string &s1, const string &s2) {
+	return duckdb_jaro_winkler::jaro_winkler_similarity(s1.data(), s1.data() + s1.size(), s2.data(),
+	                                                    s2.data() + s2.size());
+}
+
 vector<string> StringUtil::TopNLevenshtein(const vector<string> &strings, const string &target, idx_t n,
                                            idx_t threshold) {
 	vector<pair<string, idx_t>> scores;
@@ -395,6 +441,16 @@ vector<string> StringUtil::TopNLevenshtein(const vector<string> &strings, const 
 		} else {
 			scores.emplace_back(str, SimilarityScore(str, target));
 		}
+	}
+	return TopNStrings(scores, n, threshold);
+}
+
+vector<string> StringUtil::TopNJaroWinkler(const vector<string> &strings, const string &target, idx_t n,
+                                           double threshold) {
+	vector<pair<string, double>> scores;
+	scores.reserve(strings.size());
+	for (auto &str : strings) {
+		scores.emplace_back(str, SimilarityRating(str, target));
 	}
 	return TopNStrings(scores, n, threshold);
 }
@@ -472,8 +528,8 @@ string StringUtil::ToJSONMap(ExceptionType type, const string &message, const un
 
 	yyjson_write_err err;
 	size_t len;
-	yyjson_write_flag flags = YYJSON_WRITE_ALLOW_INVALID_UNICODE;
-	const char *json = yyjson_mut_write_opts(doc, flags, nullptr, &len, &err);
+	constexpr yyjson_write_flag flags = YYJSON_WRITE_ALLOW_INVALID_UNICODE;
+	char *json = yyjson_mut_write_opts(doc, flags, nullptr, &len, &err);
 	if (!json) {
 		yyjson_mut_doc_free(doc);
 		throw SerializationException("Failed to write JSON string: %s", err.msg);
@@ -482,7 +538,7 @@ string StringUtil::ToJSONMap(ExceptionType type, const string &message, const un
 	string result(json, len);
 
 	// Free the JSON and the document
-	free((void *)json);
+	free(json);
 	yyjson_mut_doc_free(doc);
 
 	// Return the result
@@ -537,7 +593,6 @@ string StringUtil::GetFileStem(const string &file_name) {
 }
 
 string StringUtil::GetFilePath(const string &file_path) {
-
 	// Trim the trailing slashes
 	auto end = file_path.size() - 1;
 	while (end > 0 && (file_path[end] == '/' || file_path[end] == '\\')) {
@@ -554,6 +609,108 @@ string StringUtil::GetFilePath(const string &file_path) {
 	}
 
 	return file_path.substr(0, pos + 1);
+}
+
+struct URLEncodeLength {
+	using RESULT_TYPE = idx_t;
+
+	static void ProcessCharacter(idx_t &result, char) {
+		result++;
+	}
+
+	static void ProcessHex(idx_t &result, const char *, idx_t) {
+		result++;
+	}
+};
+
+struct URLEncodeWrite {
+	using RESULT_TYPE = char *;
+
+	static void ProcessCharacter(char *&result, char c) {
+		*result = c;
+		result++;
+	}
+
+	static void ProcessHex(char *&result, const char *input, idx_t idx) {
+		uint32_t hex_first = StringUtil::GetHexValue(input[idx + 1]);
+		uint32_t hex_second = StringUtil::GetHexValue(input[idx + 2]);
+		uint32_t hex_value = (hex_first << 4) + hex_second;
+		ProcessCharacter(result, static_cast<char>(hex_value));
+	}
+};
+
+template <class OP>
+void URLEncodeInternal(const char *input, idx_t input_size, typename OP::RESULT_TYPE &result, bool encode_slash) {
+	// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
+	static const char *HEX_DIGIT = "0123456789ABCDEF";
+	for (idx_t i = 0; i < input_size; i++) {
+		char ch = input[i];
+		if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' ||
+		    ch == '-' || ch == '~' || ch == '.') {
+			OP::ProcessCharacter(result, ch);
+		} else if (ch == '/' && !encode_slash) {
+			OP::ProcessCharacter(result, ch);
+		} else {
+			OP::ProcessCharacter(result, '%');
+			OP::ProcessCharacter(result, HEX_DIGIT[static_cast<unsigned char>(ch) >> 4]);
+			OP::ProcessCharacter(result, HEX_DIGIT[static_cast<unsigned char>(ch) & 15]);
+		}
+	}
+}
+
+idx_t StringUtil::URLEncodeSize(const char *input, idx_t input_size, bool encode_slash) {
+	idx_t result_length = 0;
+	URLEncodeInternal<URLEncodeLength>(input, input_size, result_length, encode_slash);
+	return result_length;
+}
+
+void StringUtil::URLEncodeBuffer(const char *input, idx_t input_size, char *output, bool encode_slash) {
+	URLEncodeInternal<URLEncodeWrite>(input, input_size, output, encode_slash);
+}
+
+string StringUtil::URLEncode(const string &input, bool encode_slash) {
+	idx_t result_size = URLEncodeSize(input.c_str(), input.size(), encode_slash);
+	auto result_data = make_uniq_array<char>(result_size);
+	URLEncodeBuffer(input.c_str(), input.size(), result_data.get(), encode_slash);
+	return string(result_data.get(), result_size);
+}
+
+template <class OP>
+void URLDecodeInternal(const char *input, idx_t input_size, typename OP::RESULT_TYPE &result, bool plus_to_space) {
+	for (idx_t i = 0; i < input_size; i++) {
+		char ch = input[i];
+		if (plus_to_space && ch == '+') {
+			OP::ProcessCharacter(result, ' ');
+		} else if (ch == '%' && i + 2 < input_size && StringUtil::CharacterIsHex(input[i + 1]) &&
+		           StringUtil::CharacterIsHex(input[i + 2])) {
+			OP::ProcessHex(result, input, i);
+			i += 2;
+		} else {
+			OP::ProcessCharacter(result, ch);
+		}
+	}
+}
+
+idx_t StringUtil::URLDecodeSize(const char *input, idx_t input_size, bool plus_to_space) {
+	idx_t result_length = 0;
+	URLDecodeInternal<URLEncodeLength>(input, input_size, result_length, plus_to_space);
+	return result_length;
+}
+
+void StringUtil::URLDecodeBuffer(const char *input, idx_t input_size, char *output, bool plus_to_space) {
+	char *output_start = output;
+	URLDecodeInternal<URLEncodeWrite>(input, input_size, output, plus_to_space);
+	if (!Utf8Proc::IsValid(output_start, NumericCast<idx_t>(output - output_start))) {
+		throw InvalidInputException("Failed to decode string \"%s\" using URL decoding - decoded value is invalid UTF8",
+		                            string(input, input_size));
+	}
+}
+
+string StringUtil::URLDecode(const string &input, bool plus_to_space) {
+	idx_t result_size = URLDecodeSize(input.c_str(), input.size(), plus_to_space);
+	auto result_data = make_uniq_array<char>(result_size);
+	URLDecodeBuffer(input.c_str(), input.size(), result_data.get(), plus_to_space);
+	return string(result_data.get(), result_size);
 }
 
 } // namespace duckdb

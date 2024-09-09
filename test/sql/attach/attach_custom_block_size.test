@@ -1,0 +1,76 @@
+# name: test/sql/attach/attach_custom_block_size.test
+# description: Tests attaching database files with different block allocation sizes.
+# group: [attach]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+ATTACH '__TEST_DIR__/not_pow_of_two.db' (BLOCK_SIZE 123456);
+----
+must be a power of two
+
+statement error
+ATTACH '__TEST_DIR__/exceeds_maximum.db' (BLOCK_SIZE 2147483648);
+----
+the block size must be lesser or equal than the maximum block size
+
+statement ok
+ATTACH '__TEST_DIR__/not_default.db' (BLOCK_SIZE 16384);
+
+statement error
+ATTACH '__TEST_DIR__/too_small.db' (BLOCK_SIZE 128);
+----
+must be greater or equal than the minimum
+
+# default block allocation size works
+
+statement ok
+ATTACH '__TEST_DIR__/default_size.db' (BLOCK_SIZE 262144);
+
+# detach and then try to attach with a different block size parameter
+statement ok
+DETACH default_size;
+
+statement error
+ATTACH '__TEST_DIR__/default_size.db' (BLOCK_SIZE 16384);
+----
+block size parameter does not match
+
+statement ok
+ATTACH '__TEST_DIR__/default_size.db';
+
+statement ok
+DETACH default_size;
+
+# We detect the block allocation size in the header.
+
+statement ok
+ATTACH '__TEST_DIR__/dbname.db' (BLOCK_SIZE 16384);
+
+statement ok
+DETACH dbname;
+
+statement ok
+ATTACH '__TEST_DIR__/dbname.db';
+
+statement error
+SET default_block_size = '123456';
+----
+must be a power of two
+
+statement ok
+SET default_block_size = '16384';
+
+statement error
+SET default_block_size = '128';
+----
+must be greater or equal than the minimum
+
+statement ok
+SET default_block_size = '262144';
+
+statement ok
+ATTACH '__TEST_DIR__/default_size.db';

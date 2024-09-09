@@ -16,7 +16,7 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 
 	// create some tables
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (1), (2), (3)"));
 
 	// simple projection
 	REQUIRE_NOTHROW(tbl = con.Table("integers"));
@@ -101,8 +101,8 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
 
 	// filters can also contain conjunctions
-	REQUIRE_NOTHROW(result = proj->Filter("a=2 OR a=4")->Execute());
-	REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
+	REQUIRE_NOTHROW(result = proj->Filter("a=2 OR a=4")->Order("1")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 2, 4, 4}));
 
 	// alias
 	REQUIRE_NOTHROW(result = proj->Project("a + 1")->Alias("bla")->Execute());
@@ -110,9 +110,9 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 
 	// now test ordering
 	REQUIRE_NOTHROW(result = proj->Order("a DESC")->Execute());
-	REQUIRE(CHECK_COLUMN(result, 0, {4, 2}));
+	REQUIRE(CHECK_COLUMN(result, 0, {4, 4, 2, 2}));
 	REQUIRE_NOTHROW(result = proj->Order(duckdb::vector<string> {"a DESC", "a ASC"})->Execute());
-	REQUIRE(CHECK_COLUMN(result, 0, {4, 2}));
+	REQUIRE(CHECK_COLUMN(result, 0, {4, 4, 2, 2}));
 
 	// top n
 	REQUIRE_NOTHROW(result = proj->Order("a")->Limit(1)->Execute());
@@ -122,24 +122,24 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 
 	// test set operations
 	REQUIRE_NOTHROW(result = tbl->Union(tbl)->Order("i")->Execute());
-	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 2, 2, 3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3}));
 	REQUIRE_NOTHROW(result = tbl->Except(tbl)->Order("i")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 	REQUIRE_NOTHROW(result = tbl->Intersect(tbl)->Order("i")->Execute());
-	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 2, 2, 3, 3}));
 	REQUIRE_NOTHROW(result = tbl->Except(tbl->Filter("i=2"))->Order("i")->Execute());
-	REQUIRE(CHECK_COLUMN(result, 0, {1, 3}));
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 3, 3}));
 	REQUIRE_NOTHROW(result = tbl->Intersect(tbl->Filter("i=2"))->Order("i")->Execute());
-	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 2}));
 
 	// set operations with projections
 	REQUIRE_NOTHROW(proj = tbl->Project("i::TINYINT AS i, i::SMALLINT, i::BIGINT, i::VARCHAR"));
 	REQUIRE_NOTHROW(proj2 = tbl->Project("(i+10)::TINYINT, (i+10)::SMALLINT, (i+10)::BIGINT, (i+10)::VARCHAR"));
 	REQUIRE_NOTHROW(result = proj->Union(proj2)->Order("i")->Execute());
-	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 11, 12, 13}));
-	REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 3, 11, 12, 13}));
-	REQUIRE(CHECK_COLUMN(result, 2, {1, 2, 3, 11, 12, 13}));
-	REQUIRE(CHECK_COLUMN(result, 3, {"1", "2", "3", "11", "12", "13"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 2, 2, 3, 3, 11, 11, 12, 12, 13, 13}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 1, 2, 2, 3, 3, 11, 11, 12, 12, 13, 13}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1, 1, 2, 2, 3, 3, 11, 11, 12, 12, 13, 13}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"1", "1", "2", "2", "3", "3", "11", "11", "12", "12", "13", "13"}));
 
 	// distinct
 	REQUIRE_NOTHROW(result = tbl->Union(tbl)->Union(tbl)->Distinct()->Order("1")->Execute());
@@ -260,8 +260,8 @@ TEST_CASE("Test combinations of set operations", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
 	REQUIRE_NOTHROW(result = vunion->Intersect(vunion)->Order("1")->Execute());
-	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 2, 2, 3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 10, 5, 5, 4, 4}));
 	REQUIRE_NOTHROW(result = vunion->Except(vunion)->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 	REQUIRE(CHECK_COLUMN(result, 1, {}));
@@ -380,7 +380,7 @@ TEST_CASE("Test crossproduct relation", "[relation_api]") {
 
 	// run cross product
 	vcross = v1->CrossProduct(v2);
-	REQUIRE_NOTHROW(result = vcross->Order("v1.i")->Execute());
+	REQUIRE_NOTHROW(result = vcross->Order("v1.i, v2.i")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 2, 2, 2, 3, 3, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {10, 10, 10, 5, 5, 5, 4, 4, 4}));
 	REQUIRE(CHECK_COLUMN(result, 2, {1, 2, 3, 1, 2, 3, 1, 2, 3}));

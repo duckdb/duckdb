@@ -2,6 +2,10 @@
 # description: Test CSVs with a decimal value
 # group: [csv]
 
+statement ok
+PRAGMA enable_verification
+
+
 query I
 FROM 'data/csv/decimal.csv'
 ----

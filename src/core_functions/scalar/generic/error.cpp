@@ -11,7 +11,7 @@ struct ErrorOperator {
 };
 
 ScalarFunction ErrorFun::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::VARCHAR}, LogicalType::SQLNULL,
+	auto fun = ScalarFunction("error", {LogicalType::VARCHAR}, LogicalType::SQLNULL,
 	                          ScalarFunction::UnaryFunction<string_t, int32_t, ErrorOperator>);
 	// Set the function with side effects to avoid the optimization.
 	fun.stability = FunctionStability::VOLATILE;

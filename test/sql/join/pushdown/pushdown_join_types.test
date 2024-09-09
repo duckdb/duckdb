@@ -1,0 +1,61 @@
+# name: test/sql/join/pushdown/pushdown_join_types.test
+# description: Test join filter pushdown with various join types
+# group: [pushdown]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers AS SELECT CASE WHEN i%2=0 THEN NULL ELSE i END i FROM range(1000) t(i)
+
+# inner join
+query II
+SELECT * FROM integers JOIN (SELECT MAX(i) AS max_i FROM integers) ON i=max_i
+----
+999	999
+
+# right join
+query II
+SELECT * FROM integers RIGHT JOIN (SELECT MAX(i) AS max_i FROM integers) ON i=max_i
+----
+999	999
+
+# left join
+query II
+SELECT COUNT(*), COUNT(max_i) IS NOT NULL FROM (
+SELECT * FROM integers LEFT JOIN (SELECT MAX(i) AS max_i FROM integers) ON i=max_i
+)
+----
+1000	1
+
+query II
+SELECT COUNT(*), COUNT(max_i) IS NOT NULL FROM (
+SELECT * FROM integers FULL OUTER JOIN (SELECT MAX(i) AS max_i FROM integers) ON i=max_i
+)
+----
+1000	1
+
+# semi join
+query I
+SELECT * FROM integers WHERE i=(SELECT MAX(i) FROM integers)
+----
+999
+
+query I
+SELECT * FROM integers WHERE i IN (SELECT MAX(i) FROM integers)
+----
+999
+
+# multiple values
+query I
+SELECT * FROM integers WHERE i IN (997, 999)
+----
+997
+999
+
+# mark join
+query II
+SELECT COUNT(*), SUM(CASE WHEN in_result THEN 1 ELSE 0 END) FROM
+(SELECT i IN (SELECT MAX(i) FROM integers) AS in_result FROM integers)
+----
+1000	1

@@ -8,6 +8,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/types/varint.hpp"
 #include "duckdb/core_functions/to_interval.hpp"
 
 #include "datetime.h" // Python datetime initialize #1
@@ -42,15 +43,15 @@ interval_t PyTimeDelta::ToInterval() {
 }
 
 int64_t PyTimeDelta::GetDays(py::handle &obj) {
-	return PyDateTime_TIMEDELTA_GET_DAYS(obj.ptr()); // NOLINT
+	return py::int_(obj.attr("days")).cast<int64_t>();
 }
 
 int64_t PyTimeDelta::GetSeconds(py::handle &obj) {
-	return PyDateTime_TIMEDELTA_GET_SECONDS(obj.ptr()); // NOLINT
+	return py::int_(obj.attr("seconds")).cast<int64_t>();
 }
 
 int64_t PyTimeDelta::GetMicros(py::handle &obj) {
-	return PyDateTime_TIMEDELTA_GET_MICROSECONDS(obj.ptr()); // NOLINT
+	return py::int_(obj.attr("microseconds")).cast<int64_t>();
 }
 
 PyDecimal::PyDecimal(py::handle &obj) : obj(obj) {
@@ -248,13 +249,15 @@ py::object PyTime::GetTZInfo(py::handle &obj) {
 	return py::reinterpret_borrow<py::object>(PyDateTime_TIME_GET_TZINFO(obj.ptr())); // NOLINT
 }
 
-interval_t PyTimezone::GetUTCOffset(py::handle &tzone_obj) {
-	auto res = tzone_obj.attr("utcoffset")(py::none());
+interval_t PyTimezone::GetUTCOffset(py::handle &datetime, py::handle &tzone_obj) {
+	// The datetime object is provided because the utcoffset could be ambiguous
+	auto res = tzone_obj.attr("utcoffset")(datetime);
 	auto timedelta = PyTimeDelta(res);
 	return timedelta.ToInterval();
 }
 
 int32_t PyTimezone::GetUTCOffsetSeconds(py::handle &tzone_obj) {
+	// We should be able to use None here, the tzone_obj of a datetime.time should never be ambiguous
 	auto res = tzone_obj.attr("utcoffset")(py::none());
 	auto timedelta = PyTimeDelta(res);
 	if (timedelta.days != 0) {
@@ -288,7 +291,7 @@ timestamp_t PyDateTime::ToTimestamp() {
 Value PyDateTime::ToDuckValue(const LogicalType &target_type) {
 	auto timestamp = ToTimestamp();
 	if (!py::none().is(tzone_obj)) {
-		auto utc_offset = PyTimezone::GetUTCOffset(tzone_obj);
+		auto utc_offset = PyTimezone::GetUTCOffset(obj, tzone_obj);
 		// Need to subtract the UTC offset, so we invert the interval
 		utc_offset = Interval::Invert(utc_offset);
 		timestamp = Interval::Add(timestamp, utc_offset);
@@ -401,6 +404,58 @@ py::object PythonObject::FromStruct(const Value &val, const LogicalType &type,
 			py_struct[child_name.c_str()] = FromValue(struct_values[i], child_type, client_properties);
 		}
 		return std::move(py_struct);
+	}
+}
+
+static bool KeyIsHashable(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::ENUM:
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::BIT:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::UUID:
+	case LogicalTypeId::INTERVAL:
+		return true;
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::ARRAY:
+	case LogicalTypeId::MAP:
+		return false;
+	case LogicalTypeId::UNION: {
+		idx_t count = UnionType::GetMemberCount(type);
+		for (idx_t i = 0; i < count; i++) {
+			if (!KeyIsHashable(UnionType::GetMemberType(type, i))) {
+				return false;
+			}
+		}
+		// Only if all the member types are hashable do we say the entire UNION is hashable
+		return true;
+	}
+	case LogicalTypeId::STRUCT:
+		return false;
+	default:
+		throw NotImplementedException("Unsupported type: \"%s\"", type.ToString());
 	}
 }
 
@@ -596,16 +651,25 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		auto &key_type = MapType::KeyType(type);
 		auto &val_type = MapType::ValueType(type);
 
-		py::list keys;
-		py::list values;
-		for (auto &list_elem : list_values) {
-			auto &struct_children = StructValue::GetChildren(list_elem);
-			keys.append(PythonObject::FromValue(struct_children[0], key_type, client_properties));
-			values.append(PythonObject::FromValue(struct_children[1], val_type, client_properties));
-		}
 		py::dict py_struct;
-		py_struct["key"] = std::move(keys);
-		py_struct["value"] = std::move(values);
+		if (KeyIsHashable(key_type)) {
+			for (auto &list_elem : list_values) {
+				auto &struct_children = StructValue::GetChildren(list_elem);
+				auto key = PythonObject::FromValue(struct_children[0], key_type, client_properties);
+				auto value = PythonObject::FromValue(struct_children[1], val_type, client_properties);
+				py_struct[std::move(key)] = std::move(value);
+			}
+		} else {
+			py::list keys;
+			py::list values;
+			for (auto &list_elem : list_values) {
+				auto &struct_children = StructValue::GetChildren(list_elem);
+				keys.append(PythonObject::FromValue(struct_children[0], key_type, client_properties));
+				values.append(PythonObject::FromValue(struct_children[1], val_type, client_properties));
+			}
+			py_struct["key"] = std::move(keys);
+			py_struct["value"] = std::move(values);
+		}
 		return std::move(py_struct);
 	}
 	case LogicalTypeId::STRUCT: {
@@ -614,6 +678,10 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 	case LogicalTypeId::UUID: {
 		auto uuid_value = val.GetValueUnsafe<hugeint_t>();
 		return import_cache.uuid.UUID()(UUID::ToString(uuid_value));
+	}
+	case LogicalTypeId::VARINT: {
+		auto varint_value = val.GetValueUnsafe<string_t>();
+		return py::str(Varint::VarIntToVarchar(varint_value));
 	}
 	case LogicalTypeId::INTERVAL: {
 		auto interval_value = val.GetValueUnsafe<interval_t>();

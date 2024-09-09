@@ -24,10 +24,17 @@ void ArrayColumnData::SetStart(idx_t new_start) {
 	validity.SetStart(new_start);
 }
 
-bool ArrayColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
+FilterPropagateResult ArrayColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
 	// FIXME: There is nothing preventing us from supporting this, but it's not implemented yet.
 	// table filters are not supported yet for fixed size list columns
-	return false;
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+}
+
+void ArrayColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
+	ColumnData::InitializePrefetch(prefetch_state, scan_state, rows);
+	validity.InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
+	auto array_size = ArrayType::GetSize(type);
+	child_column->InitializePrefetch(prefetch_state, scan_state.child_states[1], rows * array_size);
 }
 
 void ArrayColumnData::InitializeScan(ColumnScanState &state) {
@@ -59,11 +66,12 @@ void ArrayColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row
 	validity.InitializeScanWithOffset(state.child_states[0], row_idx);
 
 	auto array_size = ArrayType::GetSize(type);
-	auto child_offset = (row_idx - start) * array_size;
+	auto child_count = (row_idx - start) * array_size;
 
-	D_ASSERT(child_offset <= child_column->GetMaxEntry());
-	if (child_offset < child_column->GetMaxEntry()) {
-		child_column->InitializeScanWithOffset(state.child_states[1], start + child_offset);
+	D_ASSERT(child_count <= child_column->GetMaxEntry());
+	if (child_count < child_column->GetMaxEntry()) {
+		const auto child_offset = start + child_count;
+		child_column->InitializeScanWithOffset(state.child_states[1], child_offset);
 	}
 }
 
@@ -164,7 +172,10 @@ void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &st
 	// We need to fetch between [row_id * array_size, (row_id + 1) * array_size)
 	auto child_state = make_uniq<ColumnScanState>();
 	child_state->Initialize(child_type, nullptr);
-	child_column->InitializeScanWithOffset(*child_state, UnsafeNumericCast<idx_t>(row_id) * array_size);
+
+	const auto child_offset = start + (UnsafeNumericCast<idx_t>(row_id) - start) * array_size;
+
+	child_column->InitializeScanWithOffset(*child_state, child_offset);
 	Vector child_scan(child_type, array_size);
 	child_column->ScanCount(*child_state, child_scan, array_size);
 	VectorOperations::Copy(child_scan, child_vec, array_size, 0, result_idx * array_size);
@@ -191,11 +202,11 @@ public:
 		return stats.ToUnique();
 	}
 
-	void WriteDataPointers(RowGroupWriter &writer, Serializer &serializer) override {
-		serializer.WriteObject(101, "validity",
-		                       [&](Serializer &serializer) { validity_state->WriteDataPointers(writer, serializer); });
-		serializer.WriteObject(102, "child_column",
-		                       [&](Serializer &serializer) { child_state->WriteDataPointers(writer, serializer); });
+	PersistentColumnData ToPersistentData() override {
+		PersistentColumnData data(PhysicalType::ARRAY);
+		data.child_columns.push_back(validity_state->ToPersistentData());
+		data.child_columns.push_back(child_state->ToPersistentData());
+		return data;
 	}
 };
 
@@ -213,13 +224,22 @@ unique_ptr<ColumnCheckpointState> ArrayColumnData::Checkpoint(RowGroup &row_grou
 	return std::move(checkpoint_state);
 }
 
-void ArrayColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) {
-	deserializer.ReadObject(101, "validity",
-	                        [&](Deserializer &source) { validity.DeserializeColumn(source, target_stats); });
+bool ArrayColumnData::IsPersistent() {
+	return validity.IsPersistent() && child_column->IsPersistent();
+}
 
+PersistentColumnData ArrayColumnData::Serialize() {
+	PersistentColumnData persistent_data(PhysicalType::ARRAY);
+	persistent_data.child_columns.push_back(validity.Serialize());
+	persistent_data.child_columns.push_back(child_column->Serialize());
+	return persistent_data;
+}
+
+void ArrayColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
+	D_ASSERT(column_data.pointers.empty());
+	validity.InitializeColumn(column_data.child_columns[0], target_stats);
 	auto &child_stats = ArrayStats::GetChildStats(target_stats);
-	deserializer.ReadObject(102, "child_column",
-	                        [&](Deserializer &source) { child_column->DeserializeColumn(source, child_stats); });
+	child_column->InitializeColumn(column_data.child_columns[1], child_stats);
 	this->count = validity.count.load();
 }
 

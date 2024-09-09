@@ -1,7 +1,9 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/tableref/showref.hpp"
@@ -64,7 +66,16 @@ static unique_ptr<ParsedExpression> SummarizeCreateNullPercentage(string column_
 	auto percentage_x =
 	    SummarizeCreateBinaryFunction("*", std::move(negate_x), make_uniq<ConstantExpression>(Value::DOUBLE(100)));
 
-	return make_uniq<CastExpression>(LogicalType::DECIMAL(9, 2), std::move(percentage_x));
+	auto comp_expr = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHAN, SummarizeCreateCountStar(),
+	                                                 make_uniq<ConstantExpression>(Value::BIGINT(0)));
+	auto case_expr = make_uniq<CaseExpression>();
+	CaseCheck check;
+	check.when_expr = std::move(comp_expr);
+	check.then_expr = std::move(percentage_x);
+	case_expr->case_checks.push_back(std::move(check));
+	case_expr->else_expr = make_uniq<ConstantExpression>(Value());
+
+	return make_uniq<CastExpression>(LogicalType::DECIMAL(9, 2), std::move(case_expr));
 }
 
 unique_ptr<BoundTableRef> Binder::BindSummarize(ShowRef &ref) {
@@ -112,12 +123,15 @@ unique_ptr<BoundTableRef> Binder::BindSummarize(ShowRef &ref) {
 		if (plan.types[i].IsNumeric()) {
 			avg_children.push_back(SummarizeCreateAggregate("avg", plan.names[i]));
 			std_children.push_back(SummarizeCreateAggregate("stddev", plan.names[i]));
+		} else {
+			avg_children.push_back(make_uniq<ConstantExpression>(Value()));
+			std_children.push_back(make_uniq<ConstantExpression>(Value()));
+		}
+		if (plan.types[i].IsNumeric() || plan.types[i].IsTemporal()) {
 			q25_children.push_back(SummarizeCreateAggregate("approx_quantile", plan.names[i], Value::FLOAT(0.25)));
 			q50_children.push_back(SummarizeCreateAggregate("approx_quantile", plan.names[i], Value::FLOAT(0.50)));
 			q75_children.push_back(SummarizeCreateAggregate("approx_quantile", plan.names[i], Value::FLOAT(0.75)));
 		} else {
-			avg_children.push_back(make_uniq<ConstantExpression>(Value()));
-			std_children.push_back(make_uniq<ConstantExpression>(Value()));
 			q25_children.push_back(make_uniq<ConstantExpression>(Value()));
 			q50_children.push_back(make_uniq<ConstantExpression>(Value()));
 			q75_children.push_back(make_uniq<ConstantExpression>(Value()));

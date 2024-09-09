@@ -1,0 +1,31 @@
+# name: test/sql/copy/csv/read_csv_variable.test
+# description: Test reading CSV files where the file list comes from a table
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE globbed_files AS FROM glob('data/csv/glob/a?/*.csv');
+
+statement ok
+SET VARIABLE csv_files=(SELECT LIST(file ORDER BY file) FROM globbed_files)
+
+query I
+SELECT [x.replace('\', '/') for x in getvariable('csv_files')]
+----
+[data/csv/glob/a1/a1.csv, data/csv/glob/a2/a2.csv, data/csv/glob/a3/b1.csv]
+
+# simple globbing
+query I
+SELECT * FROM read_csv(getvariable('csv_files')) ORDER BY 1
+----
+2019-06-05
+2019-06-15
+2019-06-25
+2019-07-05
+2019-07-15
+2019-07-25
+2019-08-05
+2019-08-15
+2019-08-25

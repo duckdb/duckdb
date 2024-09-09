@@ -1,0 +1,63 @@
+# name: test/sql/copy/csv/test_partition_compression.test
+# description: Test we can round-trip partitioned compressed CSV files
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+require no_extension_autoloading
+
+statement ok
+CREATE TABLE test AS VALUES ('a', 'foo', 1), ('a', 'foo', 2), ('a', 'bar', 1), ('b', 'bar', 1);
+
+statement ok
+COPY (FROM test) TO '__TEST_DIR__/data.csv.d' (FORMAT 'csv', COMPRESSION 'gzip', PARTITION_BY ('col0', 'col1'));
+
+# Specify Compression
+statement error
+FROM read_csv_auto('__TEST_DIR__/data.csv.d/*/*/*.csv')
+----
+No files found that match the pattern
+
+query III
+FROM read_csv_auto('__TEST_DIR__/data.csv.d/*/*/*.csv.gz');
+----
+1	a	bar
+1	a	foo
+2	a	foo
+1	b	bar
+
+query III
+FROM read_csv_auto('__TEST_DIR__/data.csv.d/*/*/*.csv.*');
+----
+1	a	bar
+1	a	foo
+2	a	foo
+1	b	bar
+
+require parquet
+
+statement ok
+COPY (FROM test) TO '__TEST_DIR__/data.csv.d2' (FORMAT 'csv', COMPRESSION 'zstd', PARTITION_BY ('col0', 'col1'));
+
+# Specify Compression
+statement error
+FROM read_csv_auto('__TEST_DIR__/data.csv.d2/*/*/*.csv')
+----
+No files found that match the pattern
+
+query III
+FROM read_csv_auto('__TEST_DIR__/data.csv.d2/*/*/*.csv.zst');
+----
+1	a	bar
+1	a	foo
+2	a	foo
+1	b	bar
+
+query III
+FROM read_csv_auto('__TEST_DIR__/data.csv.d2/*/*/*.csv.*');
+----
+1	a	bar
+1	a	foo
+2	a	foo
+1	b	bar

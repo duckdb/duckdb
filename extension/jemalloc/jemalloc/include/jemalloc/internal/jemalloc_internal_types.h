@@ -3,8 +3,6 @@
 
 #include "jemalloc/internal/quantum.h"
 
-namespace duckdb_jemalloc {
-
 /* Processor / core id type. */
 typedef int malloc_cpuid_t;
 
@@ -47,12 +45,12 @@ typedef enum malloc_init_e malloc_init_t;
 #define MALLOCX_ARENA_SHIFT	20
 #define MALLOCX_TCACHE_SHIFT	8
 #define MALLOCX_ARENA_MASK \
-    (((1 << MALLOCX_ARENA_BITS) - 1) << MALLOCX_ARENA_SHIFT)
+    ((unsigned)(((1U << MALLOCX_ARENA_BITS) - 1) << MALLOCX_ARENA_SHIFT))
 /* NB: Arena index bias decreases the maximum number of arenas by 1. */
-#define MALLOCX_ARENA_LIMIT	((1 << MALLOCX_ARENA_BITS) - 1)
+#define MALLOCX_ARENA_LIMIT	((unsigned)((1U << MALLOCX_ARENA_BITS) - 1))
 #define MALLOCX_TCACHE_MASK \
-    (((1 << MALLOCX_TCACHE_BITS) - 1) << MALLOCX_TCACHE_SHIFT)
-#define MALLOCX_TCACHE_MAX	((1 << MALLOCX_TCACHE_BITS) - 3)
+    ((unsigned)(((1U << MALLOCX_TCACHE_BITS) - 1) << MALLOCX_TCACHE_SHIFT))
+#define MALLOCX_TCACHE_MAX	((unsigned)((1U << MALLOCX_TCACHE_BITS) - 3))
 #define MALLOCX_LG_ALIGN_MASK	((1 << MALLOCX_LG_ALIGN_BITS) - 1)
 /* Use MALLOCX_ALIGN_GET() if alignment may not be specified in flags. */
 #define MALLOCX_ALIGN_GET_SPECIFIED(flags)				\
@@ -101,7 +99,8 @@ typedef enum malloc_init_e malloc_init_t;
 
 /* Return the nearest aligned address at or below a. */
 #define ALIGNMENT_ADDR2BASE(a, alignment)				\
-	((void *)((uintptr_t)(a) & ((~(alignment)) + 1)))
+	((void *)(((byte_t *)(a)) - (((uintptr_t)(a)) -			\
+	    ((uintptr_t)(a) & ((~(alignment)) + 1)))))
 
 /* Return the offset between a and the nearest aligned address at or below a. */
 #define ALIGNMENT_ADDR2OFFSET(a, alignment)				\
@@ -111,28 +110,39 @@ typedef enum malloc_init_e malloc_init_t;
 #define ALIGNMENT_CEILING(s, alignment)					\
 	(((s) + (alignment - 1)) & ((~(alignment)) + 1))
 
+/*
+ * Return the nearest aligned address at or above a.
+ *
+ * While at first glance this would appear to be merely a more complicated
+ * way to perform the same computation as `ALIGNMENT_CEILING`,
+ * this has the important additional property of not concealing pointer
+ * provenance from the compiler. See the block-comment on the
+ * definition of `byte_t` for more details.
+ */
+#define ALIGNMENT_ADDR2CEILING(a, alignment)				\
+	((void *)(((byte_t *)(a)) + (((((uintptr_t)(a)) +		\
+	    (alignment - 1)) & ((~(alignment)) + 1)) - ((uintptr_t)(a)))))
+
 /* Declare a variable-length array. */
-#if __STDC_VERSION__ < 199901L
+#if __STDC_VERSION__ < 199901L || defined(__STDC_NO_VLA__)
 #  ifdef _MSC_VER
 #    include <malloc.h>
 #    define alloca _alloca
 #  else
 #    ifdef JEMALLOC_HAS_ALLOCA_H
-} // namespace duckdb_jemalloc
 #      include <alloca.h>
-namespace duckdb_jemalloc {
 #    else
-} // namespace duckdb_jemalloc
-#      include <cstdlib>
-namespace duckdb_jemalloc {
+#      include <stdlib.h>
 #    endif
 #  endif
-#  define VARIABLE_ARRAY(type, name, count) \
-	type *name = (type *)alloca(sizeof(type) * (count))
+#  define VARIABLE_ARRAY_UNSAFE(type, name, count) \
+	type *name = alloca(sizeof(type) * (count))
 #else
-#  define VARIABLE_ARRAY(type, name, count) type name[(count)]
+#  define VARIABLE_ARRAY_UNSAFE(type, name, count) type name[(count)]
 #endif
-
-} // namespace duckdb_jemalloc
+#define VARIABLE_ARRAY_SIZE_MAX	2048
+#define VARIABLE_ARRAY(type, name, count)	\
+	assert(sizeof(type) * (count) <= VARIABLE_ARRAY_SIZE_MAX);	\
+	VARIABLE_ARRAY_UNSAFE(type, name, count)
 
 #endif /* JEMALLOC_INTERNAL_TYPES_H */

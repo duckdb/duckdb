@@ -40,20 +40,26 @@ vector<ColumnBinding> LogicalAggregate::GetColumnBindings() {
 	return result;
 }
 
-string LogicalAggregate::ParamsToString() const {
-	string result;
+InsertionOrderPreservingMap<string> LogicalAggregate::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	string groups_info;
 	for (idx_t i = 0; i < groups.size(); i++) {
 		if (i > 0) {
-			result += "\n";
+			groups_info += "\n";
 		}
-		result += groups[i]->GetName();
+		groups_info += groups[i]->GetName();
 	}
+	result["Groups"] = groups_info;
+
+	string expressions_info;
 	for (idx_t i = 0; i < expressions.size(); i++) {
-		if (i > 0 || !groups.empty()) {
-			result += "\n";
+		if (i > 0) {
+			expressions_info += "\n";
 		}
-		result += expressions[i]->GetName();
+		expressions_info += expressions[i]->GetName();
 	}
+	result["Expressions"] = expressions_info;
+	SetParamsEstimatedCardinality(result);
 	return result;
 }
 

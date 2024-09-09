@@ -153,7 +153,7 @@
         "parameters": "value",
         "description": "Returns the MD5 hash of the value as a string",
         "example": "md5('123')",
-        "type": "scalar_function",
+        "type": "scalar_function_set",
         "struct": "MD5Fun"
     },
     {
@@ -161,24 +161,8 @@
         "parameters": "value",
         "description": "Returns the MD5 hash of the value as an INT128",
         "example": "md5_number('123')",
-        "type": "scalar_function",
+        "type": "scalar_function_set",
         "struct": "MD5NumberFun"
-    },
-    {
-        "name": "md5_number_lower",
-        "parameters": "value",
-        "description": "Returns the MD5 hash of the value as an INT128",
-        "example": "md5_number_lower('123')",
-        "type": "scalar_function",
-        "struct": "MD5NumberLowerFun"
-    },
-    {
-        "name": "md5_number_upper",
-        "parameters": "value",
-        "description": "Returns the MD5 hash of the value as an INT128",
-        "example": "md5_number_upper('123')",
-        "type": "scalar_function",
-        "struct": "MD5NumberUpperFun"
     },
     {
         "name": "parse_dirname",
@@ -269,11 +253,19 @@
         "type": "scalar_function_set"
     },
     {
+        "name": "sha1",
+        "parameters": "value",
+        "description": "Returns the SHA1 hash of the value",
+        "example": "sha1('hello')",
+        "type": "scalar_function_set",
+        "struct": "SHA1Fun"
+    },
+    {
         "name": "sha256",
         "parameters": "value",
         "description": "Returns the SHA256 hash of the value",
         "example": "sha256('hello')",
-        "type": "scalar_function",
+        "type": "scalar_function_set",
         "struct": "SHA256Fun"
     },
     {
@@ -343,6 +335,20 @@
         "description": "Escapes all potentially meaningful regexp characters in the input string",
         "example": "regexp_escape('https://duckdb.org')",
         "struct": "RegexpEscapeFun",
+        "type": "scalar_function"
+    },
+    {
+        "name": "url_encode",
+        "parameters": "input",
+        "description": "Escapes the input string by encoding it so that it can be included in a URL query parameter.",
+        "example": "url_encode('this string has/ special+ characters>')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "url_decode",
+        "parameters": "input",
+        "description": "Unescapes the URL encoded input.",
+        "example": "url_decode('this%20string%20is%2BFencoded')",
         "type": "scalar_function"
     }
 ]

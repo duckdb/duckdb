@@ -200,24 +200,29 @@ SourceResultType PhysicalPerfectHashAggregate::GetData(ExecutionContext &context
 	}
 }
 
-string PhysicalPerfectHashAggregate::ParamsToString() const {
-	string result;
+InsertionOrderPreservingMap<string> PhysicalPerfectHashAggregate::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	string groups_info;
 	for (idx_t i = 0; i < groups.size(); i++) {
 		if (i > 0) {
-			result += "\n";
+			groups_info += "\n";
 		}
-		result += groups[i]->GetName();
+		groups_info += groups[i]->GetName();
 	}
+	result["Groups"] = groups_info;
+
+	string aggregate_info;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
-		if (i > 0 || !groups.empty()) {
-			result += "\n";
+		if (i > 0) {
+			aggregate_info += "\n";
 		}
-		result += aggregates[i]->GetName();
+		aggregate_info += aggregates[i]->GetName();
 		auto &aggregate = aggregates[i]->Cast<BoundAggregateExpression>();
 		if (aggregate.filter) {
-			result += " Filter: " + aggregate.filter->GetName();
+			aggregate_info += " Filter: " + aggregate.filter->GetName();
 		}
 	}
+	result["Aggregates"] = aggregate_info;
 	return result;
 }
 

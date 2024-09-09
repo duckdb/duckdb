@@ -84,7 +84,7 @@ public:
 	//! we need to re-swizzle.
 	void ReSwizzle();
 
-	void SwizzleBlock(RowDataBlock &data_block, RowDataBlock &heap_block);
+	void SwizzleBlock(idx_t block_idx);
 
 	//! Scans the next data chunk from the sorted data
 	void Scan(DataChunk &chunk);
@@ -114,6 +114,8 @@ private:
 	//! Whether we are unswizzling the blocks
 	const bool unswizzling;
 
+	//! Swizzle a single block
+	void SwizzleBlockInternal(RowDataBlock &data_block, RowDataBlock &heap_block);
 	//! Checks that the newest block is valid
 	void ValidateUnscannedBlock() const;
 };

@@ -117,100 +117,7 @@ string CreateFileName(const string &id_suffix, TableCatalogEntry &table, const s
 	return StringUtil::Format("%s_%s%s.%s", schema, name, id_suffix, extension);
 }
 
-static bool IsSupported(CopyTypeSupport support_level) {
-	// For export purposes we don't want to lose information, so we only accept fully supported types
-	return support_level == CopyTypeSupport::SUPPORTED;
-}
-
-static LogicalType AlterLogicalType(const LogicalType &original, copy_supports_type_t type_check) {
-	D_ASSERT(type_check);
-	auto id = original.id();
-	switch (id) {
-	case LogicalTypeId::LIST: {
-		auto child = AlterLogicalType(ListType::GetChildType(original), type_check);
-		return LogicalType::LIST(child);
-	}
-	case LogicalTypeId::ARRAY: {
-		// Attempt to convert the array to a list
-		auto &child = ArrayType::GetChildType(original);
-		return AlterLogicalType(LogicalType::LIST(child), type_check);
-	}
-	case LogicalTypeId::STRUCT: {
-		auto &original_children = StructType::GetChildTypes(original);
-		child_list_t<LogicalType> new_children;
-		for (auto &child : original_children) {
-			auto &child_name = child.first;
-			auto &child_type = child.second;
-
-			LogicalType new_type;
-			if (!IsSupported(type_check(child_type))) {
-				new_type = AlterLogicalType(child_type, type_check);
-			} else {
-				new_type = child_type;
-			}
-			new_children.push_back(std::make_pair(child_name, new_type));
-		}
-		return LogicalType::STRUCT(std::move(new_children));
-	}
-	case LogicalTypeId::UNION: {
-		auto member_count = UnionType::GetMemberCount(original);
-		child_list_t<LogicalType> new_children;
-		for (idx_t i = 0; i < member_count; i++) {
-			auto &child_name = UnionType::GetMemberName(original, i);
-			auto &child_type = UnionType::GetMemberType(original, i);
-
-			LogicalType new_type;
-			if (!IsSupported(type_check(child_type))) {
-				new_type = AlterLogicalType(child_type, type_check);
-			} else {
-				new_type = child_type;
-			}
-
-			new_children.push_back(std::make_pair(child_name, new_type));
-		}
-		return LogicalType::UNION(std::move(new_children));
-	}
-	case LogicalTypeId::MAP: {
-		auto &key_type = MapType::KeyType(original);
-		auto &value_type = MapType::ValueType(original);
-
-		LogicalType new_key_type;
-		LogicalType new_value_type;
-		if (!IsSupported(type_check(key_type))) {
-			new_key_type = AlterLogicalType(key_type, type_check);
-		} else {
-			new_key_type = key_type;
-		}
-
-		if (!IsSupported(type_check(value_type))) {
-			new_value_type = AlterLogicalType(value_type, type_check);
-		} else {
-			new_value_type = value_type;
-		}
-		return LogicalType::MAP(new_key_type, new_value_type);
-	}
-	default: {
-		D_ASSERT(!IsSupported(type_check(original)));
-		return LogicalType::VARCHAR;
-	}
-	}
-}
-
-static bool NeedsCast(LogicalType &type, copy_supports_type_t type_check) {
-	if (!type_check) {
-		return false;
-	}
-	if (IsSupported(type_check(type))) {
-		// The type is supported in it's entirety, no cast is required
-		return false;
-	}
-	// Change the type to something that is supported
-	type = AlterLogicalType(type, type_check);
-	return true;
-}
-
-static unique_ptr<QueryNode> CreateSelectStatement(CopyStatement &stmt, child_list_t<LogicalType> &select_list,
-                                                   copy_supports_type_t type_check) {
+static unique_ptr<QueryNode> CreateSelectStatement(CopyStatement &stmt, child_list_t<LogicalType> &select_list) {
 	auto ref = make_uniq<BaseTableRef>();
 	ref->catalog_name = stmt.info->catalog;
 	ref->schema_name = stmt.info->schema;
@@ -221,14 +128,7 @@ static unique_ptr<QueryNode> CreateSelectStatement(CopyStatement &stmt, child_li
 
 	vector<unique_ptr<ParsedExpression>> expressions;
 	for (auto &col : select_list) {
-		auto &name = col.first;
-		auto &type = col.second;
-
-		auto expression = make_uniq_base<ParsedExpression, ColumnRefExpression>(name);
-		if (NeedsCast(type, type_check)) {
-			// Add a cast to a type supported by the copy function
-			expression = make_uniq_base<ParsedExpression, CastExpression>(type, std::move(expression));
-		}
+		auto expression = make_uniq_base<ParsedExpression, ColumnRefExpression>(col.first);
 		expressions.push_back(std::move(expression));
 	}
 
@@ -330,11 +230,11 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		// generate the copy statement and bind it
 		CopyStatement copy_stmt;
 		copy_stmt.info = std::move(info);
-		copy_stmt.info->select_statement =
-		    CreateSelectStatement(copy_stmt, select_list, copy_function.function.supports_type);
+		copy_stmt.info->select_statement = CreateSelectStatement(copy_stmt, select_list);
 
 		auto copy_binder = Binder::CreateBinder(context, this);
-		auto bound_statement = copy_binder->Bind(copy_stmt);
+		auto bound_statement = copy_binder->Bind(copy_stmt, CopyToType::EXPORT_DATABASE);
+
 		auto plan = std::move(bound_statement.plan);
 
 		if (child_operator) {

@@ -90,6 +90,11 @@ TEST_CASE("Test GetTableNames", "[api]") {
 	REQUIRE(table_names.size() == 1);
 	REQUIRE(table_names.count("df"));
 
+	// generate_series
+	table_names = con.GetTableNames("with series_generator as (select * from generate_series(TIMESTAMP '2001-04-10', "
+	                                "TIMESTAMP '2001-04-11', INTERVAL 1 HOUR)) select * from series_generator");
+	REQUIRE(table_names.empty());
+
 	if (!db.ExtensionIsLoaded("tpch")) {
 		return;
 	}

@@ -516,7 +516,7 @@ struct RoundOperatorPrecision {
 				return input;
 			}
 		}
-		return UnsafeNumericCast<TR>(rounded_value);
+		return LossyNumericCast<TR>(rounded_value);
 	}
 };
 
@@ -527,7 +527,7 @@ struct RoundOperator {
 		if (std::isinf(rounded_value) || std::isnan(rounded_value)) {
 			return input;
 		}
-		return UnsafeNumericCast<TR>(rounded_value);
+		return LossyNumericCast<TR>(rounded_value);
 	}
 };
 
@@ -1126,6 +1126,102 @@ struct ACos {
 ScalarFunction AcosFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                      ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<ACos>>);
+}
+
+//===--------------------------------------------------------------------===//
+// cosh
+//===--------------------------------------------------------------------===//
+struct CoshOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return (double)std::cosh(input);
+	}
+};
+
+ScalarFunction CoshFun::GetFunction() {
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, CoshOperator>);
+}
+
+//===--------------------------------------------------------------------===//
+// acosh
+//===--------------------------------------------------------------------===//
+struct AcoshOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return (double)std::acosh(input);
+	}
+};
+
+ScalarFunction AcoshFun::GetFunction() {
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, AcoshOperator>);
+}
+
+//===--------------------------------------------------------------------===//
+// sinh
+//===--------------------------------------------------------------------===//
+struct SinhOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return (double)std::sinh(input);
+	}
+};
+
+ScalarFunction SinhFun::GetFunction() {
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, SinhOperator>);
+}
+
+//===--------------------------------------------------------------------===//
+// asinh
+//===--------------------------------------------------------------------===//
+struct AsinhOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return (double)std::asinh(input);
+	}
+};
+
+ScalarFunction AsinhFun::GetFunction() {
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, AsinhOperator>);
+}
+
+//===--------------------------------------------------------------------===//
+// tanh
+//===--------------------------------------------------------------------===//
+struct TanhOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return (double)std::tanh(input);
+	}
+};
+
+ScalarFunction TanhFun::GetFunction() {
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, TanhOperator>);
+}
+
+//===--------------------------------------------------------------------===//
+// atanh
+//===--------------------------------------------------------------------===//
+struct AtanhOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		if (input < -1 || input > 1) {
+			throw InvalidInputException("ATANH is undefined outside [-1,1]");
+		}
+		if (input == -1 || input == 1) {
+			return INFINITY;
+		}
+		return (double)std::atanh(input);
+	}
+};
+
+ScalarFunction AtanhFun::GetFunction() {
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, AtanhOperator>);
 }
 
 //===--------------------------------------------------------------------===//

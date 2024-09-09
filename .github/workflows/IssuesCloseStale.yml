@@ -5,10 +5,17 @@ on:
 
 jobs:
   close_stale_issues:
+    permissions:
+      actions: write
+      contents: write # only for delete-branch option
+      issues: write
+      pull-requests: write
     runs-on: ubuntu-latest
     steps:
       - name: Close stale issues
         uses: actions/stale@v9
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         with:
           stale-issue-message: 'This issue is stale because it has been open 90 days with no activity. Remove stale label or comment or this will be closed in 30 days.'
           stale-pr-message: 'This pull request is stale because it has been open 90 days with no activity. Remove stale label or comment or this will be closed in 30 days.'

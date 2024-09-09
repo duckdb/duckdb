@@ -34,7 +34,7 @@ public:
 
 protected:
 	void ResolveTypes() override {
-		// already resolved
+		types = prepared->types;
 	}
 	vector<ColumnBinding> GetColumnBindings() override {
 		return GenerateColumnBindings(0, types.size());

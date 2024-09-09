@@ -42,6 +42,9 @@ statement ok
 PRAGMA memory_limit='1.0 gb'
 
 statement ok
+PRAGMA memory_limit='488.2 MiB'
+
+statement ok
 PRAGMA memory_limit='1.0 gigabytes'
 
 # M and MB = megabyte

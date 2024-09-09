@@ -34,7 +34,13 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 				left_pushdown.filters.push_back(std::move(f));
 			} else if (side == JoinSide::RIGHT) {
 				// bindings match right side: push into right
-				right_pushdown.filters.push_back(std::move(f));
+				if (join_ref_type == JoinRefType::ASOF) {
+					// AsOf is really a table lookup, so we don't push filters
+					// down into the lookup (right) table
+					join_expressions.push_back(std::move(f->filter));
+				} else {
+					right_pushdown.filters.push_back(std::move(f));
+				}
 			} else {
 				D_ASSERT(side == JoinSide::BOTH || side == JoinSide::NONE);
 				// bindings match both: turn into join condition
@@ -56,9 +62,21 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 		                                             op->children[1], left_bindings, right_bindings, join_expressions,
 		                                             conditions, arbitrary_expressions);
 		// create the join from the join conditions
-		return LogicalComparisonJoin::CreateJoin(GetContext(), join_type, join_ref_type, std::move(op->children[0]),
-		                                         std::move(op->children[1]), std::move(conditions),
-		                                         std::move(arbitrary_expressions));
+		auto new_op = LogicalComparisonJoin::CreateJoin(GetContext(), join_type, join_ref_type,
+		                                                std::move(op->children[0]), std::move(op->children[1]),
+		                                                std::move(conditions), std::move(arbitrary_expressions));
+
+		// possible cases are: AnyJoin, ComparisonJoin, or Filter + ComparisonJoin
+		if (op->has_estimated_cardinality) {
+			// set the estimated cardinality of the new operator
+			new_op->SetEstimatedCardinality(op->estimated_cardinality);
+			if (new_op->type == LogicalOperatorType::LOGICAL_FILTER) {
+				// if the new operators are Filter + ComparisonJoin, also set the estimated cardinality for the join
+				D_ASSERT(new_op->children[0]->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
+				new_op->children[0]->SetEstimatedCardinality(op->estimated_cardinality);
+			}
+		}
+		return new_op;
 	} else {
 		// no join conditions found: keep as cross product
 		D_ASSERT(op->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT);

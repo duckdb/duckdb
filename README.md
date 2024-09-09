@@ -30,3 +30,10 @@ conn.execute("set custom_extension_repository = 'http://duckpgq.s3.eu-north-1.am
 conn.execute("force install 'duckpgq';")
 conn.execute("load 'duckpgq';")
 ```
+## SQL Reference
+
+The documentation contains a [SQL introduction and reference](https://duckdb.org/docs/sql/introduction).
+
+## Development
+
+For development, DuckDB requires [CMake](https://cmake.org), Python3 and a `C++11` compliant compiler. Run `make` in the root directory to compile the sources. For development, use `make debug` to build a non-optimized debug version. You should run `make unit` and `make allunit` to verify that your version works properly after making changes. To test performance, you can run `BUILD_BENCHMARK=1 BUILD_TPCH=1 make` and then perform several standard benchmarks from the root directory by executing `./build/release/benchmark/benchmark_runner`. The details of benchmarks are in our [Benchmark Guide](benchmark/README.md).

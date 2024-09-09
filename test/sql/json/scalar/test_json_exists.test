@@ -1,0 +1,39 @@
+# name: test/sql/json/scalar/test_json_exists.test
+# description: Test JSON exists
+# group: [scalar]
+
+require json
+
+statement ok
+pragma enable_verification
+
+query I
+SELECT json_exists('{"duck": null}', '$.duck')
+----
+true
+
+query I
+with path AS (
+    SELECT '$.duck' p
+)
+SELECT json_exists('{"duck": null}', p) FROM path
+----
+true
+
+query I
+SELECT json_exists('{"duck": null}', '$.goose')
+----
+false
+
+query I
+with path AS (
+    SELECT '$.goose' p
+)
+SELECT json_exists('{"duck": null}', p) FROM path
+----
+false
+
+query I
+SELECT json_exists('{"duck": null}', ['$.duck', '$.goose'])
+----
+[true, false]

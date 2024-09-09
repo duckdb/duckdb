@@ -4,6 +4,8 @@
 #include "duckdb/planner/operator/logical_reset.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
+#include "duckdb/parser/tableref/emptytableref.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 
 namespace duckdb {
 
@@ -13,15 +15,29 @@ BoundStatement Binder::Bind(SetVariableStatement &stmt) {
 	result.names = {"Success"};
 
 	// evaluate the scalar value
-	ConstantBinder default_binder(*this, context, "SET value");
-	auto bound_value = default_binder.Bind(stmt.value);
-	if (bound_value->HasParameter()) {
-		throw NotImplementedException("SET statements cannot have parameters");
+	Value value;
+	unique_ptr<LogicalOperator> op;
+	if (stmt.scope != SetScope::VARIABLE) {
+		ConstantBinder default_binder(*this, context, "SET value");
+		auto bound_value = default_binder.Bind(stmt.value);
+		if (bound_value->HasParameter()) {
+			throw NotImplementedException("SET statements cannot have parameters");
+		}
+		value = ExpressionExecutor::EvaluateScalar(context, *bound_value, true);
+	} else {
+		auto select_node = make_uniq<SelectNode>();
+		select_node->select_list.push_back(std::move(stmt.value));
+		select_node->from_table = make_uniq<EmptyTableRef>();
+		auto bound_select = Bind(*select_node);
+		if (bound_select.types.size() > 1) {
+			throw BinderException("SET variable expected a single input");
+		}
+		op = std::move(bound_select.plan);
 	}
-	auto value = ExpressionExecutor::EvaluateScalar(context, *bound_value, true);
-
 	result.plan = make_uniq<LogicalSet>(stmt.name, std::move(value), stmt.scope);
-
+	if (op) {
+		result.plan->children.push_back(std::move(op));
+	}
 	auto &properties = GetStatementProperties();
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;

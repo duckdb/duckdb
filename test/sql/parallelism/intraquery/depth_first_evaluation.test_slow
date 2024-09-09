@@ -1,0 +1,215 @@
+# name: test/sql/parallelism/intraquery/depth_first_evaluation.test_slow
+# description: Test that query plans are evaluated in a depth-first fashion
+# group: [intraquery]
+
+# we need a persistent DB because we want to compress the table that we're working with
+load __TEST_DIR__/depth_first_evaluation.db
+
+# we don't want any disk spilling because we're testing memory pressure
+statement ok
+SET temp_directory = ''
+
+# 1GiB is pretty tight
+statement ok
+SET memory_limit = '1GiB'
+
+statement ok
+SET threads = 4
+
+# 10M integers but the table is tiny because of delta compression
+statement ok
+CREATE TABLE integers AS SELECT range i FROM range(10_000_000)
+
+# one of these should easily fit in memory
+query I
+SELECT count(*) c FROM (SELECT DISTINCT i FROM integers)
+----
+10000000
+
+# the next query performs 10 of the same distinct aggregations and unions them together
+# each distinct aggregation has a different limit (which doesn't do anything)
+# so that this test is future-proof (in case DuckDB does any common sub-plan elimination in the future)
+
+# the idea here is that if DuckDB would do breadth-first plan evaluation (like it did before)
+# DuckDB would first perform the 'Sink' for every distinct aggregation one by one
+# this would create a HUGE temporary intermediates
+# only after that DuckDB would perform the 'Finalize' for every distinct aggregation one by one
+# the 'Finalize' reduces the data size to a single row
+# so, this used to throw an OOM exception given the current memory limit
+
+# with depth-first plan evaluation, DuckDB performs 'Finalize' for every distinct aggregation,
+# before starting 'Sink' on the next distinct aggregation
+# now this query completes without much memory pressure!
+query I
+SELECT sum(c)
+FROM (
+    SELECT count(DISTINCT i) c FROM (SELECT i FROM integers LIMIT 100_000_000)
+    UNION ALL
+    SELECT count(DISTINCT i) c FROM (SELECT i FROM integers LIMIT 100_000_001)
+    UNION ALL
+    SELECT count(DISTINCT i) c FROM (SELECT i FROM integers LIMIT 100_000_002)
+    UNION ALL
+    SELECT count(DISTINCT i) c FROM (SELECT i FROM integers LIMIT 100_000_003)
+    UNION ALL
+    SELECT count(DISTINCT i) c FROM (SELECT i FROM integers LIMIT 100_000_004)
+    UNION ALL
+    SELECT count(DISTINCT i) c FROM (SELECT i FROM integers LIMIT 100_000_005)
+    UNION ALL
+    SELECT count(DISTINCT i) c FROM (SELECT i FROM integers LIMIT 100_000_006)
+    UNION ALL
+    SELECT count(DISTINCT i) c FROM (SELECT i FROM integers LIMIT 100_000_007)
+    UNION ALL
+    SELECT count(DISTINCT i) c FROM (SELECT i FROM integers LIMIT 100_000_008)
+    UNION ALL
+    SELECT count(DISTINCT i) c FROM (SELECT i FROM integers LIMIT 100_000_009)
+)
+----
+100000000
+
+statement ok
+DROP TABLE integers
+
+# column i has 0, 100, 200, etc., around 100 unique values spread out over the range 0 to 10 million
+# all other values in column j are equal to range + 0.5
+# column j and k are just ranges from 0 to 10 million
+# we have to do this so our statistics propagation and dynamic join filters don't trivialise the query
+statement ok
+CREATE TABLE doubles AS
+SELECT
+    CASE WHEN range % 100_000 = 0 THEN range ELSE range + 0.5 END i,
+    range::DOUBLE j,
+    range::DOUBLE k0,
+    range::DOUBLE k1,
+    range::DOUBLE k2,
+    range::DOUBLE k3,
+    range::DOUBLE k4,
+    range::DOUBLE k5,
+    range::DOUBLE k6,
+    range::DOUBLE k7,
+    range::DOUBLE k8,
+    range::DOUBLE k9
+FROM range(10_000_000)
+
+# one of these should always fit in memory
+# the idea is that the cte is a large join (10m x 10m)
+# but it's really selective, only 100 tuples come out of it
+
+# then, we join with doubles union'ed with itself, so that it becomes the probe pipeline,
+# i.e., it has a higher cardinality than the selective join, which goes into a build
+query I
+WITH c AS NOT MATERIALIZED (
+    SELECT d0.k0
+    FROM doubles d0
+    JOIN doubles d1
+    ON (d0.i = d1.j)
+)
+SELECT count(*)
+FROM (
+    SELECT * FROM doubles
+    UNION ALL
+    SELECT * FROM doubles
+) d
+JOIN c
+ON (d.k0 = c.k0)
+----
+200
+
+# now we just crank up the number of ctes that we're joining with to 10
+
+# again, if DuckDB would do breadth-first plan evaluation (like it did before)
+# DuckDB would 'Sink' into all of of the builds in the cte's one by one, creating huge intermediates
+# only after that it would perform all the selective joins and reduce the size of the intermediates
+# so, this used to throw an OOM exception
+
+# with depth-first plan evaluation, DuckDB performs the selective joins one by one,
+# reducing the size of intermediates immediately, and the query completes!
+query I
+WITH c0 AS NOT MATERIALIZED (
+    SELECT d0.k0
+    FROM doubles d0
+    JOIN doubles d1
+    ON (d0.i = d1.j)
+    LIMIT 100_000_000
+), c1 AS NOT MATERIALIZED (
+    SELECT d0.k1
+    FROM doubles d0
+    JOIN doubles d1
+    ON (d0.i = d1.j)
+    LIMIT 100_000_001
+), c2 AS NOT MATERIALIZED (
+    SELECT d0.k2
+    FROM doubles d0
+    JOIN doubles d1
+    ON (d0.i = d1.j)
+    LIMIT 100_000_002
+), c3 AS NOT MATERIALIZED (
+    SELECT d0.k3
+    FROM doubles d0
+    JOIN doubles d1
+    ON (d0.i = d1.j)
+    LIMIT 100_000_003
+), c4 AS NOT MATERIALIZED (
+    SELECT d0.k4
+    FROM doubles d0
+    JOIN doubles d1
+    ON (d0.i = d1.j)
+    LIMIT 100_000_004
+), c5 AS NOT MATERIALIZED (
+    SELECT d0.k5
+    FROM doubles d0
+    JOIN doubles d1
+    ON (d0.i = d1.j)
+    LIMIT 100_000_005
+), c6 AS NOT MATERIALIZED (
+    SELECT d0.k6
+    FROM doubles d0
+    JOIN doubles d1
+    ON (d0.i = d1.j)
+    LIMIT 100_000_006
+), c7 AS NOT MATERIALIZED (
+    SELECT d0.k7
+    FROM doubles d0
+    JOIN doubles d1
+    ON (d0.i = d1.j)
+    LIMIT 100_000_007
+), c8 AS NOT MATERIALIZED (
+    SELECT d0.k8
+    FROM doubles d0
+    JOIN doubles d1
+    ON (d0.i = d1.j)
+    LIMIT 100_000_008
+), c9 AS NOT MATERIALIZED (
+    SELECT d0.k9
+    FROM doubles d0
+    JOIN doubles d1
+    ON (d0.i = d1.j)
+    LIMIT 100_000_009
+)
+SELECT count(*)
+FROM (
+    SELECT * FROM doubles
+    UNION ALL
+    SELECT * FROM doubles
+) d
+JOIN c0
+ON (d.k0 = c0.k0)
+JOIN c1
+ON (d.k1 = c1.k1)
+JOIN c2
+ON (d.k2 = c2.k2)
+JOIN c3
+ON (d.k3 = c3.k3)
+JOIN c4
+ON (d.k4 = c4.k4)
+JOIN c5
+ON (d.k5 = c5.k5)
+JOIN c6
+ON (d.k6 = c6.k6)
+JOIN c7
+ON (d.k7 = c7.k7)
+JOIN c8
+ON (d.k8 = c8.k8)
+JOIN c9
+ON (d.k9 = c9.k9)
+----
+200

@@ -6,7 +6,7 @@ require skip_reload
 
 require fts
 
-require noalternativeverify
+require no_alternative_verify
 
 statement ok
 PRAGMA enable_verification
@@ -135,8 +135,8 @@ doc1	0.36835264087244074
 query III
 SELECT score, id, body FROM (SELECT *, fts_main_documents.match_bm25(id, 'quacked barked') AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score DESC
 ----
-0.37543634550460314	doc2	 BÁRKING+BÁRKING+BÁRKING+BÁRKING
-0.3683526408724408	doc1	 QUÁCKING+QUÁCKING+QUÁCKING
+0.7208701623069375	doc2	 BÁRKING+BÁRKING+BÁRKING+BÁRKING
+0.7072688384898254	doc1	 QUÁCKING+QUÁCKING+QUÁCKING
 
 # drop and re-create, but index both the 'body' and 'author' column this time
 statement ok

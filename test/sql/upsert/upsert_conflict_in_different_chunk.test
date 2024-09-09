@@ -1,6 +1,9 @@
 # name: test/sql/upsert/upsert_conflict_in_different_chunk.test
 # group: [upsert]
 
+# breaks with constant verification
+require no_vector_verification
+
 statement ok
 PRAGMA enable_verification;
 

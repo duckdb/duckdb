@@ -197,6 +197,7 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 	D_ASSERT(bind_data.pandas_col->Backend() == PandasColumnBackend::NUMPY);
 	auto &numpy_col = reinterpret_cast<PandasNumpyColumn &>(*bind_data.pandas_col);
 	auto &array = numpy_col.array;
+	auto stride = numpy_col.stride;
 
 	switch (bind_data.numpy_type.type) {
 	case NumpyNullableType::BOOL:
@@ -276,12 +277,13 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 		};
 
 		for (idx_t row = 0; row < count; row++) {
-			auto source_idx = offset + row;
+			auto source_idx = stride / sizeof(int64_t) * (row + offset);
 			if (src_ptr[source_idx] <= NumericLimits<int64_t>::Minimum()) {
 				// pandas Not a Time (NaT)
 				mask.SetInvalid(row);
 				continue;
 			}
+
 			// Direct conversion, we've already matched the numpy type with the equivalent duckdb type
 			auto input = timestamp_t(src_ptr[source_idx]);
 			if (Timestamp::IsFinite(input)) {
@@ -298,7 +300,7 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 		auto &mask = FlatVector::Validity(out);
 
 		for (idx_t row = 0; row < count; row++) {
-			auto source_idx = offset + row;
+			auto source_idx = stride / sizeof(int64_t) * (row + offset);
 			if (src_ptr[source_idx] <= NumericLimits<int64_t>::Minimum()) {
 				// pandas Not a Time (NaT)
 				mask.SetInvalid(row);
@@ -317,11 +319,13 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 		}
 		break;
 	}
+	case NumpyNullableType::STRING:
 	case NumpyNullableType::OBJECT: {
-		//! We have determined the underlying logical type of this object column
 		// Get the source pointer of the numpy array
 		auto src_ptr = (PyObject **)array.data(); // NOLINT
-		if (out.GetType().id() != LogicalTypeId::VARCHAR) {
+		const bool is_object_col = bind_data.numpy_type.type == NumpyNullableType::OBJECT;
+		if (is_object_col && out.GetType().id() != LogicalTypeId::VARCHAR) {
+			//! We have determined the underlying logical type of this object column
 			return NumpyScan::ScanObjectColumn(src_ptr, numpy_col.stride, count, offset, out);
 		}
 
@@ -338,7 +342,7 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 
 			// Get the pointer to the object
 			PyObject *val = src_ptr[source_idx];
-			if (bind_data.numpy_type.type == NumpyNullableType::OBJECT && !py::isinstance<py::str>(val)) {
+			if (!py::isinstance<py::str>(val)) {
 				if (val == Py_None) {
 					out_mask.SetInvalid(row);
 					continue;

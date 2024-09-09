@@ -2,11 +2,11 @@
 
 namespace duckdb {
 
-static inline string_t ExtractFromVal(yyjson_val *val, yyjson_alc *alc, Vector &) {
+static inline string_t ExtractFromVal(yyjson_val *val, yyjson_alc *alc, Vector &, ValidityMask &, idx_t) {
 	return JSONCommon::WriteVal<yyjson_val>(val, alc);
 }
 
-static inline string_t ExtractStringFromVal(yyjson_val *val, yyjson_alc *alc, Vector &) {
+static inline string_t ExtractStringFromVal(yyjson_val *val, yyjson_alc *alc, Vector &, ValidityMask &, idx_t) {
 	return yyjson_is_str(val) ? string_t(unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val))
 	                          : JSONCommon::WriteVal<yyjson_val>(val, alc);
 }

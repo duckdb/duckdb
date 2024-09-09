@@ -8,9 +8,11 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/common.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 
@@ -39,13 +41,15 @@ public:
 
 	void BeginTransaction();
 	void Commit();
-	void Rollback();
+	void Rollback(optional_ptr<ErrorData>);
 	void ClearTransaction();
 
 	void SetAutoCommit(bool value);
 	bool IsAutoCommit() const {
 		return auto_commit;
 	}
+
+	void SetReadOnly();
 
 	idx_t GetActiveQuery();
 	void ResetActiveQuery();

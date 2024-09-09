@@ -329,3 +329,56 @@ class TestDataFrame(object):
                 StructField('properties', MapType(StringType(), StringType()), True),
             ]
         )
+
+    def test_getitem_filter(self, spark):
+        data = [(56, "Carol"), (20, "Alice"), (3, "Dave"), (3, "Anna"), (1, "Ben")]
+        df = spark.createDataFrame(data, ["age", "name"])
+        expected = [
+            Row(age=56, name="Carol"),
+            Row(age=20, name="Alice"),
+        ]
+
+        df = df[col("age") > 18]
+        assert df.collect() == expected
+
+    def test_getitem_column(self, spark):
+        data = [(56, "Carol"), (20, "Alice")]
+        df = spark.createDataFrame(data, ["age", "name"])
+
+        assert df["age"] == col("age")
+
+    def test_getitem_dataframe(self, spark):
+        data = [(56, "Ben", "Street1"), (20, "Tom", "Street2")]
+        df = spark.createDataFrame(data, ["age", "name", "address"])
+
+        res = df[["name", "address"]].collect()
+        expected = df.select("name", "address").collect()
+
+        assert res == expected
+
+    def test_getattr_dataframe(self, spark):
+        data = [(56, "Ben", "Street1"), (20, "Tom", "Street2")]
+        df = spark.createDataFrame(data, ["age", "name", "address"])
+
+        assert df.age == col("age")
+
+    def test_head_first(self, spark):
+        data = [(56, "Carol"), (20, "Alice"), (3, "Dave"), (3, "Anna"), (1, "Ben")]
+        df = spark.createDataFrame(data, ["age", "name"])
+        expected = Row(age=1, name="Ben")
+
+        head = df.orderBy(df.age).head()
+        first = df.orderBy(df.age).first()
+        assert head == first == expected
+
+    def test_head_take_n(self, spark):
+        data = [(56, "Carol"), (20, "Alice"), (3, "Dave"), (3, "Anna"), (1, "Ben")]
+        df = spark.createDataFrame(data, ["age", "name"])
+        expected = [
+            Row(age=1, name="Ben"),
+            Row(age=3, name="Anna"),
+        ]
+        df = df.orderBy(df.age, df.name)
+        rows = df.head(2)
+        take = df.take(2)
+        assert rows == take == expected

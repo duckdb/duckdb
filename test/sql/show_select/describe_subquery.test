@@ -38,3 +38,6 @@ null
 key
 default
 extra
+
+statement ok
+(DESCRIBE (values(42))) UNION ALL (DESCRIBE (values(42)));

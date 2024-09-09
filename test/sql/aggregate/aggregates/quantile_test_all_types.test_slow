@@ -1,0 +1,28 @@
+# name: test/sql/aggregate/aggregates/quantile_test_all_types.test_slow
+# description: Test quantile operator for all types
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table all_types as from test_all_types()
+
+# date is not tested here because the extreme date values overflow timestamps
+# and median(date) result sin timestamp
+foreach col <all_types_columns> !date
+
+# quantile_disc
+query III
+SELECT quantile_disc("${col}", 0.2) IS NOT DISTINCT FROM MIN("${col}"),
+       quantile_disc("${col}", 0.8) IS NOT DISTINCT FROM MAX("${col}"),
+       quantile_disc("${col}", [0.8, 0.2]) IS NOT DISTINCT FROM [MAX("${col}"), MIN("${col}")]
+FROM all_types
+----
+true	true	true
+
+# median
+statement ok
+SELECT median("${col}") >= min("${col}") AND median("${col}") <= max("${col}") FROM all_types
+
+endloop

@@ -36,7 +36,7 @@ jobs:
       DUCKDB_PLATFORM: "${{ matrix.duckdb_wasm_arch }}"
 
     steps:
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v4
               with:
                   ref: ${{ inputs.duckdb_wasm_ref }}
                   fetch-depth: 0
@@ -65,9 +65,9 @@ jobs:
               run: |
                  cd submodules/duckdb
                  git checkout ${{ github.event.inputs.duckdb_ref }}
-                 git apply ../../duckdb.patch
                  cd ../..
-                 cp .github/config/extension_config_wasm.cmake submodules/duckdb/extension/extension_config.cmake
+                 make apply_patches
+                 cp extension_config_wasm.cmake submodules/duckdb/extension/extension_config.cmake
 
             - name: Build Wasm module MVP
               if: ${{ matrix.duckdb_wasm_arch == 'wasm_mvp' }}
@@ -85,7 +85,7 @@ jobs:
                 DUCKDB_PLATFORM=wasm_threads DUCKDB_WASM_LOADABLE_EXTENSIONS="signed" GEN=ninja ./scripts/wasm_build_lib.sh relsize coi
 
             - name: Upload artifact
-              uses: actions/upload-artifact@v3
+              uses: actions/upload-artifact@v4
               with:
                   name: duckdb_extensions_${{ env.DUCKDB_PLATFORM }}
                   path: build/extension_repository/${{ inputs.duckdb_ref }}/${{ env.DUCKDB_PLATFORM }}
@@ -100,9 +100,9 @@ jobs:
       matrix:
         duckdb_arch: ${{ fromJSON(github.event.inputs.platforms) }}
     steps:
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v4
 
-            - uses: actions/download-artifact@v3
+            - uses: actions/download-artifact@v4
               with:
                 name: duckdb_extensions_${{ matrix.duckdb_arch }}
                 path: build/to_be_deployed/${{ inputs.duckdb_ref }}/${{ matrix.duckdb_arch }}
