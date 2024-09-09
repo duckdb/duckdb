@@ -26,6 +26,8 @@ public:
 	string schema;
 	//! The name of the table.
 	string table;
+	//! True, if the catalog is readonly.
+	bool readonly;
 	//! The columns of the table.
 	vector<ColumnDefinition> columns;
 };

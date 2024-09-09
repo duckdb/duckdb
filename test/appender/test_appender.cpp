@@ -425,7 +425,7 @@ TEST_CASE("Test appending to a different database file", "[appender]") {
 	auto test_dir = GetTestDirectory();
 	auto attach_query = "ATTACH '" + test_dir + "/append_to_other.db'";
 	REQUIRE_NO_FAIL(con.Query(attach_query));
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE append_to_other.tbl(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE append_to_other.tbl(i INTEGER)"));
 
 	Appender appender(con, "append_to_other", "main", "tbl");
 	for (idx_t i = 0; i < 200; i++) {
@@ -437,4 +437,74 @@ TEST_CASE("Test appending to a different database file", "[appender]") {
 
 	result = con.Query("SELECT SUM(i) FROM append_to_other.tbl");
 	REQUIRE(CHECK_COLUMN(result, 0, {400}));
+	bool failed;
+
+	try {
+		Appender appender_invalid(con, "invalid_database", "main", "tbl");
+		failed = false;
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		REQUIRE(error.Message().find("Catalog Error") != std::string::npos);
+		failed = true;
+	}
+	REQUIRE(failed);
+
+	try {
+		Appender appender_invalid(con, "append_to_other", "invalid_schema", "tbl");
+		failed = false;
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		REQUIRE(error.Message().find("Catalog Error") != std::string::npos);
+		failed = true;
+	}
+	REQUIRE(failed);
+
+	// Attach as readonly.
+	REQUIRE_NO_FAIL(con.Query("DETACH append_to_other"));
+	REQUIRE_NO_FAIL(con.Query(attach_query + " (readonly)"));
+
+	try {
+		Appender appender_readonly(con, "append_to_other", "main", "tbl");
+		failed = false;
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		REQUIRE(error.Message().find("Cannot append to a readonly database") != std::string::npos);
+		failed = true;
+	}
+	REQUIRE(failed);
+}
+
+TEST_CASE("Test appending to different database files", "[appender]") {
+	duckdb::unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto test_dir = GetTestDirectory();
+	auto attach_db1 = "ATTACH '" + test_dir + "/db1.db'";
+	auto attach_db2 = "ATTACH '" + test_dir + "/db2.db'";
+	REQUIRE_NO_FAIL(con.Query(attach_db1));
+	REQUIRE_NO_FAIL(con.Query(attach_db2));
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE db1.tbl(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE db2.tbl(i INTEGER)"));
+
+	REQUIRE_NO_FAIL(con.Query("START TRANSACTION"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO db1.tbl VALUES (1)"));
+
+	Appender appender(con, "db2", "main", "tbl");
+	appender.BeginRow();
+	appender.Append<int32_t>(2);
+	appender.EndRow();
+
+	bool failed;
+	try {
+		appender.Close();
+		failed = false;
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		REQUIRE(error.Message().find("a single transaction can only write to a single attached database") !=
+		        std::string::npos);
+		failed = true;
+	}
+	REQUIRE(failed);
+	REQUIRE_NO_FAIL(con.Query("COMMIT TRANSACTION"));
 }
