@@ -903,7 +903,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 		D_ASSERT(!checkpoint_state.segments[segment_idx].node);
 		return false;
 	}
-	if (schedule_vacuum) {
+	if (!schedule_vacuum) {
 		return false;
 	}
 	idx_t merge_rows;
