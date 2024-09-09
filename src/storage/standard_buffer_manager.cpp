@@ -165,16 +165,20 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx
 }
 
 BufferHandle StandardBufferManager::Allocate(MemoryTag tag, idx_t block_size, bool can_destroy,
-                                             shared_ptr<BlockHandle> *block) {
+                                             optional_ptr<shared_ptr<BlockHandle>> provided_block) {
 	shared_ptr<BlockHandle> local_block;
-	auto block_ptr = block ? block : &local_block;
-	*block_ptr = RegisterMemory(tag, block_size, can_destroy);
+	reference<shared_ptr<BlockHandle>> block = local_block;
+	if (provided_block) {
+		// If possible, use the shared_ptr given so its updated for the calling function
+		block = *provided_block;
+	}
+	block.get() = RegisterMemory(tag, block_size, can_destroy);
 
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	// Initialize the memory with garbage data
-	WriteGarbageIntoBuffer(*(*block_ptr)->buffer);
+	WriteGarbageIntoBuffer(*block.get()->buffer);
 #endif
-	return Pin(*block_ptr);
+	return Pin(block.get());
 }
 
 void StandardBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) {

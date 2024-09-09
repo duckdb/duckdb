@@ -35,7 +35,7 @@ public:
 
 public:
 	virtual BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true,
-	                              shared_ptr<BlockHandle> *block = nullptr) = 0;
+	                              optional_ptr<shared_ptr<BlockHandle>> block = nullptr) = 0;
 	//! Reallocate an in-memory buffer that is pinned.
 	virtual void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) = 0;
 	virtual BufferHandle Pin(shared_ptr<BlockHandle> &handle) = 0;
