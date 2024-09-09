@@ -79,14 +79,14 @@ BufferHandle BlockHandle::LoadFromBuffer(shared_ptr<BlockHandle> &handle, data_p
 	memcpy(block->InternalBuffer(), data, block->AllocSize());
 	handle->buffer = std::move(block);
 	handle->state = BlockState::BLOCK_LOADED;
-	return BufferHandle(handle, handle->buffer.get());
+	return BufferHandle(handle);
 }
 
 BufferHandle BlockHandle::Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileBuffer> reusable_buffer) {
 	if (handle->state == BlockState::BLOCK_LOADED) {
 		// already loaded
 		D_ASSERT(handle->buffer);
-		return BufferHandle(handle, handle->buffer.get());
+		return BufferHandle(handle);
 	}
 
 	auto &block_manager = handle->block_manager;
@@ -103,7 +103,7 @@ BufferHandle BlockHandle::Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileB
 		}
 	}
 	handle->state = BlockState::BLOCK_LOADED;
-	return BufferHandle(handle, handle->buffer.get());
+	return BufferHandle(handle);
 }
 
 unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock() {
