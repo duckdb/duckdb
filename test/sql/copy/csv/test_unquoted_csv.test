@@ -1,6 +1,6 @@
 # name: test/sql/copy/csv/test_unquoted_csv.test
 # description: Tests rejects tables on max line size parameter
-# group: [rejects]
+# group: [csv]
 
 statement ok
 PRAGMA enable_verification
