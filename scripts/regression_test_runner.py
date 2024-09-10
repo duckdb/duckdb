@@ -81,6 +81,8 @@ complete_timings = {old_runner: [], new_runner: []}
 
 
 def run_benchmark(runner, benchmark):
+    import time
+    time.sleep(1)
     benchmark_args = [runner, benchmark]
 
     if root_dir:
