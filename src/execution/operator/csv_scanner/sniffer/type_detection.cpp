@@ -423,7 +423,7 @@ void CSVSniffer::DetectTypes() {
 					}
 				}
 			}
-			if (break_loop) {
+			if (break_loop && !candidate->state_machine->options.ignore_errors.GetValue()) {
 				continue;
 			}
 		}

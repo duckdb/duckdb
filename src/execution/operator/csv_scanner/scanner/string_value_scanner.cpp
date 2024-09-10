@@ -644,9 +644,15 @@ bool LineError::HandleErrors(StringValueResult &result) {
 		result.error_handler.Error(csv_error);
 	}
 	if (is_error_in_line) {
-		result.borked_rows.insert(result.number_of_rows);
-		result.cur_col_id = 0;
-		result.chunk_col_id = 0;
+		if (result.sniffing) {
+			// If we are sniffing we just remove the line
+			result.RemoveLastLine();
+		} else {
+			// Otherwise, we add it to the borked rows to remove it later and just cleanup the column variables.
+			result.borked_rows.insert(result.number_of_rows);
+			result.cur_col_id = 0;
+			result.chunk_col_id = 0;
+		}
 		Reset();
 		return true;
 	}
@@ -1493,7 +1499,7 @@ void StringValueScanner::SetStart() {
 			}
 			if (iterator.pos.buffer_pos == cur_buffer_handle->actual_size ||
 			    scan_finder->iterator.GetBufferIdx() > iterator.GetBufferIdx()) {
-				// If things go terribly wrong, we never loop indefinetly.
+				// If things go terribly wrong, we never loop indefinitely.
 				iterator.pos.buffer_idx = scan_finder->iterator.pos.buffer_idx;
 				iterator.pos.buffer_pos = scan_finder->iterator.pos.buffer_pos;
 				result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
