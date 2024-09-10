@@ -96,6 +96,10 @@ public:
 		unswizzled = unswizzler;
 	}
 
+	MemoryTag GetMemoryTag() const {
+		return tag;
+	}
+
 	inline void SetDestroyBufferUpon(DestroyBufferUpon destroy_buffer_upon_p) {
 		lock_guard<mutex> guard(lock);
 		destroy_buffer_upon = destroy_buffer_upon_p;

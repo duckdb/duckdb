@@ -49,7 +49,7 @@ BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
 		D_ASSERT(memory_charge.size == 0);
 	}
 
-	block_manager.UnregisterBlock(block_id);
+	block_manager.UnregisterBlock(*this);
 }
 
 unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuffer> reusable_buffer,
@@ -96,8 +96,8 @@ BufferHandle BlockHandle::Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileB
 		handle->buffer = std::move(block);
 	} else {
 		if (handle->MustWriteToTemporaryFile()) {
-			handle->buffer = block_manager.buffer_manager.ReadTemporaryBuffer(handle->tag, handle->block_id,
-			                                                                  std::move(reusable_buffer));
+			handle->buffer =
+			    block_manager.buffer_manager.ReadTemporaryBuffer(handle->tag, *handle, std::move(reusable_buffer));
 		} else {
 			return BufferHandle(); // Destroyed upon unpin/evict, so there is no temp buffer to read
 		}
