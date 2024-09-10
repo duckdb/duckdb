@@ -29,7 +29,7 @@ typedef enum PGBackslashQuoteType {
 /* Primary entry point for the raw parsing functions */
 PGList *raw_parser(const char *str);
 
-bool is_keyword(const char *str);
+bool is_keyword(const char *str, duckdb_libpgquery::PGKeywordCategory type = duckdb_libpgquery::PGKeywordCategory::UNSPECIFIED );
 std::vector<PGKeyword> keyword_list();
 
 std::vector<PGSimplifiedToken> tokenize(const char *str);

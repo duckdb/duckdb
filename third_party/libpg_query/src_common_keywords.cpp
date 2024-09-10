@@ -47,7 +47,7 @@ namespace duckdb_libpgquery {
  * keywords are to be matched in this way even though non-keyword identifiers
  * receive a different case-normalization mapping.
  */
-const PGScanKeyword *ScanKeywordLookup(const char *text, const PGScanKeyword *keywords, int num_keywords) {
+const PGScanKeyword *ScanKeywordLookup(const char *text, const PGScanKeyword *keywords, int num_keywords, duckdb_libpgquery::PGKeywordCategory type) {
 	int len, i;
 	const PGScanKeyword *low;
 	const PGScanKeyword *high;
@@ -81,12 +81,22 @@ const PGScanKeyword *ScanKeywordLookup(const char *text, const PGScanKeyword *ke
 
 		middle = low + (high - low) / 2;
 		difference = strcmp(middle->name, word);
-		if (difference == 0)
+		if (difference == 0) {
+			if (type != duckdb_libpgquery::PGKeywordCategory::UNSPECIFIED){
+				if (static_cast<uint16_t>(type) == middle->category) {
+					return middle;
+				} else {
+					return NULL;
+				}
+			}
 			return middle;
-		else if (difference < 0)
+		}
+		else if (difference < 0) {
 			low = middle + 1;
-		else
+		}
+		else {
 			high = middle - 1;
+		}
 	}
 
 	return NULL;

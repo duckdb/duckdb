@@ -45,7 +45,7 @@ public:
 	static vector<SimplifiedToken> Tokenize(const string &query);
 
 	//! Returns true if the given text matches a keyword of the parser
-	static bool IsKeyword(const string &text);
+	static bool IsKeyword(const string &text, KeywordCategory type = KeywordCategory::UNSPECIFIED);
 	//! Returns a list of all keywords in the parser
 	static vector<ParserKeyword> KeywordList();
 

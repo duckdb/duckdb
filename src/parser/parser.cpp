@@ -339,8 +339,25 @@ vector<SimplifiedToken> Parser::Tokenize(const string &query) {
 	return result;
 }
 
-bool Parser::IsKeyword(const string &text) {
-	return PostgresParser::IsKeyword(text);
+duckdb_libpgquery::PGKeywordCategory ToPostgresKeywordCategory(KeywordCategory type) {
+	switch (type) {
+		case KeywordCategory::KEYWORD_RESERVED:
+			return duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_RESERVED;
+		case KeywordCategory::KEYWORD_UNRESERVED:
+			return duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_UNRESERVED;
+		case KeywordCategory::KEYWORD_TYPE_FUNC:
+			return duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_TYPE_FUNC;
+		case KeywordCategory::KEYWORD_COL_NAME:
+			return duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_COL_NAME;
+		case KeywordCategory::UNSPECIFIED:
+			return duckdb_libpgquery::PGKeywordCategory::UNSPECIFIED;
+		default:
+			throw InternalException("Unrecognized keyword category");
+		}
+}
+
+bool Parser::IsKeyword(const string &text, KeywordCategory type) {
+	return PostgresParser::IsKeyword(text, ToPostgresKeywordCategory(type));
 }
 
 vector<ParserKeyword> Parser::KeywordList() {

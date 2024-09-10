@@ -14,6 +14,7 @@
 #pragma once
 
 #include <cstdint>
+#include "pg_simplified_token.hpp"
 
 /* Keyword categories --- should match lists in gram.y */
 #define UNRESERVED_KEYWORD		0
@@ -29,5 +30,5 @@ typedef struct PGScanKeyword {
 	int16_t category; /* see codes above */
 } PGScanKeyword;
 
-const PGScanKeyword *ScanKeywordLookup(const char *text, const PGScanKeyword *keywords, int num_keywords);
+const PGScanKeyword *ScanKeywordLookup(const char *text, const PGScanKeyword *keywords, int num_keywords, duckdb_libpgquery::PGKeywordCategory type = duckdb_libpgquery::PGKeywordCategory::UNSPECIFIED);
 }
