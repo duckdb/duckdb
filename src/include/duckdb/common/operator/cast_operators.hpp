@@ -541,7 +541,7 @@ static inline bool TryCastStringBool(const char *input_data, idx_t input_size, b
 	default:
 		return false;
 	}
-};
+}
 
 template <>
 DUCKDB_API bool TryCast::Operation(string_t input, bool &result, bool strict);
