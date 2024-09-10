@@ -96,6 +96,9 @@ string FormatOptions(char opt) {
 	if (opt == '\'') {
 		return "''";
 	}
+	if (opt == '\0') {
+		return "";
+	}
 	string result;
 	result += opt;
 	return result;
