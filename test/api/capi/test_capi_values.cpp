@@ -21,4 +21,6 @@ TEST_CASE("Test MAP getters", "[capi]") {
 	REQUIRE(!value);
 	value = duckdb_get_map_value(uint_val, 0);
 	REQUIRE(!value);
+
+	duckdb_destroy_value(&uint_val);
 }
