@@ -131,7 +131,7 @@ jobs:
         run: |
           python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/csv.csv --verbose --threads=2
 
-      - name: Regression Test RealNest
+      - name: Regression Test RealNest 
         if: always()
         shell: bash
         run: |
