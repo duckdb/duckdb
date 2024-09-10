@@ -31729,8 +31729,8 @@ makeSetOp(PGSetOperation op, bool all, PGNode *larg, PGNode *rarg)
 
 	n->op = op;
 	n->all = all;
-	n->larg = (PGSelectStmt *) larg;
-	n->rarg = (PGSelectStmt *) rarg;
+	n->larg = larg;
+	n->rarg = rarg;
 	return (PGNode *) n;
 }
 

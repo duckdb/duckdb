@@ -1,0 +1,189 @@
+# name: test/sql/copy/csv/test_segfault.test
+# description: Test CSV that is segfaulting
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+from 'data/csv/fuzzing/0.csv'
+----
+It was not possible to automatically detect the CSV Parsing
+
+statement error
+from 'data/csv/fuzzing/1.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
+
+statement error
+from 'data/csv/fuzzing/2.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
+
+statement ok
+from 'data/csv/fuzzing/3.csv'
+
+statement ok
+from 'data/csv/fuzzing/4.csv'
+
+statement error
+from 'data/csv/fuzzing/5.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
+
+statement error
+from 'data/csv/fuzzing/6.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
+
+statement error
+from 'data/csv/fuzzing/7.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
+
+statement error
+from 'data/csv/fuzzing/8.csv'
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+statement error
+from 'data/csv/fuzzing/9.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
+
+statement error
+from 'data/csv/fuzzing/10.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
+
+statement error
+from 'data/csv/fuzzing/11.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
+
+statement error
+from 'data/csv/fuzzing/12.csv'
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+statement ok
+from 'data/csv/fuzzing/13.csv'
+
+statement error
+from 'data/csv/fuzzing/14.csv'
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+statement error
+from 'data/csv/fuzzing/15.csv'
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+statement error
+from 'data/csv/fuzzing/16.csv'
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+statement ok
+from 'data/csv/fuzzing/17.csv'
+
+statement error
+from 'data/csv/fuzzing/18.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
+
+statement ok
+from 'data/csv/fuzzing/19.csv'
+
+statement error
+from 'data/csv/fuzzing/20.csv'
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+statement ok
+from 'data/csv/fuzzing/21.csv'
+
+
+statement error
+from 'data/csv/fuzzing/22.csv'
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+statement error
+from 'data/csv/fuzzing/23.csv'
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+statement error
+from 'data/csv/fuzzing/24.csv'
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+statement error
+from 'data/csv/fuzzing/25.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
+
+statement error
+from 'data/csv/fuzzing/26.csv'
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+statement error
+from 'data/csv/fuzzing/27.csv'
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+statement error
+from 'data/csv/fuzzing/28.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
+
+statement error
+from 'data/csv/fuzzing/29.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
+
+statement error
+from 'data/csv/fuzzing/30.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
+
+statement ok
+from 'data/csv/fuzzing/31.csv'
+
+statement error
+from 'data/csv/fuzzing/32.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
+
+statement error
+from 'data/csv/fuzzing/33.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
+
+statement error
+from 'data/csv/fuzzing/34.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
+
+statement error
+from 'data/csv/fuzzing/35.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
+
+statement error
+from 'data/csv/fuzzing/36.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
+
+statement error
+from 'data/csv/fuzzing/37.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
+
+statement error
+from 'data/csv/fuzzing/38.csv'
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
+

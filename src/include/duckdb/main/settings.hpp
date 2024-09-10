@@ -603,6 +603,15 @@ struct MaximumTempDirectorySize {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct MaximumVacuumTasks {
+	static constexpr const char *Name = "max_vacuum_tasks";
+	static constexpr const char *Description = "The maximum vacuum tasks to schedule during a checkpoint";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct MergeJoinThreshold {
 	static constexpr const char *Name = "merge_join_threshold";
 	static constexpr const char *Description = "The number of rows we need on either table to choose a merge join";
@@ -877,10 +886,20 @@ struct UsernameSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct FlushAllocatorSetting {
+struct AllocatorFlushThreshold {
 	static constexpr const char *Name = "allocator_flush_threshold";
 	static constexpr const char *Description =
 	    "Peak allocation threshold at which to flush the allocator after completing a task.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct AllocatorBulkDeallocationFlushThreshold {
+	static constexpr const char *Name = "allocator_bulk_deallocation_flush_threshold";
+	static constexpr const char *Description =
+	    "If a bulk deallocation larger than this occurs, flush outstanding allocations.";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);

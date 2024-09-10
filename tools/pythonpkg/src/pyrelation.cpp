@@ -946,7 +946,7 @@ duckdb::pyarrow::Table DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
 	return ToArrowTableInternal(batch_size, false);
 }
 
-py::object DuckDBPyRelation::ToArrowCapsule() {
+py::object DuckDBPyRelation::ToArrowCapsule(const py::object &requested_schema) {
 	if (!result) {
 		if (!rel) {
 			return py::none();
