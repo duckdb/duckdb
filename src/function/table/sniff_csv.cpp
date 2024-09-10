@@ -217,7 +217,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 		         << "'" << separator;
 	}
 	// 11.2. Quote
-	if (!sniffer_options.dialect_options.header.IsSetByUser()) {
+	if (!sniffer_options.dialect_options.state_machine_options.quote.IsSetByUser()) {
 		csv_read << "quote="
 		         << "'" << FormatOptions(sniffer_options.dialect_options.state_machine_options.quote.GetValue()) << "'"
 		         << separator;
