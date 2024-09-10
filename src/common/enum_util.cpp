@@ -4439,6 +4439,8 @@ const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
 		return "OPTIMIZER_BUILD_SIDE_PROBE_SIDE";
 	case MetricsType::OPTIMIZER_LIMIT_PUSHDOWN:
 		return "OPTIMIZER_LIMIT_PUSHDOWN";
+	case MetricsType::OPTIMIZER_SAMPLING_PUSHDOWN:
+		return "OPTIMIZER_SAMPLING_PUSHDOWN";
 	case MetricsType::OPTIMIZER_TOP_N:
 		return "OPTIMIZER_TOP_N";
 	case MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION:
@@ -4564,6 +4566,9 @@ MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "OPTIMIZER_LIMIT_PUSHDOWN")) {
 		return MetricsType::OPTIMIZER_LIMIT_PUSHDOWN;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_SAMPLING_PUSHDOWN")) {
+		return MetricsType::OPTIMIZER_SAMPLING_PUSHDOWN;
 	}
 	if (StringUtil::Equals(value, "OPTIMIZER_TOP_N")) {
 		return MetricsType::OPTIMIZER_TOP_N;
