@@ -197,7 +197,7 @@ static unique_ptr<TableRef> ReplaceInternal(ClientContext &context, const string
 	py::gil_scoped_acquire acquire;
 	auto current_frame = py::module::import("inspect").attr("currentframe")();
 
-	auto local_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_locals"));
+	auto local_dict = py::cast<py::dict>(current_frame.attr("f_locals"));
 	// search local dictionary
 	if (local_dict) {
 		auto result = TryReplacement(local_dict, table_name, context, current_frame);
@@ -206,7 +206,7 @@ static unique_ptr<TableRef> ReplaceInternal(ClientContext &context, const string
 		}
 	}
 	// search global dictionary
-	auto global_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_globals"));
+	auto global_dict = py::cast<py::dict>(current_frame.attr("f_globals"));
 	if (global_dict) {
 		auto result = TryReplacement(global_dict, table_name, context, current_frame);
 		if (result) {
