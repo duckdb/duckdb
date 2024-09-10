@@ -1,6 +1,7 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -266,6 +267,25 @@ bool CatalogSearchPath::SchemaInSearchPath(ClientContext &context, const string 
 		}
 	}
 	return false;
+}
+
+ScopedCatalogSearchPath::ScopedCatalogSearchPath(ClientContext &context_p, Catalog &catalog_p,
+                                                 SchemaCatalogEntry &schema_p)
+    : context(context_p) {
+	// extend the search path
+	auto &search_path = context.client_data->catalog_search_path;
+	stored_paths = search_path->GetSetPaths();
+	vector<CatalogSearchEntry> new_paths;
+	new_paths.emplace_back(catalog_p.GetName(), schema_p.name);
+	new_paths.emplace_back(catalog_p.GetName(), DEFAULT_SCHEMA);
+	new_paths.insert(new_paths.end(), stored_paths.begin(), stored_paths.end());
+
+	search_path->Set(std::move(new_paths), CatalogSetPathType::SET_SCHEMAS);
+}
+
+ScopedCatalogSearchPath::~ScopedCatalogSearchPath() {
+	auto &search_path = context.client_data->catalog_search_path;
+	search_path->Set(std::move(stored_paths), CatalogSetPathType::SET_SCHEMAS);
 }
 
 } // namespace duckdb

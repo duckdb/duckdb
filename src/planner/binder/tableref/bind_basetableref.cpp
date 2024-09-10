@@ -15,6 +15,7 @@
 #include "duckdb/planner/tableref/bound_cteref.hpp"
 #include "duckdb/planner/tableref/bound_dummytableref.hpp"
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
 
 namespace duckdb {
 
@@ -261,7 +262,13 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		subquery.column_name_alias = BindContext::AliasColumnNames(subquery.alias, view_names, ref.column_name_alias);
 		// bind the child subquery
 		view_binder->AddBoundView(view_catalog_entry);
-		auto bound_child = view_binder->Bind(subquery);
+		unique_ptr<BoundTableRef> bound_child;
+		{
+			// when binding a view, we need to always look into the catalog of the view first
+			ScopedCatalogSearchPath scoped_path(context, view_catalog_entry.ParentCatalog(),
+			                                    view_catalog_entry.ParentSchema());
+			bound_child = view_binder->Bind(subquery);
+		}
 		if (!view_binder->correlated_columns.empty()) {
 			throw BinderException("Contents of view were altered - view bound correlated columns");
 		}

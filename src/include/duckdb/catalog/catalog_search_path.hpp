@@ -17,6 +17,8 @@
 namespace duckdb {
 
 class ClientContext;
+class Catalog;
+class SchemaCatalogEntry;
 
 struct CatalogSearchEntry {
 	CatalogSearchEntry(string catalog, string schema);
@@ -70,6 +72,17 @@ private:
 	vector<CatalogSearchEntry> paths;
 	//! Only the paths that were explicitly set (minus the always included paths)
 	vector<CatalogSearchEntry> set_paths;
+};
+
+//! Modify the catalog search path
+class ScopedCatalogSearchPath {
+public:
+	ScopedCatalogSearchPath(ClientContext &context, Catalog &catalog, SchemaCatalogEntry &schema);
+	~ScopedCatalogSearchPath();
+
+private:
+	ClientContext &context;
+	vector<CatalogSearchEntry> stored_paths;
 };
 
 } // namespace duckdb
