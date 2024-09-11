@@ -4,5 +4,11 @@
 
 
 statement ok
-SELECT y + z AS c FROM (SELECT y, unnest([x]) AS z FROM (SELECT 1 as x), (SELECT 1 as y))
+SELECT y + z AS c
+FROM (
+	SELECT y, unnest([x]) AS z
+	FROM
+		(SELECT 1 as x),
+		(SELECT 1 as y)
+	)
  WHERE c > 0;
