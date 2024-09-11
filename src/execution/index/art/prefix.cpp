@@ -406,9 +406,9 @@ void Prefix::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<Fixed
 	new_node.SetMetadata(static_cast<uint8_t>(PREFIX));
 	Prefix new_prefix(allocator, new_node, DEPRECATED_COUNT);
 
-	reference<Node> ref(node);
-	while (ref.get().GetType() == PREFIX && ref.get().GetGateStatus() == GateStatus::GATE_NOT_SET) {
-		Prefix prefix(art, ref, true, true);
+	Node current_node = node;
+	while (current_node.GetType() == PREFIX && current_node.GetGateStatus() == GateStatus::GATE_NOT_SET) {
+		Prefix prefix(art, current_node, true, true);
 		if (!prefix.in_memory) {
 			return;
 		}
@@ -417,16 +417,14 @@ void Prefix::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<Fixed
 			new_prefix = new_prefix.TransformToDeprecatedAppend(art, allocator, prefix.data[i]);
 		}
 
-		auto next = *prefix.ptr;
+		*new_prefix.ptr = *prefix.ptr;
 		prefix.ptr->Clear();
-		Node::Free(art, ref);
-
-		*new_prefix.ptr = next;
-		ref = *new_prefix.ptr;
+		Node::Free(art, current_node);
+		current_node = *new_prefix.ptr;
 	}
 
 	node = new_node;
-	return Node::TransformToDeprecated(art, ref, allocator);
+	return Node::TransformToDeprecated(art, *new_prefix.ptr, allocator);
 }
 
 Prefix Prefix::Append(ART &art, const uint8_t byte) {
