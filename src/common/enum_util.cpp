@@ -2789,7 +2789,7 @@ ExtensionABIType EnumUtil::FromString<ExtensionABIType>(const char *value) {
 	if (StringUtil::Equals(value, "UNKNOWN")) {
 		return ExtensionABIType::UNKNOWN;
 	}
-	if (StringUtil::Equals(value, "CPP")) {
+	if (StringUtil::Equals(value, "CPP") || StringUtil::Equals(value, "")) {
 		return ExtensionABIType::CPP;
 	}
 	if (StringUtil::Equals(value, "C_STRUCT")) {
