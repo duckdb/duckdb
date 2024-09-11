@@ -4,7 +4,6 @@
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/typedefs.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
@@ -195,10 +194,11 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 	total_dead_nodes -= actually_dequeued - alive_nodes;
 }
 
-BufferPool::BufferPool(const DBConfigOptions &options)
-    : maximum_memory(options.maximum_memory),
-      allocator_bulk_deallocation_flush_threshold(options.allocator_bulk_deallocation_flush_threshold),
-      track_eviction_timestamps(options.buffer_manager_track_eviction_timestamps),
+BufferPool::BufferPool(idx_t maximum_memory, bool track_eviction_timestamps,
+                       idx_t allocator_bulk_deallocation_flush_threshold)
+    : maximum_memory(maximum_memory),
+      allocator_bulk_deallocation_flush_threshold(allocator_bulk_deallocation_flush_threshold),
+      track_eviction_timestamps(track_eviction_timestamps),
       temporary_memory_manager(make_uniq<TemporaryMemoryManager>()) {
 	queues.reserve(FILE_BUFFER_TYPE_COUNT);
 	for (idx_t i = 0; i < FILE_BUFFER_TYPE_COUNT; i++) {
