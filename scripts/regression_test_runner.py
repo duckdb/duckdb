@@ -81,8 +81,6 @@ complete_timings = {old_runner: [], new_runner: []}
 
 
 def run_benchmark(runner, benchmark):
-    import time
-    time.sleep(5)
     benchmark_args = [runner, benchmark]
 
     if root_dir:
@@ -97,6 +95,8 @@ def run_benchmark(runner, benchmark):
     else:
         timeout_seconds = 600
     try:
+        import time
+        time.sleep(5)
         proc = subprocess.run(benchmark_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout_seconds)
         out = proc.stdout.decode('utf8')
         err = proc.stderr.decode('utf8')
