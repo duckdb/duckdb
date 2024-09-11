@@ -365,7 +365,7 @@ public:
 	DUCKDB_API IndexTypeSet &GetIndexTypes();
 	static idx_t GetSystemMaxThreads(FileSystem &fs);
 	static idx_t GetSystemAvailableMemory(FileSystem &fs);
-	static idx_t ParseMemoryLimitSlurm(const string &arg);
+	static optional_idx ParseMemoryLimitSlurm(const string &arg);
 	void SetDefaultMaxMemory();
 	void SetDefaultTempDirectory();
 
