@@ -36,3 +36,24 @@ def test_install_non_existent_extension():
     assert value.reason == 'Not Found'
     assert 'Example Domain' in value.body
     assert 'Content-Length' in value.headers
+
+
+def test_install_misuse_errors(duckdb_cursor):
+    with pytest.raises(
+        duckdb.InvalidInputException,
+        match="Both 'repository' and 'repository_url' are set which is not allowed, please pick one or the other",
+    ):
+        duckdb_cursor.install_extension('name', repository='hello', repository_url='hello.com')
+
+    with pytest.raises(
+        duckdb.InvalidInputException, match="The provided 'repository' or 'repository_url' can not be empty!"
+    ):
+        duckdb_cursor.install_extension('name', repository_url='')
+
+    with pytest.raises(
+        duckdb.InvalidInputException, match="The provided 'repository' or 'repository_url' can not be empty!"
+    ):
+        duckdb_cursor.install_extension('name', repository='')
+
+    with pytest.raises(duckdb.InvalidInputException, match="The provided 'version' can not be empty!"):
+        duckdb_cursor.install_extension('name', version='')
