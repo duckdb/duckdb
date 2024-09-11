@@ -276,7 +276,8 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      "Create a query object from a JSON protobuf plan", py::arg("json"));
 	m.def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
 	      py::arg("query"));
-	m.def("install_extension", &DuckDBPyConnection::InstallExtension, "Install an extension by name",
+	m.def("install_extension", &DuckDBPyConnection::InstallExtension,
+	      "Install an extension by name, with an optional version and/or repository to get the extension from",
 	      py::arg("extension"), py::kw_only(), py::arg("force_install") = false, py::arg("repository") = py::none(),
 	      py::arg("repository_url") = py::none(), py::arg("version") = py::none());
 	m.def("load_extension", &DuckDBPyConnection::LoadExtension, "Load an installed extension", py::arg("extension"));

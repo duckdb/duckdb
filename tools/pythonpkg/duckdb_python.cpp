@@ -813,9 +813,9 @@ static void InitializeConnectionMethods(py::module_ &m) {
 		    }
 		    conn->InstallExtension(extension, force_install, repository, repository_url, version);
 	    },
-	    "Install an extension by name", py::arg("extension"), py::kw_only(), py::arg("force_install") = false,
-	    py::arg("repository") = py::none(), py::arg("repository_url") = py::none(), py::arg("version") = py::none(),
-	    py::arg("connection") = py::none());
+	    "Install an extension by name, with an optional version and/or repository to get the extension from",
+	    py::arg("extension"), py::kw_only(), py::arg("force_install") = false, py::arg("repository") = py::none(),
+	    py::arg("repository_url") = py::none(), py::arg("version") = py::none(), py::arg("connection") = py::none());
 	m.def(
 	    "load_extension",
 	    [](const string &extension, shared_ptr<DuckDBPyConnection> conn = nullptr) {
