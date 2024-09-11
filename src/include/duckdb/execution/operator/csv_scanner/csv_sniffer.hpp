@@ -198,7 +198,7 @@ private:
 	void InitializeDateAndTimeStampDetection(CSVStateMachine &candidate, const string &separator,
 	                                         const LogicalType &sql_type);
 	//! Sets user defined date and time formats (if any)
-	void SetUserDefinedDateTimeFormat(CSVStateMachine &candidate);
+	void SetUserDefinedDateTimeFormat(CSVStateMachine &candidate) const;
 	//! Functions that performs detection for date and timestamp formats
 	void DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const LogicalType &sql_type, const string &separator,
 	                                   const string_t &dummy_val);
