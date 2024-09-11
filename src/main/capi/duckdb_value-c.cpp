@@ -282,7 +282,7 @@ idx_t duckdb_get_map_size(duckdb_value value) {
 	}
 
 	auto val = UnwrapValue(value);
-	if (val.type() != LogicalTypeId::MAP) {
+	if (val.type().id() != LogicalTypeId::MAP) {
 		return 0;
 	}
 
@@ -296,7 +296,7 @@ duckdb_value duckdb_get_map_key(duckdb_value value, idx_t index) {
 	}
 
 	auto val = UnwrapValue(value);
-	if (val.type() != LogicalTypeId::MAP) {
+	if (val.type().id() != LogicalTypeId::MAP) {
 		return nullptr;
 	}
 
@@ -316,7 +316,7 @@ duckdb_value duckdb_get_map_value(duckdb_value value, idx_t index) {
 	}
 
 	auto val = UnwrapValue(value);
-	if (val.type() != LogicalTypeId::MAP) {
+	if (val.type().id() != LogicalTypeId::MAP) {
 		return nullptr;
 	}
 
