@@ -101,8 +101,9 @@ protected:
 	virtual void PurgeQueue(FileBufferType type) = 0;
 	virtual void AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
 	virtual void WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer);
-	virtual unique_ptr<FileBuffer> ReadTemporaryBuffer(MemoryTag tag, block_id_t id, unique_ptr<FileBuffer> buffer);
-	virtual void DeleteTemporaryFile(block_id_t id);
+	virtual unique_ptr<FileBuffer> ReadTemporaryBuffer(MemoryTag tag, BlockHandle &block,
+	                                                   unique_ptr<FileBuffer> buffer);
+	virtual void DeleteTemporaryFile(BlockHandle &block);
 };
 
 } // namespace duckdb
