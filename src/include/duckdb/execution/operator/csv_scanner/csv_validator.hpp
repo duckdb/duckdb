@@ -24,18 +24,11 @@ struct ThreadLines {
 public:
 	ThreadLines() {};
 	//! Validate everything is as it should be, returns true if it's all good, false o.w.
-	bool Validate();
+	bool Validate() const;
 
 	void Insert(idx_t thread, ValidatorLine line_info);
 
-	string Print() {
-		string result;
-		for (auto &line : thread_lines) {
-			result += "{start_pos: " + to_string(line.second.start_pos) +
-			          ", end_pos: " + to_string(line.second.end_pos) + "}";
-		}
-		return result;
-	}
+	string Print() const;
 
 private:
 	map<idx_t, ValidatorLine> thread_lines;
@@ -48,14 +41,12 @@ struct CSVValidator {
 	CSVValidator() {
 	}
 	//! Validate that all files are good
-	bool Validate();
+	bool Validate() const;
 
 	//! Inserts line_info to a given thread index of a given file.
 	void Insert(idx_t file_idx, idx_t thread, ValidatorLine line_info);
 
-	string Print(idx_t file_idx) {
-		return per_file_thread_lines[file_idx].Print();
-	}
+	string Print(idx_t file_idx) const;
 
 	// private:
 	//! Per file thread lines.

@@ -7,7 +7,16 @@ void ThreadLines::Insert(idx_t thread_idx, ValidatorLine line_info) {
 	thread_lines.insert({thread_idx, line_info});
 }
 
-bool ThreadLines::Validate() {
+string ThreadLines::Print() const {
+	string result;
+	for (auto &line : thread_lines) {
+		result +=
+		    "{start_pos: " + to_string(line.second.start_pos) + ", end_pos: " + to_string(line.second.end_pos) + "}";
+	}
+	return result;
+}
+
+bool ThreadLines::Validate() const {
 	bool initialized = false;
 	idx_t last_end_pos = 0;
 	for (auto &line_info : thread_lines) {
@@ -15,7 +24,7 @@ bool ThreadLines::Validate() {
 			// First run, we just set the initialized to true
 			initialized = true;
 		} else {
-			if (last_end_pos < line_info.second.start_pos) {
+			if (last_end_pos + error_margin < line_info.second.start_pos) {
 				throw InternalException(to_string(last_end_pos) + "   " + to_string(line_info.second.start_pos));
 				// Start position of next thread can't be higher than end position of previous thread + error margin.
 				// Validation failed.
@@ -35,13 +44,17 @@ void CSVValidator::Insert(idx_t file_idx, idx_t thread_idx, ValidatorLine line_i
 	per_file_thread_lines[file_idx].Insert(thread_idx, line_info);
 }
 
-bool CSVValidator::Validate() {
+bool CSVValidator::Validate() const {
 	for (auto &file : per_file_thread_lines) {
 		if (!file.Validate()) {
 			return false;
 		}
 	}
 	return true;
+}
+
+string CSVValidator::Print(idx_t file_idx) const {
+	return per_file_thread_lines[file_idx].Print();
 }
 
 } // namespace duckdb
