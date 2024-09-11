@@ -54,7 +54,7 @@ struct TempBufferPoolReservation : BufferPoolReservation {
 	}
 };
 
-class BlockHandle {
+class BlockHandle : public enable_shared_from_this<BlockHandle> {
 	friend class BlockManager;
 	friend struct BufferEvictionNode;
 	friend class BufferHandle;
@@ -121,9 +121,8 @@ public:
 	}
 
 private:
-	static BufferHandle Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileBuffer> buffer = nullptr);
-	static BufferHandle LoadFromBuffer(shared_ptr<BlockHandle> &handle, data_ptr_t data,
-	                                   unique_ptr<FileBuffer> reusable_buffer);
+	BufferHandle Load(unique_ptr<FileBuffer> buffer = nullptr);
+	BufferHandle LoadFromBuffer(data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer);
 	unique_ptr<FileBuffer> UnloadAndTakeBlock();
 	void Unload();
 	bool CanUnload();
