@@ -83,7 +83,7 @@ class Setting:
     # validate and return the correct type format
     def _get_sql_type(self, sql_type) -> str:
         if sql_type in self.__valid_sql_types_list:
-            return f"LogicalTypeId::{sql_type}"
+            return sql_type
         raise ValueError(f"Invalid input type: '{sql_type}'")
 
     # validate and return the cpp input type
@@ -137,10 +137,24 @@ def find_start_end_indexes(source_code, start_marker, end_marker, file_path):
     return start_index, end_index
 
 
+# global markers
+SEPARATOR = "//===----------------------------------------------------------------------===//\n"
+SRC_CODE_START_MARKER = "namespace duckdb {"
+SRC_CODE_END_MARKER = "} // namespace duckdb"
+SRC_CODE_IMPLEMENTATION_COMMENT = f"\t// Implement the body here\n"
+
+
 # global method
 def write_content_to_file(new_content, path):
     with open(path, 'w') as source_file:
         source_file.write("".join(new_content))
+
+
+def get_setting_heading(setting_struct_name):
+    struct_name_wt_Setting = re.sub(r'Setting$', '', setting_struct_name)
+    heading_name = re.sub(r'(?<!^)(?=[A-Z])', ' ', struct_name_wt_Setting)
+    heading = SEPARATOR + f"// {heading_name}\n" + SEPARATOR
+    return heading
 
 
 def make_format():

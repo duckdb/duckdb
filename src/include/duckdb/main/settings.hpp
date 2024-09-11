@@ -10,22 +10,6 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/common/enums/access_mode.hpp"
-#include "duckdb/catalog/catalog_search_path.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/main/attached_database.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/main/client_data.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/main/database.hpp"
-#include "duckdb/main/database_manager.hpp"
-#include "duckdb/main/query_profiler.hpp"
-#include "duckdb/main/secret/secret_manager.hpp"
-#include "duckdb/parallel/task_scheduler.hpp"
-#include "duckdb/parser/parser.hpp"
-#include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -102,8 +86,6 @@ struct AllocatorFlushThresholdSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static bool VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config, const Value &input);
-	static bool VerifyDBInstanceRESET(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -154,6 +136,8 @@ struct AllowUnsignedExtensionsSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static bool VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config, const Value &input);
+	static bool VerifyDBInstanceRESET(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -282,6 +266,7 @@ struct DefaultBlockAllocSizeSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static bool VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config, const Value &input);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -398,6 +383,8 @@ struct EnableProgressBarSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
+	static bool VerifyDBInstanceSET(ClientContext &context, const Value &input);
+	static bool VerifyDBInstanceRESET(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -444,6 +431,8 @@ struct ExternalThreadsSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static bool VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config, const Value &input);
+	static bool VerifyDBInstanceRESET(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -560,6 +549,7 @@ struct IndexScanPercentageSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::DOUBLE;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static bool VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config, const Value &input);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -674,6 +664,7 @@ struct OrderedAggregateThresholdSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
+	static bool VerifyDBInstanceSET(ClientContext &context, const Value &input);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -712,6 +703,7 @@ struct PerfectHtThresholdSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
+	static bool VerifyDBInstanceSET(ClientContext &context, const Value &input);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -771,11 +763,13 @@ struct PrintProgressBarSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
+	static bool VerifyDBInstanceSET(ClientContext &context, const Value &input);
+	static bool VerifyDBInstanceRESET(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct ProduceArrowStringViewSetting {
-	static constexpr const char *Name = "produce_arrow_string_view";
+struct ProduceArrowStringViewsSetting {
+	static constexpr const char *Name = "produce_arrow_string_views";
 	static constexpr const char *Description =
 	    "If strings should be produced by DuckDB in Utf8View format instead of Utf8";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;

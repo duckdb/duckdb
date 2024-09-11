@@ -13,8 +13,7 @@
         "type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "global",
-        "add_verification_in_SET": true,
-        "add_verification_in_RESET": true
+        "add_verification_in_both_SetReset": true
     },
     {
         "name": "allocator_flush_threshold",
@@ -22,8 +21,7 @@
         "type": "idx_t",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "add_verification_in_SET": true,
-        "add_verification_in_RESET": true
+        "custom_conversion_and_validation": true
     },
     {
         "name": "allow_community_extensions",
@@ -31,8 +29,7 @@
         "type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "global",
-        "add_verification_in_SET": true,
-        "add_verification_in_RESET": true
+        "add_verification_in_both_SetReset": true
     },
     {
         "name": "allow_extensions_metadata_mismatch",
@@ -44,7 +41,7 @@
     {
         "name": "allow_persistent_secrets",
         "description": "Allow the creation of persistent secrets, that are stored and loaded on restarts",
-        "type": "",
+        "type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "global",
         "custom_conversion_and_validation": true
@@ -55,15 +52,15 @@
         "type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "global",
-        "add_verification_in_SET": true,
-        "add_verification_in_RESET": true
+        "add_verification_in_both_SetReset": true
     },
     {
         "name": "allow_unsigned_extensions",
         "description": "Allow to load extensions with invalid or missing signatures",
         "type": "bool",
         "sql_type": "BOOLEAN",
-        "scope": "global"
+        "scope": "global",
+        "add_verification_in_both_SetReset": true
     },
     {
         "name": "arrow_offset_size",
@@ -123,6 +120,7 @@
         "type": "CheckpointAbort",
         "sql_type": "VARCHAR",
         "scope": "global",
+        "custom_conversion_and_validation": true,
         "aliases": [
             "debug_checkpoint_abort"
         ]
@@ -173,7 +171,8 @@
         "description": "Metadata from DuckDB callers",
         "type": "string",
         "sql_type": "VARCHAR",
-        "scope": "global"
+        "scope": "global",
+        "custom_conversion_and_validation": true
     },
     {
         "name": "default_block_alloc_size",
@@ -181,6 +180,7 @@
         "type": "idx_t",
         "sql_type": "UBIGINT",
         "scope": "global",
+        "add_verification_in_SET": true,
         "aliases": [
             "default_block_size"
         ]
@@ -191,6 +191,7 @@
         "type": "DefaultOrderByNullType",
         "sql_type": "VARCHAR",
         "scope": "global",
+        "custom_conversion_and_validation": true,
         "aliases": [
             "null_order"
         ]
@@ -200,12 +201,13 @@
         "description": "The order type used when none is specified (ASC or DESC)",
         "type": "OrderType",
         "sql_type": "VARCHAR",
-        "scope": "global"
+        "scope": "global",
+        "custom_conversion_and_validation": true
     },
     {
         "name": "default_secret_storage",
         "description": "Allows switching the default storage for secrets",
-        "type": "",
+        "type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
         "custom_conversion_and_validation": true
@@ -223,14 +225,16 @@
         "description": "DEBUG SETTING: disable a specific set of optimizers (comma separated)",
         "type": "set<OptimizerType>",
         "sql_type": "VARCHAR",
-        "scope": "global"
+        "scope": "global",
+        "custom_conversion_and_validation": true
     },
     {
         "name": "duckdb_api",
         "description": "DuckDB API surface",
         "type": "string",
         "sql_type": "VARCHAR",
-        "scope": "global"
+        "scope": "global",
+        "custom_conversion_and_validation": true
     },
     {
         "name": "enable_external_access",
@@ -238,8 +242,7 @@
         "type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "global",
-        "add_verification_in_SET": true,
-        "add_verification_in_RESET": true
+        "add_verification_in_both_SetReset": true
     },
     {
         "name": "enable_fsst_vectors",
@@ -253,7 +256,8 @@
         "description": "Enables HTTP logging",
         "type": "bool",
         "sql_type": "BOOLEAN",
-        "scope": "local"
+        "scope": "local",
+        "custom_conversion_and_validation": true
     },
     {
         "name": "enable_macro_dependencies",
@@ -275,7 +279,8 @@
         "description": "Enables the progress bar, printing progress to the terminal for long queries",
         "type": "bool",
         "sql_type": "BOOLEAN",
-        "scope": "local"
+        "scope": "local",
+        "add_verification_in_both_SetReset": true
     },
     {
         "name": "enable_view_dependencies",
@@ -297,6 +302,7 @@
         "type": "ExplainOutputType",
         "sql_type": "VARCHAR",
         "scope": "local",
+        "custom_conversion_and_validation": true,
         "aliases": [
             "explain_output"
         ]
@@ -307,6 +313,7 @@
         "type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
+        "custom_conversion_and_validation": true,
         "aliases": [
             "temp_directory"
         ]
@@ -317,12 +324,12 @@
         "type": "idx_t",
         "sql_type": "BIGINT",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "add_verification_in_both_SetReset": true
     },
     {
         "name": "file_search_path",
         "description": "A comma separated list of directories to search for input files",
-        "type": "",
+        "type": "string",
         "sql_type": "VARCHAR",
         "scope": "local",
         "custom_conversion_and_validation": true
@@ -343,14 +350,16 @@
         "description": "DEBUG SETTING: forces a specific bitpacking mode",
         "type": "BitpackingMode",
         "sql_type": "VARCHAR",
-        "scope": "global"
+        "scope": "global",
+        "custom_conversion_and_validation": true
     },
     {
         "name": "force_compression",
         "description": "DEBUG SETTING: forces a specific compression method to be used",
         "type": "CompressionType",
         "sql_type": "VARCHAR",
-        "scope": "global"
+        "scope": "global",
+        "custom_conversion_and_validation": true
     },
     {
         "name": "force_external",
@@ -377,7 +386,8 @@
         "description": "Sets the home directory used by the system",
         "type": "string",
         "sql_type": "VARCHAR",
-        "scope": "local"
+        "scope": "local",
+        "custom_conversion_and_validation": true
     },
     {
         "name": "http_logging_output",
@@ -415,7 +425,8 @@
         "description": "The index scan percentage sets a threshold for index scans. If fewer than MAX(index_scan_max_count, \"\n\t    \"index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.",
         "type": "double",
         "sql_type": "DOUBLE",
-        "scope": "global"
+        "scope": "global",
+        "add_verification_in_SET": true
     },
     {
         "name": "integer_division",
@@ -434,9 +445,10 @@
     {
         "name": "log_query_path",
         "description": "Specifies the path to which queries should be logged (default: NULL, queries are not logged)",
-        "type": "",
+        "type": "string",
         "sql_type": "VARCHAR",
-        "scope": "local"
+        "scope": "local",
+        "custom_conversion_and_validation": true
     },
     {
         "name": "max_expression_depth",
@@ -463,6 +475,7 @@
         "type": "idx_t",
         "sql_type": "VARCHAR",
         "scope": "global",
+        "custom_conversion_and_validation": true,
         "aliases": [
             "max_temp_directory_size"
         ]
@@ -473,6 +486,7 @@
         "type": "idx_t",
         "sql_type": "BIGINT",
         "scope": "global",
+        "custom_conversion_and_validation": true,
         "aliases": [
             "worker_threads",
             "threads"
@@ -514,7 +528,8 @@
         "description": null,
         "type": "idx_t",
         "sql_type": "UBIGINT",
-        "scope": "local"
+        "scope": "local",
+        "add_verification_in_SET": true
     },
     {
         "name": "partitioned_write_flush_threshold",
@@ -533,7 +548,7 @@
     {
         "name": "password",
         "description": "The password to use. Ignored for legacy compatibility.",
-        "type": "",
+        "type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
         "custom_conversion_and_validation": true
@@ -543,14 +558,16 @@
         "description": "Threshold in bytes for when to use a perfect hash table",
         "type": "idx_t",
         "sql_type": "BIGINT",
-        "scope": "local"
+        "scope": "local",
+        "add_verification_in_SET": true
     },
     {
         "name": "pivot_filter_threshold",
         "description": "The threshold to switch from using filtered aggregates to LIST with a dedicated pivot operator",
         "type": "idx_t",
         "sql_type": "BIGINT",
-        "scope": "local"
+        "scope": "local",
+        "custom_conversion_and_validation": true
     },
     {
         "name": "pivot_limit",
@@ -586,16 +603,20 @@
         "type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "local",
+        "add_verification_in_both_SetReset": true,
         "aliases": [
             "enable_progress_bar_print"
         ]
     },
     {
-        "name": "produce_arrow_string_view",
+        "name": "produce_arrow_string_views",
         "description": "If strings should be produced by DuckDB in Utf8View format instead of Utf8",
         "type": "bool",
         "sql_type": "BOOLEAN",
-        "scope": "global"
+        "scope": "global",
+        "aliases": [
+            "produce_arrow_string_view"
+        ]
     },
     {
         "name": "profiler_save_location",
@@ -619,7 +640,7 @@
     {
         "name": "progress_bar_time",
         "description": "Sets the time (in milliseconds) how long a query needs to take before we start printing a progress bar",
-        "type": "",
+        "type": "int",
         "sql_type": "BIGINT",
         "scope": "local",
         "custom_conversion_and_validation": true
@@ -629,12 +650,13 @@
         "description": "Sets the default search schema. Equivalent to setting search_path to a single value.",
         "type": "idx_t",
         "sql_type": "VARCHAR",
-        "scope": "local"
+        "scope": "local",
+        "custom_conversion_and_validation": true
     },
     {
         "name": "search_path",
         "description": "Sets the default catalog search path as a comma-separated list of values",
-        "type": "",
+        "type": "string",
         "sql_type": "VARCHAR",
         "scope": "local",
         "custom_conversion_and_validation": true
@@ -642,7 +664,7 @@
     {
         "name": "secret_directory",
         "description": "Set the directory to which persistent secrets are stored",
-        "type": "",
+        "type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
         "custom_conversion_and_validation": true
@@ -653,6 +675,7 @@
         "type": "SerializationCompatibility",
         "sql_type": "VARCHAR",
         "scope": "global",
+        "custom_conversion_and_validation": true,
         "aliases": [
             "storage_compatibility_version"
         ]
@@ -668,7 +691,7 @@
     {
         "name": "username",
         "description": "The username to use. Ignored for legacy compatibility.",
-        "type": "",
+        "type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
         "custom_conversion_and_validation": true,
@@ -682,6 +705,7 @@
         "type": "WindowAggregationMode",
         "sql_type": "VARCHAR",
         "scope": "global",
+        "custom_conversion_and_validation": true,
         "aliases": [
             "debug_window_mode"
         ]

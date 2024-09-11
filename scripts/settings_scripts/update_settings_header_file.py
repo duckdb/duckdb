@@ -1,4 +1,4 @@
-from .config import SettingsList, find_start_end_indexes, write_content_to_file
+from .config import SEPARATOR, SettingsList, find_start_end_indexes, write_content_to_file
 
 # markers
 START_MARKER = (
@@ -9,7 +9,6 @@ START_MARKER = (
     f"//===----------------------------------------------------------------------===//\n"
 )
 END_MARKER = "// End of the auto-generated list of settings structures"
-SEPARATOR = "//===----------------------------------------------------------------------===//\n"
 
 
 def extract_definition(setting) -> str:
@@ -17,18 +16,25 @@ def extract_definition(setting) -> str:
         f"struct {setting.struct_name} {{\n"
         f"    static constexpr const char *Name = \"{setting.name}\";\n"
         f"    static constexpr const char *Description = \"{setting.description}\";\n"
-        f"    static constexpr const LogicalTypeId InputType = {setting.sql_type};\n"
+        f"    static constexpr const LogicalTypeId InputType = LogicalTypeId::{setting.sql_type};\n"
     )
     if setting.scope == "GLOBAL" or setting.scope == "GLOBAL_LOCAL":
         definition += f"    static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);\n"
         definition += f"    static void ResetGlobal(DatabaseInstance *db, DBConfig &config);\n"
+        if setting.add_verification_in_SET:
+            definition += (
+                f"static bool VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config, const Value &input);\n"
+            )
+        if setting.add_verification_in_RESET:
+            definition += f"static bool VerifyDBInstanceRESET(DatabaseInstance *db, DBConfig &config);\n"
     if setting.scope == "LOCAL" or setting.scope == "GLOBAL_LOCAL":
         definition += f"    static void SetLocal(ClientContext &context, const Value &parameter);\n"
         definition += f"    static void ResetLocal(ClientContext &context);\n"
-    if setting.add_verification_in_SET:
-        definition += f"static bool VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config, const Value &input);\n"
-    if setting.add_verification_in_RESET:
-        definition += f"static bool VerifyDBInstanceRESET(DatabaseInstance *db, DBConfig &config);\n"
+        if setting.add_verification_in_SET:
+            definition += f"static bool VerifyDBInstanceSET(ClientContext &context, const Value &input);\n"
+        if setting.add_verification_in_RESET:
+            definition += f"static bool VerifyDBInstanceRESET(ClientContext &context);\n"
+
     definition += f"    static Value GetSetting(const ClientContext &context);\n"
     definition += f"}};\n\n"
     return definition

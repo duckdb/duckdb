@@ -278,7 +278,7 @@ public:
 	DUCKDB_API ~DBConfig();
 
 	template <class OP>
-	typename OP::SETTING_TYPE GetSetting(const ClientContext &context) {
+	Value GetSetting(const ClientContext &context) {
 		std::lock_guard<mutex> lock(config_lock);
 		return OP::GetSetting(context);
 	}
