@@ -16,7 +16,7 @@ namespace duckdb {
 class KeywordHelper {
 public:
 	//! Returns true if the given text matches a keyword of the parser
-	static bool IsKeyword(const string &text, KeywordCategory type = KeywordCategory::UNSPECIFIED);
+	static bool IsKeyword(const string &text, const vector<KeywordCategory> &filter_type = {});
 
 	static string EscapeQuotes(const string &text, char quote = '"');
 

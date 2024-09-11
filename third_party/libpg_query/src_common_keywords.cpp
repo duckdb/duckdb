@@ -25,7 +25,7 @@
 #include <string.h>
 #include <string>
 #include <memory>
-
+#include <vector>
 #include "parser/gramparse.hpp"
 
 #include "parser/kwlist.hpp"
@@ -47,7 +47,7 @@ namespace duckdb_libpgquery {
  * keywords are to be matched in this way even though non-keyword identifiers
  * receive a different case-normalization mapping.
  */
-const PGScanKeyword *ScanKeywordLookup(const char *text, const PGScanKeyword *keywords, int num_keywords, duckdb_libpgquery::PGKeywordCategory type) {
+const PGScanKeyword *ScanKeywordLookup(const char *text, const PGScanKeyword *keywords, int num_keywords, const std::vector<duckdb_libpgquery::PGKeywordCategory>& type_filter) {
 	int len, i;
 	const PGScanKeyword *low;
 	const PGScanKeyword *high;
@@ -82,12 +82,14 @@ const PGScanKeyword *ScanKeywordLookup(const char *text, const PGScanKeyword *ke
 		middle = low + (high - low) / 2;
 		difference = strcmp(middle->name, word);
 		if (difference == 0) {
-			if (type != duckdb_libpgquery::PGKeywordCategory::UNSPECIFIED){
-				if (static_cast<uint16_t>(type) == middle->category) {
-					return middle;
-				} else {
-					return NULL;
+			if (!type_filter.empty()){
+				// we have a type filter set, need to see if there is a match.
+				for (auto& type: type_filter) {
+					if (static_cast<uint16_t>(type) == middle->category) {
+						return middle;
+					}
 				}
+				return NULL;
 			}
 			return middle;
 		}

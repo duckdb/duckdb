@@ -68,8 +68,8 @@ PGList *raw_parser(const char *str) {
 	return yyextra.parsetree;
 }
 
-bool is_keyword(const char *text, duckdb_libpgquery::PGKeywordCategory type) {
-	return ScanKeywordLookup(text, ScanKeywords, NumScanKeywords, type) != NULL;
+bool is_keyword(const char *text, const std::vector<duckdb_libpgquery::PGKeywordCategory> &type_filter) {
+	return ScanKeywordLookup(text, ScanKeywords, NumScanKeywords, type_filter) != NULL;
 }
 
 std::vector<PGKeyword> keyword_list() {

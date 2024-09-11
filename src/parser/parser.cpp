@@ -341,23 +341,25 @@ vector<SimplifiedToken> Parser::Tokenize(const string &query) {
 
 duckdb_libpgquery::PGKeywordCategory ToPostgresKeywordCategory(KeywordCategory type) {
 	switch (type) {
-		case KeywordCategory::KEYWORD_RESERVED:
-			return duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_RESERVED;
-		case KeywordCategory::KEYWORD_UNRESERVED:
-			return duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_UNRESERVED;
-		case KeywordCategory::KEYWORD_TYPE_FUNC:
-			return duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_TYPE_FUNC;
-		case KeywordCategory::KEYWORD_COL_NAME:
-			return duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_COL_NAME;
-		case KeywordCategory::UNSPECIFIED:
-			return duckdb_libpgquery::PGKeywordCategory::UNSPECIFIED;
-		default:
-			throw InternalException("Unrecognized keyword category");
-		}
+	case KeywordCategory::KEYWORD_RESERVED:
+		return duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_RESERVED;
+	case KeywordCategory::KEYWORD_UNRESERVED:
+		return duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_UNRESERVED;
+	case KeywordCategory::KEYWORD_TYPE_FUNC:
+		return duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_TYPE_FUNC;
+	case KeywordCategory::KEYWORD_COL_NAME:
+		return duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_COL_NAME;
+	default:
+		throw InternalException("Unrecognized keyword category");
+	}
 }
 
-bool Parser::IsKeyword(const string &text, KeywordCategory type) {
-	return PostgresParser::IsKeyword(text, ToPostgresKeywordCategory(type));
+bool Parser::IsKeyword(const string &text, const vector<KeywordCategory> &filter_type) {
+	vector<duckdb_libpgquery::PGKeywordCategory> pg_cat;
+	for (auto &type : filter_type) {
+		pg_cat.push_back(ToPostgresKeywordCategory(type));
+	}
+	return PostgresParser::IsKeyword(text, pg_cat);
 }
 
 vector<ParserKeyword> Parser::KeywordList() {

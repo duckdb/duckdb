@@ -90,7 +90,11 @@ static string NormalizeColumnName(const string &col_name) {
 	}
 
 	// prepend _ if name starts with a digit or is a reserved keyword
-	if (KeywordHelper::IsKeyword(col_name_cleaned, KeywordCategory::KEYWORD_UNRESERVED) || (col_name_cleaned[0] >= '0' && col_name_cleaned[0] <= '9')) {
+	const vector<KeywordCategory> parser_keywords {KeywordCategory::KEYWORD_RESERVED,
+	                                               KeywordCategory::KEYWORD_TYPE_FUNC};
+
+	if (KeywordHelper::IsKeyword(col_name_cleaned, parser_keywords) ||
+	    (col_name_cleaned[0] >= '0' && col_name_cleaned[0] <= '9')) {
 		col_name_cleaned = "_" + col_name_cleaned;
 	}
 	return col_name_cleaned;

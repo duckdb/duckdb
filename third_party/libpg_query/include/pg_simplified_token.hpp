@@ -23,9 +23,9 @@ enum class PGKeywordCategory : uint8_t {
 	PG_KEYWORD_UNRESERVED = 0,
 	PG_KEYWORD_COL_NAME = 1,
 	PG_KEYWORD_TYPE_FUNC= 2,
-	PG_KEYWORD_RESERVED = 3,
-	UNSPECIFIED = 4
+	PG_KEYWORD_RESERVED = 3
 };
+
 
 struct PGKeyword {
 	std::string text;
