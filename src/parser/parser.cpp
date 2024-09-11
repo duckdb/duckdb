@@ -357,9 +357,11 @@ duckdb_libpgquery::PGKeywordCategory ToPostgresKeywordCategory(KeywordCategory t
 bool Parser::IsKeyword(const string &text, const vector<KeywordCategory> &filter_type) {
 	vector<duckdb_libpgquery::PGKeywordCategory> pg_cat;
 	for (auto &type : filter_type) {
-		pg_cat.push_back(ToPostgresKeywordCategory(type));
+		if (ToPostgresKeywordCategory(type) == PostgresParser::IsKeyword(text)) {
+			return true;
+		}
 	}
-	return PostgresParser::IsKeyword(text, pg_cat);
+	return false;
 }
 
 vector<ParserKeyword> Parser::KeywordList() {

@@ -5,7 +5,7 @@
 namespace duckdb {
 
 bool KeywordHelper::IsKeyword(const string &text, const vector<KeywordCategory> &filter_type) {
-	return Parser::IsKeyword(text, filter_type);
+	return Parser::IsKeyword(text);
 }
 
 bool KeywordHelper::RequiresQuotes(const string &text, bool allow_caps) {

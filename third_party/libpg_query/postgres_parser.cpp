@@ -34,8 +34,8 @@ PostgresParser::~PostgresParser()  {
     duckdb_libpgquery::pg_parser_cleanup();
 }
 
-bool PostgresParser::IsKeyword(const std::string &text, const std::vector<duckdb_libpgquery::PGKeywordCategory> &type_filter) {
-	return duckdb_libpgquery::is_keyword(text.c_str(), type_filter);
+duckdb_libpgquery::PGKeywordCategory PostgresParser::IsKeyword(const std::string &text) {
+	return duckdb_libpgquery::is_keyword(text.c_str());
 }
 
 vector<duckdb_libpgquery::PGKeyword> PostgresParser::KeywordList() {
