@@ -270,6 +270,20 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		AddAggregateOrWindowRelation(input_op, parent, operator_stats, op->type);
 		return true;
 	}
+	case LogicalOperatorType::LOGICAL_UNNEST: {
+		// optimize children of unnest
+		RelationStats child_stats;
+		auto child_optimizer = optimizer.CreateChildOptimizer();
+		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
+		// the extracted cardinality should be set for window
+		if (!datasource_filters.empty()) {
+			child_stats.cardinality = LossyNumericCast<idx_t>(static_cast<double>(child_stats.cardinality) *
+			                                                  RelationStatisticsHelper::DEFAULT_SELECTIVITY);
+		}
+		ModifyStatsIfLimit(limit_op.get(), child_stats);
+		AddRelation(input_op, parent, child_stats);
+		return true;
+	}
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &join = op->Cast<LogicalComparisonJoin>();
 		// Adding relations of the left side to the current join order optimizer

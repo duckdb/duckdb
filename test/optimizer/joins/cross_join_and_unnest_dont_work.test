@@ -2,7 +2,6 @@
 # description: Internal issue
 # group: [joins]
 
-
 statement ok
 SELECT y + z AS c
 FROM (
