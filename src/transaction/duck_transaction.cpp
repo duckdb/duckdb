@@ -230,7 +230,7 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit
 	UndoBuffer::IteratorState iterator_state;
 	try {
 		storage->Commit(commit_state.get());
-		undo_buffer.Commit(iterator_state, commit_id);
+		undo_buffer.Commit(iterator_state, commit_id, start_time);
 		if (commit_state) {
 			// if we have written to the WAL - flush after the commit has been successful
 			commit_state->FlushCommit();

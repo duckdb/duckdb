@@ -76,7 +76,7 @@ public:
 	DUCKDB_API bool DropEntry(ClientContext &context, const string &name, bool cascade,
 	                          bool allow_drop_internal = false);
 	//! Verify we can still drop the entry while committing
-	DUCKDB_API void CommitDrop(transaction_t commit_id, CatalogEntry &entry);
+	DUCKDB_API void CommitDrop(transaction_t commit_id, transaction_t start_time, CatalogEntry &entry);
 
 	DUCKDB_API DuckCatalog &GetCatalog();
 

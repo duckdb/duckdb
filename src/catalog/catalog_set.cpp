@@ -434,11 +434,11 @@ bool CatalogSet::DropEntry(ClientContext &context, const string &name, bool casc
 	return DropEntry(catalog.GetCatalogTransaction(context), name, cascade, allow_drop_internal);
 }
 
-void CatalogSet::CommitDrop(transaction_t commit_id, CatalogEntry &entry) {
+void CatalogSet::CommitDrop(transaction_t commit_id, transaction_t start_time, CatalogEntry &entry) {
 	// verify that no new dependencies have been created since our drop
 	auto &duck_catalog = GetCatalog();
 	CatalogTransaction commit_transaction(duck_catalog.GetDatabase(), MAX_TRANSACTION_ID, commit_id);
-	duck_catalog.GetDependencyManager().DropObject(commit_transaction, entry, false);
+	duck_catalog.GetDependencyManager().VerifyCommitDrop(commit_transaction, start_time, entry);
 }
 
 DuckCatalog &CatalogSet::GetCatalog() {

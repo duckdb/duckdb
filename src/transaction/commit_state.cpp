@@ -19,7 +19,8 @@
 
 namespace duckdb {
 
-CommitState::CommitState(transaction_t commit_id) : commit_id(commit_id) {
+CommitState::CommitState(transaction_t commit_id, transaction_t start_time)
+    : commit_id(commit_id), start_time(start_time) {
 }
 
 void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
@@ -142,7 +143,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 
 		auto &parent = catalog_entry->Parent();
 		if (parent.type == CatalogType::DELETED_ENTRY && catalog_entry->set) {
-			catalog_entry->set->CommitDrop(commit_id, *catalog_entry);
+			catalog_entry->set->CommitDrop(commit_id, start_time, *catalog_entry);
 		}
 		// Grab a write lock on the catalog
 		auto &duck_catalog = catalog.Cast<DuckCatalog>();

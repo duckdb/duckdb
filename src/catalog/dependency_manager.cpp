@@ -433,17 +433,37 @@ string DependencyManager::CollectDependents(CatalogTransaction transaction, cata
 	return result;
 }
 
-void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade) {
+void DependencyManager::VerifyCommitDrop(CatalogTransaction transaction, transaction_t start_time,
+                                         CatalogEntry &object) {
+	auto info = GetLookupProperties(object);
+	ScanDependents(transaction, info, [&](DependencyEntry &dep) {
+		auto entry = LookupEntry(transaction, dep);
+		if (!entry) {
+			return;
+		}
+
+		auto entry_committed_at = entry->timestamp.load();
+		if (entry_committed_at > start_time) {
+			// This object was created (and committed) after our transaction started
+			throw DependencyException(
+			    "Could not commit DROP of \"%s\" because a dependency was created after the transaction started",
+			    object.name);
+		}
+	});
+}
+
+catalog_entry_set_t DependencyManager::CheckDropDependencies(CatalogTransaction transaction, CatalogEntry &object,
+                                                             bool cascade) {
 	if (IsSystemEntry(object)) {
 		// Don't do anything for this
-		return;
+		return catalog_entry_set_t();
 	}
 
-	auto info = GetLookupProperties(object);
-	// Check if there are any entries that block the DROP because they still depend on the object
 	catalog_entry_set_t to_drop;
-
 	catalog_entry_set_t blocking_dependents;
+
+	auto info = GetLookupProperties(object);
+	// Look through all the objects that depend on the 'object'
 	ScanDependents(transaction, info, [&](DependencyEntry &dep) {
 		// It makes no sense to have a schema depend on anything
 		D_ASSERT(dep.EntryInfo().type != CatalogType::SCHEMA_ENTRY);
@@ -467,6 +487,7 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 		throw DependencyException(error_string);
 	}
 
+	// Look through all the entries that 'object' depends on
 	ScanSubjects(transaction, info, [&](DependencyEntry &dep) {
 		auto flags = dep.Subject().flags;
 		if (flags.IsOwnership()) {
@@ -475,7 +496,17 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 			to_drop.insert(*entry);
 		}
 	});
+	return to_drop;
+}
 
+void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade) {
+	if (IsSystemEntry(object)) {
+		// Don't do anything for this
+		return;
+	}
+
+	// Check if there are any entries that block the DROP because they still depend on the object
+	auto to_drop = CheckDropDependencies(transaction, object, cascade);
 	CleanupDependencies(transaction, object);
 
 	for (auto &entry : to_drop) {

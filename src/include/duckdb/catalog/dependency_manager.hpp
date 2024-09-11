@@ -111,6 +111,9 @@ public:
 
 private:
 	void AddObject(CatalogTransaction transaction, CatalogEntry &object, const LogicalDependencyList &dependencies);
+	void VerifyCommitDrop(CatalogTransaction transaction, transaction_t start_time, CatalogEntry &object);
+	//! Returns the objects that should be dropped alongside the object
+	catalog_entry_set_t CheckDropDependencies(CatalogTransaction transaction, CatalogEntry &object, bool cascade);
 	void DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade);
 	void AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj, AlterInfo &info);
 
