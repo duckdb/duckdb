@@ -211,7 +211,7 @@ jobs:
            duckdb_cli-windows-arm64.zip
 
  mingw:
-     name: MingW (64 Bit)
+     name: MinGW (64 Bit)
      runs-on: windows-latest
      if: ${{ inputs.skip_tests != 'true' }}
      needs: win-release-64
