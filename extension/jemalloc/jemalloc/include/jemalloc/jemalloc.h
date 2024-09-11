@@ -5,7 +5,7 @@
 extern "C" {
 #endif
 
-// DuckDB uses a 10s decay
+// DuckDB uses a 5s decay
 #define DUCKDB_JEMALLOC_DECAY 5
 
 /* Defined if __attribute__((...)) syntax is supported. */
