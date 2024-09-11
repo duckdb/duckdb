@@ -1,6 +1,8 @@
 # name: test/sql/table_function/duckdb_memory.test
 # group: [table_function]
 
+require noforcestorage
+
 statement ok
 set memory_limit='20mb';
 
