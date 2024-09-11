@@ -103,6 +103,10 @@ bool CSVSniffer::CanYouCastIt(ClientContext &context, const string_t value, cons
 	auto value_ptr = value.GetData();
 	auto value_size = value.GetSize();
 	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN: {
+		bool dummy_value;
+		return TryCastStringBool(value_ptr, value_size, dummy_value, true);
+	}
 	case LogicalTypeId::TINYINT: {
 		int8_t dummy_value;
 		return TrySimpleIntegerCast(value_ptr, value_size, dummy_value, false);
@@ -382,7 +386,7 @@ void CSVSniffer::SniffTypes(DataChunk &data_chunk, CSVStateMachine &state_machin
 }
 
 // If we have a predefined date/timestamp format we set it
-void CSVSniffer::SetUserDefinedDateTimeFormat(CSVStateMachine &candidate) {
+void CSVSniffer::SetUserDefinedDateTimeFormat(CSVStateMachine &candidate) const {
 	const vector<LogicalTypeId> data_time_formats {LogicalTypeId::DATE, LogicalTypeId::TIMESTAMP};
 	for (auto &date_time_format : data_time_formats) {
 		auto &user_option = options.dialect_options.date_format.at(date_time_format);
@@ -413,6 +417,20 @@ void CSVSniffer::DetectTypes() {
 		SetUserDefinedDateTimeFormat(*candidate->state_machine);
 		// Parse chunk and read csv with info candidate
 		auto &data_chunk = candidate->ParseChunk().ToChunk();
+		if (!candidate->error_handler->errors.empty()) {
+			bool break_loop = false;
+			for (auto &errors : candidate->error_handler->errors) {
+				for (auto &error : errors.second) {
+					if (error.type != CSVErrorType::MAXIMUM_LINE_SIZE) {
+						break_loop = true;
+						break;
+					}
+				}
+			}
+			if (break_loop && !candidate->state_machine->options.ignore_errors.GetValue()) {
+				continue;
+			}
+		}
 		idx_t start_idx_detection = 0;
 		idx_t chunk_size = data_chunk.size();
 		if (chunk_size > 1 &&
@@ -464,6 +482,11 @@ void CSVSniffer::DetectTypes() {
 				}
 			}
 		}
+	}
+	if (!best_candidate) {
+		DialectCandidates dialect_candidates(options.dialect_options.state_machine_options);
+		auto error = CSVError::SniffingError(options, dialect_candidates.Print());
+		error_handler->Error(error);
 	}
 	// Assert that it's all good at this point.
 	D_ASSERT(best_candidate && !best_format_candidates.empty());

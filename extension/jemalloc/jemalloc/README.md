@@ -166,6 +166,20 @@ static bool
 os_overcommits_proc(void)
 ```
 
+Modify this function to only print in DEBUG mode in `malloc_io.c`.
+```c++
+void
+malloc_write(const char *s) {
+#ifdef DEBUG
+	if (je_malloc_message != NULL) {
+		je_malloc_message(NULL, s);
+	} else {
+		wrtmessage(NULL, s);
+	}
+#endif
+}
+```
+
 Almost no symbols are leaked due to `private_namespace.h`.
 The `exported_symbols_check.py` script still found a few, so these lines need to be added to `private_namespace.h`:
 ```c++

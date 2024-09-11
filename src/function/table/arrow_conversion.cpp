@@ -476,7 +476,7 @@ static void UUIDConversion(Vector &vector, const ArrowArray &array, const ArrowS
 		if (!validity_mask.RowIsValid(row)) {
 			continue;
 		}
-		tgt_ptr[row].lower = BSwap(src_ptr[row].upper);
+		tgt_ptr[row].lower = static_cast<uint64_t>(BSwap(src_ptr[row].upper));
 		// flip Upper MSD
 		tgt_ptr[row].upper =
 		    static_cast<int64_t>(static_cast<uint64_t>(BSwap(src_ptr[row].lower)) ^ (static_cast<uint64_t>(1) << 63));

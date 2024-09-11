@@ -16,10 +16,14 @@
 //! duplicate of duckdb/main/winapi.hpp
 #ifndef DUCKDB_API
 #ifdef _WIN32
+#ifdef DUCKDB_STATIC_BUILD
+#define DUCKDB_API
+#else
 #if defined(DUCKDB_BUILD_LIBRARY) && !defined(DUCKDB_BUILD_LOADABLE_EXTENSION)
 #define DUCKDB_API __declspec(dllexport)
 #else
 #define DUCKDB_API __declspec(dllimport)
+#endif
 #endif
 #else
 #define DUCKDB_API
@@ -29,10 +33,14 @@
 //! duplicate of duckdb/main/winapi.hpp
 #ifndef DUCKDB_EXTENSION_API
 #ifdef _WIN32
+#ifdef DUCKDB_STATIC_BUILD
+#define DUCKDB_EXTENSION_API
+#else
 #ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
 #define DUCKDB_EXTENSION_API __declspec(dllexport)
 #else
 #define DUCKDB_EXTENSION_API
+#endif
 #endif
 #else
 #define DUCKDB_EXTENSION_API __attribute__((visibility("default")))
@@ -1127,8 +1135,8 @@ DUCKDB_API duckdb_timestamp duckdb_value_timestamp(duckdb_result *result, idx_t 
 DUCKDB_API duckdb_interval duckdb_value_interval(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
-**DEPRECATION NOTICE**: use duckdb_value_string instead. This function does not work correctly if the string contains
-null bytes.
+**DEPRECATED**: Use duckdb_value_string instead. This function does not work correctly if the string contains null
+bytes.
 
 * @return The text value at the specified location as a null-terminated string, or nullptr if the value cannot be
 converted. The result must be freed with `duckdb_free`.
@@ -1146,8 +1154,8 @@ The resulting field "string.data" must be freed with `duckdb_free.`
 DUCKDB_API duckdb_string duckdb_value_string(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
-**DEPRECATION NOTICE**: use duckdb_value_string_internal instead. This function does not work correctly if the string
-contains null bytes.
+**DEPRECATED**: Use duckdb_value_string_internal instead. This function does not work correctly if the string contains
+null bytes.
 
 * @return The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.
 If the column is NOT a VARCHAR column this function will return NULL.
@@ -1157,8 +1165,8 @@ The result must NOT be freed.
 DUCKDB_API char *duckdb_value_varchar_internal(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
-**DEPRECATION NOTICE**: use duckdb_value_string_internal instead. This function does not work correctly if the string
-contains null bytes.
+**DEPRECATED**: Use duckdb_value_string_internal instead. This function does not work correctly if the string contains
+null bytes.
 * @return The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.
 If the column is NOT a VARCHAR column this function will return NULL.
 
@@ -2897,8 +2905,9 @@ DUCKDB_API void duckdb_destroy_scalar_function_set(duckdb_scalar_function_set *s
 /*!
 Adds the scalar function as a new overload to the scalar function set.
 
-Returns DuckDBError if the function could not be added, for example if the overload already exists.* @param set The
-scalar function set
+Returns DuckDBError if the function could not be added, for example if the overload already exists.
+
+* @param set The scalar function set
 * @param function The function to add
 */
 DUCKDB_API duckdb_state duckdb_add_scalar_function_to_set(duckdb_scalar_function_set set,
@@ -3052,8 +3061,9 @@ DUCKDB_API void duckdb_destroy_aggregate_function_set(duckdb_aggregate_function_
 /*!
 Adds the aggregate function as a new overload to the aggregate function set.
 
-Returns DuckDBError if the function could not be added, for example if the overload already exists.* @param set The
-aggregate function set
+Returns DuckDBError if the function could not be added, for example if the overload already exists.
+
+* @param set The aggregate function set
 * @param function The function to add
 */
 DUCKDB_API duckdb_state duckdb_add_aggregate_function_to_set(duckdb_aggregate_function_set set,

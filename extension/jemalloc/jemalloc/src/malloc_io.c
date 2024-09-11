@@ -79,11 +79,13 @@ JEMALLOC_EXPORT void	(*je_malloc_message)(void *, const char *s);
  */
 void
 malloc_write(const char *s) {
+#ifdef DEBUG
 	if (je_malloc_message != NULL) {
 		je_malloc_message(NULL, s);
 	} else {
 		wrtmessage(NULL, s);
 	}
+#endif
 }
 
 /*

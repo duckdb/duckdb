@@ -105,8 +105,6 @@ unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const py::objec
 		dependency->AddDependency("replacement_cache", PythonDependencyItem::Create(entry));
 		subquery->external_dependency = std::move(dependency);
 		return std::move(subquery);
-	} else if ((arrow_type = DuckDBPyConnection::GetArrowType(entry)) != PyArrowObjectType::Invalid) {
-		CreateArrowScan(name, entry, *table_function, children, client_properties, arrow_type);
 	} else if (PolarsDataFrame::IsDataFrame(entry)) {
 		auto arrow_dataset = entry.attr("to_arrow")();
 		CreateArrowScan(name, arrow_dataset, *table_function, children, client_properties, PyArrowObjectType::Table);
@@ -114,6 +112,8 @@ unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const py::objec
 		auto materialized = entry.attr("collect")();
 		auto arrow_dataset = materialized.attr("to_arrow")();
 		CreateArrowScan(name, arrow_dataset, *table_function, children, client_properties, PyArrowObjectType::Table);
+	} else if ((arrow_type = DuckDBPyConnection::GetArrowType(entry)) != PyArrowObjectType::Invalid) {
+		CreateArrowScan(name, entry, *table_function, children, client_properties, arrow_type);
 	} else if ((numpytype = DuckDBPyConnection::IsAcceptedNumpyObject(entry)) != NumpyObjectType::INVALID) {
 		string name = "np_" + StringUtil::GenerateRandomName();
 		py::dict data; // we will convert all the supported format to dict{"key": np.array(value)}.
@@ -197,7 +197,7 @@ static unique_ptr<TableRef> ReplaceInternal(ClientContext &context, const string
 	py::gil_scoped_acquire acquire;
 	auto current_frame = py::module::import("inspect").attr("currentframe")();
 
-	auto local_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_locals"));
+	auto local_dict = py::cast<py::dict>(current_frame.attr("f_locals"));
 	// search local dictionary
 	if (local_dict) {
 		auto result = TryReplacement(local_dict, table_name, context, current_frame);
@@ -206,7 +206,7 @@ static unique_ptr<TableRef> ReplaceInternal(ClientContext &context, const string
 		}
 	}
 	// search global dictionary
-	auto global_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_globals"));
+	auto global_dict = py::cast<py::dict>(current_frame.attr("f_globals"));
 	if (global_dict) {
 		auto result = TryReplacement(global_dict, table_name, context, current_frame);
 		if (result) {

@@ -1,0 +1,33 @@
+# name: test/sql/table_function/duckdb_memory.test
+# group: [table_function]
+
+require noforcestorage
+
+statement ok
+set memory_limit='20mb';
+
+statement ok
+set max_temp_directory_size='150MiB';
+
+loop i 0 5
+
+statement ok
+drop table if exists tmp1;
+
+statement ok
+create or replace temp table tmp1 as select * from range(15_000_000);
+
+# i
+endloop
+
+# These should both report only 140mb is used
+
+query I
+select temporary_storage_bytes < 150_000_000 from duckdb_memory() where tag = 'IN_MEMORY_TABLE';
+----
+true
+
+query I
+select size < 150_000_000 FROM duckdb_temporary_files();
+----
+true
