@@ -341,15 +341,15 @@ vector<SimplifiedToken> Parser::Tokenize(const string &query) {
 
 KeywordCategory ToKeywordCategory(duckdb_libpgquery::PGKeywordCategory type) {
 	switch (type) {
-	case duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_RESERVED :
+	case duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_RESERVED:
 		return KeywordCategory::KEYWORD_RESERVED;
-	case duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_UNRESERVED :
+	case duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_UNRESERVED:
 		return KeywordCategory::KEYWORD_UNRESERVED;
 	case duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_TYPE_FUNC:
 		return KeywordCategory::KEYWORD_TYPE_FUNC;
-	case duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_COL_NAME :
+	case duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_COL_NAME:
 		return KeywordCategory::KEYWORD_COL_NAME;
-	case duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_NONE :
+	case duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_NONE:
 		return KeywordCategory::KEYWORD_NONE;
 	default:
 		throw InternalException("Unrecognized keyword category");
@@ -366,7 +366,7 @@ vector<ParserKeyword> Parser::KeywordList() {
 	for (auto &kw : keywords) {
 		ParserKeyword res;
 		res.name = kw.text;
-		res.category =  ToKeywordCategory(kw.category);
+		res.category = ToKeywordCategory(kw.category);
 		result.push_back(res);
 	}
 	return result;
