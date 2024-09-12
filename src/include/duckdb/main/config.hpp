@@ -245,7 +245,7 @@ struct DBConfigOptions {
 	//! The peak allocation threshold at which to flush the allocator after completing a task (1 << 27, ~128MB)
 	idx_t allocator_flush_threshold = 134217728ULL;
 	//! If bulk deallocation larger than this occurs, flush outstanding allocations (1 << 30, ~1GB)
-	idx_t allocator_bulk_deallocation_flush_threshold = 1073741824ULL;
+	idx_t allocator_bulk_deallocation_flush_threshold = 536870912ULL;
 	//! Whether the allocator background thread is enabled
 	bool allocator_background_threads = false;
 	//! DuckDB API surface

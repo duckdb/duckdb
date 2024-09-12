@@ -194,8 +194,11 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 	total_dead_nodes -= actually_dequeued - alive_nodes;
 }
 
-BufferPool::BufferPool(idx_t maximum_memory, bool track_eviction_timestamps)
-    : maximum_memory(maximum_memory), track_eviction_timestamps(track_eviction_timestamps),
+BufferPool::BufferPool(idx_t maximum_memory, bool track_eviction_timestamps,
+                       idx_t allocator_bulk_deallocation_flush_threshold)
+    : maximum_memory(maximum_memory),
+      allocator_bulk_deallocation_flush_threshold(allocator_bulk_deallocation_flush_threshold),
+      track_eviction_timestamps(track_eviction_timestamps),
       temporary_memory_manager(make_uniq<TemporaryMemoryManager>()) {
 	queues.reserve(FILE_BUFFER_TYPE_COUNT);
 	for (idx_t i = 0; i < FILE_BUFFER_TYPE_COUNT; i++) {
@@ -283,6 +286,9 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 	bool found = false;
 
 	if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
+		if (Allocator::SupportsFlush() && extra_memory > allocator_bulk_deallocation_flush_threshold) {
+			Allocator::FlushAll();
+		}
 		return {true, std::move(r)};
 	}
 

@@ -58,8 +58,8 @@ This is not portable, but we can make it portable if we replace all of it with t
 
 Add this to `jemalloc.h`:
 ```c++
-// DuckDB uses a 10s decay
-#define DUCKDB_JEMALLOC_DECAY 10
+// DuckDB uses a 5s decay
+#define DUCKDB_JEMALLOC_DECAY 5
 ```
 
 We also supply our own config string in `jemalloc.c`.
@@ -74,7 +74,7 @@ JEMALLOC_ATTR(constructor)
 static void
 jemalloc_constructor(void) {
 	unsigned long long cpu_count = malloc_ncpus();
-	unsigned long long bgt_count = cpu_count / 32;
+	unsigned long long bgt_count = cpu_count / 16;
 	if (bgt_count == 0) {
 		bgt_count = 1;
 	}
