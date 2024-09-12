@@ -388,7 +388,17 @@ def create_duckdb_h(ext_api_version, function_groups):
                 function_declarations_finished += '#ifndef DUCKDB_API_NO_DEPRECATED\n'
                 deprecated_state = True
 
-            function_declarations_finished += create_function_comment(function)
+            function_comment = create_function_comment(function)
+            if (
+                function_is_deprecated
+                and '**DEPRECATED**' not in function_comment
+                and '**DEPRECATION NOTICE**' not in function_comment
+            ):
+                raise Exception(
+                    f"Function {str(function)} is labeled as deprecated but the comment does not indicate this"
+                )
+
+            function_declarations_finished += function_comment
             function_declarations_finished += create_function_declaration(function)
 
             function_declarations_finished += '\n'
