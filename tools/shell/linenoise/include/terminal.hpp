@@ -13,33 +13,34 @@
 namespace duckdb {
 
 enum KEY_ACTION {
-	KEY_NULL = 0,   /* NULL */
-	CTRL_A = 1,     /* Ctrl+a */
-	CTRL_B = 2,     /* Ctrl-b */
-	CTRL_C = 3,     /* Ctrl-c */
-	CTRL_D = 4,     /* Ctrl-d */
-	CTRL_E = 5,     /* Ctrl-e */
-	CTRL_F = 6,     /* Ctrl-f */
-	CTRL_G = 7,     /* Ctrl-g */
-	CTRL_H = 8,     /* Ctrl-h */
-	TAB = 9,        /* Tab */
-	CTRL_J = 10,    /* Ctrl+j*/
-	CTRL_K = 11,    /* Ctrl+k */
-	CTRL_L = 12,    /* Ctrl+l */
-	ENTER = 13,     /* Enter */
-	CTRL_N = 14,    /* Ctrl-n */
-	CTRL_O = 15,    /* Ctrl-O */
-	CTRL_P = 16,    /* Ctrl-p */
-	CTRL_R = 18,    /* Ctrl-r */
-	CTRL_S = 19,    /* Ctrl-s */
-	CTRL_T = 20,    /* Ctrl-t */
-	CTRL_U = 21,    /* Ctrl+u */
-	CTRL_W = 23,    /* Ctrl+w */
-	CTRL_X = 24,    /* Ctrl+x */
-	CTRL_Y = 25,    /* Ctrl+y */
-	CTRL_Z = 26,    /* Ctrl+z */
-	ESC = 27,       /* Escape */
-	BACKSPACE = 127 /* Backspace */
+	KEY_NULL = 0,        /* NULL */
+	CTRL_A = 1,          /* Ctrl+a */
+	CTRL_B = 2,          /* Ctrl-b */
+	CTRL_C = 3,          /* Ctrl-c */
+	CTRL_D = 4,          /* Ctrl-d */
+	CTRL_E = 5,          /* Ctrl-e */
+	CTRL_F = 6,          /* Ctrl-f */
+	CTRL_G = 7,          /* Ctrl-g */
+	CTRL_H = 8,          /* Ctrl-h */
+	TAB = 9,             /* Tab */
+	CTRL_J = 10,         /* Ctrl+j*/
+	CTRL_K = 11,         /* Ctrl+k */
+	CTRL_L = 12,         /* Ctrl+l */
+	ENTER = 13,          /* Enter */
+	CTRL_N = 14,         /* Ctrl-n */
+	CTRL_O = 15,         /* Ctrl-O */
+	CTRL_P = 16,         /* Ctrl-p */
+	CTRL_R = 18,         /* Ctrl-r */
+	CTRL_S = 19,         /* Ctrl-s */
+	CTRL_T = 20,         /* Ctrl-t */
+	CTRL_U = 21,         /* Ctrl+u */
+	CTRL_W = 23,         /* Ctrl+w */
+	CTRL_X = 24,         /* Ctrl+x */
+	CTRL_Y = 25,         /* Ctrl+y */
+	CTRL_Z = 26,         /* Ctrl+z */
+	ESC = 27,            /* Escape */
+	CTRL_BackSlash = 28, /* Ctrl+\ */
+	BACKSPACE = 127      /* Backspace */
 };
 
 enum class EscapeSequence {

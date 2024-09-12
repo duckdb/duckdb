@@ -1218,6 +1218,10 @@ int Linenoise::Edit() {
 			buf[new_len] = '\0';
 			return (int)new_len;
 		}
+		case CTRL_BackSlash: {
+			EditInsertMulti("\r\n");
+			break;
+		}
 		case CTRL_O:
 		case CTRL_G:
 		case CTRL_C: /* ctrl-c */ {
