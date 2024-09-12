@@ -5,20 +5,20 @@
 statement ok
 PRAGMA enable_verification
 
-#statement error
-#select cast('9.99' as decimal(1,0));
-#----
-#Could not convert string "9.99" to DECIMAL(1,0)
-#
-#statement error
-#select cast(9.99::float as decimal(1,0));
-#----
-#Could not cast value
-#
-#statement error
-#select cast(9.99::double as decimal(1,0));
-#----
-#Could not cast value
+statement error
+select cast('9.99' as decimal(1,0));
+----
+Could not convert string "9.99" to DECIMAL(1,0)
+
+statement error
+select cast(9.99::float as decimal(1,0));
+----
+Could not cast value
+
+statement error
+select cast(9.99::double as decimal(1,0));
+----
+Could not cast value
 
 statement error
 select cast(9.99 as decimal(1,0));

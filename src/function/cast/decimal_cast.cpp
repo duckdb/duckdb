@@ -231,51 +231,6 @@ static bool DecimalToStringCast(Vector &source, Vector &result, idx_t count, Cas
 	UnaryExecutor::GenericExecute<SRC, string_t, StringCastFromDecimalOperator>(source, result, count, (void *)&input);
 	return true;
 }
-// void RoundDecimal() {
-// 	int32_t round_value = IntegerValue::Get(val);
-// 	uint8_t target_scale;
-// 	auto width = DecimalType::GetWidth(decimal_type);
-// 	auto scale = DecimalType::GetScale(decimal_type);
-// 	if (round_value < 0) {
-// 		target_scale = 0;
-// 		switch (decimal_type.InternalType()) {
-// 		case PhysicalType::INT16:
-// 			bound_function.function = DecimalRoundNegativePrecisionFunction<int16_t, NumericHelper>;
-// 			break;
-// 		case PhysicalType::INT32:
-// 			bound_function.function = DecimalRoundNegativePrecisionFunction<int32_t, NumericHelper>;
-// 			break;
-// 		case PhysicalType::INT64:
-// 			bound_function.function = DecimalRoundNegativePrecisionFunction<int64_t, NumericHelper>;
-// 			break;
-// 		default:
-// 			bound_function.function = DecimalRoundNegativePrecisionFunction<hugeint_t, Hugeint>;
-// 			break;
-// 		}
-// 	} else {
-// 		if (round_value >= (int32_t)scale) {
-// 			// if round_value is bigger than or equal to scale we do nothing
-// 			bound_function.function = ScalarFunction::NopFunction;
-// 			target_scale = scale;
-// 		} else {
-// 			target_scale = NumericCast<uint8_t>(round_value);
-// 			switch (decimal_type.InternalType()) {
-// 			case PhysicalType::INT16:
-// 				bound_function.function = DecimalRoundPositivePrecisionFunction<int16_t, NumericHelper>;
-// 				break;
-// 			case PhysicalType::INT32:
-// 				bound_function.function = DecimalRoundPositivePrecisionFunction<int32_t, NumericHelper>;
-// 				break;
-// 			case PhysicalType::INT64:
-// 				bound_function.function = DecimalRoundPositivePrecisionFunction<int64_t, NumericHelper>;
-// 				break;
-// 			default:
-// 				bound_function.function = DecimalRoundPositivePrecisionFunction<hugeint_t, Hugeint>;
-// 				break;
-// 			}
-// 		}
-// 	}
-// }
 
 BoundCastInfo DefaultCasts::DecimalCastSwitch(BindCastInput &input, const LogicalType &source,
                                               const LogicalType &target) {
