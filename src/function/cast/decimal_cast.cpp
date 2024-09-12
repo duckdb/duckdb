@@ -114,18 +114,27 @@ struct DecimalScaleDownOperator {
 	}
 };
 
+// This function detects if we can scale a decimal down to another.
+template <class INPUT_TYPE>
+bool CanScaleDownDecimal(INPUT_TYPE input, DecimalScaleInput<INPUT_TYPE> &data) {
+	int64_t divisor = static_cast<int64_t>(pow(10, data.source_scale));
+	auto value = input % divisor;
+	auto rounded_input = input;
+	if (rounded_input < 0){
+		rounded_input*=-1;
+		value *=-1;
+	}
+	if (value >= divisor/2){
+		rounded_input+=divisor;
+	}
+	return rounded_input < data.limit && rounded_input > -data.limit;
+}
+
 struct DecimalScaleDownCheckOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto data = (DecimalScaleInput<INPUT_TYPE> *)dataptr;
-		// Calculate the divisor as 10^x to extract the last x digits
-		int64_t divisor = static_cast<int64_t>(pow(10, data->source_scale));
-		auto value = input % divisor;
-		auto rounded_input = input;
-		if (value >= divisor/2){
-			rounded_input+=divisor;
-		}
-		if (rounded_input >= data->limit || rounded_input <= -data->limit) {
+		auto data = static_cast<DecimalScaleInput<INPUT_TYPE> *>(dataptr);
+		if (!CanScaleDownDecimal(input,*data)) {
 			auto error = StringUtil::Format("Casting value \"%s\" to type %s failed: value is out of range!",
 			                                Decimal::ToString(input, data->source_width, data->source_scale),
 			                                data->result.GetType().ToString());
