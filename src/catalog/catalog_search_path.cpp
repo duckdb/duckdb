@@ -273,19 +273,25 @@ ScopedCatalogSearchPath::ScopedCatalogSearchPath(ClientContext &context_p, Catal
                                                  SchemaCatalogEntry &schema_p)
     : context(context_p) {
 	// extend the search path
-	auto &search_path = context.client_data->catalog_search_path;
-	stored_paths = search_path->GetSetPaths();
+	auto &search_path = *context.client_data->catalog_search_path;
+	stored_paths = search_path.GetSetPaths();
 	vector<CatalogSearchEntry> new_paths;
-	new_paths.emplace_back(catalog_p.GetName(), schema_p.name);
-	new_paths.emplace_back(catalog_p.GetName(), DEFAULT_SCHEMA);
-	new_paths.insert(new_paths.end(), stored_paths.begin(), stored_paths.end());
+	if (catalog_p.GetName() != TEMP_CATALOG) {
+		new_paths.emplace_back(catalog_p.GetName(), schema_p.name);
+		if (schema_p.name != DEFAULT_SCHEMA) {
+			new_paths.emplace_back(catalog_p.GetName(), DEFAULT_SCHEMA);
+		}
+	}
+	for(auto &path : stored_paths) {
+		new_paths.push_back(path);
+	}
 
-	search_path->Set(std::move(new_paths), CatalogSetPathType::SET_SCHEMAS);
+	search_path.Set(new_paths, CatalogSetPathType::SET_SCHEMAS);
 }
 
 ScopedCatalogSearchPath::~ScopedCatalogSearchPath() {
-	auto &search_path = context.client_data->catalog_search_path;
-	search_path->Set(std::move(stored_paths), CatalogSetPathType::SET_SCHEMAS);
+	auto &search_path = *context.client_data->catalog_search_path;
+	search_path.Set(stored_paths, CatalogSetPathType::SET_SCHEMAS);
 }
 
 } // namespace duckdb
