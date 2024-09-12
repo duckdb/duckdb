@@ -7,7 +7,10 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
+#define NOMINMAX
 
+#include <algorithm>
+#include <vector>
 #include "duckdb/catalog/catalog_entry/column_dependency_manager.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/parser/column_definition.hpp"
@@ -17,6 +20,8 @@
 #include "duckdb/parser/property_graph_table.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
+
+
 
 namespace duckdb {
 
@@ -56,7 +61,7 @@ public:
 		}
 		result += " ) ";
 		return result;
-	};
+	}
 
 	static size_t LevenshteinDistance(const string &s1, const string &s2) {
 		const size_t len1 = s1.size(), len2 = s2.size();
