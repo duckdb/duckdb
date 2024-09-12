@@ -58,17 +58,87 @@ public:
 		return result;
 	};
 
-	shared_ptr<PropertyGraphTable> GetTable(const string &table_name, bool error_not_found = true) {
-		auto entry = label_map.find(table_name);
-		if (entry == label_map.end()) {
-			if (error_not_found) {
-				throw Exception(ExceptionType::INVALID,
-		    "Table " + table_name + " not found in property graph " + property_graph_name);
-			}
-			return nullptr;
-		}
-		return entry->second;
+	static size_t LevenshteinDistance(const string &s1, const string &s2) {
+		const size_t len1 = s1.size(), len2 = s2.size();
+		std::vector<std::vector<size_t>> d(len1 + 1, std::vector<size_t>(len2 + 1));
+
+		d[0][0] = 0;
+		for (size_t i = 1; i <= len1; ++i) d[i][0] = i;
+		for (size_t i = 1; i <= len2; ++i) d[0][i] = i;
+
+		for (size_t i = 1; i <= len1; ++i)
+			for (size_t j = 1; j <= len2; ++j)
+				d[i][j] = std::min({d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (s1[i - 1] == s2[j - 1] ? 0 : 1)});
+
+		return d[len1][len2];
 	}
+
+	shared_ptr<PropertyGraphTable> GetTable(const string &table_name, bool error_not_found = true, bool is_vertex_table = true) {
+	    // First, check if there is an exact match for the table name in label_map
+	    auto table_entry = label_map.find(table_name);
+	    if (table_entry != label_map.end()) {
+	        // Exact table match found, but verify if it matches the vertex/edge type
+	        if (table_entry->second->is_vertex_table == is_vertex_table) {
+	            return table_entry->second;
+	        }
+	    	if (error_not_found) {
+	            throw Exception(ExceptionType::INVALID,
+	                            "Exact table '" + table_name + "' found, but it is not a " +
+	                            (is_vertex_table ? "vertex" : "edge") + " table.");
+	        }
+	        return nullptr;
+	    }
+
+	    // If no exact table match is found, search for the closest label match using Levenshtein distance
+	    string closest_label;
+	    auto min_distance = std::numeric_limits<size_t>::max();
+
+	    for (const auto &pair : label_map) {
+	        const auto &pg_table = pair.second;
+
+	        // Only consider tables of the correct type (vertex or edge)
+	        if (pg_table->is_vertex_table != is_vertex_table) {
+	            continue;
+	        }
+	    	if  (pg_table->table_name == table_name) {
+	    		throw Exception(ExceptionType::INVALID, "Table " + table_name + " found in the property graph, but does not have the correct label. Did you mean the label '" + pg_table->main_label + "' instead?");
+	    	}
+
+	        // Use int64_t for the distance calculations
+	        auto distance_main_label = LevenshteinDistance(table_name, pg_table->main_label);
+	        if (distance_main_label < min_distance) {
+	            min_distance = distance_main_label;
+	            closest_label = pg_table->main_label;
+	        }
+
+	        for (const auto &sub_label : pg_table->sub_labels) {
+	            auto distance_sub_label = LevenshteinDistance(table_name, sub_label);
+	            if (distance_sub_label < min_distance) {
+	                min_distance = distance_sub_label;
+	                closest_label = sub_label;
+
+	            }
+	        }
+	    }
+
+	    // If a close label match is found, suggest it in the error message
+	    if (min_distance < std::numeric_limits<size_t>::max() && error_not_found) {
+	        throw Exception(ExceptionType::INVALID,
+	                        "Label '" + table_name + "' not found. Did you mean the " +
+	                        (is_vertex_table ? "vertex" : "edge") + " label '" + closest_label + "'?");
+	    }
+
+	    // If no match is found and error_not_found is true, throw an error
+	    if (error_not_found) {
+	        throw Exception(ExceptionType::INVALID,
+	                        "Label '" + table_name + "' not found in the property graph for a " +
+	                        (is_vertex_table ? "vertex" : "edge") + " table.");
+	    }
+
+	    // Return nullptr if no match is found and error_not_found is false
+	    return nullptr;
+	}
+
 
 	//! Serializes a blob into a CreatePropertyGraphInfo
 	void Serialize(Serializer &serializer) const override;
