@@ -1945,6 +1945,10 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const py::object &dat
 	config.AddExtensionOption("python_enable_replacements",
 	                          "Whether variables visible to the current stack should be used for replacement scans.",
 	                          LogicalType::BOOLEAN, Value::BOOLEAN(true));
+	config.AddExtensionOption(
+	    "python_scan_all_frames",
+	    "If set, restores the old behavior of scanning all preceding frames to locate the referenced variable.",
+	    LogicalType::BOOLEAN, Value::BOOLEAN(false));
 	if (!DuckDBPyConnection::IsJupyter()) {
 		config_dict["duckdb_api"] = Value("python");
 	} else {
