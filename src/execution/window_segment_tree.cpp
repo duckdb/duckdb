@@ -53,6 +53,25 @@ public:
 	std::atomic<idx_t> finalized;
 };
 
+class WindowAggregatorLocalState : public WindowAggregatorState {
+public:
+	WindowAggregatorLocalState() {
+	}
+
+	void Sink(WindowAggregatorGlobalState &gastate, DataChunk &input, idx_t row_idx);
+	void Finalize(WindowAggregatorGlobalState &gastate);
+
+	//! The thread's current input collection
+	using ColumnDataCollectionSpec = WindowDataChunk::ColumnDataCollectionSpec;
+	ColumnDataCollectionSpec sink;
+	//! The state used for appending to the collection
+	ColumnDataAppendState appender;
+	//! The state used for reading the collection
+	ColumnDataScanState reader;
+	//! The data chunk read into
+	DataChunk scanned;
+};
+
 WindowAggregator::WindowAggregator(AggregateObject aggr_p, const vector<LogicalType> &arg_types_p,
                                    const LogicalType &result_type_p, const WindowExcludeMode exclude_mode_p)
     : aggr(std::move(aggr_p)), arg_types(arg_types_p), result_type(result_type_p),
@@ -67,22 +86,54 @@ unique_ptr<WindowAggregatorState> WindowAggregator::GetGlobalState(BufferManager
 	return make_uniq<WindowAggregatorGlobalState>(buffer_manager, *this, group_count);
 }
 
-void WindowAggregator::Sink(WindowAggregatorState &gsink, WindowAggregatorState &lstate, DataChunk &arg_chunk,
-                            idx_t input_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered) {
-	auto &gasink = gsink.Cast<WindowAggregatorGlobalState>();
-	auto &winputs = gasink.winputs;
-	auto &filter_mask = gasink.filter_mask;
-	if (winputs.chunk.ColumnCount()) {
-		winputs.Copy(arg_chunk, input_idx);
+void WindowAggregatorLocalState::Sink(WindowAggregatorGlobalState &gastate, DataChunk &arg_chunk, idx_t input_idx) {
+	auto &winputs = gastate.winputs;
+	if (!winputs.GetTypes().empty()) {
+		if (gastate.aggregator.use_collections) {
+			// Check whether we need a a new collection
+			if (!sink.second || input_idx < sink.first || sink.first + sink.second->Count() < input_idx) {
+				winputs.GetCollection(input_idx, sink);
+				D_ASSERT(sink.second);
+				sink.second->InitializeAppend(appender);
+			}
+			sink.second->Append(appender, arg_chunk);
+		} else {
+			winputs.Copy(arg_chunk, input_idx);
+		}
 	}
+}
+
+void WindowAggregator::Sink(WindowAggregatorState &gstate, WindowAggregatorState &lstate, DataChunk &arg_chunk,
+                            idx_t input_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered) {
+	auto &gastate = gstate.Cast<WindowAggregatorGlobalState>();
+	auto &lastate = lstate.Cast<WindowAggregatorLocalState>();
+	lastate.Sink(gastate, arg_chunk, input_idx);
 	if (filter_sel) {
+		auto &filter_mask = gastate.filter_mask;
 		for (idx_t f = 0; f < filtered; ++f) {
 			filter_mask.SetValid(input_idx + filter_sel->get_index(f));
 		}
 	}
 }
 
+void WindowAggregatorLocalState::Finalize(WindowAggregatorGlobalState &gastate) {
+	if (!gastate.aggregator.use_collections) {
+		return;
+	}
+
+	// Thread-safe and idempotent
+	gastate.winputs.Combine(false);
+
+	// Prepare to scan
+	auto &inputs = *gastate.winputs.inputs;
+	inputs.InitializeScan(reader);
+	inputs.InitializeScanChunk(reader, scanned);
+}
+
 void WindowAggregator::Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, const FrameStats &stats) {
+	auto &gasink = gstate.Cast<WindowAggregatorGlobalState>();
+	auto &lastate = lstate.Cast<WindowAggregatorLocalState>();
+	lastate.Finalize(gasink);
 }
 
 //===--------------------------------------------------------------------===//
@@ -187,7 +238,7 @@ public:
 	unique_ptr<Vector> results;
 };
 
-class WindowConstantAggregatorLocalState : public WindowAggregatorState {
+class WindowConstantAggregatorLocalState : public WindowAggregatorLocalState {
 public:
 	explicit WindowConstantAggregatorLocalState(const WindowConstantAggregatorGlobalState &gstate);
 	~WindowConstantAggregatorLocalState() override {
@@ -439,7 +490,7 @@ WindowCustomAggregator::WindowCustomAggregator(AggregateObject aggr, const vecto
 WindowCustomAggregator::~WindowCustomAggregator() {
 }
 
-class WindowCustomAggregatorState : public WindowAggregatorState {
+class WindowCustomAggregatorState : public WindowAggregatorLocalState {
 public:
 	WindowCustomAggregatorState(const AggregateObject &aggr, const WindowExcludeMode exclude_mode);
 	~WindowCustomAggregatorState() override;
@@ -630,7 +681,7 @@ WindowNaiveAggregator::WindowNaiveAggregator(AggregateObject aggr, const vector<
 WindowNaiveAggregator::~WindowNaiveAggregator() {
 }
 
-class WindowNaiveState : public WindowAggregatorState {
+class WindowNaiveState : public WindowAggregatorLocalState {
 public:
 	struct HashRow {
 		HashRow(WindowNaiveState &state, const DataChunk &inputs) : state(state), inputs(inputs) {
@@ -932,7 +983,7 @@ public:
 	vector<RightEntry> right_stack;
 };
 
-class WindowSegmentTreeState : public WindowAggregatorState {
+class WindowSegmentTreeState : public WindowAggregatorLocalState {
 public:
 	WindowSegmentTreeState() {
 	}
@@ -1546,7 +1597,7 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(BufferM
 	}
 }
 
-class WindowDistinctAggregatorLocalState : public WindowAggregatorState {
+class WindowDistinctAggregatorLocalState : public WindowAggregatorLocalState {
 public:
 	explicit WindowDistinctAggregatorLocalState(const WindowDistinctAggregatorGlobalState &aggregator);
 

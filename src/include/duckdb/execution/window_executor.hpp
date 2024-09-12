@@ -30,6 +30,10 @@ public:
 
 	WindowDataChunk(BufferManager &buffer_manager, const vector<LogicalType> &types);
 
+	const vector<LogicalType> &GetTypes() const {
+		return types;
+	}
+
 	void Initialize(idx_t capacity);
 
 	void Copy(DataChunk &src, idx_t begin);
