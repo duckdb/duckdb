@@ -506,7 +506,7 @@ struct HTTPProxyUsername {
 };
 
 struct HTTPProxyPassword {
-	static constexpr const char *Name = "http_proxy";
+	static constexpr const char *Name = "http_proxy_password";
 	static constexpr const char *Description = "Password for HTTP proxy";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
