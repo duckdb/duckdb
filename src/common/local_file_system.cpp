@@ -664,7 +664,13 @@ bool LocalFileSystem::ListFiles(const string &directory, const std::function<voi
 
 void LocalFileSystem::FileSync(FileHandle &handle) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
-	if (fsync(fd) != 0) {
+	int fsync_result = 0;
+#if __APPLE__ && !TARGET_OS_IPHONE
+	fsync_result = fcntl(fd, F_FULLFSYNC);
+#else
+	fsync_result = fsync(fd);
+#endif
+	if (fsync_result != 0) {
 		throw FatalException("fsync failed!");
 	}
 }
