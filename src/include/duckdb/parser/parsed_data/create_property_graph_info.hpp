@@ -83,7 +83,7 @@ public:
 	        }
 	    	if (error_not_found) {
 	            throw Exception(ExceptionType::INVALID,
-	                            "Exact table '" + table_name + "' found, but it is not a " +
+	                            "Exact label '" + table_name + "' found, but it is not a " +
 	                            (is_vertex_table ? "vertex" : "edge") + " table.");
 	        }
 	        return nullptr;
@@ -101,7 +101,7 @@ public:
 	            continue;
 	        }
 	    	if  (pg_table->table_name == table_name) {
-	    		throw Exception(ExceptionType::INVALID, "Table " + table_name + " found in the property graph, but does not have the correct label. Did you mean the label '" + pg_table->main_label + "' instead?");
+	    		throw Exception(ExceptionType::INVALID, "Table '" + table_name + "' found in the property graph, but does not have the correct label. Did you mean the label '" + pg_table->main_label + "' instead?");
 	    	}
 
 	        // Use int64_t for the distance calculations
