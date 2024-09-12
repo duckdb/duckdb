@@ -519,8 +519,10 @@ def write_header(data: ExtensionData):
                                                                     {"s3/credential_chain", "aws"},
                                                                     {"gcs/credential_chain", "aws"},
                                                                     {"r2/credential_chain", "aws"},
+                                                                    {"azure/access_token", "azure"},
                                                                     {"azure/config", "azure"},
                                                                     {"azure/credential_chain", "azure"}, 
+                                                                    {"azure/service_principal", "azure"}, 
                                                                     {"huggingface/config", "httfps"},
                                                                     {"huggingface/credential_chain", "httpfs"}, 
                                                                     {"bearer/config", "httpfs"}
