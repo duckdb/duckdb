@@ -199,7 +199,7 @@ static const StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(ISOYearFun),
 	DUCKDB_SCALAR_FUNCTION(JaccardFun),
 	DUCKDB_SCALAR_FUNCTION_SET(JaroSimilarityFun),
-    DUCKDB_SCALAR_FUNCTION_SET(JaroWinklerSimilarityFun),
+	DUCKDB_SCALAR_FUNCTION_SET(JaroWinklerSimilarityFun),
 	DUCKDB_SCALAR_FUNCTION_SET(JulianDayFun),
 	DUCKDB_AGGREGATE_FUNCTION(KahanSumFun),
 	DUCKDB_AGGREGATE_FUNCTION(KurtosisFun),
