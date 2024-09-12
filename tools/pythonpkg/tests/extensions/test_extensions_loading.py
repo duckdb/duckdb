@@ -28,14 +28,14 @@ def test_install_non_existent_extension():
     with raises(duckdb.IOException) as exc:
         conn.install_extension('non-existent')
 
-    if not isinstance(exc, duckdb.HTTPException):
-        pytest.skip(reason='This test does not throw an HTTPException, only an IOException')
-    value = exc.value
+        if not isinstance(exc, duckdb.HTTPException):
+            pytest.skip(reason='This test does not throw an HTTPException, only an IOException')
+        value = exc.value
 
-    assert value.status_code == 404
-    assert value.reason == 'Not Found'
-    assert 'Example Domain' in value.body
-    assert 'Content-Length' in value.headers
+        assert value.status_code == 404
+        assert value.reason == 'Not Found'
+        assert 'Example Domain' in value.body
+        assert 'Content-Length' in value.headers
 
 
 def test_install_misuse_errors(duckdb_cursor):

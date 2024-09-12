@@ -1741,7 +1741,10 @@ void DuckDBPyConnection::InstallExtension(const string &extension, bool force_in
 	info.repo_is_alias = repository_string.empty() ? false : has_repository;
 	info.version = version_string;
 	info.load_type = force_install ? LoadType::FORCE_INSTALL : LoadType::INSTALL;
-	connection.Query(std::move(install_statement));
+	auto res = connection.Query(std::move(install_statement));
+	if (res->HasError()) {
+		res->ThrowError();
+	}
 }
 
 void DuckDBPyConnection::LoadExtension(const string &extension) {
