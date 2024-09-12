@@ -64,6 +64,7 @@ public:
 
 private:
 	optional_ptr<CatalogEntry> ReturnAndCallback(optional_ptr<CatalogEntry> result);
+
 private:
 	//! (optional) callback, called on every succesful entry retrieval
 	catalog_entry_callback_t callback = nullptr;

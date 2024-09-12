@@ -84,8 +84,8 @@ optional_ptr<Catalog> Catalog::GetCatalogEntry(CatalogEntryRetriever &retriever,
 	if (catalog_name == SYSTEM_CATALOG) {
 		return &GetSystemCatalog(context);
 	}
-	auto entry = db_manager.GetDatabase(
-	    context, IsInvalidCatalog(catalog_name) ? GetDefaultCatalog(retriever) : catalog_name);
+	auto entry =
+	    db_manager.GetDatabase(context, IsInvalidCatalog(catalog_name) ? GetDefaultCatalog(retriever) : catalog_name);
 	if (!entry) {
 		return nullptr;
 	}
@@ -386,7 +386,8 @@ SimilarCatalogEntry Catalog::SimilarEntryInSchemas(ClientContext &context, const
 	return result;
 }
 
-vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, const string &catalog, const string &schema) {
+vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, const string &catalog,
+                                             const string &schema) {
 	auto &context = retriever.GetContext();
 	vector<CatalogSearchEntry> entries;
 	auto &search_path = retriever.GetSearchPath();
@@ -734,8 +735,8 @@ CatalogEntryLookup Catalog::LookupEntry(CatalogEntryRetriever &retriever, Catalo
 	return res;
 }
 
-CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, vector<CatalogLookup> &lookups, CatalogType type,
-                                           const string &name, OnEntryNotFound if_not_found,
+CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, vector<CatalogLookup> &lookups,
+                                           CatalogType type, const string &name, OnEntryNotFound if_not_found,
                                            QueryErrorContext error_context) {
 	auto &context = retriever.GetContext();
 	reference_set_t<SchemaCatalogEntry> schemas;
@@ -789,9 +790,9 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, Cat
 	return Catalog::TryLookupEntry(retriever, lookups, type, name, if_not_found, error_context);
 }
 
-optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, CatalogType type, const string &schema_name,
-                                             const string &name, OnEntryNotFound if_not_found,
-                                             QueryErrorContext error_context) {
+optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, CatalogType type,
+                                             const string &schema_name, const string &name,
+                                             OnEntryNotFound if_not_found, QueryErrorContext error_context) {
 	auto lookup_entry = TryLookupEntry(retriever, type, schema_name, name, if_not_found, error_context);
 
 	// Try autoloading extension to resolve lookup
@@ -809,8 +810,8 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, C
 }
 
 optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType type, const string &schema_name,
-											 const string &name, OnEntryNotFound if_not_found,
-											 QueryErrorContext error_context) {
+                                             const string &name, OnEntryNotFound if_not_found,
+                                             QueryErrorContext error_context) {
 	CatalogEntryRetriever retriever(context);
 	return GetEntry(retriever, type, schema_name, name, if_not_found, error_context);
 }
@@ -821,8 +822,8 @@ CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType type, const 
 }
 
 optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, CatalogType type, const string &catalog,
-											 const string &schema, const string &name, OnEntryNotFound if_not_found,
-											 QueryErrorContext error_context) {
+                                             const string &schema, const string &name, OnEntryNotFound if_not_found,
+                                             QueryErrorContext error_context) {
 	auto result = TryLookupEntry(retriever, type, catalog, schema, name, if_not_found, error_context);
 
 	// Try autoloading extension to resolve lookup
@@ -870,8 +871,8 @@ optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(CatalogEntryRetriever &retri
 }
 
 optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(ClientContext &context, const string &catalog_name,
-													const string &schema_name, OnEntryNotFound if_not_found,
-													QueryErrorContext error_context) {
+                                                    const string &schema_name, OnEntryNotFound if_not_found,
+                                                    QueryErrorContext error_context) {
 	CatalogEntryRetriever retriever(context);
 	return GetSchema(retriever, catalog_name, schema_name, if_not_found, error_context);
 }
@@ -882,7 +883,8 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetSchemas(ClientContext &context
 	return schemas;
 }
 
-vector<reference<SchemaCatalogEntry>> Catalog::GetSchemas(CatalogEntryRetriever &retriever, const string &catalog_name) {
+vector<reference<SchemaCatalogEntry>> Catalog::GetSchemas(CatalogEntryRetriever &retriever,
+                                                          const string &catalog_name) {
 	vector<reference<Catalog>> catalogs;
 	if (IsInvalidCatalog(catalog_name)) {
 		reference_set_t<Catalog> inserted_catalogs;

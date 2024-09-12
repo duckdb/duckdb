@@ -85,7 +85,7 @@ CatalogSearchPath &CatalogEntryRetriever::GetSearchPath() {
 
 void CatalogEntryRetriever::SetSearchPath(vector<CatalogSearchEntry> entries) {
 	vector<CatalogSearchEntry> new_path;
-	for(auto &entry : entries) {
+	for (auto &entry : entries) {
 		if (IsInvalidCatalog(entry.catalog) || entry.catalog == SYSTEM_CATALOG || entry.catalog == TEMP_CATALOG) {
 			continue;
 		}
@@ -98,7 +98,7 @@ void CatalogEntryRetriever::SetSearchPath(vector<CatalogSearchEntry> entries) {
 	// push the set paths from the ClientContext behind the provided paths
 	auto &client_search_path = *ClientData::Get(context).catalog_search_path;
 	auto &set_paths = client_search_path.GetSetPaths();
-	for(auto path : set_paths) {
+	for (auto path : set_paths) {
 		if (IsInvalidCatalog(path.catalog)) {
 			path.catalog = DatabaseManager::GetDefaultDatabase(context);
 		}
@@ -115,6 +115,5 @@ void CatalogEntryRetriever::SetCallback(catalog_entry_callback_t callback) {
 catalog_entry_callback_t CatalogEntryRetriever::GetCallback() {
 	return callback;
 }
-
 
 } // namespace duckdb
