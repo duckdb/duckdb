@@ -16,7 +16,7 @@ static inline double JaroWinklerScalarFunction(const string_t &s1, const string_
 	auto s1_begin = s1.GetData();
 	auto s2_begin = s2.GetData();
 	return duckdb_jaro_winkler::jaro_winkler_similarity(s1_begin, s1_begin + s1.GetSize(), s2_begin,
-	                                                    s2_begin + s2.GetSize(), score_cutoff);
+	                                                    s2_begin + s2.GetSize(), 0.1, score_cutoff);
 }
 
 template <class CACHED_SIMILARITY>
