@@ -202,6 +202,17 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 				return replacement_scan_bind_result;
 			}
 		}
+		auto &config = DBConfig::GetConfig(context);
+		if (context.config.use_replacement_scans && config.options.enable_external_access &&
+		    ExtensionHelper::IsFullPath(full_path)) {
+			auto &fs = FileSystem::GetFileSystem(context);
+			if (fs.FileExists(full_path)) {
+				throw BinderException(
+				    "No extension found that is capable of reading the file \"%s\"\n* If this file is a supported file "
+				    "format you can explicitly use the reader functions, such as read_csv, read_json or read_parquet",
+				    full_path);
+			}
+		}
 
 		// could not find an alternative: bind again to get the error
 		(void)entry_retriever.GetEntry(CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name, ref.table_name,
