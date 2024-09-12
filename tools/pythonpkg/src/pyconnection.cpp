@@ -1396,6 +1396,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 
 void DuckDBPyConnection::ExecuteImmediately(vector<unique_ptr<SQLStatement>> statements) {
 	auto &connection = con.GetConnection();
+	py::gil_scoped_release release;
 	if (statements.empty()) {
 		return;
 	}
