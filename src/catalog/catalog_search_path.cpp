@@ -1,7 +1,6 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -124,13 +123,17 @@ vector<CatalogSearchEntry> CatalogSearchEntry::ParseList(const string &input) {
 	return result;
 }
 
-CatalogSearchPath::CatalogSearchPath(ClientContext &context_p) : context(context_p) {
-	Reset();
+CatalogSearchPath::CatalogSearchPath(ClientContext &context_p, vector<CatalogSearchEntry> entries) :
+	context(context_p) {
+	SetPathsInternal(std::move(entries));
+}
+
+CatalogSearchPath::CatalogSearchPath(ClientContext &context_p) : CatalogSearchPath(context_p, {}) {
 }
 
 void CatalogSearchPath::Reset() {
 	vector<CatalogSearchEntry> empty;
-	SetPaths(empty);
+	SetPathsInternal(empty);
 }
 
 string CatalogSearchPath::GetSetName(CatalogSetPathType set_type) {
@@ -177,8 +180,7 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPath
 			                       new_paths[0].catalog);
 		}
 	}
-	this->set_paths = std::move(new_paths);
-	SetPaths(set_paths);
+	SetPathsInternal(std::move(new_paths));
 }
 
 void CatalogSearchPath::Set(CatalogSearchEntry new_value, CatalogSetPathType set_type) {
@@ -240,12 +242,14 @@ const CatalogSearchEntry &CatalogSearchPath::GetDefault() {
 	return paths[1];
 }
 
-void CatalogSearchPath::SetPaths(vector<CatalogSearchEntry> new_paths) {
+void CatalogSearchPath::SetPathsInternal(vector<CatalogSearchEntry> new_paths) {
+	this->set_paths = std::move(new_paths);
+
 	paths.clear();
-	paths.reserve(new_paths.size() + 3);
+	paths.reserve(set_paths.size() + 3);
 	paths.emplace_back(TEMP_CATALOG, DEFAULT_SCHEMA);
-	for (auto &path : new_paths) {
-		paths.push_back(std::move(path));
+	for (auto &path : set_paths) {
+		paths.push_back(path);
 	}
 	paths.emplace_back(INVALID_CATALOG, DEFAULT_SCHEMA);
 	paths.emplace_back(SYSTEM_CATALOG, DEFAULT_SCHEMA);
@@ -267,31 +271,6 @@ bool CatalogSearchPath::SchemaInSearchPath(ClientContext &context, const string 
 		}
 	}
 	return false;
-}
-
-ScopedCatalogSearchPath::ScopedCatalogSearchPath(ClientContext &context_p, Catalog &catalog_p,
-                                                 SchemaCatalogEntry &schema_p)
-    : context(context_p) {
-	// extend the search path
-	auto &search_path = *context.client_data->catalog_search_path;
-	stored_paths = search_path.GetSetPaths();
-	vector<CatalogSearchEntry> new_paths;
-	if (catalog_p.GetName() != TEMP_CATALOG) {
-		new_paths.emplace_back(catalog_p.GetName(), schema_p.name);
-		if (schema_p.name != DEFAULT_SCHEMA) {
-			new_paths.emplace_back(catalog_p.GetName(), DEFAULT_SCHEMA);
-		}
-	}
-	for(auto &path : stored_paths) {
-		new_paths.push_back(path);
-	}
-
-	search_path.Set(new_paths, CatalogSetPathType::SET_SCHEMAS);
-}
-
-ScopedCatalogSearchPath::~ScopedCatalogSearchPath() {
-	auto &search_path = *context.client_data->catalog_search_path;
-	search_path.Set(stored_paths, CatalogSetPathType::SET_SCHEMAS);
 }
 
 } // namespace duckdb

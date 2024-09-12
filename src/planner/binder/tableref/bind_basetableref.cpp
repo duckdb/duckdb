@@ -260,15 +260,19 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			view_names.push_back(view_catalog_entry.names[n]);
 		}
 		subquery.column_name_alias = BindContext::AliasColumnNames(subquery.alias, view_names, ref.column_name_alias);
+
+		// when binding a view, we always look into the catalog/schema where the view is stored first
+		vector<CatalogSearchEntry> view_search_path;
+		auto &catalog_name = view_catalog_entry.ParentCatalog().GetName();
+		auto &schema_name = view_catalog_entry.ParentSchema().name;
+		view_search_path.emplace_back(catalog_name, schema_name);
+		if (schema_name != DEFAULT_SCHEMA) {
+			view_search_path.emplace_back(view_catalog_entry.ParentCatalog().GetName(), DEFAULT_SCHEMA);
+		}
+		view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
 		// bind the child subquery
 		view_binder->AddBoundView(view_catalog_entry);
-		unique_ptr<BoundTableRef> bound_child;
-		{
-			// when binding a view, we need to always look into the catalog of the view first
-			ScopedCatalogSearchPath scoped_path(context, view_catalog_entry.ParentCatalog(),
-			                                    view_catalog_entry.ParentSchema());
-			bound_child = view_binder->Bind(subquery);
-		}
+		auto bound_child = view_binder->Bind(subquery);
 		if (!view_binder->correlated_columns.empty()) {
 			throw BinderException("Contents of view were altered - view bound correlated columns");
 		}

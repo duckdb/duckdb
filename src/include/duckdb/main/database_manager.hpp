@@ -21,6 +21,7 @@
 namespace duckdb {
 class AttachedDatabase;
 class Catalog;
+class CatalogEntryRetriever;
 class CatalogSet;
 class ClientContext;
 class DatabaseInstance;
