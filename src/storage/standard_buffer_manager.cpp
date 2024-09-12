@@ -476,33 +476,34 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	buffer.Write(*handle, sizeof(idx_t));
 }
 
-unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag, block_id_t id,
+unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag, BlockHandle &block,
                                                                   unique_ptr<FileBuffer> reusable_buffer) {
 	D_ASSERT(!temporary_directory.path.empty());
 	D_ASSERT(temporary_directory.handle.get());
+	auto id = block.BlockId();
 	if (temporary_directory.handle->GetTempFile().HasTemporaryBuffer(id)) {
-		evicted_data_per_tag[uint8_t(tag)] -= GetBlockSize();
+		// This is a block that was offloaded to a regular .tmp file, the file contains blocks of a fixed size
 		return temporary_directory.handle->GetTempFile().ReadTemporaryBuffer(id, std::move(reusable_buffer));
 	}
 
-	// Open the temporary file and read its size.
+	// This block contains data of variable size so we need to open it and read it to get its size.
 	idx_t block_size;
 	auto path = GetTemporaryPath(id);
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	handle->Read(&block_size, sizeof(idx_t), 0);
-	evicted_data_per_tag[uint8_t(tag)] -= block_size;
 
 	// Allocate a buffer of the file's size and read the data into that buffer.
 	auto buffer = ReadTemporaryBufferInternal(*this, *handle, sizeof(idx_t), block_size, std::move(reusable_buffer));
 	handle.reset();
 
 	// Delete the file and return the buffer.
-	DeleteTemporaryFile(id);
+	DeleteTemporaryFile(block);
 	return buffer;
 }
 
-void StandardBufferManager::DeleteTemporaryFile(block_id_t id) {
+void StandardBufferManager::DeleteTemporaryFile(BlockHandle &block) {
+	auto id = block.BlockId();
 	if (temporary_directory.path.empty()) {
 		// no temporary directory specified: nothing to delete
 		return;
@@ -516,6 +517,7 @@ void StandardBufferManager::DeleteTemporaryFile(block_id_t id) {
 	}
 	// check if we should delete the file from the shared pool of files, or from the general file system
 	if (temporary_directory.handle->GetTempFile().HasTemporaryBuffer(id)) {
+		evicted_data_per_tag[uint8_t(block.GetMemoryTag())] -= GetBlockSize();
 		temporary_directory.handle->GetTempFile().DeleteTemporaryBuffer(id);
 		return;
 	}
@@ -524,6 +526,7 @@ void StandardBufferManager::DeleteTemporaryFile(block_id_t id) {
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto path = GetTemporaryPath(id);
 	if (fs.FileExists(path)) {
+		evicted_data_per_tag[uint8_t(block.GetMemoryTag())] -= block.GetMemoryUsage();
 		auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 		auto content_size = handle->GetFileSize();
 		handle.reset();

@@ -22,9 +22,7 @@ optional_idx CGroups::GetMemoryLimit(FileSystem &fs) {
 }
 
 optional_idx CGroups::GetCGroupV2MemoryLimit(FileSystem &fs) {
-#ifdef DUCKDB_WASM
-	return optional_idx();
-#else
+#if defined(__linux__) && !defined(DUCKDB_WASM)
 	const char *cgroup_self = "/proc/self/cgroup";
 	const char *memory_max = "/sys/fs/cgroup/%s/memory.max";
 
@@ -45,13 +43,13 @@ optional_idx CGroups::GetCGroupV2MemoryLimit(FileSystem &fs) {
 	}
 
 	return ReadCGroupValue(fs, memory_max_path);
+#else
+	return optional_idx();
 #endif
 }
 
 optional_idx CGroups::GetCGroupV1MemoryLimit(FileSystem &fs) {
-#ifdef DUCKDB_WASM
-	return optional_idx();
-#else
+#if defined(__linux__) && !defined(DUCKDB_WASM)
 	const char *cgroup_self = "/proc/self/cgroup";
 	const char *memory_limit = "/sys/fs/cgroup/memory/%s/memory.limit_in_bytes";
 
@@ -72,13 +70,13 @@ optional_idx CGroups::GetCGroupV1MemoryLimit(FileSystem &fs) {
 	}
 
 	return ReadCGroupValue(fs, memory_limit_path);
+#else
+	return optional_idx();
 #endif
 }
 
 string CGroups::ReadCGroupPath(FileSystem &fs, const char *cgroup_file) {
-#ifdef DUCKDB_WASM
-	return "";
-#else
+#if defined(__linux__) && !defined(DUCKDB_WASM)
 	auto handle = fs.OpenFile(cgroup_file, FileFlags::FILE_FLAGS_READ);
 	char buffer[1024];
 	auto bytes_read = fs.Read(*handle, buffer, sizeof(buffer) - 1);
@@ -90,15 +88,12 @@ string CGroups::ReadCGroupPath(FileSystem &fs, const char *cgroup_file) {
 	if (pos != string::npos) {
 		return content.substr(pos + 2);
 	}
-
-	return "";
 #endif
+	return "";
 }
 
 string CGroups::ReadMemoryCGroupPath(FileSystem &fs, const char *cgroup_file) {
-#ifdef DUCKDB_WASM
-	return "";
-#else
+#if defined(__linux__) && !defined(DUCKDB_WASM)
 	auto handle = fs.OpenFile(cgroup_file, FileFlags::FILE_FLAGS_READ);
 	char buffer[1024];
 	auto bytes_read = fs.Read(*handle, buffer, sizeof(buffer) - 1);
@@ -115,15 +110,12 @@ string CGroups::ReadMemoryCGroupPath(FileSystem &fs, const char *cgroup_file) {
 		}
 		content.erase(0, pos + 1);
 	}
-
-	return "";
 #endif
+	return "";
 }
 
 optional_idx CGroups::ReadCGroupValue(FileSystem &fs, const char *file_path) {
-#ifdef DUCKDB_WASM
-	return optional_idx();
-#else
+#if defined(__linux__) && !defined(DUCKDB_WASM)
 	auto handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_READ);
 	char buffer[100];
 	auto bytes_read = fs.Read(*handle, buffer, 99);
@@ -133,15 +125,12 @@ optional_idx CGroups::ReadCGroupValue(FileSystem &fs, const char *file_path) {
 	if (TryCast::Operation<string_t, idx_t>(string_t(buffer), value)) {
 		return optional_idx(value);
 	}
-	return optional_idx();
 #endif
+	return optional_idx();
 }
 
 idx_t CGroups::GetCPULimit(FileSystem &fs, idx_t physical_cores) {
-#ifdef DUCKDB_WASM
-	return physical_cores;
-#else
-
+#if defined(__linux__) && !defined(DUCKDB_WASM)
 	static constexpr const char *cpu_max = "/sys/fs/cgroup/cpu.max";
 	static constexpr const char *cfs_quota = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us";
 	static constexpr const char *cfs_period = "/sys/fs/cgroup/cpu/cpu.cfs_period_us";
@@ -183,6 +172,8 @@ idx_t CGroups::GetCPULimit(FileSystem &fs, idx_t physical_cores) {
 	} else {
 		return physical_cores;
 	}
+#else
+	return physical_cores;
 #endif
 }
 
