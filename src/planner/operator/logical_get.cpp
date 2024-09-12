@@ -59,6 +59,7 @@ InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
 	if (function.to_string) {
 		result["__text__"] = function.to_string(bind_data.get());
 	}
+	SetParamsEstimatedCardinality(result);
 	return result;
 }
 
@@ -113,7 +114,7 @@ void LogicalGet::ResolveTypes() {
 	if (column_ids.empty()) {
 		column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	}
-
+	types.clear();
 	if (projection_ids.empty()) {
 		for (auto &index : column_ids) {
 			if (index == COLUMN_IDENTIFIER_ROW_ID) {
@@ -211,15 +212,21 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 			throw InternalException("Table function \"%s\" has neither bind nor (de)serialize", function.name);
 		}
 		bind_data = function.bind(deserializer.Get<ClientContext &>(), input, bind_return_types, bind_names);
-		if (result->returned_types != bind_return_types) {
-			throw SerializationException(
-			    "Table function deserialization failure - bind returned different return types than were serialized");
+
+		for (auto &col_id : result->column_ids) {
+			if (IsRowIdColumnId(col_id)) {
+				// rowid
+				continue;
+			}
+			auto &ret_type = result->returned_types[col_id];
+			auto &col_name = result->names[col_id];
+			if (bind_return_types[col_id] != ret_type) {
+				throw SerializationException("Table function deserialization failure in function \"%s\" - column with "
+				                             "name %s was serialized with type %s, but now has type %s",
+				                             function.name, col_name, ret_type, bind_return_types[col_id]);
+			}
 		}
-		// names can actually be different because of aliases - only the sizes cannot be different
-		if (result->names.size() != bind_names.size()) {
-			throw SerializationException(
-			    "Table function deserialization failure - bind returned different returned names than were serialized");
-		}
+		result->returned_types = std::move(bind_return_types);
 	} else {
 		bind_data = FunctionSerializer::FunctionDeserialize(deserializer, function);
 	}

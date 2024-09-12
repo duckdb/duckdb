@@ -874,6 +874,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(
 		auto_detect = true;
 	}
 
+	py::gil_scoped_release gil;
 	auto read_json_relation =
 	    make_shared_ptr<ReadJSONRelation>(connection.context, name, std::move(options), auto_detect);
 	if (read_json_relation == nullptr) {
@@ -1383,6 +1384,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 
 	// Create the ReadCSV Relation using the 'options'
 
+	py::gil_scoped_release gil;
 	auto read_csv_p = connection.ReadCSV(name, std::move(bind_parameters));
 	auto &read_csv = read_csv_p->Cast<ReadCSVRelation>();
 	if (file_like_object_wrapper) {
@@ -1436,15 +1438,18 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const py::object &quer
 	shared_ptr<Relation> relation;
 	if (py::none().is(params)) {
 		// FIXME: currently we can't create relations with prepared parameters
-		auto statement_type = last_statement->type;
-		switch (statement_type) {
-		case StatementType::SELECT_STATEMENT: {
-			auto select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(last_statement));
-			relation = connection.RelationFromQuery(std::move(select_statement), alias);
-			break;
-		}
-		default:
-			break;
+		{
+			py::gil_scoped_release gil;
+			auto statement_type = last_statement->type;
+			switch (statement_type) {
+			case StatementType::SELECT_STATEMENT: {
+				auto select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(last_statement));
+				relation = connection.RelationFromQuery(std::move(select_statement), alias);
+				break;
+			}
+			default:
+				break;
+			}
 		}
 	}
 
@@ -1548,6 +1553,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &file_
 		}
 		named_parameters["compression"] = Value(py::str(compression));
 	}
+	py::gil_scoped_release gil;
 	return make_uniq<DuckDBPyRelation>(connection.TableFunction("parquet_scan", params, named_parameters)->Alias(name));
 }
 
@@ -1695,7 +1701,10 @@ void DuckDBPyConnection::Interrupt() {
 
 void DuckDBPyConnection::InstallExtension(const string &extension, bool force_install) {
 	auto &connection = con.GetConnection();
-	ExtensionHelper::InstallExtension(*connection.context, extension, force_install);
+
+	ExtensionInstallOptions options;
+	options.force_install = force_install;
+	ExtensionHelper::InstallExtension(*connection.context, extension, options);
 }
 
 void DuckDBPyConnection::LoadExtension(const string &extension) {

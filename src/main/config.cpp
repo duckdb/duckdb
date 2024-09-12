@@ -2,8 +2,8 @@
 
 #include "duckdb/common/cgroups.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/storage_extension.hpp"
@@ -104,19 +104,20 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(EnableMacrosDependencies),
     DUCKDB_GLOBAL(EnableViewDependencies),
     DUCKDB_GLOBAL(LockConfigurationSetting),
-    DUCKDB_GLOBAL(IEEEFloatingPointOpsSetting),
+    DUCKDB_LOCAL(IEEEFloatingPointOpsSetting),
     DUCKDB_GLOBAL(ImmediateTransactionModeSetting),
     DUCKDB_LOCAL(IntegerDivisionSetting),
     DUCKDB_LOCAL(MaximumExpressionDepthSetting),
     DUCKDB_LOCAL(StreamingBufferSize),
     DUCKDB_GLOBAL(MaximumMemorySetting),
     DUCKDB_GLOBAL(MaximumTempDirectorySize),
+    DUCKDB_GLOBAL(MaximumVacuumTasks),
     DUCKDB_LOCAL(MergeJoinThreshold),
     DUCKDB_LOCAL(NestedLoopJoinThreshold),
     DUCKDB_GLOBAL(OldImplicitCasting),
     DUCKDB_GLOBAL_ALIAS("memory_limit", MaximumMemorySetting),
     DUCKDB_GLOBAL_ALIAS("null_order", DefaultNullOrderSetting),
-    DUCKDB_GLOBAL(OrderByNonIntegerLiteral),
+    DUCKDB_LOCAL(OrderByNonIntegerLiteral),
     DUCKDB_LOCAL(OrderedAggregateThreshold),
     DUCKDB_GLOBAL(PasswordSetting),
     DUCKDB_LOCAL(PerfectHashThresholdSetting),
@@ -131,7 +132,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(ProgressBarTimeSetting),
     DUCKDB_LOCAL(SchemaSetting),
     DUCKDB_LOCAL(SearchPathSetting),
-    DUCKDB_GLOBAL(ScalarSubqueryErrorOnMultipleRows),
+    DUCKDB_LOCAL(ScalarSubqueryErrorOnMultipleRows),
     DUCKDB_GLOBAL(SecretDirectorySetting),
     DUCKDB_GLOBAL(DefaultSecretStorage),
     DUCKDB_GLOBAL(TempDirectorySetting),
@@ -139,11 +140,13 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(UsernameSetting),
     DUCKDB_GLOBAL(ExportLargeBufferArrow),
     DUCKDB_GLOBAL(ArrowOutputListView),
+    DUCKDB_GLOBAL(LosslessConversionArrow),
     DUCKDB_GLOBAL(ProduceArrowStringView),
     DUCKDB_GLOBAL_ALIAS("user", UsernameSetting),
     DUCKDB_GLOBAL_ALIAS("wal_autocheckpoint", CheckpointThresholdSetting),
     DUCKDB_GLOBAL_ALIAS("worker_threads", ThreadsSetting),
-    DUCKDB_GLOBAL(FlushAllocatorSetting),
+    DUCKDB_GLOBAL(AllocatorFlushThreshold),
+    DUCKDB_GLOBAL(AllocatorBulkDeallocationFlushThreshold),
     DUCKDB_GLOBAL(AllocatorBackgroundThreadsSetting),
     DUCKDB_GLOBAL(DuckDBApiSetting),
     DUCKDB_GLOBAL(CustomUserAgentSetting),

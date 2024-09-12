@@ -910,9 +910,17 @@ SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &c
 			}
 		} else {
 			auto guard = gsource.Lock();
-			if (gsource.TryPrepareNextStage() || !gsource.HasUnfinishedTasks()) {
+			if (!gsource.HasMoreTasks()) {
+				// no more tasks - exit
+				gsource.UnblockTasks(guard);
+				break;
+			}
+			if (gsource.TryPrepareNextStage()) {
+				// we successfully prepared the next stage - unblock tasks
 				gsource.UnblockTasks(guard);
 			} else {
+				// there are more tasks available, but we can't execute them yet
+				// block the source
 				return gsource.BlockSource(guard, input.interrupt_state);
 			}
 		}

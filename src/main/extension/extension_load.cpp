@@ -453,7 +453,8 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DatabaseInstance &db, FileSyste
 			throw IOException(error);
 		}
 		// the extension load failed - try installing the extension
-		ExtensionHelper::InstallExtension(db, fs, extension, false);
+		ExtensionInstallOptions options;
+		ExtensionHelper::InstallExtension(db, fs, extension, options);
 		// try loading again
 		if (!TryInitialLoad(db, fs, extension, result, error)) {
 			throw IOException(error);

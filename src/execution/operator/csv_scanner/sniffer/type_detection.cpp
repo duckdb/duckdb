@@ -413,6 +413,20 @@ void CSVSniffer::DetectTypes() {
 		SetUserDefinedDateTimeFormat(*candidate->state_machine);
 		// Parse chunk and read csv with info candidate
 		auto &data_chunk = candidate->ParseChunk().ToChunk();
+		if (!candidate->error_handler->errors.empty()) {
+			bool break_loop = false;
+			for (auto &errors : candidate->error_handler->errors) {
+				for (auto &error : errors.second) {
+					if (error.type != CSVErrorType::MAXIMUM_LINE_SIZE) {
+						break_loop = true;
+						break;
+					}
+				}
+			}
+			if (break_loop) {
+				continue;
+			}
+		}
 		idx_t start_idx_detection = 0;
 		idx_t chunk_size = data_chunk.size();
 		if (chunk_size > 1 &&
@@ -464,6 +478,11 @@ void CSVSniffer::DetectTypes() {
 				}
 			}
 		}
+	}
+	if (!best_candidate) {
+		DialectCandidates dialect_candidates(options.dialect_options.state_machine_options);
+		auto error = CSVError::SniffingError(options, dialect_candidates.Print());
+		error_handler->Error(error);
 	}
 	// Assert that it's all good at this point.
 	D_ASSERT(best_candidate && !best_format_candidates.empty());

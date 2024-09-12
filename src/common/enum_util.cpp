@@ -4389,6 +4389,8 @@ const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
 		return "OPERATOR_ROWS_SCANNED";
 	case MetricsType::OPERATOR_TIMING:
 		return "OPERATOR_TIMING";
+	case MetricsType::RESULT_SET_SIZE:
+		return "RESULT_SET_SIZE";
 	case MetricsType::ALL_OPTIMIZERS:
 		return "ALL_OPTIMIZERS";
 	case MetricsType::CUMULATIVE_OPTIMIZER_TIMING:
@@ -4487,6 +4489,9 @@ MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "OPERATOR_TIMING")) {
 		return MetricsType::OPERATOR_TIMING;
+	}
+	if (StringUtil::Equals(value, "RESULT_SET_SIZE")) {
+		return MetricsType::RESULT_SET_SIZE;
 	}
 	if (StringUtil::Equals(value, "ALL_OPTIMIZERS")) {
 		return MetricsType::ALL_OPTIMIZERS;

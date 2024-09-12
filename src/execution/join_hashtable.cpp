@@ -105,8 +105,8 @@ JoinHashTable::JoinHashTable(ClientContext &context, const vector<JoinCondition>
 	memset(dead_end.get(), 0, layout.GetRowWidth());
 
 	if (join_type == JoinType::SINGLE) {
-		auto &config = DBConfig::GetConfig(context);
-		single_join_error_on_multiple_rows = config.options.scalar_subquery_error_on_multiple_rows;
+		auto &config = ClientConfig::GetConfig(context);
+		single_join_error_on_multiple_rows = config.scalar_subquery_error_on_multiple_rows;
 	}
 }
 
@@ -499,6 +499,7 @@ static inline void PerformKeyComparison(JoinHashTable::InsertState &state, JoinH
 
 	// The target selection vector says where to write the results into the lhs_data, we just want to write
 	// sequentially as otherwise we trigger a bug in the Gather function
+	data_collection.ResetCachedCastVectors(state.chunk_state, ht.equality_predicate_columns);
 	data_collection.Gather(row_locations, state.salt_match_sel, count, ht.equality_predicate_columns, state.lhs_data,
 	                       *FlatVector::IncrementalSelectionVector(), state.chunk_state.cached_cast_vectors);
 	TupleDataCollection::ToUnifiedFormat(state.chunk_state, state.lhs_data);

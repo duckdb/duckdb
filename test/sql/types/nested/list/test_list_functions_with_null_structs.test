@@ -1,0 +1,152 @@
+# name: test/sql/types/nested/list/test_list_functions_with_null_structs.test
+# description: Test correctly reserving the child vector size in the presence of NULL.
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE struct_data(str STRUCT(val VARCHAR)[]);
+
+statement ok
+INSERT INTO struct_data VALUES (NULL);
+
+query I
+SELECT list_resize(str, 1) FROM struct_data;
+----
+NULL
+
+query I
+SELECT list_reduce(str, (a, b) -> a) FROM struct_data;
+----
+NULL
+
+query I
+SELECT str[1] FROM struct_data;
+----
+NULL
+
+query I
+SELECT list_aggregate(str, 'count') FROM struct_data;
+----
+NULL
+
+foreach f array_pop_back array_pop_front len list_any_value list_distinct list_grade_up list_reverse_sort list_reverse list_sort list_unique
+
+query I
+SELECT ${f}(str) FROM struct_data;
+----
+NULL
+
+endloop
+
+# NULL in a STRUCT.
+
+statement ok
+CREATE TABLE nested_struct_data(str STRUCT(str_nested STRUCT(val VARCHAR))[]);
+
+statement ok
+INSERT INTO nested_struct_data VALUES ([NULL]);
+
+query I
+SELECT list_transform(str, x -> x) FROM nested_struct_data;
+----
+[NULL]
+
+query I
+SELECT list_filter(str, x -> x.str_nested IS NULL) FROM nested_struct_data;
+----
+[NULL]
+
+# Two list nesting levels.
+
+statement ok
+CREATE TABLE struct_data_two_lists(str STRUCT(val VARCHAR)[][]);
+
+statement ok
+INSERT INTO struct_data_two_lists VALUES (NULL);
+
+query I
+SELECT flatten(str) FROM struct_data_two_lists;
+----
+NULL
+
+# Nested STRUCTs.
+
+statement ok
+CREATE TABLE many_structs_data(str1 STRUCT(val VARCHAR, str2 STRUCT(val INT[]))[]);
+
+statement ok
+INSERT INTO many_structs_data VALUES (NULL), ([{'val': 'hello', 'str2': NULL}, (NULL, NULL), {'val': 'world', 'str2': {'val': [1, 2]}}]);
+
+query I
+SELECT list_reduce(str1, (a, b) -> a) FROM many_structs_data;
+----
+NULL
+{'val': hello, 'str2': NULL}
+
+# Original issue.
+
+query IIIII
+WITH foo AS (
+    SELECT str.reduce((a, b) -> a) AS str FROM struct_data
+)
+SELECT str, str.val, str.val = '', str.val IS NULL, str IS NULL FROM foo;
+----
+NULL	NULL	NULL	true	true
+
+statement ok
+CREATE TABLE filter_data(foo text[]);
+
+statement ok
+INSERT INTO filter_data VALUES
+    (['some value']),
+    (['some value', 'other value']),
+    (['some value', 'other value', 'some value']),
+    (['some value', 'other value', 'some value', 'other value']),
+    (['some value', 'other value', 'some value', 'other value', 'some value']),
+    (['some value', 'other value', 'some value', 'other value', 'some value', 'other value']),
+    (['some value', 'other value', 'some value', 'other value', 'some value', 'other value', 'some value']);
+
+query II
+WITH transformed AS (
+	SELECT foo.list_transform(
+                x -> struct_pack(val := x, conflict := false)
+            ).reduce(
+                (res, x) -> CASE
+                    WHEN res.conflict THEN res
+                    WHEN res.val = x.val THEN res
+                    ELSE struct_pack(val := null, conflict := true)
+					END
+            ) AS result
+        FROM filter_data
+    )
+SELECT result, result.val = '' FROM transformed;
+----
+{'val': some value, 'conflict': false}	false
+{'val': NULL, 'conflict': true}	NULL
+{'val': NULL, 'conflict': true}	NULL
+{'val': NULL, 'conflict': true}	NULL
+{'val': NULL, 'conflict': true}	NULL
+{'val': NULL, 'conflict': true}	NULL
+{'val': NULL, 'conflict': true}	NULL
+
+query II
+WITH data_(foo) AS (VALUES (null::text[]), (['a', 'b', 'c'])
+    ), transformed AS (
+        SELECT
+            foo.list_transform(
+                x -> struct_pack(val := x, conflict := false)
+            ).reduce(
+                (res, x) -> CASE
+                    WHEN res.conflict THEN res
+                    WHEN res.val = x.val THEN res
+                    ELSE struct_pack(val := null, conflict := true)
+                	END
+            ) AS result
+        FROM data_
+    )
+SELECT result, result.val = '' FROM transformed;
+----
+NULL	NULL
+{'val': NULL, 'conflict': true}	NULL

@@ -1521,8 +1521,11 @@ void StringValueScanner::FinalizeChunkProcess() {
 	// If we are not done we have two options.
 	// 1) If a boundary is set.
 	if (iterator.IsBoundarySet()) {
+		bool has_unterminated_quotes = false;
 		if (!result.current_errors.HasErrorType(UNTERMINATED_QUOTES)) {
 			iterator.done = true;
+		} else {
+			has_unterminated_quotes = true;
 		}
 		// We read until the next line or until we have nothing else to read.
 		// Move to next buffer
@@ -1540,6 +1543,16 @@ void StringValueScanner::FinalizeChunkProcess() {
 				MoveToNextBuffer();
 			}
 		} else {
+			if (result.current_errors.HasErrorType(UNTERMINATED_QUOTES)) {
+				has_unterminated_quotes = true;
+			}
+			result.current_errors.HandleErrors(result);
+		}
+		if (states.IsQuotedCurrent() && !has_unterminated_quotes) {
+			// If we finish the execution of a buffer, and we end in a quoted state, it means we have unterminated
+			// quotes
+			result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id,
+			                             result.last_position);
 			result.current_errors.HandleErrors(result);
 		}
 		if (!iterator.done) {

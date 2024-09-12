@@ -222,7 +222,7 @@ Allocator &Allocator::DefaultAllocator() {
 
 optional_idx Allocator::DecayDelay() {
 #ifdef USE_JEMALLOC
-	return JemallocExtension::DecayDelay();
+	return NumericCast<idx_t>(JemallocExtension::DecayDelay());
 #else
 	return optional_idx();
 #endif

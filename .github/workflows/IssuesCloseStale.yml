@@ -6,6 +6,7 @@ on:
 jobs:
   close_stale_issues:
     permissions:
+      actions: write
       contents: write # only for delete-branch option
       issues: write
       pull-requests: write

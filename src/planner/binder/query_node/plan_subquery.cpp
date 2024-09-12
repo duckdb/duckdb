@@ -77,8 +77,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		D_ASSERT(bindings.size() == 1);
 		idx_t table_idx = bindings[0].table_index;
 
-		auto &config = DBConfig::GetConfig(binder.context);
-		bool error_on_multiple_rows = config.options.scalar_subquery_error_on_multiple_rows;
+		auto &config = ClientConfig::GetConfig(binder.context);
+		bool error_on_multiple_rows = config.scalar_subquery_error_on_multiple_rows;
 
 		// we push an aggregate that returns the FIRST element
 		vector<unique_ptr<Expression>> expressions;
@@ -436,7 +436,7 @@ void Binder::PlanSubqueries(unique_ptr<Expression> &expr_ptr, unique_ptr<Logical
 	if (expr.expression_class == ExpressionClass::BOUND_SUBQUERY) {
 		auto &subquery = expr.Cast<BoundSubqueryExpression>();
 		// subquery node! plan it
-		if (subquery.IsCorrelated() && !is_outside_flattened) {
+		if (!is_outside_flattened) {
 			// detected a nested correlated subquery
 			// we don't plan it yet here, we are currently planning a subquery
 			// nested subqueries will only be planned AFTER the current subquery has been flattened entirely
