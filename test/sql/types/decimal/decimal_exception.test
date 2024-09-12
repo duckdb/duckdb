@@ -24,3 +24,21 @@ statement error
 select cast(9.99 as decimal(1,0));
 ----
 Casting value "9.99" to type DECIMAL(1,0) failed: value is out of range!
+
+query I
+select cast(9.49 as decimal(1,0));
+----
+9
+
+statement error
+select cast(9.5 as decimal(1,0));
+----
+Casting value "9.5" to type DECIMAL(1,0) failed: value is out of range!
+
+
+statement error
+select cast(-9.99 as decimal(1,0));
+----
+Casting value "9.99" to type DECIMAL(1,0) failed: value is out of range!
+
+# Test biggest values
