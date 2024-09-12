@@ -1,0 +1,31 @@
+# name: test/sql/cte/materialized/internal_3004.test
+# description: INTERNAL Error: Attempted to access index 1 within vector of size 1 -> harlequin internal code, CTE related
+# group: [materialized]
+
+statement ok
+with
+    system_types as (
+        select distinct
+            type_name as label,
+            'type' as type_label,
+            1000 as priority,
+            null as context
+        from duckdb_types()
+        where database_name = 'system'
+    ),
+    custom_types as (
+        select distinct
+            type_name as label,
+            'type' as type_label,
+            1000 as priority,
+            schema_name as context
+        from duckdb_types()
+        where
+            database_name not in ('system', 'temp')
+            and type_name not in (select label from system_types)
+    )
+select *
+from system_types
+union all
+select *
+from custom_types

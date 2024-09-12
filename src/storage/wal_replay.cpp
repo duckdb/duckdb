@@ -554,9 +554,8 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 		for (idx_t j = 0; j < data_info.allocation_sizes.size(); j++) {
 
 			// read the data into a buffer handle
-			shared_ptr<BlockHandle> block_handle;
-			buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager->GetBlockSize(), false, &block_handle);
-			auto buffer_handle = buffer_manager.Pin(block_handle);
+			auto buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager->GetBlockSize(), false);
+			auto block_handle = buffer_handle.GetBlockHandle();
 			auto data_ptr = buffer_handle.Ptr();
 
 			list.ReadElement<bool>(data_ptr, data_info.allocation_sizes[j]);
