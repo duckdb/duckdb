@@ -38,9 +38,10 @@ public:
 	DataChunk chunk;
 
 	void GetCollection(idx_t row_idx, ColumnDataCollectionSpec &spec);
-	void Combine();
+	void Combine(bool build_validity);
 
 	ColumnDataCollectionPtr inputs;
+	ValidityMask validity;
 
 private:
 	//! True if the column is a scalar only value
@@ -57,7 +58,7 @@ private:
 	//! The component column data collections
 	vector<ColumnDataCollectionPtr> collections;
 	//! The (sorted) collection ranges
-	vector<ColumnDataCollectionSpec> ranges;
+	vector<pair<idx_t, idx_t>> ranges;
 };
 
 struct WindowInputExpression {
@@ -307,6 +308,8 @@ public:
 
 	void Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count, WindowExecutorGlobalState &gstate,
 	          WindowExecutorLocalState &lstate) const override;
+
+	void Finalize(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate) const override;
 
 	unique_ptr<WindowExecutorGlobalState> GetGlobalState(const idx_t payload_count, const ValidityMask &partition_mask,
 	                                                     const ValidityMask &order_mask) const override;

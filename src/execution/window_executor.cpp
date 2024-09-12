@@ -90,19 +90,37 @@ void WindowDataChunk::GetCollection(idx_t row_idx, ColumnDataCollectionSpec &spe
 	auto collection = make_uniq<ColumnDataCollection>(buffer_manager, types);
 	spec = {row_idx, collection.get()};
 	auto i = upper_bound(ranges.begin(), ranges.end(), spec);
-	ranges.insert(i, spec);
+	ranges.insert(i, {row_idx, collections.size()});
 	collections.emplace_back(std::move(collection));
 }
 
-void WindowDataChunk::Combine() {
+void WindowDataChunk::Combine(bool build_validity) {
 	lock_guard<mutex> collection_guard(lock);
 
-	for (auto &range : ranges) {
-		inputs->Combine(*range.second);
+	if (collections.empty()) {
+		return;
 	}
+
+	for (auto &range : ranges) {
+		inputs->Combine(*collections[range.second]);
+	}
+	collections.clear();
 	ranges.clear();
 
-	collections.clear();
+	if (build_validity) {
+		validity.Initialize(inputs->Count());
+		ColumnDataScanState reader;
+		inputs->InitializeScan(reader);
+		DataChunk chunk;
+		inputs->InitializeScanChunk(reader, chunk);
+		idx_t target_offset = 0;
+		while (inputs->Scan(reader, chunk)) {
+			const auto count = chunk.size();
+			auto &other = FlatVector::Validity(chunk.data[0]);
+			validity.SliceInPlace(other, target_offset, 0, count);
+			target_offset += count;
+		}
+	}
 }
 
 static idx_t FindNextStart(const ValidityMask &mask, idx_t l, const idx_t r, idx_t &n) {
@@ -169,26 +187,6 @@ static idx_t FindPrevStart(const ValidityMask &mask, const idx_t l, idx_t r, idx
 
 	//	Didn't find a start so return the start of the range
 	return l;
-}
-
-template <typename T>
-static T GetCell(const DataChunk &chunk, idx_t column, idx_t index) {
-	D_ASSERT(chunk.ColumnCount() > column);
-	auto &source = chunk.data[column];
-	const auto data = FlatVector::GetData<T>(source);
-	return data[index];
-}
-
-static bool CellIsNull(const DataChunk &chunk, idx_t column, idx_t index) {
-	D_ASSERT(chunk.ColumnCount() > column);
-	auto &source = chunk.data[column];
-	return FlatVector::IsNull(source, index);
-}
-
-static void CopyCell(const DataChunk &chunk, idx_t column, idx_t index, Vector &target, idx_t target_offset) {
-	D_ASSERT(chunk.ColumnCount() > column);
-	auto &source = chunk.data[column];
-	VectorOperations::Copy(source, target, index + 1, index, target_offset);
 }
 
 //===--------------------------------------------------------------------===//
@@ -808,8 +806,6 @@ public:
 	ValidityMask mask;
 	//! The validity mask upon which mask is based
 	const ValidityMask &mask_src;
-	//! A validity mask consisting of only one entries (needed if no ignore_nulls mask is supplied)
-	ValidityMask all_ones_mask;
 };
 
 void ExclusionFilter::FetchFromSource(idx_t begin, idx_t end) {
@@ -1460,35 +1456,18 @@ public:
 	using WindowDataChunkPtr = unique_ptr<WindowDataChunk>;
 	WindowValueGlobalState(const WindowExecutor &executor, const idx_t payload_count,
 	                       const ValidityMask &partition_mask, const ValidityMask &order_mask)
-	    : WindowExecutorGlobalState(executor, payload_count, partition_mask, order_mask), ignore_nulls(&no_nulls)
+	    : WindowExecutorGlobalState(executor, payload_count, partition_mask, order_mask)
 
 	{
 		if (!arg_types.empty()) {
 			auto &buffer_manager = BufferManager::GetBufferManager(executor.context);
 			payload_collection = make_uniq<WindowDataChunk>(buffer_manager, arg_types);
-			payload_collection->Initialize(payload_count);
-		}
-
-		auto &wexpr = executor.wexpr;
-		if (wexpr.ignore_nulls) {
-			switch (wexpr.type) {
-			case ExpressionType::WINDOW_LEAD:
-			case ExpressionType::WINDOW_LAG:
-			case ExpressionType::WINDOW_FIRST_VALUE:
-			case ExpressionType::WINDOW_LAST_VALUE:
-			case ExpressionType::WINDOW_NTH_VALUE:
-				ignore_nulls = &FlatVector::Validity(payload_collection->chunk.data[0]);
-				break;
-			default:
-				break;
-			}
+			ignore_nulls = &payload_collection->validity;
 		}
 	}
 
 	// The partition values
 	WindowDataChunkPtr payload_collection;
-	// Mask to use for exclusion if we are not ignoring NULLs
-	ValidityMask no_nulls;
 	// IGNORE NULLS
 	optional_ptr<ValidityMask> ignore_nulls;
 };
@@ -1504,23 +1483,87 @@ public:
 	    : WindowExecutorBoundsState(gvstate), gvstate(gvstate) {
 	}
 
-	//! Lazily initialize for value Execute
-	void Initialize();
+	//! Sink a chunk into the collection
+	void Sink(DataChunk &chunk, idx_t row_idx);
+	//! Finish the sinking and prepare to scan
+	void Finalize();
+
+	//! Check whether a row is in range
+	inline idx_t Seek(idx_t row_idx) {
+		if (row_idx < reader.current_row_index || reader.next_row_index <= row_idx) {
+			gvstate.payload_collection->inputs->Seek(row_idx, reader, chunk);
+		}
+		return row_idx - reader.current_row_index;
+	}
+
+	//! Check a collection cell for nullity
+	bool CellIsNull(idx_t col_idx, idx_t row_idx) {
+		D_ASSERT(chunk.ColumnCount() > col_idx);
+		auto index = Seek(row_idx);
+		auto &source = chunk.data[col_idx];
+		return FlatVector::IsNull(source, index);
+	}
+
+	//! Read a typed cell
+	template <typename T>
+	T GetCell(idx_t col_idx, idx_t row_idx) {
+		D_ASSERT(chunk.ColumnCount() > col_idx);
+		auto index = Seek(row_idx);
+		auto &source = chunk.data[col_idx];
+		const auto data = FlatVector::GetData<T>(source);
+		return data[index];
+	}
+
+	//! Copy a single value
+	void CopyCell(idx_t col_idx, idx_t row_idx, Vector &target, idx_t target_offset) {
+		D_ASSERT(chunk.ColumnCount() > col_idx);
+		auto index = Seek(row_idx);
+		auto &source = chunk.data[col_idx];
+		VectorOperations::Copy(source, target, index + 1, index, target_offset);
+	}
 
 	//! The corresponding global value state
 	const WindowValueGlobalState &gvstate;
-	//! Lazy initialization flag
-	bool initialized = false;
 	//! The exclusion filter handler
 	unique_ptr<ExclusionFilter> exclusion_filter;
 	//! The validity mask that combines both the NULLs and exclusion information
 	optional_ptr<ValidityMask> ignore_nulls_exclude;
+
+	//! The thread's current input collection
+	using ColumnDataCollectionSpec = WindowDataChunk::ColumnDataCollectionSpec;
+	ColumnDataCollectionSpec sink;
+	//! The state used for appending to the collection
+	ColumnDataAppendState appender;
+	//! The state used for reading the collection
+	ColumnDataScanState reader;
+	//! The data chunk read into
+	DataChunk chunk;
 };
 
-void WindowValueLocalState::Initialize() {
-	if (initialized) {
-		return;
+void WindowValueLocalState::Sink(DataChunk &input_chunk, const idx_t input_idx) {
+	auto &payload_collection = gvstate.payload_collection;
+
+	payload_chunk.Reset();
+	payload_executor.Execute(input_chunk, payload_chunk);
+	payload_chunk.Verify();
+
+	// Check whether we need a a new collection
+	if (!sink.second || input_idx < sink.first || sink.first + sink.second->Count() < input_idx) {
+		payload_collection->GetCollection(input_idx, sink);
+		D_ASSERT(sink.second);
+		sink.second->InitializeAppend(appender);
 	}
+	sink.second->Append(appender, payload_chunk);
+}
+
+void WindowValueLocalState::Finalize() {
+	auto &payload_collection = gvstate.payload_collection;
+
+	// Thread-safe and idempotent
+	auto &wexpr = gvstate.executor.wexpr;
+	payload_collection->Combine(wexpr.ignore_nulls && wexpr.type != ExpressionType::WINDOW_NTILE);
+
+	// Set up the IGNORE NULLS state
 	auto ignore_nulls = gvstate.ignore_nulls;
 	if (gvstate.executor.wexpr.exclude_clause == WindowExcludeMode::NO_OTHER) {
 		exclusion_filter = nullptr;
@@ -1532,7 +1575,10 @@ void WindowValueLocalState::Initialize() {
 		ignore_nulls_exclude = &exclusion_filter->mask;
 	}
 
-	initialized = true;
+	// Prepare to scan
+	auto &inputs = *payload_collection->inputs;
+	inputs.InitializeScan(reader);
+	inputs.InitializeScanChunk(reader, chunk);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1554,20 +1600,19 @@ unique_ptr<WindowExecutorGlobalState> WindowValueExecutor::GetGlobalState(const 
 
 void WindowValueExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count,
                                WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate) const {
-	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
 	auto &lvstate = lstate.Cast<WindowValueLocalState>();
-	auto &payload_chunk = lvstate.payload_chunk;
-	auto &payload_executor = lvstate.payload_executor;
-	auto &payload_collection = gvstate.payload_collection;
 
 	if (!wexpr.children.empty()) {
-		payload_chunk.Reset();
-		payload_executor.Execute(input_chunk, payload_chunk);
-		payload_chunk.Verify();
-		payload_collection->Copy(payload_chunk, input_idx);
+		lvstate.Sink(input_chunk, input_idx);
 	}
 
 	WindowExecutor::Sink(input_chunk, input_idx, total_count, gstate, lstate);
+}
+
+void WindowValueExecutor::Finalize(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate) const {
+	auto &lvstate = lstate.Cast<WindowValueLocalState>();
+
+	lvstate.Finalize();
 }
 
 unique_ptr<WindowExecutorLocalState> WindowValueExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
@@ -1577,18 +1622,15 @@ unique_ptr<WindowExecutorLocalState> WindowValueExecutor::GetLocalState(const Wi
 
 void WindowNtileExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                            Vector &result, idx_t count, idx_t row_idx) const {
-	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
-	auto &payload_collection = gvstate.payload_collection->chunk;
-	D_ASSERT(payload_collection.ColumnCount() == 1);
-	auto &lbstate = lstate.Cast<WindowExecutorBoundsState>();
-	auto partition_begin = FlatVector::GetData<const idx_t>(lbstate.bounds.data[PARTITION_BEGIN]);
-	auto partition_end = FlatVector::GetData<const idx_t>(lbstate.bounds.data[PARTITION_END]);
+	auto &lvstate = lstate.Cast<WindowValueLocalState>();
+	auto partition_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[PARTITION_BEGIN]);
+	auto partition_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[PARTITION_END]);
 	auto rdata = FlatVector::GetData<int64_t>(result);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
-		if (CellIsNull(payload_collection, 0, row_idx)) {
+		if (lvstate.CellIsNull(0, row_idx)) {
 			FlatVector::SetNull(result, i, true);
 		} else {
-			auto n_param = GetCell<int64_t>(payload_collection, 0, row_idx);
+			auto n_param = lvstate.GetCell<int64_t>(0, row_idx);
 			if (n_param < 1) {
 				throw InvalidInputException("Argument for ntile must be greater than zero");
 			}
@@ -1662,7 +1704,6 @@ WindowLeadLagExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) co
 void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                              Vector &result, idx_t count, idx_t row_idx) const {
 	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
-	auto &payload_collection = gvstate.payload_collection->chunk;
 	auto &ignore_nulls = gvstate.ignore_nulls;
 	auto &llstate = lstate.Cast<WindowLeadLagLocalState>();
 
@@ -1703,14 +1744,22 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, 
 		if (can_shift) {
 			if (!delta) {
 				//	Copy source[index:index+width] => result[i:]
-				const auto index = NumericCast<idx_t>(val_idx);
+				auto index = NumericCast<idx_t>(val_idx);
 				const auto source_limit = partition_end[i] - index;
 				const auto target_limit = MinValue(partition_end[i], row_end) - row_idx;
-				const auto width = MinValue(source_limit, target_limit);
-				auto &source = payload_collection.data[0];
-				VectorOperations::Copy(source, result, index + width, index, i);
-				i += width;
-				row_idx += width;
+				auto width = MinValue(source_limit, target_limit);
+				// We may have to scan multiple blocks here, so loop until we have copied everything
+				const idx_t col_idx = 0;
+				while (width) {
+					const auto source_offset = llstate.Seek(index);
+					auto &source = llstate.chunk.data[col_idx];
+					const auto copied = MinValue<idx_t>(llstate.chunk.size() - source_offset, width);
+					VectorOperations::Copy(source, result, source_offset + copied, source_offset, i);
+					i += copied;
+					row_idx += copied;
+					index += copied;
+					width -= copied;
+				}
 			} else if (wexpr.default_expr) {
 				const auto width = MinValue(delta, count - i);
 				llstate.leadlag_default.CopyCell(result, i, width);
@@ -1723,7 +1772,7 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, 
 			}
 		} else {
 			if (!delta) {
-				CopyCell(payload_collection, 0, NumericCast<idx_t>(val_idx), result, i);
+				llstate.CopyCell(0, NumericCast<idx_t>(val_idx), result, i);
 			} else if (wexpr.default_expr) {
 				llstate.leadlag_default.CopyCell(result, i);
 			} else {
@@ -1741,10 +1790,7 @@ WindowFirstValueExecutor::WindowFirstValueExecutor(BoundWindowExpression &wexpr,
 
 void WindowFirstValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                                 Vector &result, idx_t count, idx_t row_idx) const {
-	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
-	auto &payload_collection = gvstate.payload_collection->chunk;
 	auto &lvstate = lstate.Cast<WindowValueLocalState>();
-	lvstate.Initialize();
 	auto window_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_BEGIN]);
 	auto window_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_END]);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
@@ -1761,7 +1807,7 @@ void WindowFirstValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstat
 		idx_t n = 1;
 		const auto first_idx = FindNextStart(*lvstate.ignore_nulls_exclude, window_begin[i], window_end[i], n);
 		if (!n) {
-			CopyCell(payload_collection, 0, first_idx, result, i);
+			lvstate.CopyCell(0, first_idx, result, i);
 		} else {
 			FlatVector::SetNull(result, i, true);
 		}
@@ -1778,10 +1824,7 @@ WindowLastValueExecutor::WindowLastValueExecutor(BoundWindowExpression &wexpr, C
 
 void WindowLastValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                                Vector &result, idx_t count, idx_t row_idx) const {
-	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
-	auto &payload_collection = gvstate.payload_collection->chunk;
 	auto &lvstate = lstate.Cast<WindowValueLocalState>();
-	lvstate.Initialize();
 	auto window_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_BEGIN]);
 	auto window_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_END]);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
@@ -1797,7 +1840,7 @@ void WindowLastValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate
 		idx_t n = 1;
 		const auto last_idx = FindPrevStart(*lvstate.ignore_nulls_exclude, window_begin[i], window_end[i], n);
 		if (!n) {
-			CopyCell(payload_collection, 0, last_idx, result, i);
+			lvstate.CopyCell(0, last_idx, result, i);
 		} else {
 			FlatVector::SetNull(result, i, true);
 		}
@@ -1814,12 +1857,8 @@ WindowNthValueExecutor::WindowNthValueExecutor(BoundWindowExpression &wexpr, Cli
 
 void WindowNthValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                               Vector &result, idx_t count, idx_t row_idx) const {
-	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
-	auto &payload_collection = gvstate.payload_collection->chunk;
-	D_ASSERT(payload_collection.ColumnCount() == 2);
-
 	auto &lvstate = lstate.Cast<WindowValueLocalState>();
-	lvstate.Initialize();
+	D_ASSERT(lvstate.chunk.ColumnCount() == 2);
 	auto window_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_BEGIN]);
 	auto window_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_END]);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
@@ -1834,17 +1873,17 @@ void WindowNthValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate,
 		}
 		// Returns value evaluated at the row that is the n'th row of the window frame (counting from 1);
 		// returns NULL if there is no such row.
-		if (CellIsNull(payload_collection, 1, row_idx)) {
+		if (lvstate.CellIsNull(1, row_idx)) {
 			FlatVector::SetNull(result, i, true);
 		} else {
-			auto n_param = GetCell<int64_t>(payload_collection, 1, row_idx);
+			auto n_param = lvstate.GetCell<int64_t>(1, row_idx);
 			if (n_param < 1) {
 				FlatVector::SetNull(result, i, true);
 			} else {
 				auto n = idx_t(n_param);
 				const auto nth_index = FindNextStart(*lvstate.ignore_nulls_exclude, window_begin[i], window_end[i], n);
 				if (!n) {
-					CopyCell(payload_collection, 0, nth_index, result, i);
+					lvstate.CopyCell(0, nth_index, result, i);
 				} else {
 					FlatVector::SetNull(result, i, true);
 				}
