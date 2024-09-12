@@ -124,7 +124,7 @@ public:
 
 	static bool CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata,
 	                                    const bool allow_community_extensions);
-	static ParsedExtensionMetaData ParseExtensionMetaData(const char *metadata);
+	static ParsedExtensionMetaData ParseExtensionMetaData(const char *metadata) noexcept;
 	static ParsedExtensionMetaData ParseExtensionMetaData(FileHandle &handle);
 
 	//! Get the extension url template, containing placeholders for version, platform and extension name
