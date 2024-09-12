@@ -18,27 +18,46 @@ namespace duckdb {
 // A wrapper for building DataChunks in parallel
 class WindowDataChunk {
 public:
+	using ColumnDataCollectionPtr = unique_ptr<ColumnDataCollection>;
+	using ColumnDataCollectionSpec = pair<idx_t, optional_ptr<ColumnDataCollection>>;
+
 	// True if the vector data can just be copied to
-	static bool IsSimple(const Vector &v);
+	static bool IsSimple(const LogicalType &t);
 
 	static inline bool IsMaskAligned(idx_t begin, idx_t end, idx_t count) {
 		return ValidityMask::IsAligned(begin) && (ValidityMask::IsAligned(end) || (end == count));
 	}
 
-	explicit WindowDataChunk(DataChunk &chunk);
+	WindowDataChunk(BufferManager &buffer_manager, const vector<LogicalType> &types);
 
-	void Initialize(Allocator &allocator, const vector<LogicalType> &types, idx_t capacity);
+	void Initialize(idx_t capacity);
 
 	void Copy(DataChunk &src, idx_t begin);
 
 	//! The wrapped chunk
-	DataChunk &chunk;
+	DataChunk chunk;
+
+	void GetCollection(idx_t row_idx, ColumnDataCollectionSpec &spec);
+	void Combine();
+
+	ColumnDataCollectionPtr inputs;
 
 private:
 	//! True if the column is a scalar only value
 	vector<bool> is_simple;
 	//! Exclusive lock for each column
 	vector<mutex> locks;
+
+	//! Guard for range updates
+	mutex lock;
+	//! The paging buffer manager to use
+	BufferManager &buffer_manager;
+	//! The collection schema
+	vector<LogicalType> types;
+	//! The component column data collections
+	vector<ColumnDataCollectionPtr> collections;
+	//! The (sorted) collection ranges
+	vector<ColumnDataCollectionSpec> ranges;
 };
 
 struct WindowInputExpression {
@@ -99,21 +118,23 @@ struct WindowInputExpression {
 };
 
 struct WindowInputColumn {
+	using WindowDataChunkPtr = unique_ptr<WindowDataChunk>;
+
 	WindowInputColumn(optional_ptr<Expression> expr_p, ClientContext &context, idx_t count);
 
 	void Copy(DataChunk &input_chunk, idx_t input_idx);
 
 	inline bool CellIsNull(idx_t i) const {
-		D_ASSERT(!target.data.empty());
+		D_ASSERT(!target->chunk.data.empty());
 		D_ASSERT(i < count);
-		return FlatVector::IsNull((target.data[0]), scalar ? 0 : i);
+		return FlatVector::IsNull((target->chunk.data[0]), scalar ? 0 : i);
 	}
 
 	template <typename T>
 	inline T GetCell(idx_t i) const {
-		D_ASSERT(!target.data.empty());
+		D_ASSERT(!target->chunk.data.empty());
 		D_ASSERT(i < count);
-		const auto data = FlatVector::GetData<T>(target.data[0]);
+		const auto data = FlatVector::GetData<T>(target->chunk.data[0]);
 		return data[scalar ? 0 : i];
 	}
 
@@ -123,8 +144,7 @@ struct WindowInputColumn {
 	const idx_t count;
 
 private:
-	DataChunk target;
-	WindowDataChunk wtarget;
+	WindowDataChunkPtr target;
 };
 
 //	Column indexes of the bounds chunk

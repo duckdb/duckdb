@@ -197,8 +197,8 @@ public:
 
 public:
 	// container API
-	bool empty() const { // NOLINT: match stl API
-		return rows.empty();
+	bool empty() const {     // NOLINT: match stl API
+		return rows.empty(); // NOLINT
 	}
 	idx_t size() const { // NOLINT: match stl API
 		return rows.size();

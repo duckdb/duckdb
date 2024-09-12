@@ -10,8 +10,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // WindowDataChunk
 //===--------------------------------------------------------------------===//
-bool WindowDataChunk::IsSimple(const Vector &v) {
-	switch (v.GetType().InternalType()) {
+bool WindowDataChunk::IsSimple(const LogicalType &t) {
+	switch (t.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::UINT8:
 	case PhysicalType::INT8:
@@ -40,19 +40,23 @@ bool WindowDataChunk::IsSimple(const Vector &v) {
 	throw InternalException("Unsupported type for WindowDataChunk");
 }
 
-WindowDataChunk::WindowDataChunk(DataChunk &chunk) : chunk(chunk) {
-}
-
-void WindowDataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &types, idx_t capacity) {
-	vector<mutex> new_locks(types.size());
-	locks.swap(new_locks);
-	chunk.Initialize(allocator, types, capacity);
-	chunk.SetCardinality(capacity);
+WindowDataChunk::WindowDataChunk(BufferManager &buffer_manager, const vector<LogicalType> &types)
+    : buffer_manager(buffer_manager), types(types) {
+	if (!types.empty()) {
+		inputs = make_uniq<ColumnDataCollection>(buffer_manager, types);
+	}
 
 	is_simple.clear();
-	for (const auto &v : chunk.data) {
-		is_simple.push_back(IsSimple(v));
+	for (const auto &t : types) {
+		is_simple.push_back(IsSimple(t));
 	}
+}
+
+void WindowDataChunk::Initialize(idx_t capacity) {
+	vector<mutex> new_locks(types.size());
+	locks.swap(new_locks);
+	chunk.Initialize(inputs->GetAllocator(), types, capacity);
+	chunk.SetCardinality(capacity);
 }
 
 void WindowDataChunk::Copy(DataChunk &input, idx_t begin) {
@@ -74,6 +78,31 @@ void WindowDataChunk::Copy(DataChunk &input, idx_t begin) {
 			VectorOperations::Copy(src, dst, source_count, 0, begin);
 		}
 	}
+}
+
+void WindowDataChunk::GetCollection(idx_t row_idx, ColumnDataCollectionSpec &spec) {
+	if (spec.second && row_idx == spec.first + spec.second->Count()) {
+		return;
+	}
+
+	lock_guard<mutex> collection_guard(lock);
+
+	auto collection = make_uniq<ColumnDataCollection>(buffer_manager, types);
+	spec = {row_idx, collection.get()};
+	auto i = upper_bound(ranges.begin(), ranges.end(), spec);
+	ranges.insert(i, spec);
+	collections.emplace_back(std::move(collection));
+}
+
+void WindowDataChunk::Combine() {
+	lock_guard<mutex> collection_guard(lock);
+
+	for (auto &range : ranges) {
+		inputs->Combine(*range.second);
+	}
+	ranges.clear();
+
+	collections.clear();
 }
 
 static idx_t FindNextStart(const ValidityMask &mask, idx_t l, const idx_t r, idx_t &n) {
@@ -166,19 +195,20 @@ static void CopyCell(const DataChunk &chunk, idx_t column, idx_t index, Vector &
 // WindowInputColumn
 //===--------------------------------------------------------------------===//
 WindowInputColumn::WindowInputColumn(optional_ptr<Expression> expr_p, ClientContext &context, idx_t count)
-    : expr(expr_p), scalar(expr ? expr->IsScalar() : true), count(count), wtarget(target) {
+    : expr(expr_p), scalar(expr ? expr->IsScalar() : true), count(count) {
 
 	if (expr) {
 		vector<LogicalType> types;
 		types.emplace_back(expr->return_type);
-		wtarget.Initialize(Allocator::Get(context), types, count);
+		target = make_uniq<WindowDataChunk>(BufferManager::GetBufferManager(context), types);
+		target->Initialize(count);
 		ptype = expr->return_type.InternalType();
 	}
 }
 
 void WindowInputColumn::Copy(DataChunk &input_chunk, idx_t input_idx) {
 	if (expr && (!input_idx || !scalar)) {
-		wtarget.Copy(input_chunk, input_idx);
+		target->Copy(input_chunk, input_idx);
 	}
 }
 
@@ -1066,7 +1096,7 @@ WindowAggregateExecutorGlobalState::WindowAggregateExecutorGlobalState(const Win
 		aggregator = make_uniq<WindowSegmentTree>(aggr, arg_types, return_type, mode, wexpr.exclude_clause);
 	}
 
-	gsink = aggregator->GetGlobalState(group_count, partition_mask);
+	gsink = aggregator->GetGlobalState(BufferManager::GetBufferManager(context), group_count, partition_mask);
 }
 
 unique_ptr<WindowExecutorGlobalState> WindowAggregateExecutor::GetGlobalState(const idx_t payload_count,
@@ -1427,14 +1457,16 @@ void WindowCumeDistExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate,
 
 class WindowValueGlobalState : public WindowExecutorGlobalState {
 public:
+	using WindowDataChunkPtr = unique_ptr<WindowDataChunk>;
 	WindowValueGlobalState(const WindowExecutor &executor, const idx_t payload_count,
 	                       const ValidityMask &partition_mask, const ValidityMask &order_mask)
-	    : WindowExecutorGlobalState(executor, payload_count, partition_mask, order_mask),
-	      payload_collection(payload_data), ignore_nulls(&no_nulls)
+	    : WindowExecutorGlobalState(executor, payload_count, partition_mask, order_mask), ignore_nulls(&no_nulls)
 
 	{
 		if (!arg_types.empty()) {
-			payload_collection.Initialize(Allocator::Get(executor.context), arg_types, payload_count);
+			auto &buffer_manager = BufferManager::GetBufferManager(executor.context);
+			payload_collection = make_uniq<WindowDataChunk>(buffer_manager, arg_types);
+			payload_collection->Initialize(payload_count);
 		}
 
 		auto &wexpr = executor.wexpr;
@@ -1445,7 +1477,7 @@ public:
 			case ExpressionType::WINDOW_FIRST_VALUE:
 			case ExpressionType::WINDOW_LAST_VALUE:
 			case ExpressionType::WINDOW_NTH_VALUE:
-				ignore_nulls = &FlatVector::Validity(payload_collection.chunk.data[0]);
+				ignore_nulls = &FlatVector::Validity(payload_collection->chunk.data[0]);
 				break;
 			default:
 				break;
@@ -1454,9 +1486,7 @@ public:
 	}
 
 	// The partition values
-	DataChunk payload_data;
-	// The partition values
-	WindowDataChunk payload_collection;
+	WindowDataChunkPtr payload_collection;
 	// Mask to use for exclusion if we are not ignoring NULLs
 	ValidityMask no_nulls;
 	// IGNORE NULLS
@@ -1534,7 +1564,7 @@ void WindowValueExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, co
 		payload_chunk.Reset();
 		payload_executor.Execute(input_chunk, payload_chunk);
 		payload_chunk.Verify();
-		payload_collection.Copy(payload_chunk, input_idx);
+		payload_collection->Copy(payload_chunk, input_idx);
 	}
 
 	WindowExecutor::Sink(input_chunk, input_idx, total_count, gstate, lstate);
@@ -1548,7 +1578,7 @@ unique_ptr<WindowExecutorLocalState> WindowValueExecutor::GetLocalState(const Wi
 void WindowNtileExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                            Vector &result, idx_t count, idx_t row_idx) const {
 	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
-	auto &payload_collection = gvstate.payload_collection.chunk;
+	auto &payload_collection = gvstate.payload_collection->chunk;
 	D_ASSERT(payload_collection.ColumnCount() == 1);
 	auto &lbstate = lstate.Cast<WindowExecutorBoundsState>();
 	auto partition_begin = FlatVector::GetData<const idx_t>(lbstate.bounds.data[PARTITION_BEGIN]);
@@ -1632,7 +1662,7 @@ WindowLeadLagExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) co
 void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                              Vector &result, idx_t count, idx_t row_idx) const {
 	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
-	auto &payload_collection = gvstate.payload_collection.chunk;
+	auto &payload_collection = gvstate.payload_collection->chunk;
 	auto &ignore_nulls = gvstate.ignore_nulls;
 	auto &llstate = lstate.Cast<WindowLeadLagLocalState>();
 
@@ -1712,7 +1742,7 @@ WindowFirstValueExecutor::WindowFirstValueExecutor(BoundWindowExpression &wexpr,
 void WindowFirstValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                                 Vector &result, idx_t count, idx_t row_idx) const {
 	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
-	auto &payload_collection = gvstate.payload_collection.chunk;
+	auto &payload_collection = gvstate.payload_collection->chunk;
 	auto &lvstate = lstate.Cast<WindowValueLocalState>();
 	lvstate.Initialize();
 	auto window_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_BEGIN]);
@@ -1749,7 +1779,7 @@ WindowLastValueExecutor::WindowLastValueExecutor(BoundWindowExpression &wexpr, C
 void WindowLastValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                                Vector &result, idx_t count, idx_t row_idx) const {
 	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
-	auto &payload_collection = gvstate.payload_collection.chunk;
+	auto &payload_collection = gvstate.payload_collection->chunk;
 	auto &lvstate = lstate.Cast<WindowValueLocalState>();
 	lvstate.Initialize();
 	auto window_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_BEGIN]);
@@ -1785,7 +1815,7 @@ WindowNthValueExecutor::WindowNthValueExecutor(BoundWindowExpression &wexpr, Cli
 void WindowNthValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                               Vector &result, idx_t count, idx_t row_idx) const {
 	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
-	auto &payload_collection = gvstate.payload_collection.chunk;
+	auto &payload_collection = gvstate.payload_collection->chunk;
 	D_ASSERT(payload_collection.ColumnCount() == 2);
 
 	auto &lvstate = lstate.Cast<WindowValueLocalState>();
