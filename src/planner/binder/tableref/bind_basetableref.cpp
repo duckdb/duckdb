@@ -204,7 +204,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		}
 		auto &config = DBConfig::GetConfig(context);
 		if (context.config.use_replacement_scans && config.options.enable_external_access &&
-		    StringUtil::Contains(full_path, ".")) {
+		    ExtensionHelper::IsFullPath(full_path)) {
 			auto &fs = FileSystem::GetFileSystem(context);
 			if (fs.FileExists(full_path)) {
 				throw BinderException(
