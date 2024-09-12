@@ -118,7 +118,14 @@ struct DecimalScaleDownCheckOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
 		auto data = (DecimalScaleInput<INPUT_TYPE> *)dataptr;
-		if (input >= data->limit || input <= -data->limit) {
+		// Calculate the divisor as 10^x to extract the last x digits
+		int64_t divisor = static_cast<int64_t>(pow(10, data->source_scale));
+		auto value = input % divisor;
+		auto rounded_input = input;
+		if (value >= divisor/2){
+			rounded_input+=divisor;
+		}
+		if (rounded_input >= data->limit || rounded_input <= -data->limit) {
 			auto error = StringUtil::Format("Casting value \"%s\" to type %s failed: value is out of range!",
 			                                Decimal::ToString(input, data->source_width, data->source_scale),
 			                                data->result.GetType().ToString());
@@ -145,7 +152,6 @@ bool TemplatedDecimalScaleDown(Vector &source, Vector &result, idx_t count, Cast
 		return true;
 	} else {
 		// type might not fit: check limit
-
 		auto limit = UnsafeNumericCast<SOURCE>(POWERS_SOURCE::POWERS_OF_TEN[target_width]);
 		DecimalScaleInput<SOURCE> input(result, limit, divide_factor, parameters, source_width, source_scale);
 		UnaryExecutor::GenericExecute<SOURCE, DEST, DecimalScaleDownCheckOperator>(source, result, count, &input,
@@ -225,6 +231,51 @@ static bool DecimalToStringCast(Vector &source, Vector &result, idx_t count, Cas
 	UnaryExecutor::GenericExecute<SRC, string_t, StringCastFromDecimalOperator>(source, result, count, (void *)&input);
 	return true;
 }
+// void RoundDecimal() {
+// 	int32_t round_value = IntegerValue::Get(val);
+// 	uint8_t target_scale;
+// 	auto width = DecimalType::GetWidth(decimal_type);
+// 	auto scale = DecimalType::GetScale(decimal_type);
+// 	if (round_value < 0) {
+// 		target_scale = 0;
+// 		switch (decimal_type.InternalType()) {
+// 		case PhysicalType::INT16:
+// 			bound_function.function = DecimalRoundNegativePrecisionFunction<int16_t, NumericHelper>;
+// 			break;
+// 		case PhysicalType::INT32:
+// 			bound_function.function = DecimalRoundNegativePrecisionFunction<int32_t, NumericHelper>;
+// 			break;
+// 		case PhysicalType::INT64:
+// 			bound_function.function = DecimalRoundNegativePrecisionFunction<int64_t, NumericHelper>;
+// 			break;
+// 		default:
+// 			bound_function.function = DecimalRoundNegativePrecisionFunction<hugeint_t, Hugeint>;
+// 			break;
+// 		}
+// 	} else {
+// 		if (round_value >= (int32_t)scale) {
+// 			// if round_value is bigger than or equal to scale we do nothing
+// 			bound_function.function = ScalarFunction::NopFunction;
+// 			target_scale = scale;
+// 		} else {
+// 			target_scale = NumericCast<uint8_t>(round_value);
+// 			switch (decimal_type.InternalType()) {
+// 			case PhysicalType::INT16:
+// 				bound_function.function = DecimalRoundPositivePrecisionFunction<int16_t, NumericHelper>;
+// 				break;
+// 			case PhysicalType::INT32:
+// 				bound_function.function = DecimalRoundPositivePrecisionFunction<int32_t, NumericHelper>;
+// 				break;
+// 			case PhysicalType::INT64:
+// 				bound_function.function = DecimalRoundPositivePrecisionFunction<int64_t, NumericHelper>;
+// 				break;
+// 			default:
+// 				bound_function.function = DecimalRoundPositivePrecisionFunction<hugeint_t, Hugeint>;
+// 				break;
+// 			}
+// 		}
+// 	}
+// }
 
 BoundCastInfo DefaultCasts::DecimalCastSwitch(BindCastInput &input, const LogicalType &source,
                                               const LogicalType &target) {
