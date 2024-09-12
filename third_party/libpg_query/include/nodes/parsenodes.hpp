@@ -2100,7 +2100,7 @@ typedef struct PGIntervalConstant {
 typedef struct PGSampleSize {
 	PGNodeTag type;
 	bool is_percentage;   /* whether or not the sample size is expressed in row numbers or a percentage */
-	PGValue sample_size;  /* sample size */
+	PGNode *sample_size;  /* sample size */
 } PGSampleSize;
 
 typedef struct PGSampleOptions {
