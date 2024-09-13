@@ -193,7 +193,7 @@ with open(enum_util_source_file, "w") as f:
             # Always use the first string as the enum string
             f.write(f"\tcase {enum_name}::{key}:\n\t\treturn \"{strings[0]}\";\n")
         f.write(
-            '\tdefault:\n\t\tthrow NotImplementedException(StringUtil::Format("Enum value: \'%d\' not implemented", value));\n'
+            f"\tdefault:\n\t\tthrow NotImplementedException(StringUtil::Format(\"Enum value: \'%d\' not implemented in ToChars<{enum_name}>\", value));\n"
         )
         f.write("\t}\n")
         f.write("}\n\n")
@@ -203,7 +203,9 @@ with open(enum_util_source_file, "w") as f:
         for key, strings in enum_members:
             cond = " || ".join([f'StringUtil::Equals(value, "{string}")' for string in strings])
             f.write(f'\tif ({cond}) {{\n\t\treturn {enum_name}::{key};\n\t}}\n')
-        f.write('\tthrow NotImplementedException(StringUtil::Format("Enum value: \'%s\' not implemented", value));\n')
+        f.write(
+            f"\tthrow NotImplementedException(StringUtil::Format(\"Enum value: \'%s\' not implemented in FromString<{enum_name}>\", value));\n"
+        )
 
         f.write("}\n\n")
 
