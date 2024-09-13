@@ -3,6 +3,7 @@
 #include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/types/row/tuple_data_segment.hpp"
 #include "duckdb/common/types/row/tuple_data_states.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -10,7 +11,8 @@ namespace duckdb {
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
 TupleDataBlock::TupleDataBlock(BufferManager &buffer_manager, idx_t capacity_p) : capacity(capacity_p), size(0) {
-	buffer_manager.Allocate(MemoryTag::HASH_TABLE, capacity, false, &handle);
+	auto buffer_handle = buffer_manager.Allocate(MemoryTag::HASH_TABLE, capacity, false);
+	handle = buffer_handle.GetBlockHandle();
 }
 
 TupleDataBlock::TupleDataBlock(TupleDataBlock &&other) noexcept : capacity(0), size(0) {
@@ -32,6 +34,23 @@ TupleDataAllocator::TupleDataAllocator(BufferManager &buffer_manager, const Tupl
 
 TupleDataAllocator::TupleDataAllocator(TupleDataAllocator &allocator)
     : buffer_manager(allocator.buffer_manager), layout(allocator.layout.Copy()) {
+}
+
+void TupleDataAllocator::SetDestroyBufferUponUnpin() {
+	for (auto &block : row_blocks) {
+		if (block.handle) {
+			block.handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+		}
+	}
+	for (auto &block : heap_blocks) {
+		if (block.handle) {
+			block.handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+		}
+	}
+}
+
+TupleDataAllocator::~TupleDataAllocator() {
+	SetDestroyBufferUponUnpin();
 }
 
 BufferManager &TupleDataAllocator::GetBufferManager() {
@@ -440,7 +459,10 @@ void TupleDataAllocator::ReleaseOrStoreHandlesInternal(
 			case TupleDataPinProperties::ALREADY_PINNED:
 				break;
 			case TupleDataPinProperties::DESTROY_AFTER_DONE:
-				blocks[block_id].handle = nullptr;
+				// Prevent it from being added to the eviction queue
+				blocks[block_id].handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+				// Destroy
+				blocks[block_id].handle.reset();
 				break;
 			default:
 				D_ASSERT(properties == TupleDataPinProperties::INVALID);

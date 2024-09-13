@@ -48,7 +48,7 @@ jobs:
         BUILD_FTS: 1
         BUILD_HTTPFS: 1
         BUILD_JSON: 1
-        BUILD_INET: 1
+        CORE_EXTENSIONS: "inet"
 
     - name: Upload the result
       run: |

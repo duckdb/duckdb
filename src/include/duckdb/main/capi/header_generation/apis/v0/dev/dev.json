@@ -1,17 +1,5 @@
 {
     "version": "dev",
     "entries": [
-        "duckdb_create_aggregate_function",
-        "duckdb_destroy_aggregate_function",
-        "duckdb_aggregate_function_set_name",
-        "duckdb_aggregate_function_add_parameter",
-        "duckdb_aggregate_function_set_return_type",
-        "duckdb_aggregate_function_set_functions",
-        "duckdb_aggregate_function_set_destructor",
-        "duckdb_register_aggregate_function",
-        "duckdb_aggregate_function_set_special_handling",
-        "duckdb_aggregate_function_set_extra_info",
-        "duckdb_aggregate_function_get_extra_info",
-        "duckdb_aggregate_function_set_error"
     ]
 }

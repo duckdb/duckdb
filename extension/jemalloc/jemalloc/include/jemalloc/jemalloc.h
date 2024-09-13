@@ -5,8 +5,8 @@
 extern "C" {
 #endif
 
-// DuckDB uses a 10s decay
-#define DUCKDB_DECAY_DELAY 10
+// DuckDB uses a 5s decay
+#define DUCKDB_JEMALLOC_DECAY 5
 
 /* Defined if __attribute__((...)) syntax is supported. */
 #define JEMALLOC_HAVE_ATTR
@@ -30,14 +30,14 @@ extern "C" {
 #define JEMALLOC_HAVE_ATTR_COLD
 
 /* Defined if deprecated attribute is supported. */
-/* #undef JEMALLOC_HAVE_ATTR_DEPRECATED */
+#define JEMALLOC_HAVE_ATTR_DEPRECATED
 
 /*
  * Define overrides for non-standard allocator-related functions if they are
  * present on the system.
  */
 /* #undef JEMALLOC_OVERRIDE_MEMALIGN */
-/* #undef JEMALLOC_OVERRIDE_VALLOC */
+#define JEMALLOC_OVERRIDE_VALLOC
 /* #undef JEMALLOC_OVERRIDE_PVALLOC */
 
 /*
@@ -64,7 +64,7 @@ extern "C" {
 #  endif
 #endif
 
-/* sizeof(void *) == 2^LG_SIZEOF_PTR. */
+    /* sizeof(void *) == 2^LG_SIZEOF_PTR. */
 #include <limits.h>
 #ifdef _MSC_VER
 #  define LG_SIZEOF_PTR LG_SIZEOF_PTR_WIN
@@ -84,6 +84,8 @@ extern "C" {
 #  define je_calloc duckdb_je_calloc
 #  define je_dallocx duckdb_je_dallocx
 #  define je_free duckdb_je_free
+#  define je_free_sized duckdb_je_free_sized
+#  define je_free_aligned_sized duckdb_je_free_aligned_sized
 #  define je_mallctl duckdb_je_mallctl
 #  define je_mallctlbymib duckdb_je_mallctlbymib
 #  define je_mallctlnametomib duckdb_je_mallctlnametomib
@@ -94,7 +96,7 @@ extern "C" {
 #  define je_malloc_stats_print duckdb_je_malloc_stats_print
 #  define je_malloc_usable_size duckdb_je_malloc_usable_size
 #  define je_mallocx duckdb_je_mallocx
-#  define je_smallocx_fa451de17fff73cc03c31ec8cd817d62927d1ff9 duckdb_je_smallocx_fa451de17fff73cc03c31ec8cd817d62927d1ff9
+#  define je_smallocx_a25b9b8ba91881964be3083db349991bbbbf1661 duckdb_je_smallocx_a25b9b8ba91881964be3083db349991bbbbf1661
 #  define je_nallocx duckdb_je_nallocx
 #  define je_posix_memalign duckdb_je_posix_memalign
 #  define je_rallocx duckdb_je_rallocx
@@ -112,13 +114,13 @@ extern "C" {
 #include <limits.h>
 #include <strings.h>
 
-#define JEMALLOC_VERSION "5.3.0-172-gfa451de17fff73cc03c31ec8cd817d62927d1ff9"
+#define JEMALLOC_VERSION "5.3.0-196-ga25b9b8ba91881964be3083db349991bbbbf1661"
 #define JEMALLOC_VERSION_MAJOR 5
 #define JEMALLOC_VERSION_MINOR 3
 #define JEMALLOC_VERSION_BUGFIX 0
-#define JEMALLOC_VERSION_NREV 172
-#define JEMALLOC_VERSION_GID "fa451de17fff73cc03c31ec8cd817d62927d1ff9"
-#define JEMALLOC_VERSION_GID_IDENT fa451de17fff73cc03c31ec8cd817d62927d1ff9
+#define JEMALLOC_VERSION_NREV 196
+#define JEMALLOC_VERSION_GID "a25b9b8ba91881964be3083db349991bbbbf1661"
+#define JEMALLOC_VERSION_GID_IDENT a25b9b8ba91881964be3083db349991bbbbf1661
 
 #define MALLOCX_LG_ALIGN(la)	((int)(la))
 #if LG_SIZEOF_PTR == 2
@@ -160,7 +162,7 @@ extern "C" {
 #define MALLCTL_ARENAS_DESTROYED	4097
 
 #if defined(__cplusplus) && defined(JEMALLOC_USE_CXX_THROW)
-#  define JEMALLOC_CXX_THROW throw()
+#  define JEMALLOC_CXX_THROW noexcept (true)
 #else
 #  define JEMALLOC_CXX_THROW
 #endif
@@ -438,6 +440,8 @@ struct extent_hooks_s {
 #  define calloc je_calloc
 #  define dallocx je_dallocx
 #  define free je_free
+#  define free_sized je_free_sized
+#  define free_aligned_sized je_free_aligned_sized
 #  define mallctl je_mallctl
 #  define mallctlbymib je_mallctlbymib
 #  define mallctlnametomib je_mallctlnametomib
@@ -448,7 +452,7 @@ struct extent_hooks_s {
 #  define malloc_stats_print je_malloc_stats_print
 #  define malloc_usable_size je_malloc_usable_size
 #  define mallocx je_mallocx
-#  define smallocx_fa451de17fff73cc03c31ec8cd817d62927d1ff9 je_smallocx_fa451de17fff73cc03c31ec8cd817d62927d1ff9
+#  define smallocx_a25b9b8ba91881964be3083db349991bbbbf1661 je_smallocx_a25b9b8ba91881964be3083db349991bbbbf1661
 #  define nallocx je_nallocx
 #  define posix_memalign je_posix_memalign
 #  define rallocx je_rallocx
@@ -472,6 +476,8 @@ struct extent_hooks_s {
 #  undef je_calloc
 #  undef je_dallocx
 #  undef je_free
+#  undef je_free_sized
+#  undef je_free_aligned_sized
 #  undef je_mallctl
 #  undef je_mallctlbymib
 #  undef je_mallctlnametomib
@@ -482,7 +488,7 @@ struct extent_hooks_s {
 #  undef je_malloc_stats_print
 #  undef je_malloc_usable_size
 #  undef je_mallocx
-#  undef je_smallocx_fa451de17fff73cc03c31ec8cd817d62927d1ff9
+#  undef je_smallocx_a25b9b8ba91881964be3083db349991bbbbf1661
 #  undef je_nallocx
 #  undef je_posix_memalign
 #  undef je_rallocx

@@ -218,7 +218,9 @@ public:
 
 	shared_ptr<DuckDBPyConnection> RegisterPythonObject(const string &name, const py::object &python_object);
 
-	void InstallExtension(const string &extension, bool force_install = false);
+	void InstallExtension(const string &extension, bool force_install = false,
+	                      const py::object &repository = py::none(), const py::object &repository_url = py::none(),
+	                      const py::object &version = py::none());
 
 	void LoadExtension(const string &extension);
 
@@ -314,6 +316,7 @@ public:
 
 	static bool IsPandasDataframe(const py::object &object);
 	static bool IsPolarsDataframe(const py::object &object);
+	static PyArrowObjectType GetArrowType(const py::handle &obj);
 	static bool IsAcceptedArrowObject(const py::object &object);
 	static NumpyObjectType IsAcceptedNumpyObject(const py::object &object);
 

@@ -30,13 +30,15 @@ public:
 	DUCKDB_API static void SetHeader(char *blob, uint64_t number_of_bytes, bool is_negative);
 	//! Initializes and returns a blob with value 0, allocated in Vector& result
 	DUCKDB_API static string_t InitializeVarintZero(Vector &result);
+	DUCKDB_API static string InitializeVarintZero();
+
 	//! Switch Case of To Varint Convertion
 	DUCKDB_API static BoundCastInfo NumericToVarintCastSwitch(const LogicalType &source);
 
 	//! ----------------------------------- Varchar Cast ----------------------------------- //
 	//! Function to prepare a varchar for conversion. We trim zero's, check for negative values, and what-not
 	//! Returns false if this is an invalid varchar
-	DUCKDB_API static bool VarcharFormatting(string_t &value, idx_t &start_pos, idx_t &end_pos, bool &is_negative,
+	DUCKDB_API static bool VarcharFormatting(const string_t &value, idx_t &start_pos, idx_t &end_pos, bool &is_negative,
 	                                         bool &is_zero);
 
 	//! Converts a char to a Digit
@@ -47,9 +49,10 @@ public:
 	DUCKDB_API static void GetByteArray(vector<uint8_t> &byte_array, bool &is_negative, const string_t &blob);
 	//! Function to convert VARINT blob to a VARCHAR
 	DUCKDB_API static string VarIntToVarchar(const string_t &blob);
-
+	//! Function to convert Varchar to VARINT blob
+	DUCKDB_API static string VarcharToVarInt(const string_t &value);
 	//! ----------------------------------- Double Cast ----------------------------------- //
-	DUCKDB_API static bool VarintToDouble(string_t &blob, double &result, bool &strict);
+	DUCKDB_API static bool VarintToDouble(const string_t &blob, double &result, bool &strict);
 };
 
 //! ----------------------------------- (u)Integral Cast ----------------------------------- //

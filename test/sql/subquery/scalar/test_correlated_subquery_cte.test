@@ -14,7 +14,7 @@ CREATE TABLE integers(i INTEGER)
 statement ok
 INSERT INTO integers VALUES (1), (2), (3), (NULL)
 
-require noalternativeverify
+require no_alternative_verify
 
 # scalar select with correlation
 query II
@@ -35,6 +35,14 @@ NULL
 1
 
 # subquery returning multiple results
+statement error
+SELECT i, (WITH i2 AS (SELECT 42+i1.i AS j FROM integers) SELECT j FROM i2) AS j FROM integers i1 ORDER BY i;
+----
+More than one row returned by a subquery
+
+statement ok
+SET scalar_subquery_error_on_multiple_rows=false
+
 query II
 SELECT i, (WITH i2 AS (SELECT 42+i1.i AS j FROM integers) SELECT j FROM i2) AS j FROM integers i1 ORDER BY i;
 ----

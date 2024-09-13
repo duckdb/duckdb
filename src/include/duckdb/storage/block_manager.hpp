@@ -44,6 +44,8 @@ public:
 	virtual bool IsRootBlock(MetaBlockPointer root) = 0;
 	//! Mark a block as "free"; free blocks are immediately added to the free list and can be immediately overwritten
 	virtual void MarkBlockAsFree(block_id_t block_id) = 0;
+	//! Mark a block as "used"; either the block is removed from the free list, or the reference count is incremented
+	virtual void MarkBlockAsUsed(block_id_t block_id) = 0;
 	//! Mark a block as "modified"; modified blocks are added to the free list after a checkpoint (i.e. their data is
 	//! assumed to be rewritten)
 	virtual void MarkBlockAsModified(block_id_t block_id) = 0;
@@ -76,6 +78,8 @@ public:
 	//! Whether or not the attached database is in-memory
 	virtual bool InMemory() = 0;
 
+	//! Sync changes made to the block manager
+	virtual void FileSync() = 0;
 	//! Truncate the underlying database file after a checkpoint
 	virtual void Truncate();
 
@@ -84,7 +88,9 @@ public:
 	//! Convert an existing in-memory buffer into a persistent disk-backed block
 	shared_ptr<BlockHandle> ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block);
 
-	void UnregisterBlock(block_id_t block_id, bool can_destroy);
+	void UnregisterBlock(BlockHandle &block);
+	//! UnregisterBlock, only accepts non-temporary block ids
+	void UnregisterBlock(block_id_t id);
 
 	//! Returns a reference to the metadata manager of this block manager.
 	MetadataManager &GetMetadataManager();
@@ -108,6 +114,10 @@ public:
 			throw InternalException("the block allocation size must be set once");
 		}
 		block_alloc_size = block_alloc_size_p.GetIndex();
+	}
+
+	//! Verify the block usage count
+	virtual void VerifyBlocks(const unordered_map<block_id_t, idx_t> &block_usage_count) {
 	}
 
 private:

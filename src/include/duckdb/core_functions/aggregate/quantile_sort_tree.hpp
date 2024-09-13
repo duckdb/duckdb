@@ -10,6 +10,7 @@
 
 #include "duckdb/core_functions/aggregate/quantile_helpers.hpp"
 #include "duckdb/execution/merge_sort_tree.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include <algorithm>
 #include <numeric>
@@ -109,8 +110,8 @@ string_t CastInterpolation::Cast(const string_t &src, Vector &result);
 template <bool DISCRETE>
 struct Interpolator {
 	Interpolator(const QuantileValue &q, const idx_t n_p, const bool desc_p)
-	    : desc(desc_p), RN((double)(n_p - 1) * q.dbl), FRN(UnsafeNumericCast<idx_t>(floor(RN))),
-	      CRN(UnsafeNumericCast<idx_t>(ceil(RN))), begin(0), end(n_p) {
+	    : desc(desc_p), RN((double)(n_p - 1) * q.dbl), FRN(ExactNumericCast<idx_t>(floor(RN))),
+	      CRN(ExactNumericCast<idx_t>(ceil(RN))), begin(0), end(n_p) {
 	}
 
 	template <class INPUT_TYPE, class TARGET_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
@@ -246,7 +247,9 @@ struct QuantileSortTree : public MergeSortTree<IDX, IDX> {
 	using BaseTree = MergeSortTree<IDX, IDX>;
 	using Elements = typename BaseTree::Elements;
 
-	explicit QuantileSortTree(Elements &&lowest_level) : BaseTree(std::move(lowest_level)) {
+	explicit QuantileSortTree(Elements &&lowest_level) {
+		BaseTree::Allocate(lowest_level.size());
+		BaseTree::LowestLevel() = std::move(lowest_level);
 	}
 
 	template <class INPUT_TYPE>
@@ -285,8 +288,11 @@ struct QuantileSortTree : public MergeSortTree<IDX, IDX> {
 
 	template <typename INPUT_TYPE, typename RESULT_TYPE, bool DISCRETE>
 	RESULT_TYPE WindowScalar(const INPUT_TYPE *data, const SubFrames &frames, const idx_t n, Vector &result,
-	                         const QuantileValue &q) const {
+	                         const QuantileValue &q) {
 		D_ASSERT(n > 0);
+
+		//	Thread safe and idempotent.
+		BaseTree::Build();
 
 		//	Find the interpolated indicies within the frame
 		Interpolator<DISCRETE> interp(q, n, false);
@@ -304,8 +310,11 @@ struct QuantileSortTree : public MergeSortTree<IDX, IDX> {
 
 	template <typename INPUT_TYPE, typename CHILD_TYPE, bool DISCRETE>
 	void WindowList(const INPUT_TYPE *data, const SubFrames &frames, const idx_t n, Vector &list, const idx_t lidx,
-	                const QuantileBindData &bind_data) const {
+	                const QuantileBindData &bind_data) {
 		D_ASSERT(n > 0);
+
+		//	Thread safe and idempotent.
+		BaseTree::Build();
 
 		// Result is a constant LIST<CHILD_TYPE> with a fixed length
 		auto ldata = FlatVector::GetData<list_entry_t>(list);

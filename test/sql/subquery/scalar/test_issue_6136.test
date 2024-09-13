@@ -13,6 +13,22 @@ select
   (select {'__matches': count(*)} from r where ba = ra and bb = rb group by ra, rb) as ref1,
 from b;
 
+statement error
+select
+  id,
+  ba,
+  bb,
+  coalesce((select {'x': first(x), 'y': first(y), '__matches': count(*)} from r where ba = ra and bb = rb group by ra, rb), {'x': null, 'y': null, '__matches': 0}) as ref1,
+  coalesce((select {'x': first(x), 'y': first(y), '__matches': count(*)} from r where ba = ra and (bb = rb or rb is null) group by ra, rb order by bb = rb), {'x': null, 'y': null, '__matches': 0}) as ref2,
+  coalesce((select {'x': first(x), 'y': first(y), '__matches': count(*)} from r where (ba = ra or ra is null) and (bb = rb or rb is null) group by ra, rb order by ba = ra, bb = rb), {'x': null, 'y': null, '__matches': 0}) as ref3,
+  coalesce((select {'x': first(x), 'y': first(y), '__matches': count(*)} from r where (ba = ra or ra is null) group by ra order by ba = ra), {'x': null, 'y': null, '__matches': 0}) as ref4,
+from b
+----
+More than one row returned by a subquery
+
+statement ok
+SET scalar_subquery_error_on_multiple_rows=false
+
 # this is non-deterministic since the subqueries return multiple rows
 statement ok
 select

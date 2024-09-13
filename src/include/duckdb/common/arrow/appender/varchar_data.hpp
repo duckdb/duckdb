@@ -3,6 +3,7 @@
 #include "duckdb/common/arrow/appender/append_data.hpp"
 #include "duckdb/common/arrow/appender/scalar_data.hpp"
 #include "duckdb/common/types/arrow_string_view_type.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
 

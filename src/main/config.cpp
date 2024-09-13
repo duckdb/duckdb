@@ -2,8 +2,8 @@
 
 #include "duckdb/common/cgroups.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/storage_extension.hpp"
@@ -58,6 +58,25 @@ bool DBConfigOptions::debug_print_bindings = false;
 
 static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(AccessModeSetting),
+    DUCKDB_GLOBAL(AllowPersistentSecrets),
+    DUCKDB_GLOBAL(CatalogErrorMaxSchema),
+    DUCKDB_GLOBAL(CheckpointThresholdSetting),
+    DUCKDB_GLOBAL(DebugCheckpointAbort),
+    DUCKDB_GLOBAL(DebugSkipCheckpointOnCommit),
+    DUCKDB_GLOBAL(StorageCompatibilityVersion),
+    DUCKDB_LOCAL(DebugForceExternal),
+    DUCKDB_LOCAL(DebugForceNoCrossProduct),
+    DUCKDB_LOCAL(DebugAsOfIEJoin),
+    DUCKDB_LOCAL(PreferRangeJoins),
+    DUCKDB_GLOBAL(DebugWindowMode),
+    DUCKDB_GLOBAL_LOCAL(DefaultCollationSetting),
+    DUCKDB_GLOBAL(DefaultOrderSetting),
+    DUCKDB_GLOBAL(DefaultNullOrderSetting),
+    DUCKDB_GLOBAL(DisabledFileSystemsSetting),
+    DUCKDB_GLOBAL(DisabledOptimizersSetting),
+    DUCKDB_GLOBAL(EnableExternalAccessSetting),
+    DUCKDB_GLOBAL(EnableFSSTVectors),
+    DUCKDB_GLOBAL(AllowUnsignedExtensionsSetting),
     DUCKDB_GLOBAL(AllocatorBackgroundThreadsSetting),
     DUCKDB_GLOBAL(AllocatorFlushThresholdSetting),
     DUCKDB_GLOBAL(AllowCommunityExtensionsSetting),
@@ -118,9 +137,13 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(ForceNoCrossProductSetting),
     DUCKDB_LOCAL_ALIAS("debug_force_no_cross_product", ForceNoCrossProductSetting),
     DUCKDB_LOCAL(HomeDirectorySetting),
+    DUCKDB_GLOBAL(HTTPProxy),
+    DUCKDB_GLOBAL(HTTPProxyUsername),
+    DUCKDB_GLOBAL(HTTPProxyPassword),
     DUCKDB_LOCAL(HttpLoggingOutputSetting),
     DUCKDB_GLOBAL(HttpMetadataCacheEnableSetting),
     DUCKDB_GLOBAL_ALIAS("enable_http_metadata_cache", HttpMetadataCacheEnableSetting),
+    DUCKDB_LOCAL(IEEEFloatingPointOpsSetting),
     DUCKDB_GLOBAL(ImmediateTransactionModeSetting),
     DUCKDB_GLOBAL(IndexScanMaxCountSetting),
     DUCKDB_GLOBAL(IndexScanPercentageSetting),
@@ -129,6 +152,11 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(LogQueryPathSetting),
     DUCKDB_LOCAL(MaxExpressionDepthSetting),
     DUCKDB_GLOBAL(MaximumMemorySetting),
+    DUCKDB_GLOBAL(MaximumTempDirectorySize),
+    DUCKDB_GLOBAL(MaximumVacuumTasks),
+    DUCKDB_LOCAL(MergeJoinThreshold),
+    DUCKDB_LOCAL(NestedLoopJoinThreshold),
+    DUCKDB_GLOBAL(OldImplicitCasting),
     DUCKDB_GLOBAL_ALIAS("memory_limit", MaximumMemorySetting),
     DUCKDB_GLOBAL_ALIAS("max_memory", MaximumMemorySetting),
     DUCKDB_GLOBAL(MaximumSwapSpaceSetting),
@@ -140,6 +168,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(NestedLoopJoinThresholdSetting),
     DUCKDB_GLOBAL(ObjectCacheEnableSetting),
     DUCKDB_GLOBAL_ALIAS("enable_object_cache", ObjectCacheEnableSetting),
+    DUCKDB_LOCAL(OrderByNonIntegerLiteral),
     DUCKDB_GLOBAL(OldImplicitCastingSetting),
     DUCKDB_LOCAL(OrderedAggregateThresholdSetting),
     DUCKDB_LOCAL(PartitionedWriteFlushThresholdSetting),
@@ -162,14 +191,31 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(ProgressBarTimeSetting),
     DUCKDB_LOCAL(SchemaSetting),
     DUCKDB_LOCAL(SearchPathSetting),
+    DUCKDB_LOCAL(ScalarSubqueryErrorOnMultipleRows),
     DUCKDB_GLOBAL(SecretDirectorySetting),
     DUCKDB_GLOBAL(SerializationCompatibilitySetting),
     DUCKDB_GLOBAL_ALIAS("storage_compatibility_version", SerializationCompatibilitySetting),
     DUCKDB_LOCAL(StreamingBufferSizeSetting),
     DUCKDB_GLOBAL(UsernameSetting),
+    DUCKDB_GLOBAL(ExportLargeBufferArrow),
+    DUCKDB_GLOBAL(ArrowOutputListView),
+    DUCKDB_GLOBAL(LosslessConversionArrow),
+    DUCKDB_GLOBAL(ProduceArrowStringView),
     DUCKDB_GLOBAL_ALIAS("user", UsernameSetting),
-    DUCKDB_GLOBAL(WindowModeSetting),
-    DUCKDB_GLOBAL_ALIAS("debug_window_mode", WindowModeSetting),
+    DUCKDB_GLOBAL_ALIAS("wal_autocheckpoint", CheckpointThresholdSetting),
+    DUCKDB_GLOBAL_ALIAS("worker_threads", ThreadsSetting),
+    DUCKDB_GLOBAL(AllocatorFlushThreshold),
+    DUCKDB_GLOBAL(AllocatorBulkDeallocationFlushThreshold),
+    DUCKDB_GLOBAL(AllocatorBackgroundThreadsSetting),
+    DUCKDB_GLOBAL(DuckDBApiSetting),
+    DUCKDB_GLOBAL(CustomUserAgentSetting),
+    DUCKDB_LOCAL(PartitionedWriteFlushThreshold),
+    DUCKDB_LOCAL(PartitionedWriteMaxOpenFiles),
+    DUCKDB_GLOBAL(DefaultBlockAllocSize),
+    DUCKDB_GLOBAL(IndexScanPercentage),
+    DUCKDB_GLOBAL(IndexScanMaxCount),
+    DUCKDB_LOCAL(EnableHTTPLoggingSetting),
+    DUCKDB_LOCAL(HTTPLoggingOutputSetting),
     FINAL_SETTING};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -376,16 +422,22 @@ idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 }
 
 idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
+#ifdef __linux__
 	// Check SLURM environment variables first
 	const char *slurm_mem_per_node = getenv("SLURM_MEM_PER_NODE");
 	const char *slurm_mem_per_cpu = getenv("SLURM_MEM_PER_CPU");
 
 	if (slurm_mem_per_node) {
-		return ParseMemoryLimitSlurm(slurm_mem_per_node);
+		auto limit = ParseMemoryLimitSlurm(slurm_mem_per_node);
+		if (limit.IsValid()) {
+			return limit.GetIndex();
+		}
 	} else if (slurm_mem_per_cpu) {
-		idx_t mem_per_cpu = ParseMemoryLimitSlurm(slurm_mem_per_cpu);
-		idx_t num_threads = GetSystemMaxThreads(fs);
-		return mem_per_cpu * num_threads;
+		auto mem_per_cpu = ParseMemoryLimitSlurm(slurm_mem_per_cpu);
+		if (mem_per_cpu.IsValid()) {
+			idx_t num_threads = GetSystemMaxThreads(fs);
+			return mem_per_cpu.GetIndex() * num_threads;
+		}
 	}
 
 	// Check cgroup memory limit
@@ -393,8 +445,9 @@ idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
 	if (cgroup_memory_limit.IsValid()) {
 		return cgroup_memory_limit.GetIndex();
 	}
+#endif
 
-	// Fall back to system memory detection
+	// System memory detection
 	auto memory = FileSystem::GetAvailableMemory();
 	if (!memory.IsValid()) {
 		return DBConfigOptions().maximum_memory;
@@ -461,12 +514,12 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 		throw ParserException("Unknown unit for memory_limit: %s (expected: KB, MB, GB, TB for 1000^i units or KiB, "
 		                      "MiB, GiB, TiB for 1024^i unites)");
 	}
-	return NumericCast<idx_t>(static_cast<double>(multiplier) * limit);
+	return LossyNumericCast<idx_t>(static_cast<double>(multiplier) * limit);
 }
 
-idx_t DBConfig::ParseMemoryLimitSlurm(const string &arg) {
+optional_idx DBConfig::ParseMemoryLimitSlurm(const string &arg) {
 	if (arg.empty()) {
-		return 0;
+		return optional_idx();
 	}
 
 	string number_str = arg;
@@ -488,13 +541,19 @@ idx_t DBConfig::ParseMemoryLimitSlurm(const string &arg) {
 	}
 
 	// Parse the number
-	double limit = Cast::Operation<string_t, double>(string_t(number_str));
-
-	if (limit < 0) {
-		return NumericLimits<idx_t>::Maximum();
+	double limit;
+	if (!TryCast::Operation<string_t, double>(string_t(number_str), limit)) {
+		return optional_idx();
 	}
 
-	return NumericCast<idx_t>(static_cast<double>(multiplier) * limit);
+	if (limit < 0) {
+		return static_cast<idx_t>(NumericLimits<int64_t>::Maximum());
+	}
+	idx_t actual_limit = LossyNumericCast<idx_t>(static_cast<double>(multiplier) * limit);
+	if (actual_limit == NumericLimits<idx_t>::Maximum()) {
+		return static_cast<idx_t>(NumericLimits<int64_t>::Maximum());
+	}
+	return actual_limit;
 }
 
 // Right now we only really care about access mode when comparing DBConfigs
@@ -572,9 +631,15 @@ SerializationCompatibility SerializationCompatibility::Default() {
 	res.manually_set = false;
 	return res;
 #else
+#ifdef DUCKDB_LATEST_STORAGE
+	auto res = FromString("latest");
+	res.manually_set = false;
+	return res;
+#else
 	auto res = FromString("v0.10.2");
 	res.manually_set = false;
 	return res;
+#endif
 #endif
 }
 

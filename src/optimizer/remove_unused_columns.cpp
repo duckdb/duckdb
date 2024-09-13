@@ -144,6 +144,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 					}
 					auto new_projection =
 					    make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
+					if (child->has_estimated_cardinality) {
+						new_projection->SetEstimatedCardinality(child->estimated_cardinality);
+					}
 					new_projection->children.push_back(std::move(child));
 					op.children[child_idx] = std::move(new_projection);
 

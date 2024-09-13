@@ -115,3 +115,25 @@ TEST_CASE("Test external threads", "[api]") {
 	REQUIRE(config.options.maximum_threads == std::thread::hardware_concurrency());
 	REQUIRE(db.NumberOfThreads() == std::thread::hardware_concurrency());
 }
+
+#ifdef DUCKDB_NO_THREADS
+TEST_CASE("Test scheduling with no threads", "[api]") {
+	DuckDB db(nullptr);
+	Connection con1(db);
+	Connection con2(db);
+
+	const auto query_1 = con1.PendingQuery("SELECT 42");
+	const auto query_2 = con2.PendingQuery("SELECT 42");
+	// Get the completed pipelines. Because "executeTask" was never called, there should be no completed pipelines.
+	auto query_1_pipelines = con1.context->GetExecutor().GetCompletedPipelines();
+	REQUIRE((query_1_pipelines == 0));
+
+	// Execute the second query
+	REQUIRE_NO_FAIL(query_2->Execute());
+
+	// And even after that, there should still be no completed pipelines for the first query.
+	query_1_pipelines = con1.context->GetExecutor().GetCompletedPipelines();
+	REQUIRE((query_1_pipelines == 0));
+	REQUIRE_NO_FAIL(query_1->Execute());
+}
+#endif

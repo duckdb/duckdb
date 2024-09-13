@@ -73,6 +73,7 @@ ORIGINAL_FUNCTION_GROUP_ORDER = [
     'arrow_interface',
     'threading_information',
     'streaming_result_interface',
+    'cast_functions',
 ]
 
 # The file that forms the base for the header generation
@@ -124,6 +125,8 @@ HELPER_MACROS = f'''
 DUCKDB_H_HEADER = HEADER('duckdb.h')
 DUCKDB_EXT_H_HEADER = HEADER('duckdb_extension.h')
 DUCKDB_EXT_INTERNAL_H_HEADER = HEADER('extension_api.hpp')
+
+DUCKDB_EXT_H_HEADER += "\n// WARNING: this API is not yet stable, this means that this API is only guaranteed to work for this specific DuckDB version\n\n"
 
 
 # Loads the template for the header files to be generated
@@ -370,22 +373,39 @@ def create_duckdb_h(ext_api_version, function_groups):
         if 'description' in curr_group:
             function_declarations_finished += curr_group['description'] + '\n'
 
-        if 'deprecated' in curr_group and curr_group['deprecated']:
+        deprecated_state = False
+        group_is_deprecated = 'deprecated' in curr_group and curr_group['deprecated']
+        if group_is_deprecated:
             function_declarations_finished += f'#ifndef DUCKDB_API_NO_DEPRECATED\n'
+            deprecated_state = True
 
         for function in curr_group['entries']:
-            if 'deprecated' in function and function['deprecated']:
-                function_declarations_finished += '#ifndef DUCKDB_API_NO_DEPRECATED\n'
-
-            function_declarations_finished += create_function_comment(function)
-            function_declarations_finished += create_function_declaration(function)
-
-            if 'deprecated' in function and function['deprecated']:
+            function_is_deprecated = group_is_deprecated or ('deprecated' in function and function['deprecated'])
+            if deprecated_state and not function_is_deprecated:
                 function_declarations_finished += '#endif\n'
+                deprecated_state = False
+            elif not deprecated_state and function_is_deprecated:
+                function_declarations_finished += '#ifndef DUCKDB_API_NO_DEPRECATED\n'
+                deprecated_state = True
+
+            function_comment = create_function_comment(function)
+            function_contains_deprecation_notice = (
+                '**DEPRECATED**' in function_comment or '**DEPRECATION NOTICE**' in function_comment
+            )
+            if function_is_deprecated and not function_contains_deprecation_notice:
+                raise Exception(
+                    f"Function {str(function)} is labeled as deprecated but the comment does not indicate this"
+                )
+            elif not function_is_deprecated and function_contains_deprecation_notice:
+                raise Exception(
+                    f"Function {str(function)} is not labeled as deprecated but the comment indicates that it is"
+                )
+            function_declarations_finished += function_comment
+            function_declarations_finished += create_function_declaration(function)
 
             function_declarations_finished += '\n'
 
-        if 'deprecated' in curr_group and curr_group['deprecated']:
+        if deprecated_state:
             function_declarations_finished += '#endif\n'
 
     header_template = fetch_header_template_main()
@@ -462,6 +482,8 @@ def create_extension_api_struct(
     extension_struct_finished = COMMENT_HEADER("Function pointer struct")
     extension_struct_finished += 'typedef struct {\n'
     for api_version_entry in api_definition:
+        if len(api_version_entry['entries']) == 0:
+            continue
         version = api_version_entry['version']
         if version == DEV_VERSION_TAG:
             if add_version_defines:
@@ -538,8 +560,9 @@ def create_duckdb_ext_h(
     typedefs = ""
     for api_version_entry in api_struct_definition:
         version = api_version_entry['version']
-        typedefs += f"// Version {version}\n"
 
+        # Collect the typedefs for this version
+        grouped_typedefs = []
         for group in function_groups:
             functions_to_add = []
             for function in group['entries']:
@@ -548,12 +571,18 @@ def create_duckdb_ext_h(
                 functions_to_add.append(function)
 
             if functions_to_add:
-                group_name = group['group']
-                # typedefs += f'//! {group_name}\n'
-                for fun_to_add in functions_to_add:
-                    typedefs += create_function_typedef(fun_to_add)
+                grouped_typedefs.append((group['group'], functions_to_add))
 
-                typedefs += '\n'
+        if len(grouped_typedefs) == 0:
+            continue
+
+        typedefs += f"// Version {version}\n"
+
+        for group in grouped_typedefs:
+            for fun_to_add in group[1]:
+                typedefs += create_function_typedef(fun_to_add)
+
+        typedefs += '\n'
 
     # Create the versioning defines
     major, minor, patch = parse_semver(ext_api_version)

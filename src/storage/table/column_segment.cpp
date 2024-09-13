@@ -161,8 +161,8 @@ void ColumnSegment::Resize(idx_t new_size) {
 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto old_handle = buffer_manager.Pin(block);
-	shared_ptr<BlockHandle> new_block;
-	auto new_handle = buffer_manager.Allocate(MemoryTag::IN_MEMORY_TABLE, new_size, false, &new_block);
+	auto new_handle = buffer_manager.Allocate(MemoryTag::IN_MEMORY_TABLE, new_size);
+	auto new_block = new_handle.GetBlockHandle();
 	memcpy(new_handle.Ptr(), old_handle.Ptr(), segment_size);
 
 	this->block_id = new_block->BlockId();
@@ -234,6 +234,23 @@ void ColumnSegment::MarkAsPersistent(shared_ptr<BlockHandle> block_p, uint32_t o
 	block_id = block_p->BlockId();
 	offset = offset_p;
 	block = std::move(block_p);
+}
+
+DataPointer ColumnSegment::GetDataPointer() {
+	if (segment_type != ColumnSegmentType::PERSISTENT) {
+		throw InternalException("Attempting to call ColumnSegment::GetDataPointer on a transient segment");
+	}
+	// set up the data pointer directly using the data from the persistent segment
+	DataPointer pointer(stats.statistics.Copy());
+	pointer.block_pointer.block_id = GetBlockId();
+	pointer.block_pointer.offset = NumericCast<uint32_t>(GetBlockOffset());
+	pointer.row_start = start;
+	pointer.tuple_count = count;
+	pointer.compression_type = function.get().type;
+	if (function.get().serialize_state) {
+		pointer.segment_state = function.get().serialize_state(*this);
+	}
+	return pointer;
 }
 
 //===--------------------------------------------------------------------===//

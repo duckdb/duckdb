@@ -2369,8 +2369,8 @@ inline std::string base64_encode(const std::string &in) {
   std::string out;
   out.reserve(in.size());
 
-  auto val = 0;
-  auto valb = -6;
+  unsigned int val = 0;
+  int valb = -6;
 
   for (auto c : in) {
     val = (val << 8) + static_cast<uint8_t>(c);
@@ -3789,7 +3789,7 @@ inline bool parse_header(const char *beg, const char *end, T fn) {
     if (!key_len) { return false; }
 
     auto key = std::string(beg, key_end);
-    auto val = compare_case_ignore(key, "Location")
+    auto val = compare_case_ignore(key, "Location") || compare_case_ignore(key, "Link")
                    ? std::string(p, end)
                    : decode_url(std::string(p, end), false);
     fn(std::move(key), std::move(val));

@@ -15,7 +15,7 @@ LinesPerBoundary::LinesPerBoundary(idx_t boundary_idx_p, idx_t lines_in_batch_p)
 CSVErrorHandler::CSVErrorHandler(bool ignore_errors_p) : ignore_errors(ignore_errors_p) {
 }
 
-void CSVErrorHandler::ThrowError(CSVError csv_error) {
+void CSVErrorHandler::ThrowError(const CSVError &csv_error) {
 	std::ostringstream error;
 	if (PrintLineNumber(csv_error)) {
 		error << "CSV Error on Line: " << GetLineInternal(csv_error.error_info) << '\n';
@@ -30,11 +30,11 @@ void CSVErrorHandler::ThrowError(CSVError csv_error) {
 	}
 
 	switch (csv_error.type) {
-	case CSVErrorType::CAST_ERROR:
+	case CAST_ERROR:
 		throw ConversionException(error.str());
-	case CSVErrorType::COLUMN_NAME_TYPE_MISMATCH:
+	case COLUMN_NAME_TYPE_MISMATCH:
 		throw BinderException(error.str());
-	case CSVErrorType::NULLPADDED_QUOTED_NEW_VALUE:
+	case NULLPADDED_QUOTED_NEW_VALUE:
 		throw ParameterNotAllowedException(error.str());
 	default:
 		throw InvalidInputException(error.str());
@@ -53,13 +53,12 @@ void CSVErrorHandler::Error(CSVError csv_error, bool force_error) {
 }
 
 void CSVErrorHandler::ErrorIfNeeded() {
-	CSVError first_error;
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (ignore_errors || errors.empty()) {
 		// Nothing to error
 		return;
 	}
-	first_error = errors.begin()->second[0];
+	CSVError first_error = errors.begin()->second[0];
 
 	if (CanGetLine(first_error.error_info.boundary_idx)) {
 		ThrowError(first_error);
@@ -115,7 +114,7 @@ CSVError CSVError::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_
 		}
 	}
 	if (sql_types_per_column.empty()) {
-		return CSVError("", CSVErrorType::COLUMN_NAME_TYPE_MISMATCH, {});
+		return CSVError("", COLUMN_NAME_TYPE_MISMATCH, {});
 	}
 	string exception = "COLUMN_TYPES error: Columns with names: ";
 	for (auto &col : sql_types_per_column) {
@@ -123,7 +122,7 @@ CSVError CSVError::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_
 	}
 	exception.pop_back();
 	exception += " do not exist in the CSV File";
-	return CSVError(exception, CSVErrorType::COLUMN_NAME_TYPE_MISMATCH, {});
+	return CSVError(exception, COLUMN_NAME_TYPE_MISMATCH, {});
 }
 
 void CSVError::RemoveNewLine(string &error) {
@@ -157,8 +156,8 @@ CSVError CSVError::CastError(const CSVReaderOptions &options, string &column_nam
 		    << '\n';
 	}
 
-	return CSVError(error.str(), CSVErrorType::CAST_ERROR, column_idx, csv_row, error_info, row_byte_position,
-	                byte_position, options, how_to_fix_it.str(), current_path);
+	return CSVError(error.str(), CAST_ERROR, column_idx, csv_row, error_info, row_byte_position, byte_position, options,
+	                how_to_fix_it.str(), current_path);
 }
 
 CSVError CSVError::LineSizeError(const CSVReaderOptions &options, idx_t actual_size, LinesPerBoundary error_info,
@@ -171,16 +170,119 @@ CSVError CSVError::LineSizeError(const CSVReaderOptions &options, idx_t actual_s
 	how_to_fix_it << "Possible Solution: Change the maximum length size, e.g., max_line_size=" << actual_size + 1
 	              << "\n";
 
-	return CSVError(error.str(), CSVErrorType::MAXIMUM_LINE_SIZE, 0, csv_row, error_info, byte_position, byte_position,
-	                options, how_to_fix_it.str(), current_path);
+	return CSVError(error.str(), MAXIMUM_LINE_SIZE, 0, csv_row, error_info, byte_position, byte_position, options,
+	                how_to_fix_it.str(), current_path);
 }
 
-CSVError CSVError::SniffingError(const string &file_path) {
+CSVError CSVError::HeaderSniffingError(const CSVReaderOptions &options, const vector<HeaderValue> &best_header_row,
+                                       idx_t column_count, char delimiter) {
 	std::ostringstream error;
-	// Which column
-	error << "Error when sniffing file \"" << file_path << "\"." << '\n';
-	error << "CSV options could not be auto-detected. Consider setting parser options manually." << '\n';
-	return CSVError(error.str(), CSVErrorType::SNIFFING, {});
+	// 1. Which file
+	error << "Error when sniffing file \"" << options.file_path << "\"." << '\n';
+	// 2. What's the error
+	error << "It was not possible to detect the CSV Header, due to the header having less columns than expected"
+	      << '\n';
+	// 2.1 What's the expected number of columns
+	error << "Number of expected columns: " << column_count << ". Actual number of columns " << best_header_row.size()
+	      << '\n';
+	// 2.2 What was the detected row
+	error << "Detected row as Header:" << '\n';
+	for (idx_t i = 0; i < best_header_row.size(); i++) {
+		if (best_header_row[i].is_null) {
+			error << "NULL";
+		} else {
+			error << best_header_row[i].value;
+		}
+		if (i < best_header_row.size() - 1) {
+			error << delimiter << " ";
+		}
+	}
+	error << "\n";
+
+	// 3. Suggest how to fix it!
+	error << "Possible fixes:" << '\n';
+	// header
+	if (!options.dialect_options.header.IsSetByUser()) {
+		error << "* Set header (header = true) if your CSV has a header, or (header = false) if it doesn't" << '\n';
+	} else {
+		error << "* Header is set to \'" << options.dialect_options.header.GetValue() << "\'. Consider unsetting it."
+		      << '\n';
+	}
+	// skip_rows
+	if (!options.dialect_options.skip_rows.IsSetByUser()) {
+		error << "* Set skip (skip=${n}) to skip ${n} lines at the top of the file" << '\n';
+	} else {
+		error << "* Skip is set to \'" << options.dialect_options.skip_rows.GetValue() << "\'. Consider unsetting it."
+		      << '\n';
+	}
+	// ignore_errors
+	if (!options.ignore_errors.GetValue()) {
+		error << "* Enable ignore errors (ignore_errors=true) to ignore potential errors" << '\n';
+	}
+	// null_padding
+	if (!options.null_padding) {
+		error << "* Enable null padding (null_padding=true) to pad missing columns with NULL values" << '\n';
+	}
+	return CSVError(error.str(), SNIFFING, {});
+}
+
+CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &search_space) {
+	std::ostringstream error;
+	// 1. Which file
+	error << "Error when sniffing file \"" << options.file_path << "\"." << '\n';
+	// 2. What's the error
+	error << "It was not possible to automatically detect the CSV Parsing dialect/types" << '\n';
+
+	// 2. What was the search space?
+	error << "The search space used was:" << '\n';
+	error << search_space;
+	// 3. Suggest how to fix it!
+	error << "Possible fixes:" << '\n';
+	// 3.1 Inform the reader of the dialect
+	// delimiter
+	if (!options.dialect_options.state_machine_options.delimiter.IsSetByUser()) {
+		error << "* Set delimiter (e.g., delim=\',\')" << '\n';
+	} else {
+		error << "* Delimiter is set to \'" << options.dialect_options.state_machine_options.delimiter.GetValue()
+		      << "\'. Consider unsetting it." << '\n';
+	}
+	// quote
+	if (!options.dialect_options.state_machine_options.quote.IsSetByUser()) {
+		error << "* Set quote (e.g., quote=\'\"\')" << '\n';
+	} else {
+		error << "* Quote is set to \'" << options.dialect_options.state_machine_options.quote.GetValue()
+		      << "\'. Consider unsetting it." << '\n';
+	}
+	// escape
+	if (!options.dialect_options.state_machine_options.escape.IsSetByUser()) {
+		error << "* Set escape (e.g., escape=\'\"\')" << '\n';
+	} else {
+		error << "* Escape is set to \'" << options.dialect_options.state_machine_options.escape.GetValue()
+		      << "\'. Consider unsetting it." << '\n';
+	}
+	// comment
+	if (!options.dialect_options.state_machine_options.comment.IsSetByUser()) {
+		error << "* Set comment (e.g., comment=\'#\')" << '\n';
+	} else {
+		error << "* Comment is set to \'" << options.dialect_options.state_machine_options.comment.GetValue()
+		      << "\'. Consider unsetting it." << '\n';
+	}
+	// 3.2 skip_rows
+	if (!options.dialect_options.skip_rows.IsSetByUser()) {
+		error << "* Set skip (skip=${n}) to skip ${n} lines at the top of the file" << '\n';
+	}
+	// 3.3 ignore_errors
+	if (!options.ignore_errors.GetValue()) {
+		error << "* Enable ignore errors (ignore_errors=true) to ignore potential errors" << '\n';
+	}
+	// 3.4 null_padding
+	if (!options.null_padding) {
+		error << "* Enable null padding (null_padding=true) to pad missing columns with NULL values" << '\n';
+	}
+	error << "* Check you are using the correct file compression, otherwise set it (e.g., compression = \'zstd\')"
+	      << '\n';
+
+	return CSVError(error.str(), SNIFFING, {});
 }
 
 CSVError CSVError::NullPaddingFail(const CSVReaderOptions &options, LinesPerBoundary error_info,
@@ -191,7 +293,7 @@ CSVError CSVError::NullPaddingFail(const CSVReaderOptions &options, LinesPerBoun
 	      << '\n';
 	// What were the options
 	error << options.ToString(current_path);
-	return CSVError(error.str(), CSVErrorType::NULLPADDED_QUOTED_NEW_VALUE, error_info);
+	return CSVError(error.str(), NULLPADDED_QUOTED_NEW_VALUE, error_info);
 }
 
 CSVError CSVError::UnterminatedQuotesError(const CSVReaderOptions &options, idx_t current_column,
@@ -200,9 +302,11 @@ CSVError CSVError::UnterminatedQuotesError(const CSVReaderOptions &options, idx_
 	std::ostringstream error;
 	error << "Value with unterminated quote found." << '\n';
 	std::ostringstream how_to_fix_it;
-	how_to_fix_it << "Possible Solution: Enable ignore errors (ignore_errors=true) to skip this row" << '\n';
-	return CSVError(error.str(), CSVErrorType::UNTERMINATED_QUOTES, current_column, csv_row, error_info,
-	                row_byte_position, byte_position, options, how_to_fix_it.str(), current_path);
+	how_to_fix_it << "Possible fixes:" << '\n';
+	how_to_fix_it << "* Enable ignore errors (ignore_errors=true) to skip this row" << '\n';
+	how_to_fix_it << "* Set quote do empty or to a different value (e.g., quote=\'\')" << '\n';
+	return CSVError(error.str(), UNTERMINATED_QUOTES, current_column, csv_row, error_info, row_byte_position,
+	                byte_position, options, how_to_fix_it.str(), current_path);
 }
 
 CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, idx_t actual_columns,
@@ -221,11 +325,11 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, i
 	// How many columns were expected and how many were found
 	error << "Expected Number of Columns: " << options.dialect_options.num_cols << " Found: " << actual_columns + 1;
 	if (actual_columns >= options.dialect_options.num_cols) {
-		return CSVError(error.str(), CSVErrorType::TOO_MANY_COLUMNS, actual_columns, csv_row, error_info,
-		                row_byte_position, byte_position.GetIndex() - 1, options, how_to_fix_it.str(), current_path);
+		return CSVError(error.str(), TOO_MANY_COLUMNS, actual_columns, csv_row, error_info, row_byte_position,
+		                byte_position.GetIndex() - 1, options, how_to_fix_it.str(), current_path);
 	} else {
-		return CSVError(error.str(), CSVErrorType::TOO_FEW_COLUMNS, actual_columns, csv_row, error_info,
-		                row_byte_position, byte_position.GetIndex() - 1, options, how_to_fix_it.str(), current_path);
+		return CSVError(error.str(), TOO_FEW_COLUMNS, actual_columns, csv_row, error_info, row_byte_position,
+		                byte_position.GetIndex() - 1, options, how_to_fix_it.str(), current_path);
 	}
 }
 
@@ -237,22 +341,22 @@ CSVError CSVError::InvalidUTF8(const CSVReaderOptions &options, idx_t current_co
 	error << "Invalid unicode (byte sequence mismatch) detected." << '\n';
 	std::ostringstream how_to_fix_it;
 	how_to_fix_it << "Possible Solution: Enable ignore errors (ignore_errors=true) to skip this row" << '\n';
-	return CSVError(error.str(), CSVErrorType::INVALID_UNICODE, current_column, csv_row, error_info, row_byte_position,
-	                byte_position, options, how_to_fix_it.str(), current_path);
+	return CSVError(error.str(), INVALID_UNICODE, current_column, csv_row, error_info, row_byte_position, byte_position,
+	                options, how_to_fix_it.str(), current_path);
 }
 
-bool CSVErrorHandler::PrintLineNumber(CSVError &error) {
+bool CSVErrorHandler::PrintLineNumber(const CSVError &error) const {
 	if (!print_line) {
 		return false;
 	}
 	switch (error.type) {
-	case CSVErrorType::CAST_ERROR:
-	case CSVErrorType::UNTERMINATED_QUOTES:
-	case CSVErrorType::TOO_FEW_COLUMNS:
-	case CSVErrorType::TOO_MANY_COLUMNS:
-	case CSVErrorType::MAXIMUM_LINE_SIZE:
-	case CSVErrorType::NULLPADDED_QUOTED_NEW_VALUE:
-	case CSVErrorType::INVALID_UNICODE:
+	case CAST_ERROR:
+	case UNTERMINATED_QUOTES:
+	case TOO_FEW_COLUMNS:
+	case TOO_MANY_COLUMNS:
+	case MAXIMUM_LINE_SIZE:
+	case NULLPADDED_QUOTED_NEW_VALUE:
+	case INVALID_UNICODE:
 		return true;
 	default:
 		return false;

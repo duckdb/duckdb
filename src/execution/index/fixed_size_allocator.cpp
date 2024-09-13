@@ -172,18 +172,7 @@ bool FixedSizeAllocator::InitializeVacuum() {
 		Reset();
 		return false;
 	}
-
-	// remove all empty buffers
-	auto buffer_it = buffers.begin();
-	while (buffer_it != buffers.end()) {
-		if (!buffer_it->second.segment_count) {
-			buffers_with_free_space.erase(buffer_it->first);
-			buffer_it->second.Destroy();
-			buffer_it = buffers.erase(buffer_it);
-		} else {
-			buffer_it++;
-		}
-	}
+	RemoveEmptyBuffers();
 
 	// determine if a vacuum is necessary
 	multimap<idx_t, idx_t> temporary_vacuum_buffers;
@@ -353,6 +342,21 @@ idx_t FixedSizeAllocator::GetAvailableBufferId() const {
 		buffer_id--;
 	}
 	return buffer_id;
+}
+
+void FixedSizeAllocator::RemoveEmptyBuffers() {
+
+	auto buffer_it = buffers.begin();
+	while (buffer_it != buffers.end()) {
+		if (buffer_it->second.segment_count != 0) {
+			buffer_it++;
+			continue;
+		}
+
+		buffers_with_free_space.erase(buffer_it->first);
+		buffer_it->second.Destroy();
+		buffer_it = buffers.erase(buffer_it);
+	}
 }
 
 } // namespace duckdb

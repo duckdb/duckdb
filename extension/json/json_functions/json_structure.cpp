@@ -24,10 +24,12 @@ static LogicalTypeId MaxNumericType(const LogicalTypeId &a, const LogicalTypeId 
 JSONStructureNode::JSONStructureNode() : count(0), null_count(0) {
 }
 
+JSONStructureNode::JSONStructureNode(const char *key_ptr, const size_t key_len) : JSONStructureNode() {
+	key = make_uniq<string>(key_ptr, key_len);
+}
+
 JSONStructureNode::JSONStructureNode(yyjson_val *key_p, yyjson_val *val_p, const bool ignore_errors)
-    : JSONStructureNode() {
-	D_ASSERT(yyjson_is_str(key_p));
-	key = make_uniq<string>(unsafe_yyjson_get_str(key_p));
+    : JSONStructureNode(unsafe_yyjson_get_str(key_p), unsafe_yyjson_get_len(key_p)) {
 	JSONStructure::ExtractStructure(val_p, *this, ignore_errors);
 }
 
@@ -119,10 +121,11 @@ void JSONStructureNode::InitializeCandidateTypes(const idx_t max_depth, const bo
 			description.candidate_types = {LogicalTypeId::UUID, LogicalTypeId::TIMESTAMP, LogicalTypeId::DATE,
 			                               LogicalTypeId::TIME};
 		}
-	}
-	initialized = true;
-	for (auto &child : description.children) {
-		child.InitializeCandidateTypes(max_depth, convert_strings_to_integers, depth + 1);
+		initialized = true;
+	} else {
+		for (auto &child : description.children) {
+			child.InitializeCandidateTypes(max_depth, convert_strings_to_integers, depth + 1);
+		}
 	}
 }
 
@@ -357,24 +360,28 @@ JSONStructureNode &JSONStructureDescription::GetOrCreateChild() {
 	return children.back();
 }
 
+JSONStructureNode &JSONStructureDescription::GetOrCreateChild(const char *key_ptr, const size_t key_size) {
+	// Check if there is already a child with the same key
+	const JSONKey temp_key {key_ptr, key_size};
+	const auto it = key_map.find(temp_key);
+	if (it != key_map.end()) {
+		return children[it->second]; // Found it
+	}
+
+	// Didn't find, create a new child
+	children.emplace_back(key_ptr, key_size);
+	const auto &persistent_key_string = *children.back().key;
+	JSONKey new_key {persistent_key_string.c_str(), persistent_key_string.length()};
+	key_map.emplace(new_key, children.size() - 1);
+	return children.back();
+}
+
 JSONStructureNode &JSONStructureDescription::GetOrCreateChild(yyjson_val *key, yyjson_val *val,
                                                               const bool ignore_errors) {
 	D_ASSERT(yyjson_is_str(key));
-	// Check if there is already a child with the same key
-	idx_t child_idx;
-	const JSONKey temp_key {unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key)};
-	const auto it = key_map.find(temp_key);
-	if (it == key_map.end()) { // Didn't find, create a new child
-		child_idx = children.size();
-		children.emplace_back(key, val, ignore_errors);
-		const auto &persistent_key_string = children.back().key;
-		JSONKey new_key {persistent_key_string->c_str(), persistent_key_string->length()};
-		key_map.emplace(new_key, child_idx);
-	} else { // Found it
-		child_idx = it->second;
-		JSONStructure::ExtractStructure(val, children[child_idx], ignore_errors);
-	}
-	return children[child_idx];
+	auto &child = GetOrCreateChild(unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
+	JSONStructure::ExtractStructure(val, child, ignore_errors);
+	return child;
 }
 
 static void ExtractStructureArray(yyjson_val *arr, JSONStructureNode &node, const bool ignore_errors) {
@@ -421,10 +428,6 @@ static void ExtractStructureVal(yyjson_val *val, JSONStructureNode &node) {
 }
 
 void JSONStructure::ExtractStructure(yyjson_val *val, JSONStructureNode &node, const bool ignore_errors) {
-	if (!val) {
-		return;
-	}
-
 	node.count++;
 	const auto tag = yyjson_get_tag(val);
 	if (tag == (YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE)) {
@@ -496,7 +499,7 @@ static yyjson_mut_val *ConvertStructure(const JSONStructureNode &node, yyjson_mu
 	}
 }
 
-static string_t JSONStructureFunction(yyjson_val *val, yyjson_alc *alc, Vector &) {
+static string_t JSONStructureFunction(yyjson_val *val, yyjson_alc *alc, Vector &, ValidityMask &, idx_t) {
 	return JSONCommon::WriteVal<yyjson_mut_val>(
 	    ConvertStructure(ExtractStructureInternal(val, true), yyjson_mut_doc_new(alc)), alc);
 }
@@ -529,71 +532,67 @@ static LogicalType StructureToTypeArray(ClientContext &context, const JSONStruct
 	                                                        depth + 1, null_type));
 }
 
-static void MergeNodes(JSONStructureNode &merged, const JSONStructureNode &node, const idx_t max_depth,
-                       const idx_t depth) {
-	if (depth >= max_depth) {
-		merged.GetOrCreateDescription(LogicalTypeId::SQLNULL);
-		return;
-	}
+static void MergeNodes(JSONStructureNode &merged, const JSONStructureNode &node);
 
-	merged.count += node.count;
-	merged.null_count += node.null_count;
-	for (const auto &desc : node.descriptions) {
-		D_ASSERT(desc.type != LogicalTypeId::INVALID);
-		switch (desc.type) {
-		case LogicalTypeId::LIST: {
-			auto &merged_description = merged.GetOrCreateDescription(LogicalTypeId::LIST);
-			auto &merged_child = merged_description.GetOrCreateChild();
-			for (const auto &child_desc : desc.children) {
-				MergeNodes(merged_child, child_desc, max_depth, depth + 1);
-			}
-			break;
-		}
-		case LogicalTypeId::STRUCT: {
-			auto &merged_description = merged.GetOrCreateDescription(LogicalTypeId::STRUCT);
-			for (const auto &child_desc : desc.children) {
-				yyjson_val key {};
-				yyjson_set_strn(&key, child_desc.key->c_str(), child_desc.key->length());
-				auto &merged_child = merged_description.GetOrCreateChild(&key, nullptr, false);
-				MergeNodes(merged_child, child_desc, max_depth, depth + 1);
-			}
-			break;
-		}
-		default: {
-			const auto &prev_size = merged.descriptions.size();
-			const bool prev_was_null = prev_size == 1 && merged.descriptions[0].type == LogicalTypeId::SQLNULL;
-			auto &merged_desc = merged.GetOrCreateDescription(desc.type);
-			if (desc.type == LogicalTypeId::SQLNULL) {
-				break;
-			}
-
-			if (prev_was_null || prev_size != merged.descriptions.size()) {
-				// New non-null description, copy the last candidate type
-				if (!desc.candidate_types.empty()) {
-					merged_desc.candidate_types = {desc.candidate_types.back()};
-				}
-			} else if (!merged_desc.candidate_types.empty() &&
-			           (desc.candidate_types.empty() ||
-			            merged_desc.candidate_types.back() != desc.candidate_types.back())) {
-				// Remove candidate type since it is not equal to the last candidate type of desc
-				merged_desc.candidate_types.clear();
-			}
-		}
-		}
+static void MergeNodeArray(JSONStructureNode &merged, const JSONStructureDescription &child_desc) {
+	D_ASSERT(child_desc.type == LogicalTypeId::LIST);
+	auto &merged_desc = merged.GetOrCreateDescription(LogicalTypeId::LIST);
+	auto &merged_child = merged_desc.GetOrCreateChild();
+	for (auto &list_child : child_desc.children) {
+		MergeNodes(merged_child, list_child);
 	}
 }
 
-static const LogicalType &GetMapValueType(const LogicalType &map) {
-	D_ASSERT(map.id() == LogicalTypeId::MAP);
-	return map.AuxInfo()->Cast<ListTypeInfo>().child_type.AuxInfo()->Cast<StructTypeInfo>().child_types[1].second;
+static void MergeNodeObject(JSONStructureNode &merged, const JSONStructureDescription &child_desc) {
+	D_ASSERT(child_desc.type == LogicalTypeId::STRUCT);
+	auto &merged_desc = merged.GetOrCreateDescription(LogicalTypeId::STRUCT);
+	for (auto &struct_child : child_desc.children) {
+		const auto &struct_child_key = *struct_child.key;
+		auto &merged_child = merged_desc.GetOrCreateChild(struct_child_key.c_str(), struct_child_key.length());
+		MergeNodes(merged_child, struct_child);
+	}
+}
+
+static void MergeNodeVal(JSONStructureNode &merged, const JSONStructureDescription &child_desc,
+                         const bool node_initialized) {
+	D_ASSERT(child_desc.type != LogicalTypeId::LIST && child_desc.type != LogicalTypeId::STRUCT);
+	auto &merged_desc = merged.GetOrCreateDescription(child_desc.type);
+	if (merged_desc.type != LogicalTypeId::VARCHAR || !node_initialized || merged.descriptions.size() != 1) {
+		return;
+	}
+	if (!merged.initialized) {
+		merged_desc.candidate_types = child_desc.candidate_types;
+	} else if (!merged_desc.candidate_types.empty() && !child_desc.candidate_types.empty() &&
+	           merged_desc.candidate_types.back() != child_desc.candidate_types.back()) {
+		merged_desc.candidate_types.clear(); // Not the same, default to VARCHAR
+	}
+	merged.initialized = true;
+}
+
+static void MergeNodes(JSONStructureNode &merged, const JSONStructureNode &node) {
+	merged.count += node.count;
+	merged.null_count += node.null_count;
+	for (const auto &child_desc : node.descriptions) {
+		switch (child_desc.type) {
+		case LogicalTypeId::LIST:
+			MergeNodeArray(merged, child_desc);
+			break;
+		case LogicalTypeId::STRUCT:
+			MergeNodeObject(merged, child_desc);
+			break;
+		default:
+			MergeNodeVal(merged, child_desc, node.initialized);
+			break;
+		}
+	}
 }
 
 static double CalculateTypeSimilarity(const LogicalType &merged, const LogicalType &type, idx_t max_depth, idx_t depth);
 
 static double CalculateMapAndStructSimilarity(const LogicalType &map_type, const LogicalType &struct_type,
                                               const bool swapped, const idx_t max_depth, const idx_t depth) {
-	const auto &map_value_type = GetMapValueType(map_type);
-	const auto &struct_child_types = struct_type.AuxInfo()->Cast<StructTypeInfo>().child_types;
+	const auto &map_value_type = MapType::ValueType(map_type);
+	const auto &struct_child_types = StructType::GetChildTypes(struct_type);
 	double total_similarity = 0;
 	for (const auto &struct_child_type : struct_child_types) {
 		const auto similarity =
@@ -609,7 +608,7 @@ static double CalculateMapAndStructSimilarity(const LogicalType &map_type, const
 
 static double CalculateTypeSimilarity(const LogicalType &merged, const LogicalType &type, const idx_t max_depth,
                                       const idx_t depth) {
-	if (depth >= max_depth || merged == LogicalTypeId::SQLNULL) {
+	if (depth >= max_depth || merged.id() == LogicalTypeId::SQLNULL || type.id() == LogicalTypeId::SQLNULL) {
 		return 1;
 	}
 	if (merged.IsJSONType()) {
@@ -630,8 +629,8 @@ static double CalculateTypeSimilarity(const LogicalType &merged, const LogicalTy
 
 		// Only structs can be merged into a struct
 		D_ASSERT(type.id() == LogicalTypeId::STRUCT);
-		const auto &merged_child_types = merged.AuxInfo()->Cast<StructTypeInfo>().child_types;
-		const auto &type_child_types = type.AuxInfo()->Cast<StructTypeInfo>().child_types;
+		const auto &merged_child_types = StructType::GetChildTypes(merged);
+		const auto &type_child_types = StructType::GetChildTypes(type);
 
 		unordered_map<string, const LogicalType &> merged_child_types_map;
 		for (const auto &merged_child : merged_child_types) {
@@ -641,8 +640,9 @@ static double CalculateTypeSimilarity(const LogicalType &merged, const LogicalTy
 		double total_similarity = 0;
 		for (const auto &type_child_type : type_child_types) {
 			const auto it = merged_child_types_map.find(type_child_type.first);
-			// All struct keys should be present in the merged struct
-			D_ASSERT(it != merged_child_types_map.end());
+			if (it == merged_child_types_map.end()) {
+				return -1;
+			}
 			const auto similarity = CalculateTypeSimilarity(it->second, type_child_type.second, max_depth, depth + 1);
 			if (similarity < 0) {
 				return similarity;
@@ -653,7 +653,7 @@ static double CalculateTypeSimilarity(const LogicalType &merged, const LogicalTy
 	}
 	case LogicalTypeId::MAP: {
 		if (type.id() == LogicalTypeId::MAP) {
-			return CalculateTypeSimilarity(GetMapValueType(merged), GetMapValueType(type), max_depth, depth + 1);
+			return CalculateTypeSimilarity(MapType::ValueType(merged), MapType::ValueType(type), max_depth, depth + 1);
 		}
 
 		// Only maps and structs can be merged into a map
@@ -663,8 +663,8 @@ static double CalculateTypeSimilarity(const LogicalType &merged, const LogicalTy
 	case LogicalTypeId::LIST: {
 		// Only lists can be merged into a list
 		D_ASSERT(type.id() == LogicalTypeId::LIST);
-		const auto &merged_child_type = merged.AuxInfo()->Cast<ListTypeInfo>().child_type;
-		const auto &type_child_type = type.AuxInfo()->Cast<ListTypeInfo>().child_type;
+		const auto &merged_child_type = ListType::GetChildType(merged);
+		const auto &type_child_type = ListType::GetChildType(type);
 		return CalculateTypeSimilarity(merged_child_type, type_child_type, max_depth, depth + 1);
 	}
 	default:
@@ -685,12 +685,14 @@ static bool IsStructureInconsistent(const JSONStructureDescription &desc, const 
 	return avg_occurrence < field_appearance_threshold;
 }
 
-static LogicalType GetMergedType(ClientContext &context, const JSONStructureDescription &desc, const idx_t max_depth,
+static LogicalType GetMergedType(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
                                  const double field_appearance_threshold, const idx_t map_inference_threshold,
                                  const idx_t depth, const LogicalType &null_type) {
+	D_ASSERT(node.descriptions.size() == 1);
+	auto &desc = node.descriptions[0];
 	JSONStructureNode merged;
 	for (const auto &child : desc.children) {
-		MergeNodes(merged, child, max_depth, depth + 1);
+		MergeNodes(merged, child);
 	}
 	return JSONStructure::StructureToType(context, merged, max_depth, field_appearance_threshold,
 	                                      map_inference_threshold, depth + 1, null_type);
@@ -711,7 +713,7 @@ static LogicalType StructureToTypeObject(ClientContext &context, const JSONStruc
 	// If it's an inconsistent object we also just do MAP with the best-possible, recursively-merged value type
 	if (IsStructureInconsistent(desc, node.count, node.null_count, field_appearance_threshold)) {
 		return LogicalType::MAP(LogicalType::VARCHAR,
-		                        GetMergedType(context, desc, max_depth, field_appearance_threshold,
+		                        GetMergedType(context, node, max_depth, field_appearance_threshold,
 		                                      map_inference_threshold, depth + 1, null_type));
 	}
 
@@ -727,7 +729,7 @@ static LogicalType StructureToTypeObject(ClientContext &context, const JSONStruc
 
 	// If we have many children and all children have similar-enough types we infer map
 	if (desc.children.size() >= map_inference_threshold) {
-		LogicalType map_value_type = GetMergedType(context, desc, max_depth, field_appearance_threshold,
+		LogicalType map_value_type = GetMergedType(context, node, max_depth, field_appearance_threshold,
 		                                           map_inference_threshold, depth + 1, LogicalTypeId::SQLNULL);
 
 		double total_similarity = 0;
@@ -742,7 +744,7 @@ static LogicalType StructureToTypeObject(ClientContext &context, const JSONStruc
 		const auto avg_similarity = total_similarity / static_cast<double>(child_types.size());
 		if (avg_similarity >= 0.8) {
 			if (null_type != LogicalTypeId::SQLNULL) {
-				map_value_type = GetMergedType(context, desc, max_depth, field_appearance_threshold,
+				map_value_type = GetMergedType(context, node, max_depth, field_appearance_threshold,
 				                               map_inference_threshold, depth + 1, null_type);
 			}
 			return LogicalType::MAP(LogicalType::VARCHAR, map_value_type);

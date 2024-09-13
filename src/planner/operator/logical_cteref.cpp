@@ -7,6 +7,7 @@ namespace duckdb {
 InsertionOrderPreservingMap<string> LogicalCTERef::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	result["CTE Index"] = StringUtil::Format("%llu", cte_index);
+	SetParamsEstimatedCardinality(result);
 	return result;
 }
 

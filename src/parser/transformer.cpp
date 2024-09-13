@@ -21,7 +21,7 @@ Transformer::~Transformer() {
 }
 
 void Transformer::Clear() {
-	SetParamCount(0);
+	ClearParameters();
 	pivot_entries.clear();
 }
 
@@ -59,7 +59,7 @@ unique_ptr<SQLStatement> Transformer::TransformStatement(duckdb_libpgquery::PGNo
 	auto result = TransformStatementInternal(stmt);
 	if (!named_param_map.empty()) {
 		// Avoid overriding a previous move with nothing
-		result->named_param_map = std::move(named_param_map);
+		result->named_param_map = named_param_map;
 	}
 	return result;
 }
@@ -88,6 +88,12 @@ idx_t Transformer::ParamCount() const {
 void Transformer::SetParamCount(idx_t new_count) {
 	auto &root = RootTransformer();
 	root.prepared_statement_parameter_index = new_count;
+}
+
+void Transformer::ClearParameters() {
+	auto &root = RootTransformer();
+	root.prepared_statement_parameter_index = 0;
+	root.named_param_map.clear();
 }
 
 static void ParamTypeCheck(PreparedParamType last_type, PreparedParamType new_type) {
@@ -138,7 +144,7 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 		return result;
 	}
 	case duckdb_libpgquery::T_PGSelectStmt:
-		return TransformSelect(PGCast<duckdb_libpgquery::PGSelectStmt>(stmt));
+		return TransformSelectStmt(PGCast<duckdb_libpgquery::PGSelectStmt>(stmt));
 	case duckdb_libpgquery::T_PGCreateStmt:
 		return TransformCreateTable(PGCast<duckdb_libpgquery::PGCreateStmt>(stmt));
 	case duckdb_libpgquery::T_PGCreateSchemaStmt:
@@ -188,9 +194,9 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 	case duckdb_libpgquery::T_PGVacuumStmt:
 		return TransformVacuum(PGCast<duckdb_libpgquery::PGVacuumStmt>(stmt));
 	case duckdb_libpgquery::T_PGVariableShowStmt:
-		return TransformShow(PGCast<duckdb_libpgquery::PGVariableShowStmt>(stmt));
+		return TransformShowStmt(PGCast<duckdb_libpgquery::PGVariableShowStmt>(stmt));
 	case duckdb_libpgquery::T_PGVariableShowSelectStmt:
-		return TransformShowSelect(PGCast<duckdb_libpgquery::PGVariableShowSelectStmt>(stmt));
+		return TransformShowSelectStmt(PGCast<duckdb_libpgquery::PGVariableShowSelectStmt>(stmt));
 	case duckdb_libpgquery::T_PGCallStmt:
 		return TransformCall(PGCast<duckdb_libpgquery::PGCallStmt>(stmt));
 	case duckdb_libpgquery::T_PGVariableSetStmt:

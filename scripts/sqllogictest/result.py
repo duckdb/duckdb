@@ -405,6 +405,8 @@ class SQLLogicDatabase:
 
         # Now re-open the current database
         read_only = 'access_mode' in self.config and self.config['access_mode'] == 'read_only'
+        if 'access_mode' not in self.config:
+            self.config['access_mode'] = 'automatic'
         self.database = duckdb.connect(path, read_only, self.config)
 
         # Load any previously loaded extensions again
@@ -781,7 +783,9 @@ class SQLLogicContext:
 
     def execute_load(self, load: Load):
         if self.in_loop():
-            self.fail("load cannot be called in a loop")
+            # FIXME: should add support for this, the CPP tester supports this
+            self.skiptest("load cannot be called in a loop")
+            # self.fail("load cannot be called in a loop")
 
         readonly = load.readonly
 
@@ -842,23 +846,26 @@ class SQLLogicContext:
 
             if is_query_result(sql_query, statement):
                 original_rel = conn.query(sql_query)
-                original_types = original_rel.types
-                # We create new names for the columns, because they might be duplicated
-                aliased_columns = [f'c{i}' for i in range(len(original_types))]
+                if original_rel is None:
+                    query_result = QueryResult([(0,)], ['BIGINT'])
+                else:
+                    original_types = original_rel.types
+                    # We create new names for the columns, because they might be duplicated
+                    aliased_columns = [f'c{i}' for i in range(len(original_types))]
 
-                expressions = [f'"{name}"::VARCHAR' for name, sql_type in zip(aliased_columns, original_types)]
-                aliased_table = ", ".join(aliased_columns)
-                expression_list = ", ".join(expressions)
-                try:
-                    # Select from the result, converting the Values to the right type for comparison
-                    transformed_query = (
-                        f"select {expression_list} from original_rel unnamed_subquery_blabla({aliased_table})"
-                    )
-                    stringified_rel = conn.query(transformed_query)
-                except duckdb.Error as e:
-                    self.fail(f"Could not select from the ValueRelation: {str(e)}")
-                result = stringified_rel.fetchall()
-                query_result = QueryResult(result, original_types)
+                    expressions = [f'"{name}"::VARCHAR' for name, sql_type in zip(aliased_columns, original_types)]
+                    aliased_table = ", ".join(aliased_columns)
+                    expression_list = ", ".join(expressions)
+                    try:
+                        # Select from the result, converting the Values to the right type for comparison
+                        transformed_query = (
+                            f"select {expression_list} from original_rel unnamed_subquery_blabla({aliased_table})"
+                        )
+                        stringified_rel = conn.query(transformed_query)
+                    except duckdb.Error as e:
+                        self.fail(f"Could not select from the ValueRelation: {str(e)}")
+                    result = stringified_rel.fetchall()
+                    query_result = QueryResult(result, original_types)
             elif duckdb.ExpectedResultType.CHANGED_ROWS in statement.expected_result_type:
                 conn.execute(sql_query)
                 result = conn.fetchall()
@@ -1017,7 +1024,7 @@ class SQLLogicContext:
             "exact_vector_size",
             "block_size",
             "skip_reload",
-            "noalternativeverify",
+            "no_alternative_verify",
         ]
         param = statement.header.parameters[0].lower()
         if param in not_an_extension:

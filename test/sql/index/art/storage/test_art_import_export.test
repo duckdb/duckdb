@@ -2,12 +2,12 @@
 # description: Test the export and import of the ART
 # group: [storage]
 
-statement ok
-PRAGMA enable_verification
-
-# issue 4126
+# Issue #4126
 
 load __TEST_DIR__/test_art_export.db
+
+statement ok
+PRAGMA enable_verification
 
 statement ok
 CREATE TABLE raw(

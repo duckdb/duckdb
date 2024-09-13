@@ -70,14 +70,22 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, s
 	return new_block;
 }
 
-void BlockManager::UnregisterBlock(block_id_t block_id, bool can_destroy) {
-	if (block_id >= MAXIMUM_BLOCK) {
+void BlockManager::UnregisterBlock(block_id_t id) {
+	D_ASSERT(id < MAXIMUM_BLOCK);
+	lock_guard<mutex> lock(blocks_lock);
+	// on-disk block: erase from list of blocks in manager
+	blocks.erase(id);
+}
+
+void BlockManager::UnregisterBlock(BlockHandle &block) {
+	auto id = block.BlockId();
+	if (id >= MAXIMUM_BLOCK) {
 		// in-memory buffer: buffer could have been offloaded to disk: remove the file
-		buffer_manager.DeleteTemporaryFile(block_id);
+		buffer_manager.DeleteTemporaryFile(block);
 	} else {
 		lock_guard<mutex> lock(blocks_lock);
 		// on-disk block: erase from list of blocks in manager
-		blocks.erase(block_id);
+		blocks.erase(id);
 	}
 }
 
