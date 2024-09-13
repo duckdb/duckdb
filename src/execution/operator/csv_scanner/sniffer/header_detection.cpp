@@ -88,7 +88,7 @@ static string NormalizeColumnName(const string &col_name) {
 	}
 
 	// prepend _ if name starts with a digit or is a reserved keyword
-	auto keyword = KeywordHelper::KeywordCategory(col_name_cleaned);
+	auto keyword = KeywordHelper::KeywordCategoryType(col_name_cleaned);
 	if (keyword == KeywordCategory::KEYWORD_TYPE_FUNC || keyword == KeywordCategory::KEYWORD_RESERVED ||
 	    (col_name_cleaned[0] >= '0' && col_name_cleaned[0] <= '9')) {
 		col_name_cleaned = "_" + col_name_cleaned;

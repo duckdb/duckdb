@@ -8,7 +8,7 @@ bool KeywordHelper::IsKeyword(const string &text) {
 	return Parser::IsKeyword(text) != KeywordCategory::KEYWORD_NONE;
 }
 
-KeywordCategory KeywordHelper::KeywordCategory(const string &text) {
+KeywordCategory KeywordHelper::KeywordCategoryType(const string &text) {
 	return Parser::IsKeyword(text);
 }
 
