@@ -44,6 +44,20 @@ public:
 	void GetCollection(idx_t row_idx, ColumnDataCollectionSpec &spec);
 	void Combine(bool build_validity);
 
+	//! Set up a pair of scanning objects
+	void PrepareScan(ColumnDataScanState &state, DataChunk &data) const;
+	//! Is the scan in range?
+	inline bool RowIsVisible(idx_t row_idx, const ColumnDataScanState &state) const {
+		return (row_idx < state.next_row_index && state.current_row_index <= row_idx);
+	}
+	//! Scan the given row
+	void Seek(idx_t row_idx, ColumnDataScanState &state, DataChunk &chunk) const;
+	//! The offset of the row in the given state
+	inline sel_t RowOffset(idx_t row_idx, const ColumnDataScanState &state) const {
+		D_ASSERT(RowIsVisible(row_idx, state));
+		return UnsafeNumericCast<sel_t>(row_idx - state.current_row_index);
+	}
+
 	ColumnDataCollectionPtr inputs;
 	ValidityMask validity;
 

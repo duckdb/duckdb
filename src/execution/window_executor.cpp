@@ -53,9 +53,11 @@ WindowDataChunk::WindowDataChunk(BufferManager &buffer_manager, const vector<Log
 }
 
 void WindowDataChunk::Initialize(idx_t capacity) {
-	vector<mutex> new_locks(types.size());
-	locks.swap(new_locks);
-	chunk.Initialize(inputs->GetAllocator(), types, capacity);
+	if (!types.empty()) {
+		vector<mutex> new_locks(types.size());
+		locks.swap(new_locks);
+		chunk.Initialize(inputs->GetAllocator(), types, capacity);
+	}
 	chunk.SetCardinality(capacity);
 }
 
@@ -108,11 +110,11 @@ void WindowDataChunk::Combine(bool build_validity) {
 	ranges.clear();
 
 	if (build_validity) {
+		D_ASSERT(inputs.get());
 		validity.Initialize(inputs->Count());
 		ColumnDataScanState reader;
-		inputs->InitializeScan(reader);
 		DataChunk chunk;
-		inputs->InitializeScanChunk(reader, chunk);
+		PrepareScan(reader, chunk);
 		idx_t target_offset = 0;
 		while (inputs->Scan(reader, chunk)) {
 			const auto count = chunk.size();
@@ -121,6 +123,31 @@ void WindowDataChunk::Combine(bool build_validity) {
 			target_offset += count;
 		}
 	}
+}
+
+void WindowDataChunk::PrepareScan(ColumnDataScanState &state, DataChunk &data) const {
+	if (types.empty()) {
+		//	For things like COUNT(*) set the state up to contain the whole range
+		state.segment_index = 0;
+		state.chunk_index = 0;
+		state.current_row_index = 0;
+		state.next_row_index = chunk.size();
+		state.properties = ColumnDataScanProperties::ALLOW_ZERO_COPY;
+		data.SetCardinality(state.next_row_index);
+		return;
+	}
+
+	D_ASSERT(inputs.get());
+	inputs->InitializeScan(state);
+	inputs->InitializeScanChunk(state, data);
+}
+
+void WindowDataChunk::Seek(idx_t row_idx, ColumnDataScanState &state, DataChunk &chunk) const {
+	if (!types.empty()) {
+		D_ASSERT(inputs.get());
+		inputs->Seek(row_idx, state, chunk);
+	}
+	D_ASSERT(RowIsVisible(row_idx, state));
 }
 
 static idx_t FindNextStart(const ValidityMask &mask, idx_t l, const idx_t r, idx_t &n) {
@@ -1491,7 +1518,7 @@ public:
 	//! Check whether a row is in range
 	inline idx_t Seek(idx_t row_idx) {
 		if (row_idx < reader.current_row_index || reader.next_row_index <= row_idx) {
-			gvstate.payload_collection->inputs->Seek(row_idx, reader, chunk);
+			gvstate.payload_collection->Seek(row_idx, reader, chunk);
 		}
 		return row_idx - reader.current_row_index;
 	}
@@ -1576,9 +1603,7 @@ void WindowValueLocalState::Finalize() {
 	}
 
 	// Prepare to scan
-	auto &inputs = *payload_collection->inputs;
-	inputs.InitializeScan(reader);
-	inputs.InitializeScanChunk(reader, chunk);
+	payload_collection->PrepareScan(reader, chunk);
 }
 
 //===--------------------------------------------------------------------===//

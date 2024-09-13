@@ -933,13 +933,11 @@ bool ColumnDataCollection::PrevScanIndex(ColumnDataScanState &state, idx_t &chun
 		}
 
 		--state.segment_index;
-		state.chunk_index = segments[state.segment_index]->chunk_data.size();
+		state.chunk_index = segments[state.segment_index]->chunk_data.size() + 1;
 		state.current_chunk_state.handles.clear();
-		if (state.chunk_index) {
-			break;
-		}
 	}
 
+	--state.chunk_index;
 	segment_index = state.segment_index;
 	chunk_index = state.chunk_index - 1;
 	state.next_row_index = state.current_row_index;
