@@ -186,7 +186,7 @@ protected:
 	                          const optional_ptr<bind_lambda_function_t> bind_lambda_function,
 	                          const LogicalType &list_child_type);
 
-	static unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
+	virtual unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
 
 	LogicalType ResolveOperatorType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
 	LogicalType ResolveCoalesceType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
