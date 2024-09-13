@@ -30,6 +30,14 @@ public:
 
 	WindowDataChunk(BufferManager &buffer_manager, const vector<LogicalType> &types);
 
+	idx_t ColumnCount() const {
+		return types.size();
+	}
+
+	idx_t size() const { // NOLINT
+		return chunk.size();
+	}
+
 	const vector<LogicalType> &GetTypes() const {
 		return types;
 	}

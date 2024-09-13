@@ -949,6 +949,7 @@ WindowSegmentTree::WindowSegmentTree(AggregateObject aggr, const vector<LogicalT
                                      const LogicalType &result_type, WindowAggregationMode mode_p,
                                      const WindowExcludeMode exclude_mode_p)
     : WindowAggregator(std::move(aggr), arg_types, result_type, exclude_mode_p), mode(mode_p) {
+	use_collections = true;
 }
 
 class WindowSegmentTreePart {
@@ -958,7 +959,7 @@ public:
 
 	enum FramePart : uint8_t { FULL = 0, LEFT = 1, RIGHT = 2 };
 
-	WindowSegmentTreePart(ArenaAllocator &allocator, const AggregateObject &aggr, const DataChunk &inputs,
+	WindowSegmentTreePart(ArenaAllocator &allocator, const AggregateObject &aggr, const WindowDataChunk &inputs,
 	                      const ValidityArray &filter_mask);
 	~WindowSegmentTreePart();
 
@@ -995,13 +996,17 @@ public:
 	//! Order insensitive aggregate (we can optimise internal combines)
 	const bool order_insensitive;
 	//! The partition arguments
-	const DataChunk &inputs;
+	const WindowDataChunk &inputs;
 	//! The filtered rows in inputs
 	const ValidityArray &filter_mask;
 	//! The size of a single aggregate state
 	const idx_t state_size;
 	//! Data pointer that contains a vector of states, used for intermediate window segment aggregation
 	vector<data_t> state;
+	//! Scanned data state
+	ColumnDataScanState reader;
+	//! Scanned data
+	DataChunk scanned;
 	//! Input data chunk, used for leaf segment aggregation
 	DataChunk leaves;
 	//! The filtered rows in inputs.
@@ -1049,7 +1054,7 @@ void WindowSegmentTree::Finalize(WindowAggregatorState &gsink, WindowAggregatorS
 }
 
 WindowSegmentTreePart::WindowSegmentTreePart(ArenaAllocator &allocator, const AggregateObject &aggr,
-                                             const DataChunk &inputs, const ValidityArray &filter_mask)
+                                             const WindowDataChunk &inputs, const ValidityArray &filter_mask)
     : allocator(allocator), aggr(aggr),
       order_insensitive(aggr.function.order_dependent == AggregateOrderDependent::NOT_ORDER_DEPENDENT), inputs(inputs),
       filter_mask(filter_mask), state_size(aggr.function.state_size(aggr.function)),
@@ -1070,6 +1075,9 @@ WindowSegmentTreePart::WindowSegmentTreePart(ArenaAllocator &allocator, const Ag
 		fdata[i] = state_ptr;
 		state_ptr += state_size;
 	}
+
+	// Set up for scanning
+	inputs.PrepareScan(reader, scanned);
 }
 
 WindowSegmentTreePart::~WindowSegmentTreePart() {
@@ -1094,7 +1102,7 @@ void WindowSegmentTreePart::FlushStates(bool combining) {
 		statel.Verify(flush_count);
 		aggr.function.combine(statel, statep, aggr_input_data, flush_count);
 	} else {
-		leaves.Slice(inputs, filter_sel, flush_count);
+		leaves.Slice(scanned, filter_sel, flush_count);
 		aggr.function.update(&leaves.data[0], aggr_input_data, leaves.ColumnCount(), statep, flush_count);
 	}
 
@@ -1114,9 +1122,10 @@ void WindowSegmentTreePart::ExtractFrame(idx_t begin, idx_t end, data_ptr_t stat
 	//	Otherwise set it to the input rows that pass the filter
 	auto states = FlatVector::GetData<data_ptr_t>(statep);
 	if (filter_mask.AllValid()) {
+		const auto offset = inputs.RowOffset(begin, reader);
 		for (idx_t i = 0; i < count; ++i) {
 			states[flush_count] = state_ptr;
-			filter_sel.set_index(flush_count++, begin + i);
+			filter_sel.set_index(flush_count++, offset + i);
 			if (flush_count >= STANDARD_VECTOR_SIZE) {
 				FlushStates(false);
 			}
@@ -1125,7 +1134,7 @@ void WindowSegmentTreePart::ExtractFrame(idx_t begin, idx_t end, data_ptr_t stat
 		for (idx_t i = begin; i < end; ++i) {
 			if (filter_mask.RowIsValid(i)) {
 				states[flush_count] = state_ptr;
-				filter_sel.set_index(flush_count++, i);
+				filter_sel.set_index(flush_count++, inputs.RowOffset(i, reader));
 				if (flush_count >= STANDARD_VECTOR_SIZE) {
 					FlushStates(false);
 				}
@@ -1143,7 +1152,16 @@ void WindowSegmentTreePart::WindowSegmentValue(const WindowSegmentTreeGlobalStat
 
 	const auto count = end - begin;
 	if (l_idx == 0) {
-		ExtractFrame(begin, end, state_ptr);
+		//	Check the leaves when they cross chunk boundaries
+		while (begin < end) {
+			if (!inputs.RowIsVisible(begin, reader)) {
+				FlushStates(false);
+				inputs.Seek(begin, reader, scanned);
+			}
+			auto next = MinValue(end, reader.next_row_index);
+			ExtractFrame(begin, next, state_ptr);
+			begin = next;
+		}
 	} else {
 		// find out where the states begin
 		auto begin_ptr = tree.levels_flat_native.GetStatePtr(begin + tree.levels_flat_start[l_idx - 1]);
@@ -1219,9 +1237,11 @@ WindowSegmentTreeGlobalState::WindowSegmentTreeGlobalState(BufferManager &buffer
 }
 
 void WindowSegmentTreeState::Finalize(WindowAggregatorGlobalState &gastate) {
+	WindowAggregatorLocalState::Finalize(gastate);
+
 	//	Single part for constructing the tree
 	auto &gstate = gastate.Cast<WindowSegmentTreeGlobalState>();
-	auto &inputs = gstate.winputs.chunk;
+	auto &inputs = gstate.winputs;
 	auto &tree = gstate.tree;
 	auto &filter_mask = gstate.filter_mask;
 	WindowSegmentTreePart gtstate(gstate.CreateTreeAllocator(), tree.aggr, inputs, filter_mask);
@@ -1287,7 +1307,7 @@ void WindowSegmentTreeState::Evaluate(const WindowSegmentTreeGlobalState &gtstat
 	auto peer_end = FlatVector::GetData<const idx_t>(bounds.data[PEER_END]);
 
 	if (!part) {
-		auto &inputs = gtstate.winputs.chunk;
+		auto &inputs = gtstate.winputs;
 		part = make_uniq<WindowSegmentTreePart>(allocator, gtstate.aggregator.aggr, inputs, gtstate.filter_mask);
 	}
 

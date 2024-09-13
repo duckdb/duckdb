@@ -135,11 +135,11 @@ void WindowDataChunk::PrepareScan(ColumnDataScanState &state, DataChunk &data) c
 		state.properties = ColumnDataScanProperties::ALLOW_ZERO_COPY;
 		data.SetCardinality(state.next_row_index);
 		return;
+	} else if (data.data.empty()) {
+		D_ASSERT(inputs.get());
+		inputs->InitializeScan(state);
+		inputs->InitializeScanChunk(state, data);
 	}
-
-	D_ASSERT(inputs.get());
-	inputs->InitializeScan(state);
-	inputs->InitializeScanChunk(state, data);
 }
 
 void WindowDataChunk::Seek(idx_t row_idx, ColumnDataScanState &state, DataChunk &chunk) const {
