@@ -59,7 +59,7 @@ Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType b
     : context(context), bind_context(*this), parent(std::move(parent_p)), bound_tables(0), binder_type(binder_type),
       entry_retriever(context) {
 	if (parent) {
-		entry_retriever.SetCallback(parent->entry_retriever.GetCallback());
+		entry_retriever.Inherit(parent->entry_retriever);
 
 		// We have to inherit macro and lambda parameter bindings and from the parent binder, if there is a parent.
 		macro_binding = parent->macro_binding;

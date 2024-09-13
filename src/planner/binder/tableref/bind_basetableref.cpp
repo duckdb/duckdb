@@ -15,6 +15,7 @@
 #include "duckdb/planner/tableref/bound_cteref.hpp"
 #include "duckdb/planner/tableref/bound_dummytableref.hpp"
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
 
 namespace duckdb {
 
@@ -270,6 +271,16 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			view_names.push_back(view_catalog_entry.names[n]);
 		}
 		subquery.column_name_alias = BindContext::AliasColumnNames(subquery.alias, view_names, ref.column_name_alias);
+
+		// when binding a view, we always look into the catalog/schema where the view is stored first
+		vector<CatalogSearchEntry> view_search_path;
+		auto &catalog_name = view_catalog_entry.ParentCatalog().GetName();
+		auto &schema_name = view_catalog_entry.ParentSchema().name;
+		view_search_path.emplace_back(catalog_name, schema_name);
+		if (schema_name != DEFAULT_SCHEMA) {
+			view_search_path.emplace_back(view_catalog_entry.ParentCatalog().GetName(), DEFAULT_SCHEMA);
+		}
+		view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
 		// bind the child subquery
 		view_binder->AddBoundView(view_catalog_entry);
 		auto bound_child = view_binder->Bind(subquery);
