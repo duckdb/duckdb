@@ -7,9 +7,6 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
 
 #include <algorithm>
 #include <vector>
@@ -75,8 +72,11 @@ public:
 
 		for (size_t i = 1; i <= len1; ++i)
 			for (size_t j = 1; j <= len2; ++j)
-				d[i][j] = std::min({d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (s1[i - 1] == s2[j - 1] ? 0 : 1)});
-
+				d[i][j] = std::min({
+				    d[i - 1][j] + 1,
+				    d[i][j - 1] + 1,
+				    d[i - 1][j - 1] + (s1[i - 1] == s2[j - 1] ? 0 : 1)
+				});
 		return d[len1][len2];
 	}
 
