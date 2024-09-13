@@ -66,17 +66,36 @@ public:
 		const size_t len1 = s1.size(), len2 = s2.size();
 		std::vector<std::vector<size_t>> d(len1 + 1, std::vector<size_t>(len2 + 1));
 
+		// Initialize the first row and column
 		d[0][0] = 0;
 		for (size_t i = 1; i <= len1; ++i) d[i][0] = i;
 		for (size_t i = 1; i <= len2; ++i) d[0][i] = i;
 
-		for (size_t i = 1; i <= len1; ++i)
-			for (size_t j = 1; j <= len2; ++j)
-				d[i][j] = std::min({
-				    d[i - 1][j] + 1,
-				    d[i][j - 1] + 1,
-				    d[i - 1][j - 1] + (s1[i - 1] == s2[j - 1] ? 0 : 1)
-				});
+		// Compute the Levenshtein distance
+		for (size_t i = 1; i <= len1; ++i) {
+			for (size_t j = 1; j <= len2; ++j) {
+				// Calculate the cost for substitution
+				size_t substitution_cost = (s1[i - 1] == s2[j - 1]) ? 0 : 1;
+
+				// Compute deletion, insertion, and substitution costs
+				size_t deletion = d[i - 1][j] + 1;
+				size_t insertion = d[i][j - 1] + 1;
+				size_t substitution = d[i - 1][j - 1] + substitution_cost;
+
+				// Find the minimum of the three
+				size_t min_cost = deletion; // Start with deletion
+				if (insertion < min_cost) {
+					min_cost = insertion;
+				}
+				if (substitution < min_cost) {
+					min_cost = substitution;
+				}
+
+				// Set the minimum cost in the matrix
+				d[i][j] = min_cost;
+			}
+		}
+
 		return d[len1][len2];
 	}
 
