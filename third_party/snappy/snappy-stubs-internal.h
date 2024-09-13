@@ -54,6 +54,14 @@
 #define HAVE_BUILTIN_PREFETCH 1
 #endif
 
+#if defined(__aarch64__) || defined(__ARM_ARCH)
+#define SNAPPY_HAVE_NEON 1
+#define SNAPPY_HAVE_NEON_CRC32 1
+#else
+#define SNAPPY_HAVE_SSSE3 1
+#define SNAPPY_HAVE_X86_CRC32 1
+#define SNAPPY_HAVE_BMI2 1
+#endif
 
 #if HAVE_SYS_MMAN_H
 #include <sys/mman.h>
