@@ -11,7 +11,7 @@
 
 #include "duckdb/main/settings.hpp"
 
-#include "duckdb/common/enums/access_mode.hpp"
+// #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -25,6 +25,7 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
@@ -89,6 +90,32 @@ bool AllocatorBackgroundThreadsSetting::VerifyDBInstanceRESET(DatabaseInstance *
 		TaskScheduler::GetScheduler(*db).SetAllocatorBackgroundThreads(DBConfig().options.allocator_background_threads);
 	}
 	return true;
+}
+
+//===----------------------------------------------------------------------===//
+// Allocator Bulk Deallocation Flush Threshold
+//===----------------------------------------------------------------------===//
+void AllocatorBulkDeallocationFlushThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config,
+                                                               const Value &input) {
+	config.options.allocator_bulk_deallocation_flush_threshold = DBConfig::ParseMemoryLimit(input.ToString());
+	if (db) {
+		BufferManager::GetBufferManager(*db).GetBufferPool().SetAllocatorBulkDeallocationFlushThreshold(
+		    config.options.allocator_bulk_deallocation_flush_threshold);
+	}
+}
+
+void AllocatorBulkDeallocationFlushThresholdSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.allocator_bulk_deallocation_flush_threshold =
+	    DBConfig().options.allocator_bulk_deallocation_flush_threshold;
+	if (db) {
+		BufferManager::GetBufferManager(*db).GetBufferPool().SetAllocatorBulkDeallocationFlushThreshold(
+		    config.options.allocator_bulk_deallocation_flush_threshold);
+	}
+}
+
+Value AllocatorBulkDeallocationFlushThresholdSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(StringUtil::BytesToHumanReadableString(config.options.allocator_bulk_deallocation_flush_threshold));
 }
 
 //===----------------------------------------------------------------------===//

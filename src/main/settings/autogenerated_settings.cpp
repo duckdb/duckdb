@@ -133,6 +133,22 @@ Value AllowUnsignedExtensionsSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Arrow Arrow Lossless Conversion
+//===----------------------------------------------------------------------===//
+void ArrowArrowLosslessConversionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.arrow_arrow_lossless_conversion = input.GetValue<bool>();
+}
+
+void ArrowArrowLosslessConversionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.arrow_arrow_lossless_conversion = DBConfig().options.arrow_arrow_lossless_conversion;
+}
+
+Value ArrowArrowLosslessConversionSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::CreateValue(config.options.arrow_arrow_lossless_conversion);
+}
+
+//===----------------------------------------------------------------------===//
 // Arrow Use List View
 //===----------------------------------------------------------------------===//
 void ArrowUseListViewSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -229,6 +245,22 @@ Value CustomExtensionRepoSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Debug Skip Checkpoint On Commit
+//===----------------------------------------------------------------------===//
+void DebugSkipCheckpointOnCommitSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.debug_skip_checkpoint_on_commit = input.GetValue<bool>();
+}
+
+void DebugSkipCheckpointOnCommitSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.debug_skip_checkpoint_on_commit = DBConfig().options.debug_skip_checkpoint_on_commit;
+}
+
+Value DebugSkipCheckpointOnCommitSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::CreateValue(config.options.debug_skip_checkpoint_on_commit);
+}
+
+//===----------------------------------------------------------------------===//
 // Default Block Alloc Size
 //===----------------------------------------------------------------------===//
 void DefaultBlockAllocSizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -305,7 +337,9 @@ Value EnableMacroDependenciesSetting::GetSetting(const ClientContext &context) {
 // Enable Progress Bar
 //===----------------------------------------------------------------------===//
 void EnableProgressBarSetting::SetLocal(ClientContext &context, const Value &input) {
-	EnableProgressBarSetting::VerifyDBInstanceSET(context, input);
+	if (!EnableProgressBarSetting::VerifyDBInstanceSET(context, input)) {
+		return;
+	}
 	auto &config = ClientConfig::GetConfig(context);
 	config.enable_progress_bar = input.GetValue<bool>();
 }
@@ -456,6 +490,70 @@ Value HttpMetadataCacheEnableSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Http Proxy
+//===----------------------------------------------------------------------===//
+void HttpProxySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.http_proxy = input.GetValue<string>();
+}
+
+void HttpProxySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.http_proxy = DBConfig().options.http_proxy;
+}
+
+Value HttpProxySetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::CreateValue(config.options.http_proxy);
+}
+
+//===----------------------------------------------------------------------===//
+// Http Proxy Password
+//===----------------------------------------------------------------------===//
+void HttpProxyPasswordSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.http_proxy_password = input.GetValue<string>();
+}
+
+void HttpProxyPasswordSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.http_proxy_password = DBConfig().options.http_proxy_password;
+}
+
+Value HttpProxyPasswordSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::CreateValue(config.options.http_proxy_password);
+}
+
+//===----------------------------------------------------------------------===//
+// Http Proxy Username
+//===----------------------------------------------------------------------===//
+void HttpProxyUsernameSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.http_proxy_username = input.GetValue<string>();
+}
+
+void HttpProxyUsernameSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.http_proxy_username = DBConfig().options.http_proxy_username;
+}
+
+Value HttpProxyUsernameSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::CreateValue(config.options.http_proxy_username);
+}
+
+//===----------------------------------------------------------------------===//
+// Ieee Floating Point Ops
+//===----------------------------------------------------------------------===//
+void IeeeFloatingPointOpsSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.ieee_floating_point_ops = input.GetValue<bool>();
+}
+
+void IeeeFloatingPointOpsSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).ieee_floating_point_ops = ClientConfig().ieee_floating_point_ops;
+}
+
+Value IeeeFloatingPointOpsSetting::GetSetting(const ClientContext &context) {
+	return Value::CreateValue(ClientConfig::GetConfig(context).ieee_floating_point_ops);
+}
+
+//===----------------------------------------------------------------------===//
 // Immediate Transaction Mode
 //===----------------------------------------------------------------------===//
 void ImmediateTransactionModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -555,6 +653,22 @@ Value MaxExpressionDepthSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Max Vacuum Tasks
+//===----------------------------------------------------------------------===//
+void MaxVacuumTasksSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.max_vacuum_tasks = input.GetValue<uint64_t>();
+}
+
+void MaxVacuumTasksSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.max_vacuum_tasks = DBConfig().options.max_vacuum_tasks;
+}
+
+Value MaxVacuumTasksSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::CreateValue(config.options.max_vacuum_tasks);
+}
+
+//===----------------------------------------------------------------------===//
 // Merge Join Threshold
 //===----------------------------------------------------------------------===//
 void MergeJoinThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -619,10 +733,28 @@ Value OldImplicitCastingSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Order By Non Integer Literal
+//===----------------------------------------------------------------------===//
+void OrderByNonIntegerLiteralSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.order_by_non_integer_literal = input.GetValue<bool>();
+}
+
+void OrderByNonIntegerLiteralSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).order_by_non_integer_literal = ClientConfig().order_by_non_integer_literal;
+}
+
+Value OrderByNonIntegerLiteralSetting::GetSetting(const ClientContext &context) {
+	return Value::CreateValue(ClientConfig::GetConfig(context).order_by_non_integer_literal);
+}
+
+//===----------------------------------------------------------------------===//
 // Ordered Aggregate Threshold
 //===----------------------------------------------------------------------===//
 void OrderedAggregateThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
-	OrderedAggregateThresholdSetting::VerifyDBInstanceSET(context, input);
+	if (!OrderedAggregateThresholdSetting::VerifyDBInstanceSET(context, input)) {
+		return;
+	}
 	auto &config = ClientConfig::GetConfig(context);
 	config.ordered_aggregate_threshold = input.GetValue<bool>();
 }
@@ -671,7 +803,9 @@ Value PartitionedWriteMaxOpenFilesSetting::GetSetting(const ClientContext &conte
 // Perfect Ht Threshold
 //===----------------------------------------------------------------------===//
 void PerfectHtThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
-	PerfectHtThresholdSetting::VerifyDBInstanceSET(context, input);
+	if (!PerfectHtThresholdSetting::VerifyDBInstanceSET(context, input)) {
+		return;
+	}
 	auto &config = ClientConfig::GetConfig(context);
 	config.perfect_ht_threshold = input.GetValue<bool>();
 }
@@ -752,7 +886,9 @@ Value PreserveInsertionOrderSetting::GetSetting(const ClientContext &context) {
 // Print Progress Bar
 //===----------------------------------------------------------------------===//
 void PrintProgressBarSetting::SetLocal(ClientContext &context, const Value &input) {
-	PrintProgressBarSetting::VerifyDBInstanceSET(context, input);
+	if (!PrintProgressBarSetting::VerifyDBInstanceSET(context, input)) {
+		return;
+	}
 	auto &config = ClientConfig::GetConfig(context);
 	config.print_progress_bar = input.GetValue<bool>();
 }
@@ -798,6 +934,22 @@ void ProfilerSaveLocationSetting::ResetLocal(ClientContext &context) {
 
 Value ProfilerSaveLocationSetting::GetSetting(const ClientContext &context) {
 	return Value::CreateValue(ClientConfig::GetConfig(context).profiler_save_location);
+}
+
+//===----------------------------------------------------------------------===//
+// Scalar Subquery Error On Multiple Rows
+//===----------------------------------------------------------------------===//
+void ScalarSubqueryErrorOnMultipleRowsSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.scalar_subquery_error_on_multiple_rows = input.GetValue<bool>();
+}
+
+void ScalarSubqueryErrorOnMultipleRowsSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).scalar_subquery_error_on_multiple_rows = ClientConfig().scalar_subquery_error_on_multiple_rows;
+}
+
+Value ScalarSubqueryErrorOnMultipleRowsSetting::GetSetting(const ClientContext &context) {
+	return Value::CreateValue(ClientConfig::GetConfig(context).scalar_subquery_error_on_multiple_rows);
 }
 
 } // namespace duckdb

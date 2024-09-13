@@ -129,7 +129,7 @@ def create_content_for_custom_funcs(custom_settings_path, existing_settings, mis
 
 def find_start_end_indexes_in_this_file(source_code, file):
     start_index, end_index = find_start_end_indexes(source_code, SRC_CODE_START_MARKER, SRC_CODE_END_MARKER, file)
-    first_separator_index = source_code.find(SEPARATOR, start_index) - 1
+    first_separator_index = source_code.find(SEPARATOR, start_index) - 2
     if first_separator_index > -1:
         start_index = first_separator_index
     return start_index, end_index

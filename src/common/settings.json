@@ -16,6 +16,14 @@
         "add_verification_in_both_SetReset": true
     },
     {
+        "name": "allocator_bulk_deallocation_flush_threshold",
+        "description": "If a bulk deallocation larger than this occurs, flush outstanding allocations.",
+        "type": "string",
+        "sql_type": "VARCHAR",
+        "scope": "global",
+        "custom_conversion_and_validation": true
+    },
+    {
         "name": "allocator_flush_threshold",
         "description": "Peak allocation threshold at which to flush the allocator after completing a task.",
         "type": "idx_t",
@@ -61,6 +69,17 @@
         "sql_type": "BOOLEAN",
         "scope": "global",
         "add_verification_in_both_SetReset": true
+    },
+    {
+        "name": "arrow_arrow_lossless_conversion",
+        "description": "Whenever a DuckDB type does not have a clear native or canonical extension match in Arrow, export the types with a duckdb.type_name extension name.",
+        "type": "bool",
+        "sql_type": "BOOLEAN",
+        "scope": "global",
+        "aliases": [
+            "arrow_lossless_conversion",
+            "lossless_conversion_arrow"
+        ]
     },
     {
         "name": "arrow_offset_size",
@@ -161,7 +180,7 @@
     {
         "name": "custom_profiling_settings",
         "description": "Accepts a JSON enabling custom metrics",
-        "type": "",
+        "type": "string",
         "sql_type": "VARCHAR",
         "scope": "local",
         "custom_conversion_and_validation": true
@@ -173,6 +192,13 @@
         "sql_type": "VARCHAR",
         "scope": "global",
         "custom_conversion_and_validation": true
+    },
+    {
+        "name": "debug_skip_checkpoint_on_commit",
+        "description": "DEBUG SETTING: skip checkpointing on commit",
+        "type": "bool",
+        "sql_type": "BOOLEAN",
+        "scope": "global"
     },
     {
         "name": "default_block_alloc_size",
@@ -269,7 +295,7 @@
     {
         "name": "enable_profiling",
         "description": "Enables profiling, and sets the output format (JSON, QUERY_TREE, QUERY_TREE_OPTIMIZER)",
-        "type": "",
+        "type": "ProfilerPrintFormat",
         "sql_type": "VARCHAR",
         "scope": "local",
         "custom_conversion_and_validation": true
@@ -407,6 +433,34 @@
         ]
     },
     {
+        "name": "http_proxy",
+        "description": "HTTP proxy host",
+        "type": "string",
+        "sql_type": "VARCHAR",
+        "scope": "global"
+    },
+    {
+        "name": "http_proxy_password",
+        "description": "Password for HTTP proxy",
+        "type": "string",
+        "sql_type": "VARCHAR",
+        "scope": "global"
+    },
+    {
+        "name": "http_proxy_username",
+        "description": "Username for HTTP proxy",
+        "type": "string",
+        "sql_type": "VARCHAR",
+        "scope": "global"
+    },
+    {
+        "name": "ieee_floating_point_ops",
+        "description": "Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL).",
+        "type": "bool",
+        "sql_type": "BOOLEAN",
+        "scope": "local"
+    },
+    {
         "name": "immediate_transaction_mode",
         "description": "Whether transactions should be started lazily when needed, or immediately when BEGIN TRANSACTION is called",
         "type": "bool",
@@ -453,9 +507,19 @@
     {
         "name": "max_expression_depth",
         "description": "The maximum expression depth limit in the parser. WARNING: increasing this setting and using very deep \"\n\t    \"expressions might lead to stack overflow errors.",
-        "type": "idx_t",
+        "type": "uint64_t",
         "sql_type": "UBIGINT",
         "scope": "local"
+    },
+    {
+        "name": "max_vacuum_tasks",
+        "description": "The maximum vacuum tasks to schedule during a checkpoint.",
+        "type": "uint64_t",
+        "sql_type": "UBIGINT",
+        "scope": "global",
+        "aliases": [
+            "maximum_vacuum_tasks"
+        ]
     },
     {
         "name": "maximum_memory",
@@ -477,7 +541,8 @@
         "scope": "global",
         "custom_conversion_and_validation": true,
         "aliases": [
-            "max_temp_directory_size"
+            "max_temp_directory_size",
+            "maximum_temp_directory_size"
         ]
     },
     {
@@ -522,6 +587,13 @@
         "type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "global"
+    },
+    {
+        "name": "order_by_non_integer_literal",
+        "description": "Allow ordering by non-integer literals - ordering by such literals has no effect.",
+        "type": "bool",
+        "sql_type": "BOOLEAN",
+        "scope": "local"
     },
     {
         "name": "ordered_aggregate_threshold",
@@ -632,7 +704,7 @@
     {
         "name": "profiling_mode",
         "description": "The profiling mode (STANDARD or DETAILED)",
-        "type": "",
+        "type": "string",
         "sql_type": "VARCHAR",
         "scope": "local",
         "custom_conversion_and_validation": true
@@ -644,6 +716,13 @@
         "sql_type": "BIGINT",
         "scope": "local",
         "custom_conversion_and_validation": true
+    },
+    {
+        "name": "scalar_subquery_error_on_multiple_rows",
+        "description": "When a scalar subquery returns multiple rows - return a random row instead of returning an error.",
+        "type": "bool",
+        "sql_type": "BOOLEAN",
+        "scope": "local"
     },
     {
         "name": "schema",
