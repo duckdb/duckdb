@@ -22,7 +22,8 @@ public:
 	ExtraOperatorInfo() : file_filters(""), sample_options(nullptr) {
 	}
 	ExtraOperatorInfo(ExtraOperatorInfo &extra_info)
-	    : file_filters(extra_info.file_filters), sample_options(extra_info.sample_options ? extra_info.sample_options->Copy() : nullptr) {
+	    : file_filters(extra_info.file_filters),
+	      sample_options(extra_info.sample_options ? extra_info.sample_options->Copy() : nullptr) {
 		if (extra_info.total_files.IsValid()) {
 			total_files = extra_info.total_files.GetIndex();
 		}

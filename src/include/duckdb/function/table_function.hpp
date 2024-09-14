@@ -102,8 +102,10 @@ struct TableFunctionBindInput {
 
 struct TableFunctionInitInput {
 	TableFunctionInitInput(optional_ptr<const FunctionData> bind_data_p, const vector<column_t> &column_ids_p,
-	                       const vector<idx_t> &projection_ids_p, optional_ptr<TableFilterSet> filters_p, optional_ptr<SampleOptions> sample_options_p = nullptr)
-	    : bind_data(bind_data_p), column_ids(column_ids_p), projection_ids(projection_ids_p), filters(filters_p), sample_options(sample_options_p) {
+	                       const vector<idx_t> &projection_ids_p, optional_ptr<TableFilterSet> filters_p,
+	                       optional_ptr<SampleOptions> sample_options_p = nullptr)
+	    : bind_data(bind_data_p), column_ids(column_ids_p), projection_ids(projection_ids_p), filters(filters_p),
+	      sample_options(sample_options_p) {
 	}
 
 	optional_ptr<const FunctionData> bind_data;
