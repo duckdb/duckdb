@@ -4,6 +4,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include <iostream>
 
 #include <utility>
 
@@ -28,7 +29,7 @@ public:
 			table_filters = op.dynamic_filters->GetFinalTableFilters(op, op.table_filters.get());
 		}
 		if (op.function.init_global) {
-			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, GetTableFilters(op));
+			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, GetTableFilters(op), op.extra_info.sample_options);
 			global_state = op.function.init_global(context, input);
 			if (global_state) {
 				max_threads = global_state->MaxThreads();
@@ -71,7 +72,7 @@ public:
 	                          const PhysicalTableScan &op) {
 		if (op.function.init_local) {
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids,
-			                             gstate.GetTableFilters(op));
+			                             gstate.GetTableFilters(op), op.extra_info.sample_options);
 			local_state = op.function.init_local(context, input, gstate.global_state.get());
 		}
 	}
@@ -95,10 +96,6 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 	auto &state = input.local_state.Cast<TableScanLocalSourceState>();
 
 	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
-	if (extra_info.is_sampling_pushed_down) {
-		chunk.sampling_pushdown_option.do_system_sample = true;
-		chunk.sampling_pushdown_option.sample_rate = extra_info.sample_rate;
-	}
 	if (function.function) {
 		function.function(context.client, data, chunk);
 	} else {
@@ -188,8 +185,8 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 		}
 		result["Filters"] = filters_info;
 	}
-	if (extra_info.is_sampling_pushed_down) {
-		result["Sample Method"] = "System: " + to_string(100 * extra_info.sample_rate) + "%";
+	if (extra_info.sample_options) {
+		result["Sample Method"] = "System: " + extra_info.sample_options->sample_size.ToString() + "%";
 	}
 	if (!extra_info.file_filters.empty()) {
 		result["File Filters"] = extra_info.file_filters;

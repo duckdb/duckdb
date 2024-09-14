@@ -11,9 +11,8 @@ unique_ptr<LogicalOperator> SamplingPushdown::Optimize(unique_ptr<LogicalOperato
 	    op->children[0]->type == LogicalOperatorType::LOGICAL_GET &&
 	    op->children[0]->Cast<LogicalGet>().function.sampling_pushdown && op->children[0]->children.empty()) {
 		auto &get = op->children[0]->Cast<LogicalGet>();
-		// set sampling rate
-		get.extra_info.is_sampling_pushed_down = true;
-		get.extra_info.sample_rate = op->Cast<LogicalSample>().sample_options->sample_size.GetValue<double>() / 100.0;
+		// set sampling option
+		get.extra_info.sample_options = std::move(op->Cast<LogicalSample>().sample_options);
 		op = std::move(op->children[0]);
 	}
 	for (auto &child : op->children) {

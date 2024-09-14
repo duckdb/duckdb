@@ -13,16 +13,16 @@
 #include <cstring>
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/parser/parsed_data/sample_options.hpp"
 
 namespace duckdb {
 
 class ExtraOperatorInfo {
 public:
-	ExtraOperatorInfo() : file_filters(""), is_sampling_pushed_down(false) {
+	ExtraOperatorInfo() : file_filters(""), sample_options(nullptr) {
 	}
 	ExtraOperatorInfo(ExtraOperatorInfo &extra_info)
-	    : file_filters(extra_info.file_filters), is_sampling_pushed_down(extra_info.is_sampling_pushed_down),
-	      sample_rate(extra_info.sample_rate) {
+	    : file_filters(extra_info.file_filters), sample_options(extra_info.sample_options ? extra_info.sample_options->Copy() : nullptr) {
 		if (extra_info.total_files.IsValid()) {
 			total_files = extra_info.total_files.GetIndex();
 		}
@@ -37,10 +37,8 @@ public:
 	optional_idx total_files;
 	//! Size of file list after applying filters
 	optional_idx filtered_files;
-	//! Whether sampling is pushed down into the table scan
-	bool is_sampling_pushed_down;
-	//! Sample rate that have been pushed down into the table scan
-	double sample_rate;
+	//! Sample options that have been pushed down into the main file list
+	unique_ptr<SampleOptions> sample_options;
 };
 
 } // namespace duckdb

@@ -40,10 +40,6 @@ class Deserializer;
     In addition to holding the data of the vectors, the DataChunk also owns the
    selection vector that underlying vectors can point to.
 */
-struct SamplingPushdownOption {
-	bool do_system_sample = false;
-	double sample_rate = 0;
-};
 
 class DataChunk {
 public:
@@ -53,9 +49,6 @@ public:
 
 	//! The vectors owned by the DataChunk.
 	vector<Vector> data;
-
-	//! Options for sampling pushdown
-	SamplingPushdownOption sampling_pushdown_option;
 
 public:
 	inline idx_t size() const { // NOLINT
