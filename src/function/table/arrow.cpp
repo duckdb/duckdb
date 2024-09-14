@@ -573,7 +573,6 @@ void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	arrow_dumb.projection_pushdown = false;
 	arrow_dumb.filter_pushdown = false;
 	arrow_dumb.filter_prune = false;
-	arrow_dumb.sampling_pushdown = false;
 	set.AddFunction(arrow_dumb);
 }
 
