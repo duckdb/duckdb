@@ -30,6 +30,8 @@ public:
 	virtual bool UsesRawKeyNames() {
 		return false;
 	}
+	virtual void Render(const ProfilingNode &op, std::ostream &ss) {
+	}
 };
 
 } // namespace duckdb

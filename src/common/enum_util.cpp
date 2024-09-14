@@ -5959,6 +5959,10 @@ const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value) {
 		return "QUERY_TREE_OPTIMIZER";
 	case ProfilerPrintFormat::NO_OUTPUT:
 		return "NO_OUTPUT";
+	case ProfilerPrintFormat::HTML:
+		return "HTML";
+	case ProfilerPrintFormat::GRAPHVIZ:
+		return "GRAPHVIZ";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ProfilerPrintFormat>", value));
 	}
@@ -5977,6 +5981,12 @@ ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value)
 	}
 	if (StringUtil::Equals(value, "NO_OUTPUT")) {
 		return ProfilerPrintFormat::NO_OUTPUT;
+	}
+	if (StringUtil::Equals(value, "HTML")) {
+		return ProfilerPrintFormat::HTML;
+	}
+	if (StringUtil::Equals(value, "GRAPHVIZ")) {
+		return ProfilerPrintFormat::GRAPHVIZ;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ProfilerPrintFormat>", value));
 }
