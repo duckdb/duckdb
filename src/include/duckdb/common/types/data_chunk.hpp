@@ -40,7 +40,6 @@ class Deserializer;
     In addition to holding the data of the vectors, the DataChunk also owns the
    selection vector that underlying vectors can point to.
 */
-
 class DataChunk {
 public:
 	//! Creates an empty DataChunk

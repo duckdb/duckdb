@@ -209,7 +209,7 @@ private:
 
 struct ScanSamplingInfo {
 	//! Whether or not to do a system sample during scanning
-	bool do_system_sample;
+	bool do_system_sample=false;
 	//! The sampling rate to use
 	double sample_rate;
 };
