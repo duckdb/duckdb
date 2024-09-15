@@ -23,7 +23,7 @@ public:
 	}
 	ExtraOperatorInfo(ExtraOperatorInfo &extra_info)
 	    : file_filters(extra_info.file_filters),
-	      sample_options(extra_info.sample_options ? extra_info.sample_options->Copy() : nullptr) {
+	      sample_options(std::move(extra_info.sample_options)) {
 		if (extra_info.total_files.IsValid()) {
 			total_files = extra_info.total_files.GetIndex();
 		}
@@ -38,7 +38,7 @@ public:
 	optional_idx total_files;
 	//! Size of file list after applying filters
 	optional_idx filtered_files;
-	//! Sample options that have been pushed down into the main file list
+	//! Sample options that have been pushed down into the table scan
 	unique_ptr<SampleOptions> sample_options;
 };
 
