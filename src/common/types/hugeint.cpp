@@ -77,19 +77,6 @@ bool Hugeint::TryNegate(hugeint_t input, hugeint_t &result) {
 	return true;
 }
 
-hugeint_t Hugeint::Pow(uint8_t base_p, uint8_t exponent) {
-	hugeint_t base = base_p;
-	hugeint_t result = 1;
-	while (exponent > 0) {
-		if (exponent % 2 == 1) {
-			result *= base;
-		}
-		base *= base;
-		exponent /= 2;
-	}
-	return result;
-}
-
 hugeint_t Hugeint::Abs(hugeint_t n) {
 	if (n < 0) {
 		return Hugeint::Negate(n);

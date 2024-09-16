@@ -117,7 +117,7 @@ struct DecimalScaleDownOperator {
 // This function detects if we can scale a decimal down to another.
 template <class INPUT_TYPE>
 bool CanScaleDownDecimal(INPUT_TYPE input, DecimalScaleInput<INPUT_TYPE> &data) {
-	int64_t divisor = static_cast<int64_t>(pow(10, data.source_scale));
+	int64_t divisor = UnsafeNumericCast<int64_t>(NumericHelper::POWERS_OF_TEN[data.source_scale]);
 	auto value = input % divisor;
 	auto rounded_input = input;
 	if (rounded_input < 0) {
@@ -130,8 +130,8 @@ bool CanScaleDownDecimal(INPUT_TYPE input, DecimalScaleInput<INPUT_TYPE> &data) 
 	return rounded_input < data.limit && rounded_input > -data.limit;
 }
 
-bool CanScaleDownDecimal(hugeint_t input, DecimalScaleInput<hugeint_t> &data) {
-	auto divisor = Hugeint::Pow(10, data.source_scale);
+bool CanScaleDownDecimal(hugeint_t input, const DecimalScaleInput<hugeint_t> &data) {
+	auto divisor = UnsafeNumericCast<hugeint_t>(Hugeint::POWERS_OF_TEN[data.source_scale]);
 	hugeint_t value = input % divisor;
 	hugeint_t rounded_input = input;
 	if (rounded_input < 0) {
