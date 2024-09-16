@@ -373,22 +373,39 @@ def create_duckdb_h(ext_api_version, function_groups):
         if 'description' in curr_group:
             function_declarations_finished += curr_group['description'] + '\n'
 
-        if 'deprecated' in curr_group and curr_group['deprecated']:
+        deprecated_state = False
+        group_is_deprecated = 'deprecated' in curr_group and curr_group['deprecated']
+        if group_is_deprecated:
             function_declarations_finished += f'#ifndef DUCKDB_API_NO_DEPRECATED\n'
+            deprecated_state = True
 
         for function in curr_group['entries']:
-            if 'deprecated' in function and function['deprecated']:
-                function_declarations_finished += '#ifndef DUCKDB_API_NO_DEPRECATED\n'
-
-            function_declarations_finished += create_function_comment(function)
-            function_declarations_finished += create_function_declaration(function)
-
-            if 'deprecated' in function and function['deprecated']:
+            function_is_deprecated = group_is_deprecated or ('deprecated' in function and function['deprecated'])
+            if deprecated_state and not function_is_deprecated:
                 function_declarations_finished += '#endif\n'
+                deprecated_state = False
+            elif not deprecated_state and function_is_deprecated:
+                function_declarations_finished += '#ifndef DUCKDB_API_NO_DEPRECATED\n'
+                deprecated_state = True
+
+            function_comment = create_function_comment(function)
+            function_contains_deprecation_notice = (
+                '**DEPRECATED**' in function_comment or '**DEPRECATION NOTICE**' in function_comment
+            )
+            if function_is_deprecated and not function_contains_deprecation_notice:
+                raise Exception(
+                    f"Function {str(function)} is labeled as deprecated but the comment does not indicate this"
+                )
+            elif not function_is_deprecated and function_contains_deprecation_notice:
+                raise Exception(
+                    f"Function {str(function)} is not labeled as deprecated but the comment indicates that it is"
+                )
+            function_declarations_finished += function_comment
+            function_declarations_finished += create_function_declaration(function)
 
             function_declarations_finished += '\n'
 
-        if 'deprecated' in curr_group and curr_group['deprecated']:
+        if deprecated_state:
             function_declarations_finished += '#endif\n'
 
     header_template = fetch_header_template_main()

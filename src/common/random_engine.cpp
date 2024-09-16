@@ -29,10 +29,16 @@ double RandomEngine::NextRandom(double min, double max) {
 }
 
 double RandomEngine::NextRandom() {
-	return std::ldexp(random_state->pcg(), -32);
+	auto uint64 = NextRandomInteger64();
+	return std::ldexp(uint64, -64);
 }
+
 uint32_t RandomEngine::NextRandomInteger() {
 	return random_state->pcg();
+}
+
+uint64_t RandomEngine::NextRandomInteger64() {
+	return (static_cast<uint64_t>(NextRandomInteger()) << UINT64_C(32)) | static_cast<uint64_t>(NextRandomInteger());
 }
 
 uint32_t RandomEngine::NextRandomInteger(uint32_t min, uint32_t max) {

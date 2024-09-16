@@ -59,6 +59,7 @@ InsertionOrderPreservingMap<string> LogicalAggregate::ParamsToString() const {
 		expressions_info += expressions[i]->GetName();
 	}
 	result["Expressions"] = expressions_info;
+	SetParamsEstimatedCardinality(result);
 	return result;
 }
 

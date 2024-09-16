@@ -261,6 +261,21 @@ struct ListRangeFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct ListCosineDistanceFun {
+	static constexpr const char *Name = "list_cosine_distance";
+	static constexpr const char *Parameters = "list1,list2";
+	static constexpr const char *Description = "Compute the cosine distance between two lists";
+	static constexpr const char *Example = "list_cosine_distance([1, 2, 3], [1, 2, 3])";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ListCosineDistanceFunAlias {
+	using ALIAS = ListCosineDistanceFun;
+
+	static constexpr const char *Name = "<=>";
+};
+
 struct ListCosineSimilarityFun {
 	static constexpr const char *Name = "list_cosine_similarity";
 	static constexpr const char *Parameters = "list1,list2";
@@ -268,12 +283,6 @@ struct ListCosineSimilarityFun {
 	static constexpr const char *Example = "list_cosine_similarity([1, 2, 3], [1, 2, 3])";
 
 	static ScalarFunctionSet GetFunctions();
-};
-
-struct ListCosineSimilarityFunAlias {
-	using ALIAS = ListCosineSimilarityFun;
-
-	static constexpr const char *Name = "<=>";
 };
 
 struct ListDistanceFun {
@@ -306,8 +315,23 @@ struct ListDotProductFun {
 	static constexpr const char *Name = "list_dot_product";
 };
 
-struct ListInnerProductFunAlias {
-	using ALIAS = ListInnerProductFun;
+struct ListNegativeInnerProductFun {
+	static constexpr const char *Name = "list_negative_inner_product";
+	static constexpr const char *Parameters = "list1,list2";
+	static constexpr const char *Description = "Compute the negative inner product between two lists";
+	static constexpr const char *Example = "list_negative_inner_product([1, 2, 3], [1, 2, 3])";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ListNegativeDotProductFun {
+	using ALIAS = ListNegativeInnerProductFun;
+
+	static constexpr const char *Name = "list_negative_dot_product";
+};
+
+struct ListNegativeInnerProductFunAlias {
+	using ALIAS = ListNegativeInnerProductFun;
 
 	static constexpr const char *Name = "<#>";
 };

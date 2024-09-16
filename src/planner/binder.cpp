@@ -6,6 +6,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
@@ -21,7 +22,6 @@
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/planner/query_node/list.hpp"
 #include "duckdb/planner/tableref/list.hpp"
-#include "duckdb/main/database.hpp"
 
 #include <algorithm>
 
@@ -59,7 +59,7 @@ Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType b
     : context(context), bind_context(*this), parent(std::move(parent_p)), bound_tables(0), binder_type(binder_type),
       entry_retriever(context) {
 	if (parent) {
-		entry_retriever.SetCallback(parent->entry_retriever.GetCallback());
+		entry_retriever.Inherit(parent->entry_retriever);
 
 		// We have to inherit macro and lambda parameter bindings and from the parent binder, if there is a parent.
 		macro_binding = parent->macro_binding;
@@ -134,10 +134,8 @@ BoundStatement Binder::BindWithCTE(T &statement) {
 		}
 		MoveCorrelatedExpressions(*tail.child_binder);
 
-		// extract operator below root operation
-		auto plan = std::move(bound_statement.plan->children[0]);
-		bound_statement.plan->children.clear();
-		bound_statement.plan->children.push_back(CreatePlan(*bound_cte, std::move(plan)));
+		auto plan = std::move(bound_statement.plan);
+		bound_statement.plan = CreatePlan(*bound_cte, std::move(plan));
 	} else {
 		bound_statement = Bind(statement.template Cast<T>());
 	}

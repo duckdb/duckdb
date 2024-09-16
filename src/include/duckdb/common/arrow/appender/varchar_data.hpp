@@ -3,6 +3,7 @@
 #include "duckdb/common/arrow/appender/append_data.hpp"
 #include "duckdb/common/arrow/appender/scalar_data.hpp"
 #include "duckdb/common/types/arrow_string_view_type.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
 
@@ -18,6 +19,18 @@ struct ArrowVarcharConverter {
 	template <class SRC>
 	static void WriteData(data_ptr_t target, SRC input) {
 		memcpy(target, input.GetData(), input.GetSize());
+	}
+};
+
+struct ArrowUUIDConverter {
+	template <class SRC>
+	static idx_t GetLength(SRC input) {
+		return UUID::STRING_SIZE;
+	}
+
+	template <class SRC>
+	static void WriteData(data_ptr_t target, SRC input) {
+		UUID::ToString(input, char_ptr_cast(target));
 	}
 };
 

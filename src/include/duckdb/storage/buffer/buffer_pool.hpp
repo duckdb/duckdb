@@ -41,12 +41,15 @@ class BufferPool {
 	friend class StandardBufferManager;
 
 public:
-	explicit BufferPool(idx_t maximum_memory, bool track_eviction_timestamps);
+	BufferPool(idx_t maximum_memory, bool track_eviction_timestamps, idx_t allocator_bulk_deallocation_flush_threshold);
 	virtual ~BufferPool();
 
 	//! Set a new memory limit to the buffer pool, throws an exception if the new limit is too low and not enough
 	//! blocks can be evicted
 	void SetLimit(idx_t limit, const char *exception_postscript);
+
+	//! If bulk deallocation larger than this occurs, flush outstanding allocations
+	void SetAllocatorBulkDeallocationFlushThreshold(idx_t threshold);
 
 	void UpdateUsedMemory(MemoryTag tag, int64_t size);
 
@@ -135,6 +138,8 @@ protected:
 	mutex limit_lock;
 	//! The maximum amount of memory that the buffer manager can keep (in bytes)
 	atomic<idx_t> maximum_memory;
+	//! If bulk deallocation larger than this occurs, flush outstanding allocations
+	atomic<idx_t> allocator_bulk_deallocation_flush_threshold;
 	//! Record timestamps of buffer manager unpin() events. Usable by custom eviction policies.
 	bool track_eviction_timestamps;
 	//! Eviction queues

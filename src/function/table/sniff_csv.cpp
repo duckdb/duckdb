@@ -96,6 +96,9 @@ string FormatOptions(char opt) {
 	if (opt == '\'') {
 		return "''";
 	}
+	if (opt == '\0') {
+		return "";
+	}
 	string result;
 	result += opt;
 	return result;
@@ -123,6 +126,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	if (sniffer_options.name_list.empty()) {
 		sniffer_options.name_list = data.names_csv;
 	}
+
 	if (sniffer_options.sql_type_list.empty()) {
 		sniffer_options.sql_type_list = data.return_types_csv;
 	}
@@ -213,7 +217,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 		         << "'" << separator;
 	}
 	// 11.2. Quote
-	if (!sniffer_options.dialect_options.header.IsSetByUser()) {
+	if (!sniffer_options.dialect_options.state_machine_options.quote.IsSetByUser()) {
 		csv_read << "quote="
 		         << "'" << FormatOptions(sniffer_options.dialect_options.state_machine_options.quote.GetValue()) << "'"
 		         << separator;

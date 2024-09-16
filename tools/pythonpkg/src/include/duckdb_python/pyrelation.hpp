@@ -194,7 +194,7 @@ public:
 
 	PolarsDataFrame ToPolars(idx_t batch_size);
 
-	py::object ToArrowCapsule();
+	py::object ToArrowCapsule(const py::object &requested_schema = py::none());
 
 	duckdb::pyarrow::RecordBatchReader ToRecordBatch(idx_t batch_size);
 

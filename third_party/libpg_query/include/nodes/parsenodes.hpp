@@ -1287,8 +1287,8 @@ typedef struct PGSelectStmt {
 	 */
 	PGSetOperation op;         /* type of set op */
 	bool all;                  /* ALL specified? */
-	struct PGSelectStmt *larg; /* left child */
-	struct PGSelectStmt *rarg; /* right child */
+	struct PGNode *larg; /* left child */
+	struct PGNode *rarg; /* right child */
 	                           /* Eventually add fields for CORRESPONDING spec here */
 } PGSelectStmt;
 
@@ -2100,7 +2100,7 @@ typedef struct PGIntervalConstant {
 typedef struct PGSampleSize {
 	PGNodeTag type;
 	bool is_percentage;   /* whether or not the sample size is expressed in row numbers or a percentage */
-	PGValue sample_size;  /* sample size */
+	PGNode *sample_size;  /* sample size */
 } PGSampleSize;
 
 typedef struct PGSampleOptions {
