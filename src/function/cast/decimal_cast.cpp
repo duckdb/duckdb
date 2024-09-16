@@ -130,7 +130,6 @@ bool CanScaleDownDecimal(INPUT_TYPE input, DecimalScaleInput<INPUT_TYPE> &data) 
 	return rounded_input < data.limit && rounded_input > -data.limit;
 }
 
-
 template <>
 bool CanScaleDownDecimal<hugeint_t>(hugeint_t input, DecimalScaleInput<hugeint_t> &data) {
 	auto divisor = UnsafeNumericCast<hugeint_t>(Hugeint::POWERS_OF_TEN[data.source_scale]);
