@@ -291,10 +291,17 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	// and we start to choose the filters that join relations in the set.
 
 	// edges are guaranteed to be in order of largest tdom to smallest tdom.
+	unordered_set<idx_t> unused_edge_tdoms;
 	auto edges = GetEdges(relations_to_tdoms, set);
 	for (auto &edge : edges) {
-		auto subgraph_connections = SubgraphsConnectedByEdge(edge, subgraphs);
+		if (subgraphs.size() == 1 && subgraphs.at(0).relations->ToString() == set.ToString()) {
+			// the first subgraph has connected all the desired relations, just skip the rest of the edges
+			auto edge_tdom = edge.has_tdom_hll ? edge.tdom_hll : edge.tdom_no_hll;
+			unused_edge_tdoms.insert(edge_tdom);
+			continue;
+		}
 
+		auto subgraph_connections = SubgraphsConnectedByEdge(edge, subgraphs);
 		if (subgraph_connections.empty()) {
 			// create a subgraph out of left and right, then merge right into left and add left to subgraphs.
 			// this helps cover a case where there are no subgraphs yet, and the only join filter is a SEMI JOIN
@@ -342,18 +349,10 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			                                   [](Subgraph2Denominator &s) { return !s.relations; });
 			subgraphs.erase(remove_start, subgraphs.end());
 		}
-		if (subgraphs.size() == 1 && subgraphs.at(0).relations->ToString() == set.ToString()) {
-			// the first subgraph has connected all the desired relations, no need to iterate
-			// through the rest of the edges.
-			break;
-		}
 	}
 
-	unordered_set<idx_t> unique_tdoms;
-	for (const auto &edge : edges) {
-		unique_tdoms.insert(edge.has_tdom_hll ? edge.tdom_hll : edge.tdom_no_hll);
-	}
-	const auto denom_multiplier = static_cast<double>(MaxValue<idx_t>(unique_tdoms.size(), 1));
+	// Slight penalty to cardinality for unused edges
+	auto denom_multiplier = 1.0 + static_cast<double>(unused_edge_tdoms.size());
 
 	// It's possible cross-products were added and are not present in the filters in the relation_2_tdom
 	// structures. When that's the case, merge all remaining subgraphs.
