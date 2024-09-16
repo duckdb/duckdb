@@ -39,7 +39,7 @@ select json_value('{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"
 "duckduckduckduck"
 
 query T
-select json_value('[1, 2, 42]', '2')
+select json_value('[1, 2, 42]', 2)
 ----
 42
 
