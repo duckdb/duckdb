@@ -296,7 +296,7 @@ void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const
 	bool initial_format_candidates =
 	    save_format_candidates.size() == original_format_candidates.at(sql_type.id()).format.size();
 	bool is_set_by_user = options.dialect_options.date_format.find(sql_type.id())->second.IsSetByUser();
-	while (!type_format_candidates.empty() && ! is_set_by_user) {
+	while (!type_format_candidates.empty() && !is_set_by_user) {
 		//	avoid using exceptions for flow control...
 		auto &current_format = candidate.dialect_options.date_format[sql_type.id()].GetValue();
 		if (current_format.Parse(dummy_val, result, true)) {
