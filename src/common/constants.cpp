@@ -22,6 +22,10 @@ bool IsPowerOfTwo(uint64_t v) {
 }
 
 uint64_t NextPowerOfTwo(uint64_t v) {
+	auto v_in = v;
+	if (v < 1) { // this is not strictly right but we seem to rely on it in places
+		return 2;
+	}
 	v--;
 	v |= v >> 1;
 	v |= v >> 2;
@@ -30,8 +34,8 @@ uint64_t NextPowerOfTwo(uint64_t v) {
 	v |= v >> 16;
 	v |= v >> 32;
 	v++;
-	if (v == 0) {
-	    throw OutOfRangeException("Can't find next power of 2 for %llu", v);
+	if (v_in == 0) {
+	    throw OutOfRangeException("Can't find next power of 2 for %llu", v_in);
 	}
 	return v;
 }
