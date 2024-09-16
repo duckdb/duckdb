@@ -1,0 +1,34 @@
+# name: test/sql/optimizer/plan/test_filter_pushdown_materialized_cte.test
+# description: Test filter pushdown in materialized CTEs (internal issue #3041)
+# group: [plan]
+
+require tpcds
+
+statement ok
+call dsdgen(sf=0.01)
+
+statement ok
+pragma explain_output='OPTIMIZED_ONLY'
+
+query II
+EXPLAIN WITH ss AS MATERIALIZED
+  ( SELECT i_manufact_id,
+           sum(ss_ext_sales_price) total_sales
+   FROM store_sales,
+        date_dim,
+        customer_address,
+        item
+   WHERE i_manufact_id IN
+       (SELECT i_manufact_id
+        FROM item
+        WHERE i_category IN ('Electronics'))
+     AND ss_item_sk = i_item_sk
+     AND ss_sold_date_sk = d_date_sk
+     AND d_year = 1998
+     AND d_moy = 5
+     AND ss_addr_sk = ca_address_sk
+     AND ca_gmt_offset = -5
+   GROUP BY i_manufact_id)
+FROM ss
+----
+logical_opt	<!REGEX>:.*CROSS_PRODUCT.*
