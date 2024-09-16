@@ -180,7 +180,7 @@ void Bit::BitToBlob(string_t bit, string_t &output_blob) {
 	idx_t size = output_blob.GetSize();
 
 	output[0] = UnsafeNumericCast<char>(GetFirstByte(bit));
-	if (size > 2) {
+	if (size >= 2) {
 		++output;
 		// First byte in bitstring contains amount of padded bits,
 		// second byte in bitstring is the padded byte,

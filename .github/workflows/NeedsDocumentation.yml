@@ -1,5 +1,8 @@
 name: Create Documentation issue for the Needs Documentation label
 on:
+  discussion:
+    types:
+      - labeled
   issues:
     types:
       - labeled

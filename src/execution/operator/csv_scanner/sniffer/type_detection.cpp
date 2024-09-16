@@ -103,6 +103,10 @@ bool CSVSniffer::CanYouCastIt(ClientContext &context, const string_t value, cons
 	auto value_ptr = value.GetData();
 	auto value_size = value.GetSize();
 	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN: {
+		bool dummy_value;
+		return TryCastStringBool(value_ptr, value_size, dummy_value, true);
+	}
 	case LogicalTypeId::TINYINT: {
 		int8_t dummy_value;
 		return TrySimpleIntegerCast(value_ptr, value_size, dummy_value, false);
@@ -382,7 +386,7 @@ void CSVSniffer::SniffTypes(DataChunk &data_chunk, CSVStateMachine &state_machin
 }
 
 // If we have a predefined date/timestamp format we set it
-void CSVSniffer::SetUserDefinedDateTimeFormat(CSVStateMachine &candidate) {
+void CSVSniffer::SetUserDefinedDateTimeFormat(CSVStateMachine &candidate) const {
 	const vector<LogicalTypeId> data_time_formats {LogicalTypeId::DATE, LogicalTypeId::TIMESTAMP};
 	for (auto &date_time_format : data_time_formats) {
 		auto &user_option = options.dialect_options.date_format.at(date_time_format);
@@ -423,7 +427,7 @@ void CSVSniffer::DetectTypes() {
 					}
 				}
 			}
-			if (break_loop) {
+			if (break_loop && !candidate->state_machine->options.ignore_errors.GetValue()) {
 				continue;
 			}
 		}

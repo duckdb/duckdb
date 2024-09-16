@@ -946,7 +946,7 @@ duckdb::pyarrow::Table DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
 	return ToArrowTableInternal(batch_size, false);
 }
 
-py::object DuckDBPyRelation::ToArrowCapsule() {
+py::object DuckDBPyRelation::ToArrowCapsule(const py::object &requested_schema) {
 	if (!result) {
 		if (!rel) {
 			return py::none();
@@ -1481,8 +1481,8 @@ void DuckDBPyRelation::Print(const Optional<py::int_> &max_width, const Optional
 	py::print(py::str(ToStringInternal(config, invalidate_cache)));
 }
 
-static ExplainFormat GetExplainFormat() {
-	if (DuckDBPyConnection::IsJupyter()) {
+static ExplainFormat GetExplainFormat(ExplainType type) {
+	if (DuckDBPyConnection::IsJupyter() && type != ExplainType::EXPLAIN_ANALYZE) {
 		return ExplainFormat::HTML;
 	} else {
 		return ExplainFormat::DEFAULT;
@@ -1502,7 +1502,7 @@ string DuckDBPyRelation::Explain(ExplainType type) {
 	AssertRelation();
 	py::gil_scoped_release release;
 
-	auto explain_format = GetExplainFormat();
+	auto explain_format = GetExplainFormat(type);
 	auto res = rel->Explain(type, explain_format);
 	D_ASSERT(res->type == duckdb::QueryResultType::MATERIALIZED_RESULT);
 	auto &materialized = res->Cast<MaterializedQueryResult>();

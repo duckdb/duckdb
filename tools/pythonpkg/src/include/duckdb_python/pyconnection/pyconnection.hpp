@@ -218,7 +218,9 @@ public:
 
 	shared_ptr<DuckDBPyConnection> RegisterPythonObject(const string &name, const py::object &python_object);
 
-	void InstallExtension(const string &extension, bool force_install = false);
+	void InstallExtension(const string &extension, bool force_install = false,
+	                      const py::object &repository = py::none(), const py::object &repository_url = py::none(),
+	                      const py::object &version = py::none());
 
 	void LoadExtension(const string &extension);
 
