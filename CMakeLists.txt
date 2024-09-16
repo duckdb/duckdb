@@ -608,6 +608,9 @@ if(OS_NAME STREQUAL "windows")
   endif()
 endif()
 
+if(OS_NAME STREQUAL "linux")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -latomic")
+endif()
 
 include_directories(src/include)
 include_directories(third_party/fsst)
