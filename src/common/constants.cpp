@@ -35,7 +35,7 @@ uint64_t NextPowerOfTwo(uint64_t v) {
 	v |= v >> 32;
 	v++;
 	if (v_in == 0) {
-	    throw OutOfRangeException("Can't find next power of 2 for %llu", v_in);
+		throw OutOfRangeException("Can't find next power of 2 for %llu", v_in);
 	}
 	return v;
 }
