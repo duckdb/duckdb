@@ -2,10 +2,10 @@
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/printer.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/optimizer/join_order/query_graph_manager.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/storage/data_table.hpp"
 
@@ -349,6 +349,12 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 		}
 	}
 
+	unordered_set<idx_t> unique_tdoms;
+	for (const auto &edge : edges) {
+		unique_tdoms.insert(edge.has_tdom_hll ? edge.tdom_hll : edge.tdom_no_hll);
+	}
+	const auto denom_multiplier = static_cast<double>(MaxValue<idx_t>(unique_tdoms.size(), 1));
+
 	// It's possible cross-products were added and are not present in the filters in the relation_2_tdom
 	// structures. When that's the case, merge all remaining subgraphs.
 	if (subgraphs.size() > 1) {
@@ -367,7 +373,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 		// denominator is 1 and numerators are a cross product of cardinalities.
 		return DenomInfo(set, 1, 1);
 	}
-	return DenomInfo(*subgraphs.at(0).numerator_relations, 1, subgraphs.at(0).denom);
+	return DenomInfo(*subgraphs.at(0).numerator_relations, 1, subgraphs.at(0).denom * denom_multiplier);
 }
 
 template <>
