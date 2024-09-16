@@ -96,21 +96,7 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(Catalog &source_catalog
 		result->children.push_back(make_uniq<LogicalDummyScan>(GenerateTableIndex()));
 	} else {
 		// use UNION ALL to combine the individual copy statements into a single node
-		while (insert_nodes.size() > 1) {
-			vector<unique_ptr<LogicalOperator>> new_nodes;
-			for (idx_t i = 0; i < insert_nodes.size(); i += 2) {
-				if (i + 1 == insert_nodes.size()) {
-					new_nodes.push_back(std::move(insert_nodes[i]));
-				} else {
-					auto copy_union = make_uniq<LogicalSetOperation>(
-					    GenerateTableIndex(), 1U, std::move(insert_nodes[i]), std::move(insert_nodes[i + 1]),
-					    LogicalOperatorType::LOGICAL_UNION, true, false);
-					new_nodes.push_back(std::move(copy_union));
-				}
-			}
-			insert_nodes = std::move(new_nodes);
-		}
-		result = std::move(insert_nodes[0]);
+		result = UnionOperators(std::move(insert_nodes));
 	}
 	return result;
 }
