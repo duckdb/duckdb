@@ -6,7 +6,11 @@
 namespace duckdb {
 
 void HTTPUtil::ParseHTTPProxyHost(string &proxy_value, string &hostname_out, idx_t &port_out, idx_t default_port) {
-	auto proxy_split = StringUtil::Split(proxy_value, ":");
+	auto sanitized_proxy_value = proxy_value;
+	if (StringUtil::StartsWith(proxy_value, "http://")) {
+		sanitized_proxy_value = proxy_value.substr(7);
+	}
+	auto proxy_split = StringUtil::Split(sanitized_proxy_value, ":");
 	if (proxy_split.size() == 1) {
 		hostname_out = proxy_split[0];
 		port_out = default_port;
