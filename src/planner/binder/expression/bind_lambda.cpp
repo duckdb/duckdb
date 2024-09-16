@@ -195,6 +195,12 @@ void ExpressionBinder::CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_
 	    expr->expression_class == ExpressionClass::BOUND_PARAMETER ||
 	    expr->expression_class == ExpressionClass::BOUND_LAMBDA_REF) {
 
+		if (expr->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+			// Search for UNNEST.
+			auto &column_binding = expr->Cast<BoundColumnRefExpression>().binding;
+			ThrowIfUnnestInLambda(column_binding);
+		}
+
 		// move the expr because we are going to replace it
 		auto original = std::move(expr);
 		unique_ptr<Expression> replacement;
