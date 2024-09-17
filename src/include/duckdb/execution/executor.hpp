@@ -13,6 +13,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/main/query_result.hpp"
 #include "duckdb/execution/task_error_manager.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
