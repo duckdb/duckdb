@@ -21,6 +21,7 @@
 #include "duckdb/catalog/catalog_entry_retriever.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
 
@@ -222,6 +223,7 @@ protected:
 
 	unique_ptr<ParsedExpression> QualifyColumnNameWithManyDotsInternal(ColumnRefExpression &col_ref, ErrorData &error,
 	                                                                   idx_t &struct_extract_start);
+	virtual void ThrowIfUnnestInLambda(const ColumnBinding &column_binding);
 };
 
 } // namespace duckdb
