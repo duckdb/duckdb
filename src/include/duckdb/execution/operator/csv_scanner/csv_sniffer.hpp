@@ -198,7 +198,7 @@ private:
 	void InitializeDateAndTimeStampDetection(CSVStateMachine &candidate, const string &separator,
 	                                         const LogicalType &sql_type);
 	//! Sets user defined date and time formats (if any)
-	void SetUserDefinedDateTimeFormat(CSVStateMachine &candidate);
+	void SetUserDefinedDateTimeFormat(CSVStateMachine &candidate) const;
 	//! Functions that performs detection for date and timestamp formats
 	void DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const LogicalType &sql_type, const string &separator,
 	                                   const string_t &dummy_val);
@@ -235,10 +235,10 @@ private:
 	//! ------------------------------------------------------//
 	void DetectHeader();
 	static bool DetectHeaderWithSetColumn(ClientContext &context, vector<HeaderValue> &best_header_row,
-	                                      SetColumns &set_columns, CSVReaderOptions &options);
+	                                      const SetColumns &set_columns, CSVReaderOptions &options);
 	static vector<string>
 	DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &best_header_row, CSVStateMachine &state_machine,
-	                     SetColumns &set_columns,
+	                     const SetColumns &set_columns,
 	                     unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
 	                     CSVReaderOptions &options, CSVErrorHandler &error_handler);
 	vector<string> names;

@@ -4270,7 +4270,7 @@ JEMALLOC_ATTR(constructor)
 static void
 jemalloc_constructor(void) {
 	unsigned long long cpu_count = malloc_ncpus();
-	unsigned long long bgt_count = cpu_count / 32;
+	unsigned long long bgt_count = cpu_count / 16;
 	if (bgt_count == 0) {
 		bgt_count = 1;
 	}

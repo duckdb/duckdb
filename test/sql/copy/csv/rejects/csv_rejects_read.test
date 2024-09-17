@@ -258,8 +258,27 @@ FROM read_csv('data/csv/comments/error.csv', store_rejects = true, comment = '#'
 query IIIIIIII
 SELECT * EXCLUDE (scan_id, file_id) FROM reject_errors ORDER BY column_name;
 ----
+2726	10963	10963	1	a	CAST	oh no	Error when converting column "a". Could not convert string "oh no" to 'BIGINT'
+2733	11009	11009	1	a	CAST	oh no	Error when converting column "a". Could not convert string "oh no" to 'BIGINT'
 2726	10963	10968	1	b	MISSING COLUMNS	oh no	Expected Number of Columns: 2 Found: 1
 2733	11009	11014	1	b	MISSING COLUMNS	oh no	Expected Number of Columns: 2 Found: 1
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query III
+FROM read_csv('data/csv/error.csv', store_rejects=1);
+----
+true	true	true
+
+query IIIIIIII
+SELECT * EXCLUDE (scan_id, file_id) FROM reject_errors ORDER BY column_name;
+----
+4	36	39	1	column1	MISSING COLUMNS	yes	Expected Number of Columns: 3 Found: 1
+4	36	39	2	column2	MISSING COLUMNS	yes	Expected Number of Columns: 3 Found: 2
 
 statement ok
 DROP TABLE reject_errors;

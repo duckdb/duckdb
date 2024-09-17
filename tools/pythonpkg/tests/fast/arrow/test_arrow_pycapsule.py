@@ -21,9 +21,9 @@ class TestArrowPyCapsule(object):
                 self.obj = obj
                 self.count = 0
 
-            def __arrow_c_stream__(self):
+            def __arrow_c_stream__(self, requested_schema=None):
                 self.count += 1
-                return self.obj.__arrow_c_stream__()
+                return self.obj.__arrow_c_stream__(requested_schema=requested_schema)
 
         df = pl.DataFrame({'a': [1, 2, 3, 4], 'b': [5, 6, 7, 8]})
         obj = MyObject(df)
@@ -38,6 +38,12 @@ class TestArrowPyCapsule(object):
         res = duckdb_cursor.sql("select * from capsule")
         assert res.fetchall() == [(1, 5), (2, 6), (3, 7), (4, 8)]
         assert obj.count == 2
+
+        # Ensure __arrow_c_stream__ accepts a requested_schema argument as noop
+        capsule = obj.__arrow_c_stream__(requested_schema="foo")
+        res = duckdb_cursor.sql("select * from capsule")
+        assert res.fetchall() == [(1, 5), (2, 6), (3, 7), (4, 8)]
+        assert obj.count == 3
 
     def test_capsule_roundtrip(self, duckdb_cursor):
         def create_capsule():
@@ -58,8 +64,8 @@ class TestArrowPyCapsule(object):
                     self.rel = rel
                     self.conn = conn
 
-                def __arrow_c_stream__(self):
-                    return self.rel.__arrow_c_stream__()
+                def __arrow_c_stream__(self, requested_schema=None):
+                    return self.rel.__arrow_c_stream__(requested_schema=requested_schema)
 
             conn = duckdb.connect()
             rel = conn.sql("select i, i+1, -i from range(100) t(i)")
