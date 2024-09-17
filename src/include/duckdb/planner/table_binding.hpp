@@ -56,6 +56,7 @@ public:
 	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);
 	virtual optional_ptr<StandardEntry> GetStandardEntry();
 	static string GetAlias(const string &explicit_alias, const StandardEntry &entry);
+	static string GetAlias(const string &explicit_alias, optional_ptr<StandardEntry> entry);
 
 public:
 	template <class TARGET>

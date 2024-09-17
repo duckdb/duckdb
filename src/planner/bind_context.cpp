@@ -187,7 +187,8 @@ unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(const string &ta
 	return result;
 }
 
-unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const BindingAlias &table_alias, const string &column_name) {
+unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const BindingAlias &table_alias,
+                                                                const string &column_name) {
 	return CreateColumnReference(table_alias.GetAlias(), column_name);
 }
 
@@ -269,9 +270,9 @@ optional_ptr<Binding> BindContext::GetBinding(const BindingAlias &alias, ErrorDa
 			candidates.push_back(kv.first);
 		}
 		string candidate_str =
-			StringUtil::CandidatesMessage(StringUtil::TopNJaroWinkler(candidates, name), "Candidate tables");
+		    StringUtil::CandidatesMessage(StringUtil::TopNJaroWinkler(candidates, name), "Candidate tables");
 		out_error = ErrorData(ExceptionType::BINDER,
-							  StringUtil::Format("Referenced table \"%s\" not found!%s", name, candidate_str));
+		                      StringUtil::Format("Referenced table \"%s\" not found!%s", name, candidate_str));
 		return nullptr;
 	}
 	return match->second.get();
@@ -476,8 +477,15 @@ void BindContext::AddBinding(unique_ptr<Binding> binding) {
 
 void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
                                const vector<LogicalType> &types, vector<column_t> &bound_column_ids,
-                               optional_ptr<StandardEntry> entry, bool add_row_id) {
-	AddBinding(make_uniq<TableBinding>(alias, types, names, bound_column_ids, entry, index, add_row_id));
+                               StandardEntry &entry, bool add_row_id) {
+	AddBinding(make_uniq<TableBinding>(alias, types, names, bound_column_ids, &entry, index, add_row_id));
+}
+
+void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
+                               const vector<LogicalType> &types, vector<column_t> &bound_column_ids,
+                               const string &table_name) {
+	AddBinding(
+	    make_uniq<TableBinding>(alias.empty() ? table_name : alias, types, names, bound_column_ids, nullptr, index));
 }
 
 void BindContext::AddTableFunction(idx_t index, const string &alias, const vector<string> &names,

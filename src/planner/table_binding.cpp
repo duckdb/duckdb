@@ -82,9 +82,20 @@ string Binding::GetAlias(const string &explicit_alias, const StandardEntry &entr
 	return explicit_alias.empty() ? entry.name : explicit_alias;
 }
 
+string Binding::GetAlias(const string &explicit_alias, optional_ptr<StandardEntry> entry) {
+	if (!explicit_alias.empty()) {
+		return explicit_alias;
+	}
+	if (!entry) {
+		throw InternalException("Binding::GetAlias called - but neither an alias nor an entry was provided");
+	}
+	return entry->name;
+}
+
 EntryBinding::EntryBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p, idx_t index,
                            StandardEntry &entry)
-    : Binding(BindingType::CATALOG_ENTRY, GetAlias(alias, entry), std::move(types_p), std::move(names_p), index), entry(entry) {
+    : Binding(BindingType::CATALOG_ENTRY, GetAlias(alias, entry), std::move(types_p), std::move(names_p), index),
+      entry(entry) {
 }
 
 optional_ptr<StandardEntry> EntryBinding::GetStandardEntry() {
@@ -94,7 +105,7 @@ optional_ptr<StandardEntry> EntryBinding::GetStandardEntry() {
 TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p,
                            vector<column_t> &bound_column_ids, optional_ptr<StandardEntry> entry, idx_t index,
                            bool add_row_id)
-    : Binding(BindingType::TABLE, alias, std::move(types_p), std::move(names_p), index),
+    : Binding(BindingType::TABLE, GetAlias(alias, entry), std::move(types_p), std::move(names_p), index),
       bound_column_ids(bound_column_ids), entry(entry) {
 	if (add_row_id) {
 		if (name_map.find("rowid") == name_map.end()) {

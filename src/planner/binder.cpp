@@ -713,8 +713,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 		column_count++;
 	}
 
-	binder->bind_context.AddBaseTable(update_table_index, alias.empty() ? table.name : alias, names, types,
-	                                  bound_columns, &table, false);
+	binder->bind_context.AddBaseTable(update_table_index, alias, names, types, bound_columns, table, false);
 	ReturningBinder returning_binder(*binder, context);
 
 	vector<unique_ptr<Expression>> projection_expressions;
