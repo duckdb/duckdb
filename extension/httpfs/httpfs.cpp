@@ -574,14 +574,109 @@ int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes)
 }
 
 void HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
+    auto &hfh = handle.Cast<HTTPFileHandle>(); // Get HTTP file handle
+
+    // Prepare the URL and headers for the HTTP POST request
+    string path, proto_host_port;
+    ParseUrl(hfh.path, path, proto_host_port); // Parse URL to get path and host
+
+    // Create an empty HeaderMap and pass it to InitializeHeaders
+    HeaderMap header_map;  // Local HeaderMap instance
+    auto headers = InitializeHeaders(header_map, hfh.http_params); // Initialize headers
+
+    // Define the request lambda
+    std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
+        auto client = GetClient(hfh.http_params, proto_host_port.c_str(), &hfh); // Get the HTTP client
+        
+        // Update internal state for tracking POST requests
+        if (hfh.state) {
+            hfh.state->post_count++;
+            hfh.state->total_bytes_sent += nr_bytes;
+        }
+
+        // Create the HTTP POST request
+        duckdb_httplib_openssl::Request req;
+        req.method = "POST";
+        req.path = path;
+        req.headers = *headers;
+        req.headers.emplace("Content-Type", "application/octet-stream"); // Set content type as binary
+        // req.headers.emplace("Content-Type", "application/json"); // Set content type as JSON
+
+        // Correct the body assignment: Use the constructor to directly assign binary data from buffer
+        req.body = std::string(static_cast<const char*>(buffer), nr_bytes);
+
+        return client->send(req); // Send the request
+    });
+
+    // Perform the HTTP POST request and handle retries
+    auto response = RunRequestWithRetry(request, hfh.path, "POST", hfh.http_params);
+
+    // Check if the response was successful (HTTP 200-299 status code)
+    if (response->code < 200 || response->code >= 300) {
+        throw HTTPException(*response, "HTTP POST request failed to '%s' with status code: %d",
+                            hfh.path.c_str(), response->code);
+    }
+}
+
+/*
+void HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
+    auto &hfh = handle.Cast<HTTPFileHandle>(); // Get HTTP file handle
+
+    // Prepare the URL and headers for the HTTP POST request
+    string path, proto_host_port;
+    ParseUrl(hfh.path, path, proto_host_port); // Parse URL to get path and host
+
+    // Create an empty HeaderMap and pass it to InitializeHeaders
+    HeaderMap header_map;  // Local HeaderMap instance
+    auto headers = InitializeHeaders(header_map, hfh.http_params); // Initialize headers
+
+    // Define the request lambda
+    std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
+        auto client = GetClient(hfh.http_params, proto_host_port.c_str(), &hfh); // Get the HTTP client
+        
+        // Update internal state for tracking POST requests
+        if (hfh.state) {
+            hfh.state->post_count++;
+            hfh.state->total_bytes_sent += nr_bytes;
+        }
+
+        // Create the HTTP POST request
+        duckdb_httplib_openssl::Request req;
+        req.method = "POST";
+        req.path = path;
+        req.headers = *headers;
+        // req.headers.emplace("Content-Type", "application/octet-stream"); // Set content type as binary
+        req.headers.emplace("Content-Type", "application/json; charset=UTF-8"); // Set content type as JSON
+        req.body.assign(static_cast<const char*>(buffer), nr_bytes); // Assign the buffer content as the request body
+
+        return client->send(req); // Send the request
+    });
+
+    // Perform the HTTP POST request and handle retries
+    auto response = RunRequestWithRetry(request, hfh.path, "POST", hfh.http_params);
+
+    // Check if the response was successful (HTTP 200-299 status code)
+    if (response->code < 200 || response->code >= 300) {
+        throw HTTPException(*response, "HTTP POST request failed to '%s' with status code: %d",
+                            hfh.path.c_str(), response->code);
+    }
+}
+
+*/
+
+int64_t HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
+    auto &hfh = handle.Cast<HTTPFileHandle>(); // Get HTTP file handle
+    Write(handle, buffer, nr_bytes, hfh.file_offset); // Call the Write function with the current file offset
+    return nr_bytes; // Return the number of bytes written
+}
+
+/*
+
+void HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	throw NotImplementedException("Writing to HTTP files not implemented");
 }
 
-int64_t HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	auto &hfh = (HTTPFileHandle &)handle;
-	Write(handle, buffer, nr_bytes, hfh.file_offset);
-	return nr_bytes;
-}
+*/
 
 void HTTPFileSystem::FileSync(FileHandle &handle) {
 	throw NotImplementedException("FileSync for HTTP files not implemented");
@@ -649,6 +744,67 @@ static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(optional_ptr<FileOpen
 	return nullptr;
 }
 
+void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
+	auto &hfs = file_system.Cast<HTTPFileSystem>();
+	state = HTTPState::TryGetState(opener);
+	if (!state) {
+		state = make_shared_ptr<HTTPState>();
+	}
+
+	auto client_context = FileOpener::TryGetClientContext(opener);
+	if (client_context && ClientConfig::GetConfig(*client_context).enable_http_logging) {
+		http_logger = client_context->client_data->http_logger.get();
+	}
+
+	auto current_cache = TryGetMetadataCache(opener, hfs);
+
+	bool should_write_cache = false;
+
+	// Check if the file is opened for writing
+	if (!flags.OpenForWriting()) {  // We only perform these checks for reads
+		if (!http_params.force_download && current_cache && !flags.OpenForWriting()) {
+			// Cache lookup logic for reading...
+		}
+
+		auto res = hfs.HeadRequest(*this, path, {});
+		if (res->code != 200) {
+			if (flags.OpenForWriting() && res->code == 404) {
+				if (!flags.CreateFileIfNotExists() && !flags.OverwriteExistingFile()) {
+					throw IOException("Unable to open URL \"" + path +
+					                  "\" for writing: file does not exist and CREATE flag is not set");
+				}
+				length = 0;
+				return;
+			} else {
+				// Handle other HEAD request failures...
+			}
+		}
+
+		// Process the headers to set the file length (only for reading)
+		if (flags.OpenForReading()) {
+			read_buffer = duckdb::unique_ptr<data_t[]>(new data_t[READ_BUFFER_LEN]);
+		}
+
+		if (res->headers.find("Content-Length") == res->headers.end() || res->headers["Content-Length"].empty()) {
+			length = 0;  // No content-length header, so assume no data
+		} else {
+			length = std::stoll(res->headers["Content-Length"]);
+		}
+
+		// Handle Last-Modified header, if needed for cache
+		if (!res->headers["Last-Modified"].empty()) {
+			auto result = StrpTimeFormat::Parse("%a, %d %h %Y %T %Z", res->headers["Last-Modified"]);
+			// Parse last-modified time and store it...
+		}
+
+		// Cache update logic, if necessary
+		if (should_write_cache) {
+			current_cache->Insert(path, {length, last_modified});
+		}
+	}
+}
+
+/*
 void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 	auto &hfs = file_system.Cast<HTTPFileSystem>();
 	state = HTTPState::TryGetState(opener);
@@ -786,6 +942,8 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 		current_cache->Insert(path, {length, last_modified});
 	}
 }
+
+*/
 
 unique_ptr<duckdb_httplib_openssl::Client> HTTPFileHandle::GetClient(optional_ptr<ClientContext> context) {
 	// Try to fetch a cached client
