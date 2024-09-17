@@ -819,7 +819,7 @@ Tables.schema(chunk::QueryResultChunk) = Tables.Schema(chunk.q.names, chunk.q.ty
 
 struct QueryResultChunkIterator
     q::QueryResult
-    column_count::UInt64
+    column_count::Int64
 end
 
 function next_chunk(iter::QueryResultChunkIterator)
