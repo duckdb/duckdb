@@ -178,7 +178,7 @@ unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(const string &ta
 
 unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const BindingAlias &table_alias,
                                                                 const string &column_name, ColumnBindType bind_type) {
-	return CreateColumnReference(table_alias.GetAlias(), column_name, bind_type);
+	return CreateColumnReference(table_alias.GetCatalog(), table_alias.GetSchema(), table_alias.GetAlias(), column_name, bind_type);
 }
 
 unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &table_name, const string &column_name,
@@ -219,7 +219,7 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &ca
 	names.push_back(column_name);
 
 	auto result = make_uniq<ColumnRefExpression>(std::move(names));
-	auto binding = GetBinding(table_name, error);
+	auto binding = GetBinding(BindingAlias(catalog_name, schema_name, table_name), error);
 	if (!binding) {
 		return std::move(result);
 	}
@@ -282,13 +282,27 @@ optional_ptr<Binding> BindContext::GetBinding(const string &name, ErrorData &out
 	return GetBinding(BindingAlias(name), out_error);
 }
 
+BindingAlias GetBindingAlias(ColumnRefExpression &colref) {
+	if (colref.column_names.size() <= 1 || colref.column_names.size() > 4) {
+		throw InternalException("Cannot get binding alias from column ref unless it has 2..4 entries");
+	}
+	if (colref.column_names.size() >= 4) {
+		return BindingAlias(colref.column_names[0], colref.column_names[1], colref.column_names[2]);
+	}
+	if (colref.column_names.size() == 3) {
+		return BindingAlias(colref.column_names[0], colref.column_names[1]);
+	}
+	return BindingAlias(colref.column_names[0]);
+}
+
 BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 	if (!colref.IsQualified()) {
 		throw InternalException("Could not bind alias \"%s\"!", colref.GetColumnName());
 	}
 
 	ErrorData error;
-	auto binding = GetBinding(colref.GetTableName(), error);
+	BindingAlias alias;
+	auto binding = GetBinding(GetBindingAlias(colref), error);
 	if (!binding) {
 		return BindResult(std::move(error));
 	}
@@ -546,12 +560,12 @@ void BindContext::AddSubquery(idx_t index, const string &alias, TableFunctionRef
 
 void BindContext::AddGenericBinding(idx_t index, const string &alias, const vector<string> &names,
                                     const vector<LogicalType> &types) {
-	AddBinding(make_uniq<Binding>(BindingType::BASE, alias, types, names, index));
+	AddBinding(make_uniq<Binding>(BindingType::BASE, BindingAlias(alias), types, names, index));
 }
 
 void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<string> &names,
                                 const vector<LogicalType> &types) {
-	auto binding = make_shared_ptr<Binding>(BindingType::BASE, alias, types, names, index);
+	auto binding = make_shared_ptr<Binding>(BindingType::BASE, BindingAlias(alias), types, names, index);
 
 	if (cte_bindings.find(alias) != cte_bindings.end()) {
 		throw BinderException("Duplicate alias \"%s\" in query!", alias);
@@ -589,7 +603,7 @@ vector<BindingAlias> BindContext::GetBindingAliases() {
 void BindContext::RemoveContext(const vector<BindingAlias> &aliases) {
 	for (auto &alias : aliases) {
 		auto it = std::remove_if(bindings_list.begin(), bindings_list.end(),
-		                         [&](unique_ptr<Binding> &x) { return x->alias == alias.GetAlias(); });
+		                         [&](unique_ptr<Binding> &x) { return x->alias == alias; });
 		bindings_list.erase(it, bindings_list.end());
 	}
 }

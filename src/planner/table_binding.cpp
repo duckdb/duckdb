@@ -21,6 +21,14 @@ BindingAlias::BindingAlias() {
 BindingAlias::BindingAlias(string alias_p) : alias(std::move(alias_p)) {
 }
 
+BindingAlias::BindingAlias(string schema_p, string alias_p) :
+	schema(std::move(schema_p)), alias(std::move(alias_p)) {
+}
+
+BindingAlias::BindingAlias(string catalog_p, string schema_p, string alias_p) :
+	catalog(std::move(catalog_p)), schema(std::move(schema_p)), alias(std::move(alias_p)) {
+}
+
 bool BindingAlias::IsSet() const {
 	return !alias.empty();
 }
@@ -32,17 +40,25 @@ const string &BindingAlias::GetAlias() const {
 	return alias;
 }
 
-void BindingAlias::Set(string alias_p) {
-	alias = std::move(alias_p);
-}
-
 bool BindingAlias::Matches(const BindingAlias &other) const {
-	//! FIXME: compare catalog/schema as well
+	// we match based on the specificity of the other entry
+	// i.e. "tbl" matches "catalog.schema.tbl"
+	// but "schema2.tbl" does not match "schema.tbl"
+	if (!other.catalog.empty()) {
+		if (!StringUtil::CIEquals(catalog, other.catalog)) {
+			return false;
+		}
+	}
+	if (!other.schema.empty()) {
+		if (!StringUtil::CIEquals(schema, other.schema)) {
+			return false;
+		}
+	}
 	return StringUtil::CIEquals(alias, other.alias);
 }
 
 bool BindingAlias::operator==(const BindingAlias &other) const {
-	return StringUtil::CIEquals(alias, other.alias);
+	return StringUtil::CIEquals(catalog, other.catalog) && StringUtil::CIEquals(schema, other.schema) && StringUtil::CIEquals(alias, other.alias);
 }
 
 Binding::Binding(BindingType binding_type, BindingAlias alias_p, vector<LogicalType> coltypes, vector<string> colnames,
@@ -114,10 +130,7 @@ optional_ptr<StandardEntry> Binding::GetStandardEntry() {
 }
 
 BindingAlias GenerateEntryAlias(const StandardEntry &entry) {
-	// FIXME: add catalog name and schema name to the alias
-	BindingAlias alias;
-	alias.Set(entry.name);
-	return alias;
+	return BindingAlias(entry.ParentCatalog().GetName(), entry.schema.name, entry.name);
 }
 
 BindingAlias Binding::GetAlias(const string &explicit_alias, const StandardEntry &entry) {
@@ -288,7 +301,7 @@ ErrorData TableBinding::ColumnNotFoundError(const string &column_name) const {
 }
 
 DummyBinding::DummyBinding(vector<LogicalType> types, vector<string> names, string dummy_name)
-    : Binding(BindingType::DUMMY, DummyBinding::DUMMY_NAME + dummy_name, std::move(types), std::move(names),
+    : Binding(BindingType::DUMMY, BindingAlias(DummyBinding::DUMMY_NAME + dummy_name), std::move(types), std::move(names),
               DConstants::INVALID_INDEX),
       dummy_name(std::move(dummy_name)) {
 }

@@ -31,17 +31,26 @@ enum class BindingType { BASE, TABLE, DUMMY, CATALOG_ENTRY };
 
 struct BindingAlias {
 	BindingAlias();
-	BindingAlias(string alias);
+	explicit BindingAlias(string alias);
+	BindingAlias(string schema, string alias);
+	BindingAlias(string catalog, string schema, string alias);
 
 	bool IsSet() const;
 	const string &GetAlias() const;
 
-	void Set(string alias);
+	const string &GetCatalog() const {
+		return catalog;
+	}
+	const string &GetSchema() const {
+		return schema;
+	}
 
 	bool Matches(const BindingAlias &other) const;
 	bool operator==(const BindingAlias &other) const;
 
 private:
+	string catalog;
+	string schema;
 	string alias;
 };
 

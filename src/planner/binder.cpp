@@ -601,26 +601,12 @@ bool Binder::HasMatchingBinding(const string &catalog_name, const string &schema
 	if (macro_binding && table_name == macro_binding->GetAlias()) {
 		binding = optional_ptr<Binding>(macro_binding.get());
 	} else {
-		binding = bind_context.GetBinding(table_name, error);
+		BindingAlias alias(catalog_name, schema_name, table_name);
+		binding = bind_context.GetBinding(alias, error);
 	}
 
 	if (!binding) {
 		return false;
-	}
-	if (!catalog_name.empty() || !schema_name.empty()) {
-		auto catalog_entry = binding->GetStandardEntry();
-		if (!catalog_entry) {
-			return false;
-		}
-		if (!catalog_name.empty() && catalog_entry->catalog.GetName() != catalog_name) {
-			return false;
-		}
-		if (!schema_name.empty() && catalog_entry->schema.name != schema_name) {
-			return false;
-		}
-		if (catalog_entry->name != table_name) {
-			return false;
-		}
 	}
 	bool binding_found;
 	binding_found = binding->HasMatchingBinding(column_name);
