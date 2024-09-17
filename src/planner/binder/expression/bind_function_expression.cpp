@@ -271,7 +271,6 @@ BindResult ExpressionBinder::BindUnnest(FunctionExpression &expr, idx_t depth, b
 }
 
 void ExpressionBinder::ThrowIfUnnestInLambda(const ColumnBinding &column_binding) {
-	throw InternalException("capturing lambda parameters not supported here");
 }
 
 string ExpressionBinder::UnsupportedAggregateMessage() {

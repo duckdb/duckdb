@@ -205,12 +205,12 @@ INSERT INTO nested_list VALUES ([[1, 2]], [3, 4]);
 statement error
 SELECT list_transform(i, x -> UNNEST(x)) FROM nested_list;
 ----
-<REGEX>:Not implemented Error.*UNNEST for lambda functions is not supported.*
+<REGEX>:Binder Error.*UNNEST in lambda expressions is not supported.*
 
 statement error
 SELECT list_transform(i, x -> UNNEST(other)) FROM nested_list;
 ----
-<REGEX>:Not implemented Error.*UNNEST for lambda functions is not supported.*
+<REGEX>:Binder Error.*UNNEST in lambda expressions is not supported.*
 
 statement ok
 CREATE TABLE map_tbl(m MAP(INTEGER, INTEGER));
@@ -218,9 +218,9 @@ CREATE TABLE map_tbl(m MAP(INTEGER, INTEGER));
 statement error
 SELECT [UNNEST([x.key FOR y IN range(x.value)]) FOR x IN map_entries(m)] FROM map_tbl;
 ----
-<REGEX>:Not implemented Error.*UNNEST for lambda functions is not supported.*
+<REGEX>:Binder Error.*UNNEST in lambda expressions is not supported.*
 
 statement error
 SELECT list_transform(map_entries(m), x -> UNNEST(range(x.value))) FROM map_tbl;
 ----
-<REGEX>:Not implemented Error.*UNNEST for lambda functions is not supported.*
+<REGEX>:Binder Error.*UNNEST in lambda expressions is not supported.*
