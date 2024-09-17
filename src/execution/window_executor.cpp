@@ -112,11 +112,11 @@ void WindowDataChunk::Combine(bool build_validity) {
 	if (build_validity) {
 		D_ASSERT(inputs.get());
 		validity.Initialize(inputs->Count());
-		WindowTable reader(*this);
+		WindowTable cursor(*this);
 		idx_t target_offset = 0;
-		while (reader.Scan()) {
-			const auto count = reader.chunk.size();
-			auto &other = FlatVector::Validity(reader.chunk.data[0]);
+		while (cursor.Scan()) {
+			const auto count = cursor.chunk.size();
+			auto &other = FlatVector::Validity(cursor.chunk.data[0]);
 			validity.SliceInPlace(other, target_offset, 0, count);
 			target_offset += count;
 		}
@@ -1519,7 +1519,7 @@ public:
 	//! The state used for appending to the collection
 	ColumnDataAppendState appender;
 	//! The state used for reading the collection
-	unique_ptr<WindowTable> reader;
+	unique_ptr<WindowTable> cursor;
 };
 
 void WindowValueLocalState::Sink(DataChunk &input_chunk, const idx_t input_idx) {
@@ -1558,8 +1558,8 @@ void WindowValueLocalState::Finalize() {
 	}
 
 	// Prepare to scan
-	if (!reader) {
-		reader = make_uniq<WindowTable>(*payload_collection);
+	if (!cursor) {
+		cursor = make_uniq<WindowTable>(*payload_collection);
 	}
 }
 
@@ -1605,15 +1605,15 @@ unique_ptr<WindowExecutorLocalState> WindowValueExecutor::GetLocalState(const Wi
 void WindowNtileExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                            Vector &result, idx_t count, idx_t row_idx) const {
 	auto &lvstate = lstate.Cast<WindowValueLocalState>();
-	auto &reader = *lvstate.reader;
+	auto &cursor = *lvstate.cursor;
 	auto partition_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[PARTITION_BEGIN]);
 	auto partition_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[PARTITION_END]);
 	auto rdata = FlatVector::GetData<int64_t>(result);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
-		if (reader.CellIsNull(0, row_idx)) {
+		if (cursor.CellIsNull(0, row_idx)) {
 			FlatVector::SetNull(result, i, true);
 		} else {
-			auto n_param = reader.GetCell<int64_t>(0, row_idx);
+			auto n_param = cursor.GetCell<int64_t>(0, row_idx);
 			if (n_param < 1) {
 				throw InvalidInputException("Argument for ntile must be greater than zero");
 			}
@@ -1689,7 +1689,7 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, 
 	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
 	auto &ignore_nulls = gvstate.ignore_nulls;
 	auto &llstate = lstate.Cast<WindowLeadLagLocalState>();
-	auto &reader = *llstate.reader;
+	auto &cursor = *llstate.cursor;
 
 	bool can_shift = ignore_nulls->AllValid();
 	if (wexpr.offset_expr) {
@@ -1735,9 +1735,9 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, 
 				// We may have to scan multiple blocks here, so loop until we have copied everything
 				const idx_t col_idx = 0;
 				while (width) {
-					const auto source_offset = reader.Seek(index);
-					auto &source = reader.chunk.data[col_idx];
-					const auto copied = MinValue<idx_t>(reader.chunk.size() - source_offset, width);
+					const auto source_offset = cursor.Seek(index);
+					auto &source = cursor.chunk.data[col_idx];
+					const auto copied = MinValue<idx_t>(cursor.chunk.size() - source_offset, width);
 					VectorOperations::Copy(source, result, source_offset + copied, source_offset, i);
 					i += copied;
 					row_idx += copied;
@@ -1756,7 +1756,7 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, 
 			}
 		} else {
 			if (!delta) {
-				reader.CopyCell(0, NumericCast<idx_t>(val_idx), result, i);
+				cursor.CopyCell(0, NumericCast<idx_t>(val_idx), result, i);
 			} else if (wexpr.default_expr) {
 				llstate.leadlag_default.CopyCell(result, i);
 			} else {
@@ -1775,7 +1775,7 @@ WindowFirstValueExecutor::WindowFirstValueExecutor(BoundWindowExpression &wexpr,
 void WindowFirstValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                                 Vector &result, idx_t count, idx_t row_idx) const {
 	auto &lvstate = lstate.Cast<WindowValueLocalState>();
-	auto &reader = *lvstate.reader;
+	auto &cursor = *lvstate.cursor;
 	auto window_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_BEGIN]);
 	auto window_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_END]);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
@@ -1792,7 +1792,7 @@ void WindowFirstValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstat
 		idx_t n = 1;
 		const auto first_idx = FindNextStart(*lvstate.ignore_nulls_exclude, window_begin[i], window_end[i], n);
 		if (!n) {
-			reader.CopyCell(0, first_idx, result, i);
+			cursor.CopyCell(0, first_idx, result, i);
 		} else {
 			FlatVector::SetNull(result, i, true);
 		}
@@ -1810,7 +1810,7 @@ WindowLastValueExecutor::WindowLastValueExecutor(BoundWindowExpression &wexpr, C
 void WindowLastValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                                Vector &result, idx_t count, idx_t row_idx) const {
 	auto &lvstate = lstate.Cast<WindowValueLocalState>();
-	auto &reader = *lvstate.reader;
+	auto &cursor = *lvstate.cursor;
 	auto window_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_BEGIN]);
 	auto window_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_END]);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
@@ -1826,7 +1826,7 @@ void WindowLastValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate
 		idx_t n = 1;
 		const auto last_idx = FindPrevStart(*lvstate.ignore_nulls_exclude, window_begin[i], window_end[i], n);
 		if (!n) {
-			reader.CopyCell(0, last_idx, result, i);
+			cursor.CopyCell(0, last_idx, result, i);
 		} else {
 			FlatVector::SetNull(result, i, true);
 		}
@@ -1844,8 +1844,8 @@ WindowNthValueExecutor::WindowNthValueExecutor(BoundWindowExpression &wexpr, Cli
 void WindowNthValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                               Vector &result, idx_t count, idx_t row_idx) const {
 	auto &lvstate = lstate.Cast<WindowValueLocalState>();
-	auto &reader = *lvstate.reader;
-	D_ASSERT(reader.chunk.ColumnCount() == 2);
+	auto &cursor = *lvstate.cursor;
+	D_ASSERT(cursor.chunk.ColumnCount() == 2);
 	auto window_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_BEGIN]);
 	auto window_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_END]);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
@@ -1860,17 +1860,17 @@ void WindowNthValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate,
 		}
 		// Returns value evaluated at the row that is the n'th row of the window frame (counting from 1);
 		// returns NULL if there is no such row.
-		if (reader.CellIsNull(1, row_idx)) {
+		if (cursor.CellIsNull(1, row_idx)) {
 			FlatVector::SetNull(result, i, true);
 		} else {
-			auto n_param = reader.GetCell<int64_t>(1, row_idx);
+			auto n_param = cursor.GetCell<int64_t>(1, row_idx);
 			if (n_param < 1) {
 				FlatVector::SetNull(result, i, true);
 			} else {
 				auto n = idx_t(n_param);
 				const auto nth_index = FindNextStart(*lvstate.ignore_nulls_exclude, window_begin[i], window_end[i], n);
 				if (!n) {
-					reader.CopyCell(0, nth_index, result, i);
+					cursor.CopyCell(0, nth_index, result, i);
 				} else {
 					FlatVector::SetNull(result, i, true);
 				}
