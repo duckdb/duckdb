@@ -600,7 +600,6 @@ void HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, i
         req.path = path;
         req.headers = *headers;
         req.headers.emplace("Content-Type", "application/octet-stream"); // Set content type as binary
-        // req.headers.emplace("Content-Type", "application/json"); // Set content type as JSON
 
         // Correct the body assignment: Use the constructor to directly assign binary data from buffer
         req.body = std::string(static_cast<const char*>(buffer), nr_bytes);
