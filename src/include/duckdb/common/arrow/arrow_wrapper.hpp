@@ -49,7 +49,7 @@ public:
 public:
 	void GetSchema(ArrowSchemaWrapper &schema);
 
-	shared_ptr<ArrowArrayWrapper> GetNextChunk();
+	virtual shared_ptr<ArrowArrayWrapper> GetNextChunk();
 
 	const char *GetError();
 
