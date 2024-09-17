@@ -57,3 +57,10 @@ class TestPolars(object):
             duckdb.InvalidInputException, match='Provided table/dataframe must have at least one column'
         ):
             duckdb_cursor.sql("from polars_empty_df")
+
+    def test_polars_from_json(self, duckdb_cursor):
+        from io import StringIO
+
+        string = StringIO("""{"entry":[{"content":{"ManagedSystem":{"test":null}}}]}""")
+        res = duckdb_cursor.read_json(string).pl()
+        assert str(res['entry'][0][0]) == "{'content': {'ManagedSystem': {'test': None}}}"
