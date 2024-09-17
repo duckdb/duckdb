@@ -230,53 +230,37 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<Pa
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpression &col_ref) {
-
-	D_ASSERT(col_ref.column_names.size() <= 3);
+	if (col_ref.column_names.size() > 3) {
+		return nullptr;
+	}
+	D_ASSERT(!col_ref.column_names.empty());
 
 	// get a matching binding
 	ErrorData error;
-	auto &table_name = col_ref.column_names.back();
-	auto binding = binder.bind_context.GetBinding(table_name, error);
-
+	BindingAlias alias;
+	switch(col_ref.column_names.size()) {
+	case 1:
+		alias = BindingAlias(col_ref.column_names[0]);
+		break;
+	case 2:
+		alias = BindingAlias(col_ref.column_names[0], col_ref.column_names[1]);
+		break;
+	case 3:
+		alias = BindingAlias(col_ref.column_names[0], col_ref.column_names[1], col_ref.column_names[2]);
+		break;
+	default:
+		throw InternalException("Expected 1, 2 or 3 column names for CreateStructPack");
+	}
+	auto binding = binder.bind_context.GetBinding(alias, error);
 	if (!binding) {
 		return nullptr;
-	}
-
-	// FIXME: use binding alias here
-	if (col_ref.column_names.size() >= 2) {
-		// "schema_name.table_name"
-		auto catalog_entry = binding->GetStandardEntry();
-		if (!catalog_entry) {
-			return nullptr;
-		}
-
-		if (catalog_entry->name != table_name) {
-			return nullptr;
-		}
-
-		if (col_ref.column_names.size() == 2) {
-			auto &qualifier = col_ref.column_names[0];
-			if (catalog_entry->catalog.GetName() != qualifier && catalog_entry->schema.name != qualifier) {
-				return nullptr;
-			}
-
-		} else if (col_ref.column_names.size() == 3) {
-			auto &catalog_name = col_ref.column_names[0];
-			auto &schema_name = col_ref.column_names[1];
-			if (catalog_entry->catalog.GetName() != catalog_name || catalog_entry->schema.name != schema_name) {
-				return nullptr;
-			}
-
-		} else {
-			throw InternalException("Expected 2 or 3 column names for CreateStructPack");
-		}
 	}
 
 	// We found the table, now create the struct_pack expression
 	vector<unique_ptr<ParsedExpression>> child_expressions;
 	child_expressions.reserve(binding->names.size());
 	for (const auto &column_name : binding->names) {
-		child_expressions.push_back(make_uniq<ColumnRefExpression>(column_name, table_name));
+		child_expressions.push_back(binder.bind_context.CreateColumnReference(binding->alias, column_name, ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS));
 	}
 	return make_uniq<FunctionExpression>("struct_pack", std::move(child_expressions));
 }
@@ -339,12 +323,11 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnNameWithManyDotsInte
 		struct_extract_start = 1;
 		return result_expr;
 	}
-	// it is not! Try creating an implicit struct_pack
 	return CreateStructPack(col_ref);
 }
 unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnNameWithManyDots(ColumnRefExpression &col_ref,
                                                                              ErrorData &error) {
-	idx_t struct_extract_start;
+	idx_t struct_extract_start = col_ref.column_names.size();
 	auto result_expr = QualifyColumnNameWithManyDotsInternal(col_ref, error, struct_extract_start);
 	if (!result_expr) {
 		return nullptr;
