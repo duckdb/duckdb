@@ -114,7 +114,7 @@ void BaseAppender::BeginRow() {
 void BaseAppender::EndRow() {
 	// check that all rows have been appended to
 	if (column != chunk.ColumnCount()) {
-		throw InvalidInputException("Call to EndRow before all rows have been appended to!");
+		throw InvalidInputException("Call to EndRow before all columns have been appended to!");
 	}
 	column = 0;
 	chunk.SetCardinality(chunk.size() + 1);
