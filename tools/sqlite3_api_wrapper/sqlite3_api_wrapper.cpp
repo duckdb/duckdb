@@ -1071,13 +1071,13 @@ int sqlite3_column_bytes(sqlite3_stmt *pStmt, int iCol) {
 
 	// checks if the current column is initialized
 	if (!pStmt->current_text) {
-		if (!sqlite3_column_text(pStmt, iCol) && !sqlite3_column_blob(pStmt, iCol)) {
+		if (!sqlite3_column_text(pStmt, iCol) || !sqlite3_column_blob(pStmt, iCol)) {
 			return 0;
 		}
 	}
 	sqlite3_string_buffer *col_text = &pStmt->current_text[iCol];
 	if (!col_text->data) {
-		if (!sqlite3_column_text(pStmt, iCol) && !sqlite3_column_blob(pStmt, iCol)) {
+		if (!sqlite3_column_text(pStmt, iCol) || !sqlite3_column_blob(pStmt, iCol)) {
 			return 0;
 		}
 		col_text = &pStmt->current_text[iCol];
