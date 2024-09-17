@@ -118,7 +118,7 @@ struct ExtensionAccess {
 // The C++ init function
 typedef void (*ext_init_fun_t)(DatabaseInstance &);
 // The C init function
-typedef void (*ext_init_c_api_fun_t)(duckdb_extension_info info, duckdb_extension_access *access);
+typedef bool (*ext_init_c_api_fun_t)(duckdb_extension_info info, duckdb_extension_access *access);
 typedef const char *(*ext_version_fun_t)(void);
 typedef bool (*ext_is_storage_t)(void);
 
@@ -525,11 +525,21 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 	DuckDBExtensionLoadState load_state(db);
 
 	auto access = ExtensionAccess::CreateAccessStruct();
-	(*init_fun_capi)(load_state.ToCStruct(), &access);
+	auto result = (*init_fun_capi)(load_state.ToCStruct(), &access);
 
 	// Throw any error that the extension might have encountered
 	if (load_state.has_error) {
 		load_state.error_data.Throw("An error was thrown during initialization of the extension '" + extension + "': ");
+	}
+
+	// Extensions are expected to either set an error or return true indicating successful initialization
+	if (result == false) {
+		throw FatalException(
+		    "Extension '%s' failed to initialize but did not return an error. This indicates an "
+		    "error in the extension: C API extensions should return a boolean `true` to indicate succesful "
+		    "initialization. "
+		    "This means that the Extension may be partially intialized resulting in an inconsistent state of DuckDB.",
+		    extension);
 	}
 
 	D_ASSERT(res.install_info);
