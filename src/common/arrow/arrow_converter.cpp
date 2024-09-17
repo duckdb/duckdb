@@ -12,7 +12,6 @@
 #include <list>
 #include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/common/arrow/arrow_schema_constructor.hpp"
-#include "duckdb/common/arrow/schema_metadata.hpp"
 
 namespace duckdb {
 
