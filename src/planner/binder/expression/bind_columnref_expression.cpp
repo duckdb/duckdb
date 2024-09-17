@@ -87,7 +87,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 	auto is_macro_column = false;
 	if (binder.macro_binding && binder.macro_binding->HasMatchingBinding(column_name)) {
 		is_macro_column = true;
-		if (table_binding.IsSet()) {
+		if (table_binding) {
 			throw BinderException("Conflicting column names for column " + column_name + "!");
 		}
 	}
@@ -99,8 +99,8 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 	}
 
 	// bind as a regular column
-	if (table_binding.IsSet()) {
-		return binder.bind_context.CreateColumnReference(table_binding, column_name);
+	if (table_binding) {
+		return binder.bind_context.CreateColumnReference(table_binding->alias, column_name);
 	}
 
 	// it's not, find candidates and error

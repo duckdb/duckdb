@@ -21,6 +21,10 @@
 
 namespace duckdb {
 
+BindingAlias::BindingAlias() {}
+
+BindingAlias::BindingAlias(string alias_p) : alias(std::move(alias_p)) {}
+
 bool BindingAlias::IsSet() const {
 	return !alias.empty();
 }
@@ -39,21 +43,21 @@ void BindingAlias::Set(string alias_p) {
 BindContext::BindContext(Binder &binder) : binder(binder) {
 }
 
-BindingAlias BindContext::GetMatchingBinding(const string &column_name) {
-	BindingAlias result;
-	for (auto &kv : bindings) {
-		auto binding = kv.second.get();
-		auto is_using_binding = GetUsingBinding(column_name, kv.first);
+optional_ptr<Binding> BindContext::GetMatchingBinding(const string &column_name) {
+	optional_ptr<Binding> result;
+	for (auto &binding_ptr : bindings_list) {
+		auto &binding = *binding_ptr;
+		auto is_using_binding = GetUsingBinding(column_name, binding.alias);
 		if (is_using_binding) {
 			continue;
 		}
-		if (binding->HasMatchingBinding(column_name)) {
-			if (result.IsSet() || is_using_binding) {
+		if (binding.HasMatchingBinding(column_name)) {
+			if (result || is_using_binding) {
 				throw BinderException("Ambiguous reference to column name \"%s\" (use: \"%s.%s\" "
 				                      "or \"%s.%s\")",
-				                      column_name, result.GetAlias(), column_name, kv.first, column_name);
+				                      column_name, result->alias, column_name, binding.alias, column_name);
 			}
-			result.Set(kv.first);
+			result = &binding;
 		}
 	}
 	return result;
@@ -61,11 +65,11 @@ BindingAlias BindContext::GetMatchingBinding(const string &column_name) {
 
 vector<string> BindContext::GetSimilarBindings(const string &column_name) {
 	vector<pair<string, double>> scores;
-	for (auto &kv : bindings) {
-		auto binding = kv.second.get();
-		for (auto &name : binding->names) {
+	for (auto &binding_ptr : bindings_list) {
+		auto binding = *binding_ptr;
+		for (auto &name : binding.names) {
 			double distance = StringUtil::SimilarityRating(name, column_name);
-			scores.emplace_back(binding->alias + "." + name, distance);
+			scores.emplace_back(binding.alias + "." + name, distance);
 		}
 	}
 	return StringUtil::TopNStrings(scores);
@@ -167,10 +171,10 @@ string BindContext::GetActualColumnName(const string &binding_name, const string
 
 unordered_set<string> BindContext::GetMatchingBindings(const string &column_name) {
 	unordered_set<string> result;
-	for (auto &kv : bindings) {
-		auto binding = kv.second.get();
-		if (binding->HasMatchingBinding(column_name)) {
-			result.insert(kv.first);
+	for (auto &binding_ptr : bindings_list) {
+		auto &binding = *binding_ptr;
+		if (binding.HasMatchingBinding(column_name)) {
+			result.insert(binding.alias);
 		}
 	}
 	return result;
@@ -262,20 +266,21 @@ optional_ptr<Binding> BindContext::GetBinding(const BindingAlias &alias, ErrorDa
 		throw InternalException("BindingAlias is not set");
 	}
 	auto &name = alias.GetAlias();
-	auto match = bindings.find(name);
-	if (match == bindings.end()) {
-		// alias not found in this BindContext
-		vector<string> candidates;
-		for (auto &kv : bindings) {
-			candidates.push_back(kv.first);
+	for(auto &binding : bindings_list) {
+		if (StringUtil::CIEquals(binding->alias, name)) {
+			return binding.get();
 		}
-		string candidate_str =
-		    StringUtil::CandidatesMessage(StringUtil::TopNJaroWinkler(candidates, name), "Candidate tables");
-		out_error = ErrorData(ExceptionType::BINDER,
-		                      StringUtil::Format("Referenced table \"%s\" not found!%s", name, candidate_str));
-		return nullptr;
 	}
-	return match->second.get();
+	// alias not found in this BindContext
+	vector<string> candidates;
+	for(auto &binding : bindings_list) {
+		candidates.push_back(binding->alias);
+	}
+	string candidate_str =
+	    StringUtil::CandidatesMessage(StringUtil::TopNJaroWinkler(candidates, name), "Candidate tables");
+	out_error = ErrorData(ExceptionType::BINDER,
+	                      StringUtil::Format("Referenced table \"%s\" not found!%s", name, candidate_str));
+	return nullptr;
 }
 
 optional_ptr<Binding> BindContext::GetBinding(const string &name, ErrorData &out_error) {
@@ -301,7 +306,7 @@ string BindContext::BindColumn(PositionalReferenceExpression &ref, string &table
 	idx_t total_columns = 0;
 	idx_t current_position = ref.index - 1;
 	for (auto &entry : bindings_list) {
-		auto &binding = entry.get();
+		auto &binding = *entry;
 		idx_t entry_column_count = binding.names.size();
 		if (ref.index == 0) {
 			// this is a row id
@@ -360,7 +365,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		// bind all expressions of each table in-order
 		reference_set_t<UsingColumnSet> handled_using_columns;
 		for (auto &entry : bindings_list) {
-			auto &binding = entry.get();
+			auto &binding = *entry;
 			for (auto &column_name : binding.names) {
 				if (CheckExclusionList(expr, column_name, new_select_list, excluded_columns)) {
 					continue;
@@ -402,11 +407,10 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		auto binding = GetBinding(expr.relation_name, error);
 		bool is_struct_ref = false;
 		if (!binding) {
-			auto binding_name = GetMatchingBinding(expr.relation_name);
-			if (!binding_name.IsSet()) {
+			binding = GetMatchingBinding(expr.relation_name);
+			if (!binding) {
 				error.Throw();
 			}
-			binding = bindings[binding_name.GetAlias()].get();
 			is_struct_ref = true;
 		}
 
@@ -458,7 +462,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 
 void BindContext::GetTypesAndNames(vector<string> &result_names, vector<LogicalType> &result_types) {
 	for (auto &binding_entry : bindings_list) {
-		auto &binding = binding_entry.get();
+		auto &binding = *binding_entry;
 		D_ASSERT(binding.names.size() == binding.types.size());
 		for (idx_t i = 0; i < binding.names.size(); i++) {
 			result_names.push_back(binding.names[i]);
@@ -468,11 +472,12 @@ void BindContext::GetTypesAndNames(vector<string> &result_names, vector<LogicalT
 }
 
 void BindContext::AddBinding(unique_ptr<Binding> binding) {
-	if (bindings.find(binding->alias) != bindings.end()) {
-		throw BinderException("Duplicate alias \"%s\" in query!", binding->alias);
+	for(auto &other_bindings : bindings_list) {
+		if (binding->alias == other_bindings->alias) {
+			throw BinderException("Duplicate alias \"%s\" in query!", binding->alias);
+		}
 	}
-	bindings_list.push_back(*binding);
-	bindings[binding->alias] = std::move(binding);
+	bindings_list.push_back(std::move(binding));
 }
 
 void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
@@ -561,14 +566,8 @@ void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<s
 }
 
 void BindContext::AddContext(BindContext other) {
-	for (auto &binding : other.bindings) {
-		if (bindings.find(binding.first) != bindings.end()) {
-			throw BinderException("Duplicate alias \"%s\" in query!", binding.first);
-		}
-		bindings[binding.first] = std::move(binding.second);
-	}
 	for (auto &binding : other.bindings_list) {
-		bindings_list.push_back(binding);
+		AddBinding(std::move(binding));
 	}
 	for (auto &entry : other.using_columns) {
 		for (auto &alias : entry.second) {
@@ -584,19 +583,20 @@ void BindContext::AddContext(BindContext other) {
 	}
 }
 
-void BindContext::RemoveContext(vector<reference<Binding>> &other_bindings_list) {
-	for (auto &other_binding : other_bindings_list) {
-		auto it = std::remove_if(bindings_list.begin(), bindings_list.end(), [other_binding](reference<Binding> x) {
-			return x.get().alias == other_binding.get().alias;
+vector<BindingAlias> BindContext::GetBindingAliases() {
+	vector<BindingAlias> result;
+	for(auto &binding : bindings_list) {
+		result.push_back(BindingAlias(binding->alias));
+	}
+	return result;
+}
+
+void BindContext::RemoveContext(const vector<BindingAlias> &aliases) {
+	for (auto &alias : aliases) {
+		auto it = std::remove_if(bindings_list.begin(), bindings_list.end(), [&](unique_ptr<Binding> &x) {
+			return x->alias == alias.GetAlias();
 		});
 		bindings_list.erase(it, bindings_list.end());
-	}
-
-	for (auto &other_binding : other_bindings_list) {
-		auto &alias = other_binding.get().alias;
-		if (bindings.find(alias) != bindings.end()) {
-			bindings.erase(alias);
-		}
 	}
 }
 

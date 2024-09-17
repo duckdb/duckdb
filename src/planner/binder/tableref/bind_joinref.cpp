@@ -186,7 +186,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		case_insensitive_set_t lhs_columns;
 		auto &lhs_binding_list = left_binder.bind_context.GetBindingsList();
 		for (auto &binding : lhs_binding_list) {
-			for (auto &column_name : binding.get().names) {
+			for (auto &column_name : binding->names) {
 				lhs_columns.insert(column_name);
 			}
 		}
@@ -212,7 +212,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			string left_candidates, right_candidates;
 			auto &rhs_binding_list = right_binder.bind_context.GetBindingsList();
 			for (auto &binding_ref : lhs_binding_list) {
-				auto &binding = binding_ref.get();
+				auto &binding = *binding_ref;
 				for (auto &column_name : binding.names) {
 					if (!left_candidates.empty()) {
 						left_candidates += ", ";
@@ -221,7 +221,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 				}
 			}
 			for (auto &binding_ref : rhs_binding_list) {
-				auto &binding = binding_ref.get();
+				auto &binding = *binding_ref;
 				for (auto &column_name : binding.names) {
 					if (!right_candidates.empty()) {
 						right_candidates += ", ";
@@ -301,8 +301,8 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		}
 	}
 
-	auto right_bindings_list_copy = right_binder.bind_context.GetBindingsList();
-	auto left_bindings_list_copy = left_binder.bind_context.GetBindingsList();
+	auto right_bindings = right_binder.bind_context.GetBindingAliases();
+	auto left_bindings = left_binder.bind_context.GetBindingAliases();
 
 	bind_context.AddContext(std::move(left_binder.bind_context));
 	bind_context.AddContext(std::move(right_binder.bind_context));
@@ -338,7 +338,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	}
 
 	if (result->type == JoinType::SEMI || result->type == JoinType::ANTI || result->type == JoinType::MARK) {
-		bind_context.RemoveContext(right_bindings_list_copy);
+		bind_context.RemoveContext(right_bindings);
 		if (result->type == JoinType::MARK) {
 			auto mark_join_idx = GenerateTableIndex();
 			string mark_join_alias = "__internal_mark_join_ref" + to_string(mark_join_idx);
@@ -348,7 +348,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		}
 	}
 	if (result->type == JoinType::RIGHT_SEMI || result->type == JoinType::RIGHT_ANTI) {
-		bind_context.RemoveContext(left_bindings_list_copy);
+		bind_context.RemoveContext(left_bindings);
 	}
 
 	return std::move(result);

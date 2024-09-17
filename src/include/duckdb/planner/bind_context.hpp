@@ -35,6 +35,9 @@ struct UsingColumnSet {
 };
 
 struct BindingAlias {
+	BindingAlias();
+	BindingAlias(string alias);
+
 	bool IsSet() const;
 	const string &GetAlias() const;
 
@@ -56,7 +59,7 @@ public:
 public:
 	//! Given a column name, find the matching table it belongs to. Throws an
 	//! exception if no table has a column of the given name.
-	BindingAlias GetMatchingBinding(const string &column_name);
+	optional_ptr<Binding> GetMatchingBinding(const string &column_name);
 	//! Like GetMatchingBinding, but instead of throwing an error if multiple tables have the same binding it will
 	//! return a list of all the matching ones
 	unordered_set<string> GetMatchingBindings(const string &column_name);
@@ -90,9 +93,10 @@ public:
 	                        vector<unique_ptr<ParsedExpression>> &new_select_list,
 	                        case_insensitive_set_t &excluded_columns);
 
-	const vector<reference<Binding>> &GetBindingsList() {
+	const vector<unique_ptr<Binding>> &GetBindingsList() {
 		return bindings_list;
 	}
+	vector<BindingAlias> GetBindingAliases();
 
 	void GetTypesAndNames(vector<string> &result_names, vector<LogicalType> &result_types);
 
@@ -158,7 +162,7 @@ public:
 	//! Add all the bindings from a BindContext to this BindContext. The other BindContext is destroyed in the process.
 	void AddContext(BindContext other);
 	//! For semi and anti joins we remove the binding context of the right table after binding the condition.
-	void RemoveContext(vector<reference<Binding>> &other_bindings_list);
+	void RemoveContext(const vector<BindingAlias> &aliases);
 
 	//! Gets a binding of the specified name. Returns a nullptr and sets the out_error if the binding could not be
 	//! found.
@@ -171,10 +175,8 @@ private:
 
 private:
 	Binder &binder;
-	//! The set of bindings
-	case_insensitive_map_t<unique_ptr<Binding>> bindings;
 	//! The list of bindings in insertion order
-	vector<reference<Binding>> bindings_list;
+	vector<unique_ptr<Binding>> bindings_list;
 	//! The set of columns used in USING join conditions
 	case_insensitive_map_t<reference_set_t<UsingColumnSet>> using_columns;
 	//! Using column sets
