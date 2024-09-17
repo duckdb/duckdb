@@ -242,6 +242,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpress
 		return nullptr;
 	}
 
+	// FIXME: use binding alias here
 	if (col_ref.column_names.size() >= 2) {
 		// "schema_name.table_name"
 		auto catalog_entry = binding->GetStandardEntry();
@@ -280,9 +281,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpress
 	return make_uniq<FunctionExpression>("struct_pack", std::move(child_expressions));
 }
 
-unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnNameWithManyDots(ColumnRefExpression &col_ref,
-                                                                             ErrorData &error) {
-
+unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnNameWithManyDotsInternal(ColumnRefExpression &col_ref, ErrorData &error, idx_t &struct_extract_start) {
 	// two or more dots (i.e. "part1.part2.part3.part4...")
 	// -> part1 is a catalog, part2 is a schema, part3 is a table, part4 is a column name, part 5 and beyond are
 	// struct fields
@@ -298,51 +297,54 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnNameWithManyDots(Col
 	// -> 3. resolve "part1" as a table
 	// -> 4. resolve "part1" as a column
 
-	unique_ptr<ParsedExpression> result_expr;
-	idx_t struct_extract_start;
-
 	// first check if part1 is a catalog
-	if (col_ref.column_names.size() > 3 &&
-	    binder.HasMatchingBinding(col_ref.column_names[0], col_ref.column_names[1], col_ref.column_names[2],
-	                              col_ref.column_names[3], error)) {
-		// part1 is a catalog - the column reference is "catalog.schema.table.column"
-		result_expr = binder.bind_context.CreateColumnReference(col_ref.column_names[0], col_ref.column_names[1],
-		                                                        col_ref.column_names[2], col_ref.column_names[3]);
-		struct_extract_start = 4;
-
-	} else if (binder.HasMatchingBinding(col_ref.column_names[0], INVALID_SCHEMA, col_ref.column_names[1],
-	                                     col_ref.column_names[2], error)) {
+	optional_ptr<Binding> binding;
+	if (col_ref.column_names.size() > 3) {
+		binding = binder.GetMatchingBinding(col_ref.column_names[0], col_ref.column_names[1], col_ref.column_names[2],
+								  col_ref.column_names[3], error);
+		if (binding) {
+			// part1 is a catalog - the column reference is "catalog.schema.table.column"
+			struct_extract_start = 4;
+			return binder.bind_context.CreateColumnReference(binding->alias, col_ref.GetColumnName());
+		}
+	}
+	binding = binder.GetMatchingBinding(col_ref.column_names[0], INVALID_SCHEMA, col_ref.column_names[1],
+										 col_ref.column_names[2], error);
+	if (binding) {
 		// part1 is a catalog - the column reference is "catalog.table.column"
-		result_expr = binder.bind_context.CreateColumnReference(col_ref.column_names[0], INVALID_SCHEMA,
-		                                                        col_ref.column_names[1], col_ref.column_names[2]);
 		struct_extract_start = 3;
-
-	} else if (binder.HasMatchingBinding(col_ref.column_names[0], col_ref.column_names[1], col_ref.column_names[2],
-	                                     error)) {
+		return binder.bind_context.CreateColumnReference(binding->alias, col_ref.GetColumnName());
+	}
+	binding = binder.GetMatchingBinding(col_ref.column_names[0], col_ref.column_names[1], col_ref.column_names[2],
+	                                     error);
+	if (binding) {
 		// part1 is a schema - the column reference is "schema.table.column"
 		// any additional fields are turned into struct_extract calls
-		result_expr = binder.bind_context.CreateColumnReference(col_ref.column_names[0], col_ref.column_names[1],
-		                                                        col_ref.column_names[2]);
 		struct_extract_start = 3;
-
-	} else if (binder.HasMatchingBinding(col_ref.column_names[0], col_ref.column_names[1], error)) {
+		return binder.bind_context.CreateColumnReference(binding->alias, col_ref.GetColumnName());
+	}
+	binding = binder.GetMatchingBinding(col_ref.column_names[0], col_ref.column_names[1], error);
+	if (binding) {
 		// part1 is a table
 		// the column reference is "table.column"
 		// any additional fields are turned into struct_extract calls
-		result_expr = binder.bind_context.CreateColumnReference(col_ref.column_names[0], col_ref.column_names[1]);
 		struct_extract_start = 2;
-
-	} else {
-		// part1 could be a column
-		ErrorData col_error;
-		result_expr = QualifyColumnName(col_ref.column_names[0], col_error);
-		if (!result_expr) {
-			// it is not! Try creating an implicit struct_pack
-			return CreateStructPack(col_ref);
-		}
+	}
+	// part1 could be a column
+	ErrorData col_error;
+	auto result_expr = QualifyColumnName(col_ref.column_names[0], col_error);
+	if (result_expr) {
 		// it is! add the struct extract calls
 		struct_extract_start = 1;
+		return result_expr;
 	}
+	// it is not! Try creating an implicit struct_pack
+	return CreateStructPack(col_ref);
+}
+unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnNameWithManyDots(ColumnRefExpression &col_ref,
+                                                                             ErrorData &error) {
+	idx_t struct_extract_start;
+	auto result_expr = QualifyColumnNameWithManyDotsInternal(col_ref, error, struct_extract_start);
 
 	// create a struct extract with all remaining column names
 	for (idx_t i = struct_extract_start; i < col_ref.column_names.size(); i++) {
@@ -386,9 +388,10 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 		// -> part1 is a column, part2 is a property of that column (i.e. struct_extract)
 
 		// first check if part1 is a table, and part2 is a standard column name
-		if (binder.HasMatchingBinding(col_ref.column_names[0], col_ref.column_names[1], error)) {
+		auto binding = binder.GetMatchingBinding(col_ref.column_names[0], col_ref.column_names[1], error);
+		if (binding) {
 			// it is! return the column reference directly
-			return binder.bind_context.CreateColumnReference(col_ref.column_names[0], col_ref.column_names[1]);
+			return binder.bind_context.CreateColumnReference(binding->alias, col_ref.GetColumnName());
 		}
 
 		// otherwise check if we can turn this into a struct extract

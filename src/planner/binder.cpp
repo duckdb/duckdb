@@ -583,18 +583,18 @@ void Binder::AddCorrelatedColumn(const CorrelatedColumnInfo &info) {
 	}
 }
 
-bool Binder::HasMatchingBinding(const string &table_name, const string &column_name, ErrorData &error) {
+optional_ptr<Binding> Binder::GetMatchingBinding(const string &table_name, const string &column_name, ErrorData &error) {
 	string empty_schema;
-	return HasMatchingBinding(empty_schema, table_name, column_name, error);
+	return GetMatchingBinding(empty_schema, table_name, column_name, error);
 }
 
-bool Binder::HasMatchingBinding(const string &schema_name, const string &table_name, const string &column_name,
+optional_ptr<Binding> Binder::GetMatchingBinding(const string &schema_name, const string &table_name, const string &column_name,
                                 ErrorData &error) {
 	string empty_catalog;
-	return HasMatchingBinding(empty_catalog, schema_name, table_name, column_name, error);
+	return GetMatchingBinding(empty_catalog, schema_name, table_name, column_name, error);
 }
 
-bool Binder::HasMatchingBinding(const string &catalog_name, const string &schema_name, const string &table_name,
+optional_ptr<Binding> Binder::GetMatchingBinding(const string &catalog_name, const string &schema_name, const string &table_name,
                                 const string &column_name, ErrorData &error) {
 	optional_ptr<Binding> binding;
 	D_ASSERT(!lambda_bindings);
@@ -606,14 +606,13 @@ bool Binder::HasMatchingBinding(const string &catalog_name, const string &schema
 	}
 
 	if (!binding) {
-		return false;
+		return nullptr;
 	}
-	bool binding_found;
-	binding_found = binding->HasMatchingBinding(column_name);
-	if (!binding_found) {
+	if (!binding->HasMatchingBinding(column_name)) {
 		error = binding->ColumnNotFoundError(column_name);
+		return nullptr;
 	}
-	return binding_found;
+	return binding;
 }
 
 void Binder::SetBindingMode(BindingMode mode) {
