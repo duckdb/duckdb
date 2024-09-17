@@ -52,20 +52,6 @@ public:
 	void GetCollection(idx_t row_idx, ColumnDataCollectionSpec &spec);
 	void Combine(bool build_validity);
 
-	//! Set up a pair of scanning objects
-	void PrepareScan(ColumnDataScanState &state, DataChunk &data) const;
-	//! Is the scan in range?
-	inline bool RowIsVisible(idx_t row_idx, const ColumnDataScanState &state) const {
-		return (row_idx < state.next_row_index && state.current_row_index <= row_idx);
-	}
-	//! Scan the given row
-	void Seek(idx_t row_idx, ColumnDataScanState &state, DataChunk &chunk) const;
-	//! The offset of the row in the given state
-	inline sel_t RowOffset(idx_t row_idx, const ColumnDataScanState &state) const {
-		D_ASSERT(RowIsVisible(row_idx, state));
-		return UnsafeNumericCast<sel_t>(row_idx - state.current_row_index);
-	}
-
 	ColumnDataCollectionPtr inputs;
 	ValidityMask validity;
 
@@ -85,6 +71,63 @@ private:
 	vector<ColumnDataCollectionPtr> collections;
 	//! The (sorted) collection ranges
 	vector<pair<idx_t, idx_t>> ranges;
+};
+
+class WindowTable {
+public:
+	explicit WindowTable(const WindowDataChunk &paged);
+
+	//! Is the scan in range?
+	inline bool RowIsVisible(idx_t row_idx) const {
+		return (row_idx < state.next_row_index && state.current_row_index <= row_idx);
+	}
+	//! The offset of the row in the given state
+	inline sel_t RowOffset(idx_t row_idx) const {
+		D_ASSERT(RowIsVisible(row_idx));
+		return UnsafeNumericCast<sel_t>(row_idx - state.current_row_index);
+	}
+	//! Scan the next chunk
+	inline bool Scan() {
+		return paged.inputs->Scan(state, chunk);
+	}
+	//! Seek to the given row
+	inline idx_t Seek(idx_t row_idx) {
+		if (!RowIsVisible(row_idx)) {
+			D_ASSERT(paged.inputs.get());
+			paged.inputs->Seek(row_idx, state, chunk);
+		}
+		return RowOffset(row_idx);
+	}
+	//! Check a collection cell for nullity
+	bool CellIsNull(idx_t col_idx, idx_t row_idx) {
+		D_ASSERT(chunk.ColumnCount() > col_idx);
+		auto index = Seek(row_idx);
+		auto &source = chunk.data[col_idx];
+		return FlatVector::IsNull(source, index);
+	}
+	//! Read a typed cell
+	template <typename T>
+	T GetCell(idx_t col_idx, idx_t row_idx) {
+		D_ASSERT(chunk.ColumnCount() > col_idx);
+		auto index = Seek(row_idx);
+		auto &source = chunk.data[col_idx];
+		const auto data = FlatVector::GetData<T>(source);
+		return data[index];
+	}
+	//! Copy a single value
+	void CopyCell(idx_t col_idx, idx_t row_idx, Vector &target, idx_t target_offset) {
+		D_ASSERT(chunk.ColumnCount() > col_idx);
+		auto index = Seek(row_idx);
+		auto &source = chunk.data[col_idx];
+		VectorOperations::Copy(source, target, index + 1, index, target_offset);
+	}
+
+	//! The pageable data
+	const WindowDataChunk &paged;
+	//! The state used for reading the collection
+	ColumnDataScanState state;
+	//! The data chunk read into
+	DataChunk chunk;
 };
 
 struct WindowInputExpression {

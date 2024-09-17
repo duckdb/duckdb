@@ -65,9 +65,7 @@ public:
 	//! The state used for appending to the collection
 	ColumnDataAppendState appender;
 	//! The state used for reading the collection
-	ColumnDataScanState reader;
-	//! The data chunk read into
-	DataChunk scanned;
+	unique_ptr<WindowTable> reader;
 };
 
 WindowAggregator::WindowAggregator(AggregateObject aggr_p, const vector<LogicalType> &arg_types_p,
@@ -124,7 +122,9 @@ void WindowAggregatorLocalState::Finalize(WindowAggregatorGlobalState &gastate) 
 	winputs.Combine(false);
 
 	// Prepare to scan
-	winputs.PrepareScan(reader, scanned);
+	if (!reader) {
+		reader = make_uniq<WindowTable>(winputs);
+	}
 }
 
 void WindowAggregator::Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, const FrameStats &stats) {
@@ -742,9 +742,7 @@ protected:
 	//! The optional hash table used for DISTINCT
 	Vector hashes;
 	//! The state used for comparing the collection across chunk boundaries
-	ColumnDataScanState comparer;
-	//! The data chunk read into for comparing across chunk boundaries
-	DataChunk compare;
+	unique_ptr<WindowTable> comparer;
 };
 
 WindowNaiveState::WindowNaiveState(const WindowNaiveAggregator &aggregator_p)
@@ -770,7 +768,9 @@ void WindowNaiveState::Finalize(WindowAggregatorGlobalState &gastate) {
 	WindowAggregatorLocalState::Finalize(gastate);
 
 	//	Set up the comparison scanner just in case
-	gastate.winputs.PrepareScan(comparer, compare);
+	if (!comparer) {
+		comparer = make_uniq<WindowTable>(gastate.winputs);
+	}
 }
 
 void WindowNaiveState::FlushStates(const WindowAggregatorGlobalState &gsink) {
@@ -778,6 +778,7 @@ void WindowNaiveState::FlushStates(const WindowAggregatorGlobalState &gsink) {
 		return;
 	}
 
+	auto &scanned = reader->chunk;
 	leaves.Slice(scanned, update_sel, flush_count);
 
 	auto &aggr = aggregator.aggr;
@@ -788,8 +789,9 @@ void WindowNaiveState::FlushStates(const WindowAggregatorGlobalState &gsink) {
 }
 
 size_t WindowNaiveState::Hash(const WindowDataChunk &winputs, idx_t rid) {
-	D_ASSERT(reader.current_row_index <= rid && rid < reader.next_row_index);
-	auto s = winputs.RowOffset(rid, reader);
+	D_ASSERT(reader->RowIsVisible(rid));
+	auto s = reader->RowOffset(rid);
+	auto &scanned = reader->chunk;
 	SelectionVector sel(&s);
 	leaves.Slice(scanned, sel, 1);
 	leaves.Hash(hashes);
@@ -801,23 +803,23 @@ bool WindowNaiveState::KeyEqual(const WindowDataChunk &winputs, const idx_t &lid
 	//	One of the indices will be scanned, so make it the left one
 	auto lhs = lidx;
 	auto rhs = ridx;
-	if (!winputs.RowIsVisible(lhs, reader)) {
-		D_ASSERT(winputs.RowIsVisible(rhs, reader));
+	if (!reader->RowIsVisible(lhs)) {
 		std::swap(lhs, rhs);
+		D_ASSERT(reader->RowIsVisible(lhs));
 	}
 
-	auto l = winputs.RowOffset(lhs, reader);
+	auto &scanned = reader->chunk;
+	auto l = reader->RowOffset(lhs);
 	SelectionVector lsel(&l);
 
-	auto rreader = &reader;
-	auto rscanned = &scanned;
-	if (!winputs.RowIsVisible(rhs, *rreader)) {
+	auto rreader = reader.get();
+	if (!reader->RowIsVisible(rhs)) {
 		//	Values on different pages!
-		winputs.Seek(rhs, comparer, compare);
-		rreader = &comparer;
-		rscanned = &compare;
+		rreader = comparer.get();
+		rreader->Seek(rhs);
 	}
-	auto r = winputs.RowOffset(rhs, *rreader);
+	auto rscanned = &rreader->chunk;
+	auto r = rreader->RowOffset(rhs);
 	SelectionVector rsel(&r);
 
 	sel_t f = 0;
@@ -865,10 +867,10 @@ void WindowNaiveState::Evaluate(const WindowAggregatorGlobalState &gsink, const 
 				}
 
 				//	Seek to the current position
-				if (!winputs.RowIsVisible(f, reader)) {
+				if (!reader->RowIsVisible(f)) {
 					//	We need to flush when we cross a chunk boundary
 					FlushStates(gsink);
-					winputs.Seek(f, reader, scanned);
+					reader->Seek(f);
 				}
 
 				//	Filter out duplicates
@@ -877,7 +879,7 @@ void WindowNaiveState::Evaluate(const WindowAggregatorGlobalState &gsink, const 
 				}
 
 				pdata[flush_count] = agg_state;
-				update_sel[flush_count++] = winputs.RowOffset(f, reader);
+				update_sel[flush_count++] = reader->RowOffset(f);
 				if (flush_count >= STANDARD_VECTOR_SIZE) {
 					FlushStates(gsink);
 				}
@@ -1004,9 +1006,7 @@ public:
 	//! Data pointer that contains a vector of states, used for intermediate window segment aggregation
 	vector<data_t> state;
 	//! Scanned data state
-	ColumnDataScanState reader;
-	//! Scanned data
-	DataChunk scanned;
+	unique_ptr<WindowTable> reader;
 	//! Input data chunk, used for leaf segment aggregation
 	DataChunk leaves;
 	//! The filtered rows in inputs.
@@ -1040,11 +1040,11 @@ public:
 void WindowSegmentTree::Finalize(WindowAggregatorState &gsink, WindowAggregatorState &lstate, const FrameStats &stats) {
 
 	auto &gasink = gsink.Cast<WindowSegmentTreeGlobalState>();
-	auto &inputs = gasink.winputs.chunk;
+	auto &types = gasink.winputs.GetTypes();
 
 	WindowAggregator::Finalize(gsink, lstate, stats);
 
-	if (inputs.ColumnCount() > 0) {
+	if (!types.empty()) {
 		if (aggr.function.combine && UseCombineAPI()) {
 			lstate.Cast<WindowSegmentTreeState>().Finalize(gasink);
 		}
@@ -1077,7 +1077,9 @@ WindowSegmentTreePart::WindowSegmentTreePart(ArenaAllocator &allocator, const Ag
 	}
 
 	// Set up for scanning
-	inputs.PrepareScan(reader, scanned);
+	if (!reader) {
+		reader = make_uniq<WindowTable>(inputs);
+	}
 }
 
 WindowSegmentTreePart::~WindowSegmentTreePart() {
@@ -1102,6 +1104,7 @@ void WindowSegmentTreePart::FlushStates(bool combining) {
 		statel.Verify(flush_count);
 		aggr.function.combine(statel, statep, aggr_input_data, flush_count);
 	} else {
+		auto &scanned = reader->chunk;
 		leaves.Slice(scanned, filter_sel, flush_count);
 		aggr.function.update(&leaves.data[0], aggr_input_data, leaves.ColumnCount(), statep, flush_count);
 	}
@@ -1122,7 +1125,7 @@ void WindowSegmentTreePart::ExtractFrame(idx_t begin, idx_t end, data_ptr_t stat
 	//	Otherwise set it to the input rows that pass the filter
 	auto states = FlatVector::GetData<data_ptr_t>(statep);
 	if (filter_mask.AllValid()) {
-		const auto offset = inputs.RowOffset(begin, reader);
+		const auto offset = reader->RowOffset(begin);
 		for (idx_t i = 0; i < count; ++i) {
 			states[flush_count] = state_ptr;
 			filter_sel.set_index(flush_count++, offset + i);
@@ -1134,7 +1137,7 @@ void WindowSegmentTreePart::ExtractFrame(idx_t begin, idx_t end, data_ptr_t stat
 		for (idx_t i = begin; i < end; ++i) {
 			if (filter_mask.RowIsValid(i)) {
 				states[flush_count] = state_ptr;
-				filter_sel.set_index(flush_count++, inputs.RowOffset(i, reader));
+				filter_sel.set_index(flush_count++, reader->RowOffset(i));
 				if (flush_count >= STANDARD_VECTOR_SIZE) {
 					FlushStates(false);
 				}
@@ -1154,11 +1157,11 @@ void WindowSegmentTreePart::WindowSegmentValue(const WindowSegmentTreeGlobalStat
 	if (l_idx == 0) {
 		//	Check the leaves when they cross chunk boundaries
 		while (begin < end) {
-			if (!inputs.RowIsVisible(begin, reader)) {
+			if (!reader->RowIsVisible(begin)) {
 				FlushStates(false);
-				inputs.Seek(begin, reader, scanned);
+				reader->Seek(begin);
 			}
-			auto next = MinValue(end, reader.next_row_index);
+			auto next = MinValue(end, reader->state.next_row_index);
 			ExtractFrame(begin, next, state_ptr);
 			begin = next;
 		}
@@ -1194,8 +1197,8 @@ WindowSegmentTreeGlobalState::WindowSegmentTreeGlobalState(BufferManager &buffer
     : WindowAggregatorGlobalState(buffer_manager, aggregator, group_count), tree(aggregator),
       levels_flat_native(aggregator.aggr) {
 
-	auto &inputs = winputs.chunk;
-	D_ASSERT(inputs.ColumnCount() > 0);
+	auto &types = winputs.GetTypes();
+	D_ASSERT(!types.empty());
 
 	// compute space required to store internal nodes of segment tree
 	levels_flat_start.push_back(0);
@@ -1206,7 +1209,7 @@ WindowSegmentTreeGlobalState::WindowSegmentTreeGlobalState(BufferManager &buffer
 	idx_t level_size;
 	// iterate over the levels of the segment tree
 	while ((level_size =
-	            (level_current == 0 ? inputs.size() : levels_flat_offset - levels_flat_start[level_current - 1])) > 1) {
+	            (level_current == 0 ? group_count : levels_flat_offset - levels_flat_start[level_current - 1])) > 1) {
 		for (idx_t pos = 0; pos < level_size; pos += TREE_FANOUT) {
 			levels_flat_offset++;
 		}
@@ -1710,7 +1713,7 @@ WindowDistinctAggregatorLocalState::WindowDistinctAggregatorLocalState(
 	sort_chunk.data.back().Reference(payload_chunk.data[0]);
 
 	//! Input data chunk, used for leaf segment aggregation
-	auto &inputs = gastate.winputs.chunk;
+	auto &inputs = gastate.winputs;
 	leaves.Initialize(Allocator::DefaultAllocator(), inputs.GetTypes());
 	sel.Initialize();
 
