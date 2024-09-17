@@ -10,16 +10,15 @@ BindingAlias::BindingAlias() {
 BindingAlias::BindingAlias(string alias_p) : alias(std::move(alias_p)) {
 }
 
-BindingAlias::BindingAlias(string schema_p, string alias_p) :
-	schema(std::move(schema_p)), alias(std::move(alias_p)) {
+BindingAlias::BindingAlias(string schema_p, string alias_p) : schema(std::move(schema_p)), alias(std::move(alias_p)) {
 }
 
-BindingAlias::BindingAlias(const StandardEntry &entry) :
-	catalog(entry.ParentCatalog().GetName()), schema(entry.schema.name), alias(entry.name) {
+BindingAlias::BindingAlias(const StandardEntry &entry)
+    : catalog(entry.ParentCatalog().GetName()), schema(entry.schema.name), alias(entry.name) {
 }
 
-BindingAlias::BindingAlias(string catalog_p, string schema_p, string alias_p) :
-	catalog(std::move(catalog_p)), schema(std::move(schema_p)), alias(std::move(alias_p)) {
+BindingAlias::BindingAlias(string catalog_p, string schema_p, string alias_p)
+    : catalog(std::move(catalog_p)), schema(std::move(schema_p)), alias(std::move(alias_p)) {
 }
 
 bool BindingAlias::IsSet() const {
@@ -51,7 +50,8 @@ bool BindingAlias::Matches(const BindingAlias &other) const {
 }
 
 bool BindingAlias::operator==(const BindingAlias &other) const {
-	return StringUtil::CIEquals(catalog, other.catalog) && StringUtil::CIEquals(schema, other.schema) && StringUtil::CIEquals(alias, other.alias);
+	return StringUtil::CIEquals(catalog, other.catalog) && StringUtil::CIEquals(schema, other.schema) &&
+	       StringUtil::CIEquals(alias, other.alias);
 }
 
-}
+} // namespace duckdb

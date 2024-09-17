@@ -251,8 +251,8 @@ ErrorData TableBinding::ColumnNotFoundError(const string &column_name) const {
 }
 
 DummyBinding::DummyBinding(vector<LogicalType> types, vector<string> names, string dummy_name)
-    : Binding(BindingType::DUMMY, BindingAlias(DummyBinding::DUMMY_NAME + dummy_name), std::move(types), std::move(names),
-              DConstants::INVALID_INDEX),
+    : Binding(BindingType::DUMMY, BindingAlias(DummyBinding::DUMMY_NAME + dummy_name), std::move(types),
+              std::move(names), DConstants::INVALID_INDEX),
       dummy_name(std::move(dummy_name)) {
 }
 

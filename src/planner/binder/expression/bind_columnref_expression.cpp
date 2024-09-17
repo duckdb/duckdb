@@ -238,7 +238,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpress
 	// get a matching binding
 	ErrorData error;
 	BindingAlias alias;
-	switch(col_ref.column_names.size()) {
+	switch (col_ref.column_names.size()) {
 	case 1:
 		alias = BindingAlias(col_ref.column_names[0]);
 		break;
@@ -260,12 +260,15 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpress
 	vector<unique_ptr<ParsedExpression>> child_expressions;
 	child_expressions.reserve(binding->names.size());
 	for (const auto &column_name : binding->names) {
-		child_expressions.push_back(binder.bind_context.CreateColumnReference(binding->alias, column_name, ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS));
+		child_expressions.push_back(binder.bind_context.CreateColumnReference(
+		    binding->alias, column_name, ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS));
 	}
 	return make_uniq<FunctionExpression>("struct_pack", std::move(child_expressions));
 }
 
-unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnNameWithManyDotsInternal(ColumnRefExpression &col_ref, ErrorData &error, idx_t &struct_extract_start) {
+unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnNameWithManyDotsInternal(ColumnRefExpression &col_ref,
+                                                                                     ErrorData &error,
+                                                                                     idx_t &struct_extract_start) {
 	// two or more dots (i.e. "part1.part2.part3.part4...")
 	// -> part1 is a catalog, part2 is a schema, part3 is a table, part4 is a column name, part 5 and beyond are
 	// struct fields
@@ -285,7 +288,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnNameWithManyDotsInte
 	optional_ptr<Binding> binding;
 	if (col_ref.column_names.size() > 3) {
 		binding = binder.GetMatchingBinding(col_ref.column_names[0], col_ref.column_names[1], col_ref.column_names[2],
-								  col_ref.column_names[3], error);
+		                                    col_ref.column_names[3], error);
 		if (binding) {
 			// part1 is a catalog - the column reference is "catalog.schema.table.column"
 			struct_extract_start = 4;
@@ -293,14 +296,14 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnNameWithManyDotsInte
 		}
 	}
 	binding = binder.GetMatchingBinding(col_ref.column_names[0], INVALID_SCHEMA, col_ref.column_names[1],
-										 col_ref.column_names[2], error);
+	                                    col_ref.column_names[2], error);
 	if (binding) {
 		// part1 is a catalog - the column reference is "catalog.table.column"
 		struct_extract_start = 3;
 		return binder.bind_context.CreateColumnReference(binding->alias, col_ref.column_names[2]);
 	}
-	binding = binder.GetMatchingBinding(col_ref.column_names[0], col_ref.column_names[1], col_ref.column_names[2],
-	                                     error);
+	binding =
+	    binder.GetMatchingBinding(col_ref.column_names[0], col_ref.column_names[1], col_ref.column_names[2], error);
 	if (binding) {
 		// part1 is a schema - the column reference is "schema.table.column"
 		// any additional fields are turned into struct_extract calls

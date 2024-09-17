@@ -190,10 +190,10 @@ public:
 	                     const string &schema = INVALID_SCHEMA);
 
 	optional_ptr<Binding> GetMatchingBinding(const string &table_name, const string &column_name, ErrorData &error);
-	optional_ptr<Binding> GetMatchingBinding(const string &schema_name, const string &table_name, const string &column_name,
-	                        ErrorData &error);
-	optional_ptr<Binding> GetMatchingBinding(const string &catalog_name, const string &schema_name, const string &table_name,
-	                        const string &column_name, ErrorData &error);
+	optional_ptr<Binding> GetMatchingBinding(const string &schema_name, const string &table_name,
+	                                         const string &column_name, ErrorData &error);
+	optional_ptr<Binding> GetMatchingBinding(const string &catalog_name, const string &schema_name,
+	                                         const string &table_name, const string &column_name, ErrorData &error);
 
 	void SetBindingMode(BindingMode mode);
 	BindingMode GetBindingMode();

@@ -178,7 +178,8 @@ unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(const string &ta
 
 unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const BindingAlias &table_alias,
                                                                 const string &column_name, ColumnBindType bind_type) {
-	return CreateColumnReference(table_alias.GetCatalog(), table_alias.GetSchema(), table_alias.GetAlias(), column_name, bind_type);
+	return CreateColumnReference(table_alias.GetCatalog(), table_alias.GetSchema(), table_alias.GetAlias(), column_name,
+	                             bind_type);
 }
 
 unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &table_name, const string &column_name,
