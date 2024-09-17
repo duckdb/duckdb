@@ -164,7 +164,7 @@ public:
 	optional_ptr<Binding> GetBinding(const BindingAlias &alias, ErrorData &out_error);
 
 private:
-	void AddBinding(const string &alias, unique_ptr<Binding> binding);
+	void AddBinding(unique_ptr<Binding> binding);
 
 private:
 	Binder &binder;

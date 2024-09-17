@@ -78,9 +78,13 @@ optional_ptr<StandardEntry> Binding::GetStandardEntry() {
 	return nullptr;
 }
 
+string Binding::GetAlias(const string &explicit_alias, const StandardEntry &entry) {
+	return explicit_alias.empty() ? entry.name : explicit_alias;
+}
+
 EntryBinding::EntryBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p, idx_t index,
                            StandardEntry &entry)
-    : Binding(BindingType::CATALOG_ENTRY, alias, std::move(types_p), std::move(names_p), index), entry(entry) {
+    : Binding(BindingType::CATALOG_ENTRY, GetAlias(alias, entry), std::move(types_p), std::move(names_p), index), entry(entry) {
 }
 
 optional_ptr<StandardEntry> EntryBinding::GetStandardEntry() {

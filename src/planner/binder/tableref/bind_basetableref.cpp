@@ -263,14 +263,14 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		auto view_binder = Binder::CreateBinder(context, this, BinderType::VIEW_BINDER);
 		view_binder->can_contain_nulls = true;
 		SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(view_catalog_entry.query->Copy()));
-		subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
+		subquery.alias = ref.alias;
 		// construct view names by first (1) taking the view aliases, (2) adding the view names, then (3) applying
 		// subquery aliases
 		vector<string> view_names = view_catalog_entry.aliases;
 		for (idx_t n = view_names.size(); n < view_catalog_entry.names.size(); n++) {
 			view_names.push_back(view_catalog_entry.names[n]);
 		}
-		subquery.column_name_alias = BindContext::AliasColumnNames(subquery.alias, view_names, ref.column_name_alias);
+		subquery.column_name_alias = BindContext::AliasColumnNames(ref.table_name, view_names, ref.column_name_alias);
 
 		// when binding a view, we always look into the catalog/schema where the view is stored first
 		vector<CatalogSearchEntry> view_search_path;

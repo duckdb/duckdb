@@ -466,24 +466,24 @@ void BindContext::GetTypesAndNames(vector<string> &result_names, vector<LogicalT
 	}
 }
 
-void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
-	if (bindings.find(alias) != bindings.end()) {
-		throw BinderException("Duplicate alias \"%s\" in query!", alias);
+void BindContext::AddBinding(unique_ptr<Binding> binding) {
+	if (bindings.find(binding->alias) != bindings.end()) {
+		throw BinderException("Duplicate alias \"%s\" in query!", binding->alias);
 	}
 	bindings_list.push_back(*binding);
-	bindings[alias] = std::move(binding);
+	bindings[binding->alias] = std::move(binding);
 }
 
 void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
                                const vector<LogicalType> &types, vector<column_t> &bound_column_ids,
                                optional_ptr<StandardEntry> entry, bool add_row_id) {
-	AddBinding(alias, make_uniq<TableBinding>(alias, types, names, bound_column_ids, entry, index, add_row_id));
+	AddBinding(make_uniq<TableBinding>(alias, types, names, bound_column_ids, entry, index, add_row_id));
 }
 
 void BindContext::AddTableFunction(idx_t index, const string &alias, const vector<string> &names,
                                    const vector<LogicalType> &types, vector<column_t> &bound_column_ids,
                                    optional_ptr<StandardEntry> entry) {
-	AddBinding(alias, make_uniq<TableBinding>(alias, types, names, bound_column_ids, entry, index));
+	AddBinding(make_uniq<TableBinding>(alias, types, names, bound_column_ids, entry, index));
 }
 
 static string AddColumnNameToBinding(const string &base_name, case_insensitive_set_t &current_names) {
@@ -522,7 +522,7 @@ void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref
 
 void BindContext::AddEntryBinding(idx_t index, const string &alias, const vector<string> &names,
                                   const vector<LogicalType> &types, StandardEntry &entry) {
-	AddBinding(alias, make_uniq<EntryBinding>(alias, types, names, index, entry));
+	AddBinding(make_uniq<EntryBinding>(alias, types, names, index, entry));
 }
 
 void BindContext::AddView(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery,
@@ -538,7 +538,7 @@ void BindContext::AddSubquery(idx_t index, const string &alias, TableFunctionRef
 
 void BindContext::AddGenericBinding(idx_t index, const string &alias, const vector<string> &names,
                                     const vector<LogicalType> &types) {
-	AddBinding(alias, make_uniq<Binding>(BindingType::BASE, alias, types, names, index));
+	AddBinding(make_uniq<Binding>(BindingType::BASE, alias, types, names, index));
 }
 
 void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<string> &names,

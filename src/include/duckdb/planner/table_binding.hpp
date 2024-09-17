@@ -55,6 +55,7 @@ public:
 	virtual ErrorData ColumnNotFoundError(const string &column_name) const;
 	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);
 	virtual optional_ptr<StandardEntry> GetStandardEntry();
+	static string GetAlias(const string &explicit_alias, const StandardEntry &entry);
 
 public:
 	template <class TARGET>
