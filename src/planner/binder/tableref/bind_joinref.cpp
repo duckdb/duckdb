@@ -46,15 +46,16 @@ bool Binder::TryFindBinding(const string &using_column, const string &join_side,
 			error += "\" is ambiguous: it exists more than once on ";
 			error += join_side;
 			error += " side of join.\nCandidates:";
-			for (auto &binding : bindings) {
+			for (auto &binding_ref : bindings) {
+				auto &other_binding = binding_ref.get();
 				error += "\n\t";
-				error += binding;
+				error += other_binding.GetAlias();
 				error += ".";
-				error += bind_context.GetActualColumnName(binding, using_column);
+				error += bind_context.GetActualColumnName(other_binding, using_column);
 			}
 			throw BinderException(error);
 		} else {
-			result = binding;
+			result = binding.get().GetAlias();
 		}
 	}
 	return true;
@@ -217,7 +218,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 					if (!left_candidates.empty()) {
 						left_candidates += ", ";
 					}
-					left_candidates += binding.alias + "." + column_name;
+					left_candidates += binding.GetAlias() + "." + column_name;
 				}
 			}
 			for (auto &binding_ref : rhs_binding_list) {
@@ -226,7 +227,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 					if (!right_candidates.empty()) {
 						right_candidates += ", ";
 					}
-					right_candidates += binding.alias + "." + column_name;
+					right_candidates += binding.GetAlias() + "." + column_name;
 				}
 			}
 			error_msg += "\n   Left candidates: " + left_candidates;

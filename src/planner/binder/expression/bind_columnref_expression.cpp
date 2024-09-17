@@ -94,8 +94,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 
 	// bind as a macro column
 	if (is_macro_column) {
-		D_ASSERT(!binder.macro_binding->alias.empty());
-		return make_uniq<ColumnRefExpression>(column_name, binder.macro_binding->alias);
+		return binder.bind_context.CreateColumnReference(binder.macro_binding->alias, column_name);
 	}
 
 	// bind as a regular column
@@ -461,7 +460,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 	D_ASSERT(col_ref.IsQualified());
 	auto &table_name = col_ref.GetTableName();
 
-	if (binder.macro_binding && table_name == binder.macro_binding->alias) {
+	if (binder.macro_binding && table_name == binder.macro_binding->GetAlias()) {
 		result = binder.macro_binding->Bind(col_ref, depth);
 	} else {
 		result = binder.bind_context.BindColumn(col_ref, depth);

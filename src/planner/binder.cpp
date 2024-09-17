@@ -598,7 +598,7 @@ bool Binder::HasMatchingBinding(const string &catalog_name, const string &schema
                                 const string &column_name, ErrorData &error) {
 	optional_ptr<Binding> binding;
 	D_ASSERT(!lambda_bindings);
-	if (macro_binding && table_name == macro_binding->alias) {
+	if (macro_binding && table_name == macro_binding->GetAlias()) {
 		binding = optional_ptr<Binding>(macro_binding.get());
 	} else {
 		binding = bind_context.GetBinding(table_name, error);

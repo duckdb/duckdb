@@ -34,19 +34,6 @@ struct UsingColumnSet {
 	unordered_set<string> bindings;
 };
 
-struct BindingAlias {
-	BindingAlias();
-	BindingAlias(string alias);
-
-	bool IsSet() const;
-	const string &GetAlias() const;
-
-	void Set(string alias);
-
-private:
-	string alias;
-};
-
 //! The BindContext object keeps track of all the tables and columns that are
 //! encountered during the binding process.
 class BindContext {
@@ -62,7 +49,7 @@ public:
 	optional_ptr<Binding> GetMatchingBinding(const string &column_name);
 	//! Like GetMatchingBinding, but instead of throwing an error if multiple tables have the same binding it will
 	//! return a list of all the matching ones
-	unordered_set<string> GetMatchingBindings(const string &column_name);
+	vector<reference<Binding>> GetMatchingBindings(const string &column_name);
 	//! Like GetMatchingBindings, but returns the top 3 most similar bindings (in levenshtein distance) instead of the
 	//! matching ones
 	vector<string> GetSimilarBindings(const string &column_name);
@@ -146,6 +133,7 @@ public:
 	//! This can be different from "column_name" because of case insensitivity
 	//! (e.g. "column_name" might return "COLUMN_NAME")
 	string GetActualColumnName(const string &binding, const string &column_name);
+	string GetActualColumnName(Binding &binding, const string &column_name);
 
 	case_insensitive_map_t<shared_ptr<Binding>> GetCTEBindings() {
 		return cte_bindings;

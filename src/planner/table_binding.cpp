@@ -15,18 +15,50 @@
 
 namespace duckdb {
 
-Binding::Binding(BindingType binding_type, const string &alias, vector<LogicalType> coltypes, vector<string> colnames,
+BindingAlias::BindingAlias() {}
+
+BindingAlias::BindingAlias(string alias_p) : alias(std::move(alias_p)) {}
+
+bool BindingAlias::IsSet() const {
+	return !alias.empty();
+}
+
+const string &BindingAlias::GetAlias() const {
+	if (!IsSet()) {
+		throw InternalException("Calling BindingAlias::GetAlias on a non-set alias");
+	}
+	return alias;
+}
+
+void BindingAlias::Set(string alias_p) {
+	alias = std::move(alias_p);
+}
+
+bool BindingAlias::Matches(const BindingAlias &other) const {
+	//! FIXME: compare catalog/schema as well
+	return StringUtil::CIEquals(alias, other.alias);
+}
+
+bool BindingAlias::operator==(const BindingAlias &other) const {
+	return StringUtil::CIEquals(alias, other.alias);
+}
+
+Binding::Binding(BindingType binding_type, BindingAlias alias_p, vector<LogicalType> coltypes, vector<string> colnames,
                  idx_t index)
-    : binding_type(binding_type), alias(alias), index(index), types(std::move(coltypes)), names(std::move(colnames)) {
+    : binding_type(binding_type), alias(std::move(alias_p)), index(index), types(std::move(coltypes)), names(std::move(colnames)) {
 	D_ASSERT(types.size() == names.size());
 	for (idx_t i = 0; i < names.size(); i++) {
 		auto &name = names[i];
 		D_ASSERT(!name.empty());
 		if (name_map.find(name) != name_map.end()) {
-			throw BinderException("table \"%s\" has duplicate column name \"%s\"", alias, name);
+			throw BinderException("table \"%s\" has duplicate column name \"%s\"", alias.GetAlias(), name);
 		}
 		name_map[name] = i;
 	}
+}
+
+string Binding::GetAlias() const {
+	return alias.GetAlias();
 }
 
 bool Binding::TryGetBindingIndex(const string &column_name, column_t &result) {
@@ -54,7 +86,7 @@ bool Binding::HasMatchingBinding(const string &column_name) {
 
 ErrorData Binding::ColumnNotFoundError(const string &column_name) const {
 	return ErrorData(ExceptionType::BINDER,
-	                 StringUtil::Format("Values list \"%s\" does not have a column named \"%s\"", alias, column_name));
+	                 StringUtil::Format("Values list \"%s\" does not have a column named \"%s\"", GetAlias(), column_name));
 }
 
 BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
@@ -78,18 +110,30 @@ optional_ptr<StandardEntry> Binding::GetStandardEntry() {
 	return nullptr;
 }
 
-string Binding::GetAlias(const string &explicit_alias, const StandardEntry &entry) {
-	return explicit_alias.empty() ? entry.name : explicit_alias;
+BindingAlias GenerateEntryAlias(const StandardEntry &entry) {
+	// FIXME: add catalog name and schema name to the alias
+	BindingAlias alias;
+	alias.Set(entry.name);
+	return alias;
 }
 
-string Binding::GetAlias(const string &explicit_alias, optional_ptr<StandardEntry> entry) {
+BindingAlias Binding::GetAlias(const string &explicit_alias, const StandardEntry &entry) {
 	if (!explicit_alias.empty()) {
-		return explicit_alias;
+		return BindingAlias(explicit_alias);
 	}
-	if (!entry) {
-		throw InternalException("Binding::GetAlias called - but neither an alias nor an entry was provided");
-	}
-	return entry->name;
+	// no explicit alias provided - generate from entry
+	return GenerateEntryAlias(entry);
+ }
+
+BindingAlias Binding::GetAlias(const string &explicit_alias, optional_ptr<StandardEntry> entry) {
+ 	if (!explicit_alias.empty()) {
+		return BindingAlias(explicit_alias);
+ 	}
+ 	if (!entry) {
+ 		throw InternalException("Binding::GetAlias called - but neither an alias nor an entry was provided");
+ 	}
+	// no explicit alias provided - generate from entry
+	return GenerateEntryAlias(*entry);
 }
 
 EntryBinding::EntryBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p, idx_t index,
@@ -129,15 +173,16 @@ static void ReplaceAliases(ParsedExpression &expr, const ColumnList &list,
 	    expr, [&](const ParsedExpression &child) { ReplaceAliases((ParsedExpression &)child, list, alias_map); });
 }
 
-static void BakeTableName(ParsedExpression &expr, const string &table_name) {
+static void BakeTableName(ParsedExpression &expr, const BindingAlias &binding_alias) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
 		auto &colref = expr.Cast<ColumnRefExpression>();
 		D_ASSERT(!colref.IsQualified());
 		auto &col_names = colref.column_names;
-		col_names.insert(col_names.begin(), table_name);
+		// FIXME: bake full BindingAlias
+		col_names.insert(col_names.begin(), binding_alias.GetAlias());
 	}
 	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { BakeTableName((ParsedExpression &)child, table_name); });
+	    expr, [&](ParsedExpression &child) { BakeTableName(child, binding_alias); });
 }
 
 unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const string &column_name) {
@@ -236,7 +281,7 @@ optional_ptr<StandardEntry> TableBinding::GetStandardEntry() {
 
 ErrorData TableBinding::ColumnNotFoundError(const string &column_name) const {
 	return ErrorData(ExceptionType::BINDER,
-	                 StringUtil::Format("Table \"%s\" does not have a column named \"%s\"", alias, column_name));
+	                 StringUtil::Format("Table \"%s\" does not have a column named \"%s\"", alias.GetAlias(), column_name));
 }
 
 DummyBinding::DummyBinding(vector<LogicalType> types, vector<string> names, string dummy_name)

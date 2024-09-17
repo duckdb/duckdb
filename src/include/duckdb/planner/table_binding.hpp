@@ -29,16 +29,32 @@ struct ColumnBinding;
 
 enum class BindingType { BASE, TABLE, DUMMY, CATALOG_ENTRY };
 
+struct BindingAlias {
+	BindingAlias();
+	BindingAlias(string alias);
+
+	bool IsSet() const;
+	const string &GetAlias() const;
+
+	void Set(string alias);
+
+	bool Matches(const BindingAlias &other) const;
+	bool operator==(const BindingAlias &other) const;
+
+private:
+	string alias;
+};
+
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index.
 struct Binding {
-	Binding(BindingType binding_type, const string &alias, vector<LogicalType> types, vector<string> names,
+	Binding(BindingType binding_type, BindingAlias alias, vector<LogicalType> types, vector<string> names,
 	        idx_t index);
 	virtual ~Binding() = default;
 
 	//! The type of Binding
 	BindingType binding_type;
 	//! The alias of the binding
-	string alias;
+	BindingAlias alias;
 	//! The table index of the binding
 	idx_t index;
 	//! The types of the bound columns
@@ -55,8 +71,10 @@ public:
 	virtual ErrorData ColumnNotFoundError(const string &column_name) const;
 	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);
 	virtual optional_ptr<StandardEntry> GetStandardEntry();
-	static string GetAlias(const string &explicit_alias, const StandardEntry &entry);
-	static string GetAlias(const string &explicit_alias, optional_ptr<StandardEntry> entry);
+	string GetAlias() const;
+
+	static BindingAlias GetAlias(const string &explicit_alias, const StandardEntry &entry);
+	static BindingAlias GetAlias(const string &explicit_alias, optional_ptr<StandardEntry> entry);
 
 public:
 	template <class TARGET>
