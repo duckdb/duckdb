@@ -71,46 +71,33 @@
         "add_verification_in_both_SetReset": true
     },
     {
-        "name": "arrow_arrow_lossless_conversion",
+        "name": "arrow_large_buffer_size",
+        "description": "If arrow buffers for strings, blobs, uuids and bits should be exported using large buffers",
+        "type": "bool",
+        "sql_type": "BOOLEAN",
+        "scope": "global",
+        "custom_conversion_and_validation": true
+    },
+    {
+        "name": "arrow_lossless_conversion",
         "description": "Whenever a DuckDB type does not have a clear native or canonical extension match in Arrow, export the types with a duckdb.type_name extension name.",
         "type": "bool",
         "sql_type": "BOOLEAN",
-        "scope": "global",
-        "aliases": [
-            "arrow_lossless_conversion",
-            "lossless_conversion_arrow"
-        ]
+        "scope": "global"
     },
     {
-        "name": "arrow_offset_size",
-        "description": "If arrow buffers for strings, blobs, uuids and bits should be exported using large buffers",
-        "type": "ArrowOffsetSize",
-        "sql_type": "BOOLEAN",
-        "scope": "global",
-        "custom_conversion_and_validation": true,
-        "aliases": [
-            "arrow_large_buffer_size"
-        ]
-    },
-    {
-        "name": "arrow_use_list_view",
+        "name": "arrow_output_list_view",
         "description": "If export to arrow format should use ListView as the physical layout for LIST columns",
         "type": "bool",
         "sql_type": "BOOLEAN",
-        "scope": "global",
-        "aliases": [
-            "arrow_output_list_view"
-        ]
+        "scope": "global"
     },
     {
-        "name": "autoinstall_extension_repo",
+        "name": "autoinstall_extension_repository",
         "description": "Overrides the custom endpoint for extension installation on autoloading",
         "type": "string",
         "sql_type": "VARCHAR",
-        "scope": "global",
-        "aliases": [
-            "autoinstall_extension_repository"
-        ]
+        "scope": "global"
     },
     {
         "name": "autoinstall_known_extensions",
@@ -129,53 +116,27 @@
     {
         "name": "catalog_error_max_schemas",
         "description": "The maximum number of schemas the system will scan for \\\"did you mean...\\\" style errors in the catalog",
-        "type": "idx_t",
+        "type": "uint64_t",
         "sql_type": "UBIGINT",
         "scope": "global"
     },
     {
-        "name": "checkpoint_abort",
-        "description": "DEBUG SETTING: trigger an abort while checkpointing for testing purposes",
-        "type": "CheckpointAbort",
-        "sql_type": "VARCHAR",
-        "scope": "global",
-        "custom_conversion_and_validation": true,
-        "aliases": [
-            "debug_checkpoint_abort"
-        ]
-    },
-    {
-        "name": "checkpoint_wal_size",
+        "name": "checkpoint_threshold",
         "description": "The WAL size threshold at which to automatically trigger a checkpoint (e.g. 1GB)",
         "type": "idx_t",
         "sql_type": "VARCHAR",
         "scope": "global",
         "custom_conversion_and_validation": true,
         "aliases": [
-            "wal_autocheckpoint",
-            "checkpoint_threshold"
+            "wal_autocheckpoint"
         ]
     },
     {
-        "name": "collation",
-        "description": "The collation setting used when none is specified",
-        "type": "string",
-        "sql_type": "VARCHAR",
-        "scope": "global_local",
-        "custom_conversion_and_validation": true,
-        "aliases": [
-            "default_collation"
-        ]
-    },
-    {
-        "name": "custom_extension_repo",
+        "name": "custom_extension_repository",
         "description": "Overrides the custom endpoint for remote extension installation",
         "type": "string",
         "sql_type": "VARCHAR",
-        "scope": "global",
-        "aliases": [
-            "custom_extension_repository"
-        ]
+        "scope": "global"
     },
     {
         "name": "custom_profiling_settings",
@@ -194,6 +155,35 @@
         "custom_conversion_and_validation": true
     },
     {
+        "name": "debug_asof_iejoin",
+        "description": "DEBUG SETTING: force use of IEJoin to implement AsOf joins",
+        "type": "bool",
+        "sql_type": "BOOLEAN",
+        "scope": "local"
+    },
+    {
+        "name": "debug_checkpoint_abort",
+        "description": "DEBUG SETTING: trigger an abort while checkpointing for testing purposes",
+        "type": "CheckpointAbort",
+        "sql_type": "VARCHAR",
+        "scope": "global",
+        "custom_conversion_and_validation": true
+    },
+    {
+        "name": "debug_force_external",
+        "description": "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing",
+        "type": "bool",
+        "sql_type": "BOOLEAN",
+        "scope": "local"
+    },
+    {
+        "name": "debug_force_no_cross_product",
+        "description": "DEBUG SETTING: Force disable cross product generation when hyper graph isn't connected, used for testing",
+        "type": "bool",
+        "sql_type": "BOOLEAN",
+        "scope": "local"
+    },
+    {
         "name": "debug_skip_checkpoint_on_commit",
         "description": "DEBUG SETTING: skip checkpointing on commit",
         "type": "bool",
@@ -201,15 +191,28 @@
         "scope": "global"
     },
     {
-        "name": "default_block_alloc_size",
+        "name": "debug_window_mode",
+        "description": "DEBUG SETTING: switch window mode to use",
+        "type": "WindowAggregationMode",
+        "sql_type": "VARCHAR",
+        "scope": "global",
+        "custom_conversion_and_validation": true
+    },
+    {
+        "name": "default_block_size",
         "description": "The default block size for new duckdb database files (new as-in, they do not yet exist).",
-        "type": "idx_t",
+        "type": "uint64_t",
         "sql_type": "UBIGINT",
         "scope": "global",
-        "add_verification_in_SET": true,
-        "aliases": [
-            "default_block_size"
-        ]
+        "add_verification_in_SET": true
+    },
+    {
+        "name": "default_collation",
+        "description": "The collation setting used when none is specified",
+        "type": "string",
+        "sql_type": "VARCHAR",
+        "scope": "global_local",
+        "custom_conversion_and_validation": true
     },
     {
         "name": "default_null_order",
@@ -286,8 +289,22 @@
         "custom_conversion_and_validation": true
     },
     {
+        "name": "enable_http_metadata_cache",
+        "description": "Whether or not the global http metadata is used to cache HTTP metadata",
+        "type": "bool",
+        "sql_type": "BOOLEAN",
+        "scope": "global"
+    },
+    {
         "name": "enable_macro_dependencies",
         "description": "Enable created MACROs to create dependencies on the referenced objects (such as tables)",
+        "type": "bool",
+        "sql_type": "BOOLEAN",
+        "scope": "global"
+    },
+    {
+        "name": "enable_object_cache",
+        "description": "Whether or not object cache is used to cache e.g. Parquet metadata",
         "type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "global"
@@ -309,6 +326,14 @@
         "add_verification_in_both_SetReset": true
     },
     {
+        "name": "enable_progress_bar_print",
+        "description": "Controls the printing of the progress bar, when 'enable_progress_bar' is true",
+        "type": "bool",
+        "sql_type": "BOOLEAN",
+        "scope": "local",
+        "add_verification_in_both_SetReset": true
+    },
+    {
         "name": "enable_view_dependencies",
         "description": "Enable created VIEWs to create dependencies on the referenced objects (such as tables)",
         "type": "bool",
@@ -323,26 +348,20 @@
         "scope": "local"
     },
     {
-        "name": "explain_output_type",
+        "name": "explain_output",
         "description": "Output of EXPLAIN statements (ALL, OPTIMIZED_ONLY, PHYSICAL_ONLY)",
-        "type": "ExplainOutputType",
+        "type": "uint64_t",
         "sql_type": "VARCHAR",
         "scope": "local",
-        "custom_conversion_and_validation": true,
-        "aliases": [
-            "explain_output"
-        ]
+        "custom_conversion_and_validation": true
     },
     {
         "name": "extension_directory",
-        "description": "Set the directory to which to write temp files",
+        "description": "Set the directory to store extensions in",
         "type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true,
-        "aliases": [
-            "temp_directory"
-        ]
+        "custom_conversion_and_validation": true
     },
     {
         "name": "external_threads",
@@ -361,17 +380,6 @@
         "custom_conversion_and_validation": true
     },
     {
-        "name": "force_asof_iejoin",
-        "description": "DEBUG SETTING: force use of IEJoin to implement AsOf joins",
-        "type": "bool",
-        "sql_type": "BOOLEAN",
-        "scope": "local",
-        "aliases": [
-            "debug_asof_iejoin",
-            "debug_force_asof_iejoin"
-        ]
-    },
-    {
         "name": "force_bitpacking_mode",
         "description": "DEBUG SETTING: forces a specific bitpacking mode",
         "type": "BitpackingMode",
@@ -388,26 +396,6 @@
         "custom_conversion_and_validation": true
     },
     {
-        "name": "force_external",
-        "description": "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing",
-        "type": "bool",
-        "sql_type": "BOOLEAN",
-        "scope": "local",
-        "aliases": [
-            "debug_force_external"
-        ]
-    },
-    {
-        "name": "force_no_cross_product",
-        "description": "DEBUG SETTING: Force disable cross product generation when hyper graph isn't connected, used for testing",
-        "type": "bool",
-        "sql_type": "BOOLEAN",
-        "scope": "local",
-        "aliases": [
-            "debug_force_no_cross_product"
-        ]
-    },
-    {
         "name": "home_directory",
         "description": "Sets the home directory used by the system",
         "type": "string",
@@ -421,16 +409,6 @@
         "type": "string",
         "sql_type": "VARCHAR",
         "scope": "local"
-    },
-    {
-        "name": "http_metadata_cache_enable",
-        "description": "Whether or not the global http metadata is used to cache HTTP metadata",
-        "type": "bool",
-        "sql_type": "BOOLEAN",
-        "scope": "global",
-        "aliases": [
-            "enable_http_metadata_cache"
-        ]
     },
     {
         "name": "http_proxy",
@@ -470,7 +448,7 @@
     {
         "name": "index_scan_max_count",
         "description": "The maximum index scan count sets a threshold for index scans. If fewer than MAX(index_scan_max_count, \"\n\t    \"index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.",
-        "type": "idx_t",
+        "type": "uint64_t",
         "sql_type": "UBIGINT",
         "scope": "global"
     },
@@ -512,50 +490,30 @@
         "scope": "local"
     },
     {
-        "name": "max_vacuum_tasks",
-        "description": "The maximum vacuum tasks to schedule during a checkpoint.",
-        "type": "uint64_t",
-        "sql_type": "UBIGINT",
-        "scope": "global",
-        "aliases": [
-            "maximum_vacuum_tasks"
-        ]
-    },
-    {
-        "name": "maximum_memory",
+        "name": "max_memory",
         "description": "The maximum memory of the system (e.g. 1GB)",
         "type": "idx_t",
         "sql_type": "VARCHAR",
         "scope": "global",
         "custom_conversion_and_validation": true,
         "aliases": [
-            "memory_limit",
-            "max_memory"
+            "memory_limit"
         ]
     },
     {
-        "name": "maximum_swap_space",
+        "name": "max_temp_directory_size",
         "description": "The maximum amount of data stored inside the 'temp_directory' (when set) (e.g. 1GB)",
         "type": "idx_t",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true,
-        "aliases": [
-            "max_temp_directory_size",
-            "maximum_temp_directory_size"
-        ]
+        "custom_conversion_and_validation": true
     },
     {
-        "name": "maximum_threads",
-        "description": "The number of total threads used by the system.",
-        "type": "idx_t",
-        "sql_type": "BIGINT",
-        "scope": "global",
-        "custom_conversion_and_validation": true,
-        "aliases": [
-            "worker_threads",
-            "threads"
-        ]
+        "name": "max_vacuum_tasks",
+        "description": "The maximum vacuum tasks to schedule during a checkpoint.",
+        "type": "uint64_t",
+        "sql_type": "UBIGINT",
+        "scope": "global"
     },
     {
         "name": "merge_join_threshold",
@@ -570,16 +528,6 @@
         "type": "idx_t",
         "sql_type": "UBIGINT",
         "scope": "local"
-    },
-    {
-        "name": "object_cache_enable",
-        "description": "Whether or not object cache is used to cache e.g. Parquet metadata",
-        "type": "bool",
-        "sql_type": "BOOLEAN",
-        "scope": "global",
-        "aliases": [
-            "enable_object_cache"
-        ]
     },
     {
         "name": "old_implicit_casting",
@@ -597,8 +545,8 @@
     },
     {
         "name": "ordered_aggregate_threshold",
-        "description": null,
-        "type": "idx_t",
+        "description": "The number of rows to accumulate before sorting, used for tuning",
+        "type": "uint64_t",
         "sql_type": "UBIGINT",
         "scope": "local",
         "add_verification_in_SET": true
@@ -631,12 +579,12 @@
         "type": "idx_t",
         "sql_type": "BIGINT",
         "scope": "local",
-        "add_verification_in_SET": true
+        "custom_conversion_and_validation": true
     },
     {
         "name": "pivot_filter_threshold",
         "description": "The threshold to switch from using filtered aggregates to LIST with a dedicated pivot operator",
-        "type": "idx_t",
+        "type": "uint64_t",
         "sql_type": "BIGINT",
         "scope": "local",
         "custom_conversion_and_validation": true
@@ -644,9 +592,10 @@
     {
         "name": "pivot_limit",
         "description": "The maximum number of pivot columns in a pivot statement",
-        "type": "idx_t",
+        "type": "uint64_t",
         "sql_type": "BIGINT",
-        "scope": "local"
+        "scope": "local",
+        "custom_conversion_and_validation": true
     },
     {
         "name": "prefer_range_joins",
@@ -670,35 +619,20 @@
         "scope": "global"
     },
     {
-        "name": "print_progress_bar",
-        "description": "Controls the printing of the progress bar, when 'enable_progress_bar' is true",
-        "type": "bool",
-        "sql_type": "BOOLEAN",
-        "scope": "local",
-        "add_verification_in_both_SetReset": true,
-        "aliases": [
-            "enable_progress_bar_print"
-        ]
-    },
-    {
-        "name": "produce_arrow_string_views",
+        "name": "produce_arrow_string_view",
         "description": "If strings should be produced by DuckDB in Utf8View format instead of Utf8",
         "type": "bool",
         "sql_type": "BOOLEAN",
-        "scope": "global",
-        "aliases": [
-            "produce_arrow_string_view"
-        ]
+        "scope": "global"
     },
     {
-        "name": "profiler_save_location",
+        "name": "profile_output",
         "description": "The file to which profile output should be saved, or empty to print to the terminal",
         "type": "string",
         "sql_type": "VARCHAR",
         "scope": "local",
         "aliases": [
-            "profiling_output",
-            "profile_output"
+            "profiling_output"
         ]
     },
     {
@@ -712,7 +646,7 @@
     {
         "name": "progress_bar_time",
         "description": "Sets the time (in milliseconds) how long a query needs to take before we start printing a progress bar",
-        "type": "int",
+        "type": "int32_t",
         "sql_type": "BIGINT",
         "scope": "local",
         "custom_conversion_and_validation": true
@@ -727,7 +661,7 @@
     {
         "name": "schema",
         "description": "Sets the default search schema. Equivalent to setting search_path to a single value.",
-        "type": "idx_t",
+        "type": "string",
         "sql_type": "VARCHAR",
         "scope": "local",
         "custom_conversion_and_validation": true
@@ -749,15 +683,12 @@
         "custom_conversion_and_validation": true
     },
     {
-        "name": "serialization_compatibility",
+        "name": "storage_compatibility_version",
         "description": "Serialize on checkpoint with compatibility for a given duckdb version",
         "type": "SerializationCompatibility",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true,
-        "aliases": [
-            "storage_compatibility_version"
-        ]
+        "custom_conversion_and_validation": true
     },
     {
         "name": "streaming_buffer_size",
@@ -768,6 +699,25 @@
         "custom_conversion_and_validation": true
     },
     {
+        "name": "temp_directory",
+        "description": "Set the directory to which to write temp files",
+        "type": "string",
+        "sql_type": "VARCHAR",
+        "scope": "global",
+        "custom_conversion_and_validation": true
+    },
+    {
+        "name": "threads",
+        "description": "The number of total threads used by the system.",
+        "type": "idx_t",
+        "sql_type": "BIGINT",
+        "scope": "global",
+        "custom_conversion_and_validation": true,
+        "aliases": [
+            "worker_threads"
+        ]
+    },
+    {
         "name": "username",
         "description": "The username to use. Ignored for legacy compatibility.",
         "type": "string",
@@ -776,17 +726,6 @@
         "custom_conversion_and_validation": true,
         "aliases": [
             "user"
-        ]
-    },
-    {
-        "name": "window_mode",
-        "description": "DEBUG SETTING: switch window mode to use",
-        "type": "WindowAggregationMode",
-        "sql_type": "VARCHAR",
-        "scope": "global",
-        "custom_conversion_and_validation": true,
-        "aliases": [
-            "debug_window_mode"
         ]
     }
 ]

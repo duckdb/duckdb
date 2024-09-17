@@ -143,9 +143,9 @@ struct DBConfigOptions {
 	bool autoinstall_known_extensions = false;
 #endif
 	//! Override for the default extension repository
-	string custom_extension_repo = "";
+	string custom_extension_repository = "";
 	//! Override for the default autoload extension repository
-	string autoinstall_extension_repo = "";
+	string autoinstall_extension_repository = "";
 	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory
 	idx_t maximum_memory = DConstants::INVALID_INDEX;
 	//! The maximum size of the 'temp_directory' folder when set (in bytes). Default: 90% of available disk space.
@@ -175,9 +175,9 @@ struct DBConfigOptions {
 	//! enable COPY and related commands
 	bool enable_external_access = true;
 	//! Whether or not object cache is used
-	bool object_cache_enable = false;
+	bool enable_object_cache = false;
 	//! Whether or not the global http metadata cache is used
-	bool http_metadata_cache_enable = false;
+	bool enable_http_metadata_cache = false;
 	//! HTTP Proxy config as 'hostname:port'
 	string http_proxy;
 	//! HTTP Proxy username for basic auth
@@ -208,12 +208,12 @@ struct DBConfigOptions {
 	//! Whether Arrow Arrays use Large or Regular buffers
 	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
 	//! Whether LISTs should produce Arrow ListViews
-	bool arrow_use_list_view = false;
+	bool arrow_output_list_view = false;
 	//! Whenever a DuckDB type does not have a clear native or canonical extension match in Arrow, export the types
 	//! with a duckdb.type_name extension name
-	bool arrow_arrow_lossless_conversion = false;
+	bool arrow_lossless_conversion = false;
 	//! Whether when producing arrow objects we produce string_views or regular strings
-	bool produce_arrow_string_views = false;
+	bool produce_arrow_string_view = false;
 	//! Database configuration variables as controlled by SET
 	case_insensitive_map_t<Value> set_variables;
 	//! Database configuration variable default values;
@@ -257,7 +257,7 @@ struct DBConfigOptions {
 	//! Use old implicit casting style (i.e. allow everything to be implicitly casted to VARCHAR)
 	bool old_implicit_casting = false;
 	//! The default block allocation size for new duckdb database files (new as-in, they do not yet exist).
-	idx_t default_block_alloc_size = DUCKDB_BLOCK_ALLOC_SIZE;
+	idx_t default_block_size = DUCKDB_BLOCK_ALLOC_SIZE;
 	//!  Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL)
 	bool abort_on_wal_failure = false;
 	//! The index_scan_percentage sets a threshold for index scans.

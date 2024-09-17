@@ -11,7 +11,7 @@
 
 #include "duckdb/main/settings.hpp"
 
-// #include "duckdb/common/enums/access_mode.hpp"
+#include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -216,108 +216,38 @@ bool AllowUnsignedExtensionsSetting::VerifyDBInstanceRESET(DatabaseInstance *db,
 }
 
 //===----------------------------------------------------------------------===//
-// Arrow Offset Size
+// Arrow Large Buffer Size
 //===----------------------------------------------------------------------===//
-void ArrowOffsetSizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void ArrowLargeBufferSizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto export_large_buffers_arrow = input.GetValue<bool>();
 	config.options.arrow_offset_size = export_large_buffers_arrow ? ArrowOffsetSize::LARGE : ArrowOffsetSize::REGULAR;
 }
 
-void ArrowOffsetSizeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+void ArrowLargeBufferSizeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.arrow_offset_size = DBConfig().options.arrow_offset_size;
 }
 
-Value ArrowOffsetSizeSetting::GetSetting(const ClientContext &context) {
+Value ArrowLargeBufferSizeSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	bool export_large_buffers_arrow = config.options.arrow_offset_size == ArrowOffsetSize::LARGE;
 	return Value::BOOLEAN(export_large_buffers_arrow);
 }
 
 //===----------------------------------------------------------------------===//
-// Checkpoint Abort
+// Checkpoint Threshold
 //===----------------------------------------------------------------------===//
-void CheckpointAbortSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto checkpoint_abort = StringUtil::Lower(input.ToString());
-	if (checkpoint_abort == "none") {
-		config.options.checkpoint_abort = CheckpointAbort::NO_ABORT;
-	} else if (checkpoint_abort == "before_truncate") {
-		config.options.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE;
-	} else if (checkpoint_abort == "before_header") {
-		config.options.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER;
-	} else if (checkpoint_abort == "after_free_list_write") {
-		config.options.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE;
-	} else {
-		throw ParserException(
-		    "Unrecognized option for PRAGMA debug_checkpoint_abort, expected none, before_truncate or before_header");
-	}
-}
-
-void CheckpointAbortSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.checkpoint_abort = DBConfig().options.checkpoint_abort;
-}
-
-Value CheckpointAbortSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(*context.db);
-	auto setting = config.options.checkpoint_abort;
-	switch (setting) {
-	case CheckpointAbort::NO_ABORT:
-		return "none";
-	case CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE:
-		return "before_truncate";
-	case CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER:
-		return "before_header";
-	case CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE:
-		return "after_free_list_write";
-	default:
-		throw InternalException("Type not implemented for CheckpointAbort");
-	}
-}
-
-//===----------------------------------------------------------------------===//
-// Checkpoint Wal Size
-//===----------------------------------------------------------------------===//
-void CheckpointWalSizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void CheckpointThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	idx_t new_limit = DBConfig::ParseMemoryLimit(input.ToString());
 	config.options.checkpoint_wal_size = new_limit;
 }
 
-void CheckpointWalSizeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+void CheckpointThresholdSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.checkpoint_wal_size = DBConfig().options.checkpoint_wal_size;
 }
 
-Value CheckpointWalSizeSetting::GetSetting(const ClientContext &context) {
+Value CheckpointThresholdSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value(StringUtil::BytesToHumanReadableString(config.options.checkpoint_wal_size));
-}
-
-//===----------------------------------------------------------------------===//
-// Collation
-//===----------------------------------------------------------------------===//
-void CollationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto parameter = StringUtil::Lower(input.ToString());
-	config.options.collation = parameter;
-}
-
-void CollationSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.collation = DBConfig().options.collation;
-}
-
-void CollationSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto parameter = input.ToString();
-	// bind the collation to verify that it exists
-	ExpressionBinder::TestCollation(context, parameter);
-	auto &config = DBConfig::GetConfig(context);
-	config.options.collation = parameter;
-}
-
-void CollationSetting::ResetLocal(ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	config.options.collation = DBConfig().options.collation;
-}
-
-Value CollationSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.collation);
 }
 
 //===----------------------------------------------------------------------===//
@@ -437,11 +367,105 @@ Value CustomUserAgentSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Default Block Alloc Size
+// Debug Checkpoint Abort
 //===----------------------------------------------------------------------===//
-bool DefaultBlockAllocSizeSetting::VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void DebugCheckpointAbortSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto checkpoint_abort = StringUtil::Lower(input.ToString());
+	if (checkpoint_abort == "none") {
+		config.options.checkpoint_abort = CheckpointAbort::NO_ABORT;
+	} else if (checkpoint_abort == "before_truncate") {
+		config.options.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE;
+	} else if (checkpoint_abort == "before_header") {
+		config.options.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER;
+	} else if (checkpoint_abort == "after_free_list_write") {
+		config.options.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE;
+	} else {
+		throw ParserException(
+		    "Unrecognized option for PRAGMA debug_checkpoint_abort, expected none, before_truncate or before_header");
+	}
+}
+
+void DebugCheckpointAbortSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.checkpoint_abort = DBConfig().options.checkpoint_abort;
+}
+
+Value DebugCheckpointAbortSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(*context.db);
+	auto setting = config.options.checkpoint_abort;
+	switch (setting) {
+	case CheckpointAbort::NO_ABORT:
+		return "none";
+	case CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE:
+		return "before_truncate";
+	case CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER:
+		return "before_header";
+	case CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE:
+		return "after_free_list_write";
+	default:
+		throw InternalException("Type not implemented for CheckpointAbort");
+	}
+}
+
+//===----------------------------------------------------------------------===//
+// Debug Window Mode
+//===----------------------------------------------------------------------===//
+void DebugWindowModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto param = StringUtil::Lower(input.ToString());
+	if (param == "window") {
+		config.options.window_mode = WindowAggregationMode::WINDOW;
+	} else if (param == "combine") {
+		config.options.window_mode = WindowAggregationMode::COMBINE;
+	} else if (param == "separate") {
+		config.options.window_mode = WindowAggregationMode::SEPARATE;
+	} else {
+		throw ParserException("Unrecognized option for PRAGMA debug_window_mode, expected window, combine or separate");
+	}
+}
+
+void DebugWindowModeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.window_mode = DBConfig().options.window_mode;
+}
+
+Value DebugWindowModeSetting::GetSetting(const ClientContext &context) {
+	return Value();
+}
+
+//===----------------------------------------------------------------------===//
+// Default Block Size
+//===----------------------------------------------------------------------===//
+bool DefaultBlockSizeSetting::VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	Storage::VerifyBlockAllocSize(input.GetValue<uint64_t>());
 	return true;
+}
+
+//===----------------------------------------------------------------------===//
+// Default Collation
+//===----------------------------------------------------------------------===//
+void DefaultCollationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto parameter = StringUtil::Lower(input.ToString());
+	config.options.collation = parameter;
+}
+
+void DefaultCollationSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.collation = DBConfig().options.collation;
+}
+
+void DefaultCollationSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto parameter = input.ToString();
+	// bind the collation to verify that it exists
+	ExpressionBinder::TestCollation(context, parameter);
+	auto &config = DBConfig::GetConfig(context);
+	config.options.collation = parameter;
+}
+
+void DefaultCollationSetting::ResetLocal(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	config.options.collation = DBConfig().options.collation;
+}
+
+Value DefaultCollationSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.collation);
 }
 
 //===----------------------------------------------------------------------===//
@@ -712,6 +736,21 @@ Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Enable Progress Bar Print
+//===----------------------------------------------------------------------===//
+bool EnableProgressBarPrintSetting::VerifyDBInstanceSET(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	ProgressBar::SystemOverrideCheck(config);
+	return true;
+}
+
+bool EnableProgressBarPrintSetting::VerifyDBInstanceRESET(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	ProgressBar::SystemOverrideCheck(config);
+	return true;
+}
+
+//===----------------------------------------------------------------------===//
 // Enable Progress Bar
 //===----------------------------------------------------------------------===//
 bool EnableProgressBarSetting::VerifyDBInstanceSET(ClientContext &context, const Value &input) {
@@ -727,9 +766,9 @@ bool EnableProgressBarSetting::VerifyDBInstanceRESET(ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Explain Output Type
+// Explain Output
 //===----------------------------------------------------------------------===//
-void ExplainOutputTypeSetting::SetLocal(ClientContext &context, const Value &input) {
+void ExplainOutputSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto parameter = StringUtil::Lower(input.ToString());
 	if (parameter == "all") {
 		ClientConfig::GetConfig(context).explain_output_type = ExplainOutputType::ALL;
@@ -743,11 +782,11 @@ void ExplainOutputTypeSetting::SetLocal(ClientContext &context, const Value &inp
 	}
 }
 
-void ExplainOutputTypeSetting::ResetLocal(ClientContext &context) {
+void ExplainOutputSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).explain_output_type = ClientConfig().explain_output_type;
 }
 
-Value ExplainOutputTypeSetting::GetSetting(const ClientContext &context) {
+Value ExplainOutputSetting::GetSetting(const ClientContext &context) {
 	switch (ClientConfig::GetConfig(context).explain_output_type) {
 	case ExplainOutputType::ALL:
 		return "all";
@@ -926,28 +965,28 @@ Value LogQueryPathSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Maximum Memory
+// Max Memory
 //===----------------------------------------------------------------------===//
-void MaximumMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void MaxMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.maximum_memory = DBConfig::ParseMemoryLimit(input.ToString());
 	if (db) {
 		BufferManager::GetBufferManager(*db).SetMemoryLimit(config.options.maximum_memory);
 	}
 }
 
-void MaximumMemorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+void MaxMemorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.SetDefaultMaxMemory();
 }
 
-Value MaximumMemorySetting::GetSetting(const ClientContext &context) {
+Value MaxMemorySetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value(StringUtil::BytesToHumanReadableString(config.options.maximum_memory));
 }
 
 //===----------------------------------------------------------------------===//
-// Maximum Swap Space
+// Max Temp Directory Size
 //===----------------------------------------------------------------------===//
-void MaximumSwapSpaceSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void MaxTempDirectorySizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto maximum_swap_space = DBConfig::ParseMemoryLimit(input.ToString());
 	if (maximum_swap_space == DConstants::INVALID_INDEX) {
 		// We use INVALID_INDEX to indicate that the value is not set by the user
@@ -963,7 +1002,7 @@ void MaximumSwapSpaceSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, 
 	config.options.maximum_swap_space = maximum_swap_space;
 }
 
-void MaximumSwapSpaceSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+void MaxTempDirectorySizeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.maximum_swap_space = DConstants::INVALID_INDEX;
 	if (!db) {
 		return;
@@ -972,7 +1011,7 @@ void MaximumSwapSpaceSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config
 	buffer_manager.SetSwapLimit();
 }
 
-Value MaximumSwapSpaceSetting::GetSetting(const ClientContext &context) {
+Value MaxTempDirectorySizeSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	if (config.options.maximum_swap_space != DConstants::INVALID_INDEX) {
 		// Explicitly set by the user
@@ -987,34 +1026,6 @@ Value MaximumSwapSpaceSetting::GetSetting(const ClientContext &context) {
 		// The temp directory has not been used yet
 		return Value(StringUtil::BytesToHumanReadableString(0));
 	}
-}
-
-//===----------------------------------------------------------------------===//
-// Maximum Threads
-//===----------------------------------------------------------------------===//
-void MaximumThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto new_val = input.GetValue<int64_t>();
-	if (new_val < 1) {
-		throw SyntaxException("Must have at least 1 thread!");
-	}
-	auto new_maximum_threads = NumericCast<idx_t>(new_val);
-	if (db) {
-		TaskScheduler::GetScheduler(*db).SetThreads(new_maximum_threads, config.options.external_threads);
-	}
-	config.options.maximum_threads = new_maximum_threads;
-}
-
-void MaximumThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	idx_t new_maximum_threads = config.GetSystemMaxThreads(*config.file_system);
-	if (db) {
-		TaskScheduler::GetScheduler(*db).SetThreads(new_maximum_threads, config.options.external_threads);
-	}
-	config.options.maximum_threads = new_maximum_threads;
-}
-
-Value MaximumThreadsSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BIGINT(NumericCast<int64_t>(config.options.maximum_threads));
 }
 
 //===----------------------------------------------------------------------===//
@@ -1046,12 +1057,20 @@ Value PasswordSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Perfect Ht Threshold
 //===----------------------------------------------------------------------===//
-bool PerfectHtThresholdSetting::VerifyDBInstanceSET(ClientContext &context, const Value &input) {
+void PerfectHtThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto bits = input.GetValue<int64_t>();
 	if (bits < 0 || bits > 32) {
 		throw ParserException("Perfect HT threshold out of range: should be within range 0 - 32");
 	}
-	return true;
+	ClientConfig::GetConfig(context).perfect_ht_threshold = NumericCast<idx_t>(bits);
+}
+
+void PerfectHtThresholdSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).perfect_ht_threshold = ClientConfig().perfect_ht_threshold;
+}
+
+Value PerfectHtThresholdSetting::GetSetting(const ClientContext &context) {
+	return Value::BIGINT(NumericCast<int64_t>(ClientConfig::GetConfig(context).perfect_ht_threshold));
 }
 
 //===----------------------------------------------------------------------===//
@@ -1070,18 +1089,18 @@ Value PivotFilterThresholdSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Print Progress Bar
+// Pivot Limit
 //===----------------------------------------------------------------------===//
-bool PrintProgressBarSetting::VerifyDBInstanceSET(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	ProgressBar::SystemOverrideCheck(config);
-	return true;
+void PivotLimitSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).pivot_limit = input.GetValue<uint64_t>();
 }
 
-bool PrintProgressBarSetting::VerifyDBInstanceRESET(ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	ProgressBar::SystemOverrideCheck(config);
-	return true;
+void PivotLimitSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).pivot_limit = ClientConfig().pivot_limit;
+}
+
+Value PivotLimitSetting::GetSetting(const ClientContext &context) {
+	return Value::BIGINT(NumericCast<int64_t>(ClientConfig::GetConfig(context).pivot_limit));
 }
 
 //===----------------------------------------------------------------------===//
@@ -1207,19 +1226,19 @@ Value SecretDirectorySetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Serialization Compatibility
+// Storage Compatibility Version
 //===----------------------------------------------------------------------===//
-void SerializationCompatibilitySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void StorageCompatibilityVersionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto version_string = input.GetValue<string>();
 	auto serialization_compatibility = SerializationCompatibility::FromString(version_string);
 	config.options.serialization_compatibility = serialization_compatibility;
 }
 
-void SerializationCompatibilitySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+void StorageCompatibilityVersionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.serialization_compatibility = DBConfig().options.serialization_compatibility;
 }
 
-Value SerializationCompatibilitySetting::GetSetting(const ClientContext &context) {
+Value StorageCompatibilityVersionSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 
 	auto &version_name = config.options.serialization_compatibility.duckdb_version;
@@ -1245,6 +1264,60 @@ Value StreamingBufferSizeSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Temp Directory
+//===----------------------------------------------------------------------===//
+void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.temporary_directory = input.ToString();
+	config.options.use_temporary_directory = !config.options.temporary_directory.empty();
+	if (db) {
+		auto &buffer_manager = BufferManager::GetBufferManager(*db);
+		buffer_manager.SetTemporaryDirectory(config.options.temporary_directory);
+	}
+}
+
+void TempDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.SetDefaultTempDirectory();
+	config.options.use_temporary_directory = DBConfig().options.use_temporary_directory;
+	if (db) {
+		auto &buffer_manager = BufferManager::GetBufferManager(*db);
+		buffer_manager.SetTemporaryDirectory(config.options.temporary_directory);
+	}
+}
+
+Value TempDirectorySetting::GetSetting(const ClientContext &context) {
+	auto &buffer_manager = BufferManager::GetBufferManager(context);
+	return Value(buffer_manager.GetTemporaryDirectory());
+}
+
+//===----------------------------------------------------------------------===//
+// Threads
+//===----------------------------------------------------------------------===//
+void ThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto new_val = input.GetValue<int64_t>();
+	if (new_val < 1) {
+		throw SyntaxException("Must have at least 1 thread!");
+	}
+	auto new_maximum_threads = NumericCast<idx_t>(new_val);
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetThreads(new_maximum_threads, config.options.external_threads);
+	}
+	config.options.maximum_threads = new_maximum_threads;
+}
+
+void ThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	idx_t new_maximum_threads = config.GetSystemMaxThreads(*config.file_system);
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetThreads(new_maximum_threads, config.options.external_threads);
+	}
+	config.options.maximum_threads = new_maximum_threads;
+}
+
+Value ThreadsSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BIGINT(NumericCast<int64_t>(config.options.maximum_threads));
+}
+
+//===----------------------------------------------------------------------===//
 // Username
 //===----------------------------------------------------------------------===//
 void UsernameSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -1256,30 +1329,6 @@ void UsernameSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 }
 
 Value UsernameSetting::GetSetting(const ClientContext &context) {
-	return Value();
-}
-
-//===----------------------------------------------------------------------===//
-// Window Mode
-//===----------------------------------------------------------------------===//
-void WindowModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto param = StringUtil::Lower(input.ToString());
-	if (param == "window") {
-		config.options.window_mode = WindowAggregationMode::WINDOW;
-	} else if (param == "combine") {
-		config.options.window_mode = WindowAggregationMode::COMBINE;
-	} else if (param == "separate") {
-		config.options.window_mode = WindowAggregationMode::SEPARATE;
-	} else {
-		throw ParserException("Unrecognized option for PRAGMA debug_window_mode, expected window, combine or separate");
-	}
-}
-
-void WindowModeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.window_mode = DBConfig().options.window_mode;
-}
-
-Value WindowModeSetting::GetSetting(const ClientContext &context) {
 	return Value();
 }
 

@@ -128,7 +128,7 @@ private:
 	//! The metadata manager
 	unique_ptr<MetadataManager> metadata_manager;
 	//! The allocation size of blocks managed by this block manager. Defaults to DEFAULT_BLOCK_ALLOC_SIZE
-	//! for in-memory block managers. Default to default_block_alloc_size for file-backed block managers.
+	//! for in-memory block managers. Default to default_block_size for file-backed block managers.
 	//! This is NOT the actual memory available on a block (block_size).
 	optional_idx block_alloc_size;
 };

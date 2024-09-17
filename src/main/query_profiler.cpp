@@ -57,7 +57,7 @@ bool QueryProfiler::PrintOptimizerOutput() const {
 }
 
 string QueryProfiler::GetSaveLocation() const {
-	return is_explain_analyze ? string() : ClientConfig::GetConfig(context).profiler_save_location;
+	return is_explain_analyze ? string() : ClientConfig::GetConfig(context).profile_output;
 }
 
 QueryProfiler &QueryProfiler::Get(ClientContext &context) {

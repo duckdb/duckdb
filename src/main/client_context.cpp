@@ -488,7 +488,7 @@ ClientContext::PendingPreparedStatementInternal(ClientContextLock &lock, shared_
 	auto &executor = *active_query->executor;
 	if (config.enable_progress_bar) {
 		progress_bar_display_create_func_t display_create_func = nullptr;
-		if (config.print_progress_bar) {
+		if (config.enable_progress_bar_print) {
 			// If a custom display is set, use that, otherwise just use the default
 			display_create_func =
 			    config.display_create_func ? config.display_create_func : ProgressBar::DefaultProgressBarDisplay;
@@ -1297,8 +1297,8 @@ ClientProperties ClientContext::GetClientProperties() const {
 	if (TryGetCurrentSetting("TimeZone", result)) {
 		timezone = result.ToString();
 	}
-	return {timezone, db->config.options.arrow_offset_size, db->config.options.arrow_use_list_view,
-	        db->config.options.produce_arrow_string_views, db->config.options.arrow_arrow_lossless_conversion};
+	return {timezone, db->config.options.arrow_offset_size, db->config.options.arrow_output_list_view,
+	        db->config.options.produce_arrow_string_view, db->config.options.arrow_lossless_conversion};
 }
 
 bool ClientContext::ExecutionIsFinished() {

@@ -9,23 +9,6 @@
 
 #include "duckdb/main/settings.hpp"
 
-#include "duckdb/common/enums/access_mode.hpp"
-#include "duckdb/catalog/catalog_search_path.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/main/attached_database.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/main/client_data.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/main/database.hpp"
-#include "duckdb/main/database_manager.hpp"
-#include "duckdb/main/query_profiler.hpp"
-#include "duckdb/main/secret/secret_manager.hpp"
-#include "duckdb/parallel/task_scheduler.hpp"
-#include "duckdb/parser/parser.hpp"
-#include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/storage_manager.hpp"
-
 namespace duckdb {
 
 //===----------------------------------------------------------------------===//
@@ -133,51 +116,51 @@ Value AllowUnsignedExtensionsSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Arrow Arrow Lossless Conversion
+// Arrow Lossless Conversion
 //===----------------------------------------------------------------------===//
-void ArrowArrowLosslessConversionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.arrow_arrow_lossless_conversion = input.GetValue<bool>();
+void ArrowLosslessConversionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.arrow_lossless_conversion = input.GetValue<bool>();
 }
 
-void ArrowArrowLosslessConversionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.arrow_arrow_lossless_conversion = DBConfig().options.arrow_arrow_lossless_conversion;
+void ArrowLosslessConversionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.arrow_lossless_conversion = DBConfig().options.arrow_lossless_conversion;
 }
 
-Value ArrowArrowLosslessConversionSetting::GetSetting(const ClientContext &context) {
+Value ArrowLosslessConversionSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value::CreateValue(config.options.arrow_arrow_lossless_conversion);
+	return Value::CreateValue(config.options.arrow_lossless_conversion);
 }
 
 //===----------------------------------------------------------------------===//
-// Arrow Use List View
+// Arrow Output List View
 //===----------------------------------------------------------------------===//
-void ArrowUseListViewSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.arrow_use_list_view = input.GetValue<bool>();
+void ArrowOutputListViewSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.arrow_output_list_view = input.GetValue<bool>();
 }
 
-void ArrowUseListViewSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.arrow_use_list_view = DBConfig().options.arrow_use_list_view;
+void ArrowOutputListViewSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.arrow_output_list_view = DBConfig().options.arrow_output_list_view;
 }
 
-Value ArrowUseListViewSetting::GetSetting(const ClientContext &context) {
+Value ArrowOutputListViewSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value::CreateValue(config.options.arrow_use_list_view);
+	return Value::CreateValue(config.options.arrow_output_list_view);
 }
 
 //===----------------------------------------------------------------------===//
-// Autoinstall Extension Repo
+// Autoinstall Extension Repository
 //===----------------------------------------------------------------------===//
-void AutoinstallExtensionRepoSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.autoinstall_extension_repo = input.GetValue<string>();
+void AutoinstallExtensionRepositorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.autoinstall_extension_repository = input.GetValue<string>();
 }
 
-void AutoinstallExtensionRepoSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.autoinstall_extension_repo = DBConfig().options.autoinstall_extension_repo;
+void AutoinstallExtensionRepositorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.autoinstall_extension_repository = DBConfig().options.autoinstall_extension_repository;
 }
 
-Value AutoinstallExtensionRepoSetting::GetSetting(const ClientContext &context) {
+Value AutoinstallExtensionRepositorySetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value::CreateValue(config.options.autoinstall_extension_repo);
+	return Value::CreateValue(config.options.autoinstall_extension_repository);
 }
 
 //===----------------------------------------------------------------------===//
@@ -216,7 +199,7 @@ Value AutoloadKnownExtensionsSetting::GetSetting(const ClientContext &context) {
 // Catalog Error Max Schemas
 //===----------------------------------------------------------------------===//
 void CatalogErrorMaxSchemasSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.catalog_error_max_schemas = input.GetValue<idx_t>();
+	config.options.catalog_error_max_schemas = input.GetValue<uint64_t>();
 }
 
 void CatalogErrorMaxSchemasSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
@@ -229,19 +212,67 @@ Value CatalogErrorMaxSchemasSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Custom Extension Repo
+// Custom Extension Repository
 //===----------------------------------------------------------------------===//
-void CustomExtensionRepoSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.custom_extension_repo = input.GetValue<string>();
+void CustomExtensionRepositorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.custom_extension_repository = input.GetValue<string>();
 }
 
-void CustomExtensionRepoSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.custom_extension_repo = DBConfig().options.custom_extension_repo;
+void CustomExtensionRepositorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.custom_extension_repository = DBConfig().options.custom_extension_repository;
 }
 
-Value CustomExtensionRepoSetting::GetSetting(const ClientContext &context) {
+Value CustomExtensionRepositorySetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value::CreateValue(config.options.custom_extension_repo);
+	return Value::CreateValue(config.options.custom_extension_repository);
+}
+
+//===----------------------------------------------------------------------===//
+// Debug Asof Iejoin
+//===----------------------------------------------------------------------===//
+void DebugAsofIejoinSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.debug_asof_iejoin = input.GetValue<bool>();
+}
+
+void DebugAsofIejoinSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).debug_asof_iejoin = ClientConfig().debug_asof_iejoin;
+}
+
+Value DebugAsofIejoinSetting::GetSetting(const ClientContext &context) {
+	return Value::CreateValue(ClientConfig::GetConfig(context).debug_asof_iejoin);
+}
+
+//===----------------------------------------------------------------------===//
+// Debug Force External
+//===----------------------------------------------------------------------===//
+void DebugForceExternalSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.debug_force_external = input.GetValue<bool>();
+}
+
+void DebugForceExternalSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).debug_force_external = ClientConfig().debug_force_external;
+}
+
+Value DebugForceExternalSetting::GetSetting(const ClientContext &context) {
+	return Value::CreateValue(ClientConfig::GetConfig(context).debug_force_external);
+}
+
+//===----------------------------------------------------------------------===//
+// Debug Force No Cross Product
+//===----------------------------------------------------------------------===//
+void DebugForceNoCrossProductSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.debug_force_no_cross_product = input.GetValue<bool>();
+}
+
+void DebugForceNoCrossProductSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).debug_force_no_cross_product = ClientConfig().debug_force_no_cross_product;
+}
+
+Value DebugForceNoCrossProductSetting::GetSetting(const ClientContext &context) {
+	return Value::CreateValue(ClientConfig::GetConfig(context).debug_force_no_cross_product);
 }
 
 //===----------------------------------------------------------------------===//
@@ -261,22 +292,22 @@ Value DebugSkipCheckpointOnCommitSetting::GetSetting(const ClientContext &contex
 }
 
 //===----------------------------------------------------------------------===//
-// Default Block Alloc Size
+// Default Block Size
 //===----------------------------------------------------------------------===//
-void DefaultBlockAllocSizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!DefaultBlockAllocSizeSetting::VerifyDBInstanceSET(db, config, input)) {
+void DefaultBlockSizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (!DefaultBlockSizeSetting::VerifyDBInstanceSET(db, config, input)) {
 		return;
 	}
-	config.options.default_block_alloc_size = input.GetValue<idx_t>();
+	config.options.default_block_size = input.GetValue<uint64_t>();
 }
 
-void DefaultBlockAllocSizeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.default_block_alloc_size = DBConfig().options.default_block_alloc_size;
+void DefaultBlockSizeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.default_block_size = DBConfig().options.default_block_size;
 }
 
-Value DefaultBlockAllocSizeSetting::GetSetting(const ClientContext &context) {
+Value DefaultBlockSizeSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value::CreateValue(config.options.default_block_alloc_size);
+	return Value::CreateValue(config.options.default_block_size);
 }
 
 //===----------------------------------------------------------------------===//
@@ -318,6 +349,22 @@ Value EnableFsstVectorsSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Enable Http Metadata Cache
+//===----------------------------------------------------------------------===//
+void EnableHttpMetadataCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.enable_http_metadata_cache = input.GetValue<bool>();
+}
+
+void EnableHttpMetadataCacheSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.enable_http_metadata_cache = DBConfig().options.enable_http_metadata_cache;
+}
+
+Value EnableHttpMetadataCacheSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::CreateValue(config.options.enable_http_metadata_cache);
+}
+
+//===----------------------------------------------------------------------===//
 // Enable Macro Dependencies
 //===----------------------------------------------------------------------===//
 void EnableMacroDependenciesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -331,6 +378,22 @@ void EnableMacroDependenciesSetting::ResetGlobal(DatabaseInstance *db, DBConfig 
 Value EnableMacroDependenciesSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::CreateValue(config.options.enable_macro_dependencies);
+}
+
+//===----------------------------------------------------------------------===//
+// Enable Object Cache
+//===----------------------------------------------------------------------===//
+void EnableObjectCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.enable_object_cache = input.GetValue<bool>();
+}
+
+void EnableObjectCacheSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.enable_object_cache = DBConfig().options.enable_object_cache;
+}
+
+Value EnableObjectCacheSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::CreateValue(config.options.enable_object_cache);
 }
 
 //===----------------------------------------------------------------------===//
@@ -353,6 +416,28 @@ void EnableProgressBarSetting::ResetLocal(ClientContext &context) {
 
 Value EnableProgressBarSetting::GetSetting(const ClientContext &context) {
 	return Value::CreateValue(ClientConfig::GetConfig(context).enable_progress_bar);
+}
+
+//===----------------------------------------------------------------------===//
+// Enable Progress Bar Print
+//===----------------------------------------------------------------------===//
+void EnableProgressBarPrintSetting::SetLocal(ClientContext &context, const Value &input) {
+	if (!EnableProgressBarPrintSetting::VerifyDBInstanceSET(context, input)) {
+		return;
+	}
+	auto &config = ClientConfig::GetConfig(context);
+	config.enable_progress_bar_print = input.GetValue<bool>();
+}
+
+void EnableProgressBarPrintSetting::ResetLocal(ClientContext &context) {
+	if (!EnableProgressBarPrintSetting::VerifyDBInstanceRESET(context)) {
+		return;
+	}
+	ClientConfig::GetConfig(context).enable_progress_bar_print = ClientConfig().enable_progress_bar_print;
+}
+
+Value EnableProgressBarPrintSetting::GetSetting(const ClientContext &context) {
+	return Value::CreateValue(ClientConfig::GetConfig(context).enable_progress_bar_print);
 }
 
 //===----------------------------------------------------------------------===//
@@ -410,59 +495,11 @@ Value ExternalThreadsSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Force Asof Iejoin
-//===----------------------------------------------------------------------===//
-void ForceAsofIejoinSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.force_asof_iejoin = input.GetValue<bool>();
-}
-
-void ForceAsofIejoinSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).force_asof_iejoin = ClientConfig().force_asof_iejoin;
-}
-
-Value ForceAsofIejoinSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).force_asof_iejoin);
-}
-
-//===----------------------------------------------------------------------===//
-// Force External
-//===----------------------------------------------------------------------===//
-void ForceExternalSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.force_external = input.GetValue<bool>();
-}
-
-void ForceExternalSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).force_external = ClientConfig().force_external;
-}
-
-Value ForceExternalSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).force_external);
-}
-
-//===----------------------------------------------------------------------===//
-// Force No Cross Product
-//===----------------------------------------------------------------------===//
-void ForceNoCrossProductSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.force_no_cross_product = input.GetValue<bool>();
-}
-
-void ForceNoCrossProductSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).force_no_cross_product = ClientConfig().force_no_cross_product;
-}
-
-Value ForceNoCrossProductSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).force_no_cross_product);
-}
-
-//===----------------------------------------------------------------------===//
 // Http Logging Output
 //===----------------------------------------------------------------------===//
 void HttpLoggingOutputSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.http_logging_output = input.GetValue<bool>();
+	config.http_logging_output = input.GetValue<string>();
 }
 
 void HttpLoggingOutputSetting::ResetLocal(ClientContext &context) {
@@ -471,22 +508,6 @@ void HttpLoggingOutputSetting::ResetLocal(ClientContext &context) {
 
 Value HttpLoggingOutputSetting::GetSetting(const ClientContext &context) {
 	return Value::CreateValue(ClientConfig::GetConfig(context).http_logging_output);
-}
-
-//===----------------------------------------------------------------------===//
-// Http Metadata Cache Enable
-//===----------------------------------------------------------------------===//
-void HttpMetadataCacheEnableSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.http_metadata_cache_enable = input.GetValue<bool>();
-}
-
-void HttpMetadataCacheEnableSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.http_metadata_cache_enable = DBConfig().options.http_metadata_cache_enable;
-}
-
-Value HttpMetadataCacheEnableSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::CreateValue(config.options.http_metadata_cache_enable);
 }
 
 //===----------------------------------------------------------------------===//
@@ -573,7 +594,7 @@ Value ImmediateTransactionModeSetting::GetSetting(const ClientContext &context) 
 // Index Scan Max Count
 //===----------------------------------------------------------------------===//
 void IndexScanMaxCountSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.index_scan_max_count = input.GetValue<idx_t>();
+	config.options.index_scan_max_count = input.GetValue<uint64_t>();
 }
 
 void IndexScanMaxCountSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
@@ -641,7 +662,7 @@ Value LockConfigurationSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 void MaxExpressionDepthSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.max_expression_depth = input.GetValue<bool>();
+	config.max_expression_depth = input.GetValue<uint64_t>();
 }
 
 void MaxExpressionDepthSetting::ResetLocal(ClientContext &context) {
@@ -673,7 +694,7 @@ Value MaxVacuumTasksSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 void MergeJoinThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.merge_join_threshold = input.GetValue<bool>();
+	config.merge_join_threshold = input.GetValue<idx_t>();
 }
 
 void MergeJoinThresholdSetting::ResetLocal(ClientContext &context) {
@@ -689,7 +710,7 @@ Value MergeJoinThresholdSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 void NestedLoopJoinThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.nested_loop_join_threshold = input.GetValue<bool>();
+	config.nested_loop_join_threshold = input.GetValue<idx_t>();
 }
 
 void NestedLoopJoinThresholdSetting::ResetLocal(ClientContext &context) {
@@ -698,22 +719,6 @@ void NestedLoopJoinThresholdSetting::ResetLocal(ClientContext &context) {
 
 Value NestedLoopJoinThresholdSetting::GetSetting(const ClientContext &context) {
 	return Value::CreateValue(ClientConfig::GetConfig(context).nested_loop_join_threshold);
-}
-
-//===----------------------------------------------------------------------===//
-// Object Cache Enable
-//===----------------------------------------------------------------------===//
-void ObjectCacheEnableSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.object_cache_enable = input.GetValue<bool>();
-}
-
-void ObjectCacheEnableSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.object_cache_enable = DBConfig().options.object_cache_enable;
-}
-
-Value ObjectCacheEnableSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::CreateValue(config.options.object_cache_enable);
 }
 
 //===----------------------------------------------------------------------===//
@@ -756,7 +761,7 @@ void OrderedAggregateThresholdSetting::SetLocal(ClientContext &context, const Va
 		return;
 	}
 	auto &config = ClientConfig::GetConfig(context);
-	config.ordered_aggregate_threshold = input.GetValue<bool>();
+	config.ordered_aggregate_threshold = input.GetValue<uint64_t>();
 }
 
 void OrderedAggregateThresholdSetting::ResetLocal(ClientContext &context) {
@@ -772,11 +777,12 @@ Value OrderedAggregateThresholdSetting::GetSetting(const ClientContext &context)
 //===----------------------------------------------------------------------===//
 void PartitionedWriteFlushThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.partitioned_write_flush_threshold = input.GetValue<bool>();
+	config.partitioned_write_flush_threshold = input.GetValue<idx_t>();
 }
 
 void PartitionedWriteFlushThresholdSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).partitioned_write_flush_threshold = ClientConfig().partitioned_write_flush_threshold;
+	ClientConfig::GetConfig(context).partitioned_write_flush_threshold =
+	    ClientConfig().partitioned_write_flush_threshold;
 }
 
 Value PartitionedWriteFlushThresholdSetting::GetSetting(const ClientContext &context) {
@@ -788,7 +794,7 @@ Value PartitionedWriteFlushThresholdSetting::GetSetting(const ClientContext &con
 //===----------------------------------------------------------------------===//
 void PartitionedWriteMaxOpenFilesSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.partitioned_write_max_open_files = input.GetValue<bool>();
+	config.partitioned_write_max_open_files = input.GetValue<idx_t>();
 }
 
 void PartitionedWriteMaxOpenFilesSetting::ResetLocal(ClientContext &context) {
@@ -797,41 +803,6 @@ void PartitionedWriteMaxOpenFilesSetting::ResetLocal(ClientContext &context) {
 
 Value PartitionedWriteMaxOpenFilesSetting::GetSetting(const ClientContext &context) {
 	return Value::CreateValue(ClientConfig::GetConfig(context).partitioned_write_max_open_files);
-}
-
-//===----------------------------------------------------------------------===//
-// Perfect Ht Threshold
-//===----------------------------------------------------------------------===//
-void PerfectHtThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
-	if (!PerfectHtThresholdSetting::VerifyDBInstanceSET(context, input)) {
-		return;
-	}
-	auto &config = ClientConfig::GetConfig(context);
-	config.perfect_ht_threshold = input.GetValue<bool>();
-}
-
-void PerfectHtThresholdSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).perfect_ht_threshold = ClientConfig().perfect_ht_threshold;
-}
-
-Value PerfectHtThresholdSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).perfect_ht_threshold);
-}
-
-//===----------------------------------------------------------------------===//
-// Pivot Limit
-//===----------------------------------------------------------------------===//
-void PivotLimitSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.pivot_limit = input.GetValue<bool>();
-}
-
-void PivotLimitSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).pivot_limit = ClientConfig().pivot_limit;
-}
-
-Value PivotLimitSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).pivot_limit);
 }
 
 //===----------------------------------------------------------------------===//
@@ -883,57 +854,35 @@ Value PreserveInsertionOrderSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Print Progress Bar
+// Produce Arrow String View
 //===----------------------------------------------------------------------===//
-void PrintProgressBarSetting::SetLocal(ClientContext &context, const Value &input) {
-	if (!PrintProgressBarSetting::VerifyDBInstanceSET(context, input)) {
-		return;
-	}
-	auto &config = ClientConfig::GetConfig(context);
-	config.print_progress_bar = input.GetValue<bool>();
+void ProduceArrowStringViewSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.produce_arrow_string_view = input.GetValue<bool>();
 }
 
-void PrintProgressBarSetting::ResetLocal(ClientContext &context) {
-	if (!PrintProgressBarSetting::VerifyDBInstanceRESET(context)) {
-		return;
-	}
-	ClientConfig::GetConfig(context).print_progress_bar = ClientConfig().print_progress_bar;
+void ProduceArrowStringViewSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.produce_arrow_string_view = DBConfig().options.produce_arrow_string_view;
 }
 
-Value PrintProgressBarSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).print_progress_bar);
-}
-
-//===----------------------------------------------------------------------===//
-// Produce Arrow String Views
-//===----------------------------------------------------------------------===//
-void ProduceArrowStringViewsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.produce_arrow_string_views = input.GetValue<bool>();
-}
-
-void ProduceArrowStringViewsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.produce_arrow_string_views = DBConfig().options.produce_arrow_string_views;
-}
-
-Value ProduceArrowStringViewsSetting::GetSetting(const ClientContext &context) {
+Value ProduceArrowStringViewSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value::CreateValue(config.options.produce_arrow_string_views);
+	return Value::CreateValue(config.options.produce_arrow_string_view);
 }
 
 //===----------------------------------------------------------------------===//
-// Profiler Save Location
+// Profile Output
 //===----------------------------------------------------------------------===//
-void ProfilerSaveLocationSetting::SetLocal(ClientContext &context, const Value &input) {
+void ProfileOutputSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.profiler_save_location = input.GetValue<bool>();
+	config.profile_output = input.GetValue<string>();
 }
 
-void ProfilerSaveLocationSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).profiler_save_location = ClientConfig().profiler_save_location;
+void ProfileOutputSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).profile_output = ClientConfig().profile_output;
 }
 
-Value ProfilerSaveLocationSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).profiler_save_location);
+Value ProfileOutputSetting::GetSetting(const ClientContext &context) {
+	return Value::CreateValue(ClientConfig::GetConfig(context).profile_output);
 }
 
 //===----------------------------------------------------------------------===//
@@ -945,7 +894,8 @@ void ScalarSubqueryErrorOnMultipleRowsSetting::SetLocal(ClientContext &context, 
 }
 
 void ScalarSubqueryErrorOnMultipleRowsSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).scalar_subquery_error_on_multiple_rows = ClientConfig().scalar_subquery_error_on_multiple_rows;
+	ClientConfig::GetConfig(context).scalar_subquery_error_on_multiple_rows =
+	    ClientConfig().scalar_subquery_error_on_multiple_rows;
 }
 
 Value ScalarSubqueryErrorOnMultipleRowsSetting::GetSetting(const ClientContext &context) {

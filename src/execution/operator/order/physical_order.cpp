@@ -62,7 +62,7 @@ unique_ptr<GlobalSinkState> PhysicalOrder::GetGlobalSinkState(ClientContext &con
 	payload_layout.Initialize(types);
 	auto state = make_uniq<OrderGlobalSinkState>(BufferManager::GetBufferManager(context), *this, payload_layout);
 	// Set external (can be force with the PRAGMA)
-	state->global_sort_state.external = ClientConfig::GetConfig(context).force_external;
+	state->global_sort_state.external = ClientConfig::GetConfig(context).debug_force_external;
 	state->memory_per_thread = GetMaxThreadMemory(context);
 	return std::move(state);
 }

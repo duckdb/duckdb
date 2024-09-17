@@ -257,7 +257,7 @@ public:
 
 unique_ptr<OperatorState> PhysicalPiecewiseMergeJoin::GetOperatorState(ExecutionContext &context) const {
 	auto &config = ClientConfig::GetConfig(context.client);
-	return make_uniq<PiecewiseMergeJoinState>(context.client, *this, config.force_external);
+	return make_uniq<PiecewiseMergeJoinState>(context.client, *this, config.debug_force_external);
 }
 
 static inline idx_t SortedBlockNotNull(const idx_t base, const idx_t count, const idx_t not_null) {

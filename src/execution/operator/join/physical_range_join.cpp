@@ -66,7 +66,7 @@ PhysicalRangeJoin::GlobalSortedTable::GlobalSortedTable(ClientContext &context, 
 
 	// Set external (can be forced with the PRAGMA)
 	auto &config = ClientConfig::GetConfig(context);
-	global_sort_state.external = config.force_external;
+	global_sort_state.external = config.debug_force_external;
 	memory_per_thread = PhysicalRangeJoin::GetMaxThreadMemory(context);
 }
 

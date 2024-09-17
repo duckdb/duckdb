@@ -45,8 +45,8 @@ string ExtensionRepository::TryConvertUrlToKnownRepository(const string &url) {
 }
 
 ExtensionRepository ExtensionRepository::GetDefaultRepository(optional_ptr<DBConfig> config) {
-	if (config && !config->options.custom_extension_repo.empty()) {
-		return ExtensionRepository("", config->options.custom_extension_repo);
+	if (config && !config->options.custom_extension_repository.empty()) {
+		return ExtensionRepository("", config->options.custom_extension_repository);
 	}
 
 	return GetCoreRepository();

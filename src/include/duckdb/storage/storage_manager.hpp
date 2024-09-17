@@ -69,7 +69,7 @@ public:
 	static StorageManager &Get(Catalog &catalog);
 
 	//! Initialize a database or load an existing database from the database file path. The block_alloc_size is
-	//! either set, or invalid. If invalid, then DuckDB defaults to the default_block_alloc_size (DBConfig),
+	//! either set, or invalid. If invalid, then DuckDB defaults to the default_block_size (DBConfig),
 	//! or the file's block allocation size, if it is an existing database.
 	void Initialize(const optional_idx block_alloc_size);
 

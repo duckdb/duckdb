@@ -28,6 +28,18 @@ def is_namespace_end_pattern(line):
     return False
 
 
+def remove_prefix(text, prefix):
+    if text.startswith(prefix):
+        return text[len(prefix) :]
+    return text
+
+
+def remove_suffix(text, suffix):
+    if text.endswith(suffix):
+        return text[: -len(suffix)]
+    return text
+
+
 def find_existing_settings_dict(custom_settings_path):
     settings_dict = {}
     current_setting = None
@@ -39,7 +51,10 @@ def find_existing_settings_dict(custom_settings_path):
                     settings_dict[current_setting]['end_line'] = line_num - 1
 
                 # start a new setting
-                current_setting = lines[line_num + 1].removeprefix("//").removesuffix("\n").replace(' ', '') + "Setting"
+
+                current_setting = (
+                    remove_suffix(remove_prefix(lines[line_num + 1], "//"), "\n").replace(' ', '') + "Setting"
+                )
                 settings_dict[current_setting] = {'start_line': line_num, 'end_line': None}
 
             # check if the line indicates the end of the namespace

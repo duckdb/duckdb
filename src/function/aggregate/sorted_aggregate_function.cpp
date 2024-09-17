@@ -16,7 +16,7 @@ struct SortedAggregateBindData : public FunctionData {
 	SortedAggregateBindData(ClientContext &context, BoundAggregateExpression &expr)
 	    : buffer_manager(BufferManager::GetBufferManager(context)), function(expr.function),
 	      bind_info(std::move(expr.bind_info)), threshold(ClientConfig::GetConfig(context).ordered_aggregate_threshold),
-	      external(ClientConfig::GetConfig(context).force_external) {
+	      external(ClientConfig::GetConfig(context).debug_force_external) {
 		auto &children = expr.children;
 		arg_types.reserve(children.size());
 		arg_funcs.reserve(children.size());

@@ -123,7 +123,7 @@ void TemporaryMemoryManager::UpdateState(ClientContext &context, TemporaryMemory
 	if (temporary_memory_state.GetRemainingSize() == 0) {
 		// Sometimes set to 0 to denote end of state (before actually deleting the state)
 		SetReservation(temporary_memory_state, 0);
-	} else if (context.config.force_external) {
+	} else if (context.config.debug_force_external) {
 		// We're forcing external processing. Give it the minimum
 		SetReservation(temporary_memory_state, lower_bound);
 	} else if (!has_temporary_directory) {
