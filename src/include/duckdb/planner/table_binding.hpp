@@ -47,8 +47,7 @@ private:
 
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index.
 struct Binding {
-	Binding(BindingType binding_type, BindingAlias alias, vector<LogicalType> types, vector<string> names,
-	        idx_t index);
+	Binding(BindingType binding_type, BindingAlias alias, vector<LogicalType> types, vector<string> names, idx_t index);
 	virtual ~Binding() = default;
 
 	//! The type of Binding

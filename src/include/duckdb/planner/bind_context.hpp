@@ -34,6 +34,8 @@ struct UsingColumnSet {
 	unordered_set<string> bindings;
 };
 
+enum class ColumnBindType { EXPAND_GENERATED_COLUMNS, DO_NOT_EXPAND_GENERATED_COLUMNS };
+
 //! The BindContext object keeps track of all the tables and columns that are
 //! encountered during the binding process.
 class BindContext {
@@ -63,12 +65,19 @@ public:
 
 	unique_ptr<ParsedExpression> ExpandGeneratedColumn(const string &table_name, const string &column_name);
 
-	unique_ptr<ParsedExpression> CreateColumnReference(const string &table_name, const string &column_name);
-	unique_ptr<ParsedExpression> CreateColumnReference(const string &schema_name, const string &table_name,
-	                                                   const string &column_name);
-	unique_ptr<ParsedExpression> CreateColumnReference(const string &catalog_name, const string &schema_name,
-	                                                   const string &table_name, const string &column_name);
-	unique_ptr<ParsedExpression> CreateColumnReference(const BindingAlias &table_alias, const string &column_name);
+	unique_ptr<ParsedExpression>
+	CreateColumnReference(const string &table_name, const string &column_name,
+	                      ColumnBindType bind_type = ColumnBindType::EXPAND_GENERATED_COLUMNS);
+	unique_ptr<ParsedExpression>
+	CreateColumnReference(const string &schema_name, const string &table_name, const string &column_name,
+	                      ColumnBindType bind_type = ColumnBindType::EXPAND_GENERATED_COLUMNS);
+	unique_ptr<ParsedExpression>
+	CreateColumnReference(const string &catalog_name, const string &schema_name, const string &table_name,
+	                      const string &column_name,
+	                      ColumnBindType bind_type = ColumnBindType::EXPAND_GENERATED_COLUMNS);
+	unique_ptr<ParsedExpression>
+	CreateColumnReference(const BindingAlias &table_alias, const string &column_name,
+	                      ColumnBindType bind_type = ColumnBindType::EXPAND_GENERATED_COLUMNS);
 
 	//! Generate column expressions for all columns that are present in the
 	//! referenced tables. This is used to resolve the * expression in a
