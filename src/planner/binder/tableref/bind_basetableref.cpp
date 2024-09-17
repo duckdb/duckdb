@@ -309,7 +309,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			}
 		}
 		bind_context.AddView(bound_subquery.subquery->GetRootIndex(), subquery.alias, subquery,
-		                     *bound_subquery.subquery, &view_catalog_entry);
+		                     *bound_subquery.subquery, view_catalog_entry);
 		return bound_child;
 	}
 	default:

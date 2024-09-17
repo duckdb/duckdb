@@ -476,13 +476,13 @@ void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
 
 void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
                                const vector<LogicalType> &types, vector<column_t> &bound_column_ids,
-                               StandardEntry *entry, bool add_row_id) {
+                               optional_ptr<StandardEntry> entry, bool add_row_id) {
 	AddBinding(alias, make_uniq<TableBinding>(alias, types, names, bound_column_ids, entry, index, add_row_id));
 }
 
 void BindContext::AddTableFunction(idx_t index, const string &alias, const vector<string> &names,
                                    const vector<LogicalType> &types, vector<column_t> &bound_column_ids,
-                                   StandardEntry *entry) {
+                                   optional_ptr<StandardEntry> entry) {
 	AddBinding(alias, make_uniq<TableBinding>(alias, types, names, bound_column_ids, entry, index));
 }
 
@@ -526,9 +526,9 @@ void BindContext::AddEntryBinding(idx_t index, const string &alias, const vector
 }
 
 void BindContext::AddView(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery,
-                          ViewCatalogEntry *view) {
+                          ViewCatalogEntry &view) {
 	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
-	AddEntryBinding(index, alias, names, subquery.types, view->Cast<StandardEntry>());
+	AddEntryBinding(index, alias, names, subquery.types, view.Cast<StandardEntry>());
 }
 
 void BindContext::AddSubquery(idx_t index, const string &alias, TableFunctionRef &ref, BoundQueryNode &subquery) {
