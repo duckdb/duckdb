@@ -4,7 +4,6 @@ namespace duckdb {
 
 LogicalCrossProduct::LogicalCrossProduct(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right)
     : LogicalUnconditionalJoin(LogicalOperatorType::LOGICAL_CROSS_PRODUCT, std::move(left), std::move(right)) {
-	SetEstimatedCardinality(children[0]->estimated_cardinality * children[1]->estimated_cardinality);
 }
 
 unique_ptr<LogicalOperator> LogicalCrossProduct::Create(unique_ptr<LogicalOperator> left,

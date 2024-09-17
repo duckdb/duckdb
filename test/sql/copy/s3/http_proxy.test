@@ -64,6 +64,15 @@ FROM 's3://test-bucket/proxy-test/test.parquet'
 ----
 value-1
 
+# And try the working one with an 'http://' prefix.
+statement ok
+set http_proxy='http://${HTTP_PROXY_PUBLIC}'
+
+query I
+FROM 's3://test-bucket/proxy-test/test.parquet'
+----
+value-1
+
 # Now we revert to the failing one
 statement ok
 set http_proxy='blabla:1337'
