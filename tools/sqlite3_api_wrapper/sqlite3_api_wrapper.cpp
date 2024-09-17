@@ -1902,7 +1902,7 @@ SQLITE_API char *sqlite3_expanded_sql(sqlite3_stmt *pStmt) {
 }
 
 SQLITE_API int sqlite3_keyword_check(const char *str, int len) {
-	return Parser::IsKeyword(std::string(str, len));
+	return KeywordHelper::IsKeyword(std::string(str, len));
 }
 
 SQLITE_API int sqlite3_keyword_count(void) {

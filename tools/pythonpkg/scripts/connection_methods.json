@@ -1065,7 +1065,7 @@
 	{
 		"name": "install_extension",
 		"function": "InstallExtension",
-		"docs": "Install an extension by name",
+		"docs": "Install an extension by name, with an optional version and/or repository to get the extension from",
 		"args": [
 			{
 				"name": "extension",
@@ -1077,6 +1077,21 @@
 				"name": "force_install",
 				"default": "False",
 				"type": "bool"
+			},
+			{
+				"name": "repository",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "repository_url",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "version",
+				"default": "None",
+				"type": "Optional[str]"
 			}
 		],
 		"return": "None"
