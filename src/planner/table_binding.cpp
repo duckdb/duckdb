@@ -15,52 +15,6 @@
 
 namespace duckdb {
 
-BindingAlias::BindingAlias() {
-}
-
-BindingAlias::BindingAlias(string alias_p) : alias(std::move(alias_p)) {
-}
-
-BindingAlias::BindingAlias(string schema_p, string alias_p) :
-	schema(std::move(schema_p)), alias(std::move(alias_p)) {
-}
-
-BindingAlias::BindingAlias(string catalog_p, string schema_p, string alias_p) :
-	catalog(std::move(catalog_p)), schema(std::move(schema_p)), alias(std::move(alias_p)) {
-}
-
-bool BindingAlias::IsSet() const {
-	return !alias.empty();
-}
-
-const string &BindingAlias::GetAlias() const {
-	if (!IsSet()) {
-		throw InternalException("Calling BindingAlias::GetAlias on a non-set alias");
-	}
-	return alias;
-}
-
-bool BindingAlias::Matches(const BindingAlias &other) const {
-	// we match based on the specificity of the other entry
-	// i.e. "tbl" matches "catalog.schema.tbl"
-	// but "schema2.tbl" does not match "schema.tbl"
-	if (!other.catalog.empty()) {
-		if (!StringUtil::CIEquals(catalog, other.catalog)) {
-			return false;
-		}
-	}
-	if (!other.schema.empty()) {
-		if (!StringUtil::CIEquals(schema, other.schema)) {
-			return false;
-		}
-	}
-	return StringUtil::CIEquals(alias, other.alias);
-}
-
-bool BindingAlias::operator==(const BindingAlias &other) const {
-	return StringUtil::CIEquals(catalog, other.catalog) && StringUtil::CIEquals(schema, other.schema) && StringUtil::CIEquals(alias, other.alias);
-}
-
 Binding::Binding(BindingType binding_type, BindingAlias alias_p, vector<LogicalType> coltypes, vector<string> colnames,
                  idx_t index)
     : binding_type(binding_type), alias(std::move(alias_p)), index(index), types(std::move(coltypes)),
@@ -129,16 +83,12 @@ optional_ptr<StandardEntry> Binding::GetStandardEntry() {
 	return nullptr;
 }
 
-BindingAlias GenerateEntryAlias(const StandardEntry &entry) {
-	return BindingAlias(entry.ParentCatalog().GetName(), entry.schema.name, entry.name);
-}
-
 BindingAlias Binding::GetAlias(const string &explicit_alias, const StandardEntry &entry) {
 	if (!explicit_alias.empty()) {
 		return BindingAlias(explicit_alias);
 	}
 	// no explicit alias provided - generate from entry
-	return GenerateEntryAlias(entry);
+	return BindingAlias(entry);
 }
 
 BindingAlias Binding::GetAlias(const string &explicit_alias, optional_ptr<StandardEntry> entry) {
@@ -149,7 +99,7 @@ BindingAlias Binding::GetAlias(const string &explicit_alias, optional_ptr<Standa
 		throw InternalException("Binding::GetAlias called - but neither an alias nor an entry was provided");
 	}
 	// no explicit alias provided - generate from entry
-	return GenerateEntryAlias(*entry);
+	return BindingAlias(*entry);
 }
 
 EntryBinding::EntryBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p, idx_t index,

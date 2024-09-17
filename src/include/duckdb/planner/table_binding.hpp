@@ -14,6 +14,7 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
+#include "duckdb/planner/binding_alias.hpp"
 
 namespace duckdb {
 class BindContext;
@@ -28,31 +29,6 @@ class StandardEntry;
 struct ColumnBinding;
 
 enum class BindingType { BASE, TABLE, DUMMY, CATALOG_ENTRY };
-
-struct BindingAlias {
-	BindingAlias();
-	explicit BindingAlias(string alias);
-	BindingAlias(string schema, string alias);
-	BindingAlias(string catalog, string schema, string alias);
-
-	bool IsSet() const;
-	const string &GetAlias() const;
-
-	const string &GetCatalog() const {
-		return catalog;
-	}
-	const string &GetSchema() const {
-		return schema;
-	}
-
-	bool Matches(const BindingAlias &other) const;
-	bool operator==(const BindingAlias &other) const;
-
-private:
-	string catalog;
-	string schema;
-	string alias;
-};
 
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index.
 struct Binding {

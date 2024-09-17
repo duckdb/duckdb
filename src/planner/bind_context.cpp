@@ -264,7 +264,7 @@ optional_ptr<Binding> BindContext::GetBinding(const BindingAlias &alias, ErrorDa
 	}
 	if (matching_bindings.size() > 1) {
 		// found multiple matching aliases
-		throw InternalException("FIXME: multiple matching aliases");
+		throw BinderException("Ambiguous reference to table \"%s\"", alias.GetAlias());
 	}
 	// alias not found in this BindContext
 	vector<string> candidates;
