@@ -34,6 +34,16 @@ struct UsingColumnSet {
 	unordered_set<string> bindings;
 };
 
+struct BindingAlias {
+	bool IsSet() const;
+	const string &GetAlias() const;
+
+	void Set(string alias);
+
+private:
+	string alias;
+};
+
 //! The BindContext object keeps track of all the tables and columns that are
 //! encountered during the binding process.
 class BindContext {
@@ -46,7 +56,7 @@ public:
 public:
 	//! Given a column name, find the matching table it belongs to. Throws an
 	//! exception if no table has a column of the given name.
-	string GetMatchingBinding(const string &column_name);
+	BindingAlias GetMatchingBinding(const string &column_name);
 	//! Like GetMatchingBinding, but instead of throwing an error if multiple tables have the same binding it will
 	//! return a list of all the matching ones
 	unordered_set<string> GetMatchingBindings(const string &column_name);
@@ -68,6 +78,7 @@ public:
 	                                                   const string &column_name);
 	unique_ptr<ParsedExpression> CreateColumnReference(const string &catalog_name, const string &schema_name,
 	                                                   const string &table_name, const string &column_name);
+	unique_ptr<ParsedExpression> CreateColumnReference(const BindingAlias &table_alias, const string &column_name);
 
 	//! Generate column expressions for all columns that are present in the
 	//! referenced tables. This is used to resolve the * expression in a
@@ -149,6 +160,8 @@ public:
 	//! Gets a binding of the specified name. Returns a nullptr and sets the out_error if the binding could not be
 	//! found.
 	optional_ptr<Binding> GetBinding(const string &name, ErrorData &out_error);
+
+	optional_ptr<Binding> GetBinding(const BindingAlias &alias, ErrorData &out_error);
 
 private:
 	void AddBinding(const string &alias, unique_ptr<Binding> binding);

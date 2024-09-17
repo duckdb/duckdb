@@ -1,0 +1,35 @@
+# name: test/sql/binder/separate_schema_tables.test
+# description: Test tables in different schemas with the same name
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE SCHEMA IF NOT EXISTS s1;
+
+statement ok
+CREATE SCHEMA IF NOT EXISTS s2;
+
+statement ok
+CREATE TABLE s1.tbl(i INT);
+
+statement ok
+CREATE TABLE s2.tbl(i INT);
+
+statement ok
+CREATE TABLE tbl(i INT);
+
+statement ok
+INSERT INTO s1.tbl VALUES (10);
+
+statement ok
+INSERT INTO s2.tbl VALUES (100);
+
+statement ok
+INSERT INTO tbl VALUES (1);
+
+query III
+SELECT * FROM tbl, s1.tbl, s2.tbl
+----
+1	10	100

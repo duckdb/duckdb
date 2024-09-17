@@ -81,13 +81,13 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 	}
 
 	// find a table binding that contains this column name
-	string table_name = binder.bind_context.GetMatchingBinding(column_name);
+	auto table_binding = binder.bind_context.GetMatchingBinding(column_name);
 
 	// throw an error if a macro parameter name conflicts with a column name
 	auto is_macro_column = false;
 	if (binder.macro_binding && binder.macro_binding->HasMatchingBinding(column_name)) {
 		is_macro_column = true;
-		if (!table_name.empty()) {
+		if (table_binding.IsSet()) {
 			throw BinderException("Conflicting column names for column " + column_name + "!");
 		}
 	}
@@ -99,8 +99,8 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 	}
 
 	// bind as a regular column
-	if (!table_name.empty()) {
-		return binder.bind_context.CreateColumnReference(table_name, column_name);
+	if (table_binding.IsSet()) {
+		return binder.bind_context.CreateColumnReference(table_binding, column_name);
 	}
 
 	// it's not, find candidates and error
