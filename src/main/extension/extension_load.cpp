@@ -67,8 +67,15 @@ struct ExtensionAccess {
 	static void SetError(duckdb_extension_info info, const char *error) {
 		auto &load_state = DuckDBExtensionLoadState::Get(info);
 
-		load_state.has_error = true;
-		load_state.error_data = ErrorData(ExceptionType::UNKNOWN_TYPE, error);
+		if (error) {
+			load_state.has_error = true;
+			load_state.error_data = ErrorData(ExceptionType::UNKNOWN_TYPE, error);
+		} else {
+			load_state.has_error = true;
+			load_state.error_data = ErrorData(
+			    ExceptionType::UNKNOWN_TYPE,
+			    "Extension has indicated an error occured during initialization, but did not set an error message.");
+		}
 	}
 
 	//! Called by the extension get a pointer to the database that is loading it
