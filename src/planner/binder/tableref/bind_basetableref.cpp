@@ -15,6 +15,7 @@
 #include "duckdb/planner/tableref/bound_cteref.hpp"
 #include "duckdb/planner/tableref/bound_dummytableref.hpp"
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
 
 namespace duckdb {
 
@@ -202,6 +203,17 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 				return replacement_scan_bind_result;
 			}
 		}
+		auto &config = DBConfig::GetConfig(context);
+		if (context.config.use_replacement_scans && config.options.enable_external_access &&
+		    ExtensionHelper::IsFullPath(full_path)) {
+			auto &fs = FileSystem::GetFileSystem(context);
+			if (fs.FileExists(full_path)) {
+				throw BinderException(
+				    "No extension found that is capable of reading the file \"%s\"\n* If this file is a supported file "
+				    "format you can explicitly use the reader functions, such as read_csv, read_json or read_parquet",
+				    full_path);
+			}
+		}
 
 		// could not find an alternative: bind again to get the error
 		(void)entry_retriever.GetEntry(CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name, ref.table_name,
@@ -259,6 +271,16 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			view_names.push_back(view_catalog_entry.names[n]);
 		}
 		subquery.column_name_alias = BindContext::AliasColumnNames(subquery.alias, view_names, ref.column_name_alias);
+
+		// when binding a view, we always look into the catalog/schema where the view is stored first
+		vector<CatalogSearchEntry> view_search_path;
+		auto &catalog_name = view_catalog_entry.ParentCatalog().GetName();
+		auto &schema_name = view_catalog_entry.ParentSchema().name;
+		view_search_path.emplace_back(catalog_name, schema_name);
+		if (schema_name != DEFAULT_SCHEMA) {
+			view_search_path.emplace_back(view_catalog_entry.ParentCatalog().GetName(), DEFAULT_SCHEMA);
+		}
+		view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
 		// bind the child subquery
 		view_binder->AddBoundView(view_catalog_entry);
 		auto bound_child = view_binder->Bind(subquery);

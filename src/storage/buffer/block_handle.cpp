@@ -49,7 +49,7 @@ BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
 		D_ASSERT(memory_charge.size == 0);
 	}
 
-	block_manager.UnregisterBlock(block_id);
+	block_manager.UnregisterBlock(*this);
 }
 
 unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuffer> reusable_buffer,
@@ -71,39 +71,36 @@ unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuff
 	}
 }
 
-BufferHandle BlockHandle::LoadFromBuffer(shared_ptr<BlockHandle> &handle, data_ptr_t data,
-                                         unique_ptr<FileBuffer> reusable_buffer) {
-	D_ASSERT(handle->state != BlockState::BLOCK_LOADED);
+BufferHandle BlockHandle::LoadFromBuffer(data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer) {
+	D_ASSERT(state != BlockState::BLOCK_LOADED);
 	// copy over the data into the block from the file buffer
-	auto block = AllocateBlock(handle->block_manager, std::move(reusable_buffer), handle->block_id);
+	auto block = AllocateBlock(block_manager, std::move(reusable_buffer), block_id);
 	memcpy(block->InternalBuffer(), data, block->AllocSize());
-	handle->buffer = std::move(block);
-	handle->state = BlockState::BLOCK_LOADED;
-	return BufferHandle(handle);
+	buffer = std::move(block);
+	state = BlockState::BLOCK_LOADED;
+	return BufferHandle(shared_from_this());
 }
 
-BufferHandle BlockHandle::Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileBuffer> reusable_buffer) {
-	if (handle->state == BlockState::BLOCK_LOADED) {
+BufferHandle BlockHandle::Load(unique_ptr<FileBuffer> reusable_buffer) {
+	if (state == BlockState::BLOCK_LOADED) {
 		// already loaded
-		D_ASSERT(handle->buffer);
-		return BufferHandle(handle);
+		D_ASSERT(buffer);
+		return BufferHandle(shared_from_this());
 	}
 
-	auto &block_manager = handle->block_manager;
-	if (handle->block_id < MAXIMUM_BLOCK) {
-		auto block = AllocateBlock(block_manager, std::move(reusable_buffer), handle->block_id);
+	if (block_id < MAXIMUM_BLOCK) {
+		auto block = AllocateBlock(block_manager, std::move(reusable_buffer), block_id);
 		block_manager.Read(*block);
-		handle->buffer = std::move(block);
+		buffer = std::move(block);
 	} else {
-		if (handle->MustWriteToTemporaryFile()) {
-			handle->buffer = block_manager.buffer_manager.ReadTemporaryBuffer(handle->tag, handle->block_id,
-			                                                                  std::move(reusable_buffer));
+		if (MustWriteToTemporaryFile()) {
+			buffer = block_manager.buffer_manager.ReadTemporaryBuffer(tag, *this, std::move(reusable_buffer));
 		} else {
 			return BufferHandle(); // Destroyed upon unpin/evict, so there is no temp buffer to read
 		}
 	}
-	handle->state = BlockState::BLOCK_LOADED;
-	return BufferHandle(handle);
+	state = BlockState::BLOCK_LOADED;
+	return BufferHandle(shared_from_this());
 }
 
 unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock() {

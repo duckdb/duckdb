@@ -216,6 +216,7 @@ simple_select:
 					n->windowClause = $8;
 					n->qualifyClause = $9;
 					n->sampleOptions = $10;
+					n->from_first = true;
 					$$ = (PGNode *)n;
 				}
 			|
@@ -234,6 +235,7 @@ simple_select:
 					n->windowClause = $10;
 					n->qualifyClause = $11;
 					n->sampleOptions = $12;
+					n->from_first = true;
 					$$ = (PGNode *)n;
 				}
 			| values_clause_opt_comma							{ $$ = $1; }
@@ -682,33 +684,37 @@ offset_clause:
 				{ $$ = $2; }
 		;
 
+sample_value:
+    FCONST
+        {
+            $$ = makeFloatConst($1, @1);
+        }
+    | ICONST
+        {
+            $$ = makeIntConst($1, @1);
+        }
+    | param_expr
+    ;
+
 /*
  * SAMPLE clause
  */
 sample_count:
-	FCONST '%'
+	sample_value '%'
 		{
-			$$ = makeSampleSize(makeFloat($1), true);
+			$$ = makeSampleSize($1, true);
 		}
-	| ICONST '%'
+	| sample_value PERCENT
 		{
-			$$ = makeSampleSize(makeInteger($1), true);
+			$$ = makeSampleSize($1, true);
 		}
-	| FCONST PERCENT
+	| sample_value
 		{
-			$$ = makeSampleSize(makeFloat($1), true);
+			$$ = makeSampleSize($1, false);
 		}
-	| ICONST PERCENT
+	| sample_value ROWS
 		{
-			$$ = makeSampleSize(makeInteger($1), true);
-		}
-	| ICONST
-		{
-			$$ = makeSampleSize(makeInteger($1), false);
-		}
-	| ICONST ROWS
-		{
-			$$ = makeSampleSize(makeInteger($1), false);
+			$$ = makeSampleSize($1, false);
 		}
 	;
 
@@ -2759,7 +2765,7 @@ indirection_expr_or_a_expr:
 			}
 		;
 
-indirection_expr:
+param_expr:
 			'?'
 				{
 					$$ = makeParamRef(0, @1);
@@ -2771,26 +2777,20 @@ indirection_expr:
 					p->location = @1;
 					$$ = (PGNode *) p;
 				}
+			| '$' ColLabel
+				{
+					$$ = makeNamedParamRef($2, @1);
+				}
+			;
+
+indirection_expr:
+            param_expr
 			| struct_expr
-				{
-					$$ = $1;
-				}
 			| map_expr
-				{
-					$$ = $1;
-				}
 			| func_expr
-				{
-					$$ = $1;
-				}
 			| case_expr
-				{ $$ = $1; }
-			 | list_expr {
-                $$ = $1;
-			}
-			| list_comprehension {
-				$$ = $1;
-			}
+			| list_expr
+			| list_comprehension
 			| ARRAY select_with_parens
 				{
 					PGSubLink *n = makeNode(PGSubLink);
@@ -2813,10 +2813,6 @@ indirection_expr:
 					n->position = $2;
 					n->location = @1;
 					$$ = (PGNode *) n;
-				}
-			| '$' ColLabel
-				{
-					$$ = makeNamedParamRef($2, @1);
 				}
 		;
 

@@ -248,7 +248,11 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Negate() {
 
 // Static creation methods
 
-static void PopulateExcludeList(case_insensitive_set_t &exclude, const py::list &list) {
+static void PopulateExcludeList(case_insensitive_set_t &exclude, py::object list_p) {
+	if (py::none().is(list_p)) {
+		list_p = py::list();
+	}
+	py::list list = py::cast<py::list>(list_p);
 	for (auto item : list) {
 		if (py::isinstance<py::str>(item)) {
 			exclude.insert(std::string(py::str(item)));
@@ -266,10 +270,10 @@ static void PopulateExcludeList(case_insensitive_set_t &exclude, const py::list 
 	}
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::StarExpression(const py::list &exclude_list) {
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::StarExpression(py::object exclude_list) {
 	case_insensitive_set_t exclude;
 	auto star = make_uniq<duckdb::StarExpression>();
-	PopulateExcludeList(star->exclude_list, exclude_list);
+	PopulateExcludeList(star->exclude_list, std::move(exclude_list));
 	return make_shared_ptr<DuckDBPyExpression>(std::move(star));
 }
 
