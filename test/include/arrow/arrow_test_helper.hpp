@@ -75,7 +75,7 @@ public:
 
 	static void GetSchema(ArrowArrayStream *, ArrowSchema &schema);
 
-	void ToArrowSchema(struct ArrowSchema *out);
+	void ToArrowSchema(struct ArrowSchema &out);
 };
 
 class ArrowTestHelper {

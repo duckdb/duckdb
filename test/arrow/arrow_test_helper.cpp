@@ -25,7 +25,7 @@ int ArrowTestFactory::ArrowArrayStreamGetSchema(struct ArrowArrayStream *stream,
 		throw InternalException("No private data!?");
 	}
 	auto &data = *((ArrowArrayStreamData *)stream->private_data);
-	data.factory.ToArrowSchema(out);
+	data.factory.ToArrowSchema(*out);
 	return 0;
 }
 
@@ -125,10 +125,10 @@ duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper> ArrowTestFactory::CreateStre
 void ArrowTestFactory::GetSchema(ArrowArrayStream *factory_ptr, ArrowSchema &schema) {
 	//! Create a new batch reader
 	auto &factory = *reinterpret_cast<ArrowTestFactory *>(factory_ptr); //! NOLINT
-	factory.ToArrowSchema(&schema);
+	factory.ToArrowSchema(schema);
 }
 
-void ArrowTestFactory::ToArrowSchema(struct ArrowSchema *out) {
+void ArrowTestFactory::ToArrowSchema(struct ArrowSchema &out) {
 	ArrowConverter::ToArrowSchema(out, types, names, options);
 }
 

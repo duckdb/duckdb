@@ -22,7 +22,7 @@ namespace duckdb {
 static py::list ConvertToSingleBatch(vector<LogicalType> &types, vector<string> &names, DataChunk &input,
                                      const ClientProperties &options) {
 	ArrowSchema schema;
-	ArrowConverter::ToArrowSchema(&schema, types, names, options);
+	ArrowConverter::ToArrowSchema(schema, types, names, options);
 
 	py::list single_batch;
 	ArrowAppender appender(types, STANDARD_VECTOR_SIZE, options);
