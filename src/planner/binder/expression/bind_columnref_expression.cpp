@@ -305,7 +305,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnNameWithManyDotsInte
 		if (binding) {
 			// part1 is a catalog - the column reference is "catalog.schema.table.column"
 			struct_extract_start = 4;
-			return binder.bind_context.CreateColumnReference(binding->alias, col_ref.GetColumnName());
+			return binder.bind_context.CreateColumnReference(binding->alias, col_ref.column_names[3]);
 		}
 	}
 	binding = binder.GetMatchingBinding(col_ref.column_names[0], INVALID_SCHEMA, col_ref.column_names[1],
@@ -313,7 +313,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnNameWithManyDotsInte
 	if (binding) {
 		// part1 is a catalog - the column reference is "catalog.table.column"
 		struct_extract_start = 3;
-		return binder.bind_context.CreateColumnReference(binding->alias, col_ref.GetColumnName());
+		return binder.bind_context.CreateColumnReference(binding->alias, col_ref.column_names[2]);
 	}
 	binding = binder.GetMatchingBinding(col_ref.column_names[0], col_ref.column_names[1], col_ref.column_names[2],
 	                                     error);
@@ -321,7 +321,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnNameWithManyDotsInte
 		// part1 is a schema - the column reference is "schema.table.column"
 		// any additional fields are turned into struct_extract calls
 		struct_extract_start = 3;
-		return binder.bind_context.CreateColumnReference(binding->alias, col_ref.GetColumnName());
+		return binder.bind_context.CreateColumnReference(binding->alias, col_ref.column_names[2]);
 	}
 	binding = binder.GetMatchingBinding(col_ref.column_names[0], col_ref.column_names[1], error);
 	if (binding) {
@@ -329,6 +329,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnNameWithManyDotsInte
 		// the column reference is "table.column"
 		// any additional fields are turned into struct_extract calls
 		struct_extract_start = 2;
+		return binder.bind_context.CreateColumnReference(binding->alias, col_ref.column_names[1]);
 	}
 	// part1 could be a column
 	ErrorData col_error;
@@ -345,6 +346,9 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnNameWithManyDots(Col
                                                                              ErrorData &error) {
 	idx_t struct_extract_start;
 	auto result_expr = QualifyColumnNameWithManyDotsInternal(col_ref, error, struct_extract_start);
+	if (!result_expr) {
+		return nullptr;
+	}
 
 	// create a struct extract with all remaining column names
 	for (idx_t i = struct_extract_start; i < col_ref.column_names.size(); i++) {
