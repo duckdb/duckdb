@@ -33,12 +33,12 @@ struct BindingAlias {
 
 	bool Matches(const BindingAlias &other) const;
 	bool operator==(const BindingAlias &other) const;
+	string ToString() const;
 
 private:
 	string catalog;
 	string schema;
 	string alias;
 };
-
 
 } // namespace duckdb

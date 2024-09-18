@@ -24,6 +24,16 @@ namespace duckdb {
 BindContext::BindContext(Binder &binder) : binder(binder) {
 }
 
+string MinimumUniqueAlias(const BindingAlias &alias, const BindingAlias &other) {
+	if (!StringUtil::CIEquals(alias.GetAlias(), other.GetAlias())) {
+		return alias.GetAlias();
+	}
+	if (!StringUtil::CIEquals(alias.GetSchema(), other.GetSchema())) {
+		return alias.GetSchema() + "." + alias.GetAlias();
+	}
+	return alias.ToString();
+}
+
 optional_ptr<Binding> BindContext::GetMatchingBinding(const string &column_name) {
 	optional_ptr<Binding> result;
 	for (auto &binding_ptr : bindings_list) {
@@ -36,7 +46,8 @@ optional_ptr<Binding> BindContext::GetMatchingBinding(const string &column_name)
 			if (result || is_using_binding) {
 				throw BinderException("Ambiguous reference to column name \"%s\" (use: \"%s.%s\" "
 				                      "or \"%s.%s\")",
-				                      column_name, result->GetAlias(), column_name, binding.GetAlias(), column_name);
+				                      column_name, MinimumUniqueAlias(result->alias, binding.alias), column_name,
+				                      MinimumUniqueAlias(binding.alias, result->alias), column_name);
 			}
 			result = &binding;
 		}
@@ -265,7 +276,19 @@ optional_ptr<Binding> BindContext::GetBinding(const BindingAlias &alias, ErrorDa
 	}
 	if (matching_bindings.size() > 1) {
 		// found multiple matching aliases
-		throw BinderException("Ambiguous reference to table \"%s\"", alias.GetAlias());
+		string result = "(use: ";
+		for (idx_t i = 0; i < matching_bindings.size(); i++) {
+			if (i > 0) {
+				if (i + 1 == matching_bindings.size()) {
+					result += " or ";
+				} else {
+					result += ", ";
+				}
+			}
+			result += matching_bindings[i].get().alias.ToString();
+		}
+		result += ")";
+		throw BinderException("Ambiguous reference to table \"%s\" %s", alias.ToString(), result);
 	}
 	// alias not found in this BindContext
 	vector<string> candidates;

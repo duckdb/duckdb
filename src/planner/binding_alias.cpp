@@ -32,6 +32,18 @@ const string &BindingAlias::GetAlias() const {
 	return alias;
 }
 
+string BindingAlias::ToString() const {
+	string result;
+	if (!catalog.empty()) {
+		result += KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
+	}
+	if (!schema.empty()) {
+		result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
+	}
+	result += KeywordHelper::WriteOptionallyQuoted(alias);
+	return result;
+}
+
 bool BindingAlias::Matches(const BindingAlias &other) const {
 	// we match based on the specificity of the other entry
 	// i.e. "tbl" matches "catalog.schema.tbl"
