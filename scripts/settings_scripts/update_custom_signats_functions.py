@@ -51,7 +51,6 @@ def find_existing_settings_dict(custom_settings_path):
                     settings_dict[current_setting]['end_line'] = line_num - 1
 
                 # start a new setting
-
                 current_setting = (
                     remove_suffix(remove_prefix(lines[line_num + 1], "//"), "\n").replace(' ', '') + "Setting"
                 )
@@ -102,6 +101,16 @@ def get_new_setting_def(setting):
 
 
 def create_content_for_custom_funcs(custom_settings_path, existing_settings, missing_settings):
+    """
+    Generates the content of all the missing settings and place them in an alphabetically order in the custom_settings.cpp file.
+
+    For each setting:
+      - If the setting is missing, it generates the appropriate code.
+      - For global or local settings, it adds the necessary VerifyDBInstanceSET and VerifyDBInstanceRESET functions.
+      - If a custom value conversion is needed, the corresponding function is generated.
+    - If the setting already exists, it copies its content from the source file.
+    """
+
     keys1 = list(existing_settings.keys())
     keys2 = list(missing_settings.keys())
     combined_keys = sorted(keys1 + keys2)
@@ -115,6 +124,7 @@ def create_content_for_custom_funcs(custom_settings_path, existing_settings, mis
     for struct_name in combined_keys:
         if struct_name in missing_settings:
             setting = missing_settings[struct_name]
+            # add the setting in the new content
             if setting.add_verification_in_SET or setting.add_verification_in_RESET or setting.custom_value_conversion:
                 new_content += get_setting_heading(setting.struct_name)
                 new += 1
@@ -151,7 +161,9 @@ def find_start_end_indexes_in_this_file(source_code, file):
 
 
 def add_custom_functions(custom_settings_path):
+    # returns a dict. with key: <setting.struct_name>, value: {'start_line': <num>, 'end_line': <num>} of all the setting in the custom_settings.cpp file
     existing_settings = find_existing_settings_dict(custom_settings_path)
+    # returns a dict with key: <setting.struct_name>, value: <setting structure> with the settings struct names that miss from the existing_settings dict
     missing_settings = find_missing_settings(existing_settings)
 
     with open(custom_settings_path, 'r') as source_file:

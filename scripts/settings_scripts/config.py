@@ -88,7 +88,6 @@ class Setting:
 
     # validate and return the cpp input type
     def _get_setting_type(self, type) -> str:
-        # TODO: now for empty parameter, returns void
         if len(type) == 0:
             return "void"
         return type

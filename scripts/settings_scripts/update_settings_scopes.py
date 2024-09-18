@@ -20,11 +20,11 @@ def generate_scope_code(file):
     # generate new entries for the settings array
     new_entries = []
     for setting in SettingsList:
-        if setting.scope in ["GLOBAL", "LOCAL", "GLOBAL_LOCAL"]:
+        if setting.scope in ["GLOBAL", "LOCAL", "GLOBAL_LOCAL"]: # valid setting_scope values
             new_entries.append(f"DUCKDB_{setting.scope}({setting.struct_name})")
             for alias in setting.aliases:
                 new_entries.append(f"DUCKDB_{setting.scope}_ALIAS(\"{alias}\", {setting.struct_name})")
-        else:  # TODO: in case of invalid scope, should we do sth?
+        else:
             raise ValueError(f"Setting {setting.name} has invalid input scope value")
 
     new_array_section = ',\n    '.join(new_entries)

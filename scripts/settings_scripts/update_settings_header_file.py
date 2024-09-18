@@ -11,7 +11,7 @@ START_MARKER = (
 END_MARKER = "// End of the auto-generated list of settings structures"
 
 
-def extract_definition(setting) -> str:
+def extract_declarations(setting) -> str:
     definition = (
         f"struct {setting.struct_name} {{\n"
         f"    static constexpr const char *Name = \"{setting.name}\";\n"
@@ -40,7 +40,7 @@ def extract_definition(setting) -> str:
     return definition
 
 
-# generate settings code for the the header file
+# generate code for all the settings for the the header file
 def generate_content(header_file_path):
     with open(header_file_path, 'r') as source_file:
         source_code = source_file.read()
@@ -52,7 +52,7 @@ def generate_content(header_file_path):
     start_section = source_code[: start_index + 1]
     end_section = SEPARATOR + source_code[end_index:]
 
-    new_content = "".join(extract_definition(setting) for setting in SettingsList)
+    new_content = "".join(extract_declarations(setting) for setting in SettingsList)
     return start_section + new_content + end_section
 
 

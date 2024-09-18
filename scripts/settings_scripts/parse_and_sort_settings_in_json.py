@@ -15,19 +15,18 @@ def sort_and_read_json_data(path):
 # parse json data and stores each entry as a settings object in the global list SettingsList
 def add_all_settings_to_global_list():
     print(f"Parsing and sorting the settings data in {JSON_PATH}")
-    reset_global_settings_list()
+    clear_global_settings_list()
     json_data = sort_and_read_json_data(JSON_PATH)
+    # store all the settings in the SettingsList
     for entry in json_data:
-        add_verif_SET = (
-            True
-            if entry.get('add_verification_in_SET', False) or entry.get('add_verification_in_both_SetReset', False)
-            else False
-        )
-        add_verif_RESET = (
-            True
-            if entry.get('add_verification_in_RESET', False) or entry.get('add_verification_in_both_SetReset', False)
-            else False
-        )
+        add_verif_SET = False
+        if entry.get('add_verification_in_SET', True) or entry.get('add_verification_in_both_SetReset', True):
+            add_verif_SET = True
+
+        add_verif_RESET = False
+        if entry.get('add_verification_in_RESET', True) or entry.get('add_verification_in_both_SetReset', True)
+            add_verif_RESET = True
+        
         setting = Setting(
             name=entry['name'],
             description=entry['description'],
@@ -42,5 +41,5 @@ def add_all_settings_to_global_list():
         SettingsList.append(setting)
 
 
-def reset_global_settings_list():
+def clear_global_settings_list():
     SettingsList.clear()
