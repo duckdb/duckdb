@@ -873,7 +873,6 @@ function nextDataChunk(q::QueryResult)::Union{Missing, DataChunk}
         if get_size(chunk) == 0
             return missing
         end
-        return chunk
     else
         chunk_count = duckdb_result_chunk_count(q.handle[])
         if q.chunk_index > chunk_count

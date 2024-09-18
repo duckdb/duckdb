@@ -2,6 +2,7 @@
 
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -42,6 +43,21 @@ ColumnDataAllocator::ColumnDataAllocator(ColumnDataAllocator &other) {
 		break;
 	default:
 		throw InternalException("Unrecognized column data allocator type");
+	}
+}
+
+ColumnDataAllocator::~ColumnDataAllocator() {
+	if (type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
+		return;
+	}
+	for (auto &block : blocks) {
+		block.handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+	}
+	const auto data_size = SizeInBytes();
+	blocks.clear();
+	if (Allocator::SupportsFlush() &&
+	    data_size > alloc.buffer_manager->GetBufferPool().GetAllocatorBulkDeallocationFlushThreshold()) {
+		Allocator::FlushAll();
 	}
 }
 
