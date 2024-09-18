@@ -203,36 +203,6 @@ struct WindowInputExpression {
 	DataChunk chunk;
 };
 
-struct WindowInputColumn {
-	using WindowDataChunkPtr = unique_ptr<WindowDataChunk>;
-
-	WindowInputColumn(optional_ptr<Expression> expr_p, ClientContext &context, idx_t count);
-
-	void Copy(DataChunk &input_chunk, idx_t input_idx);
-
-	inline bool CellIsNull(idx_t i) const {
-		D_ASSERT(!target->chunk.data.empty());
-		D_ASSERT(i < count);
-		return FlatVector::IsNull((target->chunk.data[0]), scalar ? 0 : i);
-	}
-
-	template <typename T>
-	inline T GetCell(idx_t i) const {
-		D_ASSERT(!target->chunk.data.empty());
-		D_ASSERT(i < count);
-		const auto data = FlatVector::GetData<T>(target->chunk.data[0]);
-		return data[scalar ? 0 : i];
-	}
-
-	optional_ptr<Expression> expr;
-	PhysicalType ptype;
-	const bool scalar;
-	const idx_t count;
-
-private:
-	WindowDataChunkPtr target;
-};
-
 //	Column indexes of the bounds chunk
 enum WindowBounds : uint8_t { PARTITION_BEGIN, PARTITION_END, PEER_BEGIN, PEER_END, WINDOW_BEGIN, WINDOW_END };
 
@@ -269,7 +239,8 @@ public:
 	vector<LogicalType> arg_types;
 
 	// evaluate RANGE expressions, if needed
-	WindowInputColumn range;
+	optional_ptr<Expression> range_expr;
+	unique_ptr<WindowDataChunk> range;
 };
 
 class WindowExecutorLocalState : public WindowExecutorState {
@@ -277,6 +248,7 @@ public:
 	explicit WindowExecutorLocalState(const WindowExecutorGlobalState &gstate);
 
 	void Sink(WindowExecutorGlobalState &gstate, DataChunk &input_chunk, idx_t input_idx);
+	virtual void Finalize(WindowExecutorGlobalState &gstate);
 
 	// Argument evaluation
 	ExpressionExecutor payload_executor;
@@ -285,6 +257,10 @@ public:
 	//! Range evaluation
 	ExpressionExecutor range_executor;
 	DataChunk range_chunk;
+	//! The state used for building the range collection
+	unique_ptr<WindowBuilder> range_builder;
+	//! The state used for reading the range collection
+	unique_ptr<WindowCursor> range_cursor;
 };
 
 class WindowExecutor {
@@ -300,8 +276,7 @@ public:
 	virtual void Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count,
 	                  WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate) const;
 
-	virtual void Finalize(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate) const {
-	}
+	virtual void Finalize(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate) const;
 
 	void Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &result, WindowExecutorLocalState &lstate,
 	              WindowExecutorGlobalState &gstate) const;
@@ -393,8 +368,6 @@ public:
 
 	void Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count, WindowExecutorGlobalState &gstate,
 	          WindowExecutorLocalState &lstate) const override;
-
-	void Finalize(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate) const override;
 
 	unique_ptr<WindowExecutorGlobalState> GetGlobalState(const idx_t payload_count, const ValidityMask &partition_mask,
 	                                                     const ValidityMask &order_mask) const override;
