@@ -296,8 +296,9 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	for (auto &edge : edges) {
 		if (subgraphs.size() == 1 && subgraphs.at(0).relations->ToString() == set.ToString()) {
 			// the first subgraph has connected all the desired relations, just skip the rest of the edges
-			auto edge_tdom = edge.has_tdom_hll ? edge.tdom_hll : edge.tdom_no_hll;
-			unused_edge_tdoms.insert(edge_tdom);
+			if (edge.has_tdom_hll) {
+				unused_edge_tdoms.insert(edge.tdom_hll);
+			}
 			continue;
 		}
 
