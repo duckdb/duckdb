@@ -217,7 +217,7 @@ public:
 
 	template <class T_INNER>
 	void SubtractFrameOfReference(T_INNER *buffer, T_INNER frame_of_reference) {
-		static_assert(IsIntegral<T_INNER>::value, "Integral type required.");
+		static_assert(NumericLimits<T_INNER>::IsIntegral(), "Integral type required.");
 
 		using T_U = typename MakeUnsigned<T_INNER>::type;
 
@@ -476,8 +476,8 @@ public:
 			state->current_segment->count += count;
 
 			if (WRITE_STATISTICS && !state->state.all_invalid) {
-				NumericStats::Update<T>(state->current_segment->stats.statistics, state->state.minimum);
-				NumericStats::Update<T>(state->current_segment->stats.statistics, state->state.maximum);
+				state->current_segment->stats.statistics.template UpdateNumericStats<T>(state->state.maximum);
+				state->current_segment->stats.statistics.template UpdateNumericStats<T>(state->state.minimum);
 			}
 		}
 	};

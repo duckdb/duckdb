@@ -21,14 +21,14 @@ CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager>
 	}
 }
 
-bool SetColumns::IsSet() {
+bool SetColumns::IsSet() const {
 	if (!types) {
 		return false;
 	}
 	return !types->empty();
 }
 
-idx_t SetColumns::Size() {
+idx_t SetColumns::Size() const {
 	if (!types) {
 		return 0;
 	}
@@ -99,7 +99,7 @@ SnifferResult CSVSniffer::MinimalSniff() {
 	vector<string> names;
 
 	buffer_manager->sniffing = true;
-	const idx_t result_size = 2;
+	constexpr idx_t result_size = 2;
 
 	auto state_machine =
 	    make_shared_ptr<CSVStateMachine>(options, options.dialect_options.state_machine_options, state_machine_cache);
@@ -166,9 +166,9 @@ SnifferResult CSVSniffer::AdaptiveSniff(CSVSchema &file_schema) {
 	}
 	if (run_full) {
 		// We run full sniffer
-		string error;
 		auto full_sniffer = SniffCSV();
 		if (!set_columns.IsSet() && !options.file_options.AnySet()) {
+			string error;
 			if (!file_schema.SchemasMatch(error, full_sniffer.names, full_sniffer.return_types, options.file_path) &&
 			    !options.ignore_errors.GetValue()) {
 				throw InvalidInputException(error);

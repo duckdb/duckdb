@@ -241,6 +241,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"postgres_scan", "postgres_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
     {"postgres_scan_pushdown", "postgres_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
     {"pragma_hnsw_index_info", "vss", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"pragma_rtree_index_info", "spatial", CatalogType::TABLE_FUNCTION_ENTRY},
     {"read_json", "json", CatalogType::TABLE_FUNCTION_ENTRY},
     {"read_json_auto", "json", CatalogType::TABLE_FUNCTION_ENTRY},
     {"read_json_objects", "json", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -251,6 +252,8 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"read_parquet", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
     {"reduce_sql_statement", "sqlsmith", CatalogType::TABLE_FUNCTION_ENTRY},
     {"row_to_json", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"rtree_index_dump", "spatial", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"rtree_index_scan", "spatial", CatalogType::TABLE_FUNCTION_ENTRY},
     {"scan_arrow_ipc", "arrow", CatalogType::TABLE_FUNCTION_ENTRY},
     {"shapefile_meta", "spatial", CatalogType::TABLE_FUNCTION_ENTRY},
     {"sql_auto_complete", "autocomplete", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -261,6 +264,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_area_spheroid", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_asgeojson", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_ashexwkb", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_assvg", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_astext", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_aswkb", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_boundary", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -289,12 +293,14 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_envelope_agg", "spatial", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"st_equals", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_extent", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_extent_approx", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_exteriorring", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_flipcoordinates", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_force2d", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_force3dm", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_force3dz", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_force4d", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_generatepoints", "spatial", CatalogType::TABLE_FUNCTION_ENTRY},
     {"st_geometrytype", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_geomfromgeojson", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_geomfromhexewkb", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -381,6 +387,8 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"tpch", "tpch", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"tpch_answers", "tpch", CatalogType::TABLE_FUNCTION_ENTRY},
     {"tpch_queries", "tpch", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"vss_join", "vss", CatalogType::TABLE_MACRO_ENTRY},
+    {"vss_match", "vss", CatalogType::TABLE_MACRO_ENTRY},
 }; // END_OF_EXTENSION_FUNCTIONS
 
 static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
@@ -419,6 +427,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"pg_connection_limit", "postgres_scanner"},
     {"pg_debug_show_queries", "postgres_scanner"},
     {"pg_experimental_filter_pushdown", "postgres_scanner"},
+    {"pg_null_byte_replacement", "postgres_scanner"},
     {"pg_pages_per_task", "postgres_scanner"},
     {"pg_use_binary_copy", "postgres_scanner"},
     {"pg_use_ctid_scan", "postgres_scanner"},
@@ -502,11 +511,18 @@ static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
-    {"s3/config", "httpfs"},          {"gcs/config", "httpfs"},
-    {"r2/config", "httpfs"},          {"s3/credential_chain", "aws"},
-    {"gcs/credential_chain", "aws"},  {"r2/credential_chain", "aws"},
-    {"azure/config", "azure"},        {"azure/credential_chain", "azure"},
-    {"huggingface/config", "httfps"}, {"huggingface/credential_chain", "httpfs"},
+    {"s3/config", "httpfs"},
+    {"gcs/config", "httpfs"},
+    {"r2/config", "httpfs"},
+    {"s3/credential_chain", "aws"},
+    {"gcs/credential_chain", "aws"},
+    {"r2/credential_chain", "aws"},
+    {"azure/access_token", "azure"},
+    {"azure/config", "azure"},
+    {"azure/credential_chain", "azure"},
+    {"azure/service_principal", "azure"},
+    {"huggingface/config", "httfps"},
+    {"huggingface/credential_chain", "httpfs"},
     {"bearer/config", "httpfs"}}; // EXTENSION_SECRET_PROVIDERS
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {

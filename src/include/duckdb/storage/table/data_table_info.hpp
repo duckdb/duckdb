@@ -44,6 +44,9 @@ public:
 	const vector<IndexStorageInfo> &GetIndexStorageInfo() const {
 		return index_storage_infos;
 	}
+	unique_ptr<StorageLockKey> GetSharedLock() {
+		return checkpoint_lock.GetSharedLock();
+	}
 
 	string GetSchemaName();
 	string GetTableName();

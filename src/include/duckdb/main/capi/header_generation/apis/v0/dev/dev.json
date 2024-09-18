@@ -1,31 +1,5 @@
 {
     "version": "dev",
     "entries": [
-        "duckdb_create_aggregate_function",
-        "duckdb_destroy_aggregate_function",
-        "duckdb_aggregate_function_set_name",
-        "duckdb_aggregate_function_add_parameter",
-        "duckdb_aggregate_function_set_return_type",
-        "duckdb_aggregate_function_set_functions",
-        "duckdb_aggregate_function_set_destructor",
-        "duckdb_register_aggregate_function",
-        "duckdb_aggregate_function_set_special_handling",
-        "duckdb_aggregate_function_set_extra_info",
-        "duckdb_aggregate_function_get_extra_info",
-        "duckdb_aggregate_function_set_error",
-        "duckdb_logical_type_set_alias",
-        "duckdb_register_logical_type",
-        "duckdb_create_cast_function", 
-        "duckdb_cast_function_set_source_type",
-        "duckdb_cast_function_set_target_type",
-        "duckdb_cast_function_set_implicit_cast_cost",
-        "duckdb_cast_function_set_function",
-        "duckdb_cast_function_set_extra_info",
-        "duckdb_cast_function_get_extra_info",
-        "duckdb_cast_function_get_cast_mode",
-        "duckdb_cast_function_set_error",
-        "duckdb_cast_function_set_row_error",
-        "duckdb_register_cast_function",
-        "duckdb_destroy_cast_function"
     ]
 }

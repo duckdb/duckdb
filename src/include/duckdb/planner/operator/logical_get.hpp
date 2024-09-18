@@ -35,7 +35,7 @@ public:
 	vector<LogicalType> returned_types;
 	//! The names of ALL columns that can be returned by the table function
 	vector<string> names;
-	//! Columns that are used outside of the scan
+	//! Columns that are used outside the scan
 	vector<idx_t> projection_ids;
 	//! Filters pushed down for table scan
 	TableFilterSet table_filters;
@@ -50,7 +50,7 @@ public:
 	//! For a table-in-out function, the set of projected input columns
 	vector<column_t> projected_input;
 	//! Currently stores File Filters (as strings) applied by hive partitioning/complex filter pushdown
-	//! Stored so the can be included in explain output
+	//! Stored so they can be included in explain output
 	ExtraOperatorInfo extra_info;
 	//! Contains a reference to dynamically generated table filters (through e.g. a join up in the tree)
 	shared_ptr<DynamicTableFilterSet> dynamic_filters;

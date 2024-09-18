@@ -1,4 +1,4 @@
-This is the DuckDB Python package
+# DuckDB Python package
 
 ## Default installation
 
@@ -30,9 +30,17 @@ To install in debug mode, set the environment variable `$DUCKDEBUG=1` (or some o
 Note that this will override any existing DuckDB installation you might have. You might also run into conflicts depending on your Python environment. In order to remedy that, it is possible to use virtualenv for installation, e.g. by running the following commands:
 
 ```bash
+cd tools/pythonpkg
 virtualenv .venv --python=python3.12
 source .venv/bin/activate
 python3 -m pip install .
+```
+
+To test, run:
+
+```bash
+cd ../..
+python3 -c "import duckdb; duckdb.sql('SELECT version() AS version').show()"
 ```
 
 ### Installing with make

@@ -35,8 +35,28 @@ ArrowSchemaMetadata::ArrowSchemaMetadata(const char *metadata) {
 void ArrowSchemaMetadata::AddOption(const string &key, const string &value) {
 	metadata_map[key] = value;
 }
-string ArrowSchemaMetadata::GetOption(const string &key) {
-	return metadata_map[key];
+string ArrowSchemaMetadata::GetOption(const string &key) const {
+	return metadata_map.at(key);
+}
+
+string ArrowSchemaMetadata::GetExtensionName() const {
+	return GetOption(ARROW_EXTENSION_NAME);
+}
+
+ArrowSchemaMetadata ArrowSchemaMetadata::MetadataFromName(const string &extension_name) {
+	ArrowSchemaMetadata metadata;
+	metadata.AddOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME, extension_name);
+	metadata.AddOption(ArrowSchemaMetadata::ARROW_METADATA_KEY, "");
+	return metadata;
+}
+
+bool ArrowSchemaMetadata::HasExtension() {
+	if (metadata_map.find(ARROW_EXTENSION_NAME) == metadata_map.end()) {
+		return false;
+	}
+	auto arrow_extension = GetOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME);
+	// FIXME: We are currently ignoring the ogc extensions
+	return !arrow_extension.empty() && !StringUtil::StartsWith(arrow_extension, "ogc");
 }
 
 unsafe_unique_array<char> ArrowSchemaMetadata::SerializeMetadata() const {

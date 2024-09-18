@@ -73,6 +73,10 @@ unique_ptr<FunctionData> ICUDateFunc::Bind(ClientContext &context, ScalarFunctio
 
 void ICUDateFunc::SetTimeZone(icu::Calendar *calendar, const string_t &tz_id) {
 	auto tz = icu_66::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(icu::StringPiece(tz_id.GetString())));
+	if (*tz == icu::TimeZone::getUnknown()) {
+		delete tz;
+		throw NotImplementedException("Unknown TimeZone '%s'", tz_id.GetString());
+	}
 	calendar->adoptTimeZone(tz);
 }
 
@@ -83,7 +87,7 @@ timestamp_t ICUDateFunc::GetTimeUnsafe(icu::Calendar *calendar, uint64_t micros)
 	if (U_FAILURE(status)) {
 		throw InternalException("Unable to get ICU calendar time.");
 	}
-	return timestamp_t(millis * Interval::MICROS_PER_MSEC + micros);
+	return timestamp_t(millis * Interval::MICROS_PER_MSEC + int64_t(micros));
 }
 
 bool ICUDateFunc::TryGetTime(icu::Calendar *calendar, uint64_t micros, timestamp_t &result) {
@@ -98,7 +102,7 @@ bool ICUDateFunc::TryGetTime(icu::Calendar *calendar, uint64_t micros, timestamp
 	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(millis, Interval::MICROS_PER_MSEC, millis)) {
 		return false;
 	}
-	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(millis, micros, millis)) {
+	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(millis, int64_t(micros), millis)) {
 		return false;
 	}
 

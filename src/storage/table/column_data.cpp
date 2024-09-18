@@ -92,7 +92,10 @@ void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx)
 	state.last_offset = 0;
 }
 
-ScanVectorType ColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_count) {
+ScanVectorType ColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) {
+	if (result.GetVectorType() != VectorType::FLAT_VECTOR) {
+		return ScanVectorType::SCAN_ENTIRE_VECTOR;
+	}
 	if (HasUpdates()) {
 		// if we have updates we need to merge in the updates
 		// always need to scan flat vectors
@@ -230,8 +233,12 @@ void ColumnData::UpdateInternal(TransactionData transaction, idx_t column_index,
 template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>
 idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                              idx_t target_scan) {
-	auto scan_count = ScanVector(state, result, target_scan, GetVectorScanType(state, target_scan));
-	FetchUpdates(transaction, vector_index, result, scan_count, ALLOW_UPDATES, SCAN_COMMITTED);
+	auto scan_type = GetVectorScanType(state, target_scan, result);
+	auto scan_count = ScanVector(state, result, target_scan, scan_type);
+	if (scan_type != ScanVectorType::SCAN_ENTIRE_VECTOR) {
+		// if we are scanning an entire vector we cannot have updates
+		FetchUpdates(transaction, vector_index, result, scan_count, ALLOW_UPDATES, SCAN_COMMITTED);
+	}
 	return scan_count;
 }
 
@@ -632,6 +639,9 @@ PersistentColumnData::~PersistentColumnData() {
 }
 
 void PersistentColumnData::Serialize(Serializer &serializer) const {
+	if (has_updates) {
+		throw InternalException("Column data with updates cannot be serialized");
+	}
 	serializer.WritePropertyWithDefault(100, "data_pointers", pointers);
 	if (child_columns.empty()) {
 		// validity column
@@ -640,6 +650,7 @@ void PersistentColumnData::Serialize(Serializer &serializer) const {
 	}
 	serializer.WriteProperty(101, "validity", child_columns[0]);
 	if (physical_type == PhysicalType::ARRAY || physical_type == PhysicalType::LIST) {
+		D_ASSERT(child_columns.size() == 2);
 		serializer.WriteProperty(102, "child_column", child_columns[1]);
 	} else if (physical_type == PhysicalType::STRUCT) {
 		serializer.WriteList(102, "sub_columns", child_columns.size() - 1,
@@ -653,6 +664,7 @@ void PersistentColumnData::DeserializeField(Deserializer &deserializer, field_id
 	child_columns.push_back(deserializer.ReadProperty<PersistentColumnData>(field_idx, field_name));
 	deserializer.Unset<LogicalType>();
 }
+
 PersistentColumnData PersistentColumnData::Deserialize(Deserializer &deserializer) {
 	auto &type = deserializer.Get<const LogicalType &>();
 	auto physical_type = type.InternalType();
@@ -685,6 +697,18 @@ PersistentColumnData PersistentColumnData::Deserialize(Deserializer &deserialize
 	return result;
 }
 
+bool PersistentColumnData::HasUpdates() const {
+	if (has_updates) {
+		return true;
+	}
+	for (auto &child_col : child_columns) {
+		if (child_col.HasUpdates()) {
+			return true;
+		}
+	}
+	return false;
+}
+
 PersistentRowGroupData::PersistentRowGroupData(vector<LogicalType> types_p) : types(std::move(types_p)) {
 }
 
@@ -708,6 +732,15 @@ PersistentRowGroupData PersistentRowGroupData::Deserialize(Deserializer &deseria
 	return data;
 }
 
+bool PersistentRowGroupData::HasUpdates() const {
+	for (auto &col : column_data) {
+		if (col.HasUpdates()) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void PersistentCollectionData::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "row_groups", row_group_data);
 }
@@ -718,8 +751,19 @@ PersistentCollectionData PersistentCollectionData::Deserialize(Deserializer &des
 	return data;
 }
 
+bool PersistentCollectionData::HasUpdates() const {
+	for (auto &row_group : row_group_data) {
+		if (row_group.HasUpdates()) {
+			return true;
+		}
+	}
+	return false;
+}
+
 PersistentColumnData ColumnData::Serialize() {
-	return PersistentColumnData(type.InternalType(), GetDataPointers());
+	PersistentColumnData result(type.InternalType(), GetDataPointers());
+	result.has_updates = HasUpdates();
+	return result;
 }
 
 shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,

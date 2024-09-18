@@ -197,6 +197,16 @@ SELECT '1111'::BIT::BLOB;
 \x0F
 
 query I
+select 'ab'::BLOB::BIT::BLOB;
+----
+ab
+
+query I
+select 'a'::BLOB::BIT::BLOB;
+----
+a
+
+query I
 SELECT bitstring('1111', 33)::BLOB;
 ----
 \x00\x00\x00\x00\x0F

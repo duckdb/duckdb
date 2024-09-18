@@ -450,6 +450,7 @@ void ClientContext::RebindPreparedStatement(ClientContextLock &lock, const strin
 	auto new_prepared =
 	    CreatePreparedStatement(lock, query, prepared->unbound_statement->Copy(), parameters.parameters);
 	D_ASSERT(new_prepared->properties.bound_all_parameters);
+	new_prepared->properties.parameter_count = prepared->properties.parameter_count;
 	prepared = std::move(new_prepared);
 	prepared->properties.bound_all_parameters = false;
 }
@@ -1297,7 +1298,7 @@ ClientProperties ClientContext::GetClientProperties() const {
 		timezone = result.ToString();
 	}
 	return {timezone, db->config.options.arrow_offset_size, db->config.options.arrow_use_list_view,
-	        db->config.options.produce_arrow_string_views};
+	        db->config.options.produce_arrow_string_views, db->config.options.arrow_arrow_lossless_conversion};
 }
 
 bool ClientContext::ExecutionIsFinished() {

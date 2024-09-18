@@ -175,7 +175,7 @@ struct RLECompressState : public CompressionState {
 
 		// update meta data
 		if (WRITE_STATISTICS && !is_null) {
-			NumericStats::Update<T>(current_segment->stats.statistics, value);
+			current_segment->stats.statistics.UpdateNumericStats<T>(value);
 		}
 		current_segment->count += count;
 

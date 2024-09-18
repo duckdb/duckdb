@@ -71,8 +71,8 @@ public:
 	void UnswizzlePointers(ChunkManagementState &state, Vector &result, idx_t v_offset, uint16_t count,
 	                       uint32_t block_id, uint32_t offset);
 
-	//! Deletes the block with the given id
-	void DeleteBlock(uint32_t block_id);
+	//! Prevents the block with the given id from being added to the eviction queue
+	void SetDestroyBufferUponUnpin(uint32_t block_id);
 
 private:
 	void AllocateEmptyBlock(idx_t size);

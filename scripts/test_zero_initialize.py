@@ -27,7 +27,6 @@ test_list = [
     'test/sql/storage/update/test_store_null_updates.test',
     'test/sql/storage/test_store_integers.test',
     'test/sql/storage/mix/test_update_delete_string.test',
-    'test/sql/storage/nested/struct_of_lists_unaligned.test',
 ]
 
 

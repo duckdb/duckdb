@@ -204,6 +204,8 @@ typedef BindInfo (*table_function_get_bind_info_t)(const optional_ptr<FunctionDa
 
 typedef unique_ptr<MultiFileReader> (*table_function_get_multi_file_reader_t)();
 
+typedef bool (*table_function_supports_pushdown_type_t)(const LogicalType &type);
+
 typedef double (*table_function_progress_t)(ClientContext &context, const FunctionData *bind_data,
                                             const GlobalTableFunctionState *global_state);
 typedef void (*table_function_dependency_t)(LogicalDependencyList &dependencies, const FunctionData *bind_data);
@@ -220,6 +222,9 @@ typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(Deserializer &d
 
 typedef void (*table_function_type_pushdown_t)(ClientContext &context, optional_ptr<FunctionData> bind_data,
                                                const unordered_map<idx_t, LogicalType> &new_column_types);
+
+//! When to call init_global to initialize the table function
+enum class TableFunctionInitialization { INITIALIZE_ON_EXECUTE, INITIALIZE_ON_SCHEDULE };
 
 class TableFunction : public SimpleNamedParameterFunction { // NOLINT: work-around bug in clang-tidy
 public:
@@ -280,6 +285,8 @@ public:
 	table_function_type_pushdown_t type_pushdown;
 	//! (Optional) allows injecting a custom MultiFileReader implementation
 	table_function_get_multi_file_reader_t get_multi_file_reader;
+	//! (Optional) If this scanner supports filter pushdown, but not to all data types
+	table_function_supports_pushdown_type_t supports_pushdown_type;
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;
@@ -296,6 +303,11 @@ public:
 	bool filter_prune;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
+
+	//! When to call init_global
+	//! By default init_global is called when the pipeline is ready for execution
+	//! If this is set to `INITIALIZE_ON_SCHEDULE` the table function is initialized when the query is scheduled
+	TableFunctionInitialization global_initialization = TableFunctionInitialization::INITIALIZE_ON_EXECUTE;
 
 	DUCKDB_API bool Equal(const TableFunction &rhs) const;
 };

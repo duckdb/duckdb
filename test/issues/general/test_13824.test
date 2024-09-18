@@ -1,0 +1,37 @@
+# name: test/issues/general/test_13824.test
+# description: min() and max() should use default collation
+# group: [general]
+
+require icu
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table test(id int, name text)
+
+statement ok
+insert into test values (1, 'a'), (2, 'b'), (3, 'c'), (4, 'A'), (5, 'G'), (6, 'd')
+
+query I
+select min(name) from test
+----
+A
+
+query I
+select max(name) from test
+----
+d
+
+statement ok
+set default_collation = 'EN_US';
+
+query I
+select min(name) from test
+----
+a
+
+query I
+select max(name) from test
+----
+G

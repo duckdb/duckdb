@@ -65,7 +65,8 @@ BufferHandle ColumnDataAllocator::AllocateBlock(idx_t size) {
 	BlockMetaData data;
 	data.size = 0;
 	data.capacity = NumericCast<uint32_t>(max_size);
-	auto pin = alloc.buffer_manager->Allocate(MemoryTag::COLUMN_DATA, max_size, false, &data.handle);
+	auto pin = alloc.buffer_manager->Allocate(MemoryTag::COLUMN_DATA, max_size, false);
+	data.handle = pin.GetBlockHandle();
 	blocks.push_back(std::move(data));
 	allocated_size += max_size;
 	return pin;
@@ -220,8 +221,8 @@ void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector 
 	}
 }
 
-void ColumnDataAllocator::DeleteBlock(uint32_t block_id) {
-	blocks[block_id].handle->SetCanDestroy(true);
+void ColumnDataAllocator::SetDestroyBufferUponUnpin(uint32_t block_id) {
+	blocks[block_id].handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
 }
 
 Allocator &ColumnDataAllocator::GetAllocator() {

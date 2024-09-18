@@ -29,7 +29,7 @@ CREATE TABLE test_2 as (SELECT 2 FROM range(0,5));
 CREATE TABLE test_3 as (SELECT 3 FROM range(0,5));
 CREATE TABLE test_4 as (SELECT 4 FROM range(0,5));
 
-foreach prefix s3:// r2:// gcs:// gs:// s3a:// s3n://
+foreach prefix s3:// r2:// s3a:// s3n://
 
 statement ok
 COPY test_1 TO '${prefix}test-bucket-public/url_encode/just because you can doesnt mean you should.parquet' (FORMAT 'parquet');
@@ -142,4 +142,4 @@ HTTP GET error on 'http://test-bucket.s3.amazonaws.com/whatever.parquet'
 statement error
 SELECT * FROM 'gcs://test-bucket/whatever.parquet';
 ----
-HTTP GET error on 'http://test-bucket.storage.googleapis.com/whatever.parquet'
+HTTP GET error on 'http://storage.googleapis.com/test-bucket/whatever.parquet'

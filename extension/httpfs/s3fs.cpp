@@ -686,7 +686,7 @@ unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const string &path, FileOp
 	auto parsed_s3_url = S3UrlParse(path, auth_params);
 	ReadQueryParams(parsed_s3_url.query_param, auth_params);
 
-	return duckdb::make_uniq<S3FileHandle>(*this, path, flags, HTTPParams::ReadFrom(opener), auth_params,
+	return duckdb::make_uniq<S3FileHandle>(*this, path, flags, HTTPParams::ReadFrom(opener, info), auth_params,
 	                                       S3ConfigParams::ReadFrom(opener));
 }
 
@@ -903,7 +903,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 	}
 
 	string shared_path = parsed_glob_url.substr(0, first_wildcard_pos);
-	auto http_params = HTTPParams::ReadFrom(opener);
+	auto http_params = HTTPParams::ReadFrom(opener, info);
 
 	ReadQueryParams(parsed_s3_url.query_param, s3_auth_params);
 

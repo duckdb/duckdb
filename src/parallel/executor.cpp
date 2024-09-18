@@ -2,6 +2,7 @@
 
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
+#include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/operator/set/physical_cte.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/execution/physical_operator.hpp"
@@ -162,11 +163,14 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 	event_map.insert(make_pair(reference<Pipeline>(*base_pipeline), base_stack));
 
 	for (auto &pipeline : pipelines) {
-		auto &config = DBConfig::GetConfig(context);
 		auto source = pipeline->GetSource();
-		if (source->type == PhysicalOperatorType::TABLE_SCAN && config.options.initialize_in_main_thread) {
-			// this is a work-around for the R client that requires the init to be called in the main thread
-			pipeline->ResetSource(true);
+		if (source->type == PhysicalOperatorType::TABLE_SCAN) {
+			auto &table_function = source->Cast<PhysicalTableScan>();
+			if (table_function.function.global_initialization == TableFunctionInitialization::INITIALIZE_ON_SCHEDULE) {
+				// certain functions have to be eagerly initialized during scheduling
+				// if that is the case - initialize the function here
+				pipeline->ResetSource(true);
+			}
 		}
 	}
 }
@@ -464,6 +468,7 @@ void Executor::SignalTaskRescheduled(lock_guard<mutex> &) {
 }
 
 void Executor::WaitForTask() {
+#ifndef DUCKDB_NO_THREADS
 	static constexpr std::chrono::milliseconds WAIT_TIME_MS = std::chrono::milliseconds(WAIT_TIME);
 	std::unique_lock<mutex> l(executor_lock);
 	if (to_be_rescheduled_tasks.empty()) {
@@ -476,6 +481,7 @@ void Executor::WaitForTask() {
 
 	blocked_thread_time++;
 	task_reschedule.wait_for(l, WAIT_TIME_MS);
+#endif
 }
 
 void Executor::RescheduleTask(shared_ptr<Task> &task_p) {

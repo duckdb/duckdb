@@ -1,5 +1,6 @@
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 
+#include "duckdb/common/allocator.hpp"
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/typedefs.hpp"
@@ -8,6 +9,7 @@
 #include "duckdb/storage/temporary_memory_manager.hpp"
 
 namespace duckdb {
+
 BufferEvictionNode::BufferEvictionNode(weak_ptr<BlockHandle> handle_p, idx_t eviction_seq_num)
     : handle(std::move(handle_p)), handle_sequence_number(eviction_seq_num) {
 	D_ASSERT(!handle.expired());
@@ -192,8 +194,11 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 	total_dead_nodes -= actually_dequeued - alive_nodes;
 }
 
-BufferPool::BufferPool(idx_t maximum_memory, bool track_eviction_timestamps)
-    : maximum_memory(maximum_memory), track_eviction_timestamps(track_eviction_timestamps),
+BufferPool::BufferPool(idx_t maximum_memory, bool track_eviction_timestamps,
+                       idx_t allocator_bulk_deallocation_flush_threshold)
+    : maximum_memory(maximum_memory),
+      allocator_bulk_deallocation_flush_threshold(allocator_bulk_deallocation_flush_threshold),
+      track_eviction_timestamps(track_eviction_timestamps),
       temporary_memory_manager(make_uniq<TemporaryMemoryManager>()) {
 	queues.reserve(FILE_BUFFER_TYPE_COUNT);
 	for (idx_t i = 0; i < FILE_BUFFER_TYPE_COUNT; i++) {
@@ -281,6 +286,9 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 	bool found = false;
 
 	if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
+		if (Allocator::SupportsFlush() && extra_memory > allocator_bulk_deallocation_flush_threshold) {
+			Allocator::FlushAll();
+		}
 		return {true, std::move(r)};
 	}
 
@@ -307,6 +315,8 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 
 	if (!found) {
 		r.Resize(0);
+	} else if (Allocator::SupportsFlush() && extra_memory > allocator_bulk_deallocation_flush_threshold) {
+		Allocator::FlushAll();
 	}
 
 	return {found, std::move(r)};
@@ -394,6 +404,13 @@ void BufferPool::SetLimit(idx_t limit, const char *exception_postscript) {
 		    "Failed to change memory limit to %lld: could not free up enough memory for the new limit%s", limit,
 		    exception_postscript);
 	}
+	if (Allocator::SupportsFlush()) {
+		Allocator::FlushAll();
+	}
+}
+
+void BufferPool::SetAllocatorBulkDeallocationFlushThreshold(idx_t threshold) {
+	allocator_bulk_deallocation_flush_threshold = threshold;
 }
 
 BufferPool::MemoryUsage::MemoryUsage() {

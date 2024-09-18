@@ -164,12 +164,19 @@ SinkFinalizeType PhysicalCreateARTIndex::Finalize(Pipeline &pipeline, Event &eve
 
 	auto &schema = table.schema;
 	info->column_ids = storage_ids;
-	auto index_entry = schema.CreateIndex(schema.GetCatalogTransaction(context), *info, table).get();
-	if (!index_entry) {
-		D_ASSERT(info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT);
-		// index already exists, but error ignored because of IF NOT EXISTS
+
+	// Ensure that the index does not yet exist.
+	// FIXME: We should early-out prior to creating the index.
+	if (schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::INDEX_ENTRY, info->index_name)) {
+		if (info->on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
+			throw CatalogException("Index with name \"%s\" already exists!", info->index_name);
+		}
+		// IF NOT EXISTS on existing index. We are done.
 		return SinkFinalizeType::READY;
 	}
+
+	auto index_entry = schema.CreateIndex(schema.GetCatalogTransaction(context), *info, table).get();
+	D_ASSERT(index_entry);
 	auto &index = index_entry->Cast<DuckIndexEntry>();
 	index.initial_index_size = state.global_index->GetInMemorySize();
 

@@ -36,7 +36,7 @@ bool ColumnCountResult::AddRow(ColumnCountResult &result, idx_t buffer_pos) {
 }
 
 void ColumnCountResult::SetComment(ColumnCountResult &result, idx_t buffer_pos) {
-	if (result.current_column_count == 0) {
+	if (!result.states.WasStandard()) {
 		result.cur_line_starts_as_comment = true;
 	}
 	result.comment = true;

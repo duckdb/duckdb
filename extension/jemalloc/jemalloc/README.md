@@ -58,8 +58,8 @@ This is not portable, but we can make it portable if we replace all of it with t
 
 Add this to `jemalloc.h`:
 ```c++
-// DuckDB uses a 10s decay
-#define DUCKDB_JEMALLOC_DECAY 10
+// DuckDB uses a 5s decay
+#define DUCKDB_JEMALLOC_DECAY 5
 ```
 
 We also supply our own config string in `jemalloc.c`.
@@ -74,7 +74,7 @@ JEMALLOC_ATTR(constructor)
 static void
 jemalloc_constructor(void) {
 	unsigned long long cpu_count = malloc_ncpus();
-	unsigned long long bgt_count = cpu_count / 32;
+	unsigned long long bgt_count = cpu_count / 16;
 	if (bgt_count == 0) {
 		bgt_count = 1;
 	}
@@ -153,6 +153,30 @@ int strerror_fixed(int err, char *buf, size_t buflen) {
         strncpy(buf, (const char*)r, buflen);
     }
 	return 0;
+}
+```
+
+Edit the following in `pages.c`:
+```c++
+// explicitly initialize this buffer to prevent reading uninitialized memory if the file is somehow empty
+// 0 is the default setting for linux if it hasn't been changed so that's what we initialize to
+char buf[1] = {'0'};
+// in this function
+static bool
+os_overcommits_proc(void)
+```
+
+Modify this function to only print in DEBUG mode in `malloc_io.c`.
+```c++
+void
+malloc_write(const char *s) {
+#ifdef DEBUG
+	if (je_malloc_message != NULL) {
+		je_malloc_message(NULL, s);
+	} else {
+		wrtmessage(NULL, s);
+	}
+#endif
 }
 ```
 

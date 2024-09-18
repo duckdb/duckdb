@@ -23,6 +23,7 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 	case JoinType::OUTER:
 	case JoinType::ANTI:
 	case JoinType::RIGHT_ANTI:
+	case JoinType::RIGHT_SEMI:
 		// cannot generate join filters for these join types
 		// mark/single - cannot change cardinality of probe side
 		// left/outer always need to include every row from probe side
@@ -117,11 +118,6 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 		}
 	}
 	// pushdown can be performed
-	// set up the dynamic filters (if we don't have any yet)
-	if (!get.dynamic_filters) {
-		get.dynamic_filters = make_shared_ptr<DynamicTableFilterSet>();
-	}
-	pushdown_info->dynamic_filters = get.dynamic_filters;
 
 	// set up the min/max aggregates for each of the filters
 	vector<AggregateFunction> aggr_functions;
@@ -134,9 +130,18 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 			aggr_children.push_back(join.conditions[filter.join_condition].right->Copy());
 			auto aggr_expr = function_binder.BindAggregateFunction(aggr, std::move(aggr_children), nullptr,
 			                                                       AggregateType::NON_DISTINCT);
+			if (aggr_expr->children.size() != 1) {
+				// min/max with collation - not supported
+				return;
+			}
 			pushdown_info->min_max_aggregates.push_back(std::move(aggr_expr));
 		}
 	}
+	// set up the dynamic filters (if we don't have any yet)
+	if (!get.dynamic_filters) {
+		get.dynamic_filters = make_shared_ptr<DynamicTableFilterSet>();
+	}
+	pushdown_info->dynamic_filters = get.dynamic_filters;
 
 	// set up the filter pushdown in the join itself
 	join.filter_pushdown = std::move(pushdown_info);

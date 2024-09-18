@@ -42,7 +42,7 @@ struct IcuBindData : public FunctionData {
 	string country;
 	string tag;
 
-	IcuBindData(duckdb::unique_ptr<icu::Collator> collator_p) : collator(std::move(collator_p)) {
+	explicit IcuBindData(duckdb::unique_ptr<icu::Collator> collator_p) : collator(std::move(collator_p)) {
 	}
 
 	IcuBindData(string language_p, string country_p) : language(std::move(language_p)), country(std::move(country_p)) {
@@ -59,7 +59,7 @@ struct IcuBindData : public FunctionData {
 		}
 	}
 
-	IcuBindData(string tag_p) : tag(std::move(tag_p)) {
+	explicit IcuBindData(string tag_p) : tag(std::move(tag_p)) {
 		UErrorCode status = U_ZERO_ERROR;
 		UCollator *ucollator = ucol_open(tag.c_str(), &status);
 		if (U_FAILURE(status)) {
@@ -120,7 +120,7 @@ const string IcuBindData::FUNCTION_PREFIX = "icu_collate_";
 static int32_t ICUGetSortKey(icu::Collator &collator, string_t input, duckdb::unique_ptr<char[]> &buffer,
                              int32_t &buffer_size) {
 	icu::UnicodeString unicode_string =
-	    icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetData(), input.GetSize()));
+	    icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetData(), int32_t(input.GetSize())));
 	int32_t string_size = collator.getSortKey(unicode_string, reinterpret_cast<uint8_t *>(buffer.get()), buffer_size);
 	if (string_size > buffer_size) {
 		// have to resize the buffer
@@ -204,18 +204,19 @@ static ScalarFunction GetICUCollateFunction(const string &collation, const strin
 	string fname = IcuBindData::EncodeFunctionName(collation);
 	ScalarFunction result(fname, {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction, ICUCollateBind);
 	//! collation tag is added into the Function extra info
-	result.extra_info = std::move(tag);
+	result.extra_info = tag;
 	result.serialize = IcuBindData::Serialize;
 	result.deserialize = IcuBindData::Deserialize;
 	return result;
 }
 
 static void SetICUTimeZone(ClientContext &context, SetScope scope, Value &parameter) {
-	icu::StringPiece utf8(StringValue::Get(parameter));
+	auto str = StringValue::Get(parameter);
+	icu::StringPiece utf8(str);
 	const auto uid = icu::UnicodeString::fromUTF8(utf8);
 	duckdb::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createTimeZone(uid));
 	if (*tz == icu::TimeZone::getUnknown()) {
-		throw NotImplementedException("Unknown TimeZone setting");
+		throw NotImplementedException("Unknown TimeZone '%s'", str);
 	}
 }
 

@@ -88,7 +88,7 @@ public:
 	//! Whether or not the column has any updates
 	bool HasUpdates() const;
 	//! Whether or not we can scan an entire vector
-	virtual ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count);
+	virtual ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result);
 
 	//! Initialize prefetch state with required I/O data for the next N rows
 	virtual void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows);
@@ -224,11 +224,13 @@ struct PersistentColumnData {
 	PhysicalType physical_type;
 	vector<DataPointer> pointers;
 	vector<PersistentColumnData> child_columns;
+	bool has_updates = false;
 
 	void Serialize(Serializer &serializer) const;
 	static PersistentColumnData Deserialize(Deserializer &deserializer);
 	void DeserializeField(Deserializer &deserializer, field_id_t field_idx, const char *field_name,
 	                      const LogicalType &type);
+	bool HasUpdates() const;
 };
 
 struct PersistentRowGroupData {
@@ -249,6 +251,7 @@ struct PersistentRowGroupData {
 
 	void Serialize(Serializer &serializer) const;
 	static PersistentRowGroupData Deserialize(Deserializer &deserializer);
+	bool HasUpdates() const;
 };
 
 struct PersistentCollectionData {
@@ -265,6 +268,7 @@ struct PersistentCollectionData {
 
 	void Serialize(Serializer &serializer) const;
 	static PersistentCollectionData Deserialize(Deserializer &deserializer);
+	bool HasUpdates() const;
 };
 
 } // namespace duckdb

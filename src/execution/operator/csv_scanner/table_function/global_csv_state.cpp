@@ -41,6 +41,11 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 	    make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager, current_boundary.GetBufferIdx());
 }
 
+bool CSVGlobalState::IsDone() const {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	return current_boundary.done;
+}
+
 double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	idx_t total_files = bind_data.files.size();
@@ -72,17 +77,18 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScanner> previous_scanner) {
 	if (single_threaded) {
 		idx_t cur_idx;
-		shared_ptr<CSVFileScan> current_file;
+		bool empty_file = false;
 		do {
 			{
 				lock_guard<mutex> parallel_lock(main_mutex);
 				cur_idx = last_file_idx++;
 				if (cur_idx >= bind_data.files.size()) {
+					// No more files to scan
 					return nullptr;
 				}
 				if (cur_idx == 0) {
 					D_ASSERT(!previous_scanner);
-					current_file = file_scans.front();
+					auto current_file = file_scans.front();
 					return make_uniq<StringValueScanner>(scanner_idx++, current_file->buffer_manager,
 					                                     current_file->state_machine, current_file->error_handler,
 					                                     current_file, false, current_boundary);
@@ -90,22 +96,25 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 			}
 			auto file_scan = make_shared_ptr<CSVFileScan>(context, bind_data.files[cur_idx], bind_data.options, cur_idx,
 			                                              bind_data, column_ids, file_schema, true);
-			lock_guard<mutex> parallel_lock(main_mutex);
-			file_scans.emplace_back(std::move(file_scan));
-			current_file = file_scans.back();
-		} while (current_file->file_size == 0);
-		lock_guard<mutex> parallel_lock(main_mutex);
-		current_boundary = current_file->start_iterator;
-		current_boundary.SetCurrentBoundaryToPosition(single_threaded);
-		current_buffer_in_use =
-		    make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager, current_boundary.GetBufferIdx());
-		if (previous_scanner) {
-			previous_scanner->buffer_tracker.reset();
-			current_buffer_in_use.reset();
-			previous_scanner->csv_file_scan->Finish();
-		}
-		return make_uniq<StringValueScanner>(scanner_idx++, current_file->buffer_manager, current_file->state_machine,
-		                                     current_file->error_handler, current_file, false, current_boundary);
+			empty_file = file_scan->file_size == 0;
+			if (!empty_file) {
+				lock_guard<mutex> parallel_lock(main_mutex);
+				file_scans.emplace_back(std::move(file_scan));
+				auto current_file = file_scans.back();
+				current_boundary = current_file->start_iterator;
+				current_boundary.SetCurrentBoundaryToPosition(single_threaded);
+				current_buffer_in_use = make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager,
+				                                                        current_boundary.GetBufferIdx());
+				if (previous_scanner) {
+					previous_scanner->buffer_tracker.reset();
+					current_buffer_in_use.reset();
+					previous_scanner->csv_file_scan->Finish();
+				}
+				return make_uniq<StringValueScanner>(scanner_idx++, current_file->buffer_manager,
+				                                     current_file->state_machine, current_file->error_handler,
+				                                     current_file, false, current_boundary);
+			}
+		} while (empty_file);
 	}
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (finished) {

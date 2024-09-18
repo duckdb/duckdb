@@ -216,7 +216,6 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		ExpressionBinder::QualifyColumnNames(*this, expression);
 
 		// bind it to verify the function was defined correctly
-		ErrorData error;
 		BoundSelectNode sel_node;
 		BoundGroupInformation group_info;
 		SelectBinder binder(*this, context, sel_node, group_info);
@@ -232,8 +231,17 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 				dependencies.AddDependency(entry);
 			});
 		}
-		error = binder.Bind(expression, 0, false);
-		if (error.HasError()) {
+		ErrorData error;
+		try {
+			error = binder.Bind(expression, 0, false);
+			if (error.HasError()) {
+				error.Throw();
+			}
+		} catch (const std::exception &ex) {
+			error = ErrorData(ex);
+		}
+		// if we cannot resolve parameters we postpone binding until the macro function is used
+		if (error.HasError() && error.Type() != ExceptionType::PARAMETER_NOT_RESOLVED) {
 			error.Throw();
 		}
 	}
@@ -580,6 +588,7 @@ unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateS
 	create_index_info->scan_types.emplace_back(LogicalType::ROW_TYPE);
 	create_index_info->names = get.names;
 	create_index_info->column_ids = column_ids;
+	create_index_info->schema = table.schema.name;
 	auto &bind_data = get.bind_data->Cast<TableScanBindData>();
 	bind_data.is_create_index = true;
 	get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);

@@ -304,6 +304,14 @@ void SingleFileStorageCommitState::FlushCommit() {
 
 void SingleFileStorageCommitState::AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
                                                    unique_ptr<PersistentCollectionData> row_group_data) {
+	if (row_group_data->HasUpdates()) {
+		// cannot serialize optimistic block pointers if in-memory updates exist
+		return;
+	}
+	if (table.HasIndexes()) {
+		// cannot serialize optimistic block pointers if the table has indexes
+		return;
+	}
 	auto &entries = optimistically_written_data[table];
 	auto entry = entries.find(start_index);
 	if (entry != entries.end()) {

@@ -73,6 +73,22 @@ class TestReadFromStdin(object):
         result.check_stdout("column0,column1,column2")
         result.check_stdout('0,0, test')
 
+    def test_split_part_csv(self, shell):
+        test = (
+            ShellTest(shell)
+            .input_file('data/csv/split_part.csv')
+            .statement("""
+                FROM read_csv('/dev/stdin') select split_part(C1, ',', 2) as res;
+            """)
+            .add_argument(
+                '-csv',
+                ':memory:'
+            )
+        )
+        result = test.run()
+        result.check_stdout("res")
+        result.check_stdout('12')
+        result.check_stdout('12')
 
     def test_read_stdin_csv_auto_projection(self, shell):
         test = (

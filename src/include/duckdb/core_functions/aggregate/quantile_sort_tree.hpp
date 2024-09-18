@@ -110,8 +110,8 @@ string_t CastInterpolation::Cast(const string_t &src, Vector &result);
 template <bool DISCRETE>
 struct Interpolator {
 	Interpolator(const QuantileValue &q, const idx_t n_p, const bool desc_p)
-	    : desc(desc_p), RN((double)(n_p - 1) * q.dbl), FRN(UnsafeNumericCast<idx_t>(floor(RN))),
-	      CRN(UnsafeNumericCast<idx_t>(ceil(RN))), begin(0), end(n_p) {
+	    : desc(desc_p), RN((double)(n_p - 1) * q.dbl), FRN(ExactNumericCast<idx_t>(floor(RN))),
+	      CRN(ExactNumericCast<idx_t>(ceil(RN))), begin(0), end(n_p) {
 	}
 
 	template <class INPUT_TYPE, class TARGET_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
