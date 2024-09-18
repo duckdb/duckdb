@@ -227,8 +227,9 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	idx_t consistent_rows = 0;
 	idx_t num_cols = sniffed_column_counts.result_position == 0 ? 1 : sniffed_column_counts[0].number_of_columns;
 	const bool ignore_errors = options.ignore_errors.GetValue();
-	if (ignore_errors) {
-		// If we are ignoring errors, we pick the most frequent number of columns as the right one
+	// If we are ignoring errors and not null_padding , we pick the most frequent number of columns as the right one
+	bool use_most_frequent_columns = ignore_errors && !options.null_padding;
+	if (use_most_frequent_columns) {
 		num_cols = sniffed_column_counts.GetMostFrequentColumnCount();
 	}
 	idx_t padding_count = 0;
@@ -262,7 +263,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 			consistent_rows++;
 		} else if (num_cols < sniffed_column_counts[row].number_of_columns &&
 		           (!options.dialect_options.skip_rows.IsSetByUser() || comment_rows > 0) &&
-		           (!set_columns.IsSet() || options.null_padding) && (!first_valid || !ignore_errors)) {
+		           (!set_columns.IsSet() || options.null_padding) && (!first_valid || (!use_most_frequent_columns))) {
 			// all rows up to this point will need padding
 			if (!first_valid) {
 				first_valid = true;
@@ -275,11 +276,11 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 			dirty_notes_minus_comments = dirty_notes - comment_rows;
 			header_idx = row;
 			consistent_rows = 1;
-		} else if (sniffed_column_counts[row].number_of_columns == num_cols ||
-		           (ignore_errors && !options.null_padding)) {
+		} else if (sniffed_column_counts[row].number_of_columns == num_cols || (use_most_frequent_columns)) {
 			if (!first_valid) {
 				first_valid = true;
 				sniffed_column_counts.state_machine.dialect_options.rows_until_header = row;
+				dirty_notes = row;
 			}
 			if (sniffed_column_counts[row].number_of_columns != num_cols) {
 				ignored_rows++;

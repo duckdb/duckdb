@@ -28,6 +28,11 @@ idx_t ColumnCountResult::GetMostFrequentColumnCount() const {
 		if (rpc.second > current_max) {
 			current_max = rpc.second;
 			column_count = rpc.first;
+		} else if (rpc.second == current_max) {
+			// We pick the largest to untie
+			if (rpc.first > column_count) {
+				column_count = rpc.first;
+			}
 		}
 	}
 	return column_count;
