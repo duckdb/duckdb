@@ -482,6 +482,10 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 	if (column_type.IsJSONType()) {
 		return 0; // Does not need to be surrounded in quotes like VARCHAR
 	}
+	if (column_type.HasAlias()) {
+		// Use the text representation for aliased types
+		return SQLITE_TEXT;
+	}
 	switch (column_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 	case LogicalTypeId::TINYINT:
