@@ -73,9 +73,25 @@ private:
 	vector<pair<idx_t, idx_t>> ranges;
 };
 
-class WindowTable {
+class WindowBuilder {
 public:
-	explicit WindowTable(const WindowDataChunk &paged);
+	explicit WindowBuilder(WindowDataChunk &collection);
+
+	//! Add a new chunk at the given index
+	void Sink(DataChunk &chunk, idx_t input_idx);
+
+	//! The collection we are helping to build
+	WindowDataChunk &collection;
+	//! The thread's current input collection
+	using ColumnDataCollectionSpec = WindowDataChunk::ColumnDataCollectionSpec;
+	ColumnDataCollectionSpec sink;
+	//! The state used for appending to the collection
+	ColumnDataAppendState appender;
+};
+
+class WindowCursor {
+public:
+	explicit WindowCursor(const WindowDataChunk &paged);
 
 	//! Is the scan in range?
 	inline bool RowIsVisible(idx_t row_idx) const {

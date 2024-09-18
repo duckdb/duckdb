@@ -59,13 +59,10 @@ public:
 	void Sink(WindowAggregatorGlobalState &gastate, DataChunk &input, idx_t row_idx);
 	virtual void Finalize(WindowAggregatorGlobalState &gastate);
 
-	//! The thread's current input collection
-	using ColumnDataCollectionSpec = WindowDataChunk::ColumnDataCollectionSpec;
-	ColumnDataCollectionSpec sink;
 	//! The state used for appending to the collection
-	ColumnDataAppendState appender;
+	unique_ptr<WindowBuilder> appender;
 	//! The state used for reading the collection
-	unique_ptr<WindowTable> cursor;
+	unique_ptr<WindowCursor> cursor;
 };
 
 WindowAggregator::WindowAggregator(AggregateObject aggr_p, const vector<LogicalType> &arg_types_p,
@@ -86,13 +83,10 @@ void WindowAggregatorLocalState::Sink(WindowAggregatorGlobalState &gastate, Data
 	auto &winputs = gastate.winputs;
 	if (!winputs.GetTypes().empty()) {
 		if (gastate.aggregator.use_collections) {
-			// Check whether we need a a new collection
-			if (!sink.second || input_idx < sink.first || sink.first + sink.second->Count() < input_idx) {
-				winputs.GetCollection(input_idx, sink);
-				D_ASSERT(sink.second);
-				sink.second->InitializeAppend(appender);
+			if (!appender) {
+				appender = make_uniq<WindowBuilder>(winputs);
 			}
-			sink.second->Append(appender, arg_chunk);
+			appender->Sink(arg_chunk, input_idx);
 		} else {
 			winputs.Copy(arg_chunk, input_idx);
 		}
@@ -123,7 +117,7 @@ void WindowAggregatorLocalState::Finalize(WindowAggregatorGlobalState &gastate) 
 
 	// Prepare to scan
 	if (!cursor) {
-		cursor = make_uniq<WindowTable>(winputs);
+		cursor = make_uniq<WindowCursor>(winputs);
 	}
 }
 
@@ -742,7 +736,7 @@ protected:
 	//! The optional hash table used for DISTINCT
 	Vector hashes;
 	//! The state used for comparing the collection across chunk boundaries
-	unique_ptr<WindowTable> comparer;
+	unique_ptr<WindowCursor> comparer;
 };
 
 WindowNaiveState::WindowNaiveState(const WindowNaiveAggregator &aggregator_p)
@@ -769,7 +763,7 @@ void WindowNaiveState::Finalize(WindowAggregatorGlobalState &gastate) {
 
 	//	Set up the comparison scanner just in case
 	if (!comparer) {
-		comparer = make_uniq<WindowTable>(gastate.winputs);
+		comparer = make_uniq<WindowCursor>(gastate.winputs);
 	}
 }
 
@@ -1006,7 +1000,7 @@ public:
 	//! Data pointer that contains a vector of states, used for intermediate window segment aggregation
 	vector<data_t> state;
 	//! Scanned data state
-	unique_ptr<WindowTable> cursor;
+	unique_ptr<WindowCursor> cursor;
 	//! Input data chunk, used for leaf segment aggregation
 	DataChunk leaves;
 	//! The filtered rows in inputs.
@@ -1078,7 +1072,7 @@ WindowSegmentTreePart::WindowSegmentTreePart(ArenaAllocator &allocator, const Ag
 
 	// Set up for scanning
 	if (!cursor) {
-		cursor = make_uniq<WindowTable>(inputs);
+		cursor = make_uniq<WindowCursor>(inputs);
 	}
 }
 

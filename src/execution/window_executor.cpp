@@ -112,7 +112,7 @@ void WindowDataChunk::Combine(bool build_validity) {
 	if (build_validity) {
 		D_ASSERT(inputs.get());
 		validity.Initialize(inputs->Count());
-		WindowTable cursor(*this);
+		WindowCursor cursor(*this);
 		idx_t target_offset = 0;
 		while (cursor.Scan()) {
 			const auto count = cursor.chunk.size();
@@ -123,7 +123,20 @@ void WindowDataChunk::Combine(bool build_validity) {
 	}
 }
 
-WindowTable::WindowTable(const WindowDataChunk &paged) : paged(paged) {
+WindowBuilder::WindowBuilder(WindowDataChunk &collection) : collection(collection) {
+}
+
+void WindowBuilder::Sink(DataChunk &chunk, idx_t input_idx) {
+	// Check whether we need a a new collection
+	if (!sink.second || input_idx < sink.first || sink.first + sink.second->Count() < input_idx) {
+		collection.GetCollection(input_idx, sink);
+		D_ASSERT(sink.second);
+		sink.second->InitializeAppend(appender);
+	}
+	sink.second->Append(appender, chunk);
+}
+
+WindowCursor::WindowCursor(const WindowDataChunk &paged) : paged(paged) {
 	if (paged.GetTypes().empty()) {
 		//	For things like COUNT(*) set the state up to contain the whole range
 		state.segment_index = 0;
@@ -1498,7 +1511,7 @@ public:
 class WindowValueLocalState : public WindowExecutorBoundsState {
 public:
 	explicit WindowValueLocalState(const WindowValueGlobalState &gvstate)
-	    : WindowExecutorBoundsState(gvstate), gvstate(gvstate) {
+	    : WindowExecutorBoundsState(gvstate), gvstate(gvstate), builder(*gvstate.payload_collection) {
 	}
 
 	//! Sink a chunk into the collection
@@ -1514,28 +1527,18 @@ public:
 	optional_ptr<ValidityMask> ignore_nulls_exclude;
 
 	//! The thread's current input collection
-	using ColumnDataCollectionSpec = WindowDataChunk::ColumnDataCollectionSpec;
-	ColumnDataCollectionSpec sink;
-	//! The state used for appending to the collection
-	ColumnDataAppendState appender;
+	WindowBuilder builder;
 	//! The state used for reading the collection
-	unique_ptr<WindowTable> cursor;
+	unique_ptr<WindowCursor> cursor;
 };
 
 void WindowValueLocalState::Sink(DataChunk &input_chunk, const idx_t input_idx) {
-	auto &payload_collection = gvstate.payload_collection;
-
 	payload_chunk.Reset();
 	payload_executor.Execute(input_chunk, payload_chunk);
 	payload_chunk.Verify();
 
 	// Check whether we need a a new collection
-	if (!sink.second || input_idx < sink.first || sink.first + sink.second->Count() < input_idx) {
-		payload_collection->GetCollection(input_idx, sink);
-		D_ASSERT(sink.second);
-		sink.second->InitializeAppend(appender);
-	}
-	sink.second->Append(appender, payload_chunk);
+	builder.Sink(payload_chunk, input_idx);
 }
 
 void WindowValueLocalState::Finalize() {
@@ -1559,7 +1562,7 @@ void WindowValueLocalState::Finalize() {
 
 	// Prepare to scan
 	if (!cursor) {
-		cursor = make_uniq<WindowTable>(*payload_collection);
+		cursor = make_uniq<WindowCursor>(*payload_collection);
 	}
 }
 
