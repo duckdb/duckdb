@@ -237,21 +237,33 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpress
 
 	// get a matching binding
 	ErrorData error;
-	BindingAlias alias;
+	optional_ptr<Binding> binding;
 	switch (col_ref.column_names.size()) {
-	case 1:
-		alias = BindingAlias(col_ref.column_names[0]);
+	case 1: {
+		// single entry - this must be the table name
+		BindingAlias alias(col_ref.column_names[0]);
+		binding = binder.bind_context.GetBinding(alias, error);
 		break;
-	case 2:
-		alias = BindingAlias(col_ref.column_names[0], col_ref.column_names[1]);
+	}
+	case 2: {
+		// two entries - this can either be "catalog.table" or "schema.table" - try both
+		BindingAlias alias(col_ref.column_names[0], col_ref.column_names[1]);
+		binding = binder.bind_context.GetBinding(alias, error);
+		if (!binding) {
+			alias = BindingAlias(col_ref.column_names[0], INVALID_SCHEMA, col_ref.column_names[1]);
+			binding = binder.bind_context.GetBinding(alias, error);
+		}
 		break;
-	case 3:
-		alias = BindingAlias(col_ref.column_names[0], col_ref.column_names[1], col_ref.column_names[2]);
+	}
+	case 3: {
+		// three entries - this must be "catalog.schema.table"
+		BindingAlias alias(col_ref.column_names[0], col_ref.column_names[1], col_ref.column_names[2]);
+		binding = binder.bind_context.GetBinding(alias, error);
 		break;
+	}
 	default:
 		throw InternalException("Expected 1, 2 or 3 column names for CreateStructPack");
 	}
-	auto binding = binder.bind_context.GetBinding(alias, error);
 	if (!binding) {
 		return nullptr;
 	}
