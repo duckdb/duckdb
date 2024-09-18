@@ -136,7 +136,7 @@ static void ReplaceAliases(ParsedExpression &expr, const ColumnList &list,
 		col_names = {alias};
 	}
 	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { ReplaceAliases((ParsedExpression &)child, list, alias_map); });
+	    expr, [&](ParsedExpression &child) { ReplaceAliases(child, list, alias_map); });
 }
 
 static void BakeTableName(ParsedExpression &expr, const BindingAlias &binding_alias) {
@@ -144,8 +144,13 @@ static void BakeTableName(ParsedExpression &expr, const BindingAlias &binding_al
 		auto &colref = expr.Cast<ColumnRefExpression>();
 		D_ASSERT(!colref.IsQualified());
 		auto &col_names = colref.column_names;
-		// FIXME: bake full BindingAlias
 		col_names.insert(col_names.begin(), binding_alias.GetAlias());
+		if (!binding_alias.GetSchema().empty()) {
+			col_names.insert(col_names.begin(), binding_alias.GetSchema());
+		}
+		if (!binding_alias.GetCatalog().empty()) {
+			col_names.insert(col_names.begin(), binding_alias.GetCatalog());
+		}
 	}
 	ParsedExpressionIterator::EnumerateChildren(expr,
 	                                            [&](ParsedExpression &child) { BakeTableName(child, binding_alias); });

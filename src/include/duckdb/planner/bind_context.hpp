@@ -63,7 +63,7 @@ public:
 	string BindColumn(PositionalReferenceExpression &ref, string &table_name, string &column_name);
 	unique_ptr<ColumnRefExpression> PositionToColumn(PositionalReferenceExpression &ref);
 
-	unique_ptr<ParsedExpression> ExpandGeneratedColumn(const string &table_name, const string &column_name);
+	unique_ptr<ParsedExpression> ExpandGeneratedColumn(TableBinding &table_binding, const string &column_name);
 
 	unique_ptr<ParsedExpression>
 	CreateColumnReference(const string &table_name, const string &column_name,

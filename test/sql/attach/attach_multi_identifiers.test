@@ -77,3 +77,18 @@ query I
 SELECT db1.s1.t.c FROM db1.s1.t, db2.s1.t
 ----
 42
+
+# generated columns
+statement ok
+CREATE OR REPLACE TABLE db1.s1.t (
+	c INT,
+	c_squared AS (c * c),
+);
+
+statement ok
+INSERT INTO db1.s1.t VALUES (42);
+
+query III
+SELECT * FROM db1.s1.t, db2.s1.t
+----
+42	1764	84

@@ -176,12 +176,7 @@ vector<reference<Binding>> BindContext::GetMatchingBindings(const string &column
 	return result;
 }
 
-unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(const string &table_name, const string &column_name) {
-	ErrorData error;
-
-	auto binding = GetBinding(table_name, error);
-	D_ASSERT(binding && !error.HasError());
-	auto &table_binding = binding->Cast<TableBinding>();
+unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(TableBinding &table_binding, const string &column_name) {
 	auto result = table_binding.ExpandGeneratedColumn(column_name);
 	result->alias = column_name;
 	return result;
@@ -230,14 +225,15 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &ca
 	names.push_back(table_name);
 	names.push_back(column_name);
 
+	BindingAlias alias(catalog_name, schema_name, table_name);
 	auto result = make_uniq<ColumnRefExpression>(std::move(names));
-	auto binding = GetBinding(BindingAlias(catalog_name, schema_name, table_name), error);
+	auto binding = GetBinding(alias, error);
 	if (!binding) {
 		return std::move(result);
 	}
 	auto column_index = binding->GetBindingIndex(column_name);
 	if (bind_type == ColumnBindType::EXPAND_GENERATED_COLUMNS && ColumnIsGenerated(*binding, column_index)) {
-		return ExpandGeneratedColumn(table_name, column_name);
+		return ExpandGeneratedColumn(binding->Cast<TableBinding>(), column_name);
 	} else if (column_index < binding->names.size() && binding->names[column_index] != column_name) {
 		// because of case insensitivity in the binder we rename the column to the original name
 		// as it appears in the binding itself
