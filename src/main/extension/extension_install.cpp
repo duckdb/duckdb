@@ -268,15 +268,20 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance 
                                                                const string &local_extension_path,
                                                                ExtensionInstallOptions &options,
                                                                optional_ptr<ClientContext> context) {
-	string file = fs.ConvertSeparators(path);
-
-	// Try autoloading httpfs for loading extensions over https
-	if (context) {
-		auto &db = DatabaseInstance::GetDatabase(*context);
-		if (StringUtil::StartsWith(path, "https://") && !db.ExtensionIsLoaded("httpfs") &&
-		    db.config.options.autoload_known_extensions) {
-			ExtensionHelper::AutoLoadExtension(*context, "httpfs");
+	string extension;
+	string file;
+	if (fs.IsRemoteFile(path, extension)) {
+		file = path;
+		// Try autoloading httpfs for loading extensions over https
+		if (context) {
+			auto &db = DatabaseInstance::GetDatabase(*context);
+			if (extension == "httpfs" && !db.ExtensionIsLoaded("httpfs") &&
+			    db.config.options.autoload_known_extensions) {
+				ExtensionHelper::AutoLoadExtension(*context, "httpfs");
+			}
 		}
+	} else {
+		file = fs.ConvertSeparators(path);
 	}
 
 	// Check if file exists
