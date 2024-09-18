@@ -12,10 +12,16 @@ statement ok
 CREATE SCHEMA IF NOT EXISTS s2;
 
 statement ok
+CREATE SCHEMA IF NOT EXISTS s3;
+
+statement ok
 CREATE TABLE s1.tbl(i INT);
 
 statement ok
 CREATE TABLE s2.tbl(i INT);
+
+statement ok
+CREATE TABLE s3.tbl(i INT);
 
 statement ok
 CREATE TABLE tbl(i INT);
@@ -33,3 +39,13 @@ query III
 SELECT * FROM tbl, s1.tbl, s2.tbl
 ----
 1	10	100
+
+statement error
+SELECT tbl.i FROM s1.tbl, s2.tbl
+----
+s1.tbl or s2.tbl
+
+statement error
+SELECT tbl.i FROM s1.tbl, s2.tbl, s3.tbl
+----
+s1.tbl, s2.tbl or s3.tbl

@@ -285,7 +285,20 @@ optional_ptr<Binding> BindContext::GetBinding(const BindingAlias &alias, ErrorDa
 					result += ", ";
 				}
 			}
-			result += matching_bindings[i].get().alias.ToString();
+			// find the minimum alias that uniquely describes this table reference
+			auto &current_alias = matching_bindings[i].get().alias;
+			string minimum_alias;
+			for (idx_t k = 0; k < matching_bindings.size(); k++) {
+				if (k == i) {
+					continue;
+				}
+				auto &other_alias = matching_bindings[k].get().alias;
+				string new_minimum_alias = MinimumUniqueAlias(current_alias, other_alias);
+				if (new_minimum_alias.size() > minimum_alias.size()) {
+					minimum_alias = std::move(new_minimum_alias);
+				}
+			}
+			result += minimum_alias;
 		}
 		result += ")";
 		throw BinderException("Ambiguous reference to table \"%s\" %s", alias.ToString(), result);
