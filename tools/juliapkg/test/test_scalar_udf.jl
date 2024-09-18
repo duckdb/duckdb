@@ -1,3 +1,4 @@
+# test_scalar_udf.jl
 
 # Define a simple scalar UDF that doubles the input value
 function my_double_function(info::DuckDB.duckdb_function_info, input::DuckDB.duckdb_data_chunk, output::DuckDB.duckdb_vector)
