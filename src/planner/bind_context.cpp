@@ -619,7 +619,7 @@ void BindContext::AddContext(BindContext other) {
 #ifdef DEBUG
 			for (auto &other_alias : using_columns[entry.first]) {
 				for (auto &col : alias.get().bindings) {
-					D_ASSERT(std::find(other_alias.get().bindings.begin(), other_alias.get().bindings.end(), col) !=
+					D_ASSERT(std::find(other_alias.get().bindings.begin(), other_alias.get().bindings.end(), col) ==
 					         other_alias.get().bindings.end());
 				}
 			}
