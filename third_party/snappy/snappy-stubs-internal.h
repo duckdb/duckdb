@@ -31,6 +31,22 @@
 #ifndef THIRD_PARTY_SNAPPY_OPENSOURCE_SNAPPY_STUBS_INTERNAL_H_
 #define THIRD_PARTY_SNAPPY_OPENSOURCE_SNAPPY_STUBS_INTERNAL_H_
 
+// DuckDB - LNK: define here instead of in CMake
+#ifdef __GNUC__
+#define HAVE_BUILTIN_EXPECT 1
+#define HAVE_BUILTIN_CTZ 1
+#define HAVE_BUILTIN_PREFETCH 1
+#endif
+
+#if defined(__aarch64__) || defined(__ARM_ARCH)
+#define SNAPPY_HAVE_NEON 1
+#define SNAPPY_HAVE_NEON_CRC32 1
+#else
+#define SNAPPY_HAVE_SSSE3 1
+#define SNAPPY_HAVE_X86_CRC32 1
+#define SNAPPY_HAVE_BMI2 1
+#endif
+
 #include "snappy_version.hpp"
 
 #if SNAPPY_NEW_VERSION
@@ -46,19 +62,6 @@
 #include <cstring>
 #include <limits>
 #include <string>
-
-// DuckDB - LNK: define here instead of in CMake
-#ifdef __GNUC__
-#define HAVE_BUILTIN_EXPECT 1
-#define HAVE_BUILTIN_CTZ 1
-#define HAVE_BUILTIN_PREFETCH 1
-#endif
-
-#if defined(__aarch64__)
-// These are enabled by default on aarch64
-#define SNAPPY_HAVE_NEON 1
-#define SNAPPY_HAVE_NEON_CRC32 1
-#endif
 
 #if HAVE_SYS_MMAN_H
 #include <sys/mman.h>
@@ -556,13 +559,6 @@ inline char* string_as_array(std::string* str) {
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
-
-// DuckDB - LNK: define here instead of in CMake
-#ifdef __GNUC__
-#define HAVE_BUILTIN_EXPECT
-#define HAVE_BUILTIN_CTZ
-#define HAVE_BUILTIN_PREFETCH
-#endif
 
 #ifdef HAVE_SYS_MMAN_H
 #include <sys/mman.h>
