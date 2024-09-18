@@ -12,8 +12,25 @@ void ColumnCountResult::AddValue(ColumnCountResult &result, idx_t buffer_pos) {
 }
 
 inline void ColumnCountResult::InternalAddRow() {
-	column_counts[result_position].number_of_columns = current_column_count + 1;
+	const idx_t column_count = current_column_count + 1;
+	column_counts[result_position].number_of_columns = column_count;
+	rows_per_column_count[column_count]++;
 	current_column_count = 0;
+}
+
+idx_t ColumnCountResult::GetMostFrequentColumnCount() const {
+	if (rows_per_column_count.empty()) {
+		return 1;
+	}
+	idx_t column_count = 0;
+	idx_t current_max = 0;
+	for (auto &rpc : rows_per_column_count) {
+		if (rpc.second > current_max) {
+			current_max = rpc.second;
+			column_count = rpc.first;
+		}
+	}
+	return column_count;
 }
 
 bool ColumnCountResult::AddRow(ColumnCountResult &result, idx_t buffer_pos) {

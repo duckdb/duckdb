@@ -56,7 +56,7 @@ struct DialectCandidates {
 	//! Candidates for the comment
 	vector<char> comment_candidates;
 	//! Quote-Rule Candidates
-	vector<QuoteRule> quoterule_candidates;
+	vector<QuoteRule> quote_rule_candidates;
 	//! Candidates for the quote option
 	unordered_map<uint8_t, vector<char>> quote_candidates_map;
 	//! Candidates for the escape option
@@ -181,7 +181,7 @@ private:
 	void RefineCandidates();
 
 	//! Checks if candidate still produces good values for the next chunk
-	bool RefineCandidateNextChunk(ColumnCountScanner &candidate);
+	bool RefineCandidateNextChunk(ColumnCountScanner &candidate) const;
 
 	//! ------------------------------------------------------//
 	//! ------------------- Type Detection ------------------ //
