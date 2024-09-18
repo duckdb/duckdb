@@ -317,8 +317,10 @@ void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, c
 			// 4) System catalog
 
 			optional_ptr<CatalogEntry> entry = nullptr;
-			entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, user_type_schema, user_type_name,
-			                                 OnEntryNotFound::RETURN_NULL);
+			if (!user_type_schema.empty()) {
+				entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, user_type_schema, user_type_name,
+				                                 OnEntryNotFound::RETURN_NULL);
+			}
 			if (!IsValidUserType(entry)) {
 				entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, schema, user_type_name,
 				                                 OnEntryNotFound::RETURN_NULL);
