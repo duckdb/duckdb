@@ -534,8 +534,8 @@ void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<st
 void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
                                const vector<LogicalType> &types, vector<column_t> &bound_column_ids,
                                const string &table_name) {
-	AddBinding(
-	    make_uniq<TableBinding>(alias.empty() ? table_name : alias, types, names, bound_column_ids, nullptr, index));
+	AddBinding(make_uniq<TableBinding>(alias.empty() ? table_name : alias, types, names, bound_column_ids, nullptr,
+	                                   index, true));
 }
 
 void BindContext::AddTableFunction(idx_t index, const string &alias, const vector<string> &names,
