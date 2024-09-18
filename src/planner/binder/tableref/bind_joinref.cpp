@@ -15,7 +15,7 @@
 
 namespace duckdb {
 
-static unique_ptr<ParsedExpression> BindColumn(Binder &binder, ClientContext &context, const string &alias,
+static unique_ptr<ParsedExpression> BindColumn(Binder &binder, ClientContext &context, const BindingAlias &alias,
                                                const string &column_name) {
 	auto expr = make_uniq_base<ParsedExpression, ColumnRefExpression>(column_name, alias);
 	ExpressionBinder expr_binder(binder, context);
@@ -24,7 +24,7 @@ static unique_ptr<ParsedExpression> BindColumn(Binder &binder, ClientContext &co
 }
 
 static unique_ptr<ParsedExpression> AddCondition(ClientContext &context, Binder &left_binder, Binder &right_binder,
-                                                 const string &left_alias, const string &right_alias,
+                                                 const BindingAlias &left_alias, const BindingAlias &right_alias,
                                                  const string &column_name, ExpressionType type) {
 	ExpressionBinder expr_binder(left_binder, context);
 	auto left = BindColumn(left_binder, context, left_alias, column_name);
@@ -32,7 +32,7 @@ static unique_ptr<ParsedExpression> AddCondition(ClientContext &context, Binder 
 	return make_uniq<ComparisonExpression>(type, std::move(left), std::move(right));
 }
 
-bool Binder::TryFindBinding(const string &using_column, const string &join_side, string &result) {
+bool Binder::TryFindBinding(const string &using_column, const string &join_side, BindingAlias &result) {
 	// for each using column, get the matching binding
 	auto bindings = bind_context.GetMatchingBindings(using_column);
 	if (bindings.empty()) {
@@ -40,7 +40,7 @@ bool Binder::TryFindBinding(const string &using_column, const string &join_side,
 	}
 	// find the join binding
 	for (auto &binding : bindings) {
-		if (!result.empty()) {
+		if (result.IsSet()) {
 			string error = "Column name \"";
 			error += using_column;
 			error += "\" is ambiguous: it exists more than once on ";
@@ -55,32 +55,33 @@ bool Binder::TryFindBinding(const string &using_column, const string &join_side,
 			}
 			throw BinderException(error);
 		} else {
-			result = binding.get().GetAlias();
+			result = binding.get().alias;
 		}
 	}
 	return true;
 }
 
-string Binder::FindBinding(const string &using_column, const string &join_side) {
-	string result;
+BindingAlias Binder::FindBinding(const string &using_column, const string &join_side) {
+	BindingAlias result;
 	if (!TryFindBinding(using_column, join_side, result)) {
 		throw BinderException("Column \"%s\" does not exist on %s side of join!", using_column, join_side);
 	}
 	return result;
 }
 
-static void AddUsingBindings(UsingColumnSet &set, optional_ptr<UsingColumnSet> input_set, const string &input_binding) {
+static void AddUsingBindings(UsingColumnSet &set, optional_ptr<UsingColumnSet> input_set,
+                             const BindingAlias &input_binding) {
 	if (input_set) {
 		for (auto &entry : input_set->bindings) {
-			set.bindings.insert(entry);
+			set.bindings.push_back(entry);
 		}
 	} else {
-		set.bindings.insert(input_binding);
+		set.bindings.push_back(input_binding);
 	}
 }
 
-static void SetPrimaryBinding(UsingColumnSet &set, JoinType join_type, const string &left_binding,
-                              const string &right_binding) {
+static void SetPrimaryBinding(UsingColumnSet &set, JoinType join_type, const BindingAlias &left_binding,
+                              const BindingAlias &right_binding) {
 	switch (join_type) {
 	case JoinType::LEFT:
 	case JoinType::INNER:
@@ -98,9 +99,9 @@ static void SetPrimaryBinding(UsingColumnSet &set, JoinType join_type, const str
 	}
 }
 
-string Binder::RetrieveUsingBinding(Binder &current_binder, optional_ptr<UsingColumnSet> current_set,
-                                    const string &using_column, const string &join_side) {
-	string binding;
+BindingAlias Binder::RetrieveUsingBinding(Binder &current_binder, optional_ptr<UsingColumnSet> current_set,
+                                          const string &using_column, const string &join_side) {
+	BindingAlias binding;
 	if (!current_set) {
 		binding = current_binder.FindBinding(using_column, join_side);
 	} else {
@@ -195,7 +196,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		for (auto &column_name : lhs_columns) {
 			auto right_using_binding = right_binder.bind_context.GetUsingBinding(column_name);
 
-			string right_binding;
+			BindingAlias right_binding;
 			// loop over the set of lhs columns, and figure out if there is a table in the rhs with the same name
 			if (!right_using_binding) {
 				if (!right_binder.TryFindBinding(column_name, "right", right_binding)) {
@@ -274,8 +275,8 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 
 		for (idx_t i = 0; i < extra_using_columns.size(); i++) {
 			auto &using_column = extra_using_columns[i];
-			string left_binding;
-			string right_binding;
+			BindingAlias left_binding;
+			BindingAlias right_binding;
 
 			auto set = make_uniq<UsingColumnSet>();
 			auto &left_using_binding = left_using_bindings[i];
@@ -294,10 +295,8 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			AddUsingBindings(*set, left_using_binding, left_binding);
 			AddUsingBindings(*set, right_using_binding, right_binding);
 			SetPrimaryBinding(*set, ref.type, left_binding, right_binding);
-			bind_context.TransferUsingBinding(left_binder.bind_context, left_using_binding, *set, left_binding,
-			                                  using_column);
-			bind_context.TransferUsingBinding(right_binder.bind_context, right_using_binding, *set, right_binding,
-			                                  using_column);
+			bind_context.TransferUsingBinding(left_binder.bind_context, left_using_binding, *set, using_column);
+			bind_context.TransferUsingBinding(right_binder.bind_context, right_using_binding, *set, using_column);
 			AddUsingBindingSet(std::move(set));
 		}
 	}

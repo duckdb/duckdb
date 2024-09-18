@@ -38,7 +38,7 @@ optional_ptr<Binding> BindContext::GetMatchingBinding(const string &column_name)
 	optional_ptr<Binding> result;
 	for (auto &binding_ptr : bindings_list) {
 		auto &binding = *binding_ptr;
-		auto is_using_binding = GetUsingBinding(column_name, binding.GetAlias());
+		auto is_using_binding = GetUsingBinding(column_name, binding.alias);
 		if (is_using_binding) {
 			continue;
 		}
@@ -92,7 +92,7 @@ optional_ptr<UsingColumnSet> BindContext::GetUsingBinding(const string &column_n
 				} else {
 					result_bindings += ", ";
 				}
-				result_bindings += binding;
+				result_bindings += binding.GetAlias();
 				result_bindings += ".";
 				result_bindings += GetActualColumnName(binding, column_name);
 			}
@@ -106,8 +106,8 @@ optional_ptr<UsingColumnSet> BindContext::GetUsingBinding(const string &column_n
 	throw InternalException("Using binding found but no entries");
 }
 
-optional_ptr<UsingColumnSet> BindContext::GetUsingBinding(const string &column_name, const string &binding_name) {
-	if (binding_name.empty()) {
+optional_ptr<UsingColumnSet> BindContext::GetUsingBinding(const string &column_name, const BindingAlias &binding) {
+	if (!binding.IsSet()) {
 		throw InternalException("GetUsingBinding: expected non-empty binding_name");
 	}
 	auto entry = using_columns.find(column_name);
@@ -118,8 +118,10 @@ optional_ptr<UsingColumnSet> BindContext::GetUsingBinding(const string &column_n
 	for (auto &using_set_ref : using_bindings) {
 		auto &using_set = using_set_ref.get();
 		auto &bindings = using_set.bindings;
-		if (bindings.find(binding_name) != bindings.end()) {
-			return &using_set;
+		for (auto &using_binding : bindings) {
+			if (using_binding == binding) {
+				return &using_set;
+			}
 		}
 	}
 	return nullptr;
@@ -140,7 +142,7 @@ void BindContext::RemoveUsingBinding(const string &column_name, UsingColumnSet &
 }
 
 void BindContext::TransferUsingBinding(BindContext &current_context, optional_ptr<UsingColumnSet> current_set,
-                                       UsingColumnSet &new_set, const string &binding, const string &using_column) {
+                                       UsingColumnSet &new_set, const string &using_column) {
 	AddUsingBinding(using_column, new_set);
 	if (current_set) {
 		current_context.RemoveUsingBinding(using_column, *current_set);
@@ -156,11 +158,11 @@ string BindContext::GetActualColumnName(Binding &binding, const string &column_n
 	return binding.names[binding_index];
 }
 
-string BindContext::GetActualColumnName(const string &binding_name, const string &column_name) {
+string BindContext::GetActualColumnName(const BindingAlias &binding_alias, const string &column_name) {
 	ErrorData error;
-	auto binding = GetBinding(binding_name, error);
+	auto binding = GetBinding(binding_alias, error);
 	if (!binding) {
-		throw InternalException("No binding with name \"%s\": %s", binding_name, error.RawMessage());
+		throw InternalException("No binding with name \"%s\": %s", binding_alias.GetAlias(), error.RawMessage());
 	}
 	return GetActualColumnName(*binding, column_name);
 }
@@ -176,7 +178,8 @@ vector<reference<Binding>> BindContext::GetMatchingBindings(const string &column
 	return result;
 }
 
-unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(TableBinding &table_binding, const string &column_name) {
+unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(TableBinding &table_binding,
+                                                                const string &column_name) {
 	auto result = table_binding.ExpandGeneratedColumn(column_name);
 	result->alias = column_name;
 	return result;
@@ -411,7 +414,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 					continue;
 				}
 				// check if this column is a USING column
-				auto using_binding_ptr = GetUsingBinding(column_name, binding.alias.GetAlias());
+				auto using_binding_ptr = GetUsingBinding(column_name, binding.alias);
 				if (using_binding_ptr) {
 					auto &using_binding = *using_binding_ptr;
 					// it is!
@@ -421,7 +424,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 						continue;
 					}
 					// we have not! output the using column
-					if (using_binding.primary_binding.empty()) {
+					if (!using_binding.primary_binding.IsSet()) {
 						// no primary binding: output a coalesce
 						auto coalesce = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
 						for (auto &child_binding : using_binding.bindings) {
@@ -616,7 +619,8 @@ void BindContext::AddContext(BindContext other) {
 #ifdef DEBUG
 			for (auto &other_alias : using_columns[entry.first]) {
 				for (auto &col : alias.get().bindings) {
-					D_ASSERT(other_alias.get().bindings.find(col) == other_alias.get().bindings.end());
+					D_ASSERT(std::find(other_alias.get().bindings.begin(), other_alias.get().bindings.end(), col) !=
+					         other_alias.get().bindings.end());
 				}
 			}
 #endif

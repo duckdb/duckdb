@@ -60,7 +60,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 		// we are referencing a USING column
 		// check if we can refer to one of the base columns directly
 		unique_ptr<Expression> expression;
-		if (!using_binding->primary_binding.empty()) {
+		if (using_binding->primary_binding.IsSet()) {
 			// we can! just assign the table name and re-bind
 			return binder.bind_context.CreateColumnReference(using_binding->primary_binding, column_name);
 		} else {
@@ -115,7 +115,6 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
 	bool next_within_function_expression = false;
 	switch (expr->type) {
 	case ExpressionType::COLUMN_REF: {
-
 		auto &col_ref = expr->Cast<ColumnRefExpression>();
 
 		// don't qualify lambda parameters
