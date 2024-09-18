@@ -19,7 +19,7 @@ struct BindingAlias {
 	explicit BindingAlias(string alias);
 	BindingAlias(string schema, string alias);
 	BindingAlias(string catalog, string schema, string alias);
-	BindingAlias(const StandardEntry &entry);
+	explicit BindingAlias(const StandardEntry &entry);
 
 	bool IsSet() const;
 	const string &GetAlias() const;
