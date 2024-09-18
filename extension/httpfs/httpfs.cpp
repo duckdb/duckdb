@@ -576,9 +576,9 @@ int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes)
 void HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
     auto &hfh = handle.Cast<HTTPFileHandle>(); // Get HTTP file handle
 
-    // Ensure the buffer is non-empty
-    if (!buffer || nr_bytes == 0) {
-        throw IOException("Buffer is empty or nr_bytes is zero");
+    // BUG: empty requests get fired after a successful post. Ensure the buffer is non-empty and larger than 1
+    if (!buffer || nr_bytes <= 1) {
+        return;
     }
 
     // Prepare the URL and headers for the HTTP POST request
@@ -608,9 +608,6 @@ void HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 
         // Set the body using the buffer content
         req.body = std::string(static_cast<const char*>(buffer), nr_bytes);
-
-        // Debug: Print the body data that will be sent
-        printf("Sending POST body: %s\n", req.body.c_str());
 
         return client->send(req); // Send the request
     });
