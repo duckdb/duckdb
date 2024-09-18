@@ -32,6 +32,7 @@ public:
 	explicit ColumnDataAllocator(BufferManager &buffer_manager);
 	ColumnDataAllocator(ClientContext &context, ColumnDataAllocatorType allocator_type);
 	ColumnDataAllocator(ColumnDataAllocator &allocator);
+	~ColumnDataAllocator();
 
 	//! Returns an allocator object to allocate with. This returns the allocator in IN_MEMORY_ALLOCATOR, and a buffer
 	//! allocator in case of BUFFER_MANAGER_ALLOCATOR.
