@@ -19,14 +19,16 @@ def add_all_settings_to_global_list():
     json_data = sort_and_read_json_data(JSON_PATH)
     # store all the settings in the SettingsList
     for entry in json_data:
-        add_verif_SET = False
-        if entry.get('add_verification_in_SET', True) or entry.get('add_verification_in_both_SetReset', True):
-            add_verif_SET = True
-
-        add_verif_RESET = False
-        if entry.get('add_verification_in_RESET', True) or entry.get('add_verification_in_both_SetReset', True)
-            add_verif_RESET = True
-        
+        add_verif_SET = (
+            True
+            if entry.get('add_verification_in_SET', False) or entry.get('add_verification_in_both_SetReset', False)
+            else False
+        )
+        add_verif_RESET = (
+            True
+            if entry.get('add_verification_in_RESET', False) or entry.get('add_verification_in_both_SetReset', False)
+            else False
+        )
         setting = Setting(
             name=entry['name'],
             description=entry['description'],
