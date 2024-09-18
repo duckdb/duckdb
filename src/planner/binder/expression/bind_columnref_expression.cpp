@@ -218,6 +218,11 @@ void ExpressionBinder::QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpre
 	where_binder.QualifyColumnNames(expr, lambda_params);
 }
 
+void ExpressionBinder::QualifyColumnNames(ExpressionBinder &expression_binder, unique_ptr<ParsedExpression> &expr) {
+	vector<unordered_set<string>> lambda_params;
+	expression_binder.QualifyColumnNames(expr, lambda_params);
+}
+
 unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<ParsedExpression> base,
                                                                    const string &field_name) {
 
