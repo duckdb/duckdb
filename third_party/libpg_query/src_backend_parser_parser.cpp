@@ -68,8 +68,12 @@ PGList *raw_parser(const char *str) {
 	return yyextra.parsetree;
 }
 
-bool is_keyword(const char *text) {
-	return ScanKeywordLookup(text, ScanKeywords, NumScanKeywords) != NULL;
+PGKeywordCategory is_keyword(const char *text) {
+	auto keyword = ScanKeywordLookup(text, ScanKeywords, NumScanKeywords);
+	if (keyword) {
+		return static_cast<PGKeywordCategory>(keyword->category);
+	}
+	return PGKeywordCategory::PG_KEYWORD_NONE;
 }
 
 std::vector<PGKeyword> keyword_list() {

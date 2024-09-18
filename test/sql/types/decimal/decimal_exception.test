@@ -20,8 +20,50 @@ select cast(9.99::double as decimal(1,0));
 ----
 Could not cast value
 
-#FIXME: This requires implementing ROUND for Decimals, and checking Decimal Scale Down
-#statement error
-#select cast(9.99 as decimal(1,0));
-#----
-#Casting value "9.99" to type DECIMAL(1,0) failed: value is out of range!
+statement error
+select cast(9.99 as decimal(1,0));
+----
+Casting value "9.99" to type DECIMAL(1,0) failed: value is out of range!
+
+query I
+select cast(9.49 as decimal(1,0));
+----
+9
+
+statement error
+select cast(9.5 as decimal(1,0));
+----
+Casting value "9.5" to type DECIMAL(1,0) failed: value is out of range!
+
+
+statement error
+select cast(-9.99 as decimal(1,0));
+----
+Casting value "-9.99" to type DECIMAL(1,0) failed: value is out of range!
+
+statement error
+select cast(-9.5 as decimal(1,0));
+----
+Casting value "-9.5" to type DECIMAL(1,0) failed: value is out of range!
+
+query I
+select cast(-9.01 as decimal(1,0));
+----
+-9
+
+# Test lots of decimal cases
+statement error
+select cast(-9.999999999 as decimal(1,0));
+----
+Casting value "-9.999999999" to type DECIMAL(1,0) failed: value is out of range!
+
+# Test hugeint values
+statement error
+select cast(9.9999999999999999999999999999999 as decimal(1,0));
+----
+Casting value "9.9999999999999999999999999999999" to type DECIMAL(1,0) failed: value is out of range!
+
+statement error
+select cast(-9.9999999999999999999999999999999 as decimal(1,0));
+----
+Casting value "-9.9999999999999999999999999999999" to type DECIMAL(1,0) failed: value is out of range!
