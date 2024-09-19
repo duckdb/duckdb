@@ -190,9 +190,18 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
-	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &aggr_input_data, STATE &state, const SubFrames &frames, Vector &result,
-	                   idx_t ridx, const STATE *gstate) {
+	static void Window(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
+	                   const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames &frames, Vector &result,
+	                   idx_t ridx) {
+		auto &state = *reinterpret_cast<STATE *>(l_state);
+		auto gstate = reinterpret_cast<const STATE *>(g_state);
+
+		D_ASSERT(partition.input_count == 1);
+		const auto &input = partition.inputs[0];
+		auto data = FlatVector::GetData<const INPUT_TYPE>(input);
+		const auto &dmask = FlatVector::Validity(input);
+		const auto &fmask = partition.filter_mask;
+
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 
 		QuantileIncluded included(fmask, dmask);
@@ -262,7 +271,7 @@ AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const Logical
 	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP>(input_type, target_type);
 	fun.bind = BindMAD;
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, TARGET_TYPE, OP>;
+	fun.window = OP::template Window<STATE, INPUT_TYPE, TARGET_TYPE>;
 	fun.window_init = OP::template WindowInit<STATE, INPUT_TYPE>;
 	return fun;
 }

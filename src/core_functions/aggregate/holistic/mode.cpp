@@ -286,9 +286,17 @@ struct ModeFunction : BaseModeFunction<TYPE_OP> {
 	};
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
-	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &aggr_input_data, STATE &state, const SubFrames &frames, Vector &result,
-	                   idx_t rid, const STATE *gstate) {
+	static void Window(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
+	                   const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames &frames, Vector &result,
+	                   idx_t rid) {
+		auto &state = *reinterpret_cast<STATE *>(l_state);
+
+		D_ASSERT(partition.input_count == 1);
+		const auto &input = partition.inputs[0];
+		auto data = FlatVector::GetData<const INPUT_TYPE>(input);
+		const auto &dmask = FlatVector::Validity(input);
+		const auto &fmask = partition.filter_mask;
+
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 		auto &prevs = state.prevs;
@@ -363,7 +371,7 @@ AggregateFunction GetTypedModeFunction(const LogicalType &type) {
 	using STATE = ModeState<INPUT_TYPE, TYPE_OP>;
 	using OP = ModeFunction<TYPE_OP>;
 	auto func = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
-	func.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
+	func.window = OP::template Window<STATE, INPUT_TYPE, INPUT_TYPE>;
 	return func;
 }
 

@@ -387,19 +387,6 @@ public:
 		}
 	}
 
-	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static void UnaryWindow(const Vector &input, const ValidityMask &ifilter, AggregateInputData &aggr_input_data,
-	                        data_ptr_t state_p, const SubFrames &frames, Vector &result, idx_t ridx,
-	                        const_data_ptr_t gstate_p) {
-
-		auto idata = FlatVector::GetData<const INPUT_TYPE>(input);
-		const auto &ivalid = FlatVector::Validity(input);
-		auto &state = *reinterpret_cast<STATE *>(state_p);
-		auto gstate = reinterpret_cast<const STATE *>(gstate_p);
-		OP::template Window<STATE, INPUT_TYPE, RESULT_TYPE>(idata, ifilter, ivalid, aggr_input_data, state, frames,
-		                                                    result, ridx, gstate);
-	}
-
 	template <typename OP>
 	static void IntersectFrames(const SubFrames &lefts, const SubFrames &rights, OP &op) {
 		const auto cover_start = MinValue(rights[0].start, lefts[0].start);

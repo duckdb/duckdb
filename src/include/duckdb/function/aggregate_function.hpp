@@ -265,16 +265,6 @@ public:
 		AggregateExecutor::UnaryUpdate<STATE, INPUT_TYPE, OP>(inputs[0], aggr_input_data, state, count);
 	}
 
-	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static void UnaryWindow(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
-	                        const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames &subframes, Vector &result,
-	                        idx_t rid) {
-
-		D_ASSERT(partition.input_count == 1);
-		AggregateExecutor::UnaryWindow<STATE, INPUT_TYPE, RESULT_TYPE, OP>(
-		    partition.inputs[0], partition.filter_mask, aggr_input_data, l_state, subframes, result, rid, g_state);
-	}
-
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>
 	static void BinaryScatterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
 	                                Vector &states, idx_t count) {

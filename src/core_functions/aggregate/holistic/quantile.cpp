@@ -208,9 +208,18 @@ struct QuantileScalarOperation : public QuantileOperation {
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
-	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &aggr_input_data, STATE &state, const SubFrames &frames, Vector &result,
-	                   idx_t ridx, const STATE *gstate) {
+	static void Window(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
+	                   const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames &frames, Vector &result,
+	                   idx_t ridx) {
+		auto &state = *reinterpret_cast<STATE *>(l_state);
+		auto gstate = reinterpret_cast<const STATE *>(g_state);
+
+		D_ASSERT(partition.input_count == 1);
+		const auto &input = partition.inputs[0];
+		auto data = FlatVector::GetData<const INPUT_TYPE>(input);
+		const auto &dmask = FlatVector::Validity(input);
+		const auto &fmask = partition.filter_mask;
+
 		QuantileIncluded included(fmask, dmask);
 		const auto n = FrameSize(included, frames);
 
@@ -305,9 +314,18 @@ struct QuantileListOperation : QuantileOperation {
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
-	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &aggr_input_data, STATE &state, const SubFrames &frames, Vector &list,
-	                   idx_t lidx, const STATE *gstate) {
+	static void Window(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
+	                   const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames &frames, Vector &list,
+	                   idx_t lidx) {
+		auto &state = *reinterpret_cast<STATE *>(l_state);
+		auto gstate = reinterpret_cast<const STATE *>(g_state);
+
+		D_ASSERT(partition.input_count == 1);
+		const auto &input = partition.inputs[0];
+		auto data = FlatVector::GetData<const INPUT_TYPE>(input);
+		const auto &dmask = FlatVector::Validity(input);
+		const auto &fmask = partition.filter_mask;
+
 		D_ASSERT(aggr_input_data.bind_data);
 		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
 
@@ -407,7 +425,7 @@ struct ScalarDiscreteQuantile {
 		using STATE = QuantileState<INPUT_TYPE, TYPE_OP>;
 		using OP = QuantileScalarOperation<true>;
 		auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
-		fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
+		fun.window = OP::Window<STATE, INPUT_TYPE, INPUT_TYPE>;
 		fun.window_init = OP::WindowInit<STATE, INPUT_TYPE>;
 		return fun;
 	}
@@ -442,7 +460,7 @@ struct ListDiscreteQuantile {
 		using OP = QuantileListOperation<INPUT_TYPE, true>;
 		auto fun = QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(type, type);
 		fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-		fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, list_entry_t, OP>;
+		fun.window = OP::template Window<STATE, INPUT_TYPE, list_entry_t>;
 		fun.window_init = OP::template WindowInit<STATE, INPUT_TYPE>;
 		return fun;
 	}
@@ -531,7 +549,7 @@ struct ScalarContinuousQuantile {
 		auto fun =
 		    AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP>(input_type, target_type);
 		fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-		fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, TARGET_TYPE, OP>;
+		fun.window = OP::template Window<STATE, INPUT_TYPE, TARGET_TYPE>;
 		fun.window_init = OP::template WindowInit<STATE, INPUT_TYPE>;
 		return fun;
 	}
@@ -544,7 +562,7 @@ struct ListContinuousQuantile {
 		using OP = QuantileListOperation<TARGET_TYPE, false>;
 		auto fun = QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(input_type, target_type);
 		fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-		fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, list_entry_t, OP>;
+		fun.window = OP::template Window<STATE, INPUT_TYPE, list_entry_t>;
 		fun.window_init = OP::template WindowInit<STATE, INPUT_TYPE>;
 		return fun;
 	}
