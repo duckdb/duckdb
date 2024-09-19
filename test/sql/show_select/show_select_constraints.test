@@ -76,3 +76,9 @@ SELECT column_name, key FROM (DESCRIBE SELECT c4, c1 FROM my_view)
 ----
 c4	UNI
 c1	PRI
+
+# constraint information does not persist through expressions
+query II
+SELECT column_name, key FROM (DESCRIBE SELECT c4 + 1 AS expr FROM integers LIMIT 5)
+----
+expr	NULL
