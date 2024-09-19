@@ -17,7 +17,14 @@ unique_ptr<QueryNode> Transformer::TransformShow(duckdb_libpgquery::PGVariableSh
 	if (stmt.set) {
 		// describing a set (e.g. SHOW ALL TABLES) - push it in the table name
 		showref->table_name = stmt.set;
-	} else {
+	} else if (!stmt.relation->schemaname) {
+		// describing an unqualified relation - check if this is a "special" relation
+		string table_name = StringUtil::Lower(stmt.relation->relname);
+		if (table_name == "databases" || table_name == "tables" || table_name == "variables") {
+			showref->table_name = "\"" + std::move(table_name) + "\"";
+		}
+	}
+	if (showref->table_name.empty()) {
 		// describing a single relation
 		// wrap the relation in a "SELECT * FROM [table_name]" query
 		auto show_select_node = make_uniq<SelectNode>();
