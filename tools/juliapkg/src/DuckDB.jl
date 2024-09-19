@@ -35,6 +35,5 @@ include("table_function.jl")
 include("replacement_scan.jl")
 include("table_scan.jl")
 include("old_interface.jl")
-include("scalar_udf.jl")
 
 end # module
