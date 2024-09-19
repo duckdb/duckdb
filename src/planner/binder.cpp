@@ -605,15 +605,7 @@ optional_ptr<Binding> Binder::GetMatchingBinding(const string &catalog_name, con
 		binding = optional_ptr<Binding>(macro_binding.get());
 	} else {
 		BindingAlias alias(catalog_name, schema_name, table_name);
-		binding = bind_context.GetBinding(alias, error);
-	}
-
-	if (!binding) {
-		return nullptr;
-	}
-	if (!binding->HasMatchingBinding(column_name)) {
-		error = binding->ColumnNotFoundError(column_name);
-		return nullptr;
+		binding = bind_context.GetBinding(alias, column_name, error);
 	}
 	return binding;
 }

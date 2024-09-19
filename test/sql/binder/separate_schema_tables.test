@@ -147,12 +147,12 @@ SELECT * FROM tbl, s1.tbl, s2.tbl, s3.tbl
 1	10	100	1000
 
 statement error
-SELECT tbl.i FROM s1.tbl, s2.tbl
+SELECT tbl.col FROM s1.tbl, s2.tbl
 ----
 s1.tbl or s2.TBL
 
 statement error
-SELECT tbl.i FROM s1.tbl, s2.tbl, s3.tbl
+SELECT tbl.col FROM s1.tbl, s2.tbl, s3.tbl
 ----
 s1.tbl, s2.TBL or s3.Tbl
 
