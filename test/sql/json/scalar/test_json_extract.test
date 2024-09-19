@@ -352,3 +352,15 @@ query I
 select '{"\"du\nck\"": 42}'->('$."\"du' || chr(10) || 'ck\""');
 ----
 42
+
+# json_extract gets the JSON null (PostgreSQL behavior)
+query I
+select '{"duck":null}'->'$.duck'
+----
+null
+
+# json_extract_string gets a SQL NULL (PostgreSQL behavior)
+query I
+select '{"duck":null}'->>'$.duck'
+----
+null
