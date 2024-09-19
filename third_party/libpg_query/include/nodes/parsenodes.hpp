@@ -1574,7 +1574,8 @@ typedef struct PGVariableSetStmt {
  */
 typedef struct PGVariableShowStmt {
 	PGNodeTag   type;
-	char       *name;
+	PGRangeVar *relation;   /* relation to describe (if any) */
+	char       *set;        /* set to describe (e.g. set when using SHOW ALL TABLES) */
 	int         is_summary; // whether or not this is a DESCRIBE or a SUMMARIZE
 } PGVariableShowStmt;
 
