@@ -3931,9 +3931,32 @@ target_el:	a_expr AS ColLabelOrString
 				}
 		;
 
-except_list: EXCLUDE '(' name_list_opt_comma ')'					{ $$ = $3; }
-			| EXCLUDE ColId								{ $$ = list_make1(makeString($2)); }
+except_list: EXCLUDE '(' except_name_list_opt_comma ')'					{ $$ = $3; }
+			| EXCLUDE except_name										{ $$ = list_make1($2); }
 		;
+
+except_name:
+		ColId
+			{
+				$$ = list_make1($1);
+			}
+		| except_name '.' ColId
+			{
+				$$ = lappend($1, $3);
+			}
+		;
+
+except_name_list:	except_name
+					{ $$ = list_make1($1); }
+			| except_name_list ',' except_name
+					{ $$ = lappend($1, $3); }
+		;
+
+except_name_list_opt_comma:
+			except_name_list								{ $$ = $1; }
+			| except_name_list ','							{ $$ = $1; }
+		;
+
 
 opt_except_list: except_list						{ $$ = $1; }
 			| /*EMPTY*/								{ $$ = NULL; }

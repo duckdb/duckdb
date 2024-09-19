@@ -46,6 +46,21 @@ SELECT db1.s1.t.c, db2.s1.t.c FROM db1.s1.t, db2.s1.t
 ----
 42	84
 
+query I
+SELECT * EXCLUDE (db1.s1.t.c) FROM db1.s1.t, db2.s1.t
+----
+84
+
+query I
+SELECT * EXCLUDE (DB1.S1.T.C) FROM db1.s1.t, db2.s1.t
+----
+84
+
+query I
+SELECT * EXCLUDE (s1.t.c) FROM db1.s1.t, (SELECT 42) t
+----
+42
+
 # struct pack
 query II
 SELECT db1.s1.t, db2.s1.t FROM db1.s1.t, db2.s1.t
