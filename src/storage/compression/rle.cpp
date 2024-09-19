@@ -57,7 +57,9 @@ public:
 			} else {
 				// the values are different
 				// issue the callback on the last value
-				Flush<OP>();
+				if (last_seen_count > 0) {
+					Flush<OP>();
+				}
 
 				// increment the seen_count and put the new value into the RLE slot
 				last_value = data[idx];
