@@ -48,6 +48,11 @@ SELECT integers.* EXCLUDE (i) FROM integers
 ----
 2	3
 
+query II
+SELECT integers.* EXCLUDE ('i') FROM integers
+----
+2	3
+
 query I
 SELECT integers.* EXCLUDE (i, j) FROM integers
 ----

@@ -3936,11 +3936,11 @@ except_list: EXCLUDE '(' except_name_list_opt_comma ')'					{ $$ = $3; }
 		;
 
 except_name:
-		ColId
+		ColIdOrString
 			{
 				$$ = list_make1($1);
 			}
-		| except_name '.' ColId
+		| except_name '.' ColIdOrString
 			{
 				$$ = lappend($1, $3);
 			}
