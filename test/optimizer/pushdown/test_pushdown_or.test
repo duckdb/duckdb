@@ -1,7 +1,7 @@
 
 statement ok
-create table t1 as select range a, range b from range(1000000);
+create table t1 as select range a, range b from range(0,10000000) ;
 
 
 statement ok
-select * from t1 where a = 5 or a = 1000;
+select * from t1 where a = 30000 or a = 50000 or a = 500;
