@@ -85,7 +85,7 @@ select '{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}'::JSON-
 duckduckduckduck
 
 query T
-select json_extract('[1, 2, 42]', '2')
+select json_extract('[1, 2, 42]', 2)
 ----
 42
 
