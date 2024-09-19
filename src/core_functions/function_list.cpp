@@ -158,7 +158,6 @@ static const StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(DecadeFun),
 	DUCKDB_SCALAR_FUNCTION(DecodeFun),
 	DUCKDB_SCALAR_FUNCTION(DegreesFun),
-	DUCKDB_SCALAR_FUNCTION_SET(ConstRHSDivideFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(Editdist3Fun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ElementAtFun),
 	DUCKDB_SCALAR_FUNCTION(EncodeFun),

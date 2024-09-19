@@ -232,7 +232,6 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 
 		unique_ptr<FunctionData> bind_data;
 		auto scan_function = table.GetScanFunction(context, bind_data);
-		auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
 		// TODO: bundle the type and name vector in a struct (e.g PackedColumnMetadata)
 		vector<LogicalType> table_types;
 		vector<string> table_names;
@@ -246,12 +245,17 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			return_types.push_back(col.Type());
 			return_names.push_back(col.Name());
 		}
-		table_names = BindContext::AliasColumnNames(alias, table_names, ref.column_name_alias);
+		table_names = BindContext::AliasColumnNames(ref.table_name, table_names, ref.column_name_alias);
 
 		auto logical_get = make_uniq<LogicalGet>(table_index, scan_function, std::move(bind_data),
 		                                         std::move(return_types), std::move(return_names));
-		bind_context.AddBaseTable(table_index, alias, table_names, table_types, logical_get->GetMutableColumnIds(),
-		                          logical_get->GetTable().get());
+		auto table_entry = logical_get->GetTable();
+		auto &col_ids = logical_get->GetMutableColumnIds();
+		if (!table_entry) {
+			bind_context.AddBaseTable(table_index, ref.alias, table_names, table_types, col_ids, ref.table_name);
+		} else {
+			bind_context.AddBaseTable(table_index, ref.alias, table_names, table_types, col_ids, *table_entry);
+		}
 		return make_uniq_base<BoundTableRef, BoundBaseTableRef>(table, std::move(logical_get));
 	}
 	case CatalogType::VIEW_ENTRY: {
@@ -263,14 +267,14 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		auto view_binder = Binder::CreateBinder(context, this, BinderType::VIEW_BINDER);
 		view_binder->can_contain_nulls = true;
 		SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(view_catalog_entry.query->Copy()));
-		subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
+		subquery.alias = ref.alias;
 		// construct view names by first (1) taking the view aliases, (2) adding the view names, then (3) applying
 		// subquery aliases
 		vector<string> view_names = view_catalog_entry.aliases;
 		for (idx_t n = view_names.size(); n < view_catalog_entry.names.size(); n++) {
 			view_names.push_back(view_catalog_entry.names[n]);
 		}
-		subquery.column_name_alias = BindContext::AliasColumnNames(subquery.alias, view_names, ref.column_name_alias);
+		subquery.column_name_alias = BindContext::AliasColumnNames(ref.table_name, view_names, ref.column_name_alias);
 
 		// when binding a view, we always look into the catalog/schema where the view is stored first
 		vector<CatalogSearchEntry> view_search_path;
@@ -309,7 +313,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			}
 		}
 		bind_context.AddView(bound_subquery.subquery->GetRootIndex(), subquery.alias, subquery,
-		                     *bound_subquery.subquery, &view_catalog_entry);
+		                     *bound_subquery.subquery, view_catalog_entry);
 		return bound_child;
 	}
 	default:

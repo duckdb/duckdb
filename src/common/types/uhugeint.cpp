@@ -1,13 +1,12 @@
 #include "duckdb/common/types/uhugeint.hpp"
-
-#include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/windows_undefs.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/windows_undefs.hpp"
 
 #include <cmath>
 #include <limits>
@@ -169,8 +168,18 @@ bool Uhugeint::TryMultiply(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &result) {
 }
 
 // No overflow check, will wrap
-uhugeint_t Uhugeint::SlowMultiply(uhugeint_t lhs, uhugeint_t rhs) {
+template <>
+uhugeint_t Uhugeint::Multiply<false>(uhugeint_t lhs, uhugeint_t rhs) {
 	uhugeint_t result;
+#if ((__GNUC__ >= 5) || defined(__clang__)) && defined(__SIZEOF_INT128__)
+	__uint128_t left = __uint128_t(lhs.lower) + (__uint128_t(lhs.upper) << 64);
+	__uint128_t right = __uint128_t(rhs.lower) + (__uint128_t(rhs.upper) << 64);
+	__uint128_t result_u128;
+
+	result_u128 = left * right;
+	result.upper = uint64_t(result_u128 >> 64);
+	result.lower = uint64_t(result_u128 & 0xffffffffffffffff);
+#else
 	// split values into 4 32-bit parts
 	uint64_t top[4] = {lhs.upper >> 32, lhs.upper & 0xffffffff, lhs.lower >> 32, lhs.lower & 0xffffffff};
 	uint64_t bottom[4] = {rhs.upper >> 32, rhs.upper & 0xffffffff, rhs.lower >> 32, rhs.lower & 0xffffffff};
@@ -215,6 +224,7 @@ uhugeint_t Uhugeint::SlowMultiply(uhugeint_t lhs, uhugeint_t rhs) {
 	// combine components
 	result.lower = (third32 << 32) | fourth32;
 	result.upper = (first32 << 32) | second32;
+#endif
 	return result;
 }
 

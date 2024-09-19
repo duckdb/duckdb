@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/limits.hpp"
-#include "duckdb/common/type_util.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/type_util.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/exception.hpp"
 
 namespace duckdb {
 
@@ -60,46 +60,15 @@ public:
 		return input;
 	}
 
-	static hugeint_t SlowMultiply(hugeint_t lhs, hugeint_t rhs);
-
 	static bool TryMultiply(hugeint_t lhs, hugeint_t rhs, hugeint_t &result);
 
 	template <bool CHECK_OVERFLOW = true>
 	inline static hugeint_t Multiply(hugeint_t lhs, hugeint_t rhs) {
-		if (CHECK_OVERFLOW) {
-			hugeint_t result;
-			if (!TryMultiply(lhs, rhs, result)) {
-				throw OutOfRangeException("Overflow in HUGEINT multiplication: %s + %s", lhs.ToString(),
-				                          rhs.ToString());
-			}
-			return result;
-		}
-
-#if ((__GNUC__ >= 5) || defined(__clang__)) && defined(__SIZEOF_INT128__)
 		hugeint_t result;
-		bool lhs_negative = lhs.upper < 0;
-		bool rhs_negative = rhs.upper < 0;
-		if (lhs_negative) {
-			NegateInPlace<false>(lhs);
-		}
-		if (rhs_negative) {
-			NegateInPlace<false>(rhs);
-		}
-
-		__uint128_t left = __uint128_t(lhs.lower) + (__uint128_t(lhs.upper) << 64);
-		__uint128_t right = __uint128_t(rhs.lower) + (__uint128_t(rhs.upper) << 64);
-		__uint128_t result_i128;
-		result_i128 = left * right;
-		uint64_t upper = uint64_t(result_i128 >> 64);
-		result.upper = int64_t(upper);
-		result.lower = uint64_t(result_i128 & 0xffffffffffffffff);
-		if (lhs_negative ^ rhs_negative) {
-			NegateInPlace<false>(result);
+		if (!TryMultiply(lhs, rhs, result)) {
+			throw OutOfRangeException("Overflow in HUGEINT multiplication: %s + %s", lhs.ToString(), rhs.ToString());
 		}
 		return result;
-#else
-		return SlowMultiply(lhs, rhs);
-#endif
 	}
 
 	static bool TryDivMod(hugeint_t lhs, hugeint_t rhs, hugeint_t &result, hugeint_t &remainder);

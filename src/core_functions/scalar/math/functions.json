@@ -313,13 +313,5 @@
         "description": "Computes the inverse hyperbolic tan of x",
         "example": "atanh(0.5)",
         "type": "scalar_function"
-	},
-	{
-        "name": "divide_by_const",
-        "parameters": "x, C",
-        "description": "Same as // but optimised for a constant right hand size",
-        "example": "SELECT divide_by_const(x, 100) FROM Y",
-        "type": "scalar_function_set",
-        "struct": "ConstRHSDivideFun"
-    }
+	}
 ]
