@@ -437,10 +437,47 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 		auto base_column_idx = entry.table_column_index;
 		auto &filter = entry.filter;
 
+		if (filter.filter_type == TableFilterType::CONJUNCTION_OR) {
+			bool check_collection = false;
+			auto &or_filter = filter.Cast<ConjunctionOrFilter>();
+			auto stats = state.row_group->GetStatistics(column_idx);
+			bool has_min = NumericStats::HasMin(*stats);
+			bool has_max = NumericStats::HasMax(*stats);
+			Value min;
+			Value max;
+			if (has_max) {
+				max = NumericStats::Max(*stats);
+			}
+			if (has_min) {
+				min = NumericStats::Min(*stats);
+			}
+			Printer::Print("min is" + min.ToString());
+			Printer::Print("max is " + max.ToString());
+			for (auto &filter : or_filter.child_filters) {
+				if (filter->filter_type == TableFilterType::CONSTANT_COMPARISON) {
+					auto &constant_expr = filter->Cast<ConstantFilter>();
+					auto val = constant_expr.constant;
+					if (val < max && val > min) {
+						check_collection |= true;
+						break;
+					}
+				}
+			}
+			// the value of the or is outside the min and max of the collection
+			// the or table filter will always evaluate to false, so this chunk does not
+			// need to be read
+			if (!check_collection) {
+				Printer::Print("returning false here");
+				return false;
+			}
+		}
+
 		auto prune_result = GetColumn(base_column_idx).CheckZonemap(state.column_scans[column_idx], filter);
 		if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			continue;
 		}
+
+		// check zone map segment.
 		idx_t target_row = GetFilterScanCount(state.column_scans[column_idx], filter);
 		if (target_row >= state.max_row) {
 			target_row = state.max_row;

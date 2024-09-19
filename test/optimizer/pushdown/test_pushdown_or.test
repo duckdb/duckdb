@@ -1,0 +1,7 @@
+
+statement ok
+create table t1 as select range a, range b from range(1000000);
+
+
+statement ok
+select * from t1 where a = 5 or a = 1000;
