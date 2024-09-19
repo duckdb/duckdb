@@ -6,8 +6,9 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/planner/tableref/bound_table_function.hpp"
-
-#include <duckdb/planner/operator/logical_projection.hpp>
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 namespace duckdb {
 
