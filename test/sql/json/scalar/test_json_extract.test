@@ -363,4 +363,4 @@ null
 query I
 select '{"duck":null}'->>'$.duck'
 ----
-null
+NULL
