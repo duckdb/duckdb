@@ -10,22 +10,22 @@ QualifiedColumnName TransformQualifiedColumnName(duckdb_libpgquery::PGList &list
 	QualifiedColumnName result;
 	switch (list.length) {
 	case 1:
-		result.column = (const char *)list.head->data.ptr_value;
+		result.column = const_char_ptr_cast(list.head->data.ptr_value);
 		break;
 	case 2:
-		result.table = (const char *)list.head->data.ptr_value;
-		result.column = (const char *)list.head->next->data.ptr_value;
+		result.table = const_char_ptr_cast(list.head->data.ptr_value);
+		result.column = const_char_ptr_cast(list.head->next->data.ptr_value);
 		break;
 	case 3:
-		result.schema = (const char *)list.head->data.ptr_value;
-		result.table = (const char *)list.head->next->data.ptr_value;
-		result.column = (const char *)list.head->next->next->data.ptr_value;
+		result.schema = const_char_ptr_cast(list.head->data.ptr_value);
+		result.table = const_char_ptr_cast(list.head->next->data.ptr_value);
+		result.column = const_char_ptr_cast(list.head->next->next->data.ptr_value);
 		break;
 	case 4:
-		result.catalog = (const char *)list.head->data.ptr_value;
-		result.schema = (const char *)list.head->next->data.ptr_value;
-		result.table = (const char *)list.head->next->next->data.ptr_value;
-		result.column = (const char *)list.head->next->next->next->data.ptr_value;
+		result.catalog = const_char_ptr_cast(list.head->data.ptr_value);
+		result.schema = const_char_ptr_cast(list.head->next->data.ptr_value);
+		result.table = const_char_ptr_cast(list.head->next->next->data.ptr_value);
+		result.column = const_char_ptr_cast(list.head->next->next->next->data.ptr_value);
 		break;
 	default:
 		throw ParserException("Qualified column name must have between 1 and 4 elements");
