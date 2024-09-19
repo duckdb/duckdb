@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <utility>
+
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
@@ -21,6 +23,10 @@ public:
 	//! From a DuckDB type
 	explicit ArrowType(LogicalType type_p, unique_ptr<ArrowTypeInfo> type_info = nullptr)
 	    : type(std::move(type_p)), type_info(std::move(type_info)) {
+	}
+	explicit ArrowType(string error_message_p, bool not_implemented_p = false)
+	    : type(LogicalTypeId::INVALID), type_info(nullptr), error_message(std::move(error_message_p)),
+	      not_implemented(not_implemented_p) {
 	}
 
 public:
@@ -37,6 +43,7 @@ public:
 	const T &GetTypeInfo() const {
 		return type_info->Cast<T>();
 	}
+	void ThrowIfInvalid() const;
 
 private:
 	LogicalType type;
@@ -45,6 +52,10 @@ private:
 	//! Is run-end-encoded
 	bool run_end_encoded = false;
 	unique_ptr<ArrowTypeInfo> type_info;
+	//! Error message in case of an invalid type (i.e., from an unsupported extension)
+	string error_message;
+	//! In case of an error do we throw not implemented?
+	bool not_implemented = false;
 };
 
 using arrow_column_map_t = unordered_map<idx_t, unique_ptr<ArrowType>>;
