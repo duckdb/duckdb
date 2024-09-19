@@ -1,0 +1,89 @@
+#include "duckdb/optimizer/empty_result_pullup.hpp"
+
+#include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_distinct.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_empty_result.hpp"
+#include "duckdb/planner/operator/logical_order.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_set_operation.hpp"
+#include "duckdb/planner/operator/logical_simple.hpp"
+
+namespace duckdb {
+
+unique_ptr<LogicalOperator> EmptyResultPullup::Optimize(unique_ptr<LogicalOperator> op) {
+	for (idx_t i = 0; i < op->children.size(); i++) {
+		op->children[i] = Optimize(std::move(op->children[i]));
+	}
+	switch (op->type) {
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_DISTINCT:
+	case LogicalOperatorType::LOGICAL_WINDOW:
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+	case LogicalOperatorType::LOGICAL_CTE_REF:
+	case LogicalOperatorType::LOGICAL_GET:
+	case LogicalOperatorType::LOGICAL_INTERSECT:
+	case LogicalOperatorType::LOGICAL_PIVOT:
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
+		for (auto &child : op->children) {
+			if (child->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+				op = make_uniq<LogicalEmptyResult>(std::move(op));
+				break;
+			}
+		}
+		return op;
+	}
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+		auto &join = op->Cast<LogicalComparisonJoin>();
+		if (join.join_type == JoinType::INNER) {
+			for (auto &child : op->children) {
+				if (child->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+					op = make_uniq<LogicalEmptyResult>(std::move(op));
+					break;
+				}
+			}
+			return op;
+		}
+		if (join.join_type == JoinType::SEMI && join.children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+			op = make_uniq<LogicalEmptyResult>(std::move(op));
+			break;
+		}
+		if (join.join_type == JoinType::ANTI && join.children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+			op = make_uniq<LogicalEmptyResult>(std::move(op));
+			break;
+		}
+		if (join.join_type == JoinType::LEFT && join.children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+			op = make_uniq<LogicalEmptyResult>(std::move(op));
+			break;
+		}
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
+		auto &join = op->Cast<LogicalAnyJoin>();
+		if (join.join_type == JoinType::INNER) {
+			for (auto &child : op->children) {
+				if (child->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+					op = make_uniq<LogicalEmptyResult>(std::move(op));
+					break;
+				}
+			}
+			return op;
+		}
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+		// if child is empty
+		// replace with 1 row answer;
+		break;
+	}
+	default:
+		break;
+	}
+	return op;
+}
+
+} // namespace duckdb

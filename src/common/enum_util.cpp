@@ -4846,6 +4846,8 @@ const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
 		return "FILTER_PULLUP";
 	case OptimizerType::FILTER_PUSHDOWN:
 		return "FILTER_PUSHDOWN";
+	case OptimizerType::EMPTY_RESULT_PULLUP:
+		return "EMPTY_RESULT_PULLUP";
 	case OptimizerType::CTE_FILTER_PUSHER:
 		return "CTE_FILTER_PUSHER";
 	case OptimizerType::REGEX_RANGE:
