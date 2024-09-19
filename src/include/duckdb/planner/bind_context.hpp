@@ -167,8 +167,14 @@ public:
 
 	optional_ptr<Binding> GetBinding(const BindingAlias &alias, ErrorData &out_error);
 
+	optional_ptr<Binding> GetBinding(const BindingAlias &alias, const string &column_name, ErrorData &out_error);
+
+	//! Get all bindings that match a specific binding alias - returns an error if none match
+	vector<reference<Binding>> GetBindings(const BindingAlias &alias, ErrorData &out_error);
+
 private:
 	void AddBinding(unique_ptr<Binding> binding);
+	static string AmbiguityException(const BindingAlias &alias, const vector<reference<Binding>> &bindings);
 
 private:
 	Binder &binder;
