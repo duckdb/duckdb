@@ -221,13 +221,16 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 			// If the header exists it should match
 			string header_error = "The Column names set by the user do not match the ones found by the sniffer. \n";
 			auto &set_names = *set_columns.names;
-			for (idx_t i = 0; i < set_columns.Size(); i++) {
-				if (set_names[i] != names[i]) {
-					header_error += "Column at position: " + to_string(i) + " Set name: " + set_names[i] +
-					                " Sniffed Name: " + names[i] + "\n";
-					match = false;
+			if (set_names.size() == names.size()) {
+				for (idx_t i = 0; i < set_columns.Size(); i++) {
+					if (set_names[i] != names[i]) {
+						header_error += "Column at position: " + to_string(i) + " Set name: " + set_names[i] +
+						                " Sniffed Name: " + names[i] + "\n";
+						match = false;
+					}
 				}
 			}
+
 			if (!match) {
 				error += header_error;
 			}
@@ -235,15 +238,18 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 		match = true;
 		string type_error = "The Column types set by the user do not match the ones found by the sniffer. \n";
 		auto &set_types = *set_columns.types;
-		for (idx_t i = 0; i < set_columns.Size(); i++) {
-			if (set_types[i] != detected_types[i]) {
-				type_error += "Column at position: " + to_string(i) + " Set type: " + set_types[i].ToString() +
-				              " Sniffed type: " + detected_types[i].ToString() + "\n";
-				detected_types[i] = set_types[i];
-				manually_set[i] = true;
-				match = false;
+		if (detected_types.size() == set_columns.Size()) {
+			for (idx_t i = 0; i < set_columns.Size(); i++) {
+				if (set_types[i] != detected_types[i]) {
+					type_error += "Column at position: " + to_string(i) + " Set type: " + set_types[i].ToString() +
+					              " Sniffed type: " + detected_types[i].ToString() + "\n";
+					detected_types[i] = set_types[i];
+					manually_set[i] = true;
+					match = false;
+				}
 			}
 		}
+
 		if (!match) {
 			error += type_error;
 		}

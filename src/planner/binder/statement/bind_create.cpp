@@ -249,6 +249,13 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	return BindCreateSchema(info);
 }
 
+static bool IsValidUserType(optional_ptr<CatalogEntry> entry) {
+	if (!entry) {
+		return false;
+	}
+	return entry->Cast<TypeCatalogEntry>().user_type.id() != LogicalTypeId::INVALID;
+}
+
 void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, const string &schema) {
 	if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP) {
 		auto child_type = ListType::GetChildType(type);
@@ -297,24 +304,34 @@ void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, c
 		type.SetModifiers(modifiers);
 	} else if (type.id() == LogicalTypeId::USER) {
 		auto user_type_name = UserType::GetTypeName(type);
+		auto user_type_schema = UserType::GetSchema(type);
 		auto user_type_mods = UserType::GetTypeModifiers(type);
 
 		bind_type_modifiers_function_t user_bind_modifiers_func = nullptr;
 
 		if (catalog) {
 			// The search order is:
-			// 1) In the same schema as the table
-			// 2) In the same catalog
-			// 3) System catalog
-			auto entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, schema, user_type_name,
-			                                      OnEntryNotFound::RETURN_NULL);
-			if (!entry || entry->Cast<TypeCatalogEntry>().user_type.id() == LogicalTypeId::INVALID) {
+			// 1) In the explicitly set schema (my_schema.my_type)
+			// 2) In the same schema as the table
+			// 3) In the same catalog
+			// 4) System catalog
+
+			optional_ptr<CatalogEntry> entry = nullptr;
+			if (!user_type_schema.empty()) {
+				entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, user_type_schema, user_type_name,
+				                                 OnEntryNotFound::RETURN_NULL);
+			}
+			if (!IsValidUserType(entry)) {
+				entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, schema, user_type_name,
+				                                 OnEntryNotFound::RETURN_NULL);
+			}
+			if (!IsValidUserType(entry)) {
 				entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, INVALID_SCHEMA, user_type_name,
 				                                 OnEntryNotFound::RETURN_NULL);
-				if (!entry || entry->Cast<TypeCatalogEntry>().user_type.id() == LogicalTypeId::INVALID) {
-					entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, INVALID_CATALOG, INVALID_SCHEMA,
-					                                 user_type_name, OnEntryNotFound::THROW_EXCEPTION);
-				}
+			}
+			if (!IsValidUserType(entry)) {
+				entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, INVALID_CATALOG, INVALID_SCHEMA,
+				                                 user_type_name, OnEntryNotFound::THROW_EXCEPTION);
 			}
 			auto &type_entry = entry->Cast<TypeCatalogEntry>();
 			type = type_entry.user_type;

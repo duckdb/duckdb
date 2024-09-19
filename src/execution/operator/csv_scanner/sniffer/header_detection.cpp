@@ -1,7 +1,6 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
-#include "duckdb/common/types/value.hpp"
 
 #include "utf8proc.hpp"
 
@@ -32,8 +31,7 @@ static string TrimWhitespace(const string &col_name) {
 	}
 
 	// Find the last character that is not right trimmed
-	idx_t end;
-	end = begin;
+	idx_t end = begin;
 	for (auto next = begin; next < col_name.size();) {
 		auto bytes = utf8proc_iterate(str + next, NumericCast<utf8proc_ssize_t>(size - next), &codepoint);
 		D_ASSERT(bytes > 0);
@@ -90,7 +88,9 @@ static string NormalizeColumnName(const string &col_name) {
 	}
 
 	// prepend _ if name starts with a digit or is a reserved keyword
-	if (KeywordHelper::IsKeyword(col_name_cleaned) || (col_name_cleaned[0] >= '0' && col_name_cleaned[0] <= '9')) {
+	auto keyword = KeywordHelper::KeywordCategoryType(col_name_cleaned);
+	if (keyword == KeywordCategory::KEYWORD_TYPE_FUNC || keyword == KeywordCategory::KEYWORD_RESERVED ||
+	    (col_name_cleaned[0] >= '0' && col_name_cleaned[0] <= '9')) {
 		col_name_cleaned = "_" + col_name_cleaned;
 	}
 	return col_name_cleaned;
@@ -98,10 +98,9 @@ static string NormalizeColumnName(const string &col_name) {
 
 // If our columns were set by the user, we verify if their names match with the first row
 bool CSVSniffer::DetectHeaderWithSetColumn(ClientContext &context, vector<HeaderValue> &best_header_row,
-                                           SetColumns &set_columns, CSVReaderOptions &options) {
+                                           const SetColumns &set_columns, CSVReaderOptions &options) {
 	bool has_header = true;
-	bool all_varchar = true;
-	bool first_row_consistent = true;
+
 	std::ostringstream error;
 	// User set the names, we must check if they match the first row
 	// We do a +1 to check for situations where the csv file has an extra all null column
@@ -125,6 +124,8 @@ bool CSVSniffer::DetectHeaderWithSetColumn(ClientContext &context, vector<Header
 	}
 
 	if (!has_header) {
+		bool all_varchar = true;
+		bool first_row_consistent = true;
 		// We verify if the types are consistent
 		for (idx_t col = 0; col < set_columns.Size(); col++) {
 			// try cast to sql_type of column
@@ -168,7 +169,7 @@ bool EmptyHeader(const string &col_name, bool is_null, bool normalize) {
 
 vector<string>
 CSVSniffer::DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &best_header_row,
-                                 CSVStateMachine &state_machine, SetColumns &set_columns,
+                                 CSVStateMachine &state_machine, const SetColumns &set_columns,
                                  unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
                                  CSVReaderOptions &options, CSVErrorHandler &error_handler) {
 	vector<string> detected_names;
@@ -187,9 +188,7 @@ CSVSniffer::DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &be
 		return detected_names;
 	}
 	// information for header detection
-	bool first_row_consistent = true;
 	// check if header row is all null and/or consistent with detected column data types
-	bool first_row_nulls = true;
 	// If null-padding is not allowed and there is a mismatch between our header candidate and the number of columns
 	// We can't detect the dialect/type options properly
 	if (!options.null_padding && best_sql_types_candidates_per_column_idx.size() != best_header_row.size()) {
@@ -198,12 +197,14 @@ CSVSniffer::DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &be
 		                                  state_machine.dialect_options.state_machine_options.delimiter.GetValue());
 		error_handler.Error(error);
 	}
-	bool all_varchar = true;
 	bool has_header;
 
 	if (set_columns.IsSet()) {
 		has_header = DetectHeaderWithSetColumn(context, best_header_row, set_columns, options);
 	} else {
+		bool first_row_consistent = true;
+		bool all_varchar = true;
+		bool first_row_nulls = true;
 		for (idx_t col = 0; col < best_header_row.size(); col++) {
 			if (!best_header_row[col].IsNull()) {
 				first_row_nulls = false;

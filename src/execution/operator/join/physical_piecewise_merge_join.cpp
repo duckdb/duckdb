@@ -618,7 +618,12 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 
 				if (tail_count < result_count) {
 					result_count = tail_count;
-					chunk.Slice(*sel, result_count);
+					if (result_count == 0) {
+						// Need to reset here otherwise we may use the non-flat chunk when constructing LEFT/OUTER
+						chunk.Reset();
+					} else {
+						chunk.Slice(*sel, result_count);
+					}
 				}
 			}
 
