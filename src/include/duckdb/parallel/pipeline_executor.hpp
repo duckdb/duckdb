@@ -34,7 +34,7 @@ enum class PipelineExecuteResult {
 
 class ExecutionBudget {
 public:
-	ExecutionBudget(idx_t maximum) : processed(0), maximum_to_process(maximum) {
+	explicit ExecutionBudget(idx_t maximum) : processed(0), maximum_to_process(maximum) {
 	}
 
 public:
