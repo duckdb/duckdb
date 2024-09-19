@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/filter_combiner.hpp"
 
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -10,11 +11,12 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
-#include "duckdb/planner/table_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
-#include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/table_filter.hpp"
+
+#include <duckdb/parser/expression/constant_expression.hpp>
 
 namespace duckdb {
 
@@ -629,6 +631,27 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 			table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
 
 			remaining_filters.erase_at(rem_fil_idx);
+		}
+	}
+	for (idx_t rem_fil_idx = 0; rem_fil_idx < remaining_filters.size(); rem_fil_idx++) {
+		auto &remaining_filter = remaining_filters[rem_fil_idx];
+		if (remaining_filter->expression_class == ExpressionClass::BOUND_CONJUNCTION) {
+			auto &conj = remaining_filter->Cast<BoundConjunctionExpression>();
+			if (conj.type == ExpressionType::CONJUNCTION_OR) {
+				auto conj_filter = make_uniq<ConjunctionOrFilter>();
+				for (auto &child : conj.children) {
+					auto &comp = child->Cast<BoundComparisonExpression>();
+					if (comp.right->expression_class == ExpressionClass::BOUND_CONSTANT) {
+						auto &const_val = comp.right->Cast<BoundConstantExpression>();
+						auto or_val = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, const_val.value);
+						conj_filter->child_filters.push_back(std::move(or_val));
+					}
+					// auto or_val_one = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, );
+
+				}
+
+				table_filters.PushFilter(0, std::move(conj_filter));
+			}
 		}
 	}
 
