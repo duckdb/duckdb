@@ -119,6 +119,7 @@ duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/sqlite_scanner
         GIT_TAG 315861963c8106397af36cbda10faebc8dae485a
+        APPLY_PATCHES
         )
 
 duckdb_extension_load(sqlsmith
