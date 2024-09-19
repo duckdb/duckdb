@@ -32,6 +32,25 @@ enum class PipelineExecuteResult {
 	INTERRUPTED
 };
 
+class ExecutionBudget {
+public:
+	ExecutionBudget(idx_t maximum) : processed(0), maximum_to_process(maximum) {
+	}
+
+public:
+	bool Next() {
+		if (processed >= maximum_to_process) {
+			return false;
+		}
+		processed++;
+		return true;
+	}
+
+private:
+	idx_t processed;
+	idx_t maximum_to_process;
+};
+
 //! The Pipeline class represents an execution pipeline
 class PipelineExecutor {
 public:
@@ -43,10 +62,6 @@ public:
 	//! Returns true if execution is finished, false if Execute should be called again
 	PipelineExecuteResult Execute(idx_t max_chunks);
 
-	//! Push a single input DataChunk into the pipeline.
-	//! Returns either OperatorResultType::NEED_MORE_INPUT or OperatorResultType::FINISHED
-	//! If OperatorResultType::FINISHED is returned, more input will not change the result anymore
-	OperatorResultType ExecutePush(DataChunk &input);
 	//! Called after depleting the source: finalizes the execution of this pipeline executor
 	//! This should only be called once per PipelineExecutor.
 	PipelineExecuteResult PushFinalize();
@@ -128,7 +143,7 @@ private:
 	SourceResultType GetData(DataChunk &chunk, OperatorSourceInput &input);
 	SinkResultType Sink(DataChunk &chunk, OperatorSinkInput &input);
 
-	OperatorResultType ExecutePushInternal(DataChunk &input, idx_t initial_idx = 0);
+	OperatorResultType ExecutePushInternal(DataChunk &input, ExecutionBudget &chunk_budget, idx_t initial_idx = 0);
 	//! Pushes a chunk through the pipeline and returns a single result chunk
 	//! Returns whether or not a new input chunk is needed, or whether or not we are finished
 	OperatorResultType Execute(DataChunk &input, DataChunk &result, idx_t initial_index = 0);
@@ -138,7 +153,7 @@ private:
 
 	//! Tries to flush all state from intermediate operators. Will return true if all state is flushed, false in the
 	//! case of a blocked sink.
-	bool TryFlushCachingOperators();
+	bool TryFlushCachingOperators(ExecutionBudget &chunk_budget);
 
 	static bool CanCacheType(const LogicalType &type);
 	void CacheChunk(DataChunk &input, idx_t operator_idx);

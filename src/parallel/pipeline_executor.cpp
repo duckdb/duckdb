@@ -48,7 +48,7 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 	InitializeChunk(final_chunk);
 }
 
-bool PipelineExecutor::TryFlushCachingOperators() {
+bool PipelineExecutor::TryFlushCachingOperators(ExecutionBudget &chunk_budget) {
 	if (!started_flushing) {
 		// Remainder of this method assumes any in process operators are from flushing
 		D_ASSERT(in_process_operators.empty());
@@ -89,7 +89,7 @@ bool PipelineExecutor::TryFlushCachingOperators() {
 			finalize_result = OperatorFinalizeResultType::HAVE_MORE_OUTPUT;
 		}
 
-		push_result = ExecutePushInternal(curr_chunk, flushing_idx + 1);
+		push_result = ExecutePushInternal(curr_chunk, chunk_budget, flushing_idx + 1);
 
 		if (finalize_result == OperatorFinalizeResultType::HAVE_MORE_OUTPUT) {
 			should_flush_current_idx = true;
@@ -168,7 +168,8 @@ SinkNextBatchType PipelineExecutor::NextBatch(duckdb::DataChunk &source_chunk) {
 PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 	D_ASSERT(pipeline.sink);
 	auto &source_chunk = pipeline.operators.empty() ? final_chunk : *intermediate_chunks[0];
-	for (idx_t i = 0; i < max_chunks; i++) {
+	ExecutionBudget chunk_budget(max_chunks);
+	while (chunk_budget.Next()) {
 		if (context.client.interrupted) {
 			throw InterruptException();
 		}
@@ -179,17 +180,17 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 			break;
 		} else if (remaining_sink_chunk) {
 			// The pipeline was interrupted by the Sink. We should retry sinking the final chunk.
-			result = ExecutePushInternal(final_chunk);
+			result = ExecutePushInternal(final_chunk, chunk_budget);
 			remaining_sink_chunk = false;
 		} else if (!in_process_operators.empty() && !started_flushing) {
 			// The pipeline was interrupted by the Sink when pushing a source chunk through the pipeline. We need to
 			// re-push the same source chunk through the pipeline because there are in_process operators, meaning that
 			// the result for the pipeline
 			D_ASSERT(source_chunk.size() > 0);
-			result = ExecutePushInternal(source_chunk);
+			result = ExecutePushInternal(source_chunk, chunk_budget);
 		} else if (exhausted_source && !next_batch_blocked && !done_flushing) {
 			// The source was exhausted, try flushing all operators
-			auto flush_completed = TryFlushCachingOperators();
+			auto flush_completed = TryFlushCachingOperators(chunk_budget);
 			if (flush_completed) {
 				done_flushing = true;
 				break;
@@ -223,7 +224,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 				continue;
 			}
 
-			result = ExecutePushInternal(source_chunk);
+			result = ExecutePushInternal(source_chunk, chunk_budget);
 		} else {
 			throw InternalException("Unexpected state reached in pipeline executor");
 		}
@@ -254,10 +255,6 @@ PipelineExecuteResult PipelineExecutor::Execute() {
 	return Execute(NumericLimits<idx_t>::Maximum());
 }
 
-OperatorResultType PipelineExecutor::ExecutePush(DataChunk &input) { // LCOV_EXCL_START
-	return ExecutePushInternal(input);
-} // LCOV_EXCL_STOP
-
 void PipelineExecutor::FinishProcessing(int32_t operator_idx) {
 	finished_processing_idx = operator_idx < 0 ? NumericLimits<int32_t>::Maximum() : operator_idx;
 	in_process_operators = stack<idx_t>();
@@ -278,7 +275,8 @@ bool PipelineExecutor::IsFinished() {
 	return finished_processing_idx >= 0;
 }
 
-OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t initial_idx) {
+OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, ExecutionBudget &chunk_budget,
+                                                         idx_t initial_idx) {
 	D_ASSERT(pipeline.sink);
 	if (input.size() == 0) { // LCOV_EXCL_START
 		return OperatorResultType::NEED_MORE_INPUT;
@@ -287,8 +285,8 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 	// this loop will continuously push the input chunk through the pipeline as long as:
 	// - the OperatorResultType for the Execute is HAVE_MORE_OUTPUT
 	// - the Sink doesn't block
-	while (true) {
-		OperatorResultType result;
+	OperatorResultType result = OperatorResultType::HAVE_MORE_OUTPUT;
+	do {
 		// Note: if input is the final_chunk, we don't do any executing, the chunk just needs to be sinked
 		if (&input != &final_chunk) {
 			final_chunk.Reset();
@@ -320,7 +318,8 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 		if (result == OperatorResultType::NEED_MORE_INPUT) {
 			return OperatorResultType::NEED_MORE_INPUT;
 		}
-	}
+	} while (chunk_budget.Next());
+	return result;
 }
 
 PipelineExecuteResult PipelineExecutor::PushFinalize() {
