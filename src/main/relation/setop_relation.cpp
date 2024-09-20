@@ -12,7 +12,7 @@ SetOpRelation::SetOpRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> r
 	if (left->context.GetContext() != right->context.GetContext()) {
 		throw InvalidInputException("Cannot combine LEFT and RIGHT relations of different connections!");
 	}
-	context.GetContext()->TryBindRelation(*this, this->columns);
+	TryBindRelation(columns);
 }
 
 unique_ptr<QueryNode> SetOpRelation::GetQueryNode() {

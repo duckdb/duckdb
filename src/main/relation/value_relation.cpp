@@ -21,7 +21,7 @@ ValueRelation::ValueRelation(const shared_ptr<ClientContext> &context, const vec
 		this->expressions.push_back(std::move(expressions));
 	}
 	QueryResult::DeduplicateColumns(names);
-	context->TryBindRelation(*this, this->columns);
+	TryBindRelation(columns);
 }
 
 ValueRelation::ValueRelation(const shared_ptr<ClientContext> &context, const string &values_list,
@@ -29,7 +29,7 @@ ValueRelation::ValueRelation(const shared_ptr<ClientContext> &context, const str
     : Relation(context, RelationType::VALUE_LIST_RELATION), names(std::move(names_p)), alias(std::move(alias_p)) {
 	this->expressions = Parser::ParseValuesList(values_list, context->GetParserOptions());
 	QueryResult::DeduplicateColumns(names);
-	context->TryBindRelation(*this, this->columns);
+	TryBindRelation(columns);
 }
 
 unique_ptr<QueryNode> ValueRelation::GetQueryNode() {

@@ -75,6 +75,7 @@ public:
 	virtual bool IsReadOnly() {
 		return true;
 	}
+	DUCKDB_API virtual void TryBindRelation(vector<ColumnDefinition> &columns);
 
 public:
 	// PROJECT

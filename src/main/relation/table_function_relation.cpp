@@ -49,7 +49,7 @@ void TableFunctionRelation::InitializeColumns() {
 	if (!auto_initialize) {
 		return;
 	}
-	context.GetContext()->TryBindRelation(*this, this->columns);
+	TryBindRelation(columns);
 }
 
 unique_ptr<QueryNode> TableFunctionRelation::GetQueryNode() {
