@@ -633,6 +633,11 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 			remaining_filters.erase_at(rem_fil_idx);
 		}
 	}
+	// TODO: add tests for these
+	// OR filters on different columns: X = 1 OR Y = 1
+	// OR filters on composite expressions: X + 1 = 1 OR X + 2 = 1
+	// OR filters combined with different expressions: X = 1 OR X + Y < 0.5
+	// OR filters with different comparison types: X > 1 OR X < 0
 	for (idx_t rem_fil_idx = 0; rem_fil_idx < remaining_filters.size(); rem_fil_idx++) {
 		auto &remaining_filter = remaining_filters[rem_fil_idx];
 		if (remaining_filter->expression_class == ExpressionClass::BOUND_CONJUNCTION) {
@@ -645,11 +650,14 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 						auto &const_val = comp.right->Cast<BoundConstantExpression>();
 						auto or_val = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, const_val.value);
 						conj_filter->child_filters.push_back(std::move(or_val));
+					} else {
+						// FIXME: cancel if this is not a constant
+						break;
 					}
 					// auto or_val_one = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, );
 
 				}
-
+				// TODO: push a ZonemapFilter, not a ConjunctionOrFilter
 				table_filters.PushFilter(0, std::move(conj_filter));
 			}
 		}

@@ -1002,6 +1002,10 @@ static void ApplyFilter(Vector &v, TableFilter &filter, parquet_filter_t &filter
 		auto &child = StructVector::GetEntries(v)[struct_filter.child_idx];
 		ApplyFilter(*child, *struct_filter.child_filter, filter_mask, count);
 	} break;
+	case TableFilterType::ZONE_MAP:
+		// we don't execute zone map filters here - we only consider them for zone map pruning
+		filter_mask.reset();
+		break;
 	default:
 		D_ASSERT(0);
 		break;

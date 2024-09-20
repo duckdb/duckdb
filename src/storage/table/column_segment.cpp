@@ -530,6 +530,9 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		return FilterSelection(sel, *child_vec, child_data, *struct_filter.child_filter, scan_count,
 		                       approved_tuple_count);
 	}
+	case TableFilterType::ZONE_MAP:
+		// we don't execute zone map filters here - we only consider them for zone map pruning
+		return scan_count;
 	default:
 		throw InternalException("FIXME: unsupported type for filter selection");
 	}
