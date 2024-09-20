@@ -44,11 +44,11 @@ public:
 public:
 	void GetSchema(ArrowSchemaWrapper &schema);
 
-	shared_ptr<ArrowArrayWrapper> GetNextChunk();
+	virtual shared_ptr<ArrowArrayWrapper> GetNextChunk();
 
 	const char *GetError();
 
-	~ArrowArrayStreamWrapper();
+	virtual ~ArrowArrayStreamWrapper();
 	ArrowArrayStreamWrapper() {
 		arrow_array_stream.release = nullptr;
 	}
