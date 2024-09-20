@@ -638,6 +638,56 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 	// OR filters on composite expressions: X + 1 = 1 OR X + 2 = 1
 	// OR filters combined with different expressions: X = 1 OR X + Y < 0.5
 	// OR filters with different comparison types: X > 1 OR X < 0
+	unordered_map<idx_t, unique_ptr<TableFilter>> column_to_conjunction_filter;
+
+	for (idx_t rem_fil_idx = 0; rem_fil_idx < remaining_filters.size(); rem_fil_idx++) {
+		auto &remaining_filter = remaining_filters[rem_fil_idx];
+		if (remaining_filter->expression_class == ExpressionClass::BOUND_CONJUNCTION) {
+			auto &conj = remaining_filter->Cast<BoundConjunctionExpression>();
+			if (conj.type == ExpressionType::CONJUNCTION_OR) {
+				auto conj_filter = make_uniq<ConjunctionOrFilter>();
+				for (auto &child : conj.children) {
+					idx_t column_index;
+					unique_ptr<ZonemapFilter> zone_filter;
+					auto &comp = child->Cast<BoundComparisonExpression>();
+					if (comp.right->expression_class == ExpressionClass::BOUND_CONSTANT &&
+					    comp.left->expression_class == ExpressionClass::BOUND_CONSTANT) {
+						auto &column_ref = comp.left->Cast<BoundColumnRefExpression>();
+						column_index = column_ids[column_ref.binding.column_index];
+						auto &const_val = comp.right->Cast<BoundConstantExpression>();
+						auto const_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, const_val.value);
+						zone_filter = make_uniq<ZonemapFilter>();
+						zone_filter->child_filter = std::move(const_filter);
+					} else if (comp.left->expression_class == ExpressionClass::BOUND_CONSTANT &&
+					           comp.right->expression_class == ExpressionClass::BOUND_CONSTANT) {
+						auto &column_ref = comp.right->Cast<BoundColumnRefExpression>();
+						column_index = column_ids[column_ref.binding.column_index];
+						auto &const_val = comp.left->Cast<BoundConstantExpression>();
+						auto const_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, const_val.value);
+						zone_filter = make_uniq<ZonemapFilter>();
+						zone_filter->child_filter = std::move(const_filter);
+					} else {
+						// OR filter is not simple skip it.
+						continue;
+					}
+
+					if (column_to_conjunction_filter.find(column_index) == column_to_conjunction_filter.end()) {
+						auto new_conjunction = make_uniq<ConjunctionOrFilter>();
+						new_conjunction->child_filters.push_back(zone_filter->Copy());
+					} else {
+						auto &it = column_to_conjunction_filter.at(column_index);
+						auto &or_filter = it->Cast<ConjunctionOrFilter>();
+						or_filter.child_filters.push_back(zone_filter->Copy());
+					}
+				}
+				// TODO: push a ZonemapFilter
+				for (auto &filter : column_to_conjunction_filter) {
+					table_filters.PushFilter(filter.first, filter.second->Copy());
+				}
+			}
+		}
+	}
+
 	for (idx_t rem_fil_idx = 0; rem_fil_idx < remaining_filters.size(); rem_fil_idx++) {
 		auto &remaining_filter = remaining_filters[rem_fil_idx];
 		if (remaining_filter->expression_class == ExpressionClass::BOUND_CONJUNCTION) {
@@ -646,18 +696,24 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 				auto conj_filter = make_uniq<ConjunctionOrFilter>();
 				for (auto &child : conj.children) {
 					auto &comp = child->Cast<BoundComparisonExpression>();
-					if (comp.right->expression_class == ExpressionClass::BOUND_CONSTANT) {
+					if (comp.right->expression_class == ExpressionClass::BOUND_CONSTANT &&
+					    comp.left->expression_class == ExpressionClass::BOUND_CONSTANT) {
 						auto &const_val = comp.right->Cast<BoundConstantExpression>();
-						auto or_val = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, const_val.value);
-						conj_filter->child_filters.push_back(std::move(or_val));
-					} else {
-						// FIXME: cancel if this is not a constant
-						break;
+						auto const_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, const_val.value);
+						auto zone_filter = make_uniq<ZonemapFilter>();
+						zone_filter->child_filter = std::move(const_filter);
+						conj_filter->child_filters.push_back(std::move(zone_filter));
 					}
-					// auto or_val_one = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, );
-
+					if (comp.left->expression_class == ExpressionClass::BOUND_CONSTANT &&
+					    comp.right->expression_class == ExpressionClass::BOUND_CONSTANT) {
+						auto &const_val = comp.left->Cast<BoundConstantExpression>();
+						auto const_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, const_val.value);
+						auto zone_filter = make_uniq<ZonemapFilter>();
+						zone_filter->child_filter = std::move(const_filter);
+						conj_filter->child_filters.push_back(std::move(zone_filter));
+					}
 				}
-				// TODO: push a ZonemapFilter, not a ConjunctionOrFilter
+				// TODO: push a ZonemapFilter
 				table_filters.PushFilter(0, std::move(conj_filter));
 			}
 		}

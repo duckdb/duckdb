@@ -78,12 +78,30 @@ public:
 	// zonemap filter
 	unique_ptr<TableFilter> child_filter;
 
+	ZonemapFilter() : TableFilter(TableFilterType::ZONE_MAP) {
+	}
+
+	string ToString(const string &column_name) override {
+		return "";
+	}
+
+	unique_ptr<TableFilter> Copy() const override {
+		auto copy = make_uniq<ZonemapFilter>();
+		copy->child_filter = child_filter->Copy();
+		return copy;
+	}
+
+	unique_ptr<Expression> ToExpression(const Expression &column) const override {
+		return nullptr;
+	};
 
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override {
 		return child_filter->CheckStatistics(stats);
 	}
-};
 
+	~ZonemapFilter() override {
+	}
+};
 
 class TableFilterSet {
 public:
