@@ -23,62 +23,57 @@ statement ok
 create table quantile as select range r, random() from range(10000) union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9) order by 2;
 
 query I
-SELECT median(r) FROM quantile
-----
-4999.5
-
-query I
-SELECT median(r) FROM quantile
+SELECT median(r)::VARCHAR FROM quantile
 ----
 4999.5
 
 query R
-SELECT median(r::float) FROM quantile
+SELECT median(r::float)::VARCHAR FROM quantile
 ----
 4999.5
 
 query R
-SELECT median(r::double) FROM quantile
+SELECT median(r::double)::VARCHAR FROM quantile
 ----
 4999.5
 
 query I
-SELECT median(r::tinyint) FROM quantile where r < 100
+SELECT median(r::tinyint)::VARCHAR FROM quantile where r < 100
 ----
-49.500000
+49.5
 
 query I
-SELECT median(r::smallint) FROM quantile
-----
-4999.5
-
-query I
-SELECT median(r::integer) FROM quantile
+SELECT median(r::smallint)::VARCHAR FROM quantile
 ----
 4999.5
 
 query I
-SELECT median(r::bigint) FROM quantile
+SELECT median(r::integer)::VARCHAR FROM quantile
 ----
 4999.5
 
 query I
-SELECT median(r::hugeint) FROM quantile
+SELECT median(r::bigint)::VARCHAR FROM quantile
 ----
 4999.5
 
 query I
-SELECT median(r::decimal(10,2)) FROM quantile
+SELECT median(r::hugeint)::VARCHAR FROM quantile
+----
+4999.5
+
+query I
+SELECT median(r::decimal(10,2))::VARCHAR FROM quantile
 ----
 4999.50
 
 query I
-SELECT median(case when r is null then null else [r] end) FROM quantile
+SELECT median(case when r is null then null else [r] end)::VARCHAR FROM quantile
 ----
 [4999]
 
 query I
-SELECT median(case when r is null then null else {'i': r} end) FROM quantile
+SELECT median(case when r is null then null else {'i': r} end)::VARCHAR FROM quantile
 ----
 {'i': 4999}
 
@@ -105,3 +100,69 @@ SELECT median(42) FROM quantile
 ----
 42
 
+
+#
+# Validate even number of values for all types.
+#
+
+# Interpolated
+foreach type <integral> DECIMAL(4,1) DECIMAL(9,1) DECIMAL(18,1) DECIMAL(38,1) float double
+
+# We don't need to cast these values because 
+# they are too small for the 1% floating point margin to affect the result
+query I
+SELECT MEDIAN(range::${type})
+FROM range(0,10);
+----
+4.5
+
+endloop
+
+foreach type date timestamp timestamp_s timestamp_ms timestamp_ns
+
+query I
+SELECT MEDIAN(range::${type}) 
+FROM range('2024-01-01'::date, '2024-01-11'::date, INTERVAL 1 DAY);
+----
+2024-01-05 12:00:00
+
+endloop
+
+query I
+SELECT MEDIAN(range::timestamptz) 
+FROM range('2024-01-01'::date, '2024-01-11'::date, INTERVAL 1 DAY);
+----
+2024-01-05 12:00:00+00
+
+query I
+SELECT MEDIAN('00:00:00'::TIME + INTERVAL (range) HOUR)
+FROM range(0,10);
+----
+04:30:00
+
+query I
+SELECT MEDIAN(ttz::TIMETZ)
+FROM (VALUES 
+	('00:00:00-09'),
+	('00:00:00-08'),
+	('00:00:00-07'),
+	('00:00:00-06'),
+	('00:00:00-05'),
+	('00:00:00-04'),
+	('00:00:00-03'),
+	('00:00:00-02'),
+	('00:00:00-01'),
+	('00:00:00+00'),
+) tbl(ttz);
+----
+00:00:00-04:30
+
+# Floored
+foreach type varchar
+
+query I
+SELECT MEDIAN(range::${type}) FROM range(0,10);
+----
+4
+
+endloop
