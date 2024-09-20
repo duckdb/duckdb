@@ -190,6 +190,7 @@ static void NestedComparisonExecutor(Vector &left, Vector &right, Vector &result
 	for (idx_t i = 0; i < match_count; ++i) {
 		const auto idx = true_sel.get_index(i);
 		result_data[idx] = true;
+		result_validity.SetValid(idx);
 	}
 
 	const idx_t no_match_count = count - match_count;
