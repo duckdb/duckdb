@@ -24,13 +24,15 @@ struct DateTimestampSniffing {
 };
 //! Struct to store the result of the Sniffer
 struct SnifferResult {
-	SnifferResult(vector<LogicalType> return_types_p, vector<string> names_p)
-	    : return_types(std::move(return_types_p)), names(std::move(names_p)) {
+	SnifferResult(vector<LogicalType> return_types_p, vector<string> names_p, bool only_header_p = false)
+	    : return_types(std::move(return_types_p)), names(std::move(names_p)), only_header(only_header_p) {
 	}
 	//! Return Types that were detected
 	vector<LogicalType> return_types;
 	//! Column Names that were detected
 	vector<string> names;
+	//! If our CSV File is only a header
+	bool only_header = false;
 };
 
 //! All the options that will be used to sniff the dialect of the CSV file
