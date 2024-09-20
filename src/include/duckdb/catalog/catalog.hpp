@@ -350,9 +350,9 @@ private:
 	                                                    QueryErrorContext error_context);
 
 	//! Return the close entry name, the distance and the belonging schema.
-	static vector<SimilarCatalogEntry> SimilarEntryInSchemas(ClientContext &context, const string &entry_name,
-	                                                         CatalogType type,
-	                                                         const reference_set_t<SchemaCatalogEntry> &schemas);
+	static vector<SimilarCatalogEntry> SimilarEntriesInSchemas(ClientContext &context, const string &entry_name,
+	                                                           CatalogType type,
+	                                                           const reference_set_t<SchemaCatalogEntry> &schemas);
 
 	virtual void DropSchema(ClientContext &context, DropInfo &info) = 0;
 

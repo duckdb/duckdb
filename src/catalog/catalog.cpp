@@ -354,9 +354,9 @@ SchemaCatalogEntry &Catalog::GetSchema(CatalogTransaction transaction, const str
 //===--------------------------------------------------------------------===//
 // Lookup
 //===--------------------------------------------------------------------===//
-vector<SimilarCatalogEntry> Catalog::SimilarEntryInSchemas(ClientContext &context, const string &entry_name,
-                                                           CatalogType type,
-                                                           const reference_set_t<SchemaCatalogEntry> &schemas) {
+vector<SimilarCatalogEntry> Catalog::SimilarEntriesInSchemas(ClientContext &context, const string &entry_name,
+                                                             CatalogType type,
+                                                             const reference_set_t<SchemaCatalogEntry> &schemas) {
 	vector<SimilarCatalogEntry> results;
 	for (auto schema_ref : schemas) {
 		auto &schema = schema_ref.get();
@@ -564,7 +564,7 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
                                                       CatalogType type,
                                                       const reference_set_t<SchemaCatalogEntry> &schemas,
                                                       QueryErrorContext error_context) {
-	auto entries = SimilarEntryInSchemas(context, entry_name, type, schemas);
+	auto entries = SimilarEntriesInSchemas(context, entry_name, type, schemas);
 
 	reference_set_t<SchemaCatalogEntry> unseen_schemas;
 	auto &db_manager = DatabaseManager::Get(context);
@@ -644,7 +644,7 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 	// entries in other schemas get a penalty
 	// however, if there is an exact match in another schema, we will always show it
 	static constexpr const double UNSEEN_PENALTY = 0.2;
-	auto unseen_entries = SimilarEntryInSchemas(context, entry_name, type, unseen_schemas);
+	auto unseen_entries = SimilarEntriesInSchemas(context, entry_name, type, unseen_schemas);
 	vector<string> suggestions;
 	if (!unseen_entries.empty() && (unseen_entries[0].score == 1.0 || unseen_entries[0].score - UNSEEN_PENALTY >
 	                                                                      (entries.empty() ? 0.0 : entries[0].score))) {
