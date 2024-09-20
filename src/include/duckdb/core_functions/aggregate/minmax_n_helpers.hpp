@@ -1,6 +1,7 @@
 #pragma once
 
-#include "duckdb/common/vector.hpp"
+#include "duckdb/common/common.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/common/algorithm.hpp"
 
 namespace duckdb {
