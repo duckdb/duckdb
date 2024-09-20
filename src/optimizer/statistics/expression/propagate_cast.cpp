@@ -1,3 +1,4 @@
+#include "duckdb/common/exception_format_value.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 
@@ -27,6 +28,9 @@ static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatisti
 	case LogicalTypeId::TIME: {
 		switch (input.GetType().id()) {
 		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_SEC:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_NS:
 		case LogicalTypeId::TIMESTAMP_TZ:
 			return nullptr;
 		default:
