@@ -83,11 +83,6 @@ public:
 	//! referenced tables. This is used to resolve the * expression in a
 	//! selection list.
 	void GenerateAllColumnExpressions(StarExpression &expr, vector<unique_ptr<ParsedExpression>> &new_select_list);
-	//! Check if the given (binding, column_name) is in the exclusion/replacement lists.
-	//! Returns true if it is in one of these lists, and should therefore be skipped.
-	bool CheckExclusionList(StarExpression &expr, const string &column_name,
-	                        vector<unique_ptr<ParsedExpression>> &new_select_list,
-	                        case_insensitive_set_t &excluded_columns);
 
 	const vector<unique_ptr<Binding>> &GetBindingsList() {
 		return bindings_list;

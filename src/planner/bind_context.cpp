@@ -431,19 +431,27 @@ unique_ptr<ColumnRefExpression> BindContext::PositionToColumn(PositionalReferenc
 	return make_uniq<ColumnRefExpression>(column_name, table_name);
 }
 
-bool BindContext::CheckExclusionList(StarExpression &expr, const string &column_name,
-                                     vector<unique_ptr<ParsedExpression>> &new_select_list,
-                                     case_insensitive_set_t &excluded_columns) {
-	if (expr.exclude_list.find(column_name) != expr.exclude_list.end()) {
-		excluded_columns.insert(column_name);
+struct ExclusionListInfo {
+	explicit ExclusionListInfo(vector<unique_ptr<ParsedExpression>> &new_select_list)
+	    : new_select_list(new_select_list) {
+	}
+
+	vector<unique_ptr<ParsedExpression>> &new_select_list;
+	case_insensitive_set_t excluded_columns;
+	qualified_column_set_t excluded_qualified_columns;
+};
+
+bool CheckExclusionList(StarExpression &expr, const QualifiedColumnName &qualified_name, ExclusionListInfo &info) {
+	if (expr.exclude_list.find(qualified_name) != expr.exclude_list.end()) {
+		info.excluded_qualified_columns.insert(qualified_name);
 		return true;
 	}
-	auto entry = expr.replace_list.find(column_name);
+	auto entry = expr.replace_list.find(qualified_name.column);
 	if (entry != expr.replace_list.end()) {
 		auto new_entry = entry->second->Copy();
 		new_entry->alias = entry->first;
-		excluded_columns.insert(entry->first);
-		new_select_list.push_back(std::move(new_entry));
+		info.excluded_columns.insert(entry->first);
+		info.new_select_list.push_back(std::move(new_entry));
 		return true;
 	}
 	return false;
@@ -454,7 +462,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 	if (bindings_list.empty()) {
 		throw BinderException("* expression without FROM clause!");
 	}
-	case_insensitive_set_t excluded_columns;
+	ExclusionListInfo exclusion_info(new_select_list);
 	if (expr.relation_name.empty()) {
 		// SELECT * case
 		// bind all expressions of each table in-order
@@ -462,7 +470,8 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		for (auto &entry : bindings_list) {
 			auto &binding = *entry;
 			for (auto &column_name : binding.names) {
-				if (CheckExclusionList(expr, column_name, new_select_list, excluded_columns)) {
+				QualifiedColumnName qualified_column(binding.alias, column_name);
+				if (CheckExclusionList(expr, qualified_column, exclusion_info)) {
 					continue;
 				}
 				// check if this column is a USING column
@@ -522,7 +531,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 			column_names[0] = binding->alias.GetAlias();
 			column_names[1] = expr.relation_name;
 			for (auto &child : struct_children) {
-				if (CheckExclusionList(expr, child.first, new_select_list, excluded_columns)) {
+				if (CheckExclusionList(expr, QualifiedColumnName(child.first), exclusion_info)) {
 					continue;
 				}
 				column_names[2] = child.first;
@@ -530,7 +539,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 			}
 		} else {
 			for (auto &column_name : binding->names) {
-				if (CheckExclusionList(expr, column_name, new_select_list, excluded_columns)) {
+				if (CheckExclusionList(expr, QualifiedColumnName(binding->alias, column_name), exclusion_info)) {
 					continue;
 				}
 
@@ -544,13 +553,14 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		expr.replace_list.clear();
 	}
 	for (auto &excluded : expr.exclude_list) {
-		if (excluded_columns.find(excluded) == excluded_columns.end()) {
-			throw BinderException("Column \"%s\" in EXCLUDE list not found in %s", excluded,
+		if (exclusion_info.excluded_qualified_columns.find(excluded) ==
+		    exclusion_info.excluded_qualified_columns.end()) {
+			throw BinderException("Column \"%s\" in EXCLUDE list not found in %s", excluded.ToString(),
 			                      expr.relation_name.empty() ? "FROM clause" : expr.relation_name.c_str());
 		}
 	}
 	for (auto &entry : expr.replace_list) {
-		if (excluded_columns.find(entry.first) == excluded_columns.end()) {
+		if (exclusion_info.excluded_columns.find(entry.first) == exclusion_info.excluded_columns.end()) {
 			throw BinderException("Column \"%s\" in REPLACE list not found in %s", entry.first,
 			                      expr.relation_name.empty() ? "FROM clause" : expr.relation_name.c_str());
 		}
