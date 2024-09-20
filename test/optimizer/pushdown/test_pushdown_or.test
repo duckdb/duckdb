@@ -1,3 +1,5 @@
+# name: test/optimizer/pushdown/test_pushdown_or.test
+# group: [pushdown]
 
 statement ok
 create table t1 as select range a, range b from range(0,1000000) ;
