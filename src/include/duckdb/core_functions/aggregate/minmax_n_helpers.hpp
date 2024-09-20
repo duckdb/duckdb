@@ -294,11 +294,8 @@ struct MinMaxFallbackValue {
 
 	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &extra_state, UnifiedVectorFormat &format) {
 		const OrderModifiers modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
-		CreateSortKeyHelpers::CreateSortKey(input, count, modifiers, extra_state);
+		CreateSortKeyHelpers::CreateSortKeyWithValidity(input, extra_state, modifiers, count);
 		input.Flatten(count);
-		extra_state.Flatten(count);
-		// Ensure the validity vectors match, because we want to ignore nulls
-		FlatVector::Validity(extra_state).Initialize(FlatVector::Validity(input));
 		extra_state.ToUnifiedFormat(count, format);
 	}
 };
