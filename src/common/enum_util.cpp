@@ -4593,6 +4593,9 @@ MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
 	if (StringUtil::Equals(value, "OPTIMIZER_MATERIALIZED_CTE")) {
 		return MetricsType::OPTIMIZER_MATERIALIZED_CTE;
 	}
+	if (StringUtil::Equals(value, "OPTIMIZER_EMPTY_RESULT_PULLUP")) {
+		return MetricsType::OPTIMIZER_EMPTY_RESULT_PULLUP;
+	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<MetricsType>", value));
 }
 
