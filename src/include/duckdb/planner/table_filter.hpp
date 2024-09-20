@@ -73,6 +73,18 @@ public:
 	}
 };
 
+class ZonemapFilter : public TableFilter {
+public:
+	// zonemap filter
+	unique_ptr<TableFilter> child_filter;
+
+
+	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override {
+		return child_filter->CheckStatistics(stats);
+	}
+};
+
+
 class TableFilterSet {
 public:
 	unordered_map<idx_t, unique_ptr<TableFilter>> filters;
