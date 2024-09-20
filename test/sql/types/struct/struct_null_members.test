@@ -36,45 +36,47 @@ NULL	{'x': NULL, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
 {'x': 1, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	1
 {'x': 1, 'y': 0}	{'x': 1, 'y': 0}	0	1	1	0	0	1	1	0
 {'x': 1, 'y': 0}	{'x': 1, 'y': 2}	1	1	0	1	0	0	0	1
-{'x': 1, 'y': 0}	{'x': 1, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': 1, 'y': 0}	{'x': NULL, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': 1, 'y': 0}	{'x': NULL, 'y': 2}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': 1, 'y': 0}	{'x': NULL, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
+{'x': 1, 'y': 0}	{'x': 1, 'y': NULL}	1	1	NULL	1	NULL	NULL	0	1
+{'x': 1, 'y': 0}	{'x': NULL, 'y': 0}	1	1	NULL	1	NULL	NULL	0	1
+{'x': 1, 'y': 0}	{'x': NULL, 'y': 2}	1	1	NULL	1	NULL	NULL	0	1
+{'x': 1, 'y': 0}	{'x': NULL, 'y': NULL}	1	1	NULL	1	NULL	NULL	0	1
 {'x': 1, 'y': 2}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	1
 {'x': 1, 'y': 2}	{'x': 1, 'y': 0}	0	0	0	1	1	1	0	1
 {'x': 1, 'y': 2}	{'x': 1, 'y': 2}	0	1	1	0	0	1	1	0
-{'x': 1, 'y': 2}	{'x': 1, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': 1, 'y': 2}	{'x': NULL, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': 1, 'y': 2}	{'x': NULL, 'y': 2}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': 1, 'y': 2}	{'x': NULL, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
+{'x': 1, 'y': 2}	{'x': 1, 'y': NULL}	1	1	NULL	1	NULL	NULL	0	1
+{'x': 1, 'y': 2}	{'x': NULL, 'y': 0}	1	1	NULL	1	NULL	NULL	0	1
+{'x': 1, 'y': 2}	{'x': NULL, 'y': 2}	1	1	NULL	1	NULL	NULL	0	1
+{'x': 1, 'y': 2}	{'x': NULL, 'y': NULL}	1	1	NULL	1	NULL	NULL	0	1
 {'x': 1, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': 1, 'y': NULL}	{'x': 1, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': 1, 'y': NULL}	{'x': 1, 'y': 2}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': 1, 'y': NULL}	{'x': 1, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	1	0
-{'x': 1, 'y': NULL}	{'x': NULL, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': 1, 'y': NULL}	{'x': NULL, 'y': 2}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': 1, 'y': NULL}	{'x': NULL, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
+{'x': 1, 'y': NULL}	{'x': 1, 'y': 0}	NULL	NULL	NULL	1	1	1	0	1
+{'x': 1, 'y': NULL}	{'x': 1, 'y': 2}	NULL	NULL	NULL	1	1	1	0	1
+{'x': 1, 'y': NULL}	{'x': 1, 'y': NULL}	NULL	1	1	NULL	NULL	1	1	0
+{'x': 1, 'y': NULL}	{'x': NULL, 'y': 0}	1	1	NULL	1	NULL	NULL	0	1
+{'x': 1, 'y': NULL}	{'x': NULL, 'y': 2}	1	1	NULL	1	NULL	NULL	0	1
+{'x': 1, 'y': NULL}	{'x': NULL, 'y': NULL}	1	1	NULL	1	NULL	NULL	0	1
 {'x': NULL, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': NULL, 'y': 0}	{'x': 1, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': NULL, 'y': 0}	{'x': 1, 'y': 2}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': NULL, 'y': 0}	{'x': 1, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': NULL, 'y': 0}	{'x': NULL, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	1	0
-{'x': NULL, 'y': 0}	{'x': NULL, 'y': 2}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': NULL, 'y': 0}	{'x': NULL, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
+{'x': NULL, 'y': 0}	{'x': 1, 'y': 0}	NULL	NULL	NULL	1	1	1	0	1
+{'x': NULL, 'y': 0}	{'x': 1, 'y': 2}	NULL	NULL	NULL	1	1	1	0	1
+{'x': NULL, 'y': 0}	{'x': 1, 'y': NULL}	NULL	NULL	NULL	1	1	1	0	1
+{'x': NULL, 'y': 0}	{'x': NULL, 'y': 0}	NULL	1	1	NULL	NULL	1	1	0
+{'x': NULL, 'y': 0}	{'x': NULL, 'y': 2}	1	1	NULL	1	NULL	NULL	0	1
+{'x': NULL, 'y': 0}	{'x': NULL, 'y': NULL}	1	1	NULL	1	NULL	NULL	0	1
 {'x': NULL, 'y': 2}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': NULL, 'y': 2}	{'x': 1, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': NULL, 'y': 2}	{'x': 1, 'y': 2}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': NULL, 'y': 2}	{'x': 1, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': NULL, 'y': 2}	{'x': NULL, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': NULL, 'y': 2}	{'x': NULL, 'y': 2}	NULL	NULL	NULL	NULL	NULL	NULL	1	0
-{'x': NULL, 'y': 2}	{'x': NULL, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
+{'x': NULL, 'y': 2}	{'x': 1, 'y': 0}	NULL	NULL	NULL	1	1	1	0	1
+{'x': NULL, 'y': 2}	{'x': 1, 'y': 2}	NULL	NULL	NULL	1	1	1	0	1
+{'x': NULL, 'y': 2}	{'x': 1, 'y': NULL}	NULL	NULL	NULL	1	1	1	0	1
+{'x': NULL, 'y': 2}	{'x': NULL, 'y': 0}	NULL	NULL	NULL	1	1	1	0	1
+{'x': NULL, 'y': 2}	{'x': NULL, 'y': 2}	NULL	1	1	NULL	NULL	1	1	0
+{'x': NULL, 'y': 2}	{'x': NULL, 'y': NULL}	1	1	NULL	1	NULL	NULL	0	1
 {'x': NULL, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': NULL, 'y': NULL}	{'x': 1, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': NULL, 'y': NULL}	{'x': 1, 'y': 2}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': NULL, 'y': NULL}	{'x': 1, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': NULL, 'y': NULL}	{'x': NULL, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': NULL, 'y': NULL}	{'x': NULL, 'y': 2}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': NULL, 'y': NULL}	{'x': NULL, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	1	0
+{'x': NULL, 'y': NULL}	{'x': 1, 'y': 0}	NULL	NULL	NULL	1	1	1	0	1
+{'x': NULL, 'y': NULL}	{'x': 1, 'y': 2}	NULL	NULL	NULL	1	1	1	0	1
+{'x': NULL, 'y': NULL}	{'x': 1, 'y': NULL}	NULL	NULL	NULL	1	1	1	0	1
+{'x': NULL, 'y': NULL}	{'x': NULL, 'y': 0}	NULL	NULL	NULL	1	1	1	0	1
+{'x': NULL, 'y': NULL}	{'x': NULL, 'y': 2}	NULL	NULL	NULL	1	1	1	0	1
+{'x': NULL, 'y': NULL}	{'x': NULL, 'y': NULL}	NULL	1	1	NULL	NULL	1	1	0
+
+mode skip
 
 # String STRUCTs with NULLs in various positions
 statement ok

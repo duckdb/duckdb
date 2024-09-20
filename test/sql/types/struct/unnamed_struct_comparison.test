@@ -11,7 +11,7 @@ select a<>b from VALUES ((NULL, 1, NULL), (5, 6, 7)) t(a, b);
 ----
 true
 
-
+git
 query I
 select a<>b is null from VALUES ((NULL, 1, NULL), (5, 6, 7)) t(a, b);
 ----
