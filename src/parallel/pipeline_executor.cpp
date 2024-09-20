@@ -169,7 +169,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 	D_ASSERT(pipeline.sink);
 	auto &source_chunk = pipeline.operators.empty() ? final_chunk : *intermediate_chunks[0];
 	ExecutionBudget chunk_budget(max_chunks);
-	while (chunk_budget.Next()) {
+	do {
 		if (context.client.interrupted) {
 			throw InterruptException();
 		}
@@ -181,6 +181,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 		} else if (remaining_sink_chunk) {
 			// The pipeline was interrupted by the Sink. We should retry sinking the final chunk.
 			result = ExecutePushInternal(final_chunk, chunk_budget);
+			D_ASSERT(result != OperatorResultType::HAVE_MORE_OUTPUT);
 			remaining_sink_chunk = false;
 		} else if (!in_process_operators.empty() && !started_flushing) {
 			// The pipeline was interrupted by the Sink when pushing a source chunk through the pipeline. We need to
@@ -238,7 +239,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 		if (result == OperatorResultType::FINISHED) {
 			break;
 		}
-	}
+	} while (chunk_budget.Next());
 
 	if ((!exhausted_source || !done_flushing) && !IsFinished()) {
 		return PipelineExecuteResult::NOT_FINISHED;
@@ -285,11 +286,13 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, Execu
 	// this loop will continuously push the input chunk through the pipeline as long as:
 	// - the OperatorResultType for the Execute is HAVE_MORE_OUTPUT
 	// - the Sink doesn't block
+	// - the ExecutionBudget has not been depleted
 	OperatorResultType result = OperatorResultType::HAVE_MORE_OUTPUT;
 	do {
 		// Note: if input is the final_chunk, we don't do any executing, the chunk just needs to be sinked
 		if (&input != &final_chunk) {
 			final_chunk.Reset();
+			// Execute and put the result into 'final_chunk'
 			result = Execute(input, final_chunk, initial_idx);
 			if (result == OperatorResultType::FINISHED) {
 				return OperatorResultType::FINISHED;
