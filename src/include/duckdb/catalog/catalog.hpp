@@ -9,17 +9,18 @@
 #pragma once
 
 #include "duckdb/catalog/catalog_entry.hpp"
-#include "duckdb/common/mutex.hpp"
-#include "duckdb/parser/query_error_context.hpp"
 #include "duckdb/catalog/catalog_transaction.hpp"
-#include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/atomic.hpp"
-#include "duckdb/common/map.hpp"
-#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/enums/catalog_lookup_behavior.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception/catalog_exception.hpp"
-#include "duckdb/common/enums/catalog_lookup_behavior.hpp"
+#include "duckdb/common/map.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/reference_map.hpp"
+#include "duckdb/parser/query_error_context.hpp"
+
 #include <functional>
 
 namespace duckdb {
@@ -349,8 +350,9 @@ private:
 	                                                    QueryErrorContext error_context);
 
 	//! Return the close entry name, the distance and the belonging schema.
-	static SimilarCatalogEntry SimilarEntryInSchemas(ClientContext &context, const string &entry_name, CatalogType type,
-	                                                 const reference_set_t<SchemaCatalogEntry> &schemas);
+	static vector<SimilarCatalogEntry> SimilarEntryInSchemas(ClientContext &context, const string &entry_name,
+	                                                         CatalogType type,
+	                                                         const reference_set_t<SchemaCatalogEntry> &schemas);
 
 	virtual void DropSchema(ClientContext &context, DropInfo &info) = 0;
 

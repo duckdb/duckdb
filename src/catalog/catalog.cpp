@@ -1,42 +1,44 @@
 #include "duckdb/catalog/catalog.hpp"
 
-#include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/catalog/catalog_entry/list.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/catalog/default/default_schemas.hpp"
-#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/catalog/default/default_types.hpp"
+#include "duckdb/catalog/similar_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/function/built_in_functions.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/extension/generated_extension_loader.hpp"
+#include "duckdb/main/extension_entries.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
-#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/catalog/default/default_types.hpp"
-#include "duckdb/main/extension_entries.hpp"
-#include "duckdb/main/extension/generated_extension_loader.hpp"
-#include "duckdb/main/connection.hpp"
-#include "duckdb/main/attached_database.hpp"
-#include "duckdb/main/database_manager.hpp"
-#include "duckdb/function/built_in_functions.hpp"
-#include "duckdb/catalog/similar_catalog_entry.hpp"
+#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/database_size.hpp"
+
 #include <algorithm>
 
 namespace duckdb {
@@ -352,9 +354,10 @@ SchemaCatalogEntry &Catalog::GetSchema(CatalogTransaction transaction, const str
 //===--------------------------------------------------------------------===//
 // Lookup
 //===--------------------------------------------------------------------===//
-SimilarCatalogEntry Catalog::SimilarEntryInSchemas(ClientContext &context, const string &entry_name, CatalogType type,
-                                                   const reference_set_t<SchemaCatalogEntry> &schemas) {
-	SimilarCatalogEntry result;
+vector<SimilarCatalogEntry> Catalog::SimilarEntryInSchemas(ClientContext &context, const string &entry_name,
+                                                           CatalogType type,
+                                                           const reference_set_t<SchemaCatalogEntry> &schemas) {
+	vector<SimilarCatalogEntry> results;
 	for (auto schema_ref : schemas) {
 		auto &schema = schema_ref.get();
 		auto transaction = schema.catalog.GetCatalogTransaction(context);
@@ -363,12 +366,16 @@ SimilarCatalogEntry Catalog::SimilarEntryInSchemas(ClientContext &context, const
 			// no similar entry found
 			continue;
 		}
-		if (!result.Found() || result.score < entry.score) {
-			result = entry;
-			result.schema = &schema;
+		if (results.empty() || results[0].score <= entry.score) {
+			if (!results.empty() && results[0].score < entry.score) {
+				results.clear();
+			}
+
+			results.push_back(entry);
+			results.back().schema = &schema;
 		}
 	}
-	return result;
+	return results;
 }
 
 vector<CatalogSearchEntry> GetCatalogEntries(ClientContext &context, const string &catalog, const string &schema) {
@@ -557,7 +564,7 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
                                                       CatalogType type,
                                                       const reference_set_t<SchemaCatalogEntry> &schemas,
                                                       QueryErrorContext error_context) {
-	auto entry = SimilarEntryInSchemas(context, entry_name, type, schemas);
+	auto entries = SimilarEntryInSchemas(context, entry_name, type, schemas);
 
 	reference_set_t<SchemaCatalogEntry> unseen_schemas;
 	auto &db_manager = DatabaseManager::Get(context);
@@ -637,20 +644,36 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 	// entries in other schemas get a penalty
 	// however, if there is an exact match in another schema, we will always show it
 	static constexpr const double UNSEEN_PENALTY = 0.2;
-	auto unseen_entry = SimilarEntryInSchemas(context, entry_name, type, unseen_schemas);
-	string did_you_mean;
-	if (unseen_entry.Found() && (unseen_entry.score == 1.0 || unseen_entry.score - UNSEEN_PENALTY > entry.score)) {
+	auto unseen_entries = SimilarEntryInSchemas(context, entry_name, type, unseen_schemas);
+	vector<string> suggestions;
+	if (!unseen_entries.empty() && (unseen_entries[0].score == 1.0 || unseen_entries[0].score - UNSEEN_PENALTY >
+	                                                                      (entries.empty() ? 0.0 : entries[0].score))) {
 		// the closest matching entry requires qualification as it is not in the default search path
 		// check how to minimally qualify this entry
-		auto catalog_name = unseen_entry.schema->catalog.GetName();
-		auto schema_name = unseen_entry.schema->name;
-		bool qualify_database;
-		bool qualify_schema;
-		FindMinimalQualification(context, catalog_name, schema_name, qualify_database, qualify_schema);
-		did_you_mean = unseen_entry.GetQualifiedName(qualify_database, qualify_schema);
-	} else if (entry.Found()) {
-		did_you_mean = entry.name;
+		for (auto &unseen_entry : unseen_entries) {
+			auto catalog_name = unseen_entry.schema->catalog.GetName();
+			auto schema_name = unseen_entry.schema->name;
+			bool qualify_database;
+			bool qualify_schema;
+			FindMinimalQualification(context, catalog_name, schema_name, qualify_database, qualify_schema);
+			suggestions.push_back(unseen_entry.GetQualifiedName(qualify_database, qualify_schema));
+		}
+	} else if (!entries.empty()) {
+		for (auto &entry : entries) {
+			suggestions.push_back(entry.name);
+		}
 	}
+
+	string did_you_mean;
+	std::sort(suggestions.begin(), suggestions.end());
+	if (suggestions.size() > 2) {
+		auto last = suggestions.back();
+		suggestions.pop_back();
+		did_you_mean = StringUtil::Join(suggestions, ", ") + ", or " + last;
+	} else {
+		did_you_mean = StringUtil::Join(suggestions, " or ");
+	}
+
 	return CatalogException::MissingEntry(type, entry_name, did_you_mean, error_context);
 }
 
