@@ -6,6 +6,9 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/enums/order_type.hpp"
+#include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/core_functions/create_sort_key.hpp"
 
 namespace duckdb {
 
