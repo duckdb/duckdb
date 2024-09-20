@@ -150,6 +150,8 @@ static idx_t DistinctSelectGeneric(Vector &left, Vector &right, const SelectionV
 	    UnifiedVectorFormat::GetData<LEFT_TYPE>(ldata), UnifiedVectorFormat::GetData<RIGHT_TYPE>(rdata), ldata.sel,
 	    rdata.sel, sel, count, ldata.validity, rdata.validity, true_sel, false_sel);
 }
+
+#ifndef DUCKDB_SMALLER_BINARY
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT, bool NO_NULL,
           bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
 static inline idx_t DistinctSelectFlatLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
@@ -205,6 +207,7 @@ static inline idx_t DistinctSelectFlatLoopSwitch(LEFT_TYPE *__restrict ldata, RI
 	return DistinctSelectFlatLoopSelSwitch<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT, true>(
 	    ldata, rdata, sel, count, lmask, rmask, true_sel, false_sel);
 }
+
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
 static idx_t DistinctSelectFlat(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                 SelectionVector *true_sel, SelectionVector *false_sel) {
@@ -229,6 +232,8 @@ static idx_t DistinctSelectFlat(Vector &left, Vector &right, const SelectionVect
 		    ldata, rdata, sel, count, FlatVector::Validity(left), FlatVector::Validity(right), true_sel, false_sel);
 	}
 }
+#endif
+
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
 static idx_t DistinctSelectConstant(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                     SelectionVector *true_sel, SelectionVector *false_sel) {
@@ -287,6 +292,7 @@ static idx_t DistinctSelect(Vector &left, Vector &right, const SelectionVector *
 
 	if (left.GetVectorType() == VectorType::CONSTANT_VECTOR && right.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		return DistinctSelectConstant<LEFT_TYPE, RIGHT_TYPE, OP>(left, right, sel, count, true_sel, false_sel);
+#ifndef DUCKDB_SMALLER_BINARY
 	} else if (left.GetVectorType() == VectorType::CONSTANT_VECTOR &&
 	           right.GetVectorType() == VectorType::FLAT_VECTOR) {
 		return DistinctSelectFlat<LEFT_TYPE, RIGHT_TYPE, OP, true, false>(left, right, sel, count, true_sel, false_sel);
@@ -296,6 +302,7 @@ static idx_t DistinctSelect(Vector &left, Vector &right, const SelectionVector *
 	} else if (left.GetVectorType() == VectorType::FLAT_VECTOR && right.GetVectorType() == VectorType::FLAT_VECTOR) {
 		return DistinctSelectFlat<LEFT_TYPE, RIGHT_TYPE, OP, false, false>(left, right, sel, count, true_sel,
 		                                                                   false_sel);
+#endif
 	} else {
 		return DistinctSelectGeneric<LEFT_TYPE, RIGHT_TYPE, OP>(left, right, sel, count, true_sel, false_sel);
 	}
