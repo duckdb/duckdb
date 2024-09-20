@@ -3,6 +3,9 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
 
