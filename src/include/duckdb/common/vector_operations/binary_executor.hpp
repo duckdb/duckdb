@@ -426,13 +426,22 @@ public:
 	}
 #endif
 
+#ifndef DUCKDB_SMALLER_BINARY
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool NO_NULL, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
+#else
+	template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
+#endif
 	static inline idx_t
 	SelectGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
 	                  const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
 	                  const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lvalidity,
 	                  ValidityMask &rvalidity, SelectionVector *true_sel, SelectionVector *false_sel) {
 		idx_t true_count = 0, false_count = 0;
+#ifdef DUCKDB_SMALLER_BINARY
+		const bool HAS_TRUE_SEL = true_sel;
+		const bool HAS_FALSE_SEL = false_sel;
+		const bool NO_NULL = false;
+#endif
 		for (idx_t i = 0; i < count; i++) {
 			auto result_idx = result_sel->get_index(i);
 			auto lindex = lsel->get_index(i);
@@ -454,6 +463,8 @@ public:
 			return count - false_count;
 		}
 	}
+
+#ifndef DUCKDB_SMALLER_BINARY
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool NO_NULL>
 	static inline idx_t
 	SelectGenericLoopSelSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
@@ -472,6 +483,7 @@ public:
 			    ldata, rdata, lsel, rsel, result_sel, count, lvalidity, rvalidity, true_sel, false_sel);
 		}
 	}
+#endif
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
 	static inline idx_t
@@ -479,6 +491,7 @@ public:
 	                        const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
 	                        const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lvalidity,
 	                        ValidityMask &rvalidity, SelectionVector *true_sel, SelectionVector *false_sel) {
+#ifndef DUCKDB_SMALLER_BINARY
 		if (!lvalidity.AllValid() || !rvalidity.AllValid()) {
 			return SelectGenericLoopSelSwitch<LEFT_TYPE, RIGHT_TYPE, OP, false>(
 			    ldata, rdata, lsel, rsel, result_sel, count, lvalidity, rvalidity, true_sel, false_sel);
@@ -486,6 +499,10 @@ public:
 			return SelectGenericLoopSelSwitch<LEFT_TYPE, RIGHT_TYPE, OP, true>(
 			    ldata, rdata, lsel, rsel, result_sel, count, lvalidity, rvalidity, true_sel, false_sel);
 		}
+#else
+		return SelectGenericLoop<LEFT_TYPE, RIGHT_TYPE, OP>(
+		    ldata, rdata, lsel, rsel, result_sel, count, lvalidity, rvalidity, true_sel, false_sel);
+#endif
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
