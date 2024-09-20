@@ -1,6 +1,4 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 
@@ -24,10 +22,6 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 	}
 	unordered_set<idx_t> left_bindings, right_bindings;
 	if (!filters.empty()) {
-		// We can only push down right side AsOf expressions
-		// that do not reference the inequality column
-		vector<unique_ptr<Filter>> asof_filters;
-		optional_ptr<Expression> asof_compare;
 		// check to see into which side we should push the filters
 		// first get the LHS and RHS bindings
 		LogicalJoin::GetTableReferences(*op->children[0], left_bindings);
@@ -43,34 +37,14 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 				if (join_ref_type == JoinRefType::ASOF) {
 					// AsOf is really a table lookup, so we don't push filters
 					// down into the lookup (right) table
-					asof_filters.push_back(std::move(f));
+					join_expressions.push_back(std::move(f->filter));
 				} else {
 					right_pushdown.filters.push_back(std::move(f));
 				}
 			} else {
 				D_ASSERT(side == JoinSide::BOTH || side == JoinSide::NONE);
-				// Record the inequality binding for AsOf
-				if (join_ref_type == JoinRefType::ASOF && ExpressionType::COMPARE_LESSTHAN <= f->filter->type &&
-				    f->filter->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
-					asof_compare = f->filter->Cast<BoundComparisonExpression>().right.get();
-				}
 				// bindings match both: turn into join condition
 				join_expressions.push_back(std::move(f->filter));
-			}
-		}
-		//	Now that we know what the right side AsOf inequality expression is,
-		//	we can push down any predicates that don't refer to it
-		for (auto &f : asof_filters) {
-			bool referenced = false;
-			ExpressionIterator::EnumerateExpression(f->filter, [&](const Expression &child) {
-				if (child.Equals(*asof_compare)) {
-					referenced = true;
-				}
-			});
-			if (referenced) {
-				join_expressions.push_back(std::move(f->filter));
-			} else {
-				right_pushdown.filters.push_back(std::move(f));
 			}
 		}
 	}

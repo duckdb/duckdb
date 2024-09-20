@@ -44,6 +44,29 @@ ASOF LEFT JOIN (
 0 	0	0.0	0.0
 1 	0	NULL	0.0
 
+statement ok
+CREATE OR REPLACE TABLE issue12215 AS
+	SELECT col0 AS starts, col1 AS ends
+	FROM (VALUES
+		(5, 9),
+		(10, 13),
+		(14, 20),
+		(21, 23)
+	);
+
+query II
+SELECT
+    s1.starts as s1_starts,
+    s2.starts as s2_starts,
+FROM issue12215 AS s1 
+ASOF JOIN issue12215 as s2 
+  ON s2.ends >= (s1.ends - 5)
+WHERE s1_starts <> s2_starts
+ORDER BY ALL
+----
+10	5
+21	14
+
 query II
 WITH t as (
     SELECT
@@ -97,19 +120,16 @@ INSERT INTO issue13899 VALUES
 	(10,null),
 	(11,5.00);
 
-# Without the pushdown, the filter does not get applied properly
-statement ok
-PRAGMA disable_verification
-
 query III
-SELECT 
+select 
 	a.seq_no,
 	a.amount,
 	b.amount
-FROM issue13899 AS a 
-ASOF JOIN issue13899 AS b
-    ON a.seq_no>=b.seq_no
-   AND b.amount IS NOT NULL;
+from issue13899 as a 
+asof join issue13899 as b
+    on a.seq_no>=b.seq_no
+   and b.amount is not null
+ORDER BY 1
 ----
 1	1.00	1.00
 2	NULL	1.00
