@@ -1,4 +1,3 @@
-#include "duckdb/common/exception_format_value.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 
