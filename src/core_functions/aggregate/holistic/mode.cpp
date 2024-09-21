@@ -358,6 +358,17 @@ struct ModeFallbackFunction : BaseModeFunction<TYPE_OP> {
 	}
 };
 
+AggregateFunction GetFallbackModeFunction(const LogicalType &type) {
+	using STATE = ModeState<string_t, ModeString>;
+	using OP = ModeFallbackFunction<ModeString>;
+	AggregateFunction aggr({type}, type, AggregateFunction::StateSize<STATE>,
+						   AggregateFunction::StateInitialize<STATE, OP>,
+						   AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
+						   AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr);
+	aggr.destructor = AggregateFunction::StateDestroy<STATE, OP>;
+	return aggr;
+}
+
 template <typename INPUT_TYPE, typename TYPE_OP = ModeStandard<INPUT_TYPE>>
 AggregateFunction GetTypedModeFunction(const LogicalType &type) {
 	using STATE = ModeState<INPUT_TYPE, TYPE_OP>;
@@ -367,19 +378,9 @@ AggregateFunction GetTypedModeFunction(const LogicalType &type) {
 	return func;
 }
 
-AggregateFunction GetFallbackModeFunction(const LogicalType &type) {
-	using STATE = ModeState<string_t, ModeString>;
-	using OP = ModeFallbackFunction<ModeString>;
-	AggregateFunction aggr({type}, type, AggregateFunction::StateSize<STATE>,
-	                       AggregateFunction::StateInitialize<STATE, OP>,
-	                       AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
-	                       AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr);
-	aggr.destructor = AggregateFunction::StateDestroy<STATE, OP>;
-	return aggr;
-}
-
 AggregateFunction GetModeAggregate(const LogicalType &type) {
 	switch (type.InternalType()) {
+#ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::INT8:
 		return GetTypedModeFunction<int8_t>(type);
 	case PhysicalType::UINT8:
@@ -408,6 +409,7 @@ AggregateFunction GetModeAggregate(const LogicalType &type) {
 		return GetTypedModeFunction<interval_t>(type);
 	case PhysicalType::VARCHAR:
 		return GetTypedModeFunction<string_t, ModeString>(type);
+#endif
 	default:
 		return GetFallbackModeFunction(type);
 	}
