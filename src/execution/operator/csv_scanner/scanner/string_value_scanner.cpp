@@ -28,6 +28,11 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
       current_errors(state_machine.options.IgnoreErrors()), sniffing(sniffing_p), path(std::move(path_p)) {
 	// Vector information
 	D_ASSERT(number_of_columns > 0);
+	if (!buffer_handle) {
+		// It Was Over Before It Even Began
+		D_ASSERT(iterator.done);
+		return;
+	}
 	buffer_handles[buffer_handle->buffer_idx] = buffer_handle;
 	// Buffer Information
 	buffer_ptr = buffer_handle->Ptr();
