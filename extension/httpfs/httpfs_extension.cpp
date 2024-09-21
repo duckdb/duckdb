@@ -39,6 +39,9 @@ static void LoadInternal(DatabaseInstance &instance) {
 	                          LogicalType::BOOLEAN, Value(false));
 	config.AddExtensionOption("ca_cert_file", "Path to a custom certificate file for self-signed certificates.",
 	                          LogicalType::VARCHAR, Value(""));
+	// Experimental HTTPFS write
+	config.AddExtensionOption("enable_http_write", "Enable HTTPFS POST write", LogicalType::BOOLEAN, Value(false));
+
 	// Global S3 config
 	config.AddExtensionOption("s3_region", "S3 Region", LogicalType::VARCHAR, Value("us-east-1"));
 	config.AddExtensionOption("s3_access_key_id", "S3 Access Key ID", LogicalType::VARCHAR);

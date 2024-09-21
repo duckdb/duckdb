@@ -59,6 +59,7 @@ HTTPParams HTTPParams::ReadFrom(optional_ptr<FileOpener> opener, optional_ptr<Fi
 	                                 info);
 	FileOpener::TryGetCurrentSetting(opener, "ca_cert_file", result.ca_cert_file, info);
 	FileOpener::TryGetCurrentSetting(opener, "hf_max_per_page", result.hf_max_per_page, info);
+	FileOpener::TryGetCurrentSetting(opener, "enable_http_write", result.enable_http_write, info);
 
 	// HTTP Secret lookups
 	KeyValueSecretReader settings_reader(*opener, info, "http");
@@ -575,6 +576,10 @@ int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes)
 
 void HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	auto &hfh = handle.Cast<HTTPFileHandle>(); // Get HTTP file handle
+
+	if (!hfh.http_params.enable_http_write) {
+		throw NotImplementedException("Writing to HTTP files not implemented");
+	}
 
 	// BUG: empty requests get fired after a successful post. Ensure the buffer is non-empty and larger than 1
 	if (!buffer || nr_bytes <= 1) {
