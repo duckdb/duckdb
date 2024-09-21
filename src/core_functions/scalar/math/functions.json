@@ -313,5 +313,5 @@
         "description": "Computes the inverse hyperbolic tan of x",
         "example": "atanh(0.5)",
         "type": "scalar_function"
-    }
+	}
 ]

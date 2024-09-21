@@ -6,6 +6,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
@@ -21,7 +22,6 @@
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/planner/query_node/list.hpp"
 #include "duckdb/planner/tableref/list.hpp"
-#include "duckdb/main/database.hpp"
 
 #include <algorithm>
 
@@ -59,7 +59,7 @@ Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType b
     : context(context), bind_context(*this), parent(std::move(parent_p)), bound_tables(0), binder_type(binder_type),
       entry_retriever(context) {
 	if (parent) {
-		entry_retriever.SetCallback(parent->entry_retriever.GetCallback());
+		entry_retriever.Inherit(parent->entry_retriever);
 
 		// We have to inherit macro and lambda parameter bindings and from the parent binder, if there is a parent.
 		macro_binding = parent->macro_binding;
@@ -134,10 +134,8 @@ BoundStatement Binder::BindWithCTE(T &statement) {
 		}
 		MoveCorrelatedExpressions(*tail.child_binder);
 
-		// extract operator below root operation
-		auto plan = std::move(bound_statement.plan->children[0]);
-		bound_statement.plan->children.clear();
-		bound_statement.plan->children.push_back(CreatePlan(*bound_cte, std::move(plan)));
+		auto plan = std::move(bound_statement.plan);
+		bound_statement.plan = CreatePlan(*bound_cte, std::move(plan));
 	} else {
 		bound_statement = Bind(statement.template Cast<T>());
 	}
@@ -344,7 +342,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 
 BoundStatement Binder::Bind(QueryNode &node) {
 	BoundStatement result;
-	if (context.db->config.options.disabled_optimizers.find(OptimizerType::MATERIALIZED_CTE) ==
+	if (node.type != QueryNodeType::CTE_NODE && // Issue #13850 - Don't auto-materialize if users materialize (for now)
+	    context.db->config.options.disabled_optimizers.find(OptimizerType::MATERIALIZED_CTE) ==
 	        context.db->config.options.disabled_optimizers.end() &&
 	    context.config.enable_optimizer && OptimizeCTEs(node)) {
 		switch (node.type) {
@@ -585,51 +584,30 @@ void Binder::AddCorrelatedColumn(const CorrelatedColumnInfo &info) {
 	}
 }
 
-bool Binder::HasMatchingBinding(const string &table_name, const string &column_name, ErrorData &error) {
+optional_ptr<Binding> Binder::GetMatchingBinding(const string &table_name, const string &column_name,
+                                                 ErrorData &error) {
 	string empty_schema;
-	return HasMatchingBinding(empty_schema, table_name, column_name, error);
+	return GetMatchingBinding(empty_schema, table_name, column_name, error);
 }
 
-bool Binder::HasMatchingBinding(const string &schema_name, const string &table_name, const string &column_name,
-                                ErrorData &error) {
+optional_ptr<Binding> Binder::GetMatchingBinding(const string &schema_name, const string &table_name,
+                                                 const string &column_name, ErrorData &error) {
 	string empty_catalog;
-	return HasMatchingBinding(empty_catalog, schema_name, table_name, column_name, error);
+	return GetMatchingBinding(empty_catalog, schema_name, table_name, column_name, error);
 }
 
-bool Binder::HasMatchingBinding(const string &catalog_name, const string &schema_name, const string &table_name,
-                                const string &column_name, ErrorData &error) {
+optional_ptr<Binding> Binder::GetMatchingBinding(const string &catalog_name, const string &schema_name,
+                                                 const string &table_name, const string &column_name,
+                                                 ErrorData &error) {
 	optional_ptr<Binding> binding;
 	D_ASSERT(!lambda_bindings);
-	if (macro_binding && table_name == macro_binding->alias) {
+	if (macro_binding && table_name == macro_binding->GetAlias()) {
 		binding = optional_ptr<Binding>(macro_binding.get());
 	} else {
-		binding = bind_context.GetBinding(table_name, error);
+		BindingAlias alias(catalog_name, schema_name, table_name);
+		binding = bind_context.GetBinding(alias, column_name, error);
 	}
-
-	if (!binding) {
-		return false;
-	}
-	if (!catalog_name.empty() || !schema_name.empty()) {
-		auto catalog_entry = binding->GetStandardEntry();
-		if (!catalog_entry) {
-			return false;
-		}
-		if (!catalog_name.empty() && catalog_entry->catalog.GetName() != catalog_name) {
-			return false;
-		}
-		if (!schema_name.empty() && catalog_entry->schema.name != schema_name) {
-			return false;
-		}
-		if (catalog_entry->name != table_name) {
-			return false;
-		}
-	}
-	bool binding_found;
-	binding_found = binding->HasMatchingBinding(column_name);
-	if (!binding_found) {
-		error = binding->ColumnNotFoundError(column_name);
-	}
-	return binding_found;
+	return binding;
 }
 
 void Binder::SetBindingMode(BindingMode mode) {
@@ -715,8 +693,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 		column_count++;
 	}
 
-	binder->bind_context.AddBaseTable(update_table_index, alias.empty() ? table.name : alias, names, types,
-	                                  bound_columns, &table, false);
+	binder->bind_context.AddBaseTable(update_table_index, alias, names, types, bound_columns, table, false);
 	ReturningBinder returning_binder(*binder, context);
 
 	vector<unique_ptr<Expression>> projection_expressions;

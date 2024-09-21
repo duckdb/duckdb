@@ -1,0 +1,13 @@
+# name: test/sql/fts/issue_13866.test
+# description: Issue 13866: FTS ignore regex to include single quote
+# group: [fts]
+
+require fts
+
+require noalternativeverify
+
+statement ok
+CREATE TABLE my_table AS SELECT 1 AS CustomerId, 'hans' as CustomerName
+
+statement ok
+PRAGMA create_fts_index(my_table, 'CustomerId', 'CustomerName', ignore='(\\.|[^a-z0-9''])+')

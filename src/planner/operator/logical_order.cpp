@@ -29,6 +29,7 @@ InsertionOrderPreservingMap<string> LogicalOrder::ParamsToString() const {
 		orders_info += orders[i].expression->GetName();
 	}
 	result["__order_by__"] = orders_info;
+	SetParamsEstimatedCardinality(result);
 	return result;
 }
 

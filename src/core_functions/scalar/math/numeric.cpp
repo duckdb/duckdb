@@ -1,16 +1,25 @@
-#include "duckdb/core_functions/scalar/math_functions.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/likely.hpp"
 #include "duckdb/common/operator/abs.hpp"
 #include "duckdb/common/operator/multiply.hpp"
-#include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/types/cast_helpers.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/common/algorithm.hpp"
-#include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/common/likely.hpp"
+#include "duckdb/common/operator/numeric_binary_operators.hpp"
 #include "duckdb/common/types/bit.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
+#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/core_functions/scalar/math_functions.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+
 #include <cmath>
+#include <cstdint>
 #include <errno.h>
+#include <limits>
+#include <type_traits>
 
 namespace duckdb {
 

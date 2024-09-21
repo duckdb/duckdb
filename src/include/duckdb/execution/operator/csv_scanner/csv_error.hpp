@@ -65,7 +65,7 @@ public:
 	static CSVError LineSizeError(const CSVReaderOptions &options, idx_t actual_size, LinesPerBoundary error_info,
 	                              string &csv_row, idx_t byte_position, const string &current_path);
 	//! Produces an error message for a dialect sniffing error.
-	static CSVError DialectSniffingError(const CSVReaderOptions &options, const string &search_space);
+	static CSVError SniffingError(const CSVReaderOptions &options, const string &search_space);
 	//! Produces an error message for a header sniffing error.
 	static CSVError HeaderSniffingError(const CSVReaderOptions &options, const vector<HeaderValue> &best_header_row,
 	                                    idx_t column_count, char delimiter);

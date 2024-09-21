@@ -1379,7 +1379,8 @@ if(NOT DUCKDB_EXPLICIT_PLATFORM)
                                          ${PROJECT_BINARY_DIR})
   add_custom_target(
           duckdb_platform ALL
-          COMMAND duckdb_platform_binary > duckdb_platform_out || ( echo "Provide explicit DUCKDB_PLATFORM=your_target_arch to avoid build-type detection of the platform" && exit 1 )
+          COMMAND duckdb_platform_binary > ${PROJECT_BINARY_DIR}/duckdb_platform_out || ( echo "Provide explicit DUCKDB_PLATFORM=your_target_arch to avoid build-type detection of the platform" && exit 1 )
+          WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
           )
   add_dependencies(duckdb_platform duckdb_platform_binary)
 else()

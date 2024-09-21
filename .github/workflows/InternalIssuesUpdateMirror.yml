@@ -1,5 +1,8 @@
 name: Update Mirror Issue
 on:
+  discussion:
+    types:
+      - labeled
   issues:
     types:
       - closed

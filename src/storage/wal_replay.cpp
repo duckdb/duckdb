@@ -554,9 +554,8 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 		for (idx_t j = 0; j < data_info.allocation_sizes.size(); j++) {
 
 			// read the data into a buffer handle
-			shared_ptr<BlockHandle> block_handle;
-			buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager->GetBlockSize(), false, &block_handle);
-			auto buffer_handle = buffer_manager.Pin(block_handle);
+			auto buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager->GetBlockSize(), false);
+			auto block_handle = buffer_handle.GetBlockHandle();
 			auto data_ptr = buffer_handle.Ptr();
 
 			list.ReadElement<bool>(data_ptr, data_info.allocation_sizes[j]);
@@ -598,7 +597,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 
 	// create a binder to bind the parsed expressions
 	vector<column_t> column_ids;
-	binder->bind_context.AddBaseTable(0, info.table, column_names, column_types, column_ids, &table);
+	binder->bind_context.AddBaseTable(0, string(), column_names, column_types, column_ids, table);
 	IndexBinder idx_binder(*binder, context);
 
 	// bind the parsed expressions to create unbound expressions

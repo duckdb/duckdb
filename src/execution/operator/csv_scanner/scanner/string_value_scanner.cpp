@@ -264,6 +264,10 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 	}
 	bool success = true;
 	switch (parse_types[chunk_col_id].type_id) {
+	case LogicalTypeId::BOOLEAN:
+		success =
+		    TryCastStringBool(value_ptr, size, static_cast<bool *>(vector_ptr[chunk_col_id])[number_of_rows], false);
+		break;
 	case LogicalTypeId::TINYINT:
 		success = TrySimpleIntegerCast(value_ptr, size, static_cast<int8_t *>(vector_ptr[chunk_col_id])[number_of_rows],
 		                               false);
@@ -644,9 +648,15 @@ bool LineError::HandleErrors(StringValueResult &result) {
 		result.error_handler.Error(csv_error);
 	}
 	if (is_error_in_line) {
-		result.borked_rows.insert(result.number_of_rows);
-		result.cur_col_id = 0;
-		result.chunk_col_id = 0;
+		if (result.sniffing) {
+			// If we are sniffing we just remove the line
+			result.RemoveLastLine();
+		} else {
+			// Otherwise, we add it to the borked rows to remove it later and just cleanup the column variables.
+			result.borked_rows.insert(result.number_of_rows);
+			result.cur_col_id = 0;
+			result.chunk_col_id = 0;
+		}
 		Reset();
 		return true;
 	}
@@ -1437,6 +1447,7 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type, bool icu_loade
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::DECIMAL:
 	case LogicalType::VARCHAR:
+	case LogicalType::BOOLEAN:
 		return true;
 	case LogicalType::TIMESTAMP_TZ:
 		// We only try to do direct cast of timestamp tz if the ICU extension is not loaded, otherwise, it needs to go
@@ -1493,7 +1504,7 @@ void StringValueScanner::SetStart() {
 			}
 			if (iterator.pos.buffer_pos == cur_buffer_handle->actual_size ||
 			    scan_finder->iterator.GetBufferIdx() > iterator.GetBufferIdx()) {
-				// If things go terribly wrong, we never loop indefinetly.
+				// If things go terribly wrong, we never loop indefinitely.
 				iterator.pos.buffer_idx = scan_finder->iterator.pos.buffer_idx;
 				iterator.pos.buffer_pos = scan_finder->iterator.pos.buffer_pos;
 				result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
@@ -1521,8 +1532,11 @@ void StringValueScanner::FinalizeChunkProcess() {
 	// If we are not done we have two options.
 	// 1) If a boundary is set.
 	if (iterator.IsBoundarySet()) {
+		bool has_unterminated_quotes = false;
 		if (!result.current_errors.HasErrorType(UNTERMINATED_QUOTES)) {
 			iterator.done = true;
+		} else {
+			has_unterminated_quotes = true;
 		}
 		// We read until the next line or until we have nothing else to read.
 		// Move to next buffer
@@ -1540,6 +1554,16 @@ void StringValueScanner::FinalizeChunkProcess() {
 				MoveToNextBuffer();
 			}
 		} else {
+			if (result.current_errors.HasErrorType(UNTERMINATED_QUOTES)) {
+				has_unterminated_quotes = true;
+			}
+			result.current_errors.HandleErrors(result);
+		}
+		if (states.IsQuotedCurrent() && !has_unterminated_quotes) {
+			// If we finish the execution of a buffer, and we end in a quoted state, it means we have unterminated
+			// quotes
+			result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id,
+			                             result.last_position);
 			result.current_errors.HandleErrors(result);
 		}
 		if (!iterator.done) {

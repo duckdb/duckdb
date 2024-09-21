@@ -74,6 +74,7 @@ if (NOT MINGW)
             ${LOAD_ICEBERG_TESTS}
             GIT_URL https://github.com/duckdb/duckdb_iceberg
             GIT_TAG 3f6d753787252e3da1d12157910b62edf729fc6e
+            APPLY_PATCHES
             )
 endif()
 
@@ -93,7 +94,7 @@ if (NOT MINGW)
     duckdb_extension_load(postgres_scanner
             DONT_LINK
             GIT_URL https://github.com/duckdb/postgres_scanner
-            GIT_TAG d0e0115f29a9dbe44f026aea7290a1c6d4622a73
+            GIT_TAG 58dc3d0c7620f3978c27d4a490563fd65884d103
             )
 endif()
 
@@ -101,9 +102,10 @@ endif()
 duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb_spatial.git
-    GIT_TAG 0bc9dff490cff60526061e7c72dceed945d3b3a3
+    GIT_TAG 4107eb788f933c9e268b52f6f927a6b36b9ea440
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
+    APPLY_PATCHES
     )
 
 ################# SQLITE_SCANNER
@@ -117,7 +119,8 @@ endif()
 duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/sqlite_scanner
-        GIT_TAG 647f1403791890b65a1419841df02bf17d634639
+        GIT_TAG 315861963c8106397af36cbda10faebc8dae485a
+        APPLY_PATCHES
         )
 
 duckdb_extension_load(sqlsmith
@@ -131,7 +134,7 @@ if (NOT WIN32)
     duckdb_extension_load(substrait
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/substrait
-            GIT_TAG 55922a3e77756054abbe3e04dae17ccf4203ad6f
+            GIT_TAG 800be4945807b831754f6b0d1a064a3d30f9cada
             )
 endif()
 
@@ -141,7 +144,7 @@ duckdb_extension_load(vss
         LOAD_TESTS
         DONT_LINK
         GIT_URL https://github.com/duckdb/duckdb_vss
-        GIT_TAG 3e192f25de97bdd759f96eeb488c59750db73937
+        GIT_TAG 77739ea5382cce3220af83803ac0b1e98b3ab7d8
         TEST_DIR test/sql
     )
 
@@ -151,6 +154,6 @@ if (NOT MINGW)
             DONT_LINK
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_mysql
-            GIT_TAG 64cb6aec994fbe441157086599c265eb86303c84
+            GIT_TAG d0c56abf1169cca1c54f55448b68a85ae4279ea4
             )
 endif()

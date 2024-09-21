@@ -123,10 +123,11 @@ static void ArrayFixedCombine(DataChunk &args, ExpressionState &state, Vector &r
 			throw InvalidInputException(
 			    StringUtil::Format("%s: right argument can not contain NULL values", func_name));
 		}
+		const auto result_offset = i * N;
 
 		const auto lhs_data_ptr = lhs_data + left_offset;
 		const auto rhs_data_ptr = rhs_data + right_offset;
-		const auto res_data_ptr = res_data + right_offset;
+		const auto res_data_ptr = res_data + result_offset;
 
 		OP::Operation(lhs_data_ptr, rhs_data_ptr, res_data_ptr, N);
 	}

@@ -44,7 +44,7 @@ LEFT JOIN (
   LEFT JOIN ORDERITEMVIEW ON ORDERVIEW.ORDER_ID = ORDERITEM_ORDERID
 ) AS Q3J ON (Q3J.Q3P = CTE.CUSTOMER_ID) order by all;
 ----
-285 values hashing to 9b1c4d195c0e3c4de5b190b1ab7b357b
+261 values hashing to 5a4c1b428d36bcb30b04222a764fbafc
 
 query II
 explain WITH CTE AS (

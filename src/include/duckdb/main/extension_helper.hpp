@@ -124,7 +124,7 @@ public:
 
 	static bool CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata,
 	                                    const bool allow_community_extensions);
-	static ParsedExtensionMetaData ParseExtensionMetaData(const char *metadata);
+	static ParsedExtensionMetaData ParseExtensionMetaData(const char *metadata) noexcept;
 	static ParsedExtensionMetaData ParseExtensionMetaData(FileHandle &handle);
 
 	//! Get the extension url template, containing placeholders for version, platform and extension name
@@ -171,6 +171,19 @@ public:
 			}
 		}
 		return result;
+	}
+
+	template <idx_t N>
+	static idx_t ArraySize(const ExtensionEntry (&entries)[N]) {
+		return N;
+	}
+
+	template <idx_t N>
+	static const ExtensionEntry *GetArrayEntry(const ExtensionEntry (&entries)[N], idx_t entry) {
+		if (entry >= N) {
+			return nullptr;
+		}
+		return entries + entry;
 	}
 
 	//! Lookup a name in an ExtensionEntry list
