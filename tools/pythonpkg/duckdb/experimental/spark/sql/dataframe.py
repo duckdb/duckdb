@@ -588,19 +588,17 @@ class DataFrame:
         return DataFrame(self.relation.set_alias(alias), self.session)
 
     def drop(self, *cols: "ColumnOrName") -> "DataFrame":  # type: ignore[misc]
-        if len(cols) == 1:
-            col = cols[0]
+        exclude = []
+        for col in cols:
             if isinstance(col, str):
-                exclude = [col]
+                exclude.append(col)
             elif isinstance(col, Column):
-                exclude = [col.expr]
+                exclude.append(col.expr.get_name())
             else:
-                raise TypeError("col should be a string or a Column")
-        else:
-            for col in cols:
-                if not isinstance(col, str):
-                    raise TypeError("each col in the param list should be a string")
-            exclude = list(cols)
+                raise PySparkTypeError(
+                    error_class="NOT_COLUMN_OR_STR",
+                    message_parameters={"arg_name": "col", "arg_type": type(col).__name__},
+                )           
         # Filter out the columns that don't exist in the relation
         exclude = [x for x in exclude if x in self.relation.columns]
         expr = StarExpression(exclude=exclude)

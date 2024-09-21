@@ -24,6 +24,10 @@ string DuckDBPyExpression::ToString() const {
 	return expression->ToString();
 }
 
+string DuckDBPyExpression::GetName() const {
+	return expression->GetName();
+}
+
 void DuckDBPyExpression::Print() const {
 	Printer::Print(expression->ToString());
 }
