@@ -270,6 +270,8 @@ static AggregateFunction GetFirstFunction(const LogicalType &type) {
 		return GetFirstAggregateTemplated<float, LAST, SKIP_NULLS>(type);
 	case PhysicalType::DOUBLE:
 		return GetFirstAggregateTemplated<double, LAST, SKIP_NULLS>(type);
+	case PhysicalType::INTERVAL:
+		return GetFirstAggregateTemplated<interval_t, LAST, SKIP_NULLS>(type);
 	case PhysicalType::VARCHAR:
 		if (LAST) {
 			return AggregateFunction::UnaryAggregateDestructor<FirstState<string_t>, string_t, string_t,

@@ -49,6 +49,8 @@ static AggregateFunction GetUnaryAggregate(LogicalType type) {
 		return AggregateFunction::UnaryAggregate<MinMaxState<float>, float, float, OP>(type, type);
 	case PhysicalType::DOUBLE:
 		return AggregateFunction::UnaryAggregate<MinMaxState<double>, double, double, OP>(type, type);
+	case PhysicalType::INTERVAL:
+		return AggregateFunction::UnaryAggregate<MinMaxState<interval_t>, interval_t, interval_t, OP>(type, type);
 	default:
 		throw InternalException("Unimplemented type for min/max aggregate");
 	}

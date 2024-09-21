@@ -393,6 +393,8 @@ AggregateFunction GetDiscreteQuantileTemplated(const LogicalType &type) {
 		return OP::template GetFunction<float>(type);
 	case PhysicalType::DOUBLE:
 		return OP::template GetFunction<double>(type);
+	case PhysicalType::INTERVAL:
+		return OP::template GetFunction<interval_t>(type);
 	case PhysicalType::VARCHAR:
 		return OP::template GetFunction<string_t, QuantileStringType>(type);
 #endif

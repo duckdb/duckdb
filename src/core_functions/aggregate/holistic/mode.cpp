@@ -405,6 +405,8 @@ AggregateFunction GetModeAggregate(const LogicalType &type) {
 		return GetTypedModeFunction<float>(type);
 	case PhysicalType::DOUBLE:
 		return GetTypedModeFunction<double>(type);
+	case PhysicalType::INTERVAL:
+		return GetTypedModeFunction<interval_t>(type);
 	case PhysicalType::VARCHAR:
 		return GetTypedModeFunction<string_t, ModeString>(type);
 #endif
