@@ -311,13 +311,14 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 	}
 };
 
-template<class OP>
+template <class OP>
 AggregateFunction GetGenericArgMinMaxFunction() {
 	using STATE = ArgMinMaxState<string_t, string_t>;
-	return AggregateFunction({LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, AggregateFunction::StateSize<STATE>,
-						  AggregateFunction::StateInitialize<STATE, OP>, OP::template Update<STATE>,
-						  AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>,
-						  nullptr, OP::Bind, AggregateFunction::StateDestroy<STATE, OP>);
+	return AggregateFunction({LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY,
+	                         AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
+	                         OP::template Update<STATE>, AggregateFunction::StateCombine<STATE, OP>,
+	                         AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, OP::Bind,
+	                         AggregateFunction::StateDestroy<STATE, OP>);
 }
 
 template <class OP, class ARG_TYPE, class BY_TYPE>
@@ -330,7 +331,7 @@ AggregateFunction GetVectorArgMinMaxFunctionInternal(const LogicalType &by_type,
 	    AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, OP::Bind, AggregateFunction::StateDestroy<STATE, OP>);
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>();
-	function.arguments = { type, by_type };
+	function.arguments = {type, by_type};
 	function.return_type = type;
 	return function;
 #endif
@@ -380,7 +381,7 @@ AggregateFunction GetArgMinMaxFunctionInternal(const LogicalType &by_type, const
 	function.bind = OP::Bind;
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>();
-	function.arguments = { type, by_type };
+	function.arguments = {type, by_type};
 	function.return_type = type;
 #endif
 	return function;

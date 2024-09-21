@@ -362,9 +362,9 @@ AggregateFunction GetFallbackModeFunction(const LogicalType &type) {
 	using STATE = ModeState<string_t, ModeString>;
 	using OP = ModeFallbackFunction<ModeString>;
 	AggregateFunction aggr({type}, type, AggregateFunction::StateSize<STATE>,
-						   AggregateFunction::StateInitialize<STATE, OP>,
-						   AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
-						   AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr);
+	                       AggregateFunction::StateInitialize<STATE, OP>,
+	                       AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
+	                       AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr);
 	aggr.destructor = AggregateFunction::StateDestroy<STATE, OP>;
 	return aggr;
 }

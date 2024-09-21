@@ -500,8 +500,8 @@ public:
 			    ldata, rdata, lsel, rsel, result_sel, count, lvalidity, rvalidity, true_sel, false_sel);
 		}
 #else
-		return SelectGenericLoop<LEFT_TYPE, RIGHT_TYPE, OP>(
-		    ldata, rdata, lsel, rsel, result_sel, count, lvalidity, rvalidity, true_sel, false_sel);
+		return SelectGenericLoop<LEFT_TYPE, RIGHT_TYPE, OP>(ldata, rdata, lsel, rsel, result_sel, count, lvalidity,
+		                                                    rvalidity, true_sel, false_sel);
 #endif
 	}
 

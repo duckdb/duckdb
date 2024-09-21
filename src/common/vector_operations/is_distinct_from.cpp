@@ -152,8 +152,8 @@ DistinctSelectGenericLoopSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_T
 		    ldata, rdata, lsel, rsel, result_sel, count, lmask, rmask, true_sel, false_sel);
 	}
 #else
-	return DistinctSelectGenericLoop<LEFT_TYPE, RIGHT_TYPE, OP>(
-		ldata, rdata, lsel, rsel, result_sel, count, lmask, rmask, true_sel, false_sel);
+	return DistinctSelectGenericLoop<LEFT_TYPE, RIGHT_TYPE, OP>(ldata, rdata, lsel, rsel, result_sel, count, lmask,
+	                                                            rmask, true_sel, false_sel);
 #endif
 }
 
