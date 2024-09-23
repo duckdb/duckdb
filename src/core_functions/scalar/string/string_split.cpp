@@ -1,11 +1,5 @@
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/vector_size.hpp"
-#include "duckdb/core_functions/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/re2_regex.hpp"
 
 namespace duckdb {
 
@@ -30,78 +24,91 @@ struct StringSplitInput {
 };
 
 struct RegularStringSplit {
-	static idx_t Find(const char *input_data, idx_t input_size, const char *delim_data, idx_t delim_size,
+	static idx_t Find(const char *input_data, idx_t offset, idx_t input_size, const char *delim_data, idx_t delim_size,
 	                  idx_t &match_size, void *data) {
 		match_size = delim_size;
 		if (delim_size == 0) {
-			return 0;
+			return offset;
 		}
-		return ContainsFun::Find(const_uchar_ptr_cast(input_data), input_size, const_uchar_ptr_cast(delim_data),
-		                         delim_size);
-	}
-};
-
-struct ConstantRegexpStringSplit {
-	static idx_t Find(const char *input_data, idx_t input_size, const char *delim_data, idx_t delim_size,
-	                  idx_t &match_size, void *data) {
-		D_ASSERT(data);
-		auto regex = reinterpret_cast<duckdb_re2::RE2 *>(data);
-		duckdb_re2::StringPiece match;
-		if (!regex->Match(duckdb_re2::StringPiece(input_data, input_size), 0, input_size, RE2::UNANCHORED, &match, 1)) {
-			return DConstants::INVALID_INDEX;
+		idx_t pos = ContainsFun::Find(const_uchar_ptr_cast(input_data + offset), input_size - offset,
+		                              const_uchar_ptr_cast(delim_data), delim_size);
+		if (pos == DConstants::INVALID_INDEX) {
+			return pos;
 		}
-		match_size = match.size();
-		return UnsafeNumericCast<idx_t>(match.data() - input_data);
+		return offset + pos;
 	}
-};
 
-struct RegexpStringSplit {
-	static idx_t Find(const char *input_data, idx_t input_size, const char *delim_data, idx_t delim_size,
-	                  idx_t &match_size, void *data) {
-		duckdb_re2::RE2 regex(duckdb_re2::StringPiece(delim_data, delim_size));
-		if (!regex.ok()) {
-			throw InvalidInputException(regex.error());
-		}
-		return ConstantRegexpStringSplit::Find(input_data, input_size, delim_data, delim_size, match_size, &regex);
-	}
-};
-
-struct StringSplitter {
-	template <class OP>
 	static idx_t Split(string_t input, string_t delim, StringSplitInput &state, void *data) {
 		auto input_data = input.GetData();
 		auto input_size = input.GetSize();
 		auto delim_data = delim.GetData();
 		auto delim_size = delim.GetSize();
+		if (!delim_size) {
+			// empty string delimeter: copy the complete entry
+			state.AddSplit(input_data, input_size, 0);
+			return 1;
+		}
+
 		idx_t list_idx = 0;
-		while (input_size > 0) {
-			idx_t match_size = 0;
-			auto pos = OP::Find(input_data, input_size, delim_data, delim_size, match_size, data);
+		idx_t match_size = 0;
+		idx_t current_offset = 0;
+		while (current_offset < input_size) {
+			auto pos = Find(input_data, current_offset, input_size, delim_data, delim_size, match_size, data);
 			if (pos > input_size) {
 				break;
 			}
-			if (match_size == 0 && pos == 0) {
-				// special case: 0 length match and pos is 0
-				// move to the next character
-				for (pos++; pos < input_size; pos++) {
-					if (LengthFun::IsCharacter(input_data[pos])) {
-						break;
-					}
-				}
-				if (pos == input_size) {
-					break;
-				}
-			}
-			D_ASSERT(input_size >= pos + match_size);
-			state.AddSplit(input_data, pos, list_idx);
-
+			D_ASSERT(current_offset <= pos);
+			state.AddSplit(input_data + current_offset, pos - current_offset, list_idx);
+			current_offset = pos + match_size;
 			list_idx++;
-			input_data += (pos + match_size);
-			input_size -= (pos + match_size);
 		}
-		state.AddSplit(input_data, input_size, list_idx);
-		list_idx++;
+		if (current_offset <= input_size) {
+			state.AddSplit(input_data + current_offset, input_size - current_offset, list_idx);
+			list_idx++;
+		}
 		return list_idx;
+	}
+};
+
+struct ConstantRegexpStringSplit {
+	static idx_t Split(string_t input, string_t delim, StringSplitInput &state, void *data) {
+		D_ASSERT(data);
+		auto regex = reinterpret_cast<duckdb_re2::RE2 *>(data);
+		if (!regex->ok()) {
+			throw InvalidInputException(regex->error());
+		}
+
+		auto input_data = input.GetData();
+		auto input_size = input.GetSize();
+		auto matches = duckdb_re2::RegexFindAll(input_data, input_size, *regex);
+
+		idx_t list_idx = 0;
+		idx_t current_offset = 0;
+		auto num_of_matches = matches.size();
+		for (auto &m : matches) {
+			// if match's length == 0 and its position is at the beginning or the end of the entry, skip it
+			if (!m.length(0) && (m.position(0) == 0 || m.position(0) == input_size)) {
+				num_of_matches--;
+				continue;
+			}
+			D_ASSERT(current_offset <= input_size);
+			state.AddSplit(input_data + current_offset, m.position(0) - current_offset, list_idx);
+			current_offset = m.position(0) + m.length(0);
+			list_idx++;
+		}
+		if (current_offset <= input_size) {
+			state.AddSplit(input_data + current_offset, input_size - current_offset, list_idx);
+			list_idx++;
+		}
+		D_ASSERT(num_of_matches <= list_idx);
+		return list_idx;
+	}
+};
+
+struct RegexpStringSplit {
+	static idx_t Split(string_t input, string_t delim, StringSplitInput &state, void *data) {
+		duckdb_re2::RE2 regex(duckdb_re2::StringPiece(delim.GetData(), delim.GetSize()));
+		return ConstantRegexpStringSplit::Split(input, delim, state, &regex);
 	}
 };
 
@@ -142,7 +149,7 @@ static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector 
 			total_splits++;
 			continue;
 		}
-		auto list_length = StringSplitter::Split<OP>(inputs[input_idx], delims[delim_idx], split_input, data);
+		auto list_length = OP::Split(inputs[input_idx], delims[delim_idx], split_input, data);
 		list_struct_data[i].length = list_length;
 		list_struct_data[i].offset = total_splits;
 		total_splits += list_length;
