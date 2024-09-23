@@ -38,7 +38,7 @@ if (NOT MINGW)
     duckdb_extension_load(azure
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_azure
-            GIT_TAG eddc48422c76a2f02a57a45d31b650b2680168f5
+            GIT_TAG b0ffe7ada20cdbd0bee2bbe5461ecd22fb468062
             )
 endif()
 
@@ -123,7 +123,7 @@ duckdb_extension_load(sqlite_scanner
 duckdb_extension_load(sqlsmith
         DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb_sqlsmith
-        GIT_TAG 7b00307a0c00fbb85bef2010330946f11311ba4c
+        GIT_TAG f24be8b5b0cd0eeed7541e10cff42d7050771afc
         )
 
 ################# SUBSTRAIT
