@@ -192,7 +192,7 @@ struct GenericArgMinMaxState {
 
 	static void PrepareData(Vector &by, idx_t count, Vector &extra_state, UnifiedVectorFormat &result) {
 		OrderModifiers modifiers(ORDER_TYPE, OrderByNullType::NULLS_LAST);
-		CreateSortKeyHelpers::CreateSortKey(by, count, modifiers, extra_state);
+		CreateSortKeyHelpers::CreateSortKeyWithValidity(by, extra_state, modifiers, count);
 		extra_state.ToUnifiedFormat(count, result);
 	}
 };

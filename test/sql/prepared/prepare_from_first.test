@@ -1,0 +1,19 @@
+# name: test/sql/prepared/prepare_from_first.test
+# description: Test IN with a single NULL element
+# group: [prepared]
+
+statement ok
+pragma enable_verification
+
+statement ok
+prepare fromFirst as from (select ? fromV) select ? selectV,*;
+
+query II
+execute fromFirst('from', 'sel');
+----
+sel	from
+
+query II
+from (select 'from' fromV) select 'sel' selectV,*;
+----
+sel	from

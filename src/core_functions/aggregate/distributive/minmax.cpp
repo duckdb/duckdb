@@ -4,6 +4,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
@@ -330,7 +331,7 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
                                     vector<unique_ptr<Expression>> &arguments) {
 	if (arguments[0]->return_type.id() == LogicalTypeId::VARCHAR) {
 		auto str_collation = StringType::GetCollation(arguments[0]->return_type);
-		if (!str_collation.empty()) {
+		if (!str_collation.empty() || !DBConfig::GetConfig(context).options.collation.empty()) {
 			// If aggr function is min/max and uses collations, replace bound_function with arg_min/arg_max
 			// to make sure the result's correctness.
 			string function_name = function.name == "min" ? "arg_min" : "arg_max";

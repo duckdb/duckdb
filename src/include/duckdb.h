@@ -133,6 +133,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_ANY = 34,
 	// duckdb_varint
 	DUCKDB_TYPE_VARINT = 35,
+	// SQLNULL type
+	DUCKDB_TYPE_SQLNULL = 36,
 } duckdb_type;
 //! An enum over the returned state of different functions.
 typedef enum duckdb_state { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
@@ -866,8 +868,8 @@ Returns the number of rows present in the result object.
 * @return The number of rows present in the result object.
 */
 DUCKDB_API idx_t duckdb_row_count(duckdb_result *result);
-#endif
 
+#endif
 /*!
 Returns the number of rows changed by the query stored in the result. This is relevant only for INSERT/UPDATE/DELETE
 queries. For other queries the rows_changed will be 0.
@@ -898,9 +900,7 @@ printf("Data for row %d: %d\n", row, data[row]);
 * @return The column data of the specified column.
 */
 DUCKDB_API void *duckdb_column_data(duckdb_result *result, idx_t col);
-#endif
 
-#ifndef DUCKDB_API_NO_DEPRECATED
 /*!
 **DEPRECATED**: Prefer using `duckdb_result_get_chunk` instead.
 
@@ -923,8 +923,8 @@ if (nullmask[row]) {
 * @return The nullmask of the specified column.
 */
 DUCKDB_API bool *duckdb_nullmask_data(duckdb_result *result, idx_t col);
-#endif
 
+#endif
 /*!
 Returns the error message contained within the result. The error is only set if `duckdb_query` returns `DuckDBError`.
 
@@ -990,6 +990,7 @@ Returns the number of data chunks present in the result.
 */
 DUCKDB_API idx_t duckdb_result_chunk_count(duckdb_result result);
 
+#endif
 /*!
 Returns the return_type of the given result, or DUCKDB_RETURN_TYPE_INVALID on error
 
@@ -998,7 +999,6 @@ Returns the return_type of the given result, or DUCKDB_RETURN_TYPE_INVALID on er
 */
 DUCKDB_API duckdb_result_type duckdb_result_return_type(duckdb_result result);
 
-#endif
 //===--------------------------------------------------------------------===//
 // Safe Fetch Functions
 //===--------------------------------------------------------------------===//
@@ -1663,8 +1663,8 @@ Note that the result must be freed with `duckdb_destroy_result`.
 */
 DUCKDB_API duckdb_state duckdb_execute_prepared_streaming(duckdb_prepared_statement prepared_statement,
                                                           duckdb_result *out_result);
-#endif
 
+#endif
 //===--------------------------------------------------------------------===//
 // Extract Statements
 //===--------------------------------------------------------------------===//
@@ -1754,8 +1754,8 @@ Note that after calling `duckdb_pending_prepared_streaming`, the pending result 
 */
 DUCKDB_API duckdb_state duckdb_pending_prepared_streaming(duckdb_prepared_statement prepared_statement,
                                                           duckdb_pending_result *out_result);
-#endif
 
+#endif
 /*!
 Closes the pending result and de-allocates all memory allocated for the result.
 
@@ -4038,8 +4038,8 @@ It is not known beforehand how many chunks will be returned by this result.
 * @return The resulting data chunk. Returns `NULL` if the result has an error.
 */
 DUCKDB_API duckdb_data_chunk duckdb_stream_fetch_chunk(duckdb_result result);
-#endif
 
+#endif
 /*!
 Fetches a data chunk from a duckdb_result. This function should be called repeatedly until the result is exhausted.
 
