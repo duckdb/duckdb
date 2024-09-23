@@ -33,38 +33,35 @@ void RewriteSubquery::VisitOperator(duckdb::LogicalOperator &op) {
 	}
 
 	// visit the children of the operator
-		// check if op is a dependent join, if so, increment the lateral depth
-		if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
-			auto &join = op.Cast<LogicalDependentJoin>();
-			VisitOperator(*op.children[0]);
-			lateral_depth++;
+	// check if op is a dependent join, if so, increment the lateral depth
+	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
+		auto &join = op.Cast<LogicalDependentJoin>();
+		VisitOperator(*op.children[0]);
+		lateral_depth++;
 
-			for (auto col : join.correlated_columns) {
-				bool skip = false;
-				for (auto &corr : correlated_columns) {
-					if (corr.binding == col.binding) {
-						skip = true;
-						break;
-					}
+		for (auto col : join.correlated_columns) {
+			bool skip = false;
+			for (auto &corr : correlated_columns) {
+				if (corr.binding == col.binding) {
+					skip = true;
+					break;
 				}
-
-				if (skip) {
-					continue;
-				}
-
-//				col.depth = 1;
-//				correlated_columns.emplace_back(col);
 			}
 
-			for(auto &col : correlated_columns) {
-				join.correlated_columns.emplace_back(col);
+			if (skip) {
+				continue;
 			}
-
-			VisitOperator(*op.children[1]);
-			lateral_depth--;
-		} else {
-			VisitOperatorChildren(op);
 		}
+
+		for (auto &col : correlated_columns) {
+			join.correlated_columns.emplace_back(col);
+		}
+
+		VisitOperator(*op.children[1]);
+		lateral_depth--;
+	} else {
+		VisitOperatorChildren(op);
+	}
 
 	VisitOperatorExpressions(op);
 
@@ -86,10 +83,6 @@ void RewriteSubquery::VisitOperator(duckdb::LogicalOperator &op) {
 			if (skip) {
 				continue;
 			}
-			duckdb::Printer::PrintF("correlated column: %d, depth: %d\n", col.binding.column_index, col.depth);
-//			col.depth += 1;
-//			col.depth = lateral_depth;
-//			join.correlated_columns.push_back(col);
 		}
 	}
 }
@@ -97,7 +90,8 @@ void RewriteSubquery::VisitOperator(duckdb::LogicalOperator &op) {
 unique_ptr<Expression> RewriteSubquery::VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	// subquery detected within this subquery
 	// recursively rewrite it using the RewriteCorrelatedRecursive class
-	RewriteCorrelatedSubqueriesRecursive rewrite(table_index, lateral_depth, this->base_binding, correlated_columns, correlated_map);
+	RewriteCorrelatedSubqueriesRecursive rewrite(table_index, lateral_depth, this->base_binding, correlated_columns,
+	                                             correlated_map);
 	rewrite.subquery_depth++;
 	rewrite.RewriteCorrelatedSubquery(*expr.binder, *expr.subquery);
 	add_correlated_columns = rewrite.add_correlated_columns;
@@ -106,8 +100,7 @@ unique_ptr<Expression> RewriteSubquery::VisitReplace(BoundSubqueryExpression &ex
 
 RewriteCorrelatedSubqueriesRecursive::RewriteCorrelatedSubqueriesRecursive(
     const vector<idx_t> &table_index, idx_t lateral_depth, ColumnBinding base_binding,
-    const vector<CorrelatedColumnInfo> &correlated_columns,
-    column_binding_map_t<idx_t> &correlated_map)
+    const vector<CorrelatedColumnInfo> &correlated_columns, column_binding_map_t<idx_t> &correlated_map)
     : table_index(table_index), lateral_depth(lateral_depth), base_binding(base_binding),
       correlated_columns(correlated_columns), correlated_map(correlated_map) {
 }
@@ -149,36 +142,30 @@ void RewriteCorrelatedSubqueriesRecursive::VisitBoundTableRef(BoundTableRef &ref
 
 			D_ASSERT(found);
 
-				for (idx_t i = 0; i < correlated_columns.size(); i++) {
-					auto &col = correlated_columns[i];
-					auto col_copy = col;
-					col_copy.depth += lateral_depth + subquery_depth;
-					add_correlated_columns.push_back(col_copy);
+			for (idx_t i = 0; i < correlated_columns.size(); i++) {
+				auto &col = correlated_columns[i];
+				auto col_copy = col;
+				col_copy.depth += lateral_depth + subquery_depth;
+				add_correlated_columns.push_back(col_copy);
 
-					auto outer_binding = col.binding;
-					auto outer = make_uniq<BoundColumnRefExpression>(col.name, col.type, outer_binding, col.depth + subquery_depth + lateral_depth);
+				auto outer_binding = col.binding;
+				auto outer = make_uniq<BoundColumnRefExpression>(col.name, col.type, outer_binding,
+				                                                 col.depth + subquery_depth + lateral_depth);
 
-					auto inner_binding = ColumnBinding(cteref.bind_index, cteref.bound_columns.size() + i);
-					auto inner = make_uniq<BoundColumnRefExpression>(col.name, col.type, inner_binding);
+				auto inner_binding = ColumnBinding(cteref.bind_index, cteref.bound_columns.size() + i);
+				auto inner = make_uniq<BoundColumnRefExpression>(col.name, col.type, inner_binding);
 
-					auto comp = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
-					                                                 std::move(outer), std::move(inner));
-
-					duckdb::Printer::PrintF("%%%%\n");
-					duckdb::Printer::PrintF("outer idx: %d, depth: %d, col: %d\n", col.binding.table_index,
-					                        col.depth+lateral_depth, col.binding.column_index);
-
-					duckdb::Printer::PrintF("inner idx: %d, col: %d\n", cteref.bind_index, cteref.bound_columns.size() + i);
-
-					if (condition) {
-						auto conj = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
-						                                                  std::move(comp), std::move(condition));
-						condition = std::move(conj);
-					} else {
-						condition = std::move(comp);
-					}
+				auto comp = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
+				                                                 std::move(outer), std::move(inner));
+				if (condition) {
+					auto conj = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(comp),
+					                                                  std::move(condition));
+					condition = std::move(conj);
+				} else {
+					condition = std::move(comp);
 				}
 			}
+		}
 	}
 	// visit the children of the table ref
 	BoundNodeVisitor::VisitBoundTableRef(ref);
