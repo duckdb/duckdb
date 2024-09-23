@@ -7,11 +7,11 @@ require json
 statement ok
 pragma enable_verification
 
-# should go to our NULL
+# unlike JSON extract, this goes our NULL
 query T
 select json_value('{"foo": null}', '$.foo')
 ----
-null
+NULL
 
 query T
 select json_value('{"foo": null}', '$.foo.bar')
@@ -21,12 +21,12 @@ NULL
 query T
 select json_value('null', '$')
 ----
-null
+NULL
 
 query T
 select json_value('[null]', '$[0]')
 ----
-null
+NULL
 
 query T
 select json_value('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '/my_field/my_nested_field/1')
