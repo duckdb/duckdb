@@ -13,8 +13,6 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/planner/tableref/bound_cteref.hpp"
-#include "duckdb/planner/query_node/bound_recursive_cte_node.hpp"
-#include "duckdb/planner/query_node/bound_cte_node.hpp"
 #include "duckdb/planner/tableref/bound_dummytableref.hpp"
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
 
@@ -122,7 +120,6 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 
 				result->types = ctebinding->types;
 				result->bound_columns = std::move(names);
-
 				return std::move(result);
 			} else {
 				if (CTEIsAlreadyBound(cte)) {

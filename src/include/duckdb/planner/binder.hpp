@@ -114,7 +114,6 @@ public:
 	optional_ptr<vector<DummyBinding>> lambda_bindings;
 
 	unordered_map<idx_t, LogicalOperator *> recursive_ctes;
-	unordered_map<idx_t, BoundQueryNode *> bound_cte_nodes;
 
 public:
 	DUCKDB_API BoundStatement Bind(SQLStatement &statement);
@@ -210,10 +209,6 @@ public:
 	void SetAlwaysRequireRebind();
 
 	StatementProperties &GetStatementProperties();
-
-	shared_ptr<Binder> GetParentBinder() {
-		return parent;
-	}
 
 private:
 	//! The parent binder (if any)

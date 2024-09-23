@@ -209,7 +209,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		base_binding.table_index = proj.table_index;
 		this->delim_offset = base_binding.column_index = plan->expressions.size() - correlated_columns.size();
 		this->data_offset = 0;
-
 		return plan;
 	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
@@ -432,7 +431,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			// push the child into the LHS
 			plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]),
 			                                                  parent_propagate_null_values, lateral_depth);
-
 			// rewrite expressions in the join conditions
 			RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
 			rewriter.VisitOperator(*plan);
@@ -481,7 +479,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				logical_any_join.condition = std::move(conjunction);
 			}
 		}
-
 		// then we replace any correlated expressions with the corresponding entry in the correlated_map
 		RewriteCorrelatedExpressions rewriter(right_binding, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
