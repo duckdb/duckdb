@@ -455,7 +455,7 @@ TEST_CASE("Test TryFlushCachingOperators interrupted ExecutePushInternal", "[api
 	auto res = pending_query->Execute();
 	REQUIRE(!res->HasError());
 	auto &materialized_res = res->Cast<MaterializedQueryResult>();
-	auto initial_tuples = 2 * 2;
+	idx_t initial_tuples = 2 * 2;
 	REQUIRE(materialized_res.RowCount() == initial_tuples * 100000);
 	for (idx_t i = 0; i < initial_tuples; i++) {
 		for (idx_t j = 0; j < 100000; j++) {
