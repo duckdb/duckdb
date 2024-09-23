@@ -39,24 +39,12 @@ void RewriteSubquery::VisitOperator(duckdb::LogicalOperator &op) {
 		VisitOperator(*op.children[0]);
 		lateral_depth++;
 
-		// check if the correlated columns of the join are already present in the correlated columns
-		// if not, add them
-		// note: this operation could be optimized, e.g., by using a hash set
-		for (auto &col : join.correlated_columns) {
-			bool skip = false;
-			for (auto &corr : correlated_columns) {
+		for (auto &col : correlated_columns) {
+			for (auto &corr : join.correlated_columns) {
 				if (corr.binding == col.binding) {
-					skip = true;
-					break;
+					continue;
 				}
 			}
-
-			if (skip) {
-				continue;
-			}
-		}
-
-		for (auto &col : correlated_columns) {
 			join.correlated_columns.emplace_back(col);
 		}
 
