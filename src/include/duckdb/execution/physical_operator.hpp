@@ -241,8 +241,12 @@ public:
 	bool caching_supported;
 
 public:
+	//! This Execute will prevent small chunks from entering the pipeline, buffering them until a bigger chunk is
+	//! created.
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const final;
+	//! FinalExecute is used here to send out the remainder of the chunk (< STANDARD_VECTOR_SIZE) that we still had
+	//! cached.
 	OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
 	                                        OperatorState &state) const final;
 
