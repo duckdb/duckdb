@@ -28,3 +28,4 @@ SELECT regexp_split_to_table('axbyc', '[x|y]'), 42
 a	42
 b	42
 c	42
+

@@ -63,7 +63,17 @@ select split_part('','',1)
 query T
 select split_part('a,b,c','',3)
 ----
-b
+(empty)
+
+query T
+select split_part('abc','',1)
+----
+abc
+
+query T
+select split_part('abc','',2)
+----
+(empty)
 
 query T
 select split_part('',',',1)
