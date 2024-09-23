@@ -19,11 +19,9 @@
 
 namespace duckdb {
 
-RewriteSubquery::RewriteSubquery(const vector<idx_t> &table_index, idx_t lateral_depth, ColumnBinding base_binding,
-                                 const vector<CorrelatedColumnInfo> &correlated_columns,
-                                 column_binding_map_t<idx_t> &correlated_map)
-    : table_index(table_index), lateral_depth(lateral_depth), base_binding(base_binding),
-      correlated_columns(correlated_columns), correlated_map(correlated_map) {
+RewriteSubquery::RewriteSubquery(const vector<idx_t> &table_index, idx_t lateral_depth,
+                                 const vector<CorrelatedColumnInfo> &correlated_columns)
+    : table_index(table_index), lateral_depth(lateral_depth), correlated_columns(correlated_columns) {
 }
 
 void RewriteSubquery::VisitOperator(duckdb::LogicalOperator &op) {
@@ -60,8 +58,7 @@ void RewriteSubquery::VisitOperator(duckdb::LogicalOperator &op) {
 unique_ptr<Expression> RewriteSubquery::VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	// subquery detected within this subquery
 	// recursively rewrite it using the RewriteCorrelatedRecursive class
-	RewriteCorrelatedSubqueriesRecursive rewrite(table_index, lateral_depth, this->base_binding, correlated_columns,
-	                                             correlated_map);
+	RewriteCorrelatedSubqueriesRecursive rewrite(table_index, lateral_depth, correlated_columns);
 	rewrite.subquery_depth++;
 	rewrite.RewriteCorrelatedSubquery(*expr.binder, *expr.subquery);
 	add_correlated_columns = rewrite.add_correlated_columns;
@@ -69,10 +66,8 @@ unique_ptr<Expression> RewriteSubquery::VisitReplace(BoundSubqueryExpression &ex
 }
 
 RewriteCorrelatedSubqueriesRecursive::RewriteCorrelatedSubqueriesRecursive(
-    const vector<idx_t> &table_index, idx_t lateral_depth, ColumnBinding base_binding,
-    const vector<CorrelatedColumnInfo> &correlated_columns, column_binding_map_t<idx_t> &correlated_map)
-    : table_index(table_index), lateral_depth(lateral_depth), base_binding(base_binding),
-      correlated_columns(correlated_columns), correlated_map(correlated_map) {
+    const vector<idx_t> &table_index, idx_t lateral_depth, const vector<CorrelatedColumnInfo> &correlated_columns)
+    : table_index(table_index), lateral_depth(lateral_depth), correlated_columns(correlated_columns) {
 }
 
 void RewriteCorrelatedSubqueriesRecursive::VisitBoundTableRef(BoundTableRef &ref) {

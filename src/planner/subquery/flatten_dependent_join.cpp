@@ -713,7 +713,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 
 		binder.recursive_ctes[table_index] = plan.get();
 
-		RewriteSubquery subquery_rewriter(cte_idx, lateral_depth, base_binding, correlated_columns, correlated_map);
+		RewriteSubquery subquery_rewriter(cte_idx, lateral_depth, correlated_columns);
 		subquery_rewriter.VisitOperator(*plan->children[1]);
 
 		RewriteCTEScan cte_rewriter(table_index, correlated_columns);
