@@ -6,7 +6,6 @@ add_library_unity(
   bitagg.cpp
   bitstring_agg.cpp
   bool.cpp
-  entropy.cpp
   kurtosis.cpp
   minmax.cpp
   product.cpp

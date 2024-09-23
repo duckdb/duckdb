@@ -2,6 +2,7 @@
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/core_functions/aggregate/distributive_functions.hpp"
 #include "duckdb/core_functions/aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/unordered_map.hpp"
@@ -205,6 +206,7 @@ struct BaseModeFunction {
 		if (!target.frequency_map) {
 			// Copy - don't destroy! Otherwise windowing will break.
 			target.frequency_map = new typename STATE::Counts(*source.frequency_map);
+			target.count = source.count;
 			return;
 		}
 		for (auto &val : *source.frequency_map) {
@@ -226,7 +228,21 @@ struct BaseModeFunction {
 };
 
 template <typename TYPE_OP>
-struct ModeFunction : BaseModeFunction<TYPE_OP> {
+struct TypedModeFunction : BaseModeFunction<TYPE_OP> {
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &key, AggregateUnaryInput &aggr_input, idx_t count) {
+		if (!state.frequency_map) {
+			state.frequency_map = TYPE_OP::CreateEmpty(aggr_input.input.allocator);
+		}
+		auto &i = (*state.frequency_map)[key];
+		i.count += count;
+		i.first_row = MinValue<idx_t>(i.first_row, state.count);
+		state.count += count;
+	}
+};
+
+template <typename TYPE_OP>
+struct ModeFunction : TypedModeFunction<TYPE_OP> {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (!state.frequency_map) {
@@ -239,17 +255,6 @@ struct ModeFunction : BaseModeFunction<TYPE_OP> {
 		} else {
 			finalize_data.ReturnNull();
 		}
-	}
-
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE &state, const INPUT_TYPE &key, AggregateUnaryInput &aggr_input, idx_t count) {
-		if (!state.frequency_map) {
-			state.frequency_map = TYPE_OP::CreateEmpty(aggr_input.input.allocator);
-		}
-		auto &i = (*state.frequency_map)[key];
-		i.count += count;
-		i.first_row = MinValue<idx_t>(i.first_row, state.count);
-		state.count += count;
 	}
 
 	template <typename STATE, typename INPUT_TYPE>
@@ -423,9 +428,105 @@ unique_ptr<FunctionData> BindModeAggregate(ClientContext &context, AggregateFunc
 }
 
 AggregateFunctionSet ModeFun::GetFunctions() {
-	AggregateFunctionSet mode;
+	AggregateFunctionSet mode("mode");
 	mode.AddFunction(AggregateFunction({LogicalTypeId::ANY}, LogicalTypeId::ANY, nullptr, nullptr, nullptr, nullptr,
 	                                   nullptr, nullptr, BindModeAggregate));
 	return mode;
 }
+
+//===--------------------------------------------------------------------===//
+// Entropy
+//===--------------------------------------------------------------------===//
+template <class STATE>
+static double FinalizeEntropy(STATE &state) {
+	if (!state.frequency_map) {
+		return 0;
+	}
+	double count = static_cast<double>(state.count);
+	double entropy = 0;
+	for (auto &val : *state.frequency_map) {
+		double val_sec = static_cast<double>(val.second.count);
+		entropy += (val_sec / count) * log2(count / val_sec);
+	}
+	return entropy;
+}
+
+template <typename TYPE_OP>
+struct EntropyFunction : TypedModeFunction<TYPE_OP> {
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		target = FinalizeEntropy(state);
+	}
+};
+
+template <typename TYPE_OP>
+struct EntropyFallbackFunction : BaseModeFunction<TYPE_OP> {
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		target = FinalizeEntropy(state);
+	}
+};
+
+template <typename INPUT_TYPE, typename TYPE_OP = ModeStandard<INPUT_TYPE>>
+AggregateFunction GetTypedEntropyFunction(const LogicalType &type) {
+	using STATE = ModeState<INPUT_TYPE, TYPE_OP>;
+	using OP = EntropyFunction<TYPE_OP>;
+	auto func = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, double, OP>(type, LogicalType::DOUBLE);
+	func.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	return func;
+}
+
+AggregateFunction GetFallbackEntropyFunction(const LogicalType &type) {
+	using STATE = ModeState<string_t, ModeString>;
+	using OP = EntropyFallbackFunction<ModeString>;
+	AggregateFunction func({type}, LogicalType::DOUBLE, AggregateFunction::StateSize<STATE>,
+	                       AggregateFunction::StateInitialize<STATE, OP>,
+	                       AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
+	                       AggregateFunction::StateFinalize<STATE, double, OP>, nullptr);
+	func.destructor = AggregateFunction::StateDestroy<STATE, OP>;
+	func.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	return func;
+}
+
+AggregateFunction GetEntropyFunction(const LogicalType &type) {
+	switch (type.InternalType()) {
+#ifndef DUCKDB_SMALLER_BINARY
+	case PhysicalType::UINT16:
+		return GetTypedEntropyFunction<uint16_t>(type);
+	case PhysicalType::UINT32:
+		return GetTypedEntropyFunction<uint32_t>(type);
+	case PhysicalType::UINT64:
+		return GetTypedEntropyFunction<uint64_t>(type);
+	case PhysicalType::INT16:
+		return GetTypedEntropyFunction<int16_t>(type);
+	case PhysicalType::INT32:
+		return GetTypedEntropyFunction<int32_t>(type);
+	case PhysicalType::INT64:
+		return GetTypedEntropyFunction<int64_t>(type);
+	case PhysicalType::FLOAT:
+		return GetTypedEntropyFunction<float>(type);
+	case PhysicalType::DOUBLE:
+		return GetTypedEntropyFunction<double>(type);
+	case PhysicalType::VARCHAR:
+		return GetTypedEntropyFunction<string_t, ModeString>(type);
+#endif
+	default:
+		return GetFallbackEntropyFunction(type);
+	}
+}
+
+unique_ptr<FunctionData> BindEntropyAggregate(ClientContext &context, AggregateFunction &function,
+                                              vector<unique_ptr<Expression>> &arguments) {
+	function = GetEntropyFunction(arguments[0]->return_type);
+	function.name = "entropy";
+	return nullptr;
+}
+
+AggregateFunctionSet EntropyFun::GetFunctions() {
+	AggregateFunctionSet entropy("entropy");
+	entropy.AddFunction(AggregateFunction({LogicalTypeId::ANY}, LogicalType::DOUBLE, nullptr, nullptr, nullptr, nullptr,
+	                                      nullptr, nullptr, BindEntropyAggregate));
+	return entropy;
+}
+
 } // namespace duckdb
