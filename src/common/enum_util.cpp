@@ -3522,6 +3522,8 @@ const char* EnumUtil::ToChars<KeywordCategory>(KeywordCategory value) {
 		return "KEYWORD_TYPE_FUNC";
 	case KeywordCategory::KEYWORD_COL_NAME:
 		return "KEYWORD_COL_NAME";
+	case KeywordCategory::KEYWORD_NONE:
+		return "KEYWORD_NONE";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<KeywordCategory>", value));
 	}
@@ -3540,6 +3542,9 @@ KeywordCategory EnumUtil::FromString<KeywordCategory>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "KEYWORD_COL_NAME")) {
 		return KeywordCategory::KEYWORD_COL_NAME;
+	}
+	if (StringUtil::Equals(value, "KEYWORD_NONE")) {
+		return KeywordCategory::KEYWORD_NONE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<KeywordCategory>", value));
 }
@@ -6385,6 +6390,8 @@ const char* EnumUtil::ToChars<ScanType>(ScanType value) {
 		return "TABLE";
 	case ScanType::PARQUET:
 		return "PARQUET";
+	case ScanType::EXTERNAL:
+		return "EXTERNAL";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ScanType>", value));
 	}
@@ -6397,6 +6404,9 @@ ScanType EnumUtil::FromString<ScanType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "PARQUET")) {
 		return ScanType::PARQUET;
+	}
+	if (StringUtil::Equals(value, "EXTERNAL")) {
+		return ScanType::EXTERNAL;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ScanType>", value));
 }

@@ -378,6 +378,7 @@ struct QuantileListFallback : QuantileOperation {
 template <class OP>
 AggregateFunction GetDiscreteQuantileTemplated(const LogicalType &type) {
 	switch (type.InternalType()) {
+#ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::INT8:
 		return OP::template GetFunction<int8_t>(type);
 	case PhysicalType::INT16:
@@ -396,6 +397,7 @@ AggregateFunction GetDiscreteQuantileTemplated(const LogicalType &type) {
 		return OP::template GetFunction<interval_t>(type);
 	case PhysicalType::VARCHAR:
 		return OP::template GetFunction<string_t, QuantileStringType>(type);
+#endif
 	default:
 		return OP::GetFallback(type);
 	}
@@ -407,8 +409,10 @@ struct ScalarDiscreteQuantile {
 		using STATE = QuantileState<INPUT_TYPE, TYPE_OP>;
 		using OP = QuantileScalarOperation<true>;
 		auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
+#ifndef DUCKDB_SMALLER_BINARY
 		fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
 		fun.window_init = OP::WindowInit<STATE, INPUT_TYPE>;
+#endif
 		return fun;
 	}
 
@@ -442,8 +446,10 @@ struct ListDiscreteQuantile {
 		using OP = QuantileListOperation<INPUT_TYPE, true>;
 		auto fun = QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(type, type);
 		fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+#ifndef DUCKDB_SMALLER_BINARY
 		fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, list_entry_t, OP>;
 		fun.window_init = OP::template WindowInit<STATE, INPUT_TYPE>;
+#endif
 		return fun;
 	}
 
@@ -531,8 +537,10 @@ struct ScalarContinuousQuantile {
 		auto fun =
 		    AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP>(input_type, target_type);
 		fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+#ifndef DUCKDB_SMALLER_BINARY
 		fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, TARGET_TYPE, OP>;
 		fun.window_init = OP::template WindowInit<STATE, INPUT_TYPE>;
+#endif
 		return fun;
 	}
 };
@@ -544,8 +552,10 @@ struct ListContinuousQuantile {
 		using OP = QuantileListOperation<TARGET_TYPE, false>;
 		auto fun = QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(input_type, target_type);
 		fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+#ifndef DUCKDB_SMALLER_BINARY
 		fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, list_entry_t, OP>;
 		fun.window_init = OP::template WindowInit<STATE, INPUT_TYPE>;
+#endif
 		return fun;
 	}
 };

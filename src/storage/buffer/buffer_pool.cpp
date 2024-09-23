@@ -413,6 +413,10 @@ void BufferPool::SetAllocatorBulkDeallocationFlushThreshold(idx_t threshold) {
 	allocator_bulk_deallocation_flush_threshold = threshold;
 }
 
+idx_t BufferPool::GetAllocatorBulkDeallocationFlushThreshold() {
+	return allocator_bulk_deallocation_flush_threshold;
+}
+
 BufferPool::MemoryUsage::MemoryUsage() {
 	for (auto &v : memory_usage) {
 		v = 0;

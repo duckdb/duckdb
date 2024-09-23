@@ -511,11 +511,18 @@ static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
-    {"s3/config", "httpfs"},          {"gcs/config", "httpfs"},
-    {"r2/config", "httpfs"},          {"s3/credential_chain", "aws"},
-    {"gcs/credential_chain", "aws"},  {"r2/credential_chain", "aws"},
-    {"azure/config", "azure"},        {"azure/credential_chain", "azure"},
-    {"huggingface/config", "httfps"}, {"huggingface/credential_chain", "httpfs"},
+    {"s3/config", "httpfs"},
+    {"gcs/config", "httpfs"},
+    {"r2/config", "httpfs"},
+    {"s3/credential_chain", "aws"},
+    {"gcs/credential_chain", "aws"},
+    {"r2/credential_chain", "aws"},
+    {"azure/access_token", "azure"},
+    {"azure/config", "azure"},
+    {"azure/credential_chain", "azure"},
+    {"azure/service_principal", "azure"},
+    {"huggingface/config", "httfps"},
+    {"huggingface/credential_chain", "httpfs"},
     {"bearer/config", "httpfs"}}; // EXTENSION_SECRET_PROVIDERS
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {

@@ -343,6 +343,7 @@ static AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 template <class HIST>
 AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 	switch (type.InternalType()) {
+#ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::BOOL:
 		return GetHistogramBinFunction<HistogramFunctor, bool, HIST>(type);
 	case PhysicalType::UINT8:
@@ -367,6 +368,7 @@ AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 		return GetHistogramBinFunction<HistogramFunctor, double, HIST>(type);
 	case PhysicalType::VARCHAR:
 		return GetHistogramBinFunction<HistogramStringFunctor, string_t, HIST>(type);
+#endif
 	default:
 		return GetHistogramBinFunction<HistogramGenericFunctor, string_t, HIST>(type);
 	}

@@ -514,7 +514,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	// bind the HAVING clause, if any
 	if (statement.having) {
 		HavingBinder having_binder(*this, context, *result, info, statement.aggregate_handling);
-		ExpressionBinder::QualifyColumnNames(*this, statement.having);
+		ExpressionBinder::QualifyColumnNames(having_binder, statement.having);
 		result->having = having_binder.Bind(statement.having);
 	}
 

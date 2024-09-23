@@ -50,6 +50,7 @@ public:
 
 	//! If bulk deallocation larger than this occurs, flush outstanding allocations
 	void SetAllocatorBulkDeallocationFlushThreshold(idx_t threshold);
+	idx_t GetAllocatorBulkDeallocationFlushThreshold();
 
 	void UpdateUsedMemory(MemoryTag tag, int64_t size);
 

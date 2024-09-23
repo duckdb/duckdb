@@ -450,13 +450,4 @@ struct AtanhFun {
 	static ScalarFunction GetFunction();
 };
 
-struct ConstRHSDivideFun {
-	static constexpr const char *Name = "divide_by_const";
-	static constexpr const char *Parameters = "x, C";
-	static constexpr const char *Description = "Same as // but optimised for a constant right hand size";
-	static constexpr const char *Example = "SELECT divide_by_const(x, 100) FROM Y";
-
-	static ScalarFunctionSet GetFunctions();
-};
-
 } // namespace duckdb

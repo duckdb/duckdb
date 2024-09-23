@@ -178,7 +178,7 @@ void ExpressionBinder::CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_
                                             const LogicalType &list_child_type) {
 
 	if (expr->expression_class == ExpressionClass::BOUND_SUBQUERY) {
-		throw InvalidInputException("Subqueries are not supported in lambda expressions!");
+		throw BinderException("subqueries in lambda expressions are not supported");
 	}
 
 	// these are bound depth-first
@@ -194,6 +194,12 @@ void ExpressionBinder::CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_
 	if (expr->expression_class == ExpressionClass::BOUND_COLUMN_REF ||
 	    expr->expression_class == ExpressionClass::BOUND_PARAMETER ||
 	    expr->expression_class == ExpressionClass::BOUND_LAMBDA_REF) {
+
+		if (expr->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+			// Search for UNNEST.
+			auto &column_binding = expr->Cast<BoundColumnRefExpression>().binding;
+			ThrowIfUnnestInLambda(column_binding);
+		}
 
 		// move the expr because we are going to replace it
 		auto original = std::move(expr);

@@ -192,7 +192,7 @@ struct GenericArgMinMaxState {
 
 	static void PrepareData(Vector &by, idx_t count, Vector &extra_state, UnifiedVectorFormat &result) {
 		OrderModifiers modifiers(ORDER_TYPE, OrderByNullType::NULLS_LAST);
-		CreateSortKeyHelpers::CreateSortKey(by, count, modifiers, extra_state);
+		CreateSortKeyHelpers::CreateSortKeyWithValidity(by, extra_state, modifiers, count);
 		extra_state.ToUnifiedFormat(count, result);
 	}
 };
@@ -285,7 +285,6 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 			target.arg_null = source.arg_null;
 			if (!target.arg_null) {
 				STATE::template AssignValue<typename STATE::ARG_TYPE>(target.arg, source.arg);
-				;
 			}
 			target.is_initialized = true;
 		}
@@ -303,21 +302,42 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 
 	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
 	                                     vector<unique_ptr<Expression>> &arguments) {
+		if (arguments[1]->return_type.InternalType() == PhysicalType::VARCHAR) {
+			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->return_type);
+		}
 		function.arguments[0] = arguments[0]->return_type;
 		function.return_type = arguments[0]->return_type;
 		return nullptr;
 	}
 };
 
+template <class OP>
+AggregateFunction GetGenericArgMinMaxFunction() {
+	using STATE = ArgMinMaxState<string_t, string_t>;
+	return AggregateFunction({LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY,
+	                         AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
+	                         OP::template Update<STATE>, AggregateFunction::StateCombine<STATE, OP>,
+	                         AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, OP::Bind,
+	                         AggregateFunction::StateDestroy<STATE, OP>);
+}
+
 template <class OP, class ARG_TYPE, class BY_TYPE>
 AggregateFunction GetVectorArgMinMaxFunctionInternal(const LogicalType &by_type, const LogicalType &type) {
+#ifndef DUCKDB_SMALLER_BINARY
 	using STATE = ArgMinMaxState<ARG_TYPE, BY_TYPE>;
 	return AggregateFunction(
 	    {type, by_type}, type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
 	    OP::template Update<STATE>, AggregateFunction::StateCombine<STATE, OP>,
 	    AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, OP::Bind, AggregateFunction::StateDestroy<STATE, OP>);
+#else
+	auto function = GetGenericArgMinMaxFunction<OP>();
+	function.arguments = {type, by_type};
+	function.return_type = type;
+	return function;
+#endif
 }
 
+#ifndef DUCKDB_SMALLER_BINARY
 template <class OP, class ARG_TYPE>
 AggregateFunction GetVectorArgMinMaxFunctionBy(const LogicalType &by_type, const LogicalType &type) {
 	switch (by_type.InternalType()) {
@@ -335,6 +355,7 @@ AggregateFunction GetVectorArgMinMaxFunctionBy(const LogicalType &by_type, const
 		throw InternalException("Unimplemented arg_min/arg_max aggregate");
 	}
 }
+#endif
 
 static const vector<LogicalType> ArgMaxByTypes() {
 	vector<LogicalType> types = {LogicalType::INTEGER,   LogicalType::BIGINT,       LogicalType::HUGEINT,
@@ -347,21 +368,32 @@ template <class OP, class ARG_TYPE>
 void AddVectorArgMinMaxFunctionBy(AggregateFunctionSet &fun, const LogicalType &type) {
 	auto by_types = ArgMaxByTypes();
 	for (const auto &by_type : by_types) {
+#ifndef DUCKDB_SMALLER_BINARY
 		fun.AddFunction(GetVectorArgMinMaxFunctionBy<OP, ARG_TYPE>(by_type, type));
+#else
+		fun.AddFunction(GetVectorArgMinMaxFunctionInternal<OP, string_t, string_t>(by_type, type));
+#endif
 	}
 }
 
 template <class OP, class ARG_TYPE, class BY_TYPE>
 AggregateFunction GetArgMinMaxFunctionInternal(const LogicalType &by_type, const LogicalType &type) {
+#ifndef DUCKDB_SMALLER_BINARY
 	using STATE = ArgMinMaxState<ARG_TYPE, BY_TYPE>;
 	auto function = AggregateFunction::BinaryAggregate<STATE, ARG_TYPE, BY_TYPE, ARG_TYPE, OP>(type, by_type, type);
 	if (type.InternalType() == PhysicalType::VARCHAR || by_type.InternalType() == PhysicalType::VARCHAR) {
 		function.destructor = AggregateFunction::StateDestroy<STATE, OP>;
 	}
 	function.bind = OP::Bind;
+#else
+	auto function = GetGenericArgMinMaxFunction<OP>();
+	function.arguments = {type, by_type};
+	function.return_type = type;
+#endif
 	return function;
 }
 
+#ifndef DUCKDB_SMALLER_BINARY
 template <class OP, class ARG_TYPE>
 AggregateFunction GetArgMinMaxFunctionBy(const LogicalType &by_type, const LogicalType &type) {
 	switch (by_type.InternalType()) {
@@ -379,18 +411,24 @@ AggregateFunction GetArgMinMaxFunctionBy(const LogicalType &by_type, const Logic
 		throw InternalException("Unimplemented arg_min/arg_max by aggregate");
 	}
 }
+#endif
 
 template <class OP, class ARG_TYPE>
 void AddArgMinMaxFunctionBy(AggregateFunctionSet &fun, const LogicalType &type) {
 	auto by_types = ArgMaxByTypes();
 	for (const auto &by_type : by_types) {
+#ifndef DUCKDB_SMALLER_BINARY
 		fun.AddFunction(GetArgMinMaxFunctionBy<OP, ARG_TYPE>(by_type, type));
+#else
+		fun.AddFunction(GetArgMinMaxFunctionInternal<OP, string_t, string_t>(by_type, type));
+#endif
 	}
 }
 
 template <class OP>
 static AggregateFunction GetDecimalArgMinMaxFunction(const LogicalType &by_type, const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::DECIMAL);
+#ifndef DUCKDB_SMALLER_BINARY
 	switch (type.InternalType()) {
 	case PhysicalType::INT16:
 		return GetArgMinMaxFunctionBy<OP, int16_t>(by_type, type);
@@ -401,6 +439,9 @@ static AggregateFunction GetDecimalArgMinMaxFunction(const LogicalType &by_type,
 	default:
 		return GetArgMinMaxFunctionBy<OP, hugeint_t>(by_type, type);
 	}
+#else
+	return GetArgMinMaxFunctionInternal<OP, string_t, string_t>(by_type, type);
+#endif
 }
 
 template <class OP>
@@ -449,17 +490,19 @@ void AddDecimalArgMinMaxFunctionBy(AggregateFunctionSet &fun, const LogicalType 
 
 template <class OP>
 void AddGenericArgMinMaxFunction(AggregateFunctionSet &fun) {
-	using STATE = ArgMinMaxState<string_t, string_t>;
-	fun.AddFunction(
-	    AggregateFunction({LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, AggregateFunction::StateSize<STATE>,
-	                      AggregateFunction::StateInitialize<STATE, OP>, OP::template Update<STATE>,
-	                      AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>,
-	                      nullptr, OP::Bind, AggregateFunction::StateDestroy<STATE, OP>));
+	fun.AddFunction(GetGenericArgMinMaxFunction<OP>());
 }
 
 template <class COMPARATOR, bool IGNORE_NULL, OrderType ORDER_TYPE>
 static void AddArgMinMaxFunctions(AggregateFunctionSet &fun) {
+	using GENERIC_VECTOR_OP = VectorArgMinMaxBase<LessThan, IGNORE_NULL, ORDER_TYPE, GenericArgMinMaxState<ORDER_TYPE>>;
+#ifndef DUCKDB_SMALLER_BINARY
 	using OP = ArgMinMaxBase<COMPARATOR, IGNORE_NULL>;
+	using VECTOR_OP = VectorArgMinMaxBase<COMPARATOR, IGNORE_NULL, ORDER_TYPE>;
+#else
+	using OP = GENERIC_VECTOR_OP;
+	using VECTOR_OP = GENERIC_VECTOR_OP;
+#endif
 	AddArgMinMaxFunctionBy<OP, int32_t>(fun, LogicalType::INTEGER);
 	AddArgMinMaxFunctionBy<OP, int64_t>(fun, LogicalType::BIGINT);
 	AddArgMinMaxFunctionBy<OP, double>(fun, LogicalType::DOUBLE);
@@ -474,11 +517,9 @@ static void AddArgMinMaxFunctions(AggregateFunctionSet &fun) {
 		AddDecimalArgMinMaxFunctionBy<OP>(fun, by_type);
 	}
 
-	using VECTOR_OP = VectorArgMinMaxBase<COMPARATOR, IGNORE_NULL, ORDER_TYPE>;
 	AddVectorArgMinMaxFunctionBy<VECTOR_OP, string_t>(fun, LogicalType::ANY);
 
 	// we always use LessThan when using sort keys because the ORDER_TYPE takes care of selecting the lowest or highest
-	using GENERIC_VECTOR_OP = VectorArgMinMaxBase<LessThan, IGNORE_NULL, ORDER_TYPE, GenericArgMinMaxState<ORDER_TYPE>>;
 	AddGenericArgMinMaxFunction<GENERIC_VECTOR_OP>(fun);
 }
 
@@ -588,6 +629,7 @@ static void SpecializeArgMinMaxNFunction(AggregateFunction &function) {
 template <class VAL_TYPE, class COMPARATOR>
 static void SpecializeArgMinMaxNFunction(PhysicalType arg_type, AggregateFunction &function) {
 	switch (arg_type) {
+#ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::VARCHAR:
 		SpecializeArgMinMaxNFunction<VAL_TYPE, MinMaxStringValue, COMPARATOR>(function);
 		break;
@@ -603,6 +645,7 @@ static void SpecializeArgMinMaxNFunction(PhysicalType arg_type, AggregateFunctio
 	case PhysicalType::DOUBLE:
 		SpecializeArgMinMaxNFunction<VAL_TYPE, MinMaxFixedValue<double>, COMPARATOR>(function);
 		break;
+#endif
 	default:
 		SpecializeArgMinMaxNFunction<VAL_TYPE, MinMaxFallbackValue, COMPARATOR>(function);
 		break;
@@ -612,6 +655,7 @@ static void SpecializeArgMinMaxNFunction(PhysicalType arg_type, AggregateFunctio
 template <class COMPARATOR>
 static void SpecializeArgMinMaxNFunction(PhysicalType val_type, PhysicalType arg_type, AggregateFunction &function) {
 	switch (val_type) {
+#ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::VARCHAR:
 		SpecializeArgMinMaxNFunction<MinMaxStringValue, COMPARATOR>(arg_type, function);
 		break;
@@ -627,6 +671,7 @@ static void SpecializeArgMinMaxNFunction(PhysicalType val_type, PhysicalType arg
 	case PhysicalType::DOUBLE:
 		SpecializeArgMinMaxNFunction<MinMaxFixedValue<double>, COMPARATOR>(arg_type, function);
 		break;
+#endif
 	default:
 		SpecializeArgMinMaxNFunction<MinMaxFallbackValue, COMPARATOR>(arg_type, function);
 		break;
