@@ -52,7 +52,6 @@ public:
 	idx_t subquery_depth = 0;
 	ColumnBinding base_binding;
 	const vector<CorrelatedColumnInfo> &correlated_columns;
-	bool add_filter = false;
 	unique_ptr<Expression> condition;
 	column_binding_map_t<idx_t> &correlated_map;
 	Binder *binder;

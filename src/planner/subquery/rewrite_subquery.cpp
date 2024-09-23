@@ -149,14 +149,11 @@ void RewriteCorrelatedSubqueriesRecursive::VisitBoundTableRef(BoundTableRef &ref
 
 			D_ASSERT(found);
 
-			if (!add_filter) {
 				for (idx_t i = 0; i < correlated_columns.size(); i++) {
 					auto &col = correlated_columns[i];
 					auto col_copy = col;
 					col_copy.depth += lateral_depth + subquery_depth;
-					if (!add_filter) {
-						add_correlated_columns.push_back(col_copy);
-					}
+					add_correlated_columns.push_back(col_copy);
 
 					auto outer_binding = col.binding;
 					auto outer = make_uniq<BoundColumnRefExpression>(col.name, col.type, outer_binding, col.depth + subquery_depth + lateral_depth);
@@ -182,7 +179,6 @@ void RewriteCorrelatedSubqueriesRecursive::VisitBoundTableRef(BoundTableRef &ref
 					}
 				}
 			}
-		}
 	}
 	// visit the children of the table ref
 	BoundNodeVisitor::VisitBoundTableRef(ref);
