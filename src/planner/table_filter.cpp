@@ -20,14 +20,7 @@ void TableFilterSet::PushFilter(idx_t column_index, unique_ptr<TableFilter> filt
 		} else {
 			auto and_filter = make_uniq<ConjunctionAndFilter>();
 			and_filter->child_filters.push_back(std::move(entry->second));
-			if (filter->filter_type == TableFilterType::CONJUNCTION_AND) {
-				auto &other_and_filter = filter->Cast<ConjunctionAndFilter>();
-				for (auto &child : other_and_filter.child_filters) {
-					and_filter->child_filters.push_back(std::move(child));
-				}
-			} else {
-				and_filter->child_filters.push_back(std::move(filter));
-			}
+			and_filter->child_filters.push_back(std::move(filter));
 			filters[column_index] = std::move(and_filter);
 		}
 	}

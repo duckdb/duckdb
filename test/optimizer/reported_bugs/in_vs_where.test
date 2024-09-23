@@ -3,19 +3,37 @@
 # group: [reported_bugs]
 
 statement ok
-CREATE TABLE AllOpportunities as select * FROM Values
+CREATE OR REPLACE TABLE AllOpportunities as select * FROM Values
 ('0058b00000IIEQVAA7'),
 ('0058b00000IIEQVAA6'),
 ('0058b00000IIEQVAA5') t(owner_id);
 
 statement ok
-CREATE TABLE persons as
- select * from VALUES ('0058b00000IIEQVAA5'),
- ('0058b00000IIEQVAA6'),
- ('0058b00000IIEQVAA7') t(id);
+CREATE OR REPLACE TABLE persons as
+select * from VALUES
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA4'),
+('0058b00000IIEQVAA5'),
+('0058b00000IIEQVAA6'),
+('0058b00000IIEQVAA7') t(id);
 
 statement ok
-CREATE TABLE role_hierarchy as select *
+CREATE OR REPLACE TABLE role_hierarchy as select *
 FROM VALUES
 ('0058b00000IIEQVAA5','0058b00000IIEQVAA5'),
 ('0058b00000IIEQVAA6','0058b00000IIEQVAA6'),
@@ -23,11 +41,13 @@ FROM VALUES
 
 
 query I
-select persons.id from persons
-  join role_hierarchy on role_hierarchy.root_person_id = persons.id
-  left outer join AllOpportunities ON AllOpportunities.owner_id = role_hierarchy.descendent_person_id
-  where persons.id in ('0058b00000IIEQVAA5')
-  group by persons.id;
+with opp_stats as (
+	select persons.id from persons
+	join role_hierarchy on role_hierarchy.root_person_id = persons.id
+	left outer join AllOpportunities ON AllOpportunities.owner_id = role_hierarchy.descendent_person_id
+	where persons.id in ('0058b00000IIEQVAA5')
+	group by persons.id
+) select * from opp_stats;
 ----
 0058b00000IIEQVAA5
 
