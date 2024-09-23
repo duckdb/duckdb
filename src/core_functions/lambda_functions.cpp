@@ -1,4 +1,4 @@
-#include "duckdb/core_functions/lambda_functions.hpp"
+#include "duckdb/function/lambda_functions.hpp"
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"

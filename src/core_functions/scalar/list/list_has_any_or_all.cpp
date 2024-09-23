@@ -1,4 +1,4 @@
-#include "duckdb/core_functions/lambda_functions.hpp"
+#include "duckdb/function/lambda_functions.hpp"
 #include "duckdb/core_functions/scalar/list_functions.hpp"
 #include "duckdb/core_functions/create_sort_key.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"

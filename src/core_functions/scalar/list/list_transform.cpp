@@ -1,6 +1,6 @@
 #include "duckdb/core_functions/scalar/list_functions.hpp"
 
-#include "duckdb/core_functions/lambda_functions.hpp"
+#include "duckdb/function/lambda_functions.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
