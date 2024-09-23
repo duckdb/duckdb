@@ -337,6 +337,7 @@ AggregateFunction GetVectorArgMinMaxFunctionInternal(const LogicalType &by_type,
 #endif
 }
 
+#ifndef DUCKDB_SMALLER_BINARY
 template <class OP, class ARG_TYPE>
 AggregateFunction GetVectorArgMinMaxFunctionBy(const LogicalType &by_type, const LogicalType &type) {
 	switch (by_type.InternalType()) {
@@ -354,6 +355,7 @@ AggregateFunction GetVectorArgMinMaxFunctionBy(const LogicalType &by_type, const
 		throw InternalException("Unimplemented arg_min/arg_max aggregate");
 	}
 }
+#endif
 
 static const vector<LogicalType> ArgMaxByTypes() {
 	vector<LogicalType> types = {LogicalType::INTEGER,   LogicalType::BIGINT,       LogicalType::HUGEINT,
@@ -366,7 +368,11 @@ template <class OP, class ARG_TYPE>
 void AddVectorArgMinMaxFunctionBy(AggregateFunctionSet &fun, const LogicalType &type) {
 	auto by_types = ArgMaxByTypes();
 	for (const auto &by_type : by_types) {
+#ifndef DUCKDB_SMALLER_BINARY
 		fun.AddFunction(GetVectorArgMinMaxFunctionBy<OP, ARG_TYPE>(by_type, type));
+#else
+		fun.AddFunction(GetVectorArgMinMaxFunctionInternal<OP, string_t, string_t>(by_type, type));
+#endif
 	}
 }
 
@@ -387,6 +393,7 @@ AggregateFunction GetArgMinMaxFunctionInternal(const LogicalType &by_type, const
 	return function;
 }
 
+#ifndef DUCKDB_SMALLER_BINARY
 template <class OP, class ARG_TYPE>
 AggregateFunction GetArgMinMaxFunctionBy(const LogicalType &by_type, const LogicalType &type) {
 	switch (by_type.InternalType()) {
@@ -404,6 +411,7 @@ AggregateFunction GetArgMinMaxFunctionBy(const LogicalType &by_type, const Logic
 		throw InternalException("Unimplemented arg_min/arg_max by aggregate");
 	}
 }
+#endif
 
 template <class OP, class ARG_TYPE>
 void AddArgMinMaxFunctionBy(AggregateFunctionSet &fun, const LogicalType &type) {
@@ -412,7 +420,7 @@ void AddArgMinMaxFunctionBy(AggregateFunctionSet &fun, const LogicalType &type) 
 #ifndef DUCKDB_SMALLER_BINARY
 		fun.AddFunction(GetArgMinMaxFunctionBy<OP, ARG_TYPE>(by_type, type));
 #else
-		fun.AddFunction(GetArgMinMaxFunctionBy<OP, string_t>(by_type, type));
+		fun.AddFunction(GetArgMinMaxFunctionInternal<OP, string_t, string_t>(by_type, type));
 #endif
 	}
 }
@@ -420,6 +428,7 @@ void AddArgMinMaxFunctionBy(AggregateFunctionSet &fun, const LogicalType &type) 
 template <class OP>
 static AggregateFunction GetDecimalArgMinMaxFunction(const LogicalType &by_type, const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::DECIMAL);
+#ifndef DUCKDB_SMALLER_BINARY
 	switch (type.InternalType()) {
 	case PhysicalType::INT16:
 		return GetArgMinMaxFunctionBy<OP, int16_t>(by_type, type);
@@ -430,6 +439,9 @@ static AggregateFunction GetDecimalArgMinMaxFunction(const LogicalType &by_type,
 	default:
 		return GetArgMinMaxFunctionBy<OP, hugeint_t>(by_type, type);
 	}
+#else
+	return GetArgMinMaxFunctionInternal<OP, string_t, string_t>(by_type, type);
+#endif
 }
 
 template <class OP>
@@ -617,6 +629,7 @@ static void SpecializeArgMinMaxNFunction(AggregateFunction &function) {
 template <class VAL_TYPE, class COMPARATOR>
 static void SpecializeArgMinMaxNFunction(PhysicalType arg_type, AggregateFunction &function) {
 	switch (arg_type) {
+#ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::VARCHAR:
 		SpecializeArgMinMaxNFunction<VAL_TYPE, MinMaxStringValue, COMPARATOR>(function);
 		break;
@@ -632,6 +645,7 @@ static void SpecializeArgMinMaxNFunction(PhysicalType arg_type, AggregateFunctio
 	case PhysicalType::DOUBLE:
 		SpecializeArgMinMaxNFunction<VAL_TYPE, MinMaxFixedValue<double>, COMPARATOR>(function);
 		break;
+#endif
 	default:
 		SpecializeArgMinMaxNFunction<VAL_TYPE, MinMaxFallbackValue, COMPARATOR>(function);
 		break;
@@ -641,6 +655,7 @@ static void SpecializeArgMinMaxNFunction(PhysicalType arg_type, AggregateFunctio
 template <class COMPARATOR>
 static void SpecializeArgMinMaxNFunction(PhysicalType val_type, PhysicalType arg_type, AggregateFunction &function) {
 	switch (val_type) {
+#ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::VARCHAR:
 		SpecializeArgMinMaxNFunction<MinMaxStringValue, COMPARATOR>(arg_type, function);
 		break;
@@ -656,6 +671,7 @@ static void SpecializeArgMinMaxNFunction(PhysicalType val_type, PhysicalType arg
 	case PhysicalType::DOUBLE:
 		SpecializeArgMinMaxNFunction<MinMaxFixedValue<double>, COMPARATOR>(arg_type, function);
 		break;
+#endif
 	default:
 		SpecializeArgMinMaxNFunction<MinMaxFallbackValue, COMPARATOR>(arg_type, function);
 		break;
