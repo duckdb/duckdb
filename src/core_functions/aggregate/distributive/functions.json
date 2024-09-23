@@ -108,22 +108,6 @@
         "type": "aggregate_function"
     },
     {
-        "name": "min",
-        "parameters": "arg",
-        "description": "Returns the minimum value present in arg.",
-        "example": "min(A)",
-        "type": "aggregate_function_set",
-        "extra_functions": ["static AggregateFunction GetFunction();"]
-    },
-    {
-        "name": "max",
-        "parameters": "arg",
-        "description": "Returns the maximum value present in arg.",
-        "example": "max(A)",
-        "type": "aggregate_function_set",
-        "extra_functions": ["static AggregateFunction GetFunction();"]
-    },
-    {
         "name": "product",
         "parameters": "arg",
         "description": "Calculates the product of all tuples in arg.",

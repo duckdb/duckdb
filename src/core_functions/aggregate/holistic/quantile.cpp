@@ -9,7 +9,7 @@
 #include "duckdb/common/queue.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
-#include "duckdb/core_functions/aggregate/sort_key_helpers.hpp"
+#include "duckdb/function/aggregate/sort_key_helpers.hpp"
 
 namespace duckdb {
 

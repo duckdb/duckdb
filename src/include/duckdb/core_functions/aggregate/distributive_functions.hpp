@@ -186,26 +186,6 @@ struct KurtosisPopFun {
 	static AggregateFunction GetFunction();
 };
 
-struct MinFun {
-	static constexpr const char *Name = "min";
-	static constexpr const char *Parameters = "arg";
-	static constexpr const char *Description = "Returns the minimum value present in arg.";
-	static constexpr const char *Example = "min(A)";
-
-	static AggregateFunctionSet GetFunctions();
-	static AggregateFunction GetFunction();
-};
-
-struct MaxFun {
-	static constexpr const char *Name = "max";
-	static constexpr const char *Parameters = "arg";
-	static constexpr const char *Description = "Returns the maximum value present in arg.";
-	static constexpr const char *Example = "max(A)";
-
-	static AggregateFunctionSet GetFunctions();
-	static AggregateFunction GetFunction();
-};
-
 struct ProductFun {
 	static constexpr const char *Name = "product";
 	static constexpr const char *Parameters = "arg";

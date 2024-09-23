@@ -1,16 +1,16 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/core_functions/aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/aggregate/minmax_n_helpers.hpp"
+#include "duckdb/function/aggregate/sort_key_helpers.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/function/function_binder.hpp"
-#include "duckdb/core_functions/aggregate/sort_key_helpers.hpp"
-#include "duckdb/core_functions/aggregate/minmax_n_helpers.hpp"
 
 namespace duckdb {
 
@@ -531,19 +531,18 @@ static AggregateFunction GetMinMaxNFunction() {
 //---------------------------------------------------
 // Function Registration
 //---------------------------------------------------s
-
-AggregateFunctionSet MinFun::GetFunctions() {
+void MinFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet min("min");
 	min.AddFunction(GetFunction());
 	min.AddFunction(GetMinMaxNFunction<LessThan>());
-	return min;
+	set.AddFunction(min);
 }
 
-AggregateFunctionSet MaxFun::GetFunctions() {
+void MaxFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet max("max");
 	max.AddFunction(GetFunction());
 	max.AddFunction(GetMinMaxNFunction<GreaterThan>());
-	return max;
+	set.AddFunction(max);
 }
 
 } // namespace duckdb

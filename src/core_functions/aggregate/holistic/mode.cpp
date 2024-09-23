@@ -7,7 +7,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/owning_string_map.hpp"
 #include "duckdb/core_functions/create_sort_key.hpp"
-#include "duckdb/core_functions/aggregate/sort_key_helpers.hpp"
+#include "duckdb/function/aggregate/sort_key_helpers.hpp"
 #include <functional>
 
 // MODE( <expr1> )

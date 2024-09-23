@@ -1,6 +1,6 @@
 #include "duckdb/core_functions/aggregate/histogram_helpers.hpp"
 #include "duckdb/core_functions/aggregate/holistic_functions.hpp"
-#include "duckdb/core_functions/aggregate/sort_key_helpers.hpp"
+#include "duckdb/function/aggregate/sort_key_helpers.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/printer.hpp"

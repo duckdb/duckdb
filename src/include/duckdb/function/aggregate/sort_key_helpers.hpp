@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/core_functions/aggregate/sort_key_helpers.hpp
+// duckdb/function/aggregate/sort_key_helpers.hpp
 //
 //
 //===----------------------------------------------------------------------===//

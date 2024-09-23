@@ -8,7 +8,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/core_functions/create_sort_key.hpp"
-#include "duckdb/core_functions/aggregate/minmax_n_helpers.hpp"
+#include "duckdb/function/aggregate/minmax_n_helpers.hpp"
 
 namespace duckdb {
 

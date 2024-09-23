@@ -8,7 +8,6 @@ add_library_unity(
   bool.cpp
   entropy.cpp
   kurtosis.cpp
-  minmax.cpp
   product.cpp
   skew.cpp
   string_agg.cpp
