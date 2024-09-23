@@ -186,27 +186,26 @@ with open(enum_util_source_file, "w") as f:
     f.write("namespace duckdb {\n\n")
 
     for enum_name, enum_type, enum_members in enums:
+        enum_string_array = "Get" + enum_name + "Values()"
+        enum_count = str(len(enum_members))
         # Write the enum from string
+        f.write(f"const StringUtil::EnumStringLiteral *{enum_string_array} {{\n")
+        f.write(f"\tstatic constexpr StringUtil::EnumStringLiteral values[] {{\n")
+        for count, (key, strings) in enumerate(enum_members):
+            if count > 0:
+                f.write(",\n")
+            f.write(f"\t\t{{ static_cast<uint32_t>({enum_name}::{key}), \"{strings[0]}\" }}")
+        f.write("\n\t};");
+        f.write("\n\treturn values;")
+        f.write("\n}\n\n")
         f.write(f"template<>\nconst char* EnumUtil::ToChars<{enum_name}>({enum_name} value) {{\n")
-        f.write("\tswitch(value) {\n")
-        for key, strings in enum_members:
-            # Always use the first string as the enum string
-            f.write(f"\tcase {enum_name}::{key}:\n\t\treturn \"{strings[0]}\";\n")
-        f.write(
-            f"\tdefault:\n\t\tthrow NotImplementedException(StringUtil::Format(\"Enum value: \'%d\' not implemented in ToChars<{enum_name}>\", value));\n"
-        )
-        f.write("\t}\n")
+        f.write(f"\treturn StringUtil::EnumToString({enum_string_array}, {enum_count}, static_cast<uint32_t>(value));\n");
         f.write("}\n\n")
 
         # Write the string to enum
         f.write(f"template<>\n{enum_name} EnumUtil::FromString<{enum_name}>(const char *value) {{\n")
-        for key, strings in enum_members:
-            cond = " || ".join([f'StringUtil::Equals(value, "{string}")' for string in strings])
-            f.write(f'\tif ({cond}) {{\n\t\treturn {enum_name}::{key};\n\t}}\n')
-        f.write(
-            f"\tthrow NotImplementedException(StringUtil::Format(\"Enum value: \'%s\' not implemented in FromString<{enum_name}>\", value));\n"
-        )
-
-        f.write("}\n\n")
+        enum_count = str(len(enum_members))
+        f.write(f"\treturn static_cast<{enum_name}>(StringUtil::StringToEnum({enum_string_array}, {enum_count}, value));")
+        f.write("\n}\n\n")
 
     f.write("}\n\n")

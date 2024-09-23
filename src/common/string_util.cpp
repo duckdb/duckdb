@@ -713,4 +713,22 @@ string StringUtil::URLDecode(const string &input, bool plus_to_space) {
 	return string(result_data.get(), result_size);
 }
 
+uint32_t StringUtil::StringToEnum(const EnumStringLiteral enum_list[], idx_t enum_count, const char *str_value) {
+	for(idx_t i = 0; i < enum_count; i++) {
+		if (CIEquals(enum_list[i].string, str_value)) {
+			return enum_list[i].number;
+		}
+	}
+	throw NotImplementedException("Enum value: unrecognized string value %s for this enum type", str_value);
+}
+
+const char *StringUtil::EnumToString(const EnumStringLiteral enum_list[], idx_t enum_count, uint32_t enum_value) {
+	for(idx_t i = 0; i < enum_count; i++) {
+		if (enum_list[i].number == enum_value) {
+			return enum_list[i].string;
+		}
+	}
+	throw NotImplementedException("Enum value: unrecognized enum value %s for this enum type", enum_value);
+}
+
 } // namespace duckdb
