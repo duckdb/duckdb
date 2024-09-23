@@ -234,6 +234,60 @@ Value ArrowLargeBufferSizeSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Arrow Lossless Conversion
+//===----------------------------------------------------------------------===//
+void ArrowLosslessConversionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto arrow_arrow_lossless_conversion = input.GetValue<bool>();
+
+	config.options.arrow_arrow_lossless_conversion = arrow_arrow_lossless_conversion;
+}
+
+void ArrowLosslessConversionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.arrow_arrow_lossless_conversion = DBConfig().options.arrow_arrow_lossless_conversion;
+}
+
+Value ArrowLosslessConversionSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	bool arrow_arrow_lossless_conversion = config.options.arrow_arrow_lossless_conversion;
+	return Value::BOOLEAN(arrow_arrow_lossless_conversion);
+}
+
+//===----------------------------------------------------------------------===//
+// Arrow Output List View
+//===----------------------------------------------------------------------===//
+void ArrowOutputListViewSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto arrow_output_list_view = input.GetValue<bool>();
+
+	config.options.arrow_use_list_view = arrow_output_list_view;
+}
+
+void ArrowOutputListViewSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.arrow_use_list_view = DBConfig().options.arrow_use_list_view;
+}
+
+Value ArrowOutputListViewSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	bool arrow_output_list_view = config.options.arrow_use_list_view;
+	return Value::BOOLEAN(arrow_output_list_view);
+}
+
+//===----------------------------------------------------------------------===//
+// Autoinstall Extension Repository
+//===----------------------------------------------------------------------===//
+void AutoinstallExtensionRepositorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.autoinstall_extension_repo = input.ToString();
+}
+
+void AutoinstallExtensionRepositorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.autoinstall_extension_repo = DBConfig().options.autoinstall_extension_repo;
+}
+
+Value AutoinstallExtensionRepositorySetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.autoinstall_extension_repo);
+}
+
+//===----------------------------------------------------------------------===//
 // Checkpoint Threshold
 //===----------------------------------------------------------------------===//
 void CheckpointThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -248,6 +302,22 @@ void CheckpointThresholdSetting::ResetGlobal(DatabaseInstance *db, DBConfig &con
 Value CheckpointThresholdSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value(StringUtil::BytesToHumanReadableString(config.options.checkpoint_wal_size));
+}
+
+//===----------------------------------------------------------------------===//
+// Custom Extension Repository
+//===----------------------------------------------------------------------===//
+void CustomExtensionRepositorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.custom_extension_repo = input.ToString();
+}
+
+void CustomExtensionRepositorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.custom_extension_repo = DBConfig().options.custom_extension_repo;
+}
+
+Value CustomExtensionRepositorySetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.custom_extension_repo);
 }
 
 //===----------------------------------------------------------------------===//
@@ -367,6 +437,21 @@ Value CustomUserAgentSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Debug Asof Iejoin
+//===----------------------------------------------------------------------===//
+void DebugAsofIejoinSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).force_asof_iejoin = input.GetValue<bool>();
+}
+
+void DebugAsofIejoinSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).force_asof_iejoin = ClientConfig().force_asof_iejoin;
+}
+
+Value DebugAsofIejoinSetting::GetSetting(const ClientContext &context) {
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).force_asof_iejoin);
+}
+
+//===----------------------------------------------------------------------===//
 // Debug Checkpoint Abort
 //===----------------------------------------------------------------------===//
 void DebugCheckpointAbortSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -407,6 +492,36 @@ Value DebugCheckpointAbortSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Debug Force External
+//===----------------------------------------------------------------------===//
+void DebugForceExternalSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).force_external = input.GetValue<bool>();
+}
+
+void DebugForceExternalSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).force_external = ClientConfig().force_external;
+}
+
+Value DebugForceExternalSetting::GetSetting(const ClientContext &context) {
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).force_external);
+}
+
+//===----------------------------------------------------------------------===//
+// Debug Force No Cross Product
+//===----------------------------------------------------------------------===//
+void DebugForceNoCrossProductSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).force_no_cross_product = input.GetValue<bool>();
+}
+
+void DebugForceNoCrossProductSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).force_no_cross_product = ClientConfig().force_no_cross_product;
+}
+
+Value DebugForceNoCrossProductSetting::GetSetting(const ClientContext &context) {
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).force_no_cross_product);
+}
+
+//===----------------------------------------------------------------------===//
 // Debug Window Mode
 //===----------------------------------------------------------------------===//
 void DebugWindowModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -433,9 +548,19 @@ Value DebugWindowModeSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Default Block Size
 //===----------------------------------------------------------------------===//
-bool DefaultBlockSizeSetting::VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	Storage::VerifyBlockAllocSize(input.GetValue<uint64_t>());
-	return true;
+void DefaultBlockSizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto block_alloc_size = input.GetValue<uint64_t>();
+	Storage::VerifyBlockAllocSize(block_alloc_size);
+	config.options.default_block_alloc_size = block_alloc_size;
+}
+
+void DefaultBlockSizeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.default_block_alloc_size = DBConfig().options.default_block_alloc_size;
+}
+
+Value DefaultBlockSizeSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::UBIGINT(config.options.default_block_alloc_size);
 }
 
 //===----------------------------------------------------------------------===//
@@ -655,18 +780,35 @@ bool EnableExternalAccessSetting::VerifyDBInstanceRESET(DatabaseInstance *db, DB
 }
 
 //===----------------------------------------------------------------------===//
-// Enable Http Logging
+// Enable Http Metadata Cache
 //===----------------------------------------------------------------------===//
-void EnableHttpLoggingSetting::SetLocal(ClientContext &context, const Value &input) {
-	ClientConfig::GetConfig(context).enable_http_logging = input.GetValue<bool>();
+void EnableHttpMetadataCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.http_metadata_cache_enable = input.GetValue<bool>();
 }
 
-void EnableHttpLoggingSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).enable_http_logging = ClientConfig().enable_http_logging;
+void EnableHttpMetadataCacheSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.http_metadata_cache_enable = DBConfig().options.http_metadata_cache_enable;
 }
 
-Value EnableHttpLoggingSetting::GetSetting(const ClientContext &context) {
-	return Value(ClientConfig::GetConfig(context).enable_http_logging);
+Value EnableHttpMetadataCacheSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.http_metadata_cache_enable);
+}
+
+//===----------------------------------------------------------------------===//
+// Enable Object Cache
+//===----------------------------------------------------------------------===//
+void EnableObjectCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.object_cache_enable = input.GetValue<bool>();
+}
+
+void EnableObjectCacheSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.object_cache_enable = DBConfig().options.object_cache_enable;
+}
+
+Value EnableObjectCacheSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.object_cache_enable);
 }
 
 //===----------------------------------------------------------------------===//
@@ -738,16 +880,20 @@ Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Enable Progress Bar Print
 //===----------------------------------------------------------------------===//
-bool EnableProgressBarPrintSetting::VerifyDBInstanceSET(ClientContext &context, const Value &input) {
+void EnableProgressBarPrintSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 	ProgressBar::SystemOverrideCheck(config);
-	return true;
+	config.print_progress_bar = input.GetValue<bool>();
 }
 
-bool EnableProgressBarPrintSetting::VerifyDBInstanceRESET(ClientContext &context) {
+void EnableProgressBarPrintSetting::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	ProgressBar::SystemOverrideCheck(config);
-	return true;
+	config.print_progress_bar = ClientConfig().print_progress_bar;
+}
+
+Value EnableProgressBarPrintSetting::GetSetting(const ClientContext &context) {
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).print_progress_bar);
 }
 
 //===----------------------------------------------------------------------===//
@@ -1101,6 +1247,39 @@ void PivotLimitSetting::ResetLocal(ClientContext &context) {
 
 Value PivotLimitSetting::GetSetting(const ClientContext &context) {
 	return Value::BIGINT(NumericCast<int64_t>(ClientConfig::GetConfig(context).pivot_limit));
+}
+
+//===----------------------------------------------------------------------===//
+// Produce Arrow String View
+//===----------------------------------------------------------------------===//
+void ProduceArrowStringViewSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.produce_arrow_string_views = input.GetValue<bool>();
+}
+
+void ProduceArrowStringViewSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.produce_arrow_string_views = DBConfig().options.produce_arrow_string_views;
+}
+
+Value ProduceArrowStringViewSetting::GetSetting(const ClientContext &context) {
+	return Value::BOOLEAN(DBConfig::GetConfig(context).options.produce_arrow_string_views);
+}
+
+//===----------------------------------------------------------------------===//
+// Profile Output
+//===----------------------------------------------------------------------===//
+void ProfileOutputSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	auto parameter = input.ToString();
+	config.profiler_save_location = parameter;
+}
+
+void ProfileOutputSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).profiler_save_location = ClientConfig().profiler_save_location;
+}
+
+Value ProfileOutputSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value(config.profiler_save_location);
 }
 
 //===----------------------------------------------------------------------===//

@@ -80,7 +80,7 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 	// Save settings
 	bool optimizer_enabled = config.enable_optimizer;
 	bool profiling_is_enabled = config.enable_profiler;
-	bool force_external = config.debug_force_external;
+	bool force_external = config.force_external;
 
 	// Disable profiling if it is enabled
 	if (profiling_is_enabled) {
@@ -123,7 +123,7 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 
 	// Restore config setting
 	config.enable_optimizer = optimizer_enabled;
-	config.debug_force_external = force_external;
+	config.force_external = force_external;
 
 	// Check explain, only if q does not already contain EXPLAIN
 	if (original->materialized_result->success) {

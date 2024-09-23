@@ -42,7 +42,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparis
 	}
 	D_ASSERT(asof_idx < op.conditions.size());
 
-	if (!ClientConfig::GetConfig(context).debug_asof_iejoin) {
+	if (!ClientConfig::GetConfig(context).force_asof_iejoin) {
 		return make_uniq<PhysicalAsOfJoin>(op, std::move(left), std::move(right));
 	}
 

@@ -107,7 +107,7 @@ struct DatabaseHeader {
 	//! The number of blocks that is in the file as of this database header. If the file is larger than BLOCK_SIZE *
 	//! block_count any blocks appearing AFTER block_count are implicitly part of the free_list.
 	uint64_t block_count;
-	//! The allocation size of blocks in this database file. Defaults to default_block_size (DBConfig).
+	//! The allocation size of blocks in this database file. Defaults to default_block_alloc_size (DBConfig).
 	idx_t block_alloc_size;
 	//! The vector size of the database file
 	idx_t vector_size;

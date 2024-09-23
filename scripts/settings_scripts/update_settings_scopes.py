@@ -1,4 +1,4 @@
-from .config import SettingsList, find_start_end_indexes, write_content_to_file
+from .config import SettingsList, VALID_SCOPE_VALUES, find_start_end_indexes, write_content_to_file
 
 # markers
 START_MARKER = r'static const ConfigurationOption internal_options\[\] = \{'
@@ -20,7 +20,7 @@ def generate_scope_code(file):
     # generate new entries for the settings array
     new_entries = []
     for setting in SettingsList:
-        if setting.scope in ["GLOBAL", "LOCAL", "GLOBAL_LOCAL"]:  # valid setting_scope values
+        if setting.scope in VALID_SCOPE_VALUES:  # valid setting_scope values
             new_entries.append(f"DUCKDB_{setting.scope}({setting.struct_name})")
             for alias in setting.aliases:
                 new_entries.append(f"DUCKDB_{setting.scope}_ALIAS(\"{alias}\", {setting.struct_name})")

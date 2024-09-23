@@ -234,7 +234,7 @@ bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const str
 		auto &fs = FileSystem::GetFileSystem(instance);
 		if (dbconfig.options.autoinstall_known_extensions) {
 			auto autoinstall_repo =
-			    ExtensionRepository::GetRepositoryByUrl(dbconfig.options.autoinstall_extension_repository);
+			    ExtensionRepository::GetRepositoryByUrl(dbconfig.options.autoinstall_extension_repo);
 			ExtensionInstallOptions options;
 			options.repository = autoinstall_repo;
 			ExtensionHelper::InstallExtension(instance, fs, extension_name, options);
@@ -384,8 +384,7 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 #ifndef DUCKDB_WASM
 		if (dbconfig.options.autoinstall_known_extensions) {
 			//! Get the autoloading repository
-			auto repository =
-			    ExtensionRepository::GetRepositoryByUrl(dbconfig.options.autoinstall_extension_repository);
+			auto repository = ExtensionRepository::GetRepositoryByUrl(dbconfig.options.autoinstall_extension_repo);
 			ExtensionInstallOptions options;
 			options.repository = repository;
 			ExtensionHelper::InstallExtension(db, *fs, extension_name, options);

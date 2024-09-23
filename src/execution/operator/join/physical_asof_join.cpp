@@ -336,7 +336,7 @@ public:
 	using Orders = vector<BoundOrderByNode>;
 
 	static bool IsExternal(ClientContext &context) {
-		return ClientConfig::GetConfig(context).debug_force_external;
+		return ClientConfig::GetConfig(context).force_external;
 	}
 
 	AsOfProbeBuffer(ClientContext &context, const PhysicalAsOfJoin &op);

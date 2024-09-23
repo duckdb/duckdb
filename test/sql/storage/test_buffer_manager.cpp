@@ -12,7 +12,7 @@ TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storag
 	duckdb::unique_ptr<MaterializedQueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
-	config->options.default_block_size = DEFAULT_BLOCK_ALLOC_SIZE;
+	config->options.default_block_alloc_size = DEFAULT_BLOCK_ALLOC_SIZE;
 	config->options.maximum_threads = 1;
 
 	uint64_t string_length = 64;
@@ -141,7 +141,7 @@ TEST_CASE("Modifying the buffer manager limit at runtime for an in-memory databa
 TEST_CASE("Test buffer reallocation", "[storage][.]") {
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
-	config->options.default_block_size = DEFAULT_BLOCK_ALLOC_SIZE;
+	config->options.default_block_alloc_size = DEFAULT_BLOCK_ALLOC_SIZE;
 
 	// make sure the database does not exist
 	DeleteDatabase(storage_database);
@@ -155,7 +155,7 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
 	CHECK(buffer_manager.GetUsedMemory() == 0);
 
-	auto block_size = config->options.default_block_size - Storage::DEFAULT_BLOCK_HEADER_SIZE;
+	auto block_size = config->options.default_block_alloc_size - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 	idx_t requested_size = block_size;
 	auto handle = buffer_manager.Allocate(MemoryTag::EXTENSION, requested_size, false);
 	auto block = handle.GetBlockHandle();
@@ -193,7 +193,7 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 TEST_CASE("Test buffer manager variable size allocations", "[storage][.]") {
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
-	config->options.default_block_size = DEFAULT_BLOCK_ALLOC_SIZE;
+	config->options.default_block_alloc_size = DEFAULT_BLOCK_ALLOC_SIZE;
 
 	// make sure the database does not exist
 	DeleteDatabase(storage_database);
@@ -216,7 +216,7 @@ TEST_CASE("Test buffer manager variable size allocations", "[storage][.]") {
 TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
-	config->options.default_block_size = DEFAULT_BLOCK_ALLOC_SIZE;
+	config->options.default_block_alloc_size = DEFAULT_BLOCK_ALLOC_SIZE;
 
 	// make sure the database does not exist
 	DeleteDatabase(storage_database);
@@ -228,7 +228,7 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 
 	// Set memory limit to hold exactly 10 blocks
 	idx_t pin_count = 10;
-	auto block_alloc_size = config->options.default_block_size;
+	auto block_alloc_size = config->options.default_block_alloc_size;
 	auto block_size = block_alloc_size - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", block_alloc_size * pin_count)));
 
@@ -307,7 +307,7 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 TEST_CASE("Test buffer allocator", "[storage][.]") {
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
-	config->options.default_block_size = DEFAULT_BLOCK_ALLOC_SIZE;
+	config->options.default_block_alloc_size = DEFAULT_BLOCK_ALLOC_SIZE;
 
 	// make sure the database does not exist
 	DeleteDatabase(storage_database);
@@ -321,7 +321,7 @@ TEST_CASE("Test buffer allocator", "[storage][.]") {
 	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", limit)));
 
 	auto &allocator = buffer_manager.GetBufferAllocator();
-	auto block_size = config->options.default_block_size - Storage::DEFAULT_BLOCK_HEADER_SIZE;
+	auto block_size = config->options.default_block_alloc_size - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 	idx_t requested_size = block_size;
 	auto pointer = allocator.AllocateData(requested_size);
 	idx_t current_size = requested_size;

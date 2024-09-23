@@ -16,7 +16,7 @@ DUCKDB_SETTINGS_TYPES_FILE = os.path.join(DUCKDB_DIR, "src/include/duckdb/common
 JSON_PATH = os.path.join(DUCKDB_DIR, "src/common", "settings.json")
 
 # define scope values
-VALID_SCOPE_VALUES = ["GLOBAL", "LOCAL", "GLOBAL_LOCAL", "SECRET"]
+VALID_SCOPE_VALUES = ["GLOBAL", "LOCAL", "GLOBAL_LOCAL"]
 INVALID_SCOPE_VALUE = "INVALID"
 
 
@@ -140,7 +140,7 @@ def find_start_end_indexes(source_code, start_marker, end_marker, file_path):
 SEPARATOR = "//===----------------------------------------------------------------------===//\n"
 SRC_CODE_START_MARKER = "namespace duckdb {"
 SRC_CODE_END_MARKER = "} // namespace duckdb"
-SRC_CODE_IMPLEMENTATION_COMMENT = f"\t// Implement the body here\n"
+SRC_CODE_IMPLEMENTATION_COMMENT = f"\t// Add implementation for this function\n"
 
 
 # global method

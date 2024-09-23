@@ -45,11 +45,11 @@ static void PragmaDisableProgressBar(ClientContext &context, const FunctionParam
 }
 
 static void PragmaEnablePrintProgressBar(ClientContext &context, const FunctionParameters &parameters) {
-	ClientConfig::GetConfig(context).enable_progress_bar_print = true;
+	ClientConfig::GetConfig(context).print_progress_bar = true;
 }
 
 static void PragmaDisablePrintProgressBar(ClientContext &context, const FunctionParameters &parameters) {
-	ClientConfig::GetConfig(context).enable_progress_bar_print = false;
+	ClientConfig::GetConfig(context).print_progress_bar = false;
 }
 
 static void PragmaEnableVerification(ClientContext &context, const FunctionParameters &parameters) {
@@ -99,11 +99,11 @@ static void PragmaDisableForceParallelism(ClientContext &context, const Function
 }
 
 static void PragmaEnableObjectCache(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).options.enable_object_cache = true;
+	DBConfig::GetConfig(context).options.object_cache_enable = true;
 }
 
 static void PragmaDisableObjectCache(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).options.enable_object_cache = false;
+	DBConfig::GetConfig(context).options.object_cache_enable = false;
 }
 
 static void PragmaEnableCheckpointOnShutdown(ClientContext &context, const FunctionParameters &parameters) {

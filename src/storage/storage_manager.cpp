@@ -57,7 +57,7 @@ ObjectCache &ObjectCache::GetObjectCache(ClientContext &context) {
 }
 
 bool ObjectCache::ObjectCacheEnabled(ClientContext &context) {
-	return context.db->config.options.enable_object_cache;
+	return context.db->config.options.object_cache_enable;
 }
 
 idx_t StorageManager::GetWALSize() {
@@ -183,7 +183,7 @@ void SingleFileStorageManager::LoadDatabase(const optional_idx block_alloc_size)
 			options.block_alloc_size = block_alloc_size;
 		} else {
 			// No explicit option provided: use the default option.
-			options.block_alloc_size = config.options.default_block_size;
+			options.block_alloc_size = config.options.default_block_alloc_size;
 		}
 
 		// Initialize the block manager before creating a new database.

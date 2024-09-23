@@ -323,7 +323,6 @@ struct DefaultBlockSizeSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static bool VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config, const Value &input);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -481,8 +480,6 @@ struct EnableProgressBarPrintSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static bool VerifyDBInstanceSET(ClientContext &context, const Value &input);
-	static bool VerifyDBInstanceRESET(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
 };
 

@@ -116,7 +116,7 @@ void SQLLogicTestRunner::Reconnect() {
 #endif
 	auto &client_config = ClientConfig::GetConfig(*con->context);
 	client_config.enable_progress_bar = true;
-	client_config.enable_progress_bar_print = false;
+	client_config.print_progress_bar = false;
 	if (enable_verification) {
 		con->EnableQueryVerification();
 	}
@@ -402,7 +402,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		}
 		// require a specific block size
 		auto required_block_size = NumericCast<idx_t>(std::stoi(params[1]));
-		if (config->options.default_block_size != required_block_size) {
+		if (config->options.default_block_alloc_size != required_block_size) {
 			// block size does not match the required block size: skip it
 			return RequireResult::MISSING;
 		}

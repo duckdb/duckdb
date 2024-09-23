@@ -470,7 +470,7 @@ void PlanEnumerator::InitLeafPlans() {
 // Moerkotte and Thomas Neumannn, see that paper for additional info/documentation bonus slides:
 // https://db.in.tum.de/teaching/ws1415/queryopt/chapter3.pdf?lang=de
 void PlanEnumerator::SolveJoinOrder() {
-	bool force_no_cross_product = query_graph_manager.context.config.debug_force_no_cross_product;
+	bool force_no_cross_product = query_graph_manager.context.config.force_no_cross_product;
 	// first try to solve the join order exactly
 	if (!SolveJoinOrderExactly()) {
 		// otherwise, if that times out we resort to a greedy algorithm
@@ -491,7 +491,7 @@ void PlanEnumerator::SolveJoinOrder() {
 		// in this case we need to generate cross product to connect the disjoint sets
 		if (force_no_cross_product) {
 			throw InvalidInputException(
-			    "Query requires a cross-product, but 'debug_force_no_cross_product' PRAGMA is enabled");
+			    "Query requires a cross-product, but 'force_no_cross_product' PRAGMA is enabled");
 		}
 		GenerateCrossProducts();
 		//! solve the join order again, returning the final plan

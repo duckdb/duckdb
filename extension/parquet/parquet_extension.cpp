@@ -467,11 +467,11 @@ public:
 			if (bind_data.initial_reader) {
 				// most common path, scanning single parquet file
 				return bind_data.initial_reader->ReadStatistics(bind_data.names[column_index]);
-			} else if (!config.options.enable_object_cache) {
+			} else if (!config.options.object_cache_enable) {
 				// our initial reader was reset
 				return nullptr;
 			}
-		} else if (config.options.enable_object_cache) {
+		} else if (config.options.object_cache_enable) {
 			// multiple files, object cache enabled: merge statistics
 			unique_ptr<BaseStatistics> overall_stats;
 

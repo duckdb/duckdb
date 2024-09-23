@@ -37,7 +37,7 @@ struct ClientConfig {
 	ProfilerPrintFormat profiler_print_format = ProfilerPrintFormat::QUERY_TREE;
 	//! The file to save query profiling information to, instead of printing it to the console
 	//! (empty = print to console)
-	string profile_output;
+	string profiler_save_location;
 	//! The custom settings for the profiler
 	//! (empty = use the default settings)
 	profiler_settings_t profiler_settings = ProfilingInfo::DefaultSettings();
@@ -51,7 +51,7 @@ struct ClientConfig {
 	//! If the progress bar is enabled or not.
 	bool enable_progress_bar = false;
 	//! If the print of the progress bar is enabled
-	bool enable_progress_bar_print = true;
+	bool print_progress_bar = true;
 	//! The wait time before showing the progress bar
 	int wait_time = 2000;
 
@@ -76,11 +76,11 @@ struct ClientConfig {
 	//! Force parallelism of small tables, used for testing
 	bool verify_parallelism = false;
 	//! Force out-of-core computation for operators that support it, used for testing
-	bool debug_force_external = false;
+	bool force_external = false;
 	//! Force disable cross product generation when hyper graph isn't connected, used for testing
-	bool debug_force_no_cross_product = false;
+	bool force_no_cross_product = false;
 	//! Force use of IEJoin to implement AsOfJoin, used for testing
-	bool debug_asof_iejoin = false;
+	bool force_asof_iejoin = false;
 	//! Force use of fetch row instead of scan, used for testing
 	bool force_fetch_row = false;
 	//! Use range joins for inequalities, even if there are equality predicates

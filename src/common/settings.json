@@ -13,7 +13,10 @@
         "type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "global",
-        "add_verification_in_both_SetReset": true
+        "verification": [
+            "set",
+            "reset"
+        ]
     },
     {
         "name": "allocator_bulk_deallocation_flush_threshold",
@@ -37,7 +40,10 @@
         "type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "global",
-        "add_verification_in_both_SetReset": true
+        "verification": [
+            "set",
+            "reset"
+        ]
     },
     {
         "name": "allow_extensions_metadata_mismatch",
@@ -60,7 +66,10 @@
         "type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "global",
-        "add_verification_in_both_SetReset": true
+        "verification": [
+            "set",
+            "reset"
+        ]
     },
     {
         "name": "allow_unsigned_extensions",
@@ -68,7 +77,10 @@
         "type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "global",
-        "add_verification_in_both_SetReset": true
+        "verification": [
+            "set",
+            "reset"
+        ]
     },
     {
         "name": "arrow_large_buffer_size",
@@ -83,21 +95,24 @@
         "description": "Whenever a DuckDB type does not have a clear native or canonical extension match in Arrow, export the types with a duckdb.type_name extension name.",
         "type": "bool",
         "sql_type": "BOOLEAN",
-        "scope": "global"
+        "scope": "global",
+        "custom_conversion_and_validation": true
     },
     {
         "name": "arrow_output_list_view",
         "description": "If export to arrow format should use ListView as the physical layout for LIST columns",
         "type": "bool",
         "sql_type": "BOOLEAN",
-        "scope": "global"
+        "scope": "global",
+        "custom_conversion_and_validation": true
     },
     {
         "name": "autoinstall_extension_repository",
         "description": "Overrides the custom endpoint for extension installation on autoloading",
         "type": "string",
         "sql_type": "VARCHAR",
-        "scope": "global"
+        "scope": "global",
+        "custom_conversion_and_validation": true
     },
     {
         "name": "autoinstall_known_extensions",
@@ -136,7 +151,8 @@
         "description": "Overrides the custom endpoint for remote extension installation",
         "type": "string",
         "sql_type": "VARCHAR",
-        "scope": "global"
+        "scope": "global",
+        "custom_conversion_and_validation": true
     },
     {
         "name": "custom_profiling_settings",
@@ -159,7 +175,8 @@
         "description": "DEBUG SETTING: force use of IEJoin to implement AsOf joins",
         "type": "bool",
         "sql_type": "BOOLEAN",
-        "scope": "local"
+        "scope": "local",
+        "custom_conversion_and_validation": true
     },
     {
         "name": "debug_checkpoint_abort",
@@ -174,14 +191,16 @@
         "description": "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing",
         "type": "bool",
         "sql_type": "BOOLEAN",
-        "scope": "local"
+        "scope": "local",
+        "custom_conversion_and_validation": true
     },
     {
         "name": "debug_force_no_cross_product",
         "description": "DEBUG SETTING: Force disable cross product generation when hyper graph isn't connected, used for testing",
         "type": "bool",
         "sql_type": "BOOLEAN",
-        "scope": "local"
+        "scope": "local",
+        "custom_conversion_and_validation": true
     },
     {
         "name": "debug_skip_checkpoint_on_commit",
@@ -204,7 +223,7 @@
         "type": "uint64_t",
         "sql_type": "UBIGINT",
         "scope": "global",
-        "add_verification_in_SET": true
+        "custom_conversion_and_validation": true
     },
     {
         "name": "default_collation",
@@ -271,7 +290,10 @@
         "type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "global",
-        "add_verification_in_both_SetReset": true
+        "verification": [
+            "set",
+            "reset"
+        ]
     },
     {
         "name": "enable_fsst_vectors",
@@ -285,15 +307,15 @@
         "description": "Enables HTTP logging",
         "type": "bool",
         "sql_type": "BOOLEAN",
-        "scope": "local",
-        "custom_conversion_and_validation": true
+        "scope": "local"
     },
     {
         "name": "enable_http_metadata_cache",
         "description": "Whether or not the global http metadata is used to cache HTTP metadata",
         "type": "bool",
         "sql_type": "BOOLEAN",
-        "scope": "global"
+        "scope": "global",
+        "custom_conversion_and_validation": true
     },
     {
         "name": "enable_macro_dependencies",
@@ -307,7 +329,8 @@
         "description": "Whether or not object cache is used to cache e.g. Parquet metadata",
         "type": "bool",
         "sql_type": "BOOLEAN",
-        "scope": "global"
+        "scope": "global",
+        "custom_conversion_and_validation": true
     },
     {
         "name": "enable_profiling",
@@ -323,7 +346,10 @@
         "type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "local",
-        "add_verification_in_both_SetReset": true
+        "verification": [
+            "set",
+            "reset"
+        ]
     },
     {
         "name": "enable_progress_bar_print",
@@ -331,7 +357,7 @@
         "type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "local",
-        "add_verification_in_both_SetReset": true
+        "custom_conversion_and_validation": true
     },
     {
         "name": "enable_view_dependencies",
@@ -369,7 +395,10 @@
         "type": "idx_t",
         "sql_type": "BIGINT",
         "scope": "global",
-        "add_verification_in_both_SetReset": true
+        "verification": [
+            "set",
+            "reset"
+        ]
     },
     {
         "name": "file_search_path",
@@ -458,7 +487,9 @@
         "type": "double",
         "sql_type": "DOUBLE",
         "scope": "global",
-        "add_verification_in_SET": true
+        "verification": [
+            "set"
+        ]
     },
     {
         "name": "integer_division",
@@ -549,7 +580,9 @@
         "type": "uint64_t",
         "sql_type": "UBIGINT",
         "scope": "local",
-        "add_verification_in_SET": true
+        "verification": [
+            "set"
+        ]
     },
     {
         "name": "partitioned_write_flush_threshold",
@@ -623,7 +656,8 @@
         "description": "If strings should be produced by DuckDB in Utf8View format instead of Utf8",
         "type": "bool",
         "sql_type": "BOOLEAN",
-        "scope": "global"
+        "scope": "global",
+        "custom_conversion_and_validation": true
     },
     {
         "name": "profile_output",
@@ -631,6 +665,7 @@
         "type": "string",
         "sql_type": "VARCHAR",
         "scope": "local",
+        "custom_conversion_and_validation": true,
         "aliases": [
             "profiling_output"
         ]

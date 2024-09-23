@@ -18,7 +18,7 @@ TEST_CASE("Test autoload of extension settings", "[api]") {
 	if (!env_var) {
 		return;
 	}
-	config.options.autoinstall_extension_repository = std::string(env_var);
+	config.options.autoinstall_extension_repo = std::string(env_var);
 	REQUIRE(config.options.unrecognized_options.count("timezone"));
 
 	// Create a connection

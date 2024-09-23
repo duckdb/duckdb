@@ -640,7 +640,7 @@ static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(optional_ptr<FileOpen
 		return nullptr;
 	}
 
-	bool use_shared_cache = db->config.options.enable_http_metadata_cache;
+	bool use_shared_cache = db->config.options.http_metadata_cache_enable;
 	if (use_shared_cache) {
 		return httpfs.GetGlobalCache();
 	} else if (client_context) {

@@ -110,7 +110,7 @@ bool StatementVerifier::Run(
 	context.interrupted = false;
 	context.config.enable_optimizer = !DisableOptimizer();
 	context.config.enable_caching_operators = !DisableOperatorCaching();
-	context.config.debug_force_external = ForceExternal();
+	context.config.force_external = ForceExternal();
 	context.config.force_fetch_row = ForceFetchRow();
 	try {
 		auto result = run(query, std::move(statement));
