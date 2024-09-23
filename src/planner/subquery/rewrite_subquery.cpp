@@ -39,7 +39,10 @@ void RewriteSubquery::VisitOperator(duckdb::LogicalOperator &op) {
 		VisitOperator(*op.children[0]);
 		lateral_depth++;
 
-		for (auto col : join.correlated_columns) {
+		// check if the correlated columns of the join are already present in the correlated columns
+		// if not, add them
+		// note: this operation could be optimized, e.g., by using a hash set
+		for (auto &col : join.correlated_columns) {
 			bool skip = false;
 			for (auto &corr : correlated_columns) {
 				if (corr.binding == col.binding) {
@@ -64,27 +67,6 @@ void RewriteSubquery::VisitOperator(duckdb::LogicalOperator &op) {
 	}
 
 	VisitOperatorExpressions(op);
-
-	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
-		auto &join = op.Cast<LogicalDependentJoin>();
-
-		for (auto &col : add_correlated_columns) {
-			if (col.depth != lateral_depth) {
-				continue;
-			}
-			bool skip = false;
-			for (auto &corr : correlated_columns) {
-				if (corr.binding == col.binding) {
-					skip = true;
-					break;
-				}
-			}
-
-			if (skip) {
-				continue;
-			}
-		}
-	}
 }
 
 unique_ptr<Expression> RewriteSubquery::VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) {
