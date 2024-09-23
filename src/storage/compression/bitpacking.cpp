@@ -266,10 +266,10 @@ public:
 
 				// FOR (frame of reference).
 				total_size += sizeof(T);
-				// Delta offset.
-				total_size += sizeof(T);
 				// Aligned bitpacking width.
 				total_size += AlignValue(sizeof(bitpacking_width_t));
+				// Delta offset.
+				total_size += sizeof(T);
 				// Compressed data size.
 				total_size += BitpackingPrimitives::GetRequiredSize(compression_buffer_idx, delta_required_bitwidth);
 
