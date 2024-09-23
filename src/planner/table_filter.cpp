@@ -20,7 +20,14 @@ void TableFilterSet::PushFilter(idx_t column_index, unique_ptr<TableFilter> filt
 		} else {
 			auto and_filter = make_uniq<ConjunctionAndFilter>();
 			and_filter->child_filters.push_back(std::move(entry->second));
-			and_filter->child_filters.push_back(std::move(filter));
+			if (filter->filter_type == TableFilterType::CONJUNCTION_AND) {
+				auto &other_and_filter = filter->Cast<ConjunctionAndFilter>();
+				for (auto &child : other_and_filter.child_filters) {
+					and_filter->child_filters.push_back(std::move(child));
+				}
+			} else {
+				and_filter->child_filters.push_back(std::move(filter));
+			}
 			filters[column_index] = std::move(and_filter);
 		}
 	}
@@ -57,7 +64,7 @@ DynamicTableFilterSet::GetFinalTableFilters(const PhysicalTableScan &scan,
 	auto result = make_uniq<TableFilterSet>();
 	if (existing_filters) {
 		for (auto &entry : existing_filters->filters) {
-			result->filters[entry.first] = entry.second->Copy();
+			result->PushFilter(entry.first, entry.second->Copy());
 		}
 	}
 	for (auto &entry : filters) {
@@ -66,7 +73,7 @@ DynamicTableFilterSet::GetFinalTableFilters(const PhysicalTableScan &scan,
 				// skip row id filters
 				continue;
 			}
-			result->filters[filter.first] = filter.second->Copy();
+			result->PushFilter(filter.first, filter.second->Copy());
 		}
 	}
 	if (result->filters.empty()) {
