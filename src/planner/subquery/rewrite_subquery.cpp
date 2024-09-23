@@ -86,27 +86,6 @@ void RewriteCorrelatedSubqueriesRecursive::VisitBoundTableRef(BoundTableRef &ref
 			// this is the CTE we are looking for: add a filter to the CTE
 			// we add a filter to the CTE that compares the correlated columns of the CTE to the correlated columns of
 			// the outer query. This filter is added to the WHERE clause of the subquery.
-
-			// first we need to find the correlated columns of the CTE
-
-			Binder *current = this->binder;
-			vector<CorrelatedColumnInfo> cte_correlated_columns;
-			bool found = false;
-			while (current) {
-
-				auto rec_cte = current->recursive_ctes.find(cteref.cte_index);
-				if (rec_cte != current->recursive_ctes.end()) {
-					auto &rec_cte_info = rec_cte->second->Cast<LogicalCTE>();
-					cte_correlated_columns = rec_cte_info.correlated_columns;
-					found = true;
-					break;
-				}
-
-				current = current->GetParentBinder().get();
-			}
-
-			D_ASSERT(found);
-
 			for (idx_t i = 0; i < correlated_columns.size(); i++) {
 				auto &col = correlated_columns[i];
 				auto col_copy = col;
