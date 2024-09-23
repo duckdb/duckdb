@@ -24,10 +24,11 @@ test_list = [
     'test/sql/index/art/storage/test_art_checkpoint.test',
     'test/sql/storage/compression/simple_compression.test',
     'test/sql/storage/delete/test_store_deletes.test',
+    'test/sql/storage/mix/test_update_delete_string.test',
+    'test/sql/storage/nested/struct_of_lists_unaligned.test',
+    'test/sql/storage/test_store_integers.test',
     'test/sql/storage/test_store_nulls_strings.test',
     'test/sql/storage/update/test_store_null_updates.test',
-    'test/sql/storage/test_store_integers.test',
-    'test/sql/storage/mix/test_update_delete_string.test',
 ]
 
 
