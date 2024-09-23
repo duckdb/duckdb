@@ -1,12 +1,12 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/generic_executor.hpp"
 #include "duckdb/core_functions/scalar/generic_functions.hpp"
-#include "duckdb/common/operator/subtract.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 

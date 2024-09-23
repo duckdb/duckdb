@@ -1,4 +1,4 @@
-add_library_unity(duckdb_func_generic_main OBJECT binning.cpp
+add_library_unity(duckdb_func_generic_main OBJECT
                   constant_or_null.cpp getvariable.cpp)
 
 set(ALL_OBJECT_FILES
