@@ -17,9 +17,9 @@ class JoinRelation : public Relation {
 public:
 	DUCKDB_API JoinRelation(shared_ptr<Relation> left, shared_ptr<Relation> right,
 	                        unique_ptr<ParsedExpression> condition, JoinType type,
-	                        JoinRefType join_ref_type = JoinRefType::REGULAR);
+	                        JoinRefType join_ref_type = JoinRefType::REGULAR, bool try_bind = true);
 	DUCKDB_API JoinRelation(shared_ptr<Relation> left, shared_ptr<Relation> right, vector<string> using_columns,
-	                        JoinType type, JoinRefType join_ref_type = JoinRefType::REGULAR);
+	                        JoinType type, JoinRefType join_ref_type = JoinRefType::REGULAR, bool try_bind = true);
 
 	shared_ptr<Relation> left;
 	shared_ptr<Relation> right;

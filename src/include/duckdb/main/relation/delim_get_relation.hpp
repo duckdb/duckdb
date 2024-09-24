@@ -14,7 +14,7 @@ namespace duckdb {
 
 class DelimGetRelation : public Relation {
 public:
-	DUCKDB_API DelimGetRelation(const shared_ptr<ClientContext> &context, vector<LogicalType> chunk_types);
+	DUCKDB_API DelimGetRelation(const shared_ptr<ClientContext> &context, vector<LogicalType> chunk_types, bool try_bind = true);
 
 	vector<LogicalType> chunk_types;
 	vector<ColumnDefinition> columns;

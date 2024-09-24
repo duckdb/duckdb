@@ -15,7 +15,7 @@ namespace duckdb {
 class ExplainRelation : public Relation {
 public:
 	explicit ExplainRelation(shared_ptr<Relation> child, ExplainType type = ExplainType::EXPLAIN_STANDARD,
-	                         ExplainFormat format = ExplainFormat::DEFAULT);
+	                         ExplainFormat format = ExplainFormat::DEFAULT, bool try_bind = true);
 
 	shared_ptr<Relation> child;
 	vector<ColumnDefinition> columns;

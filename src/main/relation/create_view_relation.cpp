@@ -6,18 +6,22 @@
 namespace duckdb {
 
 CreateViewRelation::CreateViewRelation(shared_ptr<Relation> child_p, string view_name_p, bool replace_p,
-                                       bool temporary_p)
+                                       bool temporary_p, bool try_bind)
     : Relation(child_p->context, RelationType::CREATE_VIEW_RELATION), child(std::move(child_p)),
       view_name(std::move(view_name_p)), replace(replace_p), temporary(temporary_p) {
-	TryBindRelation(columns);
+	if (try_bind) {
+		Relation::TryBindRelation(columns);
+	}
 }
 
 CreateViewRelation::CreateViewRelation(shared_ptr<Relation> child_p, string schema_name_p, string view_name_p,
-                                       bool replace_p, bool temporary_p)
+                                       bool replace_p, bool temporary_p, bool try_bind)
     : Relation(child_p->context, RelationType::CREATE_VIEW_RELATION), child(std::move(child_p)),
       schema_name(std::move(schema_name_p)), view_name(std::move(view_name_p)), replace(replace_p),
       temporary(temporary_p) {
-	TryBindRelation(columns);
+	if (try_bind) {
+		Relation::TryBindRelation(columns);
+	}
 }
 
 BoundStatement CreateViewRelation::Bind(Binder &binder) {

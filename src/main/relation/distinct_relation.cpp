@@ -4,11 +4,13 @@
 
 namespace duckdb {
 
-DistinctRelation::DistinctRelation(shared_ptr<Relation> child_p)
+DistinctRelation::DistinctRelation(shared_ptr<Relation> child_p, bool try_bind)
     : Relation(child_p->context, RelationType::DISTINCT_RELATION), child(std::move(child_p)) {
 	D_ASSERT(child.get() != this);
 	vector<ColumnDefinition> dummy_columns;
-	TryBindRelation(dummy_columns);
+	if (try_bind) {
+		Relation::TryBindRelation(dummy_columns);
+	}
 }
 
 unique_ptr<QueryNode> DistinctRelation::GetQueryNode() {

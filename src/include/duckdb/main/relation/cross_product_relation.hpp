@@ -16,7 +16,7 @@ namespace duckdb {
 class CrossProductRelation : public Relation {
 public:
 	DUCKDB_API CrossProductRelation(shared_ptr<Relation> left, shared_ptr<Relation> right,
-	                                JoinRefType join_ref_type = JoinRefType::CROSS);
+	                                JoinRefType join_ref_type = JoinRefType::CROSS, bool try_bind = true);
 
 	shared_ptr<Relation> left;
 	shared_ptr<Relation> right;

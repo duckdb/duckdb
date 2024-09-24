@@ -6,24 +6,28 @@
 namespace duckdb {
 
 AggregateRelation::AggregateRelation(shared_ptr<Relation> child_p,
-                                     vector<unique_ptr<ParsedExpression>> parsed_expressions)
+                                     vector<unique_ptr<ParsedExpression>> parsed_expressions, bool try_bind)
     : Relation(child_p->context, RelationType::AGGREGATE_RELATION), expressions(std::move(parsed_expressions)),
       child(std::move(child_p)) {
 	// bind the expressions
-	TryBindRelation(columns);
+	if (try_bind) {
+		Relation::TryBindRelation(columns);
+	}
 }
 
 AggregateRelation::AggregateRelation(shared_ptr<Relation> child_p,
-                                     vector<unique_ptr<ParsedExpression>> parsed_expressions, GroupByNode groups_p)
+                                     vector<unique_ptr<ParsedExpression>> parsed_expressions, GroupByNode groups_p, bool try_bind)
     : Relation(child_p->context, RelationType::AGGREGATE_RELATION), expressions(std::move(parsed_expressions)),
       groups(std::move(groups_p)), child(std::move(child_p)) {
 	// bind the expressions
-	Relation::TryBindRelation(columns);
+	if (try_bind) {
+		Relation::TryBindRelation(columns);
+	}
 }
 
 AggregateRelation::AggregateRelation(shared_ptr<Relation> child_p,
                                      vector<unique_ptr<ParsedExpression>> parsed_expressions,
-                                     vector<unique_ptr<ParsedExpression>> groups_p)
+                                     vector<unique_ptr<ParsedExpression>> groups_p, bool try_bind)
     : Relation(child_p->context, RelationType::AGGREGATE_RELATION), expressions(std::move(parsed_expressions)),
       child(std::move(child_p)) {
 	if (!groups_p.empty()) {
@@ -36,7 +40,9 @@ AggregateRelation::AggregateRelation(shared_ptr<Relation> child_p,
 		groups.grouping_sets.push_back(std::move(grouping_set));
 	}
 	// bind the expressions
-	TryBindRelation(columns);
+	if (try_bind) {
+		Relation::TryBindRelation(columns);
+	}
 }
 
 unique_ptr<QueryNode> AggregateRelation::GetQueryNode() {

@@ -16,7 +16,7 @@ namespace duckdb {
 class SetOpRelation : public Relation {
 public:
 	SetOpRelation(shared_ptr<Relation> left, shared_ptr<Relation> right, SetOperationType setop_type,
-	              bool setop_all = false);
+	              bool setop_all = false, bool try_bind = true);
 
 	shared_ptr<Relation> left;
 	shared_ptr<Relation> right;

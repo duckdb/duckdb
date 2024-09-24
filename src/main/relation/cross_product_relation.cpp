@@ -7,13 +7,15 @@
 namespace duckdb {
 
 CrossProductRelation::CrossProductRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> right_p,
-                                           JoinRefType ref_type)
+                                           JoinRefType ref_type, bool try_bind)
     : Relation(left_p->context, RelationType::CROSS_PRODUCT_RELATION), left(std::move(left_p)),
       right(std::move(right_p)), ref_type(ref_type) {
 	if (left->context.GetContext() != right->context.GetContext()) {
 		throw InvalidInputException("Cannot combine LEFT and RIGHT relations of different connections!");
 	}
-	TryBindRelation(columns);
+	if (try_bind) {
+		Relation::TryBindRelation(columns);
+	}
 }
 
 unique_ptr<QueryNode> CrossProductRelation::GetQueryNode() {

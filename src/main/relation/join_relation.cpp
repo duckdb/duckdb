@@ -8,23 +8,27 @@
 namespace duckdb {
 
 JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> right_p,
-                           unique_ptr<ParsedExpression> condition_p, JoinType type, JoinRefType join_ref_type)
+                           unique_ptr<ParsedExpression> condition_p, JoinType type, JoinRefType join_ref_type, bool try_bind)
     : Relation(left_p->context, RelationType::JOIN_RELATION), left(std::move(left_p)), right(std::move(right_p)),
       condition(std::move(condition_p)), join_type(type), join_ref_type(join_ref_type) {
 	if (left->context.GetContext() != right->context.GetContext()) {
 		throw InvalidInputException("Cannot combine LEFT and RIGHT relations of different connections!");
 	}
-	TryBindRelation(columns);
+	if (try_bind) {
+		Relation::TryBindRelation(columns);
+	}
 }
 
 JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> right_p, vector<string> using_columns_p,
-                           JoinType type, JoinRefType join_ref_type)
+                           JoinType type, JoinRefType join_ref_type, bool try_bind)
     : Relation(left_p->context, RelationType::JOIN_RELATION), left(std::move(left_p)), right(std::move(right_p)),
       using_columns(std::move(using_columns_p)), join_type(type), join_ref_type(join_ref_type) {
 	if (left->context.GetContext() != right->context.GetContext()) {
 		throw InvalidInputException("Cannot combine LEFT and RIGHT relations of different connections!");
 	}
-	TryBindRelation(columns);
+	if (try_bind) {
+		Relation::TryBindRelation(columns);
+	}
 }
 
 unique_ptr<QueryNode> JoinRelation::GetQueryNode() {

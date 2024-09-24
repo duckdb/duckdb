@@ -7,10 +7,12 @@
 
 namespace duckdb {
 
-InsertRelation::InsertRelation(shared_ptr<Relation> child_p, string schema_name, string table_name)
+InsertRelation::InsertRelation(shared_ptr<Relation> child_p, string schema_name, string table_name, bool try_bind)
     : Relation(child_p->context, RelationType::INSERT_RELATION), child(std::move(child_p)),
       schema_name(std::move(schema_name)), table_name(std::move(table_name)) {
-	TryBindRelation(columns);
+	if (try_bind) {
+		Relation::TryBindRelation(columns);
+	}
 }
 
 BoundStatement InsertRelation::Bind(Binder &binder) {

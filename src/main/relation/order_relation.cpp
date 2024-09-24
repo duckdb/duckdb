@@ -6,11 +6,13 @@
 
 namespace duckdb {
 
-OrderRelation::OrderRelation(shared_ptr<Relation> child_p, vector<OrderByNode> orders)
+OrderRelation::OrderRelation(shared_ptr<Relation> child_p, vector<OrderByNode> orders, bool try_bind)
     : Relation(child_p->context, RelationType::ORDER_RELATION), orders(std::move(orders)), child(std::move(child_p)) {
 	D_ASSERT(child.get() != this);
 	// bind the expressions
-	TryBindRelation(columns);
+	if (try_bind) {
+		Relation::TryBindRelation(columns);
+	}
 }
 
 unique_ptr<QueryNode> OrderRelation::GetQueryNode() {
