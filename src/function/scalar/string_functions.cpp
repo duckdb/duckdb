@@ -17,6 +17,11 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<PrefixFun>();
 	Register<SuffixFun>();
 	Register<NFCNormalizeFun>();
+	Register<StringSplitFun>();
+	Register<StringSplitRegexFun>();
+	Register<RegexpEscapeFun>();
+	Register<SHA1Fun>();
+	Register<SHA256Fun>();
 }
 
 } // namespace duckdb

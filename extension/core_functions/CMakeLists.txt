@@ -46,7 +46,6 @@ set(CORE_FUNCTION_FILES
     scalar/date/age.cpp
     scalar/date/date_diff.cpp
     scalar/date/date_sub.cpp
-    scalar/date/strftime.cpp
     scalar/date/to_interval.cpp
     scalar/date/time_bucket.cpp
     scalar/date/date_trunc.cpp
@@ -88,7 +87,6 @@ set(CORE_FUNCTION_FILES
     scalar/generic/system_functions.cpp
     scalar/generic/current_setting.cpp
     scalar/string/starts_with.cpp
-    scalar/string/md5.cpp
     scalar/string/jaccard.cpp
     scalar/string/levenshtein.cpp
     scalar/string/damerau_levenshtein.cpp
@@ -97,25 +95,21 @@ set(CORE_FUNCTION_FILES
     scalar/string/replace.cpp
     scalar/string/hamming.cpp
     scalar/string/instr.cpp
-    scalar/string/sha1.cpp
     scalar/string/ascii.cpp
     scalar/string/reverse.cpp
     scalar/string/url_encode.cpp
     scalar/string/parse_path.cpp
     scalar/string/left_right.cpp
-    scalar/string/sha256.cpp
     scalar/string/to_base.cpp
     scalar/string/pad.cpp
     scalar/string/trim.cpp
     scalar/string/format_bytes.cpp
     scalar/string/hex.cpp
     scalar/string/repeat.cpp
-    scalar/string/string_split.cpp
     scalar/string/translate.cpp
     scalar/string/chr.cpp
     scalar/string/unicode.cpp
     scalar/string/jaro_winkler.cpp
-    scalar/string/regexp_escape.cpp
     scalar/random/random.cpp
     scalar/random/setseed.cpp
     scalar/blob/base64.cpp
@@ -125,6 +119,7 @@ set(CORE_FUNCTION_FILES
 build_static_extension(core_functions ${CORE_FUNCTION_FILES})
 set(PARAMETERS "-warnings")
 build_loadable_extension(core_functions ${PARAMETERS} ${CORE_FUNCTION_FILES})
+target_link_libraries(core_functions_loadable_extension duckdb_skiplistlib)
 
 install(
   TARGETS core_functions_extension

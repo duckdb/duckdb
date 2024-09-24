@@ -1,6 +1,6 @@
+#include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
-#include "core_functions/scalar/string_functions.hpp"
 #include "mbedtls_wrapper.hpp"
 
 namespace duckdb {
@@ -30,6 +30,10 @@ ScalarFunctionSet SHA1Fun::GetFunctions() {
 	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, SHA1Function));
 	set.AddFunction(ScalarFunction({LogicalType::BLOB}, LogicalType::VARCHAR, SHA1Function));
 	return set;
+}
+
+void SHA1Fun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(GetFunctions());
 }
 
 } // namespace duckdb

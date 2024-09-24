@@ -277,22 +277,6 @@
         "type": "scalar_function_set"
     },
     {
-        "struct": "StrfTimeFun",
-        "name": "strftime",
-        "parameters": "text,format",
-        "description": "Converts timestamp to string according to the format string",
-        "example": "strftime(timestamp '1992-01-01 20:38:40', '%a, %-d %B %Y - %I:%M:%S %p')",
-        "type": "scalar_function_set"
-    },
-    {
-        "struct": "StrpTimeFun",
-        "name": "strptime",
-        "parameters": "text,format",
-        "description": "Converts string to timestamp with time zone according to the format string if %Z is specified",
-        "example": "strptime('Wed, 1 January 1992 - 08:38:40 PST', '%a, %-d %B %Y - %H:%M:%S %Z')",
-        "type": "scalar_function_set"
-    },
-    {
         "name": "time_bucket",
         "parameters": "bucket_width,timestamp,origin",
         "description": "Truncate TIMESTAMPTZ by the specified interval bucket_width. Buckets are aligned relative to origin TIMESTAMPTZ. The origin defaults to 2000-01-03 00:00:00+00 for buckets that do not include a month or year interval, and to 2000-01-01 00:00:00+00 for month and year buckets",
@@ -425,14 +409,6 @@
         "description": "Construct a year interval",
         "example": "to_years(5)",
         "type": "scalar_function"
-    },
-    {
-        "struct": "TryStrpTimeFun",
-        "name": "try_strptime",
-        "parameters": "text,format",
-        "description": "Converts string to timestamp using the format string (timestamp with time zone if %Z is specified). Returns NULL on failure",
-        "example": "try_strptime('Wed, 1 January 1992 - 08:38:40 PM', '%a, %-d %B %Y - %I:%M:%S %p')",
-        "type": "scalar_function_set"
     },
     {
         "name": "week",

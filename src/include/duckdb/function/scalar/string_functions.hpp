@@ -128,4 +128,47 @@ struct RegexpFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct StringSplitFun {
+	static ScalarFunction GetFunction();
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct RegexpEscapeFun {
+	static ScalarFunction GetFunction();
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct StringSplitRegexFun {
+	static ScalarFunctionSet GetFunctions();
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct MD5Fun {
+	static ScalarFunctionSet GetFunctions();
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct MD5NumberFun {
+	static ScalarFunctionSet GetFunctions();
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct SHA1Fun {
+	static ScalarFunctionSet GetFunctions();
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct SHA256Fun {
+	static ScalarFunctionSet GetFunctions();
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+
 } // namespace duckdb

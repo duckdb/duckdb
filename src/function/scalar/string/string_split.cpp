@@ -1,8 +1,8 @@
+#include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_size.hpp"
-#include "core_functions/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -182,6 +182,14 @@ ScalarFunction StringSplitFun::GetFunction() {
 	return string_split;
 }
 
+void StringSplitFun::RegisterFunction(BuiltinFunctions &set) {
+	for(auto &name : {"string_split", "str_split", "string_to_array", "split"}) {
+		auto function = GetFunction();
+		function.name = name;
+		set.AddFunction(function);
+	}
+}
+
 ScalarFunctionSet StringSplitRegexFun::GetFunctions() {
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 	ScalarFunctionSet regexp_split;
@@ -193,6 +201,14 @@ ScalarFunctionSet StringSplitRegexFun::GetFunctions() {
 	regex_fun.arguments.emplace_back(LogicalType::VARCHAR);
 	regexp_split.AddFunction(regex_fun);
 	return regexp_split;
+}
+
+void StringSplitRegexFun::RegisterFunction(BuiltinFunctions &set) {
+	for(auto &name : {"string_split_regex", "str_split_regex", "regexp_split_to_array"}) {
+		auto function = GetFunctions();
+		function.name = name;
+		set.AddFunction(function);
+	}
 }
 
 } // namespace duckdb

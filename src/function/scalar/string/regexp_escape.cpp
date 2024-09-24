@@ -1,4 +1,4 @@
-#include "core_functions/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 #include "re2/re2.h"
 
 namespace duckdb {
@@ -16,7 +16,11 @@ static void RegexpEscapeFunction(DataChunk &args, ExpressionState &state, Vector
 }
 
 ScalarFunction RegexpEscapeFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, RegexpEscapeFunction);
+	return ScalarFunction("regexp_escape", {LogicalType::VARCHAR}, LogicalType::VARCHAR, RegexpEscapeFunction);
+}
+
+void RegexpEscapeFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(GetFunction());
 }
 
 } // namespace duckdb

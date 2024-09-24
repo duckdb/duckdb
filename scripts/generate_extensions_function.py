@@ -23,6 +23,12 @@ parser.add_argument(
     help="The root directory to look for the '<extension_name>/<extension>.duckdb_extension' files, relative to the location of this script",
     default='../build/release/repository',
 )
+parser.add_argument(
+    '--extensions',
+    action='store',
+    help="Comma separated list of extensions - if not provided this is read from the extension configuration",
+    default='',
+)
 
 args = parser.parse_args()
 
@@ -180,9 +186,20 @@ class ParsedEntries:
 
 
 def check_prerequisites():
-    if not os.path.isfile(EXTENSIONS_PATH) or not os.path.isfile(DUCKDB_PATH):
+    if not os.path.isfile(DUCKDB_PATH):
+        print(f"{DUCKDB_PATH} not found")
         print(
             "please run 'DISABLE_BUILTIN_EXTENSIONS=1 BUILD_ALL_EXT=1 make release', you might have to manually add DONT_LINK to all extension_configs"
+        )
+        exit(1)
+    if len(args.extensions) == 0 and not os.path.isfile(EXTENSIONS_PATH):
+        print(f"{EXTENSIONS_PATH} not found and --extensions it not set")
+        print("Either:")
+        print(
+            "* run 'DISABLE_BUILTIN_EXTENSIONS=1 BUILD_ALL_EXT=1 make release', you might have to manually add DONT_LINK to all extension_configs"
+        )
+        print(
+            "* Specify a comma separated list of extensions using --extensions"
         )
         exit(1)
     if not os.path.isdir(args.extension_dir):
@@ -192,6 +209,8 @@ def check_prerequisites():
 
 # Parses the extension config files for which extension names there are to be expected
 def get_extension_names() -> List[str]:
+    if len(args.extensions) > 0:
+        return args.extensions.split(',')
     extension_names = []
     with open(EXTENSIONS_PATH) as f:
         # Skip the csv header

@@ -1,4 +1,5 @@
 add_subdirectory(compressed_materialization)
+add_subdirectory(date)
 add_subdirectory(generic)
 add_subdirectory(list)
 add_subdirectory(map)

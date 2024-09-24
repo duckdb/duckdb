@@ -243,24 +243,6 @@ struct LtrimFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
-struct MD5Fun {
-	static constexpr const char *Name = "md5";
-	static constexpr const char *Parameters = "value";
-	static constexpr const char *Description = "Returns the MD5 hash of the value as a string";
-	static constexpr const char *Example = "md5('123')";
-
-	static ScalarFunctionSet GetFunctions();
-};
-
-struct MD5NumberFun {
-	static constexpr const char *Name = "md5_number";
-	static constexpr const char *Parameters = "value";
-	static constexpr const char *Description = "Returns the MD5 hash of the value as an INT128";
-	static constexpr const char *Example = "md5_number('123')";
-
-	static ScalarFunctionSet GetFunctions();
-};
-
 struct ParseDirnameFun {
 	static constexpr const char *Name = "parse_dirname";
 	static constexpr const char *Parameters = "string,separator";
@@ -369,72 +351,6 @@ struct RtrimFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
-struct SHA1Fun {
-	static constexpr const char *Name = "sha1";
-	static constexpr const char *Parameters = "value";
-	static constexpr const char *Description = "Returns the SHA1 hash of the value";
-	static constexpr const char *Example = "sha1('hello')";
-
-	static ScalarFunctionSet GetFunctions();
-};
-
-struct SHA256Fun {
-	static constexpr const char *Name = "sha256";
-	static constexpr const char *Parameters = "value";
-	static constexpr const char *Description = "Returns the SHA256 hash of the value";
-	static constexpr const char *Example = "sha256('hello')";
-
-	static ScalarFunctionSet GetFunctions();
-};
-
-struct StringSplitFun {
-	static constexpr const char *Name = "string_split";
-	static constexpr const char *Parameters = "string,separator";
-	static constexpr const char *Description = "Splits the string along the separator";
-	static constexpr const char *Example = "string_split('hello-world', '-')";
-
-	static ScalarFunction GetFunction();
-};
-
-struct StrSplitFun {
-	using ALIAS = StringSplitFun;
-
-	static constexpr const char *Name = "str_split";
-};
-
-struct StringToArrayFun {
-	using ALIAS = StringSplitFun;
-
-	static constexpr const char *Name = "string_to_array";
-};
-
-struct SplitFun {
-	using ALIAS = StringSplitFun;
-
-	static constexpr const char *Name = "split";
-};
-
-struct StringSplitRegexFun {
-	static constexpr const char *Name = "string_split_regex";
-	static constexpr const char *Parameters = "string,separator";
-	static constexpr const char *Description = "Splits the string along the regex";
-	static constexpr const char *Example = "string_split_regex('hello␣world; 42', ';?␣')";
-
-	static ScalarFunctionSet GetFunctions();
-};
-
-struct StrSplitRegexFun {
-	using ALIAS = StringSplitRegexFun;
-
-	static constexpr const char *Name = "str_split_regex";
-};
-
-struct RegexpSplitToArrayFun {
-	using ALIAS = StringSplitRegexFun;
-
-	static constexpr const char *Name = "regexp_split_to_array";
-};
-
 struct TranslateFun {
 	static constexpr const char *Name = "translate";
 	static constexpr const char *Parameters = "string,from,to";
@@ -505,15 +421,6 @@ struct ToBaseFun {
 	static constexpr const char *Example = "to_base(42, 16)";
 
 	static ScalarFunctionSet GetFunctions();
-};
-
-struct RegexpEscapeFun {
-	static constexpr const char *Name = "regexp_escape";
-	static constexpr const char *Parameters = "string";
-	static constexpr const char *Description = "Escapes all potentially meaningful regexp characters in the input string";
-	static constexpr const char *Example = "regexp_escape('https://duckdb.org')";
-
-	static ScalarFunction GetFunction();
 };
 
 struct UrlEncodeFun {

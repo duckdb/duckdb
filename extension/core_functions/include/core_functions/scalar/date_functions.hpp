@@ -390,24 +390,6 @@ struct SecondsFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
-struct StrfTimeFun {
-	static constexpr const char *Name = "strftime";
-	static constexpr const char *Parameters = "text,format";
-	static constexpr const char *Description = "Converts timestamp to string according to the format string";
-	static constexpr const char *Example = "strftime(timestamp '1992-01-01 20:38:40', '%a, %-d %B %Y - %I:%M:%S %p')";
-
-	static ScalarFunctionSet GetFunctions();
-};
-
-struct StrpTimeFun {
-	static constexpr const char *Name = "strptime";
-	static constexpr const char *Parameters = "text,format";
-	static constexpr const char *Description = "Converts string to timestamp with time zone according to the format string if %Z is specified";
-	static constexpr const char *Example = "strptime('Wed, 1 January 1992 - 08:38:40 PST', '%a, %-d %B %Y - %H:%M:%S %Z')";
-
-	static ScalarFunctionSet GetFunctions();
-};
-
 struct TimeBucketFun {
 	static constexpr const char *Name = "time_bucket";
 	static constexpr const char *Parameters = "bucket_width,timestamp,origin";
@@ -577,15 +559,6 @@ struct ToYearsFun {
 	static constexpr const char *Example = "to_years(5)";
 
 	static ScalarFunction GetFunction();
-};
-
-struct TryStrpTimeFun {
-	static constexpr const char *Name = "try_strptime";
-	static constexpr const char *Parameters = "text,format";
-	static constexpr const char *Description = "Converts string to timestamp using the format string (timestamp with time zone if %Z is specified). Returns NULL on failure";
-	static constexpr const char *Example = "try_strptime('Wed, 1 January 1992 - 08:38:40 PM', '%a, %-d %B %Y - %I:%M:%S %p')";
-
-	static ScalarFunctionSet GetFunctions();
 };
 
 struct WeekFun {

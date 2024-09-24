@@ -149,22 +149,6 @@
         "type": "scalar_function_set"
     },
     {
-        "name": "md5",
-        "parameters": "value",
-        "description": "Returns the MD5 hash of the value as a string",
-        "example": "md5('123')",
-        "type": "scalar_function_set",
-        "struct": "MD5Fun"
-    },
-    {
-        "name": "md5_number",
-        "parameters": "value",
-        "description": "Returns the MD5 hash of the value as an INT128",
-        "example": "md5_number('123')",
-        "type": "scalar_function_set",
-        "struct": "MD5NumberFun"
-    },
-    {
         "name": "parse_dirname",
         "parameters": "string,separator",
         "description": "Returns the top-level directory name. separator options: system, both_slash (default), forward_slash, backslash",
@@ -253,38 +237,6 @@
         "type": "scalar_function_set"
     },
     {
-        "name": "sha1",
-        "parameters": "value",
-        "description": "Returns the SHA1 hash of the value",
-        "example": "sha1('hello')",
-        "type": "scalar_function_set",
-        "struct": "SHA1Fun"
-    },
-    {
-        "name": "sha256",
-        "parameters": "value",
-        "description": "Returns the SHA256 hash of the value",
-        "example": "sha256('hello')",
-        "type": "scalar_function_set",
-        "struct": "SHA256Fun"
-    },
-    {
-        "name": "string_split",
-        "parameters": "string,separator",
-        "description": "Splits the string along the separator",
-        "example": "string_split('hello-world', '-')",
-        "type": "scalar_function",
-        "aliases": ["str_split", "string_to_array", "split"]
-    },
-    {
-        "name": "string_split_regex",
-        "parameters": "string,separator",
-        "description": "Splits the string along the regex",
-        "example": "string_split_regex('hello␣world; 42', ';?␣')",
-        "type": "scalar_function_set",
-        "aliases": ["str_split_regex", "regexp_split_to_array"]
-    },
-    {
         "name": "translate",
         "parameters": "string,from,to",
         "description": "Replaces each character in string that matches a character in the from set with the corresponding character in the to set. If from is longer than to, occurrences of the extra characters in from are deleted",
@@ -328,14 +280,6 @@
         "description": "Converts a value to a string in the given base radix, optionally padding with leading zeros to the minimum length",
         "example": "to_base(42, 16)",
         "type": "scalar_function_set"
-    },
-    {
-        "name": "regexp_escape",
-        "parameters": "string",
-        "description": "Escapes all potentially meaningful regexp characters in the input string",
-        "example": "regexp_escape('https://duckdb.org')",
-        "struct": "RegexpEscapeFun",
-        "type": "scalar_function"
     },
     {
         "name": "url_encode",
