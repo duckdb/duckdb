@@ -75,6 +75,9 @@ public:
 
 class ZonemapFilter : public TableFilter {
 public:
+	static constexpr const TableFilterType TYPE = TableFilterType::ZONE_MAP;
+
+public:
 	// zonemap filter
 	unique_ptr<TableFilter> child_filter;
 
@@ -82,7 +85,7 @@ public:
 	}
 
 	string ToString(const string &column_name) override {
-		return "";
+		return child_filter->ToString(column_name);
 	}
 
 	unique_ptr<TableFilter> Copy() const override {
