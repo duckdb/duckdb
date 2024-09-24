@@ -300,7 +300,7 @@ struct StrpTimeFunction {
 };
 
 ScalarFunctionSet StrpTimeFun::GetFunctions() {
-	ScalarFunctionSet strptime;
+	ScalarFunctionSet strptime("strptime");
 
 	const auto list_type = LogicalType::LIST(LogicalType::VARCHAR);
 	auto fun = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::TIMESTAMP,
@@ -320,7 +320,7 @@ void StrpTimeFun::RegisterFunction(BuiltinFunctions &set) {
 }
 
 ScalarFunctionSet TryStrpTimeFun::GetFunctions() {
-	ScalarFunctionSet try_strptime;
+	ScalarFunctionSet try_strptime("try_strptime");
 
 	const auto list_type = LogicalType::LIST(LogicalType::VARCHAR);
 	auto fun = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::TIMESTAMP,
