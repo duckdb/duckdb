@@ -11,6 +11,7 @@ add_library_unity(
   duckdb_func_scalar
   OBJECT
   compressed_materialization_functions.cpp
+  create_sort_key.cpp
   generic_functions.cpp
   string_functions.cpp
   strftime_format.cpp

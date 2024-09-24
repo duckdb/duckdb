@@ -48,4 +48,11 @@ struct GetVariableFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct CreateSortKeyFun {
+	static ScalarFunction GetFunction();
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+
 } // namespace duckdb

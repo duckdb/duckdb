@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/core_functions/create_sort_key.hpp"
+#include "duckdb/function/create_sort_key.hpp"
 
 namespace duckdb {
 

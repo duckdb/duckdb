@@ -1,6 +1,6 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/core_functions/scalar/generic_functions.hpp"
-#include "duckdb/core_functions/create_sort_key.hpp"
+#include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {

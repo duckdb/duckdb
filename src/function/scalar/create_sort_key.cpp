@@ -1,10 +1,11 @@
-#include "duckdb/core_functions/scalar/blob_functions.hpp"
-#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/create_sort_key.hpp"
+
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/radix.hpp"
+#include "duckdb/function/scalar/generic_functions.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/core_functions/create_sort_key.hpp"
 
 namespace duckdb {
 
@@ -969,6 +970,10 @@ ScalarFunction CreateSortKeyFun::GetFunction() {
 	sort_key_function.varargs = LogicalType::ANY;
 	sort_key_function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return sort_key_function;
+}
+
+void CreateSortKeyFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(GetFunction());
 }
 
 } // namespace duckdb

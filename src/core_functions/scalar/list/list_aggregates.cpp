@@ -10,7 +10,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/function/function_binder.hpp"
-#include "duckdb/core_functions/create_sort_key.hpp"
+#include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/common/owning_string_map.hpp"
 
 namespace duckdb {

@@ -2,7 +2,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/multiply.hpp"
-#include "duckdb/core_functions/to_interval.hpp"
+#include "duckdb/function/to_interval.hpp"
 
 namespace duckdb {
 
