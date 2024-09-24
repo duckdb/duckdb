@@ -147,7 +147,7 @@
         "description": "Compute the negative inner product between two lists",
         "example": "list_negative_inner_product([1, 2, 3], [1, 2, 3])",
         "type": "scalar_function_set",
-        "aliases": ["list_negative_dot_product", "<#>"]
+        "aliases": ["list_negative_dot_product"]
     },
     {
         "name": "unpivot_list",

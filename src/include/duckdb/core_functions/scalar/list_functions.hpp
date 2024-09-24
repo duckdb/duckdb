@@ -330,12 +330,6 @@ struct ListNegativeDotProductFun {
 	static constexpr const char *Name = "list_negative_dot_product";
 };
 
-struct ListNegativeInnerProductFunAlias {
-	using ALIAS = ListNegativeInnerProductFun;
-
-	static constexpr const char *Name = "<#>";
-};
-
 struct UnpivotListFun {
 	static constexpr const char *Name = "unpivot_list";
 	static constexpr const char *Parameters = "any,...";
