@@ -11,7 +11,7 @@ namespace duckdb {
 
 TableRelation::TableRelation(const shared_ptr<ClientContext> &context, unique_ptr<TableDescription> description,
                              bool acquire_lock)
-    : Relation(context, RelationType::TABLE_RELATION), description(std::move(description)) {
+    : Relation(context, RelationType::TABLE_RELATION, acquire_lock), description(std::move(description)) {
 }
 
 unique_ptr<QueryNode> TableRelation::GetQueryNode() {

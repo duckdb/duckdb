@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <utility>
+
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/relation_type.hpp"
@@ -62,6 +64,10 @@ public:
 	}
 	Relation(const ClientContextWrapper &context, RelationType type) : context(context), type(type) {
 	}
+
+	Relation(RelationContextWrapper context, RelationType type) : context(std::move(context)), type(type) {
+	}
+
 	virtual ~Relation() = default;
 
 	RelationContextWrapper context;
