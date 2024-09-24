@@ -87,11 +87,15 @@ struct ConstantRegexpStringSplit {
 
 		idx_t list_idx = 0;
 		idx_t current_offset = 0;
+#ifndef NDEBUG
 		auto num_of_matches = matches.size();
+#endif
 		for (auto &m : matches) {
 			// if match's length == 0 and its position is at the beginning or the end of the entry, skip it
 			if (!m.length(0) && (m.position(0) == 0 || m.position(0) == input_size)) {
+#ifndef NDEBUG
 				num_of_matches--;
+#endif
 				continue;
 			}
 			D_ASSERT(current_offset <= input_size);
