@@ -16,21 +16,21 @@ namespace duckdb {
 class BoundFunctionExpression;
 
 struct StrfTimeFun {
-  static ScalarFunctionSet GetFunctions();
+	static ScalarFunctionSet GetFunctions();
 
-  static void RegisterFunction(BuiltinFunctions &set);
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct StrpTimeFun {
-  static ScalarFunctionSet GetFunctions();
+	static ScalarFunctionSet GetFunctions();
 
-  static void RegisterFunction(BuiltinFunctions &set);
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct TryStrpTimeFun {
-  static ScalarFunctionSet GetFunctions();
+	static ScalarFunctionSet GetFunctions();
 
-  static void RegisterFunction(BuiltinFunctions &set);
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 } // namespace duckdb

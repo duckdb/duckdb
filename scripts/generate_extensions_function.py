@@ -198,9 +198,7 @@ def check_prerequisites():
         print(
             "* run 'DISABLE_BUILTIN_EXTENSIONS=1 BUILD_ALL_EXT=1 make release', you might have to manually add DONT_LINK to all extension_configs"
         )
-        print(
-            "* Specify a comma separated list of extensions using --extensions"
-        )
+        print("* Specify a comma separated list of extensions using --extensions")
         exit(1)
     if not os.path.isdir(args.extension_dir):
         print(f"provided --extension_dir '{args.extension_dir}' is not a valid directory")

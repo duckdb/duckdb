@@ -183,7 +183,7 @@ ScalarFunction StringSplitFun::GetFunction() {
 }
 
 void StringSplitFun::RegisterFunction(BuiltinFunctions &set) {
-	for(auto &name : {"string_split", "str_split", "string_to_array", "split"}) {
+	for (auto &name : {"string_split", "str_split", "string_to_array", "split"}) {
 		auto function = GetFunction();
 		function.name = name;
 		set.AddFunction(function);
@@ -204,7 +204,7 @@ ScalarFunctionSet StringSplitRegexFun::GetFunctions() {
 }
 
 void StringSplitRegexFun::RegisterFunction(BuiltinFunctions &set) {
-	for(auto &name : {"string_split_regex", "str_split_regex", "regexp_split_to_array"}) {
+	for (auto &name : {"string_split_regex", "str_split_regex", "regexp_split_to_array"}) {
 		auto function = GetFunctions();
 		function.name = name;
 		set.AddFunction(function);
