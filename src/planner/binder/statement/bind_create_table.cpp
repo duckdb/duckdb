@@ -329,9 +329,25 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			}
 			dependencies.AddDependency(entry);
 		});
+
+		// Handle materialized JSON fields
+		for (auto &column : base.columns.Logical()) {
+			if (column.HasMaterializedFields()) {
+				const auto &materialized_fields = column.MaterializedFields();
+				for (const auto &materialized_field : materialized_fields) {
+					// Extract field name and type
+					const string &field_name = materialized_field.first;
+					const LogicalType &field_type = materialized_field.second;
+
+					// Add materialized field as virtual columns
+					base.columns.AddColumn(ColumnDefinition(field_name, field_type));
+				}
+			}
+		}
 		CreateColumnDependencyManager(*result);
 		// bind the generated column expressions
 		BindGeneratedColumns(*result);
+
 		// bind any constraints
 		bound_constraints = BindNewConstraints(base.constraints, base.table, base.columns);
 		// bind the default values
