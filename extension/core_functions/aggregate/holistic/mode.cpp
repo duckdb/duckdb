@@ -2,6 +2,7 @@
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "core_functions/aggregate/distributive_functions.hpp"
 #include "core_functions/aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/unordered_map.hpp"
