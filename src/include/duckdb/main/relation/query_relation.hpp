@@ -17,7 +17,7 @@ class SelectStatement;
 class QueryRelation : public Relation {
 public:
 	QueryRelation(const shared_ptr<ClientContext> &context, unique_ptr<SelectStatement> select_stmt, string alias,
-	              const string &query = "", bool try_bind = true);
+	              const string &query = "");
 	~QueryRelation() override;
 
 	unique_ptr<SelectStatement> select_stmt;

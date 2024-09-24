@@ -14,7 +14,7 @@ namespace duckdb {
 
 class CreateTableRelation : public Relation {
 public:
-	CreateTableRelation(shared_ptr<Relation> child, string schema_name, string table_name, bool temporary, bool try_bind = true);
+	CreateTableRelation(shared_ptr<Relation> child, string schema_name, string table_name, bool temporary);
 
 	shared_ptr<Relation> child;
 	string schema_name;

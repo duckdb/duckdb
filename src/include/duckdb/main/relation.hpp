@@ -76,7 +76,7 @@ public:
 		return true;
 	}
 	DUCKDB_API virtual void TryBindRelation(vector<ColumnDefinition> &columns);
-	void TryBind(vector<ColumnDefinition> &columns);
+
 public:
 	// PROJECT
 	DUCKDB_API shared_ptr<Relation> Project(const string &select_list);
@@ -165,7 +165,6 @@ public:
 	DUCKDB_API shared_ptr<Relation> TableFunction(const std::string &fname, const vector<Value> &values);
 	DUCKDB_API shared_ptr<Relation> TableFunction(const std::string &fname, const vector<Value> &values,
 	                                              const named_parameter_map_t &named_parameters);
-
 
 public:
 	//! Whether or not the relation inherits column bindings from its child or not, only relevant for binding

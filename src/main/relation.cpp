@@ -341,10 +341,6 @@ void Relation::TryBindRelation(vector<ColumnDefinition> &columns) {
 	context.GetContext()->TryBindRelation(*this, columns);
 }
 
-void Relation::TryBind(vector<ColumnDefinition> &columns) {
-	TryBindRelation(columns);
-}
-
 void Relation::Update(const string &update, const string &condition) {
 	throw InvalidInputException("UPDATE can only be used on base tables!");
 }

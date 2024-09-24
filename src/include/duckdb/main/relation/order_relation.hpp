@@ -16,7 +16,7 @@ namespace duckdb {
 
 class OrderRelation : public Relation {
 public:
-	DUCKDB_API OrderRelation(shared_ptr<Relation> child, vector<OrderByNode> orders, bool try_bind = true);
+	DUCKDB_API OrderRelation(shared_ptr<Relation> child, vector<OrderByNode> orders);
 
 	vector<OrderByNode> orders;
 	shared_ptr<Relation> child;

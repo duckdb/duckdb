@@ -6,7 +6,7 @@
 namespace duckdb {
 
 ProjectionRelation::ProjectionRelation(shared_ptr<Relation> child_p,
-                                       vector<unique_ptr<ParsedExpression>> parsed_expressions, vector<string> aliases, bool try_bind)
+                                       vector<unique_ptr<ParsedExpression>> parsed_expressions, vector<string> aliases)
     : Relation(child_p->context, RelationType::PROJECTION_RELATION), expressions(std::move(parsed_expressions)),
       child(std::move(child_p)) {
 	if (!aliases.empty()) {
@@ -18,9 +18,7 @@ ProjectionRelation::ProjectionRelation(shared_ptr<Relation> child_p,
 		}
 	}
 	// bind the expressions
-	if (try_bind) {
-		Relation::TryBindRelation(columns);
-	}
+	TryBindRelation(columns);
 }
 
 unique_ptr<QueryNode> ProjectionRelation::GetQueryNode() {

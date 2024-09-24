@@ -14,7 +14,7 @@ namespace duckdb {
 
 class WriteCSVRelation : public Relation {
 public:
-	WriteCSVRelation(shared_ptr<Relation> child, string csv_file, case_insensitive_map_t<vector<Value>> options, bool try_bind = true);
+	WriteCSVRelation(shared_ptr<Relation> child, string csv_file, case_insensitive_map_t<vector<Value>> options);
 
 	shared_ptr<Relation> child;
 	string csv_file;

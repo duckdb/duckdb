@@ -6,11 +6,9 @@
 
 namespace duckdb {
 
-DelimGetRelation::DelimGetRelation(const shared_ptr<ClientContext> &context, vector<LogicalType> chunk_types_p, bool try_bind)
+DelimGetRelation::DelimGetRelation(const shared_ptr<ClientContext> &context, vector<LogicalType> chunk_types_p)
     : Relation(context, RelationType::DELIM_GET_RELATION), chunk_types(std::move(chunk_types_p)) {
-	if (try_bind) {
-		Relation::TryBindRelation(columns);
-	}
+	TryBindRelation(columns);
 }
 
 unique_ptr<QueryNode> DelimGetRelation::GetQueryNode() {

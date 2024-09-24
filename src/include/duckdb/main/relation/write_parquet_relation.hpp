@@ -15,7 +15,7 @@ namespace duckdb {
 class WriteParquetRelation : public Relation {
 public:
 	WriteParquetRelation(shared_ptr<Relation> child, string parquet_file,
-	                     case_insensitive_map_t<vector<Value>> options, bool try_bind = true);
+	                     case_insensitive_map_t<vector<Value>> options);
 
 	shared_ptr<Relation> child;
 	string parquet_file;

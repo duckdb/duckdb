@@ -16,7 +16,7 @@ namespace duckdb {
 class ProjectionRelation : public Relation {
 public:
 	DUCKDB_API ProjectionRelation(shared_ptr<Relation> child, vector<unique_ptr<ParsedExpression>> expressions,
-	                              vector<string> aliases, bool try_bind = true);
+	                              vector<string> aliases);
 
 	vector<unique_ptr<ParsedExpression>> expressions;
 	vector<ColumnDefinition> columns;

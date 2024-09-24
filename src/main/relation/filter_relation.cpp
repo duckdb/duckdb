@@ -7,14 +7,12 @@
 
 namespace duckdb {
 
-FilterRelation::FilterRelation(shared_ptr<Relation> child_p, unique_ptr<ParsedExpression> condition_p, bool try_bind)
+FilterRelation::FilterRelation(shared_ptr<Relation> child_p, unique_ptr<ParsedExpression> condition_p)
     : Relation(child_p->context, RelationType::FILTER_RELATION), condition(std::move(condition_p)),
       child(std::move(child_p)) {
 	D_ASSERT(child.get() != this);
 	vector<ColumnDefinition> dummy_columns;
-	if (try_bind) {
-		Relation::TryBindRelation(dummy_columns);
-	}
+	TryBindRelation(dummy_columns);
 }
 
 unique_ptr<QueryNode> FilterRelation::GetQueryNode() {

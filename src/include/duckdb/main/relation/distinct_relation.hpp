@@ -14,7 +14,7 @@ namespace duckdb {
 
 class DistinctRelation : public Relation {
 public:
-	explicit DistinctRelation(shared_ptr<Relation> child, bool try_bind = true);
+	explicit DistinctRelation(shared_ptr<Relation> child);
 
 	shared_ptr<Relation> child;
 

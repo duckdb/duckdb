@@ -16,11 +16,11 @@ namespace duckdb {
 
 class AggregateRelation : public Relation {
 public:
-	DUCKDB_API AggregateRelation(shared_ptr<Relation> child, vector<unique_ptr<ParsedExpression>> expressions, bool try_bind = true);
+	DUCKDB_API AggregateRelation(shared_ptr<Relation> child, vector<unique_ptr<ParsedExpression>> expressions);
 	DUCKDB_API AggregateRelation(shared_ptr<Relation> child, vector<unique_ptr<ParsedExpression>> expressions,
-	                             GroupByNode groups, bool try_bind = true);
+	                             GroupByNode groups);
 	DUCKDB_API AggregateRelation(shared_ptr<Relation> child, vector<unique_ptr<ParsedExpression>> expressions,
-	                             vector<unique_ptr<ParsedExpression>> groups, bool try_bind = true);
+	                             vector<unique_ptr<ParsedExpression>> groups);
 
 	vector<unique_ptr<ParsedExpression>> expressions;
 	GroupByNode groups;

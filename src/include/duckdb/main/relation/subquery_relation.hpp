@@ -14,7 +14,7 @@ namespace duckdb {
 
 class SubqueryRelation : public Relation {
 public:
-	SubqueryRelation(shared_ptr<Relation> child, string alias, bool try_bind = true);
+	SubqueryRelation(shared_ptr<Relation> child, string alias);
 
 	shared_ptr<Relation> child;
 	string alias;
