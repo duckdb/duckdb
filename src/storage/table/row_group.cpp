@@ -416,6 +416,10 @@ static idx_t GetFilterScanCount(ColumnScanState &state, TableFilter &filter) {
 		}
 		return max_count;
 	}
+	case TableFilterType::ZONE_MAP: {
+		auto &zone_filter = filter.Cast<ZonemapFilter>();
+		return GetFilterScanCount(state, *zone_filter.child_filter);
+	}
 	case TableFilterType::IS_NULL:
 	case TableFilterType::IS_NOT_NULL:
 	case TableFilterType::CONSTANT_COMPARISON:
