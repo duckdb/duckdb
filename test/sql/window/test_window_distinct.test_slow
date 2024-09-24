@@ -33,7 +33,7 @@ statement ok
 PRAGMA threads=4
 
 statement ok
-PRAGMA memory_limit='20MB'
+PRAGMA memory_limit='500MB'
 
 query I
 WITH t AS (

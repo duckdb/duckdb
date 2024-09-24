@@ -358,15 +358,6 @@ struct ModeFallbackFunction : BaseModeFunction<TYPE_OP> {
 	}
 };
 
-template <typename INPUT_TYPE, typename TYPE_OP = ModeStandard<INPUT_TYPE>>
-AggregateFunction GetTypedModeFunction(const LogicalType &type) {
-	using STATE = ModeState<INPUT_TYPE, TYPE_OP>;
-	using OP = ModeFunction<TYPE_OP>;
-	auto func = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
-	func.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
-	return func;
-}
-
 AggregateFunction GetFallbackModeFunction(const LogicalType &type) {
 	using STATE = ModeState<string_t, ModeString>;
 	using OP = ModeFallbackFunction<ModeString>;
@@ -378,8 +369,18 @@ AggregateFunction GetFallbackModeFunction(const LogicalType &type) {
 	return aggr;
 }
 
+template <typename INPUT_TYPE, typename TYPE_OP = ModeStandard<INPUT_TYPE>>
+AggregateFunction GetTypedModeFunction(const LogicalType &type) {
+	using STATE = ModeState<INPUT_TYPE, TYPE_OP>;
+	using OP = ModeFunction<TYPE_OP>;
+	auto func = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
+	func.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
+	return func;
+}
+
 AggregateFunction GetModeAggregate(const LogicalType &type) {
 	switch (type.InternalType()) {
+#ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::INT8:
 		return GetTypedModeFunction<int8_t>(type);
 	case PhysicalType::UINT8:
@@ -408,6 +409,7 @@ AggregateFunction GetModeAggregate(const LogicalType &type) {
 		return GetTypedModeFunction<interval_t>(type);
 	case PhysicalType::VARCHAR:
 		return GetTypedModeFunction<string_t, ModeString>(type);
+#endif
 	default:
 		return GetFallbackModeFunction(type);
 	}
