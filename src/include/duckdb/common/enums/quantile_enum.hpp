@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/constants.hpp"
+
 namespace duckdb {
 
 enum class QuantileSerializationType : uint8_t {

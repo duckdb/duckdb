@@ -58,7 +58,7 @@ void CoreFunctionsExtension::Load(DuckDB &db) {
 }
 
 std::string CoreFunctionsExtension::Name() {
-	return "fts";
+	return "core_functions";
 }
 
 std::string CoreFunctionsExtension::Version() const {
