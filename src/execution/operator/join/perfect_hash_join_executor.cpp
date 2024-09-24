@@ -238,6 +238,18 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
 	auto min_value = perfect_join_statistics.build_min.GetValueUnsafe<T>();
 	auto max_value = perfect_join_statistics.build_max.GetValueUnsafe<T>();
 
+	auto set_result = [&](idx_t i, idx_t sel_idx, int input_value) {
+		if (perfect_join_statistics.is_probe_in_domain || (min_value <= input_value && input_value <= max_value)) {
+			auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
+			                                             // check for matches in the build
+			if (bitmap_build_idx[idx]) {
+				build_sel_vec.set_index(sel_idx, idx);
+				probe_sel_vec.set_index(sel_idx++, i);
+				probe_sel_count++;
+			}
+		}
+	};
+
 	UnifiedVectorFormat vector_data;
 	source.ToUnifiedFormat(count, vector_data);
 	auto data = reinterpret_cast<T *>(vector_data.data);
@@ -249,15 +261,7 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
 			auto data_idx = vector_data.sel->get_index(i);
 			auto input_value = data[data_idx];
 			// add index to selection vector if value in the range
-			if (min_value <= input_value && input_value <= max_value) {
-				auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
-				                                             // check for matches in the build
-				if (bitmap_build_idx[idx]) {
-					build_sel_vec.set_index(sel_idx, idx);
-					probe_sel_vec.set_index(sel_idx++, i);
-					probe_sel_count++;
-				}
-			}
+			set_result(i, sel_idx, input_value);
 		}
 	} else {
 		for (idx_t i = 0, sel_idx = 0; i < count; ++i) {
@@ -268,15 +272,7 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
 			}
 			auto input_value = data[data_idx];
 			// add index to selection vector if value in the range
-			if (min_value <= input_value && input_value <= max_value) {
-				auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
-				                                             // check for matches in the build
-				if (bitmap_build_idx[idx]) {
-					build_sel_vec.set_index(sel_idx, idx);
-					probe_sel_vec.set_index(sel_idx++, i);
-					probe_sel_count++;
-				}
-			}
+			set_result(i, sel_idx, input_value);
 		}
 	}
 }
