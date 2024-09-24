@@ -507,7 +507,7 @@ void UnzipCommand::ExecuteInternal(ExecuteContext &context) const {
 			break;
 		}
 
-		vfs.Write(*output_file, compressed_buffer.get(), BUFFER_SIZE);
+		vfs.Write(*output_file, compressed_buffer.get(), bytes_read);
 	}
 }
 
