@@ -958,7 +958,6 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 //===--------------------------------------------------------------------===//
 unique_ptr<CheckpointTask> RowGroupCollection::GetCheckpointTask(CollectionCheckpointState &checkpoint_state,
                                                                  idx_t segment_idx) {
-	Printer::PrintF("Schedule checkpoint task segment idx %llu", segment_idx);
 	return make_uniq<CheckpointTask>(checkpoint_state, segment_idx);
 }
 
