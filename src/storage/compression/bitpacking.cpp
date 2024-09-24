@@ -264,10 +264,14 @@ public:
 				                  delta_required_bitwidth, static_cast<T>(minimum_delta), delta_offset,
 				                  compression_buffer, compression_buffer_idx, data_ptr);
 
+				// FOR (frame of reference).
+				total_size += sizeof(T);
+				// Aligned bitpacking width.
+				total_size += AlignValue(sizeof(bitpacking_width_t));
+				// Delta offset.
+				total_size += sizeof(T);
+				// Compressed data size.
 				total_size += BitpackingPrimitives::GetRequiredSize(compression_buffer_idx, delta_required_bitwidth);
-				total_size += sizeof(T);                              // FOR value
-				total_size += sizeof(T);                              // Delta offset value
-				total_size += AlignValue(sizeof(bitpacking_width_t)); // FOR value
 
 				return true;
 			}

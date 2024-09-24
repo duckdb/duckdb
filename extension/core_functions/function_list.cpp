@@ -52,7 +52,6 @@ static const StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(BitwiseAndFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ListHasAnyFunAlias),
 	DUCKDB_SCALAR_FUNCTION(PowOperatorFun),
-	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ListNegativeInnerProductFunAlias),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ListDistanceFunAlias),
 	DUCKDB_SCALAR_FUNCTION_SET(LeftShiftFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ListCosineDistanceFunAlias),
