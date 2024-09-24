@@ -14,13 +14,6 @@
         "type": "scalar_function"
     },
     {
-        "name": "error",
-        "parameters": "message",
-        "description": "Throws the given error message",
-        "example": "error('access_mode')",
-        "type": "scalar_function"
-    },
-    {
         "name": "hash",
         "parameters": "param",
         "description": "Returns an integer with the hash of the value. Note that this is not a cryptographic hash",

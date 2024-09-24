@@ -1,4 +1,5 @@
-#include "duckdb/core_functions/scalar/generic_functions.hpp"
+#include "duckdb/function/scalar/generic_functions.hpp"
+
 #include <iostream>
 
 namespace duckdb {
@@ -16,6 +17,10 @@ ScalarFunction ErrorFun::GetFunction() {
 	// Set the function with side effects to avoid the optimization.
 	fun.stability = FunctionStability::VOLATILE;
 	return fun;
+}
+
+void ErrorFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(GetFunction());
 }
 
 } // namespace duckdb

@@ -1,6 +1,6 @@
-#include "duckdb/core_functions/scalar/map_functions.hpp"
 #include "duckdb/function/scalar/list/contains_or_position.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
 
 namespace duckdb {
 
@@ -48,9 +48,13 @@ static unique_ptr<FunctionData> MapContainsBind(ClientContext &context, ScalarFu
 }
 
 ScalarFunction MapContainsFun::GetFunction() {
-
 	ScalarFunction fun("map_contains", {LogicalType::MAP(LogicalType::ANY, LogicalType::ANY), LogicalType::ANY},
 	                   LogicalType::BOOLEAN, MapContainsFunction, MapContainsBind);
 	return fun;
 }
+
+void MapContainsFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(GetFunction());
+}
+
 } // namespace duckdb

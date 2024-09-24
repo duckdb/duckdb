@@ -93,13 +93,4 @@ struct MapValuesFun {
 	static ScalarFunction GetFunction();
 };
 
-struct MapContainsFun {
-	static constexpr const char *Name = "map_contains";
-	static constexpr const char *Parameters = "map,key";
-	static constexpr const char *Description = "Returns true if the map contains the key, false otherwise";
-	static constexpr const char *Example = "map_contains(map(['key'], ['val']), 'key')";
-
-	static ScalarFunction GetFunction();
-};
-
 } // namespace duckdb

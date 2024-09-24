@@ -33,15 +33,6 @@ struct CurrentSettingFun {
 	static ScalarFunction GetFunction();
 };
 
-struct ErrorFun {
-	static constexpr const char *Name = "error";
-	static constexpr const char *Parameters = "message";
-	static constexpr const char *Description = "Throws the given error message";
-	static constexpr const char *Example = "error('access_mode')";
-
-	static ScalarFunction GetFunction();
-};
-
 struct HashFun {
 	static constexpr const char *Name = "hash";
 	static constexpr const char *Parameters = "param";

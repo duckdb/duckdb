@@ -5,7 +5,6 @@ add_library_unity(
   binning.cpp
   can_implicitly_cast.cpp
   current_setting.cpp
-  error.cpp
   hash.cpp
   least.cpp
   stats.cpp
