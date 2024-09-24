@@ -492,14 +492,6 @@ void UnzipCommand::ExecuteInternal(ExecuteContext &context) const {
 		throw CatalogException("Cannot open the file \"%s\"", input_path);
 	}
 
-	// read the compressed data from the file
-	int64_t file_size = vfs.GetFileSize(*compressed_file_handle);
-	std::unique_ptr<char[]> compressed_buffer(new char[BUFFER_SIZE]);
-	int64_t bytes_read = vfs.Read(*compressed_file_handle, compressed_buffer.get(), BUFFER_SIZE);
-	if (bytes_read < file_size) {
-		throw CatalogException("Cannot read the file \"%s\"", input_path);
-	}
-
 	// output
 	FileOpenFlags out_flags(FileOpenFlags::FILE_FLAGS_FILE_CREATE | FileOpenFlags::FILE_FLAGS_WRITE);
 	auto output_file = vfs.OpenFile(extraction_path, out_flags);
@@ -507,9 +499,15 @@ void UnzipCommand::ExecuteInternal(ExecuteContext &context) const {
 		throw CatalogException("Cannot open the file \"%s\"", extraction_path);
 	}
 
-	int64_t bytes_written = vfs.Write(*output_file, compressed_buffer.get(), BUFFER_SIZE);
-	if (bytes_written < file_size) {
-		throw CatalogException("Cannot write the file \"%s\"", extraction_path);
+	// read the compressed data from the file
+	while (true) {
+		std::unique_ptr<char[]> compressed_buffer(new char[BUFFER_SIZE]);
+		int64_t bytes_read = vfs.Read(*compressed_file_handle, compressed_buffer.get(), BUFFER_SIZE);
+		if (bytes_read == 0) {
+			break;
+		}
+
+		vfs.Write(*output_file, compressed_buffer.get(), bytes_read);
 	}
 }
 
