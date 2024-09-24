@@ -18,7 +18,6 @@ set(CORE_FUNCTION_FILES
     aggregate/distributive/kurtosis.cpp
     aggregate/distributive/string_agg.cpp
     aggregate/distributive/sum.cpp
-    aggregate/distributive/entropy.cpp
     aggregate/distributive/arg_min_max.cpp
     aggregate/distributive/approx_count.cpp
     aggregate/distributive/skew.cpp
