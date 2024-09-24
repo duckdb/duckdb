@@ -34,16 +34,37 @@ class LogicalOperator;
 class QueryNode;
 class TableRef;
 
-class Relation : public enable_shared_from_this<Relation> {
+class RelationContextWrapper : public ClientContextWrapper {
 public:
-	Relation(const shared_ptr<ClientContext> &context, RelationType type) : context(context), type(type) {
-	}
-	Relation(ClientContextWrapper &context, RelationType type) : context(context.GetContext()), type(type) {
-	}
-	virtual ~Relation() {
+	explicit RelationContextWrapper(const shared_ptr<ClientContext> &context, bool acquire_lock = true)
+	    : ClientContextWrapper(context), acquire_lock(acquire_lock) {};
+
+	explicit RelationContextWrapper(const ClientContextWrapper &context, bool acquire_lock = true)
+	    : ClientContextWrapper(context), acquire_lock(acquire_lock) {};
+
+	void TryBindRelation(Relation &relation, vector<ColumnDefinition> &columns) {
+		if (acquire_lock) {
+			GetContext()->TryBindRelation(relation, columns);
+		} else {
+			GetContext()->InternalTryBindRelation(relation, columns);
+		}
 	}
 
-	ClientContextWrapper context;
+private:
+	weak_ptr<ClientContext> client_context;
+	bool acquire_lock;
+};
+
+class Relation : public enable_shared_from_this<Relation> {
+public:
+	Relation(const shared_ptr<ClientContext> &context, const RelationType type, const bool acquire_lock = true)
+	    : context(context, acquire_lock), type(type) {
+	}
+	Relation(const ClientContextWrapper &context, RelationType type) : context(context), type(type) {
+	}
+	virtual ~Relation() = default;
+
+	RelationContextWrapper context;
 	RelationType type;
 	vector<shared_ptr<ExternalDependency>> external_dependencies;
 
@@ -75,7 +96,7 @@ public:
 	virtual bool IsReadOnly() {
 		return true;
 	}
-	DUCKDB_API virtual void TryBindRelation(vector<ColumnDefinition> &columns);
+	DUCKDB_API void TryBindRelation(vector<ColumnDefinition> &columns);
 
 public:
 	// PROJECT

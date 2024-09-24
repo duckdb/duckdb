@@ -15,7 +15,8 @@ namespace duckdb {
 
 class TableRelation : public Relation {
 public:
-	TableRelation(const shared_ptr<ClientContext> &context, unique_ptr<TableDescription> description);
+	TableRelation(const shared_ptr<ClientContext> &context, unique_ptr<TableDescription> description,
+	              bool acquire_lock = true);
 
 	unique_ptr<TableDescription> description;
 

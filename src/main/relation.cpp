@@ -338,7 +338,7 @@ unique_ptr<QueryResult> Relation::Explain(ExplainType type, ExplainFormat format
 }
 
 void Relation::TryBindRelation(vector<ColumnDefinition> &columns) {
-	context.GetContext()->TryBindRelation(*this, columns);
+	context.TryBindRelation(*this, columns);
 }
 
 void Relation::Update(const string &update, const string &condition) {
