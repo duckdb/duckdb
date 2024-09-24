@@ -15,6 +15,9 @@ ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p, unique_ptr
     : name(std::move(name_p)), type(std::move(type_p)), category(category), expression(std::move(expression)) {
 }
 
+ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p, vector<pair<string, LogicalType>> materialized_fields_p) : name(std::move(name_p)), type(std::move(type_p)), materialized_fields(std::move(materialized_fields_p)) {
+}
+
 ColumnDefinition ColumnDefinition::Copy() const {
 	ColumnDefinition copy(name, type);
 	copy.oid = oid;
@@ -24,6 +27,7 @@ ColumnDefinition ColumnDefinition::Copy() const {
 	copy.category = category;
 	copy.comment = comment;
 	copy.tags = tags;
+	copy.materialized_fields = materialized_fields;
 	return copy;
 }
 
@@ -198,6 +202,19 @@ const ParsedExpression &ColumnDefinition::GeneratedExpression() const {
 ParsedExpression &ColumnDefinition::GeneratedExpressionMutable() {
 	D_ASSERT(Generated());
 	return *expression;
+}
+
+// Extended JSON Extension
+const vector<pair<string, LogicalType>> &ColumnDefinition::MaterializedFields() const {
+	return materialized_fields;
+}
+
+void ColumnDefinition::SetMaterializedFields(vector<pair<string, LogicalType>> fields) {
+	materialized_fields = std::move(fields);
+}
+
+bool ColumnDefinition::HasMaterializedFields() const {
+	return !materialized_fields.empty();
 }
 
 } // namespace duckdb

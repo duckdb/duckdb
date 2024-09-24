@@ -28,6 +28,7 @@ public:
 	DUCKDB_API ColumnDefinition(string name, LogicalType type);
 	DUCKDB_API ColumnDefinition(string name, LogicalType type, unique_ptr<ParsedExpression> expression,
 	                            TableColumnType category);
+	DUCKDB_API ColumnDefinition(string name, LogicalType type, vector<pair<string, LogicalType>> materialized_fields);
 
 public:
 	//! default_value
@@ -86,6 +87,17 @@ public:
 
 	LogicalType GetType() const;
 
+	//===--------------------------------------------------------------------===//
+	// Materialized JSON Fields
+	//===--------------------------------------------------------------------===//
+
+	// Get and set the list of materialized fields
+	const vector<pair<string, LogicalType>> &MaterializedFields() const;
+	void SetMaterializedFields(vector<pair<string, LogicalType>> fields);
+
+	// Check if there are materialized fields for this column
+	bool HasMaterializedFields() const;
+
 private:
 	//! The name of the entry
 	string name;
@@ -106,6 +118,8 @@ private:
 	Value comment;
 	//! Tags on this column
 	unordered_map<string, string> tags;
+	//! List of fields to materialize from JSON columns
+	vector<pair<string, LogicalType>> materialized_fields;
 };
 
 } // namespace duckdb
