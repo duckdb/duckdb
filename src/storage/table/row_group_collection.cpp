@@ -958,12 +958,13 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 //===--------------------------------------------------------------------===//
 unique_ptr<CheckpointTask> RowGroupCollection::GetCheckpointTask(CollectionCheckpointState &checkpoint_state,
                                                                  idx_t segment_idx) {
+	Printer::PrintF("Schedule checkpoint task segment idx %llu", segment_idx);
 	return make_uniq<CheckpointTask>(checkpoint_state, segment_idx);
 }
 
 void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats) {
-	auto segments = row_groups->MoveSegments();
 	auto l = row_groups->Lock();
+	auto segments = row_groups->MoveSegments(l);
 
 	CollectionCheckpointState checkpoint_state(*this, writer, segments, global_stats);
 
