@@ -2,8 +2,7 @@ cmake_minimum_required(VERSION 3.5...3.29)
 
 project(CoreFunctionsExtension)
 
-include_directories(
-  include)
+include_directories(include)
 
 set(CORE_FUNCTION_FILES
     core_functions_extension.cpp
@@ -121,8 +120,7 @@ set(CORE_FUNCTION_FILES
     scalar/random/setseed.cpp
     scalar/blob/base64.cpp
     scalar/blob/encode.cpp
-    scalar/debug/vector_type.cpp
-)
+    scalar/debug/vector_type.cpp)
 
 build_static_extension(core_functions ${CORE_FUNCTION_FILES})
 set(PARAMETERS "-warnings")

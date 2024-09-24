@@ -81,10 +81,8 @@ DUCKDB_EXTENSION_API void core_functions_init(duckdb::DatabaseInstance &db) {
 DUCKDB_EXTENSION_API const char *core_functions_version() {
 	return duckdb::DuckDB::LibraryVersion();
 }
-
 }
 
 #ifndef DUCKDB_EXTENSION_MAIN
 #error DUCKDB_EXTENSION_MAIN not defined
 #endif
-

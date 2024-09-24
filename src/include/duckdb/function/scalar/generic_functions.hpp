@@ -54,5 +54,4 @@ struct CreateSortKeyFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-
 } // namespace duckdb

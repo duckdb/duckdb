@@ -45,5 +45,4 @@ struct MaxFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-
 } // namespace duckdb

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/core_functions/aggregate/nested_functions.hpp
+// core_functions/aggregate/nested_functions.hpp
 //
 //
 //===----------------------------------------------------------------------===//
