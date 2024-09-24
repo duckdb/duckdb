@@ -1,6 +1,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/core_functions/aggregate/holistic_functions.hpp"
-#include "duckdb/core_functions/aggregate/quantile_enum.hpp"
+#include "duckdb/common/enums/quantile_enum.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/abs.hpp"
