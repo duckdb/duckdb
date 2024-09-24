@@ -403,7 +403,7 @@ void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 	// The in-tree extensions that we check. Non-cmake builds are currently limited to these for static linking
 	// TODO: rewrite package_build.py to allow also loading out-of-tree extensions in non-cmake builds, after that
 	//		 these can be removed
-	unordered_set<string> extensions {"parquet", "icu",   "tpch", "tpcds",    "fts",         "httpfs",
+	vector<string> extensions {"core_functions", "parquet", "icu",   "tpch", "tpcds",    "fts",         "httpfs",
 	                                  "json",    "excel", "inet", "jemalloc", "autocomplete"};
 	for (auto &ext : extensions) {
 		LoadExtensionInternal(db, ext, true);
