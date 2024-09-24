@@ -238,7 +238,7 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
 	auto min_value = perfect_join_statistics.build_min.GetValueUnsafe<T>();
 	auto max_value = perfect_join_statistics.build_max.GetValueUnsafe<T>();
 
-	auto set_result = [&](idx_t i, idx_t sel_idx, int input_value) {
+	auto set_result = [&](idx_t i, idx_t sel_idx, T input_value) {
 		if (perfect_join_statistics.is_probe_in_domain || (min_value <= input_value && input_value <= max_value)) {
 			auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
 			                                             // check for matches in the build
