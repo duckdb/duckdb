@@ -102,6 +102,9 @@ public:
 		return child_filter->CheckStatistics(stats);
 	}
 
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
+
 	~ZonemapFilter() override {
 	}
 };

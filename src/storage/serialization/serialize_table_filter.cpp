@@ -39,6 +39,9 @@ unique_ptr<TableFilter> TableFilter::Deserialize(Deserializer &deserializer) {
 	case TableFilterType::STRUCT_EXTRACT:
 		result = StructFilter::Deserialize(deserializer);
 		break;
+	case TableFilterType::ZONE_MAP:
+		result = ZonemapFilter::Deserialize(deserializer);
+		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of TableFilter!");
 	}
@@ -53,6 +56,17 @@ void ConjunctionAndFilter::Serialize(Serializer &serializer) const {
 unique_ptr<TableFilter> ConjunctionAndFilter::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ConjunctionAndFilter>(new ConjunctionAndFilter());
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<TableFilter>>>(200, "child_filters", result->child_filters);
+	return std::move(result);
+}
+
+void ZonemapFilter::Serialize(Serializer &serializer) const {
+	TableFilter::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<TableFilter>>(200, "child_filters", child_filter);
+}
+
+unique_ptr<TableFilter> ZonemapFilter::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<ZonemapFilter>(new ZonemapFilter());
+	deserializer.ReadPropertyWithDefault<unique_ptr<TableFilter>>(200, "child_filters", result->child_filter);
 	return std::move(result);
 }
 
