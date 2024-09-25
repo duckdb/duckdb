@@ -127,7 +127,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectFromTypes(const py::object
 		LogicalType type;
 		if (py::isinstance<py::str>(item)) {
 			string type_str = py::str(item);
-			type = TransformStringToLogicalType(type_str, *rel->context.GetContext());
+			type = TransformStringToLogicalType(type_str, *rel->context->GetContext());
 		} else if (py::isinstance<DuckDBPyType>(item)) {
 			auto *type_p = item.cast<DuckDBPyType *>();
 			type = type_p->Type();
@@ -254,7 +254,7 @@ vector<unique_ptr<ParsedExpression>> GetExpressions(ClientContext &context, cons
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Aggregate(const py::object &expr, const string &groups) {
 	AssertRelation();
-	auto expressions = GetExpressions(*rel->context.GetContext(), expr);
+	auto expressions = GetExpressions(*rel->context->GetContext(), expr);
 	if (!groups.empty()) {
 		return make_uniq<DuckDBPyRelation>(rel->Aggregate(std::move(expressions), groups));
 	}
@@ -779,7 +779,7 @@ static unique_ptr<QueryResult> PyExecuteRelation(const shared_ptr<Relation> &rel
 	if (!rel) {
 		return nullptr;
 	}
-	auto context = rel->context.GetContext();
+	auto context = rel->context->GetContext();
 	py::gil_scoped_release release;
 	auto pending_query = context->PendingQuery(rel, stream_result);
 	return DuckDBPyConnection::CompletePendingQuery(*pending_query);
@@ -1342,7 +1342,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, co
 	auto view_relation = CreateView(view_name);
 	auto all_dependencies = rel->GetAllDependencies();
 
-	Parser parser(rel->context.GetContext()->GetParserOptions());
+	Parser parser(rel->context->GetContext()->GetParserOptions());
 	parser.ParseQuery(sql_query);
 	if (parser.statements.size() != 1) {
 		throw InvalidInputException("'DuckDBPyRelation.query' only accepts a single statement");
@@ -1350,7 +1350,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, co
 	auto &statement = *parser.statements[0];
 	if (statement.type == StatementType::SELECT_STATEMENT) {
 		auto select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
-		auto query_relation = make_shared_ptr<QueryRelation>(rel->context.GetContext(), std::move(select_statement),
+		auto query_relation = make_shared_ptr<QueryRelation>(rel->context->GetContext(), std::move(select_statement),
 		                                                     sql_query, "query_relation");
 		return make_uniq<DuckDBPyRelation>(std::move(query_relation));
 	} else if (IsDescribeStatement(statement)) {
@@ -1359,7 +1359,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, co
 	}
 	{
 		py::gil_scoped_release release;
-		auto query_result = rel->context.GetContext()->Query(std::move(parser.statements[0]), false);
+		auto query_result = rel->context->GetContext()->Query(std::move(parser.statements[0]), false);
 		// Execute it anyways, for creation/altering statements
 		// We only care that it succeeds, we can't store the result
 		D_ASSERT(query_result);
@@ -1425,7 +1425,7 @@ string DuckDBPyRelation::ToStringInternal(const BoxRendererConfig &config, bool 
 		auto limit = Limit(config.limit, 0);
 		auto res = limit->ExecuteInternal();
 
-		auto context = rel->context.GetContext();
+		auto context = rel->context->GetContext();
 		rendered_result = res->ToBox(*context, config);
 	}
 	return rendered_result;
