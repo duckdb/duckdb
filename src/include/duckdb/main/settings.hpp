@@ -506,7 +506,7 @@ struct HTTPProxyUsername {
 };
 
 struct HTTPProxyPassword {
-	static constexpr const char *Name = "http_proxy";
+	static constexpr const char *Name = "http_proxy_password";
 	static constexpr const char *Description = "Password for HTTP proxy";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
@@ -596,7 +596,9 @@ struct StreamingBufferSize {
 struct MaximumTempDirectorySize {
 	static constexpr const char *Name = "max_temp_directory_size";
 	static constexpr const char *Description =
-	    "The maximum amount of data stored inside the 'temp_directory' (when set) (e.g. 1GB)";
+	    "The maximum amount of data stored inside the 'temp_directory' (when set). If the `temp_directory` is set to "
+	    "an existing directory, this option defaults to the available disk space on "
+	    "that drive. Otherwise, it defaults to 0 (implying that the temporary directory is not used).";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);

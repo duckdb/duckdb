@@ -85,6 +85,7 @@ static bool OperatorNeedsRelation(LogicalOperatorType op_type) {
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
 	case LogicalOperatorType::LOGICAL_GET:
+	case LogicalOperatorType::LOGICAL_UNNEST:
 	case LogicalOperatorType::LOGICAL_DELIM_GET:
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 	case LogicalOperatorType::LOGICAL_WINDOW:
@@ -267,6 +268,20 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		}
 		ModifyStatsIfLimit(limit_op.get(), child_stats);
 		AddAggregateOrWindowRelation(input_op, parent, operator_stats, op->type);
+		return true;
+	}
+	case LogicalOperatorType::LOGICAL_UNNEST: {
+		// optimize children of unnest
+		RelationStats child_stats;
+		auto child_optimizer = optimizer.CreateChildOptimizer();
+		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
+		// the extracted cardinality should be set for window
+		if (!datasource_filters.empty()) {
+			child_stats.cardinality = LossyNumericCast<idx_t>(static_cast<double>(child_stats.cardinality) *
+			                                                  RelationStatisticsHelper::DEFAULT_SELECTIVITY);
+		}
+		ModifyStatsIfLimit(limit_op.get(), child_stats);
+		AddRelation(input_op, parent, child_stats);
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {

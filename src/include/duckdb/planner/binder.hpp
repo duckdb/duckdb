@@ -418,6 +418,8 @@ private:
 	unique_ptr<BoundTableRef> BindShowTable(ShowRef &ref);
 	unique_ptr<BoundTableRef> BindSummarize(ShowRef &ref);
 
+	unique_ptr<LogicalOperator> UnionOperators(vector<unique_ptr<LogicalOperator>> nodes);
+
 private:
 	Binder(ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);
 };

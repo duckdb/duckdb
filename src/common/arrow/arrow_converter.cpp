@@ -166,7 +166,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	}
 	case LogicalTypeId::VARCHAR:
-		if (type.IsJSONType()) {
+		if (type.IsJSONType() && options.arrow_lossless_conversion) {
 			auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("arrow.json");
 			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
 			child.metadata = root_holder.metadata_info.back().get();

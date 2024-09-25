@@ -1,6 +1,7 @@
 #include "duckdb/common/types/row/tuple_data_segment.hpp"
 
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
 
 namespace duckdb {
 
@@ -118,6 +119,10 @@ TupleDataSegment::~TupleDataSegment() {
 	}
 	pinned_row_handles.clear();
 	pinned_heap_handles.clear();
+	if (Allocator::SupportsFlush() && allocator &&
+	    data_size > allocator->GetBufferManager().GetBufferPool().GetAllocatorBulkDeallocationFlushThreshold()) {
+		Allocator::FlushAll();
+	}
 	allocator.reset();
 }
 

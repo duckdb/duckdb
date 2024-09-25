@@ -103,6 +103,10 @@ bool CSVSniffer::CanYouCastIt(ClientContext &context, const string_t value, cons
 	auto value_ptr = value.GetData();
 	auto value_size = value.GetSize();
 	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN: {
+		bool dummy_value;
+		return TryCastStringBool(value_ptr, value_size, dummy_value, true);
+	}
 	case LogicalTypeId::TINYINT: {
 		int8_t dummy_value;
 		return TrySimpleIntegerCast(value_ptr, value_size, dummy_value, false);
@@ -251,19 +255,20 @@ void CSVSniffer::InitializeDateAndTimeStampDetection(CSVStateMachine &candidate,
 		auto user_format = options.dialect_options.date_format.find(sql_type.id());
 		if (user_format->second.IsSetByUser()) {
 			format_candidate.format.emplace_back(user_format->second.GetValue().format_specifier);
-		}
-		// order by preference
-		auto entry = format_template_candidates.find(sql_type.id());
-		if (entry != format_template_candidates.end()) {
-			const auto &format_template_list = entry->second;
-			for (const auto &t : format_template_list) {
-				const auto format_string = GenerateDateFormat(separator, t);
-				// don't parse ISO 8601
-				if (format_string.find("%Y-%m-%d") == string::npos) {
-					format_candidate.format.emplace_back(format_string);
+		} else {
+			auto entry = format_template_candidates.find(sql_type.id());
+			if (entry != format_template_candidates.end()) {
+				const auto &format_template_list = entry->second;
+				for (const auto &t : format_template_list) {
+					const auto format_string = GenerateDateFormat(separator, t);
+					// don't parse ISO 8601
+					if (format_string.find("%Y-%m-%d") == string::npos) {
+						format_candidate.format.emplace_back(format_string);
+					}
 				}
 			}
 		}
+		// order by preference
 		original_format_candidates = format_candidates;
 	}
 	//	initialise the first candidate
@@ -290,7 +295,8 @@ void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const
 	bool had_format_candidates = !save_format_candidates.empty();
 	bool initial_format_candidates =
 	    save_format_candidates.size() == original_format_candidates.at(sql_type.id()).format.size();
-	while (!type_format_candidates.empty()) {
+	bool is_set_by_user = options.dialect_options.date_format.find(sql_type.id())->second.IsSetByUser();
+	while (!type_format_candidates.empty() && !is_set_by_user) {
 		//	avoid using exceptions for flow control...
 		auto &current_format = candidate.dialect_options.date_format[sql_type.id()].GetValue();
 		if (current_format.Parse(dummy_val, result, true)) {
@@ -341,7 +347,7 @@ void CSVSniffer::SniffTypes(DataChunk &data_chunk, CSVStateMachine &state_machin
 			// try cast from string to sql_type
 			while (col_type_candidates.size() > 1) {
 				const auto &sql_type = col_type_candidates.back();
-				// try formatting for date types if the user did not specify one and it starts with numeric
+				// try formatting for date types if the user did not specify one, and it starts with numeric
 				// values.
 				string separator;
 				// If Value is not Null, Has a numeric date format, and the current investigated candidate is
@@ -382,7 +388,7 @@ void CSVSniffer::SniffTypes(DataChunk &data_chunk, CSVStateMachine &state_machin
 }
 
 // If we have a predefined date/timestamp format we set it
-void CSVSniffer::SetUserDefinedDateTimeFormat(CSVStateMachine &candidate) {
+void CSVSniffer::SetUserDefinedDateTimeFormat(CSVStateMachine &candidate) const {
 	const vector<LogicalTypeId> data_time_formats {LogicalTypeId::DATE, LogicalTypeId::TIMESTAMP};
 	for (auto &date_time_format : data_time_formats) {
 		auto &user_option = options.dialect_options.date_format.at(date_time_format);
@@ -423,7 +429,7 @@ void CSVSniffer::DetectTypes() {
 					}
 				}
 			}
-			if (break_loop) {
+			if (break_loop && !candidate->state_machine->options.ignore_errors.GetValue()) {
 				continue;
 			}
 		}

@@ -41,7 +41,7 @@ class BufferPool {
 	friend class StandardBufferManager;
 
 public:
-	explicit BufferPool(idx_t maximum_memory, bool track_eviction_timestamps);
+	BufferPool(idx_t maximum_memory, bool track_eviction_timestamps, idx_t allocator_bulk_deallocation_flush_threshold);
 	virtual ~BufferPool();
 
 	//! Set a new memory limit to the buffer pool, throws an exception if the new limit is too low and not enough
@@ -50,6 +50,7 @@ public:
 
 	//! If bulk deallocation larger than this occurs, flush outstanding allocations
 	void SetAllocatorBulkDeallocationFlushThreshold(idx_t threshold);
+	idx_t GetAllocatorBulkDeallocationFlushThreshold();
 
 	void UpdateUsedMemory(MemoryTag tag, int64_t size);
 

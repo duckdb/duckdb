@@ -88,7 +88,7 @@ public:
 	//! Whether or not the column has any updates
 	bool HasUpdates() const;
 	//! Whether or not we can scan an entire vector
-	virtual ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count);
+	virtual ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result);
 
 	//! Initialize prefetch state with required I/O data for the next N rows
 	virtual void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows);

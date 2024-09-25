@@ -848,9 +848,10 @@ public:
 		if (total_append_count != merge_rows) {
 			throw InternalException("Mismatch in row group count vs verify count in RowGroupCollection::Checkpoint");
 		}
-		// merging is complete - schedule checkpoint tasks of the target row groups
+		// merging is complete - execute checkpoint tasks of the target row groups
 		for (idx_t i = 0; i < target_count; i++) {
-			collection.ScheduleCheckpointTask(checkpoint_state, segment_idx + i);
+			auto checkpoint_task = collection.GetCheckpointTask(checkpoint_state, segment_idx + i);
+			checkpoint_task->ExecuteTask();
 		}
 	}
 
@@ -886,7 +887,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 }
 
 bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoint_state, VacuumState &state,
-                                             idx_t segment_idx) {
+                                             idx_t segment_idx, bool schedule_vacuum) {
 	static constexpr const idx_t MAX_MERGE_COUNT = 3;
 
 	if (!state.can_vacuum_deletes) {
@@ -900,6 +901,9 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 	if (state.row_group_counts[segment_idx] == 0) {
 		// segment was already dropped - skip
 		D_ASSERT(!checkpoint_state.segments[segment_idx].node);
+		return false;
+	}
+	if (!schedule_vacuum) {
 		return false;
 	}
 	idx_t merge_rows;
@@ -952,9 +956,9 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 //===--------------------------------------------------------------------===//
 // Checkpoint
 //===--------------------------------------------------------------------===//
-void RowGroupCollection::ScheduleCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx) {
-	auto checkpoint_task = make_uniq<CheckpointTask>(checkpoint_state, segment_idx);
-	checkpoint_state.executor.ScheduleTask(std::move(checkpoint_task));
+unique_ptr<CheckpointTask> RowGroupCollection::GetCheckpointTask(CollectionCheckpointState &checkpoint_state,
+                                                                 idx_t segment_idx) {
+	return make_uniq<CheckpointTask>(checkpoint_state, segment_idx);
 }
 
 void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats) {
@@ -970,13 +974,12 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	auto &config = DBConfig::GetConfig(writer.GetDatabase());
 	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
 		auto &entry = segments[segment_idx];
-		if (total_vacuum_tasks < config.options.max_vacuum_tasks) {
-			auto vacuum_tasks = ScheduleVacuumTasks(checkpoint_state, vacuum_state, segment_idx);
-			if (vacuum_tasks) {
-				// vacuum tasks were scheduled - don't schedule a checkpoint task yet
-				total_vacuum_tasks++;
-				continue;
-			}
+		auto vacuum_tasks = ScheduleVacuumTasks(checkpoint_state, vacuum_state, segment_idx,
+		                                        total_vacuum_tasks < config.options.max_vacuum_tasks);
+		if (vacuum_tasks) {
+			// vacuum tasks were scheduled - don't schedule a checkpoint task yet
+			total_vacuum_tasks++;
+			continue;
 		}
 		if (!entry.node) {
 			// row group was vacuumed/dropped - skip
@@ -984,7 +987,8 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		}
 		// schedule a checkpoint task for this row group
 		entry.node->MoveToCollection(*this, vacuum_state.row_start);
-		ScheduleCheckpointTask(checkpoint_state, segment_idx);
+		auto checkpoint_task = GetCheckpointTask(checkpoint_state, segment_idx);
+		checkpoint_state.executor.ScheduleTask(std::move(checkpoint_task));
 		vacuum_state.row_start += entry.node->count;
 	}
 	// all tasks have been scheduled - execute tasks until we are done

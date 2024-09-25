@@ -21,3 +21,17 @@ bla_1	BIGINT	YES	NULL	NULL	NULL
 b_la	BIGINT	YES	NULL	NULL	NULL
 _	BIGINT	YES	NULL	NULL	NULL
 _3b	BIGINT	YES	NULL	NULL	NULL
+
+
+query III
+FROM read_csv(['data/csv/auto/sample.csv','data/csv/auto/sample.csv','data/csv/auto/sample.csv'])
+----
+c1	pedro	1992
+c2	mark	1992
+c3	oogie	2021
+c1	pedro	1992
+c2	mark	1992
+c3	oogie	2021
+c1	pedro	1992
+c2	mark	1992
+c3	oogie	2021

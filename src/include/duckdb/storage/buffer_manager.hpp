@@ -34,8 +34,7 @@ public:
 	}
 
 public:
-	virtual BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true,
-	                              shared_ptr<BlockHandle> *block = nullptr) = 0;
+	virtual BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true) = 0;
 	//! Reallocate an in-memory buffer that is pinned.
 	virtual void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) = 0;
 	virtual BufferHandle Pin(shared_ptr<BlockHandle> &handle) = 0;
@@ -102,8 +101,9 @@ protected:
 	virtual void PurgeQueue(FileBufferType type) = 0;
 	virtual void AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
 	virtual void WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer);
-	virtual unique_ptr<FileBuffer> ReadTemporaryBuffer(MemoryTag tag, block_id_t id, unique_ptr<FileBuffer> buffer);
-	virtual void DeleteTemporaryFile(block_id_t id);
+	virtual unique_ptr<FileBuffer> ReadTemporaryBuffer(MemoryTag tag, BlockHandle &block,
+	                                                   unique_ptr<FileBuffer> buffer);
+	virtual void DeleteTemporaryFile(BlockHandle &block);
 };
 
 } // namespace duckdb

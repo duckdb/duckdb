@@ -43,6 +43,15 @@ bool ArrowType::RunEndEncoded() const {
 	return run_end_encoded;
 }
 
+void ArrowType::ThrowIfInvalid() const {
+	if (type.id() == LogicalTypeId::INVALID) {
+		if (not_implemented) {
+			throw NotImplementedException(error_message);
+		}
+		throw InvalidInputException(error_message);
+	}
+}
+
 LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
 	if (use_dictionary && dictionary_type) {
 		return dictionary_type->GetDuckType();

@@ -21,6 +21,7 @@
 #include "duckdb/catalog/catalog_entry_retriever.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
 
@@ -186,7 +187,7 @@ protected:
 	                          const optional_ptr<bind_lambda_function_t> bind_lambda_function,
 	                          const LogicalType &list_child_type);
 
-	static unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
+	virtual unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
 
 	LogicalType ResolveOperatorType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
 	LogicalType ResolveCoalesceType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
@@ -219,6 +220,7 @@ protected:
 	//! Returns true if the function name is an alias for the UNNEST function
 	static bool IsUnnestFunction(const string &function_name);
 	BindResult TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func);
+	virtual void ThrowIfUnnestInLambda(const ColumnBinding &column_binding);
 };
 
 } // namespace duckdb
