@@ -14,12 +14,10 @@ void FillExtraInfo(const StaticFunctionDefinition &function, T &info) {
 	info.description = function.description;
 	info.parameter_names = StringUtil::Split(function.parameters, ",");
 	info.example = function.example;
+	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
 }
 
 void LoadInternal(DuckDB &db) {
-	auto &catalog = Catalog::GetSystemCatalog(*db.instance);
-	auto transaction = CatalogTransaction::GetSystemTransaction(*db.instance);
-
 	auto functions = StaticFunctionDefinition::GetFunctionList();
 	for (idx_t i = 0; functions[i].name; i++) {
 		auto &function = functions[i];
@@ -34,7 +32,7 @@ void LoadInternal(DuckDB &db) {
 			result.name = function.name;
 			CreateScalarFunctionInfo info(result);
 			FillExtraInfo(function, info);
-			catalog.CreateFunction(transaction, info);
+			ExtensionUtil::RegisterFunction(*db.instance, std::move(info));
 		} else if (function.get_aggregate_function || function.get_aggregate_function_set) {
 			// aggregate function
 			AggregateFunctionSet result;
@@ -46,7 +44,7 @@ void LoadInternal(DuckDB &db) {
 			result.name = function.name;
 			CreateAggregateFunctionInfo info(result);
 			FillExtraInfo(function, info);
-			catalog.CreateFunction(transaction, info);
+			ExtensionUtil::RegisterFunction(*db.instance, std::move(info));
 		} else {
 			throw InternalException("Do not know how to register function of this type");
 		}

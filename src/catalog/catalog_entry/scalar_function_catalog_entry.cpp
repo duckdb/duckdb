@@ -8,7 +8,7 @@ ScalarFunctionCatalogEntry::ScalarFunctionCatalogEntry(Catalog &catalog, SchemaC
     : FunctionEntry(CatalogType::SCALAR_FUNCTION_ENTRY, catalog, schema, info), functions(info.functions) {
 }
 
-unique_ptr<CatalogEntry> ScalarFunctionCatalogEntry::AlterEntry(ClientContext &context, AlterInfo &info) {
+unique_ptr<CatalogEntry> ScalarFunctionCatalogEntry::AlterEntry(CatalogTransaction transaction, AlterInfo &info) {
 	if (info.type != AlterType::ALTER_SCALAR_FUNCTION) {
 		throw InternalException("Attempting to alter ScalarFunctionCatalogEntry with unsupported alter type");
 	}
