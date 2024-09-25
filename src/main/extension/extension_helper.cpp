@@ -213,7 +213,9 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 		if (dbconfig.options.autoinstall_known_extensions) {
 			auto &config = DBConfig::GetConfig(context);
 			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(config.options.autoinstall_extension_repo);
-			ExtensionHelper::InstallExtension(context, extension_name, false, autoinstall_repo, false);
+			ExtensionInstallOptions options;
+			options.repository = autoinstall_repo;
+			ExtensionHelper::InstallExtension(context, extension_name, options);
 		}
 		ExtensionHelper::LoadExternalExtension(context, extension_name);
 		return true;
@@ -232,7 +234,9 @@ bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const str
 		if (dbconfig.options.autoinstall_known_extensions) {
 			auto autoinstall_repo =
 			    ExtensionRepository::GetRepositoryByUrl(dbconfig.options.autoinstall_extension_repo);
-			ExtensionHelper::InstallExtension(instance, fs, extension_name, false, autoinstall_repo, false);
+			ExtensionInstallOptions options;
+			options.repository = autoinstall_repo;
+			ExtensionHelper::InstallExtension(instance, fs, extension_name, options);
 		}
 		ExtensionHelper::LoadExternalExtension(instance, fs, extension_name);
 		return true;
@@ -291,10 +295,15 @@ static ExtensionUpdateResult UpdateExtensionInternal(ClientContext &context, Dat
 	auto repository_from_info = ExtensionRepository::GetRepositoryByUrl(extension_install_info->repository_url);
 	result.repository = repository_from_info.ToReadableString();
 
-	// We force install the full url found in this file, throwing
+	// Force install the full url found in this file, enabling etags to ensure efficient updating
+	ExtensionInstallOptions options;
+	options.repository = repository_from_info;
+	options.force_install = true;
+	options.use_etags = true;
+
 	unique_ptr<ExtensionInstallInfo> install_result;
 	try {
-		install_result = ExtensionHelper::InstallExtension(context, extension_name, true, repository_from_info);
+		install_result = ExtensionHelper::InstallExtension(context, extension_name, options);
 	} catch (std::exception &e) {
 		ErrorData error(e);
 		error.Throw("Extension updating failed when trying to install '" + extension_name + "', original error: ");
@@ -375,7 +384,9 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 		if (dbconfig.options.autoinstall_known_extensions) {
 			//! Get the autoloading repository
 			auto repository = ExtensionRepository::GetRepositoryByUrl(dbconfig.options.autoinstall_extension_repo);
-			ExtensionHelper::InstallExtension(db, *fs, extension_name, false, repository);
+			ExtensionInstallOptions options;
+			options.repository = repository;
+			ExtensionHelper::InstallExtension(db, *fs, extension_name, options);
 		}
 #endif
 		ExtensionHelper::LoadExternalExtension(db, *fs, extension_name);
@@ -757,17 +768,6 @@ EMS5gLv50CzQqJXK9mNzPuYXNUIc4Pw4ssVWe0OfN3Od90gl5uFUwk/G9lWSYnBN
 )", nullptr};
 
 static const char *const community_public_keys[] = {
-    R"(
------BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv+Jki3aiZt0eOzShgD2g
-BYPjPpkhHowOwPzUKtTVPob7vxyzd2wPyWDF/Zn6sN8QzravAdlXFE3SNF7ayO86
-IPHhMxO6P2YlxbipyKzPOUJsasXBiwYw2aSvb0RtwnYwD5lJs8Tz2ET1RQCFgXGc
-LW7bDjKRbHSME0Me5rLRWVztOqULeoMeY1oCOmKKeAYxjFOASJJfQF9oQxkuu3j1
-qpcXnfHldlPGzFM77OFlWFtlc9QW4WNoxkO3HwskFW6ZRaQipM8vgSzkIfPFESGL
-TtDRw+RcUPqmS6NVW8nhaiptBIMXy+9cP/l1LGmGwrZRhWP0YBlk6V9MUMzjyo+R
-JQIDAQAB
------END PUBLIC KEY-----
-)",
     R"(
 -----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtXl28loGwAH3ZGQXXgJQ

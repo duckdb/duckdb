@@ -217,6 +217,8 @@ protected:
 	static idx_t ArrowGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
 	                                LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state);
 
+	//! Specify if a given type can be pushed-down by the arrow engine
+	static bool ArrowPushdownType(const LogicalType &type);
 	//! -----Utility Functions:-----
 	//! Gets Arrow Table's Cardinality
 	static unique_ptr<NodeStatistics> ArrowScanCardinality(ClientContext &context, const FunctionData *bind_data);

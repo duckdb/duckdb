@@ -88,7 +88,9 @@ public:
 	//! Convert an existing in-memory buffer into a persistent disk-backed block
 	shared_ptr<BlockHandle> ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block);
 
-	void UnregisterBlock(block_id_t block_id, bool can_destroy);
+	void UnregisterBlock(BlockHandle &block);
+	//! UnregisterBlock, only accepts non-temporary block ids
+	void UnregisterBlock(block_id_t id);
 
 	//! Returns a reference to the metadata manager of this block manager.
 	MetadataManager &GetMetadataManager();
@@ -112,6 +114,10 @@ public:
 			throw InternalException("the block allocation size must be set once");
 		}
 		block_alloc_size = block_alloc_size_p.GetIndex();
+	}
+
+	//! Verify the block usage count
+	virtual void VerifyBlocks(const unordered_map<block_id_t, idx_t> &block_usage_count) {
 	}
 
 private:

@@ -43,6 +43,10 @@ public:
 	virtual void FlushSegment(unique_ptr<ColumnSegment> segment, idx_t segment_size);
 	virtual PersistentColumnData ToPersistentData();
 
+	PartialBlockManager &GetPartialBlockManager() {
+		return partial_block_manager;
+	}
+
 public:
 	template <class TARGET>
 	TARGET &Cast() {

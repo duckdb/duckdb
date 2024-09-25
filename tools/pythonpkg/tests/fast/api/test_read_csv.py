@@ -124,6 +124,12 @@ class TestReadCSV(object):
         print(res)
         assert res == ('"AAA"BB',)
 
+    def test_quote(self, duckdb_cursor):
+        with pytest.raises(
+            duckdb.Error, match="The methods read_csv and read_csv_auto do not have the \"quote\" argument."
+        ):
+            rel = duckdb_cursor.read_csv(TestFile('unquote_without_delimiter.csv'), quote="", header=False)
+
     def test_escapechar(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile('quote_escape.csv'), escapechar=";", header=False)
         res = rel.limit(1, 1).fetchone()

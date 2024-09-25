@@ -43,7 +43,7 @@ jobs:
   rstats-windows-extensions:
     # Builds extensions for windows_amd64_rtools
     name: R Package Windows (Extensions)
-    runs-on: windows-latest
+    runs-on: windows-2019
     steps:
       - uses: actions/checkout@v4
         with:

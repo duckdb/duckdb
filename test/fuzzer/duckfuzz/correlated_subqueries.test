@@ -1,0 +1,44 @@
+# name: test/fuzzer/duckfuzz/correlated_subqueries.test
+# description: Type mismatch in map concat
+# group: [duckfuzz]
+
+require tpch
+
+require json
+
+statement ok
+CREATE TABLE mytable(i INT)
+
+## https://github.com/duckdb/duckdb-fuzzer/issues/3244
+statement ok
+SELECT
+    (
+        SELECT
+            (
+                SELECT (SELECT ref_2.i)
+                FROM mytable AS ref_2
+            )
+        WHERE
+            (
+                SELECT subq_0.i AS c1
+            )
+    )
+FROM mytable AS subq_0
+
+
+statement ok
+create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types() limit 0;
+
+# https://github.com/duckdb/duckdb-fuzzer/issues/3124
+statement ok
+SELECT
+NULL
+FROM main.all_types AS ref_0
+WHERE
+EXISTS(
+	SELECT EXISTS(
+		  SELECT NULL
+		  FROM main.all_types AS ref_3
+		  WHERE EXISTS(SELECT NULL WHERE ref_3."varchar")
+	)
+	FROM (SELECT NULL WHERE EXISTS(SELECT NULL WHERE ref_0."varchar")))

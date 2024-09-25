@@ -104,6 +104,9 @@ private:
 
 	void IncreaseBlockReferenceCountInternal(block_id_t block_id);
 
+	//! Verify the block usage count
+	void VerifyBlocks(const unordered_map<block_id_t, idx_t> &block_usage_count) override;
+
 private:
 	AttachedDatabase &db;
 	//! The active DatabaseHeader, either 0 (h1) or 1 (h2)

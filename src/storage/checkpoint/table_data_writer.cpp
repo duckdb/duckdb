@@ -31,7 +31,11 @@ void TableDataWriter::AddRowGroup(RowGroupPointer &&row_group_pointer, unique_pt
 }
 
 TaskScheduler &TableDataWriter::GetScheduler() {
-	return TaskScheduler::GetScheduler(table.ParentCatalog().GetDatabase());
+	return TaskScheduler::GetScheduler(GetDatabase());
+}
+
+DatabaseInstance &TableDataWriter::GetDatabase() {
+	return table.ParentCatalog().GetDatabase();
 }
 
 SingleFileTableDataWriter::SingleFileTableDataWriter(SingleFileCheckpointWriter &checkpoint_manager,
@@ -89,6 +93,16 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 		options.emplace("v1_0_0_storage", v1_0_0_storage);
 	}
 	auto index_storage_infos = info->GetIndexes().GetStorageInfos(options);
+
+#ifdef DUCKDB_BLOCK_VERIFICATION
+	for (auto &entry : index_storage_infos) {
+		for (auto &allocator : entry.allocator_infos) {
+			for (auto &block : allocator.block_pointers) {
+				checkpoint_manager.verify_block_usage_count[block.block_id]++;
+			}
+		}
+	}
+#endif
 
 	// write empty block pointers for forwards compatibility
 	vector<BlockPointer> compat_block_pointers;

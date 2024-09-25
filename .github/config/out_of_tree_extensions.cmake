@@ -38,19 +38,18 @@ if (NOT MINGW)
     duckdb_extension_load(azure
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_azure
-            GIT_TAG 49b63dc8cd166952a0a34dfd54e6cfe5b823e05e
-            APPLY_PATCHES
+            GIT_TAG b0ffe7ada20cdbd0bee2bbe5461ecd22fb468062
             )
 endif()
 
 ################# DELTA
 # MinGW build is not available, and our current manylinux ci does not have enough storage space to run the rust build
 # for Delta
-if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux" AND NOT WIN32)
+if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux")
     duckdb_extension_load(delta
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_delta
-            GIT_TAG 0b981978e8450a43f3b0bfdb84d382d61afbb1d0
+            GIT_TAG 3933ebd800ad06a64656c9aef6ca7d62897fa4db
     )
 endif()
 
@@ -94,7 +93,7 @@ if (NOT MINGW)
     duckdb_extension_load(postgres_scanner
             DONT_LINK
             GIT_URL https://github.com/duckdb/postgres_scanner
-            GIT_TAG d0e0115f29a9dbe44f026aea7290a1c6d4622a73
+            GIT_TAG 03eaed75f0ec5500609b7a97aa05468493b229d1
             )
 endif()
 
@@ -102,10 +101,9 @@ endif()
 duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb_spatial.git
-    GIT_TAG dbb9971c900c5888e3e3598af91de3b9b884aca6
+    GIT_TAG bb9c829693965f029eb5a312aefed4c538fad781
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
-    APPLY_PATCHES
     )
 
 ################# SQLITE_SCANNER
@@ -119,13 +117,13 @@ endif()
 duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/sqlite_scanner
-        GIT_TAG 1ee5404c4b9a62a572c9076ebf4cabb7f4181ea6
+        GIT_TAG 315861963c8106397af36cbda10faebc8dae485a
         )
 
 duckdb_extension_load(sqlsmith
         DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb_sqlsmith
-        GIT_TAG 98fb00dcfc9413ffe58f58022344661e1b45623f
+        GIT_TAG f24be8b5b0cd0eeed7541e10cff42d7050771afc
         )
 
 ################# SUBSTRAIT
@@ -133,7 +131,7 @@ if (NOT WIN32)
     duckdb_extension_load(substrait
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/substrait
-            GIT_TAG 55922a3e77756054abbe3e04dae17ccf4203ad6f
+            GIT_TAG be71387cf0a484dc7b261a0cb21abec0d0e0ce5c
             )
 endif()
 
@@ -143,7 +141,7 @@ duckdb_extension_load(vss
         LOAD_TESTS
         DONT_LINK
         GIT_URL https://github.com/duckdb/duckdb_vss
-        GIT_TAG 3e192f25de97bdd759f96eeb488c59750db73937
+        GIT_TAG 77739ea5382cce3220af83803ac0b1e98b3ab7d8
         TEST_DIR test/sql
     )
 
@@ -153,6 +151,6 @@ if (NOT MINGW)
             DONT_LINK
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_mysql
-            GIT_TAG 6519c1953655b86f59884bb1b79f554b9fdf551b
+            GIT_TAG f2a15013fb4559e1591e977c1c023aa0a369c6f3
             )
 endif()

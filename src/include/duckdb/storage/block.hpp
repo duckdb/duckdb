@@ -34,6 +34,7 @@ struct BlockPointer {
 
 	block_id_t block_id;
 	uint32_t offset;
+	uint32_t unused_padding {0};
 
 	bool IsValid() const {
 		return block_id != INVALID_BLOCK;
@@ -51,6 +52,7 @@ struct MetaBlockPointer {
 
 	idx_t block_pointer;
 	uint32_t offset;
+	uint32_t unused_padding {0};
 
 	bool IsValid() const {
 		return block_pointer != DConstants::INVALID_INDEX;

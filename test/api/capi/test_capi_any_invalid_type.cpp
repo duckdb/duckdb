@@ -17,7 +17,10 @@ TEST_CASE("Test logical type creation with unsupported types", "[capi]") {
 	}
 }
 
-TEST_CASE("Test INVALID and ANY", "[capi]") {
+TEST_CASE("Test INVALID, ANY and SQLNULL", "[capi]") {
+	auto sql_null_type = duckdb_create_logical_type(DUCKDB_TYPE_SQLNULL);
+	duckdb_destroy_logical_type(&sql_null_type);
+
 	auto any_type = duckdb_create_logical_type(DUCKDB_TYPE_ANY);
 	auto invalid_type = duckdb_create_logical_type(DUCKDB_TYPE_INVALID);
 

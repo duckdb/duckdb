@@ -220,11 +220,11 @@ Allocator &Allocator::DefaultAllocator() {
 	return *DefaultAllocatorReference();
 }
 
-int64_t Allocator::DecayDelay() {
+optional_idx Allocator::DecayDelay() {
 #ifdef USE_JEMALLOC
-	return JemallocExtension::DecayDelay();
+	return NumericCast<idx_t>(JemallocExtension::DecayDelay());
 #else
-	return NumericLimits<int64_t>::Maximum();
+	return optional_idx();
 #endif
 }
 

@@ -46,19 +46,17 @@ idx_t ListSearchSimpleOp(Vector &list_vec, Vector &source_vec, Vector &target_ve
 
 template <bool RETURN_POSITION>
 idx_t ListSearchNestedOp(Vector &list_vec, Vector &source_vec, Vector &target_vec, Vector &result_vec,
-                         idx_t target_count) {
+                         const idx_t target_count) {
+	// Set up sort keys for nested types.
 	auto source_count = ListVector::GetListSize(list_vec);
-
-	// Setup sortkey for nested types
-	Vector source_sortkey_vec(LogicalType::BLOB, source_count);
-	Vector target_sortkey_vec(LogicalType::BLOB, target_count);
+	Vector source_sort_key_vec(LogicalType::BLOB, source_count);
+	Vector target_sort_key_vec(LogicalType::BLOB, target_count);
 
 	const OrderModifiers order_modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
+	CreateSortKeyHelpers::CreateSortKeyWithValidity(source_vec, source_sort_key_vec, order_modifiers, source_count);
+	CreateSortKeyHelpers::CreateSortKeyWithValidity(target_vec, target_sort_key_vec, order_modifiers, target_count);
 
-	CreateSortKeyHelpers::CreateSortKey(source_vec, source_count, order_modifiers, source_sortkey_vec);
-	CreateSortKeyHelpers::CreateSortKey(target_vec, target_count, order_modifiers, target_sortkey_vec);
-
-	return ListSearchSimpleOp<string_t, RETURN_POSITION>(list_vec, source_sortkey_vec, target_sortkey_vec, result_vec,
+	return ListSearchSimpleOp<string_t, RETURN_POSITION>(list_vec, source_sort_key_vec, target_sort_key_vec, result_vec,
 	                                                     target_count);
 }
 

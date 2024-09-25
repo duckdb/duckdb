@@ -801,7 +801,8 @@
       },
       {"id": 137,
         "name": "dialect_options.state_machine_options.comment",
-        "type": "CSVOption<char>"
+        "type": "CSVOption<char>",
+        "default": "CSVOption<char>('\\0')"
       },
       {"id": 138,
         "name": "dialect_options.rows_until_header",

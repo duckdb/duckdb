@@ -1,0 +1,70 @@
+# name: test/sql/tpch/tpch_power_test.test_slow
+# description: Test TPC-H power test
+# group: [tpch]
+
+# TPC-H power test
+mode skip
+
+require parquet
+
+require tpch
+
+statement ok
+ATTACH '/Users/myth/Programs/duckdb-tpch-power-test/gen/sf100/tpch.duckdb' AS tpch
+
+statement ok
+USE tpch
+
+statement ok
+SELECT COUNT(*) FROM lineitem
+
+statement ok
+SET wal_autocheckpoint='100MB'
+
+mode output_result
+
+concurrentloop threadid 0 8
+
+statement ok
+USE tpch
+
+# thread 1 is doing the refreshes
+loop i 1 100
+
+onlyif threadid=0
+statement ok
+BEGIN
+
+onlyif threadid=0
+statement ok
+INSERT INTO lineitem FROM read_parquet('/Users/myth/Programs/duckdb-tpch-power-test/gen/sf100/lineitem.tbl.u${i}.parquet')
+
+onlyif threadid=0
+statement ok
+INSERT INTO orders FROM read_parquet('/Users/myth/Programs/duckdb-tpch-power-test/gen/sf100/orders.tbl.u${i}.parquet')
+
+onlyif threadid=0
+statement ok
+DELETE FROM orders WHERE o_orderkey IN (SELECT column0 FROM read_parquet('/Users/myth/Programs/duckdb-tpch-power-test/gen/sf100/delete.${i}.parquet'))
+
+onlyif threadid=0
+statement ok
+DELETE FROM lineitem WHERE l_orderkey IN (SELECT column0 FROM read_parquet('/Users/myth/Programs/duckdb-tpch-power-test/gen/sf100/delete.${i}.parquet'))
+
+onlyif threadid=0
+statement ok
+COMMIT
+
+endloop
+
+# threads >1 are querying
+loop qnr 1 22
+
+skipif threadid=0
+statement ok
+PRAGMA tpch(${qnr})
+
+endloop
+
+
+endloop

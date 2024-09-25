@@ -323,6 +323,9 @@ static unique_ptr<FunctionData> BindConcatOperator(ClientContext &context, Scala
 	LogicalTypeId rhs;
 	FindFirstTwoArguments(arguments, lhs, rhs);
 
+	if (lhs == LogicalTypeId::UNKNOWN || rhs == LogicalTypeId::UNKNOWN) {
+		throw ParameterNotResolvedException();
+	}
 	if (lhs == LogicalTypeId::ARRAY || rhs == LogicalTypeId::ARRAY) {
 		HandleArrayBinding(context, arguments);
 		FindFirstTwoArguments(arguments, lhs, rhs);
@@ -332,8 +335,15 @@ static unique_ptr<FunctionData> BindConcatOperator(ClientContext &context, Scala
 		return HandleListBinding(context, bound_function, arguments, true);
 	}
 
+	LogicalType return_type;
+	if (lhs == LogicalTypeId::BLOB && rhs == LogicalTypeId::BLOB) {
+		return_type = LogicalType::BLOB;
+	} else {
+		return_type = LogicalType::VARCHAR;
+	}
+
 	// we can now assume that the input is a string or castable to a string
-	SetArgumentType(bound_function, LogicalType::VARCHAR, true);
+	SetArgumentType(bound_function, return_type, true);
 	return make_uniq<ConcatFunctionData>(bound_function.return_type, true);
 }
 
