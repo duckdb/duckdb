@@ -41,7 +41,7 @@ void MatchAndReplace(CSVOption<T> &original, CSVOption<T> &sniffed, const string
 		// We verify that the user input matches the sniffed value
 		if (original != sniffed) {
 			error += "CSV Sniffer: Sniffer detected value different than the user input for the " + name;
-			error += " options \n Set: " + original.FormatValue() + " Sniffed: " + sniffed.FormatValue() + "\n";
+			error += " options \n Set: " + original.FormatValue() + ", Sniffed: " + sniffed.FormatValue() + "\n";
 		}
 	} else {
 		// We replace the value of original with the sniffed value
@@ -228,8 +228,8 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 			if (set_names.size() == names.size()) {
 				for (idx_t i = 0; i < set_columns.Size(); i++) {
 					if (set_names[i] != names[i]) {
-						header_error += "Column at position: " + to_string(i) + " Set name: " + set_names[i] +
-						                " Sniffed Name: " + names[i] + "\n";
+						header_error += "Column at position: " + to_string(i) + ", Set name: " + set_names[i] +
+						                ", Sniffed Name: " + names[i] + "\n";
 						match = false;
 					}
 				}
