@@ -541,6 +541,7 @@ unique_ptr<PreparedStatement> DuckDBPyConnection::PrepareQuery(unique_ptr<SQLSta
 	auto &connection = con.GetConnection();
 	unique_ptr<PreparedStatement> prep;
 	{
+		D_ASSERT(py::gil_check());
 		py::gil_scoped_release release;
 		unique_lock<mutex> lock(py_connection_lock);
 
@@ -561,6 +562,7 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(PreparedStatement &p
 	auto named_values = TransformPreparedParameters(prep, params);
 	unique_ptr<QueryResult> res;
 	{
+		D_ASSERT(py::gil_check());
 		py::gil_scoped_release release;
 		unique_lock<std::mutex> lock(py_connection_lock);
 
@@ -877,6 +879,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(
 		auto_detect = true;
 	}
 
+	D_ASSERT(py::gil_check());
 	py::gil_scoped_release gil;
 	auto read_json_relation =
 	    make_shared_ptr<ReadJSONRelation>(connection.context, name, std::move(options), auto_detect);
@@ -1387,6 +1390,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 
 	// Create the ReadCSV Relation using the 'options'
 
+	D_ASSERT(py::gil_check());
 	py::gil_scoped_release gil;
 	auto read_csv_p = connection.ReadCSV(name, std::move(bind_parameters));
 	auto &read_csv = read_csv_p->Cast<ReadCSVRelation>();
@@ -1399,6 +1403,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 
 void DuckDBPyConnection::ExecuteImmediately(vector<unique_ptr<SQLStatement>> statements) {
 	auto &connection = con.GetConnection();
+	D_ASSERT(py::gil_check());
 	py::gil_scoped_release release;
 	if (statements.empty()) {
 		return;
@@ -1443,6 +1448,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const py::object &quer
 	if (py::none().is(params)) {
 		// FIXME: currently we can't create relations with prepared parameters
 		{
+			D_ASSERT(py::gil_check());
 			py::gil_scoped_release gil;
 			auto statement_type = last_statement->type;
 			switch (statement_type) {
@@ -1557,6 +1563,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &file_
 		}
 		named_parameters["compression"] = Value(py::str(compression));
 	}
+	D_ASSERT(py::gil_check());
 	py::gil_scoped_release gil;
 	return make_uniq<DuckDBPyRelation>(connection.TableFunction("parquet_scan", params, named_parameters)->Alias(name));
 }
@@ -1646,6 +1653,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterPythonObject(const 
 	if (!registered_objects.count(name)) {
 		return shared_from_this();
 	}
+	D_ASSERT(py::gil_check());
 	py::gil_scoped_release release;
 	// FIXME: DROP TEMPORARY VIEW? doesn't exist?
 	connection.Query("DROP VIEW \"" + name + "\"");
@@ -1691,6 +1699,8 @@ int DuckDBPyConnection::GetRowcount() {
 
 void DuckDBPyConnection::Close() {
 	con.SetResult(nullptr);
+	D_ASSERT(py::gil_check());
+	py::gil_scoped_release release;
 	con.SetConnection(nullptr);
 	con.SetDatabase(nullptr);
 	// https://peps.python.org/pep-0249/#Connection.close
@@ -1783,6 +1793,9 @@ void DuckDBPyConnection::Cursors::ClearCursors() {
 			// The cursor has already been closed
 			continue;
 		}
+		// This is *only* needed because we have a py::gil_scoped_release in Close, so it *needs* the GIL in order to
+		// release it don't ask me why it can't just realize there is no GIL and move on
+		py::gil_scoped_acquire gil;
 		cursor->Close();
 	}
 
@@ -1939,6 +1952,7 @@ static shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &databa
 	bool cache_instance = database_path != ":memory:" && !database_path.empty();
 	config.replacement_scans.emplace_back(PythonReplacementScan::Replace);
 	{
+		D_ASSERT(py::gil_check());
 		py::gil_scoped_release release;
 		unique_lock<mutex> lock(res->py_connection_lock);
 		auto database =
@@ -2199,6 +2213,7 @@ unique_lock<std::mutex> DuckDBPyConnection::AcquireConnectionLock() {
 	// we first release the gil and then acquire the connection lock
 	unique_lock<std::mutex> lock(py_connection_lock, std::defer_lock);
 	{
+		D_ASSERT(py::gil_check());
 		py::gil_scoped_release release;
 		lock.lock();
 	}
