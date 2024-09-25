@@ -122,7 +122,7 @@ public:
 	DUCKDB_API bool UseTimestamp(CatalogTransaction transaction, transaction_t timestamp);
 	static bool IsCommitted(transaction_t timestamp);
 
-	void UpdateTimestamp(CatalogEntry &entry, transaction_t timestamp);
+	static void UpdateTimestamp(CatalogEntry &entry, transaction_t timestamp);
 
 	mutex &GetCatalogLock() {
 		return catalog_lock;

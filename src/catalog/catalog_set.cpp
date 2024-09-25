@@ -88,10 +88,6 @@ CatalogSet::CatalogSet(optional_ptr<CatalogEntry> parent_p, Catalog &catalog_p, 
 CatalogSet::~CatalogSet() {
 }
 
-bool IsDependencyEntry(CatalogEntry &entry) {
-	return entry.type == CatalogType::DEPENDENCY_ENTRY;
-}
-
 bool CatalogSet::HasParentEntry() const {
 	return parent != nullptr;
 }
@@ -110,9 +106,8 @@ bool CatalogSet::StartChain(CatalogTransaction transaction, const string &name, 
 		return false;
 	}
 
-	// first create a dummy deleted entry for this entry
-	// so transactions started before the commit of this transaction don't
-	// see it yet
+	// first create a dummy deleted entry
+	// so other transactions will see that instead of the entry that is to be added.
 	auto dummy_node = make_uniq<InCatalogEntry>(CatalogType::INVALID, catalog, name);
 	dummy_node->timestamp = 0;
 	dummy_node->deleted = true;
@@ -123,18 +118,21 @@ bool CatalogSet::StartChain(CatalogTransaction transaction, const string &name, 
 }
 
 bool CatalogSet::VerifyVacancy(CatalogTransaction transaction, CatalogEntry &entry) {
-	// if it does, we have to check version numbers
 	if (HasConflict(transaction, entry.timestamp)) {
-		// current version has been written to by a currently active
-		// transaction
+		// A transaction that is not visible to our snapshot has already made a change to this entry.
+		// Because of Catalog limitations we can't push our change on this, even if the change was made by another
+		// active transaction that might end up being aborted. So we have to cancel this transaction.
 		throw TransactionException("Catalog write-write conflict on create with \"%s\"", entry.name);
 	}
-	// there is a current version that has been committed
-	// if it has not been deleted there is a conflict
+	// The entry is visible to our snapshot
 	if (!entry.deleted) {
 		return false;
 	}
 	return true;
+}
+
+static bool IsDependencyEntry(CatalogEntry &entry) {
+	return entry.type == CatalogType::DEPENDENCY_ENTRY;
 }
 
 void CatalogSet::CheckCatalogEntryInvariants(CatalogEntry &value, const string &name) {
@@ -169,7 +167,7 @@ optional_ptr<CatalogEntry> CatalogSet::CreateCommittedEntry(unique_ptr<CatalogEn
 	auto catalog_entry = entry.get();
 
 	entry->set = this;
-	// Set the timestamp to the first committed transaction
+	// Give the entry commit id 0, so it is visible to all transactions
 	entry->timestamp = 0;
 	map.AddEntry(std::move(entry));
 
@@ -185,7 +183,7 @@ bool CatalogSet::CreateEntryInternal(CatalogTransaction transaction, const strin
 			return false;
 		}
 	} else if (should_be_empty) {
-		// Verify that the chain is deleted, not altered by another transaction
+		// Verify that the entry is deleted, not altered by another transaction
 		if (!VerifyVacancy(transaction, *entry_value)) {
 			return false;
 		}
@@ -194,7 +192,7 @@ bool CatalogSet::CreateEntryInternal(CatalogTransaction transaction, const strin
 	// Finally add the new entry to the chain
 	auto value_ptr = value.get();
 	map.UpdateEntry(std::move(value));
-	// push the old entry in the undo buffer for this transaction
+	// Push the old entry in the undo buffer for this transaction, so it can be restored in the event of failure
 	if (transaction.transaction) {
 		DuckTransactionManager::Get(GetCatalog().GetAttached())
 		    .PushCatalogEntry(*transaction.transaction, value_ptr->Child());
@@ -206,10 +204,9 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
                              const LogicalDependencyList &dependencies) {
 	CheckCatalogEntryInvariants(*value, name);
 
-	// Set the timestamp to the timestamp of the current transaction
+	// Mark this entry as being created by the current active transaction
 	value->timestamp = transaction.transaction_id;
 	value->set = this;
-	// now add the dependency set of this object to the dependency manager
 	catalog.GetDependencyManager().AddObject(transaction, *value, dependencies);
 
 	// lock the catalog for writing
@@ -226,23 +223,23 @@ bool CatalogSet::CreateEntry(ClientContext &context, const string &name, unique_
 }
 
 optional_ptr<CatalogEntry> CatalogSet::GetEntryInternal(CatalogTransaction transaction, const string &name) {
+	// This method is used to retrieve an entry for the purpose of making a new version, through an alter/drop/create
 	auto entry_value = map.GetEntry(name);
 	if (!entry_value) {
-		// the entry does not exist, check if we can create a default entry
 		return nullptr;
 	}
 	auto &catalog_entry = *entry_value;
 
-	// if it does: we have to retrieve the entry and to check version numbers
+	// Check if this entry is visible to our snapshot
 	if (HasConflict(transaction, catalog_entry.timestamp)) {
-		// current version has been written to by a currently active
-		// transaction
+		// We intend to create a new version of the entry.
+		// Another transaction has already made an edit to this catalog entry, because of limitations in the Catalog we
+		// can't create an edit alongside this even if the other transaction might end up getting aborted. So we have to
+		// abort the transaction.
 		throw TransactionException("Catalog write-write conflict on alter with \"%s\"", catalog_entry.name);
 	}
-	// there is a current version that has been committed by this transaction
+	// The entry is visible to our snapshot, check if it's deleted
 	if (catalog_entry.deleted) {
-		// if the entry was already deleted, it now does not exist anymore
-		// so we return that we could not find it
 		return nullptr;
 	}
 	return &catalog_entry;

@@ -156,31 +156,28 @@ bool IsCatalogSetDeleted(CatalogEntry &catalog_entry) {
 void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {
-		// set the commit timestamp of the catalog entry to the given id
-		auto &catalog_entry = *Load<CatalogEntry *>(data);
-		D_ASSERT(catalog_entry.HasParent());
+		auto &old_entry = *Load<CatalogEntry *>(data);
+		D_ASSERT(old_entry.HasParent());
 
-		auto &catalog = catalog_entry.ParentCatalog();
+		auto &catalog = old_entry.ParentCatalog();
 		D_ASSERT(catalog.IsDuckCatalog());
 
-		auto &parent = catalog_entry.Parent();
-		if (IsCatalogSetDeleted(catalog_entry)) {
+		auto &new_entry = old_entry.Parent();
+		if (IsCatalogSetDeleted(old_entry)) {
 			throw TransactionException("The schema was deleted");
 		}
-		if (parent.type == CatalogType::DELETED_ENTRY && catalog_entry.set) {
-			catalog_entry.set->CommitDrop(commit_id, start_time, catalog_entry);
+		if (new_entry.type == CatalogType::DELETED_ENTRY && old_entry.set) {
+			old_entry.set->CommitDrop(commit_id, start_time, old_entry);
 		}
 		// Grab a write lock on the catalog
 		auto &duck_catalog = catalog.Cast<DuckCatalog>();
 		lock_guard<mutex> write_lock(duck_catalog.GetWriteLock());
-		lock_guard<mutex> read_lock(catalog_entry.set->GetCatalogLock());
-		catalog_entry.set->UpdateTimestamp(catalog_entry.Parent(), commit_id);
-		if (!StringUtil::CIEquals(catalog_entry.name, catalog_entry.Parent().name)) {
-			catalog_entry.set->UpdateTimestamp(catalog_entry, commit_id);
-		}
+		lock_guard<mutex> read_lock(old_entry.set->GetCatalogLock());
+		// Set the timestamp of the catalog entry to the given commit_id, marking it as committed
+		CatalogSet::UpdateTimestamp(old_entry.Parent(), commit_id);
 
 		// drop any blocks associated with the catalog entry if possible (e.g. in case of a DROP or ALTER)
-		CommitEntryDrop(catalog_entry, data + sizeof(CatalogEntry *));
+		CommitEntryDrop(old_entry, data + sizeof(CatalogEntry *));
 		break;
 	}
 	case UndoFlags::INSERT_TUPLE: {
@@ -218,9 +215,9 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 		// set the commit timestamp of the catalog entry to the given id
 		auto catalog_entry = Load<CatalogEntry *>(data);
 		D_ASSERT(catalog_entry->HasParent());
-		catalog_entry->set->UpdateTimestamp(catalog_entry->Parent(), transaction_id);
+		CatalogSet::UpdateTimestamp(catalog_entry->Parent(), transaction_id);
 		if (catalog_entry->name != catalog_entry->Parent().name) {
-			catalog_entry->set->UpdateTimestamp(*catalog_entry, transaction_id);
+			CatalogSet::UpdateTimestamp(*catalog_entry, transaction_id);
 		}
 		break;
 	}

@@ -436,6 +436,9 @@ string DependencyManager::CollectDependents(CatalogTransaction transaction, cata
 
 void DependencyManager::VerifyCommitDrop(CatalogTransaction transaction, transaction_t start_time,
                                          CatalogEntry &object) {
+	if (IsSystemEntry(object)) {
+		return;
+	}
 	auto info = GetLookupProperties(object);
 	ScanDependents(transaction, info, [&](DependencyEntry &dep) {
 		auto entry = LookupEntry(transaction, dep);
