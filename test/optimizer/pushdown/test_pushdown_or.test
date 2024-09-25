@@ -19,12 +19,6 @@ statement ok
 select * from t1 where a = 30000 or a = 50000 or a = 500;
 
 statement ok
-attach 'wat.db' as wat;
-
-statement ok
-use wat;
-
-statement ok
 call dbgen(sf=1);
 
 query I

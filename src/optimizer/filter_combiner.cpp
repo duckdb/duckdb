@@ -690,7 +690,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 						continue;
 					}
 				}
-				if (same_column_id) {
+				if (same_column_id && column_id_set) {
 					table_filters.PushFilter(column_id, std::move(conj_filter));
 				}
 			}
