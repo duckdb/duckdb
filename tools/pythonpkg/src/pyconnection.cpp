@@ -2211,15 +2211,4 @@ bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
 	return DuckDBPyConnection::GetArrowType(object) != PyArrowObjectType::Invalid;
 }
 
-unique_lock<std::mutex> DuckDBPyConnection::AcquireConnectionLock() {
-	// we first release the gil and then acquire the connection lock
-	unique_lock<std::mutex> lock(py_connection_lock, std::defer_lock);
-	{
-		D_ASSERT(py::gil_check());
-		py::gil_scoped_release release;
-		lock.lock();
-	}
-	return lock;
-}
-
 } // namespace duckdb
