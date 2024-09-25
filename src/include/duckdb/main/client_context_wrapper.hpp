@@ -19,6 +19,9 @@ public:
 	explicit ClientContextWrapper(const shared_ptr<ClientContext> &context);
 	shared_ptr<ClientContext> GetContext();
 	shared_ptr<ClientContext> TryGetContext();
+	virtual void TryBindRelation(Relation &relation, vector<ColumnDefinition> &columns) {
+		GetContext()->TryBindRelation(relation, columns);
+	}
 
 private:
 	weak_ptr<ClientContext> client_context;

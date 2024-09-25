@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <utility>
-
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/relation_type.hpp"
@@ -38,39 +36,33 @@ class TableRef;
 
 class RelationContextWrapper : public ClientContextWrapper {
 public:
-	explicit RelationContextWrapper(const shared_ptr<ClientContext> &context, bool acquire_lock = true)
-	    : ClientContextWrapper(context), acquire_lock(acquire_lock) {};
+	virtual ~RelationContextWrapper() = default;
+	explicit RelationContextWrapper(const shared_ptr<ClientContext> &context) : ClientContextWrapper(context) {};
 
-	explicit RelationContextWrapper(const ClientContextWrapper &context, bool acquire_lock = true)
-	    : ClientContextWrapper(context), acquire_lock(acquire_lock) {};
+	explicit RelationContextWrapper(const ClientContextWrapper &context) : ClientContextWrapper(context) {};
 
-	void TryBindRelation(Relation &relation, vector<ColumnDefinition> &columns) {
-		if (acquire_lock) {
-			GetContext()->TryBindRelation(relation, columns);
-		} else {
-			GetContext()->InternalTryBindRelation(relation, columns);
-		}
+	void TryBindRelation(Relation &relation, vector<ColumnDefinition> &columns) override {
+		GetContext()->InternalTryBindRelation(relation, columns);
 	}
 
 private:
 	weak_ptr<ClientContext> client_context;
-	bool acquire_lock;
 };
 
 class Relation : public enable_shared_from_this<Relation> {
 public:
-	Relation(const shared_ptr<ClientContext> &context, const RelationType type, const bool acquire_lock = true)
-	    : context(context, acquire_lock), type(type) {
+	Relation(const shared_ptr<ClientContext> &context_p, const RelationType type) : type(type) {
+		context = make_shared_ptr<ClientContextWrapper>(context_p);
 	}
-	Relation(const ClientContextWrapper &context, RelationType type) : context(context), type(type) {
+	Relation(const shared_ptr<ClientContextWrapper> &context, RelationType type) : context(context), type(type) {
 	}
 
-	Relation(RelationContextWrapper context, RelationType type) : context(std::move(context)), type(type) {
+	Relation(const shared_ptr<RelationContextWrapper> &context, RelationType type) : context(context), type(type) {
 	}
 
 	virtual ~Relation() = default;
 
-	RelationContextWrapper context;
+	shared_ptr<ClientContextWrapper> context;
 	RelationType type;
 	vector<shared_ptr<ExternalDependency>> external_dependencies;
 
@@ -91,7 +83,7 @@ public:
 	DUCKDB_API shared_ptr<Relation> CreateView(const string &name, bool replace = true, bool temporary = false);
 	DUCKDB_API shared_ptr<Relation> CreateView(const string &schema_name, const string &name, bool replace = true,
 	                                           bool temporary = false);
-	DUCKDB_API unique_ptr<QueryResult> Query(const string &sql);
+	DUCKDB_API unique_ptr<QueryResult> Query(const string &sql) const;
 	DUCKDB_API unique_ptr<QueryResult> Query(const string &name, const string &sql);
 
 	//! Explain the query plan of this relation
@@ -205,7 +197,7 @@ public:
 	DUCKDB_API vector<shared_ptr<ExternalDependency>> GetAllDependencies();
 
 protected:
-	DUCKDB_API string RenderWhitespace(idx_t depth);
+	DUCKDB_API static string RenderWhitespace(idx_t depth);
 
 public:
 	template <class TARGET>

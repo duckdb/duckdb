@@ -7,9 +7,14 @@
 
 namespace duckdb {
 
-ViewRelation::ViewRelation(const shared_ptr<ClientContext> &context, string schema_name_p, string view_name_p,
-                           bool acquire_lock)
-    : Relation(context, RelationType::VIEW_RELATION, acquire_lock), schema_name(std::move(schema_name_p)),
+ViewRelation::ViewRelation(const shared_ptr<ClientContext> &context, string schema_name_p, string view_name_p)
+    : Relation(context, RelationType::VIEW_RELATION), schema_name(std::move(schema_name_p)),
+      view_name(std::move(view_name_p)) {
+	TryBindRelation(columns);
+}
+
+ViewRelation::ViewRelation(const shared_ptr<RelationContextWrapper> &context, string schema_name_p, string view_name_p)
+    : Relation(context, RelationType::VIEW_RELATION), schema_name(std::move(schema_name_p)),
       view_name(std::move(view_name_p)) {
 	TryBindRelation(columns);
 }

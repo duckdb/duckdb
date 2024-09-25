@@ -9,9 +9,13 @@
 
 namespace duckdb {
 
-TableRelation::TableRelation(const shared_ptr<ClientContext> &context, unique_ptr<TableDescription> description,
-                             bool acquire_lock)
-    : Relation(context, RelationType::TABLE_RELATION, acquire_lock), description(std::move(description)) {
+TableRelation::TableRelation(const shared_ptr<ClientContext> &context, unique_ptr<TableDescription> description)
+    : Relation(context, RelationType::TABLE_RELATION), description(std::move(description)) {
+}
+
+TableRelation::TableRelation(const shared_ptr<RelationContextWrapper> &context,
+                             unique_ptr<TableDescription> description)
+    : Relation(context, RelationType::TABLE_RELATION), description(std::move(description)) {
 }
 
 unique_ptr<QueryNode> TableRelation::GetQueryNode() {
@@ -55,15 +59,15 @@ static unique_ptr<ParsedExpression> ParseCondition(ClientContext &context, const
 void TableRelation::Update(const string &update_list, const string &condition) {
 	vector<string> update_columns;
 	vector<unique_ptr<ParsedExpression>> expressions;
-	auto cond = ParseCondition(*context.GetContext(), condition);
-	Parser::ParseUpdateList(update_list, update_columns, expressions, context.GetContext()->GetParserOptions());
+	auto cond = ParseCondition(*context->GetContext(), condition);
+	Parser::ParseUpdateList(update_list, update_columns, expressions, context->GetContext()->GetParserOptions());
 	auto update = make_shared_ptr<UpdateRelation>(context, std::move(cond), description->schema, description->table,
 	                                              std::move(update_columns), std::move(expressions));
 	update->Execute();
 }
 
 void TableRelation::Delete(const string &condition) {
-	auto cond = ParseCondition(*context.GetContext(), condition);
+	auto cond = ParseCondition(*context->GetContext(), condition);
 	auto del = make_shared_ptr<DeleteRelation>(context, std::move(cond), description->schema, description->table);
 	del->Execute();
 }

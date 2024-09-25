@@ -9,9 +9,8 @@
 namespace duckdb {
 
 ValueRelation::ValueRelation(const shared_ptr<ClientContext> &context, const vector<vector<Value>> &values,
-                             vector<string> names_p, string alias_p, bool acquire_lock)
-    : Relation(context, RelationType::VALUE_LIST_RELATION, acquire_lock), names(std::move(names_p)),
-      alias(std::move(alias_p)) {
+                             vector<string> names_p, string alias_p)
+    : Relation(context, RelationType::VALUE_LIST_RELATION), names(std::move(names_p)), alias(std::move(alias_p)) {
 	// create constant expressions for the values
 	for (idx_t row_idx = 0; row_idx < values.size(); row_idx++) {
 		auto &list = values[row_idx];
@@ -29,6 +28,22 @@ ValueRelation::ValueRelation(const shared_ptr<ClientContext> &context, const str
                              vector<string> names_p, string alias_p)
     : Relation(context, RelationType::VALUE_LIST_RELATION), names(std::move(names_p)), alias(std::move(alias_p)) {
 	this->expressions = Parser::ParseValuesList(values_list, context->GetParserOptions());
+	QueryResult::DeduplicateColumns(names);
+	TryBindRelation(columns);
+}
+
+ValueRelation::ValueRelation(const shared_ptr<RelationContextWrapper> &context, const vector<vector<Value>> &values,
+                             vector<string> names_p, string alias_p)
+    : Relation(context, RelationType::VALUE_LIST_RELATION), names(std::move(names_p)), alias(std::move(alias_p)) {
+	// create constant expressions for the values
+	for (idx_t row_idx = 0; row_idx < values.size(); row_idx++) {
+		auto &list = values[row_idx];
+		vector<unique_ptr<ParsedExpression>> expressions;
+		for (idx_t col_idx = 0; col_idx < list.size(); col_idx++) {
+			expressions.push_back(make_uniq<ConstantExpression>(list[col_idx]));
+		}
+		this->expressions.push_back(std::move(expressions));
+	}
 	QueryResult::DeduplicateColumns(names);
 	TryBindRelation(columns);
 }

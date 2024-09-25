@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-UpdateRelation::UpdateRelation(ClientContextWrapper &context, unique_ptr<ParsedExpression> condition_p,
+UpdateRelation::UpdateRelation(shared_ptr<ClientContextWrapper> &context, unique_ptr<ParsedExpression> condition_p,
                                string schema_name_p, string table_name_p, vector<string> update_columns_p,
                                vector<unique_ptr<ParsedExpression>> expressions_p)
     : Relation(context, RelationType::UPDATE_RELATION), condition(std::move(condition_p)),
