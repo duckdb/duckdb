@@ -164,6 +164,8 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 
 		auto &new_entry = old_entry.Parent();
 		if (IsCatalogSetDeleted(old_entry)) {
+			//! TODO: make this more generic, we can get the type of catalog entry and use it in the message
+			// we can probably also use the DependencyManager to get this information
 			throw TransactionException("The schema was deleted");
 		}
 		if (new_entry.type == CatalogType::DELETED_ENTRY && old_entry.set) {
