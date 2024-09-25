@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/null_filter.hpp"
+#include "duckdb/planner/filter/zone_map_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 
@@ -666,6 +667,11 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 							break;
 						}
 						auto &const_val = comp.right->Cast<BoundConstantExpression>();
+						if (const_val.value.type().IsTemporal()) {
+							same_column_id = false;
+							same_column_id = false;
+							break;
+						}
 						auto const_filter = make_uniq<ConstantFilter>(comp.type, const_val.value);
 						zone_filter = make_uniq<ZonemapFilter>();
 						zone_filter->child_filter = std::move(const_filter);
@@ -681,6 +687,11 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 							break;
 						}
 						auto &const_val = comp.left->Cast<BoundConstantExpression>();
+						if (const_val.value.type().IsTemporal()) {
+							same_column_id = false;
+							same_column_id = false;
+							break;
+						}
 						auto const_filter = make_uniq<ConstantFilter>(comp.type, const_val.value);
 						zone_filter = make_uniq<ZonemapFilter>();
 						zone_filter->child_filter = std::move(const_filter);
