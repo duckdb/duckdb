@@ -42,7 +42,8 @@ MangledDependencyName::MangledDependencyName(const MangledEntryName &from, const
 	AssertMangledName(this->name, 5);
 }
 
-DependencyManager::DependencyManager(DuckCatalog &catalog) : catalog(catalog), subjects(catalog), dependents(catalog) {
+DependencyManager::DependencyManager(DuckCatalog &catalog)
+    : catalog(catalog), subjects(nullptr, catalog), dependents(nullptr, catalog) {
 }
 
 string DependencyManager::GetSchema(const CatalogEntry &entry) {

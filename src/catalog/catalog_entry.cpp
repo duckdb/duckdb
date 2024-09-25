@@ -79,6 +79,9 @@ CatalogEntry &CatalogEntry::Child() {
 CatalogEntry &CatalogEntry::Parent() {
 	return *parent;
 }
+const CatalogEntry &CatalogEntry::Parent() const {
+	return *parent;
+}
 
 Catalog &CatalogEntry::ParentCatalog() {
 	throw InternalException("CatalogEntry::ParentCatalog called on catalog entry without catalog");

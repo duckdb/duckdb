@@ -10,19 +10,21 @@ CREATE SCHEMA foo;
 statement ok con2
 START TRANSACTION;
 
+# Drop the schema in con2
 statement ok con2
 DROP SCHEMA IF EXISTS foo CASCADE;
 
-# shouldn't the following cause a write-write conflict?
+# Create a table on the schema we're dropping
+# This should succeed because the schema drop isn't committed yet
 statement ok con1
 create table foo.bar as select 42;
 
+# This now fails because the 'create table' was committed
 statement error con2
 COMMIT;
 ----
-Cannot drop entry
+Could not commit DROP
 
-# FIXME
-# statement ok
-# DROP SCHEMA foo CASCADE;
+statement ok
+DROP SCHEMA foo CASCADE;
 

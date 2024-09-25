@@ -16,7 +16,7 @@ namespace duckdb {
 
 DuckCatalog::DuckCatalog(AttachedDatabase &db)
     : Catalog(db), dependency_manager(make_uniq<DependencyManager>(*this)),
-      schemas(make_uniq<CatalogSet>(*this, make_uniq<DefaultSchemaGenerator>(*this))) {
+      schemas(make_uniq<CatalogSet>(nullptr, *this, make_uniq<DefaultSchemaGenerator>(*this))) {
 }
 
 DuckCatalog::~DuckCatalog() {

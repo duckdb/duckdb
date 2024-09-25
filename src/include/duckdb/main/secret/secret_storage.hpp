@@ -129,7 +129,7 @@ protected:
 class TemporarySecretStorage : public CatalogSetSecretStorage {
 public:
 	TemporarySecretStorage(const string &name_p, DatabaseInstance &db_p) : CatalogSetSecretStorage(db_p, name_p) {
-		secrets = make_uniq<CatalogSet>(Catalog::GetSystemCatalog(db));
+		secrets = make_uniq<CatalogSet>(nullptr, Catalog::GetSystemCatalog(db));
 		persistent = false;
 	}
 

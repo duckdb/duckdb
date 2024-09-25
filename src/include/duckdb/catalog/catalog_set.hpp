@@ -59,7 +59,8 @@ public:
 	};
 
 public:
-	DUCKDB_API explicit CatalogSet(Catalog &catalog, unique_ptr<DefaultGenerator> defaults = nullptr);
+	DUCKDB_API explicit CatalogSet(optional_ptr<CatalogEntry> parent, Catalog &catalog,
+	                               unique_ptr<DefaultGenerator> defaults = nullptr);
 	~CatalogSet();
 
 	//! Create an entry in the catalog set. Returns whether or not it was
@@ -81,6 +82,9 @@ public:
 	DUCKDB_API DuckCatalog &GetCatalog();
 
 	bool AlterOwnership(CatalogTransaction transaction, ChangeOwnershipInfo &info);
+
+	bool HasParentEntry() const;
+	const CatalogEntry &ParentEntry() const;
 
 	void CleanupEntry(CatalogEntry &catalog_entry);
 
@@ -116,6 +120,7 @@ public:
 	DUCKDB_API bool CommittedAfterStarting(CatalogTransaction transaction, transaction_t timestamp);
 	DUCKDB_API bool HasConflict(CatalogTransaction transaction, transaction_t timestamp);
 	DUCKDB_API bool UseTimestamp(CatalogTransaction transaction, transaction_t timestamp);
+	static bool IsCommitted(transaction_t timestamp);
 
 	void UpdateTimestamp(CatalogEntry &entry, transaction_t timestamp);
 
@@ -153,6 +158,8 @@ private:
 	                         AlterInfo &alter_info, unique_lock<mutex> &read_lock);
 
 private:
+	//! The CatalogEntry that owns this CatalogSet (if the CatalogSet is owned by a CatalogEntry)
+	optional_ptr<CatalogEntry> parent;
 	DuckCatalog &catalog;
 	//! The catalog lock is used to make changes to the data
 	mutex catalog_lock;

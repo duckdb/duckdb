@@ -131,31 +131,56 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
 	}
 }
 
+bool IsCatalogSetDeleted(CatalogEntry &catalog_entry) {
+	if (!catalog_entry.set) {
+		return false; // ??
+	}
+	if (!catalog_entry.set->HasParentEntry()) {
+		// CatalogSet is not owned by a CatalogEntry, no risk of it being deleted
+		return false;
+	}
+	auto &parent_entry = catalog_entry.set->ParentEntry();
+	// It should not be possible for the direct parent to be deleted
+	D_ASSERT(parent_entry.type != CatalogType::DELETED_ENTRY);
+	if (!parent_entry.HasParent()) {
+		return false;
+	}
+	if (parent_entry.Parent().type == CatalogType::DELETED_ENTRY &&
+	    CatalogSet::IsCommitted(parent_entry.Parent().timestamp)) {
+		// The entry that owns the CatalogSet has been deleted
+		return true;
+	}
+	return false;
+}
+
 void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {
 		// set the commit timestamp of the catalog entry to the given id
-		auto catalog_entry = Load<CatalogEntry *>(data);
-		D_ASSERT(catalog_entry->HasParent());
+		auto &catalog_entry = *Load<CatalogEntry *>(data);
+		D_ASSERT(catalog_entry.HasParent());
 
-		auto &catalog = catalog_entry->ParentCatalog();
+		auto &catalog = catalog_entry.ParentCatalog();
 		D_ASSERT(catalog.IsDuckCatalog());
 
-		auto &parent = catalog_entry->Parent();
-		if (parent.type == CatalogType::DELETED_ENTRY && catalog_entry->set) {
-			catalog_entry->set->CommitDrop(commit_id, start_time, *catalog_entry);
+		auto &parent = catalog_entry.Parent();
+		if (IsCatalogSetDeleted(catalog_entry)) {
+			throw TransactionException("The schema was deleted");
+		}
+		if (parent.type == CatalogType::DELETED_ENTRY && catalog_entry.set) {
+			catalog_entry.set->CommitDrop(commit_id, start_time, catalog_entry);
 		}
 		// Grab a write lock on the catalog
 		auto &duck_catalog = catalog.Cast<DuckCatalog>();
 		lock_guard<mutex> write_lock(duck_catalog.GetWriteLock());
-		lock_guard<mutex> read_lock(catalog_entry->set->GetCatalogLock());
-		catalog_entry->set->UpdateTimestamp(catalog_entry->Parent(), commit_id);
-		if (!StringUtil::CIEquals(catalog_entry->name, catalog_entry->Parent().name)) {
-			catalog_entry->set->UpdateTimestamp(*catalog_entry, commit_id);
+		lock_guard<mutex> read_lock(catalog_entry.set->GetCatalogLock());
+		catalog_entry.set->UpdateTimestamp(catalog_entry.Parent(), commit_id);
+		if (!StringUtil::CIEquals(catalog_entry.name, catalog_entry.Parent().name)) {
+			catalog_entry.set->UpdateTimestamp(catalog_entry, commit_id);
 		}
 
 		// drop any blocks associated with the catalog entry if possible (e.g. in case of a DROP or ALTER)
-		CommitEntryDrop(*catalog_entry, data + sizeof(CatalogEntry *));
+		CommitEntryDrop(catalog_entry, data + sizeof(CatalogEntry *));
 		break;
 	}
 	case UndoFlags::INSERT_TUPLE: {

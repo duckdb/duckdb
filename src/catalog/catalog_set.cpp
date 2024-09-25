@@ -81,8 +81,8 @@ optional_ptr<CatalogEntry> CatalogEntryMap::GetEntry(const string &name) {
 	return entry->second.get();
 }
 
-CatalogSet::CatalogSet(Catalog &catalog_p, unique_ptr<DefaultGenerator> defaults)
-    : catalog(catalog_p.Cast<DuckCatalog>()), defaults(std::move(defaults)) {
+CatalogSet::CatalogSet(optional_ptr<CatalogEntry> parent_p, Catalog &catalog_p, unique_ptr<DefaultGenerator> defaults)
+    : parent(parent_p), catalog(catalog_p.Cast<DuckCatalog>()), defaults(std::move(defaults)) {
 	D_ASSERT(catalog_p.IsDuckCatalog());
 }
 CatalogSet::~CatalogSet() {
@@ -90,6 +90,15 @@ CatalogSet::~CatalogSet() {
 
 bool IsDependencyEntry(CatalogEntry &entry) {
 	return entry.type == CatalogType::DEPENDENCY_ENTRY;
+}
+
+bool CatalogSet::HasParentEntry() const {
+	return parent != nullptr;
+}
+
+const CatalogEntry &CatalogSet::ParentEntry() const {
+	D_ASSERT(HasParentEntry());
+	return *parent;
 }
 
 bool CatalogSet::StartChain(CatalogTransaction transaction, const string &name, unique_lock<mutex> &read_lock) {
@@ -472,6 +481,10 @@ bool CatalogSet::CommittedAfterStarting(CatalogTransaction transaction, transact
 
 bool CatalogSet::HasConflict(CatalogTransaction transaction, transaction_t timestamp) {
 	return CreatedByOtherActiveTransaction(transaction, timestamp) || CommittedAfterStarting(transaction, timestamp);
+}
+
+bool CatalogSet::IsCommitted(transaction_t timestamp) {
+	return timestamp < TRANSACTION_ID_START;
 }
 
 bool CatalogSet::UseTimestamp(CatalogTransaction transaction, transaction_t timestamp) {

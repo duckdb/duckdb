@@ -81,11 +81,11 @@ static void LazyLoadIndexes(ClientContext &context, CatalogEntry &entry) {
 }
 
 DuckSchemaEntry::DuckSchemaEntry(Catalog &catalog, CreateSchemaInfo &info)
-    : SchemaCatalogEntry(catalog, info), tables(catalog, make_uniq<DefaultViewGenerator>(catalog, *this)),
-      indexes(catalog), table_functions(catalog, make_uniq<DefaultTableFunctionGenerator>(catalog, *this)),
-      copy_functions(catalog), pragma_functions(catalog),
-      functions(catalog, make_uniq<DefaultFunctionGenerator>(catalog, *this)), sequences(catalog), collations(catalog),
-      types(catalog, make_uniq<DefaultTypeGenerator>(catalog, *this)) {
+    : SchemaCatalogEntry(catalog, info), tables(this, catalog, make_uniq<DefaultViewGenerator>(catalog, *this)),
+      indexes(this, catalog), table_functions(this, catalog, make_uniq<DefaultTableFunctionGenerator>(catalog, *this)),
+      copy_functions(this, catalog), pragma_functions(this, catalog),
+      functions(this, catalog, make_uniq<DefaultFunctionGenerator>(catalog, *this)), sequences(this, catalog),
+      collations(this, catalog), types(this, catalog, make_uniq<DefaultTypeGenerator>(catalog, *this)) {
 }
 
 unique_ptr<CatalogEntry> DuckSchemaEntry::Copy(ClientContext &context) const {

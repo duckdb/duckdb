@@ -148,7 +148,7 @@ LocalFileSecretStorage::LocalFileSecretStorage(SecretManager &manager, DatabaseI
 	}
 
 	auto &catalog = Catalog::GetSystemCatalog(db);
-	secrets = make_uniq<CatalogSet>(Catalog::GetSystemCatalog(db),
+	secrets = make_uniq<CatalogSet>(nullptr, Catalog::GetSystemCatalog(db),
 	                                make_uniq<DefaultSecretGenerator>(catalog, manager, persistent_secrets));
 }
 
