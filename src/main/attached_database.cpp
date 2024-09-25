@@ -56,6 +56,11 @@ AttachOptions::AttachOptions(const unique_ptr<AttachInfo> &info, const AccessMod
 			continue;
 		}
 
+		if (entry.first == "default_table") {
+			default_table = QualifiedName::Parse(StringValue::Get(entry.second.DefaultCastAs(LogicalType::VARCHAR)));
+			continue;
+		}
+
 		// We allow unrecognized options in storage extensions. To track that we saw an unrecognized option,
 		// we set unrecognized_option.
 		if (unrecognized_option.empty()) {
