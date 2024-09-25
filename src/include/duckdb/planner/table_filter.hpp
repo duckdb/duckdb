@@ -73,42 +73,6 @@ public:
 	}
 };
 
-class ZonemapFilter : public TableFilter {
-public:
-	static constexpr const TableFilterType TYPE = TableFilterType::ZONE_MAP;
-
-public:
-	// zonemap filter
-	unique_ptr<TableFilter> child_filter;
-
-	ZonemapFilter() : TableFilter(TableFilterType::ZONE_MAP) {
-	}
-
-	string ToString(const string &column_name) override {
-		return child_filter->ToString(column_name);
-	}
-
-	unique_ptr<TableFilter> Copy() const override {
-		auto copy = make_uniq<ZonemapFilter>();
-		copy->child_filter = child_filter->Copy();
-		return copy;
-	}
-
-	unique_ptr<Expression> ToExpression(const Expression &column) const override {
-		return nullptr;
-	};
-
-	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override {
-		return child_filter->CheckStatistics(stats);
-	}
-
-	void Serialize(Serializer &serializer) const override;
-	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
-
-	~ZonemapFilter() override {
-	}
-};
-
 class TableFilterSet {
 public:
 	unordered_map<idx_t, unique_ptr<TableFilter>> filters;
