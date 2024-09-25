@@ -553,6 +553,45 @@ class DataFrame:
             result = self.relation.join(other.relation, on, how)
         return DataFrame(result, self.session)
 
+    def crossJoin(self, other: "DataFrame") -> "DataFrame":
+        """Returns the cartesian product with another :class:`DataFrame`.
+
+        .. versionadded:: 2.1.0
+
+        .. versionchanged:: 3.4.0
+            Supports Spark Connect.
+
+        Parameters
+        ----------
+        other : :class:`DataFrame`
+            Right side of the cartesian product.
+
+        Returns
+        -------
+        :class:`DataFrame`
+            Joined DataFrame.
+
+        Examples
+        --------
+        >>> from pyspark.sql import Row
+        >>> df = spark.createDataFrame(
+        ...     [(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
+        >>> df2 = spark.createDataFrame(
+        ...     [Row(height=80, name="Tom"), Row(height=85, name="Bob")])
+        >>> df.crossJoin(df2.select("height")).select("age", "name", "height").show()
+        +---+-----+------+
+        |age| name|height|
+        +---+-----+------+
+        | 14|  Tom|    80|
+        | 14|  Tom|    85|
+        | 23|Alice|    80|
+        | 23|Alice|    85|
+        | 16|  Bob|    80|
+        | 16|  Bob|    85|
+        +---+-----+------+
+        """
+        return DataFrame(self.relation.cross(other.relation), self.session)
+
     def alias(self, alias: str) -> "DataFrame":
         """Returns a new :class:`DataFrame` with an alias set.
 

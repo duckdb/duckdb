@@ -95,7 +95,10 @@ void Optimizer::RunBuiltInOptimizers() {
 	case LogicalOperatorType::LOGICAL_CREATE_SECRET:
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
 		// skip optimizing simple & often-occurring plans unaffected by rewrites
-		return;
+		if (plan->children.empty()) {
+			return;
+		}
+		break;
 	default:
 		break;
 	}
