@@ -416,6 +416,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const py::object &query, py::object params_p) {
+	py::gil_scoped_acquire gil;
 	con.SetResult(nullptr);
 	if (params_p.is_none()) {
 		params_p = py::list();
@@ -600,6 +601,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteFromString(const strin
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const py::object &query, py::object params) {
+	py::gil_scoped_acquire gil;
 	con.SetResult(nullptr);
 
 	auto statements = GetStatements(query);

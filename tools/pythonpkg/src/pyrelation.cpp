@@ -790,6 +790,7 @@ unique_ptr<QueryResult> DuckDBPyRelation::ExecuteInternal(bool stream_result) {
 }
 
 void DuckDBPyRelation::ExecuteOrThrow(bool stream_result) {
+	py::gil_scoped_acquire gil;
 	result.reset();
 	auto query_result = ExecuteInternal(stream_result);
 	if (!query_result) {
