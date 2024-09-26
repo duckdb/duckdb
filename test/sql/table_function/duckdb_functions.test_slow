@@ -8,6 +8,10 @@ PRAGMA enable_verification
 statement ok
 SELECT * FROM duckdb_functions();
 
+query I
+select function_name from duckdb_functions() where not internal order by 1;
+----
+
 statement ok
 CREATE MACRO add_default1(a := 3, b := 5) AS a + b
 
