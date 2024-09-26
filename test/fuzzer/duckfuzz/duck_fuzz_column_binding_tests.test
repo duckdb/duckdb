@@ -31,9 +31,10 @@ SELECT subq_0.c6 AS c1, subq_0.c14 AS c2, subq_0.c7 AS c4, subq_0.c4 AS c5 FROM 
 statement ok
 call dbgen(sf=0.1);
 
+require icu
 
 # https://github.com/duckdb/duckdb-fuzzer/issues/3240
-statement error
+query I
 SELECT NULL FROM (SELECT CAST(COALESCE(ref_3.ps_partkey, ref_4.p_partkey) AS BIGINT) AS c0, ref_0.n_regionkey AS c1, ref_5.r_regionkey AS c2, ref_0.n_comment AS c3 FROM main.nation AS ref_0 LEFT JOIN main.part AS ref_1 ON ((CAST(NULL AS VARCHAR) !~~ ref_0.n_comment)) RIGHT JOIN main.part AS ref_2 ON (((ref_1.p_size IS NOT NULL) AND 1)) INNER JOIN main.partsupp AS ref_3 LEFT JOIN main.part AS ref_4 RIGHT JOIN main.region AS ref_5 RIGHT JOIN main.part AS ref_6 INNER JOIN main.part AS ref_7 ON (EXISTS(SELECT ref_6.p_comment AS c0, ref_8.c_phone AS c1, ref_8.c_phone AS c2, ref_6.p_mfgr AS c3, ref_7.p_partkey AS c4 FROM main.customer AS ref_8 WHERE (((ref_6.p_container ^@ ref_8.c_mktsegment) AND 0) OR (0 AND (ref_8.c_comment ~~ ref_6.p_mfgr) AND EXISTS(SELECT ref_9.l_linestatus AS c0, 30 AS c1 FROM main.lineitem AS ref_9 WHERE ((ref_7.p_type ~~~ ref_9.l_shipmode) AND (ref_6.p_comment !~~* ref_6.p_container)) LIMIT 50))) LIMIT 37)) ON (1) ON ((ref_4.p_type = ref_7.p_name)) ON ((ref_5.r_name ^@ ref_4.p_brand)) ON ((ref_2.p_type ~~* ref_7.p_comment)) WHERE (ref_5.r_name IS NULL) LIMIT 145) AS subq_0 WHERE (("map"() IS NOT NULL) OR ((SELECT p_name FROM main.part LIMIT 1 OFFSET 2) !~~* subq_0.c3) OR (dayofweek(CAST(now() AS TIMESTAMP WITH TIME ZONE)) IS NULL))
 ----
-<REGEX>:.*Binder Error.*
+NULL

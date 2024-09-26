@@ -20,6 +20,9 @@ SELECT * FROM duckdb_functions();
 statement ok
 SELECT * FROM duckdb_functions() WHERE function_type='table';
 
+statement ok
+SELECT sqrt(4)
+
 query I
 select distinct function_name from duckdb_functions() where function_name='sqrt';
 ----
