@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/planner/filter/constant_filter.hpp
+// duckdb/planner/filter/zone_map_filter.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -15,7 +15,7 @@
 
 namespace duckdb {
 
-class ZonemapFilter : public TableFilter {
+class ZoneMapFilter : public TableFilter {
 public:
 	static constexpr const TableFilterType TYPE = TableFilterType::ZONE_MAP;
 
@@ -23,7 +23,7 @@ public:
 	// zonemap filter
 	unique_ptr<TableFilter> child_filter;
 
-	ZonemapFilter() : TableFilter(TableFilterType::ZONE_MAP) {
+	ZoneMapFilter() : TableFilter(TableFilterType::ZONE_MAP) {
 	}
 
 	string ToString(const string &column_name) override;
@@ -33,7 +33,7 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
 
-	~ZonemapFilter() override {
+	~ZoneMapFilter() override {
 	}
 };
 

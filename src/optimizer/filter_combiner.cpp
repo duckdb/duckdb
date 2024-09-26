@@ -650,7 +650,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 				idx_t column_id = 0;
 				auto conj_filter = make_uniq<ConjunctionOrFilter>();
 				for (auto &child : conj.children) {
-					unique_ptr<ZonemapFilter> zone_filter;
+					unique_ptr<ZoneMapFilter> zone_filter;
 					if (child->GetExpressionClass() != ExpressionClass::BOUND_COMPARISON) {
 						same_column_id = false;
 						break;
@@ -673,7 +673,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 							break;
 						}
 						auto const_filter = make_uniq<ConstantFilter>(comp.type, const_val.value);
-						zone_filter = make_uniq<ZonemapFilter>();
+						zone_filter = make_uniq<ZoneMapFilter>();
 						zone_filter->child_filter = std::move(const_filter);
 						conj_filter->child_filters.push_back(std::move(zone_filter));
 					} else if (comp.left->expression_class == ExpressionClass::BOUND_CONSTANT &&
@@ -693,7 +693,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 							break;
 						}
 						auto const_filter = make_uniq<ConstantFilter>(comp.type, const_val.value);
-						zone_filter = make_uniq<ZonemapFilter>();
+						zone_filter = make_uniq<ZoneMapFilter>();
 						zone_filter->child_filter = std::move(const_filter);
 						conj_filter->child_filters.push_back(std::move(zone_filter));
 					} else {
