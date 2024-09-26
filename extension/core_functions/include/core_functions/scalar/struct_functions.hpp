@@ -24,22 +24,4 @@ struct StructInsertFun {
 	static ScalarFunction GetFunction();
 };
 
-struct StructPackFun {
-	static constexpr const char *Name = "struct_pack";
-	static constexpr const char *Parameters = "any";
-	static constexpr const char *Description = "Creates a STRUCT containing the argument values. The entry name will be the bound variable name";
-	static constexpr const char *Example = "struct_pack(i := 4, s := 'string')";
-
-	static ScalarFunction GetFunction();
-};
-
-struct RowFun {
-	static constexpr const char *Name = "row";
-	static constexpr const char *Parameters = "any";
-	static constexpr const char *Description = "Creates an unnamed STRUCT containing the argument values.";
-	static constexpr const char *Example = "row(4, 'hello')";
-
-	static ScalarFunction GetFunction();
-};
-
 } // namespace duckdb
