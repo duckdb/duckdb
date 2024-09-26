@@ -794,7 +794,14 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	if (!state.file_handle || state.file_handle->path != file_handle->path) {
 		auto flags = FileFlags::FILE_FLAGS_READ;
 
-		if (!file_handle->OnDiskFile() && file_handle->CanSeek()) {
+		Value disable_prefetch = false;
+		Value prefetch_all_files = false;
+		context.TryGetCurrentSetting("disable_parquet_prefetching", disable_prefetch);
+		context.TryGetCurrentSetting("prefetch_all_parquet_files", prefetch_all_files);
+		bool should_prefetch = !file_handle->OnDiskFile() || prefetch_all_files.GetValue<bool>();
+		bool can_prefetch = file_handle->CanSeek() && !disable_prefetch.GetValue<bool>();
+
+		if (should_prefetch && can_prefetch) {
 			state.prefetch_mode = true;
 			flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
 		} else {
@@ -1046,8 +1053,11 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			double scan_percentage = (double)(to_scan_compressed_bytes) / static_cast<double>(total_row_group_span);
 
 			if (to_scan_compressed_bytes > total_row_group_span) {
-				throw InvalidInputException(
-				    "Malformed parquet file: sum of total compressed bytes of columns seems incorrect");
+				throw IOException(
+				    "The parquet file '%s' seems to have incorrectly set page offsets. This interferes with DuckDB's "
+				    "prefetching optimization. DuckDB may still be able to scan this file by manually disabling the "
+				    "prefetching mechanism using: 'SET disable_parquet_prefetching=true'.",
+				    file_name);
 			}
 
 			if (!reader_data.filters &&

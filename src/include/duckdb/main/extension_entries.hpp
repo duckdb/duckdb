@@ -922,6 +922,43 @@ static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS[] =
 static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"binary_as_string", "parquet"},
     {"calendar", "icu"},
+    {"disable_parquet_prefetching", "parquet"},
+    {"enable_server_cert_verification", "httpfs"},
+    {"force_download", "httpfs"},
+    {"hf_max_per_page", "httpfs"},
+    {"hnsw_ef_search", "vss"},
+    {"hnsw_enable_experimental_persistence", "vss"},
+    {"http_keep_alive", "httpfs"},
+    {"http_retries", "httpfs"},
+    {"http_retry_backoff", "httpfs"},
+    {"http_retry_wait_ms", "httpfs"},
+    {"http_timeout", "httpfs"},
+    {"mysql_bit1_as_boolean", "mysql_scanner"},
+    {"mysql_debug_show_queries", "mysql_scanner"},
+    {"mysql_experimental_filter_pushdown", "mysql_scanner"},
+    {"mysql_tinyint1_as_boolean", "mysql_scanner"},
+    {"pg_array_as_varchar", "postgres_scanner"},
+    {"pg_connection_cache", "postgres_scanner"},
+    {"pg_connection_limit", "postgres_scanner"},
+    {"pg_debug_show_queries", "postgres_scanner"},
+    {"pg_experimental_filter_pushdown", "postgres_scanner"},
+    {"pg_null_byte_replacement", "postgres_scanner"},
+    {"pg_pages_per_task", "postgres_scanner"},
+    {"pg_use_binary_copy", "postgres_scanner"},
+    {"pg_use_ctid_scan", "postgres_scanner"},
+    {"prefetch_all_parquet_files", "parquet"},
+    {"s3_access_key_id", "httpfs"},
+    {"s3_endpoint", "httpfs"},
+    {"s3_region", "httpfs"},
+    {"s3_secret_access_key", "httpfs"},
+    {"s3_session_token", "httpfs"},
+    {"s3_uploader_max_filesize", "httpfs"},
+    {"s3_uploader_max_parts_per_file", "httpfs"},
+    {"s3_uploader_thread_limit", "httpfs"},
+    {"s3_url_compatibility_mode", "httpfs"},
+    {"s3_url_style", "httpfs"},
+    {"s3_use_ssl", "httpfs"},
+    {"sqlite_all_varchar", "sqlite_scanner"},
     {"timezone", "icu"},
 }; // END_OF_EXTENSION_SETTINGS
 
@@ -965,7 +1002,7 @@ static constexpr ExtensionEntry EXTENSION_COLLATIONS[] = {
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_FILE_PREFIXES[] = {
     {"http://", "httpfs"}, {"https://", "httpfs"}, {"s3://", "httpfs"}, {"s3a://", "httpfs"},  {"s3n://", "httpfs"},
-    {"gcs://", "httpfs"},  {"gs://", "httpfs"},    {"r2://", "httpfs"}, {"azure://", "azure"}, {"az://", "azure"},
+{"gcs://", "httpfs"},  {"gs://", "httpfs"},    {"r2://", "httpfs"}, {"azure://", "azure"}, {"az://", "azure"},
     {"abfss://", "azure"}, {"hf://", "httpfs"}}; // END_OF_EXTENSION_FILE_PREFIXES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
