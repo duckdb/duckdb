@@ -14,6 +14,7 @@ END_MARKER = "// End of the auto-generated list of settings structures"
 def extract_declarations(setting) -> str:
     definition = (
         f"struct {setting.struct_name} {{\n"
+        f"    using RETURN_TYPE = {setting.type};\n"
         f"    static constexpr const char *Name = \"{setting.name}\";\n"
         f"    static constexpr const char *Description = \"{setting.description}\";\n"
         f"    static constexpr const LogicalTypeId InputType = LogicalTypeId::{setting.sql_type};\n"

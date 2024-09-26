@@ -346,9 +346,8 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 			if (index_state != nullptr) {
 
 				auto &db_config = DBConfig::GetConfig(context);
-				auto index_scan_percentage =
-				    DoubleValue::Get(db_config.GetSetting<IndexScanPercentageSetting>(context));
-				auto index_scan_max_count = UBigIntValue::Get(db_config.GetSetting<IndexScanMaxCountSetting>(context));
+				auto index_scan_percentage = db_config.GetSetting<IndexScanPercentageSetting>(context);
+				auto index_scan_max_count = db_config.GetSetting<IndexScanMaxCountSetting>(context);
 
 				auto total_rows = storage.GetTotalRows();
 				auto total_rows_from_percentage = LossyNumericCast<idx_t>(double(total_rows) * index_scan_percentage);

@@ -88,8 +88,7 @@ class Setting:
 
     # validate and return the cpp input type
     def _get_setting_type(self, type) -> str:
-        if len(type) == 0:
-            return "void"
+        # TODO: check if it is a cpp valid type
         return type
 
     # validate and return the set of the aliases

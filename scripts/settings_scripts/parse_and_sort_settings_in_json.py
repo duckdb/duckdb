@@ -33,7 +33,7 @@ def add_all_settings_to_global_list():
         setting = Setting(
             name=entry['name'],
             description=entry['description'],
-            type=entry.get('type', ""),
+            type=entry.get('return_type', ""),
             sql_type=entry['sql_type'],
             scope=entry['scope'],
             add_verification_in_SET=add_verif_SET,
