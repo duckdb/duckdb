@@ -1,16 +1,1 @@
-add_library_unity(
-  duckdb_aggr_distributive
-  OBJECT
-  approx_count.cpp
-  arg_min_max.cpp
-  bitagg.cpp
-  bitstring_agg.cpp
-  bool.cpp
-  kurtosis.cpp
-  product.cpp
-  skew.cpp
-  string_agg.cpp
-  sum.cpp)
-set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_aggr_distributive>
-    PARENT_SCOPE)
+add_library_unity
