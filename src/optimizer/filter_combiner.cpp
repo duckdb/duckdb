@@ -597,7 +597,15 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 			//! Check if values are consecutive, if yes transform them to >= <= (only for integers)
 			// e.g. if we have x IN (1, 2, 3, 4, 5) we transform this into x >= 1 AND x <= 5
 			if (!type.IsIntegral()) {
-				continue;
+				auto or_zone_map_filter = make_uniq<ConjunctionOrFilter>();
+				for (idx_t in_val_idx = 1; in_val_idx < func.children.size(); in_val_idx++) {
+					D_ASSERT(func.children[in_val_idx]->type == ExpressionType::VALUE_CONSTANT);
+					auto &const_val = func.children[in_val_idx]->Cast<BoundConstantExpression>();
+					auto constant_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, const_val.value);
+					or_zone_map_filter->child_filters.push_back(std::move(constant_filter));
+				}
+				table_filters.PushFilter(column_index, std::move(or_zone_map_filter));
+				break;
 			}
 
 			for (idx_t i = 1; i < func.children.size(); i++) {
@@ -619,7 +627,15 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 				}
 			}
 			if (!can_simplify_in_clause) {
-				continue;
+				auto or_zone_map_filter = make_uniq<ConjunctionOrFilter>();
+				for (idx_t in_val_idx = 1; in_val_idx < func.children.size(); in_val_idx++) {
+					D_ASSERT(func.children[in_val_idx]->type == ExpressionType::VALUE_CONSTANT);
+					auto &const_val = func.children[in_val_idx]->Cast<BoundConstantExpression>();
+					auto constant_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, const_val.value);
+					or_zone_map_filter->child_filters.push_back(std::move(constant_filter));
+				}
+				table_filters.PushFilter(column_index, std::move(or_zone_map_filter));
+				break;
 			}
 			auto lower_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
 			                                             Value::Numeric(type, in_values.front()));
