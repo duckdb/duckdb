@@ -688,7 +688,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 						}
 						auto &const_val = comp.left->Cast<BoundConstantExpression>();
 						if (const_val.value.type().IsTemporal()) {
-							same_column_id = false;
+							column_id_set = false;
 							same_column_id = false;
 							break;
 						}
@@ -697,8 +697,10 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 						zone_filter->child_filter = std::move(const_filter);
 						conj_filter->child_filters.push_back(std::move(zone_filter));
 					} else {
-						// OR filter is not simple so we skip it.
-						continue;
+						// child of OR filter is not simple so we do not push the or filter down at all
+						same_column_id = false;
+						column_id_set = false;
+						break;
 					}
 				}
 				if (same_column_id && column_id_set && column_id != DConstants::INVALID_INDEX) {
