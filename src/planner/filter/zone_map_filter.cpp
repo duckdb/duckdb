@@ -2,6 +2,9 @@
 
 namespace duckdb {
 
+ZoneMapFilter::ZoneMapFilter() : TableFilter(TableFilterType::ZONE_MAP) {
+}
+
 FilterPropagateResult ZoneMapFilter::CheckStatistics(BaseStatistics &stats) {
 	if (child_filter->filter_type == TableFilterType::CONSTANT_COMPARISON) {
 		auto &const_compare = child_filter->Cast<ConstantFilter>();
