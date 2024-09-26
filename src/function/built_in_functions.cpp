@@ -92,7 +92,7 @@ LogicalType ParseLogicalType(const string &type) {
 	if (StringUtil::EndsWith(type, "[]")) {
 		// array - recurse
 		auto child_type = ParseLogicalType(type.substr(0, type.size() - 2));
-		return LogicalType::LIST(std::move(child_type));
+		return LogicalType::LIST(child_type);
 	}
 	if (StringUtil::EndsWith(type, "()")) {
 		if (type != "STRUCT()") {
