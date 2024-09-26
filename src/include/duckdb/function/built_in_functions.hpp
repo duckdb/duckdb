@@ -65,6 +65,8 @@ private:
 	void RegisterNestedFunctions();
 	void RegisterSequenceFunctions();
 
+	void RegisterExtensionOverloads();
+
 	// pragmas
 	void RegisterPragmaFunctions();
 };

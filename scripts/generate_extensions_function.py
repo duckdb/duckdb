@@ -56,6 +56,11 @@ class CatalogType(str, Enum):
     TABLE_MACRO = "CatalogType::TABLE_MACRO_ENTRY"
 
 
+parameter_type_map = {
+    "TIMESTAMP WITH TIME ZONE": "TIMESTAMPTZ",
+    "TIME WITH TIME ZONE": "TIMETZ"
+}
+
 def catalog_type_from_type(catalog_type: str) -> CatalogType:
     TYPE_MAP = {
         CatalogType.SCALAR.value: CatalogType.SCALAR,
@@ -84,10 +89,25 @@ def catalog_type_from_string(catalog_type: str) -> CatalogType:
     return TYPE_MAP[catalog_type]
 
 
+class LogicalType(NamedTuple):
+    type: str
+
 class Function(NamedTuple):
     name: str
     type: CatalogType
 
+class FunctionOverload(NamedTuple):
+    name: str
+    type: CatalogType
+    parameters: Tuple
+    return_type: LogicalType
+
+class ExtensionFunctionOverload(NamedTuple):
+    extension: str
+    name: str
+    type: CatalogType
+    parameters: Tuple
+    return_type: LogicalType
 
 class ExtensionFunction(NamedTuple):
     extension: str
@@ -143,6 +163,7 @@ class ParsedEntries:
     def __init__(self, file_path):
         self.path = file_path
         self.functions = {}
+        self.function_overloads = {}
         self.settings = {}
         self.types = {}
         self.copy_functions = {}
@@ -188,6 +209,7 @@ class ParsedEntries:
 
     def filter_entries(self, extensions: List[str]):
         self.functions = {k: v for k, v in self.functions.items() if v.extension not in extensions}
+        self.function_overloads = {k: v for k, v in self.function_overloads.items() if v.extension not in extensions}
         self.copy_functions = {k: v for k, v in self.copy_functions.items() if v.extension not in extensions}
         self.settings = {k: v for k, v in self.settings.items() if v.extension not in extensions}
         self.types = {k: v for k, v in self.types.items() if v.extension not in extensions}
@@ -233,27 +255,51 @@ def get_extension_names() -> List[str]:
 def get_query(sql_query, load_query) -> list:
     # Optionally perform a LOAD of an extension
     # Then perform a SQL query, fetch the output
-    query = f'{DUCKDB_PATH} -csv -unsigned -c "{load_query}{sql_query}" '
+    query = f'{DUCKDB_PATH} -csv -unsigned -separator "{{" -c "{load_query}{sql_query}" '
     query_result = os.popen(query).read()
     result = query_result.split("\n")[1:-1]
     return result
 
+def transform_parameter(parameter) -> LogicalType:
+    parameter = parameter.upper()
+    if parameter.endswith('[]'):
+        return LogicalType(transform_parameter(parameter[0:len(parameter) - 2]).type + '[]')
+    if parameter in parameter_type_map:
+        return LogicalType(parameter_type_map[parameter])
+    return LogicalType(parameter)
 
-def get_functions(load="") -> Set[Function]:
+def transform_parameters(parameters) -> FunctionOverload:
+    parameters = parameters[1:len(parameters) - 1].split(', ')
+    return tuple(transform_parameter(param) for param in parameters)
+
+def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverload]]):
     GET_FUNCTIONS_QUERY = """
         select distinct
             function_name,
-            function_type
-        from duckdb_functions();
+            function_type,
+            parameter_types,
+            return_type
+        from duckdb_functions()
+        ORDER BY function_name, function_type;
     """
     # ['name_1,type_1', ..., 'name_n,type_n']
     results = set(get_query(GET_FUNCTIONS_QUERY, load))
 
     functions = set()
+    function_overloads = {}
     for x in results:
-        function_name, function_type = [y.lower() for y in x.split(',')]
-        functions.add(Function(function_name, catalog_type_from_string(function_type)))
-    return functions
+        function_name, function_type, parameters, return_type = [y.lower() for y in x.split('{')]
+        function_parameters = transform_parameters(parameters)
+        function_return = transform_parameter(return_type)
+        function = Function(function_name, catalog_type_from_string(function_type))
+        function_overload = FunctionOverload(function_name, catalog_type_from_string(function_type), function_parameters, function_return)
+        if function not in functions:
+            functions.add(function)
+            function_overloads[function] = [function_overload]
+        else:
+            function_overloads[function].append(function_overload)
+
+    return (functions, function_overloads)
 
 
 def get_settings(load="") -> Set[str]:
@@ -271,6 +317,10 @@ class ExtensionData:
         self.function_map: Dict[Function, ExtensionFunction] = {}
         # Map of extension -> ExtensionSetting
         self.settings_map: Dict[str, ExtensionSetting] = {}
+        # Map of function -> extension function overloads
+        self.function_overloads: Dict[Function, List[ExtensionFunctionOverload]]  = {}
+        # All function overloads (also ones that will not be written to the file)
+        self.all_function_overloads: Dict[Function, List[ExtensionFunctionOverload]]  = {}
 
         # Map of extension -> extension_path
         self.extensions: Dict[str, str] = get_extension_path_map()
@@ -288,11 +338,13 @@ class ExtensionData:
         self.stored_settings: Dict[str, List[str]] = {'substrait': [], 'arrow': [], 'spatial': []}
 
     def set_base(self):
-        self.base_functions: Set[Function] = get_functions()
+        (functions, function_overloads) = get_functions()
+        self.base_functions: Set[Function] = functions
         self.base_settings: Set[str] = get_settings()
 
     def add_entries(self, entries: ParsedEntries):
         self.function_map.update(entries.functions)
+        self.function_overloads.update(entries.function_overloads)
         self.settings_map.update(entries.settings)
 
     def add_extension(self, extension_name: str):
@@ -303,11 +355,12 @@ class ExtensionData:
             print(f"Load {extension_name} at {extension_path}")
             load = f"LOAD '{extension_path}';"
 
-            extension_functions = list(get_functions(load))
+            (functions, function_overloads) = get_functions(load)
+            extension_functions = list(functions)
             extension_settings = list(get_settings(load))
 
             self.add_settings(extension_name, extension_settings)
-            self.add_functions(extension_name, extension_functions)
+            self.add_functions(extension_name, extension_functions, function_overloads)
         elif extension_name in self.stored_functions or extension_name in self.stored_settings:
             # Retrieve the list of settings/functions from our hardcoded list
             extension_functions = self.stored_functions[extension_name]
@@ -333,14 +386,35 @@ Please double check if '{args.extension_dir}' is the right location to look for 
 
         self.settings_map.update(settings_to_add)
 
-    def add_functions(self, extension_name: str, function_list: List[Function]):
+    def get_extension_overloads(self, extension_name: str, overloads : Dict[Function, List[FunctionOverload]]) -> Dict[Function, List[ExtensionFunctionOverload]]:
+        result = {}
+        for (function, function_overloads) in overloads.items():
+            extension_overloads = []
+            for overload in function_overloads:
+                extension_overloads.append(ExtensionFunctionOverload(extension_name, overload.name, overload.type, overload.parameters, overload.return_type))
+            result[function] = extension_overloads
+        return result
+
+    def add_functions(self, extension_name: str, function_list: List[Function], overloads: Dict[Function, List[FunctionOverload]]):
         extension_name = extension_name.lower()
 
+        overloads = self.get_extension_overloads(extension_name, overloads)
         added_functions: Set[Function] = set(function_list) - self.base_functions
         functions_to_add: Dict[Function, ExtensionFunction] = {}
         for function in added_functions:
-            functions_to_add[function] = ExtensionFunction(extension_name, function.name, function.type)
+            if function in self.function_overloads:
+                # function is in overload map - add overloads
+                self.function_overloads[function] += overloads[function]
+            elif function in self.function_map:
+                # function is in function map and we are trying to add it again
+                # this means the function is present in multiple extensions
+                # remove from function map, and add to overload map
+                self.function_overloads[function] = self.all_function_overloads[function] + overloads[function]
+                del self.function_map[function]
+            else:
+                functions_to_add[function] = ExtensionFunction(extension_name, function.name, function.type)
 
+        self.all_function_overloads.update(overloads)
         self.function_map.update(functions_to_add)
 
     def validate(self):
@@ -378,6 +452,27 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {\n"""
             result += "\t{"
             result += f'"{function.name}", "{function.extension}", {function.type.value}'
             result += "},\n"
+        result += "}; // END_OF_EXTENSION_FUNCTIONS\n"
+        return result
+
+    def export_function_overloads(self) -> str:
+        result = """
+static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS[] = {\n"""
+        sorted_function = sorted(self.function_overloads)
+
+        for func in sorted_function:
+            overloads: List[ExtensionFunctionOverload] = self.function_overloads[func]
+            for overload in overloads:
+                result += "\t{"
+                result += f'"{overload.name}", "{overload.extension}", {overload.type.value}, "'
+                signature = ""
+                for parameter in overload.parameters:
+                    if len(signature) != 0:
+                        signature += ","
+                    signature += parameter.type
+                signature += ">" + overload.return_type.type
+                result += signature
+                result += '"},\n'
         result += "}; // END_OF_EXTENSION_FUNCTIONS\n"
         return result
 
@@ -460,8 +555,8 @@ struct ExtensionFunctionEntry {
 struct ExtensionFunctionOverloadEntry {
 	char name[48];
 	char extension[48];
-	LogicalOperatorType parameters[5];
 	CatalogType type;
+	char signature[96];
 };
 """
 
@@ -568,6 +663,7 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "aws",
     "azure",
     "autocomplete",
+    "core_functions",
     "delta",
     "excel",
     "fts",
@@ -592,6 +688,9 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
 
     exported_functions = data.export_functions()
     file.write(exported_functions)
+
+    exported_overloads = data.export_function_overloads()
+    file.write(exported_overloads)
 
     exported_settings = data.export_settings()
     file.write(exported_settings)
