@@ -23,9 +23,9 @@ WindowAggregatorState::WindowAggregatorState() : allocator(Allocator::DefaultAll
 class WindowAggregatorGlobalState : public WindowAggregatorState {
 public:
 	WindowAggregatorGlobalState(BufferManager &buffer_manager, const WindowAggregator &aggregator_p, idx_t group_count)
-	    : aggregator(aggregator_p), winputs(buffer_manager, aggregator.arg_types), locals(0), finalized(0) {
+	    : aggregator(aggregator_p), winputs(buffer_manager, group_count, aggregator.arg_types), locals(0),
+	      finalized(0) {
 
-		winputs.Initialize(group_count);
 		if (aggregator.aggr.filter) {
 			// 	Start with all invalid and set the ones that pass
 			filter_mask.Initialize(group_count, false);
@@ -36,7 +36,7 @@ public:
 	const WindowAggregator &aggregator;
 
 	//! Partition data chunk
-	WindowDataChunk winputs;
+	WindowCollection winputs;
 
 	//! The filtered rows in inputs.
 	ValidityArray filter_mask;
@@ -82,14 +82,10 @@ unique_ptr<WindowAggregatorState> WindowAggregator::GetGlobalState(BufferManager
 void WindowAggregatorLocalState::Sink(WindowAggregatorGlobalState &gastate, DataChunk &arg_chunk, idx_t input_idx) {
 	auto &winputs = gastate.winputs;
 	if (!winputs.GetTypes().empty()) {
-		if (gastate.aggregator.use_collections) {
-			if (!appender) {
-				appender = make_uniq<WindowBuilder>(winputs);
-			}
-			appender->Sink(arg_chunk, input_idx);
-		} else {
-			winputs.Copy(arg_chunk, input_idx);
+		if (!appender) {
+			appender = make_uniq<WindowBuilder>(winputs);
 		}
+		appender->Sink(arg_chunk, input_idx);
 	}
 }
 
@@ -108,9 +104,6 @@ void WindowAggregator::Sink(WindowAggregatorState &gstate, WindowAggregatorState
 
 void WindowAggregatorLocalState::Finalize(WindowAggregatorGlobalState &gastate) {
 	auto &winputs = gastate.winputs;
-	if (!gastate.aggregator.use_collections) {
-		return;
-	}
 
 	// Thread-safe and idempotent
 	winputs.Combine(false);
@@ -518,11 +511,13 @@ class WindowCustomAggregatorGlobalState : public WindowAggregatorGlobalState {
 public:
 	explicit WindowCustomAggregatorGlobalState(BufferManager &buffer_manager, const WindowCustomAggregator &aggregator,
 	                                           idx_t group_count)
-	    : WindowAggregatorGlobalState(buffer_manager, aggregator, group_count) {
+	    : WindowAggregatorGlobalState(buffer_manager, aggregator, group_count), buffer_manager(buffer_manager) {
 
 		gcstate = make_uniq<WindowCustomAggregatorState>(aggregator.aggr, aggregator.exclude_mode);
 	}
 
+	//! Buffer manager for paging custom accelerator data
+	BufferManager &buffer_manager;
 	//! Traditional packed filter mask for API
 	ValidityMask filter_packed;
 	//! Data pointer that contains a single local state, used for global custom window execution state
@@ -564,13 +559,14 @@ void WindowCustomAggregator::Finalize(WindowAggregatorState &gsink, WindowAggreg
 
 	WindowAggregator::Finalize(gsink, lstate, stats);
 
-	auto &inputs = gcsink.winputs.chunk;
+	auto inputs = gcsink.winputs.inputs.get();
+	const auto count = gcsink.winputs.size();
 	auto &filter_mask = gcsink.filter_mask;
 	auto &filter_packed = gcsink.filter_packed;
 	filter_mask.Pack(filter_packed, filter_mask.target_count);
 
 	gcsink.partition_input =
-	    make_uniq<WindowPartitionInput>(inputs.data.data(), inputs.ColumnCount(), inputs.size(), filter_packed, stats);
+	    make_uniq<WindowPartitionInput>(gcsink.buffer_manager, inputs, count, filter_packed, stats);
 
 	if (aggr.function.window_init) {
 		auto &gcstate = *gcsink.gcstate;
@@ -667,7 +663,6 @@ void WindowCustomAggregator::Evaluate(const WindowAggregatorState &gsink, Window
 WindowNaiveAggregator::WindowNaiveAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types,
                                              const LogicalType &result_type, const WindowExcludeMode exclude_mode)
     : WindowAggregator(std::move(aggr), arg_types, result_type, exclude_mode) {
-	use_collections = true;
 }
 
 WindowNaiveAggregator::~WindowNaiveAggregator() {
@@ -676,7 +671,7 @@ WindowNaiveAggregator::~WindowNaiveAggregator() {
 class WindowNaiveState : public WindowAggregatorLocalState {
 public:
 	struct HashRow {
-		explicit HashRow(WindowNaiveState &state, const WindowDataChunk &winputs) : state(state), winputs(winputs) {
+		explicit HashRow(WindowNaiveState &state, const WindowCollection &winputs) : state(state), winputs(winputs) {
 		}
 
 		inline size_t operator()(const idx_t &i) const {
@@ -684,11 +679,11 @@ public:
 		}
 
 		WindowNaiveState &state;
-		const WindowDataChunk &winputs;
+		const WindowCollection &winputs;
 	};
 
 	struct EqualRow {
-		EqualRow(WindowNaiveState &state, const WindowDataChunk &winputs) : state(state), winputs(winputs) {
+		EqualRow(WindowNaiveState &state, const WindowCollection &winputs) : state(state), winputs(winputs) {
 		}
 
 		inline bool operator()(const idx_t &lhs, const idx_t &rhs) const {
@@ -696,7 +691,7 @@ public:
 		}
 
 		WindowNaiveState &state;
-		const WindowDataChunk &winputs;
+		const WindowCollection &winputs;
 	};
 
 	using RowSet = std::unordered_set<idx_t, HashRow, EqualRow>;
@@ -713,9 +708,9 @@ protected:
 	void FlushStates(const WindowAggregatorGlobalState &gsink);
 
 	//! Hashes a value for the hash table
-	size_t Hash(const WindowDataChunk &inputs, idx_t rid);
+	size_t Hash(const WindowCollection &inputs, idx_t rid);
 	//! Compares two values for the hash table
-	bool KeyEqual(const WindowDataChunk &inputs, const idx_t &lhs, const idx_t &rhs);
+	bool KeyEqual(const WindowCollection &inputs, const idx_t &lhs, const idx_t &rhs);
 
 	//! The global state
 	const WindowNaiveAggregator &aggregator;
@@ -782,7 +777,7 @@ void WindowNaiveState::FlushStates(const WindowAggregatorGlobalState &gsink) {
 	flush_count = 0;
 }
 
-size_t WindowNaiveState::Hash(const WindowDataChunk &winputs, idx_t rid) {
+size_t WindowNaiveState::Hash(const WindowCollection &winputs, idx_t rid) {
 	D_ASSERT(cursor->RowIsVisible(rid));
 	auto s = cursor->RowOffset(rid);
 	auto &scanned = cursor->chunk;
@@ -793,7 +788,7 @@ size_t WindowNaiveState::Hash(const WindowDataChunk &winputs, idx_t rid) {
 	return *FlatVector::GetData<hash_t>(hashes);
 }
 
-bool WindowNaiveState::KeyEqual(const WindowDataChunk &winputs, const idx_t &lidx, const idx_t &ridx) {
+bool WindowNaiveState::KeyEqual(const WindowCollection &winputs, const idx_t &lidx, const idx_t &ridx) {
 	//	One of the indices will be scanned, so make it the left one
 	auto lhs = lidx;
 	auto rhs = ridx;
@@ -945,7 +940,6 @@ WindowSegmentTree::WindowSegmentTree(AggregateObject aggr, const vector<LogicalT
                                      const LogicalType &result_type, WindowAggregationMode mode_p,
                                      const WindowExcludeMode exclude_mode_p)
     : WindowAggregator(std::move(aggr), arg_types, result_type, exclude_mode_p), mode(mode_p) {
-	use_collections = true;
 }
 
 class WindowSegmentTreePart {
@@ -955,7 +949,7 @@ public:
 
 	enum FramePart : uint8_t { FULL = 0, LEFT = 1, RIGHT = 2 };
 
-	WindowSegmentTreePart(ArenaAllocator &allocator, const AggregateObject &aggr, const WindowDataChunk &inputs,
+	WindowSegmentTreePart(ArenaAllocator &allocator, const AggregateObject &aggr, const WindowCollection &inputs,
 	                      const ValidityArray &filter_mask);
 	~WindowSegmentTreePart();
 
@@ -992,7 +986,7 @@ public:
 	//! Order insensitive aggregate (we can optimise internal combines)
 	const bool order_insensitive;
 	//! The partition arguments
-	const WindowDataChunk &inputs;
+	const WindowCollection &inputs;
 	//! The filtered rows in inputs
 	const ValidityArray &filter_mask;
 	//! The size of a single aggregate state
@@ -1048,7 +1042,7 @@ void WindowSegmentTree::Finalize(WindowAggregatorState &gsink, WindowAggregatorS
 }
 
 WindowSegmentTreePart::WindowSegmentTreePart(ArenaAllocator &allocator, const AggregateObject &aggr,
-                                             const WindowDataChunk &inputs, const ValidityArray &filter_mask)
+                                             const WindowCollection &inputs, const ValidityArray &filter_mask)
     : allocator(allocator), aggr(aggr),
       order_insensitive(aggr.function.order_dependent == AggregateOrderDependent::NOT_ORDER_DEPENDENT), inputs(inputs),
       filter_mask(filter_mask), state_size(aggr.function.state_size(aggr.function)),
@@ -1507,7 +1501,6 @@ WindowDistinctAggregator::WindowDistinctAggregator(AggregateObject aggr, const v
                                                    const LogicalType &result_type,
                                                    const WindowExcludeMode exclude_mode_p, ClientContext &context)
     : WindowAggregator(std::move(aggr), arg_types, result_type, exclude_mode_p), context(context) {
-	use_collections = true;
 }
 
 class WindowDistinctAggregatorLocalState;

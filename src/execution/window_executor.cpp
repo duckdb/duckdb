@@ -8,81 +8,16 @@
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
-// WindowDataChunk
+// WindowCollection
 //===--------------------------------------------------------------------===//
-bool WindowDataChunk::IsSimple(const LogicalType &t) {
-	switch (t.InternalType()) {
-	case PhysicalType::BOOL:
-	case PhysicalType::UINT8:
-	case PhysicalType::INT8:
-	case PhysicalType::UINT16:
-	case PhysicalType::INT16:
-	case PhysicalType::UINT32:
-	case PhysicalType::INT32:
-	case PhysicalType::UINT64:
-	case PhysicalType::INT64:
-	case PhysicalType::FLOAT:
-	case PhysicalType::DOUBLE:
-	case PhysicalType::INTERVAL:
-	case PhysicalType::UINT128:
-	case PhysicalType::INT128:
-		return true;
-	case PhysicalType::LIST:
-	case PhysicalType::STRUCT:
-	case PhysicalType::ARRAY:
-	case PhysicalType::VARCHAR:
-	case PhysicalType::BIT:
-		return false;
-	default:
-		break;
-	}
-
-	throw InternalException("Unsupported type for WindowDataChunk");
-}
-
-WindowDataChunk::WindowDataChunk(BufferManager &buffer_manager, const vector<LogicalType> &types)
-    : buffer_manager(buffer_manager), types(types) {
+WindowCollection::WindowCollection(BufferManager &buffer_manager, idx_t count, const vector<LogicalType> &types)
+    : types(types), count(count), buffer_manager(buffer_manager) {
 	if (!types.empty()) {
 		inputs = make_uniq<ColumnDataCollection>(buffer_manager, types);
 	}
-
-	is_simple.clear();
-	for (const auto &t : types) {
-		is_simple.push_back(IsSimple(t));
-	}
 }
 
-void WindowDataChunk::Initialize(idx_t capacity) {
-	if (!types.empty()) {
-		vector<mutex> new_locks(types.size());
-		locks.swap(new_locks);
-		chunk.Initialize(inputs->GetAllocator(), types, capacity);
-	}
-	chunk.SetCardinality(capacity);
-}
-
-void WindowDataChunk::Copy(DataChunk &input, idx_t begin) {
-	const auto source_count = input.size();
-	const idx_t end = begin + source_count;
-	const idx_t count = chunk.size();
-	D_ASSERT(end <= count);
-	// Can we overwrite the validity mask in parallel?
-	bool aligned = IsMaskAligned(begin, end, count);
-	for (column_t i = 0; i < chunk.data.size(); ++i) {
-		auto &src = input.data[i];
-		auto &dst = chunk.data[i];
-		UnifiedVectorFormat sdata;
-		src.ToUnifiedFormat(count, sdata);
-		if (is_simple[i] && aligned && sdata.validity.AllValid()) {
-			VectorOperations::Copy(src, dst, source_count, 0, begin);
-		} else {
-			lock_guard<mutex> column_guard(locks[i]);
-			VectorOperations::Copy(src, dst, source_count, 0, begin);
-		}
-	}
-}
-
-void WindowDataChunk::GetCollection(idx_t row_idx, ColumnDataCollectionSpec &spec) {
+void WindowCollection::GetCollection(idx_t row_idx, ColumnDataCollectionSpec &spec) {
 	if (spec.second && row_idx == spec.first + spec.second->Count()) {
 		return;
 	}
@@ -96,7 +31,7 @@ void WindowDataChunk::GetCollection(idx_t row_idx, ColumnDataCollectionSpec &spe
 	collections.emplace_back(std::move(collection));
 }
 
-void WindowDataChunk::Combine(bool build_validity) {
+void WindowCollection::Combine(bool build_validity) {
 	lock_guard<mutex> collection_guard(lock);
 
 	if (collections.empty()) {
@@ -123,7 +58,7 @@ void WindowDataChunk::Combine(bool build_validity) {
 	}
 }
 
-WindowBuilder::WindowBuilder(WindowDataChunk &collection) : collection(collection) {
+WindowBuilder::WindowBuilder(WindowCollection &collection) : collection(collection) {
 }
 
 void WindowBuilder::Sink(DataChunk &chunk, idx_t input_idx) {
@@ -136,13 +71,13 @@ void WindowBuilder::Sink(DataChunk &chunk, idx_t input_idx) {
 	sink.second->Append(appender, chunk);
 }
 
-WindowCursor::WindowCursor(const WindowDataChunk &paged) : paged(paged) {
+WindowCursor::WindowCursor(const WindowCollection &paged) : paged(paged) {
 	if (paged.GetTypes().empty()) {
 		//	For things like COUNT(*) set the state up to contain the whole range
 		state.segment_index = 0;
 		state.chunk_index = 0;
 		state.current_row_index = 0;
-		state.next_row_index = paged.chunk.size();
+		state.next_row_index = paged.size();
 		state.properties = ColumnDataScanProperties::ALLOW_ZERO_COPY;
 		chunk.SetCardinality(state.next_row_index);
 		return;
@@ -915,8 +850,7 @@ WindowExecutorGlobalState::WindowExecutorGlobalState(const WindowExecutor &execu
 	if (range_expr) {
 		vector<LogicalType> types;
 		types.emplace_back(range_expr->return_type);
-		range = make_uniq<WindowDataChunk>(BufferManager::GetBufferManager(executor.context), types);
-		range->Initialize(payload_count);
+		range = make_uniq<WindowCollection>(BufferManager::GetBufferManager(executor.context), payload_count, types);
 	}
 }
 
@@ -1487,7 +1421,7 @@ void WindowCumeDistExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate,
 
 class WindowValueGlobalState : public WindowExecutorGlobalState {
 public:
-	using WindowDataChunkPtr = unique_ptr<WindowDataChunk>;
+	using WindowDataChunkPtr = unique_ptr<WindowCollection>;
 	WindowValueGlobalState(const WindowExecutor &executor, const idx_t payload_count,
 	                       const ValidityMask &partition_mask, const ValidityMask &order_mask)
 	    : WindowExecutorGlobalState(executor, payload_count, partition_mask, order_mask)
@@ -1495,7 +1429,7 @@ public:
 	{
 		if (!arg_types.empty()) {
 			auto &buffer_manager = BufferManager::GetBufferManager(executor.context);
-			payload_collection = make_uniq<WindowDataChunk>(buffer_manager, arg_types);
+			payload_collection = make_uniq<WindowCollection>(buffer_manager, payload_count, arg_types);
 			ignore_nulls = &payload_collection->validity;
 		}
 	}

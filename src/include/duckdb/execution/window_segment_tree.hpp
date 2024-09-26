@@ -69,8 +69,6 @@ public:
 	const idx_t state_size;
 	//! The window exclusion clause
 	const WindowExcludeMode exclude_mode;
-	//! Temporary switch for spooling development
-	bool use_collections = false;
 };
 
 // Used for validation

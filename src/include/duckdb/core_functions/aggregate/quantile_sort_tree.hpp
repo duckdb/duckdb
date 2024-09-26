@@ -8,16 +8,73 @@
 
 #pragma once
 
+#include "duckdb/common/sort/sort.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/types/row/row_layout.hpp"
 #include "duckdb/core_functions/aggregate/quantile_helpers.hpp"
 #include "duckdb/execution/merge_sort_tree.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include <algorithm>
 #include <numeric>
 #include <stdlib.h>
 #include <utility>
 
 namespace duckdb {
+
+// Paged access
+template <typename INPUT_TYPE>
+struct QuantileCursor {
+	explicit QuantileCursor(const ColumnDataCollection &inputs) : inputs(inputs) {
+		inputs.InitializeScan(scan);
+		inputs.InitializeScanChunk(scan, page);
+	}
+
+	inline sel_t RowOffset(idx_t row_idx) const {
+		D_ASSERT(RowIsVisible(row_idx));
+		return UnsafeNumericCast<sel_t>(row_idx - scan.current_row_index);
+	}
+
+	inline bool RowIsVisible(idx_t row_idx) const {
+		return (row_idx < scan.next_row_index && scan.current_row_index <= row_idx);
+	}
+
+	inline idx_t Seek(idx_t row_idx) {
+		if (!RowIsVisible(row_idx)) {
+			inputs.Seek(row_idx, scan, page);
+			data = FlatVector::GetData<INPUT_TYPE>(page.data[0]);
+			validity = &FlatVector::Validity(page.data[0]);
+		}
+		return RowOffset(row_idx);
+	}
+
+	inline const INPUT_TYPE &operator[](idx_t row_idx) {
+		const auto offset = Seek(row_idx);
+		return data[offset];
+	}
+
+	inline bool RowIsValid(idx_t row_idx) {
+		const auto offset = Seek(row_idx);
+		return validity->RowIsValid(offset);
+	}
+
+	inline bool AllValid() {
+		// TODO: See if we can improve this...
+		return false;
+	}
+
+	//! Windowed paging
+	const ColumnDataCollection &inputs;
+	//! The state used for reading the collection on this thread
+	ColumnDataScanState scan;
+	//! The data chunk paged into into
+	DataChunk page;
+	//! The data pointer
+	const INPUT_TYPE *data = nullptr;
+	//! The validity mask
+	const ValidityMask *validity = nullptr;
+};
 
 // Direct access
 template <typename T>
@@ -35,12 +92,13 @@ template <typename T>
 struct QuantileIndirect {
 	using INPUT_TYPE = idx_t;
 	using RESULT_TYPE = T;
-	const RESULT_TYPE *data;
+	using CURSOR = QuantileCursor<RESULT_TYPE>;
+	CURSOR &data;
 
-	explicit QuantileIndirect(const RESULT_TYPE *data_p) : data(data_p) {
+	explicit QuantileIndirect(CURSOR &data_p) : data(data_p) {
 	}
 
-	inline RESULT_TYPE operator()(const idx_t &input) const {
+	inline RESULT_TYPE operator()(const INPUT_TYPE &input) const {
 		return data[input];
 	}
 };
@@ -66,14 +124,23 @@ struct QuantileComposed {
 template <typename ACCESSOR>
 struct QuantileCompare {
 	using INPUT_TYPE = typename ACCESSOR::INPUT_TYPE;
-	const ACCESSOR &accessor;
+	const ACCESSOR &accessor_l;
+	const ACCESSOR &accessor_r;
 	const bool desc;
-	explicit QuantileCompare(const ACCESSOR &accessor_p, bool desc_p) : accessor(accessor_p), desc(desc_p) {
+
+	// Single cursor for linear operations
+	explicit QuantileCompare(const ACCESSOR &accessor, bool desc_p)
+	    : accessor_l(accessor), accessor_r(accessor), desc(desc_p) {
+	}
+
+	// Independent cursors for sorting
+	explicit QuantileCompare(const ACCESSOR &accessor_l, const ACCESSOR &accessor_r, bool desc_p)
+	    : accessor_l(accessor_l), accessor_r(accessor_r), desc(desc_p) {
 	}
 
 	inline bool operator()(const INPUT_TYPE &lhs, const INPUT_TYPE &rhs) const {
-		const auto lval = accessor(lhs);
-		const auto rval = accessor(rhs);
+		const auto lval = accessor_l(lhs);
+		const auto rval = accessor_r(rhs);
 
 		return desc ? (rval < lval) : (lval < rval);
 	}
@@ -143,12 +210,12 @@ struct Interpolator {
 	}
 
 	template <class INPUT_TYPE, class TARGET_TYPE>
-	inline TARGET_TYPE Extract(const INPUT_TYPE **dest, Vector &result) const {
+	inline TARGET_TYPE Extract(const INPUT_TYPE *dest, Vector &result) const {
 		if (CRN == FRN) {
-			return CastInterpolation::Cast<INPUT_TYPE, TARGET_TYPE>(*dest[0], result);
+			return CastInterpolation::Cast<INPUT_TYPE, TARGET_TYPE>(dest[0], result);
 		} else {
-			auto lo = CastInterpolation::Cast<INPUT_TYPE, TARGET_TYPE>(*dest[0], result);
-			auto hi = CastInterpolation::Cast<INPUT_TYPE, TARGET_TYPE>(*dest[1], result);
+			auto lo = CastInterpolation::Cast<INPUT_TYPE, TARGET_TYPE>(dest[0], result);
+			auto hi = CastInterpolation::Cast<INPUT_TYPE, TARGET_TYPE>(dest[1], result);
 			return CastInterpolation::Interpolate<TARGET_TYPE>(lo, RN - FRN, hi);
 		}
 	}
@@ -212,8 +279,8 @@ struct Interpolator<true> {
 	}
 
 	template <class INPUT_TYPE, class TARGET_TYPE>
-	TARGET_TYPE Extract(const INPUT_TYPE **dest, Vector &result) const {
-		return CastInterpolation::Cast<INPUT_TYPE, TARGET_TYPE>(*dest[0], result);
+	TARGET_TYPE Extract(const INPUT_TYPE *dest, Vector &result) const {
+		return CastInterpolation::Cast<INPUT_TYPE, TARGET_TYPE>(dest[0], result);
 	}
 
 	const bool desc;
@@ -224,22 +291,103 @@ struct Interpolator<true> {
 	idx_t end;
 };
 
+template <typename INPUT_TYPE>
 struct QuantileIncluded {
-	inline explicit QuantileIncluded(const ValidityMask &fmask_p, const ValidityMask &dmask_p)
+	using CURSOR_TYPE = QuantileCursor<INPUT_TYPE>;
+
+	inline explicit QuantileIncluded(const ValidityMask &fmask_p, CURSOR_TYPE &dmask_p)
 	    : fmask(fmask_p), dmask(dmask_p) {
 	}
 
-	inline bool operator()(const idx_t &idx) const {
+	inline bool operator()(const idx_t &idx) {
 		return fmask.RowIsValid(idx) && dmask.RowIsValid(idx);
 	}
 
-	inline bool AllValid() const {
+	inline bool AllValid() {
 		return fmask.AllValid() && dmask.AllValid();
 	}
 
 	const ValidityMask &fmask;
-	const ValidityMask &dmask;
+	CURSOR_TYPE &dmask;
 };
+
+// Shared untemplated sort logic
+static unique_ptr<GlobalSortState> SortQuantileIndices(const WindowPartitionInput &partition, // NOLINT
+                                                       const LogicalType &index_type, OrderType order_type) {
+	auto &inputs = *partition.inputs;
+	const auto &filter_mask = partition.filter_mask;
+
+	// Sort the unfiltered indices by the argument values
+	vector<LogicalType> payload_types;
+	payload_types.emplace_back(index_type);
+
+	idx_t capacity = STANDARD_VECTOR_SIZE;
+	DataChunk payload;
+	payload.Initialize(inputs.GetAllocator(), payload_types, capacity);
+	RowLayout payload_layout;
+	payload_layout.Initialize(payload.GetTypes());
+	SelectionVector filtered(capacity);
+
+	// TODO: Two pass parallel sorting using Build
+	auto order_expr = make_uniq<BoundConstantExpression>(Value(inputs.Types()[0]));
+	vector<BoundOrderByNode> orders;
+	orders.emplace_back(BoundOrderByNode(order_type, OrderByNullType::NULLS_LAST, std::move(order_expr)));
+
+	auto global_sort = make_uniq<GlobalSortState>(partition.buffer_manager, orders, payload_layout);
+	LocalSortState local_sort;
+	local_sort.Initialize(*global_sort, global_sort->buffer_manager);
+
+	//	Build the indirection array by scanning the valid indices
+	ColumnDataScanState state;
+	DataChunk sort;
+	inputs.InitializeScan(state);
+	inputs.InitializeScanChunk(state, sort);
+	while (inputs.Scan(state, sort)) {
+		// Match the payload to the scanned data
+		if (sort.size() > capacity) {
+			payload.Destroy();
+			capacity = sort.size();
+			payload.Initialize(inputs.GetAllocator(), payload_types, capacity);
+			filtered.Initialize(capacity);
+		} else {
+			payload.Reset();
+		}
+		auto &indices = payload.data[0];
+		payload.SetCardinality(sort);
+		indices.Sequence(int64_t(state.current_row_index), 1, payload.size());
+
+		auto &key = sort.data[0];
+		auto &validity = FlatVector::Validity(key);
+
+		if (!filter_mask.AllValid() || !validity.AllValid()) {
+			idx_t valid = 0;
+			for (sel_t i = 0; i < sort.size(); ++i) {
+				if (filter_mask.RowIsValid(i + state.current_row_index) && validity.RowIsValid(i)) {
+					filtered[valid++] = i;
+				}
+			}
+			if (valid < sort.size()) {
+				payload.Slice(filtered, valid);
+				sort.Slice(filtered, valid);
+			}
+		}
+		local_sort.SinkChunk(sort, payload);
+		if (local_sort.SizeInBytes() > (1ULL << 32)) {
+			local_sort.Sort(*global_sort, true);
+		}
+	}
+	global_sort->AddLocalState(local_sort);
+
+	//	Sort it
+	while (global_sort->sorted_blocks.size() > 1) {
+		global_sort->InitializeMergeRound();
+		MergeSorter merge_sorter(*global_sort, global_sort->buffer_manager);
+		merge_sorter.PerformInMergeRound();
+		global_sort->CompleteMergeRound(false);
+	}
+
+	return global_sort;
+}
 
 template <typename IDX>
 struct QuantileSortTree : public MergeSortTree<IDX, IDX> {
@@ -253,31 +401,48 @@ struct QuantileSortTree : public MergeSortTree<IDX, IDX> {
 	}
 
 	template <class INPUT_TYPE>
-	static unique_ptr<QuantileSortTree> WindowInit(const INPUT_TYPE *data, AggregateInputData &aggr_input_data,
-	                                               const ValidityMask &data_mask, const ValidityMask &filter_mask,
-	                                               idx_t count) {
-		//	Build the indirection array
+	static unique_ptr<QuantileSortTree> WindowInit(AggregateInputData &aggr_input_data,
+	                                               const WindowPartitionInput &partition) {
+		auto &inputs = *partition.inputs;
+
+		// Sort the unfiltered indices by the argument values
 		using ElementType = typename QuantileSortTree::ElementType;
-		vector<ElementType> sorted(count);
-		if (filter_mask.AllValid() && data_mask.AllValid()) {
-			std::iota(sorted.begin(), sorted.end(), 0);
-		} else {
-			size_t valid = 0;
-			QuantileIncluded included(filter_mask, data_mask);
-			for (ElementType i = 0; i < count; ++i) {
-				if (included(i)) {
-					sorted[valid++] = i;
-				}
-			}
-			sorted.resize(valid);
+		vector<LogicalType> payload_types;
+		switch (sizeof(ElementType)) {
+		case sizeof(int64_t):
+			payload_types.emplace_back(LogicalType::BIGINT);
+			break;
+		case sizeof(int32_t):
+			payload_types.emplace_back(LogicalType::INTEGER);
+			break;
+		default:
+			throw InternalException("Unsupported Quantile Sort Tree index size");
 		}
 
-		//	Sort it
+		// TODO: Two pass parallel sorting using Build
 		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
-		using Accessor = QuantileIndirect<INPUT_TYPE>;
-		Accessor indirect(data);
-		QuantileCompare<Accessor> cmp(indirect, bind_data.desc);
-		std::sort(sorted.begin(), sorted.end(), cmp);
+		auto order_type = bind_data.desc ? OrderType::DESCENDING : OrderType::ASCENDING;
+		auto global_sort = SortQuantileIndices(partition, payload_types[0], order_type);
+
+		// Now scan the sorted indices into an array we can use as the leaves
+		vector<ElementType> sorted;
+		if (!global_sort->sorted_blocks.empty()) {
+			PayloadScanner scanner(*global_sort);
+			DataChunk payload;
+			payload.Initialize(inputs.GetAllocator(), payload_types);
+			sorted.resize(scanner.Remaining());
+			for (;;) {
+				idx_t row_idx = scanner.Scanned();
+				scanner.Scan(payload);
+				if (payload.size() == 0) {
+					break;
+				}
+				auto &indices = payload.data[0];
+				auto data = FlatVector::GetData<ElementType>(indices);
+
+				std::copy(data, data + payload.size(), sorted.data() + row_idx);
+			}
+		}
 
 		return make_uniq<QuantileSortTree>(std::move(sorted));
 	}
@@ -287,7 +452,7 @@ struct QuantileSortTree : public MergeSortTree<IDX, IDX> {
 	}
 
 	template <typename INPUT_TYPE, typename RESULT_TYPE, bool DISCRETE>
-	RESULT_TYPE WindowScalar(const INPUT_TYPE *data, const SubFrames &frames, const idx_t n, Vector &result,
+	RESULT_TYPE WindowScalar(QuantileCursor<INPUT_TYPE> &data, const SubFrames &frames, const idx_t n, Vector &result,
 	                         const QuantileValue &q) {
 		D_ASSERT(n > 0);
 
@@ -309,8 +474,8 @@ struct QuantileSortTree : public MergeSortTree<IDX, IDX> {
 	}
 
 	template <typename INPUT_TYPE, typename CHILD_TYPE, bool DISCRETE>
-	void WindowList(const INPUT_TYPE *data, const SubFrames &frames, const idx_t n, Vector &list, const idx_t lidx,
-	                const QuantileBindData &bind_data) {
+	void WindowList(QuantileCursor<INPUT_TYPE> &data, const SubFrames &frames, const idx_t n, Vector &list,
+	                const idx_t lidx, const QuantileBindData &bind_data) {
 		D_ASSERT(n > 0);
 
 		//	Thread safe and idempotent.

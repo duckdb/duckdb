@@ -15,58 +15,46 @@
 
 namespace duckdb {
 
-// A wrapper for building DataChunks in parallel
-class WindowDataChunk {
+// A wrapper for building ColumnDataCollections in parallel
+class WindowCollection {
 public:
 	using ColumnDataCollectionPtr = unique_ptr<ColumnDataCollection>;
 	using ColumnDataCollectionSpec = pair<idx_t, optional_ptr<ColumnDataCollection>>;
 
-	// True if the vector data can just be copied to
-	static bool IsSimple(const LogicalType &t);
-
-	static inline bool IsMaskAligned(idx_t begin, idx_t end, idx_t count) {
-		return ValidityMask::IsAligned(begin) && (ValidityMask::IsAligned(end) || (end == count));
-	}
-
-	WindowDataChunk(BufferManager &buffer_manager, const vector<LogicalType> &types);
+	WindowCollection(BufferManager &buffer_manager, idx_t count, const vector<LogicalType> &types);
 
 	idx_t ColumnCount() const {
 		return types.size();
 	}
 
 	idx_t size() const { // NOLINT
-		return chunk.size();
+		return count;
 	}
 
 	const vector<LogicalType> &GetTypes() const {
 		return types;
 	}
 
-	void Initialize(idx_t capacity);
-
-	void Copy(DataChunk &src, idx_t begin);
-
-	//! The wrapped chunk
-	DataChunk chunk;
-
+	//! Update a thread-local collection for appending data to a given row
 	void GetCollection(idx_t row_idx, ColumnDataCollectionSpec &spec);
+	//! Single-threaded, idempotent ordered combining of all the appended data.
 	void Combine(bool build_validity);
 
+	//! The collection data. May be null if the column count is 0.
 	ColumnDataCollectionPtr inputs;
+	//! Optional validity mask for the entire collection
 	ValidityMask validity;
 
-private:
-	//! True if the column is a scalar only value
-	vector<bool> is_simple;
-	//! Exclusive lock for each column
-	vector<mutex> locks;
+	//! The collection columns
+	const vector<LogicalType> types;
+	//! The collection rows
+	const idx_t count;
 
+private:
 	//! Guard for range updates
 	mutex lock;
 	//! The paging buffer manager to use
 	BufferManager &buffer_manager;
-	//! The collection schema
-	vector<LogicalType> types;
 	//! The component column data collections
 	vector<ColumnDataCollectionPtr> collections;
 	//! The (sorted) collection ranges
@@ -75,15 +63,15 @@ private:
 
 class WindowBuilder {
 public:
-	explicit WindowBuilder(WindowDataChunk &collection);
+	explicit WindowBuilder(WindowCollection &collection);
 
 	//! Add a new chunk at the given index
 	void Sink(DataChunk &chunk, idx_t input_idx);
 
 	//! The collection we are helping to build
-	WindowDataChunk &collection;
+	WindowCollection &collection;
 	//! The thread's current input collection
-	using ColumnDataCollectionSpec = WindowDataChunk::ColumnDataCollectionSpec;
+	using ColumnDataCollectionSpec = WindowCollection::ColumnDataCollectionSpec;
 	ColumnDataCollectionSpec sink;
 	//! The state used for appending to the collection
 	ColumnDataAppendState appender;
@@ -91,7 +79,7 @@ public:
 
 class WindowCursor {
 public:
-	explicit WindowCursor(const WindowDataChunk &paged);
+	explicit WindowCursor(const WindowCollection &paged);
 
 	//! Is the scan in range?
 	inline bool RowIsVisible(idx_t row_idx) const {
@@ -139,7 +127,7 @@ public:
 	}
 
 	//! The pageable data
-	const WindowDataChunk &paged;
+	const WindowCollection &paged;
 	//! The state used for reading the collection
 	ColumnDataScanState state;
 	//! The data chunk read into
@@ -240,7 +228,7 @@ public:
 
 	// evaluate RANGE expressions, if needed
 	optional_ptr<Expression> range_expr;
-	unique_ptr<WindowDataChunk> range;
+	unique_ptr<WindowCollection> range;
 };
 
 class WindowExecutorLocalState : public WindowExecutorState {

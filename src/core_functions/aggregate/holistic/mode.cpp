@@ -2,6 +2,7 @@
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/core_functions/aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/unordered_map.hpp"
@@ -98,6 +99,17 @@ struct ModeState {
 	bool valid = false;
 	size_t count = 0;
 
+	//! The collection being read
+	const ColumnDataCollection *inputs;
+	//! The state used for reading the collection on this thread
+	ColumnDataScanState scan;
+	//! The data chunk paged into into
+	DataChunk page;
+	//! The data pointer
+	const KEY_TYPE *data = nullptr;
+	//! The validity mask
+	const ValidityMask *validity = nullptr;
+
 	~ModeState() {
 		if (frequency_map) {
 			delete frequency_map;
@@ -105,6 +117,43 @@ struct ModeState {
 		if (mode) {
 			delete mode;
 		}
+	}
+
+	void InitializePage(const ColumnDataCollection &inputs) {
+		if (page.ColumnCount() == 0) {
+			this->inputs = &inputs;
+			inputs.InitializeScan(scan);
+			inputs.InitializeScanChunk(scan, page);
+		}
+	}
+
+	inline sel_t RowOffset(idx_t row_idx) const {
+		D_ASSERT(RowIsVisible(row_idx));
+		return UnsafeNumericCast<sel_t>(row_idx - scan.current_row_index);
+	}
+
+	inline bool RowIsVisible(idx_t row_idx) const {
+		return (row_idx < scan.next_row_index && scan.current_row_index <= row_idx);
+	}
+
+	inline idx_t Seek(idx_t row_idx) {
+		if (!RowIsVisible(row_idx)) {
+			D_ASSERT(inputs);
+			inputs->Seek(row_idx, scan, page);
+			data = FlatVector::GetData<KEY_TYPE>(page.data[0]);
+			validity = &FlatVector::Validity(page.data[0]);
+		}
+		return RowOffset(row_idx);
+	}
+
+	inline const KEY_TYPE &GetCell(idx_t row_idx) {
+		const auto offset = Seek(row_idx);
+		return data[offset];
+	}
+
+	inline bool RowIsValid(idx_t row_idx) {
+		const auto offset = Seek(row_idx);
+		return validity->RowIsValid(offset);
 	}
 
 	void Reset() {
@@ -116,7 +165,8 @@ struct ModeState {
 		valid = false;
 	}
 
-	void ModeAdd(const KEY_TYPE &key, idx_t row) {
+	void ModeAdd(idx_t row) {
+		const auto &key = GetCell(row);
 		auto &attr = (*frequency_map)[key];
 		auto new_count = (attr.count += 1);
 		if (new_count == 1) {
@@ -136,7 +186,8 @@ struct ModeState {
 		}
 	}
 
-	void ModeRm(const KEY_TYPE &key, idx_t frame) {
+	void ModeRm(idx_t frame) {
+		const auto &key = GetCell(frame);
 		auto &attr = (*frequency_map)[key];
 		auto old_count = attr.count;
 		nonzero -= size_t(old_count == 1);
@@ -162,16 +213,16 @@ struct ModeState {
 	}
 };
 
+template <typename STATE>
 struct ModeIncluded {
-	inline explicit ModeIncluded(const ValidityMask &fmask_p, const ValidityMask &dmask_p)
-	    : fmask(fmask_p), dmask(dmask_p) {
+	inline explicit ModeIncluded(const ValidityMask &fmask_p, STATE &state) : fmask(fmask_p), state(state) {
 	}
 
 	inline bool operator()(const idx_t &idx) const {
-		return fmask.RowIsValid(idx) && dmask.RowIsValid(idx);
+		return fmask.RowIsValid(idx) && state.RowIsValid(idx);
 	}
 	const ValidityMask &fmask;
-	const ValidityMask &dmask;
+	STATE &state;
 };
 
 template <typename TYPE_OP>
@@ -255,11 +306,9 @@ struct ModeFunction : BaseModeFunction<TYPE_OP> {
 	template <typename STATE, typename INPUT_TYPE>
 	struct UpdateWindowState {
 		STATE &state;
-		const INPUT_TYPE *data;
-		ModeIncluded &included;
+		ModeIncluded<STATE> &included;
 
-		inline UpdateWindowState(STATE &state, const INPUT_TYPE *data, ModeIncluded &included)
-		    : state(state), data(data), included(included) {
+		inline UpdateWindowState(STATE &state, ModeIncluded<STATE> &included) : state(state), included(included) {
 		}
 
 		inline void Neither(idx_t begin, idx_t end) {
@@ -268,7 +317,7 @@ struct ModeFunction : BaseModeFunction<TYPE_OP> {
 		inline void Left(idx_t begin, idx_t end) {
 			for (; begin < end; ++begin) {
 				if (included(begin)) {
-					state.ModeRm(data[begin], begin);
+					state.ModeRm(begin);
 				}
 			}
 		}
@@ -276,7 +325,7 @@ struct ModeFunction : BaseModeFunction<TYPE_OP> {
 		inline void Right(idx_t begin, idx_t end) {
 			for (; begin < end; ++begin) {
 				if (included(begin)) {
-					state.ModeAdd(data[begin], begin);
+					state.ModeAdd(begin);
 				}
 			}
 		}
@@ -291,10 +340,10 @@ struct ModeFunction : BaseModeFunction<TYPE_OP> {
 	                   idx_t rid) {
 		auto &state = *reinterpret_cast<STATE *>(l_state);
 
-		D_ASSERT(partition.input_count == 1);
-		const auto &input = partition.inputs[0];
-		auto data = FlatVector::GetData<const INPUT_TYPE>(input);
-		const auto &dmask = FlatVector::Validity(input);
+		D_ASSERT(partition.inputs);
+		const auto &inputs = *partition.inputs;
+		D_ASSERT(inputs.ColumnCount() == 1);
+		state.InitializePage(inputs);
 		const auto &fmask = partition.filter_mask;
 
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
@@ -304,7 +353,7 @@ struct ModeFunction : BaseModeFunction<TYPE_OP> {
 			prevs.resize(1);
 		}
 
-		ModeIncluded included(fmask, dmask);
+		ModeIncluded<STATE> included(fmask, state);
 
 		if (!state.frequency_map) {
 			state.frequency_map = TYPE_OP::CreateEmpty(Allocator::DefaultAllocator());
@@ -317,13 +366,13 @@ struct ModeFunction : BaseModeFunction<TYPE_OP> {
 			for (const auto &frame : frames) {
 				for (auto i = frame.start; i < frame.end; ++i) {
 					if (included(i)) {
-						state.ModeAdd(data[i], i);
+						state.ModeAdd(i);
 					}
 				}
 			}
 		} else {
 			using Updater = UpdateWindowState<STATE, INPUT_TYPE>;
-			Updater updater(state, data, included);
+			Updater updater(state, included);
 			AggregateExecutor::IntersectFrames(prevs, frames, updater);
 		}
 

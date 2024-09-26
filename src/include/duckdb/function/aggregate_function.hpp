@@ -16,6 +16,8 @@
 
 namespace duckdb {
 
+class BufferManager;
+
 //! A half-open range of frame boundary values _relative to the current row_
 //! This is why they are signed values.
 struct FrameDelta {
@@ -29,13 +31,16 @@ struct FrameDelta {
 using FrameStats = array<FrameDelta, 2>;
 
 //! The partition data for custom window functions
+//! Note that if the inputs is nullptr then the column count is 0,
+//! but the row count will still be valid
+class ColumnDataCollection;
 struct WindowPartitionInput {
-	WindowPartitionInput(const Vector inputs[], idx_t input_count, idx_t count, const ValidityMask &filter_mask,
-	                     const FrameStats &stats)
-	    : inputs(inputs), input_count(input_count), count(count), filter_mask(filter_mask), stats(stats) {
+	WindowPartitionInput(BufferManager &buffer_manager, const ColumnDataCollection *inputs, idx_t count,
+	                     const ValidityMask &filter_mask, const FrameStats &stats)
+	    : buffer_manager(buffer_manager), inputs(inputs), count(count), filter_mask(filter_mask), stats(stats) {
 	}
-	const Vector *inputs;
-	idx_t input_count;
+	BufferManager &buffer_manager;
+	const ColumnDataCollection *inputs;
 	idx_t count;
 	const ValidityMask &filter_mask;
 	const FrameStats stats;
