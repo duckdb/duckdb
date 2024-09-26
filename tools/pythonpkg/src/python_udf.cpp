@@ -425,7 +425,7 @@ public:
 			}
 		}
 		idx_t i = 0;
-		for (auto &param : params) {
+		for (auto param : params) {
 			auto type = py::cast<shared_ptr<DuckDBPyType>>(param);
 			parameters[i++] = type->Type();
 		}
