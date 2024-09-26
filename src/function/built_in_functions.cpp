@@ -141,6 +141,13 @@ unique_ptr<FunctionData> BindExtensionFunction(ClientContext &context, ScalarFun
 	return bound_function.bind(context, bound_function, arguments);
 }
 
+void BuiltinFunctions::AddExtensionFunction(ScalarFunctionSet set) {
+	CreateScalarFunctionInfo info(std::move(set));
+	info.internal = true;
+	info.description = "[Extension Function]";
+	catalog.CreateFunction(transaction, info);
+}
+
 void BuiltinFunctions::RegisterExtensionOverloads() {
 	ScalarFunctionSet current_set;
 	for(auto &entry : EXTENSION_FUNCTION_OVERLOADS) {
@@ -160,14 +167,14 @@ void BuiltinFunctions::RegisterExtensionOverloads() {
 		if (current_set.name != entry.name) {
 			if (!current_set.name.empty()) {
 				// create set of functions
-				AddFunction(current_set);
+				AddExtensionFunction(current_set);
 			}
 			current_set = ScalarFunctionSet(entry.name);
 		}
 		// add this function to the set of function overloads
 		current_set.AddFunction(std::move(function));
 	}
-	AddFunction(current_set);
+	AddExtensionFunction(std::move(current_set));
 }
 
 

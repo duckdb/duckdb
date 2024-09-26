@@ -69,6 +69,8 @@ private:
 
 	// pragmas
 	void RegisterPragmaFunctions();
+
+	void AddExtensionFunction(ScalarFunctionSet set);
 };
 
 } // namespace duckdb

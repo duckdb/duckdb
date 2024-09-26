@@ -109,6 +109,22 @@ class ExtensionFunctionOverload(NamedTuple):
     parameters: Tuple
     return_type: LogicalType
 
+    @staticmethod
+    def create_map(input: List[Tuple[str, str, str, str]]) -> Dict[Function, List["ExtensionFunctionOverload"]]:
+        output: Dict[Function, List["ExtensionFunctionOverload"]] = {}
+        for x in input:
+            function = Function(x[0], catalog_type_from_type(x[2]))
+            # parse the signature
+            signature = x[3]
+            splits = signature.split('>')
+            return_type = LogicalType(splits[1])
+            parameters = [LogicalType(param) for param in splits[0].split(',')]
+            extension_function = ExtensionFunctionOverload(x[1], function.name, function.type, parameters, return_type)
+            if function not in output:
+                output[function] = []
+            output[function].append(extension_function)
+        return output
+
 class ExtensionFunction(NamedTuple):
     extension: str
     name: str
@@ -170,7 +186,7 @@ class ParsedEntries:
 
         def parse_contents(input) -> list:
             # Split the string by comma and remove any leading or trailing spaces
-            elements = input.split(",")
+            elements = input.split(", ")
             # Strip any leading or trailing spaces and surrounding double quotes from each element
             elements = [element.strip().strip('"') for element in elements]
             return elements
@@ -185,6 +201,13 @@ class ParsedEntries:
         res = [parse_contents(x) for x in res]
         res = [(x[0], x[1], x[2]) for x in res]
         self.functions = ExtensionFunction.create_map(res)
+
+        # Get the extension function overloads
+        ext_function_overloads_file_blob = get_slice_of_file("EXTENSION_FUNCTION_OVERLOADS", file_blob)
+        res = pattern.findall(ext_function_overloads_file_blob)
+        res = [parse_contents(x) for x in res]
+        res = [(x[0], x[1], x[2], x[3]) for x in res]
+        self.function_overloads = ExtensionFunctionOverload.create_map(res)
 
         # Get the extension settings
         ext_settings_file_blob = get_slice_of_file("EXTENSION_SETTINGS", file_blob)
@@ -207,9 +230,12 @@ class ParsedEntries:
         res = [(x[0], x[1]) for x in res]
         self.types = ExtensionType.create_map(res)
 
+    def strip_unloaded_extensions(self, extensions: List[str], functions):
+        return [x for x in functions if x.extension not in extensions]
+
     def filter_entries(self, extensions: List[str]):
         self.functions = {k: v for k, v in self.functions.items() if v.extension not in extensions}
-        self.function_overloads = {k: v for k, v in self.function_overloads.items() if v.extension not in extensions}
+        self.function_overloads = {k: self.strip_unloaded_extensions(extensions, v) for k, v in self.function_overloads.items() if len(self.strip_unloaded_extensions(extensions, v)) > 0}
         self.copy_functions = {k: v for k, v in self.copy_functions.items() if v.extension not in extensions}
         self.settings = {k: v for k, v in self.settings.items() if v.extension not in extensions}
         self.types = {k: v for k, v in self.types.items() if v.extension not in extensions}
@@ -280,6 +306,7 @@ def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverlo
             parameter_types,
             return_type
         from duckdb_functions()
+        WHERE description IS NULL OR description NOT LIKE '%[Extension Function]%'
         ORDER BY function_name, function_type;
     """
     # ['name_1,type_1', ..., 'name_n,type_n']
@@ -461,7 +488,7 @@ static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS[] =
         sorted_function = sorted(self.function_overloads)
 
         for func in sorted_function:
-            overloads: List[ExtensionFunctionOverload] = self.function_overloads[func]
+            overloads: List[ExtensionFunctionOverload] = sorted(self.function_overloads[func])
             for overload in overloads:
                 result += "\t{"
                 result += f'"{overload.name}", "{overload.extension}", {overload.type.value}, "'
@@ -473,7 +500,7 @@ static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS[] =
                 signature += ">" + overload.return_type.type
                 result += signature
                 result += '"},\n'
-        result += "}; // END_OF_EXTENSION_FUNCTIONS\n"
+        result += "}; // END_OF_EXTENSION_FUNCTION_OVERLOADS\n"
         return result
 
     def export_settings(self) -> str:
