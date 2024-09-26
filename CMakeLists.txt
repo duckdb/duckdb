@@ -393,16 +393,14 @@ option(CLANG_TIDY "Enable build for clang-tidy, this disables all source files e
 option(BUILD_UNITTESTS "Build the C++ Unit Tests." TRUE)
 option(EXTENSION_CONFIG_BUILD "Produce extension configuration artifacts instead of building. (such as shared vcpkg.json, extensions.txt)" FALSE)
 option(CUSTOM_LINKER "Use a custom linker program" "")
-option(
-  ASSERT_EXCEPTION
-  "Throw an exception on an assert failing, instead of triggering a sigabort"
-  TRUE)
+option(CRASH_ON_ASSERT "Trigger a sigabort on an assert failing, instead of throwing an exception" FALSE)
 option(FORCE_ASSERT "Enable checking of assertions, even in release mode" FALSE)
 
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
 option(EXPORT_DLL_SYMBOLS "Export dll symbols on Windows, else import" TRUE)
 option(BUILD_RDTSC "Enable the rdtsc instruction." FALSE)
 option(TEST_REMOTE_INSTALL "Test installation of specific extensions." FALSE)
+option(SMALLER_BINARY "Produce a smaller binary by trimming specialized code paths. This can negatively affect performance." FALSE)
 
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
@@ -426,8 +424,7 @@ if(TREAT_WARNINGS_AS_ERRORS)
   message("Treating warnings as errors.")
 endif()
 
-if(ASSERT_EXCEPTION)
-else()
+if(CRASH_ON_ASSERT)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_CRASH_ON_ASSERT")
 endif()
 
@@ -477,6 +474,10 @@ endif()
 
 if (CLANG_TIDY)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_CLANG_TIDY")
+endif()
+
+if (SMALLER_BINARY)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_SMALLER_BINARY")
 endif()
 
 if(FORCE_ASSERT)

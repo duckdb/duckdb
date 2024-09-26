@@ -139,7 +139,7 @@ public:
 	optional_ptr<GlobalTableFunctionState> global_state;
 };
 
-enum class ScanType : uint8_t { TABLE, PARQUET };
+enum class ScanType : uint8_t { TABLE, PARQUET, EXTERNAL };
 
 struct BindInfo {
 public:

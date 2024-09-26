@@ -175,6 +175,7 @@ AggregateFunction GetStringMapType(const LogicalType &type) {
 template <bool IS_ORDERED = true>
 AggregateFunction GetHistogramFunction(const LogicalType &type) {
 	switch (type.InternalType()) {
+#ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::BOOL:
 		return GetMapType<HistogramFunctor, bool, IS_ORDERED>(type);
 	case PhysicalType::UINT8:
@@ -199,6 +200,7 @@ AggregateFunction GetHistogramFunction(const LogicalType &type) {
 		return GetMapType<HistogramFunctor, double, IS_ORDERED>(type);
 	case PhysicalType::VARCHAR:
 		return GetStringMapType<HistogramStringFunctor, IS_ORDERED>(type);
+#endif
 	default:
 		return GetStringMapType<HistogramGenericFunctor, IS_ORDERED>(type);
 	}

@@ -6390,6 +6390,8 @@ const char* EnumUtil::ToChars<ScanType>(ScanType value) {
 		return "TABLE";
 	case ScanType::PARQUET:
 		return "PARQUET";
+	case ScanType::EXTERNAL:
+		return "EXTERNAL";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ScanType>", value));
 	}
@@ -6402,6 +6404,9 @@ ScanType EnumUtil::FromString<ScanType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "PARQUET")) {
 		return ScanType::PARQUET;
+	}
+	if (StringUtil::Equals(value, "EXTERNAL")) {
+		return ScanType::EXTERNAL;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ScanType>", value));
 }
