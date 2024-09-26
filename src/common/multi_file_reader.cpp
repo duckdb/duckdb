@@ -413,12 +413,6 @@ void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReade
 TablePartitionInfo MultiFileReader::GetPartitionInfo(ClientContext &context, const MultiFileReaderBindData &bind_data,
 										TableFunctionPartitionInput &input) {
 	// check if all of the columns are in the hive partition set
-	if (bind_data.hive_partitioning_indexes.size() != input.partition_ids.size()) {
-		// we only support single value partitions currently
-		// if we are only referencing a SUBSET of the hive partitions these might not be unique
-		// e.g. consider a dataset partitioned by (YEAR, MONTH), if we refer to (MONTH) only it is not unique
-		return TablePartitionInfo::NOT_PARTITIONED;
-	}
 	for(auto &partition_col : input.partition_ids) {
 		auto col_idx = input.column_ids[partition_col];
 		// check if this column is in the hive partitioned set
@@ -430,9 +424,12 @@ TablePartitionInfo MultiFileReader::GetPartitionInfo(ClientContext &context, con
 			}
 		}
 		if (!found) {
+			// the column is not partitioned - hive partitioning alone can't guarantee the groups are partitioned
 			return TablePartitionInfo::NOT_PARTITIONED;
 		}
 	}
+	// if all columns are in the hive partitioning set, we know that each partition will only have a single value
+	// i.e. if the hive partitioning is by (YEAR, MONTH), each partition will have a single unique (YEAR, MONTH)
 	return TablePartitionInfo::SINGLE_VALUE_PARTITIONS;
 }
 

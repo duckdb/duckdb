@@ -1,0 +1,21 @@
+# name: test/sql/copy/partitioned/partitioned_group_by.test
+# description: Test partitioned aggregates
+# group: [partitioned]
+
+require parquet
+
+# partitions
+statement ok
+CREATE TABLE tbl AS SELECT i%2 AS partition, i FROM range(10000) t(i)
+
+statement ok
+COPY tbl TO '__TEST_DIR__/partition_group_by' (FORMAT parquet, PARTITION_BY (partition))
+
+query II
+SELECT partition, SUM(i)
+FROM '__TEST_DIR__/partition_group_by/**/*.parquet'
+GROUP BY partition
+ORDER BY ALL
+----
+0	24995000
+1	25000000

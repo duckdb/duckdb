@@ -3,6 +3,7 @@
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/aggregate/physical_perfecthash_aggregate.hpp"
 #include "duckdb/execution/operator/aggregate/physical_ungrouped_aggregate.hpp"
+#include "duckdb/execution/operator/aggregate/physical_partitioned_aggregate.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
@@ -246,7 +247,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 		// use a partitioned or perfect hash aggregate if possible
 		vector<idx_t> required_bits;
 		if (CanUsePartitionedAggregate(context, op, *plan)) {
-			throw InternalException("FIXME: create partition aware aggregate");
+			groupby = make_uniq_base<PhysicalOperator, PhysicalPartitionedAggregate>(
+				context, op.types, std::move(op.expressions), std::move(op.groups), op.estimated_cardinality);
 		} else if (CanUsePerfectHashAggregate(context, op, required_bits)) {
 			groupby = make_uniq_base<PhysicalOperator, PhysicalPerfectHashAggregate>(
 			    context, op.types, std::move(op.expressions), std::move(op.groups), std::move(op.group_stats),
