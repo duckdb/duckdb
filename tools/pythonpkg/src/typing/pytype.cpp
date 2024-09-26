@@ -195,7 +195,7 @@ static bool IsMapType(const py::tuple &args) {
 	if (args.size() != 2) {
 		return false;
 	}
-	for (auto &arg : args) {
+	for (auto arg : args) {
 		if (GetTypeObjectType(arg) == PythonTypeObject::INVALID) {
 			return false;
 		}

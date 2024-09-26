@@ -446,7 +446,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const py::object 
 
 	unique_ptr<QueryResult> query_result;
 	// Execute once for every set of parameters that are provided
-	for (auto &parameters : outer_list) {
+	for (auto parameters : outer_list) {
 		auto params = py::reinterpret_borrow<py::object>(parameters);
 		query_result = ExecuteInternal(*prep, std::move(params));
 	}
@@ -1119,7 +1119,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 		} else if (py::is_list_like(dtype)) {
 			vector<Value> list_values;
 			py::list dtype_list = dtype;
-			for (auto &child : dtype_list) {
+			for (auto child : dtype_list) {
 				shared_ptr<DuckDBPyType> sql_type;
 				if (!py::try_cast(child, sql_type)) {
 					throw py::value_error("The types provided to 'dtype' have to be DuckDBPyType");
@@ -1149,7 +1149,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 		}
 		vector<Value> names;
 		py::list names_list = names_p;
-		for (auto &elem : names_list) {
+		for (auto elem : names_list) {
 			if (!py::isinstance<py::str>(elem)) {
 				throw InvalidInputException("read_csv 'names' list has to consist of only strings");
 			}
@@ -1166,7 +1166,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 			null_values.push_back(Value(py::str(na_values)));
 		} else {
 			py::list null_list = na_values;
-			for (auto &elem : null_list) {
+			for (auto elem : null_list) {
 				if (!py::isinstance<py::str>(elem)) {
 					throw InvalidInputException("read_csv 'na_values' list has to consist of only strings");
 				}

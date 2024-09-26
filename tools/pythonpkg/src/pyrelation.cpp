@@ -121,7 +121,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectFromTypes(const py::object
 	auto list = py::list(obj);
 	vector<LogicalType> types_filter;
 	// Collect the list of types specified that will be our filter
-	for (auto &item : list) {
+	for (auto item : list) {
 		LogicalType type;
 		if (py::isinstance<py::str>(item)) {
 			string type_str = py::str(item);
@@ -231,7 +231,7 @@ vector<unique_ptr<ParsedExpression>> GetExpressions(ClientContext &context, cons
 	if (py::is_list_like(expr)) {
 		vector<unique_ptr<ParsedExpression>> expressions;
 		auto aggregate_list = py::list(expr);
-		for (auto &item : aggregate_list) {
+		for (auto item : aggregate_list) {
 			shared_ptr<DuckDBPyExpression> py_expr;
 			if (!py::try_cast<shared_ptr<DuckDBPyExpression>>(item, py_expr)) {
 				throw InvalidInputException("Please provide arguments of type Expression!");
@@ -1301,7 +1301,7 @@ void DuckDBPyRelation::ToCSV(const string &filename, const py::object &sep, cons
 		}
 		vector<Value> partition_by_values;
 		const py::list &partition_fields = partition_by;
-		for (auto &field : partition_fields) {
+		for (auto field : partition_fields) {
 			if (!py::isinstance<py::str>(field)) {
 				throw InvalidInputException("to_csv only accepts 'partition_by' as a list of strings");
 			}

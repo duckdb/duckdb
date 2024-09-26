@@ -23,7 +23,7 @@ static child_list_t<LogicalType> GetChildList(const py::object &container) {
 	if (py::isinstance<py::list>(container)) {
 		const py::list &fields = container;
 		idx_t i = 1;
-		for (auto &item : fields) {
+		for (auto item : fields) {
 			shared_ptr<DuckDBPyType> pytype;
 			if (!py::try_cast<shared_ptr<DuckDBPyType>>(item, pytype)) {
 				string actual_type = py::str(item.get_type());
