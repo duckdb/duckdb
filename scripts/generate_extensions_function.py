@@ -56,10 +56,8 @@ class CatalogType(str, Enum):
     TABLE_MACRO = "CatalogType::TABLE_MACRO_ENTRY"
 
 
-parameter_type_map = {
-    "TIMESTAMP WITH TIME ZONE": "TIMESTAMPTZ",
-    "TIME WITH TIME ZONE": "TIMETZ"
-}
+parameter_type_map = {"TIMESTAMP WITH TIME ZONE": "TIMESTAMPTZ", "TIME WITH TIME ZONE": "TIMETZ"}
+
 
 def catalog_type_from_type(catalog_type: str) -> CatalogType:
     TYPE_MAP = {
@@ -92,15 +90,18 @@ def catalog_type_from_string(catalog_type: str) -> CatalogType:
 class LogicalType(NamedTuple):
     type: str
 
+
 class Function(NamedTuple):
     name: str
     type: CatalogType
+
 
 class FunctionOverload(NamedTuple):
     name: str
     type: CatalogType
     parameters: Tuple
     return_type: LogicalType
+
 
 class ExtensionFunctionOverload(NamedTuple):
     extension: str
@@ -124,6 +125,7 @@ class ExtensionFunctionOverload(NamedTuple):
                 output[function] = []
             output[function].append(extension_function)
         return output
+
 
 class ExtensionFunction(NamedTuple):
     extension: str
@@ -235,7 +237,11 @@ class ParsedEntries:
 
     def filter_entries(self, extensions: List[str]):
         self.functions = {k: v for k, v in self.functions.items() if v.extension not in extensions}
-        self.function_overloads = {k: self.strip_unloaded_extensions(extensions, v) for k, v in self.function_overloads.items() if len(self.strip_unloaded_extensions(extensions, v)) > 0}
+        self.function_overloads = {
+            k: self.strip_unloaded_extensions(extensions, v)
+            for k, v in self.function_overloads.items()
+            if len(self.strip_unloaded_extensions(extensions, v)) > 0
+        }
         self.copy_functions = {k: v for k, v in self.copy_functions.items() if v.extension not in extensions}
         self.settings = {k: v for k, v in self.settings.items() if v.extension not in extensions}
         self.types = {k: v for k, v in self.types.items() if v.extension not in extensions}
@@ -286,17 +292,20 @@ def get_query(sql_query, load_query) -> list:
     result = query_result.split("\n")[1:-1]
     return result
 
+
 def transform_parameter(parameter) -> LogicalType:
     parameter = parameter.upper()
     if parameter.endswith('[]'):
-        return LogicalType(transform_parameter(parameter[0:len(parameter) - 2]).type + '[]')
+        return LogicalType(transform_parameter(parameter[0 : len(parameter) - 2]).type + '[]')
     if parameter in parameter_type_map:
         return LogicalType(parameter_type_map[parameter])
     return LogicalType(parameter)
 
+
 def transform_parameters(parameters) -> FunctionOverload:
-    parameters = parameters[1:len(parameters) - 1].split(', ')
+    parameters = parameters[1 : len(parameters) - 1].split(', ')
     return tuple(transform_parameter(param) for param in parameters)
+
 
 def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverload]]):
     GET_FUNCTIONS_QUERY = """
@@ -319,7 +328,9 @@ def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverlo
         function_parameters = transform_parameters(parameters)
         function_return = transform_parameter(return_type)
         function = Function(function_name, catalog_type_from_string(function_type))
-        function_overload = FunctionOverload(function_name, catalog_type_from_string(function_type), function_parameters, function_return)
+        function_overload = FunctionOverload(
+            function_name, catalog_type_from_string(function_type), function_parameters, function_return
+        )
         if function not in functions:
             functions.add(function)
             function_overloads[function] = [function_overload]
@@ -345,9 +356,9 @@ class ExtensionData:
         # Map of extension -> ExtensionSetting
         self.settings_map: Dict[str, ExtensionSetting] = {}
         # Map of function -> extension function overloads
-        self.function_overloads: Dict[Function, List[ExtensionFunctionOverload]]  = {}
+        self.function_overloads: Dict[Function, List[ExtensionFunctionOverload]] = {}
         # All function overloads (also ones that will not be written to the file)
-        self.all_function_overloads: Dict[Function, List[ExtensionFunctionOverload]]  = {}
+        self.all_function_overloads: Dict[Function, List[ExtensionFunctionOverload]] = {}
 
         # Map of extension -> extension_path
         self.extensions: Dict[str, str] = get_extension_path_map()
@@ -413,16 +424,24 @@ Please double check if '{args.extension_dir}' is the right location to look for 
 
         self.settings_map.update(settings_to_add)
 
-    def get_extension_overloads(self, extension_name: str, overloads : Dict[Function, List[FunctionOverload]]) -> Dict[Function, List[ExtensionFunctionOverload]]:
+    def get_extension_overloads(
+        self, extension_name: str, overloads: Dict[Function, List[FunctionOverload]]
+    ) -> Dict[Function, List[ExtensionFunctionOverload]]:
         result = {}
-        for (function, function_overloads) in overloads.items():
+        for function, function_overloads in overloads.items():
             extension_overloads = []
             for overload in function_overloads:
-                extension_overloads.append(ExtensionFunctionOverload(extension_name, overload.name, overload.type, overload.parameters, overload.return_type))
+                extension_overloads.append(
+                    ExtensionFunctionOverload(
+                        extension_name, overload.name, overload.type, overload.parameters, overload.return_type
+                    )
+                )
             result[function] = extension_overloads
         return result
 
-    def add_functions(self, extension_name: str, function_list: List[Function], overloads: Dict[Function, List[FunctionOverload]]):
+    def add_functions(
+        self, extension_name: str, function_list: List[Function], overloads: Dict[Function, List[FunctionOverload]]
+    ):
         extension_name = extension_name.lower()
 
         overloads = self.get_extension_overloads(extension_name, overloads)

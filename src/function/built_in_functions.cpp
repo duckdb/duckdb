@@ -96,25 +96,28 @@ LogicalType ParseLogicalType(const string &type) {
 	}
 	if (StringUtil::EndsWith(type, "()")) {
 		if (type != "STRUCT()") {
-			throw InternalException("Error while generating extension function overloads - expected STRUCT(), not %s", type);
+			throw InternalException("Error while generating extension function overloads - expected STRUCT(), not %s",
+			                        type);
 		}
 		return LogicalType::STRUCT({});
 	}
 	auto type_id = TransformStringToLogicalTypeId(type);
 	if (type_id == LogicalTypeId::USER) {
-		throw InternalException("Error while generating extension function overloads - unrecognized logical type %s", type);
+		throw InternalException("Error while generating extension function overloads - unrecognized logical type %s",
+		                        type);
 	}
 	return type_id;
 }
 
 struct ExtensionFunctionInfo : public ScalarFunctionInfo {
-	explicit ExtensionFunctionInfo(string extension_p) : extension(std::move(extension_p)) {}
+	explicit ExtensionFunctionInfo(string extension_p) : extension(std::move(extension_p)) {
+	}
 
 	string extension;
 };
 
 unique_ptr<FunctionData> BindExtensionFunction(ClientContext &context, ScalarFunction &bound_function,
-														   vector<unique_ptr<Expression>> &arguments) {
+                                               vector<unique_ptr<Expression>> &arguments) {
 	// if this is triggered we are trying to call a method that is present in an extension
 	// but the extension is not loaded
 	// try to autoload the extension
@@ -124,7 +127,9 @@ unique_ptr<FunctionData> BindExtensionFunction(ClientContext &context, ScalarFun
 	auto &db = *context.db;
 
 	if (!ExtensionHelper::CanAutoloadExtension(extension_name)) {
-		throw BinderException("Trying to call function \"%s\" which is present in extension \"%s\" - but the extension is not loaded and could not be auto-loaded", bound_function.name, extension_name);
+		throw BinderException("Trying to call function \"%s\" which is present in extension \"%s\" - but the extension "
+		                      "is not loaded and could not be auto-loaded",
+		                      bound_function.name, extension_name);
 	}
 	// auto-load the extension
 	ExtensionHelper::AutoLoadExtension(db, extension_name);
@@ -150,19 +155,22 @@ void BuiltinFunctions::AddExtensionFunction(ScalarFunctionSet set) {
 
 void BuiltinFunctions::RegisterExtensionOverloads() {
 	ScalarFunctionSet current_set;
-	for(auto &entry : EXTENSION_FUNCTION_OVERLOADS) {
+	for (auto &entry : EXTENSION_FUNCTION_OVERLOADS) {
 		vector<LogicalType> arguments;
 		auto splits = StringUtil::Split(entry.signature, ">");
 		auto return_type = ParseLogicalType(splits[1]);
 		auto argument_splits = StringUtil::Split(splits[0], ",");
-		for(auto &param : argument_splits) {
+		for (auto &param : argument_splits) {
 			arguments.push_back(ParseLogicalType(param));
 		}
 		if (entry.type != CatalogType::SCALAR_FUNCTION_ENTRY) {
-			throw InternalException("Extension function overloads only supported for scalar functions currently - %s has a different type", entry.name);
+			throw InternalException(
+			    "Extension function overloads only supported for scalar functions currently - %s has a different type",
+			    entry.name);
 		}
 
-		ScalarFunction function(entry.name, std::move(arguments), std::move(return_type), nullptr, BindExtensionFunction);
+		ScalarFunction function(entry.name, std::move(arguments), std::move(return_type), nullptr,
+		                        BindExtensionFunction);
 		function.function_info = make_shared_ptr<ExtensionFunctionInfo>(entry.extension);
 		if (current_set.name != entry.name) {
 			if (!current_set.name.empty()) {
@@ -176,6 +184,5 @@ void BuiltinFunctions::RegisterExtensionOverloads() {
 	}
 	AddExtensionFunction(std::move(current_set));
 }
-
 
 } // namespace duckdb
