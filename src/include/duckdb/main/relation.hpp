@@ -36,7 +36,7 @@ class TableRef;
 
 class RelationContextWrapper : public ClientContextWrapper {
 public:
-	virtual ~RelationContextWrapper() = default;
+	~RelationContextWrapper() override = default;
 	explicit RelationContextWrapper(const shared_ptr<ClientContext> &context) : ClientContextWrapper(context) {};
 
 	explicit RelationContextWrapper(const ClientContextWrapper &context) : ClientContextWrapper(context) {};

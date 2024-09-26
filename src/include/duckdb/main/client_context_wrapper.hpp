@@ -16,6 +16,7 @@ class ClientContext;
 
 class ClientContextWrapper {
 public:
+	virtual ~ClientContextWrapper() = default;
 	explicit ClientContextWrapper(const shared_ptr<ClientContext> &context);
 	shared_ptr<ClientContext> GetContext();
 	shared_ptr<ClientContext> TryGetContext();

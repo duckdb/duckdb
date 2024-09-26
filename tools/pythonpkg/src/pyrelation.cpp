@@ -43,7 +43,7 @@ bool DuckDBPyRelation::CanBeRegisteredBy(ClientContext &context) {
 		// PyRelation without an internal relation can not be registered
 		return false;
 	}
-	auto this_context = rel->context.TryGetContext();
+	auto this_context = rel->context->TryGetContext();
 	if (!this_context) {
 		return false;
 	}
