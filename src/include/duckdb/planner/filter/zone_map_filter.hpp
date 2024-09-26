@@ -9,9 +9,6 @@
 #pragma once
 
 #include "duckdb/planner/table_filter.hpp"
-#include "duckdb/common/types/value.hpp"
-#include "duckdb/common/enums/expression_type.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
 
 namespace duckdb {
 
@@ -23,8 +20,8 @@ public:
 	// zonemap filter
 	unique_ptr<TableFilter> child_filter;
 
-	ZoneMapFilter() : TableFilter(TableFilterType::ZONE_MAP) {
-	}
+public:
+	ZoneMapFilter();
 
 	string ToString(const string &column_name) override;
 	unique_ptr<TableFilter> Copy() const override;
@@ -32,9 +29,6 @@ public:
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override;
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
-
-	~ZoneMapFilter() override {
-	}
 };
 
 } // namespace duckdb
