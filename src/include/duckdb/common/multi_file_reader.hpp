@@ -282,6 +282,10 @@ struct MultiFileReader {
 		}
 	}
 
+	//! Get partition info
+	DUCKDB_API virtual TablePartitionInfo GetPartitionInfo(ClientContext &context, const MultiFileReaderBindData &bind_data,
+											TableFunctionPartitionInput &input);
+
 protected:
 	virtual void CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,
 	                               const vector<string> &local_names, const vector<LogicalType> &global_types,

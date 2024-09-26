@@ -4,6 +4,7 @@
 #include "duckdb/execution/operator/aggregate/physical_perfecthash_aggregate.hpp"
 #include "duckdb/execution/operator/aggregate/physical_ungrouped_aggregate.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
+#include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -26,6 +27,70 @@ static uint32_t RequiredBitsForValue(uint32_t n) {
 template <class T>
 hugeint_t GetRangeHugeint(const BaseStatistics &nstats) {
 	return Hugeint::Convert(NumericStats::GetMax<T>(nstats)) - Hugeint::Convert(NumericStats::GetMin<T>(nstats));
+}
+
+static bool CanUsePartitionedAggregate(ClientContext &context, LogicalAggregate &op, PhysicalOperator &child) {
+	if (op.grouping_sets.size() > 1 || !op.grouping_functions.empty()) {
+		return false;
+	}
+	// check if the source is partitioned by the aggregate columns
+	// figure out the columns we are grouping by
+	vector<column_t> partition_columns;
+	for(auto &group_id : op.grouping_sets[0]) {
+		auto &group_expr = op.groups[group_id];
+		// only support bound reference here
+		if (group_expr->type != ExpressionType::BOUND_REF) {
+			return false;
+		}
+		auto &ref = group_expr->Cast<BoundReferenceExpression>();
+		partition_columns.push_back(ref.index);
+	}
+	// traverse the children of the aggregate to find the source operator
+	reference<PhysicalOperator> child_ref(child);
+	while(child_ref.get().type != PhysicalOperatorType::TABLE_SCAN) {
+		auto &child_op = child_ref.get();
+		switch(child_op.type) {
+		case PhysicalOperatorType::PROJECTION: {
+			// recompute partition columns
+			auto &projection = child_op.Cast<PhysicalProjection>();
+			vector<column_t> new_columns;
+			for(auto &partition_col : partition_columns) {
+				// we only support bound reference here
+				auto &expr = projection.select_list[partition_col];
+				if (expr->type != ExpressionType::BOUND_REF) {
+					return false;
+				}
+				auto &ref = expr->Cast<BoundReferenceExpression>();
+				new_columns.push_back(ref.index);
+			}
+			// continue into child node with new columns
+			partition_columns = std::move(new_columns);
+			child_ref = *child_op.children[0];
+			break;
+		}
+		case PhysicalOperatorType::FILTER:
+			// continue into child operators
+			child_ref = *child_op.children[0];
+			break;
+		default:
+			// unsupported operator for partition pass-through
+			return false;
+		}
+	}
+	auto &table_scan = child_ref.get().Cast<PhysicalTableScan>();
+	if (!table_scan.function.get_partition_info) {
+		// this source does not expose partition information - skip
+		return false;
+	}
+	// check if the source operator is partitioned by the grouping columns
+	TableFunctionPartitionInput input(table_scan.bind_data.get(), table_scan.column_ids, partition_columns);
+	auto partition_info = table_scan.function.get_partition_info(context, input);
+	if (partition_info != TablePartitionInfo::SINGLE_VALUE_PARTITIONS) {
+		// we only support single-value partitions currently
+		return false;
+	}
+	// we have single value partitions!
+	return true;
 }
 
 static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate &op, vector<idx_t> &bits_per_group) {
@@ -178,9 +243,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 		}
 	} else {
 		// groups! create a GROUP BY aggregator
-		// use a perfect hash aggregate if possible
+		// use a partitioned or perfect hash aggregate if possible
 		vector<idx_t> required_bits;
-		if (CanUsePerfectHashAggregate(context, op, required_bits)) {
+		if (CanUsePartitionedAggregate(context, op, *plan)) {
+			throw InternalException("FIXME: create partition aware aggregate");
+		} else if (CanUsePerfectHashAggregate(context, op, required_bits)) {
 			groupby = make_uniq_base<PhysicalOperator, PhysicalPerfectHashAggregate>(
 			    context, op.types, std::move(op.expressions), std::move(op.groups), std::move(op.group_stats),
 			    std::move(required_bits), op.estimated_cardinality);

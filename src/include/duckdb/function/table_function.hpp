@@ -139,6 +139,16 @@ public:
 	optional_ptr<GlobalTableFunctionState> global_state;
 };
 
+struct TableFunctionPartitionInput {
+	TableFunctionPartitionInput(optional_ptr<const FunctionData> bind_data_p, const vector<column_t> &column_ids_p, const vector<column_t> &partition_ids)
+	    : bind_data(bind_data_p), column_ids(column_ids_p), partition_ids(partition_ids) {
+	}
+
+	optional_ptr<const FunctionData> bind_data;
+	const vector<column_t> &column_ids;
+	const vector<column_t> &partition_ids;
+};
+
 enum class ScanType : uint8_t { TABLE, PARQUET, EXTERNAL };
 
 struct BindInfo {
@@ -179,6 +189,14 @@ public:
 		}
 		return result;
 	}
+};
+
+//! How a table is partitioned by a given set of columns
+enum class TablePartitionInfo : uint8_t {
+	NOT_PARTITIONED,         // the table is not partitioned by the given set of columns
+	SINGLE_VALUE_PARTITIONS, // each partition has exactly one unique value (e.g. bounds = [1,1][2,2][3,3])
+	OVERLAPPING_PARTITIONS,  // the partitions overlap **only** at the boundaries (e.g. bounds = [1,2][2,3][3,4]
+	DISJOINT_PARTITIONS      // the partitions are disjoint (e.g. bounds = [1,2][3,4][5,6])
 };
 
 typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context, TableFunctionBindInput &input,
@@ -222,6 +240,9 @@ typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(Deserializer &d
 
 typedef void (*table_function_type_pushdown_t)(ClientContext &context, optional_ptr<FunctionData> bind_data,
                                                const unordered_map<idx_t, LogicalType> &new_column_types);
+
+typedef TablePartitionInfo (*table_function_get_partition_info_t)(ClientContext &context,
+                                                                  TableFunctionPartitionInput &input);
 
 //! When to call init_global to initialize the table function
 enum class TableFunctionInitialization { INITIALIZE_ON_EXECUTE, INITIALIZE_ON_SCHEDULE };
@@ -287,6 +308,8 @@ public:
 	table_function_get_multi_file_reader_t get_multi_file_reader;
 	//! (Optional) If this scanner supports filter pushdown, but not to all data types
 	table_function_supports_pushdown_type_t supports_pushdown_type;
+	//! Get partition info of the table
+	table_function_get_partition_info_t get_partition_info;
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;

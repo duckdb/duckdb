@@ -383,6 +383,11 @@ static bool GetBooleanArgument(const pair<string, vector<Value>> &option) {
 	return BooleanValue::Get(boolean_value);
 }
 
+TablePartitionInfo ParquetGetPartitionInfo(ClientContext &context, TableFunctionPartitionInput &input) {
+	auto &parquet_bind = input.bind_data->Cast<ParquetReadBindData>();
+	return parquet_bind.multi_file_reader->GetPartitionInfo(context, parquet_bind.reader_bind, input);
+}
+
 class ParquetScanFunction {
 public:
 	static TableFunctionSet GetFunctionSet() {
@@ -408,6 +413,7 @@ public:
 		table_function.filter_pushdown = true;
 		table_function.filter_prune = true;
 		table_function.pushdown_complex_filter = ParquetComplexFilterPushdown;
+		table_function.get_partition_info = ParquetGetPartitionInfo;
 
 		MultiFileReader::AddParameters(table_function);
 

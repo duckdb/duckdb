@@ -410,6 +410,32 @@ void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReade
 	chunk.Verify();
 }
 
+TablePartitionInfo MultiFileReader::GetPartitionInfo(ClientContext &context, const MultiFileReaderBindData &bind_data,
+										TableFunctionPartitionInput &input) {
+	// check if all of the columns are in the hive partition set
+	if (bind_data.hive_partitioning_indexes.size() != input.partition_ids.size()) {
+		// we only support single value partitions currently
+		// if we are only referencing a SUBSET of the hive partitions these might not be unique
+		// e.g. consider a dataset partitioned by (YEAR, MONTH), if we refer to (MONTH) only it is not unique
+		return TablePartitionInfo::NOT_PARTITIONED;
+	}
+	for(auto &partition_col : input.partition_ids) {
+		auto col_idx = input.column_ids[partition_col];
+		// check if this column is in the hive partitioned set
+		bool found = false;
+		for(auto &partition : bind_data.hive_partitioning_indexes) {
+			if (partition.index == col_idx) {
+				found = true;
+				break;
+			}
+		}
+		if (!found) {
+			return TablePartitionInfo::NOT_PARTITIONED;
+		}
+	}
+	return TablePartitionInfo::SINGLE_VALUE_PARTITIONS;
+}
+
 TableFunctionSet MultiFileReader::CreateFunctionSet(TableFunction table_function) {
 	TableFunctionSet function_set(table_function.name);
 	function_set.AddFunction(table_function);
