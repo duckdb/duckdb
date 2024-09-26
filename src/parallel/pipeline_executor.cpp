@@ -15,7 +15,8 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 	D_ASSERT(pipeline.source_state);
 	if (pipeline.sink) {
 		local_sink_state = pipeline.sink->GetLocalSinkState(context);
-		requires_batch_index = pipeline.sink->RequiresBatchIndex() && pipeline.source->SupportsBatchIndex();
+		auto partition_info = pipeline.sink->RequiredPartitionInfo();
+		requires_batch_index = partition_info.batch_index && pipeline.source->SupportsBatchIndex();
 		if (requires_batch_index) {
 			auto &partition_info = local_sink_state->partition_info;
 			D_ASSERT(!partition_info.batch_index.IsValid());

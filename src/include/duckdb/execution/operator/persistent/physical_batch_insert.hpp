@@ -60,8 +60,8 @@ public:
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          OperatorSinkFinalizeInput &input) const override;
 
-	bool RequiresBatchIndex() const override {
-		return true;
+	OperatorPartitionInfo RequiredPartitionInfo() const override {
+		return OperatorPartitionInfo::RequiresBatchIndex();
 	}
 
 	bool IsSink() const override {

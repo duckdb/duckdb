@@ -57,8 +57,8 @@ public:
 		return true;
 	}
 
-	bool RequiresBatchIndex() const override {
-		return true;
+	OperatorPartitionInfo RequiredPartitionInfo() const override {
+		return OperatorPartitionInfo::RequiresBatchIndex();
 	}
 
 public:

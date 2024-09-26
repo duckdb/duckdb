@@ -29,6 +29,24 @@ class Pipeline;
 class PipelineBuildState;
 class MetaPipeline;
 
+enum class PartitionInfo {
+	NONE,
+	REQUIRES_BATCH_INDEX
+};
+
+struct OperatorPartitionInfo {
+	explicit OperatorPartitionInfo(bool batch_index) : batch_index(batch_index) {}
+
+	bool batch_index = false;
+
+	static OperatorPartitionInfo NoPartitionInfo() {
+		return OperatorPartitionInfo(false);
+	}
+	static OperatorPartitionInfo RequiresBatchIndex() {
+		return OperatorPartitionInfo(true);
+	}
+};
+
 //! PhysicalOperator is the base class of the physical operators present in the
 //! execution plan
 class PhysicalOperator {
@@ -181,8 +199,8 @@ public:
 		return false;
 	}
 
-	virtual bool RequiresBatchIndex() const {
-		return false;
+	virtual OperatorPartitionInfo RequiredPartitionInfo() const {
+		return OperatorPartitionInfo::NoPartitionInfo();
 	}
 
 	//! Whether or not the sink operator depends on the order of the input chunks

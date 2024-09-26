@@ -175,10 +175,13 @@ bool PhysicalOperator::OperatorCachingAllowed(ExecutionContext &context) {
 		return false;
 	} else if (!context.pipeline->GetSink()) {
 		return false;
-	} else if (context.pipeline->GetSink()->RequiresBatchIndex()) {
-		return false;
 	} else if (context.pipeline->IsOrderDependent()) {
 		return false;
+	} else {
+		auto partition_info = context.pipeline->GetSink()->RequiredPartitionInfo();
+		if (partition_info.batch_index) {
+			return false;
+		}
 	}
 
 	return true;

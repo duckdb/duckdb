@@ -105,7 +105,8 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 			return false;
 		}
 	}
-	if (sink->RequiresBatchIndex()) {
+	auto partition_info = sink->RequiredPartitionInfo();
+	if (partition_info.batch_index) {
 		if (!source->SupportsBatchIndex()) {
 			throw InternalException(
 			    "Attempting to schedule a pipeline where the sink requires batch index but source does not support it");

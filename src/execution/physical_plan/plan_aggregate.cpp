@@ -37,8 +37,7 @@ static bool CanUsePartitionedAggregate(ClientContext &context, LogicalAggregate 
 	// check if the source is partitioned by the aggregate columns
 	// figure out the columns we are grouping by
 	vector<column_t> partition_columns;
-	for(auto &group_id : op.grouping_sets[0]) {
-		auto &group_expr = op.groups[group_id];
+	for(auto &group_expr : op.groups) {
 		// only support bound reference here
 		if (group_expr->type != ExpressionType::BOUND_REF) {
 			return false;
