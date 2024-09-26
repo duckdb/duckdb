@@ -262,8 +262,10 @@ AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const Logical
 	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP>(input_type, target_type);
 	fun.bind = BindMAD;
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+#ifndef DUCKDB_SMALLER_BINARY
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, TARGET_TYPE, OP>;
 	fun.window_init = OP::template WindowInit<STATE, INPUT_TYPE>;
+#endif
 	return fun;
 }
 
