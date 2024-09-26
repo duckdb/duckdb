@@ -336,11 +336,13 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
 			// to make sure the result's correctness.
 			string function_name = function.name == "min" ? "arg_min" : "arg_max";
 			QueryErrorContext error_context;
-			auto func = Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, "", "", function_name,
+			auto func = Catalog::GetEntry(context, CatalogType::AGGREGATE_FUNCTION_ENTRY, "", "", function_name,
 			                              OnEntryNotFound::RETURN_NULL, error_context);
 			if (!func) {
 				throw NotImplementedException(
-				    "arg_min/arg_max do not exist in the catalog - is the core_functions extension loaded");
+				    "Failure while binding function \"%s\" using collations - arg_min/arg_max do not exist in the "
+				    "catalog - load the core_functions module to fix this issue",
+				    function.name);
 			}
 
 			auto &func_entry = func->Cast<AggregateFunctionCatalogEntry>();
