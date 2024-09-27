@@ -920,7 +920,21 @@ static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS[] =
 }; // END_OF_EXTENSION_FUNCTION_OVERLOADS
 
 static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
+    {"azure_account_name", "azure"},
+    {"azure_context_caching", "azure"},
+    {"azure_credential_chain", "azure"},
+    {"azure_endpoint", "azure"},
+    {"azure_http_proxy", "azure"},
+    {"azure_http_stats", "azure"},
+    {"azure_proxy_password", "azure"},
+    {"azure_proxy_user_name", "azure"},
+    {"azure_read_buffer_size", "azure"},
+    {"azure_read_transfer_chunk_size", "azure"},
+    {"azure_read_transfer_concurrency", "azure"},
+    {"azure_storage_connection_string", "azure"},
+    {"azure_transport_option_type", "azure"},
     {"binary_as_string", "parquet"},
+    {"ca_cert_file", "httpfs"},
     {"calendar", "icu"},
     {"disable_parquet_prefetching", "parquet"},
     {"enable_server_cert_verification", "httpfs"},
