@@ -444,17 +444,16 @@ void DependencyManager::VerifyExistence(CatalogTransaction transaction, transact
 
 	auto schema_entry = catalog.GetSchema(transaction, schema, OnEntryNotFound::RETURN_NULL);
 
-	optional_ptr<CatalogEntry> entry;
+	CatalogSet::EntryLookup lookup_result;
+	lookup_result.reason = CatalogSet::EntryLookup::FailureReason::NOT_PRESENT;
 	if (type == CatalogType::SCHEMA_ENTRY || !schema_entry) {
-		entry = reinterpret_cast<CatalogEntry *>(schema_entry.get());
+		lookup_result.result = reinterpret_cast<CatalogEntry *>(schema_entry.get());
 	} else {
-		entry = schema_entry->GetEntry(transaction, type, name);
+		// FIXME: This will never return a DELETED_ENTRY, only nullptr
+		lookup_result = schema_entry->GetEntryDetailed(transaction, type, name);
 	}
 
-	if (!entry) {
-		return;
-	}
-	if (entry->deleted) {
+	if (lookup_result.reason == CatalogSet::EntryLookup::FailureReason::DELETED) {
 		throw DependencyException("Could not commit creation of dependency, subject \"%s\" has been deleted",
 		                          object.SourceInfo().name);
 	}

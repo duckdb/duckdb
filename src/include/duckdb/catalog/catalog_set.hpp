@@ -53,7 +53,7 @@ private:
 class CatalogSet {
 public:
 	struct EntryLookup {
-		enum class FailureReason { SUCCESS, DELETED, NOT_PRESENT };
+		enum class FailureReason { SUCCESS, DELETED, NOT_PRESENT, INVISIBLE };
 		optional_ptr<CatalogEntry> result;
 		FailureReason reason;
 	};
@@ -136,7 +136,8 @@ private:
 	bool DropDependencies(CatalogTransaction transaction, const string &name, bool cascade,
 	                      bool allow_drop_internal = false);
 	//! Given a root entry, gets the entry valid for this transaction
-	CatalogEntry &GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current);
+	CatalogEntry &GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current,
+	                                     bool *visible = nullptr);
 	CatalogEntry &GetCommittedEntry(CatalogEntry &current);
 	optional_ptr<CatalogEntry> GetEntryInternal(CatalogTransaction transaction, const string &name);
 	optional_ptr<CatalogEntry> CreateCommittedEntry(unique_ptr<CatalogEntry> entry);

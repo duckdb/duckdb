@@ -452,7 +452,11 @@ void CatalogSet::VerifyExistenceOfDependency(transaction_t commit_id, transactio
 void CatalogSet::CommitDrop(transaction_t commit_id, transaction_t start_time, CatalogEntry &entry) {
 	// verify that no new dependencies have been created since our drop
 	auto &duck_catalog = GetCatalog();
-	CatalogTransaction commit_transaction(duck_catalog.GetDatabase(), MAX_TRANSACTION_ID, commit_id);
+	// Make sure that we don't see any uncommitted changes
+	auto transaction_id = MAX_TRANSACTION_ID;
+	// This will allow us to see all committed changes made before this COMMIT happened
+	auto tx_start_time = commit_id;
+	CatalogTransaction commit_transaction(duck_catalog.GetDatabase(), transaction_id, tx_start_time);
 	duck_catalog.GetDependencyManager().VerifyCommitDrop(commit_transaction, start_time, entry);
 }
 
@@ -505,13 +509,19 @@ bool CatalogSet::UseTimestamp(CatalogTransaction transaction, transaction_t time
 	return false;
 }
 
-CatalogEntry &CatalogSet::GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current) {
+CatalogEntry &CatalogSet::GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current, bool *visible) {
 	reference<CatalogEntry> entry(current);
 	while (entry.get().HasChild()) {
 		if (UseTimestamp(transaction, entry.get().timestamp)) {
-			break;
+			if (visible) {
+				*visible = true;
+			}
+			return entry.get();
 		}
 		entry = entry.get().Child();
+	}
+	if (visible) {
+		*visible = false;
 	}
 	return entry.get();
 }
@@ -580,9 +590,14 @@ CatalogSet::EntryLookup CatalogSet::GetEntryDetailed(CatalogTransaction transact
 		// check the version numbers
 
 		auto &catalog_entry = *entry_value;
-		auto &current = GetEntryForTransaction(transaction, catalog_entry);
+		bool visible;
+		auto &current = GetEntryForTransaction(transaction, catalog_entry, &visible);
 		if (current.deleted) {
-			return EntryLookup {nullptr, EntryLookup::FailureReason::DELETED};
+			if (!visible) {
+				return EntryLookup {nullptr, EntryLookup::FailureReason::INVISIBLE};
+			} else {
+				return EntryLookup {nullptr, EntryLookup::FailureReason::DELETED};
+			}
 		}
 		D_ASSERT(StringUtil::CIEquals(name, current.name));
 		return EntryLookup {&current, EntryLookup::FailureReason::SUCCESS};
