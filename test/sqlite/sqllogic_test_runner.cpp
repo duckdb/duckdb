@@ -20,13 +20,14 @@ namespace duckdb {
 SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)), finished_processing_file(false) {
 	config = GetTestConfig();
 	config->options.allow_unredacted_secrets = true;
+	config->options.load_extensions = false;
 
 	auto env_var = std::getenv("LOCAL_EXTENSION_REPO");
 	if (!env_var) {
-		config->options.load_extensions = false;
 		config->options.autoload_known_extensions = false;
 	} else {
 		local_extension_repo = env_var;
+		config->options.autoload_known_extensions = true;
 	}
 }
 
@@ -92,10 +93,8 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 
 	try {
 		db = make_uniq<DuckDB>(dbpath, config.get());
-		if (local_extension_repo.empty()) {
-			// always load core functions unless we are testing auto-loading
-			ExtensionHelper::LoadExtension(*db, "core_functions");
-		}
+		// always load core functions
+		ExtensionHelper::LoadExtension(*db, "core_functions");
 	} catch (std::exception &ex) {
 		ErrorData err(ex);
 		SQLLogicTestLogger::LoadDatabaseFail(dbpath, err.Message());
@@ -128,7 +127,6 @@ void SQLLogicTestRunner::Reconnect() {
 	}
 	// Set the local extension repo for autoinstalling extensions
 	if (!local_extension_repo.empty()) {
-		config->options.autoload_known_extensions = true;
 		auto res1 = con->Query("SET autoinstall_extension_repository='" + local_extension_repo + "'");
 	}
 }
