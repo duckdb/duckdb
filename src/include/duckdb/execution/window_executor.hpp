@@ -58,7 +58,8 @@ private:
 	//! The component column data collections
 	vector<ColumnDataCollectionPtr> collections;
 	//! The (sorted) collection ranges
-	vector<pair<idx_t, idx_t>> ranges;
+	using Range = pair<idx_t, idx_t>;
+	vector<Range> ranges;
 };
 
 class WindowBuilder {

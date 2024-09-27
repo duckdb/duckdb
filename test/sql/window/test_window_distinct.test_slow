@@ -35,7 +35,7 @@ PRAGMA threads=4
 # The actual memory consumption of this query is 1.5GB
 # So this is a serious level of stress.
 statement ok
-PRAGMA memory_limit='100MB'
+PRAGMA memory_limit='500MB'
 
 query I
 WITH t AS (

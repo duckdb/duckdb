@@ -47,6 +47,7 @@
 %type <node>	overlay_placing substr_from substr_for
 
 %type <list>	except_list opt_except_list replace_list_el replace_list opt_replace_list replace_list_opt_comma
+%type <list> except_name except_name_list except_name_list_opt_comma
 
 %type <node> limit_clause select_limit_value
 				offset_clause select_offset_value

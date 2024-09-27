@@ -26,8 +26,9 @@ void WindowCollection::GetCollection(idx_t row_idx, ColumnDataCollectionSpec &sp
 
 	auto collection = make_uniq<ColumnDataCollection>(buffer_manager, types);
 	spec = {row_idx, collection.get()};
-	auto i = upper_bound(ranges.begin(), ranges.end(), spec);
-	ranges.insert(i, {row_idx, collections.size()});
+	Range probe {row_idx, collections.size()};
+	auto i = std::upper_bound(ranges.begin(), ranges.end(), probe);
+	ranges.insert(i, probe);
 	collections.emplace_back(std::move(collection));
 }
 
