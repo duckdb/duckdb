@@ -20,15 +20,15 @@ unique_ptr<CatalogEntry> ScalarFunctionCatalogEntry::AlterEntry(CatalogTransacti
 	auto &add_overloads = function_info.Cast<AddScalarFunctionOverloadInfo>();
 
 	ScalarFunctionSet new_set = functions;
-	if (!new_set.MergeFunctionSet(add_overloads.new_overloads, true)) {
+	if (!new_set.MergeFunctionSet(add_overloads.new_overloads->functions, true)) {
 		throw BinderException(
 		    "Failed to add new function overloads to function \"%s\": function overload already exists", name);
 	}
 	CreateScalarFunctionInfo new_info(std::move(new_set));
 	new_info.internal = internal;
-	new_info.description = description;
-	new_info.parameter_names = parameter_names;
-	new_info.example = example;
+	new_info.description = add_overloads.new_overloads->description.empty() ? description : add_overloads.new_overloads->description;
+	new_info.parameter_names = add_overloads.new_overloads->parameter_names.empty() ? parameter_names : add_overloads.new_overloads->parameter_names;
+	new_info.example = add_overloads.new_overloads->example.empty() ? example : add_overloads.new_overloads->example;
 	return make_uniq<ScalarFunctionCatalogEntry>(catalog, schema, new_info);
 }
 
