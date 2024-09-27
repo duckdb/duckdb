@@ -25,7 +25,10 @@ bool ThreadLines::Validate() const {
 			initialized = true;
 		} else {
 			if (last_end_pos + error_margin < line_info.second.start_pos) {
-				throw InternalException(to_string(last_end_pos) + "   " + to_string(line_info.second.start_pos));
+				std::ostringstream error;
+				error << "The Parallel CSV Reader currently does not support a full read on this file." << '\n';
+				error << "To correctly parse  this file, please run with the single threaded error (i.e., parallel = false)"<< '\n';
+				throw NotImplementedException(error.str());
 			}
 		}
 		last_end_pos = line_info.second.end_pos;
