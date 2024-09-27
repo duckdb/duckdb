@@ -57,11 +57,14 @@ public:
 			} else {
 				// the values are different
 				// issue the callback on the last value
-				Flush<OP>();
+				// edge case: if a value has exactly 2^16 repeated values, we can end up here with last_seen_count = 0
+				if (last_seen_count > 0) {
+					Flush<OP>();
+					seen_count++;
+				}
 
 				// increment the seen_count and put the new value into the RLE slot
 				last_value = data[idx];
-				seen_count++;
 				last_seen_count = 1;
 			}
 		} else {
@@ -175,7 +178,7 @@ struct RLECompressState : public CompressionState {
 
 		// update meta data
 		if (WRITE_STATISTICS && !is_null) {
-			NumericStats::Update<T>(current_segment->stats.statistics, value);
+			current_segment->stats.statistics.UpdateNumericStats<T>(value);
 		}
 		current_segment->count += count;
 

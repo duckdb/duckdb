@@ -487,6 +487,33 @@ struct HomeDirectorySetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct HTTPProxy {
+	static constexpr const char *Name = "http_proxy";
+	static constexpr const char *Description = "HTTP proxy host";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct HTTPProxyUsername {
+	static constexpr const char *Name = "http_proxy_username";
+	static constexpr const char *Description = "Username for HTTP proxy";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct HTTPProxyPassword {
+	static constexpr const char *Name = "http_proxy_password";
+	static constexpr const char *Description = "Password for HTTP proxy";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct IntegerDivisionSetting {
 	static constexpr const char *Name = "integer_division";
 	static constexpr const char *Description =
@@ -513,6 +540,16 @@ struct LockConfigurationSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct IEEEFloatingPointOpsSetting {
+	static constexpr const char *Name = "ieee_floating_point_ops";
+	static constexpr const char *Description =
+	    "Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -559,8 +596,19 @@ struct StreamingBufferSize {
 struct MaximumTempDirectorySize {
 	static constexpr const char *Name = "max_temp_directory_size";
 	static constexpr const char *Description =
-	    "The maximum amount of data stored inside the 'temp_directory' (when set) (e.g. 1GB)";
+	    "The maximum amount of data stored inside the 'temp_directory' (when set). If the `temp_directory` is set to "
+	    "an existing directory, this option defaults to the available disk space on "
+	    "that drive. Otherwise, it defaults to 0 (implying that the temporary directory is not used).";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct MaximumVacuumTasks {
+	static constexpr const char *Name = "max_vacuum_tasks";
+	static constexpr const char *Description = "The maximum vacuum tasks to schedule during a checkpoint";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -591,6 +639,16 @@ struct OldImplicitCasting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct OrderByNonIntegerLiteral {
+	static constexpr const char *Name = "order_by_non_integer_literal";
+	static constexpr const char *Description =
+	    "Allow ordering by non-integer literals - ordering by such literals has no effect";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -714,6 +772,17 @@ struct ArrowOutputListView {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct LosslessConversionArrow {
+	static constexpr const char *Name = "arrow_lossless_conversion";
+	static constexpr const char *Description =
+	    "Whenever a DuckDB type does not have a clear native or canonical extension match in Arrow, export the types "
+	    "with a duckdb.type_name extension name.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct ProduceArrowStringView {
 	static constexpr const char *Name = "produce_arrow_string_view";
 	static constexpr const char *Description =
@@ -748,6 +817,16 @@ struct ProgressBarTimeSetting {
 	static constexpr const char *Description =
 	    "Sets the time (in milliseconds) how long a query needs to take before we start printing a progress bar";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct ScalarSubqueryErrorOnMultipleRows {
+	static constexpr const char *Name = "scalar_subquery_error_on_multiple_rows";
+	static constexpr const char *Description =
+	    "When a scalar subquery returns multiple rows - return a random row instead of returning an error";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
@@ -809,10 +888,20 @@ struct UsernameSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct FlushAllocatorSetting {
+struct AllocatorFlushThreshold {
 	static constexpr const char *Name = "allocator_flush_threshold";
 	static constexpr const char *Description =
 	    "Peak allocation threshold at which to flush the allocator after completing a task.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct AllocatorBulkDeallocationFlushThreshold {
+	static constexpr const char *Name = "allocator_bulk_deallocation_flush_threshold";
+	static constexpr const char *Description =
+	    "If a bulk deallocation larger than this occurs, flush outstanding allocations.";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);

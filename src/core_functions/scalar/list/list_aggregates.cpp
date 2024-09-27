@@ -57,7 +57,7 @@ struct ListAggregatesBindData : public FunctionData {
 	}
 
 	static unique_ptr<FunctionData> DeserializeFunction(Deserializer &deserializer, ScalarFunction &bound_function) {
-		auto result = deserializer.ReadPropertyWithDefault<unique_ptr<ListAggregatesBindData>>(
+		auto result = deserializer.ReadPropertyWithExplicitDefault<unique_ptr<ListAggregatesBindData>>(
 		    100, "bind_data", unique_ptr<ListAggregatesBindData>(nullptr));
 		if (!result) {
 			return ListAggregatesBindFailure(bound_function);
@@ -294,6 +294,7 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 		auto key_type = aggr.function.arguments[0];
 
 		switch (key_type.InternalType()) {
+#ifndef DUCKDB_SMALLER_BINARY
 		case PhysicalType::BOOL:
 			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, bool>(
 			    result, state_vector.state_vector, count);
@@ -343,6 +344,7 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 			                                               OwningStringMap<idx_t>>(result, state_vector.state_vector,
 			                                                                       count);
 			break;
+#endif
 		default:
 			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeGenericValueFunctor, string_t,
 			                                               OwningStringMap<idx_t>>(result, state_vector.state_vector,

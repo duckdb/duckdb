@@ -17,6 +17,8 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/storage/storage_lock.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
 
@@ -198,6 +200,12 @@ ErrorData DuckTransaction::WriteToWAL(AttachedDatabase &db, unique_ptr<StorageCo
 		commit_state = storage_manager.GenStorageCommitState(*log);
 		storage->Commit(commit_state.get());
 		undo_buffer.WriteToWAL(*log, commit_state.get());
+		if (commit_state->HasRowGroupData()) {
+			// if we have optimistically written any data AND we are writing to the WAL, we have written references to
+			// optimistically written blocks
+			// hence we need to ensure those optimistically written blocks are persisted
+			storage_manager.GetBlockManager().FileSync();
+		}
 	} catch (std::exception &ex) {
 		if (commit_state) {
 			commit_state->RevertCommit();
@@ -260,6 +268,27 @@ unique_ptr<StorageLockKey> DuckTransaction::TryGetCheckpointLock() {
 		throw InternalException("TryUpgradeCheckpointLock - but thread has no shared lock!?");
 	}
 	return transaction_manager.TryUpgradeCheckpointLock(*write_lock);
+}
+
+shared_ptr<CheckpointLock> DuckTransaction::SharedLockTable(DataTableInfo &info) {
+	lock_guard<mutex> l(active_locks_lock);
+	auto entry = active_locks.find(info);
+	if (entry != active_locks.end()) {
+		// found an existing lock
+		auto lock_weak_ptr = entry->second;
+		// check if it is expired
+		auto lock = lock_weak_ptr.lock();
+		if (lock) {
+			// not expired - return it
+			return lock;
+		}
+	}
+	// no existing lock - obtain it
+	auto table_lock = info.GetSharedLock();
+	auto checkpoint_lock = make_shared_ptr<CheckpointLock>(std::move(table_lock));
+	// insert it into the active locks and return it
+	active_locks.insert(make_pair(std::ref(info), checkpoint_lock));
+	return checkpoint_lock;
 }
 
 } // namespace duckdb

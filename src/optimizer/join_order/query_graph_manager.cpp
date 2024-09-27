@@ -253,7 +253,9 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		auto right = GenerateJoins(extracted_relations, node->right_set);
 		if (dp_entry->second->info->filters.empty()) {
 			// no filters, create a cross product
+			auto cardinality = left.op->estimated_cardinality * right.op->estimated_cardinality;
 			result_operator = LogicalCrossProduct::Create(std::move(left.op), std::move(right.op));
+			result_operator->SetEstimatedCardinality(cardinality);
 		} else {
 			// we have filters, create a join node
 			auto chosen_filter = node->info->filters.at(0);
@@ -322,14 +324,6 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	//	result_operator->estimated_props = node.estimated_props->Copy();
 	result_operator->estimated_cardinality = node->cardinality;
 	result_operator->has_estimated_cardinality = true;
-	if (result_operator->type == LogicalOperatorType::LOGICAL_FILTER &&
-	    result_operator->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
-		// FILTER on top of GET, add estimated properties to both
-		// auto &filter_props = *result_operator->estimated_props;
-		auto &child_operator = *result_operator->children[0];
-		child_operator.estimated_cardinality = node->cardinality;
-		child_operator.has_estimated_cardinality = true;
-	}
 	// check if we should do a pushdown on this node
 	// basically, any remaining filter that is a subset of the current relation will no longer be used in joins
 	// hence we should push it here

@@ -216,7 +216,6 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		ExpressionBinder::QualifyColumnNames(*this, expression);
 
 		// bind it to verify the function was defined correctly
-		ErrorData error;
 		BoundSelectNode sel_node;
 		BoundGroupInformation group_info;
 		SelectBinder binder(*this, context, sel_node, group_info);
@@ -232,13 +231,29 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 				dependencies.AddDependency(entry);
 			});
 		}
-		error = binder.Bind(expression, 0, false);
-		if (error.HasError()) {
+		ErrorData error;
+		try {
+			error = binder.Bind(expression, 0, false);
+			if (error.HasError()) {
+				error.Throw();
+			}
+		} catch (const std::exception &ex) {
+			error = ErrorData(ex);
+		}
+		// if we cannot resolve parameters we postpone binding until the macro function is used
+		if (error.HasError() && error.Type() != ExceptionType::PARAMETER_NOT_RESOLVED) {
 			error.Throw();
 		}
 	}
 
 	return BindCreateSchema(info);
+}
+
+static bool IsValidUserType(optional_ptr<CatalogEntry> entry) {
+	if (!entry) {
+		return false;
+	}
+	return entry->Cast<TypeCatalogEntry>().user_type.id() != LogicalTypeId::INVALID;
 }
 
 void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, const string &schema) {
@@ -289,24 +304,34 @@ void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, c
 		type.SetModifiers(modifiers);
 	} else if (type.id() == LogicalTypeId::USER) {
 		auto user_type_name = UserType::GetTypeName(type);
+		auto user_type_schema = UserType::GetSchema(type);
 		auto user_type_mods = UserType::GetTypeModifiers(type);
 
 		bind_type_modifiers_function_t user_bind_modifiers_func = nullptr;
 
 		if (catalog) {
 			// The search order is:
-			// 1) In the same schema as the table
-			// 2) In the same catalog
-			// 3) System catalog
-			auto entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, schema, user_type_name,
-			                                      OnEntryNotFound::RETURN_NULL);
-			if (!entry || entry->Cast<TypeCatalogEntry>().user_type.id() == LogicalTypeId::INVALID) {
+			// 1) In the explicitly set schema (my_schema.my_type)
+			// 2) In the same schema as the table
+			// 3) In the same catalog
+			// 4) System catalog
+
+			optional_ptr<CatalogEntry> entry = nullptr;
+			if (!user_type_schema.empty()) {
+				entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, user_type_schema, user_type_name,
+				                                 OnEntryNotFound::RETURN_NULL);
+			}
+			if (!IsValidUserType(entry)) {
+				entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, schema, user_type_name,
+				                                 OnEntryNotFound::RETURN_NULL);
+			}
+			if (!IsValidUserType(entry)) {
 				entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, INVALID_SCHEMA, user_type_name,
 				                                 OnEntryNotFound::RETURN_NULL);
-				if (!entry || entry->Cast<TypeCatalogEntry>().user_type.id() == LogicalTypeId::INVALID) {
-					entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, INVALID_CATALOG, INVALID_SCHEMA,
-					                                 user_type_name, OnEntryNotFound::THROW_EXCEPTION);
-				}
+			}
+			if (!IsValidUserType(entry)) {
+				entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, INVALID_CATALOG, INVALID_SCHEMA,
+				                                 user_type_name, OnEntryNotFound::THROW_EXCEPTION);
 			}
 			auto &type_entry = entry->Cast<TypeCatalogEntry>();
 			type = type_entry.user_type;
@@ -580,6 +605,7 @@ unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateS
 	create_index_info->scan_types.emplace_back(LogicalType::ROW_TYPE);
 	create_index_info->names = get.names;
 	create_index_info->column_ids = column_ids;
+	create_index_info->schema = table.schema.name;
 	auto &bind_data = get.bind_data->Cast<TableScanBindData>();
 	bind_data.is_create_index = true;
 	get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);

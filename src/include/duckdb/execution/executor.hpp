@@ -13,6 +13,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/main/query_result.hpp"
 #include "duckdb/execution/task_error_manager.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
@@ -36,6 +37,9 @@ class Executor {
 	friend class Pipeline;
 	friend class PipelineTask;
 	friend class PipelineBuildState;
+
+public:
+	static constexpr idx_t WAIT_TIME = 20;
 
 public:
 	explicit Executor(ClientContext &context);
@@ -112,6 +116,14 @@ public:
 		executor_tasks--;
 	}
 
+	idx_t GetTotalPipelines() const {
+		return total_pipelines;
+	}
+
+	idx_t GetCompletedPipelines() const {
+		return completed_pipelines.load();
+	}
+
 private:
 	//! Check if the streaming query result is waiting to be fetched from, must hold the 'executor_lock'
 	bool ResultCollectorIsBlocked();
@@ -176,5 +188,8 @@ private:
 
 	//! Currently alive executor tasks
 	atomic<idx_t> executor_tasks;
+
+	//! Total time blocked while waiting on tasks. In ticks. One tick corresponds to WAIT_TIME.
+	atomic<idx_t> blocked_thread_time;
 };
 } // namespace duckdb

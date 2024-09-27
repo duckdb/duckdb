@@ -21,7 +21,7 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<TableReferenceType>(100, "type");
 	auto alias = deserializer.ReadPropertyWithDefault<string>(101, "alias");
 	auto sample = deserializer.ReadPropertyWithDefault<unique_ptr<SampleOptions>>(102, "sample");
-	auto query_location = deserializer.ReadPropertyWithDefault<optional_idx>(103, "query_location", optional_idx());
+	auto query_location = deserializer.ReadPropertyWithExplicitDefault<optional_idx>(103, "query_location", optional_idx());
 	auto is_recurring = deserializer.ReadPropertyWithDefault<bool>(104, "is_recurring");
 	unique_ptr<TableRef> result;
 	switch (type) {

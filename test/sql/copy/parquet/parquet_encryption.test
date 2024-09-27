@@ -28,12 +28,6 @@ COPY (SELECT 42 i) to '__TEST_DIR__/encrypted.parquet' (ENCRYPTION_CONFIG {colum
 ----
 Not implemented Error: Parquet encryption_config column_keys not yet implemented
 
-# just some code coverage for transform_constant.cpp
-statement error
-COPY (SELECT 42 i) to '__TEST_DIR__/encrypted.parquet' (ENCRYPTION_CONFIG {column_keys: {key_name: map {}}})
-----
-Unsupported expression in option list
-
 statement error
 COPY (SELECT 42 i) to '__TEST_DIR__/encrypted.parquet' (ENCRYPTION_CONFIG {footer_key: 'nonexistant'})
 ----

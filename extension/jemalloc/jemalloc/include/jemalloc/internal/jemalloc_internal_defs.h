@@ -393,9 +393,9 @@
  * Defined if transparent huge pages are supported via the MADV_[NO]HUGEPAGE
  * arguments to madvise(2).
  */
-#ifdef __GLIBC__
-#define JEMALLOC_HAVE_MADVISE_HUGE
-#endif
+// #ifdef __GLIBC__
+// #define JEMALLOC_HAVE_MADVISE_HUGE
+// #endif
 
 /*
  * Methods for purging unused pages differ between operating systems.

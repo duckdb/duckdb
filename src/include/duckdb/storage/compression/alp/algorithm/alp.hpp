@@ -107,7 +107,7 @@ struct AlpCompression {
 	 */
 	static int64_t NumberToInt64(T n) {
 		if (IsImpossibleToEncode(n)) {
-			return NumericCast<int64_t>(AlpConstants::ENCODING_UPPER_LIMIT);
+			return ExactNumericCast<int64_t>(AlpConstants::ENCODING_UPPER_LIMIT);
 		}
 		n = n + AlpTypedConstants<T>::MAGIC_NUMBER - AlpTypedConstants<T>::MAGIC_NUMBER;
 		return LossyNumericCast<int64_t>(n);
@@ -185,7 +185,7 @@ struct AlpCompression {
 
 		// Evaluate factor/exponent compression size (we optimize for FOR)
 		uint64_t delta = (static_cast<uint64_t>(max_encoded_value) - static_cast<uint64_t>(min_encoded_value));
-		estimated_bits_per_value = LossyNumericCast<uint32_t>(std::ceil(std::log2(delta + 1)));
+		estimated_bits_per_value = ExactNumericCast<uint32_t>(std::ceil(std::log2(delta + 1)));
 		estimated_compression_size += n_values * estimated_bits_per_value;
 		estimated_compression_size +=
 		    exceptions_count * (EXACT_TYPE_BITSIZE + (AlpConstants::EXCEPTION_POSITION_SIZE * 8));
@@ -255,7 +255,7 @@ struct AlpCompression {
 		//! We sample equidistant values within a vector; to do this we skip a fixed number of values
 		vector<T> vector_sample;
 		auto idx_increments = MaxValue<uint32_t>(
-		    1, LossyNumericCast<uint32_t>(std::ceil((double)n_values / AlpConstants::SAMPLES_PER_VECTOR)));
+		    1, ExactNumericCast<uint32_t>(std::ceil((double)n_values / AlpConstants::SAMPLES_PER_VECTOR)));
 		for (idx_t i = 0; i < n_values; i += idx_increments) {
 			vector_sample.push_back(input_vector[i]);
 		}

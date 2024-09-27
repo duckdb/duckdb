@@ -70,14 +70,6 @@ set(INSTALL_CMAKE_DIR
     CACHE PATH "Installation directory for CMake files")
 set(DUCKDB_EXPORT_SET "DuckDBExports")
 
-# Make relative install paths absolute
-foreach(p LIB BIN INCLUDE CMAKE)
-  set(var INSTALL_${p}_DIR)
-  if(NOT IS_ABSOLUTE "${${var}}")
-    set(${var} "${CMAKE_INSTALL_PREFIX}/${${var}}")
-  endif()
-endforeach()
-
 # This option allows --gc-sections flag during extension linking to discard any unused functions or data
 if (EXTENSION_STATIC_BUILD AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
   if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
@@ -223,6 +215,10 @@ if(${EXPLICIT_EXCEPTIONS})
   set(CXX_EXTRA "${CXX_EXTRA} -fexceptions")
 endif()
 
+if (UNSAFE_NUMERIC_CAST)
+  message(status "UNSAFE_NUMERIC_CAST")
+  add_definitions(-DUNSAFE_NUMERIC_CAST=1)
+endif()
 if (ENABLE_EXTENSION_AUTOLOADING)
   add_definitions(-DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT=1)
 endif()
@@ -397,16 +393,14 @@ option(CLANG_TIDY "Enable build for clang-tidy, this disables all source files e
 option(BUILD_UNITTESTS "Build the C++ Unit Tests." TRUE)
 option(EXTENSION_CONFIG_BUILD "Produce extension configuration artifacts instead of building. (such as shared vcpkg.json, extensions.txt)" FALSE)
 option(CUSTOM_LINKER "Use a custom linker program" "")
-option(
-  ASSERT_EXCEPTION
-  "Throw an exception on an assert failing, instead of triggering a sigabort"
-  TRUE)
+option(CRASH_ON_ASSERT "Trigger a sigabort on an assert failing, instead of throwing an exception" FALSE)
 option(FORCE_ASSERT "Enable checking of assertions, even in release mode" FALSE)
 
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
 option(EXPORT_DLL_SYMBOLS "Export dll symbols on Windows, else import" TRUE)
 option(BUILD_RDTSC "Enable the rdtsc instruction." FALSE)
 option(TEST_REMOTE_INSTALL "Test installation of specific extensions." FALSE)
+option(SMALLER_BINARY "Produce a smaller binary by trimming specialized code paths. This can negatively affect performance." FALSE)
 
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
@@ -430,8 +424,7 @@ if(TREAT_WARNINGS_AS_ERRORS)
   message("Treating warnings as errors.")
 endif()
 
-if(ASSERT_EXCEPTION)
-else()
+if(CRASH_ON_ASSERT)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_CRASH_ON_ASSERT")
 endif()
 
@@ -463,6 +456,14 @@ if(ALTERNATIVE_VERIFY)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_ALTERNATIVE_VERIFY")
 endif()
 
+if(LATEST_STORAGE)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_LATEST_STORAGE")
+endif()
+
+if(BLOCK_VERIFICATION)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_BLOCK_VERIFICATION")
+endif()
+
 if(DEBUG_ALLOCATION)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_ALLOCATION")
 endif()
@@ -473,6 +474,10 @@ endif()
 
 if (CLANG_TIDY)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_CLANG_TIDY")
+endif()
+
+if (SMALLER_BINARY)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_SMALLER_BINARY")
 endif()
 
 if(FORCE_ASSERT)
@@ -1138,7 +1143,7 @@ function(duckdb_extension_load NAME)
   else()
     # For in-tree extensions of the default path, we set the extension version to GIT_COMMIT_HASH by default
     if ("${duckdb_extension_load_EXTENSION_VERSION}" STREQUAL "")
-      set(duckdb_extension_load_EXTENSION_VERSION ${GIT_COMMIT_HASH})
+      set(duckdb_extension_load_EXTENSION_VERSION ${DUCKDB_NORMALIZED_VERSION})
     endif()
 
     # Local extension, default path
@@ -1375,7 +1380,8 @@ if(NOT DUCKDB_EXPLICIT_PLATFORM)
                                          ${PROJECT_BINARY_DIR})
   add_custom_target(
           duckdb_platform ALL
-          COMMAND duckdb_platform_binary > duckdb_platform_out || ( echo "Provide explicit DUCKDB_PLATFORM=your_target_arch to avoid build-type detection of the platform" && exit 1 )
+          COMMAND duckdb_platform_binary > ${PROJECT_BINARY_DIR}/duckdb_platform_out || ( echo "Provide explicit DUCKDB_PLATFORM=your_target_arch to avoid build-type detection of the platform" && exit 1 )
+          WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
           )
   add_dependencies(duckdb_platform duckdb_platform_binary)
 else()
@@ -1417,8 +1423,8 @@ if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
                  "${PROJECT_BINARY_DIR}/DuckDBConfig.cmake" @ONLY)
 
   # Configure cmake package config for the install tree
-  file(RELATIVE_PATH REL_INCLUDE_DIR "${INSTALL_CMAKE_DIR}"
-       "${INSTALL_INCLUDE_DIR}")
+  file(RELATIVE_PATH REL_INCLUDE_DIR "${CMAKE_INSTALL_PREFIX}/${INSTALL_CMAKE_DIR}"
+    "${CMAKE_INSTALL_PREFIX}/${INSTALL_INCLUDE_DIR}")
   set(CONF_INCLUDE_DIRS "\${DuckDB_CMAKE_DIR}/${REL_INCLUDE_DIR}")
   configure_file(
     ${CMAKE_CONFIG_TEMPLATE}

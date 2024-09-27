@@ -118,6 +118,8 @@ enum class DependencyEntryType : uint8_t;
 
 enum class DeprecatedIndexType : uint8_t;
 
+enum class DestroyBufferUpon : uint8_t;
+
 enum class DistinctType : uint8_t;
 
 enum class ErrorType : uint16_t;
@@ -167,6 +169,8 @@ enum class ForeignKeyType : uint8_t;
 enum class FunctionNullHandling : uint8_t;
 
 enum class FunctionStability : uint8_t;
+
+enum class GateStatus : uint8_t;
 
 enum class HLLStorageType : uint8_t;
 
@@ -249,8 +253,6 @@ enum class PreparedParamType : uint8_t;
 enum class PreparedStatementMode : uint8_t;
 
 enum class ProfilerPrintFormat : uint8_t;
-
-enum class ProfilingNodeType : uint8_t;
 
 enum class QuantileSerializationType : uint8_t;
 
@@ -487,6 +489,9 @@ template<>
 const char* EnumUtil::ToChars<DeprecatedIndexType>(DeprecatedIndexType value);
 
 template<>
+const char* EnumUtil::ToChars<DestroyBufferUpon>(DestroyBufferUpon value);
+
+template<>
 const char* EnumUtil::ToChars<DistinctType>(DistinctType value);
 
 template<>
@@ -560,6 +565,9 @@ const char* EnumUtil::ToChars<FunctionNullHandling>(FunctionNullHandling value);
 
 template<>
 const char* EnumUtil::ToChars<FunctionStability>(FunctionStability value);
+
+template<>
+const char* EnumUtil::ToChars<GateStatus>(GateStatus value);
 
 template<>
 const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value);
@@ -683,9 +691,6 @@ const char* EnumUtil::ToChars<PreparedStatementMode>(PreparedStatementMode value
 
 template<>
 const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value);
-
-template<>
-const char* EnumUtil::ToChars<ProfilingNodeType>(ProfilingNodeType value);
 
 template<>
 const char* EnumUtil::ToChars<QuantileSerializationType>(QuantileSerializationType value);
@@ -974,6 +979,9 @@ template<>
 DeprecatedIndexType EnumUtil::FromString<DeprecatedIndexType>(const char *value);
 
 template<>
+DestroyBufferUpon EnumUtil::FromString<DestroyBufferUpon>(const char *value);
+
+template<>
 DistinctType EnumUtil::FromString<DistinctType>(const char *value);
 
 template<>
@@ -1047,6 +1055,9 @@ FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *valu
 
 template<>
 FunctionStability EnumUtil::FromString<FunctionStability>(const char *value);
+
+template<>
+GateStatus EnumUtil::FromString<GateStatus>(const char *value);
 
 template<>
 HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value);
@@ -1170,9 +1181,6 @@ PreparedStatementMode EnumUtil::FromString<PreparedStatementMode>(const char *va
 
 template<>
 ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value);
-
-template<>
-ProfilingNodeType EnumUtil::FromString<ProfilingNodeType>(const char *value);
 
 template<>
 QuantileSerializationType EnumUtil::FromString<QuantileSerializationType>(const char *value);

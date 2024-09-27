@@ -189,11 +189,11 @@ public:
 	void BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog = nullptr,
 	                     const string &schema = INVALID_SCHEMA);
 
-	bool HasMatchingBinding(const string &table_name, const string &column_name, ErrorData &error);
-	bool HasMatchingBinding(const string &schema_name, const string &table_name, const string &column_name,
-	                        ErrorData &error);
-	bool HasMatchingBinding(const string &catalog_name, const string &schema_name, const string &table_name,
-	                        const string &column_name, ErrorData &error);
+	optional_ptr<Binding> GetMatchingBinding(const string &table_name, const string &column_name, ErrorData &error);
+	optional_ptr<Binding> GetMatchingBinding(const string &schema_name, const string &table_name,
+	                                         const string &column_name, ErrorData &error);
+	optional_ptr<Binding> GetMatchingBinding(const string &catalog_name, const string &schema_name,
+	                                         const string &table_name, const string &column_name, ErrorData &error);
 
 	void SetBindingMode(BindingMode mode);
 	BindingMode GetBindingMode();
@@ -384,12 +384,12 @@ private:
 	                                                       vector<LogicalType> &target_types,
 	                                                       unique_ptr<LogicalOperator> op);
 
-	string FindBinding(const string &using_column, const string &join_side);
-	bool TryFindBinding(const string &using_column, const string &join_side, string &result);
+	BindingAlias FindBinding(const string &using_column, const string &join_side);
+	bool TryFindBinding(const string &using_column, const string &join_side, BindingAlias &result);
 
 	void AddUsingBindingSet(unique_ptr<UsingColumnSet> set);
-	string RetrieveUsingBinding(Binder &current_binder, optional_ptr<UsingColumnSet> current_set,
-	                            const string &column_name, const string &join_side);
+	BindingAlias RetrieveUsingBinding(Binder &current_binder, optional_ptr<UsingColumnSet> current_set,
+	                                  const string &column_name, const string &join_side);
 
 	void AddCTEMap(CommonTableExpressionMap &cte_map);
 
@@ -416,10 +416,10 @@ private:
 	unique_ptr<BoundTableRef> BindShowTable(ShowRef &ref);
 	unique_ptr<BoundTableRef> BindSummarize(ShowRef &ref);
 
-public:
-	// This should really be a private constructor, but make_shared_ptr does not allow it...
-	// If you are thinking about calling this, you should probably call Binder::CreateBinder
-	Binder(bool i_know_what_i_am_doing, ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);
+	unique_ptr<LogicalOperator> UnionOperators(vector<unique_ptr<LogicalOperator>> nodes);
+
+private:
+	Binder(ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);
 };
 
 } // namespace duckdb

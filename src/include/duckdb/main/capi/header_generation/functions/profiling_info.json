@@ -42,6 +42,23 @@
             }
         },
         {
+            "name": "duckdb_profiling_info_get_metrics",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_profiling_info",
+                    "name": "info"
+                }
+            ],
+            "comment": {
+                "description": "Returns the key-value metric map of this profiling node as a MAP duckdb_value.\nThe individual elements are accessible via the duckdb_value MAP functions.\n\n",
+                "param_comments": {
+                    "info": "A profiling information object."
+                },
+                "return_value": "The key-value metric map as a MAP duckdb_value."
+            }
+        },
+        {
             "name": "duckdb_profiling_info_get_child_count",
             "return_type": "idx_t",
             "params": [
@@ -79,41 +96,6 @@
                 },
                 "return_value": "The child node at the specified index."
             }
-        },
-        {
-            "name": "duckdb_profiling_info_get_name",
-            "return_type": "const char *",
-            "params": [
-                {
-                    "type": "duckdb_profiling_info",
-                    "name": "info"
-                }
-            ],
-            "comment": {
-                "description": "Returns the operator name of the current profiling info node, if the node is an Operator Node.\n\n",
-                "param_comments": {
-                    "info": "A profiling information object."
-                },
-                "return_value": "The name of the operator of the current node. Returns nullptr, if the node is not an Operator Node. The result must be freed with `duckdb_free`."
-            }
-        },
-        {
-            "name": "duckdb_profiling_info_get_query",
-            "return_type": "const char *",
-            "params": [
-                {
-                    "type": "duckdb_profiling_info",
-                    "name": "info"
-                }
-            ],
-            "comment": {
-                "description": "Returns the query of the current profiling info node, if the node is the root.\n\n",
-                "param_comments": {
-                    "info": "A profiling information object."
-                },
-                "return_value": "The query of the current node. Returns nullptr, if the node is not the root. The result must be freed\n * with `duckdb_free`."
-            }
         }
-
     ]
 }

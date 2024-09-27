@@ -17,6 +17,12 @@ namespace duckdb {
 static void CreateArrowScan(const string &name, py::object entry, TableFunctionRef &table_function,
                             vector<unique_ptr<ParsedExpression>> &children, ClientProperties &client_properties,
                             PyArrowObjectType type) {
+
+	if (type == PyArrowObjectType::PyCapsuleInterface) {
+		entry = entry.attr("__arrow_c_stream__")();
+		type = PyArrowObjectType::PyCapsule;
+	}
+
 	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(entry.ptr(), client_properties);
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
@@ -83,8 +89,6 @@ unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const py::objec
 			dependency->AddDependency("copy", PythonDependencyItem::Create(new_df));
 			table_function->external_dependency = std::move(dependency);
 		}
-	} else if ((arrow_type = DuckDBPyConnection::GetArrowType(entry)) != PyArrowObjectType::Invalid) {
-		CreateArrowScan(name, entry, *table_function, children, client_properties, arrow_type);
 	} else if (DuckDBPyRelation::IsRelation(entry)) {
 		auto pyrel = py::cast<DuckDBPyRelation *>(entry);
 		if (!pyrel->CanBeRegisteredBy(context)) {
@@ -108,6 +112,8 @@ unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const py::objec
 		auto materialized = entry.attr("collect")();
 		auto arrow_dataset = materialized.attr("to_arrow")();
 		CreateArrowScan(name, arrow_dataset, *table_function, children, client_properties, PyArrowObjectType::Table);
+	} else if ((arrow_type = DuckDBPyConnection::GetArrowType(entry)) != PyArrowObjectType::Invalid) {
+		CreateArrowScan(name, entry, *table_function, children, client_properties, arrow_type);
 	} else if ((numpytype = DuckDBPyConnection::IsAcceptedNumpyObject(entry)) != NumpyObjectType::INVALID) {
 		string name = "np_" + StringUtil::GenerateRandomName();
 		py::dict data; // we will convert all the supported format to dict{"key": np.array(value)}.
@@ -188,25 +194,38 @@ static unique_ptr<TableRef> ReplaceInternal(ClientContext &context, const string
 		return nullptr;
 	}
 
-	py::gil_scoped_acquire acquire;
-	auto current_frame = py::module::import("inspect").attr("currentframe")();
+	lookup_result = context.TryGetCurrentSetting("python_scan_all_frames", result);
+	D_ASSERT((bool)lookup_result);
+	auto scan_all_frames = result.GetValue<bool>();
 
-	auto local_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_locals"));
-	// search local dictionary
-	if (local_dict) {
-		auto result = TryReplacement(local_dict, table_name, context, current_frame);
-		if (result) {
-			return result;
+	py::gil_scoped_acquire acquire;
+	py::object current_frame = py::module::import("inspect").attr("currentframe")();
+
+	bool has_locals = false;
+	bool has_globals = false;
+	do {
+		py::object local_dict_p = current_frame.attr("f_locals");
+		has_locals = !py::none().is(local_dict_p);
+		if (has_locals) {
+			// search local dictionary
+			auto local_dict = py::cast<py::dict>(local_dict_p);
+			auto result = TryReplacement(local_dict, table_name, context, current_frame);
+			if (result) {
+				return result;
+			}
 		}
-	}
-	// search global dictionary
-	auto global_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_globals"));
-	if (global_dict) {
-		auto result = TryReplacement(global_dict, table_name, context, current_frame);
-		if (result) {
-			return result;
+		py::object global_dict_p = current_frame.attr("f_globals");
+		has_globals = !py::none().is(global_dict_p);
+		if (has_globals) {
+			auto global_dict = py::cast<py::dict>(global_dict_p);
+			// search global dictionary
+			auto result = TryReplacement(global_dict, table_name, context, current_frame);
+			if (result) {
+				return result;
+			}
 		}
-	}
+		current_frame = current_frame.attr("f_back");
+	} while (scan_all_frames && (has_locals || has_globals));
 	return nullptr;
 }
 

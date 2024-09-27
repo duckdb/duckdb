@@ -164,75 +164,15 @@ string_t HugeintCastToVarInt::Operation(hugeint_t int_value, Vector &result) {
 template <>
 bool TryCastToVarInt::Operation(string_t input_value, string_t &result_value, Vector &result,
                                 CastParameters &parameters) {
-	idx_t start_pos, end_pos;
-	bool is_negative, is_zero;
-	if (!Varint::VarcharFormatting(input_value, start_pos, end_pos, is_negative, is_zero)) {
-		return false;
-	}
-	if (is_zero) {
-		// Return Value 0
-		result_value = Varint::InitializeVarintZero(result);
-		return true;
-	}
-	auto int_value_char = input_value.GetData();
-	idx_t actual_size = end_pos - start_pos;
-	// convert the string to a byte array
-	string blob_string;
+	auto blob_string = Varint::VarcharToVarInt(input_value);
 
-	unsafe_vector<uint64_t> digits;
-
-	// The max number a uint64_t can represent is 18.446.744.073.709.551.615
-	// That has 20 digits
-	// In the worst case a remainder of a division will be 255, which is 3 digits
-	// Since the max value is 184, we need to take one more digit out
-	// Hence we end up with a max of 16 digits supported.
-	constexpr uint8_t max_digits = 16;
-	const idx_t number_of_digits = static_cast<idx_t>(std::ceil(static_cast<double>(actual_size) / max_digits));
-
-	// lets convert the string to a uint64_t vector
-	idx_t cur_end = end_pos;
-	for (idx_t i = 0; i < number_of_digits; i++) {
-		idx_t cur_start = static_cast<int64_t>(start_pos) > static_cast<int64_t>(cur_end - max_digits)
-		                      ? start_pos
-		                      : cur_end - max_digits;
-		std::string current_number(int_value_char + cur_start, cur_end - cur_start);
-		digits.push_back(std::stoull(current_number));
-		// move cur_end to more digits down the road
-		cur_end = cur_end - max_digits;
-	}
-
-	// Now that we have our uint64_t vector, lets start our division process to figure out the new number and remainder
-	while (!digits.empty()) {
-		idx_t digit_idx = digits.size() - 1;
-		uint8_t remainder = 0;
-		idx_t digits_size = digits.size();
-		for (idx_t i = 0; i < digits_size; i++) {
-			digits[digit_idx] += static_cast<uint64_t>(remainder * pow(10, max_digits));
-			remainder = static_cast<uint8_t>(digits[digit_idx] % 256);
-			digits[digit_idx] /= 256;
-			if (digits[digit_idx] == 0 && digit_idx == digits.size() - 1) {
-				// we can cap this
-				digits.pop_back();
-			}
-			digit_idx--;
-		}
-		if (is_negative) {
-			blob_string.push_back(static_cast<char>(~remainder));
-		} else {
-			blob_string.push_back(static_cast<char>(remainder));
-		}
-	}
-
-	uint32_t blob_size = static_cast<uint32_t>(blob_string.size() + Varint::VARINT_HEADER_SIZE);
+	uint32_t blob_size = static_cast<uint32_t>(blob_string.size());
 	result_value = StringVector::EmptyString(result, blob_size);
 	auto writable_blob = result_value.GetDataWriteable();
 
-	Varint::SetHeader(writable_blob, blob_string.size(), is_negative);
-
 	// Write string_blob into blob
-	idx_t blob_string_idx = blob_string.size() - 1;
-	for (idx_t i = Varint::VARINT_HEADER_SIZE; i < blob_size; i++) {
-		writable_blob[i] = blob_string[blob_string_idx--];
+	for (idx_t i = 0; i < blob_string.size(); i++) {
+		writable_blob[i] = blob_string[i];
 	}
 	result_value.Finalize();
 	return true;

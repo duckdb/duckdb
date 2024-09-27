@@ -64,6 +64,13 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		auto new_stats = RelationStatisticsHelper::CombineStatsOfReorderableOperator(bindings, relation_stats);
 		new_stats.cardinality = cardinality;
 		RelationStatisticsHelper::CopyRelationStats(*stats, new_stats);
+	} else {
+		// starts recursively setting cardinality
+		new_logical_plan->EstimateCardinality(context);
+	}
+
+	if (new_logical_plan->type == LogicalOperatorType::LOGICAL_EXPLAIN) {
+		new_logical_plan->SetEstimatedCardinality(3);
 	}
 
 	return new_logical_plan;

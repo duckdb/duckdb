@@ -65,7 +65,7 @@ void LogicalCopyToFile::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(213, "file_extension", file_extension);
 	serializer.WriteProperty(214, "rotate", rotate);
 	serializer.WriteProperty(215, "return_type", return_type);
-	serializer.WriteProperty(216, "write_partition_columns", write_partition_columns);
+	serializer.WritePropertyWithDefault(216, "write_partition_columns", write_partition_columns, true);
 }
 
 unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deserializer) {
@@ -104,11 +104,12 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	auto default_extension = function.extension;
 
 	auto file_extension =
-	    deserializer.ReadPropertyWithDefault<string>(213, "file_extension", std::move(default_extension));
+	    deserializer.ReadPropertyWithExplicitDefault<string>(213, "file_extension", std::move(default_extension));
 
-	auto rotate = deserializer.ReadPropertyWithDefault(214, "rotate", false);
-	auto return_type = deserializer.ReadPropertyWithDefault(215, "return_type", CopyFunctionReturnType::CHANGED_ROWS);
-	auto write_partition_columns = deserializer.ReadProperty<bool>(216, "write_partition_columns");
+	auto rotate = deserializer.ReadPropertyWithExplicitDefault(214, "rotate", false);
+	auto return_type =
+	    deserializer.ReadPropertyWithExplicitDefault(215, "return_type", CopyFunctionReturnType::CHANGED_ROWS);
+	auto write_partition_columns = deserializer.ReadPropertyWithExplicitDefault(216, "write_partition_columns", true);
 
 	if (!has_serialize) {
 		// If not serialized, re-bind with the copy info

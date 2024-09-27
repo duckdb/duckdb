@@ -114,6 +114,7 @@ namespace duckdb_libpgquery {
 #define parser_yyerror(msg)  scanner_yyerror(msg, yyscanner)
 #define parser_errposition(pos)  scanner_errposition(pos, yyscanner)
 
+#if YYBISON == 1
 // explicitly define stack growing support
 // yacc cannot handle stack growing by default YYLTYPE is overriden - which the Postgres parser overrides with an `int`
 // so we need to copy these definitions here explicitly
@@ -167,6 +168,7 @@ union yyalloc
 	yyptr += yynewbytes / sizeof (*yyptr);				\
       }									\
     while (YYID (0))
+#endif
 
 static void base_yyerror(YYLTYPE *yylloc, core_yyscan_t yyscanner,
 						 const char *msg);
@@ -180,7 +182,7 @@ static PGNode *makeStringConstCast(char *str, int location, PGTypeName *tpname);
 static PGNode *makeIntervalNode(char *str, int location, PGList *typmods);
 static PGNode *makeIntervalNode(int val, int location, PGList *typmods);
 static PGNode *makeIntervalNode(PGNode *arg, int location, PGList *typmods);
-static PGNode *makeSampleSize(PGValue *sample_size, bool is_percentage);
+static PGNode *makeSampleSize(PGNode *sample_size, bool is_percentage);
 static PGNode *makeSampleOptions(PGNode *sample_size, char *method, int *seed, int location);
 static PGNode *makeIntConst(int val, int location);
 static PGNode *makeFloatConst(char *str, int location);

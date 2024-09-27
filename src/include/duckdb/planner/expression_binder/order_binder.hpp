@@ -22,8 +22,8 @@ struct SelectBindState;
 //! The ORDER binder is responsible for binding an expression within the ORDER BY clause of a SQL statement
 class OrderBinder {
 public:
-	OrderBinder(vector<Binder *> binders, SelectBindState &bind_state);
-	OrderBinder(vector<Binder *> binders, SelectNode &node, SelectBindState &bind_state);
+	OrderBinder(vector<reference<Binder>> binders, SelectBindState &bind_state);
+	OrderBinder(vector<reference<Binder>> binders, SelectNode &node, SelectBindState &bind_state);
 
 public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> expr);
@@ -31,7 +31,7 @@ public:
 	bool HasExtraList() const {
 		return extra_list;
 	}
-	const vector<Binder *> &GetBinders() const {
+	const vector<reference<Binder>> &GetBinders() const {
 		return binders;
 	}
 
@@ -43,7 +43,7 @@ private:
 	optional_idx TryGetProjectionReference(ParsedExpression &expr) const;
 
 private:
-	vector<Binder *> binders;
+	vector<reference<Binder>> binders;
 	optional_ptr<vector<unique_ptr<ParsedExpression>>> extra_list;
 	SelectBindState &bind_state;
 };

@@ -125,6 +125,8 @@ private:
 	PartialBlockManager partial_block_manager;
 	//! Checkpoint type
 	CheckpointType checkpoint_type;
+	//! Block usage count for verification purposes
+	unordered_map<block_id_t, idx_t> verify_block_usage_count;
 };
 
 } // namespace duckdb

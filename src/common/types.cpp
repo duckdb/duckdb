@@ -29,7 +29,6 @@
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/main/config.hpp"
-
 #include <cmath>
 
 namespace duckdb {
@@ -527,7 +526,67 @@ LogicalType TransformStringToLogicalType(const string &str) {
 	if (StringUtil::Lower(str) == "null") {
 		return LogicalType::SQLNULL;
 	}
-	return Parser::ParseColumnList("dummy " + str).GetColumn(LogicalIndex(0)).Type();
+	ColumnList column_list;
+	try {
+		column_list = Parser::ParseColumnList("dummy " + str);
+	} catch (const std::runtime_error &e) {
+		const vector<string> suggested_types {"BIGINT",
+		                                      "INT8",
+		                                      "LONG",
+		                                      "BIT",
+		                                      "BITSTRING",
+		                                      "BLOB",
+		                                      "BYTEA",
+		                                      "BINARY,",
+		                                      "VARBINARY",
+		                                      "BOOLEAN",
+		                                      "BOOL",
+		                                      "LOGICAL",
+		                                      "DATE",
+		                                      "DECIMAL(prec, scale)",
+		                                      "DOUBLE",
+		                                      "FLOAT8",
+		                                      "FLOAT",
+		                                      "FLOAT4",
+		                                      "REAL",
+		                                      "HUGEINT",
+		                                      "INTEGER",
+		                                      "INT4",
+		                                      "INT",
+		                                      "SIGNED",
+		                                      "INTERVAL",
+		                                      "SMALLINT",
+		                                      "INT2",
+		                                      "SHORT",
+		                                      "TIME",
+		                                      "TIMESTAMPTZ	",
+		                                      "TIMESTAMP",
+		                                      "DATETIME",
+		                                      "TINYINT",
+		                                      "INT1",
+		                                      "UBIGINT",
+		                                      "UHUGEINT",
+		                                      "UINTEGER",
+		                                      "USMALLINT",
+		                                      "UTINYINT",
+		                                      "UUID",
+		                                      "VARCHAR",
+		                                      "CHAR",
+		                                      "BPCHAR",
+		                                      "TEXT",
+		                                      "STRING",
+		                                      "MAP(INTEGER, VARCHAR)",
+		                                      "UNION(num INTEGER, text VARCHAR)"};
+		std::ostringstream error;
+		error << "Value \"" << str << "\" can not be converted to a DuckDB Type." << '\n';
+		error << "Possible examples as suggestions: " << '\n';
+		auto suggestions = StringUtil::TopNJaroWinkler(suggested_types, str);
+		for (auto &suggestion : suggestions) {
+			error << "* " << suggestion << '\n';
+		}
+		throw InvalidInputException(error.str());
+	}
+	return column_list.GetColumn(LogicalIndex(0)).Type();
 }
 
 LogicalType GetUserTypeRecursive(const LogicalType &type, ClientContext &context) {

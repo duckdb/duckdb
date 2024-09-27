@@ -391,16 +391,17 @@ py::object PythonTableArrowArrayStreamFactory::TransformFilter(TableFilterSet &f
 	auto filters_map = &filter_collection.filters;
 	auto it = filters_map->begin();
 	D_ASSERT(columns.find(it->first) != columns.end());
-	auto &arrow_type = *arrow_table.GetColumns().at(filter_to_col.at(it->first));
+	auto arrow_type = &arrow_table.GetColumns().at(filter_to_col.at(it->first));
 
 	vector<string> column_ref;
 	column_ref.push_back(columns[it->first]);
-	py::object expression = TransformFilterRecursive(it->second.get(), column_ref, config.time_zone, arrow_type);
+	py::object expression = TransformFilterRecursive(it->second.get(), column_ref, config.time_zone, **arrow_type);
 	while (it != filters_map->end()) {
+		arrow_type = &arrow_table.GetColumns().at(filter_to_col.at(it->first));
 		column_ref.clear();
 		column_ref.push_back(columns[it->first]);
 		py::object child_expression =
-		    TransformFilterRecursive(it->second.get(), column_ref, config.time_zone, arrow_type);
+		    TransformFilterRecursive(it->second.get(), column_ref, config.time_zone, **arrow_type);
 		expression = expression.attr("__and__")(child_expression);
 		it++;
 	}

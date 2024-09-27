@@ -57,7 +57,7 @@ jobs:
     steps:
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           # we need tags for the ubiquity build script to run without errors
           fetch-depth: '0'
@@ -74,30 +74,3 @@ jobs:
             -workspace tools/swift/duckdb-swift/DuckDB.xcworkspace \
             -scheme DuckDB \
             -destination platform='${{ matrix.destination }}'
-
-  test-linux:
-    name: Test Linux
-    runs-on: ubuntu-latest
-    container:
-      image: swift:latest
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          # we need tags for the ubiquity build script to run without errors
-          fetch-depth: '0'
-
-      - name: Install Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.9'
-
-      - name: Prepare Package
-        run: python3 tools/swift/create_package.py tools/swift
-
-      - name: Build Package
-        run: swift build --package-path tools/swift/duckdb-swift
-
-      - name: Test Package
-        run: swift test --package-path tools/swift/duckdb-swift

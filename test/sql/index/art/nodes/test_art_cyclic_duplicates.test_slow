@@ -1,0 +1,30 @@
+# name: test/sql/index/art/nodes/test_art_cyclic_duplicates.test_slow
+# description: Test cycling inserts into the ART.
+# group: [nodes]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers (i INTEGER);
+
+statement ok
+CREATE INDEX i_index ON integers USING art(i);
+
+# Insert duplicates and test the count.
+
+loop i 0 10
+
+statement ok
+INSERT INTO integers SELECT range FROM range(100);
+
+loop j 0 40
+
+query I
+SELECT COUNT(*) = ${i} + 1 FROM integers WHERE i = ${j};
+----
+1
+
+endloop
+
+endloop

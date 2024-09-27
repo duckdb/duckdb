@@ -29,6 +29,11 @@ SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=[
 ----
 1	1.1	bla
 
+statement error
+SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['MAP']);
+----
+Value "MAP" can not be converted to a DuckDB Type.
+
 query TTT
 SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['BIGINT', 'DOUBLE', 'VARCHAR']);
 ----

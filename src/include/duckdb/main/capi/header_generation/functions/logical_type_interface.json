@@ -37,6 +37,27 @@
             }
         },
         {
+            "name": "duckdb_logical_type_set_alias",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                },
+                {
+                    "type": "const char *",
+                    "name": "alias"
+                }
+            ],
+            "comment": {
+                "description": "Sets the alias of a duckdb_logical_type.\n\n",
+                "param_comments": {
+                    "type": "The logical type",
+                    "alias": "The alias to set"
+                }
+            }
+        },
+        {
             "name": "duckdb_create_list_type",
             "return_type": "duckdb_logical_type",
             "params": [
@@ -540,6 +561,33 @@
                 "param_comments": {
                     "type": "The logical type to destroy."
                 }
+            }
+        },
+        {
+            "name": "duckdb_register_logical_type",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "con"
+                },
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                },
+                {
+                    "type": "duckdb_create_type_info",
+                    "name": "info"
+                }
+            ],
+            "comment": {
+                "description": "Registers a custom type within the given connection.\nThe type must have an alias\n\n",
+                "param_comments": {
+                    "con": "The connection to use",
+                    "type": "The custom type to register",
+                    "extra_info": "Optional extra information used when registering the custom type. Can be `NULL`."
+                },
+                "return_value": "Whether or not the registration was successful."
             }
         }
     ]

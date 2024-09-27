@@ -52,12 +52,15 @@ SELECT COUNT(*) FROM db1.test_schema.call_center
 
 statement error
 Call dsdgen(sf=NULL);
+----
 <REGEX>:.*Cannot use NULL.*
 
 statement error
 Call dsdgen(catalog=NULL);
+----
 <REGEX>:.*Cannot use NULL.*
 
 statement error
 Call dsdgen(sf=1, suffix=NULL);
+----
 <REGEX>:.*Cannot use NULL.*

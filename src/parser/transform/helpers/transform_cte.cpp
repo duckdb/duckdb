@@ -82,8 +82,7 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 			info->query = TransformRecursiveCTE(cte, *info);
 		} else {
 			Transformer cte_transformer(*this);
-			info->query =
-			    cte_transformer.TransformSelect(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(cte.ctequery));
+			info->query = cte_transformer.TransformSelectStmt(*cte.ctequery);
 		}
 		D_ASSERT(info->query);
 		auto cte_name = string(cte.ctename);
@@ -126,8 +125,8 @@ unique_ptr<SelectStatement> Transformer::TransformRecursiveCTE(duckdb_libpgquery
 			auto with_clause = PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause);
 			TransformCTE(*with_clause, result.cte_map);
 		}
-		result.left = TransformSelectNode(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(stmt.larg));
-		result.right = TransformSelectNode(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(stmt.rarg));
+		result.left = TransformSelectNode(*stmt.larg);
+		result.right = TransformSelectNode(*stmt.rarg);
 		result.aliases = info.aliases;
 		// btodo: Maybe there is another way, we handle unique pointers and therefore can only copy the keys.
 		for (auto &key : info.key_targets) {
@@ -141,9 +140,13 @@ unique_ptr<SelectStatement> Transformer::TransformRecursiveCTE(duckdb_libpgquery
 	}
 	case duckdb_libpgquery::PG_SETOP_EXCEPT:
 	case duckdb_libpgquery::PG_SETOP_INTERSECT:
-	default:
+	default: {
 		// This CTE is not recursive. Fallback to regular query transformation.
-		return TransformSelect(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(cte.ctequery));
+		auto node = TransformSelectNode(*cte.ctequery);
+		auto result = make_uniq<SelectStatement>();
+		result->node = std::move(node);
+		return result;
+	}
 	}
 
 	if (stmt.limitCount || stmt.limitOffset) {

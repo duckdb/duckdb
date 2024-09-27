@@ -817,6 +817,67 @@
                 },
                 "return_value": "The array value, or nullptr, if the child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`."
             }
+        },
+        {
+            "name": "duckdb_get_map_size",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "value"
+                }
+            ],
+            "comment": {
+                "description": "Returns the number of elements in a MAP value.\n\n",
+                "param_comments": {
+                    "value": "The MAP value."
+                },
+                "return_value": "The number of elements in the map."
+            }
+        },
+        {
+            "name": "duckdb_get_map_key",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "value"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                }
+            ],
+            "comment": {
+                "description": "Returns the MAP key at index as a duckdb_value.\n\n",
+                "param_comments": {
+                    "value": "The MAP value.",
+                    "index": "The index of the key."
+                },
+                "return_value": "The key as a duckdb_value."
+            }
+        },
+        {
+            "name": "duckdb_get_map_value",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "value"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                }
+            ],
+            "comment": {
+                "description": "Returns the MAP value at index as a duckdb_value.\n\n",
+                "param_comments": {
+                    "value": "The MAP value.",
+                    "index": "The index of the value."
+                },
+                "return_value": "The value as a duckdb_value."
+            }
         }
     ]
 }

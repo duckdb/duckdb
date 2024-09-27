@@ -74,7 +74,7 @@ void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &ca
 		return;
 	}
 	auto &profiler = QueryProfiler::Get(context);
-	profiler.StartPhase(OptimizerTypeToString(type));
+	profiler.StartPhase(MetricsUtils::GetOptimizerMetricByType(type));
 	callback();
 	profiler.EndPhase();
 	if (plan) {
@@ -95,7 +95,10 @@ void Optimizer::RunBuiltInOptimizers() {
 	case LogicalOperatorType::LOGICAL_CREATE_SECRET:
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
 		// skip optimizing simple & often-occurring plans unaffected by rewrites
-		return;
+		if (plan->children.empty()) {
+			return;
+		}
+		break;
 	default:
 		break;
 	}

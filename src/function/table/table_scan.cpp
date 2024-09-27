@@ -86,7 +86,6 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &
 }
 
 unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
-
 	D_ASSERT(input.bind_data);
 	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
 	auto result = make_uniq<TableScanGlobalState>(context, input.bind_data.get());
@@ -324,7 +323,6 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 
 	auto checkpoint_lock = storage.GetSharedCheckpointLock();
 	auto &info = storage.GetDataTableInfo();
-	auto &transaction = Transaction::Get(context, bind_data.table.catalog);
 
 	// bind and scan any ART indexes
 	info->GetIndexes().BindAndScan<ART>(context, *info, [&](ART &art_index) {
@@ -344,7 +342,7 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 
 		// Try to find a matching index for any of the filter expressions.
 		for (auto &filter : filters) {
-			auto index_state = art_index.TryInitializeScan(transaction, *index_expression, *filter);
+			auto index_state = art_index.TryInitializeScan(*index_expression, *filter);
 			if (index_state != nullptr) {
 
 				auto &db_config = DBConfig::GetConfig(context);
@@ -356,12 +354,13 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 				auto max_count = MaxValue(index_scan_max_count, total_rows_from_percentage);
 
 				// Check if we can use an index scan, and already retrieve the matching row ids.
-				if (art_index.Scan(transaction, storage, *index_state, max_count, bind_data.row_ids)) {
+				if (art_index.Scan(*index_state, max_count, bind_data.row_ids)) {
 					bind_data.is_index_scan = true;
 					get.function = TableScanFunction::GetIndexScanFunction();
 					return true;
 				}
 
+				// Clear the row ids in case we exceeded the maximum count and stopped scanning.
 				bind_data.row_ids.clear();
 				return true;
 			}

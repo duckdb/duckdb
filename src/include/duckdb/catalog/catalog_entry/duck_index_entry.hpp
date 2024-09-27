@@ -28,8 +28,9 @@ struct IndexDataTableInfo {
 class DuckIndexEntry : public IndexCatalogEntry {
 public:
 	//! Create a DuckIndexEntry
-	DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info, TableCatalogEntry &table);
-	DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info,
+	DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &create_info,
+	               TableCatalogEntry &table);
+	DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &create_info,
 	               shared_ptr<IndexDataTableInfo> storage_info);
 
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;

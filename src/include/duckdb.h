@@ -16,10 +16,14 @@
 //! duplicate of duckdb/main/winapi.hpp
 #ifndef DUCKDB_API
 #ifdef _WIN32
+#ifdef DUCKDB_STATIC_BUILD
+#define DUCKDB_API
+#else
 #if defined(DUCKDB_BUILD_LIBRARY) && !defined(DUCKDB_BUILD_LOADABLE_EXTENSION)
 #define DUCKDB_API __declspec(dllexport)
 #else
 #define DUCKDB_API __declspec(dllimport)
+#endif
 #endif
 #else
 #define DUCKDB_API
@@ -29,10 +33,14 @@
 //! duplicate of duckdb/main/winapi.hpp
 #ifndef DUCKDB_EXTENSION_API
 #ifdef _WIN32
+#ifdef DUCKDB_STATIC_BUILD
+#define DUCKDB_EXTENSION_API
+#else
 #ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
 #define DUCKDB_EXTENSION_API __declspec(dllexport)
 #else
 #define DUCKDB_EXTENSION_API
+#endif
 #endif
 #else
 #define DUCKDB_EXTENSION_API __attribute__((visibility("default")))
@@ -125,6 +133,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_ANY = 34,
 	// duckdb_varint
 	DUCKDB_TYPE_VARINT = 35,
+	// SQLNULL type
+	DUCKDB_TYPE_SQLNULL = 36,
 } duckdb_type;
 //! An enum over the returned state of different functions.
 typedef enum duckdb_state { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
@@ -219,6 +229,8 @@ typedef enum duckdb_error_type {
 	DUCKDB_ERROR_SEQUENCE = 41,
 	DUCKDB_INVALID_CONFIGURATION = 42
 } duckdb_error_type;
+//! An enum over DuckDB's different cast modes.
+typedef enum duckdb_cast_mode { DUCKDB_CAST_NORMAL = 0, DUCKDB_CAST_TRY = 1 } duckdb_cast_mode;
 
 //===--------------------------------------------------------------------===//
 // General type definitions
@@ -444,6 +456,12 @@ typedef struct _duckdb_logical_type {
 	void *internal_ptr;
 } * duckdb_logical_type;
 
+//! Holds extra information used when registering a custom logical type.
+//! Reserved for future use.
+typedef struct _duckdb_create_type_info {
+	void *internal_ptr;
+} * duckdb_create_type_info;
+
 //! Contains a data chunk from a duckdb_result.
 //! Must be destroyed with `duckdb_destroy_data_chunk`.
 typedef struct _duckdb_data_chunk {
@@ -554,6 +572,18 @@ typedef void (*duckdb_table_function_init_t)(duckdb_init_info info);
 
 //! The main function of the table function.
 typedef void (*duckdb_table_function_t)(duckdb_function_info info, duckdb_data_chunk output);
+
+//===--------------------------------------------------------------------===//
+// Cast types
+//===--------------------------------------------------------------------===//
+
+//! A cast function. Must be destroyed with `duckdb_destroy_cast_function`.
+typedef struct _duckdb_cast_function {
+	void *internal_ptr;
+} * duckdb_cast_function;
+
+typedef bool (*duckdb_cast_function_t)(duckdb_function_info info, idx_t count, duckdb_vector input,
+                                       duckdb_vector output);
 
 //===--------------------------------------------------------------------===//
 // Replacement scan types
@@ -838,8 +868,8 @@ Returns the number of rows present in the result object.
 * @return The number of rows present in the result object.
 */
 DUCKDB_API idx_t duckdb_row_count(duckdb_result *result);
-#endif
 
+#endif
 /*!
 Returns the number of rows changed by the query stored in the result. This is relevant only for INSERT/UPDATE/DELETE
 queries. For other queries the rows_changed will be 0.
@@ -870,9 +900,7 @@ printf("Data for row %d: %d\n", row, data[row]);
 * @return The column data of the specified column.
 */
 DUCKDB_API void *duckdb_column_data(duckdb_result *result, idx_t col);
-#endif
 
-#ifndef DUCKDB_API_NO_DEPRECATED
 /*!
 **DEPRECATED**: Prefer using `duckdb_result_get_chunk` instead.
 
@@ -895,8 +923,8 @@ if (nullmask[row]) {
 * @return The nullmask of the specified column.
 */
 DUCKDB_API bool *duckdb_nullmask_data(duckdb_result *result, idx_t col);
-#endif
 
+#endif
 /*!
 Returns the error message contained within the result. The error is only set if `duckdb_query` returns `DuckDBError`.
 
@@ -962,6 +990,7 @@ Returns the number of data chunks present in the result.
 */
 DUCKDB_API idx_t duckdb_result_chunk_count(duckdb_result result);
 
+#endif
 /*!
 Returns the return_type of the given result, or DUCKDB_RETURN_TYPE_INVALID on error
 
@@ -970,7 +999,6 @@ Returns the return_type of the given result, or DUCKDB_RETURN_TYPE_INVALID on er
 */
 DUCKDB_API duckdb_result_type duckdb_result_return_type(duckdb_result result);
 
-#endif
 //===--------------------------------------------------------------------===//
 // Safe Fetch Functions
 //===--------------------------------------------------------------------===//
@@ -1107,8 +1135,8 @@ DUCKDB_API duckdb_timestamp duckdb_value_timestamp(duckdb_result *result, idx_t 
 DUCKDB_API duckdb_interval duckdb_value_interval(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
-**DEPRECATION NOTICE**: use duckdb_value_string instead. This function does not work correctly if the string contains
-null bytes.
+**DEPRECATED**: Use duckdb_value_string instead. This function does not work correctly if the string contains null
+bytes.
 
 * @return The text value at the specified location as a null-terminated string, or nullptr if the value cannot be
 converted. The result must be freed with `duckdb_free`.
@@ -1126,8 +1154,8 @@ The resulting field "string.data" must be freed with `duckdb_free.`
 DUCKDB_API duckdb_string duckdb_value_string(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
-**DEPRECATION NOTICE**: use duckdb_value_string_internal instead. This function does not work correctly if the string
-contains null bytes.
+**DEPRECATED**: Use duckdb_value_string_internal instead. This function does not work correctly if the string contains
+null bytes.
 
 * @return The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.
 If the column is NOT a VARCHAR column this function will return NULL.
@@ -1137,8 +1165,8 @@ The result must NOT be freed.
 DUCKDB_API char *duckdb_value_varchar_internal(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
-**DEPRECATION NOTICE**: use duckdb_value_string_internal instead. This function does not work correctly if the string
-contains null bytes.
+**DEPRECATED**: Use duckdb_value_string_internal instead. This function does not work correctly if the string contains
+null bytes.
 * @return The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.
 If the column is NOT a VARCHAR column this function will return NULL.
 
@@ -1635,8 +1663,8 @@ Note that the result must be freed with `duckdb_destroy_result`.
 */
 DUCKDB_API duckdb_state duckdb_execute_prepared_streaming(duckdb_prepared_statement prepared_statement,
                                                           duckdb_result *out_result);
-#endif
 
+#endif
 //===--------------------------------------------------------------------===//
 // Extract Statements
 //===--------------------------------------------------------------------===//
@@ -1726,8 +1754,8 @@ Note that after calling `duckdb_pending_prepared_streaming`, the pending result 
 */
 DUCKDB_API duckdb_state duckdb_pending_prepared_streaming(duckdb_prepared_statement prepared_statement,
                                                           duckdb_pending_result *out_result);
-#endif
 
+#endif
 /*!
 Closes the pending result and de-allocates all memory allocated for the result.
 
@@ -2176,6 +2204,32 @@ Must be destroyed with `duckdb_destroy_value`.
 */
 DUCKDB_API duckdb_value duckdb_create_array_value(duckdb_logical_type type, duckdb_value *values, idx_t value_count);
 
+/*!
+Returns the number of elements in a MAP value.
+
+* @param value The MAP value.
+* @return The number of elements in the map.
+*/
+DUCKDB_API idx_t duckdb_get_map_size(duckdb_value value);
+
+/*!
+Returns the MAP key at index as a duckdb_value.
+
+* @param value The MAP value.
+* @param index The index of the key.
+* @return The key as a duckdb_value.
+*/
+DUCKDB_API duckdb_value duckdb_get_map_key(duckdb_value value, idx_t index);
+
+/*!
+Returns the MAP value at index as a duckdb_value.
+
+* @param value The MAP value.
+* @param index The index of the value.
+* @return The value as a duckdb_value.
+*/
+DUCKDB_API duckdb_value duckdb_get_map_value(duckdb_value value, idx_t index);
+
 //===--------------------------------------------------------------------===//
 // Logical Type Interface
 //===--------------------------------------------------------------------===//
@@ -2200,6 +2254,14 @@ The result must be destroyed with `duckdb_free`.
 * @return The alias or `nullptr`
 */
 DUCKDB_API char *duckdb_logical_type_get_alias(duckdb_logical_type type);
+
+/*!
+Sets the alias of a duckdb_logical_type.
+
+* @param type The logical type
+* @param alias The alias to set
+*/
+DUCKDB_API void duckdb_logical_type_set_alias(duckdb_logical_type type, const char *alias);
 
 /*!
 Creates a LIST type from its child type.
@@ -2446,6 +2508,17 @@ Destroys the logical type and de-allocates all memory allocated for that type.
 * @param type The logical type to destroy.
 */
 DUCKDB_API void duckdb_destroy_logical_type(duckdb_logical_type *type);
+
+/*!
+Registers a custom type within the given connection.
+The type must have an alias
+
+* @param con The connection to use
+* @param type The custom type to register
+* @return Whether or not the registration was successful.
+*/
+DUCKDB_API duckdb_state duckdb_register_logical_type(duckdb_connection con, duckdb_logical_type type,
+                                                     duckdb_create_type_info info);
 
 //===--------------------------------------------------------------------===//
 // Data Chunk Interface
@@ -2832,8 +2905,9 @@ DUCKDB_API void duckdb_destroy_scalar_function_set(duckdb_scalar_function_set *s
 /*!
 Adds the scalar function as a new overload to the scalar function set.
 
-Returns DuckDBError if the function could not be added, for example if the overload already exists.* @param set The
-scalar function set
+Returns DuckDBError if the function could not be added, for example if the overload already exists.
+
+* @param set The scalar function set
 * @param function The function to add
 */
 DUCKDB_API duckdb_state duckdb_add_scalar_function_to_set(duckdb_scalar_function_set set,
@@ -2987,8 +3061,9 @@ DUCKDB_API void duckdb_destroy_aggregate_function_set(duckdb_aggregate_function_
 /*!
 Adds the aggregate function as a new overload to the aggregate function set.
 
-Returns DuckDBError if the function could not be added, for example if the overload already exists.* @param set The
-aggregate function set
+Returns DuckDBError if the function could not be added, for example if the overload already exists.
+
+* @param set The aggregate function set
 * @param function The function to add
 */
 DUCKDB_API duckdb_state duckdb_add_aggregate_function_to_set(duckdb_aggregate_function_set set,
@@ -3379,6 +3454,15 @@ Returns the value of the metric of the current profiling info node. Returns null
 DUCKDB_API duckdb_value duckdb_profiling_info_get_value(duckdb_profiling_info info, const char *key);
 
 /*!
+Returns the key-value metric map of this profiling node as a MAP duckdb_value.
+The individual elements are accessible via the duckdb_value MAP functions.
+
+* @param info A profiling information object.
+* @return The key-value metric map as a MAP duckdb_value.
+*/
+DUCKDB_API duckdb_value duckdb_profiling_info_get_metrics(duckdb_profiling_info info);
+
+/*!
 Returns the number of children in the current profiling info node.
 
 * @param info A profiling information object.
@@ -3394,24 +3478,6 @@ Returns the child node at the specified index.
 * @return The child node at the specified index.
 */
 DUCKDB_API duckdb_profiling_info duckdb_profiling_info_get_child(duckdb_profiling_info info, idx_t index);
-
-/*!
-Returns the operator name of the current profiling info node, if the node is an Operator Node.
-
-* @param info A profiling information object.
-* @return The name of the operator of the current node. Returns nullptr, if the node is not an Operator Node. The result
-must be freed with `duckdb_free`.
-*/
-DUCKDB_API const char *duckdb_profiling_info_get_name(duckdb_profiling_info info);
-
-/*!
-Returns the query of the current profiling info node, if the node is the root.
-
-* @param info A profiling information object.
-* @return The query of the current node. Returns nullptr, if the node is not the root. The result must be freed
- * with `duckdb_free`.
-*/
-DUCKDB_API const char *duckdb_profiling_info_get_query(duckdb_profiling_info info);
 
 //===--------------------------------------------------------------------===//
 // Appender
@@ -3972,8 +4038,8 @@ It is not known beforehand how many chunks will be returned by this result.
 * @return The resulting data chunk. Returns `NULL` if the result has an error.
 */
 DUCKDB_API duckdb_data_chunk duckdb_stream_fetch_chunk(duckdb_result result);
-#endif
 
+#endif
 /*!
 Fetches a data chunk from a duckdb_result. This function should be called repeatedly until the result is exhausted.
 
@@ -3985,6 +4051,111 @@ It is not known beforehand how many chunks will be returned by this result.
 * @return The resulting data chunk. Returns `NULL` if the result has an error.
 */
 DUCKDB_API duckdb_data_chunk duckdb_fetch_chunk(duckdb_result result);
+
+//===--------------------------------------------------------------------===//
+// Cast Functions
+//===--------------------------------------------------------------------===//
+
+/*!
+Creates a new cast function object.
+
+* @return The cast function object.
+*/
+DUCKDB_API duckdb_cast_function duckdb_create_cast_function();
+
+/*!
+Sets the source type of the cast function.
+
+* @param cast_function The cast function object.
+* @param source_type The source type to set.
+*/
+DUCKDB_API void duckdb_cast_function_set_source_type(duckdb_cast_function cast_function,
+                                                     duckdb_logical_type source_type);
+
+/*!
+Sets the target type of the cast function.
+
+* @param cast_function The cast function object.
+* @param target_type The target type to set.
+*/
+DUCKDB_API void duckdb_cast_function_set_target_type(duckdb_cast_function cast_function,
+                                                     duckdb_logical_type target_type);
+
+/*!
+Sets the "cost" of implicitly casting the source type to the target type using this function.
+
+* @param cast_function The cast function object.
+* @param cost The cost to set.
+*/
+DUCKDB_API void duckdb_cast_function_set_implicit_cast_cost(duckdb_cast_function cast_function, int64_t cost);
+
+/*!
+Sets the actual cast function to use.
+
+* @param cast_function The cast function object.
+* @param function The function to set.
+*/
+DUCKDB_API void duckdb_cast_function_set_function(duckdb_cast_function cast_function, duckdb_cast_function_t function);
+
+/*!
+Assigns extra information to the cast function that can be fetched during execution, etc.
+
+* @param extra_info The extra information
+* @param destroy The callback that will be called to destroy the extra information (if any)
+*/
+DUCKDB_API void duckdb_cast_function_set_extra_info(duckdb_cast_function cast_function, void *extra_info,
+                                                    duckdb_delete_callback_t destroy);
+
+/*!
+Retrieves the extra info of the function as set in `duckdb_cast_function_set_extra_info`.
+
+* @param info The info object.
+* @return The extra info.
+*/
+DUCKDB_API void *duckdb_cast_function_get_extra_info(duckdb_function_info info);
+
+/*!
+Get the cast execution mode from the given function info.
+
+* @param info The info object.
+* @return The cast mode.
+*/
+DUCKDB_API duckdb_cast_mode duckdb_cast_function_get_cast_mode(duckdb_function_info info);
+
+/*!
+Report that an error has occurred while executing the cast function.
+
+* @param info The info object.
+* @param error The error message.
+*/
+DUCKDB_API void duckdb_cast_function_set_error(duckdb_function_info info, const char *error);
+
+/*!
+Report that an error has occurred while executing the cast function, setting the corresponding output row to NULL.
+
+* @param info The info object.
+* @param error The error message.
+* @param row The index of the row within the output vector to set to NULL.
+* @param output The output vector.
+*/
+DUCKDB_API void duckdb_cast_function_set_row_error(duckdb_function_info info, const char *error, idx_t row,
+                                                   duckdb_vector output);
+
+/*!
+Registers a cast function within the given connection.
+
+* @param con The connection to use.
+* @param cast_function The cast function to register.
+* @return Whether or not the registration was successful.
+*/
+DUCKDB_API duckdb_state duckdb_register_cast_function(duckdb_connection con, duckdb_cast_function cast_function);
+
+/*!
+Destroys the cast function object.
+
+* @param cast_function The cast function object.
+*/
+DUCKDB_API void duckdb_destroy_cast_function(duckdb_cast_function *cast_function);
 
 #ifdef __cplusplus
 }

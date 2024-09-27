@@ -30,7 +30,6 @@ protected:
 
 struct CreateBearerTokenFunctions {
 public:
-	static constexpr const char *GENERIC_BEARER_TYPE = "bearer";
 	static constexpr const char *HUGGINGFACE_TYPE = "huggingface";
 
 	//! Register all CreateSecretFunctions

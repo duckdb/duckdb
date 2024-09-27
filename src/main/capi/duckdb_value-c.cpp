@@ -1,13 +1,13 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
-#include "duckdb/common/types/null_value.hpp"
 
 using duckdb::LogicalTypeId;
 
-static duckdb_value WrapValue(duckdb::Value *list_value) {
-	return reinterpret_cast<duckdb_value>(list_value);
+static duckdb_value WrapValue(duckdb::Value *value) {
+	return reinterpret_cast<duckdb_value>(value);
 }
 
 static duckdb::LogicalType &UnwrapType(duckdb_logical_type type) {
@@ -274,4 +274,58 @@ duckdb_value duckdb_create_array_value(duckdb_logical_type type, duckdb_value *v
 		return nullptr;
 	}
 	return WrapValue(array_value);
+}
+
+idx_t duckdb_get_map_size(duckdb_value value) {
+	if (!value) {
+		return 0;
+	}
+
+	auto val = UnwrapValue(value);
+	if (val.type().id() != LogicalTypeId::MAP) {
+		return 0;
+	}
+
+	auto &children = duckdb::MapValue::GetChildren(val);
+	return children.size();
+}
+
+duckdb_value duckdb_get_map_key(duckdb_value value, idx_t index) {
+	if (!value) {
+		return nullptr;
+	}
+
+	auto val = UnwrapValue(value);
+	if (val.type().id() != LogicalTypeId::MAP) {
+		return nullptr;
+	}
+
+	auto &children = duckdb::MapValue::GetChildren(val);
+	if (index >= children.size()) {
+		return nullptr;
+	}
+
+	auto &child = children[index];
+	auto &child_struct = duckdb::StructValue::GetChildren(child);
+	return WrapValue(new duckdb::Value(child_struct[0]));
+}
+
+duckdb_value duckdb_get_map_value(duckdb_value value, idx_t index) {
+	if (!value) {
+		return nullptr;
+	}
+
+	auto val = UnwrapValue(value);
+	if (val.type().id() != LogicalTypeId::MAP) {
+		return nullptr;
+	}
+
+	auto &children = duckdb::MapValue::GetChildren(val);
+	if (index >= children.size()) {
+		return nullptr;
+	}
+
+	auto &child = children[index];
+	auto &child_struct = duckdb::StructValue::GetChildren(child);
+	return WrapValue(new duckdb::Value(child_struct[1]));
 }

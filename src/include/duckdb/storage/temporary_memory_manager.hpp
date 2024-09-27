@@ -30,8 +30,12 @@ public:
 	~TemporaryMemoryState();
 
 public:
-	//! Set the remaining size needed for this state, and updates the reservation
+	//! Set the remaining size needed for this state (NOTE: does not update the reservation!)
 	void SetRemainingSize(idx_t new_remaining_size);
+	//! Set the remaining size needed for this state and update the reservation
+	void SetRemainingSizeAndUpdateReservation(ClientContext &context, idx_t new_remaining_size);
+	//! Set the remaining size to 0 (NOTE: updates the reservation to 0 as well)
+	void SetZero();
 	//! Get the remaining size that was set for this state
 	idx_t GetRemainingSize() const;
 	//! Set the minimum reservation for this state
@@ -44,6 +48,8 @@ public:
 	idx_t GetReservation() const;
 	//! Set the materialization penalty for this state
 	void SetMaterializationPenalty(idx_t new_materialization_penalty);
+	//! Get the materialization penalty for this state
+	idx_t GetMaterializationPenalty() const;
 
 private:
 	//! The TemporaryMemoryManager that owns this state
@@ -103,8 +109,7 @@ private:
 	//! Set the reservation of a TemporaryMemoryState (must hold the lock)
 	void SetReservation(TemporaryMemoryState &temporary_memory_state, idx_t new_reservation);
 	//! Computes optimal reservation of a TemporaryMemoryState based on a cost function
-	idx_t ComputeOptimalReservation(const TemporaryMemoryState &temporary_memory_state, idx_t free_memory,
-	                                idx_t lower_bound, idx_t upper_bound) const;
+	idx_t ComputeReservation(const TemporaryMemoryState &temporary_memory_state) const;
 	//! Verify internal counts (must hold the lock)
 	void Verify() const;
 
@@ -113,13 +118,13 @@ private:
 	mutex lock;
 
 	//! Memory limit of the buffer pool
-	idx_t memory_limit;
+	idx_t memory_limit = DConstants::INVALID_INDEX;
 	//! Whether there is a temporary directory that we can offload blocks to
-	bool has_temporary_directory;
+	bool has_temporary_directory = false;
 	//! Number of threads
-	idx_t num_threads;
+	idx_t num_threads = DConstants::INVALID_INDEX;
 	//! Max memory per query
-	idx_t query_max_memory;
+	idx_t query_max_memory = DConstants::INVALID_INDEX;
 
 	//! Currently active states
 	reference_set_t<TemporaryMemoryState> active_states;

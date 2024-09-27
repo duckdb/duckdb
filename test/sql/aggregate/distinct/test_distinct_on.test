@@ -73,12 +73,12 @@ SELECT DISTINCT ON (3) i, j, k FROM integers ORDER BY 3
 4	5	6
 
 query II
-SELECT DISTINCT ON (2) j, (SELECT i FROM integers) FROM integers ORDER BY 2
+SELECT DISTINCT ON (2) j, (SELECT i FROM integers WHERE i=2 LIMIT 1) FROM integers ORDER BY 2
 ----
 3	2
 
 query II
-SELECT DISTINCT ON (2) j, (SELECT DISTINCT ON (i) i FROM integers ORDER BY 1) FROM integers ORDER BY 2
+SELECT DISTINCT ON (2) j, (SELECT DISTINCT ON (i) i FROM integers ORDER BY 1 LIMIT 1) FROM integers ORDER BY 2
 ----
 3	2
 

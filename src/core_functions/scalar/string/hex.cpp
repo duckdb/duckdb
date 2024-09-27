@@ -393,6 +393,8 @@ ScalarFunctionSet HexFun::GetFunctions() {
 	to_hex.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, ToHexFunction<string_t, HexStrOperator>));
 	to_hex.AddFunction(
+	    ScalarFunction({LogicalType::VARINT}, LogicalType::VARCHAR, ToHexFunction<string_t, HexStrOperator>));
+	to_hex.AddFunction(
 	    ScalarFunction({LogicalType::BLOB}, LogicalType::VARCHAR, ToHexFunction<string_t, HexStrOperator>));
 	to_hex.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT}, LogicalType::VARCHAR, ToHexFunction<int64_t, HexIntegralOperator>));
@@ -414,6 +416,8 @@ ScalarFunctionSet BinFun::GetFunctions() {
 
 	to_binary.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, ToBinaryFunction<string_t, BinaryStrOperator>));
+	to_binary.AddFunction(
+	    ScalarFunction({LogicalType::VARINT}, LogicalType::VARCHAR, ToBinaryFunction<string_t, BinaryStrOperator>));
 	to_binary.AddFunction(ScalarFunction({LogicalType::UBIGINT}, LogicalType::VARCHAR,
 	                                     ToBinaryFunction<uint64_t, BinaryIntegralOperator>));
 	to_binary.AddFunction(

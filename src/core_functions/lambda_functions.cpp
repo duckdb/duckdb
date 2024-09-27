@@ -161,7 +161,6 @@ struct ListFilterFunctor {
 };
 
 vector<LambdaFunctions::ColumnInfo> LambdaFunctions::GetColumnInfo(DataChunk &args, const idx_t row_count) {
-
 	vector<ColumnInfo> data;
 	// skip the input list and then insert all remaining input vectors
 	for (idx_t i = 1; i < args.ColumnCount(); i++) {
@@ -172,8 +171,7 @@ vector<LambdaFunctions::ColumnInfo> LambdaFunctions::GetColumnInfo(DataChunk &ar
 }
 
 vector<reference<LambdaFunctions::ColumnInfo>>
-LambdaFunctions::GetInconstantColumnInfo(vector<LambdaFunctions::ColumnInfo> &data) {
-
+LambdaFunctions::GetMutableColumnInfo(vector<LambdaFunctions::ColumnInfo> &data) {
 	vector<reference<ColumnInfo>> inconstant_info;
 	for (auto &entry : data) {
 		if (entry.vector.get().GetVectorType() != VectorType::CONSTANT_VECTOR) {
@@ -246,8 +244,8 @@ void ListLambdaBindData::Serialize(Serializer &serializer, const optional_ptr<Fu
 
 unique_ptr<FunctionData> ListLambdaBindData::Deserialize(Deserializer &deserializer, ScalarFunction &) {
 	auto return_type = deserializer.ReadProperty<LogicalType>(100, "return_type");
-	auto lambda_expr =
-	    deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(101, "lambda_expr", unique_ptr<Expression>());
+	auto lambda_expr = deserializer.ReadPropertyWithExplicitDefault<unique_ptr<Expression>>(101, "lambda_expr",
+	                                                                                        unique_ptr<Expression>());
 	auto has_index = deserializer.ReadProperty<bool>(102, "has_index");
 	return make_uniq<ListLambdaBindData>(return_type, std::move(lambda_expr), has_index);
 }
@@ -290,7 +288,7 @@ void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result) {
 	}
 
 	auto result_entries = FlatVector::GetData<list_entry_t>(result);
-	auto inconstant_column_infos = LambdaFunctions::GetInconstantColumnInfo(info.column_infos);
+	auto mutable_column_infos = LambdaFunctions::GetMutableColumnInfo(info.column_infos);
 
 	// special-handling for the child_vector
 	auto child_vector_size = ListVector::GetListSize(args.data[0]);
@@ -347,7 +345,7 @@ void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result) {
 			// FIXME: reuse same selection vector for inconstant rows
 			// adjust indexes for slicing
 			child_info.sel.set_index(elem_cnt, list_entry.offset + child_idx);
-			for (auto &entry : inconstant_column_infos) {
+			for (auto &entry : mutable_column_infos) {
 				entry.get().sel.set_index(elem_cnt, row_idx);
 			}
 

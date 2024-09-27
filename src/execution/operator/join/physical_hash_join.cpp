@@ -160,7 +160,6 @@ public:
 	idx_t max_partition_count;
 
 	//! Hash tables built by each thread
-	mutex lock;
 	vector<unique_ptr<JoinHashTable>> local_hash_tables;
 
 	//! Excess probe data gathered during Sink
@@ -219,8 +218,7 @@ public:
 };
 
 unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context) const {
-	auto result = make_uniq<JoinHashTable>(BufferManager::GetBufferManager(context), conditions, payload_types,
-	                                       join_type, rhs_output_columns);
+	auto result = make_uniq<JoinHashTable>(context, conditions, payload_types, join_type, rhs_output_columns);
 	if (!delim_types.empty() && join_type == JoinType::MARK) {
 		// correlated MARK join
 		if (delim_types.size() + 1 == conditions.size()) {
@@ -328,16 +326,15 @@ SinkCombineResultType PhysicalHashJoin::Combine(ExecutionContext &context, Opera
 	auto &lstate = input.local_state.Cast<HashJoinLocalSinkState>();
 
 	lstate.hash_table->GetSinkCollection().FlushAppendState(lstate.append_state);
-	lock_guard<mutex> local_ht_lock(gstate.lock);
+	auto guard = gstate.Lock();
 	gstate.local_hash_tables.push_back(std::move(lstate.hash_table));
 	if (gstate.local_hash_tables.size() == gstate.active_local_states) {
 		// Set to 0 until PrepareFinalize
-		gstate.temporary_memory_state->SetRemainingSize(0);
-		gstate.temporary_memory_state->UpdateReservation(context.client);
+		gstate.temporary_memory_state->SetZero();
 	}
 
 	auto &client_profiler = QueryProfiler::Get(context.client);
-	context.thread.profiler.Flush(*this, lstate.join_key_executor, "join_key_executor", 1);
+	context.thread.profiler.Flush(*this);
 	client_profiler.Flush(context.thread.profiler);
 	if (filter_pushdown) {
 		filter_pushdown->Combine(*gstate.global_filter_state, *lstate.local_filter_state);
@@ -465,7 +462,7 @@ void HashJoinGlobalSinkState::ScheduleFinalize(Pipeline &pipeline, Event &event)
 }
 
 void HashJoinGlobalSinkState::InitializeProbeSpill() {
-	lock_guard<mutex> guard(lock);
+	auto guard = Lock();
 	if (!probe_spill) {
 		probe_spill = make_uniq<JoinHashTable::ProbeSpill>(*hash_table, context, probe_types);
 	}
@@ -694,7 +691,7 @@ public:
 
 public:
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
-		context.thread.profiler.Flush(op, probe_executor, "probe_executor", 0);
+		context.thread.profiler.Flush(op);
 	}
 };
 
@@ -813,7 +810,6 @@ public:
 
 	//! For synchronizing the external hash join
 	atomic<HashJoinSourceStage> global_stage;
-	mutex lock;
 
 	//! For HT build synchronization
 	idx_t build_chunk_idx = DConstants::INVALID_INDEX;
@@ -900,7 +896,7 @@ HashJoinGlobalSourceState::HashJoinGlobalSourceState(const PhysicalHashJoin &op,
 }
 
 void HashJoinGlobalSourceState::Initialize(HashJoinGlobalSinkState &sink) {
-	lock_guard<mutex> init_lock(lock);
+	auto guard = Lock();
 	if (global_stage != HashJoinSourceStage::INIT) {
 		// Another thread initialized
 		return;
@@ -952,14 +948,12 @@ void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
 	auto &ht = *sink.hash_table;
 
 	// Update remaining size
-	sink.temporary_memory_state->SetRemainingSize(ht.GetRemainingSize());
-	sink.temporary_memory_state->UpdateReservation(sink.context);
+	sink.temporary_memory_state->SetRemainingSizeAndUpdateReservation(sink.context, ht.GetRemainingSize());
 
 	// Try to put the next partitions in the block collection of the HT
 	if (!sink.external || !ht.PrepareExternalFinalize(sink.temporary_memory_state->GetReservation())) {
 		global_stage = HashJoinSourceStage::DONE;
-		sink.temporary_memory_state->SetRemainingSize(0);
-		sink.temporary_memory_state->UpdateReservation(sink.context);
+		sink.temporary_memory_state->SetZero();
 		return;
 	}
 
@@ -1012,7 +1006,7 @@ void HashJoinGlobalSourceState::PrepareScanHT(HashJoinGlobalSinkState &sink) {
 bool HashJoinGlobalSourceState::AssignTask(HashJoinGlobalSinkState &sink, HashJoinLocalSourceState &lstate) {
 	D_ASSERT(lstate.TaskFinished());
 
-	lock_guard<mutex> guard(lock);
+	auto guard = Lock();
 	switch (global_stage.load()) {
 	case HashJoinSourceStage::BUILD:
 		if (build_chunk_idx != build_chunk_count) {
@@ -1107,7 +1101,7 @@ void HashJoinLocalSourceState::ExternalBuild(HashJoinGlobalSinkState &sink, Hash
 	auto &ht = *sink.hash_table;
 	ht.Finalize(build_chunk_idx_from, build_chunk_idx_to, true);
 
-	lock_guard<mutex> guard(gstate.lock);
+	auto guard = gstate.Lock();
 	gstate.build_chunk_done += build_chunk_idx_to - build_chunk_idx_from;
 }
 
@@ -1128,7 +1122,7 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 		scan_structure.is_null = true;
 		empty_ht_probe_in_progress = false;
 		sink.probe_spill->consumer->FinishChunk(probe_local_scan);
-		lock_guard<mutex> lock(gstate.lock);
+		auto guard = gstate.Lock();
 		gstate.probe_chunk_done++;
 		return;
 	}
@@ -1164,7 +1158,7 @@ void HashJoinLocalSourceState::ExternalScanHT(HashJoinGlobalSinkState &sink, Has
 
 	if (chunk.size() == 0) {
 		full_outer_scan_state = nullptr;
-		lock_guard<mutex> guard(gstate.lock);
+		auto guard = gstate.Lock();
 		gstate.full_outer_chunk_done += full_outer_chunk_idx_to - full_outer_chunk_idx_from;
 	}
 }
@@ -1177,12 +1171,11 @@ SourceResultType PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk 
 	sink.scanned_data = true;
 
 	if (!sink.external && !PropagatesBuildSide(join_type)) {
-		lock_guard<mutex> guard(gstate.lock);
+		auto guard = gstate.Lock();
 		if (gstate.global_stage != HashJoinSourceStage::DONE) {
 			gstate.global_stage = HashJoinSourceStage::DONE;
 			sink.hash_table->Reset();
-			sink.temporary_memory_state->SetRemainingSize(0);
-			sink.temporary_memory_state->UpdateReservation(context.client);
+			sink.temporary_memory_state->SetZero();
 		}
 		return SourceResultType::FINISHED;
 	}
@@ -1197,15 +1190,11 @@ SourceResultType PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk 
 		if (!lstate.TaskFinished() || gstate.AssignTask(sink, lstate)) {
 			lstate.ExecuteTask(sink, gstate, chunk);
 		} else {
-			lock_guard<mutex> guard(gstate.lock);
+			auto guard = gstate.Lock();
 			if (gstate.TryPrepareNextStage(sink) || gstate.global_stage == HashJoinSourceStage::DONE) {
-				for (auto &state : gstate.blocked_tasks) {
-					state.Callback();
-				}
-				gstate.blocked_tasks.clear();
+				gstate.UnblockTasks(guard);
 			} else {
-				gstate.blocked_tasks.push_back(input.interrupt_state);
-				return SourceResultType::BLOCKED;
+				return gstate.BlockSource(guard, input.interrupt_state);
 			}
 		}
 	}
@@ -1265,7 +1254,7 @@ InsertionOrderPreservingMap<string> PhysicalHashJoin::ParamsToString() const {
 		result["Build Min"] = perfect_join_statistics.build_min.ToString();
 		result["Build Max"] = perfect_join_statistics.build_max.ToString();
 	}
-	result["Estimated Cardinality"] = StringUtil::Format("%llu", estimated_cardinality);
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 

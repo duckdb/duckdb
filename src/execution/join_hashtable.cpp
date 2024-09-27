@@ -29,12 +29,12 @@ JoinHashTable::InsertState::InsertState(const JoinHashTable &ht)
 	ht.data_collection->InitializeChunkState(chunk_state, ht.equality_predicate_columns);
 }
 
-JoinHashTable::JoinHashTable(BufferManager &buffer_manager_p, const vector<JoinCondition> &conditions_p,
+JoinHashTable::JoinHashTable(ClientContext &context, const vector<JoinCondition> &conditions_p,
                              vector<LogicalType> btypes, JoinType type_p, const vector<idx_t> &output_columns_p)
-    : buffer_manager(buffer_manager_p), conditions(conditions_p), build_types(std::move(btypes)),
-      output_columns(output_columns_p), entry_size(0), tuple_size(0), vfound(Value::BOOLEAN(false)), join_type(type_p),
-      finalized(false), has_null(false), radix_bits(INITIAL_RADIX_BITS), partition_start(0), partition_end(0) {
-
+    : buffer_manager(BufferManager::GetBufferManager(context)), conditions(conditions_p),
+      build_types(std::move(btypes)), output_columns(output_columns_p), entry_size(0), tuple_size(0),
+      vfound(Value::BOOLEAN(false)), join_type(type_p), finalized(false), has_null(false),
+      radix_bits(INITIAL_RADIX_BITS), partition_start(0), partition_end(0) {
 	for (idx_t i = 0; i < conditions.size(); ++i) {
 		auto &condition = conditions[i];
 		D_ASSERT(condition.left->return_type == condition.right->return_type);
@@ -103,6 +103,11 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager_p, const vector<JoinC
 
 	dead_end = make_unsafe_uniq_array_uninitialized<data_t>(layout.GetRowWidth());
 	memset(dead_end.get(), 0, layout.GetRowWidth());
+
+	if (join_type == JoinType::SINGLE) {
+		auto &config = ClientConfig::GetConfig(context);
+		single_join_error_on_multiple_rows = config.scalar_subquery_error_on_multiple_rows;
+	}
 }
 
 JoinHashTable::~JoinHashTable() {
@@ -429,6 +434,14 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> 
 	return added_count;
 }
 
+static void StorePointer(const_data_ptr_t pointer, data_ptr_t target) {
+	Store<uint64_t>(cast_pointer_to_uint64(pointer), target);
+}
+
+static data_ptr_t LoadPointer(const_data_ptr_t source) {
+	return cast_uint64_to_pointer(Load<uint64_t>(source));
+}
+
 //! If we consider to insert into an entry we expct to be empty, if it was filled in the meantime the insert will not
 //! happen and we need to return the pointer to the to row with which the new entry would have collided. In any other
 //! case we return a nullptr
@@ -442,7 +455,7 @@ static inline data_ptr_t InsertRowToEntry(atomic<ht_entry_t> &entry, const data_
 		if (EXPECT_EMPTY) {
 
 			// add nullptr to the end of the list to mark the end
-			Store<data_ptr_t>(nullptr, row_ptr_to_insert + pointer_offset);
+			StorePointer(nullptr, row_ptr_to_insert + pointer_offset);
 
 			ht_entry_t new_empty_entry = ht_entry_t::GetDesiredEntry(row_ptr_to_insert, salt);
 			ht_entry_t expected_empty_entry = ht_entry_t::GetEmptyEntry();
@@ -463,7 +476,7 @@ static inline data_ptr_t InsertRowToEntry(atomic<ht_entry_t> &entry, const data_
 
 			do {
 				data_ptr_t current_row_pointer = expected_current_entry.GetPointer();
-				Store<data_ptr_t>(current_row_pointer, row_ptr_to_insert + pointer_offset);
+				StorePointer(current_row_pointer, row_ptr_to_insert + pointer_offset);
 			} while (!std::atomic_compare_exchange_weak(&entry, &expected_current_entry, desired_new_entry));
 
 			return nullptr;
@@ -472,7 +485,7 @@ static inline data_ptr_t InsertRowToEntry(atomic<ht_entry_t> &entry, const data_
 		// if we are not in parallel mode, we can just do the operation without any checks
 		ht_entry_t current_entry = entry.load(std::memory_order_relaxed);
 		data_ptr_t current_row_pointer = current_entry.GetPointerOrNull();
-		Store<data_ptr_t>(current_row_pointer, row_ptr_to_insert + pointer_offset);
+		StorePointer(current_row_pointer, row_ptr_to_insert + pointer_offset);
 		entry = ht_entry_t::GetDesiredEntry(row_ptr_to_insert, salt);
 		return nullptr;
 	}
@@ -486,6 +499,7 @@ static inline void PerformKeyComparison(JoinHashTable::InsertState &state, JoinH
 
 	// The target selection vector says where to write the results into the lhs_data, we just want to write
 	// sequentially as otherwise we trigger a bug in the Gather function
+	data_collection.ResetCachedCastVectors(state.chunk_state, ht.equality_predicate_columns);
 	data_collection.Gather(row_locations, state.salt_match_sel, count, ht.equality_predicate_columns, state.lhs_data,
 	                       *FlatVector::IncrementalSelectionVector(), state.chunk_state.cached_cast_vectors);
 	TupleDataCollection::ToUnifiedFormat(state.chunk_state, state.lhs_data);
@@ -601,7 +615,10 @@ static void InsertHashesLoop(atomic<ht_entry_t> entries[], Vector &row_locations
 				occupied = entry.IsOccupied();
 
 				// condition for incrementing the ht_offset: occupied and row_salt does not match -> move to next entry
-				if (!occupied || entry.GetSalt() == salt) {
+				if (!occupied) {
+					break;
+				}
+				if (entry.GetSalt() == salt) {
 					break;
 				}
 
@@ -671,7 +688,7 @@ void JoinHashTable::InitializePointerTable() {
 		auto current_capacity = hash_map.GetSize() / sizeof(ht_entry_t);
 		if (capacity > current_capacity) {
 			// Need more space
-			hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(data_ptr_t));
+			hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(ht_entry_t));
 			entries = reinterpret_cast<ht_entry_t *>(hash_map.get());
 		} else {
 			// Just use the current hash map
@@ -858,7 +875,7 @@ void ScanStructure::AdvancePointers(const SelectionVector &sel, const idx_t sel_
 	auto ptrs = FlatVector::GetData<data_ptr_t>(this->pointers);
 	for (idx_t i = 0; i < sel_count; i++) {
 		auto idx = sel.get_index(i);
-		ptrs[idx] = Load<data_ptr_t>(ptrs[idx] + ht.pointer_offset);
+		ptrs[idx] = LoadPointer(ptrs[idx] + ht.pointer_offset);
 		if (ptrs[idx]) {
 			this->sel_vector.set_index(new_count++, idx);
 		}
@@ -1005,7 +1022,7 @@ void ScanStructure::NextRightSemiOrAntiJoin(DataChunk &keys) {
 				// NOTE: threadsan reports this as a data race because this can be set concurrently by separate threads
 				// Technically it is, but it does not matter, since the only value that can be written is "true"
 				Store<bool>(true, ptr + ht.tuple_size);
-				auto next_ptr = Load<data_ptr_t>(ptr + ht.pointer_offset);
+				auto next_ptr = LoadPointer(ptr + ht.pointer_offset);
 				if (!next_ptr) {
 					break;
 				}
@@ -1173,6 +1190,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &left, DataChunk &
 	// this join is similar to the semi join except that
 	// (1) we actually return data from the RHS and
 	// (2) we return NULL for that data if there is no match
+	// (3) if single_join_error_on_multiple_rows is set, we need to keep looking for duplicates after fetching
 	idx_t result_count = 0;
 	SelectionVector result_sel(STANDARD_VECTOR_SIZE);
 
@@ -1213,6 +1231,24 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &left, DataChunk &
 
 	// like the SEMI, ANTI and MARK join types, the SINGLE join only ever does one pass over the HT per input chunk
 	finished = true;
+
+	if (ht.single_join_error_on_multiple_rows && result_count > 0) {
+		// we need to throw an error if there are multiple rows per key
+		// advance pointers for those rows
+		AdvancePointers(result_sel, result_count);
+
+		// now resolve the predicates
+		idx_t match_count = ResolvePredicates(keys, chain_match_sel_vector, nullptr);
+		if (match_count > 0) {
+			// we found at least one duplicate row - throw
+			throw InvalidInputException(
+			    "More than one row returned by a subquery used as an expression - scalar subqueries can only "
+			    "return a single row.\n\nUse \"SET scalar_subquery_error_on_multiple_rows=false\" to revert to "
+			    "previous behavior of returning a random row.");
+		}
+
+		this->count = 0;
+	}
 }
 
 void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, DataChunk &result) const {

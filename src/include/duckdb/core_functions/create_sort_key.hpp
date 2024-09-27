@@ -48,6 +48,8 @@ struct OrderModifiers {
 struct CreateSortKeyHelpers {
 	static void CreateSortKey(Vector &input, idx_t input_count, OrderModifiers modifiers, Vector &result);
 	static void DecodeSortKey(string_t sort_key, Vector &result, idx_t result_idx, OrderModifiers modifiers);
+	static void CreateSortKeyWithValidity(Vector &input, Vector &result, const OrderModifiers &modifiers,
+	                                      const idx_t count);
 };
 
 } // namespace duckdb

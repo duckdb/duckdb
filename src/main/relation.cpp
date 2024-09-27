@@ -263,16 +263,16 @@ void Relation::Insert(const vector<vector<Value>> &values) {
 	rel->Insert(GetAlias());
 }
 
-shared_ptr<Relation> Relation::CreateRel(const string &schema_name, const string &table_name) {
-	return make_shared_ptr<CreateTableRelation>(shared_from_this(), schema_name, table_name);
+shared_ptr<Relation> Relation::CreateRel(const string &schema_name, const string &table_name, bool temporary) {
+	return make_shared_ptr<CreateTableRelation>(shared_from_this(), schema_name, table_name, temporary);
 }
 
-void Relation::Create(const string &table_name) {
-	Create(INVALID_SCHEMA, table_name);
+void Relation::Create(const string &table_name, bool temporary) {
+	Create(INVALID_SCHEMA, table_name, temporary);
 }
 
-void Relation::Create(const string &schema_name, const string &table_name) {
-	auto create = CreateRel(schema_name, table_name);
+void Relation::Create(const string &schema_name, const string &table_name, bool temporary) {
+	auto create = CreateRel(schema_name, table_name, temporary);
 	auto res = create->Execute();
 	if (res->HasError()) {
 		const string prepended_message = "Failed to create table '" + table_name + "': ";

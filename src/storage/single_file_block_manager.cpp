@@ -420,6 +420,60 @@ void SingleFileBlockManager::IncreaseBlockReferenceCountInternal(block_id_t bloc
 	}
 }
 
+void SingleFileBlockManager::VerifyBlocks(const unordered_map<block_id_t, idx_t> &block_usage_count) {
+	// probably don't need this?
+	lock_guard<mutex> lock(block_lock);
+	// all blocks should be accounted for - either in the block_usage_count, or in the free list
+	set<block_id_t> referenced_blocks;
+	for (auto &block : block_usage_count) {
+		if (block.first == INVALID_BLOCK) {
+			continue;
+		}
+		if (block.first >= max_block) {
+			throw InternalException("Block %lld is used, but it is bigger than the max block %d", block.first,
+			                        max_block);
+		}
+		referenced_blocks.insert(block.first);
+		if (block.second > 1) {
+			// multi-use block
+			auto entry = multi_use_blocks.find(block.first);
+			if (entry == multi_use_blocks.end()) {
+				throw InternalException("Block %lld was used %llu times, but not present in multi_use_blocks",
+				                        block.first, block.second);
+			}
+			if (entry->second != block.second) {
+				throw InternalException(
+				    "Block %lld was used %llu times, but multi_use_blocks says it is used %llu times", block.first,
+				    block.second, entry->second);
+			}
+		} else {
+			D_ASSERT(block.second > 0);
+			auto entry = free_list.find(block.first);
+			if (entry != free_list.end()) {
+				throw InternalException("Block %lld was used, but it is present in the free list", block.first);
+			}
+		}
+	}
+	for (auto &free_block : free_list) {
+		referenced_blocks.insert(free_block);
+	}
+	if (referenced_blocks.size() != NumericCast<idx_t>(max_block)) {
+		// not all blocks are accounted for
+		string missing_blocks;
+		for (block_id_t i = 0; i < max_block; i++) {
+			if (referenced_blocks.find(i) == referenced_blocks.end()) {
+				if (!missing_blocks.empty()) {
+					missing_blocks += ", ";
+				}
+				missing_blocks += to_string(i);
+			}
+		}
+		throw InternalException(
+		    "Blocks %s were neither present in the free list or in the block_usage_count (max block %lld)",
+		    missing_blocks, max_block);
+	}
+}
+
 void SingleFileBlockManager::IncreaseBlockReferenceCount(block_id_t block_id) {
 	lock_guard<mutex> lock(block_lock);
 	IncreaseBlockReferenceCountInternal(block_id);
@@ -636,6 +690,10 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	handle->Sync();
 	// Release the free blocks to the filesystem.
 	TrimFreeBlocks();
+}
+
+void SingleFileBlockManager::FileSync() {
+	handle->Sync();
 }
 
 void SingleFileBlockManager::TrimFreeBlocks() {

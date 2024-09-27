@@ -172,6 +172,9 @@ void CompressedMaterialization::CreateCompressProjection(unique_ptr<LogicalOpera
 	}
 	const auto table_index = optimizer.binder.GenerateTableIndex();
 	auto compress_projection = make_uniq<LogicalProjection>(table_index, std::move(projections));
+	if (child_op->has_estimated_cardinality) {
+		compress_projection->SetEstimatedCardinality(child_op->estimated_cardinality);
+	}
 	compress_projection->ResolveOperatorTypes();
 
 	compress_projection->children.emplace_back(std::move(child_op));
@@ -258,6 +261,9 @@ void CompressedMaterialization::CreateDecompressProjection(unique_ptr<LogicalOpe
 	// Replace op with a projection
 	const auto table_index = optimizer.binder.GenerateTableIndex();
 	auto decompress_projection = make_uniq<LogicalProjection>(table_index, std::move(decompress_exprs));
+	if (op->has_estimated_cardinality) {
+		decompress_projection->SetEstimatedCardinality(op->estimated_cardinality);
+	}
 
 	decompress_projection->children.emplace_back(std::move(op));
 	op = std::move(decompress_projection);

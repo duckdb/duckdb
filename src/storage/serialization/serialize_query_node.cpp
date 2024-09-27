@@ -71,7 +71,7 @@ void RecursiveCTENode::Serialize(Serializer &serializer) const {
 unique_ptr<QueryNode> RecursiveCTENode::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<RecursiveCTENode>(new RecursiveCTENode());
 	deserializer.ReadPropertyWithDefault<string>(200, "cte_name", result->ctename);
-	deserializer.ReadPropertyWithDefault<bool>(201, "union_all", result->union_all, false);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(201, "union_all", result->union_all, false);
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(202, "left", result->left);
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(203, "right", result->right);
 	deserializer.ReadPropertyWithDefault<vector<string>>(204, "aliases", result->aliases);
@@ -119,7 +119,7 @@ unique_ptr<QueryNode> SetOperationNode::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadProperty<SetOperationType>(200, "setop_type", result->setop_type);
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(201, "left", result->left);
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(202, "right", result->right);
-	deserializer.ReadPropertyWithDefault<bool>(203, "setop_all", result->setop_all, true);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(203, "setop_all", result->setop_all, true);
 	return std::move(result);
 }
 

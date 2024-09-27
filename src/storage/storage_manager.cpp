@@ -89,8 +89,12 @@ void StorageManager::ResetWAL() {
 }
 
 string StorageManager::GetWALPath() {
-
-	std::size_t question_mark_pos = path.find('?');
+	// we append the ".wal" **before** a question mark in case of GET parameters
+	// but only if we are not in a windows long path (which starts with \\?\)
+	std::size_t question_mark_pos = std::string::npos;
+	if (!StringUtil::StartsWith(path, "\\\\?\\")) {
+		question_mark_pos = path.find('?');
+	}
 	auto wal_path = path;
 	if (question_mark_pos != std::string::npos) {
 		wal_path.insert(question_mark_pos, ".wal");
@@ -251,6 +255,7 @@ public:
 	void AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
 	                     unique_ptr<PersistentCollectionData> row_group_data) override;
 	optional_ptr<PersistentCollectionData> GetRowGroupData(DataTable &table, idx_t start_index, idx_t &count) override;
+	bool HasRowGroupData() override;
 
 private:
 	idx_t initial_wal_size = 0;
@@ -299,6 +304,14 @@ void SingleFileStorageCommitState::FlushCommit() {
 
 void SingleFileStorageCommitState::AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
                                                    unique_ptr<PersistentCollectionData> row_group_data) {
+	if (row_group_data->HasUpdates()) {
+		// cannot serialize optimistic block pointers if in-memory updates exist
+		return;
+	}
+	if (table.HasIndexes()) {
+		// cannot serialize optimistic block pointers if the table has indexes
+		return;
+	}
 	auto &entries = optimistically_written_data[table];
 	auto entry = entries.find(start_index);
 	if (entry != entries.end()) {
@@ -323,6 +336,10 @@ optional_ptr<PersistentCollectionData> SingleFileStorageCommitState::GetRowGroup
 	}
 	count = start_entry->second.count;
 	return start_entry->second.row_group_data.get();
+}
+
+bool SingleFileStorageCommitState::HasRowGroupData() {
+	return !optimistically_written_data.empty();
 }
 
 unique_ptr<StorageCommitState> SingleFileStorageManager::GenStorageCommitState(WriteAheadLog &wal) {

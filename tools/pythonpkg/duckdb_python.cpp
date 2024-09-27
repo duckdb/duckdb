@@ -805,14 +805,17 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("connection") = py::none());
 	m.def(
 	    "install_extension",
-	    [](const string &extension, bool force_install = false, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](const string &extension, bool force_install = false, const py::object &repository = py::none(),
+	       const py::object &repository_url = py::none(), const py::object &version = py::none(),
+	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
-		    conn->InstallExtension(extension, force_install);
+		    conn->InstallExtension(extension, force_install, repository, repository_url, version);
 	    },
-	    "Install an extension by name", py::arg("extension"), py::kw_only(), py::arg("force_install") = false,
-	    py::arg("connection") = py::none());
+	    "Install an extension by name, with an optional version and/or repository to get the extension from",
+	    py::arg("extension"), py::kw_only(), py::arg("force_install") = false, py::arg("repository") = py::none(),
+	    py::arg("repository_url") = py::none(), py::arg("version") = py::none(), py::arg("connection") = py::none());
 	m.def(
 	    "load_extension",
 	    [](const string &extension, shared_ptr<DuckDBPyConnection> conn = nullptr) {
@@ -1075,7 +1078,11 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	m.attr("__git_revision__") = DuckDB::SourceID();
 	m.attr("__interactive__") = DuckDBPyConnection::DetectAndGetEnvironment();
 	m.attr("__jupyter__") = DuckDBPyConnection::IsJupyter();
-	m.attr("default_connection") = DuckDBPyConnection::DefaultConnection();
+	m.def("default_connection", &DuckDBPyConnection::DefaultConnection,
+	      "Retrieve the connection currently registered as the default to be used by the module");
+	m.def("set_default_connection", &DuckDBPyConnection::SetDefaultConnection,
+	      "Register the provided connection as the default to be used by the module",
+	      py::arg("connection").none(false));
 	m.attr("apilevel") = "2.0";
 	m.attr("threadsafety") = 1;
 	m.attr("paramstyle") = "qmark";
@@ -1090,7 +1097,7 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	      py::arg("database") = ":memory:", py::arg("read_only") = false, py::arg_v("config", py::dict(), "None"));
 	m.def("tokenize", PyTokenize,
 	      "Tokenizes a SQL string, returning a list of (position, type) tuples that can be "
-	      "used for e.g. syntax highlighting",
+	      "used for e.g., syntax highlighting",
 	      py::arg("query"));
 	py::enum_<PySQLTokenType>(m, "token_type", py::module_local())
 	    .value("identifier", PySQLTokenType::PY_SQL_TOKEN_IDENTIFIER)

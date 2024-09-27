@@ -1,0 +1,62 @@
+# name: test/sql/types/float/ieee_floating_points.test
+# description: Test usage of the INF value
+# group: [float]
+
+statement ok
+PRAGMA enable_verification
+
+foreach type FLOAT DOUBLE
+
+statement ok
+CREATE OR REPLACE TABLE tbl(val ${type})
+
+statement ok
+INSERT INTO tbl VALUES (1), (-1), (0), ('nan'), ('inf')
+
+# division by zero
+query II
+SELECT val, val / 0::${type} FROM tbl
+----
+1.0	inf
+-1.0	-inf
+0.0	nan
+nan	nan
+inf	inf
+
+# modulo by zero
+query II
+SELECT val, val % 0::${type} FROM tbl
+----
+1.0	nan
+-1.0	nan
+0.0	nan
+nan	nan
+inf	nan
+
+statement ok
+SET ieee_floating_point_ops = false;
+
+# division by zero
+query II
+SELECT val, val / 0::${type} FROM tbl
+----
+1.0	NULL
+-1.0	NULL
+0.0	NULL
+nan	NULL
+inf	NULL
+
+# modulo by zero
+query II
+SELECT val, val % 0::${type} FROM tbl
+----
+1.0	NULL
+-1.0	NULL
+0.0	NULL
+nan	NULL
+inf	NULL
+
+statement ok
+SET ieee_floating_point_ops = true;
+
+endloop

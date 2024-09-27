@@ -88,7 +88,7 @@ public:
 	//! Whether or not the column has any updates
 	bool HasUpdates() const;
 	//! Whether or not we can scan an entire vector
-	virtual ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count);
+	virtual ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result);
 
 	//! Initialize prefetch state with required I/O data for the next N rows
 	virtual void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows);
@@ -218,17 +218,19 @@ struct PersistentColumnData {
 	PersistentColumnData &operator=(const PersistentColumnData &) = delete;
 	//! enable move constructors
 	PersistentColumnData(PersistentColumnData &&other) noexcept = default;
-	PersistentColumnData &operator=(PersistentColumnData &&) noexcept = default;
+	PersistentColumnData &operator=(PersistentColumnData &&) = default;
 	~PersistentColumnData();
 
 	PhysicalType physical_type;
 	vector<DataPointer> pointers;
 	vector<PersistentColumnData> child_columns;
+	bool has_updates = false;
 
 	void Serialize(Serializer &serializer) const;
 	static PersistentColumnData Deserialize(Deserializer &deserializer);
 	void DeserializeField(Deserializer &deserializer, field_id_t field_idx, const char *field_name,
 	                      const LogicalType &type);
+	bool HasUpdates() const;
 };
 
 struct PersistentRowGroupData {
@@ -239,7 +241,7 @@ struct PersistentRowGroupData {
 	PersistentRowGroupData &operator=(const PersistentRowGroupData &) = delete;
 	//! enable move constructors
 	PersistentRowGroupData(PersistentRowGroupData &&other) noexcept = default;
-	PersistentRowGroupData &operator=(PersistentRowGroupData &&) noexcept = default;
+	PersistentRowGroupData &operator=(PersistentRowGroupData &&) = default;
 	~PersistentRowGroupData() = default;
 
 	vector<LogicalType> types;
@@ -249,6 +251,7 @@ struct PersistentRowGroupData {
 
 	void Serialize(Serializer &serializer) const;
 	static PersistentRowGroupData Deserialize(Deserializer &deserializer);
+	bool HasUpdates() const;
 };
 
 struct PersistentCollectionData {
@@ -258,13 +261,14 @@ struct PersistentCollectionData {
 	PersistentCollectionData &operator=(const PersistentCollectionData &) = delete;
 	//! enable move constructors
 	PersistentCollectionData(PersistentCollectionData &&other) noexcept = default;
-	PersistentCollectionData &operator=(PersistentCollectionData &&) noexcept = default;
+	PersistentCollectionData &operator=(PersistentCollectionData &&) = default;
 	~PersistentCollectionData() = default;
 
 	vector<PersistentRowGroupData> row_group_data;
 
 	void Serialize(Serializer &serializer) const;
 	static PersistentCollectionData Deserialize(Deserializer &deserializer);
+	bool HasUpdates() const;
 };
 
 } // namespace duckdb

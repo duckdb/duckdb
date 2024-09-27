@@ -274,3 +274,11 @@ statement error
 SELECT * FROM read_csv_auto(NULL::VARCHAR[]) ORDER BY 1
 ----
 NULL
+
+statement ok
+SET threads=1;
+
+statement error
+FROM read_csv('data/csv/glob/*/*.csv');
+----
+Schema mismatch between globbed files.

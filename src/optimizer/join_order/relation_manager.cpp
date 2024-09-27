@@ -85,6 +85,7 @@ static bool OperatorNeedsRelation(LogicalOperatorType op_type) {
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
 	case LogicalOperatorType::LOGICAL_GET:
+	case LogicalOperatorType::LOGICAL_UNNEST:
 	case LogicalOperatorType::LOGICAL_DELIM_GET:
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 	case LogicalOperatorType::LOGICAL_WINDOW:
@@ -225,6 +226,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		}
 
 		auto combined_stats = RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(*op, children_stats);
+		op->SetEstimatedCardinality(combined_stats.cardinality);
 		if (!datasource_filters.empty()) {
 			combined_stats.cardinality = (idx_t)MaxValue(
 			    double(combined_stats.cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
@@ -241,6 +243,8 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
 		auto &aggr = op->Cast<LogicalAggregate>();
 		auto operator_stats = RelationStatisticsHelper::ExtractAggregationStats(aggr, child_stats);
+		// the extracted cardinality should be set for aggregate
+		aggr.SetEstimatedCardinality(operator_stats.cardinality);
 		if (!datasource_filters.empty()) {
 			operator_stats.cardinality = LossyNumericCast<idx_t>(static_cast<double>(operator_stats.cardinality) *
 			                                                     RelationStatisticsHelper::DEFAULT_SELECTIVITY);
@@ -256,12 +260,28 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
 		auto &window = op->Cast<LogicalWindow>();
 		auto operator_stats = RelationStatisticsHelper::ExtractWindowStats(window, child_stats);
+		// the extracted cardinality should be set for window
+		window.SetEstimatedCardinality(operator_stats.cardinality);
 		if (!datasource_filters.empty()) {
 			operator_stats.cardinality = LossyNumericCast<idx_t>(static_cast<double>(operator_stats.cardinality) *
 			                                                     RelationStatisticsHelper::DEFAULT_SELECTIVITY);
 		}
 		ModifyStatsIfLimit(limit_op.get(), child_stats);
 		AddAggregateOrWindowRelation(input_op, parent, operator_stats, op->type);
+		return true;
+	}
+	case LogicalOperatorType::LOGICAL_UNNEST: {
+		// optimize children of unnest
+		RelationStats child_stats;
+		auto child_optimizer = optimizer.CreateChildOptimizer();
+		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
+		// the extracted cardinality should be set for window
+		if (!datasource_filters.empty()) {
+			child_stats.cardinality = LossyNumericCast<idx_t>(static_cast<double>(child_stats.cardinality) *
+			                                                  RelationStatisticsHelper::DEFAULT_SELECTIVITY);
+		}
+		ModifyStatsIfLimit(limit_op.get(), child_stats);
+		AddRelation(input_op, parent, child_stats);
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
@@ -322,6 +342,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		auto stats = RelationStatisticsHelper::ExtractGetStats(get, context);
 		// if there is another logical filter that could not be pushed down into the
 		// table scan, apply another selectivity.
+		get.SetEstimatedCardinality(stats.cardinality);
 		if (!datasource_filters.empty()) {
 			stats.cardinality =
 			    (idx_t)MaxValue(double(stats.cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
@@ -338,6 +359,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		auto &proj = op->Cast<LogicalProjection>();
 		// Projection can create columns so we need to add them here
 		auto proj_stats = RelationStatisticsHelper::ExtractProjectionStats(proj, child_stats);
+		proj.SetEstimatedCardinality(proj_stats.cardinality);
 		ModifyStatsIfLimit(limit_op.get(), proj_stats);
 		AddRelation(input_op, parent, proj_stats);
 		return true;
@@ -347,6 +369,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		auto &empty_result = op->Cast<LogicalEmptyResult>();
 		// Projection can create columns so we need to add them here
 		auto stats = RelationStatisticsHelper::ExtractEmptyResultStats(empty_result);
+		empty_result.SetEstimatedCardinality(stats.cardinality);
 		AddRelation(input_op, parent, stats);
 		return true;
 	}
@@ -370,7 +393,9 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		if (cte_ref.materialized_cte != CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
 			return false;
 		}
-		AddRelation(input_op, parent, optimizer.GetMaterializedCTEStats(cte_ref.cte_index));
+		auto cte_stats = optimizer.GetMaterializedCTEStats(cte_ref.cte_index);
+		cte_ref.SetEstimatedCardinality(cte_stats.cardinality);
+		AddRelation(input_op, parent, cte_stats);
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
@@ -401,7 +426,9 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		// Used to not be possible to reorder these. We added reordering (without stats) before,
 		// but ran into terrible join orders (see internal issue #596), so we removed it again
 		// We now have proper statistics for DelimGets, and get an even better query plan for #596
-		AddAggregateOrWindowRelation(input_op, parent, optimizer.GetDelimScanStats(), op->type);
+		auto delim_scan_stats = optimizer.GetDelimScanStats();
+		op->SetEstimatedCardinality(delim_scan_stats.cardinality);
+		AddAggregateOrWindowRelation(input_op, parent, delim_scan_stats, op->type);
 		return true;
 	}
 	default:

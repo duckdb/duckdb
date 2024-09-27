@@ -414,8 +414,16 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		return RequireResult::PRESENT;
 	}
 
-	if (param == "noalternativeverify") {
+	if (param == "no_alternative_verify") {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
+
+	if (param == "no_block_verification") {
+#ifdef DUCKDB_BLOCK_VERIFICATION
 		return RequireResult::MISSING;
 #else
 		return RequireResult::PRESENT;
@@ -885,7 +893,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 
 			// file name
 			idx_t filename_start_pos = input_path.find_last_of("/") + 1;
-			if (!StringUtil::EndsWith(input_path, ".gz")) {
+			if (!StringUtil::EndsWith(input_path, CompressionExtensionFromType(FileCompressionType::GZIP))) {
 				parser.Fail("unzip: input has not a GZIP extension");
 			}
 			string filename = input_path.substr(filename_start_pos, input_path.size() - filename_start_pos - 3);

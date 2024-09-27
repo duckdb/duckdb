@@ -43,9 +43,34 @@ static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const ClientP
 	return pyarrow::ToArrowTable(types, names, ConvertToSingleBatch(types, names, input, options), options);
 }
 
+// If these types are arrow canonical extensions, we must check if they are registered.
+// If not, we should error.
+void AreExtensionsRegistered(const LogicalType &arrow_type, const LogicalType &duckdb_type) {
+	if (arrow_type != duckdb_type) {
+		// Is it a UUID Registration?
+		if (arrow_type.id() == LogicalTypeId::BLOB && duckdb_type.id() == LogicalTypeId::UUID) {
+			throw InvalidConfigurationException(
+			    "Mismatch on return type from Arrow object (%s) and DuckDB (%s). It seems that you are using the UUID "
+			    "arrow canonical extension, but the same is not yet registered. Make sure to register it first with "
+			    "e.g., pa.register_extension_type(UUIDType()). ",
+			    arrow_type.ToString(), duckdb_type.ToString());
+		}
+		// Is it a JSON Registration
+		if (!arrow_type.IsJSONType() && duckdb_type.IsJSONType()) {
+			throw InvalidConfigurationException(
+			    "Mismatch on return type from Arrow object (%s) and DuckDB (%s). It seems that you are using the JSON "
+			    "arrow canonical extension, but the same is not yet registered. Make sure to register it first with "
+			    "e.g., pa.register_extension_type(JSONType()). ",
+			    arrow_type.ToString(), duckdb_type.ToString());
+		}
+	}
+}
 static void ConvertArrowTableToVector(const py::object &table, Vector &out, ClientContext &context, idx_t count) {
 	// Create the stream factory from the Table object
-	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(table.ptr(), context.GetClientProperties());
+	auto ptr = table.ptr();
+	py::gil_scoped_release gil;
+
+	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(ptr, context.GetClientProperties());
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 
@@ -80,6 +105,8 @@ static void ConvertArrowTableToVector(const py::object &table, Vector &out, Clie
 		    "The returned table from a pyarrow scalar udf should only contain one column, found %d",
 		    return_types.size());
 	}
+
+	AreExtensionsRegistered(return_types[0], out.GetType());
 
 	DataChunk result;
 	// Reserve for STANDARD_VECTOR_SIZE instead of count, in case the returned table contains too many tuples

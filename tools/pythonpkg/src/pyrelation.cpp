@@ -946,7 +946,7 @@ duckdb::pyarrow::Table DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
 	return ToArrowTableInternal(batch_size, false);
 }
 
-py::object DuckDBPyRelation::ToArrowCapsule() {
+py::object DuckDBPyRelation::ToArrowCapsule(const py::object &requested_schema) {
 	if (!result) {
 		if (!rel) {
 			return py::none();
@@ -1101,6 +1101,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 	vector<unique_ptr<ParsedExpression>> conditions;
 	conditions.push_back(condition_expr->GetExpression().Copy());
 	return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, std::move(conditions), dtype));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Cross(DuckDBPyRelation *other) {
+	return make_uniq<DuckDBPyRelation>(rel->CrossProduct(other->rel));
 }
 
 static Value NestedDictToStruct(const py::object &dictionary) {
@@ -1401,7 +1405,7 @@ void DuckDBPyRelation::Insert(const py::object &params) {
 void DuckDBPyRelation::Create(const string &table) {
 	AssertRelation();
 	auto parsed_info = QualifiedName::Parse(table);
-	auto create = rel->CreateRel(parsed_info.schema, parsed_info.name);
+	auto create = rel->CreateRel(parsed_info.schema, parsed_info.name, false);
 	PyExecuteRelation(create);
 }
 
@@ -1481,8 +1485,8 @@ void DuckDBPyRelation::Print(const Optional<py::int_> &max_width, const Optional
 	py::print(py::str(ToStringInternal(config, invalidate_cache)));
 }
 
-static ExplainFormat GetExplainFormat() {
-	if (DuckDBPyConnection::IsJupyter()) {
+static ExplainFormat GetExplainFormat(ExplainType type) {
+	if (DuckDBPyConnection::IsJupyter() && type != ExplainType::EXPLAIN_ANALYZE) {
 		return ExplainFormat::HTML;
 	} else {
 		return ExplainFormat::DEFAULT;
@@ -1502,7 +1506,7 @@ string DuckDBPyRelation::Explain(ExplainType type) {
 	AssertRelation();
 	py::gil_scoped_release release;
 
-	auto explain_format = GetExplainFormat();
+	auto explain_format = GetExplainFormat(type);
 	auto res = rel->Explain(type, explain_format);
 	D_ASSERT(res->type == duckdb::QueryResultType::MATERIALIZED_RESULT);
 	auto &materialized = res->Cast<MaterializedQueryResult>();

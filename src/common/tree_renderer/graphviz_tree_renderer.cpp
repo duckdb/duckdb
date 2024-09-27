@@ -59,7 +59,7 @@ void GRAPHVIZTreeRenderer::Render(const Pipeline &op, std::ostream &ss) {
 	ToStream(*tree, ss);
 }
 
-void GRAPHVIZTreeRenderer::ToStream(RenderTree &root, std::ostream &ss) {
+void GRAPHVIZTreeRenderer::ToStreamInternal(RenderTree &root, std::ostream &ss) {
 	const string digraph_format = R"(
 digraph G {
     node [shape=box, style=rounded, fontname="Courier New", fontsize=10];
