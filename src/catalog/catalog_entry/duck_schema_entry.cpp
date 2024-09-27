@@ -119,6 +119,17 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 	// first find the set for this entry
 	auto &set = GetCatalogSet(entry_type);
 	dependencies.AddDependency(*this);
+	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+		auto old_entry = set.GetEntry(transaction, entry_name);
+		if (old_entry) {
+			if (old_entry->type != entry_type) {
+				throw CatalogException("Existing object %s is of type %s, trying to replace with type %s", entry_name,
+				                       CatalogTypeToString(old_entry->type), CatalogTypeToString(entry_type));
+			}
+			return nullptr;
+		}
+	}
+
 	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		// CREATE OR REPLACE: first try to drop the entry
 		auto old_entry = set.GetEntry(transaction, entry_name);
