@@ -9,6 +9,8 @@
 #pragma once
 
 #include "duckdb/common/map.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/string.hpp"
 
 namespace duckdb {
 
@@ -21,7 +23,6 @@ struct ValidatorLine {
 };
 
 struct ThreadLines {
-public:
 	ThreadLines() {};
 	//! Validate everything is as it should be, returns true if it's all good, false o.w.
 	bool Validate() const;
@@ -48,7 +49,7 @@ struct CSVValidator {
 
 	string Print(idx_t file_idx) const;
 
-	// private:
+	 private:
 	//! Per file thread lines.
 	vector<ThreadLines> per_file_thread_lines;
 };

@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/csv_scanner/csv_validator.hpp"
+#include <sstream>
 
 namespace duckdb {
 
