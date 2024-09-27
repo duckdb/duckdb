@@ -20,7 +20,7 @@
 %type <str>		all_Op
 %type <conststr> MathOp
 
-%type <list>	distinct_clause opt_all_clause name_list_opt_comma opt_name_list name_list_opt_comma_opt_bracket
+%type <list>	distinct_clause opt_all_clause name_list_opt_comma opt_name_list name_list_opt_comma_opt_bracket opt_on_key column_ref_list_opt_comma column_ref_list
 				sort_clause opt_sort_clause sortby_list name_list from_clause from_list from_list_opt_comma opt_array_bounds
 				qualified_name_list any_name 				any_operator expr_list	attrs expr_list_opt_comma opt_expr_list_opt_comma c_expr_list c_expr_list_opt_comma
 				target_list			 			 opt_indirection target_list_opt_comma opt_target_list_opt_comma

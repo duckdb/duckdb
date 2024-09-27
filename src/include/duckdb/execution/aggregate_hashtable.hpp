@@ -29,6 +29,14 @@ struct FlushMoveState;
    as input the set of groups and the types of the aggregates to compute and
    stores them in the HT. It uses linear probing for collision resolution.
 */
+struct AggregateHTScanState {
+public:
+	AggregateHTScanState() {
+	}
+
+	idx_t partition_idx = 0;
+	TupleDataScanState scan_states;
+};
 
 class GroupedAggregateHashTable : public BaseAggregateHashTable {
 public:
@@ -68,6 +76,11 @@ public:
 	//! Fetch the aggregates for specific groups from the HT and place them in the result
 	void FetchAggregates(DataChunk &groups, DataChunk &result);
 
+	void InitializeScan(AggregateHTScanState &scan_state);
+	bool Scan(AggregateHTScanState &scan_state, DataChunk &distinct_rows, DataChunk &payload_rows);
+	//! Fetch entries from the hash table into the result chunk
+	void FetchAll(DataChunk &keys, DataChunk &payload);
+
 	//! Finds or creates groups in the hashtable using the specified group keys. The addresses vector will be filled
 	//! with pointers to the groups in the hash table, and the new_groups selection vector will point to the newly
 	//! created groups. The return value is the amount of newly created groups.
@@ -96,6 +109,8 @@ public:
 
 	//! Unpins the data blocks
 	void UnpinData();
+	//! Reset aggregate ht
+	void Reset();
 
 private:
 	//! Efficiently matches groups
