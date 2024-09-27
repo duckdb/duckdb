@@ -370,7 +370,8 @@ bool MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 
 	// Check if we're approaching the memory limit
 	auto &temporary_memory_state = *gstate.temporary_memory_state;
-	const auto total_size = partitioned_data->SizeInBytes() + ht.Capacity() * sizeof(ht_entry_t);
+	const auto total_size = ht.GetAggregateAllocator()->AllocationSize() + partitioned_data->SizeInBytes() +
+	                        ht.Capacity() * sizeof(ht_entry_t);
 	idx_t thread_limit = temporary_memory_state.GetReservation() / gstate.number_of_threads;
 	if (total_size > thread_limit) {
 		// We're over the thread memory limit

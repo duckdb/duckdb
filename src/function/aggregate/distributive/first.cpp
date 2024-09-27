@@ -70,8 +70,12 @@ template <bool LAST, bool SKIP_NULLS>
 struct FirstFunctionStringBase : public FirstFunctionBase {
 	template <class STATE>
 	static void SetValue(STATE &state, AggregateInputData &input_data, string_t value, bool is_null) {
-		if (LAST && state.is_set) {
-			Destroy(state, input_data);
+		if (state.is_set) {
+			if (LAST) {
+				Destroy(state, input_data); // overwrite
+			} else {
+				return; // leave untouched
+			}
 		}
 		if (is_null) {
 			if (!SKIP_NULLS) {
