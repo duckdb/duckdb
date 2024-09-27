@@ -264,10 +264,10 @@ SourceResultType PhysicalOrder::GetData(ExecutionContext &context, DataChunk &ch
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
-idx_t PhysicalOrder::GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+OperatorPartitionData PhysicalOrder::GetPartitionData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                    LocalSourceState &lstate_p) const {
 	auto &lstate = lstate_p.Cast<PhysicalOrderLocalSourceState>();
-	return lstate.batch_index;
+	return OperatorPartitionData(lstate.batch_index);
 }
 
 InsertionOrderPreservingMap<string> PhysicalOrder::ParamsToString() const {

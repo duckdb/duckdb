@@ -60,7 +60,7 @@ public:
 	                                                 GlobalSourceState &gstate) const override;
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
-	idx_t GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	OperatorPartitionData GetPartitionData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	                    LocalSourceState &lstate) const override;
 
 	bool IsSource() const override {
@@ -69,7 +69,7 @@ public:
 	bool ParallelSource() const override;
 
 	bool SupportsBatchIndex() const override {
-		return function.get_batch_index != nullptr;
+		return function.get_partition_data != nullptr;
 	}
 
 	double GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;

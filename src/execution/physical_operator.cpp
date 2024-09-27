@@ -116,9 +116,9 @@ SourceResultType PhysicalOperator::GetData(ExecutionContext &context, DataChunk 
 	throw InternalException("Calling GetData on a node that is not a source!");
 }
 
-idx_t PhysicalOperator::GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+OperatorPartitionData PhysicalOperator::GetPartitionData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                       LocalSourceState &lstate) const {
-	throw InternalException("Calling GetBatchIndex on a node that does not support it");
+	throw InternalException("Calling GetPartitionData on a node that does not support it");
 }
 
 double PhysicalOperator::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {

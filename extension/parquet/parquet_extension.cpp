@@ -405,7 +405,7 @@ public:
 		                                                                 {"type", LogicalType::VARCHAR},
 		                                                                 {"default_value", LogicalType::VARCHAR}}}));
 		table_function.named_parameters["encryption_config"] = LogicalTypeId::ANY;
-		table_function.get_batch_index = ParquetScanGetBatchIndex;
+		table_function.get_partition_data = ParquetScanGetPartitionData;
 		table_function.serialize = ParquetScanSerialize;
 		table_function.deserialize = ParquetScanDeserialize;
 		table_function.get_bind_info = ParquetGetBindInfo;
@@ -777,11 +777,9 @@ public:
 		return std::move(result);
 	}
 
-	static idx_t ParquetScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-	                                      LocalTableFunctionState *local_state,
-	                                      GlobalTableFunctionState *global_state) {
-		auto &data = local_state->Cast<ParquetReadLocalState>();
-		return data.batch_index;
+	static OperatorPartitionData ParquetScanGetPartitionData(ClientContext &context, TableFunctionInput &input) {
+		auto &data = input.local_state->Cast<ParquetReadLocalState>();
+		return OperatorPartitionData(data.batch_index);
 	}
 
 	static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,

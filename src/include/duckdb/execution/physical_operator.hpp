@@ -47,6 +47,12 @@ struct OperatorPartitionInfo {
 	}
 };
 
+struct OperatorPartitionData {
+	explicit OperatorPartitionData(idx_t batch_index) : batch_index(batch_index) {}
+
+	idx_t batch_index;
+};
+
 //! PhysicalOperator is the base class of the physical operators present in the
 //! execution plan
 class PhysicalOperator {
@@ -131,7 +137,7 @@ public:
 	virtual unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
 	virtual SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const;
 
-	virtual idx_t GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	virtual OperatorPartitionData GetPartitionData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	                            LocalSourceState &lstate) const;
 
 	virtual bool IsSource() const {

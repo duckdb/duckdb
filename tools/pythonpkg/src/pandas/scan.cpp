@@ -62,18 +62,16 @@ struct PandasScanGlobalState : public GlobalTableFunctionState {
 PandasScanFunction::PandasScanFunction()
     : TableFunction("pandas_scan", {LogicalType::POINTER}, PandasScanFunc, PandasScanBind, PandasScanInitGlobal,
                     PandasScanInitLocal) {
-	get_batch_index = PandasScanGetBatchIndex;
+	get_partition_data = PandasScanGetPartitionData;
 	cardinality = PandasScanCardinality;
 	table_scan_progress = PandasProgress;
 	serialize = PandasSerialize;
 	projection_pushdown = true;
 }
 
-idx_t PandasScanFunction::PandasScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-                                                  LocalTableFunctionState *local_state,
-                                                  GlobalTableFunctionState *global_state) {
-	auto &data = local_state->Cast<PandasScanLocalState>();
-	return data.batch_index;
+OperatorPartitionData PandasScanFunction::PandasScanGetPartitionData(ClientContext &context, TableFunctionInput &input) {
+	auto &data = input.local_state->Cast<PandasScanLocalState>();
+	return OperatorPartitionData(data.batch_index);
 }
 
 unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &context, TableFunctionBindInput &input,

@@ -513,11 +513,9 @@ unique_ptr<NodeStatistics> ArrowTableFunction::ArrowScanCardinality(ClientContex
 	return make_uniq<NodeStatistics>();
 }
 
-idx_t ArrowTableFunction::ArrowGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-                                             LocalTableFunctionState *local_state,
-                                             GlobalTableFunctionState *global_state) {
-	auto &state = local_state->Cast<ArrowScanLocalState>();
-	return state.batch_index;
+OperatorPartitionData ArrowTableFunction::ArrowGetPartitionData(ClientContext &context, TableFunctionInput &input) {
+	auto &state = input.local_state->Cast<ArrowScanLocalState>();
+	return OperatorPartitionData(state.batch_index);
 }
 
 bool ArrowTableFunction::ArrowPushdownType(const LogicalType &type) {
@@ -571,7 +569,7 @@ void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction arrow("arrow_scan", {LogicalType::POINTER, LogicalType::POINTER, LogicalType::POINTER},
 	                    ArrowScanFunction, ArrowScanBind, ArrowScanInitGlobal, ArrowScanInitLocal);
 	arrow.cardinality = ArrowScanCardinality;
-	arrow.get_batch_index = ArrowGetBatchIndex;
+	arrow.get_partition_data = ArrowGetPartitionData;
 	arrow.projection_pushdown = true;
 	arrow.filter_pushdown = true;
 	arrow.filter_prune = true;
@@ -581,7 +579,7 @@ void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction arrow_dumb("arrow_scan_dumb", {LogicalType::POINTER, LogicalType::POINTER, LogicalType::POINTER},
 	                         ArrowScanFunction, ArrowScanBind, ArrowScanInitGlobal, ArrowScanInitLocal);
 	arrow_dumb.cardinality = ArrowScanCardinality;
-	arrow_dumb.get_batch_index = ArrowGetBatchIndex;
+	arrow_dumb.get_partition_data = ArrowGetPartitionData;
 	arrow_dumb.projection_pushdown = false;
 	arrow_dumb.filter_pushdown = false;
 	arrow_dumb.filter_prune = false;

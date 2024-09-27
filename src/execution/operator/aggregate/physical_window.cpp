@@ -887,10 +887,10 @@ double PhysicalWindow::GetProgress(ClientContext &context, GlobalSourceState &gs
 	return count ? (double(returned) / double(count)) : -1;
 }
 
-idx_t PhysicalWindow::GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+OperatorPartitionData PhysicalWindow::GetPartitionData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                     LocalSourceState &lstate_p) const {
 	auto &lstate = lstate_p.Cast<WindowLocalSourceState>();
-	return lstate.batch_index;
+	return OperatorPartitionData(lstate.batch_index);
 }
 
 SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk,
