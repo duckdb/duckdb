@@ -436,21 +436,28 @@ string DependencyManager::CollectDependents(CatalogTransaction transaction, cata
 
 void DependencyManager::VerifyExistence(CatalogTransaction transaction, transaction_t start_time,
                                         DependencyEntry &object) {
-	auto info = object.SourceInfo();
+	auto &subject = object.Subject();
+
+	CatalogEntryInfo info;
+	if (subject.flags.IsOwnership()) {
+		info = object.SourceInfo();
+	} else {
+		info = object.EntryInfo();
+	}
 
 	auto &type = info.type;
 	auto &schema = info.schema;
 	auto &name = info.name;
 
-	auto schema_entry = catalog.GetSchema(transaction, schema, OnEntryNotFound::RETURN_NULL);
+	auto &duck_catalog = catalog.Cast<DuckCatalog>();
+	auto &schema_catalog_set = duck_catalog.GetSchemaCatalogSet();
 
 	CatalogSet::EntryLookup lookup_result;
-	lookup_result.reason = CatalogSet::EntryLookup::FailureReason::NOT_PRESENT;
-	if (type == CatalogType::SCHEMA_ENTRY || !schema_entry) {
-		lookup_result.result = reinterpret_cast<CatalogEntry *>(schema_entry.get());
-	} else {
-		// FIXME: This will never return a DELETED_ENTRY, only nullptr
-		lookup_result = schema_entry->GetEntryDetailed(transaction, type, name);
+	lookup_result = schema_catalog_set.GetEntryDetailed(transaction, schema);
+
+	if (type != CatalogType::SCHEMA_ENTRY && lookup_result.result) {
+		auto &schema_entry = lookup_result.result->Cast<SchemaCatalogEntry>();
+		lookup_result = schema_entry.GetEntryDetailed(transaction, type, name);
 	}
 
 	if (lookup_result.reason == CatalogSet::EntryLookup::FailureReason::DELETED) {

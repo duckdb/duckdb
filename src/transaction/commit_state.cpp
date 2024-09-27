@@ -132,28 +132,6 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
 	}
 }
 
-bool IsCatalogSetDeleted(CatalogEntry &catalog_entry) {
-	if (!catalog_entry.set) {
-		return false; // ??
-	}
-	if (!catalog_entry.set->HasParentEntry()) {
-		// CatalogSet is not owned by a CatalogEntry, no risk of it being deleted
-		return false;
-	}
-	auto &parent_entry = catalog_entry.set->ParentEntry();
-	// It should not be possible for the direct parent to be deleted
-	D_ASSERT(parent_entry.type != CatalogType::DELETED_ENTRY);
-	if (!parent_entry.HasParent()) {
-		return false;
-	}
-	if (parent_entry.Parent().type == CatalogType::DELETED_ENTRY &&
-	    CatalogSet::IsCommitted(parent_entry.Parent().timestamp)) {
-		// The entry that owns the CatalogSet has been deleted
-		return true;
-	}
-	return false;
-}
-
 void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {
@@ -164,11 +142,6 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		D_ASSERT(catalog.IsDuckCatalog());
 
 		auto &new_entry = old_entry.Parent();
-		if (IsCatalogSetDeleted(old_entry)) {
-			//! TODO: make this more generic, we can get the type of catalog entry and use it in the message
-			// we can probably also use the DependencyManager to get this information
-			throw TransactionException("The schema was deleted");
-		}
 		if (new_entry.type == CatalogType::DEPENDENCY_ENTRY) {
 			auto &dep = new_entry.Cast<DependencyEntry>();
 			if (dep.Side() == DependencyEntryType::SUBJECT) {
