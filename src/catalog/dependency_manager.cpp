@@ -434,6 +434,32 @@ string DependencyManager::CollectDependents(CatalogTransaction transaction, cata
 	return result;
 }
 
+void DependencyManager::VerifyExistence(CatalogTransaction transaction, transaction_t start_time,
+                                        DependencyEntry &object) {
+	auto info = object.SourceInfo();
+
+	auto &type = info.type;
+	auto &schema = info.schema;
+	auto &name = info.name;
+
+	auto schema_entry = catalog.GetSchema(transaction, schema, OnEntryNotFound::RETURN_NULL);
+
+	optional_ptr<CatalogEntry> entry;
+	if (type == CatalogType::SCHEMA_ENTRY || !schema_entry) {
+		entry = reinterpret_cast<CatalogEntry *>(schema_entry.get());
+	} else {
+		entry = schema_entry->GetEntry(transaction, type, name);
+	}
+
+	if (!entry) {
+		return;
+	}
+	if (entry->deleted) {
+		throw DependencyException("Could not commit creation of dependency, subject \"%s\" has been deleted",
+		                          object.SourceInfo().name);
+	}
+}
+
 void DependencyManager::VerifyCommitDrop(CatalogTransaction transaction, transaction_t start_time,
                                          CatalogEntry &object) {
 	if (IsSystemEntry(object)) {
@@ -441,13 +467,17 @@ void DependencyManager::VerifyCommitDrop(CatalogTransaction transaction, transac
 	}
 	auto info = GetLookupProperties(object);
 	ScanDependents(transaction, info, [&](DependencyEntry &dep) {
-		auto entry = LookupEntry(transaction, dep);
-		if (!entry) {
-			return;
+		auto dep_committed_at = dep.timestamp.load();
+		if (dep_committed_at > start_time) {
+			// This object was created (and committed) after our transaction started
+			throw DependencyException(
+			    "Could not commit DROP of \"%s\" because a dependency was created after the transaction started",
+			    object.name);
 		}
-
-		auto entry_committed_at = entry->timestamp.load();
-		if (entry_committed_at > start_time) {
+	});
+	ScanSubjects(transaction, info, [&](DependencyEntry &dep) {
+		auto dep_committed_at = dep.timestamp.load();
+		if (dep_committed_at > start_time) {
 			// This object was created (and committed) after our transaction started
 			throw DependencyException(
 			    "Could not commit DROP of \"%s\" because a dependency was created after the transaction started",

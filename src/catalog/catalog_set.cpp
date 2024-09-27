@@ -440,6 +440,15 @@ bool CatalogSet::DropEntry(ClientContext &context, const string &name, bool casc
 	return DropEntry(catalog.GetCatalogTransaction(context), name, cascade, allow_drop_internal);
 }
 
+void CatalogSet::VerifyExistenceOfDependency(transaction_t commit_id, transaction_t start_time, CatalogEntry &entry) {
+	// verify that no new dependencies have been created since our drop
+	D_ASSERT(entry.type == CatalogType::DEPENDENCY_ENTRY);
+	auto &dep = entry.Cast<DependencyEntry>();
+	auto &duck_catalog = GetCatalog();
+	CatalogTransaction commit_transaction(duck_catalog.GetDatabase(), MAX_TRANSACTION_ID, commit_id);
+	duck_catalog.GetDependencyManager().VerifyExistence(commit_transaction, start_time, dep);
+}
+
 void CatalogSet::CommitDrop(transaction_t commit_id, transaction_t start_time, CatalogEntry &entry) {
 	// verify that no new dependencies have been created since our drop
 	auto &duck_catalog = GetCatalog();

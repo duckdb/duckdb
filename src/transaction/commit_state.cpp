@@ -5,6 +5,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/dependency/dependency_entry.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
@@ -168,7 +169,12 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 			// we can probably also use the DependencyManager to get this information
 			throw TransactionException("The schema was deleted");
 		}
-		if (new_entry.type == CatalogType::DELETED_ENTRY && old_entry.set) {
+		if (new_entry.type == CatalogType::DEPENDENCY_ENTRY) {
+			auto &dep = new_entry.Cast<DependencyEntry>();
+			if (dep.Side() == DependencyEntryType::SUBJECT) {
+				new_entry.set->VerifyExistenceOfDependency(commit_id, start_time, new_entry);
+			}
+		} else if (new_entry.type == CatalogType::DELETED_ENTRY && old_entry.set) {
 			old_entry.set->CommitDrop(commit_id, start_time, old_entry);
 		}
 		// Grab a write lock on the catalog
