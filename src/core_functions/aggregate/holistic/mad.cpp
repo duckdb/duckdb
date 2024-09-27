@@ -199,7 +199,7 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 		D_ASSERT(partition.inputs);
 		const auto &inputs = *partition.inputs;
 		D_ASSERT(inputs.ColumnCount() == 1);
-		auto &data = state.GetOrCreateWindowCursor(inputs);
+		auto &data = state.GetOrCreateWindowCursor(inputs, partition.all_valid);
 		const auto &fmask = partition.filter_mask;
 
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);

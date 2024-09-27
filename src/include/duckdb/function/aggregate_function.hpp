@@ -35,13 +35,14 @@ using FrameStats = array<FrameDelta, 2>;
 //! but the row count will still be valid
 class ColumnDataCollection;
 struct WindowPartitionInput {
-	WindowPartitionInput(BufferManager &buffer_manager, const ColumnDataCollection *inputs, idx_t count,
+	WindowPartitionInput(ClientContext &context, const ColumnDataCollection *inputs, idx_t count, bool all_valid,
 	                     const ValidityMask &filter_mask, const FrameStats &stats)
-	    : buffer_manager(buffer_manager), inputs(inputs), count(count), filter_mask(filter_mask), stats(stats) {
+	    : context(context), inputs(inputs), count(count), all_valid(all_valid), filter_mask(filter_mask), stats(stats) {
 	}
-	BufferManager &buffer_manager;
+	ClientContext &context;
 	const ColumnDataCollection *inputs;
 	idx_t count;
+	bool all_valid;
 	const ValidityMask &filter_mask;
 	const FrameStats stats;
 };

@@ -26,7 +26,7 @@ namespace duckdb {
 // Paged access
 template <typename INPUT_TYPE>
 struct QuantileCursor {
-	explicit QuantileCursor(const ColumnDataCollection &inputs) : inputs(inputs) {
+	explicit QuantileCursor(const ColumnDataCollection &inputs, bool all_valid) : inputs(inputs), all_valid(all_valid) {
 		inputs.InitializeScan(scan);
 		inputs.InitializeScanChunk(scan, page);
 	}
@@ -60,8 +60,7 @@ struct QuantileCursor {
 	}
 
 	inline bool AllValid() {
-		// TODO: See if we can improve this...
-		return false;
+		return all_valid;
 	}
 
 	//! Windowed paging
@@ -74,6 +73,8 @@ struct QuantileCursor {
 	const INPUT_TYPE *data = nullptr;
 	//! The validity mask
 	const ValidityMask *validity = nullptr;
+	//! Paged chunks do not track this but it is really necessary for performance
+	bool all_valid;
 };
 
 // Direct access
@@ -333,7 +334,11 @@ static unique_ptr<GlobalSortState> SortQuantileIndices(const WindowPartitionInpu
 	vector<BoundOrderByNode> orders;
 	orders.emplace_back(BoundOrderByNode(order_type, OrderByNullType::NULLS_LAST, std::move(order_expr)));
 
-	auto global_sort = make_uniq<GlobalSortState>(partition.buffer_manager, orders, payload_layout);
+	auto &buffer_manager = BufferManager::GetBufferManager(partition.context);
+	auto global_sort = make_uniq<GlobalSortState>(buffer_manager, orders, payload_layout);
+	global_sort->external = ClientConfig::GetConfig(partition.context).force_external;
+	const auto memory_per_thread = PhysicalOperator::GetMaxThreadMemory(partition.context);
+
 	LocalSortState local_sort;
 	local_sort.Initialize(*global_sort, global_sort->buffer_manager);
 
@@ -356,10 +361,9 @@ static unique_ptr<GlobalSortState> SortQuantileIndices(const WindowPartitionInpu
 		payload.SetCardinality(sort);
 		indices.Sequence(int64_t(state.current_row_index), 1, payload.size());
 
-		auto &key = sort.data[0];
-		auto &validity = FlatVector::Validity(key);
-
-		if (!filter_mask.AllValid() || !validity.AllValid()) {
+		if (!filter_mask.AllValid() || !partition.all_valid) {
+			auto &key = sort.data[0];
+			auto &validity = FlatVector::Validity(key);
 			idx_t valid = 0;
 			for (sel_t i = 0; i < sort.size(); ++i) {
 				if (filter_mask.RowIsValid(i + state.current_row_index) && validity.RowIsValid(i)) {
@@ -372,7 +376,7 @@ static unique_ptr<GlobalSortState> SortQuantileIndices(const WindowPartitionInpu
 			}
 		}
 		local_sort.SinkChunk(sort, payload);
-		if (local_sort.SizeInBytes() > (1ULL << 32)) {
+		if (local_sort.SizeInBytes() > memory_per_thread) {
 			local_sort.Sort(*global_sort, true);
 		}
 	}

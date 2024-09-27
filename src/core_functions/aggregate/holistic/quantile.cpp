@@ -217,7 +217,7 @@ struct QuantileScalarOperation : public QuantileOperation {
 		D_ASSERT(partition.inputs);
 		const auto &inputs = *partition.inputs;
 		D_ASSERT(inputs.ColumnCount() == 1);
-		auto &data = state.GetOrCreateWindowCursor(inputs);
+		auto &data = state.GetOrCreateWindowCursor(inputs, partition.all_valid);
 		const auto &fmask = partition.filter_mask;
 
 		QuantileIncluded<INPUT_TYPE> included(fmask, data);
@@ -323,7 +323,7 @@ struct QuantileListOperation : QuantileOperation {
 		D_ASSERT(partition.inputs);
 		const auto &inputs = *partition.inputs;
 		D_ASSERT(inputs.ColumnCount() == 1);
-		auto &data = state.GetOrCreateWindowCursor(inputs);
+		auto &data = state.GetOrCreateWindowCursor(inputs, partition.all_valid);
 		const auto &fmask = partition.filter_mask;
 
 		D_ASSERT(aggr_input_data.bind_data);

@@ -42,6 +42,8 @@ public:
 
 	//! The collection data. May be null if the column count is 0.
 	ColumnDataCollectionPtr inputs;
+	//! Global validity mask
+	atomic<bool> all_valid;
 	//! Optional validity mask for the entire collection
 	ValidityMask validity;
 
@@ -76,6 +78,8 @@ public:
 	ColumnDataCollectionSpec sink;
 	//! The state used for appending to the collection
 	ColumnDataAppendState appender;
+	//! Are all the sunk rows valid?
+	bool all_valid = true;
 };
 
 class WindowCursor {

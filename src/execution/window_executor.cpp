@@ -11,7 +11,7 @@ namespace duckdb {
 // WindowCollection
 //===--------------------------------------------------------------------===//
 WindowCollection::WindowCollection(BufferManager &buffer_manager, idx_t count, const vector<LogicalType> &types)
-    : types(types), count(count), buffer_manager(buffer_manager) {
+    : all_valid(true), types(types), count(count), buffer_manager(buffer_manager) {
 	if (!types.empty()) {
 		inputs = make_uniq<ColumnDataCollection>(buffer_manager, types);
 	}
@@ -45,7 +45,7 @@ void WindowCollection::Combine(bool build_validity) {
 	collections.clear();
 	ranges.clear();
 
-	if (build_validity) {
+	if (build_validity && !all_valid) {
 		D_ASSERT(inputs.get());
 		validity.Initialize(inputs->Count());
 		WindowCursor cursor(*this);
@@ -70,6 +70,16 @@ void WindowBuilder::Sink(DataChunk &chunk, idx_t input_idx) {
 		sink.second->InitializeAppend(appender);
 	}
 	sink.second->Append(appender, chunk);
+
+	// Record NULLs
+	if (all_valid) {
+		UnifiedVectorFormat data;
+		chunk.data[0].ToUnifiedFormat(chunk.size(), data);
+		all_valid = data.validity.AllValid();
+		if (!all_valid) {
+			collection.all_valid = false;
+		}
+	}
 }
 
 WindowCursor::WindowCursor(const WindowCollection &paged) : paged(paged) {
@@ -1059,7 +1069,7 @@ WindowAggregateExecutorGlobalState::WindowAggregateExecutorGlobalState(const Win
 		aggregator = make_uniq<WindowSegmentTree>(aggr, arg_types, return_type, mode, wexpr.exclude_clause);
 	}
 
-	gsink = aggregator->GetGlobalState(BufferManager::GetBufferManager(context), group_count, partition_mask);
+	gsink = aggregator->GetGlobalState(context, group_count, partition_mask);
 }
 
 unique_ptr<WindowExecutorGlobalState> WindowAggregateExecutor::GetGlobalState(const idx_t payload_count,
