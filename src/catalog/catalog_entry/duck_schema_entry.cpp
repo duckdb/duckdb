@@ -122,10 +122,6 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		auto old_entry = set.GetEntry(transaction, entry_name);
 		if (old_entry) {
-			if (old_entry->type != entry_type) {
-				throw CatalogException("Existing object %s is of type %s, trying to replace with type %s", entry_name,
-				                       CatalogTypeToString(old_entry->type), CatalogTypeToString(entry_type));
-			}
 			return nullptr;
 		}
 	}
@@ -326,7 +322,7 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 		throw InternalException("Failed to drop entry \"%s\" - entry could not be found", info.name);
 	}
 	if (existing_entry->type != info.type) {
-		throw CatalogException("Existing object %s is of type %s, trying to replace with type %s", info.name,
+		throw CatalogException("Existing object %s is of type %s, trying to drop type %s", info.name,
 		                       CatalogTypeToString(existing_entry->type), CatalogTypeToString(info.type));
 	}
 
