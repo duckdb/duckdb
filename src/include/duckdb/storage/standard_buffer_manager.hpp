@@ -128,12 +128,12 @@ protected:
 	//! Write a temporary buffer to disk
 	void WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) final;
 	//! Read a temporary buffer from disk
-	unique_ptr<FileBuffer> ReadTemporaryBuffer(MemoryTag tag, block_id_t id,
+	unique_ptr<FileBuffer> ReadTemporaryBuffer(MemoryTag tag, BlockHandle &block,
 	                                           unique_ptr<FileBuffer> buffer = nullptr) final;
 	//! Get the path of the temporary buffer
 	string GetTemporaryPath(block_id_t id);
 
-	void DeleteTemporaryFile(block_id_t id) final;
+	void DeleteTemporaryFile(BlockHandle &block) final;
 
 	void RequireTemporaryDirectory();
 

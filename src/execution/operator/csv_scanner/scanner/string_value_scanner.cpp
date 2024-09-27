@@ -28,6 +28,11 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
       current_errors(state_machine.options.IgnoreErrors()), sniffing(sniffing_p), path(std::move(path_p)) {
 	// Vector information
 	D_ASSERT(number_of_columns > 0);
+	if (!buffer_handle) {
+		// It Was Over Before It Even Began
+		D_ASSERT(iterator.done);
+		return;
+	}
 	buffer_handles[buffer_handle->buffer_idx] = buffer_handle;
 	// Buffer Information
 	buffer_ptr = buffer_handle->Ptr();
@@ -264,6 +269,10 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 	}
 	bool success = true;
 	switch (parse_types[chunk_col_id].type_id) {
+	case LogicalTypeId::BOOLEAN:
+		success =
+		    TryCastStringBool(value_ptr, size, static_cast<bool *>(vector_ptr[chunk_col_id])[number_of_rows], false);
+		break;
 	case LogicalTypeId::TINYINT:
 		success = TrySimpleIntegerCast(value_ptr, size, static_cast<int8_t *>(vector_ptr[chunk_col_id])[number_of_rows],
 		                               false);
@@ -644,9 +653,15 @@ bool LineError::HandleErrors(StringValueResult &result) {
 		result.error_handler.Error(csv_error);
 	}
 	if (is_error_in_line) {
-		result.borked_rows.insert(result.number_of_rows);
-		result.cur_col_id = 0;
-		result.chunk_col_id = 0;
+		if (result.sniffing) {
+			// If we are sniffing we just remove the line
+			result.RemoveLastLine();
+		} else {
+			// Otherwise, we add it to the borked rows to remove it later and just cleanup the column variables.
+			result.borked_rows.insert(result.number_of_rows);
+			result.cur_col_id = 0;
+			result.chunk_col_id = 0;
+		}
 		Reset();
 		return true;
 	}
@@ -1440,6 +1455,7 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type, bool icu_loade
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::DECIMAL:
 	case LogicalType::VARCHAR:
+	case LogicalType::BOOLEAN:
 		return true;
 	case LogicalType::TIMESTAMP_TZ:
 		// We only try to do direct cast of timestamp tz if the ICU extension is not loaded, otherwise, it needs to go
