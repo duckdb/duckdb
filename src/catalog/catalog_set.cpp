@@ -432,7 +432,7 @@ bool CatalogSet::DropEntry(ClientContext &context, const string &name, bool casc
 }
 
 //! Verify that the object referenced by the dependency still exists when we commit the dependency
-void CatalogSet::VerifyExistenceOfDependency(transaction_t commit_id, transaction_t start_time, CatalogEntry &entry) {
+void CatalogSet::VerifyExistenceOfDependency(transaction_t commit_id, CatalogEntry &entry) {
 	auto &duck_catalog = GetCatalog();
 
 	// Make sure that we don't see any uncommitted changes
@@ -443,7 +443,7 @@ void CatalogSet::VerifyExistenceOfDependency(transaction_t commit_id, transactio
 
 	D_ASSERT(entry.type == CatalogType::DEPENDENCY_ENTRY);
 	auto &dep = entry.Cast<DependencyEntry>();
-	duck_catalog.GetDependencyManager().VerifyExistence(commit_transaction, start_time, dep);
+	duck_catalog.GetDependencyManager().VerifyExistence(commit_transaction, dep);
 }
 
 //! Verify that no dependencies creations were committed since our transaction started, that reference the entry we're
@@ -494,6 +494,7 @@ bool CatalogSet::HasConflict(CatalogTransaction transaction, transaction_t times
 }
 
 bool CatalogSet::IsCommitted(transaction_t timestamp) {
+	//! FIXME: `transaction_t` itself should be a class that has these methods
 	return timestamp < TRANSACTION_ID_START;
 }
 

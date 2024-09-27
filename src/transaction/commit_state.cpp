@@ -145,7 +145,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		if (new_entry.type == CatalogType::DEPENDENCY_ENTRY) {
 			auto &dep = new_entry.Cast<DependencyEntry>();
 			if (dep.Side() == DependencyEntryType::SUBJECT) {
-				new_entry.set->VerifyExistenceOfDependency(commit_id, start_time, new_entry);
+				new_entry.set->VerifyExistenceOfDependency(commit_id, new_entry);
 			}
 		} else if (new_entry.type == CatalogType::DELETED_ENTRY && old_entry.set) {
 			old_entry.set->CommitDrop(commit_id, start_time, old_entry);

@@ -433,8 +433,7 @@ string DependencyManager::CollectDependents(CatalogTransaction transaction, cata
 	return result;
 }
 
-void DependencyManager::VerifyExistence(CatalogTransaction transaction, transaction_t start_time,
-                                        DependencyEntry &object) {
+void DependencyManager::VerifyExistence(CatalogTransaction transaction, DependencyEntry &object) {
 	auto &subject = object.Subject();
 
 	CatalogEntryInfo info;
