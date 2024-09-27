@@ -13,7 +13,7 @@ namespace duckdb {
 
 DatabaseManager::DatabaseManager(DatabaseInstance &db) : next_oid(0), current_query_number(1) {
 	system = make_uniq<AttachedDatabase>(db);
-	databases = make_uniq<CatalogSet>(nullptr, system->GetCatalog());
+	databases = make_uniq<CatalogSet>(system->GetCatalog());
 }
 
 DatabaseManager::~DatabaseManager() {

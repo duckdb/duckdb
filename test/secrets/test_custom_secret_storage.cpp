@@ -44,7 +44,7 @@ class TestSecretStorage : public CatalogSetSecretStorage {
 public:
 	TestSecretStorage(const string &name_p, DatabaseInstance &db, TestSecretLog &logger_p, int64_t tie_break_offset_p)
 	    : CatalogSetSecretStorage(db, name_p), tie_break_offset(tie_break_offset_p), logger(logger_p) {
-		secrets = make_uniq<CatalogSet>(nullptr, Catalog::GetSystemCatalog(db));
+		secrets = make_uniq<CatalogSet>(Catalog::GetSystemCatalog(db));
 		persistent = true;
 		include_in_lookups = true;
 	}
