@@ -1059,15 +1059,18 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 
 void StringValueScanner::Initialize() {
 	states.Initialize();
+
 	if (result.result_size != 1 && !(sniffing && state_machine->options.null_padding &&
 	                                 !state_machine->options.dialect_options.skip_rows.IsSetByUser())) {
 		SetStart();
+	} else {
+		start_pos = iterator.GetGlobalCurrentPos();
 	}
+
 	result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, cur_buffer_handle->actual_size};
 	result.current_line_position.begin = result.last_position;
-
 	result.current_line_position.end = result.current_line_position.begin;
-	start_pos = iterator.GetGlobalCurrentPos();
+
 }
 
 void StringValueScanner::ProcessExtraRow() {
@@ -1467,6 +1470,7 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type, bool icu_loade
 }
 
 void StringValueScanner::SetStart() {
+	start_pos = iterator.GetGlobalCurrentPos();
 	if (iterator.first_one) {
 		if (result.store_line_size) {
 			result.error_handler.NewMaxLineSize(iterator.pos.buffer_pos);
@@ -1487,6 +1491,7 @@ void StringValueScanner::SetStart() {
 		SkipUntilNewLine();
 		if (state_machine->options.null_padding) {
 			// When Null Padding, we assume we start from the correct new-line
+			start_pos = iterator.GetGlobalCurrentPos();
 			return;
 		}
 		scan_finder =
@@ -1507,6 +1512,7 @@ void StringValueScanner::SetStart() {
 					iterator.pos.buffer_pos = scan_finder->iterator.pos.buffer_pos;
 					result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
 					iterator.done = scan_finder->iterator.done;
+					start_pos = scan_finder->start_pos;
 					return;
 				}
 			}
@@ -1517,6 +1523,7 @@ void StringValueScanner::SetStart() {
 				iterator.pos.buffer_pos = scan_finder->iterator.pos.buffer_pos;
 				result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
 				iterator.done = scan_finder->iterator.done;
+				start_pos = scan_finder->start_pos;
 				return;
 			}
 		}
@@ -1524,6 +1531,7 @@ void StringValueScanner::SetStart() {
 	iterator.pos.buffer_idx = scan_finder->result.current_line_position.begin.buffer_idx;
 	iterator.pos.buffer_pos = scan_finder->result.current_line_position.begin.buffer_pos;
 	result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
+	start_pos = iterator.GetGlobalCurrentPos();
 }
 
 void StringValueScanner::FinalizeChunkProcess() {
