@@ -26,8 +26,11 @@ unique_ptr<CatalogEntry> ScalarFunctionCatalogEntry::AlterEntry(CatalogTransacti
 	}
 	CreateScalarFunctionInfo new_info(std::move(new_set));
 	new_info.internal = internal;
-	new_info.description = add_overloads.new_overloads->description.empty() ? description : add_overloads.new_overloads->description;
-	new_info.parameter_names = add_overloads.new_overloads->parameter_names.empty() ? parameter_names : add_overloads.new_overloads->parameter_names;
+	new_info.description =
+	    add_overloads.new_overloads->description.empty() ? description : add_overloads.new_overloads->description;
+	new_info.parameter_names = add_overloads.new_overloads->parameter_names.empty()
+	                               ? parameter_names
+	                               : add_overloads.new_overloads->parameter_names;
 	new_info.example = add_overloads.new_overloads->example.empty() ? example : add_overloads.new_overloads->example;
 	return make_uniq<ScalarFunctionCatalogEntry>(catalog, schema, new_info);
 }

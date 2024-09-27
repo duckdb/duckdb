@@ -28,7 +28,8 @@ unique_ptr<CreateInfo> CreateScalarFunctionInfo::Copy() const {
 
 unique_ptr<AlterInfo> CreateScalarFunctionInfo::GetAlterInfo() const {
 	return make_uniq_base<AlterInfo, AddScalarFunctionOverloadInfo>(
-	    AlterEntryData(catalog, schema, name, OnEntryNotFound::RETURN_NULL), unique_ptr_cast<CreateInfo, CreateScalarFunctionInfo>(Copy()));
+	    AlterEntryData(catalog, schema, name, OnEntryNotFound::RETURN_NULL),
+	    unique_ptr_cast<CreateInfo, CreateScalarFunctionInfo>(Copy()));
 }
 
 } // namespace duckdb

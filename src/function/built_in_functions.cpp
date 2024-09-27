@@ -149,11 +149,14 @@ unique_ptr<FunctionData> BindExtensionFunction(ClientContext &context, ScalarFun
 void BuiltinFunctions::AddExtensionFunction(ScalarFunctionSet set) {
 	CreateScalarFunctionInfo info(std::move(set));
 	info.internal = true;
-	info.description = "[Extension Function]";
 	catalog.CreateFunction(transaction, info);
 }
 
 void BuiltinFunctions::RegisterExtensionOverloads() {
+#ifdef GENERATE_EXTENSION_ENTRIES
+	// do not insert auto loading placeholders when generating extension entries
+	return;
+#endif
 	ScalarFunctionSet current_set;
 	for (auto &entry : EXTENSION_FUNCTION_OVERLOADS) {
 		vector<LogicalType> arguments;
