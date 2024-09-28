@@ -36,7 +36,12 @@ void ArrowSchemaMetadata::AddOption(const string &key, const string &value) {
 	metadata_map[key] = value;
 }
 string ArrowSchemaMetadata::GetOption(const string &key) const {
-	return metadata_map.at(key);
+	auto it = metadata_map.find(key);
+	if (it != metadata_map.end()) {
+		return it->second;
+	} else {
+		return "";
+	}
 }
 
 string ArrowSchemaMetadata::GetExtensionName() const {
