@@ -1,0 +1,4 @@
+
+# This won't work due to BIGINT -> Double mismatch
+#statement ok
+#INSERT INTO trips FROM read_csv('/Users/holanda/Documents/Projects/nyc-taxi-data/csv/split/trips_a*', nullstr = '\N' );
