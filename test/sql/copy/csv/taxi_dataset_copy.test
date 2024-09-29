@@ -59,7 +59,7 @@ CREATE TABLE trips (
     dropoff_puma            VARCHAR);
 
 statement ok
-COPY trips FROM '/Users/holanda/Documents/Projects/nyc-taxi-data/csv/compressed/${file}';
+COPY trips FROM '/Users/holanda/Documents/Projects/nyc-taxi-data/csv/compressed/${file}' (HEADER 0);
 
 query I
 SELECT count(*) from trips
@@ -127,7 +127,7 @@ CREATE TABLE trips (
     dropoff_puma            VARCHAR);
 
 statement ok
-COPY trips FROM '/Users/holanda/Documents/Projects/nyc-taxi-data/csv/compressed/trips_dn.csv.gz';
+COPY trips FROM '/Users/holanda/Documents/Projects/nyc-taxi-data/csv/compressed/trips_dn.csv.gz' (HEADER 0);
 
 query I
 SELECT count(*) from trips
