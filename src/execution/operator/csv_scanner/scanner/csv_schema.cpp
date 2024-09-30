@@ -60,14 +60,46 @@ bool CSVSchema::Empty() const {
 	return columns.empty();
 }
 
-bool CSVSchema::SchemasMatch(string &error_message, vector<string> &names, vector<LogicalType> &types,
-                             const string &cur_file_path) {
-	D_ASSERT(names.size() == types.size());
+bool CSVSchema::SchemasMatch(string &error_message, SnifferResult *sniffer_result,
+                             const string &cur_file_path, bool is_minimal_sniffer) const{
+	D_ASSERT(sniffer_result->names.size() == sniffer_result->return_types.size());
 	bool match = true;
 	unordered_map<string, TypeIdxPair> current_schema;
-	for (idx_t i = 0; i < names.size(); i++) {
+
+	for (idx_t i = 0; i < sniffer_result->names.size(); i++) {
 		// Populate our little schema
-		current_schema[names[i]] = {types[i], i};
+		current_schema[sniffer_result->names[i]] = {sniffer_result->return_types[i], i};
+	}
+	if (is_minimal_sniffer) {
+		auto min_sniffer = static_cast<AdaptiveSnifferResult*>(sniffer_result);
+		if (!min_sniffer->more_than_one_row) {
+			bool min_sniff_match = true;
+			// If we don't have more than one row, either the names must match or the types must match.
+			for (auto &column : columns) {
+				if (current_schema.find(column.name) == current_schema.end()) {
+					min_sniff_match = false;
+					break;
+				}
+			}
+			if (min_sniff_match) {
+				return true;
+			}
+			// Otherwise, the types must match.
+			min_sniff_match = true;
+			if (sniffer_result->return_types.size() == current_schema.size()) {
+				idx_t return_type_idx = 0;
+				for (auto &column : current_schema) {
+					if (column.second.type != sniffer_result->return_types[return_type_idx++]) {
+						min_sniff_match = false;
+						break;
+					}
+				}
+			}
+			if (min_sniff_match) {
+				return true;
+			}
+		}
+		// If we got to this point, the minimal sniffer doesn't match, we throw an error.
 	}
 	// Here we check if the schema of a given file matched our original schema
 	// We consider it's not a match if:
