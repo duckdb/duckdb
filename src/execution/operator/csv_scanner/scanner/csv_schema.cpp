@@ -98,6 +98,11 @@ bool CSVSchema::SchemasMatch(string &error_message, SnifferResult *sniffer_resul
 				min_sniff_match = false;
 			}
 			if (min_sniff_match) {
+				// If we got here, we have the right types but the wrong names, lets fix the names
+				idx_t sniff_name_idx = 0;
+				for (auto &column : columns) {
+					sniffer_result->names[sniff_name_idx++] = column.name;
+				}
 				return true;
 			}
 		}
