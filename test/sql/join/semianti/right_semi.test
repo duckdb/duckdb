@@ -116,6 +116,23 @@ analyzed_plan	<!REGEX>:.*RIGHT_SEMI.*
 
 # correlated subqueries can flip
 query II
+explain analyze SELECT a as outer_a, (SELECT MAX(right_table.b) FROM right_table where right_table.a != outer_a) right_table_b FROM left_table SEMI JOIN right_table ON (left_table.a = right_table.a) Order by outer_a, right_table_b;
+----
+analyzed_plan	<REGEX>:.*RIGHT_SEMI.*
+
+statement ok
+INSERT INTO right_table VALUES (1, 20);
+
+# correlated subqueries
+query II
+explain analyze SELECT a as outer_a, (SELECT MAX(b) FROM right_table where right_table.a != outer_a) right_table_b FROM left_table SEMI JOIN right_table ON (left_table.a = right_table.a) Order by outer_a, right_table_b;
+----
+analyzed_plan	<REGEX>:.*RIGHT_SEMI.*
+
+statement ok
+SET scalar_subquery_error_on_multiple_rows=false
+
+query II
 explain analyze SELECT a as outer_a, (SELECT right_table.b FROM right_table where right_table.a != outer_a) right_table_b FROM left_table SEMI JOIN right_table ON (left_table.a = right_table.a) Order by outer_a, right_table_b;
 ----
 analyzed_plan	<REGEX>:.*RIGHT_SEMI.*

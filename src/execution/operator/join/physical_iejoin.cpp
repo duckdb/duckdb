@@ -11,8 +11,8 @@
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-
-#include <thread>
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/common/thread.hpp"
 
 namespace duckdb {
 
@@ -96,8 +96,8 @@ public:
 		tables[1] = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_layout, op);
 	}
 
-	IEJoinGlobalState(IEJoinGlobalState &prev)
-	    : GlobalSinkState(prev), tables(std::move(prev.tables)), child(prev.child + 1) {
+	IEJoinGlobalState(IEJoinGlobalState &prev) : tables(std::move(prev.tables)), child(prev.child + 1) {
+		state = prev.state;
 	}
 
 	void Sink(DataChunk &input, IEJoinLocalState &lstate) {
@@ -147,7 +147,7 @@ SinkCombineResultType PhysicalIEJoin::Combine(ExecutionContext &context, Operato
 	gstate.tables[gstate.child]->Combine(lstate.table);
 	auto &client_profiler = QueryProfiler::Get(context.client);
 
-	context.thread.profiler.Flush(*this, lstate.table.executor, gstate.child ? "rhs_executor" : "lhs_executor", 1);
+	context.thread.profiler.Flush(*this);
 	client_profiler.Flush(context.thread.profiler);
 
 	return SinkCombineResultType::FINISHED;
@@ -790,20 +790,20 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &re
 
 class IEJoinGlobalSourceState : public GlobalSourceState {
 public:
-	explicit IEJoinGlobalSourceState(const PhysicalIEJoin &op)
-	    : op(op), initialized(false), next_pair(0), completed(0), left_outers(0), next_left(0), right_outers(0),
-	      next_right(0) {
+	explicit IEJoinGlobalSourceState(const PhysicalIEJoin &op, IEJoinGlobalState &gsink)
+	    : op(op), gsink(gsink), initialized(false), next_pair(0), completed(0), left_outers(0), next_left(0),
+	      right_outers(0), next_right(0) {
 	}
 
-	void Initialize(IEJoinGlobalState &sink_state) {
-		lock_guard<mutex> initializing(lock);
+	void Initialize() {
+		auto guard = Lock();
 		if (initialized) {
 			return;
 		}
 
 		// Compute the starting row for reach block
 		// (In theory these are all the same size, but you never know...)
-		auto &left_table = *sink_state.tables[0];
+		auto &left_table = *gsink.tables[0];
 		const auto left_blocks = left_table.BlockCount();
 		idx_t left_base = 0;
 
@@ -812,7 +812,7 @@ public:
 			left_base += left_table.BlockSize(lhs);
 		}
 
-		auto &right_table = *sink_state.tables[1];
+		auto &right_table = *gsink.tables[1];
 		const auto right_blocks = right_table.BlockCount();
 		idx_t right_base = 0;
 		for (size_t rhs = 0; rhs < right_blocks; ++rhs) {
@@ -840,9 +840,9 @@ public:
 		return sink_state.tables[0]->BlockCount() * sink_state.tables[1]->BlockCount();
 	}
 
-	void GetNextPair(ClientContext &client, IEJoinGlobalState &gstate, IEJoinLocalSourceState &lstate) {
-		auto &left_table = *gstate.tables[0];
-		auto &right_table = *gstate.tables[1];
+	void GetNextPair(ClientContext &client, IEJoinLocalSourceState &lstate) {
+		auto &left_table = *gsink.tables[0];
+		auto &right_table = *gsink.tables[1];
 
 		const auto left_blocks = left_table.BlockCount();
 		const auto right_blocks = right_table.BlockCount();
@@ -905,40 +905,63 @@ public:
 		}
 	}
 
-	void PairCompleted(ClientContext &client, IEJoinGlobalState &gstate, IEJoinLocalSourceState &lstate) {
+	void PairCompleted(ClientContext &client, IEJoinLocalSourceState &lstate) {
 		lstate.joiner.reset();
 		++completed;
-		GetNextPair(client, gstate, lstate);
+		GetNextPair(client, lstate);
+	}
+
+	double GetProgress() const {
+		auto &left_table = *gsink.tables[0];
+		auto &right_table = *gsink.tables[1];
+
+		const auto left_blocks = left_table.BlockCount();
+		const auto right_blocks = right_table.BlockCount();
+		const auto pair_count = left_blocks * right_blocks;
+
+		const auto count = pair_count + left_outers + right_outers;
+
+		const auto l = MinValue(next_left.load(), left_outers.load());
+		const auto r = MinValue(next_right.load(), right_outers.load());
+		const auto returned = completed.load() + l + r;
+
+		return count ? (double(returned) / double(count)) : -1;
 	}
 
 	const PhysicalIEJoin &op;
+	IEJoinGlobalState &gsink;
 
-	mutex lock;
 	bool initialized;
 
 	// Join queue state
-	std::atomic<size_t> next_pair;
-	std::atomic<size_t> completed;
+	atomic<size_t> next_pair;
+	atomic<size_t> completed;
 
 	// Block base row number
 	vector<idx_t> left_bases;
 	vector<idx_t> right_bases;
 
 	// Outer joins
-	idx_t left_outers;
-	std::atomic<idx_t> next_left;
+	atomic<idx_t> left_outers;
+	atomic<idx_t> next_left;
 
-	idx_t right_outers;
-	std::atomic<idx_t> next_right;
+	atomic<idx_t> right_outers;
+	atomic<idx_t> next_right;
 };
 
 unique_ptr<GlobalSourceState> PhysicalIEJoin::GetGlobalSourceState(ClientContext &context) const {
-	return make_uniq<IEJoinGlobalSourceState>(*this);
+	auto &gsink = sink_state->Cast<IEJoinGlobalState>();
+	return make_uniq<IEJoinGlobalSourceState>(*this, gsink);
 }
 
 unique_ptr<LocalSourceState> PhysicalIEJoin::GetLocalSourceState(ExecutionContext &context,
                                                                  GlobalSourceState &gstate) const {
 	return make_uniq<IEJoinLocalSourceState>(context.client, *this);
+}
+
+double PhysicalIEJoin::GetProgress(ClientContext &context, GlobalSourceState &gsource_p) const {
+	auto &gsource = gsource_p.Cast<IEJoinGlobalSourceState>();
+	return gsource.GetProgress();
 }
 
 SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result,
@@ -947,10 +970,10 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 	auto &ie_gstate = input.global_state.Cast<IEJoinGlobalSourceState>();
 	auto &ie_lstate = input.local_state.Cast<IEJoinLocalSourceState>();
 
-	ie_gstate.Initialize(ie_sink);
+	ie_gstate.Initialize();
 
 	if (!ie_lstate.joiner && !ie_lstate.left_matches && !ie_lstate.right_matches) {
-		ie_gstate.GetNextPair(context.client, ie_sink, ie_lstate);
+		ie_gstate.GetNextPair(context.client, ie_lstate);
 	}
 
 	// Process INNER results
@@ -961,7 +984,7 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 			return SourceResultType::HAVE_MORE_OUTPUT;
 		}
 
-		ie_gstate.PairCompleted(context.client, ie_sink, ie_lstate);
+		ie_gstate.PairCompleted(context.client, ie_lstate);
 	}
 
 	// Process LEFT OUTER results
@@ -969,7 +992,7 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 	while (ie_lstate.left_matches) {
 		const idx_t count = ie_lstate.SelectOuterRows(ie_lstate.left_matches);
 		if (!count) {
-			ie_gstate.GetNextPair(context.client, ie_sink, ie_lstate);
+			ie_gstate.GetNextPair(context.client, ie_lstate);
 			continue;
 		}
 		auto &chunk = ie_lstate.unprojected;
@@ -994,7 +1017,7 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 	while (ie_lstate.right_matches) {
 		const idx_t count = ie_lstate.SelectOuterRows(ie_lstate.right_matches);
 		if (!count) {
-			ie_gstate.GetNextPair(context.client, ie_sink, ie_lstate);
+			ie_gstate.GetNextPair(context.client, ie_lstate);
 			continue;
 		}
 

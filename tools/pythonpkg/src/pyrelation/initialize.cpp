@@ -35,14 +35,14 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 	             py::arg("compression") = py::none(), py::arg("field_ids") = py::none(),
 	             py::arg("row_group_size_bytes") = py::none(), py::arg("row_group_size") = py::none());
 
-	DefineMethod({"to_csv", "write_csv"}, m, &DuckDBPyRelation::ToCSV,
-	             "Write the relation object to a CSV file in 'file_name'", py::arg("file_name"), py::kw_only(),
-	             py::arg("sep") = py::none(), py::arg("na_rep") = py::none(), py::arg("header") = py::none(),
-	             py::arg("quotechar") = py::none(), py::arg("escapechar") = py::none(),
-	             py::arg("date_format") = py::none(), py::arg("timestamp_format") = py::none(),
-	             py::arg("quoting") = py::none(), py::arg("encoding") = py::none(), py::arg("compression") = py::none(),
-	             py::arg("overwrite") = py::none(), py::arg("per_thread_output") = py::none(),
-	             py::arg("use_tmp_file") = py::none(), py::arg("partition_by") = py::none());
+	DefineMethod(
+	    {"to_csv", "write_csv"}, m, &DuckDBPyRelation::ToCSV, "Write the relation object to a CSV file in 'file_name'",
+	    py::arg("file_name"), py::kw_only(), py::arg("sep") = py::none(), py::arg("na_rep") = py::none(),
+	    py::arg("header") = py::none(), py::arg("quotechar") = py::none(), py::arg("escapechar") = py::none(),
+	    py::arg("date_format") = py::none(), py::arg("timestamp_format") = py::none(), py::arg("quoting") = py::none(),
+	    py::arg("encoding") = py::none(), py::arg("compression") = py::none(), py::arg("overwrite") = py::none(),
+	    py::arg("per_thread_output") = py::none(), py::arg("use_tmp_file") = py::none(),
+	    py::arg("partition_by") = py::none(), py::arg("write_partition_columns") = py::none());
 
 	m.def("fetchone", &DuckDBPyRelation::FetchOne, "Execute and fetch a single row as a tuple")
 	    .def("fetchmany", &DuckDBPyRelation::FetchMany, "Execute and fetch the next set of rows as a list of tuples",
@@ -67,9 +67,16 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 	    .def("pl", &DuckDBPyRelation::ToPolars, "Execute and fetch all rows as a Polars DataFrame",
 	         py::arg("batch_size") = 1000000)
 	    .def("torch", &DuckDBPyRelation::FetchPyTorch, "Fetch a result as dict of PyTorch Tensors")
-	    .def("tf", &DuckDBPyRelation::FetchTF, "Fetch a result as dict of TensorFlow Tensors")
-	    .def("record_batch", &DuckDBPyRelation::ToRecordBatch,
-	         "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("batch_size") = 1000000)
+	    .def("tf", &DuckDBPyRelation::FetchTF, "Fetch a result as dict of TensorFlow Tensors");
+	const char *capsule_docs = R"(
+			Execute and return an ArrowArrayStream through the Arrow PyCapsule Interface.
+
+			https://arrow.apache.org/docs/dev/format/CDataInterface/PyCapsuleInterface.html
+		)";
+	m.def("__arrow_c_stream__", &DuckDBPyRelation::ToArrowCapsule, capsule_docs,
+	      py::arg("requested_schema") = py::none());
+	m.def("record_batch", &DuckDBPyRelation::ToRecordBatch,
+	      "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("batch_size") = 1000000)
 	    .def("fetch_arrow_reader", &DuckDBPyRelation::ToRecordBatch,
 	         "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("batch_size") = 1000000);
 }

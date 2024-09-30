@@ -216,6 +216,7 @@ simple_select:
 					n->windowClause = $8;
 					n->qualifyClause = $9;
 					n->sampleOptions = $10;
+					n->from_first = true;
 					$$ = (PGNode *)n;
 				}
 			|
@@ -234,6 +235,7 @@ simple_select:
 					n->windowClause = $10;
 					n->qualifyClause = $11;
 					n->sampleOptions = $12;
+					n->from_first = true;
 					$$ = (PGNode *)n;
 				}
 			| values_clause_opt_comma							{ $$ = $1; }
@@ -2687,7 +2689,7 @@ c_expr:		d_expr
 				}
 		;
 
-d_expr:		columnref								{ $$ = $1; }
+d_expr:		columnref_opt_indirection								{ $$ = $1; }
 			| AexprConst							{ $$ = $1; }
 			| select_with_parens			%prec UMINUS
 				{
@@ -2775,22 +2777,9 @@ indirection_expr:
 				{
 					$$ = $1;
 				}
-			| MAP '{' opt_map_arguments_opt_comma '}'
+			| map_expr
 				{
-					PGList *key_list = NULL;
-					PGList *value_list = NULL;
-					PGListCell *lc;
-					PGList *entry_list = $3;
-					foreach(lc, entry_list)
-					{
-						PGList *l = (PGList *) lc->data.ptr_value;
-						key_list = lappend(key_list, (PGNode *) l->head->data.ptr_value);
-						value_list = lappend(value_list, (PGNode *) l->tail->data.ptr_value);
-					}
-					PGNode *keys   = (PGNode *) makeFuncCall(SystemFuncName("list_value"), key_list, @3);
-					PGNode *values = (PGNode *) makeFuncCall(SystemFuncName("list_value"), value_list, @3);
-					PGFuncCall *f = makeFuncCall(SystemFuncName("map"), list_make2(keys, values), @3);
-					$$ = (PGNode *) f;
+					$$ = $1;
 				}
 			| func_expr
 				{
@@ -2845,6 +2834,24 @@ struct_expr:		'{' dict_arguments_opt_comma '}'
 					$$ = (PGNode *) f;
 				}
 		;
+
+map_expr:  MAP '{' opt_map_arguments_opt_comma '}'
+                {
+                    PGList *key_list = NULL;
+                    PGList *value_list = NULL;
+                    PGListCell *lc;
+                    PGList *entry_list = $3;
+                    foreach(lc, entry_list)
+                    {
+                        PGList *l = (PGList *) lc->data.ptr_value;
+                        key_list = lappend(key_list, (PGNode *) l->head->data.ptr_value);
+                        value_list = lappend(value_list, (PGNode *) l->tail->data.ptr_value);
+                    }
+                    PGNode *keys   = (PGNode *) makeFuncCall(SystemFuncName("list_value"), key_list, @3);
+                    PGNode *values = (PGNode *) makeFuncCall(SystemFuncName("list_value"), value_list, @3);
+                    PGFuncCall *f = makeFuncCall(SystemFuncName("map"), list_make2(keys, values), @3);
+                    $$ = (PGNode *) f;
+                }
 
 
 
@@ -3043,25 +3050,33 @@ func_expr_common_subexpr:
 				}
 		;
 
+list_comprehension_lhs:
+		columnrefList
+		{
+			PGFuncCall *n = makeFuncCall(SystemFuncName("row"), $1, @1);
+			$$ = (PGNode *) n;
+		}
+	;
+
 list_comprehension:
-				'[' a_expr FOR ColId IN_P a_expr ']'
+				'[' a_expr FOR list_comprehension_lhs IN_P a_expr ']'
 				{
 					PGLambdaFunction *lambda = makeNode(PGLambdaFunction);
-					lambda->lhs = makeColumnRef($4, NIL, @4, yyscanner);
+					lambda->lhs = $4;
 					lambda->rhs = $2;
 					lambda->location = @1;
 					PGFuncCall *n = makeFuncCall(SystemFuncName("list_apply"), list_make2($6, lambda), @1);
 					$$ = (PGNode *) n;
 				}
-				| '[' a_expr FOR ColId IN_P c_expr IF_P a_expr']'
+				| '[' a_expr FOR list_comprehension_lhs IN_P c_expr IF_P a_expr']'
 				{
 					PGLambdaFunction *lambda = makeNode(PGLambdaFunction);
-					lambda->lhs = makeColumnRef($4, NIL, @4, yyscanner);
+					lambda->lhs = $4;
 					lambda->rhs = $2;
 					lambda->location = @1;
 
 					PGLambdaFunction *lambda_filter = makeNode(PGLambdaFunction);
-					lambda_filter->lhs = makeColumnRef($4, NIL, @4, yyscanner);
+					lambda_filter->lhs = $4;
 					lambda_filter->rhs = $8;
 					lambda_filter->location = @8;
 					PGFuncCall *filter = makeFuncCall(SystemFuncName("list_filter"), list_make2($6, lambda_filter), @1);
@@ -3686,7 +3701,7 @@ in_expr:	select_with_parens
 					$$ = (PGNode *)n;
 				}
 			| '(' expr_list_opt_comma ')'						{ $$ = (PGNode *)$2; }
-			| columnref
+			| columnref_opt_indirection
 			| indirection_expr { $$ = (PGNode *)$1; }
 		;
 
@@ -3735,7 +3750,18 @@ case_arg:	a_expr									{ $$ = $1; }
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
 
-columnref:	ColId
+columnrefList:
+			columnref								{ $$ = list_make1($1); }
+			| columnrefList ',' columnref				{ $$ = lappend($1, $3); }
+		;
+
+columnref: ColId
+		{
+			$$ = makeColumnRef($1, NIL, @1, yyscanner);
+		}
+	;
+
+columnref_opt_indirection:	ColId
 				{
 					$$ = makeColumnRef($1, NIL, @1, yyscanner);
 				}

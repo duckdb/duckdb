@@ -17,10 +17,10 @@ ExecutorTask::ExecutorTask(ClientContext &context, shared_ptr<Event> event_p, co
 }
 
 ExecutorTask::~ExecutorTask() {
-	executor.UnregisterTask();
 	if (thread_context) {
 		executor.Flush(*thread_context);
 	}
+	executor.UnregisterTask();
 }
 
 void ExecutorTask::Deschedule() {

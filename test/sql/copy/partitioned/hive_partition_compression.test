@@ -18,8 +18,8 @@ query III
 FROM read_parquet('__TEST_DIR__/hive_partition_compress/*/*/*.parquet')
 ORDER BY ALL
 ----
-a	bar	1
-a	foo	1
-a	foo	2
-b	bar	1
+1	a	bar
+1	a	foo
+1	b	bar
+2	a	foo
 

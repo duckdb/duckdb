@@ -619,10 +619,16 @@ def test_mode_insert(shell):
     test = (
         ShellTest(shell)
         .statement(".mode insert")
-        .statement("SELECT NULL, 42, 'fourty-two', 42.0;")
+        .statement("SELECT NULL, 42, 'fourty-two', 42.0, 3.14, 2.71;")
     )
     result = test.run()
     result.check_stdout('fourty-two')
+    result.check_stdout('3.14')
+    result.check_stdout('2.71')
+    result.check_not_exist('3.140000')
+    result.check_not_exist('2.709999')
+    result.check_not_exist('3.139999')
+    result.check_not_exist('2.710000')
 
 def test_mode_line(shell):
     test = (

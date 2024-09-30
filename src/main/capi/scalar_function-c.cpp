@@ -52,6 +52,10 @@ duckdb::ScalarFunction &GetCScalarFunction(duckdb_scalar_function function) {
 	return *reinterpret_cast<duckdb::ScalarFunction *>(function);
 }
 
+duckdb::ScalarFunctionSet &GetCScalarFunctionSet(duckdb_scalar_function_set set) {
+	return *reinterpret_cast<duckdb::ScalarFunctionSet *>(set);
+}
+
 unique_ptr<FunctionData> BindCAPIScalarFunction(ClientContext &, ScalarFunction &bound_function,
                                                 vector<unique_ptr<Expression>> &arguments) {
 	auto &info = bound_function.function_info->Cast<CScalarFunctionInfo>();
@@ -82,6 +86,7 @@ void CAPIScalarFunction(DataChunk &input, ExpressionState &state, Vector &result
 } // namespace duckdb
 
 using duckdb::GetCScalarFunction;
+using duckdb::GetCScalarFunctionSet;
 
 duckdb_scalar_function duckdb_create_scalar_function() {
 	auto function = new duckdb::ScalarFunction("", {}, duckdb::LogicalType::INVALID, duckdb::CAPIScalarFunction,
@@ -196,18 +201,57 @@ duckdb_state duckdb_register_scalar_function(duckdb_connection connection, duckd
 		return DuckDBError;
 	}
 	auto &scalar_function = GetCScalarFunction(function);
-	auto &info = scalar_function.function_info->Cast<duckdb::CScalarFunctionInfo>();
+	duckdb::ScalarFunctionSet set(scalar_function.name);
+	set.AddFunction(scalar_function);
+	return duckdb_register_scalar_function_set(connection, reinterpret_cast<duckdb_scalar_function_set>(&set));
+}
 
-	if (scalar_function.name.empty() || !info.function) {
+duckdb_scalar_function_set duckdb_create_scalar_function_set(const char *name) {
+	if (!name || !*name) {
+		return nullptr;
+	}
+	auto function = new duckdb::ScalarFunctionSet(name);
+	return reinterpret_cast<duckdb_scalar_function_set>(function);
+}
+
+void duckdb_destroy_scalar_function_set(duckdb_scalar_function_set *set) {
+	if (set && *set) {
+		auto scalar_function_set = reinterpret_cast<duckdb::ScalarFunctionSet *>(*set);
+		delete scalar_function_set;
+		*set = nullptr;
+	}
+}
+
+duckdb_state duckdb_add_scalar_function_to_set(duckdb_scalar_function_set set, duckdb_scalar_function function) {
+	if (!set || !function) {
 		return DuckDBError;
 	}
-	if (duckdb::TypeVisitor::Contains(scalar_function.return_type, duckdb::LogicalTypeId::INVALID) ||
-	    duckdb::TypeVisitor::Contains(scalar_function.return_type, duckdb::LogicalTypeId::ANY)) {
+	auto &scalar_function_set = GetCScalarFunctionSet(set);
+	auto &scalar_function = GetCScalarFunction(function);
+	scalar_function_set.AddFunction(scalar_function);
+	return DuckDBSuccess;
+}
+
+duckdb_state duckdb_register_scalar_function_set(duckdb_connection connection, duckdb_scalar_function_set set) {
+	if (!connection || !set) {
 		return DuckDBError;
 	}
-	for (const auto &argument : scalar_function.arguments) {
-		if (duckdb::TypeVisitor::Contains(argument, duckdb::LogicalTypeId::INVALID)) {
+	auto &scalar_function_set = GetCScalarFunctionSet(set);
+	for (idx_t idx = 0; idx < scalar_function_set.Size(); idx++) {
+		auto &scalar_function = scalar_function_set.GetFunctionReferenceByOffset(idx);
+		auto &info = scalar_function.function_info->Cast<duckdb::CScalarFunctionInfo>();
+
+		if (scalar_function.name.empty() || !info.function) {
 			return DuckDBError;
+		}
+		if (duckdb::TypeVisitor::Contains(scalar_function.return_type, duckdb::LogicalTypeId::INVALID) ||
+		    duckdb::TypeVisitor::Contains(scalar_function.return_type, duckdb::LogicalTypeId::ANY)) {
+			return DuckDBError;
+		}
+		for (const auto &argument : scalar_function.arguments) {
+			if (duckdb::TypeVisitor::Contains(argument, duckdb::LogicalTypeId::INVALID)) {
+				return DuckDBError;
+			}
 		}
 	}
 
@@ -215,7 +259,7 @@ duckdb_state duckdb_register_scalar_function(duckdb_connection connection, duckd
 		auto con = reinterpret_cast<duckdb::Connection *>(connection);
 		con->context->RunFunctionInTransaction([&]() {
 			auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
-			duckdb::CreateScalarFunctionInfo sf_info(scalar_function);
+			duckdb::CreateScalarFunctionInfo sf_info(scalar_function_set);
 			catalog.CreateFunction(*con->context, sf_info);
 		});
 	} catch (...) {

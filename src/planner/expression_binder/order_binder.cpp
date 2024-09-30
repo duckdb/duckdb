@@ -12,14 +12,15 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/expression_binder/select_bind_state.hpp"
+#include "duckdb/main/client_config.hpp"
 #include "duckdb/common/pair.hpp"
 
 namespace duckdb {
 
-OrderBinder::OrderBinder(vector<Binder *> binders, SelectBindState &bind_state)
+OrderBinder::OrderBinder(vector<reference<Binder>> binders, SelectBindState &bind_state)
     : binders(std::move(binders)), extra_list(nullptr), bind_state(bind_state) {
 }
-OrderBinder::OrderBinder(vector<Binder *> binders, SelectNode &node, SelectBindState &bind_state)
+OrderBinder::OrderBinder(vector<reference<Binder>> binders, SelectNode &node, SelectBindState &bind_state)
     : binders(std::move(binders)), bind_state(bind_state) {
 	this->extra_list = &node.select_list;
 }
@@ -55,9 +56,14 @@ optional_idx OrderBinder::TryGetProjectionReference(ParsedExpression &expr) cons
 		auto &constant = expr.Cast<ConstantExpression>();
 		// ORDER BY a constant
 		if (!constant.value.type().IsIntegral()) {
-			// non-integral expression, we just leave the constant here.
+			// non-integral expression
 			// ORDER BY <constant> has no effect
-			// CONTROVERSIAL: maybe we should throw an error
+			// this is disabled by default (matching Postgres) - but we can control this with a setting
+			auto &config = ClientConfig::GetConfig(binders[0].get().context);
+			if (!config.order_by_non_integer_literal) {
+				throw BinderException(expr, "ORDER BY non-integer literal has no effect.\n* SET "
+				                            "order_by_non_integer_literal=true to allow this behavior.");
+			}
 			break;
 		}
 		// INTEGER constant: we use the integer as an index into the select list (e.g. ORDER BY 1)
@@ -143,7 +149,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 	// general case
 	// first bind the table names of this entry
 	for (auto &binder : binders) {
-		ExpressionBinder::QualifyColumnNames(*binder, expr);
+		ExpressionBinder::QualifyColumnNames(binder.get(), expr);
 	}
 	// first check if the ORDER BY clause already points to an entry in the projection list
 	auto entry = bind_state.projection_map.find(*expr);

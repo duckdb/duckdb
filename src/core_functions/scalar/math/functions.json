@@ -271,5 +271,47 @@
         "description": "Truncates the number",
         "example": "trunc(17.4)",
         "type": "scalar_function_set"
+    },
+    {
+        "name": "cosh",
+        "parameters": "x",
+        "description": "Computes the hyperbolic cos of x",
+        "example": "cosh(1)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "sinh",
+        "parameters": "x",
+        "description": "Computes the hyperbolic sin of x",
+        "example": "sinh(1)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "tanh",
+        "parameters": "x",
+        "description": "Computes the hyperbolic tan of x",
+        "example": "tanh(1)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "acosh",
+        "parameters": "x",
+        "description": "Computes the inverse hyperbolic cos of x",
+        "example": "acosh(0.5)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "asinh",
+        "parameters": "x",
+        "description": "Computes the inverse hyperbolic sin of x",
+        "example": "asinh(0.5)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "atanh",
+        "parameters": "x",
+        "description": "Computes the inverse hyperbolic tan of x",
+        "example": "atanh(0.5)",
+        "type": "scalar_function"
     }
 ]

@@ -61,6 +61,7 @@ CMAKE_LLVM_VARS ?=
 SKIP_EXTENSIONS ?=
 BUILD_EXTENSIONS ?=
 CORE_EXTENSIONS ?=
+UNSAFE_NUMERIC_CAST ?=
 ifdef OVERRIDE_GIT_DESCRIBE
         COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DOVERRIDE_GIT_DESCRIBE="${OVERRIDE_GIT_DESCRIBE}"
 else
@@ -93,7 +94,9 @@ endif
 ifneq (${ENABLE_EXTENSION_AUTOINSTALL}, "")
 	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_EXTENSION_AUTOINSTALL=${ENABLE_EXTENSION_AUTOINSTALL}
 endif
-
+ifneq (${UNSAFE_NUMERIC_CAST}, )
+	CMAKE_VARS:=${CMAKE_VARS} -DUNSAFE_NUMERIC_CAST=1
+endif
 ifeq (${BUILD_EXTENSIONS_ONLY}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_EXTENSIONS_ONLY=1
 endif
@@ -106,9 +109,6 @@ ifeq (${BUILD_AUTOCOMPLETE}, 1)
 endif
 ifeq (${BUILD_ICU}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};icu
-endif
-ifeq (${BUILD_INET}, 1)
-	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};inet
 endif
 ifeq (${BUILD_TPCH}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};tpch
@@ -184,7 +184,10 @@ ifneq ($(EXTRA_CMAKE_VARIABLES),)
 	CMAKE_VARS:=${CMAKE_VARS} ${EXTRA_CMAKE_VARIABLES}
 endif
 ifeq (${CRASH_ON_ASSERT}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DASSERT_EXCEPTION=0
+	CMAKE_VARS:=${CMAKE_VARS} -DCRASH_ON_ASSERT=1
+endif
+ifeq (${FORCE_ASSERT}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DFORCE_ASSERT=1
 endif
 ifeq (${DISABLE_STRING_INLINE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_STR_INLINE=1
@@ -206,6 +209,12 @@ ifeq (${RUN_SLOW_VERIFIERS}, 1)
 endif
 ifeq (${ALTERNATIVE_VERIFY}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DALTERNATIVE_VERIFY=1
+endif
+ifeq (${LATEST_STORAGE}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DLATEST_STORAGE=1
+endif
+ifeq (${BLOCK_VERIFICATION}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DBLOCK_VERIFICATION=1
 endif
 ifneq (${VERIFY_VECTOR}, )
 	CMAKE_VARS:=${CMAKE_VARS} -DVERIFY_VECTOR=${VERIFY_VECTOR}
@@ -395,7 +404,7 @@ tidy-check-diff:
 	cd build/tidy && \
 	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_PYTHON_PKG=TRUE -DBUILD_SHELL=0 ../.. && \
 	cd ../../ && \
-	git diff origin/main . ':(exclude)test' ':(exclude)benchmark' ':(exclude)third_party' ':(exclude)src/common/adbc' ':(exclude)src/main/capi' | python3 scripts/clang-tidy-diff.py -path build/tidy -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS} -p1
+	git diff origin/main . ':(exclude)tools' ':(exclude)extension' ':(exclude)test' ':(exclude)benchmark' ':(exclude)third_party' ':(exclude)src/common/adbc' ':(exclude)src/main/capi' | python3 scripts/clang-tidy-diff.py -path build/tidy -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS} -p1
 
 tidy-fix:
 	mkdir -p ./build/tidy && \
@@ -457,6 +466,7 @@ coverage-check:
 	./scripts/coverage_check.sh
 
 generate-files:
+	python3 scripts/generate_c_api.py
 	python3 scripts/generate_functions.py
 	python3 scripts/generate_serialization.py
 	python3 scripts/generate_enum_util.py

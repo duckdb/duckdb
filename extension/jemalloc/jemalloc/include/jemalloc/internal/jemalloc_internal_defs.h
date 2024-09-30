@@ -84,31 +84,44 @@
 /*
  * Defined if os_unfair_lock_*() functions are available, as provided by Darwin.
  */
-// #if defined(__APPLE__)
-// #define JEMALLOC_OS_UNFAIR_LOCK
-// #endif
+#if defined(__APPLE__)
+#define JEMALLOC_OS_UNFAIR_LOCK
+#endif
 
 /* Defined if syscall(2) is usable. */
-/* #undef JEMALLOC_USE_SYSCALL */
+#ifdef __GLIBC__
+#define JEMALLOC_USE_SYSCALL
+#endif
 
 /*
  * Defined if secure_getenv(3) is available.
  */
-/* #undef JEMALLOC_HAVE_SECURE_GETENV */
+#ifdef __GLIBC__
+#undef JEMALLOC_HAVE_SECURE_GETENV
+#endif
 
 /*
  * Defined if issetugid(2) is available.
  */
-// #define JEMALLOC_HAVE_ISSETUGID
+#ifdef __APPLE__
+#define JEMALLOC_HAVE_ISSETUGID
+#endif
 
 /* Defined if pthread_atfork(3) is available. */
-// #define JEMALLOC_HAVE_PTHREAD_ATFORK
+#ifndef _MSC_VER
+#define JEMALLOC_HAVE_PTHREAD_ATFORK
+#endif
 
 /* Defined if pthread_setname_np(3) is available. */
-/* #undef JEMALLOC_HAVE_PTHREAD_SETNAME_NP */
+// #define JEMALLOC_HAVE_PTHREAD_SETNAME_NP
 
 /* Defined if pthread_getname_np(3) is available. */
-// #define JEMALLOC_HAVE_PTHREAD_GETNAME_NP
+#ifdef __APPLE__
+#define JEMALLOC_HAVE_PTHREAD_GETNAME_NP
+#endif
+
+/* Defined if pthread_set_name_np(3) is available. */
+/* #undef JEMALLOC_HAVE_PTHREAD_SET_NAME_NP */
 
 /* Defined if pthread_get_name_np(3) is available. */
 /* #undef JEMALLOC_HAVE_PTHREAD_GET_NAME_NP */
@@ -116,17 +129,23 @@
 /*
  * Defined if clock_gettime(CLOCK_MONOTONIC_COARSE, ...) is available.
  */
-/* #undef JEMALLOC_HAVE_CLOCK_MONOTONIC_COARSE */
+#ifdef __GLIBC__
+#define JEMALLOC_HAVE_CLOCK_MONOTONIC_COARSE
+#endif
 
 /*
  * Defined if clock_gettime(CLOCK_MONOTONIC, ...) is available.
  */
-/* #undef JEMALLOC_HAVE_CLOCK_MONOTONIC */
+#ifdef __GLIBC__
+#define JEMALLOC_HAVE_CLOCK_MONOTONIC
+#endif
 
 /*
  * Defined if mach_absolute_time() is available.
  */
-// #define JEMALLOC_HAVE_MACH_ABSOLUTE_TIME
+#ifdef __APPLE__
+#define JEMALLOC_HAVE_MACH_ABSOLUTE_TIME
+#endif
 
 /*
  * Defined if clock_gettime(CLOCK_REALTIME, ...) is available.
@@ -140,7 +159,7 @@
  * _malloc_thread_cleanup() exists, use it as the basis for thread cleanup in
  * malloc_tsd.
  */
-#if defined(__APPLE__) || defined(__FreeBSD__)
+#if defined(__FreeBSD__)
 #define JEMALLOC_MALLOC_THREAD_CLEANUP
 #endif
 
@@ -149,7 +168,9 @@
  * Among other things, it must be possible to initialize a mutex without
  * triggering allocation in order for threaded allocation to be safe.
  */
-/* #undef JEMALLOC_THREADED_INIT */
+#ifdef __GLIBC__
+#define JEMALLOC_THREADED_INIT
+#endif
 
 /*
  * Defined if the pthreads implementation defines
@@ -185,11 +206,21 @@
 /* Use gcc intrinsics for profile backtracing if defined. */
 /* #undef JEMALLOC_PROF_GCC */
 
+/* JEMALLOC_PAGEID enabled page id */
+/* #undef JEMALLOC_PAGEID */
+
+/* JEMALLOC_HAVE_PRCTL checks prctl */
+#ifdef __GLIBC__
+#define JEMALLOC_HAVE_PRCTL
+#endif
+
 /*
  * JEMALLOC_DSS enables use of sbrk(2) to allocate extents from the data storage
  * segment (DSS).
  */
-/* #undef JEMALLOC_DSS */
+#ifdef __GLIBC__
+#define JEMALLOC_DSS
+#endif
 
 /* Support memory filling (junk/zero). */
 #define JEMALLOC_FILL
@@ -267,12 +298,14 @@
 // ----- DuckDB comment -----
 // This makes it feasible to run the larger page size (https://github.com/duckdb/duckdb/discussions/11455),
 // but it causes DuckDB to retain RSS even after closing the connection, so we have to disable it
-// #if INTPTR_MAX == INT64_MAX
-// #define JEMALLOC_RETAIN
-// #endif
+#if INTPTR_MAX == INT64_MAX && !defined(__APPLE__)
+#define JEMALLOC_RETAIN
+#endif
 
 /* TLS is used to map arenas and magazine caches to threads. */
+#ifndef __APPLE__
 #define JEMALLOC_TLS
+#endif
 
 /*
  * Used to mark unreachable code to quiet "end of non-void" compiler warnings.
@@ -329,11 +362,17 @@
 /* #undef JEMALLOC_READLINKAT */
 
 /*
+ * If defined, use getenv() (instead of secure_getenv() or
+ * alternatives) to access MALLOC_CONF.
+ */
+/* #undef JEMALLOC_FORCE_GETENV */
+
+/*
  * Darwin (OS X) uses zones to work around Mach-O symbol override shortcomings.
  */
-// #if defined(__APPLE__)
-// #define JEMALLOC_ZONE
-// #endif
+#if defined(__APPLE__)
+#define JEMALLOC_ZONE
+#endif
 
 /*
  * Methods for determining whether the OS overcommits.
@@ -341,10 +380,10 @@
  *                                         /proc/sys/vm.overcommit_memory file.
  * JEMALLOC_SYSCTL_VM_OVERCOMMIT: FreeBSD's vm.overcommit sysctl.
  */
-#ifdef __FreeBSD__
-#define JEMALLOC_SYSCTL_VM_OVERCOMMIT
-#else
+#if defined(__linux__)
 #define JEMALLOC_PROC_SYS_VM_OVERCOMMIT_MEMORY
+#elif defined(__FreeBSD__)
+#define JEMALLOC_SYSCTL_VM_OVERCOMMIT
 #endif
 
 /* Defined if madvise(2) is available. */
@@ -354,7 +393,9 @@
  * Defined if transparent huge pages are supported via the MADV_[NO]HUGEPAGE
  * arguments to madvise(2).
  */
-/* #undef JEMALLOC_HAVE_MADVISE_HUGE */
+// #ifdef __GLIBC__
+// #define JEMALLOC_HAVE_MADVISE_HUGE
+// #endif
 
 /*
  * Methods for purging unused pages differ between operating systems.
@@ -371,15 +412,21 @@
  */
 #define JEMALLOC_PURGE_MADVISE_FREE
 #define JEMALLOC_PURGE_MADVISE_DONTNEED
-/* #undef JEMALLOC_PURGE_MADVISE_DONTNEED_ZEROS */
+#ifdef __GLIBC__
+#define JEMALLOC_PURGE_MADVISE_DONTNEED_ZEROS
+#endif
 
 /* Defined if madvise(2) is available but MADV_FREE is not (x86 Linux only). */
+#ifdef __GLIBC__
 #define JEMALLOC_DEFINE_MADVISE_FREE
+#endif
 
 /*
  * Defined if MADV_DO[NT]DUMP is supported as an argument to madvise.
  */
-/* #undef JEMALLOC_MADVISE_DONTDUMP */
+#ifdef __GLIBC__
+#define JEMALLOC_MADVISE_DONTDUMP
+#endif
 
 /*
  * Defined if MADV_[NO]CORE is supported as an argument to madvise.
@@ -414,10 +461,14 @@
 /*
  * Defined if malloc_size is supported
  */
-// #define JEMALLOC_HAVE_MALLOC_SIZE
+#ifdef __APPLE__
+#define JEMALLOC_HAVE_MALLOC_SIZE
+#endif
 
 /* Define if operating system has alloca.h header. */
-/* #undef JEMALLOC_HAS_ALLOCA_H */
+#ifdef __GLIBC__
+#define JEMALLOC_HAS_ALLOCA_H
+#endif
 
 /* C99 restrict keyword supported. */
 #define JEMALLOC_HAS_RESTRICT
@@ -442,16 +493,22 @@
 #define LG_SIZEOF_INTMAX_T 3
 
 /* glibc malloc hooks (__malloc_hook, __realloc_hook, __free_hook). */
-/* #undef JEMALLOC_GLIBC_MALLOC_HOOK */
+#ifdef __GLIBC__
+#define JEMALLOC_GLIBC_MALLOC_HOOK
+#endif
 
 /* glibc memalign hook. */
-/* #undef JEMALLOC_GLIBC_MEMALIGN_HOOK */
+#ifdef __GLIBC__
+#define JEMALLOC_GLIBC_MEMALIGN_HOOK
+#endif
 
 /* pthread support */
 #define JEMALLOC_HAVE_PTHREAD
 
 /* dlsym() support */
-// #define JEMALLOC_HAVE_DLSYM
+#if defined(__APPLE__) || defined(_GNU_SOURCE)
+#define JEMALLOC_HAVE_DLSYM
+#endif
 
 /* Adaptive mutex support in pthreads. */
 /* #undef JEMALLOC_HAVE_PTHREAD_MUTEX_ADAPTIVE_NP */
@@ -461,6 +518,9 @@
 
 /* GNU specific sched_setaffinity support */
 // #define JEMALLOC_HAVE_SCHED_SETAFFINITY
+
+/* pthread_setaffinity_np support */
+/* #undef JEMALLOC_HAVE_PTHREAD_SETAFFINITY_NP */
 
 /*
  * If defined, all the features necessary for background threads are present.
@@ -482,7 +542,9 @@
 /*
  * Defined if strerror_r returns char * if _GNU_SOURCE is defined.
  */
-// #define JEMALLOC_STRERROR_R_RETURNS_CHAR_WITH_GNU_SOURCE
+#ifdef __GLIBC__
+#define JEMALLOC_STRERROR_R_RETURNS_CHAR_WITH_GNU_SOURCE
+#endif
 
 /* Performs additional safety checks when defined. */
 /* #undef JEMALLOC_OPT_SAFETY_CHECKS */
@@ -497,11 +559,26 @@
 /* #undef JEMALLOC_UAF_DETECTION */
 
 /* Darwin VM_MAKE_TAG support */
-// #if defined(__APPLE__)
-// #define JEMALLOC_HAVE_VM_MAKE_TAG
-// #endif
+#if defined(__APPLE__)
+#define JEMALLOC_HAVE_VM_MAKE_TAG
+#endif
 
 /* If defined, realloc(ptr, 0) defaults to "free" instead of "alloc". */
-/* #undef JEMALLOC_ZERO_REALLOC_DEFAULT_FREE */
+#ifdef __GLIBC__
+#undef JEMALLOC_ZERO_REALLOC_DEFAULT_FREE
+#endif
+
+/* If defined, use volatile asm during benchmarks. */
+#ifdef __APPLE__
+#define JEMALLOC_HAVE_ASM_VOLATILE
+#endif
+
+/*
+ * If defined, support the use of rdtscp to get the time stamp counter
+ * and the processor ID.
+ */
+/* #undef JEMALLOC_HAVE_RDTSCP */
+
+#include "jemalloc/internal/jemalloc_internal_overrides.h"
 
 #endif /* JEMALLOC_INTERNAL_DEFS_H_ */

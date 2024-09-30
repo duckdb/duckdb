@@ -212,6 +212,26 @@ string StringUtil::Lower(const string &str) {
 	return (copy);
 }
 
+string StringUtil::Title(const string &str) {
+	string copy;
+	bool first_character = true;
+	for (auto c : str) {
+		bool is_alpha = StringUtil::CharacterIsAlpha(c);
+		if (is_alpha) {
+			if (first_character) {
+				copy += StringUtil::CharacterToUpper(c);
+				first_character = false;
+			} else {
+				copy += StringUtil::CharacterToLower(c);
+			}
+		} else {
+			first_character = true;
+			copy += c;
+		}
+	}
+	return copy;
+}
+
 bool StringUtil::IsLower(const string &str) {
 	return str == Lower(str);
 }

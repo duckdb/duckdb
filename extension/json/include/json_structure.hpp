@@ -19,6 +19,7 @@ struct StrpTimeFormat;
 struct JSONStructureNode {
 public:
 	JSONStructureNode();
+	JSONStructureNode(const char *key_ptr, const size_t key_len);
 	JSONStructureNode(yyjson_val *key_p, yyjson_val *val_p, bool ignore_errors);
 
 	//! Disable copy constructors
@@ -65,6 +66,7 @@ public:
 	JSONStructureDescription &operator=(JSONStructureDescription &&) noexcept;
 
 	JSONStructureNode &GetOrCreateChild();
+	JSONStructureNode &GetOrCreateChild(const char *key_ptr, size_t key_size);
 	JSONStructureNode &GetOrCreateChild(yyjson_val *key, yyjson_val *val, bool ignore_errors);
 
 public:

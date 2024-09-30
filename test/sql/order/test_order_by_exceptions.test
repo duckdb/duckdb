@@ -17,8 +17,16 @@ SELECT a FROM test ORDER BY 2
 ----
 <REGEX>:Binder Error:.*term out of range.*
 
-# ORDER BY constant works, but does nothing
+# ORDER BY constant returns an error
 # CONTROVERSIAL: works in SQLite but not in Postgres
+statement error
+SELECT a FROM test ORDER BY 'hello', a
+----
+ORDER BY non-integer literal has no effect
+
+statement ok
+SET order_by_non_integer_literal=true
+
 query I
 SELECT a FROM test ORDER BY 'hello', a
 ----

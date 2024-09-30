@@ -247,7 +247,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 			GatherAliases(*result, bind_state, reorder_idx);
 		}
 		// now we perform the actual resolution of the ORDER BY/DISTINCT expressions
-		OrderBinder order_binder({result->left_binder.get(), result->right_binder.get()}, bind_state);
+		OrderBinder order_binder({*result->left_binder, *result->right_binder}, bind_state);
 		PrepareModifiers(order_binder, statement, *result);
 	}
 

@@ -24,14 +24,10 @@
 
 namespace duckdb {
 
-enum class ProfilingNodeType : uint8_t { QUERY_ROOT, OPERATOR };
-
-class QueryProfilingNode;
-
-// Recursive tree that mirrors the operator tree
+//! Recursive tree mirroring the operator tree.
 class ProfilingNode {
 public:
-	explicit ProfilingNode(ProfilingNodeType node_type) : node_type(node_type) {
+	explicit ProfilingNode() {
 	}
 	virtual ~ProfilingNode() {};
 
@@ -41,83 +37,24 @@ private:
 public:
 	idx_t depth = 0;
 	vector<unique_ptr<ProfilingNode>> children;
-	ProfilingNodeType node_type = ProfilingNodeType::OPERATOR;
 
 public:
-	virtual string GetName() const = 0;
-
 	idx_t GetChildCount() {
 		return children.size();
 	}
-
 	ProfilingInfo &GetProfilingInfo() {
 		return profiling_info;
 	}
-
 	const ProfilingInfo &GetProfilingInfo() const {
 		return profiling_info;
 	}
-
 	optional_ptr<ProfilingNode> GetChild(idx_t idx) {
 		return children[idx].get();
 	}
-
 	optional_ptr<ProfilingNode> AddChild(unique_ptr<ProfilingNode> child) {
 		children.push_back(std::move(child));
 		return children.back().get();
 	}
-
-	template <class TARGET>
-	TARGET &Cast() {
-		if (node_type != TARGET::TYPE) {
-			throw InternalException("Failed to cast ProfilingNode - node type mismatch");
-		}
-		return reinterpret_cast<TARGET &>(*this);
-	}
-
-	template <class TARGET>
-	const TARGET &Cast() const {
-		if (node_type != TARGET::TYPE) {
-			throw InternalException("Failed to cast ProfilingNode - node type mismatch");
-		}
-		return reinterpret_cast<const TARGET &>(*this);
-	}
-};
-
-// Holds the top level query info
-class QueryProfilingNode : public ProfilingNode {
-public:
-	static constexpr const ProfilingNodeType TYPE = ProfilingNodeType::QUERY_ROOT;
-
-public:
-	explicit QueryProfilingNode(const string &query) : ProfilingNode(TYPE), query(query) {
-	}
-	~QueryProfilingNode() override {};
-
-public:
-	string GetName() const override {
-		return EnumUtil::ToString(node_type);
-	}
-	string query;
-};
-
-class OperatorProfilingNode : public ProfilingNode {
-public:
-	static constexpr const ProfilingNodeType TYPE = ProfilingNodeType::OPERATOR;
-
-public:
-	OperatorProfilingNode(const string &name, PhysicalOperatorType type) : ProfilingNode(TYPE), name(name), type(type) {
-	}
-	~OperatorProfilingNode() override {};
-
-public:
-	string GetName() const override {
-		return name;
-	}
-
-public:
-	string name;
-	PhysicalOperatorType type;
 };
 
 } // namespace duckdb

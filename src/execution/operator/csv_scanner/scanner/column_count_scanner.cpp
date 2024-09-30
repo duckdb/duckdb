@@ -4,6 +4,7 @@ namespace duckdb {
 
 ColumnCountResult::ColumnCountResult(CSVStates &states, CSVStateMachine &state_machine, idx_t result_size)
     : ScannerResult(states, state_machine, result_size) {
+	column_counts.resize(result_size);
 }
 
 void ColumnCountResult::AddValue(ColumnCountResult &result, idx_t buffer_pos) {
@@ -11,8 +12,30 @@ void ColumnCountResult::AddValue(ColumnCountResult &result, idx_t buffer_pos) {
 }
 
 inline void ColumnCountResult::InternalAddRow() {
-	column_counts[result_position].number_of_columns = current_column_count + 1;
+	const idx_t column_count = current_column_count + 1;
+	column_counts[result_position].number_of_columns = column_count;
+	rows_per_column_count[column_count]++;
 	current_column_count = 0;
+}
+
+idx_t ColumnCountResult::GetMostFrequentColumnCount() const {
+	if (rows_per_column_count.empty()) {
+		return 1;
+	}
+	idx_t column_count = 0;
+	idx_t current_max = 0;
+	for (auto &rpc : rows_per_column_count) {
+		if (rpc.second > current_max) {
+			current_max = rpc.second;
+			column_count = rpc.first;
+		} else if (rpc.second == current_max) {
+			// We pick the largest to untie
+			if (rpc.first > column_count) {
+				column_count = rpc.first;
+			}
+		}
+	}
+	return column_count;
 }
 
 bool ColumnCountResult::AddRow(ColumnCountResult &result, idx_t buffer_pos) {
@@ -35,7 +58,7 @@ bool ColumnCountResult::AddRow(ColumnCountResult &result, idx_t buffer_pos) {
 }
 
 void ColumnCountResult::SetComment(ColumnCountResult &result, idx_t buffer_pos) {
-	if (result.current_column_count == 0) {
+	if (!result.states.WasStandard()) {
 		result.cur_line_starts_as_comment = true;
 	}
 	result.comment = true;
@@ -83,7 +106,9 @@ unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner()
 	    std::max(state_machine->dialect_options.skip_rows.GetValue(), state_machine->dialect_options.rows_until_header);
 	auto iterator = SkipCSVRows(buffer_manager, state_machine, rows_to_skip);
 	if (iterator.done) {
-		return make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true);
+		CSVIterator it {};
+		return make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true, it,
+		                                     result_size);
 	}
 	return make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true, iterator,
 	                                     result_size);

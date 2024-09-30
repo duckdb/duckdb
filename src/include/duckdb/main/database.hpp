@@ -76,6 +76,7 @@ public:
 
 private:
 	void Initialize(const char *path, DBConfig *config);
+	void LoadExtensionSettings();
 	void CreateMainDatabase();
 
 	void Configure(DBConfig &config, const char *path);

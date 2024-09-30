@@ -196,7 +196,11 @@ static unique_ptr<SelectStatement> DeserializeSelectStatement(string_t input, yy
 	}
 	auto stmt_json = yyjson_arr_get(statements, 0);
 	JsonDeserializer deserializer(stmt_json, doc);
-	return SelectStatement::Deserialize(deserializer);
+	auto stmt = SelectStatement::Deserialize(deserializer);
+	if (!stmt->node) {
+		throw ParserException("Error parsing json: no select node found in json");
+	}
+	return stmt;
 }
 
 //----------------------------------------------------------------------

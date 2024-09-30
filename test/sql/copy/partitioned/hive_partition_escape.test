@@ -43,9 +43,22 @@ value with strings	1
 statement ok
 ALTER TABLE weird_tbl RENAME COLUMN key TO "=/ \\/"
 
+# this column name won't work with automatic HIVE partition due to the equal character 
 statement ok
 COPY weird_tbl TO '__TEST_DIR__/escaped_partitions_names' (FORMAT PARQUET, PARTITION_BY("=/ \\/"))
 
+statement error
+select "=/ \\/", COUNT(*)
+from parquet_scan('__TEST_DIR__/escaped_partitions_names/**/*.parquet')
+GROUP BY ALL
+ORDER BY ALL
+----
+Binder Error: Referenced column "=/ \\/" not found in FROM clause!
+
+
+# if we write the partition column on files, it can be read
+statement ok
+COPY weird_tbl TO '__TEST_DIR__/escaped_partitions_names' (FORMAT PARQUET, PARTITION_BY("=/ \\/"), OVERWRITE, WRITE_PARTITION_COLUMNS)
 
 query II
 select "=/ \\/", COUNT(*)

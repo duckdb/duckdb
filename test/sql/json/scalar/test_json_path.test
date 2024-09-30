@@ -214,7 +214,7 @@ select sum((to_json({duck:range})->'$.*')[1]::int) = sum(range) from range(10000
 query T
 select json_extract('[{"duck":null},{"duck":42},{"duck":null},{}]', '$[*].*')
 ----
-[NULL, 42, NULL]
+[null, 42, null]
 
 # test recursive wildcard path
 query T
@@ -245,7 +245,7 @@ with tbl as (
 )
 select json_extract(j, '$[*]..*') from tbl
 ----
-[42, {"a":43,"b":null}, 43, NULL]
+[42, {"a":43,"b":null}, 43, null]
 
 query T
 with tbl as (

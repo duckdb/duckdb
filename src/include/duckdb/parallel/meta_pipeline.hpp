@@ -41,6 +41,8 @@ public:
 	PipelineBuildState &GetState() const;
 	//! Get the sink operator for this MetaPipeline
 	optional_ptr<PhysicalOperator> GetSink() const;
+	//! Get the parent pipeline
+	optional_ptr<Pipeline> GetParent() const;
 
 	//! Get the initial pipeline of this MetaPipeline
 	shared_ptr<Pipeline> &GetBasePipeline();
@@ -48,8 +50,10 @@ public:
 	void GetPipelines(vector<shared_ptr<Pipeline>> &result, bool recursive);
 	//! Get the MetaPipeline children of this MetaPipeline
 	void GetMetaPipelines(vector<shared_ptr<MetaPipeline>> &result, bool recursive, bool skip);
-	//! Get the dependencies (within this MetaPipeline) of the given Pipeline
-	optional_ptr<const vector<reference<Pipeline>>> GetDependencies(Pipeline &dependant) const;
+	//! Recursively gets the last child added
+	MetaPipeline &GetLastChild();
+	//! Get the dependencies of the Pipelines of this MetaPipeline
+	const reference_map_t<Pipeline, vector<reference<Pipeline>>> &GetDependencies() const;
 	//! Whether the sink of this pipeline is a join build
 	MetaPipelineType Type() const;
 	//! Whether this MetaPipeline has a recursive CTE
@@ -60,7 +64,9 @@ public:
 	void AssignNextBatchIndex(Pipeline &pipeline);
 	//! Let 'dependant' depend on all pipeline that were created since 'start',
 	//! where 'including' determines whether 'start' is added to the dependencies
-	void AddDependenciesFrom(Pipeline &dependant, const Pipeline &start, bool including);
+	vector<shared_ptr<Pipeline>> AddDependenciesFrom(Pipeline &dependant, const Pipeline &start, bool including);
+	//! Recursively makes all children of this MetaPipeline depend on the given Pipeline
+	void AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &new_dependencies, const MetaPipeline &last_child);
 	//! Make sure that the given pipeline has its own PipelineFinishEvent (e.g., for IEJoin - double Finalize)
 	void AddFinishEvent(Pipeline &pipeline);
 	//! Whether the pipeline needs its own PipelineFinishEvent
@@ -90,6 +96,8 @@ private:
 	Executor &executor;
 	//! The PipelineBuildState for all MetaPipelines in the query plan
 	PipelineBuildState &state;
+	//! Parent pipeline (optional)
+	optional_ptr<Pipeline> parent;
 	//! The sink of all pipelines within this MetaPipeline
 	optional_ptr<PhysicalOperator> sink;
 	//! The type of this MetaPipeline (regular, join build)
@@ -98,8 +106,8 @@ private:
 	bool recursive_cte;
 	//! All pipelines with a different source, but the same sink
 	vector<shared_ptr<Pipeline>> pipelines;
-	//! Dependencies within this MetaPipeline
-	reference_map_t<Pipeline, vector<reference<Pipeline>>> dependencies;
+	//! Dependencies of Pipelines of this MetaPipeline
+	reference_map_t<Pipeline, vector<reference<Pipeline>>> pipeline_dependencies;
 	//! Other MetaPipelines that this MetaPipeline depends on
 	vector<shared_ptr<MetaPipeline>> children;
 	//! Next batch index

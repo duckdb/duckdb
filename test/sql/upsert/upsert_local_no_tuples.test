@@ -1,0 +1,58 @@
+# name: test/sql/upsert/upsert_local_no_tuples.test
+# group: [upsert]
+
+statement ok
+pragma enable_verification;
+
+# Table with a constraint
+statement ok
+create table tbl (
+	a short primary key,
+	b short
+);
+
+# Populate the table
+statement ok
+insert into tbl(a, b) values(1, 2);
+
+# Start a transaction, local storage will be created if an INSERT happens
+statement ok
+begin transaction;
+
+# Create a local storage, appending 0 tuples because of DO NOTHING
+statement ok
+insert into tbl(a, b) values(1, 2) on conflict do nothing;
+
+# Scan from the table, hitting the local storage
+query II
+select * from tbl where a = 1;
+----
+1	2
+
+# Do it again to test proper cleanup of state
+statement ok
+insert into tbl(a, b) values(1, 2) on conflict do nothing;
+
+# Scan from the table, hitting the local storage
+statement ok
+select * from tbl where a = 1;
+
+statement ok
+commit;
+
+statement ok
+begin transaction;
+
+# Now create a LocalStorage with tuples before doing an append with 0 tuples
+statement ok
+insert into tbl (a, b) values (5,4);
+
+statement ok
+insert into tbl(a, b) values(1, 2) on conflict do nothing;
+
+# Scan from the table, hitting the local storage
+query II
+select * from tbl order by a;
+----
+1	2
+5	4

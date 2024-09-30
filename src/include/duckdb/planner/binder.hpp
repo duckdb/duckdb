@@ -416,10 +416,10 @@ private:
 	unique_ptr<BoundTableRef> BindShowTable(ShowRef &ref);
 	unique_ptr<BoundTableRef> BindSummarize(ShowRef &ref);
 
-public:
-	// This should really be a private constructor, but make_shared_ptr does not allow it...
-	// If you are thinking about calling this, you should probably call Binder::CreateBinder
-	Binder(bool i_know_what_i_am_doing, ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);
+	unique_ptr<LogicalOperator> UnionOperators(vector<unique_ptr<LogicalOperator>> nodes);
+
+private:
+	Binder(ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);
 };
 
 } // namespace duckdb

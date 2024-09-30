@@ -65,12 +65,15 @@ public:
 	//! A mapping of base table index -> index into relations array (relation number)
 	unordered_map<idx_t, idx_t> relation_mapping;
 
+	bool CrossProductWithRelationAllowed(idx_t relation_id);
+
 	void PrintRelationStats();
 
 private:
 	ClientContext &context;
 	//! Set of all relations considered in the join optimizer
 	vector<unique_ptr<SingleJoinRelation>> relations;
+	unordered_set<idx_t> no_cross_product_relations;
 };
 
 } // namespace duckdb

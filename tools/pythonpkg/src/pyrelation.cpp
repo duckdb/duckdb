@@ -59,10 +59,8 @@ bool DuckDBPyRelation::CanBeRegisteredBy(shared_ptr<ClientContext> &con) {
 }
 
 DuckDBPyRelation::~DuckDBPyRelation() {
-	// FIXME: It makes sense to release the GIL here, but it causes a crash
-	// because pybind11's gil_scoped_acquire and gil_scoped_release can not be nested
-	// The Relation will need to call the destructor of the ExternalDependency, which might need to hold the GIL
-	// py::gil_scoped_release gil;
+	D_ASSERT(py::gil_check());
+	py::gil_scoped_release gil;
 	rel.reset();
 }
 
@@ -781,6 +779,7 @@ static unique_ptr<QueryResult> PyExecuteRelation(const shared_ptr<Relation> &rel
 		return nullptr;
 	}
 	auto context = rel->context.GetContext();
+	D_ASSERT(py::gil_check());
 	py::gil_scoped_release release;
 	auto pending_query = context->PendingQuery(rel, stream_result);
 	return DuckDBPyConnection::CompletePendingQuery(*pending_query);
@@ -792,6 +791,7 @@ unique_ptr<QueryResult> DuckDBPyRelation::ExecuteInternal(bool stream_result) {
 }
 
 void DuckDBPyRelation::ExecuteOrThrow(bool stream_result) {
+	py::gil_scoped_acquire gil;
 	result.reset();
 	auto query_result = ExecuteInternal(stream_result);
 	if (!query_result) {
@@ -945,6 +945,17 @@ duckdb::pyarrow::Table DuckDBPyRelation::ToArrowTableInternal(idx_t batch_size, 
 
 duckdb::pyarrow::Table DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
 	return ToArrowTableInternal(batch_size, false);
+}
+
+py::object DuckDBPyRelation::ToArrowCapsule(const py::object &requested_schema) {
+	if (!result) {
+		if (!rel) {
+			return py::none();
+		}
+		ExecuteOrThrow();
+	}
+	AssertResultOpen();
+	return result->FetchArrowCapsule();
 }
 
 PolarsDataFrame DuckDBPyRelation::ToPolars(idx_t batch_size) {
@@ -1188,7 +1199,8 @@ void DuckDBPyRelation::ToCSV(const string &filename, const py::object &sep, cons
                              const py::object &date_format, const py::object &timestamp_format,
                              const py::object &quoting, const py::object &encoding, const py::object &compression,
                              const py::object &overwrite, const py::object &per_thread_output,
-                             const py::object &use_tmp_file, const py::object &partition_by) {
+                             const py::object &use_tmp_file, const py::object &partition_by,
+                             const py::object &write_partition_columns) {
 	case_insensitive_map_t<vector<Value>> options;
 
 	if (!py::none().is(sep)) {
@@ -1315,6 +1327,13 @@ void DuckDBPyRelation::ToCSV(const string &filename, const py::object &sep, cons
 		options["partition_by"] = {partition_by_values};
 	}
 
+	if (!py::none().is(write_partition_columns)) {
+		if (!py::isinstance<py::bool_>(write_partition_columns)) {
+			throw InvalidInputException("to_csv only accepts 'write_partition_columns' as a boolean");
+		}
+		options["write_partition_columns"] = {Value::BOOLEAN(py::bool_(write_partition_columns))};
+	}
+
 	auto write_csv = rel->WriteCSVRel(filename, std::move(options));
 	PyExecuteRelation(write_csv);
 }
@@ -1356,6 +1375,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, co
 		return Query(view_name, query);
 	}
 	{
+		D_ASSERT(py::gil_check());
 		py::gil_scoped_release release;
 		auto query_result = rel->context.GetContext()->Query(std::move(parser.statements[0]), false);
 		// Execute it anyways, for creation/altering statements
@@ -1392,6 +1412,7 @@ void DuckDBPyRelation::Insert(const py::object &params) {
 	}
 	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(params)};
 
+	D_ASSERT(py::gil_check());
 	py::gil_scoped_release release;
 	rel->Insert(values);
 }
@@ -1399,7 +1420,7 @@ void DuckDBPyRelation::Insert(const py::object &params) {
 void DuckDBPyRelation::Create(const string &table) {
 	AssertRelation();
 	auto parsed_info = QualifiedName::Parse(table);
-	auto create = rel->CreateRel(parsed_info.schema, parsed_info.name);
+	auto create = rel->CreateRel(parsed_info.schema, parsed_info.name, false);
 	PyExecuteRelation(create);
 }
 
@@ -1479,26 +1500,112 @@ void DuckDBPyRelation::Print(const Optional<py::int_> &max_width, const Optional
 	py::print(py::str(ToStringInternal(config, invalidate_cache)));
 }
 
+static ExplainFormat GetExplainFormat(ExplainType type) {
+	if (DuckDBPyConnection::IsJupyter() && type != ExplainType::EXPLAIN_ANALYZE) {
+		return ExplainFormat::HTML;
+	} else {
+		return ExplainFormat::DEFAULT;
+	}
+}
+
+static void DisplayHTML(const string &html) {
+	py::gil_scoped_acquire gil;
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	auto html_attr = import_cache.IPython.display.HTML();
+	auto html_object = html_attr(py::str(html));
+	auto display_attr = import_cache.IPython.display.display();
+	display_attr(html_object);
+}
+
 string DuckDBPyRelation::Explain(ExplainType type) {
 	AssertRelation();
+	D_ASSERT(py::gil_check());
 	py::gil_scoped_release release;
-	auto res = rel->Explain(type);
+
+	auto explain_format = GetExplainFormat(type);
+	auto res = rel->Explain(type, explain_format);
 	D_ASSERT(res->type == duckdb::QueryResultType::MATERIALIZED_RESULT);
 	auto &materialized = res->Cast<MaterializedQueryResult>();
 	auto &coll = materialized.Collection();
-	string result;
-	for (auto &row : coll.Rows()) {
-		// Skip the first column because it just contains 'physical plan'
-		for (idx_t col_idx = 1; col_idx < coll.ColumnCount(); col_idx++) {
-			if (col_idx > 1) {
-				result += "\t";
+	if (explain_format != ExplainFormat::HTML || !DuckDBPyConnection::IsJupyter()) {
+		string result;
+		for (auto &row : coll.Rows()) {
+			// Skip the first column because it just contains 'physical plan'
+			for (idx_t col_idx = 1; col_idx < coll.ColumnCount(); col_idx++) {
+				if (col_idx > 1) {
+					result += "\t";
+				}
+				auto val = row.GetValue(col_idx);
+				result += val.IsNull() ? "NULL" : StringUtil::Replace(val.ToString(), string("\0", 1), "\\0");
 			}
-			auto val = row.GetValue(col_idx);
-			result += val.IsNull() ? "NULL" : StringUtil::Replace(val.ToString(), string("\0", 1), "\\0");
+			result += "\n";
 		}
-		result += "\n";
+		return result;
 	}
-	return result;
+
+	auto chunk = materialized.Fetch();
+	for (idx_t i = 0; i < chunk->size(); i++) {
+		auto plan = chunk->GetValue(1, i);
+		auto plan_string = plan.GetValue<string>();
+		DisplayHTML(plan_string);
+	}
+
+	const string tree_resize_script = R"(
+<script>
+function toggleDisplay(button) {
+    const parentLi = button.closest('li');
+    const nestedUl = parentLi.querySelector('ul');
+    if (nestedUl) {
+        const currentDisplay = getComputedStyle(nestedUl).getPropertyValue('display');
+        if (currentDisplay === 'none') {
+            nestedUl.classList.toggle('hidden');
+            button.textContent = '-';
+        } else {
+            nestedUl.classList.toggle('hidden');
+            button.textContent = '+';
+        }
+    }
+}
+
+function updateTreeHeight(tfTree) {
+	if (!tfTree) {
+		return;
+	}
+
+	const closestElement = tfTree.closest('.lm-Widget.jp-OutputArea.jp-Cell-outputArea');
+	if (!closestElement) {
+		return;
+	}
+
+	console.log(closestElement);
+
+	const height = getComputedStyle(closestElement).getPropertyValue('height');
+	tfTree.style.height = height;
+}
+
+function resizeTFTree() {
+	const tfTrees = document.querySelectorAll('.tf-tree');
+	tfTrees.forEach(tfTree => {
+		console.log(tfTree);
+		if (tfTree) {
+			const jupyterViewPort = tfTree.closest('.lm-Widget.jp-OutputArea.jp-Cell-outputArea');
+			console.log(jupyterViewPort);
+			if (jupyterViewPort) {
+				const resizeObserver = new ResizeObserver(() => {
+					updateTreeHeight(tfTree);
+				});
+				resizeObserver.observe(jupyterViewPort);
+			}
+		}
+	});
+}
+
+resizeTFTree();
+
+</script>
+	)";
+	DisplayHTML(tree_resize_script);
+	return "";
 }
 
 // TODO: RelationType to a python enum

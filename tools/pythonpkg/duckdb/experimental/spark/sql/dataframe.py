@@ -309,6 +309,17 @@ class DataFrame:
 
     orderBy = sort
 
+    def head(self, n: Optional[int] = None) -> Union[Optional[Row], List[Row]]:
+        if n is None:
+            rs = self.head(1)
+            return rs[0] if rs else None
+        return self.take(n)
+
+    first = head
+
+    def take(self, num: int) -> List[Row]:
+        return self.limit(num).collect()
+
     def filter(self, condition: "ColumnOrName") -> "DataFrame":
         """Filters rows using the given condition.
 
@@ -360,7 +371,15 @@ class DataFrame:
         |  2|Alice|
         +---+-----+
         """
-        cond = condition.expr if isinstance(condition, Column) else condition
+        if isinstance(condition, Column):
+            cond = condition.expr
+        elif isinstance(condition, str):
+            cond = condition
+        else:
+            raise PySparkTypeError(
+                error_class="NOT_COLUMN_OR_STR",
+                message_parameters={"arg_name": "condition", "arg_type": type(condition).__name__},
+            )
         rel = self.relation.filter(cond)
         return DataFrame(rel, self.session)
 

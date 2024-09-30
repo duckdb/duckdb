@@ -125,7 +125,7 @@ SinkCombineResultType PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &cont
 	gstate.table->Combine(lstate.table);
 	auto &client_profiler = QueryProfiler::Get(context.client);
 
-	context.thread.profiler.Flush(*this, lstate.table.executor, "rhs_executor", 1);
+	context.thread.profiler.Flush(*this);
 	client_profiler.Flush(context.thread.profiler);
 
 	return SinkCombineResultType::FINISHED;
@@ -250,7 +250,7 @@ public:
 
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
 		if (lhs_local_table) {
-			context.thread.profiler.Flush(op, lhs_local_table->executor, "lhs_executor", 0);
+			context.thread.profiler.Flush(op);
 		}
 	}
 };
@@ -618,7 +618,12 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 
 				if (tail_count < result_count) {
 					result_count = tail_count;
-					chunk.Slice(*sel, result_count);
+					if (result_count == 0) {
+						// Need to reset here otherwise we may use the non-flat chunk when constructing LEFT/OUTER
+						chunk.Reset();
+					} else {
+						chunk.Slice(*sel, result_count);
+					}
 				}
 			}
 

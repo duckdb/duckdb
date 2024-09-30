@@ -194,6 +194,8 @@ public:
 
 	PolarsDataFrame ToPolars(idx_t batch_size);
 
+	py::object ToArrowCapsule(const py::object &requested_schema = py::none());
+
 	duckdb::pyarrow::RecordBatchReader ToRecordBatch(idx_t batch_size);
 
 	unique_ptr<DuckDBPyRelation> Union(DuckDBPyRelation *other);
@@ -216,7 +218,8 @@ public:
 	           const py::object &timestamp_format = py::none(), const py::object &quoting = py::none(),
 	           const py::object &encoding = py::none(), const py::object &compression = py::none(),
 	           const py::object &overwrite = py::none(), const py::object &per_thread_output = py::none(),
-	           const py::object &use_tmp_file = py::none(), const py::object &partition_by = py::none());
+	           const py::object &use_tmp_file = py::none(), const py::object &partition_by = py::none(),
+	           const py::object &write_partition_columns = py::none());
 
 	// should this return a rel with the new view?
 	unique_ptr<DuckDBPyRelation> CreateView(const string &view_name, bool replace = true);

@@ -240,7 +240,8 @@ private:
 
 	void SkipOverArrayStart();
 
-	void ReadAndAutoDetect(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index);
+	void ReadAndAutoDetect(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index,
+	                       bool &file_done);
 	bool ReconstructFirstObject(JSONScanGlobalState &gstate);
 	void ParseNextChunk(JSONScanGlobalState &gstate);
 

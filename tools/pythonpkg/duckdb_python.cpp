@@ -805,14 +805,17 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("connection") = py::none());
 	m.def(
 	    "install_extension",
-	    [](const string &extension, bool force_install = false, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](const string &extension, bool force_install = false, const py::object &repository = py::none(),
+	       const py::object &repository_url = py::none(), const py::object &version = py::none(),
+	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
-		    conn->InstallExtension(extension, force_install);
+		    conn->InstallExtension(extension, force_install, repository, repository_url, version);
 	    },
-	    "Install an extension by name", py::arg("extension"), py::kw_only(), py::arg("force_install") = false,
-	    py::arg("connection") = py::none());
+	    "Install an extension by name, with an optional version and/or repository to get the extension from",
+	    py::arg("extension"), py::kw_only(), py::arg("force_install") = false, py::arg("repository") = py::none(),
+	    py::arg("repository_url") = py::none(), py::arg("version") = py::none(), py::arg("connection") = py::none());
 	m.def(
 	    "load_extension",
 	    [](const string &extension, shared_ptr<DuckDBPyConnection> conn = nullptr) {
@@ -852,13 +855,14 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	       const py::object &quoting = py::none(), const py::object &encoding = py::none(),
 	       const py::object &compression = py::none(), const py::object &overwrite = py::none(),
 	       const py::object &per_thread_output = py::none(), const py::object &use_tmp_file = py::none(),
-	       const py::object &partition_by = py::none(), shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	       const py::object &partition_by = py::none(), const py::object &write_partition_columns = py::none(),
+	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
 		    conn->FromDF(df)->ToCSV(filename, sep, na_rep, header, quotechar, escapechar, date_format, timestamp_format,
 		                            quoting, encoding, compression, overwrite, per_thread_output, use_tmp_file,
-		                            partition_by);
+		                            partition_by, write_partition_columns);
 	    },
 	    "Write the relation object to a CSV file in 'file_name'", py::arg("df"), py::arg("filename"), py::kw_only(),
 	    py::arg("sep") = py::none(), py::arg("na_rep") = py::none(), py::arg("header") = py::none(),
@@ -866,7 +870,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("timestamp_format") = py::none(), py::arg("quoting") = py::none(), py::arg("encoding") = py::none(),
 	    py::arg("compression") = py::none(), py::arg("overwrite") = py::none(),
 	    py::arg("per_thread_output") = py::none(), py::arg("use_tmp_file") = py::none(),
-	    py::arg("partition_by") = py::none(), py::arg("connection") = py::none());
+	    py::arg("partition_by") = py::none(), py::arg("write_partition_columns") = py::none(),
+	    py::arg("connection") = py::none());
 	m.def(
 	    "aggregate",
 	    [](const PandasDataFrame &df, const py::object &expr, const string &groups = "",
@@ -1088,7 +1093,7 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	      py::arg("database") = ":memory:", py::arg("read_only") = false, py::arg_v("config", py::dict(), "None"));
 	m.def("tokenize", PyTokenize,
 	      "Tokenizes a SQL string, returning a list of (position, type) tuples that can be "
-	      "used for e.g. syntax highlighting",
+	      "used for e.g., syntax highlighting",
 	      py::arg("query"));
 	py::enum_<PySQLTokenType>(m, "token_type", py::module_local())
 	    .value("identifier", PySQLTokenType::PY_SQL_TOKEN_IDENTIFIER)

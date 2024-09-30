@@ -33,6 +33,9 @@ static duckdb::unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableF
                                                   vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<DBGenFunctionData>();
 	for (auto &kv : input.named_parameters) {
+		if (kv.second.IsNull()) {
+			throw BinderException("Cannot use NULL as function argument");
+		}
 		if (kv.first == "sf") {
 			result->sf = DoubleValue::Get(kv.second);
 		} else if (kv.first == "catalog") {

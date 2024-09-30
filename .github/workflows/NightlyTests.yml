@@ -24,7 +24,7 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  DUCKDB_WASM_VERSION: "66a481954b89a046cb7c48c448163ea5e9179199"
+  DUCKDB_WASM_VERSION: "cf2048bd6d669ffa05c56d7d453e09e99de8b87e"
   CCACHE_SAVE: ${{ github.repository != 'duckdb/duckdb' }}
   BASE_BRANCH: ${{ github.base_ref || (endsWith(github.ref, '_feature') && 'feature' || 'main') }}
 
@@ -77,7 +77,7 @@ jobs:
       BUILD_FTS: 1
       BUILD_JSON: 1
       BUILD_JEMALLOC: 1
-      BUILD_EXTENSIONS: "inet"
+      CORE_EXTENSIONS: "inet"
       DISABLE_SANITIZER: 1
       CRASH_ON_ASSERT: 1
       RUN_SLOW_VERIFIERS: 1
@@ -99,7 +99,7 @@ jobs:
 
     - name: Build
       shell: bash
-      run: make relassert
+      run: UNSAFE_NUMERIC_CAST=1 make relassert
 
     - name: Test
       shell: bash
@@ -201,11 +201,11 @@ jobs:
         shell: bash
         run: |
           mkdir -p build/release
-          (cd build/release && cmake -G "Ninja" -DSTATIC_LIBCPP=1 -DBUILD_EXTENSIONS='icu;parquet;fts;json' -DFORCE_32_BIT=1 -DSKIP_EXTENSIONS="jemalloc" -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+          (cd build/release && cmake -G "Ninja" -DSTATIC_LIBCPP=1 -DBUILD_EXTENSIONS='icu;parquet;fts;json' -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
 
       - name: Test
         shell: bash
-        run: build/release/test/unittest "*"
+        run: build/release/test/unittest
 
   linux-tarball:
      name: Python 3 Tarball
@@ -405,7 +405,7 @@ jobs:
   extension-updating:
     name: Extension updating test
     runs-on: ubuntu-20.04
-#    needs: linux-memory-leaks TODO revert
+    needs: linux-memory-leaks
     env:
       CC: gcc-10
       CXX: g++-10
@@ -466,10 +466,11 @@ jobs:
       BUILD_TPCDS: 1
       BUILD_FTS: 1
       BUILD_JSON: 1
-      BUILD_EXTENSIONS: "inet"
+      CORE_EXTENSIONS: "inet"
       DISABLE_STRING_INLINE: 1
       DESTROY_UNPINNED_BLOCKS: 1
       ALTERNATIVE_VERIFY: 1
+      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
 
     steps:
       - uses: actions/checkout@v3
@@ -494,6 +495,45 @@ jobs:
         shell: bash
         run: build/relassert/test/unittest
 
+  latest-storage:
+    name: Latest Storage
+    runs-on: ubuntu-20.04
+    needs: linux-memory-leaks
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_PARQUET: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_JSON: 1
+      LATEST_STORAGE: 1
+      BLOCK_VERIFICATION: 1
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ env.CCACHE_SAVE }}
+
+      - name: Build
+        shell: bash
+        run: make reldebug
+
+      - name: Test
+        shell: bash
+        run: |
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "*" --no-exit --time_execution
+
   vector-verification:
     name: Vector Verification Tests (${{ matrix.vector_type }})
     runs-on: ubuntu-20.04
@@ -505,13 +545,13 @@ jobs:
           - vector_type: "dictionary_expression"
             test_parameter: '"*"'
           - vector_type: "dictionary_operator"
-            test_parameter: '"*"'
+            test_parameter: '' # skip running all tests here because it is too slow
           - vector_type: "constant_operator"
             test_parameter: '' # skip running all tests here because it is too slow
           - vector_type: "sequence_operator"
             test_parameter: '' # skip running all tests here because it is too slow
           - vector_type: "nested_shuffle"
-            test_parameter: '"*"'
+            test_parameter: '' # skip running all tests here because it is too slow
     env:
       CC: gcc-10
       CXX: g++-10
@@ -522,7 +562,7 @@ jobs:
       BUILD_TPCDS: 1
       BUILD_FTS: 1
       BUILD_JSON: 1
-      BUILD_EXTENSIONS: "inet"
+      CORE_EXTENSIONS: "inet"
       VERIFY_VECTOR: ${{ matrix.vector_type }}
 
     steps:
@@ -562,7 +602,7 @@ jobs:
       BUILD_TPCDS: 1
       BUILD_FTS: 1
       BUILD_JSON: 1
-      BUILD_EXTENSIONS: "inet"
+      CORE_EXTENSIONS: "inet"
       FORCE_ASYNC_SINK_SOURCE: 1
 
     steps:
@@ -634,7 +674,7 @@ jobs:
          make
 
          cd unsafe
-         DISABLE_MEMORY_SAFETY=1 make
+         UNSAFE_NUMERIC_CAST=1 DISABLE_MEMORY_SAFETY=1 make
 
      - name: Set up benchmarks
        shell: bash
@@ -686,7 +726,7 @@ jobs:
       BUILD_FTS: 1
       BUILD_JSON: 1
       BUILD_JEMALLOC: 1
-      BUILD_EXTENSIONS: "inet"
+      CORE_EXTENSIONS: "inet"
       TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt
 
     steps:
@@ -719,6 +759,7 @@ jobs:
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]" --no-exit --timeout 600
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow --no-exit --timeout 600
 
+
   vector-sizes:
     name: Vector Sizes
     runs-on: ubuntu-20.04
@@ -726,25 +767,32 @@ jobs:
     env:
       CC: gcc-10
       CXX: g++-10
+      GEN: ninja
+      STANDARD_VECTOR_SIZE: 2
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ env.CCACHE_SAVE }}
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ env.CCACHE_SAVE }}
 
-    - name: Test
-      shell: bash
-      run: python scripts/test_vector_sizes.py
+      - name: Build
+        shell: bash
+        run: make relassert
+
+      - name: Test
+        shell: bash
+        run: |
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --no-exit --time_execution
 
   block-sizes:
     name: Block Sizes
@@ -753,15 +801,19 @@ jobs:
     env:
       CC: gcc-10
       CXX: g++-10
+      GEN: ninja
+      BLOCK_ALLOC_SIZE: 16384
+      BUILD_JSON: 1
+      BUILD_PARQUET: 1
 
     steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
@@ -769,9 +821,25 @@ jobs:
           key: ${{ github.job }}
           save: ${{ env.CCACHE_SAVE }}
 
-      - name: Test
+      - name: Build with standard vector size
         shell: bash
-        run: python scripts/test_block_sizes.py
+        run: make relassert
+
+      - name: Fast and storage tests
+        shell: bash
+        run: |
+          python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest --no-exit --time_execution
+          python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest "test/sql/storage/*" --no-exit --time_execution
+
+      - name: Build with vector size of 512
+        shell: bash
+        run: rm -rf ./build && rm -rf ./duckdb_unittest_tempdir && make clean && STANDARD_VECTOR_SIZE=512 make relassert
+
+      - name: Fast and storage tests
+        shell: bash
+        run: |
+          python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest --no-exit --time_execution
+          python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest "test/sql/storage/*" --no-exit --time_execution
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
@@ -909,6 +977,7 @@ jobs:
       AWS_SECRET_ACCESS_KEY: minio_duckdb_user_password
       DUCKDB_S3_ENDPOINT: duckdb-minio.com:9000
       DUCKDB_S3_USE_SSL: false
+      HTTP_PROXY_PUBLIC: localhost:3128
 
       GEN: ninja
 
@@ -924,6 +993,14 @@ jobs:
     - name: Install Ninja
       shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+
+    # TODO: fix the authenticated proxy here
+    - name: Install and run http proxy squid
+      shell: bash
+      run: |
+        sudo apt-get install squid
+        ./scripts/run_squid.sh --port 3128 --log_dir squid_logs &
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main

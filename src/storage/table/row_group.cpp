@@ -49,6 +49,22 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
 	Verify();
 }
 
+RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &data)
+    : SegmentBase<RowGroup>(data.start, data.count), collection(collection_p), version_info(nullptr),
+      allocation_size(0) {
+	auto &block_manager = GetBlockManager();
+	auto &info = GetTableInfo();
+	auto &types = collection.get().GetTypes();
+	columns.reserve(types.size());
+	for (idx_t c = 0; c < types.size(); c++) {
+		auto entry = ColumnData::CreateColumn(block_manager, info, c, data.start, types[c], nullptr);
+		entry->InitializeColumn(data.column_data[c]);
+		columns.push_back(std::move(entry));
+	}
+
+	Verify();
+}
+
 void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_start) {
 	this->collection = collection_p;
 	this->start = new_start;
@@ -858,6 +874,13 @@ void RowGroup::MergeIntoStatistics(idx_t column_idx, BaseStatistics &other) {
 	col_data.MergeIntoStatistics(other);
 }
 
+void RowGroup::MergeIntoStatistics(TableStatistics &other) {
+	auto stats_lock = other.GetLock();
+	for (idx_t i = 0; i < columns.size(); i++) {
+		MergeIntoStatistics(i, other.GetStats(*stats_lock, i).Statistics());
+	}
+}
+
 CompressionType ColumnCheckpointInfo::GetCompressionType() {
 	return info.compression_types[column_idx];
 }
@@ -950,14 +973,36 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		//
 		// Just as above, the state can refer to many other states, so this
 		// can cascade recursively into more pointer writes.
+		auto persistent_data = state->ToPersistentData();
 		BinarySerializer serializer(data_writer);
 		serializer.Begin();
-		state->WriteDataPointers(writer, serializer);
+		persistent_data.Serialize(serializer);
 		serializer.End();
 	}
 	row_group_pointer.deletes_pointers = CheckpointDeletes(writer.GetPayloadWriter().GetManager());
 	Verify();
 	return row_group_pointer;
+}
+
+bool RowGroup::IsPersistent() const {
+	for (auto &column : columns) {
+		if (!column->IsPersistent()) {
+			// column is not persistent
+			return false;
+		}
+	}
+	return true;
+}
+
+PersistentRowGroupData RowGroup::SerializeRowGroupInfo() const {
+	// all columns are persistent - serialize
+	PersistentRowGroupData result;
+	for (auto &col : columns) {
+		result.column_data.push_back(col->Serialize());
+	}
+	result.start = start;
+	result.count = count;
+	return result;
 }
 
 vector<MetaBlockPointer> RowGroup::CheckpointDeletes(MetadataManager &manager) {

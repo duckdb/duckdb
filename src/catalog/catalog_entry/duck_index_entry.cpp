@@ -13,21 +13,21 @@ IndexDataTableInfo::~IndexDataTableInfo() {
 	if (!info) {
 		return;
 	}
+	// FIXME: this should happen differently.
 	info->GetIndexes().RemoveIndex(index_name);
 }
 
-DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info,
+DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &create_info,
                                TableCatalogEntry &table_p)
-    : IndexCatalogEntry(catalog, schema, info), initial_index_size(0) {
+    : IndexCatalogEntry(catalog, schema, create_info), initial_index_size(0) {
 	auto &table = table_p.Cast<DuckTableEntry>();
 	auto &storage = table.GetStorage();
-
-	this->info = make_shared_ptr<IndexDataTableInfo>(storage.GetDataTableInfo(), name);
+	info = make_shared_ptr<IndexDataTableInfo>(storage.GetDataTableInfo(), name);
 }
 
-DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info,
-                               shared_ptr<IndexDataTableInfo> info_p)
-    : IndexCatalogEntry(catalog, schema, info), info(std::move(info_p)), initial_index_size(0) {
+DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &create_info,
+                               shared_ptr<IndexDataTableInfo> storage_info)
+    : IndexCatalogEntry(catalog, schema, create_info), info(std::move(storage_info)), initial_index_size(0) {
 }
 
 unique_ptr<CatalogEntry> DuckIndexEntry::Copy(ClientContext &context) const {

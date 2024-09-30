@@ -149,7 +149,7 @@ public:
 	//! Commit the append
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
 	//! Write a segment of the table to the WAL
-	void WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count);
+	void WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count, optional_ptr<StorageCommitState> commit_state);
 	//! Revert a set of appends made by the given AppendState, used to revert appends in the event of an error during
 	//! commit (e.g. because of an I/O exception)
 	void RevertAppend(idx_t start_row, idx_t count);
@@ -158,7 +158,7 @@ public:
 	void ScanTableSegment(idx_t start_row, idx_t count, const std::function<void(DataChunk &chunk)> &function);
 
 	//! Merge a row group collection directly into this table - appending it to the end of the table without copying
-	void MergeStorage(RowGroupCollection &data, TableIndexList &indexes);
+	void MergeStorage(RowGroupCollection &data, TableIndexList &indexes, optional_ptr<StorageCommitState> commit_state);
 
 	//! Append a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table, returns
 	//! whether or not the append succeeded

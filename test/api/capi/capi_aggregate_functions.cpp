@@ -25,13 +25,24 @@ void WeightedSumUpdate(duckdb_function_info info, duckdb_data_chunk input, duckd
 	auto input_data = static_cast<int64_t *>(duckdb_vector_get_data(input_vector));
 	auto input_validity = duckdb_vector_get_validity(input_vector);
 
-	auto weight_vector = duckdb_data_chunk_get_vector(input, 1);
-	auto weight_data = static_cast<int64_t *>(duckdb_vector_get_data(weight_vector));
-	auto weight_validity = duckdb_vector_get_validity(weight_vector);
-	for (idx_t i = 0; i < row_count; i++) {
-		if (duckdb_validity_row_is_valid(input_validity, i) && duckdb_validity_row_is_valid(weight_validity, i)) {
-			state[i]->sum += input_data[i] * weight_data[i];
-			state[i]->count++;
+	if (duckdb_data_chunk_get_column_count(input) == 1) {
+		// single argument
+		for (idx_t i = 0; i < row_count; i++) {
+			if (duckdb_validity_row_is_valid(input_validity, i)) {
+				state[i]->sum += input_data[i];
+				state[i]->count++;
+			}
+		}
+	} else {
+		// two arguments
+		auto weight_vector = duckdb_data_chunk_get_vector(input, 1);
+		auto weight_data = static_cast<int64_t *>(duckdb_vector_get_data(weight_vector));
+		auto weight_validity = duckdb_vector_get_validity(weight_vector);
+		for (idx_t i = 0; i < row_count; i++) {
+			if (duckdb_validity_row_is_valid(input_validity, i) && duckdb_validity_row_is_valid(weight_validity, i)) {
+				state[i]->sum += input_data[i] * weight_data[i];
+				state[i]->count++;
+			}
 		}
 	}
 }
@@ -63,10 +74,9 @@ void WeightedSumFinalize(duckdb_function_info info, duckdb_aggregate_state *sour
 	}
 }
 
-static void CAPIRegisterWeightedSum(duckdb_connection connection, const char *name, duckdb_state expected_outcome) {
-	duckdb_state status;
-
-	// create a scalar function
+static duckdb_aggregate_function CAPIGetAggregateFunction(duckdb_connection connection, const char *name,
+                                                          idx_t parameter_count = 2) {
+	// create an aggregate function
 	auto function = duckdb_create_aggregate_function();
 	duckdb_aggregate_function_set_name(nullptr, name);
 	duckdb_aggregate_function_set_name(function, nullptr);
@@ -77,8 +87,9 @@ static void CAPIRegisterWeightedSum(duckdb_connection connection, const char *na
 	auto type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
 	duckdb_aggregate_function_add_parameter(nullptr, type);
 	duckdb_aggregate_function_add_parameter(function, nullptr);
-	duckdb_aggregate_function_add_parameter(function, type);
-	duckdb_aggregate_function_add_parameter(function, type);
+	for (idx_t idx = 0; idx < parameter_count; idx++) {
+		duckdb_aggregate_function_add_parameter(function, type);
+	}
 
 	// set the return type to bigint
 	duckdb_aggregate_function_set_return_type(nullptr, type);
@@ -91,7 +102,14 @@ static void CAPIRegisterWeightedSum(duckdb_connection connection, const char *na
 	duckdb_aggregate_function_set_functions(function, nullptr, nullptr, nullptr, nullptr, nullptr);
 	duckdb_aggregate_function_set_functions(function, WeightedSumSize, WeightedSumInit, WeightedSumUpdate,
 	                                        WeightedSumCombine, WeightedSumFinalize);
+	return function;
+}
 
+static void CAPIRegisterWeightedSum(duckdb_connection connection, const char *name, duckdb_state expected_outcome) {
+	duckdb_state status;
+
+	// create an aggregate function
+	auto function = CAPIGetAggregateFunction(connection, name);
 	// register and cleanup
 	status = duckdb_register_aggregate_function(connection, function);
 	REQUIRE(status == expected_outcome);
@@ -140,7 +158,7 @@ static void CAPIRegisterWeightedSumExtraInfo(duckdb_connection connection, const
                                              duckdb_state expected_outcome) {
 	duckdb_state status;
 
-	// create a scalar function
+	// create an aggregate function
 	auto function = duckdb_create_aggregate_function();
 	duckdb_aggregate_function_set_name(function, name);
 
@@ -318,7 +336,7 @@ void RepeatedStringAggDestructor(duckdb_aggregate_state *states, idx_t count) {
 static void CAPIRegisterRepeatedStringAgg(duckdb_connection connection) {
 	duckdb_state status;
 
-	// create a scalar function
+	// create an aggregate function
 	auto function = duckdb_create_aggregate_function();
 	duckdb_aggregate_function_set_name(function, "repeated_string_agg");
 
@@ -376,4 +394,47 @@ TEST_CASE("Test String Aggregate Function", "[capi]") {
 	    "SELECT repeated_string_agg(CASE WHEN i%10=0 THEN i::VARCHAR ELSE '' END, 2) FROM range(100) t(i)");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->Fetch<string>(0, 0) == "00101020203030404050506060707080809090");
+}
+
+static void CAPIRegisterWeightedSumOverloads(duckdb_connection connection, const char *name,
+                                             duckdb_state expected_outcome) {
+	duckdb_state status;
+
+	auto function_set = duckdb_create_aggregate_function_set(name);
+	// create an aggregate function with 2 parameters
+	auto function = CAPIGetAggregateFunction(connection, name, 1);
+	duckdb_add_aggregate_function_to_set(function_set, function);
+	duckdb_destroy_aggregate_function(&function);
+
+	// create an aggregate function with 3 parameters
+	function = CAPIGetAggregateFunction(connection, name, 2);
+	duckdb_add_aggregate_function_to_set(function_set, function);
+	duckdb_destroy_aggregate_function(&function);
+
+	// register and cleanup
+	status = duckdb_register_aggregate_function_set(connection, function_set);
+	REQUIRE(status == expected_outcome);
+
+	duckdb_destroy_aggregate_function_set(&function_set);
+	duckdb_destroy_aggregate_function_set(&function_set);
+	duckdb_destroy_aggregate_function_set(nullptr);
+}
+
+TEST_CASE("Test Aggregate Function Overloads C API", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+	CAPIRegisterWeightedSumOverloads(tester.connection, "my_weighted_sum", DuckDBSuccess);
+	// try to register it again - this should be an error
+	CAPIRegisterWeightedSumOverloads(tester.connection, "my_weighted_sum", DuckDBError);
+
+	// now call it
+	result = tester.Query("SELECT my_weighted_sum(40)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<int64_t>(0, 0) == 40);
+
+	result = tester.Query("SELECT my_weighted_sum(40, 2)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<int64_t>(0, 0) == 80);
 }

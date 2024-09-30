@@ -378,6 +378,18 @@ static bool
 hpa_try_purge(tsdn_t *tsdn, hpa_shard_t *shard) {
 	malloc_mutex_assert_owner(tsdn, &shard->mtx);
 
+	/*
+	 * Make sure we respect purge interval setting and don't purge
+	 * too frequently.
+	 */
+	if (shard->opts.strict_min_purge_interval) {
+		uint64_t since_last_purge_ms = shard->central->hooks.ms_since(
+		    &shard->last_purge);
+		if (since_last_purge_ms < shard->opts.min_purge_interval_ms) {
+		     return false;
+		}
+	}
+
 	hpdata_t *to_purge = psset_pick_purge(&shard->psset);
 	if (to_purge == NULL) {
 		return false;
@@ -537,9 +549,16 @@ hpa_shard_maybe_do_deferred_work(tsdn_t *tsdn, hpa_shard_t *shard,
 		purged = false;
 		while (hpa_should_purge(tsdn, shard) && nops < max_ops) {
 			purged = hpa_try_purge(tsdn, shard);
-			if (purged) {
-				nops++;
+			if (!purged) {
+				/*
+				 * It is fine if we couldn't purge as sometimes
+				 * we try to purge just to unblock
+				 * hugification, but there is maybe no dirty
+				 * pages at all at the moment.
+				 */
+				break;
 			}
+			nops++;
 		}
 		hugified = hpa_try_hugify(tsdn, shard);
 		if (hugified) {

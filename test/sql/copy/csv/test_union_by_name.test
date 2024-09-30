@@ -3,6 +3,9 @@
 # group: [csv]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 SET default_null_order='nulls_first';
 
 # Setup
@@ -209,3 +212,10 @@ ORDER BY id
 statement error
 SELECT * FROM read_csv_auto('data/csv/union-by-name/*[!a]/*',HIVE_PARTITIONING=TRUE ,UNION_BY_NAME=TRUE)
 ----
+
+# Test one thread per file CSV union by name where file only had header.
+query IIII
+from read_csv('data/csv/union_by_name_2/*.csv', union_by_name=True, parallel = false);
+----
+1	1	1	NULL
+

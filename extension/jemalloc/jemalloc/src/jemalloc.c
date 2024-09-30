@@ -433,11 +433,8 @@ arena_new_create_background_thread(tsdn_t *tsdn, unsigned ind) {
 	if (ind == 0) {
 		return;
 	}
-	/*
-	 * Avoid creating a new background thread just for the huge arena, which
-	 * purges eagerly by default.
-	 */
-	if (have_background_thread && !arena_is_huge(ind)) {
+
+	if (have_background_thread) {
 		if (background_thread_create(tsdn_tsd(tsdn), ind)) {
 			malloc_printf("<jemalloc>: error in background thread "
 				      "creation for arena %u. Abort.\n", ind);
@@ -1331,6 +1328,21 @@ malloc_conf_init_helper(sc_data_t *sc_data, unsigned bin_shard_sizes[SC_NBINS],
 				} while (vlen_left > 0);
 				CONF_CONTINUE;
 			}
+			CONF_HANDLE_SIZE_T(opt_bin_info_max_batched_size,
+			    "max_batched_size", 0, SIZE_T_MAX,
+			    CONF_DONT_CHECK_MIN, CONF_DONT_CHECK_MAX,
+			    /* clip */ true)
+			CONF_HANDLE_SIZE_T(opt_bin_info_remote_free_max_batch,
+			    "remote_free_max_batch", 0,
+			    BIN_REMOTE_FREE_ELEMS_MAX,
+			    CONF_DONT_CHECK_MIN, CONF_CHECK_MAX,
+			    /* clip */ true)
+			CONF_HANDLE_SIZE_T(opt_bin_info_remote_free_max,
+			    "remote_free_max", 0,
+			    BIN_REMOTE_FREE_ELEMS_MAX,
+			    CONF_DONT_CHECK_MIN, CONF_CHECK_MAX,
+			    /* clip */ true)
+
 			if (CONF_MATCH("tcache_ncached_max")) {
 				bool err = tcache_bin_info_default_init(
 				    v, vlen);
@@ -1544,6 +1556,10 @@ malloc_conf_init_helper(sc_data_t *sc_data, unsigned bin_shard_sizes[SC_NBINS],
 			    opt_hpa_opts.min_purge_interval_ms,
 			    "hpa_min_purge_interval_ms", 0, 0,
 			    CONF_DONT_CHECK_MIN, CONF_DONT_CHECK_MAX, false);
+
+			CONF_HANDLE_BOOL(
+			    opt_hpa_opts.strict_min_purge_interval,
+			    "hpa_strict_min_purge_interval");
 
 			if (CONF_MATCH("hpa_dirty_mult")) {
 				if (CONF_MATCH_VALUE("-1")) {
@@ -4254,16 +4270,16 @@ JEMALLOC_ATTR(constructor)
 static void
 jemalloc_constructor(void) {
 	unsigned long long cpu_count = malloc_ncpus();
-	unsigned long long bgt_count = cpu_count / 32;
+	unsigned long long bgt_count = cpu_count / 16;
 	if (bgt_count == 0) {
 		bgt_count = 1;
 	}
 	// decay is in ms
-	unsigned long long decay = DUCKDB_DECAY_DELAY * 1000;
+	unsigned long long decay = DUCKDB_JEMALLOC_DECAY * 1000;
 #ifdef DEBUG
-	snprintf(JE_MALLOC_CONF_BUFFER, JE_MALLOC_CONF_BUFFER_SIZE, "junk:true,oversize_threshold:268435456,dirty_decay_ms:%llu,muzzy_decay_ms:%llu,narenas:%llu,max_background_threads:%llu", decay, decay, cpu_count, bgt_count);
+	snprintf(JE_MALLOC_CONF_BUFFER, JE_MALLOC_CONF_BUFFER_SIZE, "junk:true,oversize_threshold:268435456,dirty_decay_ms:%llu,muzzy_decay_ms:%llu,narenas:%llu,max_background_threads:%llu", decay, decay, cpu_count / 2, bgt_count);
 #else
-	snprintf(JE_MALLOC_CONF_BUFFER, JE_MALLOC_CONF_BUFFER_SIZE, "oversize_threshold:268435456,dirty_decay_ms:%llu,muzzy_decay_ms:%llu,narenas:%llu,max_background_threads:%llu", decay, decay, cpu_count, bgt_count);
+	snprintf(JE_MALLOC_CONF_BUFFER, JE_MALLOC_CONF_BUFFER_SIZE, "oversize_threshold:268435456,dirty_decay_ms:%llu,muzzy_decay_ms:%llu,narenas:%llu,max_background_threads:%llu", decay, decay, cpu_count / 2, bgt_count);
 #endif
 	je_malloc_conf = JE_MALLOC_CONF_BUFFER;
 	malloc_init();

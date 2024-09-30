@@ -6,6 +6,7 @@ add_library_unity(
   aggregate_function-c.cpp
   appender-c.cpp
   arrow-c.cpp
+  cast_function-c.cpp
   config-c.cpp
   data_chunk-c.cpp
   datetime-c.cpp

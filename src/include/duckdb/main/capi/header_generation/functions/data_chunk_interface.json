@@ -1,0 +1,136 @@
+{
+    "group": "data_chunk_interface",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_create_data_chunk",
+            "return_type": "duckdb_data_chunk",
+            "params": [
+                {
+                    "type": "duckdb_logical_type *",
+                    "name": "types"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "column_count"
+                }
+            ],
+            "comment": {
+                "description": "Creates an empty data chunk with the specified column types.\nThe result must be destroyed with `duckdb_destroy_data_chunk`.\n\n",
+                "param_comments": {
+                    "types": "An array of column types. Column types can not contain ANY and INVALID types.",
+                    "column_count": "The number of columns."
+                },
+                "return_value": "The data chunk."
+            }
+        },
+        {
+            "name": "duckdb_destroy_data_chunk",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_data_chunk *",
+                    "name": "chunk"
+                }
+            ],
+            "comment": {
+                "description": "Destroys the data chunk and de-allocates all memory allocated for that chunk.\n\n",
+                "param_comments": {
+                    "chunk": "The data chunk to destroy."
+                }
+            }
+        },
+        {
+            "name": "duckdb_data_chunk_reset",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "chunk"
+                }
+            ],
+            "comment": {
+                "description": "Resets a data chunk, clearing the validity masks and setting the cardinality of the data chunk to 0.\nAfter calling this method, you must call `duckdb_vector_get_validity` and `duckdb_vector_get_data` to obtain current\ndata and validity pointers\n\n",
+                "param_comments": {
+                    "chunk": "The data chunk to reset."
+                }
+            }
+        },
+        {
+            "name": "duckdb_data_chunk_get_column_count",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "chunk"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the number of columns in a data chunk.\n\n",
+                "param_comments": {
+                    "chunk": "The data chunk to get the data from"
+                },
+                "return_value": "The number of columns in the data chunk"
+            }
+        },
+        {
+            "name": "duckdb_data_chunk_get_vector",
+            "return_type": "duckdb_vector",
+            "params": [
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "chunk"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col_idx"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the vector at the specified column index in the data chunk.\n\nThe pointer to the vector is valid for as long as the chunk is alive.\nIt does NOT need to be destroyed.\n\n",
+                "param_comments": {
+                    "chunk": "The data chunk to get the data from"
+                },
+                "return_value": "The vector"
+            }
+        },
+        {
+            "name": "duckdb_data_chunk_get_size",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "chunk"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the current number of tuples in a data chunk.\n\n",
+                "param_comments": {
+                    "chunk": "The data chunk to get the data from"
+                },
+                "return_value": "The number of tuples in the data chunk"
+            }
+        },
+        {
+            "name": "duckdb_data_chunk_set_size",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "chunk"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "size"
+                }
+            ],
+            "comment": {
+                "description": "Sets the current number of tuples in a data chunk.\n\n",
+                "param_comments": {
+                    "chunk": "The data chunk to set the size in",
+                    "size": "The number of tuples in the data chunk"
+                }
+            }
+        }
+    ]
+}

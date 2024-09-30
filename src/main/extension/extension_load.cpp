@@ -1,9 +1,12 @@
+#include "duckdb.h"
 #include "duckdb/common/dl.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
+#include "duckdb/main/capi/capi_internal.hpp"
+#include "duckdb/main/capi/extension_api.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
-#include "duckdb/common/serializer/buffered_file_reader.hpp"
-#include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "mbedtls_wrapper.hpp"
 
 #ifndef DUCKDB_NO_THREADS
@@ -17,10 +20,105 @@
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
+// Extension C API
+//===--------------------------------------------------------------------===//
+
+//! State that is kept during the load phase of a C API extension
+struct DuckDBExtensionLoadState {
+	explicit DuckDBExtensionLoadState(DatabaseInstance &db_p) : db(db_p), database_data(nullptr) {
+	}
+
+	//! Create a DuckDBExtensionLoadState reference from a C API opaque pointer
+	static DuckDBExtensionLoadState &Get(duckdb_extension_info info) {
+		D_ASSERT(info);
+		return *reinterpret_cast<duckdb::DuckDBExtensionLoadState *>(info);
+	}
+
+	//! Convert to an opaque C API pointer
+	duckdb_extension_info ToCStruct() {
+		return reinterpret_cast<duckdb_extension_info>(this);
+	}
+
+	//! Ref to the database being loaded
+	DatabaseInstance &db;
+
+	//! This is the duckdb_database struct that will be passed to the extension during initialization. Note that the
+	//! extension does not need to free it.
+	unique_ptr<DatabaseData> database_data;
+
+	//! The function pointer struct passed to the extension. The extension is expected to copy this struct during
+	//! initialization
+	duckdb_ext_api_v0 api_struct;
+
+	//! Error handling
+	bool has_error = false;
+	//! The stored error from the loading process
+	ErrorData error_data;
+};
+
+//! Contains the callbacks that are passed to CAPI extensions to allow initialization
+struct ExtensionAccess {
+	//! Create the struct of function pointers to pass to the extension for initialization
+	static duckdb_extension_access CreateAccessStruct() {
+		return {SetError, GetDatabase, GetAPI};
+	}
+
+	//! Called by the extension to indicate failure to initialize the extension
+	static void SetError(duckdb_extension_info info, const char *error) {
+		auto &load_state = DuckDBExtensionLoadState::Get(info);
+
+		load_state.has_error = true;
+		load_state.error_data = ErrorData(ExceptionType::UNKNOWN_TYPE, error);
+	}
+
+	//! Called by the extension get a pointer to the database that is loading it
+	static duckdb_database *GetDatabase(duckdb_extension_info info) {
+		auto &load_state = DuckDBExtensionLoadState::Get(info);
+
+		try {
+			// Create the duckdb_database
+			load_state.database_data = make_uniq<DatabaseData>();
+			load_state.database_data->database = make_uniq<DuckDB>(load_state.db);
+			return reinterpret_cast<duckdb_database *>(load_state.database_data.get());
+		} catch (std::exception &ex) {
+			load_state.error_data = ErrorData(ex);
+			return nullptr;
+		} catch (...) {
+			load_state.error_data =
+			    ErrorData(ExceptionType::UNKNOWN_TYPE, "Unknown error in GetDatabase when trying to load extension!");
+			return nullptr;
+		}
+	}
+
+	//! Called by the extension get a pointer the correctly versioned extension C API struct.
+	static void *GetAPI(duckdb_extension_info info, const char *version) {
+
+		string version_string = version;
+		idx_t major, minor, patch;
+		auto parsed = VersioningUtils::ParseSemver(version_string, major, minor, patch);
+
+		auto &load_state = DuckDBExtensionLoadState::Get(info);
+
+		if (!parsed || !VersioningUtils::IsSupportedCAPIVersion(major, minor, patch)) {
+			load_state.has_error = true;
+			load_state.error_data =
+			    ErrorData(ExceptionType::UNKNOWN_TYPE,
+			              "Unsupported C CAPI version detected during extension initialization: " + string(version));
+			return nullptr;
+		}
+		load_state.api_struct = CreateAPIv0();
+		return &load_state.api_struct;
+	}
+};
+
+//===--------------------------------------------------------------------===//
 // Load External Extension
 //===--------------------------------------------------------------------===//
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
+// The C++ init function
 typedef void (*ext_init_fun_t)(DatabaseInstance &);
+// The C init function
+typedef void (*ext_init_c_api_fun_t)(duckdb_extension_info info, duckdb_extension_access *access);
 typedef const char *(*ext_version_fun_t)(void);
 typedef bool (*ext_is_storage_t)(void);
 
@@ -33,6 +131,15 @@ static T LoadFunctionFromDLL(void *dll, const string &function_name, const strin
 	return (T)function;
 }
 #endif
+
+template <class T>
+static T TryLoadFunctionFromDLL(void *dll, const string &function_name, const string &filename) {
+	auto function = dlsym(dll, function_name.c_str());
+	if (!function) {
+		return nullptr;
+	}
+	return (T)function;
+}
 
 static void ComputeSHA256String(const string &to_hash, string *res) {
 	// Invoke MbedTls function to actually compute sha256
@@ -66,7 +173,7 @@ static string FilterZeroAtEnd(string s) {
 	return s;
 }
 
-ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(const char *metadata) {
+ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(const char *metadata) noexcept {
 	ParsedExtensionMetaData result;
 
 	vector<string> metadata_field;
@@ -77,10 +184,29 @@ ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(const char *meta
 
 	std::reverse(metadata_field.begin(), metadata_field.end());
 
+	// Fetch the magic value and early out if this is invalid: the rest will just be bogus
 	result.magic_value = FilterZeroAtEnd(metadata_field[0]);
+	if (!result.AppearsValid()) {
+		return result;
+	}
+
 	result.platform = FilterZeroAtEnd(metadata_field[1]);
-	result.duckdb_version = FilterZeroAtEnd(metadata_field[2]);
+
 	result.extension_version = FilterZeroAtEnd(metadata_field[3]);
+
+	auto extension_abi_metadata = FilterZeroAtEnd(metadata_field[4]);
+
+	if (extension_abi_metadata == "C_STRUCT") {
+		result.abi_type = ExtensionABIType::C_STRUCT;
+		result.duckdb_capi_version = FilterZeroAtEnd(metadata_field[2]);
+	} else if (extension_abi_metadata == "CPP" || extension_abi_metadata.empty()) {
+		result.abi_type = ExtensionABIType::CPP;
+		result.duckdb_version = FilterZeroAtEnd(metadata_field[2]);
+	} else {
+		result.abi_type = ExtensionABIType::UNKNOWN;
+		result.duckdb_version = "unknown";
+		result.extension_abi_metadata = extension_abi_metadata;
+	}
 
 	result.signature = string(metadata, ParsedExtensionMetaData::FOOTER_SIZE - ParsedExtensionMetaData::SIGNATURE_SIZE);
 	return result;
@@ -158,12 +284,12 @@ bool ExtensionHelper::CheckExtensionSignature(FileHandle &handle, ParsedExtensio
 	return false;
 }
 
-bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const string &extension,
+bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
                                      ExtensionInitResult &result, string &error) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
-	if (!config.options.enable_external_access) {
+	if (!db.config.options.enable_external_access) {
 		throw PermissionException("Loading external extensions is disabled through configuration");
 	}
 	auto filename = fs.ConvertSeparators(extension);
@@ -198,8 +324,9 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		filename = address;
 #else
 
-		string local_path = !config.options.extension_directory.empty() ? config.options.extension_directory
-		                                                                : ExtensionHelper::DefaultExtensionFolder(fs);
+		string local_path = !db.config.options.extension_directory.empty()
+		                        ? db.config.options.extension_directory
+		                        : ExtensionHelper::DefaultExtensionFolder(fs);
 
 		// convert random separators to platform-canonic
 		local_path = fs.ConvertSeparators(local_path);
@@ -236,12 +363,17 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		metadata_mismatch_error = StringUtil::Format("Failed to load '%s', %s", extension, metadata_mismatch_error);
 	}
 
-	if (!config.options.allow_unsigned_extensions) {
-		bool signature_valid =
-		    CheckExtensionSignature(*handle, parsed_metadata, config.options.allow_community_extensions);
+	if (!db.config.options.allow_unsigned_extensions) {
+		bool signature_valid;
+		if (parsed_metadata.AppearsValid()) {
+			signature_valid =
+			    CheckExtensionSignature(*handle, parsed_metadata, db.config.options.allow_community_extensions);
+		} else {
+			signature_valid = false;
+		}
 
 		if (!signature_valid) {
-			throw IOException(config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename) +
+			throw IOException(db.config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename) +
 			                  metadata_mismatch_error);
 		}
 
@@ -249,7 +381,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 			// Signed extensions perform the full check
 			throw InvalidInputException(metadata_mismatch_error);
 		}
-	} else if (!config.options.allow_extensions_metadata_mismatch) {
+	} else if (!db.config.options.allow_extensions_metadata_mismatch) {
 		if (!metadata_mismatch_error.empty()) {
 			// Unsigned extensions AND configuration allowing n, loading allowed, mainly for
 			// debugging purposes
@@ -319,17 +451,18 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 #endif
 }
 
-ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileSystem &fs, const string &extension) {
+ExtensionInitResult ExtensionHelper::InitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension) {
 	string error;
 	ExtensionInitResult result;
-	if (!TryInitialLoad(config, fs, extension, result, error)) {
+	if (!TryInitialLoad(db, fs, extension, result, error)) {
 		if (!ExtensionHelper::AllowAutoInstall(extension)) {
 			throw IOException(error);
 		}
 		// the extension load failed - try installing the extension
-		ExtensionHelper::InstallExtension(config, fs, extension, false);
+		ExtensionInstallOptions options;
+		ExtensionHelper::InstallExtension(db, fs, extension, options);
 		// try loading again
-		if (!TryInitialLoad(config, fs, extension, result, error)) {
+		if (!TryInitialLoad(db, fs, extension, result, error)) {
 			throw IOException(error);
 		}
 	}
@@ -364,18 +497,45 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
-	auto res = InitialLoad(DBConfig::GetConfig(db), fs, extension);
+	auto res = InitialLoad(db, fs, extension);
 	auto init_fun_name = res.filebase + "_init";
 
-	ext_init_fun_t init_fun;
-	init_fun = LoadFunctionFromDLL<ext_init_fun_t>(res.lib_hdl, init_fun_name, res.filename);
+	// "OLD WAY" of loading extensions. If the <ext_name>_init exists, we choose that
+	ext_init_fun_t init_fun = TryLoadFunctionFromDLL<ext_init_fun_t>(res.lib_hdl, init_fun_name, res.filename);
+	if (init_fun) {
+		try {
+			(*init_fun)(db);
+		} catch (std::exception &e) {
+			ErrorData error(e);
+			throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
+			                            init_fun_name, res.filename, error.RawMessage());
+		}
 
-	try {
-		(*init_fun)(db);
-	} catch (std::exception &e) {
-		ErrorData error(e);
-		throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
-		                            init_fun_name, res.filename, error.RawMessage());
+		D_ASSERT(res.install_info);
+
+		db.SetExtensionLoaded(extension, *res.install_info);
+		return;
+	}
+
+	// TODO: make this the only way of calling extensions?
+	// "NEW WAY" of loading extensions enabling C API only
+	init_fun_name = res.filebase + "_init_c_api";
+	ext_init_c_api_fun_t init_fun_capi =
+	    TryLoadFunctionFromDLL<ext_init_c_api_fun_t>(res.lib_hdl, init_fun_name, res.filename);
+
+	if (!init_fun_capi) {
+		throw IOException("File \"%s\" did not contain function \"%s\": %s", res.filename, init_fun_name, GetDLError());
+	}
+
+	// Create the load state
+	DuckDBExtensionLoadState load_state(db);
+
+	auto access = ExtensionAccess::CreateAccessStruct();
+	(*init_fun_capi)(load_state.ToCStruct(), &access);
+
+	// Throw any error that the extension might have encountered
+	if (load_state.has_error) {
+		load_state.error_data.Throw("An error was thrown during initialization of the extension '" + extension + "': ");
 	}
 
 	D_ASSERT(res.install_info);

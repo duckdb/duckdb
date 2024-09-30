@@ -342,6 +342,7 @@ void LocalUngroupedAggregateState::Sink(DataChunk &payload_chunk, idx_t payload_
 #endif
 	auto &aggregate = state.aggregate_expressions[aggr_idx]->Cast<BoundAggregateExpression>();
 	idx_t payload_cnt = aggregate.children.size();
+	D_ASSERT(payload_idx + payload_cnt <= payload_chunk.data.size());
 	auto start_of_input = payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx];
 	AggregateInputData aggr_input_data(state.bind_data[aggr_idx], allocator);
 	aggregate.function.simple_update(start_of_input, aggr_input_data, payload_cnt, state.aggregate_data[aggr_idx].get(),
@@ -385,7 +386,7 @@ SinkCombineResultType PhysicalUngroupedAggregate::Combine(ExecutionContext &cont
 	gstate.state.Combine(lstate.state);
 
 	auto &client_profiler = QueryProfiler::Get(context.client);
-	context.thread.profiler.Flush(*this, lstate.child_executor, "child_executor", 0);
+	context.thread.profiler.Flush(*this);
 	client_profiler.Flush(context.thread.profiler);
 
 	return SinkCombineResultType::FINISHED;

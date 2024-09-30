@@ -225,13 +225,16 @@ TableIOManager &TableIOManager::Get(DataTable &table) {
 //===--------------------------------------------------------------------===//
 void DataTable::InitializeScan(TableScanState &state, const vector<column_t> &column_ids,
                                TableFilterSet *table_filters) {
-	state.checkpoint_lock = info->checkpoint_lock.GetSharedLock();
+	if (!state.checkpoint_lock) {
+		state.checkpoint_lock = make_shared_ptr<CheckpointLock>(info->checkpoint_lock.GetSharedLock());
+	}
 	state.Initialize(column_ids, table_filters);
 	row_groups->InitializeScan(state.table_state, column_ids, table_filters);
 }
 
 void DataTable::InitializeScan(DuckTransaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
                                TableFilterSet *table_filters) {
+	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	auto &local_storage = LocalStorage::Get(transaction);
 	InitializeScan(state, column_ids, table_filters);
 	local_storage.InitializeScan(*this, state.local_state, table_filters);
@@ -239,7 +242,9 @@ void DataTable::InitializeScan(DuckTransaction &transaction, TableScanState &sta
 
 void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids, idx_t start_row,
                                          idx_t end_row) {
-	state.checkpoint_lock = info->checkpoint_lock.GetSharedLock();
+	if (!state.checkpoint_lock) {
+		state.checkpoint_lock = make_shared_ptr<CheckpointLock>(info->checkpoint_lock.GetSharedLock());
+	}
 	state.Initialize(column_ids);
 	row_groups->InitializeScanWithOffset(state.table_state, column_ids, start_row, end_row);
 }
@@ -255,7 +260,8 @@ idx_t DataTable::MaxThreads(ClientContext &context) {
 
 void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScanState &state) {
 	auto &local_storage = LocalStorage::Get(context, db);
-	state.checkpoint_lock = info->checkpoint_lock.GetSharedLock();
+	auto &transaction = DuckTransaction::Get(context, db);
+	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	row_groups->InitializeParallelScan(state.scan_state);
 
 	local_storage.InitializeParallelScan(*this, state.local_state);
@@ -939,13 +945,34 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 	}
 }
 
-void DataTable::MergeStorage(RowGroupCollection &data, TableIndexList &indexes) {
-	row_groups->MergeStorage(data);
+void DataTable::MergeStorage(RowGroupCollection &data, TableIndexList &,
+                             optional_ptr<StorageCommitState> commit_state) {
+	row_groups->MergeStorage(data, this, commit_state);
 	row_groups->Verify();
 }
 
-void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count) {
+void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count,
+                           optional_ptr<StorageCommitState> commit_state) {
 	log.WriteSetTable(info->schema, info->table);
+	if (commit_state) {
+		idx_t optimistic_count = 0;
+		auto entry = commit_state->GetRowGroupData(*this, row_start, optimistic_count);
+		if (entry) {
+			D_ASSERT(optimistic_count > 0);
+			log.WriteRowGroupData(*entry);
+			if (optimistic_count > count) {
+				throw InternalException(
+				    "Optimistically written count cannot exceed actual count (got %llu, but expected count is %llu)",
+				    optimistic_count, count);
+			}
+			// write any remaining (non-optimistically written) rows to the WAL normally
+			row_start += optimistic_count;
+			count -= optimistic_count;
+			if (count == 0) {
+				return;
+			}
+		}
+	}
 	ScanTableSegment(row_start, count, [&](DataChunk &chunk) { log.WriteInsert(chunk); });
 }
 

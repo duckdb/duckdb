@@ -17,7 +17,7 @@ SELECT json_structure(json('{"duck":"goose"}').duck);
 query T
 select json('{"foo": null}').foo
 ----
-NULL
+null
 
 query T
 select json('{"foo": null}').foo.bar
@@ -27,7 +27,7 @@ NULL
 query T
 select json('null')
 ----
-NULL
+null
 
 query T
 select json('[null]')."0"

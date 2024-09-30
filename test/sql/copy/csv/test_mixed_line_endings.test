@@ -2,6 +2,9 @@
 # description: Test mixed line endings
 # group: [csv]
 
+statement ok
+PRAGMA enable_verification
+
 # generate CSV file with different line endings
 # load CSV file into a table
 statement ok
@@ -9,7 +12,7 @@ CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);
 
 
 query I
-insert into test select * from read_csv_auto('test/sql/copy/csv/data/test/mixed_line_endings.csv');
+insert into test select * from read_csv_auto('data/csv/test/mixed_line_endings.csv');
 ----
 3
 

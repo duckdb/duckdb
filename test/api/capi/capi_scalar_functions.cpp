@@ -59,10 +59,8 @@ void AddVariadicNumbersTogether(duckdb_function_info, duckdb_data_chunk input, d
 	}
 }
 
-static void CAPIRegisterAddition(duckdb_connection connection, const char *name, duckdb_state expected_outcome) {
-	duckdb_state status;
-
-	// create a scalar function
+static duckdb_scalar_function CAPIGetScalarFunction(duckdb_connection connection, const char *name,
+                                                    idx_t parameter_count = 2) {
 	auto function = duckdb_create_scalar_function();
 	duckdb_scalar_function_set_name(nullptr, name);
 	duckdb_scalar_function_set_name(function, nullptr);
@@ -73,8 +71,9 @@ static void CAPIRegisterAddition(duckdb_connection connection, const char *name,
 	auto type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
 	duckdb_scalar_function_add_parameter(nullptr, type);
 	duckdb_scalar_function_add_parameter(function, nullptr);
-	duckdb_scalar_function_add_parameter(function, type);
-	duckdb_scalar_function_add_parameter(function, type);
+	for (idx_t idx = 0; idx < parameter_count; idx++) {
+		duckdb_scalar_function_add_parameter(function, type);
+	}
 
 	// set the return type to bigint
 	duckdb_scalar_function_set_return_type(nullptr, type);
@@ -86,6 +85,14 @@ static void CAPIRegisterAddition(duckdb_connection connection, const char *name,
 	duckdb_scalar_function_set_function(nullptr, AddVariadicNumbersTogether);
 	duckdb_scalar_function_set_function(function, nullptr);
 	duckdb_scalar_function_set_function(function, AddVariadicNumbersTogether);
+	return function;
+}
+
+static void CAPIRegisterAddition(duckdb_connection connection, const char *name, duckdb_state expected_outcome) {
+	duckdb_state status;
+
+	// create a scalar function
+	auto function = CAPIGetScalarFunction(connection, name);
 
 	// register and cleanup
 	status = duckdb_register_scalar_function(connection, function);
@@ -273,11 +280,22 @@ void CountNULLValues(duckdb_function_info, duckdb_data_chunk input, duckdb_vecto
 	auto result_data = (uint64_t *)duckdb_vector_get_data(output);
 	for (idx_t row_idx = 0; row_idx < input_size; row_idx++) {
 		idx_t null_count = 0;
+		idx_t other_null_count = 0;
 		for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 			if (!duckdb_validity_row_is_valid(validity_masks[col_idx], row_idx)) {
 				null_count++;
 			}
+
+			// Alternative code path using SQLNULL.
+			auto duckdb_vector = duckdb_data_chunk_get_vector(input, col_idx);
+			auto logical_type = duckdb_vector_get_column_type(duckdb_vector);
+			auto type_id = duckdb_get_type_id(logical_type);
+			if (type_id == DUCKDB_TYPE_SQLNULL) {
+				other_null_count++;
+			}
+			duckdb_destroy_logical_type(&logical_type);
 		}
+		REQUIRE(null_count == other_null_count);
 		result_data[row_idx] = null_count;
 	}
 }
@@ -336,4 +354,54 @@ TEST_CASE("Test Scalar Functions - variadic number of ANY parameters", "[capi]")
 	result = tester.Query("SELECT my_null_count()");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->Fetch<uint64_t>(0, 0) == 0);
+}
+
+static void CAPIRegisterAdditionOverloads(duckdb_connection connection, const char *name,
+                                          duckdb_state expected_outcome) {
+	duckdb_state status;
+
+	auto function_set = duckdb_create_scalar_function_set(name);
+	// create a scalar function with 2 parameters
+	auto function = CAPIGetScalarFunction(connection, name, 2);
+	duckdb_add_scalar_function_to_set(function_set, function);
+	duckdb_destroy_scalar_function(&function);
+
+	// create a scalar function with 3 parameters
+	function = CAPIGetScalarFunction(connection, name, 3);
+	duckdb_add_scalar_function_to_set(function_set, function);
+	duckdb_destroy_scalar_function(&function);
+
+	// register and cleanup
+	status = duckdb_register_scalar_function_set(connection, function_set);
+	REQUIRE(status == expected_outcome);
+
+	duckdb_destroy_scalar_function_set(&function_set);
+	duckdb_destroy_scalar_function_set(&function_set);
+	duckdb_destroy_scalar_function_set(nullptr);
+}
+
+TEST_CASE("Test Scalar Function Overloads C API", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+	CAPIRegisterAdditionOverloads(tester.connection, "my_addition", DuckDBSuccess);
+	// try to register it again - this should be an error
+	CAPIRegisterAdditionOverloads(tester.connection, "my_addition", DuckDBError);
+
+	// now call it
+	result = tester.Query("SELECT my_addition(40, 2)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<int64_t>(0, 0) == 42);
+
+	result = tester.Query("SELECT my_addition(40, 2, 2)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<int64_t>(0, 0) == 44);
+
+	// call it over a vector of values
+	result = tester.Query("SELECT my_addition(1000000, i, i) FROM range(10000) t(i)");
+	REQUIRE_NO_FAIL(*result);
+	for (idx_t row = 0; row < 10000; row++) {
+		REQUIRE(result->Fetch<int64_t>(0, row) == static_cast<int64_t>(1000000 + row + row));
+	}
 }

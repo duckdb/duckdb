@@ -214,7 +214,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		stmt->query_string = query;
 		stmt->prepared = std::move(prepared);
 		stmt->current_row = -1;
-		for (idx_t i = 0; i < stmt->prepared->n_param; i++) {
+		for (idx_t i = 0; i < stmt->prepared->named_param_map.size(); i++) {
 			stmt->bound_names.push_back("$" + to_string(i + 1));
 			stmt->bound_values.push_back(Value());
 		}
@@ -482,6 +482,10 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 	if (column_type.IsJSONType()) {
 		return 0; // Does not need to be surrounded in quotes like VARCHAR
 	}
+	if (column_type.HasAlias()) {
+		// Use the text representation for aliased types
+		return SQLITE_TEXT;
+	}
 	switch (column_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 	case LogicalTypeId::TINYINT:
@@ -620,14 +624,14 @@ int sqlite3_bind_parameter_count(sqlite3_stmt *stmt) {
 	if (!stmt) {
 		return 0;
 	}
-	return stmt->prepared->n_param;
+	return stmt->prepared->named_param_map.size();
 }
 
 const char *sqlite3_bind_parameter_name(sqlite3_stmt *stmt, int idx) {
 	if (!stmt) {
 		return nullptr;
 	}
-	if (idx < 1 || idx > (int)stmt->prepared->n_param) {
+	if (idx < 1 || idx > (int)stmt->prepared->named_param_map.size()) {
 		return nullptr;
 	}
 	return stmt->bound_names[idx - 1].c_str();
@@ -649,7 +653,7 @@ int sqlite3_internal_bind_value(sqlite3_stmt *stmt, int idx, Value value) {
 	if (!stmt || !stmt->prepared || stmt->result) {
 		return SQLITE_MISUSE;
 	}
-	if (idx < 1 || idx > (int)stmt->prepared->n_param) {
+	if (idx < 1 || idx > (int)stmt->prepared->named_param_map.size()) {
 		return SQLITE_RANGE;
 	}
 	stmt->bound_values[idx - 1] = value;
@@ -1902,7 +1906,7 @@ SQLITE_API char *sqlite3_expanded_sql(sqlite3_stmt *pStmt) {
 }
 
 SQLITE_API int sqlite3_keyword_check(const char *str, int len) {
-	return Parser::IsKeyword(std::string(str, len));
+	return KeywordHelper::IsKeyword(std::string(str, len));
 }
 
 SQLITE_API int sqlite3_keyword_count(void) {

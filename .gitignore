@@ -352,4 +352,4 @@ extension_external
 .venv-pyodide
 
 test/sql/pragma/output.json
-
+tools/pythonpkg/duckdb_build/

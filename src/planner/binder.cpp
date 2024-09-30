@@ -6,6 +6,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
@@ -21,7 +22,6 @@
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/planner/query_node/list.hpp"
 #include "duckdb/planner/tableref/list.hpp"
-#include "duckdb/main/database.hpp"
 
 #include <algorithm>
 
@@ -52,10 +52,10 @@ shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Bin
 		                      "increase the maximum expression depth.",
 		                      context.config.max_expression_depth);
 	}
-	return make_shared_ptr<Binder>(true, context, parent ? parent->shared_from_this() : nullptr, binder_type);
+	return shared_ptr<Binder>(new Binder(context, parent ? parent->shared_from_this() : nullptr, binder_type));
 }
 
-Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, BinderType binder_type)
+Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType binder_type)
     : context(context), bind_context(*this), parent(std::move(parent_p)), bound_tables(0), binder_type(binder_type),
       entry_retriever(context) {
 	if (parent) {
@@ -134,10 +134,8 @@ BoundStatement Binder::BindWithCTE(T &statement) {
 		}
 		MoveCorrelatedExpressions(*tail.child_binder);
 
-		// extract operator below root operation
-		auto plan = std::move(bound_statement.plan->children[0]);
-		bound_statement.plan->children.clear();
-		bound_statement.plan->children.push_back(CreatePlan(*bound_cte, std::move(plan)));
+		auto plan = std::move(bound_statement.plan);
+		bound_statement.plan = CreatePlan(*bound_cte, std::move(plan));
 	} else {
 		bound_statement = Bind(statement.template Cast<T>());
 	}
@@ -344,7 +342,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 
 BoundStatement Binder::Bind(QueryNode &node) {
 	BoundStatement result;
-	if (context.db->config.options.disabled_optimizers.find(OptimizerType::MATERIALIZED_CTE) ==
+	if (node.type != QueryNodeType::CTE_NODE && // Issue #13850 - Don't auto-materialize if users materialize (for now)
+	    context.db->config.options.disabled_optimizers.find(OptimizerType::MATERIALIZED_CTE) ==
 	        context.db->config.options.disabled_optimizers.end() &&
 	    context.config.enable_optimizer && OptimizeCTEs(node)) {
 		switch (node.type) {

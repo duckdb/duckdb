@@ -77,7 +77,8 @@ public:
 	DUCKDB_API unique_ptr<QueryResult> Query(const string &name, const string &sql);
 
 	//! Explain the query plan of this relation
-	DUCKDB_API unique_ptr<QueryResult> Explain(ExplainType type = ExplainType::EXPLAIN_STANDARD);
+	DUCKDB_API unique_ptr<QueryResult> Explain(ExplainType type = ExplainType::EXPLAIN_STANDARD,
+	                                           ExplainFormat explain_format = ExplainFormat::DEFAULT);
 
 	DUCKDB_API virtual unique_ptr<TableRef> GetTableRef();
 	virtual bool IsReadOnly() {
@@ -144,9 +145,10 @@ public:
 	//! Insert a row (i.e.,list of values) into a table
 	DUCKDB_API void Insert(const vector<vector<Value>> &values);
 	//! Create a table and insert the data from this relation into that table
-	DUCKDB_API shared_ptr<Relation> CreateRel(const string &schema_name, const string &table_name);
-	DUCKDB_API void Create(const string &table_name);
-	DUCKDB_API void Create(const string &schema_name, const string &table_name);
+	DUCKDB_API shared_ptr<Relation> CreateRel(const string &schema_name, const string &table_name,
+	                                          bool temporary = false);
+	DUCKDB_API void Create(const string &table_name, bool temporary = false);
+	DUCKDB_API void Create(const string &schema_name, const string &table_name, bool temporary = false);
 
 	//! Write a relation to a CSV file
 	DUCKDB_API shared_ptr<Relation>

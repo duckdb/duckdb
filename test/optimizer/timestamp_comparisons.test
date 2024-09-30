@@ -1,0 +1,113 @@
+# name: test/optimizer/timestamp_comparisons.test
+# description: timestampt comparisons should be correct
+# group: [optimizer]
+
+require icu
+
+statement ok
+create table t (t timestamptz);
+
+statement ok
+SET TimeZone='ECT';
+
+statement ok
+SET CALENDAR='gregorian';
+
+statement ok
+insert into t values('2028-02-28 01:00:00');
+
+# EQUAL is affected (and LOWER, GREATER too)
+
+query I
+select t::timestamp = timestamp '2028-02-28 01:00:00' from t;
+----
+true
+
+query II
+select timestamp '2028-02-28 01:00:00' = timestamp '2028-02-28 01:00:00', t = timestamp '2028-02-28 01:00:00' from t;
+----
+true	true
+
+# Leading to this strange behaviour: no match
+query I
+select count(*) from t where t::timestamp = timestamp '2028-02-28 01:00:00';
+----
+1
+
+## Same problem if the constant is a string (no match)
+query I
+select * from t where t::timestamp = '2028-02-28 01:00:00';
+----
+2028-02-28 01:00:00+01
+
+
+# Without the cast of 't', it matches:
+query I
+select * from t where t = timestamp '2028-02-28 01:00:00';
+----
+2028-02-28 01:00:00+01
+
+
+# IN is affected too (no match)
+query I
+select * from t where t::timestamp in (timestamp '2028-02-28 01:00:00',timestamp '2028-02-28 11:00:00');
+----
+2028-02-28 01:00:00+01
+
+# Same problem with the casting in the other direction
+statement ok
+create table u(t timestamp);
+
+statement ok
+insert into u values('1993-02-28 01:00:00');
+
+query IIIII
+select t, t::timestamptz, '1993-04-28 01:00:00'::timestamptz, t::timestamptz='1993-02-28 01:00:00', t='1993-02-28 01:00:00' from u;
+----
+1993-02-28 01:00:00	1993-02-28 01:00:00+01	1993-04-28 01:00:00+02	true	true
+
+# Cast is not invertible
+query II
+select '1993-03-28 02:00:00'::timestamp, '1993-03-28 02:00:00'::timestamp::timestamptz::timestamp;
+----
+1993-03-28 02:00:00	1993-03-28 03:00:00
+
+statement ok
+create table t1 (ts_s TIMESTAMP_S, ts_ms TIMESTAMP_MS, ts_ns TIMESTAMP_NS, ts TIMESTAMP);
+
+statement ok
+insert into t1 values ('2028-02-28 01:00:00.123456789', '2028-02-28 01:00:00.123456789', '2028-02-28 01:00:00.123456789', '2028-02-28 01:00:00.123456789');
+
+query IIII
+select * from t1;
+----
+2028-02-28 01:00:00	2028-02-28 01:00:00.123	2028-02-28 01:00:00.123456789	2028-02-28 01:00:00.123456
+
+# ts is more precise than timestamp_s and timestamp_ms, so casting ts_s, ts_ms to ts is not valid.
+query III
+select ts = ts_s::TIMESTAMP, ts = ts_ms::TIMESTAMP, ts = ts_ns::TIMESTAMP from t1;
+----
+false	false	true
+
+# ts is more precise than timestamp_s and timestamp_ms, so conversions can happen
+query III
+select ts::TIMESTAMP_S = ts_s, ts::TIMESTAMP_MS = ts_ms, ts::TIMESTAMP_NS = ts_ns from t1;
+----
+true	true	false
+
+# ts_s only has second precision, so the value of ts_s is 2028-02-28 01:00:00 and not equal to 2028-02-28 01:00:00.123456789
+query III
+select ts_s::timestamp = timestamp '2028-02-28 01:00:00.123456789', ts_ms::timestamp = timestamp '2028-02-28 01:00:00.123456789', ts_ns::timestamp = timestamp '2028-02-28 01:00:00.123456789'  from t1;
+----
+false	false	true
+
+# ts_ms only has micro second precision, so the value of ts_ms is 2028-02-28 01:00:00.123 and not equal to 2028-02-28 01:00:00.123456789
+query II
+select ts_s::timestamp_ms = timestamp_ms '2028-02-28 01:00:00.123456789', ts_ms = timestamp_ms '2028-02-28 01:00:00.123456789'  from t1;
+----
+false	true
+
+statement error
+select ts_ns::timestamp_ms = timestamp_ms '2028-02-28 01:00:00.123456789' from t1;
+----
+<REGEX>:.*Conversion Error.*

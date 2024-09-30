@@ -9,6 +9,10 @@ mode skip
 require tpch
 
 statement ok
+PRAGMA enable_verification
+
+
+statement ok
 CALL dbgen(sf=100);
 
 statement ok

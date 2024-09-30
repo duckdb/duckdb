@@ -27,7 +27,7 @@ InsertionOrderPreservingMap<string> PhysicalComparisonJoin::ParamsToString() con
 		// extra_info += it.left->GetName() + " " + op + " " + it.right->GetName() + "\n";
 	}
 	result["Conditions"] = condition_info;
-	result["Estimated Cardinality"] = StringUtil::Format("%llu", estimated_cardinality);
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 

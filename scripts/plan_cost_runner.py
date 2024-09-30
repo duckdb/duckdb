@@ -109,6 +109,7 @@ def op_inspect(op) -> PlanCost:
             cost.probe_side += op['children'][0]['operator_cardinality']
         if 'operator_cardinality' in op['children'][1]:
             cost.build_side += op['children'][1]['operator_cardinality']
+
         left_cost = op_inspect(op['children'][0])
         right_cost = op_inspect(op['children'][1])
         cost.probe_side += left_cost.probe_side + right_cost.probe_side

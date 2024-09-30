@@ -86,7 +86,9 @@ enum class ExceptionType : uint8_t {
 	HTTP = 38,
 	MISSING_EXTENSION = 39, // Thrown when an extension is used but not loaded
 	AUTOLOAD = 40,          // Thrown when an extension is used but not loaded
-	SEQUENCE = 41
+	SEQUENCE = 41,
+	INVALID_CONFIGURATION =
+	    42 // An invalid configuration was detected (e.g. a Secret param was missing, or a required setting not found)
 };
 
 class Exception : public std::runtime_error {
@@ -324,6 +326,22 @@ public:
 	template <typename... ARGS>
 	explicit InvalidInputException(const Expression &expr, const string &msg, ARGS... params)
 	    : InvalidInputException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(expr)) {
+	}
+};
+
+class InvalidConfigurationException : public Exception {
+public:
+	DUCKDB_API explicit InvalidConfigurationException(const string &msg);
+	DUCKDB_API explicit InvalidConfigurationException(const string &msg,
+	                                                  const unordered_map<string, string> &extra_info);
+
+	template <typename... ARGS>
+	explicit InvalidConfigurationException(const string &msg, ARGS... params)
+	    : InvalidConfigurationException(ConstructMessage(msg, params...)) {
+	}
+	template <typename... ARGS>
+	explicit InvalidConfigurationException(const Expression &expr, const string &msg, ARGS... params)
+	    : InvalidConfigurationException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(expr)) {
 	}
 };
 

@@ -223,6 +223,7 @@ static void CMStringDecompressSerialize(Serializer &serializer, const optional_p
 unique_ptr<FunctionData> CMStringDecompressDeserialize(Deserializer &deserializer, ScalarFunction &function) {
 	function.arguments = deserializer.ReadProperty<vector<LogicalType>>(100, "arguments");
 	function.function = GetStringDecompressFunctionSwitch(function.arguments[0]);
+	function.return_type = deserializer.Get<const LogicalType &>();
 	return nullptr;
 }
 

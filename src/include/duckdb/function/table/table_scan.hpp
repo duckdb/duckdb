@@ -28,7 +28,7 @@ struct TableScanBindData : public TableFunctionData {
 	//! Whether or not the table scan is for index creation.
 	bool is_create_index;
 	//! The row ids to fetch in case of an index scan.
-	vector<row_t> row_ids;
+	unsafe_vector<row_t> row_ids;
 
 public:
 	bool Equals(const FunctionData &other_p) const override {

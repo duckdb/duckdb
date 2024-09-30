@@ -20,7 +20,8 @@ public:
 	RowDataBlock(MemoryTag tag, BufferManager &buffer_manager, idx_t capacity, idx_t entry_size)
 	    : capacity(capacity), entry_size(entry_size), count(0), byte_offset(0) {
 		auto size = MaxValue<idx_t>(buffer_manager.GetBlockSize(), capacity * entry_size);
-		buffer_manager.Allocate(tag, size, false, &block);
+		auto buffer_handle = buffer_manager.Allocate(tag, size, false);
+		block = buffer_handle.GetBlockHandle();
 		D_ASSERT(BufferManager::GetAllocSize(size) == block->GetMemoryUsage());
 	}
 
