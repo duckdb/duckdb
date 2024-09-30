@@ -1,4 +1,4 @@
-# name: test/sql/types/struct/unnamed_struct_comparison.test
+# name: test/sql/types/struct/inet_struct_comparison.test
 # description: Test unnamed struct casts
 # group: [struct]
 
