@@ -29,6 +29,7 @@
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
+#include "duckdb/planner/filter/zone_map_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #endif
@@ -36,7 +37,7 @@
 #include <cassert>
 #include <chrono>
 #include <cstring>
-#include <duckdb/planner/filter/zone_map_filter.hpp>
+
 #include <sstream>
 
 namespace duckdb {
