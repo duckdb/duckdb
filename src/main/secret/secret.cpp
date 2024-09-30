@@ -79,16 +79,11 @@ string KeyValueSecret::ToString(SecretDisplayType mode) const {
 void KeyValueSecret::Serialize(Serializer &serializer) const {
 	BaseSecret::SerializeBaseSecret(serializer);
 
-	vector<Value> map_values;
-	for (auto it = secret_map.begin(); it != secret_map.end(); it++) {
-		child_list_t<Value> map_struct;
-		map_struct.push_back(make_pair("key", Value(it->first)));
-		map_struct.push_back(make_pair("value", Value(it->second)));
-		map_values.push_back(Value::STRUCT(map_struct));
+	child_list_t<Value> secrets;
+	for (auto &it : secret_map) {
+		secrets.emplace_back(it.first, it.second);
 	}
-
-	auto map_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
-	auto map = Value::MAP(ListType::GetChildType(map_type), map_values);
+	auto map = Value::STRUCT(std::move(secrets));
 	serializer.WriteProperty(201, "secret_map", map);
 
 	vector<Value> redact_key_values;

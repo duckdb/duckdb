@@ -185,9 +185,13 @@ public:
 		Value secret_map_value;
 		deserializer.ReadProperty(201, "secret_map", secret_map_value);
 
-		for (const auto &entry : ListValue::GetChildren(secret_map_value)) {
-			auto kv_struct = StructValue::GetChildren(entry);
-			result->secret_map[kv_struct[0].ToString()] = kv_struct[1].ToString();
+		auto child_count = StructType::GetChildCount(secret_map_value.type());
+		auto &children = StructValue::GetChildren(secret_map_value);
+		for (idx_t i = 0; i < child_count; i++) {
+			auto name = StructType::GetChildName(secret_map_value.type(), i);
+			auto &value = children[i];
+
+			result->secret_map[name] = value;
 		}
 
 		Value redact_set_value;
