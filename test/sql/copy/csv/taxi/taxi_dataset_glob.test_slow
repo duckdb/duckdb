@@ -1,6 +1,12 @@
-# name: test/sql/copy/csv/taxi_dataset_glob.test
+# name: test/sql/copy/csv/taxi_dataset_glob.test_slow
 # description: Verify that we can run with the taxi dataset
 # group: [csv]
+
+# This test requires a wild-card and can only be run directly on s3
+# This is only for internal run
+mode skip
+
+require httpfs
 
 load __TEST_DIR__/taxi_dataset.db
 
@@ -60,12 +66,12 @@ CREATE TABLE trips (
 
 # This won't work due to BIGINT -> Double mismatch
 statement error
-INSERT INTO trips FROM read_csv('/Users/holanda/Documents/Projects/nyc-taxi-data/csv/compressed/*.csv.gz');
+INSERT INTO trips FROM read_csv('s3://duckdb-blobs/data/nyc-taxi-dataset/trips_*.csv.gz');
 ----
 Schema mismatch between globbed files.
 
 statement ok
-COPY trips FROM '/Users/holanda/Documents/Projects/nyc-taxi-data/csv/compressed/*.csv.gz' (header 0);
+COPY trips FROM 's3://duckdb-blobs/data/nyc-taxi-dataset/trips_*.csv.gz' (header 0);
 
 query I
 select count(*) from trips
