@@ -29,5 +29,8 @@ struct AdaptiveSnifferResult : SnifferResult {
 	    : SnifferResult(std::move(return_types_p), std::move(names_p)), more_than_one_row(more_than_one_row_p) {
 	}
 	bool more_than_one_row;
+	SnifferResult ToSnifferResult() {
+		return {return_types,names};
+	}
 };
 } // namespace duckdb

@@ -179,7 +179,7 @@ SnifferResult CSVSniffer::AdaptiveSniff(const CSVSchema &file_schema) {
 		}
 		return full_sniffer;
 	}
-	return static_cast<SnifferResult>(min_sniff_res);
+	return min_sniff_res.ToSnifferResult();
 }
 SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	buffer_manager->sniffing = true;
