@@ -1102,8 +1102,8 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 					trans.PrefetchRegistered();
 				}
 			}
-			return true;
 		}
+		return true;
 	}
 
 	auto this_output_chunk_rows = MinValue<idx_t>(STANDARD_VECTOR_SIZE, GetGroup(state).num_rows - state.group_offset);
