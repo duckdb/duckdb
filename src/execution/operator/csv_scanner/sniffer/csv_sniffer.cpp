@@ -153,9 +153,8 @@ AdaptiveSnifferResult CSVSniffer::MinimalSniff() {
 		detected_types.push_back(d_type);
 	}
 
-	return {detected_types, names, sniffed_column_counts.result_position > 2};
+	return {detected_types, names, sniffed_column_counts.result_position > 1};
 }
-
 
 SnifferResult CSVSniffer::AdaptiveSniff(const CSVSchema &file_schema) {
 	auto min_sniff_res = MinimalSniff();
@@ -165,8 +164,7 @@ SnifferResult CSVSniffer::AdaptiveSniff(const CSVSchema &file_schema) {
 		// If we got no errors, we also run full if schemas do not match.
 		if (!set_columns.IsSet() && !options.file_options.AnySet()) {
 			string error;
-			run_full =
-			    !file_schema.SchemasMatch(error, &min_sniff_res, options.file_path, true);
+			run_full = !file_schema.SchemasMatch(error, &min_sniff_res, options.file_path, true);
 		}
 	}
 	if (run_full) {

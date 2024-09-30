@@ -24,8 +24,8 @@ struct CSVColumnInfo {
 struct CSVSchema {
 	void Initialize(vector<string> &names, vector<LogicalType> &types, const string &file_path);
 	bool Empty() const;
-	bool SchemasMatch(string &error_message, SnifferResult *sniffer_resilt,
-                             const string &cur_file_path, bool is_minimal_sniffer) const;
+	bool SchemasMatch(string &error_message, SnifferResult *sniffer_resilt, const string &cur_file_path,
+	                  bool is_minimal_sniffer) const;
 
 private:
 	static bool CanWeCastIt(LogicalTypeId source, LogicalTypeId destination);
