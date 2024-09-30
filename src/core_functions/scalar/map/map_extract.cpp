@@ -1,12 +1,13 @@
-#include "duckdb/core_functions/scalar/map_functions.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/core_functions/scalar/map_functions.hpp"
 #include "duckdb/function/scalar/list/contains_or_position.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/parser/expression/bound_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 namespace duckdb {
 
+template <bool FIRST>
 static unique_ptr<FunctionData> MapExtractBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
 	if (arguments.size() != 2) {
@@ -17,7 +18,7 @@ static unique_ptr<FunctionData> MapExtractBind(ClientContext &context, ScalarFun
 	auto &input_type = arguments[1]->return_type;
 
 	if (map_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.return_type = LogicalType::LIST(LogicalTypeId::SQLNULL);
+		bound_function.return_type = FIRST ? LogicalTypeId::SQLNULL : LogicalType::LIST(LogicalTypeId::SQLNULL);
 		return make_uniq<VariableReturnBindData>(bound_function.return_type);
 	}
 
@@ -27,7 +28,7 @@ static unique_ptr<FunctionData> MapExtractBind(ClientContext &context, ScalarFun
 	auto &value_type = MapType::ValueType(map_type);
 
 	//! Here we have to construct the List Type that will be returned
-	bound_function.return_type = LogicalType::LIST(value_type);
+	bound_function.return_type = FIRST ? value_type : LogicalType::LIST(value_type);
 	auto key_type = MapType::KeyType(map_type);
 	if (key_type.id() != LogicalTypeId::SQLNULL && input_type.id() != LogicalTypeId::SQLNULL) {
 		bound_function.arguments[1] = MapType::KeyType(map_type);
@@ -35,6 +36,7 @@ static unique_ptr<FunctionData> MapExtractBind(ClientContext &context, ScalarFun
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
+template <bool FIRST>
 static void MapExtractFunc(DataChunk &args, ExpressionState &state, Vector &result) {
 	const auto count = args.size();
 
@@ -46,9 +48,13 @@ static void MapExtractFunc(DataChunk &args, ExpressionState &state, Vector &resu
 
 	if (map_is_null || arg_is_null) {
 		// Short-circuit if either the map or the arg is NULL
-		ListVector::SetListSize(result, 0);
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::GetData<list_entry_t>(result)[0] = {0, 0};
+		if (FIRST) {
+			ConstantVector::SetNull(result, true);
+		} else {
+			ListVector::SetListSize(result, 0);
+			ConstantVector::GetData<list_entry_t>(result)[0] = {0, 0};
+		}
 		result.Verify(count);
 		return;
 	}
@@ -60,17 +66,16 @@ static void MapExtractFunc(DataChunk &args, ExpressionState &state, Vector &resu
 	Vector pos_vec(LogicalType::INTEGER, count);
 	ListSearchOp<true>(map_vec, key_vec, arg_vec, pos_vec, args.size());
 
-	UnifiedVectorFormat val_format;
 	UnifiedVectorFormat pos_format;
 	UnifiedVectorFormat lst_format;
 
-	val_vec.ToUnifiedFormat(ListVector::GetListSize(map_vec), val_format);
 	pos_vec.ToUnifiedFormat(count, pos_format);
 	map_vec.ToUnifiedFormat(count, lst_format);
 
 	const auto pos_data = UnifiedVectorFormat::GetData<int32_t>(pos_format);
 	const auto inc_list_data = ListVector::GetData(map_vec);
-	const auto out_list_data = ListVector::GetData(result);
+	// There is no out list for FIRST so we just get the map vec again
+	const auto out_list_data = FIRST ? ListVector::GetData(map_vec) : ListVector::GetData(result);
 
 	idx_t offset = 0;
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
@@ -81,21 +86,30 @@ static void MapExtractFunc(DataChunk &args, ExpressionState &state, Vector &resu
 		}
 
 		auto &inc_list = inc_list_data[lst_idx];
-		auto &out_list = out_list_data[row_idx];
+		// There is no out list for FIRST so we just get the inc list again
+		auto &out_list = FIRST ? inc_list_data[lst_idx] : out_list_data[row_idx];
 
 		const auto pos_idx = pos_format.sel->get_index(row_idx);
 		if (!pos_format.validity.RowIsValid(pos_idx)) {
 			// We didnt find the key in the map, so return an empty list
-			out_list.offset = offset;
-			out_list.length = 0;
+			if (FIRST) {
+				FlatVector::SetNull(result, row_idx, true);
+			} else {
+				out_list.offset = offset;
+				out_list.length = 0;
+			}
 			continue;
 		}
 
 		// Compute the actual position of the value in the map value vector
 		const auto pos = inc_list.offset + UnsafeNumericCast<idx_t>(pos_data[pos_idx] - 1);
-		out_list.offset = offset;
-		out_list.length = 1;
-		ListVector::Append(result, val_vec, pos + 1, pos);
+		if (FIRST) {
+			VectorOperations::Copy(val_vec, result, pos + 1, pos, offset);
+		} else {
+			out_list.offset = offset;
+			out_list.length = 1;
+			ListVector::Append(result, val_vec, pos + 1, pos);
+		}
 		offset++;
 	}
 
@@ -107,7 +121,16 @@ static void MapExtractFunc(DataChunk &args, ExpressionState &state, Vector &resu
 }
 
 ScalarFunction MapExtractFun::GetFunction() {
-	ScalarFunction fun({LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, MapExtractFunc, MapExtractBind);
+	ScalarFunction fun({LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, MapExtractFunc<false>,
+	                   MapExtractBind<false>);
+	fun.varargs = LogicalType::ANY;
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	return fun;
+}
+
+ScalarFunction MapExtractFirstFun::GetFunction() {
+	ScalarFunction fun({LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, MapExtractFunc<true>,
+	                   MapExtractBind<true>);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;

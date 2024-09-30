@@ -268,6 +268,7 @@ static const StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(MapContainsFun),
 	DUCKDB_SCALAR_FUNCTION(MapEntriesFun),
 	DUCKDB_SCALAR_FUNCTION(MapExtractFun),
+	DUCKDB_SCALAR_FUNCTION(MapExtractFirstFun),
 	DUCKDB_SCALAR_FUNCTION(MapFromEntriesFun),
 	DUCKDB_SCALAR_FUNCTION(MapKeysFun),
 	DUCKDB_SCALAR_FUNCTION(MapValuesFun),
