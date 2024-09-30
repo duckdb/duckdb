@@ -56,9 +56,6 @@ ArrowSchemaMetadata ArrowSchemaMetadata::MetadataFromName(const string &extensio
 }
 
 bool ArrowSchemaMetadata::HasExtension() {
-	if (metadata_map.find(ARROW_EXTENSION_NAME) == metadata_map.end()) {
-		return false;
-	}
 	auto arrow_extension = GetOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME);
 	// FIXME: We are currently ignoring the ogc extensions
 	return !arrow_extension.empty() && !StringUtil::StartsWith(arrow_extension, "ogc");
