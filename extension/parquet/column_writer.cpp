@@ -1,10 +1,11 @@
 #include "column_writer.hpp"
 
 #include "duckdb.hpp"
+#include "geo_parquet.hpp"
+#include "parquet_dbp_encoder.hpp"
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_rle_bp_encoder.hpp"
 #include "parquet_writer.hpp"
-#include "geo_parquet.hpp"
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
@@ -19,11 +20,11 @@
 #include "duckdb/execution/expression_executor.hpp"
 #endif
 
+#include "brotli/encode.h"
 #include "lz4.hpp"
 #include "miniz_wrapper.hpp"
 #include "snappy.h"
 #include "zstd.h"
-#include "brotli/encode.h"
 
 namespace duckdb {
 
@@ -41,26 +42,6 @@ using ParquetRowGroup = duckdb_parquet::format::RowGroup;
 using duckdb_parquet::format::Type;
 
 #define PARQUET_DEFINE_VALID 65535
-
-static void VarintEncode(uint32_t val, WriteStream &ser) {
-	do {
-		uint8_t byte = val & 127;
-		val >>= 7;
-		if (val != 0) {
-			byte |= 128;
-		}
-		ser.Write<uint8_t>(byte);
-	} while (val != 0);
-}
-
-static uint8_t GetVarintSize(uint32_t val) {
-	uint8_t res = 0;
-	do {
-		val >>= 7;
-		res++;
-	} while (val != 0);
-	return res;
-}
 
 //===--------------------------------------------------------------------===//
 // ColumnWriterStatistics
@@ -106,7 +87,7 @@ void RleBpEncoder::BeginPrepare(uint32_t first_value) {
 void RleBpEncoder::FinishRun() {
 	// last value, or value has changed
 	// write out the current run
-	byte_count += GetVarintSize(current_run_count << 1) + byte_width;
+	byte_count += ParquetDecodeUtils::GetVarintSize(current_run_count << 1) + byte_width;
 	current_run_count = 1;
 	run_count++;
 }
@@ -137,7 +118,7 @@ void RleBpEncoder::BeginWrite(WriteStream &writer, uint32_t first_value) {
 
 void RleBpEncoder::WriteRun(WriteStream &writer) {
 	// write the header of the run
-	VarintEncode(current_run_count << 1, writer);
+	ParquetDecodeUtils::VarintEncode(current_run_count << 1, writer);
 	// now write the value
 	D_ASSERT(last_value >> (byte_width * 8) == 0);
 	switch (byte_width) {
@@ -879,7 +860,7 @@ struct ParquetUhugeintOperator {
 
 template <class SRC, class TGT, class OP = ParquetCastOperator>
 static void TemplatedWritePlain(Vector &col, ColumnWriterStatistics *stats, const idx_t chunk_start,
-                                const idx_t chunk_end, ValidityMask &mask, WriteStream &ser) {
+                                const idx_t chunk_end, const ValidityMask &mask, WriteStream &ser) {
 	static constexpr idx_t WRITE_COMBINER_CAPACITY = 8;
 	TGT write_combiner[WRITE_COMBINER_CAPACITY];
 	idx_t write_combiner_count = 0;
@@ -900,6 +881,28 @@ static void TemplatedWritePlain(Vector &col, ColumnWriterStatistics *stats, cons
 	ser.WriteData(const_data_ptr_cast(write_combiner), write_combiner_count * sizeof(TGT));
 }
 
+class StandardColumnWriterState : public BasicColumnWriterState {
+public:
+	StandardColumnWriterState(duckdb_parquet::format::RowGroup &row_group, idx_t col_idx)
+	    : BasicColumnWriterState(row_group, col_idx) {
+	}
+	~StandardColumnWriterState() override = default;
+
+	// analysis state for integer values for DELTA_BINARY_PACKED
+	idx_t total_value_count = 0;
+	int64_t first_value;
+	bool first_value_set = false;
+};
+
+class StandardWriterPageState : public ColumnWriterPageState {
+public:
+	StandardWriterPageState(const idx_t total_value_count, const int64_t first_value)
+	    : encoder(total_value_count, first_value), initialized(false) {
+	}
+	DbpEncoder encoder;
+	bool initialized;
+};
+
 template <class SRC, class TGT, class OP = ParquetCastOperator>
 class StandardColumnWriter : public BasicColumnWriter {
 public:
@@ -910,14 +913,85 @@ public:
 	~StandardColumnWriter() override = default;
 
 public:
+	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) override {
+		auto result = make_uniq<StandardColumnWriterState>(row_group, row_group.columns.size());
+		RegisterToRowGroup(row_group);
+		return std::move(result);
+	}
+
+	unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state_p) override {
+		auto &state = state_p.Cast<StandardColumnWriterState>();
+		auto result = make_uniq<StandardWriterPageState>(state.total_value_count, state.first_value);
+		return std::move(result);
+	}
+
+	void FlushPageState(WriteStream &temp_writer, ColumnWriterPageState *state_p) override {
+		auto &page_state = state_p->Cast<StandardWriterPageState>();
+		page_state.encoder.FinishWrite(temp_writer);
+	}
+
+	Encoding::type GetEncoding(BasicColumnWriterState &state) override {
+		return HasAnalyze() ? Encoding::DELTA_BINARY_PACKED : Encoding::PLAIN;
+	}
+
+	bool HasAnalyze() override {
+		// We can only do DELTA_BINARY_PACKED if the target type is int32_t/int64_t
+		return writer.GetSQLType(schema_idx).IsIntegral() &&
+		       (std::is_same<TGT, int32_t>::value || std::is_same<TGT, int64_t>::value);
+	}
+
+	void Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) override {
+		auto &state = state_p.Cast<StandardColumnWriterState>();
+
+		const bool check_parent_empty = parent && !parent->is_empty.empty();
+		const idx_t parent_index = state.definition_levels.size();
+
+		const idx_t vcount = parent ? parent->definition_levels.size() - state.definition_levels.size() : count;
+		const auto values = FlatVector::GetData<SRC>(vector);
+		const auto &validity = FlatVector::Validity(vector);
+
+		idx_t vector_index = 0;
+		for (idx_t i = 0; i < vcount; i++) {
+			if (check_parent_empty && parent->is_empty[parent_index + i]) {
+				continue;
+			}
+
+			if (validity.RowIsValid(vector_index)) {
+				state.total_value_count++;
+				if (!state.first_value_set) {
+					state.first_value = OP::template Operation<SRC, TGT>(values[vector_index]);
+				}
+			}
+			vector_index++;
+		}
+	}
+
 	unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
 		return OP::template InitializeStats<SRC, TGT>();
 	}
 
-	void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state,
+	void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state_p,
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
-		auto &mask = FlatVector::Validity(input_column);
-		TemplatedWritePlain<SRC, TGT, OP>(input_column, stats, chunk_start, chunk_end, mask, temp_writer);
+		const auto &mask = FlatVector::Validity(input_column);
+		if (HasAnalyze()) {
+			auto &page_state = page_state_p->Cast<StandardWriterPageState>();
+			auto &encoder = page_state.encoder;
+			if (page_state.initialized) {
+				encoder.BeginWrite(temp_writer);
+			}
+
+			const auto *ptr = FlatVector::GetData<SRC>(input_column);
+			for (idx_t r = chunk_start; r < chunk_end; r++) {
+				if (!mask.RowIsValid(r)) {
+					continue;
+				}
+				const TGT target_value = OP::template Operation<SRC, TGT>(ptr[r]);
+				OP::template HandleStats<SRC, TGT>(stats, ptr[r], target_value);
+				encoder.WriteValue(temp_writer, target_value);
+			}
+		} else {
+			TemplatedWritePlain<SRC, TGT, OP>(input_column, stats, chunk_start, chunk_end, mask, temp_writer);
+		}
 	}
 
 	idx_t GetRowSize(const Vector &vector, const idx_t index, const BasicColumnWriterState &state) const override {
@@ -1368,7 +1442,7 @@ public:
 				// if the value changed, we will encode it in the page
 				if (last_value_index != found.first->second) {
 					// we will add the value index size later, when we know the total number of keys
-					state.estimated_rle_pages_size += GetVarintSize(run_length);
+					state.estimated_rle_pages_size += ParquetDecodeUtils::GetVarintSize(run_length);
 					run_length = 0;
 					run_count++;
 					last_value_index = found.first->second;

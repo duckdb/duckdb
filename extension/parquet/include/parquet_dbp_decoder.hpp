@@ -1,7 +1,17 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// parquet_dbp_decoder.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
+
 #include "decode_utils.hpp"
 
 namespace duckdb {
+
 class DbpDecoder {
 public:
 	DbpDecoder(data_ptr_t buffer, uint32_t buffer_len) : buffer_(buffer, buffer_len) {
@@ -15,9 +25,9 @@ public:
 		// some derivatives
 		D_ASSERT(miniblocks_per_block > 0);
 		values_per_miniblock = block_value_count / miniblocks_per_block;
-		miniblock_bit_widths = unique_ptr<uint8_t[]>(new data_t[miniblocks_per_block]);
 
 		// init state to something sane
+		miniblock_bit_widths = nullptr;
 		values_left_in_block = 0;
 		values_left_in_miniblock = 0;
 		miniblock_offset = 0;
@@ -63,10 +73,12 @@ public:
 				}
 				min_delta =
 				    ParquetDecodeUtils::ZigzagToInt<int64_t>(ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_));
-				for (idx_t miniblock_idx = 0; miniblock_idx < miniblocks_per_block; miniblock_idx++) {
-					miniblock_bit_widths[miniblock_idx] = buffer_.read<uint8_t>();
-					// TODO what happens if width is 0?
-				}
+
+				// TODO what happens if width is 0?
+				buffer_.available(miniblocks_per_block);
+				miniblock_bit_widths = buffer_.ptr;
+				buffer_.unsafe_inc(miniblocks_per_block);
+
 				values_left_in_block = block_value_count;
 				miniblock_offset = 0;
 				bitpack_pos = 0;
@@ -77,11 +89,14 @@ public:
 				values_left_in_miniblock = values_per_miniblock;
 			}
 
-			auto read_now = MinValue(values_left_in_miniblock, (idx_t)batch_size - value_offset);
+			auto read_now = MinValue(values_left_in_miniblock, UnsafeNumericCast<idx_t>(batch_size) - value_offset);
 			ParquetDecodeUtils::BitUnpack<T>(buffer_, bitpack_pos, &values[value_offset], read_now,
 			                                 miniblock_bit_widths[miniblock_offset]);
+
+			uint64_t previous_value = value_offset == 0 ? start_value : values[value_offset - 1] + min_delta;
 			for (idx_t i = value_offset; i < value_offset + read_now; i++) {
-				values[i] = T(uint64_t((i == 0) ? start_value : values[i - 1]) + min_delta + uint64_t(values[i]));
+				values[i] = T(previous_value + values[i]);
+				previous_value = values[i];
 			}
 			value_offset += read_now;
 			values_left_in_miniblock -= read_now;
@@ -93,15 +108,16 @@ public:
 		}
 		start_value = values[batch_size - 1];
 	}
+
 	void Finalize() {
 		if (values_left_in_miniblock == 0) {
 			return;
 		}
-		auto data = unique_ptr<uint32_t[]>(new uint32_t[values_left_in_miniblock]);
+		auto data = make_unsafe_uniq_array_uninitialized<uint32_t>(values_left_in_miniblock);
 		GetBatch<uint32_t>(data_ptr_cast(data.get()), values_left_in_miniblock);
 	}
 
-	uint64_t TotalValues() {
+	uint64_t TotalValues() const {
 		return total_value_count;
 	}
 
@@ -113,7 +129,7 @@ private:
 	int64_t start_value;
 	idx_t values_per_miniblock;
 
-	unique_ptr<uint8_t[]> miniblock_bit_widths;
+	data_ptr_t miniblock_bit_widths;
 	idx_t values_left_in_block;
 	idx_t values_left_in_miniblock;
 	idx_t miniblock_offset;
