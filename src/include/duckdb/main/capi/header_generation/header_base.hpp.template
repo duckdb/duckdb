@@ -10,10 +10,14 @@
 //! duplicate of duckdb/main/winapi.hpp
 #ifndef DUCKDB_API
 #ifdef _WIN32
+#ifdef DUCKDB_STATIC_BUILD
+#define DUCKDB_API
+#else
 #if defined(DUCKDB_BUILD_LIBRARY) && !defined(DUCKDB_BUILD_LOADABLE_EXTENSION)
 #define DUCKDB_API __declspec(dllexport)
 #else
 #define DUCKDB_API __declspec(dllimport)
+#endif
 #endif
 #else
 #define DUCKDB_API
@@ -23,10 +27,14 @@
 //! duplicate of duckdb/main/winapi.hpp
 #ifndef DUCKDB_EXTENSION_API
 #ifdef _WIN32
+#ifdef DUCKDB_STATIC_BUILD
+#define DUCKDB_EXTENSION_API
+#else
 #ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
 #define DUCKDB_EXTENSION_API __declspec(dllexport)
 #else
 #define DUCKDB_EXTENSION_API
+#endif
 #endif
 #else
 #define DUCKDB_EXTENSION_API __attribute__((visibility("default")))
@@ -119,6 +127,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_ANY = 34,
 	// duckdb_varint
 	DUCKDB_TYPE_VARINT = 35,
+	// SQLNULL type
+	DUCKDB_TYPE_SQLNULL = 36,
 } duckdb_type;
 //! An enum over the returned state of different functions.
 typedef enum duckdb_state { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;

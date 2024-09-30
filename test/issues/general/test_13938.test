@@ -1,0 +1,45 @@
+# name: test/issues/general/test_13938.test
+# description: Issue 13938 - INTERNAL Error: Attempted to dereference unique_ptr that is NULL
+# group: [general]
+
+statement ok
+CREATE TABLE t0(c0 TIMESTAMP, c1 VARCHAR[]);
+
+statement ok
+CREATE TABLE t1(c0 FLOAT, c1 TIMESTAMP, c2 FLOAT);
+
+statement ok
+INSERT INTO t0 VALUES('2023-10-10 00:00:00+00:00', NULL);
+
+statement ok
+INSERT INTO t0 VALUES('2025-12-25 12:00:00+02:00', []), ('2004-07-27 10:00:00+02', []);
+
+statement ok
+INSERT INTO t0(c1, c0) VALUES([], '2023-01-01 00:00:00+00:00'), ([], '2021-01-01 00:00:00+01');
+
+statement ok
+INSERT INTO t0(c1, c0) VALUES([], '2021-01-01 00:00:00+00');
+
+statement ok
+INSERT INTO t1 VALUES(2.71, '1999-12-31 23:59:59', 1.41421356237);
+
+statement ok
+INSERT INTO t1 VALUES(1.61803, '1970-01-01 00:00:00', 1.61803);
+
+statement ok
+INSERT INTO t1(c0) VALUES(1064961652.34), (123.45);
+
+statement ok
+INSERT INTO t1(c0) VALUES('514332609.12');
+
+statement ok
+INSERT INTO t1(c0, c2, c1) VALUES(2.71828, 2.345, '1995-05-23 08:45:00'), ('1308880808', 12.34, '2021-01-01 15:30:45');
+
+statement ok
+INSERT INTO t1(c0) VALUES(92857950), (840458867);
+
+statement ok
+INSERT INTO t1 VALUES('3.14', '1999-12-31 23:59:59', 3.1415);
+
+statement ok
+SELECT * FROM t0 RIGHT JOIN t1 ON(CAST(t1.c1 AS TIMESTAMP) BETWEEN t0.c0 AND t0.c0);

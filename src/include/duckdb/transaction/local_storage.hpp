@@ -12,6 +12,7 @@
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/optimistic_data_writer.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/reference_map.hpp"
 
 namespace duckdb {

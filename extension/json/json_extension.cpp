@@ -27,7 +27,7 @@ static DefaultMacro json_macros[] = {
      "json_group_structure",
      {"x", nullptr},
      {{nullptr, nullptr}},
-     "json_structure(json_group_array(x))->'0'"},
+     "json_structure(json_group_array(x))->0"},
     {DEFAULT_SCHEMA, "json", {"x", nullptr}, {{nullptr, nullptr}}, "json_extract(x, '$')"},
     {nullptr, nullptr, {nullptr}, {{nullptr, nullptr}}, nullptr}};
 

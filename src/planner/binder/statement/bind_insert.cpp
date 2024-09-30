@@ -295,7 +295,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 			auto entry = specified_columns.find(col.Name());
 			if (entry != specified_columns.end()) {
 				// column was specified, set to the index
-				insert.on_conflict_filter.insert(col.Oid());
+				insert.on_conflict_filter.insert(col.Physical().index);
 			}
 		}
 		bool index_references_columns = false;
@@ -353,8 +353,12 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 	// add a bind context entry for it
 	auto excluded_index = GenerateTableIndex();
 	insert.excluded_table_index = excluded_index;
-	auto table_column_names = columns.GetColumnNames();
-	auto table_column_types = columns.GetColumnTypes();
+	vector<string> table_column_names;
+	vector<LogicalType> table_column_types;
+	for (auto &col : columns.Physical()) {
+		table_column_names.push_back(col.Name());
+		table_column_types.push_back(col.Type());
+	}
 	bind_context.AddGenericBinding(excluded_index, "excluded", table_column_names, table_column_types);
 
 	if (on_conflict.condition) {

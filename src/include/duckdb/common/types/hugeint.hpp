@@ -128,7 +128,6 @@ public:
 
 	static int Sign(hugeint_t n);
 	static hugeint_t Abs(hugeint_t n);
-
 	// comparison operators
 	// note that everywhere here we intentionally use bitwise ops
 	// this is because they seem to be consistently much faster (benchmarked on a Macbook Pro)

@@ -21,16 +21,16 @@ void StandardColumnData::SetStart(idx_t new_start) {
 	validity.SetStart(new_start);
 }
 
-ScanVectorType StandardColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_count) {
+ScanVectorType StandardColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) {
 	// if either the current column data, or the validity column data requires flat vectors, we scan flat vectors
-	auto scan_type = ColumnData::GetVectorScanType(state, scan_count);
+	auto scan_type = ColumnData::GetVectorScanType(state, scan_count, result);
 	if (scan_type == ScanVectorType::SCAN_FLAT_VECTOR) {
 		return ScanVectorType::SCAN_FLAT_VECTOR;
 	}
 	if (state.child_states.empty()) {
 		return scan_type;
 	}
-	return validity.GetVectorScanType(state.child_states[0], scan_count);
+	return validity.GetVectorScanType(state.child_states[0], scan_count, result);
 }
 
 void StandardColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {

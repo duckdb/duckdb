@@ -1287,8 +1287,9 @@ typedef struct PGSelectStmt {
 	 */
 	PGSetOperation op;         /* type of set op */
 	bool all;                  /* ALL specified? */
-	struct PGSelectStmt *larg; /* left child */
-	struct PGSelectStmt *rarg; /* right child */
+	bool from_first;           /* FROM first or SELECT first */
+	struct PGNode *larg; /* left child */
+	struct PGNode *rarg; /* right child */
 	                           /* Eventually add fields for CORRESPONDING spec here */
 } PGSelectStmt;
 

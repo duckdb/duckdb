@@ -402,6 +402,7 @@ TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 	duckdb_logical_type schema[] = {list_type};
 	auto chunk = duckdb_create_data_chunk(schema, 1);
 	auto list_vector = duckdb_data_chunk_get_vector(chunk, 0);
+	duckdb_data_chunk_set_size(chunk, 3);
 
 	REQUIRE(duckdb_list_vector_reserve(list_vector, 123) == duckdb_state::DuckDBSuccess);
 	REQUIRE(duckdb_list_vector_get_size(list_vector) == 0);
@@ -417,11 +418,19 @@ TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 	entries[0].offset = 0;
 	entries[0].length = 20;
 	entries[1].offset = 20;
-	entries[1].offset = 80;
+	entries[1].length = 80;
 	entries[2].offset = 100;
 	entries[2].length = 23;
 
-	auto vector = (Vector &)(*list_vector);
+	auto child_data = (int *)duckdb_vector_get_data(child);
+	int count = 0;
+	for (idx_t i = 0; i < duckdb_data_chunk_get_size(chunk); i++) {
+		for (idx_t j = 0; j < entries[i].length; j++) {
+			REQUIRE(child_data[entries[i].offset + j] == count);
+			count++;
+		}
+	}
+	auto &vector = (Vector &)(*list_vector);
 	for (int i = 0; i < 123; i++) {
 		REQUIRE(ListVector::GetEntry(vector).GetValue(i) == i);
 	}

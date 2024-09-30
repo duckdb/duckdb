@@ -105,18 +105,17 @@ class TestDateTimeTimeStamp(object):
     def test_timestamp_timezone_positive_extreme(self, pandas, duckdb_cursor):
         duckdb_time = duckdb_cursor.sql(
             """
-            SELECT timestamp '2021-12-31 23:00:00' AT TIME ZONE 'kea_CV' as "0"
+            SELECT timestamp '2021-12-31 23:00:00' AT TIME ZONE 'Etc/GMT-14' as "0"
         """
         ).df()
 
-        # 'kea_CV' is 20 hours ahead of UTC
-        offset = datetime.timedelta(hours=20)
+        offset = datetime.timedelta(hours=14)
         timezone = datetime.timezone(offset)
 
         df_in = pandas.DataFrame(
             {
                 0: pandas.Series(
-                    data=[datetime.datetime(year=2022, month=1, day=1, hour=19, tzinfo=timezone)], dtype='object'
+                    data=[datetime.datetime(year=2021, month=12, day=31, hour=23, tzinfo=timezone)], dtype='object'
                 )
             }
         )

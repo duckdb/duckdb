@@ -117,10 +117,6 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	if (join_state.build_range > MAX_BUILD_SIZE) {
 		return;
 	}
-	if (NumericStats::Min(stats_build) <= NumericStats::Min(stats_probe) &&
-	    NumericStats::Max(stats_probe) <= NumericStats::Max(stats_build)) {
-		join_state.is_probe_in_domain = true;
-	}
 	join_state.is_build_small = true;
 	return;
 }

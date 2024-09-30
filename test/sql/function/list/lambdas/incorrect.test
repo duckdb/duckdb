@@ -13,74 +13,77 @@ foreach func_name list_transform list_filter list_reduce
 statement error
 SELECT ${func_name}();
 ----
+<REGEX>:Binder Error.*No function matches the given name and argument types.*You might need to add explicit type casts.*
 
 statement error
 SELECT ${func_name}([]);
 ----
+<REGEX>:Binder Error.*No function matches the given name and argument types.*You might need to add explicit type casts.*
 
 statement error
 SELECT ${func_name}(1, 2, 3);
 ----
+<REGEX>:Binder Error.*No function matches the given name and argument types.*You might need to add explicit type casts.*
 
 statement error
 SELECT ${func_name}(NULL, NULL);
 ----
-Binder Error: Invalid lambda expression!
+<REGEX>:Binder Error.*Invalid lambda expression!.*
 
 statement error
 SELECT ${func_name}(NULL, x);
 ----
-Binder Error: Referenced column "x" not found in FROM clause!
+<REGEX>:Binder Error.*Referenced column.*not found in FROM clause!.*
 
 statement error
 SELECT ${func_name}([1, 2], (SELECT 1) -> x + 1);
 ----
-Invalid lambda parameters
+<REGEX>:Binder Error.*Invalid lambda parameters!.*
 
 statement error
 SELECT ${func_name}(NULL, i) FROM incorrect_test;
 ----
-No function matches
+<REGEX>:Binder Error.*No function matches the given name and argument types.*You might need to add explicit type casts.*
 
 statement error
 SELECT ${func_name}(NULL, x -> y);
 ----
-Binder Error: Referenced column "y" not found in FROM clause!
+<REGEX>:Binder Error.*Referenced column.*not found in FROM clause!.*
 
 statement error
 SELECT ${func_name}([1]);
 ----
-No function matches
+<REGEX>:Binder Error.*No function matches the given name and argument types.*You might need to add explicit type casts.*
 
 statement error
 SELECT ${func_name}([1], NULL);
 ----
-Binder Error: Invalid lambda expression!
+<REGEX>:Binder Error.*Invalid lambda expression!.*
 
 statement error
 SELECT ${func_name}([[1]], x -> x + 1);
 ----
+<REGEX>:Binder Error.*No function matches the given name and argument types.*You might need to add explicit type casts.*
 
 statement error
 SELECT ${func_name}(1, 1);
 ----
+<REGEX>:Binder Error.*No function matches the given name and argument types.*You might need to add explicit type casts.*
 
 statement error
 SELECT ${func_name}([1], x -> x, 3);
 ----
-Binder Error: failed to bind function, either: Invalid number of function arguments!
- or: Referenced column "x" not found in FROM clause!
+<REGEX>:Binder Error.*failed to bind function, either.*Invalid number of function arguments!.*Referenced column.*not found in FROM clause!.*
 
 statement error
 SELECT ${func_name}([True], x -> x, x -> x);
 ----
-Binder Error: failed to bind function, either: Invalid number of function arguments!
- or: Referenced column "x" not found in FROM clause!
+<REGEX>:Binder Error.*failed to bind function, either.*Invalid number of function arguments!.*Referenced column.*not found in FROM clause!.*
 
 statement error
 SELECT ${func_name}(1, x -> x + 1);
 ----
-Invalid LIST argument during lambda function binding!
+<REGEX>:Binder Error.*failed to bind function, either.*Invalid LIST argument during lambda function binding!.*Referenced column.*not found in FROM clause!.*
 
 endloop
 
@@ -89,38 +92,34 @@ endloop
 statement error
 SELECT [split('01:08:22', ':'), x -> CAST (x AS INTEGER)];
 ----
-Binder Error: failed to bind function, either: This scalar function does not support lambdas!
- or: Referenced column "x" not found in FROM clause!
+<REGEX>:Binder Error.*failed to bind function, either.*This scalar function does not support lambdas!.*Referenced column.*not found in FROM clause!.*
 
 statement error
 select list_apply(i, x -> x * 3 + 2 / zz) from (values (list_value(1, 2, 3))) tbl(i);
 ----
-Binder Error: Referenced column "zz" not found in FROM clause!
-Candidate bindings: "tbl.i"
+<REGEX>:Binder Error.*Referenced column.*not found in FROM clause!.*
 
 # lambda cannot be the root of a plan
 
 statement error
 select x -> x + 1 from (values (list_value(1, 2, 3))) tbl(i);
 ----
-Binder Error: Referenced column "x" not found in FROM clause!
-Candidate bindings: "tbl.i"
+<REGEX>:Binder Error.*Referenced column.*not found in FROM clause!.*
 
 statement error
 select list_apply(i, y + 1 -> x + 1) from (values (list_value(1, 2, 3))) tbl(i);
 ----
-Invalid lambda parameters
+<REGEX>:Binder Error.*Invalid lambda parameters!.*
 
 statement error
 SELECT list_apply(i, a.x -> x + 1) FROM (VALUES (list_value(1, 2, 3))) tbl(i);
 ----
-Invalid lambda parameters
+<REGEX>:Binder Error.*Invalid lambda parameters!.*
 
 statement error
 select list_apply(i, x -> x + 1 AND y + 1) from (values (list_value(1, 2, 3))) tbl(i);
 ----
-Binder Error: Referenced column "y" not found in FROM clause!
-Candidate bindings: "tbl.i"
+<REGEX>:Binder Error.*Referenced column.*not found in FROM clause!.*
 
 statement ok
 CREATE TABLE l_filter_test (l integer[]);
@@ -128,54 +127,52 @@ CREATE TABLE l_filter_test (l integer[]);
 statement error
 SELECT list_transform([1, 2], (x, y, z) -> x + y + z);
 ----
-Binder Error: This lambda function only supports up to two lambda parameters!
+<REGEX>:Binder Error.*This lambda function only supports up to two lambda parameters!.*
 
 statement error
 SELECT list_filter([1, 2], (x, y, z) -> x >= y AND y >= z);
 ----
-Binder Error: This lambda function only supports up to two lambda parameters!
+<REGEX>:Binder Error.*This lambda function only supports up to two lambda parameters!.*
 
 # using lambdas in functions that do not support them
 
 statement error
 SELECT cos(x -> x + 1);
 ----
-Binder Error: failed to bind function, either: This scalar function does not support lambdas!
- or: Referenced column "x" not found in FROM clause!
+<REGEX>:Binder Error.*failed to bind function, either.*This scalar function does not support lambdas!.*Referenced column.*not found in FROM clause!.*
 
 statement error
 SELECT cos([1], x -> x + 1);
 ----
-Binder Error: failed to bind function, either: This scalar function does not support lambdas!
- or: Referenced column "x" not found in FROM clause!
+<REGEX>:Binder Error.*failed to bind function, either.*This scalar function does not support lambdas!.*Referenced column.*not found in FROM clause!.*
 
 # FIXME: support lambdas in CHECK constraints
 
 statement error
-create table lambda_check (i BIGINT[],
+CREATE TABLE lambda_check (i BIGINT[],
     CHECK (list_filter(i, x -> x % 2 = 0) == []));
 ----
-Not implemented Error: Lambda functions are currently not supported in CHECK constraints.
+<REGEX>:Not implemented Error.*Lambda functions are currently not supported in CHECK constraints.*
 
 statement error
 CREATE TABLE lambda_check (i BIGINT[],
     CHECK (list_transform(i, x -> x % 2) == []));
 ----
-Not implemented Error: Lambda functions are currently not supported in CHECK constraints.
+<REGEX>:Not implemented Error.*Lambda functions are currently not supported in CHECK constraints.*
 
 statement error
 CREATE TABLE lambda_check (i BIGINT[],
     CHECK ([x + 1 FOR x IN i IF x > 0] == []));
 ----
-Not implemented Error: Lambda functions are currently not supported in CHECK constraints.
+<REGEX>:Not implemented Error.*Lambda functions are currently not supported in CHECK constraints.*
 
 statement error
-create table lambda_check (
+CREATE TABLE lambda_check (
 	i BIGINT[],
 	j BIGINT[],
 	CHECK ((list_apply(i, x -> list_count(list_filter(j, y -> y%2=0)) + x)) == []));
 ----
-Not implemented Error: Lambda functions are currently not supported in CHECK constraints.
+<REGEX>:Not implemented Error.*Lambda functions are currently not supported in CHECK constraints.*
 
 # FIXME: allow lambdas in generated columns
 
@@ -185,9 +182,9 @@ CREATE TABLE unit2(
 	total_price INTEGER GENERATED ALWAYS AS (list_transform(price, x -> x + 1)) VIRTUAL
 );
 ----
-Not implemented Error: Lambda functions are currently not supported in generated columns.
+<REGEX>:Not implemented Error.*Lambda functions are currently not supported in generated columns.*
 
-# issue 9732
+# Issue 9732
 
 statement ok
 CREATE TABLE tbl AS SELECT {'a': 10} AS s;
@@ -195,4 +192,35 @@ CREATE TABLE tbl AS SELECT {'a': 10} AS s;
 statement error
 SELECT list_transform(UNNEST(s), x -> UNNEST(x)) FROM tbl;
 ----
-failed to bind function
+<REGEX>:Binder Error.*failed to bind function, either.*struct column can only be applied as the root element of a SELECT expression.*
+
+# UNNEST in lambdas is not supported
+
+statement ok
+CREATE TABLE nested_list(i INT[][], other INT[]);
+
+statement ok
+INSERT INTO nested_list VALUES ([[1, 2]], [3, 4]);
+
+statement error
+SELECT list_transform(i, x -> UNNEST(x)) FROM nested_list;
+----
+<REGEX>:Binder Error.*UNNEST in lambda expressions is not supported.*
+
+statement error
+SELECT list_transform(i, x -> UNNEST(other)) FROM nested_list;
+----
+<REGEX>:Binder Error.*UNNEST in lambda expressions is not supported.*
+
+statement ok
+CREATE TABLE map_tbl(m MAP(INTEGER, INTEGER));
+
+statement error
+SELECT [UNNEST([x.key FOR y IN range(x.value)]) FOR x IN map_entries(m)] FROM map_tbl;
+----
+<REGEX>:Binder Error.*UNNEST in lambda expressions is not supported.*
+
+statement error
+SELECT list_transform(map_entries(m), x -> UNNEST(range(x.value))) FROM map_tbl;
+----
+<REGEX>:Binder Error.*UNNEST in lambda expressions is not supported.*

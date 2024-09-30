@@ -145,6 +145,7 @@ public:
 		}
 		SegmentNode<T> node;
 		segment->index = nodes.size();
+		segment->next = nullptr;
 		node.row_start = segment->start;
 		node.node = std::move(segment);
 		nodes.push_back(std::move(node));

@@ -73,7 +73,7 @@ public:
 	virtual ~BaseScanner() = default;
 
 	//! Returns true if the scanner is finished
-	bool FinishedFile();
+	bool FinishedFile() const;
 
 	//! Parses data into a output_chunk
 	virtual ScannerResult &ParseChunk();
@@ -97,7 +97,7 @@ public:
 		return iterator.pos;
 	}
 
-	CSVStateMachine &GetStateMachine();
+	CSVStateMachine &GetStateMachine() const;
 
 	shared_ptr<CSVFileScan> csv_file_scan;
 
@@ -313,6 +313,9 @@ protected:
 	//! Internal function for parse chunk
 	template <class T>
 	void ParseChunkInternal(T &result) {
+		if (iterator.done) {
+			return;
+		}
 		if (!initialized) {
 			Initialize();
 			initialized = true;

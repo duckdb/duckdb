@@ -270,6 +270,9 @@ BindResult ExpressionBinder::BindUnnest(FunctionExpression &expr, idx_t depth, b
 	return BindUnsupportedExpression(expr, depth, UnsupportedUnnestMessage());
 }
 
+void ExpressionBinder::ThrowIfUnnestInLambda(const ColumnBinding &column_binding) {
+}
+
 string ExpressionBinder::UnsupportedAggregateMessage() {
 	return "Aggregate functions are not supported here";
 }

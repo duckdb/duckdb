@@ -38,6 +38,12 @@ value-1
 statement ok
 set http_proxy='blabla:1337'
 
+statement ok
+set http_proxy_username='xxx'
+
+statement ok
+set http_proxy_password='yyy'
+
 statement error
 FROM 's3://test-bucket/proxy-test/test.parquet'
 ----
@@ -46,6 +52,21 @@ Could not establish connection
 # Now a working one
 statement ok
 set http_proxy='${HTTP_PROXY_PUBLIC}'
+
+statement ok
+RESET http_proxy_username
+
+statement ok
+RESET http_proxy_password
+
+query I
+FROM 's3://test-bucket/proxy-test/test.parquet'
+----
+value-1
+
+# And try the working one with an 'http://' prefix.
+statement ok
+set http_proxy='http://${HTTP_PROXY_PUBLIC}'
 
 query I
 FROM 's3://test-bucket/proxy-test/test.parquet'

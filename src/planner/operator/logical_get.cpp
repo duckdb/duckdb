@@ -59,6 +59,7 @@ InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
 	if (function.to_string) {
 		result["__text__"] = function.to_string(bind_data.get());
 	}
+	SetParamsEstimatedCardinality(result);
 	return result;
 }
 

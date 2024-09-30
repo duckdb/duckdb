@@ -42,6 +42,15 @@ struct ArrayCosineSimilarityFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct ArrayCosineDistanceFun {
+	static constexpr const char *Name = "array_cosine_distance";
+	static constexpr const char *Parameters = "array1,array2";
+	static constexpr const char *Description = "Compute the cosine distance between two arrays of the same size. The array elements can not be NULL. The arrays can have any size as long as the size is the same for both arguments.";
+	static constexpr const char *Example = "array_cosine_distance([1, 2, 3], [1, 2, 3])";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 struct ArrayDistanceFun {
 	static constexpr const char *Name = "array_distance";
 	static constexpr const char *Parameters = "array1,array2";
@@ -64,6 +73,21 @@ struct ArrayDotProductFun {
 	using ALIAS = ArrayInnerProductFun;
 
 	static constexpr const char *Name = "array_dot_product";
+};
+
+struct ArrayNegativeInnerProductFun {
+	static constexpr const char *Name = "array_negative_inner_product";
+	static constexpr const char *Parameters = "array1,array2";
+	static constexpr const char *Description = "Compute the negative inner product between two arrays of the same size. The array elements can not be NULL. The arrays can have any size as long as the size is the same for both arguments.";
+	static constexpr const char *Example = "array_negative_inner_product([1, 2, 3], [1, 2, 3])";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ArrayNegativeDotProductFun {
+	using ALIAS = ArrayNegativeInnerProductFun;
+
+	static constexpr const char *Name = "array_negative_dot_product";
 };
 
 } // namespace duckdb

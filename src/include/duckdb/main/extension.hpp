@@ -50,6 +50,7 @@ struct ParsedExtensionMetaData {
 	string duckdb_capi_version;
 	string extension_version;
 	string signature;
+	string extension_abi_metadata;
 
 	bool AppearsValid() {
 		return magic_value == EXPECTED_MAGIC_VALUE;

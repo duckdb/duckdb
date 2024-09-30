@@ -245,7 +245,7 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	// Missing column.
 	REQUIRE(duckdb_appender_end_row(appender) == DuckDBError);
 	REQUIRE(duckdb_appender_error(appender) != nullptr);
-	TestAppenderError(appender, "Call to EndRow before all rows have been appended to");
+	TestAppenderError(appender, "Call to EndRow before all columns have been appended to");
 
 	// Append the missing column.
 	REQUIRE(duckdb_append_varchar(appender, "Hello, World") == DuckDBSuccess);

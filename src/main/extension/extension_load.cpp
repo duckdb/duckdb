@@ -173,7 +173,7 @@ static string FilterZeroAtEnd(string s) {
 	return s;
 }
 
-ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(const char *metadata) {
+ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(const char *metadata) noexcept {
 	ParsedExtensionMetaData result;
 
 	vector<string> metadata_field;
@@ -194,12 +194,18 @@ ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(const char *meta
 
 	result.extension_version = FilterZeroAtEnd(metadata_field[3]);
 
-	result.abi_type = EnumUtil::FromString<ExtensionABIType>(FilterZeroAtEnd(metadata_field[4]));
+	auto extension_abi_metadata = FilterZeroAtEnd(metadata_field[4]);
 
-	if (result.abi_type == ExtensionABIType::C_STRUCT) {
+	if (extension_abi_metadata == "C_STRUCT") {
+		result.abi_type = ExtensionABIType::C_STRUCT;
 		result.duckdb_capi_version = FilterZeroAtEnd(metadata_field[2]);
-	} else if (result.abi_type == ExtensionABIType::CPP) {
+	} else if (extension_abi_metadata == "CPP" || extension_abi_metadata.empty()) {
+		result.abi_type = ExtensionABIType::CPP;
 		result.duckdb_version = FilterZeroAtEnd(metadata_field[2]);
+	} else {
+		result.abi_type = ExtensionABIType::UNKNOWN;
+		result.duckdb_version = "unknown";
+		result.extension_abi_metadata = extension_abi_metadata;
 	}
 
 	result.signature = string(metadata, ParsedExtensionMetaData::FOOTER_SIZE - ParsedExtensionMetaData::SIGNATURE_SIZE);
@@ -453,7 +459,8 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DatabaseInstance &db, FileSyste
 			throw IOException(error);
 		}
 		// the extension load failed - try installing the extension
-		ExtensionHelper::InstallExtension(db, fs, extension, false);
+		ExtensionInstallOptions options;
+		ExtensionHelper::InstallExtension(db, fs, extension, options);
 		// try loading again
 		if (!TryInitialLoad(db, fs, extension, result, error)) {
 			throw IOException(error);

@@ -8,6 +8,22 @@ PRAGMA enable_verification
 statement ok 
 PRAGMA verify_parallelism
 
+query I
+select columns FROM sniff_csv('data/csv/auto/mock_duckdb_test_data.csv', ignore_errors = true);
+----
+[{'name': id, 'type': BIGINT}, {'name': name, 'type': VARCHAR}, {'name': age, 'type': BIGINT}, {'name': sex, 'type': VARCHAR}, {'name': state, 'type': VARCHAR}]
+
+query IIIII
+FROM read_csv('data/csv/auto/mock_duckdb_test_data.csv', ignore_errors = true)
+----
+1	James	30	M	AL
+2	Jill	32	F	CO
+4	John	34	M	AS
+5	Matthew	31	M	NULL
+7	Olivia	36	F	OR
+8	James	37	M	AZ
+9	Titus	38	M	WY
+
 statement error
 select * from read_csv_auto('data/csv/dates.csv', auto_detect=false, delim=',', quote='"', columns={'a': 'VARCHAR'})
 ----

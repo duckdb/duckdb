@@ -536,14 +536,18 @@ void TupleDataCollection::ScanAtIndex(TupleDataPinState &pin_state, TupleDataChu
 	segment.allocator->InitializeChunkState(segment, pin_state, chunk_state, chunk_index, false);
 	result.Reset();
 
+	ResetCachedCastVectors(chunk_state, column_ids);
+	Gather(chunk_state.row_locations, *FlatVector::IncrementalSelectionVector(), chunk.count, column_ids, result,
+	       *FlatVector::IncrementalSelectionVector(), chunk_state.cached_cast_vectors);
+	result.SetCardinality(chunk.count);
+}
+
+void TupleDataCollection::ResetCachedCastVectors(TupleDataChunkState &chunk_state, const vector<column_t> &column_ids) {
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		if (chunk_state.cached_cast_vectors[i]) {
 			chunk_state.cached_cast_vectors[i]->ResetFromCache(*chunk_state.cached_cast_vector_cache[i]);
 		}
 	}
-	Gather(chunk_state.row_locations, *FlatVector::IncrementalSelectionVector(), chunk.count, column_ids, result,
-	       *FlatVector::IncrementalSelectionVector(), chunk_state.cached_cast_vectors);
-	result.SetCardinality(chunk.count);
 }
 
 // LCOV_EXCL_START

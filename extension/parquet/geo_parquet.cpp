@@ -279,6 +279,17 @@ GeoParquetFileMetadata::TryRead(const duckdb_parquet::format::FileMetaData &file
 	return nullptr;
 }
 
+void GeoParquetFileMetadata::FlushColumnMeta(const string &column_name, const GeoParquetColumnMetadata &meta) {
+	// Lock the metadata
+	lock_guard<mutex> glock(write_lock);
+
+	auto &column = geometry_columns[column_name];
+
+	// Combine the metadata
+	column.geometry_types.insert(meta.geometry_types.begin(), meta.geometry_types.end());
+	column.bbox.Combine(meta.bbox);
+}
+
 void GeoParquetFileMetadata::Write(duckdb_parquet::format::FileMetaData &file_meta_data) const {
 
 	yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
@@ -347,6 +358,14 @@ void GeoParquetFileMetadata::Write(duckdb_parquet::format::FileMetaData &file_me
 
 bool GeoParquetFileMetadata::IsGeometryColumn(const string &column_name) const {
 	return geometry_columns.find(column_name) != geometry_columns.end();
+}
+
+void GeoParquetFileMetadata::RegisterGeometryColumn(const string &column_name) {
+	lock_guard<mutex> glock(write_lock);
+	if (primary_geometry_column.empty()) {
+		primary_geometry_column = column_name;
+	}
+	geometry_columns[column_name] = GeoParquetColumnMetadata();
 }
 
 unique_ptr<ColumnReader> GeoParquetFileMetadata::CreateColumnReader(ParquetReader &reader,

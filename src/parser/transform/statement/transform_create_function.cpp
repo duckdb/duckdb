@@ -13,8 +13,7 @@ unique_ptr<MacroFunction> Transformer::TransformMacroFunction(duckdb_libpgquery:
 		auto expression = TransformExpression(def.function);
 		macro_func = make_uniq<ScalarMacroFunction>(std::move(expression));
 	} else if (def.query) {
-		auto query_node =
-		    TransformSelect(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(def.query), true)->node->Copy();
+		auto query_node = TransformSelectNode(*def.query);
 		macro_func = make_uniq<TableMacroFunction>(std::move(query_node));
 	}
 

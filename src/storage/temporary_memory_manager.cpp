@@ -228,7 +228,7 @@ idx_t TemporaryMemoryManager::ComputeReservation(const TemporaryMemoryState &tem
 		sum_of_initial_res += initial_reservation;
 		if (RefersToSameObject(state.get(), temporary_memory_state)) {
 			state_index = i;
-		} else if (state.get().GetReservation() >= state.get().GetRemainingSize()) {
+		} else if (initial_reservation >= state.get().GetRemainingSize()) {
 			continue;
 		}
 		states.emplace_back(state);
@@ -247,16 +247,21 @@ idx_t TemporaryMemoryManager::ComputeReservation(const TemporaryMemoryState &tem
 	idx_t remaining_memory = free_memory;
 	const idx_t optimization_iterations = OPTIMIZATION_ITERATIONS_MULTIPLIER * n;
 	for (idx_t opt_idx = 0; opt_idx < optimization_iterations; opt_idx++) {
+		D_ASSERT(remaining_memory != 0);
 		ComputeDerivatives(states, res, der, n);
 
 		// Find the index of the state with the lowest derivative
 		idx_t min_idx = 0;
-		for (i = 1; i < n; i++) {
+		double min_der = NumericLimits<double>::Maximum();
+		for (i = 0; i < n; i++) {
 			auto &state = states[i].get();
 			if (res[i] >= state.GetRemainingSize()) {
 				continue; // We can't increase the reservation of "maxed" states, so we skip these
 			}
-			min_idx = der[i] < der[min_idx] ? i : min_idx;
+			if (der[i] < min_der) {
+				min_idx = i;
+				min_der = der[i];
+			}
 		}
 		auto &min_state = states[min_idx].get();
 
@@ -267,6 +272,7 @@ idx_t TemporaryMemoryManager::ComputeReservation(const TemporaryMemoryState &tem
 		// Compute how much we can add
 		const auto state_room = min_state.GetRemainingSize() - res[min_idx];
 		const auto delta = MinValue(iter_memory, state_room);
+		D_ASSERT(delta <= remaining_memory);
 
 		// Update counts
 		res[min_idx] += delta;
@@ -294,7 +300,7 @@ idx_t TemporaryMemoryManager::ComputeReservation(const TemporaryMemoryState &tem
 	remaining_memory = free_memory;
 	for (const auto idx : idxs) {
 		auto &state = states[idx].get();
-		D_ASSERT(state.GetReservation() < state.GetRemainingSize());
+		D_ASSERT(res[idx] <= state.GetRemainingSize());
 		const auto initial_state_reservation = ComputeInitialReservation(state);
 		const auto upper_bound = LossyNumericCast<idx_t>(
 		    MAXIMUM_FREE_MEMORY_RATIO * static_cast<double>(initial_state_reservation + remaining_memory));

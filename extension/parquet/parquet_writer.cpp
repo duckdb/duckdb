@@ -350,7 +350,8 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 	file_meta_data.version = 1;
 
 	file_meta_data.__isset.created_by = true;
-	file_meta_data.created_by = "DuckDB";
+	file_meta_data.created_by =
+	    StringUtil::Format("DuckDB version %s (build %s)", DuckDB::LibraryVersion(), DuckDB::SourceID());
 
 	file_meta_data.schema.resize(1);
 

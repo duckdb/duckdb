@@ -213,4 +213,13 @@ bool PhysicalTableScan::Equals(const PhysicalOperator &other_p) const {
 	return true;
 }
 
+bool PhysicalTableScan::ParallelSource() const {
+	if (!function.function) {
+		// table in-out functions cannot be executed in parallel as part of a PhysicalTableScan
+		// since they have only a single input row
+		return false;
+	}
+	return true;
+}
+
 } // namespace duckdb

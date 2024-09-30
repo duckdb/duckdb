@@ -9,14 +9,9 @@
 #pragma once
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/error_data.hpp"
-#include "duckdb/main/chunk_scan_state.hpp"
-#include "duckdb/main/client_properties.hpp"
 
 //! Here we have the internal duckdb classes that interact with Arrow's Internal Header (i.e., duckdb/commons/arrow.hpp)
 namespace duckdb {
-class QueryResult;
-class DataChunk;
 
 class ArrowSchemaWrapper {
 public:
@@ -49,23 +44,14 @@ public:
 public:
 	void GetSchema(ArrowSchemaWrapper &schema);
 
-	shared_ptr<ArrowArrayWrapper> GetNextChunk();
+	virtual shared_ptr<ArrowArrayWrapper> GetNextChunk();
 
 	const char *GetError();
 
-	~ArrowArrayStreamWrapper();
+	virtual ~ArrowArrayStreamWrapper();
 	ArrowArrayStreamWrapper() {
 		arrow_array_stream.release = nullptr;
 	}
 };
 
-class ArrowUtil {
-public:
-	static bool TryFetchChunk(ChunkScanState &scan_state, ClientProperties options, idx_t chunk_size, ArrowArray *out,
-	                          idx_t &result_count, ErrorData &error);
-	static idx_t FetchChunk(ChunkScanState &scan_state, ClientProperties options, idx_t chunk_size, ArrowArray *out);
-
-private:
-	static bool TryFetchNext(QueryResult &result, unique_ptr<DataChunk> &out, ErrorData &error);
-};
 } // namespace duckdb

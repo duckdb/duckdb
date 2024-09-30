@@ -57,7 +57,7 @@ DynamicTableFilterSet::GetFinalTableFilters(const PhysicalTableScan &scan,
 	auto result = make_uniq<TableFilterSet>();
 	if (existing_filters) {
 		for (auto &entry : existing_filters->filters) {
-			result->filters[entry.first] = entry.second->Copy();
+			result->PushFilter(entry.first, entry.second->Copy());
 		}
 	}
 	for (auto &entry : filters) {
@@ -66,7 +66,7 @@ DynamicTableFilterSet::GetFinalTableFilters(const PhysicalTableScan &scan,
 				// skip row id filters
 				continue;
 			}
-			result->filters[filter.first] = filter.second->Copy();
+			result->PushFilter(filter.first, filter.second->Copy());
 		}
 	}
 	if (result->filters.empty()) {

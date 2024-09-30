@@ -1,0 +1,48 @@
+# name: test/sql/upsert/test_generated_column.test
+# group: [upsert]
+
+# SET expression targets b (located after the virtual column)
+
+statement ok
+CREATE TABLE t1 (
+	a CHAR NOT NULL,
+	c CHAR GENERATED ALWAYS AS (a) VIRTUAL,
+	b INT,
+);
+
+statement ok
+CREATE UNIQUE INDEX t1_idx ON t1 (a);
+
+statement ok
+INSERT INTO t1 VALUES ('a', 1) ON CONFLICT(a) DO UPDATE SET b = excluded.b;
+
+statement ok
+INSERT INTO t1 VALUES ('a', 1) ON CONFLICT(a) DO UPDATE SET b = excluded.b;
+
+query III
+select * from t1;
+----
+a	a	1
+
+# The ON CONFLICT (a) is logically located after the virtual column
+
+statement ok
+CREATE TABLE t2 (
+	b INT,
+	c CHAR GENERATED ALWAYS AS (a) VIRTUAL,
+	a CHAR NOT NULL,
+);
+
+statement ok
+CREATE UNIQUE INDEX t2_idx ON t2 (a);
+
+statement ok
+INSERT INTO t2 VALUES (1, 'a') ON CONFLICT(a) DO UPDATE SET b = excluded.b;
+
+statement ok
+INSERT INTO t2 VALUES (1, 'a') ON CONFLICT(a) DO UPDATE SET b = excluded.b;
+
+query III
+select * from t1;
+----
+a	a	1

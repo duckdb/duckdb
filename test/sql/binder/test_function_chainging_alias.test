@@ -2,8 +2,6 @@
 # description: referencing an alias or a function chaining alias that exists earlier on
 # group: [binder]
 
-#              in the SELECT clause (Issue #7190)
-
 statement ok
 PRAGMA enable_verification
 
@@ -91,3 +89,43 @@ query III
 EXECUTE v1('Hello World', 'test function chainging')
 ----
 [hello, world]	[TEST, FUNCTION, CHAINGING]	[hello, world, TEST, FUNCTION, CHAINGING]
+
+statement ok
+INSERT INTO varchars VALUES ('Another longggggg String');
+
+# alias in where clause
+query IIII
+SELECT  v.split(' ') strings,
+        strings.apply(x -> x.lower()).filter(x -> x[1] == 't' or x[1] == 'a') lower,
+        strings.apply(x -> x.upper()).filter(x -> x[1] == 'T' or x[1] == 'A') upper,
+        lower + upper  as mix_case_srings
+FROM varchars
+WHERE mix_case_srings[1] = 'test'
+----
+[Test, Function, Chainging, Alias]	[test, alias]	[TEST, ALIAS]	[test, alias, TEST, ALIAS]
+
+
+query IIII
+SELECT  v.split(' ') strings,
+        strings.apply(x -> x.lower()).filter(x -> x[1] == 't' or x[1] == 'a') lower,
+        strings.apply(x -> x.upper()).filter(x -> x[1] == 'T' or x[1] == 'A') upper,
+        lower + upper  as mix_case_srings
+FROM varchars
+WHERE mix_case_srings[1] = 'another'
+----
+[Another, longggggg, String]	[another]	[ANOTHER]	[another, ANOTHER]
+
+# CTE with function chaining alias
+query II
+with test as (
+    select 'woot' as my_column
+)
+from test
+select 
+    my_column.substr(2) as partial_woot,
+    partial_woot.substr(2) as more_partially_woot
+where 
+    more_partially_woot = 'ot'
+;
+----
+oot	ot

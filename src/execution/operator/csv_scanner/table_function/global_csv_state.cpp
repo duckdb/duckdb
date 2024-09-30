@@ -41,6 +41,11 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 	    make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager, current_boundary.GetBufferIdx());
 }
 
+bool CSVGlobalState::IsDone() const {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	return current_boundary.done;
+}
+
 double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	idx_t total_files = bind_data.files.size();

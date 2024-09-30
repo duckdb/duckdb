@@ -298,7 +298,7 @@
                 }
             ],
             "comment": {
-                "description": "Adds the aggregate function as a new overload to the aggregate function set.\n\nReturns DuckDBError if the function could not be added, for example if the overload already exists.",
+                "description": "Adds the aggregate function as a new overload to the aggregate function set.\n\nReturns DuckDBError if the function could not be added, for example if the overload already exists.\n\n",
                 "param_comments": {
                     "set": "The aggregate function set",
                     "function": "The function to add"

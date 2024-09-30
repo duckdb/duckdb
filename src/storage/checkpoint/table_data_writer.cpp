@@ -31,7 +31,11 @@ void TableDataWriter::AddRowGroup(RowGroupPointer &&row_group_pointer, unique_pt
 }
 
 TaskScheduler &TableDataWriter::GetScheduler() {
-	return TaskScheduler::GetScheduler(table.ParentCatalog().GetDatabase());
+	return TaskScheduler::GetScheduler(GetDatabase());
+}
+
+DatabaseInstance &TableDataWriter::GetDatabase() {
+	return table.ParentCatalog().GetDatabase();
 }
 
 SingleFileTableDataWriter::SingleFileTableDataWriter(SingleFileCheckpointWriter &checkpoint_manager,

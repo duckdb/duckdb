@@ -1,8 +1,7 @@
 # name: test/sql/storage/temp_directory/max_swap_space_inmemory.test
 # group: [temp_directory]
 
-# FIXME: Fails with --force-storage for non-default block sizes.
-require block_size 262144
+require noforcestorage
 
 require skip_reload
 

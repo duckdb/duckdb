@@ -71,12 +71,7 @@ vector<Value> Transformer::TransformTypeModifiers(duckdb_libpgquery::PGTypeName 
 	return type_mods;
 }
 
-LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_name) {
-	if (type_name.type != duckdb_libpgquery::T_PGTypeName) {
-		throw ParserException("Expected a type");
-	}
-	auto stack_checker = StackCheck();
-
+LogicalType Transformer::TransformTypeNameInternal(duckdb_libpgquery::PGTypeName &type_name) {
 	if (type_name.names->length > 1) {
 		// qualified typename
 		vector<string> names;
@@ -85,24 +80,27 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 		}
 		vector<Value> type_mods = TransformTypeModifiers(type_name);
 		switch (type_name.names->length) {
-		case 2:
+		case 2: {
 			return LogicalType::USER(INVALID_CATALOG, std::move(names[0]), std::move(names[1]), std::move(type_mods));
-		case 3:
+		}
+		case 3: {
 			return LogicalType::USER(std::move(names[0]), std::move(names[1]), std::move(names[2]),
 			                         std::move(type_mods));
+		}
 		default:
 			throw ParserException(
 			    "Too many qualifications for type name - expected [catalog.schema.name] or [schema.name]");
 		}
 	}
+
 	auto name = PGPointerCast<duckdb_libpgquery::PGValue>(type_name.names->tail->data.ptr_value)->val.str;
 	// transform it to the SQL type
 	LogicalTypeId base_type = TransformStringToLogicalTypeId(name);
 
-	LogicalType result_type;
 	if (base_type == LogicalTypeId::LIST) {
 		throw ParserException("LIST is not valid as a stand-alone type");
-	} else if (base_type == LogicalTypeId::ENUM) {
+	}
+	if (base_type == LogicalTypeId::ENUM) {
 		if (!type_name.typmods || type_name.typmods->length == 0) {
 			throw ParserException("Enum needs a set of entries");
 		}
@@ -118,7 +116,8 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 			string_data[pos++] = StringVector::AddString(enum_vector, constant_value->val.val.str);
 		}
 		return LogicalType::ENUM(enum_vector, NumericCast<idx_t>(type_name.typmods->length));
-	} else if (base_type == LogicalTypeId::STRUCT) {
+	}
+	if (base_type == LogicalTypeId::STRUCT) {
 		if (!type_name.typmods || type_name.typmods->length == 0) {
 			throw ParserException("Struct needs a name and entries");
 		}
@@ -148,9 +147,9 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 			children.push_back(make_pair(entry_name, entry_type));
 		}
 		D_ASSERT(!children.empty());
-		result_type = LogicalType::STRUCT(children);
-
-	} else if (base_type == LogicalTypeId::MAP) {
+		return LogicalType::STRUCT(children);
+	}
+	if (base_type == LogicalTypeId::MAP) {
 		if (!type_name.typmods || type_name.typmods->length != 2) {
 			throw ParserException("Map type needs exactly two entries, key and value type");
 		}
@@ -159,8 +158,9 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 		auto value_type =
 		    TransformTypeName(*PGPointerCast<duckdb_libpgquery::PGTypeName>(type_name.typmods->tail->data.ptr_value));
 
-		result_type = LogicalType::MAP(std::move(key_type), std::move(value_type));
-	} else if (base_type == LogicalTypeId::UNION) {
+		return LogicalType::MAP(std::move(key_type), std::move(value_type));
+	}
+	if (base_type == LogicalTypeId::UNION) {
 		if (!type_name.typmods || type_name.typmods->length == 0) {
 			throw ParserException("Union type needs at least one member");
 		}
@@ -195,81 +195,83 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 			children.push_back(make_pair(entry_name, entry_type));
 		}
 		D_ASSERT(!children.empty());
-		result_type = LogicalType::UNION(std::move(children));
-	} else if (base_type == LogicalTypeId::USER) {
+		return LogicalType::UNION(std::move(children));
+	}
+	if (base_type == LogicalTypeId::USER) {
 		string user_type_name {name};
 		vector<Value> type_mods = TransformTypeModifiers(type_name);
-		result_type = LogicalType::USER(user_type_name, type_mods);
-	} else {
-		SizeModifiers modifiers = GetSizeModifiers(type_name, base_type);
-		switch (base_type) {
-		case LogicalTypeId::VARCHAR:
-			if (modifiers.count > 1) {
-				throw ParserException("VARCHAR only supports a single modifier");
-			}
-			// FIXME: create CHECK constraint based on varchar width
-			modifiers.width = 0;
-			result_type = LogicalType::VARCHAR;
-			break;
-		case LogicalTypeId::DECIMAL:
-			if (modifiers.count > 2) {
-				throw ParserException("DECIMAL only supports a maximum of two modifiers");
-			}
-			if (modifiers.count == 1) {
-				// only width is provided: set scale to 0
-				modifiers.scale = 0;
-			}
-			if (modifiers.width <= 0 || modifiers.width > Decimal::MAX_WIDTH_DECIMAL) {
-				throw ParserException("Width must be between 1 and %d!", (int)Decimal::MAX_WIDTH_DECIMAL);
-			}
-			if (modifiers.scale > modifiers.width) {
-				throw ParserException("Scale cannot be bigger than width");
-			}
-			result_type =
-			    LogicalType::DECIMAL(NumericCast<uint8_t>(modifiers.width), NumericCast<uint8_t>(modifiers.scale));
-			break;
-		case LogicalTypeId::INTERVAL:
-			if (modifiers.count > 1) {
-				throw ParserException("INTERVAL only supports a single modifier");
-			}
-			modifiers.width = 0;
-			result_type = LogicalType::INTERVAL;
-			break;
-		case LogicalTypeId::BIT:
-			if (!modifiers.width && type_name.typmods) {
-				throw ParserException("Type %s does not support any modifiers!", LogicalType(base_type).ToString());
-			}
-			result_type = LogicalType(base_type);
-			break;
-		case LogicalTypeId::TIMESTAMP:
-			if (modifiers.count == 0) {
-				result_type = LogicalType::TIMESTAMP;
-			} else {
-				if (modifiers.count > 1) {
-					throw ParserException("TIMESTAMP only supports a single modifier");
-				}
-				if (modifiers.width > 10) {
-					throw ParserException("TIMESTAMP only supports until nano-second precision (9)");
-				}
-				if (modifiers.width == 0) {
-					result_type = LogicalType::TIMESTAMP_S;
-				} else if (modifiers.width <= 3) {
-					result_type = LogicalType::TIMESTAMP_MS;
-				} else if (modifiers.width <= 6) {
-					result_type = LogicalType::TIMESTAMP;
-				} else {
-					result_type = LogicalType::TIMESTAMP_NS;
-				}
-			}
-			break;
-		default:
-			if (modifiers.count > 0) {
-				throw ParserException("Type %s does not support any modifiers!", LogicalType(base_type).ToString());
-			}
-			result_type = LogicalType(base_type);
-			break;
-		}
+		return LogicalType::USER(user_type_name, type_mods);
 	}
+
+	SizeModifiers modifiers = GetSizeModifiers(type_name, base_type);
+	switch (base_type) {
+	case LogicalTypeId::VARCHAR:
+		if (modifiers.count > 1) {
+			throw ParserException("VARCHAR only supports a single modifier");
+		}
+		// FIXME: create CHECK constraint based on varchar width
+		modifiers.width = 0;
+		return LogicalType::VARCHAR;
+	case LogicalTypeId::DECIMAL:
+		if (modifiers.count > 2) {
+			throw ParserException("DECIMAL only supports a maximum of two modifiers");
+		}
+		if (modifiers.count == 1) {
+			// only width is provided: set scale to 0
+			modifiers.scale = 0;
+		}
+		if (modifiers.width <= 0 || modifiers.width > Decimal::MAX_WIDTH_DECIMAL) {
+			throw ParserException("Width must be between 1 and %d!", (int)Decimal::MAX_WIDTH_DECIMAL);
+		}
+		if (modifiers.scale > modifiers.width) {
+			throw ParserException("Scale cannot be bigger than width");
+		}
+		return LogicalType::DECIMAL(NumericCast<uint8_t>(modifiers.width), NumericCast<uint8_t>(modifiers.scale));
+	case LogicalTypeId::INTERVAL:
+		if (modifiers.count > 1) {
+			throw ParserException("INTERVAL only supports a single modifier");
+		}
+		modifiers.width = 0;
+		return LogicalType::INTERVAL;
+	case LogicalTypeId::BIT:
+		if (!modifiers.width && type_name.typmods) {
+			throw ParserException("Type %s does not support any modifiers!", LogicalType(base_type).ToString());
+		}
+		return LogicalType(base_type);
+	case LogicalTypeId::TIMESTAMP:
+		if (modifiers.count == 0) {
+			return LogicalType::TIMESTAMP;
+		}
+		if (modifiers.count > 1) {
+			throw ParserException("TIMESTAMP only supports a single modifier");
+		}
+		if (modifiers.width > 10) {
+			throw ParserException("TIMESTAMP only supports until nano-second precision (9)");
+		}
+		if (modifiers.width == 0) {
+			return LogicalType::TIMESTAMP_S;
+		}
+		if (modifiers.width <= 3) {
+			return LogicalType::TIMESTAMP_MS;
+		}
+		if (modifiers.width <= 6) {
+			return LogicalType::TIMESTAMP;
+		}
+		return LogicalType::TIMESTAMP_NS;
+	default:
+		if (modifiers.count > 0) {
+			throw ParserException("Type %s does not support any modifiers!", LogicalType(base_type).ToString());
+		}
+		return LogicalType(base_type);
+	}
+}
+
+LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_name) {
+	if (type_name.type != duckdb_libpgquery::T_PGTypeName) {
+		throw ParserException("Expected a type");
+	}
+	auto stack_checker = StackCheck();
+	auto result_type = TransformTypeNameInternal(type_name);
 	if (type_name.arrayBounds) {
 		// array bounds: turn the type into a list
 		idx_t extra_stack = 0;

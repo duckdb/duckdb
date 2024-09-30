@@ -295,7 +295,7 @@
                 }
             ],
             "comment": {
-                "description": "Adds the scalar function as a new overload to the scalar function set.\n\nReturns DuckDBError if the function could not be added, for example if the overload already exists.",
+                "description": "Adds the scalar function as a new overload to the scalar function set.\n\nReturns DuckDBError if the function could not be added, for example if the overload already exists.\n\n",
                 "param_comments": {
                     "set": "The scalar function set",
                     "function": "The function to add"

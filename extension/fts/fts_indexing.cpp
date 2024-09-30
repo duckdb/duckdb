@@ -73,7 +73,7 @@ static string IndexingScript(ClientContext &context, QualifiedName &qname, const
 	if (lower) {
 		tokenize = "lower(" + tokenize + ")";
 	}
-	tokenize = "regexp_replace(" + tokenize + ", '" + ignore + "', " + "' ', 'g')";
+	tokenize = "regexp_replace(" + tokenize + ", $$" + ignore + "$$, " + "' ', 'g')";
 	tokenize = "string_split_regex(" + tokenize + ", '\\s+')";
 	result += "CREATE MACRO %fts_schema%.tokenize(s) AS " + tokenize + ";";
 

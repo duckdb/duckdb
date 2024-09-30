@@ -79,11 +79,12 @@ void BufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, Fil
 	throw NotImplementedException("This type of BufferManager does not support 'WriteTemporaryBuffer");
 }
 
-unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(MemoryTag tag, block_id_t id, unique_ptr<FileBuffer> buffer) {
+unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(MemoryTag tag, BlockHandle &block,
+                                                          unique_ptr<FileBuffer> buffer) {
 	throw NotImplementedException("This type of BufferManager does not support 'ReadTemporaryBuffer");
 }
 
-void BufferManager::DeleteTemporaryFile(block_id_t id) {
+void BufferManager::DeleteTemporaryFile(BlockHandle &block) {
 	throw NotImplementedException("This type of BufferManager does not support 'DeleteTemporaryFile");
 }
 

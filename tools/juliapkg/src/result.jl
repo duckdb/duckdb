@@ -40,7 +40,9 @@ function _close_result(result::QueryResult)
     return
 end
 
-mutable struct ColumnConversionData{ChunksT <: Union{Vector{DataChunk}, Tuple{DataChunk}}}
+const DataChunks = Union{Vector{DataChunk}, Tuple{DataChunk}}
+
+mutable struct ColumnConversionData{ChunksT <: DataChunks}
     chunks::ChunksT
     col_idx::Int64
     logical_type::LogicalType
@@ -571,6 +573,15 @@ function convert_column(column_data::ColumnConversionData)
     return convert_column_loop(column_data, conversion_func, internal_type, target_type, conversion_loop_func)
 end
 
+function convert_columns(q::QueryResult, chunks::DataChunks, column_count::Integer = duckdb_column_count(q.handle))
+    return NamedTuple{Tuple(q.names)}(ntuple(column_count) do i
+        j = Int64(i)
+        logical_type = LogicalType(duckdb_column_logical_type(q.handle, j))
+        column_data = ColumnConversionData(chunks, j, logical_type, nothing)
+        return convert_column(column_data)
+    end)
+end
+
 function Tables.columns(q::QueryResult)
     if q.tbl === missing
         if q.chunk_index != 1
@@ -581,7 +592,6 @@ function Tables.columns(q::QueryResult)
             )
         end
         # gather all the data chunks
-        column_count = duckdb_column_count(q.handle)
         chunks::Vector{DataChunk} = []
         while true
             # fetch the next chunk
@@ -593,11 +603,7 @@ function Tables.columns(q::QueryResult)
             push!(chunks, chunk)
         end
 
-        q.tbl = NamedTuple{Tuple(q.names)}(ntuple(column_count) do i
-            logical_type = LogicalType(duckdb_column_logical_type(q.handle, i))
-            column_data = ColumnConversionData(chunks, i, logical_type, nothing)
-            return convert_column(column_data)
-        end)
+        q.tbl = convert_columns(q, chunks)
     end
     return Tables.CopiedColumns(q.tbl)
 end
@@ -819,7 +825,7 @@ Tables.schema(chunk::QueryResultChunk) = Tables.Schema(chunk.q.names, chunk.q.ty
 
 struct QueryResultChunkIterator
     q::QueryResult
-    column_count::UInt64
+    column_count::Int64
 end
 
 function next_chunk(iter::QueryResultChunkIterator)
@@ -828,13 +834,7 @@ function next_chunk(iter::QueryResultChunkIterator)
         return nothing
     end
 
-    return QueryResultChunk(
-        NamedTuple{Tuple(iter.q.names)}(ntuple(iter.column_count) do i
-            logical_type = LogicalType(duckdb_column_logical_type(iter.q.handle, i))
-            column_data = ColumnConversionData((chunk,), i, logical_type, nothing)
-            return convert_column(column_data)
-        end)
-    )
+    return QueryResultChunk(convert_columns(iter.q, (chunk,), iter.column_count))
 end
 
 Base.iterate(iter::QueryResultChunkIterator) = iterate(iter, 0x0000000000000001)
@@ -873,7 +873,6 @@ function nextDataChunk(q::QueryResult)::Union{Missing, DataChunk}
         if get_size(chunk) == 0
             return missing
         end
-        return chunk
     else
         chunk_count = duckdb_result_chunk_count(q.handle[])
         if q.chunk_index > chunk_count

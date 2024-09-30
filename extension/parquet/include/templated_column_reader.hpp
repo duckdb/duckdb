@@ -68,9 +68,9 @@ public:
 
 	void Offsets(uint32_t *offsets, uint8_t *defines, uint64_t num_values, parquet_filter_t &filter,
 	             idx_t result_offset, Vector &result) override {
-		if (!dict) {
-			throw IOException(
-			    "Parquet file is likely corrupted, cannot have dictionary offsets without seeing a dictionary first.");
+		if (!dict || dict->len == 0) {
+			throw IOException("Parquet file is likely corrupted, cannot have dictionary offsets without seeing a "
+			                  "non-empty dictionary first.");
 		}
 		if (HasDefines()) {
 			OffsetsInternal<true>(*dict, offsets, defines, num_values, filter, result_offset, result);

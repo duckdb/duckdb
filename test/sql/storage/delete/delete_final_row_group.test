@@ -1,0 +1,42 @@
+# name: test/sql/storage/delete/delete_final_row_group.test
+# description: Test deleting the final row groups of a table
+# group: [delete]
+
+load __TEST_DIR__/delete_final_row_group.db
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM range(0, 10000000) t(i);
+
+query I
+DELETE FROM integers WHERE i>=5000000
+----
+5000000
+
+query II
+SELECT COUNT(*), SUM(i) FROM integers
+----
+5000000	12499997500000
+
+
+statement ok
+ALTER TABLE integers ADD COLUMN j INTEGER
+
+query III
+SELECT COUNT(*), SUM(i), SUM(j) FROM integers
+----
+5000000	12499997500000	NULL
+
+statement ok
+UPDATE integers SET j=i+1
+
+query III
+SELECT COUNT(*), SUM(i), SUM(j) FROM integers
+----
+5000000	12499997500000	12500002500000
+
+restart
+
+query III
+SELECT COUNT(*), SUM(i), SUM(j) FROM integers
+----
+5000000	12499997500000	12500002500000

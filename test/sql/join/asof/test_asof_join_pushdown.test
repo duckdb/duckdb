@@ -44,6 +44,29 @@ ASOF LEFT JOIN (
 0 	0	0.0	0.0
 1 	0	NULL	0.0
 
+statement ok
+CREATE OR REPLACE TABLE issue12215 AS
+	SELECT col0 AS starts, col1 AS ends
+	FROM (VALUES
+		(5, 9),
+		(10, 13),
+		(14, 20),
+		(21, 23)
+	);
+
+query II
+SELECT
+    s1.starts as s1_starts,
+    s2.starts as s2_starts,
+FROM issue12215 AS s1 
+ASOF JOIN issue12215 as s2 
+  ON s2.ends >= (s1.ends - 5)
+WHERE s1_starts <> s2_starts
+ORDER BY ALL
+----
+10	5
+21	14
+
 query II
 WITH t as (
     SELECT
@@ -79,3 +102,43 @@ ORDER BY ALL
 ----
 5	6
 10	11
+
+statement ok
+CREATE TABLE issue13899(seq_no INT, amount DECIMAL(10,2));
+
+statement ok
+INSERT INTO issue13899 VALUES
+	(1,1.00),
+	(2,null),
+	(3,null),
+	(4,null),
+	(5,2.00),
+	(6,null),
+	(7,null),
+	(8,3.00),
+	(9,null),
+	(10,null),
+	(11,5.00);
+
+query III
+select 
+	a.seq_no,
+	a.amount,
+	b.amount
+from issue13899 as a 
+asof join issue13899 as b
+    on a.seq_no>=b.seq_no
+   and b.amount is not null
+ORDER BY 1
+----
+1	1.00	1.00
+2	NULL	1.00
+3	NULL	1.00
+4	NULL	1.00
+5	2.00	2.00
+6	NULL	2.00
+7	NULL	2.00
+8	3.00	3.00
+9	NULL	3.00
+10	NULL	3.00
+11	5.00	5.00

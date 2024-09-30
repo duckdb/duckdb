@@ -11694,8 +11694,12 @@ static int shell_callback(
           }
         }else if( aiType && aiType[i]==SQLITE_BLOB && p->pStmt ){
           const void *pBlob = sqlite3_column_blob(p->pStmt, i);
-          int nBlob = sqlite3_column_bytes(p->pStmt, i);
-          output_hex_blob(p->out, pBlob, nBlob);
+          if(pBlob) {
+          	int nBlob = sqlite3_column_bytes(p->pStmt, i);
+          	output_hex_blob(p->out, pBlob, nBlob);
+          } else {
+	        utf8_printf(p->out,"NULL");
+          }
         }else if( isNumber(azArg[i], 0) ){
           utf8_printf(p->out,"%s", azArg[i]);
         }else if( ShellHasFlag(p, SHFLG_Newlines) ){

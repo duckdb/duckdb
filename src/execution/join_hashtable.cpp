@@ -499,6 +499,7 @@ static inline void PerformKeyComparison(JoinHashTable::InsertState &state, JoinH
 
 	// The target selection vector says where to write the results into the lhs_data, we just want to write
 	// sequentially as otherwise we trigger a bug in the Gather function
+	data_collection.ResetCachedCastVectors(state.chunk_state, ht.equality_predicate_columns);
 	data_collection.Gather(row_locations, state.salt_match_sel, count, ht.equality_predicate_columns, state.lhs_data,
 	                       *FlatVector::IncrementalSelectionVector(), state.chunk_state.cached_cast_vectors);
 	TupleDataCollection::ToUnifiedFormat(state.chunk_state, state.lhs_data);

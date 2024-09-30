@@ -25,7 +25,7 @@ BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_p
 	}
 }
 
-bool BaseScanner::FinishedFile() {
+bool BaseScanner::FinishedFile() const {
 	if (!cur_buffer_handle) {
 		return true;
 	}
@@ -76,7 +76,7 @@ void BaseScanner::FinalizeChunkProcess() {
 	throw InternalException("FinalizeChunkProcess() from CSV Base Scanner is not implemented");
 }
 
-CSVStateMachine &BaseScanner::GetStateMachine() {
+CSVStateMachine &BaseScanner::GetStateMachine() const {
 	return *state_machine;
 }
 

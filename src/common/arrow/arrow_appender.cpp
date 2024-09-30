@@ -160,6 +160,16 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		InitializeAppenderForType<ArrowScalarData<int64_t>>(append_data);
 		break;
 	case LogicalTypeId::UUID:
+		if (append_data.options.arrow_lossless_conversion) {
+			InitializeAppenderForType<ArrowScalarData<hugeint_t, hugeint_t, ArrowUUIDBlobConverter>>(append_data);
+		} else {
+			if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+				InitializeAppenderForType<ArrowVarcharData<hugeint_t, ArrowUUIDConverter>>(append_data);
+			} else {
+				InitializeAppenderForType<ArrowVarcharData<hugeint_t, ArrowUUIDConverter, int32_t>>(append_data);
+			}
+		}
+		break;
 	case LogicalTypeId::HUGEINT:
 		InitializeAppenderForType<ArrowScalarData<hugeint_t>>(append_data);
 		break;

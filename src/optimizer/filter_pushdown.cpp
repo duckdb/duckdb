@@ -93,9 +93,14 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 		// we can just push directly through these operations without any rewriting
 		op->children[0] = Rewrite(std::move(op->children[0]));
 		return op;
-	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
+		// we can't push filters into the materialized CTE (LHS), but we do want to recurse into it
+		FilterPushdown pushdown(optimizer, convert_mark_joins);
+		op->children[0] = pushdown.Rewrite(std::move(op->children[0]));
+		// we can push filters into the rest of the query plan (RHS)
 		op->children[1] = Rewrite(std::move(op->children[1]));
 		return op;
+	}
 	case LogicalOperatorType::LOGICAL_GET:
 		return PushdownGet(std::move(op));
 	case LogicalOperatorType::LOGICAL_LIMIT:
@@ -127,6 +132,10 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 
 	switch (join.join_type) {
 	case JoinType::INNER:
+		//	AsOf joins can't push anything into the RHS, so treat it as a left join
+		if (op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+			return PushdownLeftJoin(std::move(op), left_bindings, right_bindings);
+		}
 		return PushdownInnerJoin(std::move(op), left_bindings, right_bindings);
 	case JoinType::LEFT:
 		return PushdownLeftJoin(std::move(op), left_bindings, right_bindings);

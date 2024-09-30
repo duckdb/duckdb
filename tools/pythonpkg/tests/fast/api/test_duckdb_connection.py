@@ -8,6 +8,8 @@ pa = pytest.importorskip("pyarrow")
 def is_dunder_method(method_name: str) -> bool:
     if len(method_name) < 4:
         return False
+    if method_name.startswith('_pybind11'):
+        return True
     return method_name[:2] == '__' and method_name[:-3:-1] == '__'
 
 

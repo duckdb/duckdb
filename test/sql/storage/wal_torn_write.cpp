@@ -107,11 +107,22 @@ TEST_CASE("Test WAL checksums", "[storage][.]") {
 		}
 		FlipWALByte(lfs, storage_wal, i);
 		{
-			// reload and make sure table A is there, and table B is not there
-			DuckDB db(storage_database, config.get());
-			Connection con(db);
-			REQUIRE_NO_FAIL(con.Query("FROM A"));
-			REQUIRE_FAIL(con.Query("FROM B"));
+			// flipping a byte in the checksum leads to an IOException
+			// flipping a byte in the size of a WAL entry leads to a torn write
+			// we succeed on either of these cases here
+			try {
+				DuckDB db(storage_database, config.get());
+				Connection con(db);
+				REQUIRE_NO_FAIL(con.Query("FROM A"));
+				REQUIRE_FAIL(con.Query("FROM B"));
+			} catch (std::exception &ex) {
+				ErrorData error(ex);
+				if (error.Type() == ExceptionType::IO) {
+					REQUIRE(1 == 1);
+				} else {
+					throw;
+				}
+			}
 		}
 	}
 	DeleteDatabase(storage_database);

@@ -205,7 +205,7 @@ unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, 
 		return nullptr;
 	}
 	auto &global_state = global_state_p->Cast<CSVGlobalState>();
-	if (global_state.current_boundary.done) {
+	if (global_state.IsDone()) {
 		// nothing to do
 		return nullptr;
 	}
@@ -390,9 +390,9 @@ unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, ReplacementScanI
 	auto table_name = ReplacementScan::GetFullPath(input);
 	auto lower_name = StringUtil::Lower(table_name);
 	// remove any compression
-	if (StringUtil::EndsWith(lower_name, ".gz")) {
+	if (StringUtil::EndsWith(lower_name, CompressionExtensionFromType(FileCompressionType::GZIP))) {
 		lower_name = lower_name.substr(0, lower_name.size() - 3);
-	} else if (StringUtil::EndsWith(lower_name, ".zst")) {
+	} else if (StringUtil::EndsWith(lower_name, CompressionExtensionFromType(FileCompressionType::ZSTD))) {
 		if (!Catalog::TryAutoLoad(context, "parquet")) {
 			throw MissingExtensionException("parquet extension is required for reading zst compressed file");
 		}

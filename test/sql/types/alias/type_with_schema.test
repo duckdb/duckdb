@@ -1,0 +1,20 @@
+# name: test/sql/types/alias/type_with_schema.test
+# group: [alias]
+
+statement ok
+CREATE SCHEMA my_schema;
+
+statement ok
+CREATE TYPE my_schema.my_type AS STRUCT (
+	a int, b int
+);
+
+statement ok
+CREATE TABLE my_schema.tbl (
+	c0 my_schema.my_type
+);
+
+statement ok
+CREATE TABLE main.tbl (
+	c0 my_schema.my_type
+);

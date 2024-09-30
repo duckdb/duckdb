@@ -68,6 +68,7 @@ void AreExtensionsRegistered(const LogicalType &arrow_type, const LogicalType &d
 static void ConvertArrowTableToVector(const py::object &table, Vector &out, ClientContext &context, idx_t count) {
 	// Create the stream factory from the Table object
 	auto ptr = table.ptr();
+	D_ASSERT(py::gil_check());
 	py::gil_scoped_release gil;
 
 	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(ptr, context.GetClientProperties());

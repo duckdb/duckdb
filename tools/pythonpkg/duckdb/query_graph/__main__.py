@@ -99,7 +99,7 @@ def open_utf8(fpath: str, flags: str) -> object:
 
 
 def get_child_timings(top_node: object, query_timings: object) -> str:
-    node_timing = NodeTiming(top_node['name'], float(top_node['operator_timing']))
+    node_timing = NodeTiming(top_node['operator_type'], float(top_node['operator_timing']))
     query_timings.add_node_timing(node_timing)
     for child in top_node['children']:
         get_child_timings(child, query_timings)
@@ -131,10 +131,9 @@ def get_node_body(name: str, result: str, cardinality: float, extra_info: str) -
     body += "<div class=\"node-body\">"
     new_name = name.replace("_", " ")
     body += f"<p> <b>{new_name} ({result}s) </b></p>"
-    if extra_info:
-        extra_info = extra_info.replace("[INFOSEPARATOR]", "----")
-        extra_info = extra_info.replace("<br><br>", "<br>")
-        body += f"<p> {extra_info} </p>"
+    body += f"<p> ---------------- </p>"
+    body += f"<p> {extra_info} </p>"
+    body += f"<p> ---------------- </p>"
     body += f"<p> cardinality = {cardinality} </p>"
     # TODO: Expand on timing. Usually available from a detailed profiling
     body += "</div>"
@@ -145,10 +144,15 @@ def get_node_body(name: str, result: str, cardinality: float, extra_info: str) -
 def generate_tree_recursive(json_graph: object) -> str:
     node_prefix_html = "<li>"
     node_suffix_html = "</li>"
-    node_body = get_node_body(json_graph["name"],
+
+    extra_info = ""
+    for key in json_graph['extra_info']:
+        extra_info += f"{key}: {json_graph['extra_info'][key]} <br>"
+
+    node_body = get_node_body(json_graph["operator_type"],
                               json_graph["operator_timing"],
                               json_graph["operator_cardinality"],
-                              json_graph["extra_info"].replace("\n", "<br>"))
+                              extra_info)
 
     children_html = ""
     if len(json_graph['children']) >= 1:

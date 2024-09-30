@@ -853,7 +853,8 @@ public:
 			return file_list_cardinality_estimate;
 		}
 
-		return make_uniq<NodeStatistics>(data.initial_file_cardinality * data.file_list->GetTotalFileCount());
+		return make_uniq<NodeStatistics>(MaxValue(data.initial_file_cardinality, (idx_t)1) *
+		                                 data.file_list->GetTotalFileCount());
 	}
 
 	static idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {

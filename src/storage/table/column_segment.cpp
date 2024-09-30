@@ -161,8 +161,8 @@ void ColumnSegment::Resize(idx_t new_size) {
 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto old_handle = buffer_manager.Pin(block);
-	shared_ptr<BlockHandle> new_block;
-	auto new_handle = buffer_manager.Allocate(MemoryTag::IN_MEMORY_TABLE, new_size, false, &new_block);
+	auto new_handle = buffer_manager.Allocate(MemoryTag::IN_MEMORY_TABLE, new_size);
+	auto new_block = new_handle.GetBlockHandle();
 	memcpy(new_handle.Ptr(), old_handle.Ptr(), segment_size);
 
 	this->block_id = new_block->BlockId();

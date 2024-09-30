@@ -136,6 +136,27 @@ static unique_ptr<QueryNode> CreateSelectStatement(CopyStatement &stmt, child_li
 	return std::move(statement);
 }
 
+unique_ptr<LogicalOperator> Binder::UnionOperators(vector<unique_ptr<LogicalOperator>> nodes) {
+	if (nodes.empty()) {
+		return nullptr;
+	}
+	while (nodes.size() > 1) {
+		vector<unique_ptr<LogicalOperator>> new_nodes;
+		for (idx_t i = 0; i < nodes.size(); i += 2) {
+			if (i + 1 == nodes.size()) {
+				new_nodes.push_back(std::move(nodes[i]));
+			} else {
+				auto copy_union = make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1U, std::move(nodes[i]),
+				                                                 std::move(nodes[i + 1]),
+				                                                 LogicalOperatorType::LOGICAL_UNION, true, false);
+				new_nodes.push_back(std::move(copy_union));
+			}
+		}
+		nodes = std::move(new_nodes);
+	}
+	return std::move(nodes[0]);
+}
+
 BoundStatement Binder::Bind(ExportStatement &stmt) {
 	// COPY TO a file
 	auto &config = DBConfig::GetConfig(context);
@@ -170,11 +191,11 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 	// now generate the COPY statements for each of the tables
 	auto &fs = FileSystem::GetFileSystem(context);
-	unique_ptr<LogicalOperator> child_operator;
 
 	BoundExportData exported_tables;
 
 	unordered_set<string> table_name_index;
+	vector<unique_ptr<LogicalOperator>> export_nodes;
 	for (auto &t : tables) {
 		auto &table = t.get().Cast<TableCatalogEntry>();
 		auto info = make_uniq<CopyInfo>();
@@ -237,15 +258,9 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 		auto plan = std::move(bound_statement.plan);
 
-		if (child_operator) {
-			// use UNION ALL to combine the individual copy statements into a single node
-			auto copy_union = make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1U, std::move(child_operator),
-			                                                 std::move(plan), LogicalOperatorType::LOGICAL_UNION, true);
-			child_operator = std::move(copy_union);
-		} else {
-			child_operator = std::move(plan);
-		}
+		export_nodes.push_back(std::move(plan));
 	}
+	auto child_operator = UnionOperators(std::move(export_nodes));
 
 	// try to create the directory, if it doesn't exist yet
 	// a bit hacky to do it here, but we need to create the directory BEFORE the copy statements run

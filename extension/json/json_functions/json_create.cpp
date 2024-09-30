@@ -550,6 +550,7 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::VARINT:
 	case LogicalTypeId::UUID: {
 		Vector string_vector(LogicalTypeId::VARCHAR, count);
 		VectorOperations::DefaultCast(value_v, string_vector, count);
@@ -562,7 +563,17 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 		TemplatedCreateValues<double, double>(doc, vals, double_vector, count);
 		break;
 	}
-	default:
+	case LogicalTypeId::INVALID:
+	case LogicalTypeId::UNKNOWN:
+	case LogicalTypeId::ANY:
+	case LogicalTypeId::USER:
+	case LogicalTypeId::CHAR:
+	case LogicalTypeId::STRING_LITERAL:
+	case LogicalTypeId::INTEGER_LITERAL:
+	case LogicalTypeId::POINTER:
+	case LogicalTypeId::VALIDITY:
+	case LogicalTypeId::TABLE:
+	case LogicalTypeId::LAMBDA:
 		throw InternalException("Unsupported type arrived at JSON create function");
 	}
 }

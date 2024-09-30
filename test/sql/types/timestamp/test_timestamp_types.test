@@ -260,3 +260,15 @@ query I
 select '2008-01-01 00:00:11'::TIMESTAMP_NS = '2008-01-01 00:00:11'::TIMESTAMP_S
 ----
 true
+
+query I
+SELECT CAST(t0.c0 AS TIME)>=('12:34:56') FROM  values ('2030-01-01'::TIMESTAMP_S), ('1969-12-23 20:44:40'::TIMESTAMP_S) as t0(c0)
+----
+false
+true
+
+query I
+SELECT NOT CAST(t0.c0 AS TIME)>=('12:34:56') FROM  values ('2030-01-01'::TIMESTAMP_MS), ('1969-12-23 20:44:40'::TIMESTAMP_MS) as t0(c0)
+----
+true
+false

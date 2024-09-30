@@ -41,7 +41,8 @@ public:
 	bool error = false;
 	idx_t result_position = 0;
 	bool cur_line_starts_as_comment = false;
-
+	//! How many rows fit a given column count
+	map<idx_t, idx_t> rows_per_column_count;
 	//! Adds a Value to the result
 	static inline void AddValue(ColumnCountResult &result, idx_t buffer_pos);
 	//! Adds a Row to the result
@@ -56,6 +57,9 @@ public:
 	static inline bool UnsetComment(ColumnCountResult &result, idx_t buffer_pos);
 
 	static inline void SetComment(ColumnCountResult &result, idx_t buffer_pos);
+
+	//! Returns the column count
+	idx_t GetMostFrequentColumnCount() const;
 
 	inline void InternalAddRow();
 };

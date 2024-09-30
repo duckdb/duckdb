@@ -5,6 +5,7 @@
 
 #include "duckdb_python/arrow/arrow_array_stream.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
+#include "duckdb/common/arrow/arrow_util.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
@@ -30,6 +31,7 @@ DuckDBPyResult::DuckDBPyResult(unique_ptr<QueryResult> result_p) : result(std::m
 
 DuckDBPyResult::~DuckDBPyResult() {
 	try {
+		D_ASSERT(py::gil_check());
 		py::gil_scoped_release gil;
 		result.reset();
 		current_chunk.reset();
@@ -108,6 +110,7 @@ unique_ptr<DataChunk> DuckDBPyResult::FetchNextRaw(QueryResult &query_result) {
 
 Optional<py::tuple> DuckDBPyResult::Fetchone() {
 	{
+		D_ASSERT(py::gil_check());
 		py::gil_scoped_release release;
 		if (!result) {
 			throw InvalidInputException("result closed");
@@ -245,6 +248,7 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 			}
 			unique_ptr<DataChunk> chunk;
 			{
+				D_ASSERT(py::gil_check());
 				py::gil_scoped_release release;
 				chunk = FetchNextRaw(stream_result);
 			}
@@ -338,6 +342,7 @@ bool DuckDBPyResult::FetchArrowChunk(ChunkScanState &scan_state, py::list &batch
 	idx_t count;
 	auto &query_result = *result.get();
 	{
+		D_ASSERT(py::gil_check());
 		py::gil_scoped_release release;
 		count = ArrowUtil::FetchChunk(scan_state, query_result.client_properties, rows_per_batch, &data);
 	}

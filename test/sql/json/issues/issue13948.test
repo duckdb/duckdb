@@ -1,0 +1,79 @@
+# name: test/sql/json/issues/issue13948.test
+# description: Test issue 13948 - Json property name with special characters produce inconsistent results with json -> 'propertyname' and json_extract
+# group: [issues]
+
+require json
+
+statement ok
+pragma enable_verification
+
+query I
+SELECT '{"Status / SubStatus": "test"}' -> 'Status / SubStatus';
+----
+"test"
+
+query I
+WITH path AS (
+    SELECT 'Status / SubStatus' p
+)
+SELECT '{"Status / SubStatus": "test"}' -> p
+FROM path
+----
+"test"
+
+# TODO at some point we should escape supplied JSON paths automatically so that this works
+query I
+SELECT '{"\"Status / SubStatus\"": "test"}' -> '"Status / SubStatus"';
+----
+NULL
+
+query I
+WITH path AS (
+    SELECT NULL p
+)
+SELECT '{"\"Status / SubStatus\"": "test"}' -> p
+FROM path
+----
+NULL
+
+query I
+SELECT '{"Status / SubStatus": "test"}' -> '$."Status / SubStatus"';
+----
+"test"
+
+query I
+WITH path AS (
+    SELECT '$."Status / SubStatus"' p
+)
+SELECT '{"Status / SubStatus": "test"}' -> p
+FROM path
+----
+"test"
+
+query I
+SELECT '[1, 2, 3]'->0
+----
+1
+
+query I
+WITH path AS (
+    SELECT 0 p
+)
+SELECT '[1, 2, 3]' -> p
+FROM path
+----
+1
+
+query I
+SELECT '[1, 2, 3]'->'0'
+----
+NULL
+
+query I
+WITH path AS (
+    SELECT '0' p
+)
+SELECT '[1, 2, 3]' -> p
+FROM path
+----
+NULL

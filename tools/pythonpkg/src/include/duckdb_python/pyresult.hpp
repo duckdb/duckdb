@@ -10,6 +10,7 @@
 
 #include "duckdb_python/numpy/numpy_result_conversion.hpp"
 #include "duckdb.hpp"
+#include "duckdb/main/chunk_scan_state.hpp"
 #include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb_python/python_objects.hpp"
 #include "duckdb_python/pybind11/dataframe.hpp"

@@ -20,11 +20,13 @@ struct PGSimplifiedToken {
 };
 
 enum class PGKeywordCategory : uint8_t {
-	PG_KEYWORD_RESERVED,
-	PG_KEYWORD_UNRESERVED,
-	PG_KEYWORD_TYPE_FUNC,
-	PG_KEYWORD_COL_NAME
+	PG_KEYWORD_UNRESERVED = 0,
+	PG_KEYWORD_COL_NAME = 1,
+	PG_KEYWORD_TYPE_FUNC= 2,
+	PG_KEYWORD_RESERVED = 3,
+	PG_KEYWORD_NONE = 4
 };
+
 
 struct PGKeyword {
 	std::string text;

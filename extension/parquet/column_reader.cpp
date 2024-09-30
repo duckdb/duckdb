@@ -259,6 +259,9 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 		break;
 	case PageType::DICTIONARY_PAGE:
 		PreparePage(page_hdr);
+		if (page_hdr.dictionary_page_header.num_values < 0) {
+			throw std::runtime_error("Invalid dictionary page header (num_values < 0)");
+		}
 		Dictionary(std::move(block), page_hdr.dictionary_page_header.num_values);
 		break;
 	default:

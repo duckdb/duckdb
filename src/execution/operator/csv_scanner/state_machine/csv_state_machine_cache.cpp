@@ -22,7 +22,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	auto &transition_array = state_machine_cache[state_machine_options];
 
 	for (uint32_t i = 0; i < StateMachine::NUM_STATES; i++) {
-		CSVState cur_state = CSVState(i);
+		CSVState cur_state = static_cast<CSVState>(i);
 		switch (cur_state) {
 		case CSVState::QUOTED:
 		case CSVState::QUOTED_NEW_LINE:
@@ -234,11 +234,11 @@ CSVStateMachineCache::CSVStateMachineCache() {
 	auto default_delimiter = DialectCandidates::GetDefaultDelimiter();
 	auto default_comment = DialectCandidates::GetDefaultComment();
 
-	for (auto quoterule : default_quote_rule) {
-		const auto &quote_candidates = default_quote[static_cast<uint8_t>(quoterule)];
+	for (auto quote_rule : default_quote_rule) {
+		const auto &quote_candidates = default_quote[static_cast<uint8_t>(quote_rule)];
 		for (const auto &quote : quote_candidates) {
 			for (const auto &delimiter : default_delimiter) {
-				const auto &escape_candidates = default_escape[static_cast<uint8_t>(quoterule)];
+				const auto &escape_candidates = default_escape[static_cast<uint8_t>(quote_rule)];
 				for (const auto &escape : escape_candidates) {
 					for (const auto &comment : default_comment) {
 						Insert({delimiter, quote, escape, comment, NewLineIdentifier::SINGLE_N});

@@ -204,7 +204,9 @@ void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 		auto &child_vec = ArrayVector::GetEntry(new_vector);
 		auto &other_child_vec = ArrayVector::GetEntry(other);
 		D_ASSERT(ArrayType::GetSize(GetType()) == ArrayType::GetSize(other.GetType()));
-		child_vec.Slice(other_child_vec, offset, end);
+		const auto array_size = ArrayType::GetSize(GetType());
+		// We need to slice the child vector with the multiplied offset and end
+		child_vec.Slice(other_child_vec, offset * array_size, end * array_size);
 		new_vector.validity.Slice(other.validity, offset, end - offset);
 		Reference(new_vector);
 	} else {

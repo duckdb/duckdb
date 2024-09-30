@@ -100,3 +100,13 @@ Could not parse DATEFORMAT: Trailing format character %
 statement error
 COPY timestamps FROM 'data/csv/test/timestampformat.csv' (HEADER 0, DELIMITER '|', TIMESTAMPFORMAT '%')
 ----
+
+query I
+select columns FROM sniff_csv('data/csv/dateformat/working.csv',  header=true,dateformat='%d-%b-%Y');
+----
+[{'name': ACCESSION_NUMBER, 'type': VARCHAR}, {'name': FILING_DATE, 'type': DATE}]
+
+query I
+select columns FROM sniff_csv('data/csv/dateformat/not_working.csv',  header=true,dateformat='%d-%b-%Y');
+----
+[{'name': ACCESSION_NUMBER, 'type': VARCHAR}, {'name': FILING_DATE, 'type': DATE}]

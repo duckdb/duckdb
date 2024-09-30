@@ -99,8 +99,8 @@ void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { ReplaceMacroParameters(child, lambda_params); });
 }
 
-BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func, idx_t depth,
-                                       unique_ptr<ParsedExpression> &expr) {
+void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func,
+                                             unique_ptr<ParsedExpression> &expr) {
 	// validate the arguments and separate positional and default arguments
 	vector<unique_ptr<ParsedExpression>> positionals;
 	unordered_map<string, unique_ptr<ParsedExpression>> defaults;
@@ -143,6 +143,14 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 	// now replace the parameters
 	vector<unordered_set<string>> lambda_params;
 	ReplaceMacroParameters(expr, lambda_params);
+}
+
+BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func, idx_t depth,
+                                       unique_ptr<ParsedExpression> &expr) {
+	auto stack_checker = StackCheck(*expr, 3);
+
+	// unfold the macro expression
+	UnfoldMacroExpression(function, macro_func, expr);
 
 	// bind the unfolded macro
 	return BindExpression(expr, depth);

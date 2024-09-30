@@ -23,7 +23,7 @@ bool IteratorKey::Contains(const ARTKey &key) const {
 	return true;
 }
 
-bool IteratorKey::GreaterThan(const ARTKey &key, const bool equal) const {
+bool IteratorKey::GreaterThan(const ARTKey &key, const bool equal, const uint8_t nested_depth) const {
 	for (idx_t i = 0; i < MinValue<idx_t>(Size(), key.len); i++) {
 		if (key_bytes[i] > key.data[i]) {
 			return true;
@@ -31,12 +31,11 @@ bool IteratorKey::GreaterThan(const ARTKey &key, const bool equal) const {
 			return false;
 		}
 	}
-	if (equal) {
-		// Returns true, if current_key is greater than key.
-		return Size() > key.len;
-	}
-	// Returns true, if current_key and key match or current_key is greater than key.
-	return Size() >= key.len;
+
+	// Returns true, if current_key is greater than (or equal to) key.
+	D_ASSERT(Size() >= nested_depth);
+	auto this_len = Size() - nested_depth;
+	return equal ? this_len > key.len : this_len >= key.len;
 }
 
 //===--------------------------------------------------------------------===//
@@ -48,7 +47,7 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, unsafe_vec
 	do {
 		// An empty upper bound indicates that no upper bound exists.
 		if (!upper_bound.Empty() && status == GateStatus::GATE_NOT_SET) {
-			if (current_key.GreaterThan(upper_bound, equal)) {
+			if (current_key.GreaterThan(upper_bound, equal, nested_depth)) {
 				return true;
 			}
 		}
@@ -252,11 +251,7 @@ bool Iterator::Next() {
 }
 
 void Iterator::PopNode() {
-	// We are popping a gate node.
-	if (nodes.top().node.GetGateStatus() == GateStatus::GATE_SET) {
-		D_ASSERT(status == GateStatus::GATE_SET);
-		status = GateStatus::GATE_NOT_SET;
-	}
+	auto gate_status = nodes.top().node.GetGateStatus();
 
 	// Pop the byte and the node.
 	if (nodes.top().node.GetType() != NType::PREFIX) {
@@ -265,19 +260,25 @@ void Iterator::PopNode() {
 			nested_depth--;
 			D_ASSERT(nested_depth < Prefix::ROW_ID_SIZE);
 		}
-		nodes.pop();
-		return;
-	}
 
-	// Pop all prefix bytes and the node.
-	Prefix prefix(art, nodes.top().node);
-	auto prefix_byte_count = prefix.data[Prefix::Count(art)];
-	current_key.Pop(prefix_byte_count);
-	if (status == GateStatus::GATE_SET) {
-		nested_depth -= prefix_byte_count;
-		D_ASSERT(nested_depth < Prefix::ROW_ID_SIZE);
+	} else {
+		// Pop all prefix bytes and the node.
+		Prefix prefix(art, nodes.top().node);
+		auto prefix_byte_count = prefix.data[Prefix::Count(art)];
+		current_key.Pop(prefix_byte_count);
+
+		if (status == GateStatus::GATE_SET) {
+			nested_depth -= prefix_byte_count;
+			D_ASSERT(nested_depth < Prefix::ROW_ID_SIZE);
+		}
 	}
 	nodes.pop();
+
+	// We are popping a gate node.
+	if (gate_status == GateStatus::GATE_SET) {
+		D_ASSERT(status == GateStatus::GATE_SET);
+		status = GateStatus::GATE_NOT_SET;
+	}
 }
 
 } // namespace duckdb

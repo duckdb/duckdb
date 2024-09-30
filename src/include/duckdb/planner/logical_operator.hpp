@@ -64,6 +64,7 @@ public:
 	void AddChild(unique_ptr<LogicalOperator> child);
 	virtual idx_t EstimateCardinality(ClientContext &context);
 	void SetEstimatedCardinality(idx_t _estimated_cardinality);
+	void SetParamsEstimatedCardinality(InsertionOrderPreservingMap<string> &result) const;
 
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);

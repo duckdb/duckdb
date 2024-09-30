@@ -70,7 +70,7 @@ body:
     attributes:
       label: "OS:"
       placeholder: e.g., iOS
-      description: Please include operating system version and architecture (e.g., aarch64, x86, x64, etc)
+      description: Please include operating system version and architecture (e.g., aarch64, x86_64, etc.).
     validations:
       required: true
   - type: input
@@ -85,7 +85,12 @@ body:
       placeholder: e.g., Python
     validations:
       required: true
-
+  - type: input
+    attributes:
+      label: "Hardware:"
+      placeholder: If your issue is performance-related, please include information on your CPU and memory.
+    validations:
+      required: false
   - type: markdown
     attributes:
       value: "# Identity Disclosure:"

@@ -920,68 +920,12 @@ bool TryCast::Operation(double input, double &result, bool strict) {
 //===--------------------------------------------------------------------===//
 // Cast String -> Numeric
 //===--------------------------------------------------------------------===//
+
 template <>
 bool TryCast::Operation(string_t input, bool &result, bool strict) {
-	auto input_data = reinterpret_cast<const uint8_t *>(input.GetData());
+	auto input_data = reinterpret_cast<const char *>(input.GetData());
 	auto input_size = input.GetSize();
-
-	switch (input_size) {
-	case 1: {
-		unsigned char c = UnsafeNumericCast<uint8_t>(std::tolower(*input_data));
-		if (c == 't' || (!strict && c == 'y') || (!strict && c == '1')) {
-			result = true;
-			return true;
-		} else if (c == 'f' || (!strict && c == 'n') || (!strict && c == '0')) {
-			result = false;
-			return true;
-		}
-		return false;
-	}
-	case 2: {
-		unsigned char n = UnsafeNumericCast<uint8_t>(std::tolower(input_data[0]));
-		unsigned char o = UnsafeNumericCast<uint8_t>(std::tolower(input_data[1]));
-		if (n == 'n' && o == 'o') {
-			result = false;
-			return true;
-		}
-		return false;
-	}
-	case 3: {
-		unsigned char y = UnsafeNumericCast<uint8_t>(std::tolower(input_data[0]));
-		unsigned char e = UnsafeNumericCast<uint8_t>(std::tolower(input_data[1]));
-		unsigned char s = UnsafeNumericCast<uint8_t>(std::tolower(input_data[2]));
-		if (y == 'y' && e == 'e' && s == 's') {
-			result = true;
-			return true;
-		}
-		return false;
-	}
-	case 4: {
-		unsigned char t = UnsafeNumericCast<uint8_t>(std::tolower(input_data[0]));
-		unsigned char r = UnsafeNumericCast<uint8_t>(std::tolower(input_data[1]));
-		unsigned char u = UnsafeNumericCast<uint8_t>(std::tolower(input_data[2]));
-		unsigned char e = UnsafeNumericCast<uint8_t>(std::tolower(input_data[3]));
-		if (t == 't' && r == 'r' && u == 'u' && e == 'e') {
-			result = true;
-			return true;
-		}
-		return false;
-	}
-	case 5: {
-		unsigned char f = UnsafeNumericCast<uint8_t>(std::tolower(input_data[0]));
-		unsigned char a = UnsafeNumericCast<uint8_t>(std::tolower(input_data[1]));
-		unsigned char l = UnsafeNumericCast<uint8_t>(std::tolower(input_data[2]));
-		unsigned char s = UnsafeNumericCast<uint8_t>(std::tolower(input_data[3]));
-		unsigned char e = UnsafeNumericCast<uint8_t>(std::tolower(input_data[4]));
-		if (f == 'f' && a == 'a' && l == 'l' && s == 's' && e == 'e') {
-			result = false;
-			return true;
-		}
-		return false;
-	}
-	default:
-		return false;
-	}
+	return TryCastStringBool(input_data, input_size, result, strict);
 }
 template <>
 bool TryCast::Operation(string_t input, int8_t &result, bool strict) {
@@ -2298,7 +2242,9 @@ bool TryCastToDecimal::Operation(uhugeint_t input, hugeint_t &result, CastParame
 template <class SRC, class DST>
 bool DoubleToDecimalCast(SRC input, DST &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
 	double value = input * NumericHelper::DOUBLE_POWERS_OF_TEN[scale];
-	if (value <= -NumericHelper::DOUBLE_POWERS_OF_TEN[width] || value >= NumericHelper::DOUBLE_POWERS_OF_TEN[width]) {
+	double roundedValue = round(value);
+	if (roundedValue <= -NumericHelper::DOUBLE_POWERS_OF_TEN[width] ||
+	    roundedValue >= NumericHelper::DOUBLE_POWERS_OF_TEN[width]) {
 		string error = StringUtil::Format("Could not cast value %f to DECIMAL(%d,%d)", value, width, scale);
 		HandleCastError::AssignError(error, parameters);
 		return false;

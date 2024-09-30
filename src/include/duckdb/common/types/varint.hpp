@@ -52,7 +52,7 @@ public:
 	//! Function to convert Varchar to VARINT blob
 	DUCKDB_API static string VarcharToVarInt(const string_t &value);
 	//! ----------------------------------- Double Cast ----------------------------------- //
-	DUCKDB_API static bool VarintToDouble(string_t &blob, double &result, bool &strict);
+	DUCKDB_API static bool VarintToDouble(const string_t &blob, double &result, bool &strict);
 };
 
 //! ----------------------------------- (u)Integral Cast ----------------------------------- //

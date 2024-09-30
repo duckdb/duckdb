@@ -482,6 +482,10 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 	if (column_type.IsJSONType()) {
 		return 0; // Does not need to be surrounded in quotes like VARCHAR
 	}
+	if (column_type.HasAlias()) {
+		// Use the text representation for aliased types
+		return SQLITE_TEXT;
+	}
 	switch (column_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 	case LogicalTypeId::TINYINT:
@@ -1902,7 +1906,7 @@ SQLITE_API char *sqlite3_expanded_sql(sqlite3_stmt *pStmt) {
 }
 
 SQLITE_API int sqlite3_keyword_check(const char *str, int len) {
-	return Parser::IsKeyword(std::string(str, len));
+	return KeywordHelper::IsKeyword(std::string(str, len));
 }
 
 SQLITE_API int sqlite3_keyword_count(void) {

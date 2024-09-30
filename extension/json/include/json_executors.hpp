@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "json_functions.hpp"
 
@@ -88,11 +89,18 @@ public:
 			}
 		} else { // Columnref path
 			D_ASSERT(info.path_type == JSONCommon::JSONPathType::REGULAR);
-			auto &paths = args.data[1];
+			unique_ptr<Vector> casted_paths;
+			if (args.data[1].GetType().id() == LogicalTypeId::VARCHAR) {
+				casted_paths = make_uniq<Vector>(args.data[1]);
+			} else {
+				casted_paths = make_uniq<Vector>(LogicalTypeId::VARCHAR);
+				VectorOperations::DefaultCast(args.data[1], *casted_paths, args.size(), true);
+			}
 			BinaryExecutor::ExecuteWithNulls<string_t, string_t, T>(
-			    inputs, paths, result, args.size(), [&](string_t input, string_t path, ValidityMask &mask, idx_t idx) {
+			    inputs, *casted_paths, result, args.size(),
+			    [&](string_t input, string_t path, ValidityMask &mask, idx_t idx) {
 				    auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, lstate.json_allocator.GetYYAlc());
-				    auto val = JSONCommon::Get(doc->root, path);
+				    auto val = JSONCommon::Get(doc->root, path, args.data[1].GetType().IsIntegral());
 				    if (SET_NULL_IF_NOT_FOUND && !val) {
 					    mask.SetInvalid(idx);
 					    return T {};

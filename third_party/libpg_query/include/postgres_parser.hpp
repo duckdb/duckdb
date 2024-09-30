@@ -28,7 +28,7 @@ public:
 	void Parse(const std::string &query);
 	static duckdb::vector<duckdb_libpgquery::PGSimplifiedToken> Tokenize(const std::string &query);
 
-	static bool IsKeyword(const std::string &text);
+	static duckdb_libpgquery::PGKeywordCategory IsKeyword(const std::string &text);
 	static duckdb::vector<duckdb_libpgquery::PGKeyword> KeywordList();
 
 	static void SetPreserveIdentifierCase(bool downcase);

@@ -417,7 +417,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATION NOTICE**: use duckdb_value_string instead. This function does not work correctly if the string contains null bytes.\n\n",
+                "description": "**DEPRECATED**: Use duckdb_value_string instead. This function does not work correctly if the string contains null bytes.\n\n",
                 "return_value": "The text value at the specified location as a null-terminated string, or nullptr if the value cannot be\nconverted. The result must be freed with `duckdb_free`."
             }
         },
@@ -461,7 +461,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATION NOTICE**: use duckdb_value_string_internal instead. This function does not work correctly if the string contains\nnull bytes.\n\n",
+                "description": "**DEPRECATED**: Use duckdb_value_string_internal instead. This function does not work correctly if the string contains\nnull bytes.\n\n",
                 "return_value": "The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.\nIf the column is NOT a VARCHAR column this function will return NULL.\n\nThe result must NOT be freed."
             }
         },
@@ -483,7 +483,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATION NOTICE**: use duckdb_value_string_internal instead. This function does not work correctly if the string contains\nnull bytes.\n",
+                "description": "**DEPRECATED**: Use duckdb_value_string_internal instead. This function does not work correctly if the string contains\nnull bytes.\n",
                 "return_value": "The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.\nIf the column is NOT a VARCHAR column this function will return NULL.\n\nThe result must NOT be freed."
             }
         },

@@ -93,7 +93,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 			// erase the filter from the list of filters
 			filters.erase_at(i);
 			i--;
-		} else {
+		} else if (op->type != LogicalOperatorType::LOGICAL_ASOF_JOIN) {
 			// bindings match right side or both sides: we cannot directly push it into the right
 			// however, if the filter removes rows with null values from the RHS we can turn the left outer join
 			// in an inner join, and then push down as we would push down an inner join

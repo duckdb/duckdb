@@ -41,6 +41,7 @@ public:
 private:
 	py::object handle;
 };
+
 class PythonFilesystem : public FileSystem {
 private:
 	const vector<string> protocols;

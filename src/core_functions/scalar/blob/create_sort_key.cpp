@@ -737,7 +737,8 @@ void CreateSortKeyHelpers::CreateSortKeyWithValidity(Vector &input, Vector &resu
 	auto &validity = FlatVector::Validity(result);
 
 	for (idx_t i = 0; i < count; i++) {
-		if (!format.validity.RowIsValid(i)) {
+		auto idx = format.sel->get_index(i);
+		if (!format.validity.RowIsValid(idx)) {
 			validity.SetInvalid(i);
 		}
 	}

@@ -283,7 +283,7 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 				bool success = false;
 				if (StringUtil::StartsWith(statement.expected_error, "<REGEX>:") ||
 				    StringUtil::StartsWith(statement.expected_error, "<!REGEX>:")) {
-					success = MatchesRegex(logger, result, statement.expected_error);
+					success = MatchesRegex(logger, result.ToString(), statement.expected_error);
 				}
 				if (!success) {
 					logger.ExpectedErrorMismatch(statement.expected_error, result);
@@ -450,7 +450,7 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 		return true;
 	}
 	if (StringUtil::StartsWith(rvalue_str, "<REGEX>:") || StringUtil::StartsWith(rvalue_str, "<!REGEX>:")) {
-		if (MatchesRegex(logger, result, rvalue_str)) {
+		if (MatchesRegex(logger, lvalue_str, rvalue_str)) {
 			return true;
 		}
 	}
@@ -521,7 +521,7 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 	return true;
 }
 
-bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, MaterializedQueryResult &result, string rvalue_str) {
+bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, string lvalue_str, string rvalue_str) {
 	bool want_match = StringUtil::StartsWith(rvalue_str, "<REGEX>:");
 	string regex_str = StringUtil::Replace(StringUtil::Replace(rvalue_str, "<REGEX>:", ""), "<!REGEX>:", "");
 
@@ -536,8 +536,7 @@ bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, MaterializedQuer
 		logger.PrintLineSep();
 		return false;
 	}
-	auto resString = result.ToString();
-	bool regex_matches = RE2::FullMatch(result.ToString(), re);
+	bool regex_matches = RE2::FullMatch(lvalue_str, re);
 	if ((want_match && regex_matches) || (!want_match && !regex_matches)) {
 		return true;
 	}
