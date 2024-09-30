@@ -36,6 +36,7 @@
 #include <cassert>
 #include <chrono>
 #include <cstring>
+#include <duckdb/planner/filter/zone_map_filter.hpp>
 #include <sstream>
 
 namespace duckdb {
@@ -1001,11 +1002,12 @@ static void ApplyFilter(Vector &v, TableFilter &filter, parquet_filter_t &filter
 		auto &struct_filter = filter.Cast<StructFilter>();
 		auto &child = StructVector::GetEntries(v)[struct_filter.child_idx];
 		ApplyFilter(*child, *struct_filter.child_filter, filter_mask, count);
-	} break;
-	case TableFilterType::ZONE_MAP:
+	}
+	case TableFilterType::ZONE_MAP: {
 		// we don't execute zone map filters here - we only consider them for zone map pruning
-		filter_mask.reset();
+		// do nothing to the mask.
 		break;
+	}
 	default:
 		D_ASSERT(0);
 		break;
@@ -1052,7 +1054,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 
 		auto &group = GetGroup(state);
 		if (state.prefetch_mode && state.group_offset != (idx_t)group.num_rows) {
-
+			// here means some filter pruning is happening.
 			uint64_t total_row_group_span = GetGroupSpan(state);
 
 			double scan_percentage = (double)(to_scan_compressed_bytes) / static_cast<double>(total_row_group_span);
@@ -1099,8 +1101,8 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 					trans.PrefetchRegistered();
 				}
 			}
+			return true;
 		}
-		return true;
 	}
 
 	auto this_output_chunk_rows = MinValue<idx_t>(STANDARD_VECTOR_SIZE, GetGroup(state).num_rows - state.group_offset);
