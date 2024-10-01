@@ -42,10 +42,6 @@ struct FlattenDependentJoins {
 	const vector<CorrelatedColumnInfo> &correlated_columns;
 	vector<LogicalType> delim_types;
 
-	// Collection of recursive and materialized CTE ids.
-	// This is used to correctly decorrelate nested EXISTS subqueries.
-	vector<idx_t> cte_idx;
-
 	bool perform_delim;
 	bool any_join;
 

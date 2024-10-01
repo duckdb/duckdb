@@ -18,14 +18,14 @@ namespace duckdb {
 //! Helper class to rewrite correlated cte scans within a single LogicalOperator
 class RewriteSubquery : public LogicalOperatorVisitor {
 public:
-	RewriteSubquery(const vector<idx_t> &table_index, idx_t lateral_depth,
+	RewriteSubquery(const idx_t table_index, idx_t lateral_depth,
 	                const vector<CorrelatedColumnInfo> &correlated_columns);
 
 	void VisitOperator(LogicalOperator &op) override;
 	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
 private:
-	const vector<idx_t> &table_index;
+	const idx_t table_index;
 	idx_t lateral_depth;
 	vector<CorrelatedColumnInfo> correlated_columns;
 
@@ -34,7 +34,7 @@ private:
 
 class RewriteCorrelatedSubqueriesRecursive : public BoundNodeVisitor {
 public:
-	RewriteCorrelatedSubqueriesRecursive(const vector<idx_t> &table_index, idx_t lateral_depth,
+	RewriteCorrelatedSubqueriesRecursive(const idx_t table_index, idx_t lateral_depth,
 	                                     const vector<CorrelatedColumnInfo> &correlated_columns);
 
 	void VisitBoundTableRef(BoundTableRef &ref) override;
@@ -42,7 +42,7 @@ public:
 
 	void RewriteCorrelatedSubquery(Binder &binder, BoundQueryNode &subquery);
 
-	const vector<idx_t> &table_index;
+	const idx_t table_index;
 	idx_t lateral_depth;
 	idx_t subquery_depth = 0;
 	const vector<CorrelatedColumnInfo> &correlated_columns;

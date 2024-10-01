@@ -705,12 +705,11 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		base_binding.table_index = setop.table_index;
 		base_binding.column_index = setop.column_count;
 		idx_t table_index = setop.table_index;
-		cte_idx.emplace_back(setop.table_index);
 		setop.correlated_columns = correlated_columns;
 
 		binder.recursive_ctes[table_index] = plan.get();
 
-		RewriteSubquery subquery_rewriter(cte_idx, lateral_depth, correlated_columns);
+		RewriteSubquery subquery_rewriter(setop.table_index, lateral_depth, correlated_columns);
 		subquery_rewriter.VisitOperator(*plan->children[1]);
 
 		RewriteCTEScan cte_rewriter(table_index, correlated_columns);
@@ -739,7 +738,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 
 		setop.column_count += correlated_columns.size();
 
-		cte_idx.pop_back();
 		return plan;
 	}
 	case LogicalOperatorType::LOGICAL_CTE_REF: {

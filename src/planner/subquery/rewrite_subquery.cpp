@@ -19,17 +19,12 @@
 
 namespace duckdb {
 
-RewriteSubquery::RewriteSubquery(const vector<idx_t> &table_index, idx_t lateral_depth,
+RewriteSubquery::RewriteSubquery(const idx_t table_index, idx_t lateral_depth,
                                  const vector<CorrelatedColumnInfo> &correlated_columns)
     : table_index(table_index), lateral_depth(lateral_depth), correlated_columns(correlated_columns) {
 }
 
 void RewriteSubquery::VisitOperator(duckdb::LogicalOperator &op) {
-	if (table_index.empty()) {
-		// no table index to rewrite: skip
-		return;
-	}
-
 	// visit the children of the operator
 	// check if op is a dependent join, if so, increment the lateral depth
 	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
@@ -66,7 +61,7 @@ unique_ptr<Expression> RewriteSubquery::VisitReplace(BoundSubqueryExpression &ex
 }
 
 RewriteCorrelatedSubqueriesRecursive::RewriteCorrelatedSubqueriesRecursive(
-    const vector<idx_t> &table_index, idx_t lateral_depth, const vector<CorrelatedColumnInfo> &correlated_columns)
+    const idx_t table_index, idx_t lateral_depth, const vector<CorrelatedColumnInfo> &correlated_columns)
     : table_index(table_index), lateral_depth(lateral_depth), correlated_columns(correlated_columns) {
 }
 
@@ -80,9 +75,7 @@ void RewriteCorrelatedSubqueriesRecursive::VisitBoundTableRef(BoundTableRef &ref
 		auto &cteref = ref.Cast<BoundCTERef>();
 
 		// check if this is the CTE we are looking for
-		bool found = std::find(table_index.begin(), table_index.end(), cteref.cte_index) != table_index.end();
-
-		if (found) {
+		if (cteref.cte_index == table_index) {
 			// this is the CTE we are looking for: add a filter to the CTE
 			// we add a filter to the CTE that compares the correlated columns of the CTE to the correlated columns of
 			// the outer query. This filter is added to the WHERE clause of the subquery.
@@ -131,16 +124,10 @@ void RewriteCorrelatedSubqueriesRecursive::RewriteCorrelatedSubquery(Binder &bin
 	}
 
 	for (auto &col : add_correlated_columns) {
-		bool skip = false;
 		for (auto &corr : binder.correlated_columns) {
 			if (corr.binding == col.binding) {
-				skip = true;
-				break;
+				continue;
 			}
-		}
-
-		if (skip) {
-			continue;
 		}
 		col.depth--;
 		binder.AddCorrelatedColumn(col);
