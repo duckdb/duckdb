@@ -5,6 +5,6 @@
 template benchmark/taxi/taxi.benchmark.in
 QUERY_NUMBER=3
 QUERY_NUMBER_PADDED=03
-RESULT_QUERY=SELECT passenger_count, DATE_PART('year', pickup_datetime) AS year, COUNT(*) FROM trips GROUP BY passenger_count,year;
+RESULT_QUERY=SELECT passenger_count, DATE_PART('year', pickup_datetime) AS year, COUNT(*) FROM trips GROUP BY passenger_count,year ORDER BY passenger_count,year;
 
 
