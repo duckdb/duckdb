@@ -26,21 +26,21 @@ struct StringSplitInput {
 	}
 };
 
-struct RegularStringSplit {
-	static idx_t Find(const char *input_data, idx_t offset, idx_t input_size, const char *delim_data, idx_t delim_size,
-	                  idx_t &match_size, void *data) {
-		match_size = delim_size;
-		if (delim_size == 0) {
-			return offset;
-		}
-		idx_t pos = ContainsFun::Find(const_uchar_ptr_cast(input_data + offset), input_size - offset,
-		                              const_uchar_ptr_cast(delim_data), delim_size);
-		if (pos == DConstants::INVALID_INDEX) {
-			return pos;
-		}
-		return offset + pos;
+// check if the given regex pattern matches an empty string or a word boundary
+static bool MatchesEmptyOrWordBoundary(const duckdb_re2::RE2 &regex) {
+	if (RE2::FullMatch("", regex)) {
+		return true; // matches an empty string
 	}
+	// check if regex has a word boundary
+	const string &regex_pattern = regex.pattern();
+	if (regex_pattern.find("\\b") != string::npos) {
+		return true;
+	}
+	return false;
+}
 
+struct StringSplitter {
+	template <class OP>
 	static idx_t Split(string_t input, string_t delim, StringSplitInput &state, void *data) {
 		auto input_data = input.GetData();
 		auto input_size = input.GetSize();
@@ -56,7 +56,7 @@ struct RegularStringSplit {
 		idx_t match_size = 0;
 		idx_t current_offset = 0;
 		while (current_offset < input_size) {
-			auto pos = Find(input_data, current_offset, input_size, delim_data, delim_size, match_size, data);
+			auto pos = OP::Find(input_data, current_offset, input_size, delim_data, delim_size, match_size, data);
 			if (pos > input_size) {
 				break;
 			}
@@ -73,17 +73,44 @@ struct RegularStringSplit {
 	}
 };
 
-struct ConstantRegexpStringSplit {
+struct RegularStringSplit {
+	static idx_t Find(const char *input_data, idx_t offset, idx_t input_size, const char *delim_data, idx_t delim_size,
+	                  idx_t &match_size, void *data) {
+		match_size = delim_size;
+		if (delim_size == 0) {
+			return offset;
+		}
+		idx_t pos = ContainsFun::Find(const_uchar_ptr_cast(input_data + offset), input_size - offset,
+		                              const_uchar_ptr_cast(delim_data), delim_size);
+		if (pos == DConstants::INVALID_INDEX) {
+			return pos;
+		}
+		return offset + pos;
+	}
+
 	static idx_t Split(string_t input, string_t delim, StringSplitInput &state, void *data) {
+		return StringSplitter::Split<RegularStringSplit>(input, delim, state, data);
+	}
+};
+
+struct ConstantRegexpStringSplit {
+	static idx_t Find(const char *input_data, idx_t offset, idx_t input_size, const char *delim_data, idx_t delim_size,
+	                  idx_t &match_size, void *data) {
 		D_ASSERT(data);
 		auto regex = reinterpret_cast<duckdb_re2::RE2 *>(data);
-		if (!regex->ok()) {
-			throw InvalidInputException(regex->error());
+		duckdb_re2::StringPiece match;
+		if (!regex->Match(duckdb_re2::StringPiece(input_data, input_size), offset, input_size, RE2::UNANCHORED, &match,
+		                  1)) {
+			return DConstants::INVALID_INDEX;
 		}
+		match_size = match.size();
+		return UnsafeNumericCast<idx_t>(match.data() - input_data);
+	}
 
+	static idx_t SplitEmptyCharDelim(string_t input, const duckdb_re2::RE2 &regex, StringSplitInput &state) {
 		auto input_data = input.GetData();
 		auto input_size = input.GetSize();
-		auto matches = duckdb_re2::RegexFindAll(input_data, input_size, *regex);
+		auto matches = duckdb_re2::RegexFindAll(input_data, input_size, regex);
 
 		idx_t list_idx = 0;
 		idx_t current_offset = 0;
@@ -109,6 +136,19 @@ struct ConstantRegexpStringSplit {
 		}
 		D_ASSERT(num_of_matches <= list_idx);
 		return list_idx;
+	}
+
+	static idx_t Split(string_t input, string_t delim, StringSplitInput &state, void *data) {
+		D_ASSERT(data);
+		auto regex = reinterpret_cast<duckdb_re2::RE2 *>(data);
+		if (!regex->ok()) {
+			throw InvalidInputException(regex->error());
+		}
+
+		if (MatchesEmptyOrWordBoundary(*regex)) {
+			return SplitEmptyCharDelim(input, *regex, state);
+		}
+		return StringSplitter::Split<ConstantRegexpStringSplit>(input, delim, state, data);
 	}
 };
 

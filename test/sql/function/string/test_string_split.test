@@ -124,6 +124,11 @@ SELECT UNNEST(string_split('', 'delim'))
 (empty)
 
 query T
+SELECT UNNEST(string_split('🦆🦆🦆🦆🦆', NULL))
+----
+🦆🦆🦆🦆🦆
+
+query T
 SELECT UNNEST(string_split('🦆🦆🦆🦆🦆', ''))
 ----
 🦆🦆🦆🦆🦆
@@ -416,6 +421,32 @@ SELECT UNNEST(string_split_regex('ab cd', '\b(\w+)\b'));
 (empty)
  
 (empty)
+
+query T
+SELECT UNNEST(string_split_regex('ab cd', '$'));
+----
+ab cd
+
+query T
+SELECT UNNEST(string_split_regex('ab cd', '^'));
+----
+ab cd
+
+query T
+select UNNEST(string_split_regex('ab cd', ' '));
+----
+ab
+cd
+
+query T
+SELECT UNNEST(string_split_regex('ab cd', '^\b'));
+----
+ab cd
+
+query T
+SELECT UNNEST(string_split_regex('ab cd', '^$'));
+----
+ab cd
 
 # \z matches empty string at end of text
 query T
