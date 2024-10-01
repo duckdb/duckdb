@@ -890,14 +890,11 @@ public:
 
 	// analysis state for integer values for DELTA_BINARY_PACKED
 	idx_t total_value_count = 0;
-	int64_t first_value;
-	bool first_value_set = false;
 };
 
 class StandardWriterPageState : public ColumnWriterPageState {
 public:
-	StandardWriterPageState(const idx_t total_value_count, const int64_t first_value)
-	    : encoder(total_value_count, first_value), initialized(false) {
+	explicit StandardWriterPageState(const idx_t total_value_count) : encoder(total_value_count), initialized(false) {
 	}
 	DbpEncoder encoder;
 	bool initialized;
@@ -921,7 +918,7 @@ public:
 
 	unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state_p) override {
 		auto &state = state_p.Cast<StandardColumnWriterState>();
-		auto result = make_uniq<StandardWriterPageState>(state.total_value_count, state.first_value);
+		auto result = make_uniq<StandardWriterPageState>(state.total_value_count);
 		return std::move(result);
 	}
 
@@ -936,8 +933,8 @@ public:
 
 	bool HasAnalyze() override {
 		// We can only do DELTA_BINARY_PACKED if the target type is int32_t/int64_t
-		return writer.GetSQLType(schema_idx).IsIntegral() &&
-		       (std::is_same<TGT, int32_t>::value || std::is_same<TGT, int64_t>::value);
+		const auto type = writer.GetType(schema_idx);
+		return type == Type::type::INT32 || type == Type::type::INT64;
 	}
 
 	void Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) override {
@@ -947,7 +944,6 @@ public:
 		const idx_t parent_index = state.definition_levels.size();
 
 		const idx_t vcount = parent ? parent->definition_levels.size() - state.definition_levels.size() : count;
-		const auto values = FlatVector::GetData<SRC>(vector);
 		const auto &validity = FlatVector::Validity(vector);
 
 		idx_t vector_index = 0;
@@ -958,12 +954,13 @@ public:
 
 			if (validity.RowIsValid(vector_index)) {
 				state.total_value_count++;
-				if (!state.first_value_set) {
-					state.first_value = OP::template Operation<SRC, TGT>(values[vector_index]);
-				}
 			}
 			vector_index++;
 		}
+	}
+
+	void FinalizeAnalyze(ColumnWriterState &state) override {
+		// NOP
 	}
 
 	unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
@@ -976,12 +973,24 @@ public:
 		if (HasAnalyze()) {
 			auto &page_state = page_state_p->Cast<StandardWriterPageState>();
 			auto &encoder = page_state.encoder;
-			if (page_state.initialized) {
-				encoder.BeginWrite(temp_writer);
+			const auto *ptr = FlatVector::GetData<SRC>(input_column);
+
+			idx_t r = chunk_start;
+			if (!page_state.initialized) {
+				// find first non-null value
+				for (; r < chunk_end; r++) {
+					if (!mask.RowIsValid(r)) {
+						continue;
+					}
+					const TGT target_value = OP::template Operation<SRC, TGT>(ptr[r]);
+					encoder.BeginWrite(temp_writer, target_value);
+					page_state.initialized = true;
+					r++; // skip over
+					break;
+				}
 			}
 
-			const auto *ptr = FlatVector::GetData<SRC>(input_column);
-			for (idx_t r = chunk_start; r < chunk_end; r++) {
+			for (; r < chunk_end; r++) {
 				if (!mask.RowIsValid(r)) {
 					continue;
 				}

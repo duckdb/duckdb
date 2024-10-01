@@ -20,12 +20,11 @@ private:
 	static constexpr uint64_t NUMBER_OF_VALUES_IN_A_MINIBLOCK = BLOCK_SIZE_IN_VALUES / NUMBER_OF_MINIBLOCKS_IN_A_BLOCK;
 
 public:
-	DbpEncoder(const idx_t total_value_count_p, const int64_t first_value)
-	    : total_value_count(total_value_count_p), previous_value(first_value) {
+	explicit DbpEncoder(const idx_t total_value_count_p) : total_value_count(total_value_count_p), initialized(false) {
 	}
 
 public:
-	void BeginWrite(WriteStream &writer) {
+	void BeginWrite(WriteStream &writer, const int64_t first_value) {
 		// <block size in values> <number of miniblocks in a block> <total value count> <first value>
 
 		// the block size is a multiple of 128; it is stored as a ULEB128 int
@@ -33,16 +32,18 @@ public:
 		// the miniblock count per block is a divisor of the block size such that their quotient,
 		// the number of values in a miniblock, is a multiple of 32
 		static_assert(BLOCK_SIZE_IN_VALUES % NUMBER_OF_MINIBLOCKS_IN_A_BLOCK == 0 &&
-		                  (BLOCK_SIZE_IN_VALUES / NUMBER_OF_MINIBLOCKS_IN_A_BLOCK) % 32 == 0,
+		                  NUMBER_OF_VALUES_IN_A_MINIBLOCK % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0,
 		              "invalid block sizes for DELTA_BINARY_PACKED");
 		// it is stored as a ULEB128 int
 		ParquetDecodeUtils::VarintEncode(NUMBER_OF_MINIBLOCKS_IN_A_BLOCK, writer);
 		// the total value count is stored as a ULEB128 int
 		ParquetDecodeUtils::VarintEncode(total_value_count, writer);
 		// the first value is stored as a zigzag ULEB128 int
-		ParquetDecodeUtils::VarintEncode(ParquetDecodeUtils::IntToZigzag(previous_value), writer);
+		ParquetDecodeUtils::VarintEncode(ParquetDecodeUtils::IntToZigzag(first_value), writer);
 
 		// initialize
+		initialized = true;
+		previous_value = first_value;
 		min_delta = NumericLimits<int64_t>::Maximum();
 		count = 0;
 	}
@@ -70,10 +71,9 @@ public:
 	}
 
 	void FinishWrite(WriteStream &writer) {
-		if (count != total_value_count) {
+		if (count + initialized != total_value_count) {
 			throw InternalException("value count mismatch when writing DELTA_BINARY_PACKED");
 		}
-		// TODO what if count 0?
 		WriteBlock(writer);
 	}
 
@@ -81,20 +81,16 @@ private:
 	void WriteBlock(WriteStream &writer) {
 		const auto number_of_miniblocks =
 		    (count + NUMBER_OF_VALUES_IN_A_MINIBLOCK - 1) / NUMBER_OF_VALUES_IN_A_MINIBLOCK;
-		int64_t max_value_per_miniblock[NUMBER_OF_MINIBLOCKS_IN_A_BLOCK] = {0};
 		for (idx_t miniblock_idx = 0; miniblock_idx < number_of_miniblocks; miniblock_idx++) {
 			for (idx_t i = 0; i < NUMBER_OF_VALUES_IN_A_MINIBLOCK; i++) {
-				// 2. Compute the frame of reference (the minimum of the deltas in the block).
-				// Subtract this min delta from all deltas in the block.
-				// This guarantees that all values are non-negative.
 				const idx_t index = miniblock_idx * NUMBER_OF_VALUES_IN_A_MINIBLOCK + i;
 				auto &value = data[index];
 				if (index < count) {
+					// 2. Compute the frame of reference (the minimum of the deltas in the block).
+					// Subtract this min delta from all deltas in the block.
+					// This guarantees that all values are non-negative.
 					value = static_cast<int64_t>(static_cast<uint64_t>(value) - static_cast<uint64_t>(min_delta));
 					D_ASSERT(value >= 0);
-					// compute max value for bitpacking while we're at it
-					auto &max_value = max_value_per_miniblock[miniblock_idx];
-					max_value = MaxValue(max_value, value);
 				} else {
 					// If there are not enough values to fill the last miniblock, we pad the miniblock
 					// so that its length is always the number of values in a full miniblock multiplied by the bit
@@ -105,21 +101,18 @@ private:
 			}
 		}
 
-		// If, in the last block, less than <number of miniblocks in a block> miniblocks are needed to store the values,
-		// the bytes storing the bit widths of the unneeded miniblocks are still present,
-		// their value should be zero, but readers must accept arbitrary values as well.
-		// There are no additional padding bytes for the miniblock bodies though,
-		// as if their bit widths were 0 (regardless of the actual byte values).
-		// The reader knows when to stop reading by keeping track of the number of values read.
-		uint8_t list_of_bitwidths_of_miniblocks[NUMBER_OF_MINIBLOCKS_IN_A_BLOCK] = {0};
-
-		// compute bitpacking widths
-		for (idx_t miniblock_idx = 0; miniblock_idx < number_of_miniblocks; miniblock_idx++) {
-			auto &min_value = max_value_per_miniblock[miniblock_idx];
+		for (idx_t miniblock_idx = 0; miniblock_idx < NUMBER_OF_MINIBLOCKS_IN_A_BLOCK; miniblock_idx++) {
 			auto &width = list_of_bitwidths_of_miniblocks[miniblock_idx];
-			while (min_value) {
-				width++;
-				min_value >>= 1;
+			if (miniblock_idx < number_of_miniblocks) {
+				width = BitpackingPrimitives::MinimumBitWidth<uint64_t>(reinterpret_cast<uint64_t *>(data),
+				                                                        NUMBER_OF_VALUES_IN_A_MINIBLOCK);
+			} else {
+				// If, in the last block, less than <number of miniblocks in a block> miniblocks are needed to store the
+				// values, the bytes storing the bit widths of the unneeded miniblocks are still present, their value
+				// should be zero, but readers must accept arbitrary values as well. There are no additional padding
+				// bytes for the miniblock bodies though, as if their bit widths were 0 (regardless of the actual byte
+				// values). The reader knows when to stop reading by keeping track of the number of values read.
+				width = 0;
 			}
 		}
 
@@ -133,27 +126,26 @@ private:
 		// the bitwidth of each block is stored as a byte
 		writer.WriteData(list_of_bitwidths_of_miniblocks, NUMBER_OF_MINIBLOCKS_IN_A_BLOCK);
 		// each miniblock is a list of bit packed ints according to the bit width stored at the beginning of the block
-		data_ptr_t dst = data_ptr_cast(data);
-		uint8_t bitpack_pos = 0;
 		for (idx_t miniblock_idx = 0; miniblock_idx < number_of_miniblocks; miniblock_idx++) {
 			const auto src = &data[miniblock_idx * NUMBER_OF_VALUES_IN_A_MINIBLOCK];
 			const auto &width = list_of_bitwidths_of_miniblocks[miniblock_idx];
-			ParquetDecodeUtils::BitPack(src, dst, bitpack_pos, NUMBER_OF_VALUES_IN_A_MINIBLOCK, width);
+			memset(data_packed, 0, NUMBER_OF_VALUES_IN_A_MINIBLOCK * sizeof(int64_t));
+			ParquetDecodeUtils::BitPackAligned(src, data_packed, NUMBER_OF_VALUES_IN_A_MINIBLOCK, width);
+			writer.WriteData(data_packed, NUMBER_OF_VALUES_IN_A_MINIBLOCK * width / 8);
 		}
-
-		if (bitpack_pos != 0) {
-			dst++; // some data remaining in the last byte
-		}
-		writer.WriteData(data_ptr_cast(data), dst - data_ptr_cast(data));
 	}
 
 private:
 	const idx_t total_value_count;
+	bool initialized;
 	int64_t previous_value;
 
 	int64_t min_delta;
 	int64_t data[BLOCK_SIZE_IN_VALUES];
 	idx_t count;
+
+	bitpacking_width_t list_of_bitwidths_of_miniblocks[NUMBER_OF_MINIBLOCKS_IN_A_BLOCK];
+	data_t data_packed[NUMBER_OF_VALUES_IN_A_MINIBLOCK * sizeof(int64_t)];
 };
 
 } // namespace duckdb

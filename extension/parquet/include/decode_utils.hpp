@@ -8,57 +8,37 @@
 
 #pragma once
 
+#include "duckdb/common/bitpacking.hpp"
 #include "resizable_buffer.hpp"
 
 namespace duckdb {
 
 class ParquetDecodeUtils {
-public:
-	template <class T>
-	static T ZigzagToInt(const uint64_t n) {
-		return T(n >> 1) ^ -T(n & 1);
-	}
-
-	template <class T>
-	static uint64_t IntToZigzag(const T n) {
-		// TODO
-		return n;
-	}
-
+	//===--------------------------------------------------------------------===//
+	// Bitpacking
+	//===--------------------------------------------------------------------===//
+private:
 	static const uint64_t BITPACK_MASKS[];
 	static const uint64_t BITPACK_MASKS_SIZE;
 	static const uint8_t BITPACK_DLEN;
 
-	template <class T>
-	static void BitPack(const T *src, data_ptr_t &dst, uint8_t &bitpack_pos, const idx_t count, const uint8_t width) {
-		D_ASSERT(width < BITPACK_MASKS_SIZE);
-		for (idx_t i = 0; i < count; i++) {
-			D_ASSERT(src[i] < (1 << width));
-			const auto val = src[i];
-			// this is kinda nasty but the DbpEncoder uses the same buffer for src/dst
-			// this guarantees zero-initialization for bitpacking
-			src[i] = 0;
-			bitpack_pos += width;
-			while (bitpack_pos > BITPACK_DLEN) {
-				*dst |= static_cast<data_t>(val >> (bitpack_pos - BITPACK_DLEN));
-				bitpack_pos -= BITPACK_DLEN;
-			}
-		}
-	}
-
-	template <class T>
-	static uint32_t BitUnpack(ByteBuffer &src, uint8_t &bitpack_pos, const T *dst, const idx_t count,
-	                          const uint8_t width) {
+	static void CheckWidth(const uint8_t width) {
 		if (width >= BITPACK_MASKS_SIZE) {
 			throw InvalidInputException("The width (%d) of the bitpacked data exceeds the supported max width (%d), "
 			                            "the file might be corrupted.",
 			                            width, BITPACK_MASKS_SIZE);
 		}
-		const auto mask = BITPACK_MASKS[width];
+	}
 
+public:
+	template <class T>
+	static uint32_t BitUnpack(ByteBuffer &src, uint8_t &bitpack_pos, T *dst, const idx_t count,
+	                          const bitpacking_width_t width) {
+		CheckWidth(width);
+		const auto mask = BITPACK_MASKS[width];
 		src.available(count * width / BITPACK_DLEN); // check if buffer has enough space available once
 		for (idx_t i = 0; i < count; i++) {
-			T val = (src.unsafe_get<uint8_t>() >> bitpack_pos) & mask;
+			auto val = (src.unsafe_get<uint8_t>() >> bitpack_pos) & mask;
 			bitpack_pos += width;
 			while (bitpack_pos > BITPACK_DLEN) {
 				src.unsafe_inc(1);
@@ -72,6 +52,46 @@ public:
 		return count;
 	}
 
+	template <class T>
+	static void BitPackAligned(T *src, data_ptr_t dst, const idx_t count, const bitpacking_width_t width) {
+		D_ASSERT(width < BITPACK_MASKS_SIZE);
+		D_ASSERT(count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0);
+		BitpackingPrimitives::PackBuffer<T, true>(dst, src, count, width);
+	}
+
+	template <class T>
+	static void BitUnpackAligned(ByteBuffer &src, T *dst, const idx_t count, const bitpacking_width_t width) {
+		CheckWidth(width);
+		if (count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) {
+			throw InvalidInputException("Aligned bitpacking count must be a multiple of %llu",
+			                            BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
+		}
+		const auto read_size = count * width / BITPACK_DLEN;
+		src.available(read_size); // check if buffer has enough space available once
+		BitpackingPrimitives::UnPackBuffer<T, true>(data_ptr_cast(dst), src.ptr, count, width);
+		src.unsafe_inc(read_size);
+	}
+
+	//===--------------------------------------------------------------------===//
+	// Zigzag
+	//===--------------------------------------------------------------------===//
+public:
+	template <class T>
+	static T ZigzagToInt(const uint64_t n) {
+		return static_cast<T>(n >> 1) ^ -static_cast<T>(n & 1);
+	}
+
+	template <class T>
+	static uint64_t IntToZigzag(const T n) {
+		const auto result = (static_cast<uint64_t>(n) << 1) ^ static_cast<uint64_t>(n) >> (sizeof(T) * 8 - 1);
+		D_ASSERT(ZigzagToInt<T>(result) == n);
+		return result;
+	}
+
+	//===--------------------------------------------------------------------===//
+	// Varint
+	//===--------------------------------------------------------------------===//
+public:
 	template <class T>
 	static uint8_t GetVarintSize(T val) {
 		uint8_t res = 0;
