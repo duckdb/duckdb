@@ -9,18 +9,10 @@ namespace duckdb {
 ConjunctionOrFilter::ConjunctionOrFilter() : ConjunctionFilter(TableFilterType::CONJUNCTION_OR) {
 }
 
-FilterPropagateResult ConjunctionOrFilter::CheckStatisticsWithCardinality(BaseStatistics &stats, idx_t estimated_cardinality) {
+FilterPropagateResult ConjunctionOrFilter::CheckStatisticsWithCardinality(BaseStatistics &stats,
+                                                                          idx_t estimated_cardinality) {
 	// the OR filter is true if ANY of the children is true
 	D_ASSERT(!child_filters.empty());
-	// zone map OR
-	auto or_zone_map = true;
-	for (auto &filter : child_filters) {
-		if (filter->filter_type != TableFilterType::ZONE_MAP) {
-			or_zone_map = false;
-			break;
-		}
-	}
-	// Hack because the estimated cardinality is *0.2 when a table filter is present.
 
 	for (auto &filter : child_filters) {
 		auto prune_result = filter->CheckStatistics(stats);
