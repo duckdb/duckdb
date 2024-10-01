@@ -1404,68 +1404,13 @@ bool StringValueResult::PrintErrorLine() const {
 	       (state_machine.options.store_rejects.GetValue() || !state_machine.options.ignore_errors.GetValue());
 }
 
-void StringValueScanner::SkipUntilNewLine() {
-	// Now skip until next newline
-	if (state_machine->options.dialect_options.state_machine_options.new_line.GetValue() ==
-	    NewLineIdentifier::CARRY_ON) {
-		bool carriage_return = false;
-		bool not_carriage_return = false;
-		for (; iterator.pos.buffer_pos < cur_buffer_handle->actual_size; iterator.pos.buffer_pos++) {
-			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\r') {
-				carriage_return = true;
-			} else if (buffer_handle_ptr[iterator.pos.buffer_pos] != '\n') {
-				not_carriage_return = true;
-			}
-			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n') {
-				if (carriage_return || not_carriage_return) {
-					iterator.pos.buffer_pos++;
-					return;
-				}
-			}
-		}
-	} else {
-		for (; iterator.pos.buffer_pos < cur_buffer_handle->actual_size; iterator.pos.buffer_pos++) {
-			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n' ||
-			    buffer_handle_ptr[iterator.pos.buffer_pos] == '\r') {
-				iterator.pos.buffer_pos++;
-				return;
-			}
-		}
-	}
-}
-
-void StringValueScanner::SkipUntilQuote() {
-	char quote = state_machine->options.dialect_options.state_machine_options.quote.GetValue();
-	char escape = state_machine->options.dialect_options.state_machine_options.quote.GetValue();
-	if (quote == '\0') {
-		return;
-	}
-	if (quote != escape) {
-		while (iterator.pos.buffer_pos < cur_buffer_handle->actual_size) {
-			if (buffer_handle_ptr[iterator.pos.buffer_pos] == quote) {
-				// We found a quote, check if the previous element is an escape
-				if (iterator.pos.buffer_pos > 0) {
-					if (buffer_handle_ptr[iterator.pos.buffer_pos - 1] != escape) {
-						iterator.pos.buffer_pos++;
-						return;
-					}
-				}
-			}
-			iterator.pos.buffer_pos++;
-		}
-	} else {
-		while (iterator.pos.buffer_pos < cur_buffer_handle->actual_size) {
-			if (buffer_handle_ptr[iterator.pos.buffer_pos] == quote) {
-				// We found a quote, check if the next element is also a quote
-				if (iterator.pos.buffer_pos < cur_buffer_handle->actual_size) {
-					if (buffer_handle_ptr[iterator.pos.buffer_pos + 1] != quote) {
-						// If it's not we are done
-						iterator.pos.buffer_pos++;
-						return;
-					}
-				}
-			}
-			iterator.pos.buffer_pos++;
+void StringValueScanner::SkipUntilState(CSVState initial_state, CSVState until_state) {
+	CSVStates current_state;
+	current_state.Initialize(initial_state);
+	while (iterator.pos.buffer_pos < cur_buffer_handle->actual_size) {
+		state_machine->Transition(current_state, buffer_handle_ptr[iterator.pos.buffer_pos++]);
+		if (current_state.IsState(until_state)) {
+			return;
 		}
 	}
 }
@@ -1502,13 +1447,10 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type, bool icu_loade
 bool StringValueScanner::IsRowValid() {
 	constexpr idx_t result_size = 1;
 	auto scan_finder =
-	    make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, make_shared_ptr<CSVErrorHandler>(true),
+	    make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, make_shared_ptr<CSVErrorHandler>(),
 	                                  csv_file_scan, false, iterator, result_size);
 	auto &tuples = scan_finder->ParseChunk();
-	iterator.pos.buffer_idx = scan_finder->result.current_line_position.begin.buffer_idx;
-	iterator.pos.buffer_pos = scan_finder->result.current_line_position.begin.buffer_pos;
-	result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
-	return tuples.number_of_rows == 1;
+	return tuples.number_of_rows == 1 && tuples.borked_rows.empty();
 }
 
 void StringValueScanner::SetStart() {
@@ -1521,7 +1463,7 @@ void StringValueScanner::SetStart() {
 	// The result size of the data after skipping the row is one line
 	// We have to look for a new line that fits our schema
 	// 1. We walk until the next new line
-	SkipUntilNewLine();
+	SkipUntilState(CSVState::STANDARD, CSVState::RECORD_SEPARATOR);
 	if (state_machine->options.null_padding) {
 		// When Null Padding, we assume we start from the correct new-line
 		return;
@@ -1530,15 +1472,18 @@ void StringValueScanner::SetStart() {
 	// 1. We are at the start of a valid line
 	bool valid_line = IsRowValid();
 	// 2. We are in the middle of a quoted value
+	idx_t current_pos = iterator.pos.buffer_pos;
 	if (!valid_line) {
-		// We skip to unquote
-		SkipUntilQuote();
-		// We skip until the next new line
-		SkipUntilNewLine();
-		IsRowValid();
+		// We skip from a quoted state to a state newline
+		SkipUntilState(CSVState::QUOTED, CSVState::RECORD_SEPARATOR);
+		valid_line = IsRowValid();
+	}
+	if (!valid_line) {
+		iterator.pos.buffer_pos = current_pos;
 	}
 	// 3. We have an error, if we have an error, we let life go on, the scanner will either ignore it
 	// or throw.
+	result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
 }
 
 void StringValueScanner::FinalizeChunkProcess() {

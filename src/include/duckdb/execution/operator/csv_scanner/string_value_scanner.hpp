@@ -317,10 +317,8 @@ private:
 	//! -------- Functions used to figure out where lines start ---------!//
 	//! Main function, sets the correct start
 	void SetStart();
-	//! Skips the buffer until a new line
-	void SkipUntilNewLine();
-	//! Skips buffer until a quote
-	void SkipUntilQuote();
+	//! From a given initial state, it skips until we reach the until_state
+	void SkipUntilState(CSVState initial_state, CSVState until_state);
 	//! If the current row we found is valid
 	bool IsRowValid();
 
