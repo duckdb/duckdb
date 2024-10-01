@@ -1,8 +1,5 @@
 # NYC Taxi Benchmark
 
-
-# Benchmark Overview
-
 This benchmark is based on the following blog posts:
 - [Billion NYC Taxi Rides Redshift](https://tech.marksblogg.com/billion-nyc-taxi-rides-redshift.html)
 - [Benchmarks](https://tech.marksblogg.com/benchmarks.html)
@@ -16,26 +13,28 @@ For the benchmark queries, they are almost the same as the ones described in the
 In the following sections, I will describe how we generated the 91 compressed CSV files.
 
 ## Data Generation
-The data is generated in a similar way as described in the [billion-nyc-taxi-rides](https://tech.marksblogg.com/billion-nyc-taxi-rides-redshift.html) blogpost.
-We use the (nyc-taxi-data)[https://github.com/toddwschneider/nyc-taxi-data] repository scripts to download the parquet files from [](), transform them to CSV Files, load them to postgres, and export them to one big CSV File.
+The data is generated in a similar way as described in the [billion-nyc-taxi-rides](https://tech.marksblogg.com/billion-nyc-taxi-rides-redshift.html) blog post.
+We use the [nyc-taxi-data](https://github.com/toddwschneider/nyc-taxi-data) repository scripts to download the parquet files, transform them into CSV files, load them into PostgreSQL, and export them to one big CSV file.
 Notice that, for this dataset, we used this [exact commit](https://github.com/toddwschneider/nyc-taxi-data/commit/c65ad8332a44f49770644b11576c0529b40bbc76).
 
 ### Requirements
-To generate the data you need Postgres, PostGis, and R.
-For R, you will also need the following libraries: arrow,tidyverse and glue. R is mostly used to convert the Parquet files into CSV files, so Postgres can successfully load them.
+To generate the data, you need PostgreSQL, PostGIS, and R.
+For R, you will also need the following libraries: arrow, tidyverse, and glue. R is mostly used to convert the Parquet files into CSV files so that PostgreSQL can successfully load them.
 
-### Download files
-To download the data you simply need to execute:
-`./download_raw_data.sh`
+### Download Files
+To download the data, simply execute:
+```bash
+./download_raw_data.sh
+```
 
-### Ingesting the data into postgres
-For this benchmark there are 3 scrips that we must run.
-* `./initialize_database.sh` Will initialize our postgres instance and load the weather dataset.
-* `./import_yellow_taxi_trip_data.sh`. Will convert the yellow taxi dataset files and ingest them.
-* `./import_green_taxi_trip_data.sh`. Will convert the green taxi dataset files and ingest them.
+### Ingesting the Data into PostgreSQL
+For this benchmark, there are 3 scripts that must be run:
+* `./initialize_database.sh` initializes the PostgreSQL instance and loads the weather dataset.
+* `./import_yellow_taxi_trip_data.sh` converts the yellow taxi dataset files and ingests them.
+* `./import_green_taxi_trip_data.sh` converts the green taxi dataset files and ingests them.
 
-### Generating CSV File
-The following query is used to generate the CSV File, note that the query is based on the same one described in the [Billion NYC Taxi Rides Redshift](https://tech.marksblogg.com/billion-nyc-taxi-rides-redshift.html) blogpost. There were minor column name adjustments made, since the names seemed to have changed since the original blogpost was written. (e.g., `weather.precipitation rain` was originally named as `weather.precipitation_tenths_of_mm rain,` )
+### Generating the CSV File
+The following query is used to generate the CSV file. Note that the query is based on the one described in the [Billion NYC Taxi Rides Redshift](https://tech.marksblogg.com/billion-nyc-taxi-rides-redshift.html) blog post. Minor column name adjustments were made, as some names have changed since the original blog post was written (e.g., `weather.precipitation rain` was originally named `weather.precipitation_tenths_of_mm rain`).
 
 ```sql
    SELECT trips.id,
@@ -101,4 +100,8 @@ The following query is used to generate the CSV File, note that the query is bas
 ) TO './output.csv' WITH CSV;
 ```
 
-After generating the file, all that remains to be done is to split it and gzip the result. This can be achieved by the `split -l 20000000 output.csv split/trips_` and subsequently the `gzip trips_*` commands. 
+After generating the file, all that remains to be done is to split it and gzip the result. This can be achieved using the commands:
+```bash
+split -l 20000000 output.csv split/trips_
+gzip trips_*
+```
