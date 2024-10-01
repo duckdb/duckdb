@@ -545,7 +545,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		    "Extension '%s' failed to initialize but did not return an error. This indicates an "
 		    "error in the extension: C API extensions should return a boolean `true` to indicate succesful "
 		    "initialization. "
-		    "This means that the Extension may be partially intialized resulting in an inconsistent state of DuckDB.",
+		    "This means that the Extension may be partially initialized resulting in an inconsistent state of DuckDB.",
 		    extension);
 	}
 
