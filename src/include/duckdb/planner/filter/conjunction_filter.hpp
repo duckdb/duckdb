@@ -12,6 +12,11 @@
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+
+enum class CheckStats : uint8_t {
+
+};
+
 class ConjunctionFilter : public TableFilter {
 public:
 	explicit ConjunctionFilter(TableFilterType filter_type_p) : TableFilter(filter_type_p) {
@@ -33,11 +38,15 @@ class ConjunctionOrFilter : public ConjunctionFilter {
 public:
 	static constexpr const TableFilterType TYPE = TableFilterType::CONJUNCTION_OR;
 
+private:
+
+
 public:
 	ConjunctionOrFilter();
 
 public:
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override;
+	FilterPropagateResult CheckStatisticsWithCardinality(BaseStatistics &stats, idx_t estimated_cardinality);
 	string ToString(const string &column_name) override;
 	bool Equals(const TableFilter &other) const override;
 	unique_ptr<TableFilter> Copy() const override;

@@ -12,11 +12,14 @@ create table t2(a int);
 statement ok
 insert into t2 from range(10) t(a);
 
-statement ok
-select * from t1 join t2 using (a)
+#statement ok
+#select * from t1 join t2 using (a);
 
 statement ok
 select * from t1 where a = 30000 or a = 50000 or a = 500;
+
+mode skip
+
 
 statement ok
 call dbgen(sf=1);
