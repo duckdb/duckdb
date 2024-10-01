@@ -2,7 +2,7 @@
 # description: Test or filter pushdown
 # group: [other]
 
-name Or filter pushdown Largs
+name Or filter pushdown Large
 group large
 subgroup or_filter_pushdown
 

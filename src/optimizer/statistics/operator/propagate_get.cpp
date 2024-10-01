@@ -10,21 +10,6 @@ FilterPropagateResult StatisticsPropagator::PropagateTableFilter(BaseStatistics 
 	return filter.CheckStatistics(stats);
 }
 
-FilterPropagateResult StatisticsPropagator::PropagateTableFilter(BaseStatistics &stats, TableFilter &filter, LogicalGet &get) {
-	if (get.has_estimated_cardinality) {
-		switch (filter.filter_type) {
-		case TableFilterType::CONJUNCTION_OR: {
-			auto &or_filter = filter.Cast<ConjunctionOrFilter>();
-			return or_filter.CheckStatisticsWithCardinality(stats, get.estimated_cardinality);
-		}
-		default:
-			break;
-		}
-
-	}
-	return PropagateTableFilter(stats, filter);
-}
-
 void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &input, TableFilter &filter) {
 	// FIXME: update stats...
 	switch (filter.filter_type) {
@@ -91,7 +76,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 		// fetch the table filter
 		D_ASSERT(get.table_filters.filters.count(table_filter_column) > 0);
 		auto &filter = get.table_filters.filters[table_filter_column];
-		auto propagate_result = PropagateTableFilter(stats, *filter, get);
+		auto propagate_result = PropagateTableFilter(stats, *filter);
 		switch (propagate_result) {
 		case FilterPropagateResult::FILTER_ALWAYS_TRUE:
 			// filter is always true; it is useless to execute it
