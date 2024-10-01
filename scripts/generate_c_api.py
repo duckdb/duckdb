@@ -654,7 +654,7 @@ def create_duckdb_ext_h(
 	    DUCKDB_EXTENSION_API bool DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME,_init_c_api)(\
 	    duckdb_extension_info info, duckdb_extension_access *access) {\
 		DUCKDB_EXTENSION_API_INIT(info, access, DUCKDB_EXTENSION_API_VERSION_STRING);\
-		return DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME,_init_c_api_internal)(infpo, access);\
+		return DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME,_init_c_api_internal)(info, access);\
 	}\
 	DUCKDB_EXTENSION_EXTERN_C_GUARD_CLOSE static bool DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME,_init_c_api_internal)
 #endif
