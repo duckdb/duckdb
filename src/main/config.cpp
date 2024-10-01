@@ -363,16 +363,22 @@ idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 }
 
 idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
+#ifdef __linux__
 	// Check SLURM environment variables first
 	const char *slurm_mem_per_node = getenv("SLURM_MEM_PER_NODE");
 	const char *slurm_mem_per_cpu = getenv("SLURM_MEM_PER_CPU");
 
 	if (slurm_mem_per_node) {
-		return ParseMemoryLimitSlurm(slurm_mem_per_node);
+		auto limit = ParseMemoryLimitSlurm(slurm_mem_per_node);
+		if (limit.IsValid()) {
+			return limit.GetIndex();
+		}
 	} else if (slurm_mem_per_cpu) {
-		idx_t mem_per_cpu = ParseMemoryLimitSlurm(slurm_mem_per_cpu);
-		idx_t num_threads = GetSystemMaxThreads(fs);
-		return mem_per_cpu * num_threads;
+		auto mem_per_cpu = ParseMemoryLimitSlurm(slurm_mem_per_cpu);
+		if (mem_per_cpu.IsValid()) {
+			idx_t num_threads = GetSystemMaxThreads(fs);
+			return mem_per_cpu.GetIndex() * num_threads;
+		}
 	}
 
 	// Check cgroup memory limit
@@ -380,8 +386,9 @@ idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
 	if (cgroup_memory_limit.IsValid()) {
 		return cgroup_memory_limit.GetIndex();
 	}
+#endif
 
-	// Fall back to system memory detection
+	// System memory detection
 	auto memory = FileSystem::GetAvailableMemory();
 	if (!memory.IsValid()) {
 		return DBConfigOptions().maximum_memory;
@@ -451,9 +458,9 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 	return LossyNumericCast<idx_t>(static_cast<double>(multiplier) * limit);
 }
 
-idx_t DBConfig::ParseMemoryLimitSlurm(const string &arg) {
+optional_idx DBConfig::ParseMemoryLimitSlurm(const string &arg) {
 	if (arg.empty()) {
-		return 0;
+		return optional_idx();
 	}
 
 	string number_str = arg;
@@ -475,13 +482,19 @@ idx_t DBConfig::ParseMemoryLimitSlurm(const string &arg) {
 	}
 
 	// Parse the number
-	double limit = Cast::Operation<string_t, double>(string_t(number_str));
-
-	if (limit < 0) {
-		return NumericLimits<idx_t>::Maximum();
+	double limit;
+	if (!TryCast::Operation<string_t, double>(string_t(number_str), limit)) {
+		return optional_idx();
 	}
 
-	return LossyNumericCast<idx_t>(static_cast<double>(multiplier) * limit);
+	if (limit < 0) {
+		return static_cast<idx_t>(NumericLimits<int64_t>::Maximum());
+	}
+	idx_t actual_limit = LossyNumericCast<idx_t>(static_cast<double>(multiplier) * limit);
+	if (actual_limit == NumericLimits<idx_t>::Maximum()) {
+		return static_cast<idx_t>(NumericLimits<int64_t>::Maximum());
+	}
+	return actual_limit;
 }
 
 // Right now we only really care about access mode when comparing DBConfigs

@@ -32,6 +32,7 @@
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 
 namespace duckdb {
 
@@ -456,6 +457,22 @@ PivotColumnEntry PivotColumnEntry::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<vector<Value>>(100, "values", result.values);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", result.expr);
 	deserializer.ReadPropertyWithDefault<string>(102, "alias", result.alias);
+	return result;
+}
+
+void QualifiedColumnName::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(100, "catalog", catalog);
+	serializer.WritePropertyWithDefault<string>(101, "schema", schema);
+	serializer.WritePropertyWithDefault<string>(102, "table", table);
+	serializer.WritePropertyWithDefault<string>(103, "column", column);
+}
+
+QualifiedColumnName QualifiedColumnName::Deserialize(Deserializer &deserializer) {
+	QualifiedColumnName result;
+	deserializer.ReadPropertyWithDefault<string>(100, "catalog", result.catalog);
+	deserializer.ReadPropertyWithDefault<string>(101, "schema", result.schema);
+	deserializer.ReadPropertyWithDefault<string>(102, "table", result.table);
+	deserializer.ReadPropertyWithDefault<string>(103, "column", result.column);
 	return result;
 }
 

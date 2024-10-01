@@ -251,11 +251,7 @@ bool Iterator::Next() {
 }
 
 void Iterator::PopNode() {
-	// We are popping a gate node.
-	if (nodes.top().node.GetGateStatus() == GateStatus::GATE_SET) {
-		D_ASSERT(status == GateStatus::GATE_SET);
-		status = GateStatus::GATE_NOT_SET;
-	}
+	auto gate_status = nodes.top().node.GetGateStatus();
 
 	// Pop the byte and the node.
 	if (nodes.top().node.GetType() != NType::PREFIX) {
@@ -264,19 +260,25 @@ void Iterator::PopNode() {
 			nested_depth--;
 			D_ASSERT(nested_depth < Prefix::ROW_ID_SIZE);
 		}
-		nodes.pop();
-		return;
-	}
 
-	// Pop all prefix bytes and the node.
-	Prefix prefix(art, nodes.top().node);
-	auto prefix_byte_count = prefix.data[Prefix::Count(art)];
-	current_key.Pop(prefix_byte_count);
-	if (status == GateStatus::GATE_SET) {
-		nested_depth -= prefix_byte_count;
-		D_ASSERT(nested_depth < Prefix::ROW_ID_SIZE);
+	} else {
+		// Pop all prefix bytes and the node.
+		Prefix prefix(art, nodes.top().node);
+		auto prefix_byte_count = prefix.data[Prefix::Count(art)];
+		current_key.Pop(prefix_byte_count);
+
+		if (status == GateStatus::GATE_SET) {
+			nested_depth -= prefix_byte_count;
+			D_ASSERT(nested_depth < Prefix::ROW_ID_SIZE);
+		}
 	}
 	nodes.pop();
+
+	// We are popping a gate node.
+	if (gate_status == GateStatus::GATE_SET) {
+		D_ASSERT(status == GateStatus::GATE_SET);
+		status = GateStatus::GATE_NOT_SET;
+	}
 }
 
 } // namespace duckdb

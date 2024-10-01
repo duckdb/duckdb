@@ -33,6 +33,7 @@ class MetadataManager;
 struct VacuumState;
 struct CollectionCheckpointState;
 struct PersistentCollectionData;
+class CheckpointTask;
 
 class RowGroupCollection {
 public:
@@ -98,8 +99,9 @@ public:
 
 	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
 	                           vector<SegmentNode<RowGroup>> &segments);
-	bool ScheduleVacuumTasks(CollectionCheckpointState &checkpoint_state, VacuumState &state, idx_t segment_idx);
-	void ScheduleCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx);
+	bool ScheduleVacuumTasks(CollectionCheckpointState &checkpoint_state, VacuumState &state, idx_t segment_idx,
+	                         bool schedule_vacuum);
+	unique_ptr<CheckpointTask> GetCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx);
 
 	void CommitDropColumn(idx_t index);
 	void CommitDropTable();

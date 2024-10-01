@@ -58,6 +58,7 @@
 #include "duckdb/main/relation/materialized_relation.hpp"
 #include "duckdb/main/relation/query_relation.hpp"
 #include "duckdb/main/extension_util.hpp"
+#include "duckdb/parser/statement/load_statement.hpp"
 
 #include <random>
 
@@ -65,7 +66,7 @@
 
 namespace duckdb {
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;       // NOLINT: allow global
+DefaultConnectionHolder DuckDBPyConnection::default_connection;                        // NOLINT: allow global
 DBInstanceCache instance_cache;                                                        // NOLINT: allow global
 shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;              // NOLINT: allow global
 PythonEnvironmentType DuckDBPyConnection::environment = PythonEnvironmentType::NORMAL; // NOLINT: allow global
@@ -275,8 +276,10 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      "Create a query object from a JSON protobuf plan", py::arg("json"));
 	m.def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
 	      py::arg("query"));
-	m.def("install_extension", &DuckDBPyConnection::InstallExtension, "Install an extension by name",
-	      py::arg("extension"), py::kw_only(), py::arg("force_install") = false);
+	m.def("install_extension", &DuckDBPyConnection::InstallExtension,
+	      "Install an extension by name, with an optional version and/or repository to get the extension from",
+	      py::arg("extension"), py::kw_only(), py::arg("force_install") = false, py::arg("repository") = py::none(),
+	      py::arg("repository_url") = py::none(), py::arg("version") = py::none());
 	m.def("load_extension", &DuckDBPyConnection::LoadExtension, "Load an installed extension", py::arg("extension"));
 } // END_OF_CONNECTION_METHODS
 
@@ -1396,6 +1399,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 
 void DuckDBPyConnection::ExecuteImmediately(vector<unique_ptr<SQLStatement>> statements) {
 	auto &connection = con.GetConnection();
+	py::gil_scoped_release release;
 	if (statements.empty()) {
 		return;
 	}
@@ -1699,17 +1703,68 @@ void DuckDBPyConnection::Interrupt() {
 	connection.Interrupt();
 }
 
-void DuckDBPyConnection::InstallExtension(const string &extension, bool force_install) {
+void DuckDBPyConnection::InstallExtension(const string &extension, bool force_install, const py::object &repository,
+                                          const py::object &repository_url, const py::object &version) {
 	auto &connection = con.GetConnection();
 
-	ExtensionInstallOptions options;
-	options.force_install = force_install;
-	ExtensionHelper::InstallExtension(*connection.context, extension, options);
+	auto install_statement = make_uniq<LoadStatement>();
+	install_statement->info = make_uniq<LoadInfo>();
+	auto &info = *install_statement->info;
+
+	info.filename = extension;
+
+	const bool has_repository = !py::none().is(repository);
+	const bool has_repository_url = !py::none().is(repository_url);
+	if (has_repository && has_repository_url) {
+		throw InvalidInputException(
+		    "Both 'repository' and 'repository_url' are set which is not allowed, please pick one or the other");
+	}
+	string repository_string;
+	if (has_repository) {
+		repository_string = py::str(repository);
+	} else if (has_repository_url) {
+		repository_string = py::str(repository_url);
+	}
+
+	if ((has_repository || has_repository_url) && repository_string.empty()) {
+		throw InvalidInputException("The provided 'repository' or 'repository_url' can not be empty!");
+	}
+
+	string version_string;
+	if (!py::none().is(version)) {
+		version_string = py::str(version);
+		if (version_string.empty()) {
+			throw InvalidInputException("The provided 'version' can not be empty!");
+		}
+	}
+
+	info.repository = repository_string;
+	info.repo_is_alias = repository_string.empty() ? false : has_repository;
+	info.version = version_string;
+	info.load_type = force_install ? LoadType::FORCE_INSTALL : LoadType::INSTALL;
+	auto res = connection.Query(std::move(install_statement));
+	if (res->HasError()) {
+		res->ThrowError();
+	}
 }
 
 void DuckDBPyConnection::LoadExtension(const string &extension) {
 	auto &connection = con.GetConnection();
 	ExtensionHelper::LoadExternalExtension(*connection.context, extension);
+}
+
+shared_ptr<DuckDBPyConnection> DefaultConnectionHolder::Get() {
+	lock_guard<mutex> guard(l);
+	if (!connection) {
+		py::dict config_dict;
+		connection = DuckDBPyConnection::Connect(py::str(":memory:"), false, config_dict);
+	}
+	return connection;
+}
+
+void DefaultConnectionHolder::Set(shared_ptr<DuckDBPyConnection> conn) {
+	lock_guard<mutex> guard(l);
+	connection = conn;
 }
 
 void DuckDBPyConnection::Cursors::AddCursor(shared_ptr<DuckDBPyConnection> conn) {
@@ -1945,6 +2000,10 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const py::object &dat
 	config.AddExtensionOption("python_enable_replacements",
 	                          "Whether variables visible to the current stack should be used for replacement scans.",
 	                          LogicalType::BOOLEAN, Value::BOOLEAN(true));
+	config.AddExtensionOption(
+	    "python_scan_all_frames",
+	    "If set, restores the old behavior of scanning all preceding frames to locate the referenced variable.",
+	    LogicalType::BOOLEAN, Value::BOOLEAN(false));
 	if (!DuckDBPyConnection::IsJupyter()) {
 		config_dict["duckdb_api"] = Value("python");
 	} else {
@@ -1980,11 +2039,11 @@ case_insensitive_map_t<BoundParameterData> DuckDBPyConnection::TransformPythonPa
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::DefaultConnection() {
-	if (!default_connection) {
-		py::dict config_dict;
-		default_connection = DuckDBPyConnection::Connect(py::str(":memory:"), false, config_dict);
-	}
-	return default_connection;
+	return default_connection.Get();
+}
+
+void DuckDBPyConnection::SetDefaultConnection(shared_ptr<DuckDBPyConnection> connection) {
+	return default_connection.Set(std::move(connection));
 }
 
 PythonImportCache *DuckDBPyConnection::ImportCache() {
@@ -2029,7 +2088,7 @@ void DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_ty
 }
 
 void DuckDBPyConnection::Cleanup() {
-	default_connection.reset();
+	default_connection.Set(nullptr);
 	import_cache.reset();
 }
 

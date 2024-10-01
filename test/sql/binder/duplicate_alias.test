@@ -1,0 +1,40 @@
+# name: test/sql/binder/duplicate_alias.test
+# description: Duplicate table aliases
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table t(i int);
+
+statement ok
+INSERT INTO t VALUES (42);
+
+# this works - since no column is referenced there is no ambiguity
+query I
+SELECT COUNT(*) FROM t, t
+----
+1
+
+# this works - all columns can be uniquely identified - no ambiguity
+query II
+SELECT * FROM (SELECT 42 x) t, (SELECT 84 y) t
+----
+42	84
+
+query II
+SELECT t.x, t.y FROM (SELECT 42 x) t, (SELECT 84 y) t
+----
+42	84
+
+statement error
+SELECT t.z FROM (SELECT 42 x) t, (SELECT 84 y) t
+----
+does not have a column named
+
+# this does not work - "t" is ambiguous
+statement error
+SELECT t.i FROM t, t
+----
+duplicate alias "t"
