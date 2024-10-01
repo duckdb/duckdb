@@ -20,7 +20,7 @@ private:
 	static constexpr uint64_t NUMBER_OF_VALUES_IN_A_MINIBLOCK = BLOCK_SIZE_IN_VALUES / NUMBER_OF_MINIBLOCKS_IN_A_BLOCK;
 
 public:
-	explicit DbpEncoder(const idx_t total_value_count_p) : total_value_count(total_value_count_p), initialized(false) {
+	explicit DbpEncoder(const idx_t total_value_count_p) : total_value_count(total_value_count_p), count(0) {
 	}
 
 public:
@@ -42,10 +42,11 @@ public:
 		ParquetDecodeUtils::VarintEncode(ParquetDecodeUtils::IntToZigzag(first_value), writer);
 
 		// initialize
-		initialized = true;
+		count++;
 		previous_value = first_value;
+
 		min_delta = NumericLimits<int64_t>::Maximum();
-		count = 0;
+		block_count = 0;
 	}
 
 	void WriteValue(WriteStream &writer, const int64_t &value) {
@@ -64,14 +65,14 @@ public:
 		// Compute the frame of reference (the minimum of the deltas in the block).
 		min_delta = MinValue(min_delta, delta);
 		// append. if block is full, write it out
-		data[count++] = delta;
-		if (count % BLOCK_SIZE_IN_VALUES == 0) {
+		data[block_count++] = delta;
+		if (block_count == BLOCK_SIZE_IN_VALUES) {
 			WriteBlock(writer);
 		}
 	}
 
 	void FinishWrite(WriteStream &writer) {
-		if (count + initialized != total_value_count) {
+		if (count + block_count != total_value_count) {
 			throw InternalException("value count mismatch when writing DELTA_BINARY_PACKED");
 		}
 		WriteBlock(writer);
@@ -80,12 +81,12 @@ public:
 private:
 	void WriteBlock(WriteStream &writer) {
 		const auto number_of_miniblocks =
-		    (count + NUMBER_OF_VALUES_IN_A_MINIBLOCK - 1) / NUMBER_OF_VALUES_IN_A_MINIBLOCK;
+		    (block_count + NUMBER_OF_VALUES_IN_A_MINIBLOCK - 1) / NUMBER_OF_VALUES_IN_A_MINIBLOCK;
 		for (idx_t miniblock_idx = 0; miniblock_idx < number_of_miniblocks; miniblock_idx++) {
 			for (idx_t i = 0; i < NUMBER_OF_VALUES_IN_A_MINIBLOCK; i++) {
 				const idx_t index = miniblock_idx * NUMBER_OF_VALUES_IN_A_MINIBLOCK + i;
 				auto &value = data[index];
-				if (index < count) {
+				if (index < block_count) {
 					// 2. Compute the frame of reference (the minimum of the deltas in the block).
 					// Subtract this min delta from all deltas in the block.
 					// This guarantees that all values are non-negative.
@@ -133,17 +134,25 @@ private:
 			ParquetDecodeUtils::BitPackAligned(src, data_packed, NUMBER_OF_VALUES_IN_A_MINIBLOCK, width);
 			writer.WriteData(data_packed, NUMBER_OF_VALUES_IN_A_MINIBLOCK * width / 8);
 		}
+
+		count += block_count;
+
+		min_delta = NumericLimits<int64_t>::Maximum();
+		block_count = 0;
 	}
 
 private:
+	//! Overall fields
 	const idx_t total_value_count;
-	bool initialized;
+	idx_t count;
 	int64_t previous_value;
 
+	//! Block-specific fields
 	int64_t min_delta;
 	int64_t data[BLOCK_SIZE_IN_VALUES];
-	idx_t count;
+	idx_t block_count;
 
+	//! Bitpacking fields
 	bitpacking_width_t list_of_bitwidths_of_miniblocks[NUMBER_OF_MINIBLOCKS_IN_A_BLOCK];
 	data_t data_packed[NUMBER_OF_VALUES_IN_A_MINIBLOCK * sizeof(int64_t)];
 };
