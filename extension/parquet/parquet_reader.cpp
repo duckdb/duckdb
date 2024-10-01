@@ -1139,6 +1139,8 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				child_reader->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result_vector);
 				need_to_read[id] = false;
 
+				// FIXME filters should run on unified representation
+				result_vector.Flatten(this_output_chunk_rows);
 				ApplyFilter(result_vector, *filter_col.second, filter_mask, this_output_chunk_rows);
 			}
 		}
