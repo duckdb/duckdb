@@ -73,6 +73,8 @@ private:
 
 	//! Run a comparison between the statistics and the table filter; returns the prune result
 	FilterPropagateResult PropagateTableFilter(BaseStatistics &stats, TableFilter &filter);
+	//! Run a comparison between the statistics and the table filter; returns the prune result
+	FilterPropagateResult PropagateTableFilter(BaseStatistics &stats, TableFilter &filter, LogicalGet &get);
 	//! Update filter statistics from a TableFilter
 	void UpdateFilterStatistics(BaseStatistics &input, TableFilter &filter);
 

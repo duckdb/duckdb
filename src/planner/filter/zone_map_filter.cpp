@@ -14,7 +14,9 @@ FilterPropagateResult ZoneMapFilter::CheckStatistics(BaseStatistics &stats) {
 		if (const_compare.constant.type().IsTemporal()) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
+		return child_filter->CheckStatistics(stats);
 	}
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	return child_filter->CheckStatistics(stats);
 }
 

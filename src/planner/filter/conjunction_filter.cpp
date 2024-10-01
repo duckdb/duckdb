@@ -1,9 +1,56 @@
 #include "duckdb/planner/filter/conjunction_filter.hpp"
+
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+
+#include <duckdb/storage/statistics/base_statistics.hpp>
 
 namespace duckdb {
 
 ConjunctionOrFilter::ConjunctionOrFilter() : ConjunctionFilter(TableFilterType::CONJUNCTION_OR) {
+}
+
+FilterPropagateResult ConjunctionOrFilter::CheckStatisticsWithCardinality(BaseStatistics &stats, idx_t estimated_cardinality) {
+	// the OR filter is true if ANY of the children is true
+	D_ASSERT(!child_filters.empty());
+	// zone map OR
+	auto or_zone_map = true;
+	for (auto &filter : child_filters) {
+		if (filter->filter_type != TableFilterType::ZONE_MAP) {
+			or_zone_map = false;
+			break;
+		}
+	}
+	// Hack because the estimated cardinality is *0.2 when a table filter is present.
+	estimated_cardinality *= 5;
+
+	if (or_zone_map) {
+		auto distinct_count = stats.GetDistinctCount();
+		double ratio = 0.0;
+		if (distinct_count > estimated_cardinality) {
+			ratio = (double)estimated_cardinality / (double)distinct_count;
+			if (ratio * static_cast<double>(distinct_count) <= 0.7) {
+				return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+			}
+		} else {
+			ratio = (double)distinct_count / (double)estimated_cardinality;
+			if (ratio * static_cast<double>(estimated_cardinality) <= 0.7) {
+				return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+			}
+		}
+		if (estimated_cardinality <= 50000000) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		}
+	}
+
+	for (auto &filter : child_filters) {
+		auto prune_result = filter->CheckStatistics(stats);
+		if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		} else if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		}
+	}
+	return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 }
 
 FilterPropagateResult ConjunctionOrFilter::CheckStatistics(BaseStatistics &stats) {
