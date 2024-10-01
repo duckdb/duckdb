@@ -103,6 +103,7 @@ COPY (
 
 After generating the file, all that remains to be done is to split it and gzip the result. This can be achieved using the commands:
 ```bash
+mkdir split
 split -l 20000000 output.csv split/trips_
-gzip trips_*
+gzip split/trips_*
 ```
