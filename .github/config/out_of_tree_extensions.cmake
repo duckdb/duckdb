@@ -50,6 +50,7 @@ if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux")
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_delta
             GIT_TAG 3933ebd800ad06a64656c9aef6ca7d62897fa4db
+            APPLY_PATCHES
     )
 endif()
 
