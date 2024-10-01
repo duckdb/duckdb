@@ -21,26 +21,6 @@ FilterPropagateResult ConjunctionOrFilter::CheckStatisticsWithCardinality(BaseSt
 		}
 	}
 	// Hack because the estimated cardinality is *0.2 when a table filter is present.
-	estimated_cardinality *= 5;
-
-	if (or_zone_map) {
-		auto distinct_count = stats.GetDistinctCount();
-		double ratio = 0.0;
-		if (distinct_count > estimated_cardinality) {
-			ratio = (double)estimated_cardinality / (double)distinct_count;
-			if (ratio * static_cast<double>(distinct_count) <= 0.7) {
-				return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-			}
-		} else {
-			ratio = (double)distinct_count / (double)estimated_cardinality;
-			if (ratio * static_cast<double>(estimated_cardinality) <= 0.7) {
-				return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-			}
-		}
-		if (estimated_cardinality <= 50000000) {
-			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		}
-	}
 
 	for (auto &filter : child_filters) {
 		auto prune_result = filter->CheckStatistics(stats);
