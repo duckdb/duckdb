@@ -69,7 +69,7 @@ struct ExtensionAccess {
 
 		if (error) {
 			load_state.has_error = true;
-			load_state.error_data = ErrorData(ExceptionType::UNKNOWN_TYPE, error);
+			load_state.error_data = ErrorData(error);
 		} else {
 			load_state.has_error = true;
 			load_state.error_data = ErrorData(
