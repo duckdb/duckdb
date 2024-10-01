@@ -12,6 +12,7 @@
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/extension.hpp"
+#include "duckdb/main/capi/extension_api.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/settings.hpp"
 
@@ -58,6 +59,8 @@ public:
 	DUCKDB_API ValidChecker &GetValidChecker();
 	DUCKDB_API void SetExtensionLoaded(const string &extension_name, ExtensionInstallInfo &install_info);
 
+	DUCKDB_API const duckdb_ext_api_v0 &GetExtensionAPIV0();
+
 	idx_t NumberOfThreads();
 
 	DUCKDB_API static DatabaseInstance &GetDatabase(ClientContext &context);
@@ -91,6 +94,8 @@ private:
 	ValidChecker db_validity;
 	unique_ptr<DatabaseFileSystem> db_file_system;
 	shared_ptr<DatabaseCacheEntry> db_cache_entry;
+
+	unique_ptr<duckdb_ext_api_v0> extension_api_v0;
 };
 
 //! The database object. This object holds the catalog and all the

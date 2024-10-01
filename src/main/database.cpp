@@ -272,6 +272,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config.options.temporary_directory = string();
 	}
 
+	extension_api_v0 = make_uniq<duckdb_ext_api_v0>(CreateAPIv0());
+
 	db_file_system = make_uniq<DatabaseFileSystem>(*this);
 	db_manager = make_uniq<DatabaseManager>(*this);
 	if (config.buffer_manager) {
@@ -502,6 +504,10 @@ SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &ke
 
 ValidChecker &DatabaseInstance::GetValidChecker() {
 	return db_validity;
+}
+
+const duckdb_ext_api_v0 &DatabaseInstance::GetExtensionAPIV0() {
+	return *extension_api_v0;
 }
 
 ValidChecker &ValidChecker::Get(DatabaseInstance &db) {
