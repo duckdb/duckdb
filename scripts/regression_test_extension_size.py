@@ -63,15 +63,15 @@ for extension in matching_extensions:
     old_size = os.path.getsize(old_extensions[extension])
     new_size = os.path.getsize(new_extensions[extension])
 
-    if new_size / old_size > (1.0 + regression_threshold_percentage):
+    print(f" - checking '{extension}': old size={old_size}, new_size={new_size}")
+
+    if new_size / (old_size + 0.1) > (1.0 + regression_threshold_percentage):
         check_passed = False
         error_message += f" - Extension '{extension}' was bigger than expected {new_size}\n"
         error_message += f"   - old size: {old_size}\n"
         error_message += f"   - new size: {new_size}\n"
 
-print(
-    f"Checking extension size for {matching_extensions} are within the threshold of '{regression_threshold_percentage}'"
-)
+print()
 if not check_passed:
     print("Extension size regression check failed:\n")
     print(error_message)
