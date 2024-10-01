@@ -1434,6 +1434,42 @@ void StringValueScanner::SkipUntilNewLine() {
 	}
 }
 
+void StringValueScanner::SkipUntilQuote() {
+	char quote = state_machine->options.dialect_options.state_machine_options.quote.GetValue();
+	char escape = state_machine->options.dialect_options.state_machine_options.quote.GetValue();
+	if (quote == '\0') {
+		return;
+	}
+	if (quote != escape) {
+		while (iterator.pos.buffer_pos < cur_buffer_handle->actual_size) {
+			if (buffer_handle_ptr[iterator.pos.buffer_pos] == quote) {
+				// We found a quote, check if the previous element is an escape
+				if (iterator.pos.buffer_pos > 0) {
+					if (buffer_handle_ptr[iterator.pos.buffer_pos - 1] != escape) {
+						iterator.pos.buffer_pos++;
+						return;
+					}
+				}
+			}
+			iterator.pos.buffer_pos++;
+		}
+	} else {
+		while (iterator.pos.buffer_pos < cur_buffer_handle->actual_size) {
+			if (buffer_handle_ptr[iterator.pos.buffer_pos] == quote) {
+				// We found a quote, check if the next element is also a quote
+				if (iterator.pos.buffer_pos < cur_buffer_handle->actual_size) {
+					if (buffer_handle_ptr[iterator.pos.buffer_pos + 1] != quote) {
+						// If it's not we are done
+						iterator.pos.buffer_pos++;
+						return;
+					}
+				}
+			}
+			iterator.pos.buffer_pos++;
+		}
+	}
+}
+
 bool StringValueScanner::CanDirectlyCast(const LogicalType &type, bool icu_loaded) {
 
 	switch (type.id()) {
@@ -1463,6 +1499,18 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type, bool icu_loade
 	}
 }
 
+bool StringValueScanner::IsRowValid() {
+	constexpr idx_t result_size = 1;
+	auto scan_finder =
+	    make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, make_shared_ptr<CSVErrorHandler>(true),
+	                                  csv_file_scan, false, iterator, result_size);
+	auto &tuples = scan_finder->ParseChunk();
+	iterator.pos.buffer_idx = scan_finder->result.current_line_position.begin.buffer_idx;
+	iterator.pos.buffer_pos = scan_finder->result.current_line_position.begin.buffer_pos;
+	result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
+	return tuples.number_of_rows == 1;
+}
+
 void StringValueScanner::SetStart() {
 	if (iterator.first_one) {
 		if (result.store_line_size) {
@@ -1470,57 +1518,27 @@ void StringValueScanner::SetStart() {
 		}
 		return;
 	}
-	if (state_machine->options.IgnoreErrors()) {
-		// If we are ignoring errors we don't really need to figure out a line.
-		return;
-	}
 	// The result size of the data after skipping the row is one line
 	// We have to look for a new line that fits our schema
 	// 1. We walk until the next new line
-	bool line_found;
-	unique_ptr<StringValueScanner> scan_finder;
-	do {
-		constexpr idx_t result_size = 1;
+	SkipUntilNewLine();
+	if (state_machine->options.null_padding) {
+		// When Null Padding, we assume we start from the correct new-line
+		return;
+	}
+	// At this point we have 3 options
+	// 1. We are at the start of a valid line
+	bool valid_line = IsRowValid();
+	// 2. We are in the middle of a quoted value
+	if (!valid_line) {
+		// We skip to unquote
+		SkipUntilQuote();
+		// We skip until the next new line
 		SkipUntilNewLine();
-		if (state_machine->options.null_padding) {
-			// When Null Padding, we assume we start from the correct new-line
-			return;
-		}
-		scan_finder =
-		    make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, make_shared_ptr<CSVErrorHandler>(true),
-		                                  csv_file_scan, false, iterator, result_size);
-		auto &tuples = scan_finder->ParseChunk();
-		line_found = true;
-		if (tuples.number_of_rows != 1 ||
-		    (!tuples.borked_rows.empty() && !state_machine->options.ignore_errors.GetValue()) ||
-		    tuples.first_line_is_comment) {
-			line_found = false;
-			// If no tuples were parsed, this is not the correct start, we need to skip until the next new line
-			// Or if columns don't match, this is not the correct start, we need to skip until the next new line
-			if (scan_finder->previous_buffer_handle) {
-				if (scan_finder->iterator.pos.buffer_pos >= scan_finder->previous_buffer_handle->actual_size &&
-				    scan_finder->previous_buffer_handle->is_last_buffer) {
-					iterator.pos.buffer_idx = scan_finder->iterator.pos.buffer_idx;
-					iterator.pos.buffer_pos = scan_finder->iterator.pos.buffer_pos;
-					result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
-					iterator.done = scan_finder->iterator.done;
-					return;
-				}
-			}
-			if (iterator.pos.buffer_pos == cur_buffer_handle->actual_size ||
-			    scan_finder->iterator.GetBufferIdx() > iterator.GetBufferIdx()) {
-				// If things go terribly wrong, we never loop indefinitely.
-				iterator.pos.buffer_idx = scan_finder->iterator.pos.buffer_idx;
-				iterator.pos.buffer_pos = scan_finder->iterator.pos.buffer_pos;
-				result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
-				iterator.done = scan_finder->iterator.done;
-				return;
-			}
-		}
-	} while (!line_found);
-	iterator.pos.buffer_idx = scan_finder->result.current_line_position.begin.buffer_idx;
-	iterator.pos.buffer_pos = scan_finder->result.current_line_position.begin.buffer_pos;
-	result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
+		IsRowValid();
+	}
+	// 3. We have an error, if we have an error, we let life go on, the scanner will either ignore it
+	// or throw.
 }
 
 void StringValueScanner::FinalizeChunkProcess() {

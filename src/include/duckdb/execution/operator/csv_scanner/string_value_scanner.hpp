@@ -314,9 +314,15 @@ private:
 	//! Function used to move from one buffer to the other, if necessary
 	bool MoveToNextBuffer();
 
-	void SkipUntilNewLine();
-
+	//! -------- Functions used to figure out where lines start ---------!//
+	//! Main function, sets the correct start
 	void SetStart();
+	//! Skips the buffer until a new line
+	void SkipUntilNewLine();
+	//! Skips buffer until a quote
+	void SkipUntilQuote();
+	//! If the current row we found is valid
+	bool IsRowValid();
 
 	StringValueResult result;
 	vector<LogicalType> types;
