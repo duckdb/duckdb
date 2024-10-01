@@ -37,6 +37,7 @@ For this benchmark, there are 3 scripts that must be run:
 The following query is used to generate the CSV file. Note that the query is based on the one described in the [Billion NYC Taxi Rides Redshift](https://tech.marksblogg.com/billion-nyc-taxi-rides-redshift.html) blog post. Minor column name adjustments were made, as some names have changed since the original blog post was written (e.g., `weather.precipitation rain` was originally named `weather.precipitation_tenths_of_mm rain`).
 
 ```sql
+COPY (
    SELECT trips.id,
            trips.vendor_id,
            trips.pickup_datetime,
