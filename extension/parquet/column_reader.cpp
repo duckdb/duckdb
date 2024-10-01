@@ -489,23 +489,22 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	}
 }
 
-void ColumnReader::ConvertDictToSelVec(uint32_t *offsets, uint8_t *defines, parquet_filter_t &filter, idx_t read_now,
-                                       idx_t result_offset) {
+void ColumnReader::ConvertDictToSelVec(uint32_t *offsets, uint8_t *defines, parquet_filter_t &filter, idx_t read_now) {
 	D_ASSERT(read_now < STANDARD_VECTOR_SIZE);
 	idx_t offset_idx = 0;
-	for (idx_t row_idx_0 = 0; row_idx_0 < read_now; row_idx_0++) {
-		if (HasDefines() && defines[row_idx_0 + result_offset] != max_define) {
-			dictionary_selection_vector.set_index(row_idx_0, 0); // dictionary entry 0 is NULL
-			continue;                                            // we don't have a dict entry for NULLs
+	for (idx_t row_idx = 0; row_idx < read_now; row_idx++) {
+		if (HasDefines() && defines[row_idx] != max_define) {
+			dictionary_selection_vector.set_index(row_idx, 0); // dictionary entry 0 is NULL
+			continue;                                          // we don't have a dict entry for NULLs
 		}
-		if (filter.test(row_idx_0 + result_offset)) {
+		if (filter.test(row_idx)) {
 			auto offset = offsets[offset_idx++];
 			if (offset >= dictionary_size) {
 				throw std::runtime_error("Parquet file is likely corrupted, dictionary offset out of range");
 			}
-			dictionary_selection_vector.set_index(row_idx_0, offset + 1);
+			dictionary_selection_vector.set_index(row_idx, offset + 1);
 		} else {
-			dictionary_selection_vector.set_index(row_idx_0, 0); // just set NULL
+			dictionary_selection_vector.set_index(row_idx, 0); // just set NULL
 			offset_idx++;
 		}
 	}
@@ -564,7 +563,7 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 			offset_buffer.resize(reader.allocator, sizeof(uint32_t) * (read_now - null_count));
 			dict_decoder->GetBatch<uint32_t>(offset_buffer.ptr, read_now - null_count);
 			ConvertDictToSelVec(reinterpret_cast<uint32_t *>(offset_buffer.ptr),
-			                    reinterpret_cast<uint8_t *>(define_out), filter, read_now, result_offset);
+			                    reinterpret_cast<uint8_t *>(define_out), filter, read_now);
 			if (read_now == num_values) {
 				D_ASSERT(result_offset == 0);
 				result.Slice(*dictionary, dictionary_selection_vector, read_now);

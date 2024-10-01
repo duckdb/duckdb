@@ -164,8 +164,7 @@ private:
 	void PreparePageV2(PageHeader &page_hdr);
 	void DecompressInternal(CompressionCodec::type codec, const_data_ptr_t src, idx_t src_size, data_ptr_t dst,
 	                        idx_t dst_size);
-	void ConvertDictToSelVec(uint32_t *offsets, uint8_t *defines, parquet_filter_t &filter, idx_t read_now,
-	                         idx_t result_offset);
+	void ConvertDictToSelVec(uint32_t *offsets, uint8_t *defines, parquet_filter_t &filter, idx_t read_now);
 	const duckdb_parquet::format::ColumnChunk *chunk = nullptr;
 
 	duckdb_apache::thrift::protocol::TProtocol *protocol;
