@@ -600,6 +600,10 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 				// we have IN ('Sweden', 'Norway', 'denmark') etc.
 				// We could push this down to an OR filter and check zone maps,
 				// but min max stats on strings do not help as much compared to the same stats on integral types
+				// TODO: you could make a conjunction filter here.
+				// then when propagating statistics, check if the distinct count is > (0.5 * cardinality).
+				// If so, the IN() values are most likely selective, so it is worth it to push the
+				// filter down.
 				break;
 			}
 
