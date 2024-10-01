@@ -75,17 +75,36 @@ public:
 	//===--------------------------------------------------------------------===//
 	// Zigzag
 	//===--------------------------------------------------------------------===//
-public:
-	template <class T>
-	static T ZigzagToInt(const uint64_t n) {
-		return static_cast<T>(n >> 1) ^ -static_cast<T>(n & 1);
+private:
+	//! https://lemire.me/blog/2022/11/25/making-all-your-integers-positive-with-zigzag-encoding/
+	template <class UNSIGNED>
+	static typename std::enable_if<std::is_unsigned<UNSIGNED>::value, typename std::make_signed<UNSIGNED>::type>::type
+	ZigzagToIntInternal(UNSIGNED x) {
+		return (x >> 1) ^ (-(x & 1));
 	}
 
-	template <class T>
-	static uint64_t IntToZigzag(const T n) {
-		const auto result = (static_cast<uint64_t>(n) << 1) ^ static_cast<uint64_t>(n) >> (sizeof(T) * 8 - 1);
-		D_ASSERT(ZigzagToInt<T>(result) == n);
-		return result;
+	template <typename SIGNED>
+	static typename std::enable_if<std::is_signed<SIGNED>::value, typename std::make_unsigned<SIGNED>::type>::type
+	IntToZigzagInternal(SIGNED x) {
+		using UNSIGNED = typename std::make_unsigned<SIGNED>::type;
+		return (static_cast<UNSIGNED>(x) << 1) ^ static_cast<UNSIGNED>(x >> (sizeof(SIGNED) * 8 - 1));
+	}
+
+public:
+	template <class UNSIGNED>
+	static typename std::enable_if<std::is_unsigned<UNSIGNED>::value, typename std::make_signed<UNSIGNED>::type>::type
+	ZigzagToInt(UNSIGNED x) {
+		auto integer = ZigzagToIntInternal(x);
+		D_ASSERT(x == IntToZigzagInternal(integer)); // test roundtrip
+		return integer;
+	}
+
+	template <typename SIGNED>
+	static typename std::enable_if<std::is_signed<SIGNED>::value, typename std::make_unsigned<SIGNED>::type>::type
+	IntToZigzag(SIGNED x) {
+		auto zigzag = IntToZigzagInternal(x);
+		D_ASSERT(x == ZigzagToIntInternal(zigzag)); // test roundtrip
+		return zigzag;
 	}
 
 	//===--------------------------------------------------------------------===//

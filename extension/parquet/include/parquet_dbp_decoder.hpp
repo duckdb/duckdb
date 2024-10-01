@@ -1,17 +1,7 @@
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// parquet_dbp_decoder.hpp
-//
-//
-//===----------------------------------------------------------------------===//
-
 #pragma once
-
 #include "decode_utils.hpp"
 
 namespace duckdb {
-
 class DbpDecoder {
 public:
 	DbpDecoder(data_ptr_t buffer, uint32_t buffer_len) : buffer_(buffer, buffer_len) {
@@ -20,7 +10,7 @@ public:
 		block_value_count = ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_);
 		miniblocks_per_block = ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_);
 		total_value_count = ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_);
-		start_value = ParquetDecodeUtils::ZigzagToInt<int64_t>(ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_));
+		start_value = ParquetDecodeUtils::ZigzagToInt(ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_));
 
 		// some derivatives
 		D_ASSERT(miniblocks_per_block > 0);
@@ -71,8 +61,7 @@ public:
 				if (bitpack_pos > 0) {       // have to eat the leftovers if any
 					buffer_.inc(1);
 				}
-				min_delta =
-				    ParquetDecodeUtils::ZigzagToInt<int64_t>(ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_));
+				min_delta = ParquetDecodeUtils::ZigzagToInt(ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_));
 				for (idx_t miniblock_idx = 0; miniblock_idx < miniblocks_per_block; miniblock_idx++) {
 					miniblock_bit_widths[miniblock_idx] = buffer_.read<uint8_t>();
 					// TODO what happens if width is 0?
