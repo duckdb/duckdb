@@ -13,3 +13,5 @@ load benchmark/taxi/load.sql
 
 run
 ${RESULT_QUERY}
+
+result benchmark/taxi/result/q${QUERY_NUMBER_PADDED}.csv
