@@ -207,8 +207,6 @@ void ColumnReader::DeltaByteArray(uint8_t *defines, idx_t num_values, // NOLINT
 	throw NotImplementedException("DeltaByteArray");
 }
 
-void ColumnReader::DictReference(Vector &result) {
-}
 void ColumnReader::PlainReference(shared_ptr<ByteBuffer>, Vector &result) { // NOLINT
 }
 
@@ -262,8 +260,8 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 		} else if (dictionary_size > old_dict_size) {
 			dictionary->Resize(old_dict_size, dictionary_size + 1);
 		}
-		dictionary->SetValue(0, Value());
-		// TODO do we have to clear references
+		// we use the first entry as a NULL, dictionary vectors don't have a separate validity mask
+		FlatVector::Validity(*dictionary).SetInvalid(0);
 		PlainReference(block, *dictionary);
 		Plain(block, nullptr, dictionary_size, nullptr, 1, *dictionary);
 		break;
@@ -504,11 +502,13 @@ void ColumnReader::ConvertDictToSelVec(uint32_t *offsets, uint8_t *defines, parq
 			}
 			dictionary_selection_vector.set_index(row_idx, offset + 1);
 		} else {
-			dictionary_selection_vector.set_index(row_idx, 0); // just set NULL
+			dictionary_selection_vector.set_index(row_idx, 0); // just set NULL if the filter excludes this row
 			offset_idx++;
 		}
 	}
+#ifdef DEBUG
 	dictionary_selection_vector.Verify(read_now, dictionary_size + 1);
+#endif
 }
 
 idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr_t define_out, data_ptr_t repeat_out,
@@ -549,10 +549,8 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 
 		if ((dict_decoder || dbp_decoder || rle_decoder || bss_decoder) && HasDefines()) {
 			// we need the null count because the dictionary offsets have no entries for nulls
-			for (idx_t i = 0; i < read_now; i++) {
-				if (define_out[i + result_offset] != max_define) {
-					null_count++;
-				}
+			for (idx_t i = result_offset; i < result_offset + read_now; i++) {
+				null_count += (define_out[i] != max_define);
 			}
 		}
 
@@ -571,7 +569,6 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 			} else {
 				VectorOperations::Copy(*dictionary, result, dictionary_selection_vector, read_now, 0, result_offset);
 			}
-			result.Verify(read_now);
 		} else if (dbp_decoder) {
 			// TODO keep this in the state
 			auto read_buf = make_shared_ptr<ResizeableBuffer>();
