@@ -34,10 +34,7 @@ DROP TABLE test.t CASCADE;
 
 statement error
 PRAGMA table_info('test.v')
-<<<<<<< HEAD
-=======
 ----
->>>>>>> upstream/main
 
 # but querying the view fails
 statement error
@@ -52,10 +49,7 @@ restart
 
 statement error
 PRAGMA table_info('test.v')
-<<<<<<< HEAD
-=======
 ----
->>>>>>> upstream/main
 
 statement error
 SELECT * FROM test.v
@@ -70,10 +64,7 @@ SELECT * FROM test.t
 
 statement error
 SELECT * FROM test.v
-<<<<<<< HEAD
-=======
 ----
->>>>>>> upstream/main
 
 statement ok
 CREATE VIEW test.v AS SELECT * FROM test.t;

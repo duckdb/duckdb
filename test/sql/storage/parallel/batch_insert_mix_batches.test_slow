@@ -163,14 +163,10 @@ statement ok
 DROP TABLE integers3
 
 statement ok
-<<<<<<< HEAD
-DROP VIEW v1 CASCADE;
-=======
 drop view if exists v2;
 
 statement ok
 drop view if exists v3;
->>>>>>> upstream/main
 
 # create views that read the batches using unions
 statement ok

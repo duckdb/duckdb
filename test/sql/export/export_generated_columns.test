@@ -57,7 +57,11 @@ Dependency Error: Cannot drop entry "my_macro" because there are entries that de
 statement error
 ALTER TABLE tbl DROP COLUMN x;
 <<<<<<< HEAD
+<<<<<<< HEAD
 
+=======
+----
+>>>>>>> upstream/main
 =======
 ----
 >>>>>>> upstream/main
