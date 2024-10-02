@@ -156,8 +156,8 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 
 	auto &duck_catalog = catalog.Cast<DuckCatalog>();
 	auto &dependency_manager = duck_catalog.GetDependencyManager();
-	// catalog_entries = dependency_manager.GetExportOrder();
 	catalog_entries = GetCatalogEntries(schemas);
+	dependency_manager.ReorderEntries(catalog_entries);
 
 	// write the actual data into the database
 

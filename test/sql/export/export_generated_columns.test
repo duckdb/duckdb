@@ -56,12 +56,4 @@ Dependency Error: Cannot drop entry "my_macro" because there are entries that de
 # 'x' can not be removed, as 'gen_x' depends on it
 statement error
 ALTER TABLE tbl DROP COLUMN x;
-<<<<<<< HEAD
-<<<<<<< HEAD
-
-=======
 ----
->>>>>>> upstream/main
-=======
-----
->>>>>>> upstream/main

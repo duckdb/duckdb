@@ -485,95 +485,51 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 	}
 }
 
-bool AllExportDependenciesWritten(CatalogEntry &object, optional_ptr<catalog_entry_set_t> dependencies_p,
-                                  catalog_entry_set_t &exported) {
-	if (!dependencies_p) {
-		// This object has no dependencies at all
-		return true;
-	}
-	auto &dependencies = *dependencies_p;
-	for (auto &entry : dependencies) {
-		// This is an entry that needs to be written before 'object' can be written
-		if (exported.find(entry) == exported.end()) {
-			// It has not been written yet, abort
-			return false;
-		}
-		// We do not need to check recursively, if the object is written
-		// that means that the objects it depends on have also been written
-	}
-	return true;
+void DependencyManager::ReorderEntries(catalog_entry_vector_t &entries, ClientContext &context) {
+	auto transaction = catalog.GetCatalogTransaction(context);
+	// Read all the entries visible to this snapshot
+	ReorderEntries(entries, transaction);
 }
 
-void AddDependentsToBacklog(stack<reference<CatalogEntry>> &backlog, optional_ptr<dependency_set_t> dependents) {
-	catalog_entry_vector_t tables;
-	D_ASSERT(dependents);
-	for (auto &dependent : *dependents) {
-		auto &entry = dependent.entry.get();
-		if (entry.type == CatalogType::TABLE_ENTRY) {
-			tables.push_back(entry);
-		}
-		// This could be a foreign key reference, in which case we have to write it before other dependents
-		backlog.push(entry);
-	}
-	for (auto &entry : tables) {
-		backlog.push(entry.get());
-	}
+void DependencyManager::ReorderEntries(catalog_entry_vector_t &entries) {
+	// Read all committed entries
+	CatalogTransaction transaction(catalog.GetDatabase(), MAX_TRANSACTION_ID, 0);
+	ReorderEntries(entries, transaction);
 }
 
-void OrderEntries(ExportDependencies &map, CatalogEntryOrdering &ordering, stack<reference<CatalogEntry>> &backlog) {
-	auto &export_order = ordering.ordered_vector;
-	auto &entries = ordering.ordered_set;
-
-	while (!backlog.empty()) {
-		auto &object = backlog.top();
-		backlog.pop();
-		if (entries.count(object)) {
-			// This entry has already been written
-			continue;
-		}
-		auto dependencies = map.GetEntriesThatObjectDependsOn(object);
-		auto is_ordered = AllExportDependenciesWritten(object, dependencies, entries);
-		if (!is_ordered) {
-			if (dependencies) {
-				for (auto &dependency : *dependencies) {
-					backlog.emplace(dependency);
-				}
-			}
-			continue;
-		}
-		// All dependencies written, we can write this now
-		auto insert_result = entries.insert(object);
-		(void)insert_result;
-		D_ASSERT(insert_result.second);
-		export_order.push_back(object);
-		auto dependents = map.GetEntriesThatDependOnObject(object);
-		AddDependentsToBacklog(backlog, dependents);
+void DependencyManager::ReorderEntry(CatalogTransaction transaction, CatalogEntry &entry, catalog_entry_set_t &visited,
+                                     catalog_entry_vector_t &order) {
+	auto &catalog_entry = *LookupEntry(transaction, entry);
+	if (visited.count(catalog_entry) || catalog_entry.internal) {
+		// Already seen and ordered appropriately
+		return;
 	}
+
+	// Check if there are any entries that this entry depends on, those are written first
+	catalog_entry_vector_t dependents;
+	auto info = GetLookupProperties(entry);
+	ScanSubjects(transaction, info, [&](DependencyEntry &dep) { dependents.push_back(dep); });
+	for (auto &dep : dependents) {
+		ReorderEntry(transaction, dep, visited, order);
+	}
+
+	// Then write the entry
+	visited.insert(catalog_entry);
+	order.push_back(catalog_entry);
 }
 
-void ExportDependencies::AddForeignKeyConnection(CatalogEntry &entry, const string &fk_table) {
-	for (auto &object : dependencies) {
-		auto &other = object.first.get();
-		if (other.type != CatalogType::TABLE_ENTRY) {
-			continue;
-		}
-		if (!StringUtil::CIEquals(fk_table, other.name)) {
-			continue;
-		}
-		// Register that 'object' depends on 'entry'
-		D_ASSERT(dependents.count(entry));
-		auto &other_deps = dependents[entry];
-		other_deps.insert(Dependency(other));
-
-		// Register that 'entry' is a dependency of 'object'
-		D_ASSERT(dependencies.count(other));
-		auto &entry_deps = dependencies[other];
-		entry_deps.insert(entry);
+void DependencyManager::ReorderEntries(catalog_entry_vector_t &entries, CatalogTransaction transaction) {
+	catalog_entry_vector_t reordered;
+	catalog_entry_set_t visited;
+	for (auto &entry : entries) {
+		ReorderEntry(transaction, entry, visited, reordered);
 	}
-}
-
-catalog_entry_vector_t DependencyManager::GetExportOrder() {
-	return catalog_entry_vector_t();
+	// If this would fail, that means there are more entries that we somehow reached through the dependency manager
+	// but those entries should not actually be visible to this transaction
+	D_ASSERT(entries.size() == reordered.size());
+	entries.clear();
+	entries = reordered;
+	return;
 	// CatalogEntryOrdering ordering;
 	// auto &entries = ordering.ordered_set;
 	// auto &export_order = ordering.ordered_vector;

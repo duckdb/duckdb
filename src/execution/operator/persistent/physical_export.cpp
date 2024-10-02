@@ -223,14 +223,12 @@ SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &c
 
 	auto &catalog = Catalog::GetCatalog(ccontext, info->catalog);
 
-	// export order is SCHEMA -> SEQUENCE -> TABLE -> VIEW -> INDEX
 	catalog_entry_vector_t catalog_entries;
+	catalog_entries = GetNaiveExportOrder(context.client, catalog);
 	if (catalog.IsDuckCatalog()) {
 		auto &duck_catalog = catalog.Cast<DuckCatalog>();
 		auto &dependency_manager = duck_catalog.GetDependencyManager();
-		catalog_entries = dependency_manager.GetExportOrder();
-	} else {
-		catalog_entries = GetNaiveExportOrder(context.client, catalog);
+		dependency_manager.ReorderEntries(catalog_entries, ccontext);
 	}
 
 	// write the schema.sql file
