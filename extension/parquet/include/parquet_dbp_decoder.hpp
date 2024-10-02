@@ -1,7 +1,17 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// parquet_dbp_deccoder.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
+
 #include "decode_utils.hpp"
 
 namespace duckdb {
+
 class DbpDecoder {
 public:
 	DbpDecoder(data_ptr_t buffer, uint32_t buffer_len) : buffer_(buffer, buffer_len) {

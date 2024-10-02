@@ -32,7 +32,7 @@ private:
 
 public:
 	template <class T>
-	static uint32_t BitUnpack(ByteBuffer &src, uint8_t &bitpack_pos, T *dst, const idx_t count,
+	static uint32_t BitUnpack(ByteBuffer &src, bitpacking_width_t &bitpack_pos, T *dst, const idx_t count,
 	                          const bitpacking_width_t width) {
 		CheckWidth(width);
 		const auto mask = BITPACK_MASKS[width];

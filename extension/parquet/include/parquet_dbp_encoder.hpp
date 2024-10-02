@@ -48,7 +48,6 @@ public:
 
 		min_delta = NumericLimits<int64_t>::Maximum();
 		block_count = 0;
-
 	}
 
 	void WriteValue(WriteStream &writer, const int64_t &value) {
@@ -84,6 +83,7 @@ public:
 
 private:
 	void WriteBlock(WriteStream &writer) {
+		D_ASSERT(count + block_count == total_value_count || block_count == BLOCK_SIZE_IN_VALUES);
 		const auto number_of_miniblocks =
 		    (block_count + NUMBER_OF_VALUES_IN_A_MINIBLOCK - 1) / NUMBER_OF_VALUES_IN_A_MINIBLOCK;
 		for (idx_t miniblock_idx = 0; miniblock_idx < number_of_miniblocks; miniblock_idx++) {
@@ -109,8 +109,10 @@ private:
 		for (idx_t miniblock_idx = 0; miniblock_idx < NUMBER_OF_MINIBLOCKS_IN_A_BLOCK; miniblock_idx++) {
 			auto &width = list_of_bitwidths_of_miniblocks[miniblock_idx];
 			if (miniblock_idx < number_of_miniblocks) {
-				width = BitpackingPrimitives::MinimumBitWidth<uint64_t>(reinterpret_cast<uint64_t *>(data),
-				                                                        NUMBER_OF_VALUES_IN_A_MINIBLOCK);
+				const auto src = &data[miniblock_idx * NUMBER_OF_VALUES_IN_A_MINIBLOCK];
+				width = BitpackingPrimitives::MinimumBitWidth(reinterpret_cast<uint64_t *>(src),
+				                                              NUMBER_OF_VALUES_IN_A_MINIBLOCK);
+				D_ASSERT(width <= sizeof(int64_t) * 8);
 			} else {
 				// If, in the last block, less than <number of miniblocks in a block> miniblocks are needed to store the
 				// values, the bytes storing the bit widths of the unneeded miniblocks are still present, their value
@@ -134,9 +136,22 @@ private:
 		for (idx_t miniblock_idx = 0; miniblock_idx < number_of_miniblocks; miniblock_idx++) {
 			const auto src = &data[miniblock_idx * NUMBER_OF_VALUES_IN_A_MINIBLOCK];
 			const auto &width = list_of_bitwidths_of_miniblocks[miniblock_idx];
-			memset(data_packed, 0, NUMBER_OF_VALUES_IN_A_MINIBLOCK * sizeof(int64_t));
-			ParquetDecodeUtils::BitPackAligned(src, data_packed, NUMBER_OF_VALUES_IN_A_MINIBLOCK, width);
-			writer.WriteData(data_packed, NUMBER_OF_VALUES_IN_A_MINIBLOCK * width / 8);
+			memset(data_packed, 0, sizeof(data_packed));
+			ParquetDecodeUtils::BitPackAligned(reinterpret_cast<uint64_t *>(src), data_packed,
+			                                   NUMBER_OF_VALUES_IN_A_MINIBLOCK, width);
+			const auto write_size = NUMBER_OF_VALUES_IN_A_MINIBLOCK * width / 8;
+#ifdef DEBUG
+			// immediately verify that unpacking yields the input data
+			int64_t verification_data[NUMBER_OF_VALUES_IN_A_MINIBLOCK];
+			ByteBuffer byte_buffer(data_ptr_cast(data_packed), write_size);
+			bitpacking_width_t bitpack_pos = 0;
+			ParquetDecodeUtils::BitUnpack(byte_buffer, bitpack_pos, verification_data, NUMBER_OF_VALUES_IN_A_MINIBLOCK,
+			                              width);
+			for (idx_t i = 0; i < NUMBER_OF_VALUES_IN_A_MINIBLOCK; i++) {
+				D_ASSERT(src[i] == verification_data[i]);
+			}
+#endif
+			writer.WriteData(data_packed, write_size);
 		}
 
 		count += block_count;
