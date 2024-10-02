@@ -1478,7 +1478,9 @@ void StringValueScanner::SetStart() {
 		SkipUntilState(CSVState::QUOTED, CSVState::RECORD_SEPARATOR);
 		valid_line = IsRowValid();
 	}
-	if (!valid_line) {
+	bool is_this_the_end =
+	    iterator.pos.buffer_pos == cur_buffer_handle->actual_size && cur_buffer_handle->is_last_buffer;
+	if (!valid_line && !is_this_the_end) {
 		iterator.pos.buffer_pos = current_pos;
 	}
 	// 3. We have an error, if we have an error, we let life go on, the scanner will either ignore it
