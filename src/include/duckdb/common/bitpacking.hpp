@@ -41,16 +41,15 @@ public:
 			}
 		} else {
 			idx_t misaligned_count = count % BITPACKING_ALGORITHM_GROUP_SIZE;
-			T tmp_buffer[BITPACKING_ALGORITHM_GROUP_SIZE]; // TODO maybe faster on the heap?
-
 			count -= misaligned_count;
-
 			for (idx_t i = 0; i < count; i += BITPACKING_ALGORITHM_GROUP_SIZE) {
 				PackGroup<T>(dst + (i * width) / 8, src + i, width);
 			}
 
-			// Input was not aligned to BITPACKING_ALGORITHM_GROUP_SIZE, we need a copy
+			// The input is not aligned to BITPACKING_ALGORITHM_GROUP_SIZE.
+			// Copy the unaligned count into a zero-initialized temporary group, and pack it.
 			if (misaligned_count) {
+				T tmp_buffer[BITPACKING_ALGORITHM_GROUP_SIZE] = {0};
 				memcpy(tmp_buffer, src + count, misaligned_count * sizeof(T));
 				PackGroup<T>(dst + (count * width) / 8, tmp_buffer, width);
 			}

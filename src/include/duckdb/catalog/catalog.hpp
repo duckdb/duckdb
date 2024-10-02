@@ -70,6 +70,7 @@ class LogicalInsert;
 class LogicalDelete;
 class LogicalUpdate;
 class CreateStatement;
+class CatalogEntryRetriever;
 
 //! The Catalog object represents the catalog of the database.
 class Catalog {
@@ -84,10 +85,15 @@ public:
 	DUCKDB_API static Catalog &GetSystemCatalog(DatabaseInstance &db);
 	//! Get the specified Catalog from the ClientContext
 	DUCKDB_API static Catalog &GetCatalog(ClientContext &context, const string &catalog_name);
+	//! Get the specified Catalog from the ClientContext
+	DUCKDB_API static Catalog &GetCatalog(CatalogEntryRetriever &retriever, const string &catalog_name);
 	//! Get the specified Catalog from the DatabaseInstance
 	DUCKDB_API static Catalog &GetCatalog(DatabaseInstance &db, const string &catalog_name);
 	//! Gets the specified Catalog from the database if it exists
 	DUCKDB_API static optional_ptr<Catalog> GetCatalogEntry(ClientContext &context, const string &catalog_name);
+	//! Gets the specified Catalog from the database if it exists
+	DUCKDB_API static optional_ptr<Catalog> GetCatalogEntry(CatalogEntryRetriever &retriever,
+	                                                        const string &catalog_name);
 	//! Get the specific Catalog from the AttachedDatabase
 	DUCKDB_API static Catalog &GetCatalog(AttachedDatabase &db);
 
@@ -214,6 +220,10 @@ public:
 	                                                             const string &schema_name,
 	                                                             OnEntryNotFound if_not_found,
 	                                                             QueryErrorContext error_context = QueryErrorContext());
+	DUCKDB_API static optional_ptr<SchemaCatalogEntry> GetSchema(CatalogEntryRetriever &retriever,
+	                                                             const string &catalog_name, const string &schema_name,
+	                                                             OnEntryNotFound if_not_found,
+	                                                             QueryErrorContext error_context = QueryErrorContext());
 	//! Scans all the schemas in the system one-by-one, invoking the callback for each entry
 	DUCKDB_API virtual void ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) = 0;
 
@@ -221,11 +231,19 @@ public:
 	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(ClientContext &context, CatalogType type, const string &schema,
 	                                               const string &name, OnEntryNotFound if_not_found,
 	                                               QueryErrorContext error_context = QueryErrorContext());
+	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(CatalogEntryRetriever &retriever, CatalogType type,
+	                                               const string &schema, const string &name,
+	                                               OnEntryNotFound if_not_found,
+	                                               QueryErrorContext error_context = QueryErrorContext());
 	DUCKDB_API CatalogEntry &GetEntry(ClientContext &context, CatalogType type, const string &schema,
 	                                  const string &name, QueryErrorContext error_context = QueryErrorContext());
 	//! Gets the "catalog.schema.name" entry of the specified type, if entry does not exist behavior depends on
 	//! OnEntryNotFound
 	DUCKDB_API static optional_ptr<CatalogEntry> GetEntry(ClientContext &context, CatalogType type,
+	                                                      const string &catalog, const string &schema,
+	                                                      const string &name, OnEntryNotFound if_not_found,
+	                                                      QueryErrorContext error_context = QueryErrorContext());
+	DUCKDB_API static optional_ptr<CatalogEntry> GetEntry(CatalogEntryRetriever &retriever, CatalogType type,
 	                                                      const string &catalog, const string &schema,
 	                                                      const string &name, OnEntryNotFound if_not_found,
 	                                                      QueryErrorContext error_context = QueryErrorContext());
@@ -306,6 +324,8 @@ public:
 	DUCKDB_API vector<reference<SchemaCatalogEntry>> GetSchemas(ClientContext &context);
 	DUCKDB_API static vector<reference<SchemaCatalogEntry>> GetSchemas(ClientContext &context,
 	                                                                   const string &catalog_name);
+	DUCKDB_API static vector<reference<SchemaCatalogEntry>> GetSchemas(CatalogEntryRetriever &retriever,
+	                                                                   const string &catalog_name);
 	DUCKDB_API static vector<reference<SchemaCatalogEntry>> GetAllSchemas(ClientContext &context);
 
 	virtual void Verify();
@@ -329,21 +349,22 @@ private:
 	                                          const string &name);
 	//! Calls LookupEntryInternal on the schema, trying other schemas if the schema is invalid. Sets
 	//! CatalogEntryLookup->error depending on if_not_found when no entry is found
-	CatalogEntryLookup TryLookupEntry(ClientContext &context, CatalogType type, const string &schema,
+	CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, CatalogType type, const string &schema,
 	                                  const string &name, OnEntryNotFound if_not_found,
 	                                  QueryErrorContext error_context = QueryErrorContext());
 	//! Lookup an entry using TryLookupEntry, throws if entry not found and if_not_found == THROW_EXCEPTION
-	CatalogEntryLookup LookupEntry(ClientContext &context, CatalogType type, const string &schema, const string &name,
-	                               OnEntryNotFound if_not_found, QueryErrorContext error_context = QueryErrorContext());
-	static CatalogEntryLookup TryLookupEntry(ClientContext &context, vector<CatalogLookup> &lookups, CatalogType type,
-	                                         const string &name, OnEntryNotFound if_not_found,
+	CatalogEntryLookup LookupEntry(CatalogEntryRetriever &retriever, CatalogType type, const string &schema,
+	                               const string &name, OnEntryNotFound if_not_found,
+	                               QueryErrorContext error_context = QueryErrorContext());
+	static CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, vector<CatalogLookup> &lookups,
+	                                         CatalogType type, const string &name, OnEntryNotFound if_not_found,
 	                                         QueryErrorContext error_context = QueryErrorContext());
-	static CatalogEntryLookup TryLookupEntry(ClientContext &context, CatalogType type, const string &catalog,
+	static CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, CatalogType type, const string &catalog,
 	                                         const string &schema, const string &name, OnEntryNotFound if_not_found,
 	                                         QueryErrorContext error_context);
 
 	//! Return an exception with did-you-mean suggestion.
-	static CatalogException CreateMissingEntryException(ClientContext &context, const string &entry_name,
+	static CatalogException CreateMissingEntryException(CatalogEntryRetriever &retriever, const string &entry_name,
 	                                                    CatalogType type,
 	                                                    const reference_set_t<SchemaCatalogEntry> &schemas,
 	                                                    QueryErrorContext error_context);

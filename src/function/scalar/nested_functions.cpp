@@ -39,6 +39,9 @@ void MapUtil::ReinterpretMap(Vector &result, Vector &input, idx_t count) {
 
 void BuiltinFunctions::RegisterNestedFunctions() {
 	Register<StructExtractFun>();
+	Register<StructPackFun>();
+	Register<RowFun>();
+	Register<MapContainsFun>();
 	Register<ListConcatFun>();
 	Register<ListContainsFun>();
 	Register<ListPositionFun>();

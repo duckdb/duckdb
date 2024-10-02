@@ -92,7 +92,10 @@ void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx)
 	state.last_offset = 0;
 }
 
-ScanVectorType ColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_count) {
+ScanVectorType ColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) {
+	if (result.GetVectorType() != VectorType::FLAT_VECTOR) {
+		return ScanVectorType::SCAN_ENTIRE_VECTOR;
+	}
 	if (HasUpdates()) {
 		// if we have updates we need to merge in the updates
 		// always need to scan flat vectors
@@ -230,8 +233,12 @@ void ColumnData::UpdateInternal(TransactionData transaction, idx_t column_index,
 template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>
 idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                              idx_t target_scan) {
-	auto scan_count = ScanVector(state, result, target_scan, GetVectorScanType(state, target_scan));
-	FetchUpdates(transaction, vector_index, result, scan_count, ALLOW_UPDATES, SCAN_COMMITTED);
+	auto scan_type = GetVectorScanType(state, target_scan, result);
+	auto scan_count = ScanVector(state, result, target_scan, scan_type);
+	if (scan_type != ScanVectorType::SCAN_ENTIRE_VECTOR) {
+		// if we are scanning an entire vector we cannot have updates
+		FetchUpdates(transaction, vector_index, result, scan_count, ALLOW_UPDATES, SCAN_COMMITTED);
+	}
 	return scan_count;
 }
 

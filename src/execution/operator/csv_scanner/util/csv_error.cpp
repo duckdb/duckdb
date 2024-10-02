@@ -226,12 +226,12 @@ CSVError CSVError::HeaderSniffingError(const CSVReaderOptions &options, const ve
 	return CSVError(error.str(), SNIFFING, {});
 }
 
-CSVError CSVError::DialectSniffingError(const CSVReaderOptions &options, const string &search_space) {
+CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &search_space) {
 	std::ostringstream error;
 	// 1. Which file
 	error << "Error when sniffing file \"" << options.file_path << "\"." << '\n';
 	// 2. What's the error
-	error << "It was not possible to automatically detect the CSV Parsing dialect" << '\n';
+	error << "It was not possible to automatically detect the CSV Parsing dialect/types" << '\n';
 
 	// 2. What was the search space?
 	error << "The search space used was:" << '\n';
@@ -302,7 +302,9 @@ CSVError CSVError::UnterminatedQuotesError(const CSVReaderOptions &options, idx_
 	std::ostringstream error;
 	error << "Value with unterminated quote found." << '\n';
 	std::ostringstream how_to_fix_it;
-	how_to_fix_it << "Possible Solution: Enable ignore errors (ignore_errors=true) to skip this row" << '\n';
+	how_to_fix_it << "Possible fixes:" << '\n';
+	how_to_fix_it << "* Enable ignore errors (ignore_errors=true) to skip this row" << '\n';
+	how_to_fix_it << "* Set quote do empty or to a different value (e.g., quote=\'\')" << '\n';
 	return CSVError(error.str(), UNTERMINATED_QUOTES, current_column, csv_row, error_info, row_byte_position,
 	                byte_position, options, how_to_fix_it.str(), current_path);
 }
