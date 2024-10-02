@@ -83,11 +83,6 @@ public:
 	//! referenced tables. This is used to resolve the * expression in a
 	//! selection list.
 	void GenerateAllColumnExpressions(StarExpression &expr, vector<unique_ptr<ParsedExpression>> &new_select_list);
-	//! Check if the given (binding, column_name) is in the exclusion/replacement lists.
-	//! Returns true if it is in one of these lists, and should therefore be skipped.
-	bool CheckExclusionList(StarExpression &expr, const string &column_name,
-	                        vector<unique_ptr<ParsedExpression>> &new_select_list,
-	                        case_insensitive_set_t &excluded_columns);
 
 	const vector<unique_ptr<Binding>> &GetBindingsList() {
 		return bindings_list;
@@ -167,8 +162,14 @@ public:
 
 	optional_ptr<Binding> GetBinding(const BindingAlias &alias, ErrorData &out_error);
 
+	optional_ptr<Binding> GetBinding(const BindingAlias &alias, const string &column_name, ErrorData &out_error);
+
+	//! Get all bindings that match a specific binding alias - returns an error if none match
+	vector<reference<Binding>> GetBindings(const BindingAlias &alias, ErrorData &out_error);
+
 private:
 	void AddBinding(unique_ptr<Binding> binding);
+	static string AmbiguityException(const BindingAlias &alias, const vector<reference<Binding>> &bindings);
 
 private:
 	Binder &binder;

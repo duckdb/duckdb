@@ -230,7 +230,7 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &ca
 
 	BindingAlias alias(catalog_name, schema_name, table_name);
 	auto result = make_uniq<ColumnRefExpression>(std::move(names));
-	auto binding = GetBinding(alias, error);
+	auto binding = GetBinding(alias, column_name, error);
 	if (!binding) {
 		return std::move(result);
 	}
@@ -259,7 +259,7 @@ optional_ptr<Binding> BindContext::GetCTEBinding(const string &ctename) {
 	return match->second.get();
 }
 
-optional_ptr<Binding> BindContext::GetBinding(const BindingAlias &alias, ErrorData &out_error) {
+vector<reference<Binding>> BindContext::GetBindings(const BindingAlias &alias, ErrorData &out_error) {
 	if (!alias.IsSet()) {
 		throw InternalException("BindingAlias is not set");
 	}
@@ -269,49 +269,101 @@ optional_ptr<Binding> BindContext::GetBinding(const BindingAlias &alias, ErrorDa
 			matching_bindings.push_back(*binding);
 		}
 	}
-	if (matching_bindings.size() == 1) {
-		// found a matching alias
-		return &matching_bindings[0].get();
+	if (matching_bindings.empty()) {
+		// alias not found in this BindContext
+		vector<string> candidates;
+		for (auto &binding : bindings_list) {
+			candidates.push_back(binding->alias.GetAlias());
+		}
+		string candidate_str = StringUtil::CandidatesMessage(StringUtil::TopNJaroWinkler(candidates, alias.GetAlias()),
+		                                                     "Candidate tables");
+		out_error = ErrorData(ExceptionType::BINDER, StringUtil::Format("Referenced table \"%s\" not found!%s",
+		                                                                alias.GetAlias(), candidate_str));
 	}
-	if (matching_bindings.size() > 1) {
-		// found multiple matching aliases
-		string result = "(use: ";
-		for (idx_t i = 0; i < matching_bindings.size(); i++) {
-			if (i > 0) {
-				if (i + 1 == matching_bindings.size()) {
-					result += " or ";
-				} else {
-					result += ", ";
-				}
+	return matching_bindings;
+}
+
+string BindContext::AmbiguityException(const BindingAlias &alias, const vector<reference<Binding>> &bindings) {
+	D_ASSERT(bindings.size() > 1);
+	// found multiple matching aliases
+	string result = "(use: ";
+	for (idx_t i = 0; i < bindings.size(); i++) {
+		if (i > 0) {
+			if (i + 1 == bindings.size()) {
+				result += " or ";
+			} else {
+				result += ", ";
 			}
-			// find the minimum alias that uniquely describes this table reference
-			auto &current_alias = matching_bindings[i].get().alias;
-			string minimum_alias;
-			for (idx_t k = 0; k < matching_bindings.size(); k++) {
-				if (k == i) {
-					continue;
-				}
-				auto &other_alias = matching_bindings[k].get().alias;
-				string new_minimum_alias = MinimumUniqueAlias(current_alias, other_alias);
-				if (new_minimum_alias.size() > minimum_alias.size()) {
-					minimum_alias = std::move(new_minimum_alias);
-				}
+		}
+		// find the minimum alias that uniquely describes this table reference
+		auto &current_alias = bindings[i].get().alias;
+		string minimum_alias;
+		bool duplicate_alias = false;
+		for (idx_t k = 0; k < bindings.size(); k++) {
+			if (k == i) {
+				continue;
 			}
+			auto &other_alias = bindings[k].get().alias;
+			if (current_alias == other_alias) {
+				duplicate_alias = true;
+			}
+			string new_minimum_alias = MinimumUniqueAlias(current_alias, other_alias);
+			if (new_minimum_alias.size() > minimum_alias.size()) {
+				minimum_alias = std::move(new_minimum_alias);
+			}
+		}
+		if (duplicate_alias) {
+			result = "(duplicate alias \"" + alias.ToString() +
+			         "\", explicitly alias one of the tables using \"AS my_alias\"";
+		} else {
 			result += minimum_alias;
 		}
-		result += ")";
-		throw BinderException("Ambiguous reference to table \"%s\" %s", alias.ToString(), result);
 	}
-	// alias not found in this BindContext
-	vector<string> candidates;
-	for (auto &binding : bindings_list) {
-		candidates.push_back(binding->alias.GetAlias());
+	result += ")";
+	return result;
+}
+
+optional_ptr<Binding> BindContext::GetBinding(const BindingAlias &alias, const string &column_name,
+                                              ErrorData &out_error) {
+	auto matching_bindings = GetBindings(alias, out_error);
+	if (matching_bindings.empty()) {
+		// no bindings found
+		return nullptr;
 	}
-	string candidate_str =
-	    StringUtil::CandidatesMessage(StringUtil::TopNJaroWinkler(candidates, alias.GetAlias()), "Candidate tables");
-	out_error = ErrorData(ExceptionType::BINDER,
-	                      StringUtil::Format("Referenced table \"%s\" not found!%s", alias.GetAlias(), candidate_str));
-	return nullptr;
+
+	optional_ptr<Binding> result;
+	// find the binding that this column name belongs to
+	for (auto &binding_ref : matching_bindings) {
+		auto &binding = binding_ref.get();
+		if (!binding.HasMatchingBinding(column_name)) {
+			continue;
+		}
+		if (result) {
+			// we found multiple bindings that this column name belongs to - ambiguity
+			string helper_message = AmbiguityException(alias, matching_bindings);
+			throw BinderException("Ambiguous reference to table \"%s\" %s", alias.ToString(), helper_message);
+		} else {
+			result = &binding;
+		}
+	}
+	if (!result) {
+		// found the table binding - but could not find the column
+		out_error = matching_bindings[0].get().ColumnNotFoundError(column_name);
+	}
+	return result;
+}
+
+optional_ptr<Binding> BindContext::GetBinding(const BindingAlias &alias, ErrorData &out_error) {
+	auto matching_bindings = GetBindings(alias, out_error);
+	if (matching_bindings.empty()) {
+		return nullptr;
+	}
+	if (matching_bindings.size() > 1) {
+		string helper_message = AmbiguityException(alias, matching_bindings);
+		throw BinderException("Ambiguous reference to table \"%s\" %s", alias.ToString(), helper_message);
+	}
+	// found a single matching alias
+	return &matching_bindings[0].get();
 }
 
 optional_ptr<Binding> BindContext::GetBinding(const string &name, ErrorData &out_error) {
@@ -338,7 +390,7 @@ BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 
 	ErrorData error;
 	BindingAlias alias;
-	auto binding = GetBinding(GetBindingAlias(colref), error);
+	auto binding = GetBinding(GetBindingAlias(colref), colref.GetColumnName(), error);
 	if (!binding) {
 		return BindResult(std::move(error));
 	}
@@ -379,19 +431,27 @@ unique_ptr<ColumnRefExpression> BindContext::PositionToColumn(PositionalReferenc
 	return make_uniq<ColumnRefExpression>(column_name, table_name);
 }
 
-bool BindContext::CheckExclusionList(StarExpression &expr, const string &column_name,
-                                     vector<unique_ptr<ParsedExpression>> &new_select_list,
-                                     case_insensitive_set_t &excluded_columns) {
-	if (expr.exclude_list.find(column_name) != expr.exclude_list.end()) {
-		excluded_columns.insert(column_name);
+struct ExclusionListInfo {
+	explicit ExclusionListInfo(vector<unique_ptr<ParsedExpression>> &new_select_list)
+	    : new_select_list(new_select_list) {
+	}
+
+	vector<unique_ptr<ParsedExpression>> &new_select_list;
+	case_insensitive_set_t excluded_columns;
+	qualified_column_set_t excluded_qualified_columns;
+};
+
+bool CheckExclusionList(StarExpression &expr, const QualifiedColumnName &qualified_name, ExclusionListInfo &info) {
+	if (expr.exclude_list.find(qualified_name) != expr.exclude_list.end()) {
+		info.excluded_qualified_columns.insert(qualified_name);
 		return true;
 	}
-	auto entry = expr.replace_list.find(column_name);
+	auto entry = expr.replace_list.find(qualified_name.column);
 	if (entry != expr.replace_list.end()) {
 		auto new_entry = entry->second->Copy();
 		new_entry->alias = entry->first;
-		excluded_columns.insert(entry->first);
-		new_select_list.push_back(std::move(new_entry));
+		info.excluded_columns.insert(entry->first);
+		info.new_select_list.push_back(std::move(new_entry));
 		return true;
 	}
 	return false;
@@ -402,7 +462,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 	if (bindings_list.empty()) {
 		throw BinderException("* expression without FROM clause!");
 	}
-	case_insensitive_set_t excluded_columns;
+	ExclusionListInfo exclusion_info(new_select_list);
 	if (expr.relation_name.empty()) {
 		// SELECT * case
 		// bind all expressions of each table in-order
@@ -410,7 +470,8 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		for (auto &entry : bindings_list) {
 			auto &binding = *entry;
 			for (auto &column_name : binding.names) {
-				if (CheckExclusionList(expr, column_name, new_select_list, excluded_columns)) {
+				QualifiedColumnName qualified_column(binding.alias, column_name);
+				if (CheckExclusionList(expr, qualified_column, exclusion_info)) {
 					continue;
 				}
 				// check if this column is a USING column
@@ -470,7 +531,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 			column_names[0] = binding->alias.GetAlias();
 			column_names[1] = expr.relation_name;
 			for (auto &child : struct_children) {
-				if (CheckExclusionList(expr, child.first, new_select_list, excluded_columns)) {
+				if (CheckExclusionList(expr, QualifiedColumnName(child.first), exclusion_info)) {
 					continue;
 				}
 				column_names[2] = child.first;
@@ -478,7 +539,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 			}
 		} else {
 			for (auto &column_name : binding->names) {
-				if (CheckExclusionList(expr, column_name, new_select_list, excluded_columns)) {
+				if (CheckExclusionList(expr, QualifiedColumnName(binding->alias, column_name), exclusion_info)) {
 					continue;
 				}
 
@@ -492,13 +553,14 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		expr.replace_list.clear();
 	}
 	for (auto &excluded : expr.exclude_list) {
-		if (excluded_columns.find(excluded) == excluded_columns.end()) {
-			throw BinderException("Column \"%s\" in EXCLUDE list not found in %s", excluded,
+		if (exclusion_info.excluded_qualified_columns.find(excluded) ==
+		    exclusion_info.excluded_qualified_columns.end()) {
+			throw BinderException("Column \"%s\" in EXCLUDE list not found in %s", excluded.ToString(),
 			                      expr.relation_name.empty() ? "FROM clause" : expr.relation_name.c_str());
 		}
 	}
 	for (auto &entry : expr.replace_list) {
-		if (excluded_columns.find(entry.first) == excluded_columns.end()) {
+		if (exclusion_info.excluded_columns.find(entry.first) == exclusion_info.excluded_columns.end()) {
 			throw BinderException("Column \"%s\" in REPLACE list not found in %s", entry.first,
 			                      expr.relation_name.empty() ? "FROM clause" : expr.relation_name.c_str());
 		}
@@ -517,11 +579,6 @@ void BindContext::GetTypesAndNames(vector<string> &result_names, vector<LogicalT
 }
 
 void BindContext::AddBinding(unique_ptr<Binding> binding) {
-	for (auto &other_bindings : bindings_list) {
-		if (binding->alias == other_bindings->alias) {
-			throw BinderException("Duplicate alias \"%s\" in query!", binding->alias.GetAlias());
-		}
-	}
 	bindings_list.push_back(std::move(binding));
 }
 
@@ -604,7 +661,7 @@ void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<s
 	auto binding = make_shared_ptr<Binding>(BindingType::BASE, BindingAlias(alias), types, names, index);
 
 	if (cte_bindings.find(alias) != cte_bindings.end()) {
-		throw BinderException("Duplicate alias \"%s\" in query!", alias);
+		throw BinderException("Duplicate CTE binding \"%s\" in query!", alias);
 	}
 	cte_bindings[alias] = std::move(binding);
 	cte_references[alias] = make_shared_ptr<idx_t>(0);

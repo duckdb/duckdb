@@ -237,7 +237,7 @@ static bool ParsedExpressionIsAggregate(Binder &binder, const ParsedExpression &
 	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &function = expr.Cast<FunctionExpression>();
 		QueryErrorContext error_context;
-		auto entry = binder.GetCatalogEntry(CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
+		auto entry = binder.GetCatalogEntry(CatalogType::AGGREGATE_FUNCTION_ENTRY, function.catalog, function.schema,
 		                                    function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
 		if (entry && entry->type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 			return true;
@@ -605,15 +605,7 @@ optional_ptr<Binding> Binder::GetMatchingBinding(const string &catalog_name, con
 		binding = optional_ptr<Binding>(macro_binding.get());
 	} else {
 		BindingAlias alias(catalog_name, schema_name, table_name);
-		binding = bind_context.GetBinding(alias, error);
-	}
-
-	if (!binding) {
-		return nullptr;
-	}
-	if (!binding->HasMatchingBinding(column_name)) {
-		error = binding->ColumnNotFoundError(column_name);
-		return nullptr;
+		binding = bind_context.GetBinding(alias, column_name, error);
 	}
 	return binding;
 }

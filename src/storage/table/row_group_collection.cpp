@@ -962,8 +962,8 @@ unique_ptr<CheckpointTask> RowGroupCollection::GetCheckpointTask(CollectionCheck
 }
 
 void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats) {
-	auto segments = row_groups->MoveSegments();
 	auto l = row_groups->Lock();
+	auto segments = row_groups->MoveSegments(l);
 
 	CollectionCheckpointState checkpoint_state(*this, writer, segments, global_stats);
 
