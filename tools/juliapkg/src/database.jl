@@ -40,7 +40,7 @@ A connection can only run a single query concurrently.
 It is possible to open multiple connections to a single DuckDB database instance.
 Multiple connections can run multiple queries concurrently.
 """
-mutable struct Connection
+mutable struct Connection <: DBInterface.Connection
     db::DuckDBHandle
     handle::duckdb_connection
 
