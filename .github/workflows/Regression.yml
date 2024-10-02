@@ -222,6 +222,7 @@ jobs:
     BUILD_TPCDS: 1
     BUILD_JSON: 1
     BUILD_PARQUET: 1
+    EXTENSION_STATIC_BUILD: 1
   steps:
     - uses: actions/checkout@v4
       with:
