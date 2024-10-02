@@ -12,6 +12,8 @@ For the benchmark queries, they are almost the same as the ones described in the
 
 In the following sections, I will describe how we generated the 91 compressed CSV files.
 
+## Running this benchmark
+
 ## Data Generation
 The data is generated in a similar way as described in the [billion-nyc-taxi-rides](https://tech.marksblogg.com/billion-nyc-taxi-rides-redshift.html) blog post.
 We use the [nyc-taxi-data](https://github.com/toddwschneider/nyc-taxi-data) repository scripts to download the parquet files, transform them into CSV files, load them into PostgreSQL, and export them to one big CSV file.
@@ -107,3 +109,4 @@ mkdir split
 split -l 20000000 output.csv split/trips_
 gzip split/trips_*
 ```
+

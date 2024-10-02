@@ -1,1 +1,1 @@
-wget -i files.txt -P data/ -w 6
+wget -i files.txt -P data/
