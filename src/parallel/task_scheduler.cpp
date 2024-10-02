@@ -340,7 +340,7 @@ idx_t TaskScheduler::GetEstimatedCPUId() {
 		return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
 #else
 
-		return (idx_t)getpid();
+		return 0;
 #endif
 	}
 	return (idx_t)cpu;
@@ -354,7 +354,7 @@ idx_t TaskScheduler::GetEstimatedCPUId() {
 	// fallback to thread id
 	return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
 #else
-	return (idx_t)getpid();
+	return 0;
 #endif
 #endif
 #endif
