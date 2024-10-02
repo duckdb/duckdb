@@ -1,6 +1,6 @@
-# name: test/sql/copy/csv/taxi_dataset_glob.test_slow
+# name: test/sql/copy/csv/taxi/taxi_dataset_glob.test_slow
 # description: Verify that we can run with the taxi dataset
-# group: [csv]
+# group: [taxi]
 
 # This test requires a wild-card and can only be run directly on s3
 # This is only for internal run

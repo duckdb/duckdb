@@ -1,6 +1,6 @@
-# name: test/sql/copy/csv/taxi_dataset_one_table.test_slow
+# name: test/sql/copy/csv/taxi/taxi_dataset_one_table.test_slow
 # description: Verify that we can run with the taxi dataset
-# group: [csv]
+# group: [taxi]
 
 # CI Can't handle this, due do the size
 mode skip
