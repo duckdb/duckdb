@@ -30,7 +30,7 @@ struct AdaptiveSnifferResult : SnifferResult {
 	}
 	bool more_than_one_row;
 	SnifferResult ToSnifferResult() {
-		return {return_types,names};
+		return {return_types, names};
 	}
 };
 } // namespace duckdb
