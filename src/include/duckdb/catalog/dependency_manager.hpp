@@ -86,7 +86,6 @@ public:
 	explicit DependencyManager(DuckCatalog &catalog);
 
 	//! Scans all dependencies, returning pairs of (object, dependent)
-	void Scan(const std::function<void(CatalogEntry &, CatalogEntry &, const DependencyDependentFlags &)> &callback);
 	void Scan(ClientContext &context,
 	          const std::function<void(CatalogEntry &, CatalogEntry &, const DependencyDependentFlags &)> &callback);
 

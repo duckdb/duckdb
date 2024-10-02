@@ -533,34 +533,6 @@ void DependencyManager::ReorderEntries(catalog_entry_vector_t &entries, CatalogT
 	entries = reordered;
 }
 
-void DependencyManager::Scan(
-    const std::function<void(CatalogEntry &, CatalogEntry &, const DependencyDependentFlags &)> &callback) {
-	lock_guard<mutex> write_lock(catalog.GetWriteLock());
-
-	CatalogTransaction transaction(catalog.GetDatabase(), MAX_TRANSACTION_ID, 0);
-
-	// All the objects registered in the dependency manager
-	catalog_entry_set_t entries;
-	dependents.Scan(transaction, [&](CatalogEntry &set) {
-		auto entry = LookupEntry(transaction, set);
-		entries.insert(*entry);
-	});
-
-	// For every registered entry, get the dependents
-	for (auto &entry : entries) {
-		auto entry_info = GetLookupProperties(entry);
-		// Scan all the dependents of the entry
-		ScanDependents(transaction, entry_info, [&](DependencyEntry &dependent) {
-			auto dep = LookupEntry(transaction, dependent);
-			if (!dep) {
-				return;
-			}
-			auto &dependent_entry = *dep;
-			callback(entry, dependent_entry, dependent.Dependent().flags);
-		});
-	}
-}
-
 void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj,
                                     AlterInfo &alter_info) {
 	if (IsSystemEntry(new_obj)) {
