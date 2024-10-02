@@ -10,9 +10,18 @@ The files are stored and publicly available on our [blobs website](https://blobs
 
 For the benchmark queries, they are almost the same as the ones described in the [benchmark blog post](https://tech.marksblogg.com/benchmarks.html). The main difference is that we always order the results to guarantee a consistent output. This allows us to perform result-checking and ensure that the benchmark is accurate. Note that the results were initially generated using a PostgreSQL instance, which was used during the data generation step.
 
-In the following sections, I will describe how we generated the 91 compressed CSV files.
+In the following sections, I will describe how to run this benchmark and how we generated the 91 compressed CSV files, totalling about 48 GB.
 
-## Running this benchmark
+## Running this Benchmark
+
+To run this benchmark, you first must download the files by executing the `./downloads.sh` file. 
+All 91 files will be downloaded to the `./data` folder.
+
+After downloading the files, you can execute any of the benchmark queries (e.g., `./q01.benchmark`) using the benchmark_runner.
+
+Note that the benchmark runner will first perform a cold run, then execute the query 5 times, comparing the results with the equivalent file in the `./result` folder.
+
+When executing a query, a cached DuckDB database is created by executing the SQL commands from `load.sql`, which define our table schema and execute the copy instruction.
 
 ## Data Generation
 The data is generated in a similar way as described in the [billion-nyc-taxi-rides](https://tech.marksblogg.com/billion-nyc-taxi-rides-redshift.html) blog post.
