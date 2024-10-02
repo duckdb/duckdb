@@ -1,6 +1,5 @@
 catalog/catalog.cpp	49
 catalog/catalog_entry.cpp	11
-catalog/catalog_entry_retriever.cpp	14
 catalog/catalog_entry/duck_schema_entry.cpp	10
 catalog/catalog_entry/duck_table_entry.cpp	7
 catalog/catalog_entry/index_catalog_entry.cpp	2
@@ -13,8 +12,7 @@ catalog/catalog_search_path.cpp	9
 catalog/catalog_set.cpp	20
 catalog/catalog_transaction.cpp	3
 catalog/default/default_functions.cpp	9
-catalog/dependency_manager.cpp	6
-catalog/dependency_list.cpp	4
+catalog/dependency_manager.cpp	5
 common/allocator.cpp	20
 common/arrow/arrow_appender.cpp	23
 common/arrow/appender/map_data.cpp	7
@@ -215,7 +213,7 @@ execution/operator/csv_scanner/parallel_csv_reader.cpp	54
 execution/operator/persistent/physical_batch_copy_to_file.cpp	7
 execution/operator/persistent/physical_batch_insert.cpp	43
 execution/operator/persistent/physical_copy_to_file.cpp	2
-execution/operator/persistent/physical_export.cpp	53
+execution/operator/persistent/physical_export.cpp	2
 execution/operator/persistent/physical_fixed_batch_copy.cpp	7
 execution/operator/persistent/physical_insert.cpp	5
 execution/operator/projection/physical_projection.cpp	16
@@ -344,7 +342,6 @@ extension/parquet/parquet_timestamp.cpp	12
 extension/parquet/parquet_writer.cpp	9
 extension/parquet/zstd_file_system.cpp	6
 include/duckdb/catalog/catalog.hpp	3
-include/duckdb/catalog/dependency_manager.hpp	2
 include/duckdb/catalog/catalog_entry/table_catalog_entry.hpp	3
 include/duckdb/catalog/catalog_set.hpp	2
 include/duckdb/catalog/mapping_value.hpp	2
@@ -687,13 +684,13 @@ planner/binder/statement/bind_copy.cpp	3
 planner/binder/statement/bind_create.cpp	21
 planner/binder/statement/bind_create_table.cpp	2
 planner/binder/statement/bind_drop.cpp	20
-planner/binder/statement/bind_export.cpp	17
+planner/binder/statement/bind_export.cpp	3
 planner/binder/statement/bind_insert.cpp	19
 planner/binder/statement/bind_logical_plan.cpp	21
 planner/binder/statement/bind_pragma.cpp	3
 planner/binder/statement/bind_update.cpp	4
 planner/binder/statement/bind_vacuum.cpp	3
-planner/binder/tableref/bind_basetableref.cpp	17
+planner/binder/tableref/bind_basetableref.cpp	15
 planner/binder/tableref/bind_joinref.cpp	3
 planner/binder/tableref/bind_pivot.cpp	6
 planner/binder/tableref/bind_table_function.cpp	18
