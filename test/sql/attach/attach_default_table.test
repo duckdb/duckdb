@@ -38,6 +38,9 @@ from ddb.main.my_table
 statement ok
 create table ddb as select 42 as value
 
+# The error message is different when forcing storage
+require noforcestorage
+
 # This creates ambiguity: however we can provide the solution to the user in the error message
 statement error
 from ddb
