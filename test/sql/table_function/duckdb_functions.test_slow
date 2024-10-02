@@ -8,6 +8,10 @@ PRAGMA enable_verification
 statement ok
 SELECT * FROM duckdb_functions();
 
+query I
+select function_name from duckdb_functions() where not internal order by 1;
+----
+
 statement ok
 CREATE MACRO add_default1(a := 3, b := 5) AS a + b
 
@@ -19,6 +23,9 @@ SELECT * FROM duckdb_functions();
 
 statement ok
 SELECT * FROM duckdb_functions() WHERE function_type='table';
+
+statement ok
+SELECT sqrt(4)
 
 query I
 select distinct function_name from duckdb_functions() where function_name='sqrt';

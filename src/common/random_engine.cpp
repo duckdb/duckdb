@@ -33,6 +33,16 @@ double RandomEngine::NextRandom() {
 	return std::ldexp(uint64, -64);
 }
 
+double RandomEngine::NextRandom32(double min, double max) {
+	D_ASSERT(max >= min);
+	return min + (NextRandom32() * (max - min));
+}
+
+double RandomEngine::NextRandom32() {
+	auto uint32 = NextRandomInteger();
+	return std::ldexp(uint32, -32);
+}
+
 uint32_t RandomEngine::NextRandomInteger() {
 	return random_state->pcg();
 }
