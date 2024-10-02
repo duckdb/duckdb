@@ -90,8 +90,8 @@ private:
 					// 2. Compute the frame of reference (the minimum of the deltas in the block).
 					// Subtract this min delta from all deltas in the block.
 					// This guarantees that all values are non-negative.
+					D_ASSERT(min_delta <= value);
 					value = static_cast<int64_t>(static_cast<uint64_t>(value) - static_cast<uint64_t>(min_delta));
-					D_ASSERT(value >= 0);
 				} else {
 					// If there are not enough values to fill the last miniblock, we pad the miniblock
 					// so that its length is always the number of values in a full miniblock multiplied by the bit
