@@ -149,6 +149,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	vector<reference<SchemaCatalogEntry>> schemas;
 	// we scan the set of committed schemas
 	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
+	catalog.ScanSchemas([&](SchemaCatalogEntry &entry) { schemas.push_back(entry); });
 
 	catalog_entry_vector_t catalog_entries;
 	D_ASSERT(catalog.IsDuckCatalog());
