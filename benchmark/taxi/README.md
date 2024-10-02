@@ -4,7 +4,7 @@ This benchmark is based on the following blog posts:
 - [Billion NYC Taxi Rides Redshift](https://tech.marksblogg.com/billion-nyc-taxi-rides-redshift.html)
 - [Benchmarks](https://tech.marksblogg.com/benchmarks.html)
 
-Following steps similar to those described in the original blog posts, we generated approximately 1.8 billion rides and split them into GZipped CSV files, each containing 20 million rows. This resulted in 91 files, with sizes ranging from 300 MB to 1.2 GB.
+Following steps similar to those described in the original blog posts, we generated approximately 1.8 billion rides and split them into GZipped CSV files, each containing 20 million rows. This resulted in 92 files, with sizes ranging from 300 MB to 1.2 GB.
 
 The files are stored and publicly available on our [blobs website](https://blobs.duckdb.org/data/nyc-taxi-dataset), and you can check the `benchmark/taxi/load.sql` for a detailed reference of the URLs.
 
