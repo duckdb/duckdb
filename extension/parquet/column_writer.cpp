@@ -983,6 +983,7 @@ public:
 						continue;
 					}
 					const TGT target_value = OP::template Operation<SRC, TGT>(ptr[r]);
+					OP::template HandleStats<SRC, TGT>(stats, ptr[r], target_value);
 					encoder.BeginWrite(temp_writer, target_value);
 					page_state.initialized = true;
 					r++; // skip over
