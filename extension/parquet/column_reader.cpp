@@ -488,7 +488,7 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 }
 
 void ColumnReader::ConvertDictToSelVec(uint32_t *offsets, uint8_t *defines, parquet_filter_t &filter, idx_t read_now) {
-	D_ASSERT(read_now < STANDARD_VECTOR_SIZE);
+	D_ASSERT(read_now <= STANDARD_VECTOR_SIZE);
 	idx_t offset_idx = 0;
 	for (idx_t row_idx = 0; row_idx < read_now; row_idx++) {
 		if (HasDefines() && defines[row_idx] != max_define) {
