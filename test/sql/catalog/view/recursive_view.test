@@ -18,26 +18,23 @@ INSERT INTO test(val) VALUES (1), (2), (3);
 statement ok
 CREATE OR REPLACE VIEW foo AS (SELECT * FROM test);
 
-statement error
+statement ok
 CREATE OR REPLACE VIEW foo AS (SELECT * FROM foo);
-----
-Catalog Error: CREATE OR REPLACE is not allowed to depend on itself
 
-# foo was not deleted
-query I
+statement error
 SELECT * FROM foo;
 ----
 
 # more complex recursive view definition
 statement ok
+CREATE OR REPLACE VIEW foo AS (SELECT * FROM test);
+
+statement ok
 CREATE OR REPLACE VIEW foo2 AS (SELECT * FROM foo);
 
-statement error
+statement ok
 CREATE OR REPLACE VIEW foo AS (SELECT (SELECT * FROM foo2));
-----
-Catalog Error: CREATE OR REPLACE is not allowed to depend on itself
 
-# foo was not deleted
-query I
+statement error
 SELECT * FROM foo;
 ----

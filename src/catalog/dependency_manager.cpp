@@ -493,14 +493,16 @@ void DependencyManager::ReorderEntries(catalog_entry_vector_t &entries, ClientCo
 
 void DependencyManager::ReorderEntries(catalog_entry_vector_t &entries) {
 	// Read all committed entries
-	CatalogTransaction transaction(catalog.GetDatabase(), MAX_TRANSACTION_ID, 0);
+	CatalogTransaction transaction(catalog.GetDatabase(), TRANSACTION_ID_START - 1, TRANSACTION_ID_START - 1);
 	ReorderEntries(entries, transaction);
 }
 
 void DependencyManager::ReorderEntry(CatalogTransaction transaction, CatalogEntry &entry, catalog_entry_set_t &visited,
                                      catalog_entry_vector_t &order) {
 	auto &catalog_entry = *LookupEntry(transaction, entry);
-	if (visited.count(catalog_entry) || catalog_entry.internal) {
+	// We use this in CheckpointManager, it has the highest commit ID, allowing us to read any committed data
+	bool allow_internal = transaction.start_time == TRANSACTION_ID_START - 1;
+	if (visited.count(catalog_entry) || (!allow_internal && catalog_entry.internal)) {
 		// Already seen and ordered appropriately
 		return;
 	}

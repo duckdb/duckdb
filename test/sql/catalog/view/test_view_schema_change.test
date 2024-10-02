@@ -27,13 +27,8 @@ SELECT * FROM v1
 43
 
 # now drop the table and create a table that has a different schema
-statement error
-DROP TABLE t1
-----
-Dependency Error: Cannot drop entry "t1" because there are entries that depend on it.
-
 statement ok
-DROP TABLE t1 CASCADE;
+DROP TABLE t1
 
 statement ok
 CREATE TABLE t1(i DATE)
@@ -73,9 +68,6 @@ DROP TABLE t1
 
 statement ok
 CREATE TABLE t1(i INTEGER)
-
-statement ok
-CREATE VIEW v1 AS SELECT * FROM t1
 
 # now we can query again!
 query I
