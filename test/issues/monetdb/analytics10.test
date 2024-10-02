@@ -40,6 +40,7 @@ SELECT
     *
 FROM tbl_ProductSales
 GROUP BY ()
+----
 
 query I rowsort
 SELECT
@@ -86,6 +87,7 @@ SELECT
     CAST(SUM(TotalSales) as BIGINT) AS TotalSales
 FROM tbl_ProductSales
 GROUP BY ROLLUP ()
+----
 
 query TI rowsort
 SELECT
@@ -169,6 +171,7 @@ SELECT
     CAST(SUM(TotalSales) as BIGINT) AS TotalSales
 FROM tbl_ProductSales
 GROUP BY CUBE()
+----
 
 query TI rowsort
 SELECT
@@ -760,6 +763,7 @@ SELECT
     CAST(SUM(TotalSales) as BIGINT) AS TotalSales
 FROM tbl_ProductSales
 GROUP BY GROUPING SETS()
+----
 
 query I rowsort
 SELECT

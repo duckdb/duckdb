@@ -1,0 +1,40 @@
+# name: test/sql/parallelism/interquery/concurrent_reads_append_list.test_slow
+# description: Test concurrent reads while appending
+# group: [interquery]
+
+statement ok
+CREATE TABLE lists(l INTEGER[])
+
+statement ok
+INSERT INTO lists SELECT [i, i + 1, i + 2] FROM range(10000) t(i);
+
+concurrentloop threadid 0 20
+
+loop i 0 20
+
+onlyif threadid=0
+statement ok
+INSERT INTO lists SELECT [i, i + 1, i + 2] FROM range(100) t(i);
+
+endloop
+
+loop i 0 200
+
+skipif threadid=0
+query II
+SELECT COUNT(*) >= 30000 AND COUNT(*) <= 36000
+	, SUM(i) >= 150015000 AND SUM(i) <= 150318000
+FROM
+(SELECT UNNEST(l) AS i FROM lists);
+----
+true	true
+
+endloop
+
+endloop
+
+query II
+SELECT COUNT(*), SUM(i) FROM (SELECT UNNEST(l) AS i FROM lists)
+----
+36000	150318000
+

@@ -1,0 +1,36 @@
+# name: test/sql/constraints/foreignkey/test_fk_alter.test
+# group: [foreignkey]
+
+statement ok
+CREATE TABLE departments (
+    department_id INTEGER PRIMARY KEY,
+    department_name VARCHAR(100) NOT NULL
+);
+
+statement ok
+CREATE TABLE employees (
+    employee_id INTEGER PRIMARY KEY,
+    employee_name VARCHAR(100) NOT NULL,
+    department_id INT REFERENCES departments(department_id)
+);
+
+statement error
+drop table departments
+----
+Catalog Error: Could not drop the table because this table is main key table of the table "employees"
+
+# FIXME: we would need to update the foreign key constraint of the tables that are referencing 'employees'
+# to fix this, propagating an alter down.
+# (or use Postgres's solution of using oids to add a layer of indirection so we dont need to do cleanup whenever a rename is done)
+statement error
+ALTER TABLE departments RENAME TO old_departments
+----
+Dependency Error: Cannot alter entry "departments" because there are entries that depend on it.
+
+statement error
+drop table departments
+----
+Catalog Error: Could not drop the table because this table is main key table of the table "employees"
+
+statement ok
+ALTER TABLE employees RENAME TO old_employees

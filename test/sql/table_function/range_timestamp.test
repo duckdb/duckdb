@@ -16,6 +16,11 @@ SELECT d::DATE FROM range(DATE '1992-01-01', DATE '1992-10-01', INTERVAL (1) MON
 1992-08-01
 1992-09-01
 
+# range is exclusive
+query I
+SELECT * FROM range(date '1992-01-01', date '1992-01-01', interval '1' month);
+----
+
 # generate_series is inclusive
 query I
 SELECT d::DATE FROM generate_series(DATE '1992-01-01', DATE '1992-10-01', INTERVAL (1) MONTH) tbl(d)
@@ -47,6 +52,16 @@ SELECT d FROM range(TIMESTAMP '1992-01-01 00:00:00', TIMESTAMP '1992-01-01 12:00
 1992-01-01 09:00:00
 1992-01-01 10:00:00
 1992-01-01 11:00:00
+
+# range is exclusive
+query I
+SELECT * FROM range(timestamp '1992-01-01 00:00:00', timestamp '1992-01-01 00:00:00', interval '1' month);
+----
+
+query I
+SELECT * FROM range(timestamp '1992-01-01 00:00:00', timestamp '1992-01-01 00:00:01', interval '1' month);
+----
+1992-01-01 00:00:00
 
 # negative interval
 query I
@@ -100,31 +115,50 @@ SELECT COUNT(*) FROM generate_series(TIMESTAMP '1992-01-01 00:00:00', TIMESTAMP 
 ----
 10228
 
+# null values result in no rows
+query I
+SELECT COUNT(*) FROM range(NULL, TIMESTAMP '1992-12-31 12:00:00', INTERVAL '1 MONTH') tbl(d)
+----
+0
+
+query I
+SELECT COUNT(*) FROM generate_series(NULL, TIMESTAMP '1992-12-31 12:00:00', INTERVAL '1 MONTH') tbl(d)
+----
+0
+
 # zero interval not supported
 statement error
 SELECT d FROM range(TIMESTAMP '1992-01-01 00:00:00', TIMESTAMP '1992-12-31 12:00:00', INTERVAL '0 MONTH') tbl(d)
+----
 
 # start is smaller than end but we have a negative interval
 statement error
 SELECT d FROM range(TIMESTAMP '1992-01-01 00:00:00', TIMESTAMP '1992-12-31 12:00:00', INTERVAL '1 MONTH ago') tbl(d)
+----
 
 # start is bigger than end but we have a positive interval
 statement error
 SELECT d FROM range(TIMESTAMP '1993-01-01 00:00:00', TIMESTAMP '1992-01-01 00:00:00', INTERVAL '1 MONTH') tbl(d)
+----
 
 # composite interval with negative types not supported
 statement error
 SELECT d FROM range(TIMESTAMP '1992-01-01 00:00:00', TIMESTAMP '1992-12-31 12:00:00', INTERVAL '1 MONTH' - INTERVAL '1 HOUR') tbl(d)
+----
 
 # Infinities will overflow or cause infinite loops (PG behaviour!) so we ban them
 statement error
 SELECT COUNT(*) FROM generate_series('294247-01-10'::TIMESTAMP, 'infinity'::TIMESTAMP, INTERVAL '1 DAY');
+----
 
 statement error
 SELECT COUNT(*) FROM range('294247-01-10'::TIMESTAMP, 'infinity'::TIMESTAMP, INTERVAL '1 DAY');
+----
 
 statement error
 SELECT COUNT(*) FROM generate_series('-infinity'::TIMESTAMP, '290309-12-22 (BC) 00:00:00'::TIMESTAMP, INTERVAL '1 DAY');
+----
 
 statement error
 SELECT COUNT(*) FROM range('-infinity'::TIMESTAMP, '290309-12-22 (BC) 00:00:00'::TIMESTAMP, INTERVAL '1 DAY');
+----

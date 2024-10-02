@@ -20,6 +20,7 @@ class DatabaseInstance;
 class StorageManager;
 class TransactionManager;
 class StorageExtension;
+class DatabaseManager;
 
 struct AttachInfo;
 
@@ -30,27 +31,52 @@ enum class AttachedDatabaseType {
 	TEMP_DATABASE,
 };
 
-//! The AttachedDatabase represents an attached database instance
+//! AttachOptions holds information about a database we plan to attach. These options are generalized, i.e.,
+//! they have to apply to any database file type (duckdb, sqlite, etc.).
+struct AttachOptions {
+	//! Constructor for databases we attach outside of the ATTACH DATABASE statement.
+	explicit AttachOptions(const DBConfigOptions &options);
+	//! Constructor for databases we attach when using ATTACH DATABASE.
+	AttachOptions(const unique_ptr<AttachInfo> &info, const AccessMode default_access_mode);
+
+	//! Defaults to the access mode configured in the DBConfig, unless specified otherwise.
+	AccessMode access_mode;
+	//! The file format type. The default type is a duckdb database file, but other file formats are possible.
+	string db_type;
+	//! We only set this, if we detect any unrecognized option.
+	string unrecognized_option;
+};
+
+//! The AttachedDatabase represents an attached database instance.
 class AttachedDatabase : public CatalogEntry {
 public:
-	//! Create the built-in system attached database (without storage)
+	//! Create the built-in system database (without storage).
 	explicit AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType type = AttachedDatabaseType::SYSTEM_DATABASE);
-	//! Create an attached database instance with the specified name and storage
-	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, string name, string file_path, AccessMode access_mode);
-	//! Create an attached database instance with the specified storage extension
-	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, StorageExtension &ext, string name, AttachInfo &info,
-	                 AccessMode access_mode);
+	//! Create an attached database instance with the specified name and storage.
+	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, string name, string file_path,
+	                 const AttachOptions &options);
+	//! Create an attached database instance with the specified storage extension.
+	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, StorageExtension &ext, ClientContext &context, string name,
+	                 const AttachInfo &info, const AttachOptions &options);
 	~AttachedDatabase() override;
 
-	void Initialize();
+	//! Initializes the catalog and storage of the attached database.
+	void Initialize(const optional_idx block_alloc_size = optional_idx());
+	void Close();
 
 	Catalog &ParentCatalog() override;
+	const Catalog &ParentCatalog() const override;
 	StorageManager &GetStorageManager();
 	Catalog &GetCatalog();
 	TransactionManager &GetTransactionManager();
 	DatabaseInstance &GetDatabase() {
 		return db;
 	}
+
+	optional_ptr<StorageExtension> GetStorageExtension() {
+		return storage_extension;
+	}
+
 	const string &GetName() const {
 		return name;
 	}
@@ -59,7 +85,9 @@ public:
 	bool IsReadOnly() const;
 	bool IsInitialDatabase() const;
 	void SetInitialDatabase();
+	void SetReadOnlyDatabase();
 
+	static bool NameIsReserved(const string &name);
 	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);
 
 private:
@@ -69,7 +97,9 @@ private:
 	unique_ptr<TransactionManager> transaction_manager;
 	AttachedDatabaseType type;
 	optional_ptr<Catalog> parent_catalog;
+	optional_ptr<StorageExtension> storage_extension;
 	bool is_initial_database = false;
+	bool is_closed = false;
 };
 
 } // namespace duckdb

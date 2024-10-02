@@ -1,0 +1,243 @@
+# name: test/sql/filter/test_struct_pushdown.test
+# group: [filter]
+
+load __TEST_DIR__/test_struct_pushdown.test
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test_structs(i STRUCT(a integer, b bool));
+
+statement ok
+INSERT INTO test_structs VALUES ({'a': 1, 'b': true}), ({'a': 2, 'b': false}), (NULL), ({'a': 3, 'b': true}), ({'a': NULL, 'b': NULL});
+
+query II
+EXPLAIN SELECT * FROM test_structs WHERE i.a < 2;
+----
+physical_plan	<REGEX>:.*Filters:.*i\.a<2 AND i\.a IS NOT NULL.*
+
+query I
+SELECT * FROM test_structs WHERE i.a < 2;
+----
+{'a': 1, 'b': true}
+
+
+query II
+EXPLAIN SELECT * FROM test_structs WHERE i.a > 2;
+----
+physical_plan	<REGEX>:.*Filters:.*i\.a>2 AND i\.a IS NOT NULL.*
+
+query I
+SELECT * FROM test_structs WHERE i.a > 2;
+----
+{'a': 3, 'b': true}
+
+# Ensure it works with case insensitive struct field names
+query II
+EXPLAIN SELECT * FROM test_structs WHERE i.A < 2;
+----
+physical_plan	<REGEX>:.*Filters:.*i\.A<2 AND i\.A IS NOT NULL.*
+
+query I
+SELECT * FROM test_structs WHERE i.A < 2;
+----
+{'a': 1, 'b': true}
+
+# This should not produce a filter pushdown
+query II
+EXPLAIN SELECT * FROM test_structs WHERE i.a IS NULL;
+----
+physical_plan	<!REGEX>:.*Filters:.*
+
+query I
+SELECT * FROM test_structs WHERE i.a IS NULL;
+----
+NULL
+{'a': NULL, 'b': NULL}
+
+query II
+EXPLAIN SELECT * FROM test_structs WHERE i.a = 2 OR i.a IS NULL;
+----
+physical_plan	<!REGEX>:.*Filters:.*
+
+query I
+SELECT * FROM test_structs WHERE i.a = 2 OR i.a IS NULL ORDER BY 1 DESC NULLS FIRST;
+----
+NULL
+{'a': NULL, 'b': NULL}
+{'a': 2, 'b': false}
+
+# String comparisons
+statement ok
+CREATE TABLE string_structs(s STRUCT(a varchar, b varchar));
+
+statement ok
+INSERT INTO string_structs VALUES ({'a': 'foo', 'b': 'bar'}), ({'a': 'baz', 'b': 'qux'}), (NULL), ({'a': 'foo', 'b': NULL});
+
+query II
+EXPLAIN SELECT * FROM string_structs WHERE s.a = 'foo';
+----
+physical_plan	<REGEX>:.*Filters:.*s\.a='foo' AND s\.a IS NOT.*NULL.*
+
+query I
+SELECT * FROM string_structs WHERE s.a = 'foo';
+----
+{'a': foo, 'b': bar}
+{'a': foo, 'b': NULL}
+
+
+# Large collection of structs
+statement ok
+CREATE TABLE large_structs(i STRUCT(a integer, b bool));
+
+statement ok
+INSERT INTO large_structs SELECT {'a': n, 'b': n % 2 = 0} FROM generate_series(200000) as t(n);
+
+restart
+
+query II
+EXPLAIN SELECT * FROM large_structs WHERE i.a > 150000;
+----
+physical_plan	<REGEX>:.*Filters:.*i\.a>150000 AND i\.a IS NOT.*NULL.*
+
+query II
+EXPLAIN SELECT MIN(i.a), MAX(i.a), COUNT(*) FROM large_structs WHERE i.a > 150000;
+----
+physical_plan	<REGEX>:.*Filters:.*i\.a>150000 AND i\.a IS NOT.*NULL.*
+
+query III
+SELECT MIN(i.a), MAX(i.a), COUNT(*) FROM large_structs WHERE i.a > 150000;
+----
+150001	200000	50000
+
+
+
+# Nested structs
+statement ok
+CREATE TABLE nested_structs(s STRUCT(a STRUCT(b integer, c bool), d STRUCT(e integer, f varchar)));
+
+statement ok
+INSERT INTO nested_structs VALUES
+	({'a': {'b': 1, 'c': false}, 'd': {'e': 2, 'f': 'foo'}}),
+	(NULL),
+	({'a': {'b': 3, 'c': true}, 'd': {'e': 4, 'f': 'bar'}}),
+	({'a': {'b': NULL, 'c': true}, 'd': {'e': 5, 'f': 'qux'}}),
+	({'a': NULL, 'd': NULL});
+
+query II
+EXPLAIN SELECT * FROM nested_structs WHERE s.a.b < 2;
+----
+physical_plan	<REGEX>:.*Filters:.*s\.a\.b<2 AND s\.a\.b IS NOT.*NULL.*
+
+query I
+SELECT * FROM nested_structs WHERE s.a.b < 2;
+----
+{'a': {'b': 1, 'c': false}, 'd': {'e': 2, 'f': foo}}
+
+query II
+EXPLAIN SELECT * FROM nested_structs WHERE s.a.c = true AND s.d.e = 5;
+----
+physical_plan	<REGEX>:.*Filters:.*s\.a\.c=true AND s\.a.*\.c IS.*NOT NULL AND s\.d\.e=5 AND.*s\.d\.e IS NOT NULL.*
+
+query I
+SELECT * FROM nested_structs WHERE s.a.c = true AND s.d.e = 5;
+----
+{'a': {'b': NULL, 'c': true}, 'd': {'e': 5, 'f': qux}}
+
+query II
+EXPLAIN SELECT * FROM nested_structs WHERE s.d.f = 'bar';
+----
+physical_plan	<REGEX>:.*Filters:.*s\.d\.f='bar' AND s\.d\.f IS.*NOT NULL.*
+
+query I
+SELECT * FROM nested_structs WHERE s.d.f = 'bar';
+----
+{'a': {'b': 3, 'c': true}, 'd': {'e': 4, 'f': bar}}
+
+
+# Parquet test
+require parquet
+
+statement ok
+COPY (FROM test_structs) TO '__TEST_DIR__/test_structs.parquet' (FORMAT PARQUET);
+
+query II
+EXPLAIN SELECT * FROM read_parquet('__TEST_DIR__/test_structs.parquet') WHERE i.a < 2;
+----
+physical_plan	<REGEX>:.*Filters:.*i\.a<2 AND i\.a IS NOT NULL.*
+
+query I
+SELECT * FROM read_parquet('__TEST_DIR__/test_structs.parquet') WHERE i.a < 2;
+----
+{'a': 1, 'b': true}
+
+query II
+EXPLAIN SELECT * FROM read_parquet('__TEST_DIR__/test_structs.parquet') WHERE i.b = true or i.a IS NULL;
+----
+physical_plan	<!REGEX>:.*Filters:.*
+
+query I
+SELECT * FROM read_parquet('__TEST_DIR__/test_structs.parquet') WHERE i.b = true or i.a IS NULL ORDER BY ALL;
+----
+{'a': 1, 'b': true}
+{'a': 3, 'b': true}
+{'a': NULL, 'b': NULL}
+NULL
+
+# String structs
+statement ok
+COPY (FROM string_structs) TO '__TEST_DIR__/string_structs.parquet' (FORMAT PARQUET);
+
+query II
+EXPLAIN SELECT * FROM read_parquet('__TEST_DIR__/string_structs.parquet') WHERE s.a = 'foo';
+----
+physical_plan	<REGEX>:.*Filters:.*s\.a='foo' AND s\.a IS NOT.*NULL.*
+
+query I
+SELECT * FROM read_parquet('__TEST_DIR__/string_structs.parquet') WHERE s.a = 'foo';
+----
+{'a': foo, 'b': bar}
+{'a': foo, 'b': NULL}
+
+# Nested structs
+statement ok
+COPY (FROM nested_structs) TO '__TEST_DIR__/nested_structs.parquet' (FORMAT PARQUET);
+
+query II
+EXPLAIN SELECT * FROM read_parquet('__TEST_DIR__/nested_structs.parquet') WHERE s.a.b < 2;
+----
+physical_plan	<REGEX>:.*Filters:.*s\.a\.b<2 AND s\.a\.b IS NOT.*NULL.*
+
+query I
+SELECT * FROM read_parquet('__TEST_DIR__/nested_structs.parquet') WHERE s.a.b < 2;
+----
+{'a': {'b': 1, 'c': false}, 'd': {'e': 2, 'f': foo}}
+
+query II
+EXPLAIN SELECT * FROM read_parquet('__TEST_DIR__/nested_structs.parquet') WHERE s.a.c = true AND s.d.e = 5;
+----
+physical_plan	<REGEX>:.*Filters:.*s\.a\.c=true AND s\.a\.c IS.*NOT NULL AND s\.d\.e=5 AND.*s\.d\.e IS NOT NULL.*
+
+query I
+SELECT * FROM read_parquet('__TEST_DIR__/nested_structs.parquet') WHERE s.a.c = true AND s.d.e = 5;
+----
+{'a': {'b': NULL, 'c': true}, 'd': {'e': 5, 'f': qux}}
+
+# Test with large (multi-row-group) parquet files
+
+statement ok
+COPY (SELECT {'i': n} as s FROM generate_series(100000) as t(n)) TO '__TEST_DIR__/large.parquet' (FORMAT 'parquet', ROW_GROUP_SIZE 3000);
+
+query II
+EXPLAIN SELECT * FROM read_parquet('__TEST_DIR__/large.parquet') WHERE s.i >= 500 AND s.i < 5000;
+----
+physical_plan	<REGEX>:.*Filters:.*s\.i>=500 AND s\.i<5000 AND.*s\.i IS NOT NULL.*
+
+query II
+SELECT min(s.i), max(s.i) FROM read_parquet('__TEST_DIR__/large.parquet') WHERE s.i >= 500 AND s.i < 5000;
+----
+500	4999
+
+
+

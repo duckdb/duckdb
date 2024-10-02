@@ -1,26 +1,40 @@
 [
     {
         "name": "approx_count_distinct",
-        "parameters": "x",
+        "parameters": "any",
         "description": "Computes the approximate count of distinct elements using HyperLogLog.",
         "example": "approx_count_distinct(A)",
-        "type": "aggregate_function_set"
+        "type": "aggregate_function"
     },
     {
         "name": "arg_min",
         "parameters": "arg,val",
-        "description": "Finds the row with the minimum val. Calculates the arg expression at that row.",
+        "description": "Finds the row with the minimum val. Calculates the non-NULL arg expression at that row.",
         "example": "arg_min(A,B)",
         "type": "aggregate_function_set",
         "aliases": ["argmin", "min_by"]
     },
     {
+        "name": "arg_min_null",
+        "parameters": "arg,val",
+        "description": "Finds the row with the minimum val. Calculates the arg expression at that row.",
+        "example": "arg_min_null(A,B)",
+        "type": "aggregate_function_set"
+    },
+    {
         "name": "arg_max",
         "parameters": "arg,val",
-        "description": "Finds the row with the maximum val. Calculates the arg expression at that row.",
+        "description": "Finds the row with the maximum val. Calculates the non-NULL arg expression at that row.",
         "example": "arg_max(A,B)",
         "type": "aggregate_function_set",
         "aliases": ["argmax", "max_by"]
+    },
+    {
+        "name": "arg_max_null",
+        "parameters": "arg,val",
+        "description": "Finds the row with the maximum val. Calculates the arg expression at that row.",
+        "example": "arg_max_null(A,B)",
+        "type": "aggregate_function_set"
     },
     {
         "name": "bit_and",
@@ -87,18 +101,27 @@
         "type": "aggregate_function"
     },
     {
+        "name": "kurtosis_pop",
+        "parameters": "x",
+        "description": "Returns the excess kurtosis (Fisher’s definition) of all input values, without bias correction",
+        "example": "",
+        "type": "aggregate_function"
+    },
+    {
         "name": "min",
         "parameters": "arg",
         "description": "Returns the minimum value present in arg.",
         "example": "min(A)",
-        "type": "aggregate_function_set"
+        "type": "aggregate_function_set",
+        "extra_functions": ["static AggregateFunction GetFunction();"]
     },
     {
         "name": "max",
         "parameters": "arg",
         "description": "Returns the maximum value present in arg.",
         "example": "max(A)",
-        "type": "aggregate_function_set"
+        "type": "aggregate_function_set",
+        "extra_functions": ["static AggregateFunction GetFunction();"]
     },
     {
         "name": "product",
@@ -120,7 +143,7 @@
         "description": "Concatenates the column string values with an optional separator.",
         "example": "string_agg(A, '-')",
         "type": "aggregate_function_set",
-        "aliases": ["group_concat"]
+        "aliases": ["group_concat","listagg"]
     },
     {
         "name": "sum",
@@ -132,7 +155,7 @@
     {
         "name": "sum_no_overflow",
         "parameters": "arg",
-        "description": "Calculates the sum value for all tuples in arg without overflow checks.",
+        "description": "Internal only. Calculates the sum value for all tuples in arg without overflow checks.",
         "example": "sum_no_overflow(A)",
         "type": "aggregate_function_set"
     }

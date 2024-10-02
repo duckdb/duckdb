@@ -43,9 +43,11 @@ baz
 
 statement error
 SELECT regexp_extract('foobarbaz', '(b..)(b..)', -1)
+----
 
 statement error
 SELECT regexp_extract('foobarbaz', '(b..)(b..)', 42)
+----
 
 statement ok
 CREATE TABLE test (s VARCHAR, p VARCHAR, i INT)
@@ -60,6 +62,7 @@ INSERT INTO test VALUES
 
 statement error
 SELECT regexp_extract(s, p, i) FROM test
+----
 
 query T
 SELECT regexp_extract(s, p, 0) FROM test
@@ -102,3 +105,4 @@ NULL
 
 statement error
 SELECT regexp_extract('foobarbaz', 'b..', '1')
+----

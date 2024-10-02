@@ -5,10 +5,6 @@
 
 namespace duckdb {
 
-static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	LambdaFunctions::ExecuteLambda(args, state, result, LambdaType::TRANSFORM);
-}
-
 static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, ScalarFunction &bound_function,
                                                   vector<unique_ptr<Expression>> &arguments) {
 
@@ -32,7 +28,7 @@ static LogicalType ListTransformBindLambda(const idx_t parameter_idx, const Logi
 
 ScalarFunction ListTransformFun::GetFunction() {
 	ScalarFunction fun({LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA}, LogicalType::LIST(LogicalType::ANY),
-	                   ListTransformFunction, ListTransformBind, nullptr, nullptr);
+	                   LambdaFunctions::ListTransformFunction, ListTransformBind, nullptr, nullptr);
 
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	fun.serialize = ListLambdaBindData::Serialize;

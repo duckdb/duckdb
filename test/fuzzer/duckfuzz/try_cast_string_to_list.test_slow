@@ -1,0 +1,18 @@
+# name: test/fuzzer/duckfuzz/try_cast_string_to_list.test_slow
+# description: Fuzzyduck issue #2696
+# group: [duckfuzz]
+
+require tpch
+
+statement ok
+call dbgen(sf=0.1);
+
+query I
+SELECT DISTINCT TRY_CAST(c_name AS TIMESTAMP[]) FROM customer USING SAMPLE 63.0% (Reservoir);
+----
+NULL
+
+query I
+SELECT DISTINCT TRY_CAST(c_name AS TIMESTAMP[3]) FROM customer USING SAMPLE 63.0% (Reservoir);
+----
+NULL

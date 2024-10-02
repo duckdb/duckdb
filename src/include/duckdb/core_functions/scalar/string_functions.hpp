@@ -93,16 +93,25 @@ struct FormatFun {
 struct FormatBytesFun {
 	static constexpr const char *Name = "format_bytes";
 	static constexpr const char *Parameters = "bytes";
-	static constexpr const char *Description = "Converts bytes to a human-readable presentation (e.g. 16000 -> 16KB)";
+	static constexpr const char *Description = "Converts bytes to a human-readable presentation (e.g. 16000 -> 15.6 KiB)";
 	static constexpr const char *Example = "format_bytes(1000 * 16)";
 
 	static ScalarFunction GetFunction();
 };
 
-struct FormatreadabledecimalsizeFun {
+struct FormatreadablesizeFun {
 	using ALIAS = FormatBytesFun;
 
+	static constexpr const char *Name = "formatReadableSize";
+};
+
+struct FormatreadabledecimalsizeFun {
 	static constexpr const char *Name = "formatReadableDecimalSize";
+	static constexpr const char *Parameters = "bytes";
+	static constexpr const char *Description = "Converts bytes to a human-readable presentation (e.g. 16000 -> 16.0 KB)";
+	static constexpr const char *Example = "format_bytes(1000 * 16)";
+
+	static ScalarFunction GetFunction();
 };
 
 struct HammingFun {
@@ -240,7 +249,7 @@ struct MD5Fun {
 	static constexpr const char *Description = "Returns the MD5 hash of the value as a string";
 	static constexpr const char *Example = "md5('123')";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct MD5NumberFun {
@@ -249,25 +258,43 @@ struct MD5NumberFun {
 	static constexpr const char *Description = "Returns the MD5 hash of the value as an INT128";
 	static constexpr const char *Example = "md5_number('123')";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
-struct MD5NumberLowerFun {
-	static constexpr const char *Name = "md5_number_lower";
-	static constexpr const char *Parameters = "value";
-	static constexpr const char *Description = "Returns the MD5 hash of the value as an INT128";
-	static constexpr const char *Example = "md5_number_lower('123')";
+struct ParseDirnameFun {
+	static constexpr const char *Name = "parse_dirname";
+	static constexpr const char *Parameters = "string,separator";
+	static constexpr const char *Description = "Returns the top-level directory name. separator options: system, both_slash (default), forward_slash, backslash";
+	static constexpr const char *Example = "parse_dirname('path/to/file.csv', 'system')";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
-struct MD5NumberUpperFun {
-	static constexpr const char *Name = "md5_number_upper";
-	static constexpr const char *Parameters = "value";
-	static constexpr const char *Description = "Returns the MD5 hash of the value as an INT128";
-	static constexpr const char *Example = "md5_number_upper('123')";
+struct ParseDirpathFun {
+	static constexpr const char *Name = "parse_dirpath";
+	static constexpr const char *Parameters = "string,separator";
+	static constexpr const char *Description = "Returns the head of the path similarly to Python's os.path.dirname. separator options: system, both_slash (default), forward_slash, backslash";
+	static constexpr const char *Example = "parse_dirpath('path/to/file.csv', 'system')";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ParseFilenameFun {
+	static constexpr const char *Name = "parse_filename";
+	static constexpr const char *Parameters = "string,trim_extension,separator";
+	static constexpr const char *Description = "Returns the last component of the path similarly to Python's os.path.basename. If trim_extension is true, the file extension will be removed (it defaults to false). separator options: system, both_slash (default), forward_slash, backslash";
+	static constexpr const char *Example = "parse_filename('path/to/file.csv', true, 'forward_slash')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ParsePathFun {
+	static constexpr const char *Name = "parse_path";
+	static constexpr const char *Parameters = "string,separator";
+	static constexpr const char *Description = "Returns a list of the components (directories and filename) in the path similarly to Python's pathlib.PurePath::parts. separator options: system, both_slash (default), forward_slash, backslash";
+	static constexpr const char *Example = "parse_path('path/to/file.csv', 'system')";
+
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct PrintfFun {
@@ -342,13 +369,22 @@ struct RtrimFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct SHA1Fun {
+	static constexpr const char *Name = "sha1";
+	static constexpr const char *Parameters = "value";
+	static constexpr const char *Description = "Returns the SHA1 hash of the value";
+	static constexpr const char *Example = "sha1('hello')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 struct SHA256Fun {
 	static constexpr const char *Name = "sha256";
 	static constexpr const char *Parameters = "value";
 	static constexpr const char *Description = "Returns the SHA256 hash of the value";
 	static constexpr const char *Example = "sha256('hello')";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct StringSplitFun {
@@ -469,6 +505,33 @@ struct ToBaseFun {
 	static constexpr const char *Example = "to_base(42, 16)";
 
 	static ScalarFunctionSet GetFunctions();
+};
+
+struct RegexpEscapeFun {
+	static constexpr const char *Name = "regexp_escape";
+	static constexpr const char *Parameters = "string";
+	static constexpr const char *Description = "Escapes all potentially meaningful regexp characters in the input string";
+	static constexpr const char *Example = "regexp_escape('https://duckdb.org')";
+
+	static ScalarFunction GetFunction();
+};
+
+struct UrlEncodeFun {
+	static constexpr const char *Name = "url_encode";
+	static constexpr const char *Parameters = "input";
+	static constexpr const char *Description = "Escapes the input string by encoding it so that it can be included in a URL query parameter.";
+	static constexpr const char *Example = "url_encode('this string has/ special+ characters>')";
+
+	static ScalarFunction GetFunction();
+};
+
+struct UrlDecodeFun {
+	static constexpr const char *Name = "url_decode";
+	static constexpr const char *Parameters = "input";
+	static constexpr const char *Description = "Unescapes the URL encoded input.";
+	static constexpr const char *Example = "url_decode('this%20string%20is%2BFencoded')";
+
+	static ScalarFunction GetFunction();
 };
 
 } // namespace duckdb

@@ -23,16 +23,13 @@
 #endif
 #endif
 
-#define PyDateTime_TIMEDELTA_GET_DAYS(o)         (((PyDateTime_Delta *)(o))->days)
-#define PyDateTime_TIMEDELTA_GET_SECONDS(o)      (((PyDateTime_Delta *)(o))->seconds)
-#define PyDateTime_TIMEDELTA_GET_MICROSECONDS(o) (((PyDateTime_Delta *)(o))->microseconds)
-
 namespace duckdb {
 
 struct PyDictionary {
 public:
 	PyDictionary(py::object dict);
-	// FIXME: should probably remove these, as they aren't used if the dictionary has MAP format
+	// These are cached so we don't have to create new objects all the time
+	// The CPython API offers PyDict_Keys but that creates a new reference every time, same for values
 	py::object keys;
 	py::object values;
 	idx_t len;
@@ -40,6 +37,11 @@ public:
 public:
 	py::handle operator[](const py::object &obj) const {
 		return PyDict_GetItem(dict.ptr(), obj.ptr());
+	}
+
+public:
+	string ToString() const {
+		return string(py::str(dict));
 	}
 
 private:
@@ -110,8 +112,8 @@ private:
 struct PyTimeDelta {
 public:
 	PyTimeDelta(py::handle &obj);
-	int64_t days;
-	int64_t seconds;
+	int32_t days;
+	int32_t seconds;
 	int64_t microseconds;
 
 public:
@@ -163,8 +165,6 @@ public:
 	date_t ToDate();
 	dtime_t ToDuckTime();
 	Value ToDuckValue(const LogicalType &target_type);
-	bool IsPositiveInfinity() const;
-	bool IsNegativeInfinity() const;
 
 public:
 	static int32_t GetYears(py::handle &obj);
@@ -186,8 +186,6 @@ public:
 
 public:
 	Value ToDuckValue();
-	bool IsPositiveInfinity() const;
-	bool IsNegativeInfinity() const;
 };
 
 struct PyTimezone {
@@ -195,11 +193,13 @@ public:
 	PyTimezone() = delete;
 
 public:
-	DUCKDB_API static interval_t GetUTCOffset(py::handle &tzone_obj);
+	DUCKDB_API static int32_t GetUTCOffsetSeconds(py::handle &tzone_obj);
+	DUCKDB_API static interval_t GetUTCOffset(py::handle &datetime, py::handle &tzone_obj);
 };
 
 struct PythonObject {
 	static void Initialize();
+	static py::object FromStruct(const Value &value, const LogicalType &id, const ClientProperties &client_properties);
 	static py::object FromValue(const Value &value, const LogicalType &id, const ClientProperties &client_properties);
 };
 

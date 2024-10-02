@@ -1,29 +1,42 @@
-// MODE( <expr1> )
-// Returns the most frequent value for the values within expr1.
-// NULL values are ignored. If all the values are NULL, or there are 0 rows, then the function returns NULL.
-
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/core_functions/aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/unordered_map.hpp"
-
+#include "duckdb/common/owning_string_map.hpp"
+#include "duckdb/core_functions/create_sort_key.hpp"
+#include "duckdb/core_functions/aggregate/sort_key_helpers.hpp"
 #include <functional>
+
+// MODE( <expr1> )
+// Returns the most frequent value for the values within expr1.
+// NULL values are ignored. If all the values are NULL, or there are 0 rows, then the function returns NULL.
 
 namespace std {
 
 template <>
 struct hash<duckdb::interval_t> {
 	inline size_t operator()(const duckdb::interval_t &val) const {
-		return hash<int32_t> {}(val.days) ^ hash<int32_t> {}(val.months) ^ hash<int64_t> {}(val.micros);
+		int64_t months, days, micros;
+		val.Normalize(months, days, micros);
+		return hash<int32_t> {}(duckdb::UnsafeNumericCast<int32_t>(days)) ^
+		       hash<int32_t> {}(duckdb::UnsafeNumericCast<int32_t>(months)) ^ hash<int64_t> {}(micros);
 	}
 };
 
 template <>
 struct hash<duckdb::hugeint_t> {
 	inline size_t operator()(const duckdb::hugeint_t &val) const {
-		return hash<int64_t> {}(val.upper) ^ hash<int64_t> {}(val.lower);
+		return hash<int64_t> {}(val.upper) ^ hash<uint64_t> {}(val.lower);
+	}
+};
+
+template <>
+struct hash<duckdb::uhugeint_t> {
+	inline size_t operator()(const duckdb::uhugeint_t &val) const {
+		return hash<uint64_t> {}(val.upper) ^ hash<uint64_t> {}(val.lower);
 	}
 };
 
@@ -31,20 +44,54 @@ struct hash<duckdb::hugeint_t> {
 
 namespace duckdb {
 
-template <class KEY_TYPE>
+struct ModeAttr {
+	ModeAttr() : count(0), first_row(std::numeric_limits<idx_t>::max()) {
+	}
+	size_t count;
+	idx_t first_row;
+};
+
+template <class T>
+struct ModeStandard {
+	using MAP_TYPE = unordered_map<T, ModeAttr>;
+
+	static MAP_TYPE *CreateEmpty(ArenaAllocator &) {
+		return new MAP_TYPE();
+	}
+	static MAP_TYPE *CreateEmpty(Allocator &) {
+		return new MAP_TYPE();
+	}
+
+	template <class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Assign(Vector &result, INPUT_TYPE input) {
+		return RESULT_TYPE(input);
+	}
+};
+
+struct ModeString {
+	using MAP_TYPE = OwningStringMap<ModeAttr>;
+
+	static MAP_TYPE *CreateEmpty(ArenaAllocator &allocator) {
+		return new MAP_TYPE(allocator);
+	}
+	static MAP_TYPE *CreateEmpty(Allocator &allocator) {
+		return new MAP_TYPE(allocator);
+	}
+
+	template <class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Assign(Vector &result, INPUT_TYPE input) {
+		return StringVector::AddStringOrBlob(result, input);
+	}
+};
+
+template <class KEY_TYPE, class TYPE_OP>
 struct ModeState {
-	struct ModeAttr {
-		ModeAttr() : count(0), first_row(std::numeric_limits<idx_t>::max()) {
-		}
-		size_t count;
-		idx_t first_row;
-	};
-	using Counts = unordered_map<KEY_TYPE, ModeAttr>;
+	using Counts = typename TYPE_OP::MAP_TYPE;
 
 	ModeState() {
 	}
 
-	vector<FrameBounds> prevs;
+	SubFrames prevs;
 	Counts *frequency_map = nullptr;
 	KEY_TYPE *mode = nullptr;
 	size_t nonzero = 0;
@@ -61,8 +108,9 @@ struct ModeState {
 	}
 
 	void Reset() {
-		Counts empty;
-		frequency_map->swap(empty);
+		if (frequency_map) {
+			frequency_map->clear();
+		}
 		nonzero = 0;
 		count = 0;
 		valid = false;
@@ -91,7 +139,7 @@ struct ModeState {
 	void ModeRm(const KEY_TYPE &key, idx_t frame) {
 		auto &attr = (*frequency_map)[key];
 		auto old_count = attr.count;
-		nonzero -= int(old_count == 1);
+		nonzero -= size_t(old_count == 1);
 
 		attr.count -= 1;
 		if (count == old_count && key == *mode) {
@@ -126,37 +174,27 @@ struct ModeIncluded {
 	const ValidityMask &dmask;
 };
 
-struct ModeAssignmentStandard {
-	template <class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Assign(Vector &result, INPUT_TYPE input) {
-		return RESULT_TYPE(input);
-	}
-};
-
-struct ModeAssignmentString {
-	template <class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Assign(Vector &result, INPUT_TYPE input) {
-		return StringVector::AddString(result, input);
-	}
-};
-
-template <typename KEY_TYPE, typename ASSIGN_OP>
-struct ModeFunction {
+template <typename TYPE_OP>
+struct BaseModeFunction {
 	template <class STATE>
 	static void Initialize(STATE &state) {
 		new (&state) STATE();
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &) {
+	static void Execute(STATE &state, const INPUT_TYPE &key, AggregateInputData &input_data) {
 		if (!state.frequency_map) {
-			state.frequency_map = new typename STATE::Counts();
+			state.frequency_map = TYPE_OP::CreateEmpty(input_data.allocator);
 		}
-		auto key = KEY_TYPE(input);
 		auto &i = (*state.frequency_map)[key];
-		i.count++;
+		++i.count;
 		i.first_row = MinValue<idx_t>(i.first_row, state.count);
-		state.count++;
+		++state.count;
+	}
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Operation(STATE &state, const INPUT_TYPE &key, AggregateUnaryInput &aggr_input) {
+		Execute<INPUT_TYPE, STATE, OP>(state, key, aggr_input.input);
 	}
 
 	template <class STATE, class OP>
@@ -177,6 +215,18 @@ struct ModeFunction {
 		target.count += source.count;
 	}
 
+	static bool IgnoreNull() {
+		return true;
+	}
+
+	template <class STATE>
+	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
+		state.~STATE();
+	}
+};
+
+template <typename TYPE_OP>
+struct ModeFunction : BaseModeFunction<TYPE_OP> {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (!state.frequency_map) {
@@ -185,17 +235,17 @@ struct ModeFunction {
 		}
 		auto highest_frequency = state.Scan();
 		if (highest_frequency != state.frequency_map->end()) {
-			target = ASSIGN_OP::template Assign<T, T>(finalize_data.result, highest_frequency->first);
+			target = TYPE_OP::template Assign<T, T>(finalize_data.result, highest_frequency->first);
 		} else {
 			finalize_data.ReturnNull();
 		}
 	}
+
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &, idx_t count) {
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &key, AggregateUnaryInput &aggr_input, idx_t count) {
 		if (!state.frequency_map) {
-			state.frequency_map = new typename STATE::Counts();
+			state.frequency_map = TYPE_OP::CreateEmpty(aggr_input.input.allocator);
 		}
-		auto key = KEY_TYPE(input);
 		auto &i = (*state.frequency_map)[key];
 		i.count += count;
 		i.first_row = MinValue<idx_t>(i.first_row, state.count);
@@ -218,7 +268,7 @@ struct ModeFunction {
 		inline void Left(idx_t begin, idx_t end) {
 			for (; begin < end; ++begin) {
 				if (included(begin)) {
-					state.ModeRm(KEY_TYPE(data[begin]), begin);
+					state.ModeRm(data[begin], begin);
 				}
 			}
 		}
@@ -226,7 +276,7 @@ struct ModeFunction {
 		inline void Right(idx_t begin, idx_t end) {
 			for (; begin < end; ++begin) {
 				if (included(begin)) {
-					state.ModeAdd(KEY_TYPE(data[begin]), begin);
+					state.ModeAdd(data[begin], begin);
 				}
 			}
 		}
@@ -237,13 +287,11 @@ struct ModeFunction {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &aggr_input_data, STATE &state, const vector<FrameBounds> &frames,
-	                   Vector &result, idx_t rid) {
-
+	                   AggregateInputData &aggr_input_data, STATE &state, const SubFrames &frames, Vector &result,
+	                   idx_t rid, const STATE *gstate) {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 		auto &prevs = state.prevs;
-		//	TODO: Hack around PerfectAggregateHashTable memory leak
 		if (prevs.empty()) {
 			prevs.resize(1);
 		}
@@ -251,16 +299,17 @@ struct ModeFunction {
 		ModeIncluded included(fmask, dmask);
 
 		if (!state.frequency_map) {
-			state.frequency_map = new typename STATE::Counts;
+			state.frequency_map = TYPE_OP::CreateEmpty(Allocator::DefaultAllocator());
 		}
-		const double tau = .25;
-		if (state.nonzero <= tau * state.frequency_map->size()) {
+		const size_t tau_inverse = 4; // tau==0.25
+		if (state.nonzero <= (state.frequency_map->size() / tau_inverse) || prevs.back().end <= frames.front().start ||
+		    frames.back().end <= prevs.front().start) {
 			state.Reset();
 			// for f ∈ F do
 			for (const auto &frame : frames) {
 				for (auto i = frame.start; i < frame.end; ++i) {
 					if (included(i)) {
-						state.ModeAdd(KEY_TYPE(data[i]), i);
+						state.ModeAdd(data[i], i);
 					}
 				}
 			}
@@ -281,96 +330,100 @@ struct ModeFunction {
 		}
 
 		if (state.valid) {
-			rdata[rid] = ASSIGN_OP::template Assign<INPUT_TYPE, RESULT_TYPE>(result, *state.mode);
+			rdata[rid] = TYPE_OP::template Assign<INPUT_TYPE, RESULT_TYPE>(result, *state.mode);
 		} else {
 			rmask.Set(rid, false);
 		}
 
 		prevs = frames;
 	}
+};
 
-	static bool IgnoreNull() {
-		return true;
-	}
-
+template <typename TYPE_OP>
+struct ModeFallbackFunction : BaseModeFunction<TYPE_OP> {
 	template <class STATE>
-	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
-		state.~STATE();
+	static void Finalize(STATE &state, AggregateFinalizeData &finalize_data) {
+		if (!state.frequency_map) {
+			finalize_data.ReturnNull();
+			return;
+		}
+		auto highest_frequency = state.Scan();
+		if (highest_frequency != state.frequency_map->end()) {
+			CreateSortKeyHelpers::DecodeSortKey(highest_frequency->first, finalize_data.result,
+			                                    finalize_data.result_idx,
+			                                    OrderModifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST));
+		} else {
+			finalize_data.ReturnNull();
+		}
 	}
 };
 
-template <typename INPUT_TYPE, typename KEY_TYPE, typename ASSIGN_OP = ModeAssignmentStandard>
+template <typename INPUT_TYPE, typename TYPE_OP = ModeStandard<INPUT_TYPE>>
 AggregateFunction GetTypedModeFunction(const LogicalType &type) {
-	using STATE = ModeState<KEY_TYPE>;
-	using OP = ModeFunction<KEY_TYPE, ASSIGN_OP>;
+	using STATE = ModeState<INPUT_TYPE, TYPE_OP>;
+	using OP = ModeFunction<TYPE_OP>;
 	auto func = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
 	func.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
 	return func;
 }
 
+AggregateFunction GetFallbackModeFunction(const LogicalType &type) {
+	using STATE = ModeState<string_t, ModeString>;
+	using OP = ModeFallbackFunction<ModeString>;
+	AggregateFunction aggr({type}, type, AggregateFunction::StateSize<STATE>,
+	                       AggregateFunction::StateInitialize<STATE, OP>,
+	                       AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
+	                       AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr);
+	aggr.destructor = AggregateFunction::StateDestroy<STATE, OP>;
+	return aggr;
+}
+
 AggregateFunction GetModeAggregate(const LogicalType &type) {
 	switch (type.InternalType()) {
 	case PhysicalType::INT8:
-		return GetTypedModeFunction<int8_t, int8_t>(type);
+		return GetTypedModeFunction<int8_t>(type);
 	case PhysicalType::UINT8:
-		return GetTypedModeFunction<uint8_t, uint8_t>(type);
+		return GetTypedModeFunction<uint8_t>(type);
 	case PhysicalType::INT16:
-		return GetTypedModeFunction<int16_t, int16_t>(type);
+		return GetTypedModeFunction<int16_t>(type);
 	case PhysicalType::UINT16:
-		return GetTypedModeFunction<uint16_t, uint16_t>(type);
+		return GetTypedModeFunction<uint16_t>(type);
 	case PhysicalType::INT32:
-		return GetTypedModeFunction<int32_t, int32_t>(type);
+		return GetTypedModeFunction<int32_t>(type);
 	case PhysicalType::UINT32:
-		return GetTypedModeFunction<uint32_t, uint32_t>(type);
+		return GetTypedModeFunction<uint32_t>(type);
 	case PhysicalType::INT64:
-		return GetTypedModeFunction<int64_t, int64_t>(type);
+		return GetTypedModeFunction<int64_t>(type);
 	case PhysicalType::UINT64:
-		return GetTypedModeFunction<uint64_t, uint64_t>(type);
+		return GetTypedModeFunction<uint64_t>(type);
 	case PhysicalType::INT128:
-		return GetTypedModeFunction<hugeint_t, hugeint_t>(type);
-
+		return GetTypedModeFunction<hugeint_t>(type);
+	case PhysicalType::UINT128:
+		return GetTypedModeFunction<uhugeint_t>(type);
 	case PhysicalType::FLOAT:
-		return GetTypedModeFunction<float, float>(type);
+		return GetTypedModeFunction<float>(type);
 	case PhysicalType::DOUBLE:
-		return GetTypedModeFunction<double, double>(type);
-
+		return GetTypedModeFunction<double>(type);
 	case PhysicalType::INTERVAL:
-		return GetTypedModeFunction<interval_t, interval_t>(type);
-
+		return GetTypedModeFunction<interval_t>(type);
 	case PhysicalType::VARCHAR:
-		return GetTypedModeFunction<string_t, string, ModeAssignmentString>(type);
-
+		return GetTypedModeFunction<string_t, ModeString>(type);
 	default:
-		throw NotImplementedException("Unimplemented mode aggregate");
+		return GetFallbackModeFunction(type);
 	}
 }
 
-unique_ptr<FunctionData> BindModeDecimal(ClientContext &context, AggregateFunction &function,
-                                         vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindModeAggregate(ClientContext &context, AggregateFunction &function,
+                                           vector<unique_ptr<Expression>> &arguments) {
 	function = GetModeAggregate(arguments[0]->return_type);
 	function.name = "mode";
 	return nullptr;
 }
 
 AggregateFunctionSet ModeFun::GetFunctions() {
-	const vector<LogicalType> TEMPORAL = {LogicalType::DATE,         LogicalType::TIMESTAMP, LogicalType::TIME,
-	                                      LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ,   LogicalType::INTERVAL};
-
 	AggregateFunctionSet mode;
-	mode.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-	                                   nullptr, nullptr, nullptr, BindModeDecimal));
-
-	for (const auto &type : LogicalType::Numeric()) {
-		if (type.id() != LogicalTypeId::DECIMAL) {
-			mode.AddFunction(GetModeAggregate(type));
-		}
-	}
-
-	for (const auto &type : TEMPORAL) {
-		mode.AddFunction(GetModeAggregate(type));
-	}
-
-	mode.AddFunction(GetModeAggregate(LogicalType::VARCHAR));
+	mode.AddFunction(AggregateFunction({LogicalTypeId::ANY}, LogicalTypeId::ANY, nullptr, nullptr, nullptr, nullptr,
+	                                   nullptr, nullptr, BindModeAggregate));
 	return mode;
 }
 } // namespace duckdb

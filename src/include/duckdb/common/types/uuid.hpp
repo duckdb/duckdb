@@ -20,13 +20,16 @@ class UUID {
 public:
 	constexpr static const uint8_t STRING_SIZE = 36;
 	//! Convert a uuid string to a hugeint object
-	static bool FromString(string str, hugeint_t &result);
+	static bool FromString(const string &str, hugeint_t &result);
 	//! Convert a uuid string to a hugeint object
 	static bool FromCString(const char *str, idx_t len, hugeint_t &result) {
 		return FromString(string(str, 0, len), result);
 	}
 	//! Convert a hugeint object to a uuid style string
 	static void ToString(hugeint_t input, char *buf);
+
+	//! Convert a uhugeint_t object to a uuid value
+	static hugeint_t FromUHugeint(uhugeint_t input);
 
 	//! Convert a hugeint object to a uuid style string
 	static hugeint_t GenerateRandomUUID(RandomEngine &engine);
@@ -39,7 +42,7 @@ public:
 		return string(buff, STRING_SIZE);
 	}
 
-	static hugeint_t FromString(string str) {
+	static hugeint_t FromString(const string &str) {
 		hugeint_t result;
 		FromString(str, result);
 		return result;

@@ -1,0 +1,13 @@
+# name: benchmark/micro/lambdas/list_filter_where.benchmark
+# description: Simulate a where-function with lambda functions on 100K values
+# group: [lambdas]
+
+name Benchmark list_filter
+group lambdas
+
+load
+CREATE TABLE tbl (l INTEGER[], where_l BOOLEAN[]);
+INSERT INTO tbl VALUES (range(100000), [x % 13 != 0 for x in range(100000)]);
+
+run
+SELECT list_filter(l, (x, x_i) -> where_l[x_i]) FROM tbl;

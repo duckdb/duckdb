@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/catalog/catalog_entry/dtable_catalog_entry.hpp
+// duckdb/catalog/catalog_entry/duck_table_entry.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -17,15 +17,14 @@ class DuckTableEntry : public TableCatalogEntry {
 public:
 	//! Create a TableCatalogEntry and initialize storage for it
 	DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
-	               optional_ptr<ClientContext> context, std::shared_ptr<DataTable> inherited_storage = nullptr);
+	               shared_ptr<DataTable> inherited_storage = nullptr);
 
 public:
 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo &info) override;
+	unique_ptr<CatalogEntry> AlterEntry(CatalogTransaction, AlterInfo &info) override;
 	void UndoAlter(ClientContext &context, AlterInfo &info) override;
 	//! Returns the underlying storage of the table
 	DataTable &GetStorage() override;
-	//! Returns a list of the bound constraints of the table
-	const vector<unique_ptr<BoundConstraint>> &GetBoundConstraints() override;
 
 	//! Get statistics of a column (physical or virtual) within the table
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) override;
@@ -55,17 +54,17 @@ private:
 	unique_ptr<CatalogEntry> ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info);
 	unique_ptr<CatalogEntry> SetNotNull(ClientContext &context, SetNotNullInfo &info);
 	unique_ptr<CatalogEntry> DropNotNull(ClientContext &context, DropNotNullInfo &info);
-	unique_ptr<CatalogEntry> AddForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info);
+	unique_ptr<CatalogEntry> AddForeignKeyConstraint(optional_ptr<ClientContext> context, AlterForeignKeyInfo &info);
 	unique_ptr<CatalogEntry> DropForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info);
+	unique_ptr<CatalogEntry> SetColumnComment(ClientContext &context, SetColumnCommentInfo &info);
 
 	void UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_index, const vector<LogicalIndex> &adjusted_indices,
-	                                   const RemoveColumnInfo &info, CreateTableInfo &create_info, bool is_generated);
+	                                   const RemoveColumnInfo &info, CreateTableInfo &create_info,
+	                                   const vector<unique_ptr<BoundConstraint>> &bound_constraints, bool is_generated);
 
 private:
 	//! A reference to the underlying storage unit used for this table
-	std::shared_ptr<DataTable> storage;
-	//! A list of constraints that are part of this table
-	vector<unique_ptr<BoundConstraint>> bound_constraints;
+	shared_ptr<DataTable> storage;
 	//! Manages dependencies of the individual columns of the table
 	ColumnDependencyManager column_dependency_manager;
 };

@@ -38,11 +38,13 @@ public:
 struct StringUncompressed {
 public:
 	static CompressionFunction GetFunction(PhysicalType data_type);
+	static idx_t GetStringBlockLimit(const idx_t block_size) {
+		return MinValue(AlignValueFloor(block_size / 4), DEFAULT_STRING_BLOCK_LIMIT);
+	}
 
 public:
-	//! The max string size that is allowed within a block. Strings bigger than this will be labeled as a BIG STRING and
-	//! offloaded to the overflow blocks.
-	static constexpr uint16_t STRING_BLOCK_LIMIT = 4096;
+	//! The default maximum string size for sufficiently big block sizes
+	static constexpr idx_t DEFAULT_STRING_BLOCK_LIMIT = 4096;
 };
 
 } // namespace duckdb

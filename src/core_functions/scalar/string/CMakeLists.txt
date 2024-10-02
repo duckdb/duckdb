@@ -15,17 +15,21 @@ add_library_unity(
   levenshtein.cpp
   md5.cpp
   pad.cpp
+  parse_path.cpp
   printf.cpp
+  regexp_escape.cpp
   repeat.cpp
   replace.cpp
   reverse.cpp
+  sha1.cpp
   sha256.cpp
   starts_with.cpp
   string_split.cpp
   to_base.cpp
   translate.cpp
   trim.cpp
-  unicode.cpp)
+  unicode.cpp
+  url_encode.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_string>
     PARENT_SCOPE)

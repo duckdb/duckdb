@@ -1,0 +1,55 @@
+# name: test/issues/general/test_5614.test
+# description: Issue 5614:
+# group: [general]
+
+statement ok
+pragma enable_verification
+
+statement ok
+create table t0 as select (UNNEST(['hello', 'duckdb', 'duck LORD', 'lord duck'])) as column0;
+
+
+# create the alias but use the column name
+query III
+select 
+row_number() over () as line_number, 
+column0 as text, 
+length(coalesce(column0, '')) as text_length 
+from 
+t0
+where 'LORD' in (select * from unnest(str_split(column0, ' ')));
+----
+1	duck LORD	9
+
+# Using alias now in Where clause
+query III
+select 
+row_number() over () as line_number, 
+column0 as text, 
+length(coalesce(column0, '')) as text_length 
+from 
+t0
+where 'LORD' in (select * from unnest(str_split(text, ' ')));
+----
+1	duck LORD	9
+
+statement ok
+CREATE or replace TABLE brands (category VARCHAR, brand_name VARCHAR);
+
+statement ok
+INSERT INTO brands (category, brand_name) VALUES ('chocolates', '5-star'), (Null, 'diary milk'), (Null, 'perk'), (Null, 'eclair'), ('Biscuits', 'britannia'), (Null, 'good day'), (Null, 'boost');
+
+statement error
+with cte as (
+select 
+  *, 
+  row_number() over () as t,
+  count(category) over (order by t) as tmp
+from brands
+)
+select
+  max(category) over (partition by tmp) as category,
+  brand_name
+from cte;
+----
+Binder Error: window function calls cannot be nested

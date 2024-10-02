@@ -34,6 +34,7 @@ EXECUTE v3(42)
 
 statement error
 EXECUTE v3(-1)
+----
 
 # mixed varchar types
 statement ok
@@ -55,12 +56,12 @@ EXECUTE v5(42)
 
 # multiple scattered up-casts plus no up-cast possible in the end
 statement ok
-PREPARE v6 AS SELECT $1::INT, $1::BIGINT, $1::TINYINT, $1::UBIGINT, $1::SMALLINT
+PREPARE v6 AS SELECT $1::INT, $1::BIGINT, $1::TINYINT, $1::UBIGINT, $1::SMALLINT, $1::UHUGEINT
 
-query IIIII
+query IIIIII
 EXECUTE v6(42)
 ----
-42	42	42	42	42
+42	42	42	42	42	42
 
 # concat
 statement ok

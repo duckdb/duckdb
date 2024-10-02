@@ -11,19 +11,22 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/limits.hpp"
 
 #include <cstring>
+#include <algorithm>
 
 namespace duckdb {
 
 struct string_t {
 	friend struct StringComparisonOperators;
-	friend class StringSegment;
 
 public:
 	static constexpr idx_t PREFIX_BYTES = 4 * sizeof(char);
 	static constexpr idx_t INLINE_BYTES = 12 * sizeof(char);
 	static constexpr idx_t HEADER_SIZE = sizeof(uint32_t) + PREFIX_BYTES;
+	static constexpr idx_t MAX_STRING_SIZE = NumericLimits<uint32_t>::Maximum();
 #ifndef DUCKDB_DEBUG_NO_INLINE
 	static constexpr idx_t PREFIX_LENGTH = PREFIX_BYTES;
 	static constexpr idx_t INLINE_LENGTH = INLINE_BYTES;
@@ -58,10 +61,12 @@ public:
 			value.pointer.ptr = (char *)data; // NOLINT
 		}
 	}
-	string_t(const char *data) : string_t(data, strlen(data)) { // NOLINT: Allow implicit conversion from `const char*`
+
+	string_t(const char *data) // NOLINT: Allow implicit conversion from `const char*`
+	    : string_t(data, UnsafeNumericCast<uint32_t>(strlen(data))) {
 	}
-	string_t(const string &value)
-	    : string_t(value.c_str(), value.size()) { // NOLINT: Allow implicit conversion from `const char*`
+	string_t(const string &value) // NOLINT: Allow implicit conversion from `const char*`
+	    : string_t(value.c_str(), UnsafeNumericCast<uint32_t>(value.size())) {
 	}
 
 	bool IsInlined() const {
@@ -80,15 +85,19 @@ public:
 	}
 
 	const char *GetPrefix() const {
-		return value.pointer.prefix;
+		return value.inlined.inlined;
 	}
 
-	char *GetPrefixWriteable() const {
-		return (char *)value.pointer.prefix;
+	char *GetPrefixWriteable() {
+		return value.inlined.inlined;
 	}
 
 	idx_t GetSize() const {
 		return value.inlined.length;
+	}
+
+	bool Empty() const {
+		return value.inlined.length == 0;
 	}
 
 	string GetString() const {
@@ -113,9 +122,7 @@ public:
 		// set trailing NULL byte
 		if (GetSize() <= INLINE_LENGTH) {
 			// fill prefix with zeros if the length is smaller than the prefix length
-			for (idx_t i = GetSize(); i < INLINE_BYTES; i++) {
-				value.inlined.inlined[i] = '\0';
-			}
+			memset(value.inlined.inlined + GetSize(), 0, INLINE_BYTES - GetSize());
 		} else {
 			// copy the data into the prefix
 #ifndef DUCKDB_DEBUG_NO_INLINE
@@ -128,25 +135,28 @@ public:
 	}
 
 	void Verify() const;
+	void VerifyUTF8() const;
+	void VerifyCharacters() const;
 	void VerifyNull() const;
 
 	struct StringComparisonOperators {
 		static inline bool Equals(const string_t &a, const string_t &b) {
 #ifdef DUCKDB_DEBUG_NO_INLINE
-			if (a.GetSize() != b.GetSize())
+			if (a.GetSize() != b.GetSize()) {
 				return false;
+			}
 			return (memcmp(a.GetData(), b.GetData(), a.GetSize()) == 0);
 #endif
-			uint64_t A = Load<uint64_t>(const_data_ptr_cast(&a));
-			uint64_t B = Load<uint64_t>(const_data_ptr_cast(&b));
-			if (A != B) {
+			uint64_t a_bulk_comp = Load<uint64_t>(const_data_ptr_cast(&a));
+			uint64_t b_bulk_comp = Load<uint64_t>(const_data_ptr_cast(&b));
+			if (a_bulk_comp != b_bulk_comp) {
 				// Either length or prefix are different -> not equal
 				return false;
 			}
 			// they have the same length and same prefix!
-			A = Load<uint64_t>(const_data_ptr_cast(&a) + 8u);
-			B = Load<uint64_t>(const_data_ptr_cast(&b) + 8u);
-			if (A == B) {
+			a_bulk_comp = Load<uint64_t>(const_data_ptr_cast(&a) + 8u);
+			b_bulk_comp = Load<uint64_t>(const_data_ptr_cast(&b) + 8u);
+			if (a_bulk_comp == b_bulk_comp) {
 				// either they are both inlined (so compare equal) or point to the same string (so compare equal)
 				return true;
 			}
@@ -163,16 +173,16 @@ public:
 		}
 		// compare up to shared length. if still the same, compare lengths
 		static bool GreaterThan(const string_t &left, const string_t &right) {
-			const uint32_t left_length = left.GetSize();
-			const uint32_t right_length = right.GetSize();
+			const uint32_t left_length = UnsafeNumericCast<uint32_t>(left.GetSize());
+			const uint32_t right_length = UnsafeNumericCast<uint32_t>(right.GetSize());
 			const uint32_t min_length = std::min<uint32_t>(left_length, right_length);
 
 #ifndef DUCKDB_DEBUG_NO_INLINE
-			uint32_t A = Load<uint32_t>(const_data_ptr_cast(left.GetPrefix()));
-			uint32_t B = Load<uint32_t>(const_data_ptr_cast(right.GetPrefix()));
+			uint32_t a_prefix = Load<uint32_t>(const_data_ptr_cast(left.GetPrefix()));
+			uint32_t b_prefix = Load<uint32_t>(const_data_ptr_cast(right.GetPrefix()));
 
 			// Utility to move 0xa1b2c3d4 into 0xd4c3b2a1, basically inverting the order byte-a-byte
-			auto bswap = [](uint32_t v) -> uint32_t {
+			auto byte_swap = [](uint32_t v) -> uint32_t {
 				uint32_t t1 = (v >> 16u) | (v << 16u);
 				uint32_t t2 = t1 & 0x00ff00ff;
 				uint32_t t3 = t1 & 0xff00ff00;
@@ -185,8 +195,9 @@ public:
 			// 	if the prefix is smaller(after bswap), it will stay smaller regardless of the extra bytes
 			//	if the prefix is equal, the extra bytes are guaranteed to be /0 for the shorter one
 
-			if (A != B)
-				return bswap(A) > bswap(B);
+			if (a_prefix != b_prefix) {
+				return byte_swap(a_prefix) > byte_swap(b_prefix);
+			}
 #endif
 			auto memcmp_res = memcmp(left.GetData(), right.GetData(), min_length);
 			return memcmp_res > 0 || (memcmp_res == 0 && left_length > right_length);
@@ -195,6 +206,10 @@ public:
 
 	bool operator==(const string_t &r) const {
 		return StringComparisonOperators::Equals(*this, r);
+	}
+
+	bool operator!=(const string_t &r) const {
+		return !(*this == r);
 	}
 
 	bool operator>(const string_t &r) const {

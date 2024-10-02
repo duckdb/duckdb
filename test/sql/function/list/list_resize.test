@@ -97,6 +97,11 @@ NULL
 [NULL, NULL, NULL, NULL]
 [NULL, NULL, 5, 6, NULL, NULL]
 
+query I
+select * from (SELECT list_resize(NULL, 1, 1))
+----
+NULL
+
 # Nested Lists
 
 query I
@@ -177,26 +182,20 @@ SELECT list_resize([1, 2], 3, 4)
 [1, 2, 4]
 
 statement ok
-create table def(tbl int[], b int, d int);
+CREATE TABLE def(tbl INT[], b INT, d INT);
 
 statement ok
-insert into def values ([1, 2, 3], 5, 4);
-
-statement ok
-insert into def values ([4, 5, 6], 6, NULL);
-
-statement ok
-insert into def values ([7, 8, NULL], 3, 10);
+INSERT INTO def VALUES ([1, 2, 3], 5, 4), ([4, 5, 6], 6, NULL), ([7, 8, NULL], 3, 10);
 
 query I
-select list_resize(tbl, b, d) from def;
+SELECT list_resize(tbl, b, d) FROM def;
 ----
 [1, 2, 3, 4, 4]
 [4, 5, 6, NULL, NULL, NULL]
 [7, 8, NULL]
 
 query I
-SELECT list_resize([1, 2], 3, NULL)
+SELECT list_resize([1, 2], 3, NULL);
 ----
 [1, 2, NULL]
 
@@ -292,11 +291,25 @@ execute ${q}([1, 2, 3], 1.4);
 statement ok
 execute ${q}([2], 2::TINYINT);
 
+
+statement error
+execute ${q}([1, 2, 3], -1);
+----
+Conversion Error: Type INT32 with value -1 can't be cast because the value is out of range for the destination type UINT64
+
+statement error
+SELECT LIST_RESIZE([1, 2, 3], 9999999999999999999);
+----
+maximum allowed vector size
+
+statement error
+SELECT LIST_RESIZE([1, 2, 3], 4000999999999999999)
+----
+maximum allowed vector size
+
 endloop
 
 query I
 SELECT list_resize([1, 2, 3]::BIGINT[], 5, 42);
 ----
 [1, 2, 3, 42, 42]
-
-

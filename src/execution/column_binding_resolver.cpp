@@ -1,27 +1,24 @@
 #include "duckdb/execution/column_binding_resolver.hpp"
 
-#include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/planner/operator/logical_any_join.hpp"
-#include "duckdb/planner/operator/logical_create_index.hpp"
-#include "duckdb/planner/operator/logical_insert.hpp"
-#include "duckdb/planner/operator/logical_extension_operator.hpp"
-
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
-
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/operator/logical_any_join.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_create_index.hpp"
+#include "duckdb/planner/operator/logical_extension_operator.hpp"
+#include "duckdb/planner/operator/logical_insert.hpp"
 
 namespace duckdb {
 
-ColumnBindingResolver::ColumnBindingResolver() {
+ColumnBindingResolver::ColumnBindingResolver(bool verify_only) : verify_only(verify_only) {
 }
 
 void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		// special case: comparison join
 		auto &comp_join = op.Cast<LogicalComparisonJoin>();
 		// first get the bindings of the LHS and resolve the LHS expressions
@@ -42,6 +39,40 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		bindings = op.GetColumnBindings();
 		return;
 	}
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
+		auto &comp_join = op.Cast<LogicalComparisonJoin>();
+		// depending on whether the delim join has been flipped, get the appropriate bindings
+		if (comp_join.delim_flipped) {
+			VisitOperator(*comp_join.children[1]);
+			for (auto &cond : comp_join.conditions) {
+				VisitExpression(&cond.right);
+			}
+		} else {
+			VisitOperator(*comp_join.children[0]);
+			for (auto &cond : comp_join.conditions) {
+				VisitExpression(&cond.left);
+			}
+		}
+		// visit the duplicate eliminated columns
+		for (auto &expr : comp_join.duplicate_eliminated_columns) {
+			VisitExpression(&expr);
+		}
+		// now get the other side
+		if (comp_join.delim_flipped) {
+			VisitOperator(*comp_join.children[0]);
+			for (auto &cond : comp_join.conditions) {
+				VisitExpression(&cond.left);
+			}
+		} else {
+			VisitOperator(*comp_join.children[1]);
+			for (auto &cond : comp_join.conditions) {
+				VisitExpression(&cond.right);
+			}
+		}
+		// finally update the bindings with the result bindings of the join
+		bindings = op.GetColumnBindings();
+		return;
+	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
 		// ANY join, this join is different because we evaluate the expression on the bindings of BOTH join sides at
 		// once i.e. we set the bindings first to the bindings of the entire join, and then resolve the expressions of
@@ -52,6 +83,9 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		if (any_join.join_type == JoinType::SEMI || any_join.join_type == JoinType::ANTI) {
 			auto right_bindings = op.children[1]->GetColumnBindings();
 			bindings.insert(bindings.end(), right_bindings.begin(), right_bindings.end());
+		}
+		if (any_join.join_type == JoinType::RIGHT_SEMI || any_join.join_type == JoinType::RIGHT_ANTI) {
+			throw InternalException("RIGHT SEMI/ANTI any join not supported yet");
 		}
 		VisitOperatorExpressions(op);
 		return;
@@ -118,23 +152,19 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	// check the current set of column bindings to see which index corresponds to the column reference
 	for (idx_t i = 0; i < bindings.size(); i++) {
 		if (expr.binding == bindings[i]) {
+			if (verify_only) {
+				// in verification mode
+				return nullptr;
+			}
 			return make_uniq<BoundReferenceExpression>(expr.alias, expr.return_type, i);
 		}
 	}
 	// LCOV_EXCL_START
 	// could not bind the column reference, this should never happen and indicates a bug in the code
 	// generate an error message
-	string bound_columns = "[";
-	for (idx_t i = 0; i < bindings.size(); i++) {
-		if (i != 0) {
-			bound_columns += " ";
-		}
-		bound_columns += to_string(bindings[i].table_index) + "." + to_string(bindings[i].column_index);
-	}
-	bound_columns += "]";
-
 	throw InternalException("Failed to bind column reference \"%s\" [%d.%d] (bindings: %s)", expr.alias,
-	                        expr.binding.table_index, expr.binding.column_index, bound_columns);
+	                        expr.binding.table_index, expr.binding.column_index,
+	                        LogicalOperator::ColumnBindingsToString(bindings));
 	// LCOV_EXCL_STOP
 }
 
@@ -163,6 +193,8 @@ unordered_set<idx_t> ColumnBindingResolver::VerifyInternal(LogicalOperator &op) 
 
 void ColumnBindingResolver::Verify(LogicalOperator &op) {
 #ifdef DEBUG
+	ColumnBindingResolver resolver(true);
+	resolver.VisitOperator(op);
 	VerifyInternal(op);
 #endif
 }

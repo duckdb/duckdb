@@ -1,0 +1,240 @@
+# name: test/sql/copy/partitioned/skip_partition_column_writes.test
+# description: Skip partition column writes (issue 11931 & 12147)
+# group: [partitioned]
+
+require parquet
+
+statement ok
+CREATE TABLE test as SELECT i%2 as part_col, (i+1)%5 as value_col, i as value2_col from range(0,10) tbl(i);
+
+# Parquet
+
+# Skip write of the first partition column
+statement ok
+COPY test TO '__TEST_DIR__/no-part-cols' (FORMAT PARQUET, PARTITION_BY (part_col));
+
+# SELECT query returns all columns, but written files do not have partition columns
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/no-part-cols/part_col=0/*.parquet' ORDER BY value2_col;
+----
+0	1	0
+0	3	2
+0	0	4
+0	2	6
+0	4	8
+
+# Skip writes of 2 partition columns
+statement ok
+COPY test TO '__TEST_DIR__/no-part-cols2' (FORMAT PARQUET, PARTITION_BY (part_col, value_col));
+
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/no-part-cols2/part_col=0/value_col=*/*.parquet' ORDER BY value2_col;
+----
+0	1	0
+0	3	2
+0	0	4
+0	2	6
+0	4	8
+
+# Modified version of the partition_col
+statement ok
+COPY (SELECT * EXCLUDE (part_col), 'prefix-'::VARCHAR || part_col::VARCHAR as part_col FROM test) TO '__TEST_DIR__/no-part-cols3' (FORMAT PARQUET, PARTITION_BY (part_col));
+
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/no-part-cols3/part_col=prefix-0/*.parquet' ORDER BY value2_col;
+----
+prefix-0	1	0
+prefix-0	3	2
+prefix-0	0	4
+prefix-0	2	6
+prefix-0	4	8
+
+# Partitions of more than 8 columns
+statement ok
+COPY (SELECT 1 AS part_col, 2 AS value_col, 3 AS value2_col, 4 AS value3_col, 5 AS value4_col, 6 AS value5_col, 7 AS value6_col, 8 AS value7_col, 9 AS value8_col, 10 AS value9_col) TO '__TEST_DIR__/no-part-cols4' (FORMAT PARQUET, PARTITION_BY (part_col));
+
+query IIIIIIIIII
+SELECT part_col, value_col, value2_col, value3_col, value4_col, value5_col, value6_col, value7_col, value8_col, value9_col FROM '__TEST_DIR__/no-part-cols4/part_col=1/*.parquet' ORDER BY 1;
+----
+1	2	3	4	5	6	7	8	9	10
+
+# Partition by last column out of 10 columns
+statement ok
+COPY (SELECT 1 AS part_col, 2 AS value_col, 3 AS value2_col, 4 AS value3_col, 5 AS value4_col, 6 AS value5_col, 7 AS value6_col, 8 AS value7_col, 9 AS value8_col, 10 AS value9_col) TO '__TEST_DIR__/no-part-cols5' (FORMAT PARQUET, PARTITION_BY (value9_col));
+
+query IIIIIIIIII
+SELECT part_col, value_col, value2_col, value3_col, value4_col, value5_col, value6_col, value7_col, value8_col, value9_col FROM '__TEST_DIR__/no-part-cols5/value9_col=*/*.parquet' ORDER BY 1;
+----
+1	2	3	4	5	6	7	8	9	10
+
+# Partition by last 2 columns out of 10 columns
+statement ok
+COPY (SELECT 1 AS part_col, 2 AS value_col, 3 AS value2_col, 4 AS value3_col, 5 AS value4_col, 6 AS value5_col, 7 AS value6_col, 8 AS value7_col, 9 AS value8_col, 10 AS value9_col) TO '__TEST_DIR__/no-part-cols6' (FORMAT PARQUET, PARTITION_BY (value8_col, value9_col));
+
+query IIIIIIIIII
+SELECT part_col, value_col, value2_col, value3_col, value4_col, value5_col, value6_col, value7_col, value8_col, value9_col FROM '__TEST_DIR__/no-part-cols6/value8_col=*/value9_col=*/*.parquet' ORDER BY 1;
+----
+1	2	3	4	5	6	7	8	9	10
+
+# Partition by last 3 columns out of 10 columns in a reverse order
+statement ok
+COPY (SELECT 1 AS part_col, 2 AS value_col, 3 AS value2_col, 4 AS value3_col, 5 AS value4_col, 6 AS value5_col, 7 AS value6_col, 8 AS value7_col, 9 AS value8_col, 10 AS value9_col) TO '__TEST_DIR__/no-part-cols7' (FORMAT PARQUET, PARTITION_BY (value9_col, value8_col, value7_col));
+
+query IIIIIIIIII
+SELECT part_col, value_col, value2_col, value3_col, value4_col, value5_col, value6_col, value7_col, value8_col, value9_col FROM '__TEST_DIR__/no-part-cols7/value9_col=*/value8_col=*/value7_col=*/*.parquet' ORDER BY 1;
+----
+1	2	3	4	5	6	7	8	9	10
+
+# Throw an error when all columns are specified as partitions
+statement error
+COPY test TO '__TEST_DIR__/no-part-cols8' (FORMAT PARQUET, PARTITION_BY (part_col, value_col, value2_col));
+----
+Not implemented Error: No column to write as all columns are specified as partition columns. WRITE_PARTITION_COLUMNS option can be used to write partition columns.
+
+# With explicit WRITE_PARTITION_COLUMNS option, all columns would still be written and still readable.
+statement ok
+COPY test TO '__TEST_DIR__/no-part-cols8' (FORMAT PARQUET, OVERWRITE, PARTITION_BY (part_col, value_col, value2_col), WRITE_PARTITION_COLUMNS);
+
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/no-part-cols8/part_col=0/value_col=*/value2_col=*/*.parquet' ORDER BY value2_col;
+----
+0	1	0
+0	3	2
+0	0	4
+0	2	6
+0	4	8
+
+# '*' also ends up with error
+statement error
+COPY test TO '__TEST_DIR__/no-part-cols9' (FORMAT PARQUET, PARTITION_BY '*');
+----
+Not implemented Error: No column to write as all columns are specified as partition columns. WRITE_PARTITION_COLUMNS option can be used to write partition columns.
+
+# With explicit WRITE_PARTITION_COLUMNS option, all columns would still be written and still readable.
+statement ok
+COPY test TO '__TEST_DIR__/no-part-cols9' (FORMAT PARQUET, PARTITION_BY '*', OVERWRITE, WRITE_PARTITION_COLUMNS);
+
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/no-part-cols9/part_col=0/value_col=*/value2_col=*/*.parquet' ORDER BY value2_col;
+----
+0	1	0
+0	3	2
+0	0	4
+0	2	6
+0	4	8
+
+# CSV
+
+# Skip write of the first partition column
+statement ok
+COPY test TO '__TEST_DIR__/csv-no-part-cols' (FORMAT CSV, PARTITION_BY (part_col));
+
+# SELECT query returns all columns, but written files do not have partition columns
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/csv-no-part-cols/part_col=0/*.csv' ORDER BY value2_col;
+----
+0	1	0
+0	3	2
+0	0	4
+0	2	6
+0	4	8
+
+# Skip writes of 2 partition columns
+statement ok
+COPY test TO '__TEST_DIR__/csv-no-part-cols2' (FORMAT CSV, PARTITION_BY (part_col, value_col));
+
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/csv-no-part-cols2/part_col=0/value_col=*/*.csv' ORDER BY value2_col;
+----
+0	1	0
+0	3	2
+0	0	4
+0	2	6
+0	4	8
+
+# Modified version of the partition_col
+statement ok
+COPY (SELECT * EXCLUDE (part_col), 'prefix-'::VARCHAR || part_col::VARCHAR as part_col FROM test) TO '__TEST_DIR__/csv-no-part-cols3' (FORMAT CSV, PARTITION_BY (part_col));
+
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/csv-no-part-cols3/part_col=prefix-0/*.csv' ORDER BY value2_col;
+----
+prefix-0	1	0
+prefix-0	3	2
+prefix-0	0	4
+prefix-0	2	6
+prefix-0	4	8
+
+# Partitions of more than 8 columns
+statement ok
+COPY (SELECT 1 AS part_col, 2 AS value_col, 3 AS value2_col, 4 AS value3_col, 5 AS value4_col, 6 AS value5_col, 7 AS value6_col, 8 AS value7_col, 9 AS value8_col, 10 AS value9_col) TO '__TEST_DIR__/csv-no-part-cols4' (FORMAT CSV, PARTITION_BY (part_col));
+
+query IIIIIIIIII
+SELECT part_col, value_col, value2_col, value3_col, value4_col, value5_col, value6_col, value7_col, value8_col, value9_col FROM '__TEST_DIR__/csv-no-part-cols4/part_col=1/*.csv' ORDER BY 1;
+----
+1	2	3	4	5	6	7	8	9	10
+
+# Partition by last column out of 10 columns
+statement ok
+COPY (SELECT 1 AS part_col, 2 AS value_col, 3 AS value2_col, 4 AS value3_col, 5 AS value4_col, 6 AS value5_col, 7 AS value6_col, 8 AS value7_col, 9 AS value8_col, 10 AS value9_col) TO '__TEST_DIR__/csv-no-part-cols5' (FORMAT CSV, PARTITION_BY (value9_col));
+
+query IIIIIIIIII
+SELECT part_col, value_col, value2_col, value3_col, value4_col, value5_col, value6_col, value7_col, value8_col, value9_col FROM '__TEST_DIR__/csv-no-part-cols5/value9_col=*/*.csv' ORDER BY 1;
+----
+1	2	3	4	5	6	7	8	9	10
+
+# Partition by last 2 columns out of 10 columns
+statement ok
+COPY (SELECT 1 AS part_col, 2 AS value_col, 3 AS value2_col, 4 AS value3_col, 5 AS value4_col, 6 AS value5_col, 7 AS value6_col, 8 AS value7_col, 9 AS value8_col, 10 AS value9_col) TO '__TEST_DIR__/csv-no-part-cols6' (FORMAT CSV, PARTITION_BY (value8_col, value9_col));
+
+query IIIIIIIIII
+SELECT part_col, value_col, value2_col, value3_col, value4_col, value5_col, value6_col, value7_col, value8_col, value9_col FROM '__TEST_DIR__/csv-no-part-cols6/value8_col=*/value9_col=*/*.csv' ORDER BY 1;
+----
+1	2	3	4	5	6	7	8	9	10
+
+# Partition by last 3 columns out of 10 columns in a reverse order
+statement ok
+COPY (SELECT 1 AS part_col, 2 AS value_col, 3 AS value2_col, 4 AS value3_col, 5 AS value4_col, 6 AS value5_col, 7 AS value6_col, 8 AS value7_col, 9 AS value8_col, 10 AS value9_col) TO '__TEST_DIR__/csv-no-part-cols7' (FORMAT CSV, PARTITION_BY (value9_col, value8_col, value7_col));
+
+query IIIIIIIIII
+SELECT part_col, value_col, value2_col, value3_col, value4_col, value5_col, value6_col, value7_col, value8_col, value9_col FROM '__TEST_DIR__/csv-no-part-cols7/value9_col=*/value8_col=*/value7_col=*/*.csv' ORDER BY 1;
+----
+1	2	3	4	5	6	7	8	9	10
+
+# Throw an error when all columns are specified as partitions
+statement error
+COPY test TO '__TEST_DIR__/csv-no-part-cols8' (FORMAT CSV, PARTITION_BY (part_col, value_col, value2_col));
+----
+Not implemented Error: No column to write as all columns are specified as partition columns. WRITE_PARTITION_COLUMNS option can be used to write partition columns.
+
+# With explicit WRITE_PARTITION_COLUMNS option, all columns would still be written and still readable.
+statement ok
+COPY test TO '__TEST_DIR__/csv-no-part-cols8' (FORMAT CSV, PARTITION_BY (part_col, value_col, value2_col), OVERWRITE, WRITE_PARTITION_COLUMNS);
+
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/csv-no-part-cols8/part_col=0/value_col=*/value2_col=*/*.csv' ORDER BY value2_col;
+----
+0	1	0
+0	3	2
+0	0	4
+0	2	6
+0	4	8
+
+# '*' also ends up with error
+statement error
+COPY test TO '__TEST_DIR__/csv-no-part-cols9' (FORMAT CSV, PARTITION_BY '*');
+----
+Not implemented Error: No column to write as all columns are specified as partition columns. WRITE_PARTITION_COLUMNS option can be used to write partition columns.
+
+# With explicit WRITE_PARTITION_COLUMNS option, all columns would still be written and still readable.
+statement ok
+COPY test TO '__TEST_DIR__/csv-no-part-cols9' (FORMAT CSV, PARTITION_BY '*', OVERWRITE, WRITE_PARTITION_COLUMNS);
+
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/csv-no-part-cols9/part_col=0/value_col=*/value2_col=*/*.csv' ORDER BY value2_col;
+----
+0	1	0
+0	3	2
+0	0	4
+0	2	6
+0	4	8

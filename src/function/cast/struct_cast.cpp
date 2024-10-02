@@ -14,17 +14,44 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 	auto source_is_unnamed = StructType::IsUnnamed(source);
 
 	if (source_child_types.size() != result_child_types.size()) {
-		throw TypeMismatchException(source, target, "Cannot cast STRUCTs of different size");
+		throw TypeMismatchException(input.query_location, source, target, "Cannot cast STRUCTs of different size");
 	}
-	for (idx_t i = 0; i < source_child_types.size(); i++) {
-		if (!target_is_unnamed && !source_is_unnamed &&
-		    !StringUtil::CIEquals(source_child_types[i].first, result_child_types[i].first)) {
-			throw TypeMismatchException(source, target, "Cannot cast STRUCTs with different names");
+	bool named_struct_cast = !source_is_unnamed && !target_is_unnamed;
+	case_insensitive_map_t<idx_t> target_members;
+	if (named_struct_cast) {
+		for (idx_t i = 0; i < result_child_types.size(); i++) {
+			auto &target_name = result_child_types[i].first;
+			if (target_members.find(target_name) != target_members.end()) {
+				throw NotImplementedException("Error while casting - duplicate name \"%s\" in struct", target_name);
+			}
+			target_members[target_name] = i;
 		}
-		auto child_cast = input.GetCastFunction(source_child_types[i].second, result_child_types[i].second);
+	}
+	vector<idx_t> child_member_map;
+	child_member_map.reserve(source_child_types.size());
+	for (idx_t source_idx = 0; source_idx < source_child_types.size(); source_idx++) {
+		auto &source_child = source_child_types[source_idx];
+		idx_t target_idx;
+		if (named_struct_cast) {
+			// named struct cast - find corresponding member in target
+			auto entry = target_members.find(source_child.first);
+			if (entry == target_members.end()) {
+				throw TypeMismatchException(input.query_location, source, target,
+				                            "Cannot cast STRUCTs - element \"" + source_child.first +
+				                                "\" in source struct was not found in target struct");
+			}
+			target_idx = entry->second;
+			target_members.erase(entry);
+		} else {
+			// unnamed struct cast - positionally cast elements
+			target_idx = source_idx;
+		}
+		child_member_map.push_back(target_idx);
+		auto child_cast = input.GetCastFunction(source_child.second, result_child_types[target_idx].second);
 		child_cast_info.push_back(std::move(child_cast));
 	}
-	return make_uniq<StructBoundCastData>(std::move(child_cast_info), target);
+	D_ASSERT(child_member_map.size() == source_child_types.size());
+	return make_uniq<StructBoundCastData>(std::move(child_cast_info), target, std::move(child_member_map));
 }
 
 unique_ptr<FunctionLocalState> StructBoundCastData::InitStructCastLocalState(CastLocalStateParameters &parameters) {
@@ -52,8 +79,10 @@ static bool StructToStructCast(Vector &source, Vector &result, idx_t count, Cast
 	auto &result_children = StructVector::GetEntries(result);
 	bool all_converted = true;
 	for (idx_t c_idx = 0; c_idx < source_child_types.size(); c_idx++) {
-		auto &result_child_vector = *result_children[c_idx];
-		auto &source_child_vector = *source_children[c_idx];
+		auto source_idx = c_idx;
+		auto target_idx = cast_data.child_member_map[source_idx];
+		auto &source_child_vector = *source_children[source_idx];
+		auto &result_child_vector = *result_children[target_idx];
 		CastParameters child_parameters(parameters, cast_data.child_cast_info[c_idx].cast_data,
 		                                lstate.local_states[c_idx]);
 		if (!cast_data.child_cast_info[c_idx].function(source_child_vector, result_child_vector, count,
@@ -80,6 +109,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 
 	// now construct the actual varchar vector
 	varchar_struct.Flatten(count);
+	bool is_unnamed = StructType::IsUnnamed(source.GetType());
 	auto &child_types = StructType::GetChildTypes(source.GetType());
 	auto &children = StructVector::GetEntries(varchar_struct);
 	auto &validity = FlatVector::Validity(varchar_struct);
@@ -101,13 +131,15 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			auto &child_validity = FlatVector::Validity(*children[c]);
 			auto data = FlatVector::GetData<string_t>(*children[c]);
 			auto &name = child_types[c].first;
-			string_length += name.size() + NAME_SEP_LENGTH; // "'{name}': "
+			if (!is_unnamed) {
+				string_length += name.size() + NAME_SEP_LENGTH; // "'{name}': "
+			}
 			string_length += child_validity.RowIsValid(i) ? data[i].GetSize() : NULL_LENGTH;
 		}
 		result_data[i] = StringVector::EmptyString(result, string_length);
 		auto dataptr = result_data[i].GetDataWriteable();
 		idx_t offset = 0;
-		dataptr[offset++] = '{';
+		dataptr[offset++] = is_unnamed ? '(' : '{';
 		for (idx_t c = 0; c < children.size(); c++) {
 			if (c > 0) {
 				memcpy(dataptr + offset, ", ", SEP_LENGTH);
@@ -115,14 +147,16 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			}
 			auto &child_validity = FlatVector::Validity(*children[c]);
 			auto data = FlatVector::GetData<string_t>(*children[c]);
-			auto &name = child_types[c].first;
-			// "'{name}': "
-			dataptr[offset++] = '\'';
-			memcpy(dataptr + offset, name.c_str(), name.size());
-			offset += name.size();
-			dataptr[offset++] = '\'';
-			dataptr[offset++] = ':';
-			dataptr[offset++] = ' ';
+			if (!is_unnamed) {
+				auto &name = child_types[c].first;
+				// "'{name}': "
+				dataptr[offset++] = '\'';
+				memcpy(dataptr + offset, name.c_str(), name.size());
+				offset += name.size();
+				dataptr[offset++] = '\'';
+				dataptr[offset++] = ':';
+				dataptr[offset++] = ' ';
+			}
 			// value
 			if (child_validity.RowIsValid(i)) {
 				auto len = data[i].GetSize();
@@ -133,7 +167,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 				offset += NULL_LENGTH;
 			}
 		}
-		dataptr[offset++] = '}';
+		dataptr[offset++] = is_unnamed ? ')' : '}';
 		result_data[i].Finalize();
 	}
 

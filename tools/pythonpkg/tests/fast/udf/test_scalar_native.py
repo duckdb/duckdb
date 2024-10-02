@@ -148,6 +148,8 @@ class TestNativeUDF(object):
             (UBIGINT, 18446744073709551616),
             (HUGEINT, -170141183460469231731687303715884105729),
             (HUGEINT, 170141183460469231731687303715884105728),
+            (UHUGEINT, -1),
+            (UHUGEINT, 340282366920938463463374607431768211456),
         ],
     )
     def test_return_overflow(self, pair):
@@ -167,7 +169,7 @@ class TestNativeUDF(object):
     def test_structs(self):
         def add_extra_column(original):
             original['a'] = 200
-            original['bb'] = 0
+            original['c'] = 0
             return original
 
         con = duckdb.connect()
@@ -190,11 +192,16 @@ class TestNativeUDF(object):
         res.fetchall()
 
         def swap_keys(dict):
+            reversed_keys = list(dict.keys())[::-1]  # Reverse the keys
+            keys = list(dict.keys())  # Original keys
             result = {}
-            reversed_keys = list(dict.keys())
-            reversed_keys.reverse()
-            for item in reversed_keys:
-                result[item] = dict[item]
+
+            halfway = len(keys) // 2
+            for i in range(halfway):
+                item1 = reversed_keys[i]
+                item2 = keys[i]
+                result[item1] = dict[item2]
+                result[item2] = dict[item1]
             return result
 
         con.create_function(
@@ -209,3 +216,32 @@ class TestNativeUDF(object):
         """
         ).fetchall()
         assert res == [({'a': 'answer_to_life', 'b': 42},)]
+
+    def test_struct_different_field_order(self, duckdb_cursor):
+        def example():
+            return {
+                "country": "country",
+                "postal_code": "postal_code",
+                "state": "state",
+                "city": "city",
+                "street2": "street2",
+                "street1": "street1",
+            }
+
+        # The order in which the fields are provided is intentionally different
+        return_type = """
+        STRUCT(
+            "street1" STRING,
+            "street2" STRING,
+            "city" STRING,
+            "state" STRING,
+            "postal_code" STRING,
+            "country" STRING
+        )
+        """
+
+        duckdb_cursor.create_function("example", example, return_type=return_type)
+
+        (res,) = duckdb_cursor.sql("SELECT example()").fetchone()
+        for key, val in res.items():
+            assert key == val

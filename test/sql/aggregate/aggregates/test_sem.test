@@ -8,6 +8,7 @@ PRAGMA enable_verification
 #Corner cases
 statement error
 select sem()
+----
 
 query I
 select sem(NULL)
@@ -21,6 +22,7 @@ select sem(1)
 
 statement error
 select sem(*)
+----
 
 statement ok
 create table aggr(k int, v decimal(10,2), v2 decimal(10, 2));
@@ -40,13 +42,14 @@ select  sem(v),sem(v2) from aggr
 3.577709	5.663398
 
 # Window Function
-query I rowsort
-select  sem(v) over (partition by k)
-    from aggr;
+query II
+select k, sem(v) over (partition by k)
+from aggr
+order by all
 ----
-0.000000
-3.697550
-3.697550
-3.697550
-3.697550
+1	0.0
+2	3.6975498644372604
+2	3.6975498644372604
+2	3.6975498644372604
+2	3.6975498644372604
 

@@ -2,8 +2,8 @@
 
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/parser/query_node.hpp"
-#include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/parser/query_node/cte_node.hpp"
+#include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/tableref/list.hpp"
@@ -201,94 +201,100 @@ void ParsedExpressionIterator::EnumerateQueryNodeModifiers(
 }
 
 void ParsedExpressionIterator::EnumerateTableRefChildren(
-    TableRef &ref, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
+    TableRef &ref, const std::function<void(unique_ptr<ParsedExpression> &child)> &expr_callback,
+    const std::function<void(TableRef &ref)> &ref_callback) {
 	switch (ref.type) {
 	case TableReferenceType::EXPRESSION_LIST: {
 		auto &el_ref = ref.Cast<ExpressionListRef>();
 		for (idx_t i = 0; i < el_ref.values.size(); i++) {
 			for (idx_t j = 0; j < el_ref.values[i].size(); j++) {
-				callback(el_ref.values[i][j]);
+				expr_callback(el_ref.values[i][j]);
 			}
 		}
 		break;
 	}
 	case TableReferenceType::JOIN: {
 		auto &j_ref = ref.Cast<JoinRef>();
-		EnumerateTableRefChildren(*j_ref.left, callback);
-		EnumerateTableRefChildren(*j_ref.right, callback);
+		EnumerateTableRefChildren(*j_ref.left, expr_callback, ref_callback);
+		EnumerateTableRefChildren(*j_ref.right, expr_callback, ref_callback);
 		if (j_ref.condition) {
-			callback(j_ref.condition);
+			expr_callback(j_ref.condition);
 		}
 		break;
 	}
 	case TableReferenceType::PIVOT: {
 		auto &p_ref = ref.Cast<PivotRef>();
-		EnumerateTableRefChildren(*p_ref.source, callback);
+		EnumerateTableRefChildren(*p_ref.source, expr_callback, ref_callback);
 		for (auto &aggr : p_ref.aggregates) {
-			callback(aggr);
+			expr_callback(aggr);
 		}
 		break;
 	}
 	case TableReferenceType::SUBQUERY: {
 		auto &sq_ref = ref.Cast<SubqueryRef>();
-		EnumerateQueryNodeChildren(*sq_ref.subquery->node, callback);
+		EnumerateQueryNodeChildren(*sq_ref.subquery->node, expr_callback, ref_callback);
 		break;
 	}
 	case TableReferenceType::TABLE_FUNCTION: {
 		auto &tf_ref = ref.Cast<TableFunctionRef>();
-		callback(tf_ref.function);
+		expr_callback(tf_ref.function);
 		break;
 	}
 	case TableReferenceType::BASE_TABLE:
-	case TableReferenceType::EMPTY:
+	case TableReferenceType::EMPTY_FROM:
+	case TableReferenceType::SHOW_REF:
+	case TableReferenceType::COLUMN_DATA:
+	case TableReferenceType::DELIM_GET:
 		// these TableRefs do not need to be unfolded
 		break;
 	case TableReferenceType::INVALID:
 	case TableReferenceType::CTE:
 		throw NotImplementedException("TableRef type not implemented for traversal");
 	}
+	ref_callback(ref);
 }
 
 void ParsedExpressionIterator::EnumerateQueryNodeChildren(
-    QueryNode &node, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
+    QueryNode &node, const std::function<void(unique_ptr<ParsedExpression> &child)> &expr_callback,
+    const std::function<void(TableRef &ref)> &ref_callback) {
 	switch (node.type) {
 	case QueryNodeType::RECURSIVE_CTE_NODE: {
 		auto &rcte_node = node.Cast<RecursiveCTENode>();
-		EnumerateQueryNodeChildren(*rcte_node.left, callback);
-		EnumerateQueryNodeChildren(*rcte_node.right, callback);
+		EnumerateQueryNodeChildren(*rcte_node.left, expr_callback, ref_callback);
+		EnumerateQueryNodeChildren(*rcte_node.right, expr_callback, ref_callback);
 		break;
 	}
 	case QueryNodeType::CTE_NODE: {
 		auto &cte_node = node.Cast<CTENode>();
-		EnumerateQueryNodeChildren(*cte_node.query, callback);
-		EnumerateQueryNodeChildren(*cte_node.child, callback);
+		EnumerateQueryNodeChildren(*cte_node.query, expr_callback, ref_callback);
+		EnumerateQueryNodeChildren(*cte_node.child, expr_callback, ref_callback);
 		break;
 	}
 	case QueryNodeType::SELECT_NODE: {
 		auto &sel_node = node.Cast<SelectNode>();
 		for (idx_t i = 0; i < sel_node.select_list.size(); i++) {
-			callback(sel_node.select_list[i]);
+			expr_callback(sel_node.select_list[i]);
 		}
 		for (idx_t i = 0; i < sel_node.groups.group_expressions.size(); i++) {
-			callback(sel_node.groups.group_expressions[i]);
+			expr_callback(sel_node.groups.group_expressions[i]);
 		}
 		if (sel_node.where_clause) {
-			callback(sel_node.where_clause);
+			expr_callback(sel_node.where_clause);
 		}
 		if (sel_node.having) {
-			callback(sel_node.having);
+			expr_callback(sel_node.having);
 		}
 		if (sel_node.qualify) {
-			callback(sel_node.qualify);
+			expr_callback(sel_node.qualify);
 		}
 
-		EnumerateTableRefChildren(*sel_node.from_table.get(), callback);
+		EnumerateTableRefChildren(*sel_node.from_table.get(), expr_callback, ref_callback);
 		break;
 	}
 	case QueryNodeType::SET_OPERATION_NODE: {
 		auto &setop_node = node.Cast<SetOperationNode>();
-		EnumerateQueryNodeChildren(*setop_node.left, callback);
-		EnumerateQueryNodeChildren(*setop_node.right, callback);
+		EnumerateQueryNodeChildren(*setop_node.left, expr_callback, ref_callback);
+		EnumerateQueryNodeChildren(*setop_node.right, expr_callback, ref_callback);
 		break;
 	}
 	default:
@@ -296,11 +302,11 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 	}
 
 	if (!node.modifiers.empty()) {
-		EnumerateQueryNodeModifiers(node, callback);
+		EnumerateQueryNodeModifiers(node, expr_callback);
 	}
 
 	for (auto &kv : node.cte_map.map) {
-		EnumerateQueryNodeChildren(*kv.second->query->node, callback);
+		EnumerateQueryNodeChildren(*kv.second->query->node, expr_callback, ref_callback);
 	}
 }
 

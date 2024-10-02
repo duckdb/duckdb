@@ -19,7 +19,7 @@ unique_ptr<TableRef> Transformer::TransformRangeVar(duckdb_libpgquery::PGRangeVa
 	if (root.sample) {
 		result->sample = TransformSampleOptions(root.sample);
 	}
-	result->query_location = root.location;
+	SetQueryLocation(*result, root.location);
 	return std::move(result);
 }
 

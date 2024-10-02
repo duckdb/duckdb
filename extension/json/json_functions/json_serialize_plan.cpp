@@ -1,17 +1,15 @@
+#include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/connection.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/planner.hpp"
-#include "duckdb/optimizer/optimizer.hpp"
-#include "duckdb/execution/column_binding_resolver.hpp"
-
+#include "json_common.hpp"
 #include "json_deserializer.hpp"
 #include "json_functions.hpp"
 #include "json_serializer.hpp"
-#include "json_common.hpp"
-
-#include "duckdb/main/connection.hpp"
-#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -21,16 +19,19 @@ namespace duckdb {
 struct JsonSerializePlanBindData : public FunctionData {
 	bool skip_if_null = false;
 	bool skip_if_empty = false;
+	bool skip_if_default = false;
 	bool format = false;
 	bool optimize = false;
 
-	JsonSerializePlanBindData(bool skip_if_null_p, bool skip_if_empty_p, bool format_p, bool optimize_p)
-	    : skip_if_null(skip_if_null_p), skip_if_empty(skip_if_empty_p), format(format_p), optimize(optimize_p) {
+	JsonSerializePlanBindData(bool skip_if_null_p, bool skip_if_empty_p, bool skip_if_default_p, bool format_p,
+	                          bool optimize_p)
+	    : skip_if_null(skip_if_null_p), skip_if_empty(skip_if_empty_p), skip_if_default(skip_if_default_p),
+	      format(format_p), optimize(optimize_p) {
 	}
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<JsonSerializePlanBindData>(skip_if_null, skip_if_empty, format, optimize);
+		return make_uniq<JsonSerializePlanBindData>(skip_if_null, skip_if_empty, skip_if_default, format, optimize);
 	}
 	bool Equals(const FunctionData &other_p) const override {
 		return true;
@@ -50,6 +51,7 @@ static unique_ptr<FunctionData> JsonSerializePlanBind(ClientContext &context, Sc
 	// Optional arguments
 	bool skip_if_null = false;
 	bool skip_if_empty = false;
+	bool skip_if_default = false;
 	bool format = false;
 	bool optimize = false;
 
@@ -71,6 +73,11 @@ static unique_ptr<FunctionData> JsonSerializePlanBind(ClientContext &context, Sc
 				throw BinderException("json_serialize_plan: 'skip_empty' argument must be a boolean");
 			}
 			skip_if_empty = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
+		} else if (arg->alias == "skip_default") {
+			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
+				throw BinderException("json_serialize_plan: 'skip_default' argument must be a boolean");
+			}
+			skip_if_default = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
 		} else if (arg->alias == "format") {
 			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_plan: 'format' argument must be a boolean");
@@ -85,7 +92,7 @@ static unique_ptr<FunctionData> JsonSerializePlanBind(ClientContext &context, Sc
 			throw BinderException(StringUtil::Format("json_serialize_plan: Unknown argument '%s'", arg->alias.c_str()));
 		}
 	}
-	return make_uniq<JsonSerializePlanBindData>(skip_if_null, skip_if_empty, format, optimize);
+	return make_uniq<JsonSerializePlanBindData>(skip_if_null, skip_if_empty, skip_if_default, format, optimize);
 }
 
 static bool OperatorSupportsSerialization(LogicalOperator &op, string &operator_name) {
@@ -146,7 +153,8 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 					throw InvalidInputException("Operator '%s' does not support serialization", operator_name);
 				}
 
-				auto plan_json = JsonSerializer::Serialize(*plan, doc, info.skip_if_null, info.skip_if_empty);
+				auto plan_json =
+				    JsonSerializer::Serialize(*plan, doc, info.skip_if_null, info.skip_if_empty, info.skip_if_default);
 				yyjson_mut_arr_append(plans_arr, plan_json);
 			}
 
@@ -164,11 +172,17 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 
 			return StringVector::AddString(result, data, len);
 
-		} catch (Exception &exception) {
+		} catch (std::exception &ex) {
+			ErrorData error(ex);
 			yyjson_mut_obj_add_true(doc, result_obj, "error");
+			// error type and message
 			yyjson_mut_obj_add_strcpy(doc, result_obj, "error_type",
-			                          StringUtil::Lower(exception.ExceptionTypeToString(exception.type)).c_str());
-			yyjson_mut_obj_add_strcpy(doc, result_obj, "error_message", exception.RawMessage().c_str());
+			                          StringUtil::Lower(Exception::ExceptionTypeToString(error.Type())).c_str());
+			yyjson_mut_obj_add_strcpy(doc, result_obj, "error_message", error.RawMessage().c_str());
+			// add extra info
+			for (auto &entry : error.ExtraInfo()) {
+				yyjson_mut_obj_add_strcpy(doc, result_obj, entry.first.c_str(), entry.second.c_str());
+			}
 
 			idx_t len;
 			auto data = yyjson_mut_val_write_opts(result_obj,
@@ -182,24 +196,23 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 ScalarFunctionSet JSONFunctions::GetSerializePlanFunction() {
 	ScalarFunctionSet set("json_serialize_plan");
 
-	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, JSONCommon::JSONType(), JsonSerializePlanFunction,
+	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::JSON(), JsonSerializePlanFunction,
 	                               JsonSerializePlanBind, nullptr, nullptr, JSONFunctionLocalState::Init));
 
-	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN}, JSONCommon::JSONType(),
+	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN}, LogicalType::JSON(),
 	                               JsonSerializePlanFunction, JsonSerializePlanBind, nullptr, nullptr,
 	                               JSONFunctionLocalState::Init));
 
 	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN},
-	                               JSONCommon::JSONType(), JsonSerializePlanFunction, JsonSerializePlanBind, nullptr,
+	                               LogicalType::JSON(), JsonSerializePlanFunction, JsonSerializePlanBind, nullptr,
 	                               nullptr, JSONFunctionLocalState::Init));
 
-	set.AddFunction(
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN},
-	                   JSONCommon::JSONType(), JsonSerializePlanFunction, JsonSerializePlanBind, nullptr, nullptr,
-	                   JSONFunctionLocalState::Init));
+	set.AddFunction(ScalarFunction(
+	    {LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN}, LogicalType::JSON(),
+	    JsonSerializePlanFunction, JsonSerializePlanBind, nullptr, nullptr, JSONFunctionLocalState::Init));
 	set.AddFunction(ScalarFunction(
 	    {LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN},
-	    JSONCommon::JSONType(), JsonSerializePlanFunction, JsonSerializePlanBind, nullptr, nullptr,
+	    LogicalType::JSON(), JsonSerializePlanFunction, JsonSerializePlanBind, nullptr, nullptr,
 	    JSONFunctionLocalState::Init));
 	return set;
 }

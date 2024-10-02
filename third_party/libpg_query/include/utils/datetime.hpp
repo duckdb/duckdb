@@ -64,6 +64,7 @@
 #define MILLENNIUM	27
 /* hack for parsing two-word timezone specs "MET DST" etc */
 #define DTZMOD	28				/* "DST" as a separate word */
+#define QUARTER		29
 /* reserved for unrecognized string values */
 #define UNKNOWN_FIELD	31
 

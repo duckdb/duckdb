@@ -17,6 +17,14 @@ def test_autocomplete_select(shell, autocomplete_extension):
     result = test.run()
     result.check_stdout('SELECT')
 
+def test_autocomplete_first_from(shell, autocomplete_extension):
+    test = (
+        ShellTest(shell)
+        .statement("CALL sql_auto_complete('FRO')")
+    )
+    result = test.run()
+    result.check_stdout('FROM')
+
 def test_autocomplete_column(shell, autocomplete_extension):
     test = (
         ShellTest(shell)

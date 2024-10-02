@@ -57,6 +57,7 @@ SELECT * FROM (WITH cte AS (SELECT 42, 41 AS x) SELECT * FROM cte) v1(a);
 # too many aliases: fails
 statement error
 SELECT * FROM (WITH cte AS (SELECT 42, 41 AS x) SELECT * FROM cte) v1(a, b, c);
+----
 
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);
@@ -71,6 +72,14 @@ statement ok
 INSERT INTO test VALUES (13, 22)
 
 # select single tuple only in scalar subquery
+statement error
+SELECT (WITH cte AS (SELECT a * 42 FROM test) SELECT * FROM cte)
+----
+More than one row returned by a subquery
+
+statement ok
+SET scalar_subquery_error_on_multiple_rows=false
+
 query I
 SELECT (WITH cte AS (SELECT a * 42 FROM test) SELECT * FROM cte)
 ----
@@ -106,7 +115,7 @@ SELECT CASE WHEN c>(WITH cte AS (SELECT sum(c)/count(*) FROM t1) SELECT * FROM c
 214
 
 # temporary solution until decorrelation of materialized CTEs is implemented
-require noalternativeverify
+require no_alternative_verify
 
 # correlated subqueries
 query IR

@@ -298,9 +298,12 @@ struct Log10Fun {
 };
 
 struct LogFun {
-	using ALIAS = Log10Fun;
-
 	static constexpr const char *Name = "log";
+	static constexpr const char *Parameters = "b, x";
+	static constexpr const char *Description = "Computes the logarithm of x to base b. b may be omitted, in which case the default 10";
+	static constexpr const char *Example = "log(2, 64)";
+
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct NextAfterFun {
@@ -391,6 +394,60 @@ struct TruncFun {
 	static constexpr const char *Example = "trunc(17.4)";
 
 	static ScalarFunctionSet GetFunctions();
+};
+
+struct CoshFun {
+	static constexpr const char *Name = "cosh";
+	static constexpr const char *Parameters = "x";
+	static constexpr const char *Description = "Computes the hyperbolic cos of x";
+	static constexpr const char *Example = "cosh(1)";
+
+	static ScalarFunction GetFunction();
+};
+
+struct SinhFun {
+	static constexpr const char *Name = "sinh";
+	static constexpr const char *Parameters = "x";
+	static constexpr const char *Description = "Computes the hyperbolic sin of x";
+	static constexpr const char *Example = "sinh(1)";
+
+	static ScalarFunction GetFunction();
+};
+
+struct TanhFun {
+	static constexpr const char *Name = "tanh";
+	static constexpr const char *Parameters = "x";
+	static constexpr const char *Description = "Computes the hyperbolic tan of x";
+	static constexpr const char *Example = "tanh(1)";
+
+	static ScalarFunction GetFunction();
+};
+
+struct AcoshFun {
+	static constexpr const char *Name = "acosh";
+	static constexpr const char *Parameters = "x";
+	static constexpr const char *Description = "Computes the inverse hyperbolic cos of x";
+	static constexpr const char *Example = "acosh(0.5)";
+
+	static ScalarFunction GetFunction();
+};
+
+struct AsinhFun {
+	static constexpr const char *Name = "asinh";
+	static constexpr const char *Parameters = "x";
+	static constexpr const char *Description = "Computes the inverse hyperbolic sin of x";
+	static constexpr const char *Example = "asinh(0.5)";
+
+	static ScalarFunction GetFunction();
+};
+
+struct AtanhFun {
+	static constexpr const char *Name = "atanh";
+	static constexpr const char *Parameters = "x";
+	static constexpr const char *Description = "Computes the inverse hyperbolic tan of x";
+	static constexpr const char *Example = "atanh(0.5)";
+
+	static ScalarFunction GetFunction();
 };
 
 } // namespace duckdb

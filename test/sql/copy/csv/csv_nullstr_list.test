@@ -1,0 +1,163 @@
+# name: test/sql/copy/csv/csv_nullstr_list.test
+# description: Test CSVs with multiple nullstring values
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+# Test List
+query III
+FROM read_csv('data/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null']);
+----
+Pedro	31	1.73
+Mark	NULL	NULL
+Thijs	26	NULL
+
+# Test Quoted
+query III
+FROM read_csv('data/csv/null/multiple_quoted_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null']);
+----
+Pedro	31	1.73
+Mark	NULL	NULL
+Thijs	26	NULL
+
+#allow_quoted_nulls = false
+query III
+FROM read_csv('data/csv/null/multiple_quoted_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null'], allow_quoted_nulls = false);
+----
+Pedro	31	1.73
+Mark	null	(empty)
+Thijs	26	none
+
+# Test nullstr = []
+statement error
+FROM read_csv('data/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = []);
+----
+CSV Reader function option nullstr requires a non-empty list of possible null strings (varchar) as input
+
+# Test nullstr = ['a', NULL]
+statement error
+FROM read_csv('data/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['a', NULL]);
+----
+CSV Reader function option nullstr does not accept NULL values as a valid nullstr option
+
+# Test nullstr = NULL
+statement error
+FROM read_csv('data/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = NULL);
+----
+CSV Reader function option nullstr requires a string or a list as input
+
+# Test nullstr = [42]
+statement error
+FROM read_csv('data/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = [42]);
+----
+CSV Reader function option nullstr requires a non-empty list of possible null strings (varchar) as input
+
+# Test Null Strings equal to delim quote escape
+statement error
+FROM read_csv('data/csv/null/multiple_quoted_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['',',','null'], allow_quoted_nulls = false);
+----
+DELIMITER must not appear in the NULL specification and vice versa
+
+statement error
+FROM read_csv('data/csv/null/multiple_quoted_nulls.csv', auto_detect=false, delim=',', quote='"', escape='\', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','"','null'], allow_quoted_nulls = false);
+----
+QUOTE must not appear in the NULL specification and vice versa
+
+statement error
+FROM read_csv('data/csv/null/multiple_quoted_nulls.csv', auto_detect=false, delim=',', quote='"', escape='\', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','\','null'], allow_quoted_nulls = false);
+----
+ESCAPE must not appear in the NULL specification and vice versa
+
+# What if we have repeated values in our nullstr list?
+query III
+FROM read_csv('data/csv/null/multiple_quoted_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null','','none','null'], allow_quoted_nulls = false);
+----
+Pedro	31	1.73
+Mark	null	(empty)
+Thijs	26	none
+
+# Test with force_not_null
+query III
+FROM read_csv('data/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null'], force_not_null = ['height']);
+----
+Pedro	31	1.73
+Mark	NULL	(empty)
+Thijs	26	(empty)
+
+query III
+FROM read_csv('data/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null'], force_not_null = ['age','height']);
+----
+Pedro	31	1.73
+Mark	(empty)	(empty)
+Thijs	26	(empty)
+
+# Test Quoted
+query III
+FROM read_csv('data/csv/null/multiple_quoted_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null'], force_not_null = ['height']);
+----
+Pedro	31	1.73
+Mark	NULL	(empty)
+Thijs	26	(empty)
+
+query III
+FROM read_csv('data/csv/null/multiple_quoted_nulls.csv', auto_detect=true, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, nullstr = ['','none','null'], force_not_null = ['age','height'], ALL_VARCHAR = 1);
+----
+Pedro	31	1.73
+Mark	(empty)	(empty)
+Thijs	26	(empty)
+
+# Test with projection push-down
+query I
+select height FROM read_csv('data/csv/null/multiple_nulls.csv', delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, nullstr = ['','none','null']);
+----
+1.73
+NULL
+NULL
+
+query I
+select age FROM read_csv('data/csv/null/multiple_nulls.csv',  delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true,  nullstr = ['','none','null']);
+----
+31
+NULL
+26
+
+# Test force_not_null fails for made-up column
+statement error
+FROM read_csv('data/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null'], force_not_null = ['dont_exist']);
+----
+"force_not_null" expected to find dont_exist, but it was not found in the table
+
+# Lests add a few tests with copy from
+statement ok
+CREATE TABLE data (a VARCHAR, b VARCHAR, c VARCHAR)
+
+statement ok
+COPY data FROM 'data/csv/null/multiple_nulls.csv' (nullstr  ['','none','null'], HEADER 1);
+
+statement error
+COPY data FROM 'data/csv/null/multiple_nulls.csv' (nullstr NULL, HEADER 1);
+----
+syntax error at or near "NULL"
+
+statement error
+COPY data FROM 'data/csv/null/multiple_nulls.csv' (nullstr [NULL], HEADER 1);
+----
+Binder Error: CSV Reader function option nullstr requires a non-empty list of possible null strings (varchar) as input
+
+statement error
+COPY data FROM 'data/csv/null/multiple_nulls.csv' (nullstr [42], HEADER 1);
+----
+Binder Error: CSV Reader function option nullstr requires a non-empty list of possible null strings (varchar) as input
+
+query III
+FROM data
+----
+Pedro	31	1.73
+Mark	NULL	NULL
+Thijs	26	NULL
+
+statement error
+COPY data TO '__TEST_DIR__/multiple_nulls.csv' (nullstr ['a', 'b']);
+----
+CSV Writer function option nullstr only accepts one nullstr value.

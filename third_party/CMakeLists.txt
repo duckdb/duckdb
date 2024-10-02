@@ -8,9 +8,11 @@ if(NOT AMALGAMATION_BUILD)
   add_subdirectory(miniz)
   add_subdirectory(utf8proc)
   add_subdirectory(hyperloglog)
+  add_subdirectory(skiplist)
   add_subdirectory(fastpforlib)
   add_subdirectory(mbedtls)
   add_subdirectory(fsst)
+  add_subdirectory(yyjson)
 endif()
 
 if(NOT WIN32

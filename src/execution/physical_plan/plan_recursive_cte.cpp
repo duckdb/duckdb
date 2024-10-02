@@ -12,7 +12,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalRecursiveC
 	D_ASSERT(op.children.size() == 2);
 
 	// Create the working_table that the PhysicalRecursiveCTE will use for evaluation.
-	auto working_table = std::make_shared<ColumnDataCollection>(context, op.types);
+	auto working_table = make_shared_ptr<ColumnDataCollection>(context, op.types);
 
 	// Add the ColumnDataCollection to the context of this PhysicalPlanGenerator
 	recursive_cte_tables[op.table_index] = working_table;
@@ -37,7 +37,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op
 
 		// If this check fails, this is a reference to a materialized recursive CTE.
 		if (materialized_cte != materialized_ctes.end()) {
-			auto chunk_scan = make_uniq<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::CTE_SCAN,
+			auto chunk_scan = make_uniq<PhysicalColumnDataScan>(op.chunk_types, PhysicalOperatorType::CTE_SCAN,
 			                                                    op.estimated_cardinality, op.cte_index);
 
 			auto cte = recursive_cte_tables.find(op.cte_index);
@@ -45,6 +45,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op
 				throw InvalidInputException("Referenced materialized CTE does not exist.");
 			}
 			chunk_scan->collection = cte->second.get();
+			materialized_cte->second.push_back(*chunk_scan.get());
 
 			return std::move(chunk_scan);
 		}
@@ -60,6 +61,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op
 	    cte->second.get()->Types(), PhysicalOperatorType::RECURSIVE_CTE_SCAN, op.estimated_cardinality, op.cte_index);
 
 	chunk_scan->collection = cte->second.get();
+
 	return std::move(chunk_scan);
 }
 

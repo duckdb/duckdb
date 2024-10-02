@@ -52,8 +52,9 @@ bool Binding::HasMatchingBinding(const string &column_name) {
 	return TryGetBindingIndex(column_name, result);
 }
 
-string Binding::ColumnNotFoundError(const string &column_name) const {
-	return StringUtil::Format("Values list \"%s\" does not have a column named \"%s\"", alias, column_name);
+ErrorData Binding::ColumnNotFoundError(const string &column_name) const {
+	return ErrorData(ExceptionType::BINDER,
+	                 StringUtil::Format("Values list \"%s\" does not have a column named \"%s\"", alias, column_name));
 }
 
 BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
@@ -170,7 +171,7 @@ ColumnBinding TableBinding::GetColumnBinding(column_t column_index) {
 	auto it = std::find_if(column_ids.begin(), column_ids.end(),
 	                       [&](const column_t &id) -> bool { return id == column_index; });
 	// Get the index of it
-	binding.column_index = std::distance(column_ids.begin(), it);
+	binding.column_index = NumericCast<idx_t>(std::distance(column_ids.begin(), it));
 	// If it wasn't found, add it
 	if (it == column_ids.end()) {
 		column_ids.push_back(column_index);
@@ -218,8 +219,9 @@ optional_ptr<StandardEntry> TableBinding::GetStandardEntry() {
 	return entry;
 }
 
-string TableBinding::ColumnNotFoundError(const string &column_name) const {
-	return StringUtil::Format("Table \"%s\" does not have a column named \"%s\"", alias, column_name);
+ErrorData TableBinding::ColumnNotFoundError(const string &column_name) const {
+	return ErrorData(ExceptionType::BINDER,
+	                 StringUtil::Format("Table \"%s\" does not have a column named \"%s\"", alias, column_name));
 }
 
 DummyBinding::DummyBinding(vector<LogicalType> types, vector<string> names, string dummy_name)

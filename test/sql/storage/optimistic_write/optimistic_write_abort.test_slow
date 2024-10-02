@@ -37,9 +37,11 @@ loop i 0 10
 
 statement error
 INSERT INTO test SELECT * FROM range(1000000) UNION ALL SELECT concat('hello', i)::INTEGER FROM range(10)
+----
 
 statement error
 INSERT INTO test SELECT * FROM range(1000000) UNION ALL SELECT concat('hello', i)::INTEGER FROM range(10)
+----
 
 statement ok
 CREATE TEMPORARY TABLE new_blocks AS SELECT total_blocks FROM pragma_database_size();

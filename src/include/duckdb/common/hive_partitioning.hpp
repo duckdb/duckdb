@@ -14,28 +14,37 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/table_filter.hpp"
-#include "re2/re2.h"
 
 #include <iostream>
 #include <sstream>
 
 namespace duckdb {
+struct MultiFilePushdownInfo;
+
+struct HivePartitioningFilterInfo {
+	unordered_map<string, column_t> column_map;
+	bool hive_enabled;
+	bool filename_enabled;
+};
 
 class HivePartitioning {
 public:
 	//! Parse a filename that follows the hive partitioning scheme
 	DUCKDB_API static std::map<string, string> Parse(const string &filename);
-	DUCKDB_API static std::map<string, string> Parse(const string &filename, duckdb_re2::RE2 &regex);
 	//! Prunes a list of filenames based on a set of filters, can be used by TableFunctions in the
 	//! pushdown_complex_filter function to skip files with filename-based filters. Also removes the filters that always
 	//! evaluate to true.
 	DUCKDB_API static void ApplyFiltersToFileList(ClientContext &context, vector<string> &files,
 	                                              vector<unique_ptr<Expression>> &filters,
-	                                              unordered_map<string, column_t> &column_map, LogicalGet &get,
-	                                              bool hive_enabled, bool filename_enabled);
+	                                              const HivePartitioningFilterInfo &filter_info,
+	                                              MultiFilePushdownInfo &info);
 
-	//! Returns the compiled regex pattern to match hive partitions
-	DUCKDB_API static const string &RegexString();
+	DUCKDB_API static Value GetValue(ClientContext &context, const string &key, const string &value,
+	                                 const LogicalType &type);
+	//! Escape a hive partition key or value using URL encoding
+	DUCKDB_API static string Escape(const string &input);
+	//! Unescape a hive partition key or value encoded using URL encoding
+	DUCKDB_API static string Unescape(const string &input);
 };
 
 struct HivePartitionKey {
@@ -74,36 +83,22 @@ class GlobalHivePartitionState {
 public:
 	mutex lock;
 	hive_partition_map_t partition_map;
-	//! Used for incremental updating local copies of the partition map;
-	vector<hive_partition_map_t::const_iterator> partitions;
 };
 
 class HivePartitionedColumnData : public PartitionedColumnData {
 public:
 	HivePartitionedColumnData(ClientContext &context, vector<LogicalType> types, vector<idx_t> partition_by_cols,
-	                          shared_ptr<GlobalHivePartitionState> global_state = nullptr)
-	    : PartitionedColumnData(PartitionedColumnDataType::HIVE, context, std::move(types)),
-	      global_state(std::move(global_state)), group_by_columns(std::move(partition_by_cols)),
-	      hashes_v(LogicalType::HASH) {
-		InitializeKeys();
-	}
-	HivePartitionedColumnData(const HivePartitionedColumnData &other);
+	                          shared_ptr<GlobalHivePartitionState> global_state = nullptr);
 	void ComputePartitionIndices(PartitionedColumnDataAppendState &state, DataChunk &input) override;
 
 	//! Reverse lookup map to reconstruct keys from a partition id
 	std::map<idx_t, const HivePartitionKey *> GetReverseMap();
 
 protected:
-	//! Create allocators for all currently registered partitions
-	void GrowAllocators();
-	//! Create append states for all currently registered partitions
-	void GrowAppendState(PartitionedColumnDataAppendState &state);
-	//! Create and initialize partitions for all currently registered partitions
-	void GrowPartitions(PartitionedColumnDataAppendState &state);
 	//! Register a newly discovered partition
 	idx_t RegisterNewPartition(HivePartitionKey key, PartitionedColumnDataAppendState &state);
-	//! Copy the newly added entries in the global_state.map to the local_partition_map (requires lock!)
-	void SynchronizeLocalMap();
+	//! Add a new partition with the given partition id
+	void AddNewPartition(HivePartitionKey key, idx_t partition_id, PartitionedColumnDataAppendState &state);
 
 private:
 	void InitializeKeys();

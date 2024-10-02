@@ -39,6 +39,8 @@ public:
 		return function.in_out_function_final;
 	}
 
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
+
 private:
 	//! The table function
 	TableFunction function;

@@ -55,6 +55,8 @@ public:
 	unique_ptr<ParsedExpression> filter_expr;
 	//! True to ignore NULL values
 	bool ignore_nulls;
+	//! Whether or not the aggregate function is distinct, only used for aggregates
+	bool distinct;
 	//! The window boundaries
 	WindowBoundary start = WindowBoundary::INVALID;
 	WindowBoundary end = WindowBoundary::INVALID;
@@ -91,8 +93,11 @@ public:
 		string result = schema.empty() ? function_name : schema + "." + function_name;
 		result += "(";
 		if (entry.children.size()) {
-			result += StringUtil::Join(entry.children, entry.children.size(), ", ",
-			                           [](const unique_ptr<BASE> &child) { return child->ToString(); });
+			//	Only one DISTINCT is allowed (on the first argument)
+			int distincts = entry.distinct ? 0 : 1;
+			result += StringUtil::Join(entry.children, entry.children.size(), ", ", [&](const unique_ptr<BASE> &child) {
+				return (distincts++ ? "" : "DISTINCT ") + child->ToString();
+			});
 		}
 		// Lead/Lag extra arguments
 		if (entry.offset_expr.get()) {
@@ -191,6 +196,16 @@ public:
 			break;
 		default:
 			throw InternalException("Unrecognized TO in WindowExpression");
+		}
+		if (entry.exclude_clause != WindowExcludeMode::NO_OTHER) {
+			// if we have an explicit EXCLUDE we always need to fill in from/to
+			if (from.empty()) {
+				from = "UNBOUNDED PRECEDING";
+			}
+			if (to.empty()) {
+				to = "CURRENT ROW";
+				units = "RANGE";
+			}
 		}
 
 		if (!from.empty() || !to.empty()) {

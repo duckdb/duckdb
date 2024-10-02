@@ -30,12 +30,16 @@ SELECT "COL"."HELLO" FROM tbl
 
 statement error
 SELECT ({'hello': 3, 'hello': 4}) col;
+----
 
 statement error
 SELECT ({'HELLO': 3, 'HELLO': 4}) col;
+----
 
 statement error
 SELECT ({'HELLO': 3, 'hello': 4}) col;
+----
 
 statement error
 SELECT col['HELL'] FROM tbl
+----

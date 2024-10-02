@@ -70,14 +70,12 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 			}
 #endif
 		}
-		arguments.Verify();
 	}
 	arguments.SetCardinality(count);
+	arguments.Verify();
 
-	state->profiler.BeginSample();
 	D_ASSERT(expr.function.function);
 	expr.function.function(arguments, *state, result);
-	state->profiler.EndSample(count);
 
 	VerifyNullHandling(expr, arguments, result);
 	D_ASSERT(result.GetType() == expr.return_type);

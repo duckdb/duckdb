@@ -12,4 +12,8 @@ unique_ptr<SQLStatement> LoadStatement::Copy() const {
 	return unique_ptr<LoadStatement>(new LoadStatement(*this));
 }
 
+string LoadStatement::ToString() const {
+	return info->ToString();
+}
+
 } // namespace duckdb

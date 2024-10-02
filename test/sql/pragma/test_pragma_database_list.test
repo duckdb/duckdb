@@ -2,6 +2,8 @@
 # description: Test PRAGMA database_list
 # group: [pragma]
 
+require skip_reload
+
 # explicitly load an in-memory database
 load
 
@@ -18,3 +20,4 @@ memory	NULL
 
 statement error
 PRAGMA database_list()
+----

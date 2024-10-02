@@ -13,7 +13,7 @@ MetadataReader::MetadataReader(MetadataManager &manager, MetaBlockPointer pointe
 }
 
 MetadataReader::MetadataReader(MetadataManager &manager, BlockPointer pointer)
-    : MetadataReader(manager, MetadataManager::FromBlockPointer(pointer)) {
+    : MetadataReader(manager, MetadataManager::FromBlockPointer(pointer, manager.GetMetadataBlockSize())) {
 }
 
 MetadataPointer MetadataReader::FromDiskPointer(MetaBlockPointer pointer) {
@@ -47,7 +47,7 @@ void MetadataReader::ReadData(data_ptr_t buffer, idx_t read_size) {
 }
 
 MetaBlockPointer MetadataReader::GetMetaBlockPointer() {
-	return manager.GetDiskPointer(block.pointer, offset);
+	return manager.GetDiskPointer(block.pointer, UnsafeNumericCast<uint32_t>(offset));
 }
 
 void MetadataReader::ReadNextBlock() {
@@ -70,16 +70,16 @@ void MetadataReader::ReadNextBlock() {
 	if (next_offset < sizeof(block_id_t)) {
 		next_offset = sizeof(block_id_t);
 	}
-	if (next_offset > MetadataManager::METADATA_BLOCK_SIZE) {
+	if (next_offset > GetMetadataManager().GetMetadataBlockSize()) {
 		throw InternalException("next_offset cannot be bigger than block size");
 	}
 	offset = next_offset;
 	next_offset = sizeof(block_id_t);
-	capacity = MetadataManager::METADATA_BLOCK_SIZE;
+	capacity = GetMetadataManager().GetMetadataBlockSize();
 }
 
 data_ptr_t MetadataReader::BasePtr() {
-	return block.handle.Ptr() + index * MetadataManager::METADATA_BLOCK_SIZE;
+	return block.handle.Ptr() + index * GetMetadataManager().GetMetadataBlockSize();
 }
 
 data_ptr_t MetadataReader::Ptr() {

@@ -6,14 +6,13 @@
 #
 
 duckdb_extension_load(autocomplete)
-duckdb_extension_load(excel)
 duckdb_extension_load(fts)
 duckdb_extension_load(httpfs)
-duckdb_extension_load(inet)
 duckdb_extension_load(icu)
 duckdb_extension_load(json)
 duckdb_extension_load(parquet)
-duckdb_extension_load(sqlsmith)
 duckdb_extension_load(tpcds)
 duckdb_extension_load(tpch)
-duckdb_extension_load(visualizer)
+
+# Test extension for the upcoming C CAPI extensions
+duckdb_extension_load(demo_capi DONT_LINK)

@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -24,8 +25,9 @@ struct StorageExtensionInfo {
 	}
 };
 
-typedef unique_ptr<Catalog> (*attach_function_t)(StorageExtensionInfo *storage_info, AttachedDatabase &db,
-                                                 const string &name, AttachInfo &info, AccessMode access_mode);
+typedef unique_ptr<Catalog> (*attach_function_t)(StorageExtensionInfo *storage_info, ClientContext &context,
+                                                 AttachedDatabase &db, const string &name, AttachInfo &info,
+                                                 AccessMode access_mode);
 typedef unique_ptr<TransactionManager> (*create_transaction_manager_t)(StorageExtensionInfo *storage_info,
                                                                        AttachedDatabase &db, Catalog &catalog);
 
@@ -38,6 +40,12 @@ public:
 	shared_ptr<StorageExtensionInfo> storage_info;
 
 	virtual ~StorageExtension() {
+	}
+
+	virtual void OnCheckpointStart(AttachedDatabase &db, CheckpointOptions checkpoint_options) {
+	}
+
+	virtual void OnCheckpointEnd(AttachedDatabase &db, CheckpointOptions checkpoint_options) {
 	}
 };
 

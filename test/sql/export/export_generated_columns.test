@@ -21,10 +21,12 @@ INSERT INTO tbl VALUES(5);
 # Generated columns can not be inserted into directly
 statement error
 INSERT INTO tbl VALUES(2,3)
+----
 
 # 'x' can not be removed, as 'gen_x' depends on it
 statement error
 ALTER TABLE tbl DROP COLUMN x;
+----
 
 statement ok
 EXPORT DATABASE '__TEST_DIR__/export_generated_columns' (FORMAT CSV);
@@ -44,6 +46,7 @@ SELECT * FROM tbl
 # Generated columns can not be inserted into directly
 statement error
 INSERT INTO tbl VALUES(2,3)
+----
 
 statement error
 drop macro my_macro;
@@ -53,4 +56,8 @@ Dependency Error: Cannot drop entry "my_macro" because there are entries that de
 # 'x' can not be removed, as 'gen_x' depends on it
 statement error
 ALTER TABLE tbl DROP COLUMN x;
+<<<<<<< HEAD
 
+=======
+----
+>>>>>>> upstream/main

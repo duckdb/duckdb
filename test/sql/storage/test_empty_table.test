@@ -1,8 +1,7 @@
 # name: test/sql/storage/test_empty_table.test
-# description: Test empty table
+# description: Test empty table storage.
 # group: [storage]
 
-# load the DB from disk
 load __TEST_DIR__/test_empty_table.db
 
 statement ok
@@ -13,8 +12,7 @@ SELECT COUNT(*) FROM test
 ----
 0
 
-
-# verify that the table is still there after restart
+# Verify that the table exists after restarting the database.
 
 restart
 
@@ -23,7 +21,6 @@ SELECT COUNT(*) FROM test
 ----
 0
 
-# insert into empty table
 statement ok
 INSERT INTO test VALUES (1, 2)
 

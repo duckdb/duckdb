@@ -14,6 +14,8 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/planner/expression/bound_parameter_data.hpp"
 
 #include <cstring>
 #include <cassert>
@@ -32,7 +34,7 @@ struct DatabaseData {
 
 struct PreparedStatementWrapper {
 	//! Map of name -> values
-	case_insensitive_map_t<Value> values;
+	case_insensitive_map_t<BoundParameterData> values;
 	unique_ptr<PreparedStatement> statement;
 };
 
@@ -49,11 +51,15 @@ struct PendingStatementWrapper {
 struct ArrowResultWrapper {
 	unique_ptr<MaterializedQueryResult> result;
 	unique_ptr<DataChunk> current_chunk;
-	ClientProperties options;
 };
 
 struct AppenderWrapper {
 	unique_ptr<Appender> appender;
+	string error;
+};
+
+struct TableDescriptionWrapper {
+	unique_ptr<TableDescription> description;
 	string error;
 };
 
@@ -75,7 +81,7 @@ struct DuckDBResultData {
 duckdb_type ConvertCPPTypeToC(const LogicalType &type);
 LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type);
 idx_t GetCTypeSize(duckdb_type type);
-duckdb_state duckdb_translate_result(unique_ptr<QueryResult> result, duckdb_result *out);
-bool deprecated_materialize_result(duckdb_result *result);
-
+duckdb_state DuckDBTranslateResult(unique_ptr<QueryResult> result, duckdb_result *out);
+bool DeprecatedMaterializeResult(duckdb_result *result);
+duckdb_statement_type StatementTypeToC(duckdb::StatementType statement_type);
 } // namespace duckdb

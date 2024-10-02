@@ -56,4 +56,10 @@ enum class SinkCombineResultType : uint8_t { FINISHED, BLOCKED };
 //! BLOCKED means the finalize call to the sink is currently blocked, e.g. by some async I/O.
 enum class SinkFinalizeType : uint8_t { READY, NO_OUTPUT_POSSIBLE, BLOCKED };
 
+//! The SinkNextBatchType is used to indicate the result of a NextBatch call on a sink
+//! There are two possible results:
+//! READY means the sink is ready for further processing
+//! BLOCKED means the NextBatch call to the sink is currently blocked, e.g. by some async I/O.
+enum class SinkNextBatchType : uint8_t { READY, BLOCKED };
+
 } // namespace duckdb

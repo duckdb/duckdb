@@ -1,6 +1,5 @@
 #include "benchmark_runner.hpp"
 #include "duckdb_benchmark_macro.hpp"
-#include "duckdb/main/appender.hpp"
 
 using namespace duckdb;
 

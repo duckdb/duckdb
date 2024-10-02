@@ -47,9 +47,11 @@ SELECT test.tbl.col FROM test.tbl;
 # schema name with alias does not work
 statement error
 SELECT test.t.col FROM test.tbl t;
+----
 
 statement error
 SELECT test.tbl.col FROM test.tbl t;
+----
 
 # check how ties are resolved
 # we create a table called "t" in a schema called "t" with a column called "t" that has a field called "t"
@@ -155,13 +157,17 @@ CREATE TABLE s2.t1 AS SELECT 84 t
 
 statement error
 SELECT s1.t1.t FROM s1.t1, s2.t1
+----
 
 # test various failures
 statement error
 SELECT testX.tbl.col FROM test.tbl;
+----
 
 statement error
 SELECT test.tblX.col FROM test.tbl;
+----
 
 statement error
 SELECT test.tbl.colX FROM test.tbl;
+----

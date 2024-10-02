@@ -480,7 +480,7 @@ select * from (values(1)) x(lb),
 query II rowsort
 select x.* from
   int8_tbl x left join (select q1,coalesce(q2,0) q2 from int8_tbl) y on x.q2 = y.q1,
-  lateral (select x.q1,y.q1,y.q2) v(xq1,yq1,yq2);
+  lateral (select x.q1,y.q1,y.q2) v(xq1,yq1,yq2) order by 1, 2;
 ----
 123	456
 123	4567890123456789
@@ -497,7 +497,7 @@ select x.* from
 statement error
 select 1 from tenk1 a, lateral (select max(a.unique1) from int4_tbl b) ss;
 ----
-not found
+Binder Error: LATERAL join cannot contain aggregates
 
 statement ok
 create table xx1 as select f1 as x1, -f1 as x2 from int4_tbl;

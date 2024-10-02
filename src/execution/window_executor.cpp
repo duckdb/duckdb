@@ -3,7 +3,78 @@
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 
+#include "duckdb/common/array.hpp"
+
 namespace duckdb {
+
+//===--------------------------------------------------------------------===//
+// WindowDataChunk
+//===--------------------------------------------------------------------===//
+bool WindowDataChunk::IsSimple(const Vector &v) {
+	switch (v.GetType().InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::UINT8:
+	case PhysicalType::INT8:
+	case PhysicalType::UINT16:
+	case PhysicalType::INT16:
+	case PhysicalType::UINT32:
+	case PhysicalType::INT32:
+	case PhysicalType::UINT64:
+	case PhysicalType::INT64:
+	case PhysicalType::FLOAT:
+	case PhysicalType::DOUBLE:
+	case PhysicalType::INTERVAL:
+	case PhysicalType::UINT128:
+	case PhysicalType::INT128:
+		return true;
+	case PhysicalType::LIST:
+	case PhysicalType::STRUCT:
+	case PhysicalType::ARRAY:
+	case PhysicalType::VARCHAR:
+	case PhysicalType::BIT:
+		return false;
+	default:
+		break;
+	}
+
+	throw InternalException("Unsupported type for WindowDataChunk");
+}
+
+WindowDataChunk::WindowDataChunk(DataChunk &chunk) : chunk(chunk) {
+}
+
+void WindowDataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &types, idx_t capacity) {
+	vector<mutex> new_locks(types.size());
+	locks.swap(new_locks);
+	chunk.Initialize(allocator, types, capacity);
+	chunk.SetCardinality(capacity);
+
+	is_simple.clear();
+	for (const auto &v : chunk.data) {
+		is_simple.push_back(IsSimple(v));
+	}
+}
+
+void WindowDataChunk::Copy(DataChunk &input, idx_t begin) {
+	const auto source_count = input.size();
+	const idx_t end = begin + source_count;
+	const idx_t count = chunk.size();
+	D_ASSERT(end <= count);
+	// Can we overwrite the validity mask in parallel?
+	bool aligned = IsMaskAligned(begin, end, count);
+	for (column_t i = 0; i < chunk.data.size(); ++i) {
+		auto &src = input.data[i];
+		auto &dst = chunk.data[i];
+		UnifiedVectorFormat sdata;
+		src.ToUnifiedFormat(count, sdata);
+		if (is_simple[i] && aligned && sdata.validity.AllValid()) {
+			VectorOperations::Copy(src, dst, source_count, 0, begin);
+		} else {
+			lock_guard<mutex> column_guard(locks[i]);
+			VectorOperations::Copy(src, dst, source_count, 0, begin);
+		}
+	}
+}
 
 static idx_t FindNextStart(const ValidityMask &mask, idx_t l, const idx_t r, idx_t &n) {
 	if (mask.AllValid()) {
@@ -92,6 +163,26 @@ static void CopyCell(const DataChunk &chunk, idx_t column, idx_t index, Vector &
 }
 
 //===--------------------------------------------------------------------===//
+// WindowInputColumn
+//===--------------------------------------------------------------------===//
+WindowInputColumn::WindowInputColumn(optional_ptr<Expression> expr_p, ClientContext &context, idx_t count)
+    : expr(expr_p), scalar(expr ? expr->IsScalar() : true), count(count), wtarget(target) {
+
+	if (expr) {
+		vector<LogicalType> types;
+		types.emplace_back(expr->return_type);
+		wtarget.Initialize(Allocator::Get(context), types, count);
+		ptype = expr->return_type.InternalType();
+	}
+}
+
+void WindowInputColumn::Copy(DataChunk &input_chunk, idx_t input_idx) {
+	if (expr && (!input_idx || !scalar)) {
+		wtarget.Copy(input_chunk, input_idx);
+	}
+}
+
+//===--------------------------------------------------------------------===//
 // WindowColumnIterator
 //===--------------------------------------------------------------------===//
 template <typename T>
@@ -137,11 +228,11 @@ struct WindowColumnIterator {
 
 	//	Random Access
 	inline iterator &operator+=(difference_type n) {
-		pos += n;
+		pos += UnsafeNumericCast<pointer>(n);
 		return *this;
 	}
 	inline iterator &operator-=(difference_type n) {
-		pos -= n;
+		pos -= UnsafeNumericCast<pointer>(n);
 		return *this;
 	}
 
@@ -153,11 +244,11 @@ struct WindowColumnIterator {
 		return iterator(a.coll, a.pos + n);
 	}
 
-	friend inline iterator &operator-(const iterator &a, difference_type n) {
+	friend inline iterator operator-(const iterator &a, difference_type n) {
 		return iterator(a.coll, a.pos - n);
 	}
 
-	friend inline iterator &operator+(difference_type n, const iterator &a) {
+	friend inline iterator operator+(difference_type n, const iterator &a) {
 		return a + n;
 	}
 	friend inline difference_type operator-(const iterator &a, const iterator &b) {
@@ -191,33 +282,55 @@ private:
 template <typename T, typename OP>
 struct OperationCompare : public std::function<bool(T, T)> {
 	inline bool operator()(const T &lhs, const T &val) const {
-		return OP::template Operation(lhs, val);
+		return OP::template Operation<T>(lhs, val);
 	}
 };
 
 template <typename T, typename OP, bool FROM>
 static idx_t FindTypedRangeBound(const WindowInputColumn &over, const idx_t order_begin, const idx_t order_end,
-                                 WindowInputExpression &boundary, const idx_t chunk_idx, const FrameBounds &prev) {
+                                 const WindowBoundary range, WindowInputExpression &boundary, const idx_t chunk_idx,
+                                 const FrameBounds &prev) {
 	D_ASSERT(!boundary.CellIsNull(chunk_idx));
 	const auto val = boundary.GetCell<T>(chunk_idx);
 
 	OperationCompare<T, OP> comp;
-	WindowColumnIterator<T> begin(over, order_begin);
-	WindowColumnIterator<T> end(over, order_end);
 
-	if (order_begin < prev.start && prev.start < order_end) {
-		const auto first = over.GetCell<T>(prev.start);
-		if (!comp(val, first)) {
-			//	prev.first <= val, so we can start further forward
-			begin += (prev.start - order_begin);
+	// Check that the value we are searching for is in range.
+	if (range == WindowBoundary::EXPR_PRECEDING_RANGE) {
+		//	Preceding but value past the current value
+		const auto cur_val = over.GetCell<T>(order_end - 1);
+		if (comp(cur_val, val)) {
+			throw OutOfRangeException("Invalid RANGE PRECEDING value");
+		}
+	} else {
+		//	Following but value before the current value
+		D_ASSERT(range == WindowBoundary::EXPR_FOLLOWING_RANGE);
+		const auto cur_val = over.GetCell<T>(order_begin);
+		if (comp(val, cur_val)) {
+			throw OutOfRangeException("Invalid RANGE FOLLOWING value");
 		}
 	}
-	if (order_begin <= prev.end && prev.end < order_end) {
-		const auto second = over.GetCell<T>(prev.end);
-		if (!comp(second, val)) {
-			//	val <= prev.second, so we can end further back
-			// (prev.second is the largest peer)
-			end -= (order_end - prev.end - 1);
+
+	//	Try to reuse the previous bounds to restrict the search.
+	//	This is only valid if the previous bounds were non-empty
+	//	Only inject the comparisons if the previous bounds are a strict subset.
+	WindowColumnIterator<T> begin(over, order_begin);
+	WindowColumnIterator<T> end(over, order_end);
+	if (prev.start < prev.end) {
+		if (order_begin < prev.start && prev.start < order_end) {
+			const auto first = over.GetCell<T>(prev.start);
+			if (!comp(val, first)) {
+				//	prev.first <= val, so we can start further forward
+				begin += UnsafeNumericCast<int64_t>(prev.start - order_begin);
+			}
+		}
+		if (order_begin < prev.end && prev.end < order_end) {
+			const auto second = over.GetCell<T>(prev.end - 1);
+			if (!comp(second, val)) {
+				//	val <= prev.second, so we can end further back
+				// (prev.second is the largest peer)
+				end -= UnsafeNumericCast<int64_t>(order_end - prev.end - 1);
+			}
 		}
 	}
 
@@ -230,35 +343,40 @@ static idx_t FindTypedRangeBound(const WindowInputColumn &over, const idx_t orde
 
 template <typename OP, bool FROM>
 static idx_t FindRangeBound(const WindowInputColumn &over, const idx_t order_begin, const idx_t order_end,
-                            WindowInputExpression &boundary, const idx_t chunk_idx, const FrameBounds &prev) {
+                            const WindowBoundary range, WindowInputExpression &boundary, const idx_t chunk_idx,
+                            const FrameBounds &prev) {
 	D_ASSERT(boundary.chunk.ColumnCount() == 1);
-	D_ASSERT(boundary.chunk.data[0].GetType().InternalType() == over.input_expr.ptype);
+	D_ASSERT(boundary.chunk.data[0].GetType().InternalType() == over.ptype);
 
-	switch (over.input_expr.ptype) {
+	switch (over.ptype) {
 	case PhysicalType::INT8:
-		return FindTypedRangeBound<int8_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
+		return FindTypedRangeBound<int8_t, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
 	case PhysicalType::INT16:
-		return FindTypedRangeBound<int16_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
+		return FindTypedRangeBound<int16_t, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
 	case PhysicalType::INT32:
-		return FindTypedRangeBound<int32_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
+		return FindTypedRangeBound<int32_t, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
 	case PhysicalType::INT64:
-		return FindTypedRangeBound<int64_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
+		return FindTypedRangeBound<int64_t, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
 	case PhysicalType::UINT8:
-		return FindTypedRangeBound<uint8_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
+		return FindTypedRangeBound<uint8_t, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
 	case PhysicalType::UINT16:
-		return FindTypedRangeBound<uint16_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
+		return FindTypedRangeBound<uint16_t, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
 	case PhysicalType::UINT32:
-		return FindTypedRangeBound<uint32_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
+		return FindTypedRangeBound<uint32_t, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
 	case PhysicalType::UINT64:
-		return FindTypedRangeBound<uint64_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
+		return FindTypedRangeBound<uint64_t, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
 	case PhysicalType::INT128:
-		return FindTypedRangeBound<hugeint_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
+		return FindTypedRangeBound<hugeint_t, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
+	case PhysicalType::UINT128:
+		return FindTypedRangeBound<uhugeint_t, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx,
+		                                                 prev);
 	case PhysicalType::FLOAT:
-		return FindTypedRangeBound<float, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
+		return FindTypedRangeBound<float, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
 	case PhysicalType::DOUBLE:
-		return FindTypedRangeBound<double, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
+		return FindTypedRangeBound<double, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
 	case PhysicalType::INTERVAL:
-		return FindTypedRangeBound<interval_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
+		return FindTypedRangeBound<interval_t, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx,
+		                                                 prev);
 	default:
 		throw InternalException("Unsupported column type for RANGE");
 	}
@@ -266,13 +384,13 @@ static idx_t FindRangeBound(const WindowInputColumn &over, const idx_t order_beg
 
 template <bool FROM>
 static idx_t FindOrderedRangeBound(const WindowInputColumn &over, const OrderType range_sense, const idx_t order_begin,
-                                   const idx_t order_end, WindowInputExpression &boundary, const idx_t chunk_idx,
-                                   const FrameBounds &prev) {
+                                   const idx_t order_end, const WindowBoundary range, WindowInputExpression &boundary,
+                                   const idx_t chunk_idx, const FrameBounds &prev) {
 	switch (range_sense) {
 	case OrderType::ASCENDING:
-		return FindRangeBound<LessThan, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
+		return FindRangeBound<LessThan, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
 	case OrderType::DESCENDING:
-		return FindRangeBound<GreaterThan, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
+		return FindRangeBound<GreaterThan, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
 	default:
 		throw InternalException("Unsupported ORDER BY sense for RANGE");
 	}
@@ -280,7 +398,7 @@ static idx_t FindOrderedRangeBound(const WindowInputColumn &over, const OrderTyp
 
 struct WindowBoundariesState {
 	static inline bool IsScalar(const unique_ptr<Expression> &expr) {
-		return expr ? expr->IsScalar() : true;
+		return !expr || expr->IsScalar();
 	}
 
 	static inline bool BoundaryNeedsPeer(const WindowBoundary &boundary) {
@@ -294,7 +412,19 @@ struct WindowBoundariesState {
 		}
 	}
 
-	WindowBoundariesState(BoundWindowExpression &wexpr, const idx_t input_size);
+	static inline bool ExpressionNeedsPeer(const ExpressionType &type) {
+		switch (type) {
+		case ExpressionType::WINDOW_RANK:
+		case ExpressionType::WINDOW_RANK_DENSE:
+		case ExpressionType::WINDOW_PERCENT_RANK:
+		case ExpressionType::WINDOW_CUME_DIST:
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	WindowBoundariesState(const BoundWindowExpression &wexpr, const idx_t input_size);
 
 	void Update(const idx_t row_idx, const WindowInputColumn &range_collection, const idx_t chunk_idx,
 	            WindowInputExpression &boundary_start, WindowInputExpression &boundary_end,
@@ -323,8 +453,8 @@ struct WindowBoundariesState {
 	idx_t peer_end = 0;
 	idx_t valid_start = 0;
 	idx_t valid_end = 0;
-	int64_t window_start = -1;
-	int64_t window_end = -1;
+	idx_t window_start = NumericLimits<idx_t>::Maximum();
+	idx_t window_end = NumericLimits<idx_t>::Maximum();
 	FrameBounds prev;
 };
 
@@ -406,9 +536,6 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 	next_pos = row_idx + 1;
 
 	// determine window boundaries depending on the type of expression
-	window_start = -1;
-	window_end = -1;
-
 	switch (start_boundary) {
 	case WindowBoundary::UNBOUNDED_PRECEDING:
 		window_start = partition_start;
@@ -420,15 +547,22 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 		window_start = peer_start;
 		break;
 	case WindowBoundary::EXPR_PRECEDING_ROWS: {
-		if (!TrySubtractOperator::Operation(int64_t(row_idx), boundary_start.GetCell<int64_t>(chunk_idx),
-		                                    window_start)) {
-			throw OutOfRangeException("Overflow computing ROWS PRECEDING start");
+		int64_t computed_start;
+		if (!TrySubtractOperator::Operation(static_cast<int64_t>(row_idx), boundary_start.GetCell<int64_t>(chunk_idx),
+		                                    computed_start)) {
+			window_start = partition_start;
+		} else {
+			window_start = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
 		}
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING_ROWS: {
-		if (!TryAddOperator::Operation(int64_t(row_idx), boundary_start.GetCell<int64_t>(chunk_idx), window_start)) {
-			throw OutOfRangeException("Overflow computing ROWS FOLLOWING start");
+		int64_t computed_start;
+		if (!TryAddOperator::Operation(static_cast<int64_t>(row_idx), boundary_start.GetCell<int64_t>(chunk_idx),
+		                               computed_start)) {
+			window_start = partition_start;
+		} else {
+			window_start = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
 		}
 		break;
 	}
@@ -436,8 +570,8 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 		if (boundary_start.CellIsNull(chunk_idx)) {
 			window_start = peer_start;
 		} else {
-			prev.start = FindOrderedRangeBound<true>(range_collection, range_sense, valid_start, row_idx,
-			                                         boundary_start, chunk_idx, prev);
+			prev.start = FindOrderedRangeBound<true>(range_collection, range_sense, valid_start, row_idx + 1,
+			                                         start_boundary, boundary_start, chunk_idx, prev);
 			window_start = prev.start;
 		}
 		break;
@@ -446,8 +580,8 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 		if (boundary_start.CellIsNull(chunk_idx)) {
 			window_start = peer_start;
 		} else {
-			prev.start = FindOrderedRangeBound<true>(range_collection, range_sense, row_idx, valid_end, boundary_start,
-			                                         chunk_idx, prev);
+			prev.start = FindOrderedRangeBound<true>(range_collection, range_sense, row_idx, valid_end, start_boundary,
+			                                         boundary_start, chunk_idx, prev);
 			window_start = prev.start;
 		}
 		break;
@@ -466,23 +600,32 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 	case WindowBoundary::UNBOUNDED_FOLLOWING:
 		window_end = partition_end;
 		break;
-	case WindowBoundary::EXPR_PRECEDING_ROWS:
+	case WindowBoundary::EXPR_PRECEDING_ROWS: {
+		int64_t computed_start;
 		if (!TrySubtractOperator::Operation(int64_t(row_idx + 1), boundary_end.GetCell<int64_t>(chunk_idx),
-		                                    window_end)) {
-			throw OutOfRangeException("Overflow computing ROWS PRECEDING end");
+		                                    computed_start)) {
+			window_end = partition_end;
+		} else {
+			window_end = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
 		}
 		break;
-	case WindowBoundary::EXPR_FOLLOWING_ROWS:
-		if (!TryAddOperator::Operation(int64_t(row_idx + 1), boundary_end.GetCell<int64_t>(chunk_idx), window_end)) {
-			throw OutOfRangeException("Overflow computing ROWS FOLLOWING end");
+	}
+	case WindowBoundary::EXPR_FOLLOWING_ROWS: {
+		int64_t computed_start;
+		if (!TryAddOperator::Operation(int64_t(row_idx + 1), boundary_end.GetCell<int64_t>(chunk_idx),
+		                               computed_start)) {
+			window_end = partition_end;
+		} else {
+			window_end = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
 		}
 		break;
+	}
 	case WindowBoundary::EXPR_PRECEDING_RANGE: {
 		if (boundary_end.CellIsNull(chunk_idx)) {
 			window_end = peer_end;
 		} else {
-			prev.end = FindOrderedRangeBound<false>(range_collection, range_sense, valid_start, row_idx, boundary_end,
-			                                        chunk_idx, prev);
+			prev.end = FindOrderedRangeBound<false>(range_collection, range_sense, valid_start, row_idx + 1,
+			                                        end_boundary, boundary_end, chunk_idx, prev);
 			window_end = prev.end;
 		}
 		break;
@@ -491,8 +634,8 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 		if (boundary_end.CellIsNull(chunk_idx)) {
 			window_end = peer_end;
 		} else {
-			prev.end = FindOrderedRangeBound<false>(range_collection, range_sense, row_idx, valid_end, boundary_end,
-			                                        chunk_idx, prev);
+			prev.end = FindOrderedRangeBound<false>(range_collection, range_sense, row_idx, valid_end, end_boundary,
+			                                        boundary_end, chunk_idx, prev);
 			window_end = prev.end;
 		}
 		break;
@@ -502,39 +645,35 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 	}
 
 	// clamp windows to partitions if they should exceed
-	if (window_start < (int64_t)partition_start) {
+	if (window_start < partition_start) {
 		window_start = partition_start;
 	}
-	if (window_start > (int64_t)partition_end) {
+	if (window_start > partition_end) {
 		window_start = partition_end;
 	}
-	if (window_end < (int64_t)partition_start) {
+	if (window_end < partition_start) {
 		window_end = partition_start;
 	}
-	if (window_end > (int64_t)partition_end) {
+	if (window_end > partition_end) {
 		window_end = partition_end;
-	}
-
-	if (window_start < 0 || window_end < 0) {
-		throw InternalException("Failed to compute window boundaries");
 	}
 }
 
-static bool HasPrecedingRange(BoundWindowExpression &wexpr) {
+static bool HasPrecedingRange(const BoundWindowExpression &wexpr) {
 	return (wexpr.start == WindowBoundary::EXPR_PRECEDING_RANGE || wexpr.end == WindowBoundary::EXPR_PRECEDING_RANGE);
 }
 
-static bool HasFollowingRange(BoundWindowExpression &wexpr) {
+static bool HasFollowingRange(const BoundWindowExpression &wexpr) {
 	return (wexpr.start == WindowBoundary::EXPR_FOLLOWING_RANGE || wexpr.end == WindowBoundary::EXPR_FOLLOWING_RANGE);
 }
 
-WindowBoundariesState::WindowBoundariesState(BoundWindowExpression &wexpr, const idx_t input_size)
+WindowBoundariesState::WindowBoundariesState(const BoundWindowExpression &wexpr, const idx_t input_size)
     : type(wexpr.type), input_size(input_size), start_boundary(wexpr.start), end_boundary(wexpr.end),
       partition_count(wexpr.partitions.size()), order_count(wexpr.orders.size()),
       range_sense(wexpr.orders.empty() ? OrderType::INVALID : wexpr.orders[0].type),
       has_preceding_range(HasPrecedingRange(wexpr)), has_following_range(HasFollowingRange(wexpr)),
       // if we have EXCLUDE GROUP / TIES, we also need peer boundaries
-      needs_peer(BoundaryNeedsPeer(wexpr.end) || wexpr.type == ExpressionType::WINDOW_CUME_DIST ||
+      needs_peer(BoundaryNeedsPeer(wexpr.end) || ExpressionNeedsPeer(wexpr.type) ||
                  wexpr.exclude_clause >= WindowExcludeMode::GROUP) {
 }
 
@@ -557,8 +696,8 @@ void WindowBoundariesState::Bounds(DataChunk &bounds, idx_t row_idx, const Windo
 			*peer_begin_data++ = peer_start;
 			*peer_end_data++ = peer_end;
 		}
-		*window_begin_data++ = window_start;
-		*window_end_data++ = window_end;
+		*window_begin_data++ = UnsafeNumericCast<int64_t>(window_start);
+		*window_end_data++ = UnsafeNumericCast<int64_t>(window_end);
 	}
 	bounds.SetCardinality(count);
 }
@@ -566,10 +705,9 @@ void WindowBoundariesState::Bounds(DataChunk &bounds, idx_t row_idx, const Windo
 //===--------------------------------------------------------------------===//
 // WindowExecutorBoundsState
 //===--------------------------------------------------------------------===//
-class WindowExecutorBoundsState : public WindowExecutorState {
+class WindowExecutorBoundsState : public WindowExecutorLocalState {
 public:
-	WindowExecutorBoundsState(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count,
-	                          const ValidityMask &partition_mask_p, const ValidityMask &order_mask_p);
+	explicit WindowExecutorBoundsState(const WindowExecutorGlobalState &gstate);
 	~WindowExecutorBoundsState() override {
 	}
 
@@ -586,13 +724,13 @@ public:
 	WindowInputExpression boundary_end;
 };
 
-WindowExecutorBoundsState::WindowExecutorBoundsState(BoundWindowExpression &wexpr, ClientContext &context,
-                                                     const idx_t payload_count, const ValidityMask &partition_mask_p,
-                                                     const ValidityMask &order_mask_p)
-    : partition_mask(partition_mask_p), order_mask(order_mask_p), state(wexpr, payload_count),
-      boundary_start(wexpr.start_expr.get(), context), boundary_end(wexpr.end_expr.get(), context) {
+WindowExecutorBoundsState::WindowExecutorBoundsState(const WindowExecutorGlobalState &gstate)
+    : WindowExecutorLocalState(gstate), partition_mask(gstate.partition_mask), order_mask(gstate.order_mask),
+      state(gstate.executor.wexpr, gstate.payload_count),
+      boundary_start(gstate.executor.wexpr.start_expr.get(), gstate.executor.context),
+      boundary_end(gstate.executor.wexpr.end_expr.get(), gstate.executor.context) {
 	vector<LogicalType> bounds_types(6, LogicalType(LogicalTypeId::UBIGINT));
-	bounds.Initialize(Allocator::Get(context), bounds_types);
+	bounds.Initialize(Allocator::Get(gstate.executor.context), bounds_types);
 }
 
 void WindowExecutorBoundsState::UpdateBounds(idx_t row_idx, DataChunk &input_chunk, const WindowInputColumn &range) {
@@ -705,38 +843,9 @@ void ExclusionFilter::ResetMask(idx_t row_idx, idx_t offset) {
 }
 
 //===--------------------------------------------------------------------===//
-// WindowValueState
-//===--------------------------------------------------------------------===//
-
-//! A class representing the state of the first_value, last_value and nth_value functions
-class WindowValueState : public WindowExecutorBoundsState {
-public:
-	WindowValueState(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count,
-	                 const ValidityMask &partition_mask_p, const ValidityMask &order_mask_p,
-	                 const ValidityMask &ignore_nulls)
-	    : WindowExecutorBoundsState(wexpr, context, count, partition_mask_p, order_mask_p)
-
-	{
-		if (wexpr.exclude_clause == WindowExcludeMode::NO_OTHER) {
-			exclusion_filter = nullptr;
-			ignore_nulls_exclude = &ignore_nulls;
-		} else {
-			// create the exclusion filter based on ignore_nulls
-			exclusion_filter = make_uniq<ExclusionFilter>(wexpr.exclude_clause, count, ignore_nulls);
-			ignore_nulls_exclude = &exclusion_filter->mask;
-		}
-	}
-
-	//! The exclusion filter handling exclusion
-	unique_ptr<ExclusionFilter> exclusion_filter;
-	//! The validity mask that combines both the NULLs and exclusion information
-	const ValidityMask *ignore_nulls_exclude;
-};
-
-//===--------------------------------------------------------------------===//
 // WindowExecutor
 //===--------------------------------------------------------------------===//
-static void PrepareInputExpressions(vector<unique_ptr<Expression>> &exprs, ExpressionExecutor &executor,
+static void PrepareInputExpressions(const vector<unique_ptr<Expression>> &exprs, ExpressionExecutor &executor,
                                     DataChunk &chunk) {
 	if (exprs.empty()) {
 		return;
@@ -754,31 +863,81 @@ static void PrepareInputExpressions(vector<unique_ptr<Expression>> &exprs, Expre
 	}
 }
 
-WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t payload_count,
-                               const ValidityMask &partition_mask, const ValidityMask &order_mask)
-    : wexpr(wexpr), context(context), payload_count(payload_count), partition_mask(partition_mask),
-      order_mask(order_mask), payload_collection(), payload_executor(context),
-      range((HasPrecedingRange(wexpr) || HasFollowingRange(wexpr)) ? wexpr.orders[0].expression.get() : nullptr,
-            context, payload_count) {
-	// TODO: child may be a scalar, don't need to materialize the whole collection then
+WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, ClientContext &context) : wexpr(wexpr), context(context) {
+}
 
-	// evaluate inner expressions of window functions, could be more complex
-	PrepareInputExpressions(wexpr.children, payload_executor, payload_chunk);
-
-	auto types = payload_chunk.GetTypes();
-	if (!types.empty()) {
-		payload_collection.Initialize(Allocator::Get(context), types);
+WindowExecutorGlobalState::WindowExecutorGlobalState(const WindowExecutor &executor, const idx_t payload_count,
+                                                     const ValidityMask &partition_mask, const ValidityMask &order_mask)
+    : executor(executor), payload_count(payload_count), partition_mask(partition_mask), order_mask(order_mask),
+      range((HasPrecedingRange(executor.wexpr) || HasFollowingRange(executor.wexpr))
+                ? executor.wexpr.orders[0].expression.get()
+                : nullptr,
+            executor.context, payload_count) {
+	for (const auto &child : executor.wexpr.children) {
+		arg_types.emplace_back(child->return_type);
 	}
 }
 
-unique_ptr<WindowExecutorState> WindowExecutor::GetExecutorState() const {
-	return make_uniq<WindowExecutorBoundsState>(wexpr, context, payload_count, partition_mask, order_mask);
+WindowExecutorLocalState::WindowExecutorLocalState(const WindowExecutorGlobalState &gstate)
+    : payload_executor(gstate.executor.context), range_executor(gstate.executor.context) {
+	// TODO: child may be a scalar, don't need to materialize the whole collection then
+
+	// evaluate inner expressions of window functions, could be more complex
+	PrepareInputExpressions(gstate.executor.wexpr.children, payload_executor, payload_chunk);
+
+	if (gstate.range.expr) {
+		vector<LogicalType> types;
+		types.emplace_back(gstate.range.expr->return_type);
+		range_executor.AddExpression(*gstate.range.expr);
+
+		auto &allocator = range_executor.GetAllocator();
+		range_chunk.Initialize(allocator, types);
+	}
+}
+
+void WindowExecutorLocalState::Sink(WindowExecutorGlobalState &gstate, DataChunk &input_chunk, idx_t input_idx) {
+	if (gstate.range.expr && (!input_idx || !gstate.range.scalar)) {
+		range_executor.Execute(input_chunk, range_chunk);
+		gstate.range.Copy(range_chunk, input_idx);
+	}
+}
+
+unique_ptr<WindowExecutorGlobalState> WindowExecutor::GetGlobalState(const idx_t payload_count,
+                                                                     const ValidityMask &partition_mask,
+                                                                     const ValidityMask &order_mask) const {
+	return make_uniq<WindowExecutorGlobalState>(*this, payload_count, partition_mask, order_mask);
+}
+
+unique_ptr<WindowExecutorLocalState> WindowExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
+	return make_uniq<WindowExecutorBoundsState>(gstate);
+}
+
+void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count,
+                          WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate) const {
+	lstate.Sink(gstate, input_chunk, input_idx);
 }
 
 //===--------------------------------------------------------------------===//
 // WindowAggregateExecutor
 //===--------------------------------------------------------------------===//
-bool WindowAggregateExecutor::IsConstantAggregate() {
+class WindowAggregateExecutorGlobalState : public WindowExecutorGlobalState {
+public:
+	bool IsConstantAggregate();
+	bool IsCustomAggregate();
+	bool IsDistinctAggregate();
+
+	WindowAggregateExecutorGlobalState(const WindowAggregateExecutor &executor, const idx_t payload_count,
+	                                   const ValidityMask &partition_mask, const ValidityMask &order_mask);
+
+	// aggregate computation algorithm
+	unique_ptr<WindowAggregator> aggregator;
+	// aggregate global state
+	unique_ptr<WindowAggregatorState> gsink;
+};
+
+bool WindowAggregateExecutorGlobalState::IsConstantAggregate() {
+	const auto &wexpr = executor.wexpr;
+
 	if (!wexpr.aggregate) {
 		return false;
 	}
@@ -836,7 +995,20 @@ bool WindowAggregateExecutor::IsConstantAggregate() {
 	return true;
 }
 
-bool WindowAggregateExecutor::IsCustomAggregate() {
+bool WindowAggregateExecutorGlobalState::IsDistinctAggregate() {
+	const auto &wexpr = executor.wexpr;
+
+	if (!wexpr.aggregate) {
+		return false;
+	}
+
+	return wexpr.distinct;
+}
+
+bool WindowAggregateExecutorGlobalState::IsCustomAggregate() {
+	const auto &wexpr = executor.wexpr;
+	const auto &mode = reinterpret_cast<const WindowAggregateExecutor &>(executor).mode;
+
 	if (!wexpr.aggregate) {
 		return false;
 	}
@@ -848,45 +1020,103 @@ bool WindowAggregateExecutor::IsCustomAggregate() {
 	return (mode < WindowAggregationMode::COMBINE);
 }
 
-void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &result,
-                              WindowExecutorState &lstate) const {
+void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &result, WindowExecutorLocalState &lstate,
+                              WindowExecutorGlobalState &gstate) const {
 	auto &lbstate = lstate.Cast<WindowExecutorBoundsState>();
-	lbstate.UpdateBounds(row_idx, input_chunk, range);
+	lbstate.UpdateBounds(row_idx, input_chunk, gstate.range);
 
 	const auto count = input_chunk.size();
-	EvaluateInternal(lstate, result, count, row_idx);
+	EvaluateInternal(gstate, lstate, result, count, row_idx);
 
 	result.Verify(count);
 }
 
 WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, ClientContext &context,
-                                                 const idx_t count, const ValidityMask &partition_mask,
-                                                 const ValidityMask &order_mask, WindowAggregationMode mode)
-    : WindowExecutor(wexpr, context, count, partition_mask, order_mask), mode(mode), filter_executor(context) {
-	// TODO we could evaluate those expressions in parallel
-
-	//	Check for constant aggregate
-	if (IsConstantAggregate()) {
-		aggregator = make_uniq<WindowConstantAggregator>(AggregateObject(wexpr), wexpr.return_type, partition_mask,
-		                                                 wexpr.exclude_clause, count);
-	} else if (IsCustomAggregate()) {
-		aggregator =
-		    make_uniq<WindowCustomAggregator>(AggregateObject(wexpr), wexpr.return_type, wexpr.exclude_clause, count);
-	} else if (wexpr.aggregate) {
-		// build a segment tree for frame-adhering aggregates
-		// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
-		aggregator =
-		    make_uniq<WindowSegmentTree>(AggregateObject(wexpr), wexpr.return_type, mode, wexpr.exclude_clause, count);
-	}
-
-	// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
-	if (wexpr.filter_expr) {
-		filter_executor.AddExpression(*wexpr.filter_expr);
-		filter_sel.Initialize(STANDARD_VECTOR_SIZE);
-	}
+                                                 WindowAggregationMode mode)
+    : WindowExecutor(wexpr, context), mode(mode) {
 }
 
-void WindowAggregateExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count) {
+WindowAggregateExecutorGlobalState::WindowAggregateExecutorGlobalState(const WindowAggregateExecutor &executor,
+                                                                       const idx_t group_count,
+                                                                       const ValidityMask &partition_mask,
+                                                                       const ValidityMask &order_mask)
+    : WindowExecutorGlobalState(executor, group_count, partition_mask, order_mask) {
+	auto &wexpr = executor.wexpr;
+	auto &context = executor.context;
+	auto return_type = wexpr.return_type;
+	const auto &mode = reinterpret_cast<const WindowAggregateExecutor &>(executor).mode;
+
+	// Force naive for SEPARATE mode or for (currently!) unsupported functionality
+	const auto force_naive =
+	    !ClientConfig::GetConfig(context).enable_optimizer || mode == WindowAggregationMode::SEPARATE;
+	AggregateObject aggr(wexpr);
+	if (force_naive || (wexpr.distinct && wexpr.exclude_clause != WindowExcludeMode::NO_OTHER)) {
+		aggregator = make_uniq<WindowNaiveAggregator>(aggr, arg_types, return_type, wexpr.exclude_clause);
+	} else if (IsDistinctAggregate()) {
+		// build a merge sort tree
+		// see https://dl.acm.org/doi/pdf/10.1145/3514221.3526184
+		aggregator = make_uniq<WindowDistinctAggregator>(aggr, arg_types, return_type, wexpr.exclude_clause, context);
+	} else if (IsConstantAggregate()) {
+		aggregator = make_uniq<WindowConstantAggregator>(aggr, arg_types, return_type, wexpr.exclude_clause);
+	} else if (IsCustomAggregate()) {
+		aggregator = make_uniq<WindowCustomAggregator>(aggr, arg_types, return_type, wexpr.exclude_clause);
+	} else {
+		// build a segment tree for frame-adhering aggregates
+		// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
+		aggregator = make_uniq<WindowSegmentTree>(aggr, arg_types, return_type, mode, wexpr.exclude_clause);
+	}
+
+	gsink = aggregator->GetGlobalState(group_count, partition_mask);
+}
+
+unique_ptr<WindowExecutorGlobalState> WindowAggregateExecutor::GetGlobalState(const idx_t payload_count,
+                                                                              const ValidityMask &partition_mask,
+                                                                              const ValidityMask &order_mask) const {
+	return make_uniq<WindowAggregateExecutorGlobalState>(*this, payload_count, partition_mask, order_mask);
+}
+
+class WindowAggregateExecutorLocalState : public WindowExecutorBoundsState {
+public:
+	WindowAggregateExecutorLocalState(const WindowExecutorGlobalState &gstate, const WindowAggregator &aggregator)
+	    : WindowExecutorBoundsState(gstate), filter_executor(gstate.executor.context) {
+
+		auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
+		aggregator_state = aggregator.GetLocalState(*gastate.gsink);
+
+		// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
+		auto &wexpr = gstate.executor.wexpr;
+		if (wexpr.filter_expr) {
+			filter_executor.AddExpression(*wexpr.filter_expr);
+			filter_sel.Initialize(STANDARD_VECTOR_SIZE);
+		}
+	}
+
+public:
+	// state of aggregator
+	unique_ptr<WindowAggregatorState> aggregator_state;
+	//! Executor for any filter clause
+	ExpressionExecutor filter_executor;
+	//! Result of filtering
+	SelectionVector filter_sel;
+};
+
+unique_ptr<WindowExecutorLocalState>
+WindowAggregateExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
+	auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
+	auto res = make_uniq<WindowAggregateExecutorLocalState>(gstate, *gastate.aggregator);
+	return std::move(res);
+}
+
+void WindowAggregateExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count,
+                                   WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate) const {
+	auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
+	auto &lastate = lstate.Cast<WindowAggregateExecutorLocalState>();
+	auto &filter_sel = lastate.filter_sel;
+	auto &filter_executor = lastate.filter_executor;
+	auto &payload_executor = lastate.payload_executor;
+	auto &payload_chunk = lastate.payload_chunk;
+	auto &aggregator = gastate.aggregator;
+
 	idx_t filtered = 0;
 	SelectionVector *filtering = nullptr;
 	if (wexpr.filter_expr) {
@@ -904,63 +1134,123 @@ void WindowAggregateExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx
 	}
 
 	D_ASSERT(aggregator);
-	aggregator->Sink(payload_chunk, filtering, filtered);
+	auto &gestate = *gastate.gsink;
+	auto &lestate = *lastate.aggregator_state;
+	aggregator->Sink(gestate, lestate, payload_chunk, input_idx, filtering, filtered);
 
-	WindowExecutor::Sink(input_chunk, input_idx, total_count);
+	WindowExecutor::Sink(input_chunk, input_idx, total_count, gstate, lstate);
 }
 
-void WindowAggregateExecutor::Finalize() {
-	D_ASSERT(aggregator);
-	aggregator->Finalize();
-}
+static void ApplyWindowStats(const WindowBoundary &boundary, FrameDelta &delta, BaseStatistics *base, bool is_start) {
+	// Avoid overflow by clamping to the frame bounds
+	auto base_stats = delta;
 
-class WindowAggregateState : public WindowExecutorBoundsState {
-public:
-	WindowAggregateState(BoundWindowExpression &wexpr, ClientContext &context, const idx_t payload_count,
-	                     const ValidityMask &partition_mask, const ValidityMask &order_mask,
-	                     const WindowAggregator &aggregator)
-	    : WindowExecutorBoundsState(wexpr, context, payload_count, partition_mask, order_mask),
-	      aggregator_state(aggregator.GetLocalState()) {
+	switch (boundary) {
+	case WindowBoundary::UNBOUNDED_PRECEDING:
+		if (is_start) {
+			delta.end = 0;
+			return;
+		}
+		break;
+	case WindowBoundary::UNBOUNDED_FOLLOWING:
+		if (!is_start) {
+			delta.begin = 0;
+			return;
+		}
+		break;
+	case WindowBoundary::CURRENT_ROW_ROWS:
+		delta.begin = delta.end = 0;
+		return;
+	case WindowBoundary::EXPR_PRECEDING_ROWS:
+		if (base && base->GetStatsType() == StatisticsType::NUMERIC_STATS && NumericStats::HasMinMax(*base)) {
+			//	Preceding so negative offset from current row
+			base_stats.begin = NumericStats::GetMin<int64_t>(*base);
+			base_stats.end = NumericStats::GetMax<int64_t>(*base);
+			if (delta.begin < base_stats.end && base_stats.end < delta.end) {
+				delta.begin = -base_stats.end;
+			}
+			if (delta.begin < base_stats.begin && base_stats.begin < delta.end) {
+				delta.end = -base_stats.begin + 1;
+			}
+		}
+		return;
+	case WindowBoundary::EXPR_FOLLOWING_ROWS:
+		if (base && base->GetStatsType() == StatisticsType::NUMERIC_STATS && NumericStats::HasMinMax(*base)) {
+			base_stats.begin = NumericStats::GetMin<int64_t>(*base);
+			base_stats.end = NumericStats::GetMax<int64_t>(*base);
+			if (base_stats.end < delta.end) {
+				delta.end = base_stats.end + 1;
+			}
+		}
+		return;
+
+	case WindowBoundary::CURRENT_ROW_RANGE:
+	case WindowBoundary::EXPR_PRECEDING_RANGE:
+	case WindowBoundary::EXPR_FOLLOWING_RANGE:
+		return;
+	default:
+		break;
 	}
 
-public:
-	// state of aggregator
-	unique_ptr<WindowAggregatorState> aggregator_state;
-
-	void NextRank(idx_t partition_begin, idx_t peer_begin, idx_t row_idx);
-};
-
-unique_ptr<WindowExecutorState> WindowAggregateExecutor::GetExecutorState() const {
-	auto res = make_uniq<WindowAggregateState>(wexpr, context, payload_count, partition_mask, order_mask, *aggregator);
-	return std::move(res);
+	if (is_start) {
+		throw InternalException("Unsupported window start boundary");
+	} else {
+		throw InternalException("Unsupported window end boundary");
+	}
 }
 
-void WindowAggregateExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count,
-                                               idx_t row_idx) const {
-	auto &lastate = lstate.Cast<WindowAggregateState>();
+void WindowAggregateExecutor::Finalize(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate) const {
+	auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
+	auto &aggregator = gastate.aggregator;
+	auto &gsink = gastate.gsink;
+	D_ASSERT(aggregator);
+
+	//	Estimate the frame statistics
+	//	Default to the entire partition if we don't know anything
+	FrameStats stats;
+	const auto count = NumericCast<int64_t>(gastate.payload_count);
+
+	//	First entry is the frame start
+	stats[0] = FrameDelta(-count, count);
+	auto base = wexpr.expr_stats.empty() ? nullptr : wexpr.expr_stats[0].get();
+	ApplyWindowStats(wexpr.start, stats[0], base, true);
+
+	//	Second entry is the frame end
+	stats[1] = FrameDelta(-count, count);
+	base = wexpr.expr_stats.empty() ? nullptr : wexpr.expr_stats[1].get();
+	ApplyWindowStats(wexpr.end, stats[1], base, false);
+
+	auto &lastate = lstate.Cast<WindowAggregateExecutorLocalState>();
+	aggregator->Finalize(*gsink, *lastate.aggregator_state, stats);
+}
+
+void WindowAggregateExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
+                                               Vector &result, idx_t count, idx_t row_idx) const {
+	auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
+	auto &lastate = lstate.Cast<WindowAggregateExecutorLocalState>();
+	auto &aggregator = gastate.aggregator;
+	auto &gsink = gastate.gsink;
 	D_ASSERT(aggregator);
 
 	auto &agg_state = *lastate.aggregator_state;
 
-	aggregator->Evaluate(agg_state, lastate.bounds, result, count, row_idx);
+	aggregator->Evaluate(*gsink, agg_state, lastate.bounds, result, count, row_idx);
 }
 
 //===--------------------------------------------------------------------===//
 // WindowRowNumberExecutor
 //===--------------------------------------------------------------------===//
-WindowRowNumberExecutor::WindowRowNumberExecutor(BoundWindowExpression &wexpr, ClientContext &context,
-                                                 const idx_t payload_count, const ValidityMask &partition_mask,
-                                                 const ValidityMask &order_mask)
-    : WindowExecutor(wexpr, context, payload_count, partition_mask, order_mask) {
+WindowRowNumberExecutor::WindowRowNumberExecutor(BoundWindowExpression &wexpr, ClientContext &context)
+    : WindowExecutor(wexpr, context) {
 }
 
-void WindowRowNumberExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count,
-                                               idx_t row_idx) const {
+void WindowRowNumberExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
+                                               Vector &result, idx_t count, idx_t row_idx) const {
 	auto &lbstate = lstate.Cast<WindowExecutorBoundsState>();
 	auto partition_begin = FlatVector::GetData<const idx_t>(lbstate.bounds.data[PARTITION_BEGIN]);
 	auto rdata = FlatVector::GetData<int64_t>(result);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
-		rdata[i] = row_idx - partition_begin[i] + 1;
+		rdata[i] = NumericCast<int64_t>(row_idx - partition_begin[i] + 1);
 	}
 }
 
@@ -969,9 +1259,7 @@ void WindowRowNumberExecutor::EvaluateInternal(WindowExecutorState &lstate, Vect
 //===--------------------------------------------------------------------===//
 class WindowPeerState : public WindowExecutorBoundsState {
 public:
-	WindowPeerState(BoundWindowExpression &wexpr, ClientContext &context, const idx_t payload_count,
-	                const ValidityMask &partition_mask, const ValidityMask &order_mask)
-	    : WindowExecutorBoundsState(wexpr, context, payload_count, partition_mask, order_mask) {
+	explicit WindowPeerState(const WindowExecutorGlobalState &gstate) : WindowExecutorBoundsState(gstate) {
 	}
 
 public:
@@ -995,17 +1283,16 @@ void WindowPeerState::NextRank(idx_t partition_begin, idx_t peer_begin, idx_t ro
 	rank_equal++;
 }
 
-WindowRankExecutor::WindowRankExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t payload_count,
-                                       const ValidityMask &partition_mask, const ValidityMask &order_mask)
-    : WindowExecutor(wexpr, context, payload_count, partition_mask, order_mask) {
+WindowRankExecutor::WindowRankExecutor(BoundWindowExpression &wexpr, ClientContext &context)
+    : WindowExecutor(wexpr, context) {
 }
 
-unique_ptr<WindowExecutorState> WindowRankExecutor::GetExecutorState() const {
-	return make_uniq<WindowPeerState>(wexpr, context, payload_count, partition_mask, order_mask);
+unique_ptr<WindowExecutorLocalState> WindowRankExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
+	return make_uniq<WindowPeerState>(gstate);
 }
 
-void WindowRankExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count,
-                                          idx_t row_idx) const {
+void WindowRankExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
+                                          Vector &result, idx_t count, idx_t row_idx) const {
 	auto &lpeer = lstate.Cast<WindowPeerState>();
 	auto partition_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PARTITION_BEGIN]);
 	auto peer_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PEER_BEGIN]);
@@ -1017,23 +1304,24 @@ void WindowRankExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector &r
 
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		lpeer.NextRank(partition_begin[i], peer_begin[i], row_idx);
-		rdata[i] = lpeer.rank;
+		rdata[i] = NumericCast<int64_t>(lpeer.rank);
 	}
 }
 
-WindowDenseRankExecutor::WindowDenseRankExecutor(BoundWindowExpression &wexpr, ClientContext &context,
-                                                 const idx_t payload_count, const ValidityMask &partition_mask,
-                                                 const ValidityMask &order_mask)
-    : WindowExecutor(wexpr, context, payload_count, partition_mask, order_mask) {
+WindowDenseRankExecutor::WindowDenseRankExecutor(BoundWindowExpression &wexpr, ClientContext &context)
+    : WindowExecutor(wexpr, context) {
 }
 
-unique_ptr<WindowExecutorState> WindowDenseRankExecutor::GetExecutorState() const {
-	return make_uniq<WindowPeerState>(wexpr, context, payload_count, partition_mask, order_mask);
+unique_ptr<WindowExecutorLocalState>
+WindowDenseRankExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
+	return make_uniq<WindowPeerState>(gstate);
 }
 
-void WindowDenseRankExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count,
-                                               idx_t row_idx) const {
+void WindowDenseRankExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
+                                               Vector &result, idx_t count, idx_t row_idx) const {
 	auto &lpeer = lstate.Cast<WindowPeerState>();
+
+	auto &order_mask = gstate.order_mask;
 	auto partition_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PARTITION_BEGIN]);
 	auto peer_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PEER_BEGIN]);
 	auto rdata = FlatVector::GetData<int64_t>(result);
@@ -1079,22 +1367,21 @@ void WindowDenseRankExecutor::EvaluateInternal(WindowExecutorState &lstate, Vect
 
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		lpeer.NextRank(partition_begin[i], peer_begin[i], row_idx);
-		rdata[i] = lpeer.dense_rank;
+		rdata[i] = NumericCast<int64_t>(lpeer.dense_rank);
 	}
 }
 
-WindowPercentRankExecutor::WindowPercentRankExecutor(BoundWindowExpression &wexpr, ClientContext &context,
-                                                     const idx_t payload_count, const ValidityMask &partition_mask,
-                                                     const ValidityMask &order_mask)
-    : WindowExecutor(wexpr, context, payload_count, partition_mask, order_mask) {
+WindowPercentRankExecutor::WindowPercentRankExecutor(BoundWindowExpression &wexpr, ClientContext &context)
+    : WindowExecutor(wexpr, context) {
 }
 
-unique_ptr<WindowExecutorState> WindowPercentRankExecutor::GetExecutorState() const {
-	return make_uniq<WindowPeerState>(wexpr, context, payload_count, partition_mask, order_mask);
+unique_ptr<WindowExecutorLocalState>
+WindowPercentRankExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
+	return make_uniq<WindowPeerState>(gstate);
 }
 
-void WindowPercentRankExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count,
-                                                 idx_t row_idx) const {
+void WindowPercentRankExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
+                                                 Vector &result, idx_t count, idx_t row_idx) const {
 	auto &lpeer = lstate.Cast<WindowPeerState>();
 	auto partition_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PARTITION_BEGIN]);
 	auto partition_end = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PARTITION_END]);
@@ -1107,7 +1394,7 @@ void WindowPercentRankExecutor::EvaluateInternal(WindowExecutorState &lstate, Ve
 
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		lpeer.NextRank(partition_begin[i], peer_begin[i], row_idx);
-		int64_t denom = partition_end[i] - partition_begin[i] - 1;
+		auto denom = static_cast<double>(NumericCast<int64_t>(partition_end[i] - partition_begin[i] - 1));
 		double percent_rank = denom > 0 ? ((double)lpeer.rank - 1) / denom : 0;
 		rdata[i] = percent_rank;
 	}
@@ -1116,110 +1403,152 @@ void WindowPercentRankExecutor::EvaluateInternal(WindowExecutorState &lstate, Ve
 //===--------------------------------------------------------------------===//
 // WindowCumeDistExecutor
 //===--------------------------------------------------------------------===//
-WindowCumeDistExecutor::WindowCumeDistExecutor(BoundWindowExpression &wexpr, ClientContext &context,
-                                               const idx_t payload_count, const ValidityMask &partition_mask,
-                                               const ValidityMask &order_mask)
-    : WindowExecutor(wexpr, context, payload_count, partition_mask, order_mask) {
+WindowCumeDistExecutor::WindowCumeDistExecutor(BoundWindowExpression &wexpr, ClientContext &context)
+    : WindowExecutor(wexpr, context) {
 }
 
-void WindowCumeDistExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count,
-                                              idx_t row_idx) const {
+void WindowCumeDistExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
+                                              Vector &result, idx_t count, idx_t row_idx) const {
 	auto &lbstate = lstate.Cast<WindowExecutorBoundsState>();
 	auto partition_begin = FlatVector::GetData<const idx_t>(lbstate.bounds.data[PARTITION_BEGIN]);
 	auto partition_end = FlatVector::GetData<const idx_t>(lbstate.bounds.data[PARTITION_END]);
 	auto peer_end = FlatVector::GetData<const idx_t>(lbstate.bounds.data[PEER_END]);
 	auto rdata = FlatVector::GetData<double>(result);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
-		int64_t denom = partition_end[i] - partition_begin[i];
+		auto denom = static_cast<double>(NumericCast<int64_t>(partition_end[i] - partition_begin[i]));
 		double cume_dist = denom > 0 ? ((double)(peer_end[i] - partition_begin[i])) / denom : 0;
 		rdata[i] = cume_dist;
 	}
 }
 
 //===--------------------------------------------------------------------===//
-// WindowValueExecutor
+// WindowValueGlobalState
 //===--------------------------------------------------------------------===//
-WindowValueExecutor::WindowValueExecutor(BoundWindowExpression &wexpr, ClientContext &context,
-                                         const idx_t payload_count, const ValidityMask &partition_mask,
-                                         const ValidityMask &order_mask)
-    : WindowExecutor(wexpr, context, payload_count, partition_mask, order_mask) {
-}
 
-WindowNtileExecutor::WindowNtileExecutor(BoundWindowExpression &wexpr, ClientContext &context,
-                                         const idx_t payload_count, const ValidityMask &partition_mask,
-                                         const ValidityMask &order_mask)
-    : WindowValueExecutor(wexpr, context, payload_count, partition_mask, order_mask) {
-}
+class WindowValueGlobalState : public WindowExecutorGlobalState {
+public:
+	WindowValueGlobalState(const WindowExecutor &executor, const idx_t payload_count,
+	                       const ValidityMask &partition_mask, const ValidityMask &order_mask)
+	    : WindowExecutorGlobalState(executor, payload_count, partition_mask, order_mask),
+	      payload_collection(payload_data), ignore_nulls(&no_nulls)
 
-void WindowValueExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count) {
-	// Single pass over the input to produce the global data.
-	// Vectorisation for the win...
+	{
+		if (!arg_types.empty()) {
+			payload_collection.Initialize(Allocator::Get(executor.context), arg_types, payload_count);
+		}
 
-	// Set up a validity mask for IGNORE NULLS
-	bool check_nulls = false;
-	if (wexpr.ignore_nulls) {
-		switch (wexpr.type) {
-		case ExpressionType::WINDOW_LEAD:
-		case ExpressionType::WINDOW_LAG:
-		case ExpressionType::WINDOW_FIRST_VALUE:
-		case ExpressionType::WINDOW_LAST_VALUE:
-		case ExpressionType::WINDOW_NTH_VALUE:
-			check_nulls = true;
-			break;
-		default:
-			break;
+		auto &wexpr = executor.wexpr;
+		if (wexpr.ignore_nulls) {
+			switch (wexpr.type) {
+			case ExpressionType::WINDOW_LEAD:
+			case ExpressionType::WINDOW_LAG:
+			case ExpressionType::WINDOW_FIRST_VALUE:
+			case ExpressionType::WINDOW_LAST_VALUE:
+			case ExpressionType::WINDOW_NTH_VALUE:
+				ignore_nulls = &FlatVector::Validity(payload_collection.chunk.data[0]);
+				break;
+			default:
+				break;
+			}
 		}
 	}
+
+	// The partition values
+	DataChunk payload_data;
+	// The partition values
+	WindowDataChunk payload_collection;
+	// Mask to use for exclusion if we are not ignoring NULLs
+	ValidityMask no_nulls;
+	// IGNORE NULLS
+	optional_ptr<ValidityMask> ignore_nulls;
+};
+
+//===--------------------------------------------------------------------===//
+// WindowValueLocalState
+//===--------------------------------------------------------------------===//
+
+//! A class representing the state of the first_value, last_value and nth_value functions
+class WindowValueLocalState : public WindowExecutorBoundsState {
+public:
+	explicit WindowValueLocalState(const WindowValueGlobalState &gvstate)
+	    : WindowExecutorBoundsState(gvstate), gvstate(gvstate) {
+	}
+
+	//! Lazily initialize for value Execute
+	void Initialize();
+
+	//! The corresponding global value state
+	const WindowValueGlobalState &gvstate;
+	//! Lazy initialization flag
+	bool initialized = false;
+	//! The exclusion filter handler
+	unique_ptr<ExclusionFilter> exclusion_filter;
+	//! The validity mask that combines both the NULLs and exclusion information
+	optional_ptr<ValidityMask> ignore_nulls_exclude;
+};
+
+void WindowValueLocalState::Initialize() {
+	if (initialized) {
+		return;
+	}
+	auto ignore_nulls = gvstate.ignore_nulls;
+	if (gvstate.executor.wexpr.exclude_clause == WindowExcludeMode::NO_OTHER) {
+		exclusion_filter = nullptr;
+		ignore_nulls_exclude = ignore_nulls;
+	} else {
+		// create the exclusion filter based on ignore_nulls
+		exclusion_filter =
+		    make_uniq<ExclusionFilter>(gvstate.executor.wexpr.exclude_clause, gvstate.payload_count, *ignore_nulls);
+		ignore_nulls_exclude = &exclusion_filter->mask;
+	}
+
+	initialized = true;
+}
+
+//===--------------------------------------------------------------------===//
+// WindowValueExecutor
+//===--------------------------------------------------------------------===//
+WindowValueExecutor::WindowValueExecutor(BoundWindowExpression &wexpr, ClientContext &context)
+    : WindowExecutor(wexpr, context) {
+}
+
+WindowNtileExecutor::WindowNtileExecutor(BoundWindowExpression &wexpr, ClientContext &context)
+    : WindowValueExecutor(wexpr, context) {
+}
+
+unique_ptr<WindowExecutorGlobalState> WindowValueExecutor::GetGlobalState(const idx_t payload_count,
+                                                                          const ValidityMask &partition_mask,
+                                                                          const ValidityMask &order_mask) const {
+	return make_uniq<WindowValueGlobalState>(*this, payload_count, partition_mask, order_mask);
+}
+
+void WindowValueExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count,
+                               WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate) const {
+	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
+	auto &lvstate = lstate.Cast<WindowValueLocalState>();
+	auto &payload_chunk = lvstate.payload_chunk;
+	auto &payload_executor = lvstate.payload_executor;
+	auto &payload_collection = gvstate.payload_collection;
 
 	if (!wexpr.children.empty()) {
 		payload_chunk.Reset();
 		payload_executor.Execute(input_chunk, payload_chunk);
 		payload_chunk.Verify();
-		payload_collection.Append(payload_chunk, true);
-
-		// process payload chunks while they are still piping hot
-		if (check_nulls) {
-			const auto count = input_chunk.size();
-
-			UnifiedVectorFormat vdata;
-			payload_chunk.data[0].ToUnifiedFormat(count, vdata);
-			if (!vdata.validity.AllValid()) {
-				//	Lazily materialise the contents when we find the first NULL
-				if (ignore_nulls.AllValid()) {
-					ignore_nulls.Initialize(total_count);
-				}
-				// Write to the current position
-				if (input_idx % ValidityMask::BITS_PER_VALUE == 0) {
-					// If we are at the edge of an output entry, just copy the entries
-					auto dst = ignore_nulls.GetData() + ignore_nulls.EntryCount(input_idx);
-					auto src = vdata.validity.GetData();
-					for (auto entry_count = vdata.validity.EntryCount(count); entry_count-- > 0;) {
-						*dst++ = *src++;
-					}
-				} else {
-					// If not, we have ragged data and need to copy one bit at a time.
-					for (idx_t i = 0; i < count; ++i) {
-						ignore_nulls.Set(input_idx + i, vdata.validity.RowIsValid(i));
-					}
-				}
-			}
-		}
+		payload_collection.Copy(payload_chunk, input_idx);
 	}
 
-	WindowExecutor::Sink(input_chunk, input_idx, total_count);
+	WindowExecutor::Sink(input_chunk, input_idx, total_count, gstate, lstate);
 }
 
-unique_ptr<WindowExecutorState> WindowValueExecutor::GetExecutorState() const {
-	if (wexpr.type == ExpressionType::WINDOW_FIRST_VALUE || wexpr.type == ExpressionType::WINDOW_LAST_VALUE ||
-	    wexpr.type == ExpressionType::WINDOW_NTH_VALUE) {
-		return make_uniq<WindowValueState>(wexpr, context, payload_count, partition_mask, order_mask, ignore_nulls);
-	} else {
-		return make_uniq<WindowExecutorBoundsState>(wexpr, context, payload_count, partition_mask, order_mask);
-	}
+unique_ptr<WindowExecutorLocalState> WindowValueExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
+	const auto &gvstate = gstate.Cast<WindowValueGlobalState>();
+	return make_uniq<WindowValueLocalState>(gvstate);
 }
 
-void WindowNtileExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count,
-                                           idx_t row_idx) const {
+void WindowNtileExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
+                                           Vector &result, idx_t count, idx_t row_idx) const {
+	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
+	auto &payload_collection = gvstate.payload_collection.chunk;
 	D_ASSERT(payload_collection.ColumnCount() == 1);
 	auto &lbstate = lstate.Cast<WindowExecutorBoundsState>();
 	auto partition_begin = FlatVector::GetData<const idx_t>(lbstate.bounds.data[PARTITION_BEGIN]);
@@ -1234,7 +1563,7 @@ void WindowNtileExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector &
 				throw InvalidInputException("Argument for ntile must be greater than zero");
 			}
 			// With thanks from SQLite's ntileValueFunc()
-			int64_t n_total = partition_end[i] - partition_begin[i];
+			auto n_total = NumericCast<int64_t>(partition_end[i] - partition_begin[i]);
 			if (n_param > n_total) {
 				// more groups allowed than we have values
 				// map every entry to a unique group
@@ -1243,7 +1572,7 @@ void WindowNtileExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector &
 			int64_t n_size = (n_total / n_param);
 			// find the row idx within the group
 			D_ASSERT(row_idx >= partition_begin[i]);
-			int64_t adjusted_row_idx = row_idx - partition_begin[i];
+			auto adjusted_row_idx = NumericCast<int64_t>(row_idx - partition_begin[i]);
 			// now compute the ntile
 			int64_t n_large = n_total - n_param * n_size;
 			int64_t i_small = n_large * (n_size + 1);
@@ -1264,14 +1593,14 @@ void WindowNtileExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector &
 }
 
 //===--------------------------------------------------------------------===//
-// WindowLeadLagState
+// WindowLeadLagLocalState
 //===--------------------------------------------------------------------===//
-class WindowLeadLagState : public WindowExecutorBoundsState {
+class WindowLeadLagLocalState : public WindowValueLocalState {
 public:
-	WindowLeadLagState(BoundWindowExpression &wexpr, ClientContext &context, const idx_t payload_count,
-	                   const ValidityMask &partition_mask, const ValidityMask &order_mask)
-	    : WindowExecutorBoundsState(wexpr, context, payload_count, partition_mask, order_mask),
-	      leadlag_offset(wexpr.offset_expr.get(), context), leadlag_default(wexpr.default_expr.get(), context) {
+	explicit WindowLeadLagLocalState(const WindowValueGlobalState &gstate)
+	    : WindowValueLocalState(gstate),
+	      leadlag_offset(gstate.executor.wexpr.offset_expr.get(), gstate.executor.context),
+	      leadlag_default(gstate.executor.wexpr.default_expr.get(), gstate.executor.context) {
 	}
 
 	void UpdateBounds(idx_t row_idx, DataChunk &input_chunk, const WindowInputColumn &range) override;
@@ -1282,7 +1611,7 @@ public:
 	WindowInputExpression leadlag_default;
 };
 
-void WindowLeadLagState::UpdateBounds(idx_t row_idx, DataChunk &input_chunk, const WindowInputColumn &range) {
+void WindowLeadLagLocalState::UpdateBounds(idx_t row_idx, DataChunk &input_chunk, const WindowInputColumn &range) {
 	// Evaluate the row-level arguments
 	leadlag_offset.Execute(input_chunk);
 	leadlag_default.Execute(input_chunk);
@@ -1290,23 +1619,35 @@ void WindowLeadLagState::UpdateBounds(idx_t row_idx, DataChunk &input_chunk, con
 	WindowExecutorBoundsState::UpdateBounds(row_idx, input_chunk, range);
 }
 
-WindowLeadLagExecutor::WindowLeadLagExecutor(BoundWindowExpression &wexpr, ClientContext &context,
-                                             const idx_t payload_count, const ValidityMask &partition_mask,
-                                             const ValidityMask &order_mask)
-    : WindowValueExecutor(wexpr, context, payload_count, partition_mask, order_mask) {
+WindowLeadLagExecutor::WindowLeadLagExecutor(BoundWindowExpression &wexpr, ClientContext &context)
+    : WindowValueExecutor(wexpr, context) {
 }
 
-unique_ptr<WindowExecutorState> WindowLeadLagExecutor::GetExecutorState() const {
-	return make_uniq<WindowLeadLagState>(wexpr, context, payload_count, partition_mask, order_mask);
+unique_ptr<WindowExecutorLocalState>
+WindowLeadLagExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
+	const auto &gvstate = gstate.Cast<WindowValueGlobalState>();
+	return make_uniq<WindowLeadLagLocalState>(gvstate);
 }
 
-void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count,
-                                             idx_t row_idx) const {
-	auto &llstate = lstate.Cast<WindowLeadLagState>();
+void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
+                                             Vector &result, idx_t count, idx_t row_idx) const {
+	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
+	auto &payload_collection = gvstate.payload_collection.chunk;
+	auto &ignore_nulls = gvstate.ignore_nulls;
+	auto &llstate = lstate.Cast<WindowLeadLagLocalState>();
+
+	bool can_shift = ignore_nulls->AllValid();
+	if (wexpr.offset_expr) {
+		can_shift = can_shift && wexpr.offset_expr->IsFoldable();
+	}
+	if (wexpr.default_expr) {
+		can_shift = can_shift && wexpr.default_expr->IsFoldable();
+	}
 
 	auto partition_begin = FlatVector::GetData<const idx_t>(llstate.bounds.data[PARTITION_BEGIN]);
 	auto partition_end = FlatVector::GetData<const idx_t>(llstate.bounds.data[PARTITION_END]);
-	for (idx_t i = 0; i < count; ++i, ++row_idx) {
+	const auto row_end = row_idx + count;
+	for (idx_t i = 0; i < count;) {
 		int64_t offset = 1;
 		if (wexpr.offset_expr) {
 			offset = llstate.leadlag_offset.GetCell<int64_t>(i);
@@ -1321,33 +1662,59 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector
 		idx_t delta = 0;
 		if (val_idx < (int64_t)row_idx) {
 			// Count backwards
-			delta = idx_t(row_idx - val_idx);
-			val_idx = FindPrevStart(ignore_nulls, partition_begin[i], row_idx, delta);
+			delta = idx_t(row_idx - idx_t(val_idx));
+			val_idx = int64_t(FindPrevStart(*ignore_nulls, partition_begin[i], row_idx, delta));
 		} else if (val_idx > (int64_t)row_idx) {
-			delta = idx_t(val_idx - row_idx);
-			val_idx = FindNextStart(ignore_nulls, row_idx + 1, partition_end[i], delta);
+			delta = idx_t(idx_t(val_idx) - row_idx);
+			val_idx = int64_t(FindNextStart(*ignore_nulls, row_idx + 1, partition_end[i], delta));
 		}
 		// else offset is zero, so don't move.
 
-		if (!delta) {
-			CopyCell(payload_collection, 0, val_idx, result, i);
-		} else if (wexpr.default_expr) {
-			llstate.leadlag_default.CopyCell(result, i);
+		if (can_shift) {
+			if (!delta) {
+				//	Copy source[index:index+width] => result[i:]
+				const auto index = NumericCast<idx_t>(val_idx);
+				const auto source_limit = partition_end[i] - index;
+				const auto target_limit = MinValue(partition_end[i], row_end) - row_idx;
+				const auto width = MinValue(source_limit, target_limit);
+				auto &source = payload_collection.data[0];
+				VectorOperations::Copy(source, result, index + width, index, i);
+				i += width;
+				row_idx += width;
+			} else if (wexpr.default_expr) {
+				const auto width = MinValue(delta, count - i);
+				llstate.leadlag_default.CopyCell(result, i, width);
+				i += width;
+				row_idx += width;
+			} else {
+				for (idx_t nulls = MinValue(delta, count - i); nulls--; ++i, ++row_idx) {
+					FlatVector::SetNull(result, i, true);
+				}
+			}
 		} else {
-			FlatVector::SetNull(result, i, true);
+			if (!delta) {
+				CopyCell(payload_collection, 0, NumericCast<idx_t>(val_idx), result, i);
+			} else if (wexpr.default_expr) {
+				llstate.leadlag_default.CopyCell(result, i);
+			} else {
+				FlatVector::SetNull(result, i, true);
+			}
+			++i;
+			++row_idx;
 		}
 	}
 }
 
-WindowFirstValueExecutor::WindowFirstValueExecutor(BoundWindowExpression &wexpr, ClientContext &context,
-                                                   const idx_t payload_count, const ValidityMask &partition_mask,
-                                                   const ValidityMask &order_mask)
-    : WindowValueExecutor(wexpr, context, payload_count, partition_mask, order_mask) {
+WindowFirstValueExecutor::WindowFirstValueExecutor(BoundWindowExpression &wexpr, ClientContext &context)
+    : WindowValueExecutor(wexpr, context) {
 }
 
-void WindowFirstValueExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count,
-                                                idx_t row_idx) const {
-	auto &lvstate = lstate.Cast<WindowValueState>();
+void WindowFirstValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
+                                                Vector &result, idx_t count, idx_t row_idx) const {
+	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
+	auto &payload_collection = gvstate.payload_collection.chunk;
+	auto &lvstate = lstate.Cast<WindowValueLocalState>();
+	lvstate.Initialize();
 	auto window_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_BEGIN]);
 	auto window_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_END]);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
@@ -1375,15 +1742,16 @@ void WindowFirstValueExecutor::EvaluateInternal(WindowExecutorState &lstate, Vec
 	}
 }
 
-WindowLastValueExecutor::WindowLastValueExecutor(BoundWindowExpression &wexpr, ClientContext &context,
-                                                 const idx_t payload_count, const ValidityMask &partition_mask,
-                                                 const ValidityMask &order_mask)
-    : WindowValueExecutor(wexpr, context, payload_count, partition_mask, order_mask) {
+WindowLastValueExecutor::WindowLastValueExecutor(BoundWindowExpression &wexpr, ClientContext &context)
+    : WindowValueExecutor(wexpr, context) {
 }
 
-void WindowLastValueExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count,
-                                               idx_t row_idx) const {
-	auto &lvstate = lstate.Cast<WindowValueState>();
+void WindowLastValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
+                                               Vector &result, idx_t count, idx_t row_idx) const {
+	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
+	auto &payload_collection = gvstate.payload_collection.chunk;
+	auto &lvstate = lstate.Cast<WindowValueLocalState>();
+	lvstate.Initialize();
 	auto window_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_BEGIN]);
 	auto window_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_END]);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
@@ -1410,17 +1778,18 @@ void WindowLastValueExecutor::EvaluateInternal(WindowExecutorState &lstate, Vect
 	}
 }
 
-WindowNthValueExecutor::WindowNthValueExecutor(BoundWindowExpression &wexpr, ClientContext &context,
-                                               const idx_t payload_count, const ValidityMask &partition_mask,
-                                               const ValidityMask &order_mask)
-    : WindowValueExecutor(wexpr, context, payload_count, partition_mask, order_mask) {
+WindowNthValueExecutor::WindowNthValueExecutor(BoundWindowExpression &wexpr, ClientContext &context)
+    : WindowValueExecutor(wexpr, context) {
 }
 
-void WindowNthValueExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count,
-                                              idx_t row_idx) const {
+void WindowNthValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
+                                              Vector &result, idx_t count, idx_t row_idx) const {
+	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
+	auto &payload_collection = gvstate.payload_collection.chunk;
 	D_ASSERT(payload_collection.ColumnCount() == 2);
 
-	auto &lvstate = lstate.Cast<WindowValueState>();
+	auto &lvstate = lstate.Cast<WindowValueLocalState>();
+	lvstate.Initialize();
 	auto window_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_BEGIN]);
 	auto window_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_END]);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {

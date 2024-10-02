@@ -3,15 +3,20 @@
 # group: [csv]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE tbl(id int, ts timestamp);
 
 # this fails without ICU loaded
 statement error
 COPY tbl FROM 'data/csv/timestamp_with_tz.csv' (HEADER)
 ----
-timestamp that is not UTC
+Error when converting column "ts". Could not convert string "2021-05-25 04:55:03.382494 EST" to 'TIMESTAMP'
 
 require icu
+
+require no_extension_autoloading
 
 # we can load this into a timestamptz table
 statement ok

@@ -24,39 +24,44 @@ public:
 	            unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality);
 	~PhysicalCTE() override;
 
-	std::shared_ptr<ColumnDataCollection> working_table;
-	shared_ptr<MetaPipeline> recursive_meta_pipeline;
+	vector<const_reference<PhysicalOperator>> cte_scans;
+
+	shared_ptr<ColumnDataCollection> working_table;
 
 	idx_t table_index;
 	string ctename;
-
-public:
-	// Source interface
-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
-
-	bool IsSource() const override {
-		return true;
-	}
 
 public:
 	// Sink interface
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
+	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
+
+	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 
 	bool IsSink() const override {
 		return true;
 	}
 
-	string ParamsToString() const override;
+	bool ParallelSink() const override {
+		return true;
+	}
+
+	bool SinkOrderDependent() const override {
+		return false;
+	}
+
+	bool RequiresBatchIndex() const override {
+		return false;
+	}
+
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 
 	vector<const_reference<PhysicalOperator>> GetSources() const override;
-
-private:
-	void ExecuteRecursivePipelines(ExecutionContext &context) const;
 };
 
 } // namespace duckdb

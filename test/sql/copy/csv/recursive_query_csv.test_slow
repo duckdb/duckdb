@@ -1,0 +1,212 @@
+# name: test/sql/copy/csv/recursive_query_csv.test_slow
+# description: Test read CSV function in a recursive CTE
+# group: [csv]
+
+require httpfs
+
+statement ok
+PRAGMA enable_verification
+
+query IIII
+with recursive
+     base as
+     ( select *
+       from 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/Real_Estate_Sales_2001-2021_GL.csv'
+       where '2003-01-01' < "date recorded" and  "date recorded" < '2010-01-01' and "sale amount" > 1000000
+     )
+   , chains as
+     (
+         select
+           town
+         , "date recorded" as begTS
+         , "date recorded" as endTS
+         , [struct_pack(date:= "date recorded", amt:="sale amount", type:="property type")] as chain
+         from base
+         where "property type" = 'Condo'
+       union all
+         select
+           chains.town
+         , chains.begTS
+         , base."date recorded" as endTS
+         , list_append(chains.chain, struct_pack(date:= "date recorded", amt:="sale amount", type:="property type")) as chain
+         from base, chains
+         where
+               base.town = chains.town
+           and
+           (
+                (len(chains.chain) = 1 and list_contains(['Residential', 'Single Family'], base."property type"))
+             or (len(chains.chain) = 2 and base."property type" = 'Condo')
+             or (len(chains.chain) = 3 and list_contains(['Residential', 'Single Family'], base."property type"))
+           )
+           and chains.endTS < base."date recorded"
+           and base."date recorded" < (chains.endTS + interval 6 days)
+     )
+   select * from chains
+   order by all;
+----
+Clinton	2007-08-22	2007-08-22	[{'date': 2007-08-22, 'amt': 1175000.0, 'type': Condo}]
+Danbury	2007-05-02	2007-05-02	[{'date': 2007-05-02, 'amt': 3105000.0, 'type': Condo}]
+Danbury	2007-05-09	2007-05-09	[{'date': 2007-05-09, 'amt': 1014205.0, 'type': Condo}]
+Darien	2007-09-12	2007-09-12	[{'date': 2007-09-12, 'amt': 1150000.0, 'type': Condo}]
+Fairfield	2007-06-15	2007-06-15	[{'date': 2007-06-15, 'amt': 1100000.0, 'type': Condo}]
+Greenwich	2006-11-20	2006-11-20	[{'date': 2006-11-20, 'amt': 2050000.0, 'type': Condo}]
+Greenwich	2006-11-20	2006-11-21	[{'date': 2006-11-20, 'amt': 2050000.0, 'type': Condo}, {'date': 2006-11-21, 'amt': 6500000.0, 'type': Single Family}]
+Greenwich	2006-12-14	2006-12-14	[{'date': 2006-12-14, 'amt': 1800000.0, 'type': Condo}]
+Greenwich	2006-12-14	2006-12-15	[{'date': 2006-12-14, 'amt': 1800000.0, 'type': Condo}, {'date': 2006-12-15, 'amt': 2195000.0, 'type': Single Family}]
+Greenwich	2006-12-14	2006-12-15	[{'date': 2006-12-14, 'amt': 1800000.0, 'type': Condo}, {'date': 2006-12-15, 'amt': 5500000.0, 'type': Single Family}]
+Greenwich	2006-12-14	2006-12-18	[{'date': 2006-12-14, 'amt': 1800000.0, 'type': Condo}, {'date': 2006-12-18, 'amt': 5010000.0, 'type': Single Family}]
+Greenwich	2007-01-19	2007-01-19	[{'date': 2007-01-19, 'amt': 2227500.0, 'type': Condo}]
+Greenwich	2007-01-19	2007-01-24	[{'date': 2007-01-19, 'amt': 2227500.0, 'type': Condo}, {'date': 2007-01-24, 'amt': 1750000.0, 'type': Single Family}]
+Greenwich	2007-01-31	2007-01-31	[{'date': 2007-01-31, 'amt': 4600000.0, 'type': Condo}]
+Greenwich	2007-02-27	2007-02-27	[{'date': 2007-02-27, 'amt': 1120000.0, 'type': Condo}]
+Greenwich	2007-02-27	2007-02-28	[{'date': 2007-02-27, 'amt': 1120000.0, 'type': Condo}, {'date': 2007-02-28, 'amt': 2260000.0, 'type': Single Family}]
+Greenwich	2007-02-27	2007-03-01	[{'date': 2007-02-27, 'amt': 1120000.0, 'type': Condo}, {'date': 2007-03-01, 'amt': 1900000.0, 'type': Single Family}]
+Greenwich	2007-02-27	2007-03-02	[{'date': 2007-02-27, 'amt': 1120000.0, 'type': Condo}, {'date': 2007-03-02, 'amt': 6500000.0, 'type': Single Family}]
+Greenwich	2007-03-12	2007-03-12	[{'date': 2007-03-12, 'amt': 1084687.0, 'type': Condo}]
+Greenwich	2007-03-12	2007-03-13	[{'date': 2007-03-12, 'amt': 1084687.0, 'type': Condo}, {'date': 2007-03-13, 'amt': 1600000.0, 'type': Single Family}]
+Greenwich	2007-03-12	2007-03-16	[{'date': 2007-03-12, 'amt': 1084687.0, 'type': Condo}, {'date': 2007-03-16, 'amt': 6537500.0, 'type': Single Family}]
+Greenwich	2007-03-12	2007-03-16	[{'date': 2007-03-12, 'amt': 1084687.0, 'type': Condo}, {'date': 2007-03-16, 'amt': 12500000.0, 'type': Single Family}]
+Greenwich	2007-03-12	2007-03-20	[{'date': 2007-03-12, 'amt': 1084687.0, 'type': Condo}, {'date': 2007-03-16, 'amt': 6537500.0, 'type': Single Family}, {'date': 2007-03-20, 'amt': 4100000.0, 'type': Condo}]
+Greenwich	2007-03-12	2007-03-20	[{'date': 2007-03-12, 'amt': 1084687.0, 'type': Condo}, {'date': 2007-03-16, 'amt': 12500000.0, 'type': Single Family}, {'date': 2007-03-20, 'amt': 4100000.0, 'type': Condo}]
+Greenwich	2007-03-12	2007-03-22	[{'date': 2007-03-12, 'amt': 1084687.0, 'type': Condo}, {'date': 2007-03-16, 'amt': 6537500.0, 'type': Single Family}, {'date': 2007-03-20, 'amt': 4100000.0, 'type': Condo}, {'date': 2007-03-22, 'amt': 1580000.0, 'type': Single Family}]
+Greenwich	2007-03-12	2007-03-22	[{'date': 2007-03-12, 'amt': 1084687.0, 'type': Condo}, {'date': 2007-03-16, 'amt': 12500000.0, 'type': Single Family}, {'date': 2007-03-20, 'amt': 4100000.0, 'type': Condo}, {'date': 2007-03-22, 'amt': 1580000.0, 'type': Single Family}]
+Greenwich	2007-03-12	2007-03-23	[{'date': 2007-03-12, 'amt': 1084687.0, 'type': Condo}, {'date': 2007-03-16, 'amt': 6537500.0, 'type': Single Family}, {'date': 2007-03-20, 'amt': 4100000.0, 'type': Condo}, {'date': 2007-03-23, 'amt': 2850000.0, 'type': Single Family}]
+Greenwich	2007-03-12	2007-03-23	[{'date': 2007-03-12, 'amt': 1084687.0, 'type': Condo}, {'date': 2007-03-16, 'amt': 12500000.0, 'type': Single Family}, {'date': 2007-03-20, 'amt': 4100000.0, 'type': Condo}, {'date': 2007-03-23, 'amt': 2850000.0, 'type': Single Family}]
+Greenwich	2007-03-20	2007-03-20	[{'date': 2007-03-20, 'amt': 4100000.0, 'type': Condo}]
+Greenwich	2007-03-20	2007-03-22	[{'date': 2007-03-20, 'amt': 4100000.0, 'type': Condo}, {'date': 2007-03-22, 'amt': 1580000.0, 'type': Single Family}]
+Greenwich	2007-03-20	2007-03-23	[{'date': 2007-03-20, 'amt': 4100000.0, 'type': Condo}, {'date': 2007-03-23, 'amt': 2850000.0, 'type': Single Family}]
+Greenwich	2007-03-30	2007-03-30	[{'date': 2007-03-30, 'amt': 1200000.0, 'type': Condo}]
+Greenwich	2007-05-15	2007-05-15	[{'date': 2007-05-15, 'amt': 1215000.0, 'type': Condo}]
+Greenwich	2007-05-15	2007-05-17	[{'date': 2007-05-15, 'amt': 1215000.0, 'type': Condo}, {'date': 2007-05-17, 'amt': 2250000.0, 'type': Single Family}]
+Greenwich	2007-06-15	2007-06-15	[{'date': 2007-06-15, 'amt': 2264564.0, 'type': Condo}]
+Greenwich	2007-06-15	2007-06-19	[{'date': 2007-06-15, 'amt': 2264564.0, 'type': Condo}, {'date': 2007-06-19, 'amt': 1470000.0, 'type': Single Family}]
+Greenwich	2007-06-15	2007-06-19	[{'date': 2007-06-15, 'amt': 2264564.0, 'type': Condo}, {'date': 2007-06-19, 'amt': 1965000.0, 'type': Single Family}]
+Greenwich	2007-07-10	2007-07-10	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}]
+Greenwich	2007-07-10	2007-07-11	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-11, 'amt': 3150000.0, 'type': Single Family}]
+Greenwich	2007-07-10	2007-07-11	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-11, 'amt': 3250000.0, 'type': Single Family}]
+Greenwich	2007-07-10	2007-07-11	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-11, 'amt': 7050000.0, 'type': Single Family}]
+Greenwich	2007-07-10	2007-07-12	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-12, 'amt': 1269000.0, 'type': Single Family}]
+Greenwich	2007-07-10	2007-07-12	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-12, 'amt': 3565000.0, 'type': Single Family}]
+Greenwich	2007-07-10	2007-07-17	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-12, 'amt': 1269000.0, 'type': Single Family}, {'date': 2007-07-17, 'amt': 3000000.0, 'type': Condo}]
+Greenwich	2007-07-10	2007-07-17	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-12, 'amt': 3565000.0, 'type': Single Family}, {'date': 2007-07-17, 'amt': 3000000.0, 'type': Condo}]
+Greenwich	2007-07-10	2007-07-19	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-12, 'amt': 1269000.0, 'type': Single Family}, {'date': 2007-07-17, 'amt': 3000000.0, 'type': Condo}, {'date': 2007-07-19, 'amt': 3600000.0, 'type': Single Family}]
+Greenwich	2007-07-10	2007-07-19	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-12, 'amt': 3565000.0, 'type': Single Family}, {'date': 2007-07-17, 'amt': 3000000.0, 'type': Condo}, {'date': 2007-07-19, 'amt': 3600000.0, 'type': Single Family}]
+Greenwich	2007-07-10	2007-07-20	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-12, 'amt': 1269000.0, 'type': Single Family}, {'date': 2007-07-17, 'amt': 3000000.0, 'type': Condo}, {'date': 2007-07-20, 'amt': 7225000.0, 'type': Single Family}]
+Greenwich	2007-07-10	2007-07-20	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-12, 'amt': 1269000.0, 'type': Single Family}, {'date': 2007-07-17, 'amt': 3000000.0, 'type': Condo}, {'date': 2007-07-20, 'amt': 18000000.0, 'type': Single Family}]
+Greenwich	2007-07-10	2007-07-20	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-12, 'amt': 3565000.0, 'type': Single Family}, {'date': 2007-07-17, 'amt': 3000000.0, 'type': Condo}, {'date': 2007-07-20, 'amt': 7225000.0, 'type': Single Family}]
+Greenwich	2007-07-10	2007-07-20	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-12, 'amt': 3565000.0, 'type': Single Family}, {'date': 2007-07-17, 'amt': 3000000.0, 'type': Condo}, {'date': 2007-07-20, 'amt': 18000000.0, 'type': Single Family}]
+Greenwich	2007-07-17	2007-07-17	[{'date': 2007-07-17, 'amt': 3000000.0, 'type': Condo}]
+Greenwich	2007-07-17	2007-07-19	[{'date': 2007-07-17, 'amt': 3000000.0, 'type': Condo}, {'date': 2007-07-19, 'amt': 3600000.0, 'type': Single Family}]
+Greenwich	2007-07-17	2007-07-20	[{'date': 2007-07-17, 'amt': 3000000.0, 'type': Condo}, {'date': 2007-07-20, 'amt': 7225000.0, 'type': Single Family}]
+Greenwich	2007-07-17	2007-07-20	[{'date': 2007-07-17, 'amt': 3000000.0, 'type': Condo}, {'date': 2007-07-20, 'amt': 18000000.0, 'type': Single Family}]
+Greenwich	2007-08-16	2007-08-16	[{'date': 2007-08-16, 'amt': 2430000.0, 'type': Condo}]
+Greenwich	2007-08-16	2007-08-17	[{'date': 2007-08-16, 'amt': 2430000.0, 'type': Condo}, {'date': 2007-08-17, 'amt': 1925000.0, 'type': Single Family}]
+Greenwich	2007-08-16	2007-08-17	[{'date': 2007-08-16, 'amt': 2430000.0, 'type': Condo}, {'date': 2007-08-17, 'amt': 3400000.0, 'type': Single Family}]
+Greenwich	2007-08-16	2007-08-20	[{'date': 2007-08-16, 'amt': 2430000.0, 'type': Condo}, {'date': 2007-08-20, 'amt': 2590000.0, 'type': Single Family}]
+Greenwich	2007-08-16	2007-08-21	[{'date': 2007-08-16, 'amt': 2430000.0, 'type': Condo}, {'date': 2007-08-21, 'amt': 4100000.0, 'type': Single Family}]
+New Canaan	2007-01-22	2007-01-22	[{'date': 2007-01-22, 'amt': 1735000.0, 'type': Condo}]
+New Canaan	2007-02-15	2007-02-15	[{'date': 2007-02-15, 'amt': 2230000.0, 'type': Condo}]
+
+# JoinDependentFilter triggers on this test, make sure that the result is the same with and without
+statement ok
+set disabled_optimizers to 'expression_rewriter'
+
+query IIII
+with recursive
+     base as
+     ( select *
+       from 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/Real_Estate_Sales_2001-2021_GL.csv'
+       where '2003-01-01' < "date recorded" and  "date recorded" < '2010-01-01' and "sale amount" > 1000000
+     )
+   , chains as
+     (
+         select
+           town
+         , "date recorded" as begTS
+         , "date recorded" as endTS
+         , [struct_pack(date:= "date recorded", amt:="sale amount", type:="property type")] as chain
+         from base
+         where "property type" = 'Condo'
+       union all
+         select
+           chains.town
+         , chains.begTS
+         , base."date recorded" as endTS
+         , list_append(chains.chain, struct_pack(date:= "date recorded", amt:="sale amount", type:="property type")) as chain
+         from base, chains
+         where
+               base.town = chains.town
+           and
+           (
+                (len(chains.chain) = 1 and list_contains(['Residential', 'Single Family'], base."property type"))
+             or (len(chains.chain) = 2 and base."property type" = 'Condo')
+             or (len(chains.chain) = 3 and list_contains(['Residential', 'Single Family'], base."property type"))
+           )
+           and chains.endTS < base."date recorded"
+           and base."date recorded" < (chains.endTS + interval 6 days)
+     )
+   select * from chains
+   order by all;
+----
+Clinton	2007-08-22	2007-08-22	[{'date': 2007-08-22, 'amt': 1175000.0, 'type': Condo}]
+Danbury	2007-05-02	2007-05-02	[{'date': 2007-05-02, 'amt': 3105000.0, 'type': Condo}]
+Danbury	2007-05-09	2007-05-09	[{'date': 2007-05-09, 'amt': 1014205.0, 'type': Condo}]
+Darien	2007-09-12	2007-09-12	[{'date': 2007-09-12, 'amt': 1150000.0, 'type': Condo}]
+Fairfield	2007-06-15	2007-06-15	[{'date': 2007-06-15, 'amt': 1100000.0, 'type': Condo}]
+Greenwich	2006-11-20	2006-11-20	[{'date': 2006-11-20, 'amt': 2050000.0, 'type': Condo}]
+Greenwich	2006-11-20	2006-11-21	[{'date': 2006-11-20, 'amt': 2050000.0, 'type': Condo}, {'date': 2006-11-21, 'amt': 6500000.0, 'type': Single Family}]
+Greenwich	2006-12-14	2006-12-14	[{'date': 2006-12-14, 'amt': 1800000.0, 'type': Condo}]
+Greenwich	2006-12-14	2006-12-15	[{'date': 2006-12-14, 'amt': 1800000.0, 'type': Condo}, {'date': 2006-12-15, 'amt': 2195000.0, 'type': Single Family}]
+Greenwich	2006-12-14	2006-12-15	[{'date': 2006-12-14, 'amt': 1800000.0, 'type': Condo}, {'date': 2006-12-15, 'amt': 5500000.0, 'type': Single Family}]
+Greenwich	2006-12-14	2006-12-18	[{'date': 2006-12-14, 'amt': 1800000.0, 'type': Condo}, {'date': 2006-12-18, 'amt': 5010000.0, 'type': Single Family}]
+Greenwich	2007-01-19	2007-01-19	[{'date': 2007-01-19, 'amt': 2227500.0, 'type': Condo}]
+Greenwich	2007-01-19	2007-01-24	[{'date': 2007-01-19, 'amt': 2227500.0, 'type': Condo}, {'date': 2007-01-24, 'amt': 1750000.0, 'type': Single Family}]
+Greenwich	2007-01-31	2007-01-31	[{'date': 2007-01-31, 'amt': 4600000.0, 'type': Condo}]
+Greenwich	2007-02-27	2007-02-27	[{'date': 2007-02-27, 'amt': 1120000.0, 'type': Condo}]
+Greenwich	2007-02-27	2007-02-28	[{'date': 2007-02-27, 'amt': 1120000.0, 'type': Condo}, {'date': 2007-02-28, 'amt': 2260000.0, 'type': Single Family}]
+Greenwich	2007-02-27	2007-03-01	[{'date': 2007-02-27, 'amt': 1120000.0, 'type': Condo}, {'date': 2007-03-01, 'amt': 1900000.0, 'type': Single Family}]
+Greenwich	2007-02-27	2007-03-02	[{'date': 2007-02-27, 'amt': 1120000.0, 'type': Condo}, {'date': 2007-03-02, 'amt': 6500000.0, 'type': Single Family}]
+Greenwich	2007-03-12	2007-03-12	[{'date': 2007-03-12, 'amt': 1084687.0, 'type': Condo}]
+Greenwich	2007-03-12	2007-03-13	[{'date': 2007-03-12, 'amt': 1084687.0, 'type': Condo}, {'date': 2007-03-13, 'amt': 1600000.0, 'type': Single Family}]
+Greenwich	2007-03-12	2007-03-16	[{'date': 2007-03-12, 'amt': 1084687.0, 'type': Condo}, {'date': 2007-03-16, 'amt': 6537500.0, 'type': Single Family}]
+Greenwich	2007-03-12	2007-03-16	[{'date': 2007-03-12, 'amt': 1084687.0, 'type': Condo}, {'date': 2007-03-16, 'amt': 12500000.0, 'type': Single Family}]
+Greenwich	2007-03-12	2007-03-20	[{'date': 2007-03-12, 'amt': 1084687.0, 'type': Condo}, {'date': 2007-03-16, 'amt': 6537500.0, 'type': Single Family}, {'date': 2007-03-20, 'amt': 4100000.0, 'type': Condo}]
+Greenwich	2007-03-12	2007-03-20	[{'date': 2007-03-12, 'amt': 1084687.0, 'type': Condo}, {'date': 2007-03-16, 'amt': 12500000.0, 'type': Single Family}, {'date': 2007-03-20, 'amt': 4100000.0, 'type': Condo}]
+Greenwich	2007-03-12	2007-03-22	[{'date': 2007-03-12, 'amt': 1084687.0, 'type': Condo}, {'date': 2007-03-16, 'amt': 6537500.0, 'type': Single Family}, {'date': 2007-03-20, 'amt': 4100000.0, 'type': Condo}, {'date': 2007-03-22, 'amt': 1580000.0, 'type': Single Family}]
+Greenwich	2007-03-12	2007-03-22	[{'date': 2007-03-12, 'amt': 1084687.0, 'type': Condo}, {'date': 2007-03-16, 'amt': 12500000.0, 'type': Single Family}, {'date': 2007-03-20, 'amt': 4100000.0, 'type': Condo}, {'date': 2007-03-22, 'amt': 1580000.0, 'type': Single Family}]
+Greenwich	2007-03-12	2007-03-23	[{'date': 2007-03-12, 'amt': 1084687.0, 'type': Condo}, {'date': 2007-03-16, 'amt': 6537500.0, 'type': Single Family}, {'date': 2007-03-20, 'amt': 4100000.0, 'type': Condo}, {'date': 2007-03-23, 'amt': 2850000.0, 'type': Single Family}]
+Greenwich	2007-03-12	2007-03-23	[{'date': 2007-03-12, 'amt': 1084687.0, 'type': Condo}, {'date': 2007-03-16, 'amt': 12500000.0, 'type': Single Family}, {'date': 2007-03-20, 'amt': 4100000.0, 'type': Condo}, {'date': 2007-03-23, 'amt': 2850000.0, 'type': Single Family}]
+Greenwich	2007-03-20	2007-03-20	[{'date': 2007-03-20, 'amt': 4100000.0, 'type': Condo}]
+Greenwich	2007-03-20	2007-03-22	[{'date': 2007-03-20, 'amt': 4100000.0, 'type': Condo}, {'date': 2007-03-22, 'amt': 1580000.0, 'type': Single Family}]
+Greenwich	2007-03-20	2007-03-23	[{'date': 2007-03-20, 'amt': 4100000.0, 'type': Condo}, {'date': 2007-03-23, 'amt': 2850000.0, 'type': Single Family}]
+Greenwich	2007-03-30	2007-03-30	[{'date': 2007-03-30, 'amt': 1200000.0, 'type': Condo}]
+Greenwich	2007-05-15	2007-05-15	[{'date': 2007-05-15, 'amt': 1215000.0, 'type': Condo}]
+Greenwich	2007-05-15	2007-05-17	[{'date': 2007-05-15, 'amt': 1215000.0, 'type': Condo}, {'date': 2007-05-17, 'amt': 2250000.0, 'type': Single Family}]
+Greenwich	2007-06-15	2007-06-15	[{'date': 2007-06-15, 'amt': 2264564.0, 'type': Condo}]
+Greenwich	2007-06-15	2007-06-19	[{'date': 2007-06-15, 'amt': 2264564.0, 'type': Condo}, {'date': 2007-06-19, 'amt': 1470000.0, 'type': Single Family}]
+Greenwich	2007-06-15	2007-06-19	[{'date': 2007-06-15, 'amt': 2264564.0, 'type': Condo}, {'date': 2007-06-19, 'amt': 1965000.0, 'type': Single Family}]
+Greenwich	2007-07-10	2007-07-10	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}]
+Greenwich	2007-07-10	2007-07-11	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-11, 'amt': 3150000.0, 'type': Single Family}]
+Greenwich	2007-07-10	2007-07-11	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-11, 'amt': 3250000.0, 'type': Single Family}]
+Greenwich	2007-07-10	2007-07-11	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-11, 'amt': 7050000.0, 'type': Single Family}]
+Greenwich	2007-07-10	2007-07-12	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-12, 'amt': 1269000.0, 'type': Single Family}]
+Greenwich	2007-07-10	2007-07-12	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-12, 'amt': 3565000.0, 'type': Single Family}]
+Greenwich	2007-07-10	2007-07-17	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-12, 'amt': 1269000.0, 'type': Single Family}, {'date': 2007-07-17, 'amt': 3000000.0, 'type': Condo}]
+Greenwich	2007-07-10	2007-07-17	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-12, 'amt': 3565000.0, 'type': Single Family}, {'date': 2007-07-17, 'amt': 3000000.0, 'type': Condo}]
+Greenwich	2007-07-10	2007-07-19	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-12, 'amt': 1269000.0, 'type': Single Family}, {'date': 2007-07-17, 'amt': 3000000.0, 'type': Condo}, {'date': 2007-07-19, 'amt': 3600000.0, 'type': Single Family}]
+Greenwich	2007-07-10	2007-07-19	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-12, 'amt': 3565000.0, 'type': Single Family}, {'date': 2007-07-17, 'amt': 3000000.0, 'type': Condo}, {'date': 2007-07-19, 'amt': 3600000.0, 'type': Single Family}]
+Greenwich	2007-07-10	2007-07-20	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-12, 'amt': 1269000.0, 'type': Single Family}, {'date': 2007-07-17, 'amt': 3000000.0, 'type': Condo}, {'date': 2007-07-20, 'amt': 7225000.0, 'type': Single Family}]
+Greenwich	2007-07-10	2007-07-20	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-12, 'amt': 1269000.0, 'type': Single Family}, {'date': 2007-07-17, 'amt': 3000000.0, 'type': Condo}, {'date': 2007-07-20, 'amt': 18000000.0, 'type': Single Family}]
+Greenwich	2007-07-10	2007-07-20	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-12, 'amt': 3565000.0, 'type': Single Family}, {'date': 2007-07-17, 'amt': 3000000.0, 'type': Condo}, {'date': 2007-07-20, 'amt': 7225000.0, 'type': Single Family}]
+Greenwich	2007-07-10	2007-07-20	[{'date': 2007-07-10, 'amt': 1240000.0, 'type': Condo}, {'date': 2007-07-12, 'amt': 3565000.0, 'type': Single Family}, {'date': 2007-07-17, 'amt': 3000000.0, 'type': Condo}, {'date': 2007-07-20, 'amt': 18000000.0, 'type': Single Family}]
+Greenwich	2007-07-17	2007-07-17	[{'date': 2007-07-17, 'amt': 3000000.0, 'type': Condo}]
+Greenwich	2007-07-17	2007-07-19	[{'date': 2007-07-17, 'amt': 3000000.0, 'type': Condo}, {'date': 2007-07-19, 'amt': 3600000.0, 'type': Single Family}]
+Greenwich	2007-07-17	2007-07-20	[{'date': 2007-07-17, 'amt': 3000000.0, 'type': Condo}, {'date': 2007-07-20, 'amt': 7225000.0, 'type': Single Family}]
+Greenwich	2007-07-17	2007-07-20	[{'date': 2007-07-17, 'amt': 3000000.0, 'type': Condo}, {'date': 2007-07-20, 'amt': 18000000.0, 'type': Single Family}]
+Greenwich	2007-08-16	2007-08-16	[{'date': 2007-08-16, 'amt': 2430000.0, 'type': Condo}]
+Greenwich	2007-08-16	2007-08-17	[{'date': 2007-08-16, 'amt': 2430000.0, 'type': Condo}, {'date': 2007-08-17, 'amt': 1925000.0, 'type': Single Family}]
+Greenwich	2007-08-16	2007-08-17	[{'date': 2007-08-16, 'amt': 2430000.0, 'type': Condo}, {'date': 2007-08-17, 'amt': 3400000.0, 'type': Single Family}]
+Greenwich	2007-08-16	2007-08-20	[{'date': 2007-08-16, 'amt': 2430000.0, 'type': Condo}, {'date': 2007-08-20, 'amt': 2590000.0, 'type': Single Family}]
+Greenwich	2007-08-16	2007-08-21	[{'date': 2007-08-16, 'amt': 2430000.0, 'type': Condo}, {'date': 2007-08-21, 'amt': 4100000.0, 'type': Single Family}]
+New Canaan	2007-01-22	2007-01-22	[{'date': 2007-01-22, 'amt': 1735000.0, 'type': Condo}]
+New Canaan	2007-02-15	2007-02-15	[{'date': 2007-02-15, 'amt': 2230000.0, 'type': Condo}]

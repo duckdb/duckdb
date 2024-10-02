@@ -52,6 +52,7 @@ private:
 	void RegisterReadFunctions();
 	void RegisterTableFunctions();
 	void RegisterArrowFunctions();
+	void RegisterSnifferFunction();
 
 	// aggregates
 	void RegisterDistributiveAggregates();

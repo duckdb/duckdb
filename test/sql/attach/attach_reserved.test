@@ -1,0 +1,45 @@
+# name: test/sql/attach/attach_reserved.test
+# description: Test ATTACH of reserved names
+# group: [attach]
+
+require noforcestorage
+
+statement ok
+PRAGMA enable_verification
+
+# attach a new database called temp
+statement ok
+ATTACH DATABASE '__TEST_DIR__/temp.db';
+
+# we alias "temp" and "main" to use "_db" instead
+statement ok
+CREATE TABLE temp_db.integers(i INTEGER);
+
+statement ok
+DETACH temp_db;
+
+# attach a new database called temp
+statement ok
+ATTACH DATABASE '__TEST_DIR__/system.db';
+
+statement ok
+CREATE TABLE system_db.integers(i INTEGER);
+
+statement ok
+DETACH system_db;
+
+# explicitly selecting these aliases leads to an error
+statement error
+ATTACH DATABASE ':memory:' AS temp;
+----
+reserved name
+
+statement error
+ATTACH DATABASE ':memory:' AS main;
+----
+reserved name
+
+statement error
+ATTACH DATABASE ':memory:' AS system;
+----
+reserved name

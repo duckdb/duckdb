@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 #include <functional>
 
@@ -23,7 +24,7 @@ struct dtime_t { // NOLINT
 		return micros;
 	}
 	explicit inline operator double() const {
-		return micros;
+		return static_cast<double>(micros);
 	}
 
 	// comparison operators
@@ -57,10 +58,10 @@ struct dtime_t { // NOLINT
 		return dtime_t(this->micros - micros);
 	};
 	inline dtime_t operator*(const idx_t &copies) const {
-		return dtime_t(this->micros * copies);
+		return dtime_t(this->micros * UnsafeNumericCast<int64_t>(copies));
 	};
 	inline dtime_t operator/(const idx_t &copies) const {
-		return dtime_t(this->micros / copies);
+		return dtime_t(this->micros / UnsafeNumericCast<int64_t>(copies));
 	};
 	inline int64_t operator-(const dtime_t &other) const {
 		return this->micros - other.micros;
@@ -90,23 +91,52 @@ struct dtime_tz_t { // NOLINT
 	static constexpr const int TIME_BITS = 40;
 	static constexpr const int OFFSET_BITS = 24;
 	static constexpr const uint64_t OFFSET_MASK = ~uint64_t(0) >> TIME_BITS;
-	static constexpr const int32_t MAX_OFFSET = 1559 * 60 * 60;
+	static constexpr const int32_t MAX_OFFSET = 16 * 60 * 60 - 1; // ±15:59:59
 	static constexpr const int32_t MIN_OFFSET = -MAX_OFFSET;
+	static constexpr const uint64_t OFFSET_MICROS = 1000000;
 
 	uint64_t bits;
 
+	//	Offsets are reverse ordered e.g., 13:00:00+01 < 12:00:00+00 < 11:00:00-01
+	//	Because we encode them as the low order bits,
+	//	they are also biased into an unsigned integer: (-16, 16) => (32, 0)
+	static inline uint64_t encode_offset(int32_t offset) { // NOLINT
+		return uint64_t(MAX_OFFSET - offset);
+	}
+	static inline int32_t decode_offset(uint64_t bits) { // NOLINT
+		return MAX_OFFSET - int32_t(bits & OFFSET_MASK);
+	}
+
+	static inline uint64_t encode_micros(int64_t micros) { // NOLINT
+		return encode_micros(UnsafeNumericCast<uint64_t>(micros));
+	}
+	static inline uint64_t encode_micros(uint64_t micros) { // NOLINT
+		return micros << OFFSET_BITS;
+	}
+	static inline int64_t decode_micros(uint64_t bits) { // NOLINT
+		return int64_t(bits >> OFFSET_BITS);
+	}
+
 	dtime_tz_t() = default;
 
-	inline dtime_tz_t(dtime_t t, int32_t offset)
-	    : bits((uint64_t(t.micros) << OFFSET_BITS) | uint64_t(offset + MAX_OFFSET)) {
+	inline dtime_tz_t(dtime_t t, int32_t offset) : bits(encode_micros(t.micros) | encode_offset(offset)) {
+	}
+	explicit inline dtime_tz_t(uint64_t bits_p) : bits(bits_p) {
 	}
 
 	inline dtime_t time() const { // NOLINT
-		return dtime_t(bits >> OFFSET_BITS);
+		return dtime_t(decode_micros(bits));
 	}
 
 	inline int32_t offset() const { // NOLINT
-		return int32_t(bits & OFFSET_MASK) - MAX_OFFSET;
+		return decode_offset(bits);
+	}
+
+	//	Times are compared after adjusting to offset +00:00:00, e.g., 13:01:00+01 > 12:00:00+00
+	//	Because we encode them as the high order bits,
+	//	they are biased by the maximum offset: (0, 24) => (0, 56)
+	inline uint64_t sort_key() const { // NOLINT
+		return bits + encode_micros((bits & OFFSET_MASK) * OFFSET_MICROS);
 	}
 
 	// comparison operators
@@ -117,16 +147,16 @@ struct dtime_tz_t { // NOLINT
 		return bits != rhs.bits;
 	};
 	inline bool operator<=(const dtime_tz_t &rhs) const {
-		return bits <= rhs.bits;
+		return sort_key() <= rhs.sort_key();
 	};
 	inline bool operator<(const dtime_tz_t &rhs) const {
-		return bits < rhs.bits;
+		return sort_key() < rhs.sort_key();
 	};
 	inline bool operator>(const dtime_tz_t &rhs) const {
-		return bits > rhs.bits;
+		return sort_key() > rhs.sort_key();
 	};
 	inline bool operator>=(const dtime_tz_t &rhs) const {
-		return bits >= rhs.bits;
+		return sort_key() >= rhs.sort_key();
 	};
 };
 
@@ -147,7 +177,7 @@ template <>
 struct hash<duckdb::dtime_tz_t> {
 	std::size_t operator()(const duckdb::dtime_tz_t &k) const {
 		using std::hash;
-		return hash<int64_t>()(k.bits);
+		return hash<uint64_t>()(k.bits);
 	}
 };
 } // namespace std

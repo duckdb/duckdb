@@ -1,0 +1,91 @@
+# name: test/sql/types/nested/array/array_tupleformat.test
+# group: [array]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
+
+statement ok
+CREATE TABLE t1 (i VARCHAR[3])
+
+statement ok
+INSERT INTO t1 VALUES (array_value('1',NULL,'3')), (NULL), (array_value(NULL,'5','6'));
+
+query I rowsort
+SELECT DISTINCT * FROM t1;
+----
+NULL
+[1, NULL, 3]
+[NULL, 5, 6]
+
+statement ok
+CREATE TABLE t2(i VARCHAR[2][2])
+
+statement ok
+INSERT INTO t2 VALUES (array_value(array_value('1', NULL), array_value(NULL, '2'))), (NULL), (array_value(array_value('3', NULL), array_value(NULL, '4')));
+
+query I rowsort
+SELECT DISTINCT * FROM t2;
+----
+NULL
+[[1, NULL], [NULL, 2]]
+[[3, NULL], [NULL, 4]]
+
+#
+statement ok
+CREATE TABLE t3(i VARCHAR[2][])
+
+statement ok
+INSERT INTO t3 VALUES (array_value(list_value('1', NULL), list_value(NULL, '2'))), (NULL), (array_value(list_value('3', NULL), list_value(NULL, '4')));
+
+query I rowsort
+SELECT DISTINCT * FROM t3;
+----
+NULL
+[[1, NULL], [NULL, 2]]
+[[3, NULL], [NULL, 4]]
+
+
+statement ok
+CREATE TABLE t4(i VARCHAR[][2])
+
+statement ok
+INSERT INTO t4 VALUES (list_value(array_value('1', NULL), array_value(NULL, '2'))), (NULL), (list_value(array_value('3', NULL), array_value(NULL, '4')));
+
+query I rowsort
+SELECT DISTINCT * FROM t4;
+----
+NULL
+[[1, NULL], [NULL, 2]]
+[[3, NULL], [NULL, 4]]
+
+statement ok
+CREATE TABLE t5(i VARCHAR[][2][])
+
+statement ok
+INSERT INTO t5 VALUES (list_value(list_value(array_value('1', NULL), array_value(NULL, '2')))), (NULL), (list_value(list_value(array_value('3', NULL), array_value(NULL, '4'))));
+
+query I rowsort
+SELECT DISTINCT * FROM t5;
+----
+NULL
+[[[1, NULL], [NULL, 2]]]
+[[[3, NULL], [NULL, 4]]]
+
+statement ok
+CREATE TABLE t6(i VARCHAR[2][][2])
+
+statement ok
+INSERT INTO t6 VALUES
+	(array_value([array_value('1', NULL)], [array_value(NULL, '2')])),
+	(NULL),
+	(array_value([array_value('3', NULL)], [array_value(NULL, '4')]));
+
+query I rowsort
+SELECT DISTINCT * FROM t6;
+----
+NULL
+[[[1, NULL]], [[NULL, 2]]]
+[[[3, NULL]], [[NULL, 4]]]

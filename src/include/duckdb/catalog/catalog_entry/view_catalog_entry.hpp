@@ -27,8 +27,7 @@ public:
 
 public:
 	//! Create a real TableCatalogEntry and initialize storage for it
-	ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateViewInfo &info,
-	                 optional_ptr<ClientContext> context);
+	ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateViewInfo &info);
 
 	//! The query of the view
 	unique_ptr<SelectStatement> query;
@@ -38,6 +37,10 @@ public:
 	vector<string> aliases;
 	//! The returned types of the view
 	vector<LogicalType> types;
+	//! The returned names of the view
+	vector<string> names;
+	//! The comments on the columns of the view: can be empty if there are no comments
+	vector<Value> column_comments;
 
 public:
 	unique_ptr<CreateInfo> GetInfo() const override;
@@ -49,6 +52,6 @@ public:
 	string ToSQL() const override;
 
 private:
-	void Initialize(CreateViewInfo &info, optional_ptr<ClientContext> context, Catalog &catalog);
+	void Initialize(CreateViewInfo &info, Catalog &catalog);
 };
 } // namespace duckdb

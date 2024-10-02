@@ -46,6 +46,7 @@ SELECT COUNT(*) FROM test
 
 statement error
 INSERT INTO test VALUES (11, 22, 'hello');
+----
 
 statement ok
 CHECKPOINT

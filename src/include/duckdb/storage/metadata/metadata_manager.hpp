@@ -42,8 +42,6 @@ struct MetadataHandle {
 
 class MetadataManager {
 public:
-	//! The size of metadata blocks
-	static constexpr const idx_t METADATA_BLOCK_SIZE = 4088;
 	//! The amount of metadata blocks per storage block
 	static constexpr const idx_t METADATA_BLOCK_COUNT = 64;
 
@@ -58,8 +56,8 @@ public:
 	MetadataPointer FromDiskPointer(MetaBlockPointer pointer);
 	MetadataPointer RegisterDiskPointer(MetaBlockPointer pointer);
 
-	static BlockPointer ToBlockPointer(MetaBlockPointer meta_pointer);
-	static MetaBlockPointer FromBlockPointer(BlockPointer block_pointer);
+	static BlockPointer ToBlockPointer(MetaBlockPointer meta_pointer, const idx_t metadata_block_size);
+	static MetaBlockPointer FromBlockPointer(BlockPointer block_pointer, const idx_t metadata_block_size);
 
 	//! Flush all blocks to disk
 	void Flush();
@@ -68,10 +66,13 @@ public:
 	void ClearModifiedBlocks(const vector<MetaBlockPointer> &pointers);
 
 	vector<MetadataBlockInfo> GetMetadataInfo() const;
+	vector<shared_ptr<BlockHandle>> GetBlocks() const;
 	idx_t BlockCount();
 
 	void Write(WriteStream &sink);
 	void Read(ReadStream &source);
+
+	idx_t GetMetadataBlockSize() const;
 
 protected:
 	BlockManager &block_manager;
@@ -81,6 +82,7 @@ protected:
 
 protected:
 	block_id_t AllocateNewBlock();
+	block_id_t PeekNextBlockId();
 	block_id_t GetNextBlockId();
 
 	void AddBlock(MetadataBlock new_block, bool if_exists = false);

@@ -23,6 +23,13 @@ require-env DUCKDB_S3_USE_SSL
 # override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues
 set ignore_error_messages
 
+statement ok
+set http_timeout=120000;
+
+# More retries (longest wait will be 25600ms)
+statement ok
+set http_retries=6;
+
 # Test should be a bit faster using the metadata cache
 statement ok
 SET enable_http_metadata_cache=true;
@@ -59,6 +66,28 @@ query I
 select sum(column0) from 's3://test-bucket/parquet_glob_s3_paging/paging/t*-${urlstyle}-urls.${format}'
 ----
 1999000
+
+endloop
+
+endloop
+
+# test with enable_object_cache = true
+statement ok
+SET enable_object_cache=true
+
+foreach urlstyle path vhost
+
+foreach format parquet
+
+loop i 0 2
+
+# Begin tests
+query I
+select sum(column0) from 's3://test-bucket/parquet_glob_s3_paging/paging/t*-${urlstyle}-urls.${format}'
+----
+1999000
+
+endloop
 
 endloop
 

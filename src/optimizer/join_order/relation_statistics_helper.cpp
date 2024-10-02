@@ -59,10 +59,10 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	auto cardinality_after_filters = base_table_cardinality;
 	unique_ptr<BaseStatistics> column_statistics;
 
-	auto table_thing = get.GetTable();
+	auto catalog_table = get.GetTable();
 	auto name = string("some table");
-	if (table_thing) {
-		name = table_thing->name;
+	if (catalog_table) {
+		name = catalog_table->name;
 		return_stats.table_name = name;
 	}
 
@@ -77,14 +77,16 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	}
 
 	// first push back basic distinct counts for each column (if we have them).
-	for (idx_t i = 0; i < get.column_ids.size(); i++) {
+	auto &column_ids = get.GetColumnIds();
+	for (idx_t i = 0; i < column_ids.size(); i++) {
 		bool have_distinct_count_stats = false;
 		if (get.function.statistics) {
-			column_statistics = get.function.statistics(context, get.bind_data.get(), get.column_ids[i]);
+			column_statistics = get.function.statistics(context, get.bind_data.get(), column_ids[i]);
 			if (column_statistics && have_catalog_table_statistics) {
-				auto column_distinct_count = DistinctCount({column_statistics->GetDistinctCount(), true});
+				auto distinct_count = MaxValue((idx_t)1, column_statistics->GetDistinctCount());
+				auto column_distinct_count = DistinctCount({distinct_count, true});
 				return_stats.column_distinct_count.push_back(column_distinct_count);
-				return_stats.column_names.push_back(name + "." + get.names.at(get.column_ids.at(i)));
+				return_stats.column_names.push_back(name + "." + get.names.at(column_ids.at(i)));
 				have_distinct_count_stats = true;
 			}
 		}
@@ -95,8 +97,8 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			auto column_distinct_count = DistinctCount({cardinality_after_filters, false});
 			return_stats.column_distinct_count.push_back(column_distinct_count);
 			auto column_name = string("column");
-			if (get.column_ids.at(i) < get.names.size()) {
-				column_name = get.names.at(get.column_ids.at(i));
+			if (column_ids.at(i) < get.names.size()) {
+				column_name = get.names.at(column_ids.at(i));
 			}
 			return_stats.column_names.push_back(get.GetName() + "." + column_name);
 		}
@@ -105,9 +107,8 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	if (!get.table_filters.filters.empty()) {
 		column_statistics = nullptr;
 		for (auto &it : get.table_filters.filters) {
-			if (get.bind_data && get.function.name.compare("seq_scan") == 0) {
-				auto &table_scan_bind_data = get.bind_data->Cast<TableScanBindData>();
-				column_statistics = get.function.statistics(context, &table_scan_bind_data, it.first);
+			if (get.bind_data && get.function.statistics) {
+				column_statistics = get.function.statistics(context, get.bind_data.get(), it.first);
 			}
 
 			if (column_statistics && it.second->filter_type == TableFilterType::CONJUNCTION_AND) {
@@ -121,8 +122,9 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 		// and there are other table filters (i.e cost > 50), use default selectivity.
 		bool has_equality_filter = (cardinality_after_filters != base_table_cardinality);
 		if (!has_equality_filter && !get.table_filters.filters.empty()) {
-			cardinality_after_filters =
-			    MaxValue<idx_t>(base_table_cardinality * RelationStatisticsHelper::DEFAULT_SELECTIVITY, 1);
+			cardinality_after_filters = MaxValue<idx_t>(
+			    LossyNumericCast<idx_t>(double(base_table_cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY),
+			    1U);
 		}
 		if (base_table_cardinality == 0) {
 			cardinality_after_filters = 0;
@@ -226,6 +228,47 @@ RelationStats RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(Log
 	idx_t child_1_card = child_stats[0].stats_initialized ? child_stats[0].cardinality : 0;
 	idx_t child_2_card = child_stats[1].stats_initialized ? child_stats[1].cardinality : 0;
 	ret.cardinality = MaxValue(child_1_card, child_2_card);
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		switch (join.join_type) {
+		case JoinType::RIGHT_ANTI:
+		case JoinType::RIGHT_SEMI:
+			ret.cardinality = child_2_card;
+			break;
+		case JoinType::ANTI:
+		case JoinType::SEMI:
+		case JoinType::SINGLE:
+		case JoinType::MARK:
+			ret.cardinality = child_1_card;
+			break;
+		default:
+			break;
+		}
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_UNION: {
+		auto &setop = op.Cast<LogicalSetOperation>();
+		if (setop.setop_all) {
+			// setop returns all records
+			ret.cardinality = child_1_card + child_2_card;
+		} else {
+			ret.cardinality = MaxValue(child_1_card, child_2_card);
+		}
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_INTERSECT: {
+		ret.cardinality = MinValue(child_1_card, child_2_card);
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_EXCEPT: {
+		ret.cardinality = child_1_card;
+		break;
+	}
+	default:
+		break;
+	}
+
 	ret.stats_initialized = true;
 	ret.filter_strength = 1;
 	ret.table_name = child_stats[0].table_name + " joined with " + child_stats[1].table_name;
@@ -280,6 +323,33 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 	// TODO: look at child distinct count to better estimate cardinality.
 	stats.cardinality = child_stats.cardinality;
 	stats.column_distinct_count = child_stats.column_distinct_count;
+	double new_card = -1;
+	for (auto &g_set : aggr.grouping_sets) {
+		for (auto &ind : g_set) {
+			if (aggr.groups[ind]->expression_class != ExpressionClass::BOUND_COLUMN_REF) {
+				continue;
+			}
+			auto bound_col = &aggr.groups[ind]->Cast<BoundColumnRefExpression>();
+			auto col_index = bound_col->binding.column_index;
+			if (col_index >= child_stats.column_distinct_count.size()) {
+				// it is possible the column index of the grouping_set is not in the child stats.
+				// this can happen when delim joins are present, since delim scans are not currently
+				// reorderable. Meaning they don't add a relation or column_ids that could potentially
+				// be grouped by. Hopefully this can be fixed with duckdb-internal#606
+				continue;
+			}
+			double distinct_count = double(child_stats.column_distinct_count[col_index].distinct_count);
+			if (new_card < distinct_count) {
+				new_card = distinct_count;
+			}
+		}
+	}
+	if (new_card < 0 || new_card >= double(child_stats.cardinality)) {
+		// We have no good statistics on distinct count.
+		// most likely we are running on parquet files. Therefore we divide by 2.
+		new_card = (double)child_stats.cardinality / 2;
+	}
+	stats.cardinality = LossyNumericCast<idx_t>(new_card);
 	stats.column_names = child_stats.column_names;
 	stats.stats_initialized = true;
 	auto num_child_columns = aggr.GetColumnBindings().size();
@@ -289,6 +359,16 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 		stats.column_distinct_count.push_back(DistinctCount({child_stats.cardinality, false}));
 		stats.column_names.push_back("aggregate");
 	}
+	return stats;
+}
+
+RelationStats RelationStatisticsHelper::ExtractEmptyResultStats(LogicalEmptyResult &empty) {
+	RelationStats stats;
+	for (idx_t i = 0; i < empty.GetColumnBindings().size(); i++) {
+		stats.column_distinct_count.push_back(DistinctCount({0, false}));
+		stats.column_names.push_back("empty_result_column");
+	}
+	stats.stats_initialized = true;
 	return stats;
 }
 
@@ -304,12 +384,10 @@ idx_t RelationStatisticsHelper::InspectConjunctionAND(idx_t cardinality, idx_t c
 			continue;
 		}
 		auto column_count = base_stats.GetDistinctCount();
-		auto filtered_card = cardinality;
 		// column_count = 0 when there is no column count (i.e parquet scans)
 		if (column_count > 0) {
 			// we want the ceil of cardinality/column_count. We also want to avoid compiler errors
-			filtered_card = (cardinality + column_count - 1) / column_count;
-			cardinality_after_filters = filtered_card;
+			cardinality_after_filters = (cardinality + column_count - 1) / column_count;
 		}
 	}
 	return cardinality_after_filters;

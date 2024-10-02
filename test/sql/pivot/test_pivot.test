@@ -226,6 +226,7 @@ FROM monthly_sales
 PIVOT(COS(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR'))
   AS p (EMP_ID_renamed, JAN, FEB, MAR, APR)
 ORDER BY EMP_ID_renamed;
+----
 
 # subqueries not allowed
 statement error
@@ -264,6 +265,7 @@ SELECT *
     PIVOT(SUM(amount) FOR MONTH IN ())
       AS p
   ORDER BY EMPID;
+----
 
 
 # star

@@ -23,6 +23,7 @@ whitelist = [
     'duckdb_fmt::',
     'duckdb_hll::',
     'duckdb_moodycamel::',
+    'duckdb_yyjson::',
     'duckdb_',
     'RefCounter',
     'registerTMCloneTable',
@@ -36,7 +37,10 @@ whitelist = [
     '_edata',
     '__bss_start',
     '__udivti3',
+    '__popcount',
     'Adbc',
+    'ErrorArrayStream',
+    'ErrorFromArrayStream',
 ]
 
 for symbol in res.stdout.decode('utf-8').split('\n'):

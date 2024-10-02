@@ -77,8 +77,8 @@ mutable struct DB <: DBInterface.Connection
     main_connection::Connection
 
     function DB(f::AbstractString, config::Config)
-        set_config(config, "threads", "1")
-        set_config(config, "external_threads", string(Threads.nthreads() - 1))
+        set_config(config, "threads", string(Threads.nthreads()))
+        set_config(config, "external_threads", string(Threads.nthreads())) # all threads are external
         handle = DuckDBHandle(f, config)
         main_connection = Connection(handle)
 
@@ -108,7 +108,7 @@ DBInterface.connect(db::DB) = Connection(db.handle)
 DBInterface.close!(db::DB) = close_database(db)
 DBInterface.close!(con::Connection) = _close_connection(con)
 Base.close(db::DB) = close_database(db)
-Base.isopen(db::DB) = db.handle != C_NULL
+Base.isopen(db::DB) = db.handle.handle != C_NULL
 
 Base.show(io::IO, db::DuckDB.DB) = print(io, string("DuckDB.DB(", "\"$(db.handle.file)\"", ")"))
 Base.show(io::IO, con::DuckDB.Connection) = print(io, string("DuckDB.Connection(", "\"$(con.db.file)\"", ")"))

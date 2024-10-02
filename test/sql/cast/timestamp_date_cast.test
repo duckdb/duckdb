@@ -22,3 +22,20 @@ from test
 where (t::date) = '2021-02-04';
 ----
 2021-02-04 19:30:00
+
+# Check that casts to DATE are not invertible
+
+foreach source TIMESTAMP TIMESTAMP_S TIMESTAMP_MS TIMESTAMP_NS
+
+query I
+WITH t AS (
+    SELECT
+        '2020-09-13 00:30:00'::${source} AS a,
+)
+SELECT
+    a::DATE = '2020-09-13'::DATE,
+FROM t;
+----
+true
+
+endloop

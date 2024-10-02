@@ -33,7 +33,7 @@ shared_ptr<BoundParameterData> BoundParameterMap::CreateOrGetData(const string &
 	auto entry = parameters.find(identifier);
 	if (entry == parameters.end()) {
 		// no entry yet: create a new one
-		auto data = make_shared<BoundParameterData>();
+		auto data = make_shared_ptr<BoundParameterData>();
 		data->return_type = GetReturnType(identifier);
 
 		CreateNewParameter(identifier, data);

@@ -9,13 +9,19 @@ statement ok
 CREATE TABLE t2 (c1 INT, PRIMARY KEY (c1));
 
 statement error
-INSERT INTO t2 SELECT * FROM (VALUES (2), (2))
+INSERT INTO t2 VALUES (2), (2);
+----
+<REGEX>:Constraint Error.*duplicate key.*
 
 statement error
 INSERT INTO t2 SELECT 2 FROM range(10);
+----
+<REGEX>:Constraint Error.*duplicate key.*
 
 statement error
 INSERT INTO t2 SELECT 2 UNION ALL SELECT 2;
+----
+<REGEX>:Constraint Error.*duplicate key.*
 
 statement ok
 BEGIN TRANSACTION

@@ -2,12 +2,15 @@
 # description: Test CSV with Unicode NFC Normalization test suite
 # group: [csv]
 
+statement ok
+PRAGMA enable_verification
+
 # http:www.unicode.org/Public/UCD/latest/ucd/NormalizationTest.txt
 statement ok
 CREATE TABLE nfcstrings (source STRING, nfc STRING, nfd STRING);
 
 query I
-COPY nfcstrings FROM 'test/sql/copy/csv/data/real/nfc_normalization.csv' DELIMITER '|';
+COPY nfcstrings FROM 'data/csv/real/nfc_normalization.csv' (DELIMITER '|', HEADER 0);
 ----
 18819
 
@@ -26,3 +29,28 @@ SELECT COUNT(*) FROM nfcstrings WHERE nfc COLLATE NFC=nfd
 ----
 18819
 
+statement ok
+DROP TABLE nfcstrings
+
+statement ok
+CREATE TABLE nfcstrings (source STRING, nfc STRING, nfd STRING);
+
+query I
+COPY nfcstrings FROM 'data/csv/real/nfc_normalization_rn.csv' (DELIMITER '|', HEADER 0);
+----
+18819
+
+query I
+SELECT COUNT(*) FROM nfcstrings
+----
+18819
+
+query I
+SELECT COUNT(*) FROM nfcstrings WHERE source COLLATE NFC=nfc
+----
+18819
+
+query I
+SELECT COUNT(*) FROM nfcstrings WHERE nfc COLLATE NFC=nfd
+----
+18819

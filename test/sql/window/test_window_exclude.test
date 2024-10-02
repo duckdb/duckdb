@@ -3,6 +3,9 @@
 # group: [window]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE tenk1d (
         unique1	        int4,
 		four		int4,
@@ -704,6 +707,38 @@ ORDER BY i;
 5	4.5
 5	5.0
 
+# Test Merge Sort Trees with exclusions
+query III
+WITH t1(x, y) AS (VALUES
+ ( 1, 3 ),
+ ( 2, 2 ),
+ ( 3, 1 )
+)
+SELECT x, y, QUANTILE_DISC(y, 0) OVER (
+	ORDER BY x 
+	ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+	EXCLUDE CURRENT ROW)
+FROM t1;
+----
+1	3	NULL
+2	2	3
+3	1	2
+
+query III
+WITH t1(x, y) AS (VALUES
+ ( 1, 3 ),
+ ( 2, 2 ),
+ ( 3, 1 )
+)
+SELECT x, y, QUANTILE_DISC(y, 0) OVER (
+	ORDER BY x 
+	ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+	EXCLUDE CURRENT ROW)
+FROM t1;
+----
+1	3	1
+2	2	1
+3	1	2
 
 
 # PG test
@@ -830,6 +865,8 @@ NULL	5200	6000
 
 statement error
 SELECT sum(i) OVER (EXCLUDE CURRENT ROW) FROM generate_series(1,10) AS _(i);
+----
 
 statement error
 SELECT sum(i) OVER (ROWS UNBOUNDED PRECEDING EXCLUDE GROUPS) FROM generate_series(1,10) AS _(i);
+----

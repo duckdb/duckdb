@@ -1,0 +1,16 @@
+# name: test/sql/copy/parquet/multi_file_conversion_error.test
+# description: Test multi-file conversion error
+# group: [parquet]
+
+require parquet
+
+statement ok
+copy (select 42 as a) to '__TEST_DIR__/conversion_error1.parquet';
+
+statement ok
+copy (select blob 'hello world' as a) to '__TEST_DIR__/conversion_error2.parquet';
+
+statement error
+SELECT * FROM read_parquet(['__TEST_DIR__/conversion_error1.parquet', '__TEST_DIR__/conversion_error2.parquet'])
+----
+failed to cast column "a" from type BLOB to INTEGER

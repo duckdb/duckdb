@@ -5,6 +5,7 @@
 statement ok
 PRAGMA explain_output = 'OPTIMIZED_ONLY'
 
+
 query II
 explain select 42 intersect select 42;
 ----
@@ -29,7 +30,7 @@ logical_opt	<!REGEX>:.*EXCEPT.*
 
 # if RHS is empty we can optimize away the except
 query II
-explain select 42 except select 42 where 1=0;
+explain select 42 except all select 42 where 1=0;
 ----
 logical_opt	<!REGEX>:.*EXCEPT.*
 
@@ -40,12 +41,12 @@ explain select * from (select 42 intersect select 42) tbl(i) where i=42;
 logical_opt	<REGEX>:.*INTERSECT.*
 
 query II
-explain select * from (select 42 intersect select 43) tbl(i) where i=42;
+explain select * from (select 42 intersect all select 43) tbl(i) where i=42;
 ----
 logical_opt	<!REGEX>:.*INTERSECT.*
 
 query II
-explain select * from (select 43 intersect select 42) tbl(i) where i=42;
+explain select * from (select 43 intersect all select 42) tbl(i) where i=42;
 ----
 logical_opt	<!REGEX>:.*INTERSECT.*
 
@@ -55,12 +56,12 @@ explain select * from (select 42 except select 42) tbl(i) where i=42;
 logical_opt	<REGEX>:.*EXCEPT.*
 
 query II
-explain select * from (select 42 except select 43) tbl(i) where i=42;
+explain select * from (select 42 except all select 43) tbl(i) where i=42;
 ----
 logical_opt	<!REGEX>:.*EXCEPT.*
 
 query II
-explain select * from (select 43 except select 42) tbl(i) where i=42;
+explain select * from (select 43 except all select 42) tbl(i) where i=42;
 ----
 logical_opt	<!REGEX>:.*EXCEPT.*
 

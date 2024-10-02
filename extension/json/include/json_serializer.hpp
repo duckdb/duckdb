@@ -25,15 +25,16 @@ private:
 	void PushValue(yyjson_mut_val *val);
 
 public:
-	explicit JsonSerializer(yyjson_mut_doc *doc, bool skip_if_null, bool skip_if_empty)
+	explicit JsonSerializer(yyjson_mut_doc *doc, bool skip_if_null, bool skip_if_empty, bool skip_if_default)
 	    : doc(doc), stack({yyjson_mut_obj(doc)}), skip_if_null(skip_if_null), skip_if_empty(skip_if_empty) {
-		serialize_enum_as_string = true;
-		serialize_default_values = true;
+		options.serialize_enum_as_string = true;
+		options.serialize_default_values = !skip_if_default;
 	}
 
 	template <class T>
-	static yyjson_mut_val *Serialize(T &value, yyjson_mut_doc *doc, bool skip_if_null, bool skip_if_empty) {
-		JsonSerializer serializer(doc, skip_if_null, skip_if_empty);
+	static yyjson_mut_val *Serialize(T &value, yyjson_mut_doc *doc, bool skip_if_null, bool skip_if_empty,
+	                                 bool skip_if_default) {
+		JsonSerializer serializer(doc, skip_if_null, skip_if_empty, skip_if_default);
 		value.Serialize(serializer);
 		return serializer.GetRootObject();
 	}
@@ -71,6 +72,7 @@ public:
 	void WriteValue(uint64_t value) final;
 	void WriteValue(int64_t value) final;
 	void WriteValue(hugeint_t value) final;
+	void WriteValue(uhugeint_t value) final;
 	void WriteValue(float value) final;
 	void WriteValue(double value) final;
 	void WriteValue(const string_t value) final;

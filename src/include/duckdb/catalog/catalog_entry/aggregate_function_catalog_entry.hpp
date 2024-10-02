@@ -22,10 +22,8 @@ public:
 	static constexpr const char *Name = "aggregate function";
 
 public:
-	AggregateFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateAggregateFunctionInfo &info,
-	                              optional_ptr<ClientContext> context)
-	    : FunctionEntry(CatalogType::AGGREGATE_FUNCTION_ENTRY, catalog, schema, info, context),
-	      functions(info.functions) {
+	AggregateFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateAggregateFunctionInfo &info)
+	    : FunctionEntry(CatalogType::AGGREGATE_FUNCTION_ENTRY, catalog, schema, info), functions(info.functions) {
 	}
 
 	//! The aggregate functions

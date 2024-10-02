@@ -26,3 +26,9 @@ query I
 SELECT TRY_CAST(v AS INTEGER[]) FROM strings;
 ----
 [42, NULL, 84, NULL, 100]
+
+# Issue #10140 (used to crash)
+statement error
+SELECT DISTINCT OPERATOR ( / ) + ARRAY [ ] :: INTERVAL SECONDS [ ] [ ] :: SETOF NCHAR ARRAY :: FLOAT ; 
+----
+No function matches the given name and argument types

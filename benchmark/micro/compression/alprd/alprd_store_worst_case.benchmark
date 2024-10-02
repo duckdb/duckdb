@@ -1,0 +1,17 @@
+# name: benchmark/micro/compression/alprd/alprd_store_worst_case.benchmark
+# description: ALPRD worst case scenario is when all the float have unique front bits. Multiplying by different powers of two ensures us unique front bits
+# group: [alprd]
+
+name Alprd Insert
+group alprd
+storage persistent
+require_reinit
+
+load
+DROP TABLE IF EXISTS alprd_random_doubles;
+PRAGMA force_compression='alprd';
+checkpoint;
+
+run
+create table alprd_random_doubles as select (random() * pow(2, (i % 1000)) * (CASE WHEN i%2=0 THEN 1 ELSE -1 END))::DOUBLE as data from range(50000000) tbl(i);
+checkpoint;

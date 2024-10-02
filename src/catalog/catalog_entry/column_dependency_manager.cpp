@@ -2,6 +2,7 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/queue.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 
 namespace duckdb {
 

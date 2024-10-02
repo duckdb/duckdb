@@ -7,6 +7,7 @@ PRAGMA enable_verification
 
 statement error
 SELECT (-128)::TINYINT // (-1)::TINYINT
+----
 
 query I
 SELECT (-127)::TINYINT // (-1)::TINYINT
@@ -15,6 +16,7 @@ SELECT (-127)::TINYINT // (-1)::TINYINT
 
 statement error
 SELECT (-32768)::SMALLINT // (-1)::SMALLINT
+----
 
 query I
 SELECT (-32767)::SMALLINT // (-1)::SMALLINT
@@ -23,6 +25,7 @@ SELECT (-32767)::SMALLINT // (-1)::SMALLINT
 
 statement error
 SELECT (-2147483648)::INTEGER // (-1)::INTEGER
+----
 
 query I
 SELECT (-2147483647)::INTEGER // (-1)::INTEGER
@@ -31,6 +34,7 @@ SELECT (-2147483647)::INTEGER // (-1)::INTEGER
 
 statement error
 SELECT (-9223372036854775808)::BIGINT // (-1)::BIGINT
+----
 
 query I
 SELECT (-9223372036854775807)::BIGINT // (-1)::BIGINT

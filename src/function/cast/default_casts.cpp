@@ -5,7 +5,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
+
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
@@ -32,6 +32,10 @@ bool DefaultCasts::NopCast(Vector &source, Vector &result, idx_t count, CastPara
 	return true;
 }
 
+void HandleCastError::AssignError(const string &error_message, CastParameters &parameters) {
+	AssignError(error_message, parameters.error_message, parameters.query_location);
+}
+
 static string UnimplementedCastMessage(const LogicalType &source_type, const LogicalType &target_type) {
 	return StringUtil::Format("Unimplemented type for cast (%s -> %s)", source_type.ToString(), target_type.ToString());
 }
@@ -40,8 +44,7 @@ static string UnimplementedCastMessage(const LogicalType &source_type, const Log
 bool DefaultCasts::TryVectorNullCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	bool success = true;
 	if (VectorOperations::HasNotNull(source, count)) {
-		HandleCastError::AssignError(UnimplementedCastMessage(source.GetType(), result.GetType()),
-		                             parameters.error_message);
+		HandleCastError::AssignError(UnimplementedCastMessage(source.GetType(), result.GetType()), parameters);
 		success = false;
 	}
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -91,6 +94,7 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
@@ -139,6 +143,8 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return EnumCastSwitch(input, source, target);
 	case LogicalTypeId::ARRAY:
 		return ArrayCastSwitch(input, source, target);
+	case LogicalTypeId::VARINT:
+		return VarintCastSwitch(input, source, target);
 	case LogicalTypeId::AGGREGATE_STATE:
 		return AggregateStateToBlobCast;
 	default:

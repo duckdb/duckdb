@@ -14,7 +14,7 @@ WindowExpression::WindowExpression(ExpressionType type) : ParsedExpression(type,
 
 WindowExpression::WindowExpression(ExpressionType type, string catalog_name, string schema, const string &function_name)
     : ParsedExpression(type, ExpressionClass::WINDOW), catalog(std::move(catalog_name)), schema(std::move(schema)),
-      function_name(StringUtil::Lower(function_name)), ignore_nulls(false) {
+      function_name(StringUtil::Lower(function_name)), ignore_nulls(false), distinct(false) {
 	switch (type) {
 	case ExpressionType::WINDOW_AGGREGATE:
 	case ExpressionType::WINDOW_ROW_NUMBER:
@@ -68,6 +68,9 @@ string WindowExpression::ToString() const {
 bool WindowExpression::Equal(const WindowExpression &a, const WindowExpression &b) {
 	// check if the child expressions are equivalent
 	if (a.ignore_nulls != b.ignore_nulls) {
+		return false;
+	}
+	if (a.distinct != b.distinct) {
 		return false;
 	}
 	if (!ParsedExpression::ListEquals(a.children, b.children)) {
@@ -136,6 +139,7 @@ unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 	new_window->offset_expr = offset_expr ? offset_expr->Copy() : nullptr;
 	new_window->default_expr = default_expr ? default_expr->Copy() : nullptr;
 	new_window->ignore_nulls = ignore_nulls;
+	new_window->distinct = distinct;
 
 	return std::move(new_window);
 }

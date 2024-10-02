@@ -19,7 +19,7 @@ TEST_CASE("Test DB config configuration", "[api]") {
 	test_options["enable_external_access"] = {"true", "false"};
 	test_options["enable_object_cache"] = {"true", "false"};
 	test_options["max_memory"] = {"-1", "16GB"};
-	test_options["threads"] = {"-1", "4"};
+	test_options["threads"] = {"1", "4"};
 
 	REQUIRE(config.GetOptionByName("unknownoption") == nullptr);
 
@@ -36,5 +36,25 @@ TEST_CASE("Test DB config configuration", "[api]") {
 			Value invalid_val("___this_is_probably_invalid");
 			REQUIRE_THROWS(config.SetOption(option, invalid_val));
 		}
+	}
+}
+
+TEST_CASE("Test user_agent", "[api]") {
+	{
+		// Default duckdb_api is cpp
+		DuckDB db(nullptr);
+		Connection con(db);
+		auto res = con.Query("PRAGMA user_agent");
+		REQUIRE_THAT(res->GetValue(0, 0).ToString(), Catch::Matchers::Matches("duckdb/.*(.*) cpp"));
+	}
+	{
+		// The latest provided duckdb_api is used
+		DBConfig config;
+		config.SetOptionByName("duckdb_api", "capi");
+		config.SetOptionByName("duckdb_api", "go");
+		DuckDB db("", &config);
+		Connection con(db);
+		auto res = con.Query("PRAGMA user_agent");
+		REQUIRE_THAT(res->GetValue(0, 0).ToString(), Catch::Matchers::Matches("duckdb/.*(.*) go"));
 	}
 }

@@ -43,10 +43,13 @@ daeHrötoM
 # test incorrect usage of reverse
 statement error
 select REVERSE()
+----
 
 statement error
 select REVERSE(1, 2)
+----
 
 statement error
 select REVERSE('hello', 'world')
+----
 

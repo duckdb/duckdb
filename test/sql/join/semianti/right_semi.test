@@ -1,0 +1,148 @@
+# name: test/sql/join/semianti/right_semi.test
+# description: Test positional joins
+# group: [semianti]
+
+statement ok
+CREATE TABLE left_table (a INTEGER, b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO left_table VALUES (41, 1, 1), (42, 1, 1), (42, 1, 1), (43, 1, 1), (45, 2, 2), (46, 7, 7);
+
+statement ok
+CREATE TABLE right_table (a INTEGER, b INTEGER);
+
+# insert 2x values into right table. This means it will be forced to be the probe side
+statement ok
+INSERT INTO right_table select 41, range as b from range(375);
+
+
+query II
+EXPLAIN ANALYZE SELECT * FROM left_table SEMI JOIN right_table ON left_table.a = right_table.a;
+----
+analyzed_plan	<REGEX>:.*RIGHT_SEMI.*
+
+# still flips with filter
+query II
+explain analyze SELECT * FROM left_table SEMI JOIN right_table ON left_table.a = right_table.a WHERE a > 5;
+----
+analyzed_plan	<REGEX>:.*RIGHT_SEMI.*
+
+# still flips with equality condition on tuples 
+query II
+explain analyze SELECT * FROM left_table SEMI JOIN right_table ON ([left_table.a, left_table.b] = [right_table.a, right_table.b]);
+----
+analyzed_plan	<REGEX>:.*RIGHT_SEMI.*
+
+# right table can be a subquery, but using equality we still flip
+query II
+explain analyze SELECT * FROM left_table SEMI JOIN (SELECT a as foo from right_table where b > 1) buzz ON left_table.a = buzz.foo
+----
+analyzed_plan	<REGEX>:.*RIGHT_SEMI.*
+
+
+statement ok
+INSERT INTO left_table VALUES (43, 1, 5), (43, 1, 5), (43, 1, 5), (43, 1, 5);
+
+query I
+CREATE TABLE other (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO other VALUES (42, 1), (43, 1);
+
+# Still flip on intermediate table that is joined
+query II
+EXPLAIN ANALYZE SELECT * FROM left_table
+SEMI JOIN (select right_table.a FROM right_table JOIN other ON (other.a = right_table.a)) joined_right_table
+ON left_table.a = joined_right_table.a;
+----
+analyzed_plan	<REGEX>:.*RIGHT_SEMI.*
+
+statement ok
+DELETE FROM left_table where c=5;
+
+# USING COLUMNS also works, 
+query II
+EXPLAIN ANALYZE SELECT * FROM left_table SEMI JOIN right_table USING (a);
+----
+analyzed_plan	<REGEX>:.*RIGHT_SEMI.*
+
+# natural anti join works
+query II
+explain analyze SELECT * FROM left_table NATURAL SEMI JOIN right_table;
+----
+analyzed_plan	<REGEX>:.*RIGHT_SEMI.*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM left_table
+NATURAL SEMI JOIN (select right_table.a FROM right_table JOIN other ON (other.a = right_table.a)) joined_right_table;
+----
+analyzed_plan	<REGEX>:.*RIGHT_SEMI.*
+
+# right_table.a and left_table.a have the value 42
+# only left_table.a has the value 43
+# test flip on inequalities as well
+query II
+EXPLAIN ANALYZE SELECT * FROM left_table SEMI JOIN right_table ON (left_table.a <> right_table.a) ORDER BY a, c;
+----
+analyzed_plan	<!REGEX>:.*RIGHT_SEMI.*
+
+
+# range joins do *not* flip
+query II
+EXPLAIN ANALYZE SELECT * FROM left_table SEMI JOIN right_table ON (left_table.a > right_table.a);
+----
+analyzed_plan	<!REGEX>:.*RIGHT_SEMI.*
+
+
+# complex condition resulting in an any join DOES *NOT* flip
+query II
+explain analyze SELECT * FROM left_table SEMI JOIN right_table ON (left_table.a + right_table.a = 85 OR left_table.a + right_table.b = 84) order by left_table.a, left_table.c;
+----
+analyzed_plan	<!REGEX>:.*RIGHT_SEMI.*
+
+
+statement ok
+INSERT INTO right_table VALUES (1, 42), (1, 42);
+
+# Insert more values so that the scan side in the cross product is the right hand side
+statement ok
+INSERT INTO left_table VALUES (42, 1, 5), (42, 1, 5), (42, 1, 5), (2000, 20000, 200000);
+
+# complex condition resulting in an any join does *NOT* flip
+query II
+explain analyze SELECT * FROM left_table SEMI JOIN right_table ON (left_table.a + right_table.a = 85 OR left_table.a + right_table.b = 84) order by left_table.a, left_table.c;
+----
+analyzed_plan	<!REGEX>:.*RIGHT_SEMI.*
+
+# correlated subqueries can flip
+query II
+explain analyze SELECT a as outer_a, (SELECT MAX(right_table.b) FROM right_table where right_table.a != outer_a) right_table_b FROM left_table SEMI JOIN right_table ON (left_table.a = right_table.a) Order by outer_a, right_table_b;
+----
+analyzed_plan	<REGEX>:.*RIGHT_SEMI.*
+
+statement ok
+INSERT INTO right_table VALUES (1, 20);
+
+# correlated subqueries
+query II
+explain analyze SELECT a as outer_a, (SELECT MAX(b) FROM right_table where right_table.a != outer_a) right_table_b FROM left_table SEMI JOIN right_table ON (left_table.a = right_table.a) Order by outer_a, right_table_b;
+----
+analyzed_plan	<REGEX>:.*RIGHT_SEMI.*
+
+statement ok
+SET scalar_subquery_error_on_multiple_rows=false
+
+query II
+explain analyze SELECT a as outer_a, (SELECT right_table.b FROM right_table where right_table.a != outer_a) right_table_b FROM left_table SEMI JOIN right_table ON (left_table.a = right_table.a) Order by outer_a, right_table_b;
+----
+analyzed_plan	<REGEX>:.*RIGHT_SEMI.*
+
+statement ok
+INSERT INTO right_table VALUES (1, 20);
+
+# correlated subqueries
+query II
+explain analyze SELECT a as outer_a, (SELECT b FROM right_table where right_table.a != outer_a) right_table_b FROM left_table SEMI JOIN right_table ON (left_table.a = right_table.a) Order by outer_a, right_table_b;
+----
+analyzed_plan	<REGEX>:.*RIGHT_SEMI.*
+

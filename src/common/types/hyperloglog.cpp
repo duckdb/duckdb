@@ -1,276 +1,270 @@
 #include "duckdb/common/types/hyperloglog.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/limits.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
-
+#include "duckdb/common/serializer/serializer.hpp"
 #include "hyperloglog.hpp"
+
+#include <math.h>
+
+namespace duckdb_hll {
+struct robj; // NOLINT
+}
 
 namespace duckdb {
 
-HyperLogLog::HyperLogLog() : hll(nullptr) {
-	hll = duckdb_hll::hll_create();
-	// Insert into a dense hll can be vectorized, sparse cannot, so we immediately convert
-	duckdb_hll::hllSparseToDense(hll);
-}
-
-HyperLogLog::HyperLogLog(duckdb_hll::robj *hll) : hll(hll) {
-}
-
-HyperLogLog::~HyperLogLog() {
-	duckdb_hll::hll_destroy(hll);
-}
-
-void HyperLogLog::Add(data_ptr_t element, idx_t size) {
-	if (duckdb_hll::hll_add(hll, element, size) == HLL_C_ERR) {
-		throw InternalException("Could not add to HLL?");
-	}
-}
-
 idx_t HyperLogLog::Count() const {
-	// exception from size_t ban
-	size_t result;
+	uint32_t c[Q + 2] = {0};
+	ExtractCounts(c);
+	return static_cast<idx_t>(EstimateCardinality(c));
+}
 
-	if (duckdb_hll::hll_count(hll, &result) != HLL_C_OK) {
-		throw InternalException("Could not count HLL?");
+//! Algorithm 2
+void HyperLogLog::Merge(const HyperLogLog &other) {
+	for (idx_t i = 0; i < M; ++i) {
+		Update(i, other.k[i]);
 	}
-	return result;
 }
 
-unique_ptr<HyperLogLog> HyperLogLog::Merge(HyperLogLog &other) {
-	duckdb_hll::robj *hlls[2];
-	hlls[0] = hll;
-	hlls[1] = other.hll;
-	auto new_hll = duckdb_hll::hll_merge(hlls, 2);
-	if (!new_hll) {
-		throw InternalException("Could not merge HLLs");
+//! Algorithm 4
+void HyperLogLog::ExtractCounts(uint32_t *c) const {
+	for (idx_t i = 0; i < M; ++i) {
+		c[k[i]]++;
 	}
-	return unique_ptr<HyperLogLog>(new HyperLogLog(new_hll));
 }
 
-HyperLogLog *HyperLogLog::MergePointer(HyperLogLog &other) {
-	duckdb_hll::robj *hlls[2];
-	hlls[0] = hll;
-	hlls[1] = other.hll;
-	auto new_hll = duckdb_hll::hll_merge(hlls, 2);
-	if (!new_hll) {
-		throw Exception("Could not merge HLLs");
+//! Taken from redis code
+static double HLLSigma(double x) {
+	if (x == 1.) {
+		return std::numeric_limits<double>::infinity();
 	}
-	return new HyperLogLog(new_hll);
+	double z_prime;
+	double y = 1;
+	double z = x;
+	do {
+		x *= x;
+		z_prime = z;
+		z += x * y;
+		y += y;
+	} while (z_prime != z);
+	return z;
 }
 
-unique_ptr<HyperLogLog> HyperLogLog::Merge(HyperLogLog logs[], idx_t count) {
-	auto hlls_uptr = unique_ptr<duckdb_hll::robj *[]> {
-		new duckdb_hll::robj *[count]
-	};
-	auto hlls = hlls_uptr.get();
-	for (idx_t i = 0; i < count; i++) {
-		hlls[i] = logs[i].hll;
+//! Taken from redis code
+static double HLLTau(double x) {
+	if (x == 0. || x == 1.) {
+		return 0.;
 	}
-	auto new_hll = duckdb_hll::hll_merge(hlls, count);
-	if (!new_hll) {
-		throw InternalException("Could not merge HLLs");
+	double z_prime;
+	double y = 1.0;
+	double z = 1 - x;
+	do {
+		x = sqrt(x);
+		z_prime = z;
+		y *= 0.5;
+		z -= pow(1 - x, 2) * y;
+	} while (z_prime != z);
+	return z / 3;
+}
+
+//! Algorithm 6
+int64_t HyperLogLog::EstimateCardinality(uint32_t *c) {
+	auto z = M * HLLTau((double(M) - c[Q]) / double(M));
+
+	for (idx_t k = Q; k >= 1; --k) {
+		z += c[k];
+		z *= 0.5;
 	}
-	return unique_ptr<HyperLogLog>(new HyperLogLog(new_hll));
+
+	z += M * HLLSigma(c[0] / double(M));
+
+	return llroundl(ALPHA * M * M / z);
 }
 
-idx_t HyperLogLog::GetSize() {
-	return duckdb_hll::get_size();
+void HyperLogLog::Update(Vector &input, Vector &hash_vec, const idx_t count) {
+	UnifiedVectorFormat idata;
+	input.ToUnifiedFormat(count, idata);
+
+	UnifiedVectorFormat hdata;
+	hash_vec.ToUnifiedFormat(count, hdata);
+	const auto hashes = UnifiedVectorFormat::GetData<hash_t>(hdata);
+
+	if (hash_vec.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		if (idata.validity.RowIsValid(0)) {
+			InsertElement(hashes[0]);
+		}
+	} else {
+		D_ASSERT(hash_vec.GetVectorType() == VectorType::FLAT_VECTOR);
+		if (idata.validity.AllValid()) {
+			for (idx_t i = 0; i < count; ++i) {
+				const auto hash = hashes[i];
+				InsertElement(hash);
+			}
+		} else {
+			for (idx_t i = 0; i < count; ++i) {
+				if (idata.validity.RowIsValid(idata.sel->get_index(i))) {
+					const auto hash = hashes[i];
+					InsertElement(hash);
+				}
+			}
+		}
+	}
 }
 
-data_ptr_t HyperLogLog::GetPtr() const {
-	return data_ptr_cast((hll)->ptr);
-}
-
-unique_ptr<HyperLogLog> HyperLogLog::Copy() {
+unique_ptr<HyperLogLog> HyperLogLog::Copy() const {
 	auto result = make_uniq<HyperLogLog>();
-	lock_guard<mutex> guard(lock);
-	memcpy(result->GetPtr(), GetPtr(), GetSize());
+	memcpy(result->k, this->k, sizeof(k));
 	D_ASSERT(result->Count() == Count());
 	return result;
 }
 
+class HLLV1 {
+public:
+	HLLV1() {
+		hll = duckdb_hll::hll_create();
+		duckdb_hll::hllSparseToDense(hll);
+	}
+
+	~HLLV1() {
+		duckdb_hll::hll_destroy(hll);
+	}
+
+public:
+	static idx_t GetSize() {
+		return duckdb_hll::get_size();
+	}
+
+	data_ptr_t GetPtr() const {
+		return data_ptr_cast((hll)->ptr);
+	}
+
+	void ToNew(HyperLogLog &new_hll) const {
+		const idx_t mult = duckdb_hll::num_registers() / HyperLogLog::M;
+		// Old implementation used more registers, so we compress the registers, losing some accuracy
+		for (idx_t i = 0; i < HyperLogLog::M; i++) {
+			uint8_t max_old = 0;
+			for (idx_t j = 0; j < mult; j++) {
+				D_ASSERT(i * mult + j < duckdb_hll::num_registers());
+				max_old = MaxValue<uint8_t>(max_old, duckdb_hll::get_register(hll, i * mult + j));
+			}
+			new_hll.Update(i, max_old);
+		}
+	}
+
+	void FromNew(const HyperLogLog &new_hll) {
+		const auto new_hll_count = new_hll.Count();
+		if (new_hll_count == 0) {
+			return;
+		}
+
+		const idx_t mult = duckdb_hll::num_registers() / HyperLogLog::M;
+		// When going from less to more registers, we cannot just duplicate the registers,
+		// as each register in the new HLL is the minimum of 'mult' registers in the old HLL.
+		// Duplicating will make for VERY large over-estimations. Instead, we do the following:
+
+		// Set the first of every 'mult' registers in the old HLL to the value in the new HLL
+		// This ensures that we can convert NEW to OLD and back to NEW without loss of information
+		double avg = 0;
+		for (idx_t i = 0; i < HyperLogLog::M; i++) {
+			const auto max_new = MinValue(new_hll.GetRegister(i), duckdb_hll::maximum_zeros());
+			duckdb_hll::set_register(hll, i * mult, max_new);
+			avg += static_cast<double>(max_new);
+		}
+		avg /= static_cast<double>(HyperLogLog::M);
+
+		// Using the average will ALWAYS overestimate, so we reduce it a bit here
+		if (avg > 10) {
+			avg *= 0.75;
+		} else if (avg > 2) {
+			avg -= 2;
+		}
+
+		// Set all other registers to a default value, starting with 0 (the initialization value)
+		// We optimize the default value in 5 iterations or until OLD count is close to NEW count
+		double default_val = 0;
+		for (idx_t opt_idx = 0; opt_idx < 5; opt_idx++) {
+			if (IsWithinAcceptableRange(new_hll_count, Count())) {
+				break;
+			}
+
+			// Delta is half the average, then a quarter, etc.
+			const double delta = avg / static_cast<double>(1 << (opt_idx + 1));
+			if (Count() > new_hll_count) {
+				default_val = delta > default_val ? 0 : default_val - delta;
+			} else {
+				default_val += delta;
+			}
+
+			// If the default value is, e.g., 3.3, then the first 70% gets value 3, and the rest gets value 4
+			const double floor_fraction = 1 - (default_val - floor(default_val));
+			for (idx_t i = 0; i < HyperLogLog::M; i++) {
+				const auto max_new = MinValue(new_hll.GetRegister(i), duckdb_hll::maximum_zeros());
+				uint8_t register_value;
+				if (static_cast<double>(i) / static_cast<double>(HyperLogLog::M) < floor_fraction) {
+					register_value = ExactNumericCast<uint8_t>(floor(default_val));
+				} else {
+					register_value = ExactNumericCast<uint8_t>(ceil(default_val));
+				}
+				register_value = MinValue(register_value, max_new);
+				for (idx_t j = 1; j < mult; j++) {
+					D_ASSERT(i * mult + j < duckdb_hll::num_registers());
+					duckdb_hll::set_register(hll, i * mult + j, register_value);
+				}
+			}
+		}
+	}
+
+private:
+	idx_t Count() const {
+		size_t result;
+		if (duckdb_hll::hll_count(hll, &result) != HLL_C_OK) {
+			throw InternalException("Could not count HLL?");
+		}
+		return result;
+	}
+
+	bool IsWithinAcceptableRange(const idx_t &new_hll_count, const idx_t &old_hll_count) const {
+		const auto newd = static_cast<double>(new_hll_count);
+		const auto oldd = static_cast<double>(old_hll_count);
+		return MaxValue(newd, oldd) / MinValue(newd, oldd) < ACCEPTABLE_Q_ERROR;
+	}
+
+private:
+	static constexpr double ACCEPTABLE_Q_ERROR = 1.2;
+	duckdb_hll::robj *hll;
+};
+
 void HyperLogLog::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty(100, "type", HLLStorageType::UNCOMPRESSED);
-	serializer.WriteProperty(101, "data", GetPtr(), GetSize());
+	if (serializer.ShouldSerialize(3)) {
+		serializer.WriteProperty(100, "type", HLLStorageType::HLL_V2);
+		serializer.WriteProperty(101, "data", k, sizeof(k));
+	} else {
+		auto old = make_uniq<HLLV1>();
+		old->FromNew(*this);
+
+		serializer.WriteProperty(100, "type", HLLStorageType::HLL_V1);
+		serializer.WriteProperty(101, "data", old->GetPtr(), old->GetSize());
+	}
 }
 
 unique_ptr<HyperLogLog> HyperLogLog::Deserialize(Deserializer &deserializer) {
 	auto result = make_uniq<HyperLogLog>();
 	auto storage_type = deserializer.ReadProperty<HLLStorageType>(100, "type");
 	switch (storage_type) {
-	case HLLStorageType::UNCOMPRESSED:
-		deserializer.ReadProperty(101, "data", result->GetPtr(), GetSize());
+	case HLLStorageType::HLL_V1: {
+		auto old = make_uniq<HLLV1>();
+		deserializer.ReadProperty(101, "data", old->GetPtr(), old->GetSize());
+		old->ToNew(*result);
+		break;
+	}
+	case HLLStorageType::HLL_V2:
+		deserializer.ReadProperty(101, "data", result->k, sizeof(k));
 		break;
 	default:
 		throw SerializationException("Unknown HyperLogLog storage type!");
 	}
 	return result;
-}
-
-//===--------------------------------------------------------------------===//
-// Vectorized HLL implementation
-//===--------------------------------------------------------------------===//
-//! Taken from https://nullprogram.com/blog/2018/07/31/
-template <class T>
-inline uint64_t TemplatedHash(const T &elem) {
-	uint64_t x = elem;
-	x ^= x >> 30;
-	x *= UINT64_C(0xbf58476d1ce4e5b9);
-	x ^= x >> 27;
-	x *= UINT64_C(0x94d049bb133111eb);
-	x ^= x >> 31;
-	return x;
-}
-
-template <>
-inline uint64_t TemplatedHash(const hugeint_t &elem) {
-	return TemplatedHash<uint64_t>(Load<uint64_t>(const_data_ptr_cast(&elem.upper))) ^
-	       TemplatedHash<uint64_t>(elem.lower);
-}
-
-template <idx_t rest>
-inline void CreateIntegerRecursive(const_data_ptr_t &data, uint64_t &x) {
-	x ^= (uint64_t)data[rest - 1] << ((rest - 1) * 8);
-	return CreateIntegerRecursive<rest - 1>(data, x);
-}
-
-template <>
-inline void CreateIntegerRecursive<1>(const_data_ptr_t &data, uint64_t &x) {
-	x ^= (uint64_t)data[0];
-}
-
-inline uint64_t HashOtherSize(const_data_ptr_t &data, const idx_t &len) {
-	uint64_t x = 0;
-	switch (len & 7) {
-	case 7:
-		CreateIntegerRecursive<7>(data, x);
-		break;
-	case 6:
-		CreateIntegerRecursive<6>(data, x);
-		break;
-	case 5:
-		CreateIntegerRecursive<5>(data, x);
-		break;
-	case 4:
-		CreateIntegerRecursive<4>(data, x);
-		break;
-	case 3:
-		CreateIntegerRecursive<3>(data, x);
-		break;
-	case 2:
-		CreateIntegerRecursive<2>(data, x);
-		break;
-	case 1:
-		CreateIntegerRecursive<1>(data, x);
-		break;
-	case 0:
-		break;
-	}
-	return TemplatedHash<uint64_t>(x);
-}
-
-template <>
-inline uint64_t TemplatedHash(const string_t &elem) {
-	auto data = const_data_ptr_cast(elem.GetData());
-	const auto &len = elem.GetSize();
-	uint64_t h = 0;
-	for (idx_t i = 0; i + sizeof(uint64_t) <= len; i += sizeof(uint64_t)) {
-		h ^= TemplatedHash<uint64_t>(Load<uint64_t>(data));
-		data += sizeof(uint64_t);
-	}
-	switch (len & (sizeof(uint64_t) - 1)) {
-	case 4:
-		h ^= TemplatedHash<uint32_t>(Load<uint32_t>(data));
-		break;
-	case 2:
-		h ^= TemplatedHash<uint16_t>(Load<uint16_t>(data));
-		break;
-	case 1:
-		h ^= TemplatedHash<uint8_t>(Load<uint8_t>(data));
-		break;
-	default:
-		h ^= HashOtherSize(data, len);
-	}
-	return h;
-}
-
-template <class T>
-void TemplatedComputeHashes(UnifiedVectorFormat &vdata, const idx_t &count, uint64_t hashes[]) {
-	auto data = UnifiedVectorFormat::GetData<T>(vdata);
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = vdata.sel->get_index(i);
-		if (vdata.validity.RowIsValid(idx)) {
-			hashes[i] = TemplatedHash<T>(data[idx]);
-		} else {
-			hashes[i] = 0;
-		}
-	}
-}
-
-static void ComputeHashes(UnifiedVectorFormat &vdata, const LogicalType &type, uint64_t hashes[], idx_t count) {
-	switch (type.InternalType()) {
-	case PhysicalType::BOOL:
-	case PhysicalType::INT8:
-	case PhysicalType::UINT8:
-		return TemplatedComputeHashes<uint8_t>(vdata, count, hashes);
-	case PhysicalType::INT16:
-	case PhysicalType::UINT16:
-		return TemplatedComputeHashes<uint16_t>(vdata, count, hashes);
-	case PhysicalType::INT32:
-	case PhysicalType::UINT32:
-	case PhysicalType::FLOAT:
-		return TemplatedComputeHashes<uint32_t>(vdata, count, hashes);
-	case PhysicalType::INT64:
-	case PhysicalType::UINT64:
-	case PhysicalType::DOUBLE:
-		return TemplatedComputeHashes<uint64_t>(vdata, count, hashes);
-	case PhysicalType::INT128:
-	case PhysicalType::INTERVAL:
-		static_assert(sizeof(hugeint_t) == sizeof(interval_t), "ComputeHashes assumes these are the same size!");
-		return TemplatedComputeHashes<hugeint_t>(vdata, count, hashes);
-	case PhysicalType::VARCHAR:
-		return TemplatedComputeHashes<string_t>(vdata, count, hashes);
-	default:
-		throw InternalException("Unimplemented type for HyperLogLog::ComputeHashes");
-	}
-}
-
-//! Taken from https://stackoverflow.com/a/72088344
-static inline uint8_t CountTrailingZeros(uint64_t &x) {
-	static constexpr const uint64_t DEBRUIJN = 0x03f79d71b4cb0a89;
-	static constexpr const uint8_t LOOKUP[] = {0,  47, 1,  56, 48, 27, 2,  60, 57, 49, 41, 37, 28, 16, 3,  61,
-	                                           54, 58, 35, 52, 50, 42, 21, 44, 38, 32, 29, 23, 17, 11, 4,  62,
-	                                           46, 55, 26, 59, 40, 36, 15, 53, 34, 51, 20, 43, 31, 22, 10, 45,
-	                                           25, 39, 14, 33, 19, 30, 9,  24, 13, 18, 8,  12, 7,  6,  5,  63};
-	return LOOKUP[(DEBRUIJN * (x ^ (x - 1))) >> 58];
-}
-
-static inline void ComputeIndexAndCount(uint64_t &hash, uint8_t &prefix) {
-	uint64_t index = hash & ((1 << 12) - 1); /* Register index. */
-	hash >>= 12;                             /* Remove bits used to address the register. */
-	hash |= ((uint64_t)1 << (64 - 12));      /* Make sure the count will be <= Q+1. */
-
-	prefix = CountTrailingZeros(hash) + 1; /* Add 1 since we count the "00000...1" pattern. */
-	hash = index;
-}
-
-void HyperLogLog::ProcessEntries(UnifiedVectorFormat &vdata, const LogicalType &type, uint64_t hashes[],
-                                 uint8_t counts[], idx_t count) {
-	ComputeHashes(vdata, type, hashes, count);
-	for (idx_t i = 0; i < count; i++) {
-		ComputeIndexAndCount(hashes[i], counts[i]);
-	}
-}
-
-void HyperLogLog::AddToLogs(UnifiedVectorFormat &vdata, idx_t count, uint64_t indices[], uint8_t counts[],
-                            HyperLogLog **logs[], const SelectionVector *log_sel) {
-	AddToLogsInternal(vdata, count, indices, counts, reinterpret_cast<void ****>(logs), log_sel);
-}
-
-void HyperLogLog::AddToLog(UnifiedVectorFormat &vdata, idx_t count, uint64_t indices[], uint8_t counts[]) {
-	lock_guard<mutex> guard(lock);
-	AddToSingleLogInternal(vdata, count, indices, counts, hll);
 }
 
 } // namespace duckdb

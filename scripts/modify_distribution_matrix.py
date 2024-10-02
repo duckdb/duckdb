@@ -3,6 +3,7 @@
 import argparse
 import json
 import sys
+import logging
 
 # Define command-line arguments
 parser = argparse.ArgumentParser(description="Filter a JSON file based on excluded duckdb_arch values and select an OS")
@@ -41,10 +42,16 @@ filtered_data = filter_entries(data, excluded_arch_values)
 
 # Select an OS if specified
 if select_os:
+    found = False
     for os in filtered_data.keys():
         if os == select_os:
             filtered_data = filtered_data[os]
+            found = True
             break
+    if found == False:
+        logging.warning('A selection OS was provided but not found')
+        filtered_data = []
+
 # When deploy_matrix is specified, we only output a single merged include list with all the duckdb_archs
 elif args.deploy_matrix:
     deploy_archs = []

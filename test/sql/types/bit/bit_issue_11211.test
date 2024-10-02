@@ -1,0 +1,28 @@
+# name: test/sql/types/bit/bit_issue_11211.test
+# description: Issue #11211 - Incorrect equality comparison for BIT type
+# group: [bit]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select ( 2::bit & 2::bit ) = 2::bit as b;
+----
+true
+
+query I
+select ( 2::bit & 2::bit ) = 2::bit as b;
+----
+true
+
+query IIII
+FROM
+(
+  SELECT
+  ( 2::bit & 2::bit ) AS a,
+  2::bit AS b,
+  (a = b) AS '(a = b)',
+)
+SELECT a, b, a = b, "(a = b)";
+----
+00000000000000000000000000000010	00000000000000000000000000000010	true	true

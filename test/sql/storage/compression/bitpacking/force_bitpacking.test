@@ -1,0 +1,31 @@
+# name: test/sql/storage/compression/bitpacking/force_bitpacking.test
+# description: Test forcing bitpacking as the compression scheme
+# group: [bitpacking]
+
+# This test defaults to another compression function for smaller block sizes,
+# because the bitpacking groups no longer fit the blocks.
+require block_size 262144
+
+require vector_size 2048
+
+load __TEST_DIR__/force_bitpacking.db
+
+statement ok
+PRAGMA force_compression = 'bitpacking'
+
+statement ok
+CREATE TABLE test_bp (a INTEGER);
+
+statement ok
+INSERT INTO test_bp SELECT 1 FROM range(0, 1000) tbl(i);
+
+statement ok
+INSERT INTO test_bp SELECT 2 FROM range(0, 1000) tbl(i);
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT compression FROM pragma_storage_info('test_bp') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
+----
+BitPacking

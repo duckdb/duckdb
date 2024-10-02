@@ -1,0 +1,44 @@
+# name: test/sql/transactions/test_index_rollback_flushed_data.test
+# description: Test that we revert the global storage correctly after a constraint violation
+# group: [transactions]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+statement ok con1
+CREATE TABLE integers(i INTEGER UNIQUE);
+
+statement ok con1
+BEGIN TRANSACTION;
+
+statement ok con2
+BEGIN TRANSACTION;
+
+statement ok con1
+INSERT INTO integers VALUES (-10);
+
+statement ok con2
+INSERT INTO integers SELECT range FROM range(2, 4097, 1);
+
+# constraint violation
+statement ok con2
+INSERT INTO integers VALUES (-10);
+
+# con1 commits first
+statement ok con1
+COMMIT;
+
+# con2 fails to commit because of the conflict
+statement error con2
+COMMIT;
+----
+
+statement ok
+INSERT INTO integers SELECT i FROM range(2, 4097, 1) t1(i)
+
+query I
+SELECT MAX(i) FROM integers
+----
+4096

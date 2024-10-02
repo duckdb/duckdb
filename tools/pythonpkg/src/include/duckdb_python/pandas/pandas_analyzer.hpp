@@ -19,12 +19,13 @@ namespace duckdb {
 
 class PandasAnalyzer {
 public:
-	PandasAnalyzer(const DBConfig &config) {
+	explicit PandasAnalyzer(const ClientContext &context) {
 		analyzed_type = LogicalType::SQLNULL;
 
-		auto maximum_entry = config.options.set_variables.find("pandas_analyze_sample");
-		D_ASSERT(maximum_entry != config.options.set_variables.end());
-		sample_size = maximum_entry->second.GetValue<uint64_t>();
+		Value result;
+		auto lookup_result = context.TryGetCurrentSetting("pandas_analyze_sample", result);
+		D_ASSERT((bool)lookup_result);
+		sample_size = result.GetValue<uint64_t>();
 	}
 
 public:
@@ -38,7 +39,7 @@ public:
 	}
 
 private:
-	LogicalType InnerAnalyze(py::object column, bool &can_convert, bool sample = true, idx_t increment = 1);
+	LogicalType InnerAnalyze(py::object column, bool &can_convert, idx_t increment);
 	uint64_t GetSampleIncrement(idx_t rows);
 
 private:

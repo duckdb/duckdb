@@ -33,13 +33,13 @@ struct StrfTimeBindData : public FunctionData {
 template <bool REVERSED>
 static unique_ptr<FunctionData> StrfTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
                                                      vector<unique_ptr<Expression>> &arguments) {
-	auto format_idx = REVERSED ? 0 : 1;
+	auto format_idx = REVERSED ? 0U : 1U;
 	auto &format_arg = arguments[format_idx];
 	if (format_arg->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
 	if (!format_arg->IsFoldable()) {
-		throw InvalidInputException("strftime format must be a constant");
+		throw InvalidInputException(*format_arg, "strftime format must be a constant");
 	}
 	Value options_str = ExpressionExecutor::EvaluateScalar(context, *format_arg);
 	auto format_string = options_str.GetValue<string>();
@@ -48,7 +48,7 @@ static unique_ptr<FunctionData> StrfTimeBindFunction(ClientContext &context, Sca
 	if (!is_null) {
 		string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
 		if (!error.empty()) {
-			throw InvalidInputException("Failed to parse format specifier %s: %s", format_string, error);
+			throw InvalidInputException(*format_arg, "Failed to parse format specifier %s: %s", format_string, error);
 		}
 	}
 	return make_uniq<StrfTimeBindData>(format, format_string, is_null);
@@ -80,6 +80,19 @@ static void StrfTimeFunctionTimestamp(DataChunk &args, ExpressionState &state, V
 	info.format.ConvertTimestampVector(args.data[REVERSED ? 1 : 0], result, args.size());
 }
 
+template <bool REVERSED>
+static void StrfTimeFunctionTimestampNS(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.bind_info->Cast<StrfTimeBindData>();
+
+	if (info.is_null) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, true);
+		return;
+	}
+	info.format.ConvertTimestampNSVector(args.data[REVERSED ? 1 : 0], result, args.size());
+}
+
 ScalarFunctionSet StrfTimeFun::GetFunctions() {
 	ScalarFunctionSet strftime;
 
@@ -87,10 +100,14 @@ ScalarFunctionSet StrfTimeFun::GetFunctions() {
 	                                    StrfTimeFunctionDate<false>, StrfTimeBindFunction<false>));
 	strftime.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                                    StrfTimeFunctionTimestamp<false>, StrfTimeBindFunction<false>));
+	strftime.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_NS, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                                    StrfTimeFunctionTimestampNS<false>, StrfTimeBindFunction<false>));
 	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::VARCHAR,
 	                                    StrfTimeFunctionDate<true>, StrfTimeBindFunction<true>));
 	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
 	                                    StrfTimeFunctionTimestamp<true>, StrfTimeBindFunction<true>));
+	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP_NS}, LogicalType::VARCHAR,
+	                                    StrfTimeFunctionTimestampNS<true>, StrfTimeBindFunction<true>));
 	return strftime;
 }
 
@@ -126,79 +143,57 @@ struct StrpTimeBindData : public FunctionData {
 	}
 };
 
-static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
-                                                     vector<unique_ptr<Expression>> &arguments) {
-	if (arguments[1]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!arguments[1]->IsFoldable()) {
-		throw InvalidInputException("strptime format must be a constant");
-	}
-	Value format_value = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-	string format_string;
-	StrpTimeFormat format;
-	if (format_value.IsNull()) {
-		return make_uniq<StrpTimeBindData>(format, format_string);
-	} else if (format_value.type().id() == LogicalTypeId::VARCHAR) {
-		format_string = format_value.ToString();
-		format.format_specifier = format_string;
-		string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
-		if (!error.empty()) {
-			throw InvalidInputException("Failed to parse format specifier %s: %s", format_string, error);
-		}
-		if (format.HasFormatSpecifier(StrTimeSpecifier::UTC_OFFSET)) {
-			bound_function.return_type = LogicalType::TIMESTAMP_TZ;
-		}
-		return make_uniq<StrpTimeBindData>(format, format_string);
-	} else if (format_value.type() == LogicalType::LIST(LogicalType::VARCHAR)) {
-		const auto &children = ListValue::GetChildren(format_value);
-		if (children.empty()) {
-			throw InvalidInputException("strptime format list must not be empty");
-		}
-		vector<string> format_strings;
-		vector<StrpTimeFormat> formats;
-		for (const auto &child : children) {
-			format_string = child.ToString();
-			format.format_specifier = format_string;
-			string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
-			if (!error.empty()) {
-				throw InvalidInputException("Failed to parse format specifier %s: %s", format_string, error);
-			}
-			// If any format has UTC offsets, then we have to produce TSTZ
-			if (format.HasFormatSpecifier(StrTimeSpecifier::UTC_OFFSET)) {
-				bound_function.return_type = LogicalType::TIMESTAMP_TZ;
-			}
-			format_strings.emplace_back(format_string);
-			formats.emplace_back(format);
-		}
-		return make_uniq<StrpTimeBindData>(formats, format_strings);
-	} else {
-		throw InvalidInputException("strptime format must be a string");
-	}
+template <typename T>
+inline T StrpTimeResult(StrpTimeFormat::ParseResult &parsed) {
+	return parsed.ToTimestamp();
+}
+
+template <>
+inline timestamp_ns_t StrpTimeResult(StrpTimeFormat::ParseResult &parsed) {
+	return parsed.ToTimestampNS();
+}
+
+template <typename T>
+inline bool StrpTimeTryResult(StrpTimeFormat &format, string_t &input, T &result, string &error) {
+	return format.TryParseTimestamp(input, result, error);
+}
+
+template <>
+inline bool StrpTimeTryResult(StrpTimeFormat &format, string_t &input, timestamp_ns_t &result, string &error) {
+	return format.TryParseTimestampNS(input, result, error);
 }
 
 struct StrpTimeFunction {
 
+	template <typename T>
 	static void Parse(DataChunk &args, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.bind_info->Cast<StrpTimeBindData>();
 
-		if (args.data[1].GetVectorType() == VectorType::CONSTANT_VECTOR && ConstantVector::IsNull(args.data[1])) {
+		//	There is a bizarre situation where the format column is foldable but not constant
+		//	(i.e., the statistics tell us it has only one value)
+		//	We have to check whether that value is NULL
+		const auto count = args.size();
+		UnifiedVectorFormat format_unified;
+		args.data[1].ToUnifiedFormat(count, format_unified);
+
+		if (!format_unified.validity.RowIsValid(0)) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(result, true);
 			return;
 		}
-		UnaryExecutor::Execute<string_t, timestamp_t>(args.data[0], result, args.size(), [&](string_t input) {
+		UnaryExecutor::Execute<string_t, T>(args.data[0], result, args.size(), [&](string_t input) {
 			StrpTimeFormat::ParseResult result;
 			for (auto &format : info.formats) {
 				if (format.Parse(input, result)) {
-					return result.ToTimestamp();
+					return StrpTimeResult<T>(result);
 				}
 			}
 			throw InvalidInputException(result.FormatError(input, info.formats[0].format_specifier));
 		});
 	}
 
+	template <typename T>
 	static void TryParse(DataChunk &args, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.bind_info->Cast<StrpTimeBindData>();
@@ -209,19 +204,94 @@ struct StrpTimeFunction {
 			return;
 		}
 
-		UnaryExecutor::ExecuteWithNulls<string_t, timestamp_t>(
-		    args.data[0], result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
-			    timestamp_t result;
-			    string error;
-			    for (auto &format : info.formats) {
-				    if (format.TryParseTimestamp(input, result, error)) {
-					    return result;
-				    }
-			    }
+		UnaryExecutor::ExecuteWithNulls<string_t, T>(args.data[0], result, args.size(),
+		                                             [&](string_t input, ValidityMask &mask, idx_t idx) {
+			                                             T result;
+			                                             string error;
+			                                             for (auto &format : info.formats) {
+				                                             if (StrpTimeTryResult(format, input, result, error)) {
+					                                             return result;
+				                                             }
+			                                             }
 
-			    mask.SetInvalid(idx);
-			    return timestamp_t();
-		    });
+			                                             mask.SetInvalid(idx);
+			                                             return T();
+		                                             });
+	}
+
+	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
+	                                     vector<unique_ptr<Expression>> &arguments) {
+		if (arguments[1]->HasParameter()) {
+			throw ParameterNotResolvedException();
+		}
+		if (!arguments[1]->IsFoldable()) {
+			throw InvalidInputException(*arguments[0], "strptime format must be a constant");
+		}
+		Value format_value = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+		string format_string;
+		StrpTimeFormat format;
+		if (format_value.IsNull()) {
+			return make_uniq<StrpTimeBindData>(format, format_string);
+		} else if (format_value.type().id() == LogicalTypeId::VARCHAR) {
+			format_string = format_value.ToString();
+			format.format_specifier = format_string;
+			string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
+			if (!error.empty()) {
+				throw InvalidInputException(*arguments[0], "Failed to parse format specifier %s: %s", format_string,
+				                            error);
+			}
+			if (format.HasFormatSpecifier(StrTimeSpecifier::UTC_OFFSET)) {
+				bound_function.return_type = LogicalType::TIMESTAMP_TZ;
+			} else if (format.HasFormatSpecifier(StrTimeSpecifier::NANOSECOND_PADDED)) {
+				bound_function.return_type = LogicalType::TIMESTAMP_NS;
+				if (bound_function.name == "strptime") {
+					bound_function.function = Parse<timestamp_ns_t>;
+				} else {
+					bound_function.function = TryParse<timestamp_ns_t>;
+				}
+			}
+			return make_uniq<StrpTimeBindData>(format, format_string);
+		} else if (format_value.type() == LogicalType::LIST(LogicalType::VARCHAR)) {
+			const auto &children = ListValue::GetChildren(format_value);
+			if (children.empty()) {
+				throw InvalidInputException(*arguments[0], "strptime format list must not be empty");
+			}
+			vector<string> format_strings;
+			vector<StrpTimeFormat> formats;
+			bool has_offset = false;
+			bool has_nanos = false;
+
+			for (const auto &child : children) {
+				format_string = child.ToString();
+				format.format_specifier = format_string;
+				string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
+				if (!error.empty()) {
+					throw InvalidInputException(*arguments[0], "Failed to parse format specifier %s: %s", format_string,
+					                            error);
+				}
+				has_offset = has_offset || format.HasFormatSpecifier(StrTimeSpecifier::UTC_OFFSET);
+				has_nanos = has_nanos || format.HasFormatSpecifier(StrTimeSpecifier::NANOSECOND_PADDED);
+				format_strings.emplace_back(format_string);
+				formats.emplace_back(format);
+			}
+
+			if (has_offset) {
+				// If any format has UTC offsets, then we have to produce TSTZ
+				bound_function.return_type = LogicalType::TIMESTAMP_TZ;
+			} else if (has_nanos) {
+				// If any format has nanoseconds, then we have to produce TSNS
+				// unless there is an offset, in which case we produce
+				bound_function.return_type = LogicalType::TIMESTAMP_NS;
+				if (bound_function.name == "strptime") {
+					bound_function.function = Parse<timestamp_ns_t>;
+				} else {
+					bound_function.function = TryParse<timestamp_ns_t>;
+				}
+			}
+			return make_uniq<StrpTimeBindData>(formats, format_strings);
+		} else {
+			throw InvalidInputException(*arguments[0], "strptime format must be a string");
+		}
 	}
 };
 
@@ -230,12 +300,12 @@ ScalarFunctionSet StrpTimeFun::GetFunctions() {
 
 	const auto list_type = LogicalType::LIST(LogicalType::VARCHAR);
 	auto fun = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::TIMESTAMP,
-	                          StrpTimeFunction::Parse, StrpTimeBindFunction);
+	                          StrpTimeFunction::Parse<timestamp_t>, StrpTimeFunction::Bind);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	strptime.AddFunction(fun);
 
-	fun = ScalarFunction({LogicalType::VARCHAR, list_type}, LogicalType::TIMESTAMP, StrpTimeFunction::Parse,
-	                     StrpTimeBindFunction);
+	fun = ScalarFunction({LogicalType::VARCHAR, list_type}, LogicalType::TIMESTAMP,
+	                     StrpTimeFunction::Parse<timestamp_t>, StrpTimeFunction::Bind);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	strptime.AddFunction(fun);
 	return strptime;
@@ -246,12 +316,12 @@ ScalarFunctionSet TryStrpTimeFun::GetFunctions() {
 
 	const auto list_type = LogicalType::LIST(LogicalType::VARCHAR);
 	auto fun = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::TIMESTAMP,
-	                          StrpTimeFunction::TryParse, StrpTimeBindFunction);
+	                          StrpTimeFunction::TryParse<timestamp_t>, StrpTimeFunction::Bind);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	try_strptime.AddFunction(fun);
 
-	fun = ScalarFunction({LogicalType::VARCHAR, list_type}, LogicalType::TIMESTAMP, StrpTimeFunction::TryParse,
-	                     StrpTimeBindFunction);
+	fun = ScalarFunction({LogicalType::VARCHAR, list_type}, LogicalType::TIMESTAMP,
+	                     StrpTimeFunction::TryParse<timestamp_t>, StrpTimeFunction::Bind);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	try_strptime.AddFunction(fun);
 

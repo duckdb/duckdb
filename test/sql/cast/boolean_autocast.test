@@ -130,6 +130,8 @@ false
 # failed to auto cast
 statement error
 SELECT false='unknownbool';
+----
 
 statement error
 SELECT 'unknownbool'=false;
+----

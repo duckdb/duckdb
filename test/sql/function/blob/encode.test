@@ -30,6 +30,7 @@ SELECT decode('\x00'::BLOB)
 # test invalid decodes
 statement error
 SELECT decode('\xFF'::BLOB)
+----
 
 query I
 SELECT decode(encode(a)) || a from (values ('hello'), ('world')) tbl(a);

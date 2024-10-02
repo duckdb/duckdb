@@ -29,6 +29,16 @@ SELECT quantile_disc(r::decimal(10,2), 0.5) FROM quantile
 4999
 
 query I
+SELECT quantile_disc(case when r is null then null else [r] end, 0.5) FROM quantile
+----
+[4999]
+
+query I
+SELECT quantile_disc(case when r is null then null else {'i': r} end, 0.5) FROM quantile
+----
+{'i': 4999}
+
+query I
 SELECT quantile_disc(r, 1.0) FROM quantile
 ----
 9999
@@ -82,6 +92,16 @@ SELECT quantile_disc(col, -0.5)
 FROM VALUES (11000), (3100), (2900), (2800), (2600), (2500) AS tab(col);
 ----
 2900
+
+# ORDER BY ... DESC
+query II
+SELECT 
+    percentile_disc(0.8) WITHIN GROUP (ORDER BY x DESC),
+    quantile_disc(x, 0.8 ORDER BY x DESC),
+FROM 
+    (VALUES (2), (1)) _(x);
+----
+1.2	1.2
 
 #
 # VARCHAR. Remember, this is dictionary ordering, not numeric ordering!
@@ -148,7 +168,7 @@ SELECT quantile_disc('2021-01-01'::TIMESTAMP + interval (r) hour, 0.5) FROM quan
 query I
 SELECT quantile_disc('1990-01-01'::DATE + interval (r) day, 0.5) FROM quantile
 ----
-2003-09-09
+2003-09-09 00:00:00
 
 query I
 SELECT quantile_disc('00:00:00'::TIME + interval (r) second, 0.5) FROM quantile
@@ -181,24 +201,31 @@ NULL
 # Invalid usage
 statement error
 SELECT quantile_disc(r, -1.1) FROM quantile
+----
 
 statement error
 SELECT quantile_disc(r, 1.1) FROM quantile
+----
 
 statement error
 SELECT quantile_disc(r, "string") FROM quantile
+----
 
 statement error
 SELECT quantile_disc(r, NULL) FROM quantile
+----
 
 statement error
 SELECT quantile_disc(r) FROM quantile
+----
 
 statement error
 SELECT quantile_disc(r, 0.1, 50) FROM quantile
+----
 
 statement error
 SELECT quantile_cont(r, q) FROM quantile
+----
 
 statement ok
 pragma threads=4

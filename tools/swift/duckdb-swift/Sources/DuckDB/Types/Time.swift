@@ -2,7 +2,7 @@
 //  DuckDB
 //  https://github.com/duckdb/duckdb-swift
 //
-//  Copyright © 2018-2023 Stichting DuckDB Foundation
+//  Copyright © 2018-2024 Stichting DuckDB Foundation
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy
 //  of this software and associated documentation files (the "Software"), to
@@ -68,4 +68,9 @@ private extension Time.Components {
     let ctimestruct = duckdb_from_time(ctime)
     self = ctimestruct.asTimeComponents
   }
+}
+
+public struct TimeTz: Hashable, Equatable, Sendable {
+  public var time: Time
+  public var offset: Int32
 }

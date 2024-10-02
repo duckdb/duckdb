@@ -1,0 +1,13 @@
+# name: benchmark/micro/lambdas/list_reduce/list_variable_length.benchmark
+# description: list_reduce with list of variable length
+# group: [list_reduce]
+
+name list variable length
+group micro
+subgroup lambdas
+
+load
+CREATE TABLE tbl AS SELECT range((i * 95823983533) % 100000 + 1) AS l from range(5000) t(i);
+
+run
+SELECT list_reduce(l, (x, y) -> x + y) FROM tbl;

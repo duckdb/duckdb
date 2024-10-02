@@ -1,3 +1,4 @@
+
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -13,58 +14,50 @@
 namespace duckdb {
 
 struct DatetimeDatetimeCacheItem : public PythonImportCacheItem {
-public:
-	static constexpr const char *Name = "datetime.datetime";
 
 public:
+	DatetimeDatetimeCacheItem(optional_ptr<PythonImportCacheItem> parent)
+	    : PythonImportCacheItem("datetime", parent), min("min", this), max("max", this), combine("combine", this) {
+	}
 	~DatetimeDatetimeCacheItem() override {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		max.LoadAttribute("max", cache, *this);
-		min.LoadAttribute("min", cache, *this);
-	}
 
-public:
-	PythonImportCacheItem max;
 	PythonImportCacheItem min;
+	PythonImportCacheItem max;
+	PythonImportCacheItem combine;
 };
 
 struct DatetimeDateCacheItem : public PythonImportCacheItem {
-public:
-	static constexpr const char *Name = "datetime.date";
 
 public:
+	DatetimeDateCacheItem(optional_ptr<PythonImportCacheItem> parent)
+	    : PythonImportCacheItem("date", parent), max("max", this), min("min", this) {
+	}
 	~DatetimeDateCacheItem() override {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		max.LoadAttribute("max", cache, *this);
-		min.LoadAttribute("min", cache, *this);
-	}
 
-public:
 	PythonImportCacheItem max;
 	PythonImportCacheItem min;
 };
 
 struct DatetimeCacheItem : public PythonImportCacheItem {
+
 public:
 	static constexpr const char *Name = "datetime";
 
 public:
+	DatetimeCacheItem()
+	    : PythonImportCacheItem("datetime"), date(this), time("time", this), timedelta("timedelta", this),
+	      timezone("timezone", this), datetime(this) {
+	}
 	~DatetimeCacheItem() override {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		datetime.LoadAttribute("datetime", cache, *this);
-		date.LoadAttribute("date", cache, *this);
-		time.LoadAttribute("time", cache, *this);
-		timedelta.LoadAttribute("timedelta", cache, *this);
-	}
 
-public:
-	DatetimeDatetimeCacheItem datetime;
 	DatetimeDateCacheItem date;
 	PythonImportCacheItem time;
 	PythonImportCacheItem timedelta;
+	PythonImportCacheItem timezone;
+	DatetimeDatetimeCacheItem datetime;
 };
 
 } // namespace duckdb

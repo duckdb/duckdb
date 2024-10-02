@@ -1,0 +1,16 @@
+# name: test/sql/copy/parquet/writer/parquet_write_string_distinct.test
+# description: Write distinct stats for strings
+# group: [writer]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+COPY (SELECT 'hello' FROM range(10)) TO '__TEST_DIR__/string_dict.parquet';
+
+query I
+SELECT stats_distinct_count FROM parquet_metadata('__TEST_DIR__/string_dict.parquet');
+----
+1

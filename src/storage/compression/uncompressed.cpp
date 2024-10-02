@@ -1,5 +1,5 @@
-#include "duckdb/function/compression/compression.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
+#include "duckdb/function/compression/compression.hpp"
 
 namespace duckdb {
 
@@ -15,6 +15,7 @@ CompressionFunction UncompressedFun::GetFunction(PhysicalType type) {
 	case PhysicalType::UINT16:
 	case PhysicalType::UINT32:
 	case PhysicalType::UINT64:
+	case PhysicalType::UINT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
 	case PhysicalType::LIST:
@@ -29,7 +30,7 @@ CompressionFunction UncompressedFun::GetFunction(PhysicalType type) {
 	}
 }
 
-bool UncompressedFun::TypeIsSupported(PhysicalType type) {
+bool UncompressedFun::TypeIsSupported(const PhysicalType) {
 	return true;
 }
 

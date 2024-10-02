@@ -18,8 +18,9 @@ TableFunction::TableFunction(string name, vector<LogicalType> arguments, table_f
       init_global(init_global), init_local(init_local), function(function), in_out_function(nullptr),
       in_out_function_final(nullptr), statistics(nullptr), dependency(nullptr), cardinality(nullptr),
       pushdown_complex_filter(nullptr), to_string(nullptr), table_scan_progress(nullptr), get_batch_index(nullptr),
-      get_batch_info(nullptr), serialize(nullptr), deserialize(nullptr), projection_pushdown(false),
-      filter_pushdown(false), filter_prune(false) {
+      get_bind_info(nullptr), type_pushdown(nullptr), get_multi_file_reader(nullptr), supports_pushdown_type(nullptr),
+      serialize(nullptr), deserialize(nullptr), projection_pushdown(false), filter_pushdown(false),
+      filter_prune(false) {
 }
 
 TableFunction::TableFunction(const vector<LogicalType> &arguments, table_function_t function,
@@ -31,8 +32,9 @@ TableFunction::TableFunction()
     : SimpleNamedParameterFunction("", {}), bind(nullptr), bind_replace(nullptr), init_global(nullptr),
       init_local(nullptr), function(nullptr), in_out_function(nullptr), statistics(nullptr), dependency(nullptr),
       cardinality(nullptr), pushdown_complex_filter(nullptr), to_string(nullptr), table_scan_progress(nullptr),
-      get_batch_index(nullptr), get_batch_info(nullptr), serialize(nullptr), deserialize(nullptr),
-      projection_pushdown(false), filter_pushdown(false), filter_prune(false) {
+      get_batch_index(nullptr), get_bind_info(nullptr), type_pushdown(nullptr), get_multi_file_reader(nullptr),
+      supports_pushdown_type(nullptr), serialize(nullptr), deserialize(nullptr), projection_pushdown(false),
+      filter_pushdown(false), filter_prune(false) {
 }
 
 bool TableFunction::Equal(const TableFunction &rhs) const {

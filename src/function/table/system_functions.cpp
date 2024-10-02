@@ -16,8 +16,7 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	PragmaStorageInfo::RegisterFunction(*this);
 	PragmaMetadataInfo::RegisterFunction(*this);
 	PragmaDatabaseSize::RegisterFunction(*this);
-	PragmaLastProfilingOutput::RegisterFunction(*this);
-	PragmaDetailedProfilingOutput::RegisterFunction(*this);
+	PragmaUserAgent::RegisterFunction(*this);
 
 	DuckDBColumnsFun::RegisterFunction(*this);
 	DuckDBConstraintsFun::RegisterFunction(*this);
@@ -28,11 +27,16 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	DuckDBSchemasFun::RegisterFunction(*this);
 	DuckDBDependenciesFun::RegisterFunction(*this);
 	DuckDBExtensionsFun::RegisterFunction(*this);
+	DuckDBMemoryFun::RegisterFunction(*this);
+	DuckDBOptimizersFun::RegisterFunction(*this);
+	DuckDBSecretsFun::RegisterFunction(*this);
+	DuckDBWhichSecretFun::RegisterFunction(*this);
 	DuckDBSequencesFun::RegisterFunction(*this);
 	DuckDBSettingsFun::RegisterFunction(*this);
 	DuckDBTablesFun::RegisterFunction(*this);
 	DuckDBTemporaryFilesFun::RegisterFunction(*this);
 	DuckDBTypesFun::RegisterFunction(*this);
+	DuckDBVariablesFun::RegisterFunction(*this);
 	DuckDBViewsFun::RegisterFunction(*this);
 	TestAllTypesFun::RegisterFunction(*this);
 	TestVectorTypesFun::RegisterFunction(*this);

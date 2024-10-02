@@ -39,6 +39,7 @@ NULL
 # incorrect use
 statement error
 SELECT list_avg()
+----
 
 # NULL average
 statement ok

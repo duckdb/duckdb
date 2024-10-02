@@ -55,10 +55,17 @@
     {
         "name": "format_bytes",
         "parameters": "bytes",
-        "description": "Converts bytes to a human-readable presentation (e.g. 16000 -> 16KB)",
+        "description": "Converts bytes to a human-readable presentation (e.g. 16000 -> 15.6 KiB)",
         "example": "format_bytes(1000 * 16)",
         "type": "scalar_function",
-        "aliases": ["formatReadableDecimalSize"]
+        "aliases": ["formatReadableSize"]
+    },
+    {
+        "name": "formatReadableDecimalSize",
+        "parameters": "bytes",
+        "description": "Converts bytes to a human-readable presentation (e.g. 16000 -> 16.0 KB)",
+        "example": "format_bytes(1000 * 16)",
+        "type": "scalar_function"
     },
     {
         "name": "hamming",
@@ -146,7 +153,7 @@
         "parameters": "value",
         "description": "Returns the MD5 hash of the value as a string",
         "example": "md5('123')",
-        "type": "scalar_function",
+        "type": "scalar_function_set",
         "struct": "MD5Fun"
     },
     {
@@ -154,24 +161,40 @@
         "parameters": "value",
         "description": "Returns the MD5 hash of the value as an INT128",
         "example": "md5_number('123')",
-        "type": "scalar_function",
+        "type": "scalar_function_set",
         "struct": "MD5NumberFun"
     },
     {
-        "name": "md5_number_lower",
-        "parameters": "value",
-        "description": "Returns the MD5 hash of the value as an INT128",
-        "example": "md5_number_lower('123')",
-        "type": "scalar_function",
-        "struct": "MD5NumberLowerFun"
+        "name": "parse_dirname",
+        "parameters": "string,separator",
+        "description": "Returns the top-level directory name. separator options: system, both_slash (default), forward_slash, backslash",
+        "example": "parse_dirname('path/to/file.csv', 'system')",
+        "type": "scalar_function_set",
+        "struct": "ParseDirnameFun"
     },
     {
-        "name": "md5_number_upper",
-        "parameters": "value",
-        "description": "Returns the MD5 hash of the value as an INT128",
-        "example": "md5_number_upper('123')",
-        "type": "scalar_function",
-        "struct": "MD5NumberUpperFun"
+        "name": "parse_dirpath",
+        "parameters": "string,separator",
+        "description": "Returns the head of the path similarly to Python's os.path.dirname. separator options: system, both_slash (default), forward_slash, backslash",
+        "example": "parse_dirpath('path/to/file.csv', 'system')",
+        "type": "scalar_function_set",
+        "struct": "ParseDirpathFun"
+    },
+    {
+        "name": "parse_filename",
+        "parameters": "string,trim_extension,separator",
+        "description": "Returns the last component of the path similarly to Python's os.path.basename. If trim_extension is true, the file extension will be removed (it defaults to false). separator options: system, both_slash (default), forward_slash, backslash",
+        "example": "parse_filename('path/to/file.csv', true, 'forward_slash')",
+        "type": "scalar_function_set",
+        "struct": "ParseFilenameFun"
+    },
+    {
+        "name": "parse_path",
+        "parameters": "string,separator",
+        "description": "Returns a list of the components (directories and filename) in the path similarly to Python's pathlib.PurePath::parts. separator options: system, both_slash (default), forward_slash, backslash",
+        "example": "parse_path('path/to/file.csv', 'system')",
+        "type": "scalar_function_set",
+        "struct": "ParsePathFun"
     },
     {
         "name": "printf",
@@ -230,11 +253,19 @@
         "type": "scalar_function_set"
     },
     {
+        "name": "sha1",
+        "parameters": "value",
+        "description": "Returns the SHA1 hash of the value",
+        "example": "sha1('hello')",
+        "type": "scalar_function_set",
+        "struct": "SHA1Fun"
+    },
+    {
         "name": "sha256",
         "parameters": "value",
         "description": "Returns the SHA256 hash of the value",
         "example": "sha256('hello')",
-        "type": "scalar_function",
+        "type": "scalar_function_set",
         "struct": "SHA256Fun"
     },
     {
@@ -297,5 +328,27 @@
         "description": "Converts a value to a string in the given base radix, optionally padding with leading zeros to the minimum length",
         "example": "to_base(42, 16)",
         "type": "scalar_function_set"
+    },
+    {
+        "name": "regexp_escape",
+        "parameters": "string",
+        "description": "Escapes all potentially meaningful regexp characters in the input string",
+        "example": "regexp_escape('https://duckdb.org')",
+        "struct": "RegexpEscapeFun",
+        "type": "scalar_function"
+    },
+    {
+        "name": "url_encode",
+        "parameters": "input",
+        "description": "Escapes the input string by encoding it so that it can be included in a URL query parameter.",
+        "example": "url_encode('this string has/ special+ characters>')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "url_decode",
+        "parameters": "input",
+        "description": "Unescapes the URL encoded input.",
+        "example": "url_decode('this%20string%20is%2BFencoded')",
+        "type": "scalar_function"
     }
 ]

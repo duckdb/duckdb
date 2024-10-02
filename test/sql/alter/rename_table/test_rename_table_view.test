@@ -13,6 +13,7 @@ CREATE VIEW v1 AS SELECT * FROM tbl
 
 statement error
 ALTER TABLE v1 RENAME TO v2
+----
 
 query I
 SELECT * FROM v1

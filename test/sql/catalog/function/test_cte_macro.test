@@ -40,9 +40,6 @@ SELECT plus42(42)
 ----
 84
 
-# temporary solution until decorrelation of materialized CTEs is implemented
-require noalternativeverify
-
 query T
 SELECT plus42(a) FROM integers
 ----
@@ -57,6 +54,7 @@ SELECT plus42(3) + a FROM integers
 # we should not be able to query the CTE from outside the function call
 statement error
 SELECT plus42(42) + answer FROM cte;
+----
 
 statement ok
 CREATE MACRO plus1(a) AS (WITH tbl AS (SELECT 1 AS one) SELECT one + a FROM tbl)

@@ -1,0 +1,13 @@
+# name: test/fuzzer/afl/issue_8185.test
+# description: Issue #8185 - DuckDB binary crashed at duckdb::ExpressionIterator::EnumerateChildren
+# group: [afl]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE v0 ( v1 INTEGER , v2 INTEGER) ;
+
+query II
+SELECT * FROM v0 WHERE v2 <= 2 AND v2 <= v1 AND v1 < v2 ORDER BY v1 DESC ;
+----

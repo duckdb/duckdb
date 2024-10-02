@@ -90,7 +90,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 			}
 			if (result_count > 0) {
 				vector_to_check.Slice(slice_sel, result_count);
-				FillSwitch(vector_to_check, result, result_sel, result_count);
+				FillSwitch(vector_to_check, result, result_sel, NumericCast<sel_t>(result_count));
 			}
 			current_sel = next_sel;
 			next_sel = next_sel == &sel_a ? &sel_b : &sel_a;

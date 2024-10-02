@@ -57,10 +57,12 @@ SELECT * FROM (SELECT i, lag(i) OVER named_window FROM ( VALUES (1), (2), (3)) A
 # we cannot use named window specifications of the main query inside CTEs
 statement error
 WITH subquery AS (SELECT i, lag(i) OVER named_window FROM ( VALUES (1), (2), (3)) AS t (i)) SELECT * FROM subquery window named_window AS ( ORDER BY i);
+----
 
 # duplicate window clause name
 statement error
 select i, lag(i) over named_window from (values (1), (2), (3)) as t (i) window named_window as (order by i), named_window as (order by j);
+----
 
 # window specs are locally scoped.
 statement ok

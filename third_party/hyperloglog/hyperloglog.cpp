@@ -1247,41 +1247,24 @@ uint64_t get_size() {
 	return HLL_DENSE_SIZE;
 }
 
+uint64_t num_registers() {
+	return HLL_REGISTERS;
 }
 
-namespace duckdb {
-
-static inline int AddToLog(void *log, const uint64_t &index, const uint8_t &count) {
-	auto o = (duckdb_hll::robj *)log;
-	duckdb_hll::hllhdr *hdr = (duckdb_hll::hllhdr *)o->ptr;
-	D_ASSERT(hdr->encoding == HLL_DENSE);
-	return duckdb_hll::hllDenseSet(hdr->registers + 1, index, count);
+uint8_t maximum_zeros() {
+	return HLL_Q;
 }
 
-void AddToLogsInternal(UnifiedVectorFormat &vdata, idx_t count, uint64_t indices[], uint8_t counts[], void ***logs[],
-                       const SelectionVector *log_sel) {
-	// 'logs' is an array of pointers to AggregateStates
-	// AggregateStates have a pointer to a HyperLogLog object
-	// HyperLogLog objects have a pointer to a 'robj', which we need
-	for (idx_t i = 0; i < count; i++) {
-		auto log = logs[log_sel->get_index(i)];
-		if (log && vdata.validity.RowIsValid(vdata.sel->get_index(i))) {
-			AddToLog(**log, indices[i], counts[i]);
-		}
-	}
+uint8_t get_register(robj *o, size_t index) {
+	struct hllhdr *hdr = (struct hllhdr *) o->ptr;
+	uint8_t result;
+	HLL_DENSE_GET_REGISTER(result, hdr->registers + 1, index);
+	return result;
 }
 
-void AddToSingleLogInternal(UnifiedVectorFormat &vdata, idx_t count, uint64_t indices[], uint8_t counts[], void *log) {
-	const auto o = (duckdb_hll::robj *)log;
-	duckdb_hll::hllhdr *hdr = (duckdb_hll::hllhdr *)o->ptr;
-	D_ASSERT(hdr->encoding == HLL_DENSE);
-
-	const auto registers = hdr->registers + 1;
-	for (idx_t i = 0; i < count; i++) {
-		if (vdata.validity.RowIsValid(vdata.sel->get_index(i))) {
-			duckdb_hll::hllDenseSet(registers, indices[i], counts[i]);
-		}
-	}
+void set_register(robj *o, size_t index, uint8_t count) {
+	struct hllhdr *hdr = (struct hllhdr *) o->ptr;
+	HLL_DENSE_SET_REGISTER(hdr->registers + 1, index, count);
 }
 
-} // namespace duckdb
+}

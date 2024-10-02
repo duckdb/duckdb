@@ -68,10 +68,12 @@ a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
 # braces need to match
 statement error
 SELECT uuid '{a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+----
 
 # char length should be 32
 statement error
 SELECT uuid '47183823-2574-4bfd-b411-99ed177d3e4';
+----
 
 query I
 SELECT u FROM uuid ORDER BY u;
@@ -241,35 +243,46 @@ SELECT COUNT(*) FROM uuid_generated u1, uuid_generated u2 WHERE u1.uuid::UUID = 
 
 statement error
 SELECT SUM(u) FROM uuid
+----
 
 statement error
 SELECT AVG(u) FROM uuid
+----
 
 statement error
 SELECT u+u FROM uuid
+----
 
 statement error
 SELECT u*u FROM uuid
+----
 
 statement error
 SELECT u/u FROM uuid
+----
 
 statement error
 SELECT u%u FROM uuid
+----
 
 statement error
 SELECT u-u FROM uuid
+----
 
 statement error
 SELECT 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid::hugeint;
+----
 
 statement error
 SELECT ''::uuid
+----
 
 statement error
 SELECT 'aaaa'::uuid
+----
 
 statement error
 SELECT 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380Z11'::uuid
+----
 
 

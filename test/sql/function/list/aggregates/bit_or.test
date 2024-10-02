@@ -47,3 +47,4 @@ NULL	1	NULL
 # incorrect usage
 statement error
 SELECT list_bit_or()
+----

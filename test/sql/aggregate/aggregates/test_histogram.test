@@ -124,9 +124,11 @@ select g,histogram(g) over (partition by g%2)
 #Corner cases
 statement error
 select histogram()
+----
 
 statement error
 select histogram(*)
+----
 
 # enums
 statement ok
@@ -141,4 +143,4 @@ INSERT INTO enums VALUES ('happy'), ('ok')
 query I
 SELECT histogram(e) FROM enums
 ----
-{happy=1, ok=1}
+{ok=1, happy=1}

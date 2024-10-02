@@ -9,6 +9,7 @@ using Filter = FilterPushdown::Filter;
 unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalOperator> op,
                                                              unordered_set<idx_t> &left_bindings,
                                                              unordered_set<idx_t> &right_bindings) {
+	auto op_bindings = op->GetColumnBindings();
 	auto &join = op->Cast<LogicalJoin>();
 	auto &comp_join = op->Cast<LogicalComparisonJoin>();
 	D_ASSERT(join.join_type == JoinType::MARK);
@@ -16,7 +17,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 	         op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN || op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN);
 
 	right_bindings.insert(comp_join.mark_index);
-	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
+	FilterPushdown left_pushdown(optimizer, convert_mark_joins), right_pushdown(optimizer, convert_mark_joins);
 #ifdef DEBUG
 	bool simplified_mark_join = false;
 #endif
@@ -27,7 +28,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 			// bindings match left side: push into left
 			left_pushdown.filters.push_back(std::move(filters[i]));
 			// erase the filter from the list of filters
-			filters.erase(filters.begin() + i);
+			filters.erase_at(i);
 			i--;
 		} else if (side == JoinSide::RIGHT) {
 #ifdef DEBUG
@@ -35,13 +36,14 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 #endif
 			// this filter references the marker
 			// we can turn this into a SEMI join if the filter is on only the marker
-			if (filters[i]->filter->type == ExpressionType::BOUND_COLUMN_REF) {
+			if (filters[i]->filter->type == ExpressionType::BOUND_COLUMN_REF && convert_mark_joins &&
+			    comp_join.convert_mark_to_semi) {
 				// filter just references the marker: turn into semi join
 #ifdef DEBUG
 				simplified_mark_join = true;
 #endif
 				join.join_type = JoinType::SEMI;
-				filters.erase(filters.begin() + i);
+				filters.erase_at(i);
 				i--;
 				continue;
 			}
@@ -61,13 +63,13 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 							break;
 						}
 					}
-					if (all_null_values_are_equal) {
+					if (all_null_values_are_equal && convert_mark_joins && comp_join.convert_mark_to_semi) {
 #ifdef DEBUG
 						simplified_mark_join = true;
 #endif
 						// all null values are equal, convert to ANTI join
 						join.join_type = JoinType::ANTI;
-						filters.erase(filters.begin() + i);
+						filters.erase_at(i);
 						i--;
 						continue;
 					}

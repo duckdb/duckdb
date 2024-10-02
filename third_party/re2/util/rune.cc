@@ -51,7 +51,7 @@ int
 chartorune(Rune *rune, const char *str)
 {
 	int c, c1, c2, c3;
-	long l;
+	Rune l;
 
 	/*
 	 * one character sequence
@@ -127,7 +127,7 @@ int
 runetochar(char *str, const Rune *rune)
 {
 	/* Runes are signed, so convert to unsigned for range check. */
-	unsigned long c;
+	unsigned int c;
 
 	/*
 	 * one character sequence
@@ -212,7 +212,7 @@ int
 utflen(const char *s)
 {
 	int c;
-	long n;
+	int n;
 	Rune rune;
 
 	n = 0;
@@ -232,7 +232,7 @@ utflen(const char *s)
 char*
 utfrune(const char *s, Rune c)
 {
-	long c1;
+	int c1;
 	Rune r;
 	int n;
 
@@ -257,4 +257,4 @@ utfrune(const char *s, Rune c)
 	return 0;
 }
 
-}  // namespace duckdb_re2
+}  // namespace re2

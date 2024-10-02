@@ -15,7 +15,7 @@ statement error
 insert into union_tbl VALUES
 	({tag: '0', a: true, b: null, c: null})
 ----
-Conversion Error: Type STRUCT(tag VARCHAR, a BOOLEAN, b NULL, c NULL)
+Conversion Error: Type STRUCT(tag VARCHAR, a BOOLEAN, b "NULL", c "NULL")
 
 
 # field names have to match
@@ -53,7 +53,7 @@ statement ok
 INSERT INTO struct_tbl VALUES
 	(ROW(0, True, NULL, NULL)),
 	(ROW(1, NULL, 23423, NULL)),
-	(ROW(0, True, NULL, NULL))
+    (ROW(0, True, NULL, NULL))
 
 # Verify case-insensitive
 statement ok

@@ -69,6 +69,7 @@ PRAGMA table_info('test.v1')
 
 statement error
 PRAGMA table_info('nonexistant_table');
+----
 
 # handle constraints + default values
 statement ok
@@ -95,3 +96,16 @@ PRAGMA table_info(tconstraint2)
 # incorrect number of parameters
 statement error
 PRAGMA table_info(1,2,3);
+----
+
+statement ok
+create table t1 (
+	c1 int,
+	c2 int generated always as (c1 + 1)
+);
+
+query IIIIII
+SELECT * FROM pragma_table_info(t1);
+----
+0	c1	INTEGER	false	NULL	false
+1	c2	INTEGER	false	CAST((c1 + 1) AS INTEGER)	false

@@ -5,11 +5,6 @@
 statement ok
 PRAGMA enable_verification
 
-loop thr 1 8
-
-statement ok
-pragma threads=${thr}
-
 query IIII
 select
     field1,
@@ -21,7 +16,8 @@ from read_csv('data/csv/hebere.csv.gz',
         header=0,
         columns={field1: varchar, field2: varchar, datum: varchar},
         compression='gzip',
-        ignore_errors=0)
+        ignore_errors=0,
+        auto_detect = false)
 group by field1, field2
 order by all
 limit 10;
@@ -36,5 +32,3 @@ limit 10;
 1190535873	1367352239003155038208	2020-12-31	2020-12-31
 1190535873	1367352239003188592640	2020-12-31	2020-12-31
 1190535873	1367352239003242856448	2020-12-31	2020-12-31
-
-endloop

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/function/scalar/strftime.hpp
+// duckdb/function/scalar/strftime_format.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -53,7 +53,13 @@ enum class StrTimeSpecifier : uint8_t {
 	    29, // %c - Locale’s appropriate date and time representation. (Mon Sep 30 07:06:05 2013)
 	LOCALE_APPROPRIATE_DATE = 30, // %x - Locale’s appropriate date representation. (09/30/13)
 	LOCALE_APPROPRIATE_TIME = 31, // %X - Locale’s appropriate time representation. (07:06:05)
-	NANOSECOND_PADDED = 32 // %n - Nanosecond as a decimal number, zero-padded on the left. (000000000 - 999999999)
+	NANOSECOND_PADDED = 32, // %n - Nanosecond as a decimal number, zero-padded on the left. (000000000 - 999999999)
+	// Python 3.6 ISO directives https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes
+	YEAR_ISO =
+	    33, // %G - ISO 8601 year with century representing the year that contains the greater part of the ISO week
+	WEEKDAY_ISO = 34,     // %u - ISO 8601 weekday as a decimal number where 1 is Monday (1..7)
+	WEEK_NUMBER_ISO = 35, // %V - ISO 8601 week as a decimal number with Monday as the first day of the week.
+	                      // Week 01 is the week containing Jan 4. (01..53)
 };
 
 struct StrTimeFormat {
@@ -66,6 +72,8 @@ public:
 	inline bool HasFormatSpecifier(StrTimeSpecifier s) const {
 		return std::find(specifiers.begin(), specifiers.end(), s) != specifiers.end();
 	}
+	//! If the string format is empty
+	DUCKDB_API bool Empty() const;
 
 	//! The full format specifier, for error messages
 	string format_specifier;
@@ -87,9 +95,10 @@ protected:
 	DUCKDB_API virtual void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier);
 };
 
-struct StrfTimeFormat : public StrTimeFormat {
+struct StrfTimeFormat : public StrTimeFormat { // NOLINT: work-around bug in clang-tidy
 	DUCKDB_API idx_t GetLength(date_t date, dtime_t time, int32_t utc_offset, const char *tz_name);
 
+	DUCKDB_API void FormatStringNS(date_t date, int32_t data[8], const char *tz_name, char *target) const;
 	DUCKDB_API void FormatString(date_t date, int32_t data[8], const char *tz_name, char *target);
 	void FormatString(date_t date, dtime_t time, char *target);
 
@@ -97,6 +106,7 @@ struct StrfTimeFormat : public StrTimeFormat {
 
 	DUCKDB_API void ConvertDateVector(Vector &input, Vector &result, idx_t count);
 	DUCKDB_API void ConvertTimestampVector(Vector &input, Vector &result, idx_t count);
+	DUCKDB_API void ConvertTimestampNSVector(Vector &input, Vector &result, idx_t count);
 
 protected:
 	//! The variable-length specifiers. To determine total string size, these need to be checked.
@@ -107,55 +117,77 @@ protected:
 
 protected:
 	DUCKDB_API void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) override;
-	static idx_t GetSpecifierLength(StrTimeSpecifier specifier, date_t date, dtime_t time, int32_t utc_offset,
-	                                const char *tz_name);
-	char *WriteString(char *target, const string_t &str);
-	char *Write2(char *target, uint8_t value);
-	char *WritePadded2(char *target, uint32_t value);
-	char *WritePadded3(char *target, uint32_t value);
-	char *WritePadded(char *target, uint32_t value, size_t padding);
+	static idx_t GetSpecifierLength(StrTimeSpecifier specifier, date_t date, int32_t data[8], const char *tz_name);
+	idx_t GetLength(date_t date, int32_t data[8], const char *tz_name) const;
+
+	string_t ConvertTimestampValue(const timestamp_t &input, Vector &result) const;
+	string_t ConvertTimestampValue(const timestamp_ns_t &input, Vector &result) const;
+
+	char *WriteString(char *target, const string_t &str) const;
+	char *Write2(char *target, uint8_t value) const;
+	char *WritePadded2(char *target, uint32_t value) const;
+	char *WritePadded3(char *target, uint32_t value) const;
+	char *WritePadded(char *target, uint32_t value, size_t padding) const;
 	bool IsDateSpecifier(StrTimeSpecifier specifier);
-	char *WriteDateSpecifier(StrTimeSpecifier specifier, date_t date, char *target);
+	char *WriteDateSpecifier(StrTimeSpecifier specifier, date_t date, char *target) const;
 	char *WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t data[], const char *tz_name, size_t tz_len,
-	                             char *target);
+	                             char *target) const;
 };
 
-struct StrpTimeFormat : public StrTimeFormat {
+struct StrpTimeFormat : public StrTimeFormat { // NOLINT: work-around bug in clang-tidy
 public:
 	StrpTimeFormat();
 
 	//! Type-safe parsing argument
 	struct ParseResult {
-		int32_t data[8]; // year, month, day, hour, min, sec, µs, offset
+		int32_t data[8]; // year, month, day, hour, min, sec, ns, offset
 		string tz;
 		string error_message;
-		idx_t error_position = DConstants::INVALID_INDEX;
+		optional_idx error_position;
+
+		bool is_special;
+		date_t special;
+
+		int32_t GetMicros() const;
 
 		date_t ToDate();
+		dtime_t ToTime();
+		int64_t ToTimeNS();
 		timestamp_t ToTimestamp();
+		timestamp_ns_t ToTimestampNS();
 
 		bool TryToDate(date_t &result);
+		bool TryToTime(dtime_t &result);
 		bool TryToTimestamp(timestamp_t &result);
+		bool TryToTimestampNS(timestamp_ns_t &result);
 
 		DUCKDB_API string FormatError(string_t input, const string &format_specifier);
 	};
 
 public:
+	bool operator!=(const StrpTimeFormat &other) const {
+		return format_specifier != other.format_specifier;
+	}
 	DUCKDB_API static ParseResult Parse(const string &format, const string &text);
 
-	DUCKDB_API bool Parse(string_t str, ParseResult &result) const;
+	DUCKDB_API bool Parse(string_t str, ParseResult &result, bool strict = false) const;
+
+	DUCKDB_API bool Parse(const char *data, size_t size, ParseResult &result, bool strict = false) const;
+
+	DUCKDB_API bool TryParseDate(const char *data, size_t size, date_t &result) const;
+	DUCKDB_API bool TryParseTimestamp(const char *data, size_t size, timestamp_t &result) const;
+	DUCKDB_API bool TryParseTimestampNS(const char *data, size_t size, timestamp_ns_t &result) const;
 
 	DUCKDB_API bool TryParseDate(string_t str, date_t &result, string &error_message) const;
+	DUCKDB_API bool TryParseTime(string_t str, dtime_t &result, string &error_message) const;
 	DUCKDB_API bool TryParseTimestamp(string_t str, timestamp_t &result, string &error_message) const;
-
-	date_t ParseDate(string_t str);
-	timestamp_t ParseTimestamp(string_t str);
+	DUCKDB_API bool TryParseTimestampNS(string_t str, timestamp_ns_t &result, string &error_message) const;
 
 	void Serialize(Serializer &serializer) const;
 	static StrpTimeFormat Deserialize(Deserializer &deserializer);
 
 protected:
-	static string FormatStrpTimeError(const string &input, idx_t position);
+	static string FormatStrpTimeError(const string &input, optional_idx position);
 	DUCKDB_API void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) override;
 	int NumericSpecifierWidth(StrTimeSpecifier specifier);
 	int32_t TryParseCollection(const char *data, idx_t &pos, idx_t size, const string_t collection[],

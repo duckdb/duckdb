@@ -1,4 +1,5 @@
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/bit.hpp"
@@ -8,7 +9,7 @@ namespace duckdb {
 
 // **** helper functions ****
 static char ComputePadding(idx_t len) {
-	return (8 - (len % 8)) % 8;
+	return UnsafeNumericCast<char>((8 - (len % 8)) % 8);
 }
 
 idx_t Bit::ComputeBitstringLen(idx_t len) {
@@ -50,6 +51,7 @@ void Bit::Finalize(string_t &str) {
 	for (idx_t i = 0; i < idx_t(padding); i++) {
 		Bit::SetBitInternal(str, i, 1);
 	}
+	str.Finalize();
 	Bit::Verify(str);
 }
 
@@ -87,7 +89,7 @@ void Bit::ToString(string_t bits, char *output) {
 
 string Bit::ToString(string_t str) {
 	auto len = BitLength(str);
-	auto buffer = make_unsafe_uniq_array<char>(len);
+	auto buffer = make_unsafe_uniq_array_uninitialized<char>(len);
 	ToString(str, buffer.get());
 	return string(buffer.get(), len);
 }
@@ -129,7 +131,7 @@ void Bit::ToBit(string_t str, string_t &output_str) {
 		}
 	}
 	if (padded_byte != 0) {
-		*(output++) = (8 - padded_byte); // the first byte contains the number of padded zeroes
+		*(output++) = UnsafeNumericCast<char>((8 - padded_byte)); // the first byte contains the number of padded zeroes
 	}
 	*(output++) = byte;
 
@@ -144,13 +146,12 @@ void Bit::ToBit(string_t str, string_t &output_str) {
 		*(output++) = byte;
 	}
 	Bit::Finalize(output_str);
-	Bit::Verify(output_str);
 }
 
 string Bit::ToBit(string_t str) {
 	auto bit_len = GetBitSize(str);
-	auto buffer = make_unsafe_uniq_array<char>(bit_len);
-	string_t output_str(buffer.get(), bit_len);
+	auto buffer = make_unsafe_uniq_array_uninitialized<char>(bit_len);
+	string_t output_str(buffer.get(), UnsafeNumericCast<uint32_t>(bit_len));
 	Bit::ToBit(str, output_str);
 	return output_str.GetString();
 }
@@ -165,8 +166,8 @@ void Bit::BlobToBit(string_t blob, string_t &output_str) {
 }
 
 string Bit::BlobToBit(string_t blob) {
-	auto buffer = make_unsafe_uniq_array<char>(blob.GetSize() + 1);
-	string_t output_str(buffer.get(), blob.GetSize() + 1);
+	auto buffer = make_unsafe_uniq_array_uninitialized<char>(blob.GetSize() + 1);
+	string_t output_str(buffer.get(), UnsafeNumericCast<uint32_t>(blob.GetSize() + 1));
 	Bit::BlobToBit(blob, output_str);
 	return output_str.GetString();
 }
@@ -178,8 +179,8 @@ void Bit::BitToBlob(string_t bit, string_t &output_blob) {
 	auto output = output_blob.GetDataWriteable();
 	idx_t size = output_blob.GetSize();
 
-	output[0] = GetFirstByte(bit);
-	if (size > 2) {
+	output[0] = UnsafeNumericCast<char>(GetFirstByte(bit));
+	if (size >= 2) {
 		++output;
 		// First byte in bitstring contains amount of padded bits,
 		// second byte in bitstring is the padded byte,
@@ -191,8 +192,8 @@ void Bit::BitToBlob(string_t bit, string_t &output_blob) {
 string Bit::BitToBlob(string_t bit) {
 	D_ASSERT(bit.GetSize() > 1);
 
-	auto buffer = make_unsafe_uniq_array<char>(bit.GetSize() - 1);
-	string_t output_str(buffer.get(), bit.GetSize() - 1);
+	auto buffer = make_unsafe_uniq_array_uninitialized<char>(bit.GetSize() - 1);
+	string_t output_str(buffer.get(), UnsafeNumericCast<uint32_t>(bit.GetSize() - 1));
 	Bit::BitToBlob(bit, output_str);
 	return output_str.GetString();
 }
@@ -280,20 +281,21 @@ idx_t Bit::GetBitInternal(string_t bit_string, idx_t n) {
 	const char *buf = bit_string.GetData();
 	auto idx = Bit::GetBitIndex(n);
 	D_ASSERT(idx < bit_string.GetSize());
-	char byte = buf[idx] >> (7 - (n % 8));
+	auto byte = buf[idx] >> (7 - (n % 8));
 	return (byte & 1 ? 1 : 0);
 }
 
 void Bit::SetBit(string_t &bit_string, idx_t n, idx_t new_value) {
 	SetBitInternal(bit_string, n + GetBitPadding(bit_string), new_value);
+	Bit::Finalize(bit_string);
 }
 
 void Bit::SetBitInternal(string_t &bit_string, idx_t n, idx_t new_value) {
-	char *buf = bit_string.GetDataWriteable();
+	uint8_t *buf = reinterpret_cast<uint8_t *>(bit_string.GetDataWriteable());
 
 	auto idx = Bit::GetBitIndex(n);
 	D_ASSERT(idx < bit_string.GetSize());
-	char shift_byte = 1 << (7 - (n % 8));
+	auto shift_byte = UnsafeNumericCast<uint8_t>(1 << (7 - (n % 8)));
 	if (new_value == 0) {
 		shift_byte = ~shift_byte;
 		buf[idx] &= shift_byte;
@@ -304,8 +306,9 @@ void Bit::SetBitInternal(string_t &bit_string, idx_t n, idx_t new_value) {
 
 // **** BITWISE operators ****
 void Bit::RightShift(const string_t &bit_string, const idx_t &shift, string_t &result) {
-	char *res_buf = result.GetDataWriteable();
-	const char *buf = bit_string.GetData();
+	uint8_t *res_buf = reinterpret_cast<uint8_t *>(result.GetDataWriteable());
+	const uint8_t *buf = reinterpret_cast<const uint8_t *>(bit_string.GetData());
+
 	res_buf[0] = buf[0];
 	for (idx_t i = 0; i < Bit::BitLength(result); i++) {
 		if (i < shift) {
@@ -319,8 +322,9 @@ void Bit::RightShift(const string_t &bit_string, const idx_t &shift, string_t &r
 }
 
 void Bit::LeftShift(const string_t &bit_string, const idx_t &shift, string_t &result) {
-	char *res_buf = result.GetDataWriteable();
-	const char *buf = bit_string.GetData();
+	uint8_t *res_buf = reinterpret_cast<uint8_t *>(result.GetDataWriteable());
+	const uint8_t *buf = reinterpret_cast<const uint8_t *>(bit_string.GetData());
+
 	res_buf[0] = buf[0];
 	for (idx_t i = 0; i < Bit::BitLength(bit_string); i++) {
 		if (i < (Bit::BitLength(bit_string) - shift)) {
@@ -331,7 +335,6 @@ void Bit::LeftShift(const string_t &bit_string, const idx_t &shift, string_t &re
 		}
 	}
 	Bit::Finalize(result);
-	Bit::Verify(result);
 }
 
 void Bit::BitwiseAnd(const string_t &rhs, const string_t &lhs, string_t &result) {
@@ -339,16 +342,15 @@ void Bit::BitwiseAnd(const string_t &rhs, const string_t &lhs, string_t &result)
 		throw InvalidInputException("Cannot AND bit strings of different sizes");
 	}
 
-	char *buf = result.GetDataWriteable();
-	const char *r_buf = rhs.GetData();
-	const char *l_buf = lhs.GetData();
+	uint8_t *buf = reinterpret_cast<uint8_t *>(result.GetDataWriteable());
+	const uint8_t *r_buf = reinterpret_cast<const uint8_t *>(rhs.GetData());
+	const uint8_t *l_buf = reinterpret_cast<const uint8_t *>(lhs.GetData());
 
 	buf[0] = l_buf[0];
 	for (idx_t i = 1; i < lhs.GetSize(); i++) {
 		buf[i] = l_buf[i] & r_buf[i];
 	}
-	// and should preserve padding bits
-	Bit::Verify(result);
+	Bit::Finalize(result);
 }
 
 void Bit::BitwiseOr(const string_t &rhs, const string_t &lhs, string_t &result) {
@@ -356,16 +358,15 @@ void Bit::BitwiseOr(const string_t &rhs, const string_t &lhs, string_t &result) 
 		throw InvalidInputException("Cannot OR bit strings of different sizes");
 	}
 
-	char *buf = result.GetDataWriteable();
-	const char *r_buf = rhs.GetData();
-	const char *l_buf = lhs.GetData();
+	uint8_t *buf = reinterpret_cast<uint8_t *>(result.GetDataWriteable());
+	const uint8_t *r_buf = reinterpret_cast<const uint8_t *>(rhs.GetData());
+	const uint8_t *l_buf = reinterpret_cast<const uint8_t *>(lhs.GetData());
 
 	buf[0] = l_buf[0];
 	for (idx_t i = 1; i < lhs.GetSize(); i++) {
 		buf[i] = l_buf[i] | r_buf[i];
 	}
-	// or should preserve padding bits
-	Bit::Verify(result);
+	Bit::Finalize(result);
 }
 
 void Bit::BitwiseXor(const string_t &rhs, const string_t &lhs, string_t &result) {
@@ -373,9 +374,9 @@ void Bit::BitwiseXor(const string_t &rhs, const string_t &lhs, string_t &result)
 		throw InvalidInputException("Cannot XOR bit strings of different sizes");
 	}
 
-	char *buf = result.GetDataWriteable();
-	const char *r_buf = rhs.GetData();
-	const char *l_buf = lhs.GetData();
+	uint8_t *buf = reinterpret_cast<uint8_t *>(result.GetDataWriteable());
+	const uint8_t *r_buf = reinterpret_cast<const uint8_t *>(rhs.GetData());
+	const uint8_t *l_buf = reinterpret_cast<const uint8_t *>(lhs.GetData());
 
 	buf[0] = l_buf[0];
 	for (idx_t i = 1; i < lhs.GetSize(); i++) {
@@ -385,8 +386,8 @@ void Bit::BitwiseXor(const string_t &rhs, const string_t &lhs, string_t &result)
 }
 
 void Bit::BitwiseNot(const string_t &input, string_t &result) {
-	char *result_buf = result.GetDataWriteable();
-	const char *buf = input.GetData();
+	uint8_t *result_buf = reinterpret_cast<uint8_t *>(result.GetDataWriteable());
+	const uint8_t *buf = reinterpret_cast<const uint8_t *>(input.GetData());
 
 	result_buf[0] = buf[0];
 	for (idx_t i = 1; i < input.GetSize(); i++) {
@@ -402,6 +403,8 @@ void Bit::Verify(const string_t &input) {
 	for (idx_t i = 0; i < padding; i++) {
 		D_ASSERT(Bit::GetBitInternal(input, i));
 	}
+	// verify bit respects the "normal" string_t rules (i.e. null padding for inlined strings, prefix matches)
+	input.VerifyCharacters();
 #endif
 }
 

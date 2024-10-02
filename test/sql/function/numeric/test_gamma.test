@@ -12,6 +12,7 @@ NULL
 
 statement error
 SELECT gamma(0)
+----
 
 query I
 SELECT gamma(-1)
@@ -51,6 +52,7 @@ SELECT gamma(2::hugeint)
 
 statement error
 SELECT gamma('asdf')
+----
 
 query I
 SELECT lgamma(NULL)
@@ -59,6 +61,7 @@ NULL
 
 statement error
 SELECT lgamma(0)
+----
 
 query I
 SELECT lgamma(-1)
@@ -103,3 +106,4 @@ SELECT lgamma(2::hugeint)
 
 statement error
 SELECT lgamma('asdf')
+----

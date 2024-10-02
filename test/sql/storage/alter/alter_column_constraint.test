@@ -17,11 +17,13 @@ ALTER TABLE a ADD COLUMN c REAL;
 
 statement error
 INSERT INTO a(id) VALUES (1);
+----
 
 restart
 
 statement error
 INSERT INTO a(id) VALUES (1);
+----
 
 # add default
 statement ok
@@ -29,11 +31,13 @@ ALTER TABLE a ALTER COLUMN c SET DEFAULT 10;
 
 statement error
 INSERT INTO a(id) VALUES (1);
+----
 
 restart
 
 statement error
 INSERT INTO a(id) VALUES (1);
+----
 
 # rename column
 statement ok
@@ -41,11 +45,13 @@ ALTER TABLE a RENAME c TO d;
 
 statement error
 INSERT INTO a(id) VALUES (1);
+----
 
 restart
 
 statement error
 INSERT INTO a(id) VALUES (1);
+----
 
 # rename table
 statement ok
@@ -53,11 +59,13 @@ ALTER TABLE a RENAME TO b;
 
 statement error
 INSERT INTO b(id) VALUES (1);
+----
 
 restart
 
 statement error
 INSERT INTO b(id) VALUES (1);
+----
 
 # drop column
 statement ok
@@ -65,11 +73,13 @@ ALTER TABLE b DROP d;
 
 statement error
 INSERT INTO b(id) VALUES (1);
+----
 
 restart
 
 statement error
 INSERT INTO b(id) VALUES (1);
+----
 
 statement ok
 INSERT INTO b(id) VALUES (2);

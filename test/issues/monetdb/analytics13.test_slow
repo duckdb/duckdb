@@ -21,6 +21,7 @@ statement error
 SELECT
     (SELECT GROUPING(colID) FROM tbl_ProductSales)
 FROM another_T t1
+----
 
 query I rowsort
 SELECT

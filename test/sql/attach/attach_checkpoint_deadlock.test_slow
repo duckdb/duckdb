@@ -1,0 +1,40 @@
+# name: test/sql/attach/attach_checkpoint_deadlock.test_slow
+# description: Deadlock when checkpointing multiple databases
+# group: [attach]
+
+require noforcestorage
+
+require skip_reload
+
+concurrentforeach dbname foo bar i1 i2 i3 i4 i5 i6 i7 i8 i9
+
+statement ok
+attach '__TEST_DIR__/checkpoint_${dbname}.duckdb' as ${dbname}
+
+statement ok
+create table ${dbname}.${dbname}(foo bigint)
+
+statement ok
+insert into ${dbname}.${dbname} select sum(i) from range(1000000) t(i)
+
+statement maybe
+checkpoint ${dbname}
+----
+there are other write transactions
+
+statement ok
+select
+    coalesce(t.table_catalog, current_database()) as "database",
+    t.table_schema as "schema",
+    t.table_name as "name",
+    t.table_type as "type",
+    array_agg(c.column_name order by c.ordinal_position) as "column_names",
+    array_agg(c.data_type order by c.ordinal_position) as "column_types",
+    array_agg(c.is_nullable = 'YES' order by c.ordinal_position) as "column_nullable"
+from information_schema.tables t
+join information_schema.columns c on t.table_schema = c.table_schema and t.table_name = c.table_name
+where t.table_schema = 'main'
+group by 1, 2, 3, 4
+order by 1, 2, 3, 4
+
+endloop

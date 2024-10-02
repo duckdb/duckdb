@@ -3,16 +3,19 @@
 # group: [csv]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE dates (d DATE);
 
 # base date format does not work here
 statement error
-COPY dates FROM 'test/sql/copy/csv/data/test/dateformat.csv' (AUTO_DETECT 0, HEADER 0)
+COPY dates FROM 'data/csv/test/dateformat.csv' (AUTO_DETECT 0, HEADER 0)
 ----
-line 1
+Line: 1
 
 statement ok
-COPY dates FROM 'test/sql/copy/csv/data/test/dateformat.csv' (HEADER 0, DATEFORMAT '%d/%m/%Y')
+COPY dates FROM 'data/csv/test/dateformat.csv' (HEADER 0, DATEFORMAT '%d/%m/%Y')
 
 query I
 SELECT * FROM dates
@@ -21,7 +24,7 @@ SELECT * FROM dates
 
 # if we reverse the date format, we get a different result
 statement ok
-COPY dates FROM 'test/sql/copy/csv/data/test/dateformat.csv' (HEADER 0, DATEFORMAT '%m/%d/%Y')
+COPY dates FROM 'data/csv/test/dateformat.csv' (HEADER 0, DATEFORMAT '%m/%d/%Y')
 
 query I
 SELECT * FROM dates ORDER BY d
@@ -51,7 +54,7 @@ CREATE TABLE timestamps(t TIMESTAMP);
 
 # timestamp format
 statement ok
-COPY timestamps FROM 'test/sql/copy/csv/data/test/timestampformat.csv' (HEADER 0, DELIMITER '|', TIMESTAMPFORMAT '%a %d, %B %Y, %I:%M:%S %p')
+COPY timestamps FROM 'data/csv/test/timestampformat.csv' (HEADER 0, DELIMITER '|', TIMESTAMPFORMAT '%a %d, %B %Y, %I:%M:%S %p')
 
 query I
 SELECT * FROM timestamps
@@ -90,7 +93,20 @@ SELECT * FROM new_timestamps ORDER BY 1
 
 # incorrect date/timestamp format results in an error
 statement error
-COPY dates FROM 'test/sql/copy/csv/data/test/dateformat.csv' (HEADER 0, DATEFORMAT '%')
+COPY dates FROM 'data/csv/test/dateformat.csv' (HEADER 0, DATEFORMAT '%')
+----
+Could not parse DATEFORMAT: Trailing format character %
 
 statement error
-COPY timestamps FROM 'test/sql/copy/csv/data/test/timestampformat.csv' (HEADER 0, DELIMITER '|', TIMESTAMPFORMAT '%')
+COPY timestamps FROM 'data/csv/test/timestampformat.csv' (HEADER 0, DELIMITER '|', TIMESTAMPFORMAT '%')
+----
+
+query I
+select columns FROM sniff_csv('data/csv/dateformat/working.csv',  header=true,dateformat='%d-%b-%Y');
+----
+[{'name': ACCESSION_NUMBER, 'type': VARCHAR}, {'name': FILING_DATE, 'type': DATE}]
+
+query I
+select columns FROM sniff_csv('data/csv/dateformat/not_working.csv',  header=true,dateformat='%d-%b-%Y');
+----
+[{'name': ACCESSION_NUMBER, 'type': VARCHAR}, {'name': FILING_DATE, 'type': DATE}]

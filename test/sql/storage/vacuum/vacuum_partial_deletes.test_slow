@@ -1,0 +1,45 @@
+# name: test/sql/storage/vacuum/vacuum_partial_deletes.test_slow
+# description: Verify that deletes get vacuumed correctly through merging of adjacent row groups
+# group: [vacuum]
+
+load __TEST_DIR__/vacuum_partial_deletes.db
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers SELECT * FROM range(1000000);
+
+statement ok
+SET max_vacuum_tasks=99
+
+query I
+SELECT SUM(i) FROM integers WHERE i%2<>0
+----
+250000000000
+
+statement ok
+CHECKPOINT
+
+# 1M rows, 128K each is around ~9 row groups
+query I
+SELECT COUNT(DISTINCT row_group_id) > 6 AND COUNT(DISTINCT row_group_id) <= 10 FROM pragma_storage_info('integers')
+----
+true
+
+statement ok
+DELETE FROM integers WHERE i%2=0
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT SUM(i) FROM integers
+----
+250000000000
+
+# after deleting we have 500K rows left, which should be 4~5 row groups
+query I
+SELECT COUNT(DISTINCT row_group_id) > 3 AND COUNT(DISTINCT row_group_id) <= 6 FROM pragma_storage_info('integers')
+----
+true

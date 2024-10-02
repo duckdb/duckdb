@@ -11,8 +11,7 @@ static unique_ptr<FunctionData> JSONMergePatchBind(ClientContext &context, Scala
 	bound_function.arguments.reserve(arguments.size());
 	for (auto &arg : arguments) {
 		const auto &arg_type = arg->return_type;
-		if (arg_type == LogicalTypeId::SQLNULL || arg_type == LogicalType::VARCHAR ||
-		    JSONCommon::LogicalTypeIsJSON(arg_type)) {
+		if (arg_type == LogicalTypeId::SQLNULL || arg_type == LogicalType::VARCHAR || arg_type.IsJSONType()) {
 			bound_function.arguments.push_back(arg_type);
 		} else {
 			throw InvalidInputException("Arguments to json_merge_patch must be of type VARCHAR or JSON");
@@ -97,7 +96,7 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 ScalarFunctionSet JSONFunctions::GetMergePatchFunction() {
-	ScalarFunction fun("json_merge_patch", {}, JSONCommon::JSONType(), MergePatchFunction, JSONMergePatchBind, nullptr,
+	ScalarFunction fun("json_merge_patch", {}, LogicalType::JSON(), MergePatchFunction, JSONMergePatchBind, nullptr,
 	                   nullptr, JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;

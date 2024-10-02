@@ -2,15 +2,32 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/positional_reference_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 
 namespace duckdb {
+
+void RemoveOrderQualificationRecursive(unique_ptr<ParsedExpression> &expr) {
+	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
+		auto &col_ref = expr->Cast<ColumnRefExpression>();
+		auto &col_names = col_ref.column_names;
+		if (col_names.size() > 1) {
+			col_names = vector<string> {col_names.back()};
+		}
+	} else {
+		ParsedExpressionIterator::EnumerateChildren(
+		    *expr, [](unique_ptr<ParsedExpression> &child) { RemoveOrderQualificationRecursive(child); });
+	}
+}
 
 unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::PGSubLink &root) {
 	auto subquery_expr = make_uniq<SubqueryExpression>();
 
-	subquery_expr->subquery = TransformSelect(root.subselect);
+	subquery_expr->subquery = TransformSelectStmt(*root.subselect);
+	SetQueryLocation(*subquery_expr, root.location);
 	D_ASSERT(subquery_expr->subquery);
-	D_ASSERT(subquery_expr->subquery->node->GetSelectList().size() > 0);
+	D_ASSERT(!subquery_expr->subquery->node->GetSelectList().empty());
 
 	switch (root.subLinkType) {
 	case duckdb_libpgquery::PG_EXISTS_SUBLINK: {
@@ -55,19 +72,44 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 		break;
 	}
 	case duckdb_libpgquery::PG_ARRAY_SUBLINK: {
-		auto subquery_table_alias = "__subquery";
-		auto subquery_column_alias = "__arr_element";
-
 		// ARRAY expression
-		// wrap subquery into "SELECT CASE WHEN ARRAY_AGG(i) IS NULL THEN [] ELSE ARRAY_AGG(i) END FROM (...) tbl(i)"
+		// wrap subquery into
+		// "SELECT CASE WHEN ARRAY_AGG(COLUMNS(*)) IS NULL THEN [] ELSE ARRAY_AGG(COLUMNS(*)) END FROM (...) tbl"
 		auto select_node = make_uniq<SelectNode>();
 
-		// ARRAY_AGG(i)
+		// COLUMNS(*)
+		auto columns_star = make_uniq<StarExpression>();
+		columns_star->columns = true;
+
+		// ARRAY_AGG(COLUMNS(*))
 		vector<unique_ptr<ParsedExpression>> children;
-		children.push_back(
-		    make_uniq_base<ParsedExpression, ColumnRefExpression>(subquery_column_alias, subquery_table_alias));
+		children.push_back(std::move(columns_star));
 		auto aggr = make_uniq<FunctionExpression>("array_agg", std::move(children));
-		// ARRAY_AGG(i) IS NULL
+		// push ORDER BY modifiers into the array_agg
+		for (auto &modifier : subquery_expr->subquery->node->modifiers) {
+			if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
+				aggr->order_bys = unique_ptr_cast<ResultModifier, OrderModifier>(modifier->Copy());
+				break;
+			}
+		}
+		// transform constants (e.g. ORDER BY 1) into positional references (ORDER BY #1)
+		if (aggr->order_bys) {
+			for (auto &order : aggr->order_bys->orders) {
+				if (order.expression->type == ExpressionType::VALUE_CONSTANT) {
+					auto &constant_expr = order.expression->Cast<ConstantExpression>();
+					Value bigint_value;
+					string error;
+					if (constant_expr.value.DefaultTryCastAs(LogicalType::BIGINT, bigint_value, &error)) {
+						int64_t order_index = BigIntValue::Get(bigint_value);
+						idx_t positional_index = order_index < 0 ? NumericLimits<idx_t>::Maximum() : idx_t(order_index);
+						order.expression = make_uniq<PositionalReferenceExpression>(positional_index);
+					}
+				} else {
+					RemoveOrderQualificationRecursive(order.expression);
+				}
+			}
+		}
+		// ARRAY_AGG(COLUMNS(*)) IS NULL
 		auto agg_is_null = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NULL, aggr->Copy());
 		// empty list
 		vector<unique_ptr<ParsedExpression>> list_children;
@@ -82,9 +124,8 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 
 		select_node->select_list.push_back(std::move(case_expr));
 
-		// FROM (...) tbl(i)
-		auto child_subquery = make_uniq<SubqueryRef>(std::move(subquery_expr->subquery), subquery_table_alias);
-		child_subquery->column_name_alias.emplace_back(subquery_column_alias);
+		// FROM (...) tbl
+		auto child_subquery = make_uniq<SubqueryRef>(std::move(subquery_expr->subquery));
 		select_node->from_table = std::move(child_subquery);
 
 		auto new_subquery = make_uniq<SelectStatement>();
@@ -97,7 +138,6 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 	default:
 		throw NotImplementedException("Subquery of type %d not implemented\n", (int)root.subLinkType);
 	}
-	subquery_expr->query_location = root.location;
 	return std::move(subquery_expr);
 }
 

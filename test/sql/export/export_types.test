@@ -2,6 +2,12 @@
 # description: Test export of macro's
 # group: [export]
 
+<<<<<<< HEAD
+=======
+# Because of ordering issues in EXPORT DATABASE we can't IMPORT this database
+mode skip
+
+>>>>>>> upstream/main
 statement ok
 BEGIN TRANSACTION
 
@@ -47,13 +53,23 @@ statement ok
 CREATE TABLE tbl3 (my_struct doom_mood);
 
 statement ok
+<<<<<<< HEAD
 EXPORT DATABASE '__TEST_DIR__/export_macros' (FORMAT CSV);
+=======
+EXPORT DATABASE '__TEST_DIR__/export_types' (FORMAT CSV);
+>>>>>>> upstream/main
 
 statement ok
 ROLLBACK
 
 statement ok
+<<<<<<< HEAD
 IMPORT DATABASE '__TEST_DIR__/export_macros'
 
 # Verify that the database was imported properly
 
+=======
+IMPORT DATABASE '__TEST_DIR__/export_types'
+
+# Verify that the database was imported properly
+>>>>>>> upstream/main

@@ -7,7 +7,6 @@
 # different on Windows and other systems
 
 # test null or empty
-
 query I
 SELECT list_distinct(NULL)
 ----
@@ -31,21 +30,25 @@ SELECT list_distinct([]) WHERE 1 = 0
 
 statement error
 SELECT list_distinct()
+----
+No function matches
 
 statement error
 SELECT list_distinct(*)
+----
+No function matches
 
 statement error
 SELECT list_distinct([1, 2], 2)
+----
+No function matches
 
 # test incorrect parameter type
 
-foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval blob
-
 statement error
-SELECT list_distinct(NULL::${type})
-
-endloop
+SELECT list_distinct(NULL::boolean)
+----
+No function matches
 
 # other tests
 
@@ -125,7 +128,7 @@ SELECT list_distinct([NULL::VARCHAR])
 []
 
 # INTEGER types
-foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint
+foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint uhugeint
 
 query I
 SELECT list_distinct([1::${type}, NULL, 1::${type}])
@@ -258,3 +261,10 @@ query I
 SELECT list_sort(list_distinct(['a', 'b、c', 'a']))
 ----
 [a, b、c]
+
+statement ok
+CREATE TABLE all_types AS SELECT * FROM test_all_types();
+
+# list distinct is supported for all types
+statement ok
+SELECT list_distinct([COLUMNS(*)]) FROM all_types;

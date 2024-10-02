@@ -46,7 +46,7 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 		// Cant cast between arrays of different sizes
 		auto msg = StringUtil::Format("Cannot cast array of size %u to array of size %u", source_array_size,
 		                              target_array_size);
-		HandleCastError::AssignError(msg, parameters.error_message);
+		HandleCastError::AssignError(msg, parameters);
 		if (!parameters.strict) {
 			// if this was a TRY_CAST, we know every row will fail, so just return null
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -130,7 +130,7 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 
 		out_data[i] = StringVector::EmptyString(result, array_varchar_length);
 		auto dataptr = out_data[i].GetDataWriteable();
-		auto offset = 0;
+		idx_t offset = 0;
 		dataptr[offset++] = '[';
 
 		// Second pass, write the actual data
@@ -169,9 +169,7 @@ static bool ArrayToListCast(Vector &source, Vector &result, idx_t count, CastPar
 
 	// FIXME: dont flatten
 	source.Flatten(count);
-	if (count == 1) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
+
 	auto array_size = ArrayType::GetSize(source.GetType());
 	auto child_count = count * array_size;
 

@@ -1,0 +1,19 @@
+# name: benchmark/micro/lambdas/list_reduce/varchar.benchmark
+# description: list_reduce on varchars
+# group: [list_reduce]
+
+name list reduce on varchars
+group micro
+subgroup lambdas
+
+load
+CREATE TEMPORARY TABLE strings_temp AS
+    SELECT ((i * 95823983533) % 100000)::VARCHAR AS s1,
+           ((i * 547892347987) % 1000)::VARCHAR AS s2,
+            ((i * 847892347987) % 100)::VARCHAR AS s3,
+        FROM range(10000) tbl(i);
+CREATE TEMPORARY TABLE concat_strings_tmp AS SELECT 'a' || s1 || repeat(s2, s2::INT) || s2 || 'c' || s3 AS l FROM strings_temp;
+CREATE TABLE tbl AS SELECT string_split(l, '1') || string_split(l, '0') || string_split(l, '2') AS l FROM concat_strings_tmp;
+
+run
+SELECT list_reduce(l, (a, b) -> a || b) FROM tbl;

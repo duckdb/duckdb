@@ -41,7 +41,7 @@ void PathLikeProcessor::AddFile(const py::object &object) {
 		all_files.push_back(std::string(py::str(object)));
 		return;
 	}
-	if (py::isinstance(object, import_cache.pathlib().Path())) {
+	if (py::isinstance(object, import_cache.pathlib.Path())) {
 		all_files.push_back(std::string(py::str(object)));
 		return;
 	}
@@ -71,7 +71,10 @@ PathLike PathLikeProcessor::Finalize() {
 
 	// Create the dependency, which contains the logic to clean up the files in its destructor
 	auto &fs = GetFS();
-	result.dependency = make_uniq<PythonDependencies>(make_uniq<FileSystemObject>(fs, std::move(fs_files)));
+	auto dependency = make_uniq<ExternalDependency>();
+	auto dependency_item = PythonDependencyItem::Create(make_uniq<FileSystemObject>(fs, std::move(fs_files)));
+	dependency->AddDependency("file_handles", std::move(dependency_item));
+	result.dependency = std::move(dependency);
 	return result;
 }
 

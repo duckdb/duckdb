@@ -1,4 +1,5 @@
 #include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/parser/expression_map.hpp"
 
 namespace duckdb {
 
@@ -92,6 +93,96 @@ bool BoundOrderModifier::Equals(const unique_ptr<BoundOrderModifier> &left,
 	return BoundOrderModifier::Equals(*left, *right);
 }
 
+bool BoundOrderModifier::Simplify(const vector<unique_ptr<Expression>> &groups) {
+	// for each ORDER BY - check if it is actually necessary
+	// expressions that are in the groups do not need to be ORDERED BY
+	// `ORDER BY` on a group has no effect, because for each aggregate, the group is unique
+	// similarly, we only need to ORDER BY each aggregate once
+	expression_set_t seen_expressions;
+	for (auto &target : groups) {
+		seen_expressions.insert(*target);
+	}
+	vector<BoundOrderByNode> new_order_nodes;
+	for (auto &order_node : orders) {
+		if (seen_expressions.find(*order_node.expression) != seen_expressions.end()) {
+			// we do not need to order by this node
+			continue;
+		}
+		seen_expressions.insert(*order_node.expression);
+		new_order_nodes.push_back(std::move(order_node));
+	}
+	orders.swap(new_order_nodes);
+
+	return orders.empty();
+}
+
+BoundLimitNode::BoundLimitNode(LimitNodeType type, idx_t constant_integer, double constant_percentage,
+                               unique_ptr<Expression> expression_p)
+    : type(type), constant_integer(constant_integer), constant_percentage(constant_percentage),
+      expression(std::move(expression_p)) {
+}
+
+BoundLimitNode::BoundLimitNode() : type(LimitNodeType::UNSET) {
+}
+
+BoundLimitNode::BoundLimitNode(int64_t constant_value)
+    : type(LimitNodeType::CONSTANT_VALUE), constant_integer(NumericCast<idx_t>(constant_value)) {
+}
+
+BoundLimitNode::BoundLimitNode(double percentage_value)
+    : type(LimitNodeType::CONSTANT_PERCENTAGE), constant_percentage(percentage_value) {
+}
+
+BoundLimitNode::BoundLimitNode(unique_ptr<Expression> expression_p, bool is_percentage)
+    : type(is_percentage ? LimitNodeType::EXPRESSION_PERCENTAGE : LimitNodeType::EXPRESSION_VALUE),
+      expression(std::move(expression_p)) {
+}
+
+BoundLimitNode BoundLimitNode::ConstantValue(int64_t value) {
+	return BoundLimitNode(value);
+}
+
+BoundLimitNode BoundLimitNode::ConstantPercentage(double percentage) {
+	return BoundLimitNode(percentage);
+}
+
+BoundLimitNode BoundLimitNode::ExpressionValue(unique_ptr<Expression> expression) {
+	return BoundLimitNode(std::move(expression), false);
+}
+
+BoundLimitNode BoundLimitNode::ExpressionPercentage(unique_ptr<Expression> expression) {
+	return BoundLimitNode(std::move(expression), true);
+}
+
+idx_t BoundLimitNode::GetConstantValue() const {
+	if (Type() != LimitNodeType::CONSTANT_VALUE) {
+		throw InternalException("BoundLimitNode::GetConstantValue called but limit is not a constant value");
+	}
+	return constant_integer;
+}
+
+double BoundLimitNode::GetConstantPercentage() const {
+	if (Type() != LimitNodeType::CONSTANT_PERCENTAGE) {
+		throw InternalException("BoundLimitNode::GetConstantPercentage called but limit is not a constant percentage");
+	}
+	return constant_percentage;
+}
+
+const Expression &BoundLimitNode::GetValueExpression() const {
+	if (Type() != LimitNodeType::EXPRESSION_VALUE) {
+		throw InternalException("BoundLimitNode::GetValueExpression called but limit is not an expression value");
+	}
+	return *expression;
+}
+
+const Expression &BoundLimitNode::GetPercentageExpression() const {
+	if (Type() != LimitNodeType::EXPRESSION_PERCENTAGE) {
+		throw InternalException(
+		    "BoundLimitNode::GetPercentageExpression called but limit is not an expression percentage");
+	}
+	return *expression;
+}
+
 BoundLimitModifier::BoundLimitModifier() : BoundResultModifier(ResultModifierType::LIMIT_MODIFIER) {
 }
 
@@ -99,10 +190,6 @@ BoundOrderModifier::BoundOrderModifier() : BoundResultModifier(ResultModifierTyp
 }
 
 BoundDistinctModifier::BoundDistinctModifier() : BoundResultModifier(ResultModifierType::DISTINCT_MODIFIER) {
-}
-
-BoundLimitPercentModifier::BoundLimitPercentModifier()
-    : BoundResultModifier(ResultModifierType::LIMIT_PERCENT_MODIFIER) {
 }
 
 } // namespace duckdb

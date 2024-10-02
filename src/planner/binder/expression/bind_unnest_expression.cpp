@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_expanded_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
@@ -20,7 +21,7 @@ unique_ptr<Expression> CreateBoundStructExtract(ClientContext &context, unique_p
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(std::move(expr));
 	arguments.push_back(make_uniq<BoundConstantExpression>(Value(key)));
-	auto extract_function = StructExtractFun::GetFunction();
+	auto extract_function = StructExtractFun::KeyExtractFunction();
 	auto bind_info = extract_function.bind(context, extract_function, arguments);
 	auto return_type = extract_function.return_type;
 	auto result = make_uniq<BoundFunctionExpression>(return_type, std::move(extract_function), std::move(arguments),
@@ -29,22 +30,58 @@ unique_ptr<Expression> CreateBoundStructExtract(ClientContext &context, unique_p
 	return std::move(result);
 }
 
+unique_ptr<Expression> CreateBoundStructExtractIndex(ClientContext &context, unique_ptr<Expression> expr, idx_t key) {
+	vector<unique_ptr<Expression>> arguments;
+	arguments.push_back(std::move(expr));
+	arguments.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(int64_t(key))));
+	auto extract_function = StructExtractFun::IndexExtractFunction();
+	auto bind_info = extract_function.bind(context, extract_function, arguments);
+	auto return_type = extract_function.return_type;
+	auto result = make_uniq<BoundFunctionExpression>(return_type, std::move(extract_function), std::move(arguments),
+	                                                 std::move(bind_info));
+	result->alias = "element" + to_string(key);
+	return std::move(result);
+}
+
+void SelectBinder::ThrowIfUnnestInLambda(const ColumnBinding &column_binding) {
+	// Extract the unnests and check if any match the column index.
+	for (auto &node_pair : node.unnests) {
+		auto &unnest_node = node_pair.second;
+
+		if (unnest_node.index == column_binding.table_index) {
+			if (column_binding.column_index < unnest_node.expressions.size()) {
+				throw BinderException("UNNEST in lambda expressions is not supported");
+			}
+		}
+	}
+}
+
 BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, bool root_expression) {
 	// bind the children of the function expression
 	if (depth > 0) {
-		return BindResult(binder.FormatError(function, "UNNEST() for correlated expressions is not supported yet"));
+		return BindResult(BinderException(function, "UNNEST() for correlated expressions is not supported yet"));
 	}
-	string error;
+
+	ErrorData error;
 	if (function.children.empty()) {
-		return BindResult(binder.FormatError(function, "UNNEST() requires a single argument"));
+		return BindResult(BinderException(function, "UNNEST() requires a single argument"));
 	}
+	if (inside_window) {
+		return BindResult(BinderException(function, UnsupportedUnnestMessage()));
+	}
+
+	if (function.distinct || function.filter || !function.order_bys->orders.empty()) {
+		throw InvalidInputException("\"DISTINCT\", \"FILTER\", and \"ORDER BY\" are not "
+		                            "applicable to \"UNNEST\"");
+	}
+
 	idx_t max_depth = 1;
 	if (function.children.size() != 1) {
 		bool has_parameter = false;
 		bool supported_argument = false;
 		for (idx_t i = 1; i < function.children.size(); i++) {
 			if (has_parameter) {
-				return BindResult(binder.FormatError(function, "UNNEST() only supports a single additional argument"));
+				return BindResult(BinderException(function, "UNNEST() only supports a single additional argument"));
 			}
 			if (function.children[i]->HasParameter()) {
 				throw ParameterNotAllowedException("Parameter not allowed in unnest parameter");
@@ -52,10 +89,10 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 			if (!function.children[i]->IsScalar()) {
 				break;
 			}
-			auto alias = function.children[i]->alias;
+			auto alias = StringUtil::Lower(function.children[i]->alias);
 			BindChild(function.children[i], depth, error);
-			if (!error.empty()) {
-				return BindResult(error);
+			if (error.HasError()) {
+				return BindResult(std::move(error));
 			}
 			auto &const_child = BoundExpression::GetExpression(*function.children[i]);
 			auto value = ExpressionExecutor::EvaluateScalar(context, *const_child, true);
@@ -78,17 +115,18 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 			supported_argument = true;
 		}
 		if (!supported_argument) {
-			return BindResult(binder.FormatError(function, "UNNEST - unsupported extra argument, unnest only supports "
-			                                               "recursive := [true/false] or max_depth := #"));
+			return BindResult(BinderException(function, "UNNEST - unsupported extra argument, unnest only supports "
+			                                            "recursive := [true/false] or max_depth := #"));
 		}
 	}
 	unnest_level++;
 	BindChild(function.children[0], depth, error);
-	if (!error.empty()) {
+	if (error.HasError()) {
 		// failed to bind
 		// try to bind correlated columns manually
-		if (!BindCorrelatedColumns(function.children[0])) {
-			return BindResult(error);
+		auto result = BindCorrelatedColumns(function.children[0], error);
+		if (result.HasError()) {
+			return BindResult(result.error);
 		}
 		auto &bound_expr = BoundExpression::GetExpression(*function.children[0]);
 		ExtractCorrelatedExpressions(binder, *bound_expr);
@@ -99,6 +137,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 
 	if (unnest_level > 0) {
 		throw BinderException(
+		    function,
 		    "Nested UNNEST calls are not supported - use UNNEST(x, recursive := true) to unnest multiple levels");
 	}
 
@@ -110,7 +149,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	case LogicalTypeId::SQLNULL:
 		break;
 	default:
-		return BindResult(binder.FormatError(function, "UNNEST() can only be applied to lists, structs and NULL"));
+		return BindResult(BinderException(function, "UNNEST() can only be applied to lists, structs and NULL"));
 	}
 
 	idx_t list_unnests;
@@ -120,7 +159,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	if (child_type.id() == LogicalTypeId::SQLNULL) {
 		list_unnests = 1;
 	} else {
-		// first do all of the list unnests
+		// perform all LIST unnests
 		auto type = child_type;
 		list_unnests = 0;
 		while (type.id() == LogicalTypeId::LIST) {
@@ -130,16 +169,17 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 				break;
 			}
 		}
-		// unnest structs all the way afterwards, if there are any
+		// unnest structs
 		if (type.id() == LogicalTypeId::STRUCT) {
 			struct_unnests = max_depth - list_unnests;
 		}
 	}
 	if (struct_unnests > 0 && !root_expression) {
-		return BindResult(binder.FormatError(
+		child = std::move(unnest_expr);
+		return BindResult(BinderException(
 		    function, "UNNEST() on a struct column can only be applied as the root element of a SELECT expression"));
 	}
-	// perform all of the list unnests first
+	// perform all LIST unnests
 	auto return_type = child_type;
 	for (idx_t current_depth = 0; current_depth < list_unnests; current_depth++) {
 		if (return_type.id() == LogicalTypeId::LIST) {
@@ -182,8 +222,15 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 				if (expr->return_type.id() == LogicalTypeId::STRUCT) {
 					// struct! push a struct_extract
 					auto &child_types = StructType::GetChildTypes(expr->return_type);
-					for (auto &entry : child_types) {
-						new_expressions.push_back(CreateBoundStructExtract(context, expr->Copy(), entry.first));
+					if (StructType::IsUnnamed(expr->return_type)) {
+						for (idx_t child_index = 0; child_index < child_types.size(); child_index++) {
+							new_expressions.push_back(
+							    CreateBoundStructExtractIndex(context, expr->Copy(), child_index + 1));
+						}
+					} else {
+						for (auto &entry : child_types) {
+							new_expressions.push_back(CreateBoundStructExtract(context, expr->Copy(), entry.first));
+						}
 					}
 					has_structs = true;
 				} else {
@@ -196,8 +243,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 				break;
 			}
 		}
-		expanded_expressions = std::move(struct_expressions);
-		unnest_expr = make_uniq<BoundConstantExpression>(Value(42));
+		unnest_expr = make_uniq<BoundExpandedExpression>(std::move(struct_expressions));
 	}
 	return BindResult(std::move(unnest_expr));
 }

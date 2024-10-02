@@ -1,0 +1,7 @@
+# name: benchmark/ingestion/persistent_storage/tpch/native/ingest_lineitem.benchmark
+# description: benchmark ingestion of lineitem
+# group: [native]
+
+template benchmark/ingestion/persistent_storage/tpch/tpch_ingestion_persistent.benchmark.in
+table_name=lineitem
+format=native

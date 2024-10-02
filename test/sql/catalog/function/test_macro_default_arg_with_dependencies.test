@@ -1,0 +1,107 @@
+# name: test/sql/catalog/function/test_macro_default_arg_with_dependencies.test
+# group: [function]
+
+statement ok
+set storage_compatibility_version='latest'
+
+statement ok
+set enable_macro_dependencies=true
+
+statement ok
+pragma enable_verification;
+
+statement ok
+CREATE MACRO f(x := NULL) AS x+1;
+
+query I
+SELECT f();
+----
+NULL
+
+query I
+SELECT f(x := 41)
+----
+42
+
+query I
+SELECT f(x := (SELECT 41));
+----
+42
+
+query I
+select f(x:=(select 1 a));
+----
+2
+
+query I
+select f(x:=a) from (select 41) t(a);
+----
+42
+
+statement ok
+create table t as select 41 a;
+
+query I
+select f(x:=a) from t;
+----
+42
+
+statement error
+create macro my_macro1(a, b := a) as a + b;
+----
+Binder Error: table "0_macro_parametersmy_macro1" has duplicate column name "a"
+
+statement ok
+create table integers (a integer);
+
+statement ok
+create macro my_macro2(a := i) as (
+	select min(a) from integers
+);
+
+statement ok
+insert into integers values (5), (10), (13)
+
+query I
+select my_macro2(can_not_be_empty)
+----
+5
+
+statement error
+drop table integers;
+----
+macro function "my_macro2" depends on table "integers".
+
+statement ok
+drop table integers cascade;
+
+# The macro was dropped by the CASCADE
+statement error
+select my_macro2(5);
+----
+Catalog Error: Scalar Function with name my_macro2 does not exist!
+
+statement ok
+Create table t1 (a int, b int);
+
+statement ok
+Create table t2 (c int, d int);
+
+statement ok
+CREATE OR REPLACE MACRO eq(x := NULL, y := NULL) AS x = y
+
+statement ok
+INSERT INTO t1 VALUES (1, 1), (1, 2), (2, 2), (3, 4);
+
+statement ok
+INSERT INTO t2 VALUES (4, 1), (2, 10), (6, 2), (2, 6);
+
+statement ok
+SELECT * FROM t1 as t1_alias inner join (select * from t2) as t2_alias ON (eq(x := t1_alias.a, y := t2_alias.c))
+
+# no default parameters with incorrect names
+statement error
+SELECT * FROM t1 as t1_alias inner join (select * from t2) as t2_alias ON (eq(a := t1_alias.a, c := t2_alias.c))
+----
+Binder Error
+

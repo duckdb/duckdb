@@ -15,6 +15,15 @@ CALL dbgen(sf=0.01, children=2);
 ----
 Step must be defined when children are defined
 
+statement error
+call dbgen(sf=NULL);
+----
+<REGEX>:.*Cannot use NULL.*
+
+statement error
+call dbgen(sf=1, catalog=NULL);
+----
+<REGEX>:.*Cannot use NULL.*
 
 statement ok
 CALL dbgen(sf=1, children =100, step = 0);
@@ -107,7 +116,7 @@ select n_nationkey, n_name, n_regionkey from nation
 24	UNITED STATES	1
 
 
-# Go over the number of children
+# Loop through the number of children
 loop i 50 110
 
 statement ok
@@ -151,3 +160,25 @@ select count (*) from (SELECT * FROM db1.${tpch_tbl} EXCEPT SELECT * FROM ${tpch
 0
 
 endloop
+
+statement ok
+CREATE SCHEMA db1.test_schema
+
+statement ok
+CALL dbgen(sf=1, catalog='db1', schema='test_schema');
+
+foreach tpch_tbl orders customer lineitem nation part partsupp region supplier
+
+query I
+select count(*) from (SELECT * FROM ${tpch_tbl} EXCEPT SELECT * FROM db1.test_schema.${tpch_tbl});
+----
+0
+
+query I
+select count (*) from (SELECT * FROM db1.test_schema.${tpch_tbl} EXCEPT SELECT * FROM ${tpch_tbl});
+----
+0
+
+endloop
+
+

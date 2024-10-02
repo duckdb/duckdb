@@ -51,7 +51,8 @@ end
         "TIME",
         "TIMESTAMP",
         "VARCHAR",
-        "INTEGER"
+        "INTEGER",
+        "BLOB"
     ]
     type_values = [
         Bool(true),
@@ -69,7 +70,8 @@ end
         Time(23, 10, 33),
         DateTime(1992, 9, 20, 23, 10, 33),
         String("hello world"),
-        missing
+        missing,
+        rand(UInt8, 100)
     ]
     for i in 1:size(type_values, 1)
         stmt = DBInterface.prepare(con, string("SELECT ?::", type_names[i], " a"))

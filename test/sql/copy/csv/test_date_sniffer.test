@@ -1,0 +1,50 @@
+# name: test/sql/copy/csv/test_date_sniffer.test
+# description: Test sniffer bug from date detection is issue https://github.com/duckdb/duckdb/issues/13121
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query III
+FROM 'data/csv/bad_date.csv'
+----
+2016-10-03	vst_OSBS_2016	41_10_1
+
+query I
+SELECT columns FROM sniff_csv('data/csv/bad_date.csv')
+----
+[{'name': date, 'type': DATE}, {'name': eventID, 'type': VARCHAR}, {'name': subplotID, 'type': VARCHAR}]
+
+query II
+FROM 'data/csv/bad_date_2.csv'
+----
+2023-12-03	2.2.2
+2023-04-06	2.2.0
+2023-04-06	2.2.0
+2023-04-06	2.2.0
+2022-11-09	2.2.0
+
+query I
+SELECT columns[1].type FROM sniff_csv('data/csv/bad_date_2.csv')
+----
+DATE
+
+query II
+FROM 'data/csv/conflict_timestamp.csv'
+----
+2020-01-01 01:02:03	01-01-2020 01:02:03
+
+query II
+SELECT columns[1].type, columns[2].type FROM sniff_csv('data/csv/conflict_timestamp.csv')
+----
+TIMESTAMP	VARCHAR
+
+query IIIII
+FROM 'data/csv/bad_date_timestamp_mix.csv'
+----
+2016-10-03	vst_OSBS_2016	41_10_1	2020-01-01 01:02:03	01-01-2020 01:02:03
+
+query I
+SELECT columns FROM sniff_csv('data/csv/bad_date_timestamp_mix.csv')
+----
+[{'name': date, 'type': DATE}, {'name': eventID, 'type': VARCHAR}, {'name': subplotID, 'type': VARCHAR}, {'name': ts, 'type': TIMESTAMP}, {'name': t2_2, 'type': VARCHAR}]

@@ -1,7 +1,6 @@
 // #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"
 
-#include "duckdb/execution/operator/scan/csv/buffered_csv_reader.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "compare_result.hpp"
@@ -9,9 +8,11 @@
 #include "test_helpers.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+
 #include "pid.hpp"
 #include "duckdb/function/table/read_csv.hpp"
-
 #include <cmath>
 #include <fstream>
 
@@ -23,6 +24,7 @@ namespace duckdb {
 static string custom_test_directory;
 static int debug_initialize_value = -1;
 static bool single_threaded = false;
+static case_insensitive_set_t required_requires;
 
 bool NO_FAIL(QueryResult &result) {
 	if (result.HasError()) {
@@ -89,6 +91,14 @@ void SetSingleThreaded() {
 	single_threaded = true;
 }
 
+void AddRequire(string require) {
+	required_requires.insert(require);
+}
+
+bool IsRequired(string require) {
+	return required_requires.count(require);
+}
+
 string GetTestDirectory() {
 	if (custom_test_directory.empty()) {
 		return TESTING_DIRECTORY_NAME;
@@ -105,7 +115,8 @@ string TestDirectoryPath() {
 	string path;
 	if (custom_test_directory.empty()) {
 		// add the PID to the test directory - but only if it was not specified explicitly by the user
-		path = StringUtil::Format(test_directory + "/%d", getpid());
+		auto pid = getpid();
+		path = fs->JoinPath(test_directory, to_string(pid));
 	} else {
 		path = test_directory;
 	}
@@ -135,6 +146,12 @@ unique_ptr<DBConfig> GetTestConfig() {
 	result->options.checkpoint_wal_size = 0;
 #else
 	result->options.checkpoint_on_shutdown = false;
+#endif
+	result->options.abort_on_wal_failure = true;
+#ifdef DUCKDB_RUN_SLOW_VERIFIERS
+	// This mode isn't slow, but we want test coverage both when it's enabled
+	// and when it's not, so we enable only when DUCKDB_RUN_SLOW_VERIFIERS is set.
+	result->options.trim_free_blocks = true;
 #endif
 	result->options.allow_unsigned_extensions = true;
 	if (single_threaded) {
@@ -254,6 +271,14 @@ string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
 	return "";
 }
 
+string compare_csv_collection(duckdb::ColumnDataCollection &collection, string csv, bool header) {
+	string error;
+	if (!compare_result(csv, collection, collection.Types(), header, error)) {
+		return error;
+	}
+	return "";
+}
+
 string show_diff(DataChunk &left, DataChunk &right) {
 	if (left.ColumnCount() != right.ColumnCount()) {
 		return StringUtil::Format("Different column counts: %d vs %d", (int)left.ColumnCount(),
@@ -316,22 +341,21 @@ bool compare_result(string csv, ColumnDataCollection &collection, vector<Logical
 	options.dialect_options.state_machine_options.quote = '\"';
 	options.dialect_options.state_machine_options.escape = '\"';
 	options.file_path = csv_path;
-
+	options.dialect_options.num_cols = sql_types.size();
 	// set up the intermediate result chunk
 	DataChunk parsed_result;
 	parsed_result.Initialize(Allocator::DefaultAllocator(), sql_types);
 
 	DuckDB db;
 	Connection con(db);
-	BufferedCSVReader reader(*con.context, std::move(options), sql_types);
-	reader.InitializeProjection();
-
+	auto scanner_ptr = StringValueScanner::GetCSVScanner(*con.context, options);
+	auto &scanner = *scanner_ptr;
 	ColumnDataCollection csv_data_collection(*con.context, sql_types);
-	while (true) {
+	while (!scanner.FinishedIterator()) {
 		// parse a chunk from the CSV file
 		try {
 			parsed_result.Reset();
-			reader.ParseCSV(parsed_result);
+			scanner.Flush(parsed_result);
 		} catch (std::exception &ex) {
 			error_message = "Could not parse CSV: " + string(ex.what());
 			return false;

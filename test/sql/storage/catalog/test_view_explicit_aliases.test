@@ -2,8 +2,14 @@
 # description: Test views with explicit column aliases
 # group: [catalog]
 
+# FIXME: for this to work we need to serialize/deserialize dependencies
+require skip_reload
+
 # load the DB from disk
 load __TEST_DIR__/view_explicit_aliases_storage.db
+
+statement ok
+set enable_view_dependencies=true
 
 # create a database and insert the table/view
 statement ok
@@ -17,9 +23,11 @@ statement ok
 CREATE VIEW test.v (b,c) AS SELECT * FROM test.t;
 
 # check the view info
-query II nosort view_info
+query IIIIII
 PRAGMA table_info('test.v')
 ----
+0	b	INTEGER	false	NULL	false
+1	c	INTEGER	false	NULL	false
 
 statement ok
 SELECT * FROM test.v
@@ -40,6 +48,7 @@ PRAGMA table_info('test.v')
 
 statement error
 SELECT * FROM test.v
+----
 
 # we can query again after recreating the table
 statement ok
@@ -50,6 +59,7 @@ SELECT * FROM test.t
 
 statement error
 SELECT b,c FROM test.v
+----
 
 statement ok
 CREATE VIEW test.v (b,c) AS SELECT * FROM test.t;

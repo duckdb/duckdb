@@ -2,11 +2,37 @@
 # description: Test csv dialect detection
 # group: [auto]
 
-require vector_size 512
-
+statement ok
+PRAGMA enable_verification
 
 statement ok 
 PRAGMA verify_parallelism
+
+query I
+select columns FROM sniff_csv('data/csv/auto/mock_duckdb_test_data.csv', ignore_errors = true);
+----
+[{'name': id, 'type': BIGINT}, {'name': name, 'type': VARCHAR}, {'name': age, 'type': BIGINT}, {'name': sex, 'type': VARCHAR}, {'name': state, 'type': VARCHAR}]
+
+query IIIII
+FROM read_csv('data/csv/auto/mock_duckdb_test_data.csv', ignore_errors = true)
+----
+1	James	30	M	AL
+2	Jill	32	F	CO
+4	John	34	M	AS
+5	Matthew	31	M	NULL
+7	Olivia	36	F	OR
+8	James	37	M	AZ
+9	Titus	38	M	WY
+
+statement error
+select * from read_csv_auto('data/csv/dates.csv', auto_detect=false, delim=',', quote='"', columns={'a': 'VARCHAR'})
+----
+Expected Number of Columns: 1 Found: 2
+
+query II
+select * from read_csv_auto('data/csv/dates.csv')
+----
+919 304 6161	2008-08-10
 
 query II
 select * from read_csv_auto('data/csv/from_df.csv', quote='''')
@@ -18,7 +44,7 @@ bye	2
 
 # CSV file with RFC-conform dialect
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/rfc_conform.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/rfc_conform.csv');
 
 query ITT
 SELECT * FROM test ORDER BY column0;
@@ -33,7 +59,7 @@ DROP TABLE test;
 # CSV file with RFC-conform dialect quote
 # read_csv is an alias to read_csv_auto when no extra parameters are supplied
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/rfc_conform_quote.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/rfc_conform_quote.csv');
 
 query ITT
 SELECT * FROM test ORDER BY column0;
@@ -47,7 +73,7 @@ DROP TABLE test;
 
 # CSV file with RFC-conform dialect quote/leading space of numerics
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/leading_space_numerics.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/leading_space_numerics.csv');
 
 query ITT
 SELECT * FROM test ORDER BY column0;
@@ -61,7 +87,7 @@ DROP TABLE test;
 
 # CSV file with bar delimiter
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/pipe_delim.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/pipe_delim.csv');
 
 query ITT
 SELECT * FROM test ORDER BY column0;
@@ -75,7 +101,7 @@ DROP TABLE test;
 
 # CSV file with bar delimiter and double quotes
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/pipe_delim_quote.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/pipe_delim_quote.csv');
 
 query ITT
 SELECT * FROM test ORDER BY column0;
@@ -89,7 +115,7 @@ DROP TABLE test;
 
 # CSV file with bar delimiter and double quotes and double escape
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/quote_escape.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/quote_escape.csv');
 
 query ITT
 SELECT * FROM test ORDER BY column0;
@@ -103,7 +129,7 @@ DROP TABLE test;
 
 # CSV file with bar delimiter and double quotes and backslash escape
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/backslash_escape.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/backslash_escape.csv');
 
 query ITT
 SELECT * FROM test ORDER BY column0;
@@ -117,7 +143,7 @@ DROP TABLE test;
 
 # CSV file with bar delimiter and single quotes and backslash escape
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/single_quote_backslash.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/single_quote_backslash.csv');
 
 query ITT
 SELECT * FROM test ORDER BY column0;
@@ -131,7 +157,7 @@ DROP TABLE test;
 
 # CSV file with semicolon delimiter
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/semicolon_delim.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/semicolon_delim.csv');
 
 query ITT
 SELECT * FROM test ORDER BY column0;
@@ -145,7 +171,7 @@ DROP TABLE test;
 
 # CSV file with semicolon delimiter and double quotes
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/semicolon_quote.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/semicolon_quote.csv');
 
 query ITT
 SELECT * FROM test ORDER BY column0;
@@ -159,7 +185,7 @@ DROP TABLE test;
 
 # CSV file with semicolon delimiter, double quotes and RFC escape
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/semicolon_escape.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/semicolon_escape.csv');
 
 query ITT
 SELECT * FROM test ORDER BY column0;
@@ -173,7 +199,7 @@ DROP TABLE test;
 
 # CSV file with tab delimiter
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/tab.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/tab.csv');
 
 query ITT
 SELECT * FROM test ORDER BY column0;
@@ -187,7 +213,7 @@ DROP TABLE test;
 
 # CSV file with tab delimiter and single quotes
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/tab_single_quote.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/tab_single_quote.csv');
 
 query ITT
 SELECT * FROM test ORDER BY column0;
@@ -207,7 +233,7 @@ DROP TABLE test;
 
 # CSV file with tab delimiter and single quotes without type-hint
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/tab_single_quote_varchar.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/tab_single_quote_varchar.csv');
 
 query ITT
 SELECT * FROM test ORDER BY column0;
@@ -228,7 +254,7 @@ DROP TABLE test;
 
 # CSV file with trailing empty lines 
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/issue_1254.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/issue_1254.csv');
 
 query II
 SELECT a, b FROM test;

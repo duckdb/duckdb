@@ -36,6 +36,9 @@ static scalar_function_t GetScalarIntegerUnaryFunction(const LogicalType &type) 
 	case LogicalTypeId::HUGEINT:
 		function = &ScalarFunction::UnaryFunction<hugeint_t, hugeint_t, OP>;
 		break;
+	case LogicalTypeId::UHUGEINT:
+		function = &ScalarFunction::UnaryFunction<uhugeint_t, uhugeint_t, OP>;
+		break;
 	default:
 		throw NotImplementedException("Unimplemented type for GetScalarIntegerUnaryFunction");
 	}
@@ -72,6 +75,9 @@ static scalar_function_t GetScalarIntegerBinaryFunction(const LogicalType &type)
 		break;
 	case LogicalTypeId::HUGEINT:
 		function = &ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, OP>;
+		break;
+	case LogicalTypeId::UHUGEINT:
+		function = &ScalarFunction::BinaryFunction<uhugeint_t, uhugeint_t, uhugeint_t, OP>;
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for GetScalarIntegerBinaryFunction");
@@ -200,11 +206,10 @@ ScalarFunctionSet BitwiseNotFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 // << [bitwise_left_shift]
 //===--------------------------------------------------------------------===//
-
 struct BitwiseShiftLeftOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA input, TB shift) {
-		TA max_shift = TA(sizeof(TA) * 8);
+		TA max_shift = TA(sizeof(TA) * 8) + (NumericLimits<TA>::IsSigned() ? 0 : 1);
 		if (input < 0) {
 			throw OutOfRangeException("Cannot left-shift negative number %s", NumericHelper::ToString(input));
 		}
@@ -220,19 +225,19 @@ struct BitwiseShiftLeftOperator {
 		if (shift == 0) {
 			return input;
 		}
-		TA max_value = (TA(1) << (max_shift - shift - 1));
+		TA max_value = UnsafeNumericCast<TA>((TA(1) << (max_shift - shift - 1)));
 		if (input >= max_value) {
 			throw OutOfRangeException("Overflow in left shift (%s << %s)", NumericHelper::ToString(input),
 			                          NumericHelper::ToString(shift));
 		}
-		return input << shift;
+		return UnsafeNumericCast<TR>(input << shift);
 	}
 };
 
 static void BitwiseShiftLeftOperation(DataChunk &args, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<string_t, int32_t, string_t>(
 	    args.data[0], args.data[1], result, args.size(), [&](string_t input, int32_t shift) {
-		    int32_t max_shift = Bit::BitLength(input);
+		    auto max_shift = UnsafeNumericCast<int32_t>(Bit::BitLength(input));
 		    if (shift == 0) {
 			    return input;
 		    }
@@ -245,7 +250,7 @@ static void BitwiseShiftLeftOperation(DataChunk &args, ExpressionState &state, V
 			    Bit::SetEmptyBitString(target, input);
 			    return target;
 		    }
-		    Bit::LeftShift(input, shift, target);
+		    Bit::LeftShift(input, UnsafeNumericCast<idx_t>(shift), target);
 		    return target;
 	    });
 }
@@ -279,7 +284,7 @@ struct BitwiseShiftRightOperator {
 static void BitwiseShiftRightOperation(DataChunk &args, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<string_t, int32_t, string_t>(
 	    args.data[0], args.data[1], result, args.size(), [&](string_t input, int32_t shift) {
-		    int32_t max_shift = Bit::BitLength(input);
+		    auto max_shift = UnsafeNumericCast<int32_t>(Bit::BitLength(input));
 		    if (shift == 0) {
 			    return input;
 		    }
@@ -288,7 +293,7 @@ static void BitwiseShiftRightOperation(DataChunk &args, ExpressionState &state, 
 			    Bit::SetEmptyBitString(target, input);
 			    return target;
 		    }
-		    Bit::RightShift(input, shift, target);
+		    Bit::RightShift(input, UnsafeNumericCast<idx_t>(shift), target);
 		    return target;
 	    });
 }

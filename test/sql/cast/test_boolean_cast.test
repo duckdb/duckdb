@@ -15,6 +15,12 @@ SELECT CAST(1=0 AS VARCHAR)
 ----
 false
 
+
+query T
+SELECT CAST(12345 AS BOOLEAN)
+----
+true
+
 query T
 SELECT CAST('true' AS BOOLEAN)
 ----
@@ -27,6 +33,21 @@ SELECT CAST('t' AS BOOLEAN)
 
 query T
 SELECT CAST('TRUE' AS BOOLEAN)
+----
+1
+
+query T
+SELECT CAST('yes' AS BOOLEAN)
+----
+1
+
+query T
+SELECT CAST('YeS' AS BOOLEAN)
+----
+1
+
+query T
+SELECT CAST('y' AS BOOLEAN)
 ----
 1
 
@@ -45,8 +66,37 @@ SELECT CAST('FALSE' AS BOOLEAN)
 ----
 0
 
+query T
+SELECT CAST('no' AS BOOLEAN)
+----
+0
+
+query T
+SELECT CAST('nO' AS BOOLEAN)
+----
+0
+
+query T
+SELECT CAST('n' AS BOOLEAN)
+----
+0
+
 statement error
 SELECT CAST('12345' AS BOOLEAN)
+----
+
+statement ok
+CREATE TABLE tbl AS SELECT 0 AS yes
+
+query T
+SELECT CAST(yes AS BOOLEAN) FROM tbl
+----
+0
+
+statement error
+SELECT CAST(yes AS BOOLEAN)
+----
+Binder Error: Referenced column "yes" not found in FROM clause!
 
 query T
 SELECT CAST(CAST('12345' AS INTEGER) AS BOOLEAN)
@@ -165,6 +215,16 @@ SELECT CAST(CAST('1' AS HUGEINT) AS BOOLEAN)
 
 query T
 SELECT CAST(CAST('0' AS HUGEINT) AS BOOLEAN)
+----
+0
+
+query T
+SELECT CAST(CAST('1' AS UHUGEINT) AS BOOLEAN)
+----
+1
+
+query T
+SELECT CAST(CAST('0' AS UHUGEINT) AS BOOLEAN)
 ----
 0
 

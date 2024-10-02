@@ -34,14 +34,15 @@ public:
 	bool is_operator;
 
 public:
-	bool HasSideEffects() const override;
+	bool IsVolatile() const override;
+	bool IsConsistent() const override;
 	bool IsFoldable() const override;
 	string ToString() const override;
 	bool PropagatesNullValues() const override;
 	hash_t Hash() const override;
 	bool Equals(const BaseExpression &other) const override;
 
-	unique_ptr<Expression> Copy() override;
+	unique_ptr<Expression> Copy() const override;
 	void Verify() const override;
 
 	void Serialize(Serializer &serializer) const override;

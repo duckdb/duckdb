@@ -7,7 +7,7 @@ PRAGMA enable_verification
 
 # SUBSTRING with an invalid start position causes a segmentation fault #580
 query T
-SELECT SUBSTRING(0, 3, 0)
+SELECT SUBSTRING(0::VARCHAR, 3, 0)
 ----
 (empty)
 

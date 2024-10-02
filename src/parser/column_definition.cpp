@@ -22,14 +22,26 @@ ColumnDefinition ColumnDefinition::Copy() const {
 	copy.expression = expression ? expression->Copy() : nullptr;
 	copy.compression_type = compression_type;
 	copy.category = category;
+	copy.comment = comment;
+	copy.tags = tags;
 	return copy;
 }
 
-const unique_ptr<ParsedExpression> &ColumnDefinition::DefaultValue() const {
-	if (Generated()) {
-		throw InternalException("Calling DefaultValue() on a generated column");
+const ParsedExpression &ColumnDefinition::DefaultValue() const {
+	if (!HasDefaultValue()) {
+		if (Generated()) {
+			throw InternalException("Calling DefaultValue() on a generated column");
+		}
+		throw InternalException("DefaultValue() called on a column without a default value");
 	}
-	return expression;
+	return *expression;
+}
+
+bool ColumnDefinition::HasDefaultValue() const {
+	if (Generated()) {
+		return false;
+	}
+	return expression != nullptr;
 }
 
 void ColumnDefinition::SetDefaultValue(unique_ptr<ParsedExpression> default_value) {
@@ -54,9 +66,16 @@ void ColumnDefinition::SetType(const LogicalType &type) {
 const string &ColumnDefinition::Name() const {
 	return name;
 }
-
 void ColumnDefinition::SetName(const string &name) {
 	this->name = name;
+}
+
+const Value &ColumnDefinition::Comment() const {
+	return comment;
+}
+
+void ColumnDefinition::SetComment(const Value &comment) {
+	this->comment = comment;
 }
 
 const duckdb::CompressionType &ColumnDefinition::CompressionType() const {

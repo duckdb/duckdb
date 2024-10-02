@@ -15,6 +15,7 @@ SELECT i AS 'hello world' FROM integers
 # without an AS clause this does not work
 statement error
 SELECT i 'hello world' FROM integers
+----
 
 # double quotes work everywhere
 statement ok
@@ -30,3 +31,4 @@ SELECT "hello world".i FROM integers AS 'hello world'
 # but not without the AS clause
 statement error
 SELECT "hello world".i FROM integers 'hello world'
+----

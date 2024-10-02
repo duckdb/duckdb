@@ -8,21 +8,18 @@
 namespace duckdb {
 
 struct StructExtractBindData : public FunctionData {
-	StructExtractBindData(string key, idx_t index, LogicalType type)
-	    : key(std::move(key)), index(index), type(std::move(type)) {
+	explicit StructExtractBindData(idx_t index) : index(index) {
 	}
 
-	string key;
 	idx_t index;
-	LogicalType type;
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<StructExtractBindData>(key, index, type);
+		return make_uniq<StructExtractBindData>(index);
 	}
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<StructExtractBindData>();
-		return key == other.key && index == other.index && type == other.type;
+		return index == other.index;
 	}
 };
 
@@ -44,15 +41,20 @@ static void StructExtractFunction(DataChunk &args, ExpressionState &state, Vecto
 static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, ScalarFunction &bound_function,
                                                   vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
-	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+	auto &child_type = arguments[0]->return_type;
+	if (child_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
-	D_ASSERT(LogicalTypeId::STRUCT == arguments[0]->return_type.id());
-	auto &struct_children = StructType::GetChildTypes(arguments[0]->return_type);
+	D_ASSERT(LogicalTypeId::STRUCT == child_type.id());
+	auto &struct_children = StructType::GetChildTypes(child_type);
 	if (struct_children.empty()) {
 		throw InternalException("Can't extract something from an empty struct");
 	}
-	bound_function.arguments[0] = arguments[0]->return_type;
+	if (StructType::IsUnnamed(child_type)) {
+		throw BinderException(
+		    "struct_extract with a string key cannot be used on an unnamed struct, use a numeric index instead");
+	}
+	bound_function.arguments[0] = child_type;
 
 	auto &key_child = arguments[1];
 	if (key_child->HasParameter()) {
@@ -90,13 +92,49 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 		for (auto &struct_child : struct_children) {
 			candidates.push_back(struct_child.first);
 		}
-		auto closest_settings = StringUtil::TopNLevenshtein(candidates, key);
+		auto closest_settings = StringUtil::TopNJaroWinkler(candidates, key);
 		auto message = StringUtil::CandidatesMessage(closest_settings, "Candidate Entries");
 		throw BinderException("Could not find key \"%s\" in struct\n%s", key, message);
 	}
 
-	bound_function.return_type = return_type;
-	return make_uniq<StructExtractBindData>(std::move(key), key_index, std::move(return_type));
+	bound_function.return_type = std::move(return_type);
+	return StructExtractFun::GetBindData(key_index);
+}
+
+static unique_ptr<FunctionData> StructExtractBindIndex(ClientContext &context, ScalarFunction &bound_function,
+                                                       vector<unique_ptr<Expression>> &arguments) {
+	D_ASSERT(bound_function.arguments.size() == 2);
+	auto &child_type = arguments[0]->return_type;
+	if (child_type.id() == LogicalTypeId::UNKNOWN) {
+		throw ParameterNotResolvedException();
+	}
+	D_ASSERT(LogicalTypeId::STRUCT == child_type.id());
+	auto &struct_children = StructType::GetChildTypes(child_type);
+	if (struct_children.empty()) {
+		throw InternalException("Can't extract something from an empty struct");
+	}
+	if (!StructType::IsUnnamed(child_type)) {
+		throw BinderException(
+		    "struct_extract with an integer key can only be used on unnamed structs, use a string key instead");
+	}
+	bound_function.arguments[0] = child_type;
+
+	auto &key_child = arguments[1];
+	if (key_child->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
+
+	if (!key_child->IsFoldable()) {
+		throw BinderException("Key index for struct_extract needs to be a constant value");
+	}
+	Value key_val = ExpressionExecutor::EvaluateScalar(context, *key_child);
+	auto index = key_val.GetValue<int64_t>();
+	if (index <= 0 || idx_t(index) > struct_children.size()) {
+		throw BinderException("Key index %lld for struct_extract out of range - expected an index between 1 and %llu",
+		                      index, struct_children.size());
+	}
+	bound_function.return_type = struct_children[NumericCast<idx_t>(index - 1)].second;
+	return StructExtractFun::GetBindData(NumericCast<idx_t>(index - 1));
 }
 
 static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &context, FunctionStatisticsInput &input) {
@@ -108,15 +146,30 @@ static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &con
 	return struct_child_stats[info.index].ToUnique();
 }
 
-ScalarFunction StructExtractFun::GetFunction() {
+unique_ptr<FunctionData> StructExtractFun::GetBindData(idx_t index) {
+	return make_uniq<StructExtractBindData>(index);
+}
+
+ScalarFunction StructExtractFun::KeyExtractFunction() {
 	return ScalarFunction("struct_extract", {LogicalTypeId::STRUCT, LogicalType::VARCHAR}, LogicalType::ANY,
 	                      StructExtractFunction, StructExtractBind, nullptr, PropagateStructExtractStats);
 }
 
+ScalarFunction StructExtractFun::IndexExtractFunction() {
+	return ScalarFunction("struct_extract", {LogicalTypeId::STRUCT, LogicalType::BIGINT}, LogicalType::ANY,
+	                      StructExtractFunction, StructExtractBindIndex);
+}
+
+ScalarFunctionSet StructExtractFun::GetFunctions() {
+	ScalarFunctionSet functions("struct_extract");
+	functions.AddFunction(KeyExtractFunction());
+	functions.AddFunction(IndexExtractFunction());
+	return functions;
+}
+
 void StructExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	auto fun = GetFunction();
-	set.AddFunction(fun);
+	set.AddFunction(GetFunctions());
 }
 
 } // namespace duckdb

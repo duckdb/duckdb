@@ -64,7 +64,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		return FinishPushdown(std::move(op));
 	}
-	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
+	FilterPushdown left_pushdown(optimizer, convert_mark_joins), right_pushdown(optimizer, convert_mark_joins);
 	// for a comparison join we create a FilterCombiner that checks if we can push conditions on LHS join conditions
 	// into the RHS of the join
 	FilterCombiner filter_combiner(optimizer);
@@ -91,9 +91,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 			}
 			left_pushdown.filters.push_back(std::move(filters[i]));
 			// erase the filter from the list of filters
-			filters.erase(filters.begin() + i);
+			filters.erase_at(i);
 			i--;
-		} else {
+		} else if (op->type != LogicalOperatorType::LOGICAL_ASOF_JOIN) {
 			// bindings match right side or both sides: we cannot directly push it into the right
 			// however, if the filter removes rows with null values from the RHS we can turn the left outer join
 			// in an inner join, and then push down as we would push down an inner join

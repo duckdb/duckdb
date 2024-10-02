@@ -1,0 +1,120 @@
+# name: test/sql/attach/attach_filepath_roundtrip.test
+# description: Test file path roundtripping and concurrency
+# group: [attach]
+
+require noforcestorage
+
+require notwindows
+
+statement ok
+PRAGMA enable_verification
+
+# use a concurrent loop to attach many databases
+
+concurrentloop i 1 100
+
+statement maybe
+ATTACH '__TEST_DIR__/concurrent.db';
+----
+
+endloop
+
+query I
+SELECT database_name FROM duckdb_databases() ORDER BY 1;
+----
+concurrent
+memory
+system
+temp
+
+statement ok
+DETACH concurrent;
+
+# roundtrip
+
+statement ok
+ATTACH '__TEST_DIR__/db1.db';
+
+statement ok
+DETACH db1;
+
+statement ok
+ATTACH '__TEST_DIR__/db1.db';
+
+# multiple connections
+
+statement ok con2
+ATTACH '__TEST_DIR__/con2_rollback_detach.db';
+
+statement ok con1
+START TRANSACTION;
+
+statement ok con2
+START TRANSACTION;
+
+# attach files in con1
+
+statement ok con1
+ATTACH '__TEST_DIR__/con1.db';
+
+statement ok con1
+ATTACH '__TEST_DIR__/con1_commit.db';
+
+# detach file in con2
+
+statement ok con2
+DETACH con2_rollback_detach;
+
+# we can't attach, because we did not commit the detach yet
+
+statement error con1
+ATTACH '__TEST_DIR__/con2_rollback_detach.db';
+----
+already attached
+
+# can't attach con1.db file in con2
+
+statement error con2
+ATTACH '__TEST_DIR__/con1.db';
+----
+write-write
+
+statement ok con1
+DETACH con1;
+
+# we still can't attach (need to commit the DETACH)
+
+statement error con2
+ATTACH '__TEST_DIR__/con1.db';
+----
+transaction is aborted
+
+# commit con1 and roll back con2
+
+statement ok con1
+COMMIT;
+
+statement ok con2
+ROLLBACK
+
+# now we can ATTACH, as we committed the DETACH
+
+statement ok con2
+ATTACH '__TEST_DIR__/con1.db';
+
+statement error con1
+ATTACH '__TEST_DIR__/con1.db';
+----
+already attached
+
+statement error con2
+ATTACH '__TEST_DIR__/con1_commit.db';
+----
+already attached
+
+# we still can't ATTACH, as we rolled back the DETACH
+
+statement error con1
+ATTACH '__TEST_DIR__/con2_rollback_detach.db';
+----
+

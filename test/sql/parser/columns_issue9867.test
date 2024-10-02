@@ -1,0 +1,31 @@
+# name: test/sql/parser/columns_issue9867.test
+# description: Issue #9867 - COLUMNS(table_name.*) is broken when there are joins
+# group: [parser]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE df1 AS
+  SELECT
+    UNNEST(['K0', 'K1', 'K2', 'K3', 'K4', 'K5']) AS key,
+    UNNEST([11, 12, 13, 14, 15, 16]) AS A,
+    UNNEST([21, 22, 23, 24, 25, 26]) AS B
+
+statement ok
+CREATE TABLE df2 AS
+  SELECT
+    UNNEST(['K0', 'K2', 'K5']) AS key,
+    UNNEST([2, 3, 5]) AS C
+
+query II rowsort
+select sin(columns(df1.* exclude (key))) from df1 join df2 using(key)
+----
+-0.2879033166650653	0.7625584504796027
+-0.9999902065507035	0.836655638536056
+0.4201670368266409	-0.8462204041751706
+
+statement error
+select sin(columns(dfxx.* exclude (key))) from df1 join df2 using(key)
+----
+Referenced table "dfxx" not found

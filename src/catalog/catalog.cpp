@@ -18,6 +18,7 @@
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
@@ -54,7 +55,11 @@ AttachedDatabase &Catalog::GetAttached() {
 	return db;
 }
 
-const string &Catalog::GetName() {
+const AttachedDatabase &Catalog::GetAttached() const {
+	return db;
+}
+
+const string &Catalog::GetName() const {
 	return GetAttached().GetName();
 }
 
@@ -275,14 +280,13 @@ optional_ptr<CatalogEntry> Catalog::CreateCollation(CatalogTransaction transacti
 // Index
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateIndex(CatalogTransaction transaction, CreateIndexInfo &info) {
-	auto &context = transaction.GetContext();
-	return CreateIndex(context, info);
+	auto &schema = GetSchema(transaction, info.schema);
+	auto &table = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, info.table)->Cast<TableCatalogEntry>();
+	return schema.CreateIndex(transaction, info, table);
 }
 
 optional_ptr<CatalogEntry> Catalog::CreateIndex(ClientContext &context, CreateIndexInfo &info) {
-	auto &schema = GetSchema(context, info.schema);
-	auto &table = GetEntry<TableCatalogEntry>(context, schema.name, info.table);
-	return schema.CreateIndex(context, info, table);
+	return CreateIndex(GetCatalogTransaction(context), info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -300,7 +304,6 @@ struct CatalogLookup {
 // Generic
 //===--------------------------------------------------------------------===//
 void Catalog::DropEntry(ClientContext &context, DropInfo &info) {
-	ModifyCatalog();
 	if (info.type == CatalogType::SCHEMA_ENTRY) {
 		// DROP SCHEMA
 		DropSchema(context, info);
@@ -349,7 +352,7 @@ SimilarCatalogEntry Catalog::SimilarEntryInSchemas(ClientContext &context, const
 			// no similar entry found
 			continue;
 		}
-		if (!result.Found() || result.distance > entry.distance) {
+		if (!result.Found() || result.score < entry.score) {
 			result = entry;
 			result.schema = &schema;
 		}
@@ -457,14 +460,52 @@ void Catalog::AutoloadExtensionByConfigName(ClientContext &context, const string
 	throw Catalog::UnrecognizedConfigurationError(context, configuration_name);
 }
 
-bool Catalog::AutoLoadExtensionByCatalogEntry(ClientContext &context, CatalogType type, const string &entry_name) {
+static bool IsAutoloadableFunction(CatalogType type) {
+	return (type == CatalogType::TABLE_FUNCTION_ENTRY || type == CatalogType::SCALAR_FUNCTION_ENTRY ||
+	        type == CatalogType::AGGREGATE_FUNCTION_ENTRY || type == CatalogType::PRAGMA_FUNCTION_ENTRY);
+}
+
+static bool CompareCatalogTypes(CatalogType type_a, CatalogType type_b) {
+	if (type_a == type_b) {
+		// Types are same
+		return true;
+	}
+	if (!IsAutoloadableFunction(type_a)) {
+		D_ASSERT(IsAutoloadableFunction(type_b));
+		// Make sure that `type_a` is an autoloadable function
+		return CompareCatalogTypes(type_b, type_a);
+	}
+	if (type_a == CatalogType::TABLE_FUNCTION_ENTRY) {
+		// These are all table functions
+		return type_b == CatalogType::TABLE_MACRO_ENTRY || type_b == CatalogType::PRAGMA_FUNCTION_ENTRY;
+	} else if (type_a == CatalogType::SCALAR_FUNCTION_ENTRY) {
+		// These are all scalar functions
+		return type_b == CatalogType::MACRO_ENTRY;
+	} else if (type_a == CatalogType::PRAGMA_FUNCTION_ENTRY) {
+		// These are all table functions
+		return type_b == CatalogType::TABLE_MACRO_ENTRY || type_b == CatalogType::TABLE_FUNCTION_ENTRY;
+	}
+	return false;
+}
+
+bool Catalog::AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const string &entry_name) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
-	auto &dbconfig = DBConfig::GetConfig(context);
+	auto &dbconfig = DBConfig::GetConfig(db);
 	if (dbconfig.options.autoload_known_extensions) {
 		string extension_name;
-		if (type == CatalogType::TABLE_FUNCTION_ENTRY || type == CatalogType::SCALAR_FUNCTION_ENTRY ||
-		    type == CatalogType::AGGREGATE_FUNCTION_ENTRY || type == CatalogType::PRAGMA_FUNCTION_ENTRY) {
-			extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_FUNCTIONS);
+		if (IsAutoloadableFunction(type)) {
+			auto lookup_result = ExtensionHelper::FindExtensionInFunctionEntries(entry_name, EXTENSION_FUNCTIONS);
+			if (lookup_result.empty()) {
+				return false;
+			}
+			for (auto &function : lookup_result) {
+				auto function_type = function.second;
+				// FIXME: what if there are two functions with the same name, from different extensions?
+				if (CompareCatalogTypes(type, function_type)) {
+					extension_name = function.first;
+					break;
+				}
+			}
 		} else if (type == CatalogType::COPY_FUNCTION_ENTRY) {
 			extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_COPY_FUNCTIONS);
 		} else if (type == CatalogType::TYPE_ENTRY) {
@@ -474,7 +515,7 @@ bool Catalog::AutoLoadExtensionByCatalogEntry(ClientContext &context, CatalogTyp
 		}
 
 		if (!extension_name.empty() && ExtensionHelper::CanAutoloadExtension(extension_name)) {
-			ExtensionHelper::AutoLoadExtension(context, extension_name);
+			ExtensionHelper::AutoLoadExtension(db, extension_name);
 			return true;
 		}
 	}
@@ -498,9 +539,7 @@ CatalogException Catalog::UnrecognizedConfigurationError(ClientContext &context,
 	for (auto &entry : DBConfig::GetConfig(context).extension_parameters) {
 		potential_names.push_back(entry.first);
 	}
-
-	throw CatalogException("unrecognized configuration parameter \"%s\"\n%s", name,
-	                       StringUtil::CandidatesErrorMessage(potential_names, name, "Did you mean"));
+	throw CatalogException::MissingEntry("configuration parameter", name, potential_names);
 }
 
 CatalogException Catalog::CreateMissingEntryException(ClientContext &context, const string &entry_name,
@@ -512,10 +551,19 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 	reference_set_t<SchemaCatalogEntry> unseen_schemas;
 	auto &db_manager = DatabaseManager::Get(context);
 	auto databases = db_manager.GetDatabases(context);
+	auto &config = DBConfig::GetConfig(context);
+
+	auto max_schema_count = config.options.catalog_error_max_schemas;
 	for (auto database : databases) {
+		if (unseen_schemas.size() >= max_schema_count) {
+			break;
+		}
 		auto &catalog = database.get().GetCatalog();
 		auto current_schemas = catalog.GetAllSchemas(context);
 		for (auto &current_schema : current_schemas) {
+			if (unseen_schemas.size() >= max_schema_count) {
+				break;
+			}
 			unseen_schemas.insert(current_schema.get());
 		}
 	}
@@ -523,7 +571,42 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 	string extension_name;
 	if (type == CatalogType::TABLE_FUNCTION_ENTRY || type == CatalogType::SCALAR_FUNCTION_ENTRY ||
 	    type == CatalogType::AGGREGATE_FUNCTION_ENTRY || type == CatalogType::PRAGMA_FUNCTION_ENTRY) {
-		extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_FUNCTIONS);
+		auto lookup_result = ExtensionHelper::FindExtensionInFunctionEntries(entry_name, EXTENSION_FUNCTIONS);
+		do {
+			if (lookup_result.empty()) {
+				break;
+			}
+			vector<string> other_types;
+			string extension_for_error;
+			for (auto &function : lookup_result) {
+				auto function_type = function.second;
+				if (CompareCatalogTypes(type, function_type)) {
+					extension_name = function.first;
+					break;
+				}
+				extension_for_error = function.first;
+				other_types.push_back(CatalogTypeToString(function_type));
+			}
+			if (!extension_name.empty()) {
+				break;
+			}
+			if (other_types.size() == 1) {
+				auto &function_type = other_types[0];
+				auto error =
+				    CatalogException("%s with name \"%s\" is not in the catalog, a function by this name exists "
+				                     "in the %s extension, but it's of a different type, namely %s",
+				                     CatalogTypeToString(type), entry_name, extension_for_error, function_type);
+				return error;
+			} else {
+				D_ASSERT(!other_types.empty());
+				auto list_of_types = StringUtil::Join(other_types, ", ");
+				auto error =
+				    CatalogException("%s with name \"%s\" is not in the catalog, functions with this name exist "
+				                     "in the %s extension, but they are of different types, namely %s",
+				                     CatalogTypeToString(type), entry_name, extension_for_error, list_of_types);
+				return error;
+			}
+		} while (false);
 	} else if (type == CatalogType::TYPE_ENTRY) {
 		extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_TYPES);
 	} else if (type == CatalogType::COPY_FUNCTION_ENTRY) {
@@ -540,9 +623,12 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 		return CatalogException(error_message);
 	}
 
+	// entries in other schemas get a penalty
+	// however, if there is an exact match in another schema, we will always show it
+	static constexpr const double UNSEEN_PENALTY = 0.2;
 	auto unseen_entry = SimilarEntryInSchemas(context, entry_name, type, unseen_schemas);
 	string did_you_mean;
-	if (unseen_entry.Found() && unseen_entry.distance < entry.distance) {
+	if (unseen_entry.Found() && (unseen_entry.score == 1.0 || unseen_entry.score - UNSEEN_PENALTY > entry.score)) {
 		// the closest matching entry requires qualification as it is not in the default search path
 		// check how to minimally qualify this entry
 		auto catalog_name = unseen_entry.schema->catalog.GetName();
@@ -550,26 +636,24 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 		bool qualify_database;
 		bool qualify_schema;
 		FindMinimalQualification(context, catalog_name, schema_name, qualify_database, qualify_schema);
-		did_you_mean = "\nDid you mean \"" + unseen_entry.GetQualifiedName(qualify_database, qualify_schema) + "\"?";
+		did_you_mean = unseen_entry.GetQualifiedName(qualify_database, qualify_schema);
 	} else if (entry.Found()) {
-		did_you_mean = "\nDid you mean \"" + entry.name + "\"?";
+		did_you_mean = entry.name;
 	}
-
-	return CatalogException(error_context.FormatError("%s with name %s does not exist!%s", CatalogTypeToString(type),
-	                                                  entry_name, did_you_mean));
+	return CatalogException::MissingEntry(type, entry_name, did_you_mean, error_context);
 }
 
 CatalogEntryLookup Catalog::TryLookupEntryInternal(CatalogTransaction transaction, CatalogType type,
                                                    const string &schema, const string &name) {
 	auto schema_entry = GetSchema(transaction, schema, OnEntryNotFound::RETURN_NULL);
 	if (!schema_entry) {
-		return {nullptr, nullptr, PreservedError()};
+		return {nullptr, nullptr, ErrorData()};
 	}
 	auto entry = schema_entry->GetEntry(transaction, type, name);
 	if (!entry) {
-		return {schema_entry, nullptr, PreservedError()};
+		return {schema_entry, nullptr, ErrorData()};
 	}
-	return {schema_entry, entry, PreservedError()};
+	return {schema_entry, entry, ErrorData()};
 }
 
 CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, CatalogType type, const string &schema,
@@ -602,10 +686,10 @@ CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, CatalogType t
 	}
 
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		return {nullptr, nullptr, PreservedError()};
+		return {nullptr, nullptr, ErrorData()};
 	} else {
 		auto except = CreateMissingEntryException(context, name, type, schemas, error_context);
-		return {nullptr, nullptr, PreservedError(except)};
+		return {nullptr, nullptr, ErrorData(except)};
 	}
 }
 
@@ -614,7 +698,7 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
                                         QueryErrorContext error_context) {
 	auto res = TryLookupEntry(context, type, schema, name, if_not_found, error_context);
 
-	if (res.error) {
+	if (res.error.HasError()) {
 		res.error.Throw();
 	}
 
@@ -637,10 +721,10 @@ CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, vector<Catalo
 	}
 
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		return {nullptr, nullptr, PreservedError()};
+		return {nullptr, nullptr, ErrorData()};
 	} else {
 		auto except = CreateMissingEntryException(context, name, type, schemas, error_context);
-		return {nullptr, nullptr, PreservedError(except)};
+		return {nullptr, nullptr, ErrorData(except)};
 	}
 }
 
@@ -649,32 +733,30 @@ CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, CatalogType t
                                            QueryErrorContext error_context) {
 	auto entries = GetCatalogEntries(context, catalog, schema);
 	vector<CatalogLookup> lookups;
+	vector<CatalogLookup> final_lookups;
 	lookups.reserve(entries.size());
 	for (auto &entry : entries) {
+		optional_ptr<Catalog> catalog_entry;
 		if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-			auto catalog_entry = Catalog::GetCatalogEntry(context, entry.catalog);
-			if (!catalog_entry) {
-				return {nullptr, nullptr, PreservedError()};
-			}
-			lookups.emplace_back(*catalog_entry, entry.schema);
+			catalog_entry = Catalog::GetCatalogEntry(context, entry.catalog);
 		} else {
-			lookups.emplace_back(Catalog::GetCatalog(context, entry.catalog), entry.schema);
+			catalog_entry = &Catalog::GetCatalog(context, entry.catalog);
 		}
+		if (!catalog_entry) {
+			return {nullptr, nullptr, ErrorData()};
+		}
+		D_ASSERT(catalog_entry);
+		auto lookup_behavior = catalog_entry->CatalogTypeLookupRule(type);
+		if (lookup_behavior == CatalogLookupBehavior::STANDARD) {
+			lookups.emplace_back(*catalog_entry, entry.schema);
+		} else if (lookup_behavior == CatalogLookupBehavior::LOWER_PRIORITY) {
+			final_lookups.emplace_back(*catalog_entry, entry.schema);
+		}
+	}
+	for (auto &lookup : final_lookups) {
+		lookups.emplace_back(std::move(lookup));
 	}
 	return Catalog::TryLookupEntry(context, lookups, type, name, if_not_found, error_context);
-}
-
-CatalogEntry &Catalog::GetEntry(ClientContext &context, const string &schema, const string &name) {
-	vector<CatalogType> entry_types {CatalogType::TABLE_ENTRY, CatalogType::SEQUENCE_ENTRY};
-
-	for (auto entry_type : entry_types) {
-		auto result = GetEntry(context, entry_type, schema, name, OnEntryNotFound::RETURN_NULL);
-		if (result) {
-			return *result;
-		}
-	}
-
-	throw CatalogException("CatalogElement \"%s.%s\" does not exist!", schema, name);
 }
 
 optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType type, const string &schema_name,
@@ -684,12 +766,12 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType
 
 	// Try autoloading extension to resolve lookup
 	if (!lookup_entry.Found()) {
-		if (AutoLoadExtensionByCatalogEntry(context, type, name)) {
+		if (AutoLoadExtensionByCatalogEntry(*context.db, type, name)) {
 			lookup_entry = TryLookupEntry(context, type, schema_name, name, if_not_found, error_context);
 		}
 	}
 
-	if (lookup_entry.error) {
+	if (lookup_entry.error.HasError()) {
 		lookup_entry.error.Throw();
 	}
 
@@ -708,12 +790,12 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType
 
 	// Try autoloading extension to resolve lookup
 	if (!result.Found()) {
-		if (AutoLoadExtensionByCatalogEntry(context, type, name)) {
+		if (AutoLoadExtensionByCatalogEntry(*context.db, type, name)) {
 			result = TryLookupEntry(context, type, catalog, schema, name, if_not_found, error_context);
 		}
 	}
 
-	if (result.error) {
+	if (result.error.HasError()) {
 		result.error.Throw();
 	}
 
@@ -742,21 +824,6 @@ optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(ClientContext &context, cons
 		}
 	}
 	return nullptr;
-}
-
-LogicalType Catalog::GetType(ClientContext &context, const string &schema, const string &name,
-                             OnEntryNotFound if_not_found) {
-	auto type_entry = GetEntry<TypeCatalogEntry>(context, schema, name, if_not_found);
-	if (!type_entry) {
-		return LogicalType::INVALID;
-	}
-	return type_entry->user_type;
-}
-
-LogicalType Catalog::GetType(ClientContext &context, const string &catalog_name, const string &schema,
-                             const string &name) {
-	auto &type_entry = Catalog::GetEntry<TypeCatalogEntry>(context, catalog_name, schema, name);
-	return type_entry.user_type;
 }
 
 vector<reference<SchemaCatalogEntry>> Catalog::GetSchemas(ClientContext &context) {
@@ -816,14 +883,22 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetAllSchemas(ClientContext &cont
 	return result;
 }
 
-void Catalog::Alter(ClientContext &context, AlterInfo &info) {
-	ModifyCatalog();
-	auto lookup = LookupEntry(context, info.GetCatalogType(), info.schema, info.name, info.if_not_found);
-
-	if (!lookup.Found()) {
-		return;
+void Catalog::Alter(CatalogTransaction transaction, AlterInfo &info) {
+	if (transaction.HasContext()) {
+		auto lookup =
+		    LookupEntry(transaction.GetContext(), info.GetCatalogType(), info.schema, info.name, info.if_not_found);
+		if (!lookup.Found()) {
+			return;
+		}
+		return lookup.schema->Alter(transaction, info);
 	}
-	return lookup.schema->Alter(context, info);
+	D_ASSERT(info.if_not_found == OnEntryNotFound::THROW_EXCEPTION);
+	auto &schema = GetSchema(transaction, info.schema);
+	return schema.Alter(transaction, info);
+}
+
+void Catalog::Alter(ClientContext &context, AlterInfo &info) {
+	Alter(GetCatalogTransaction(context), info);
 }
 
 vector<MetadataBlockInfo> Catalog::GetMetadataInfo(ClientContext &context) {
@@ -831,17 +906,6 @@ vector<MetadataBlockInfo> Catalog::GetMetadataInfo(ClientContext &context) {
 }
 
 void Catalog::Verify() {
-}
-
-//===--------------------------------------------------------------------===//
-// Catalog Version
-//===--------------------------------------------------------------------===//
-idx_t Catalog::GetCatalogVersion() {
-	return GetDatabase().GetDatabaseManager().catalog_version;
-}
-
-idx_t Catalog::ModifyCatalog() {
-	return GetDatabase().GetDatabaseManager().ModifyCatalog();
 }
 
 bool Catalog::IsSystemCatalog() const {

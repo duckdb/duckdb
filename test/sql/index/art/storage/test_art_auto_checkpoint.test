@@ -1,0 +1,73 @@
+# name: test/sql/index/art/storage/test_art_auto_checkpoint.test
+# description: Test auto checkpointing of the ART after CREATE and INSERT
+# group: [storage]
+
+# this test does not work with vsize = 2 because a low vector size changes the WAL threshold
+require vector_size 2048
+
+# test auto checkpointing after CREATE INDEX
+
+load __TEST_DIR__/idx_checkpoint_create.db
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+PRAGMA wal_autocheckpoint='400KB';
+
+# inserts approximately 786.0 KiB (256KB block size) or 338.0 KiB (16KB block size) of in-memory data,
+# i.e., the WAL has to exceed that (barely)
+
+statement ok
+CREATE TABLE tbl AS SELECT range AS i FROM range(40000);
+
+query I
+SELECT used_blocks FROM pragma_database_size();
+----
+0
+
+statement ok
+CREATE INDEX idx ON tbl(i);
+
+# ensure that we automatically checkpointed
+
+query I
+SELECT used_blocks > 0 FROM pragma_database_size();
+----
+1
+
+# test auto checkpointing after INSERT
+
+load __TEST_DIR__/idx_checkpoint_insert.db
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+PRAGMA wal_autocheckpoint='400KB';
+
+# inserts just a few bytes (catalog entries), i.e., the WAL has to exceed that
+
+statement ok
+CREATE TABLE tbl (i INTEGER PRIMARY KEY);
+
+query I
+SELECT used_blocks FROM pragma_database_size();
+----
+0
+
+statement ok
+INSERT INTO tbl SELECT range FROM range(40000);
+
+# ensure that we automatically checkpointed
+
+query I
+SELECT used_blocks > 0 FROM pragma_database_size();
+----
+1

@@ -241,6 +241,70 @@
     ]
   },
   {
+    "class": "SetCommentInfo",
+    "base": "AlterInfo",
+    "enum": "SET_COMMENT",
+    "members": [
+      {
+        "id": 300,
+        "name": "entry_catalog_type",
+        "type": "CatalogType"
+      },
+      {
+        "id": 301,
+        "name": "comment_value",
+        "type": "Value"
+      }
+    ]
+  },
+  {
+    "class": "ChangeOwnershipInfo",
+    "base": "AlterInfo",
+    "enum": "CHANGE_OWNERSHIP",
+    "members": [
+      {
+        "id": 300,
+        "name": "entry_catalog_type",
+        "type": "CatalogType"
+      },
+      {
+        "id": 301,
+        "name": "owner_schema",
+        "type": "string"
+      },
+      {
+        "id": 302,
+        "name": "owner_name",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "SetColumnCommentInfo",
+    "base": "AlterInfo",
+    "enum": "SET_COLUMN_COMMENT",
+    "includes" : [
+      "duckdb/parser/parsed_data/comment_on_column_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 300,
+        "name": "catalog_entry_type",
+        "type": "CatalogType"
+      },
+      {
+        "id": 301,
+        "name": "comment_value",
+        "type": "Value"
+      },
+      {
+        "id": 302,
+        "name": "column_name",
+        "type": "string"
+      }
+    ]
+  },
+  {
     "class": "AlterViewInfo",
     "base": "AlterInfo",
     "enum": "ALTER_VIEW",
@@ -287,6 +351,32 @@
         "id": 202,
         "name": "options",
         "type": "unordered_map<string, Value>"
+      },
+      {
+        "id": 203,
+        "name": "on_conflict",
+        "type": "OnCreateConflict",
+        "default": "OnCreateConflict::ERROR_ON_CONFLICT"
+      }
+    ]
+  },
+  {
+    "class": "CopyDatabaseInfo",
+    "base": "ParseInfo",
+    "enum": "COPY_DATABASE_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/copy_database_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "target_database",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "entries",
+        "type": "vector<CreateInfo*>"
       }
     ]
   },
@@ -337,6 +427,11 @@
         "id": 207,
         "name": "options",
         "type": "case_insensitive_map_t<vector<Value>>"
+      },
+      {
+        "id": 208,
+        "name": "select_statement",
+        "type": "QueryNode*"
       }
     ]
   },
@@ -402,6 +497,11 @@
         "id": 206,
         "name": "allow_drop_internal",
         "type": "bool"
+      },
+      {
+        "id": 207,
+        "name": "extra_drop_info",
+        "type": "unique_ptr<ExtraDropInfo>"
       }
     ]
   },
@@ -427,6 +527,31 @@
         "id": 202,
         "name": "repository",
         "type": "string"
+      },
+      {
+        "id": 203,
+        "name": "version",
+        "type": "string"
+      },
+      {
+        "id": 204,
+        "name": "repo_is_alias",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "class": "UpdateExtensionsInfo",
+    "base": "ParseInfo",
+    "enum": "UPDATE_EXTENSIONS_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/update_extensions_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "extensions_to_update",
+        "type": "vector<string>"
       }
     ]
   },
@@ -446,12 +571,12 @@
       {
         "id": 201,
         "name": "parameters",
-        "type": "vector<Value>"
+        "type": "vector<ParsedExpression*>"
       },
       {
         "id": 202,
         "name": "named_parameters",
-        "type": "named_parameter_map_t"
+        "type": "case_insensitive_map_t<ParsedExpression*>"
       }
     ]
   },
@@ -467,6 +592,11 @@
         "id": 200,
         "name": "type",
         "type": "TransactionType"
+      },
+      {
+        "id": 201,
+        "name": "modifier",
+        "type": "TransactionModifierType"
       }
     ]
   },
@@ -482,6 +612,21 @@
         "id": 200,
         "name": "options",
         "type": "VacuumOptions"
+      },
+      {
+        "id": 201,
+        "name": "has_table",
+        "type": "bool"
+      },
+      {
+        "id": 202,
+        "name": "ref",
+        "type": "unique_ptr<TableRef>"
+      },
+      {
+        "id": 203,
+        "name": "columns",
+        "type": "vector<string>"
       }
     ],
     "constructor": ["options"]

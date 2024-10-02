@@ -1,7 +1,8 @@
+
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb_python/import_cache/modules/ipython_module.hpp
+// duckdb_python/import_cache/modules/ipywidgets_module.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,17 +14,16 @@
 namespace duckdb {
 
 struct IpywidgetsCacheItem : public PythonImportCacheItem {
+
 public:
 	static constexpr const char *Name = "ipywidgets";
 
 public:
+	IpywidgetsCacheItem() : PythonImportCacheItem("ipywidgets"), FloatProgress("FloatProgress", this) {
+	}
 	~IpywidgetsCacheItem() override {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		FloatProgress.LoadAttribute("FloatProgress", cache, *this);
-	}
 
-public:
 	PythonImportCacheItem FloatProgress;
 
 protected:

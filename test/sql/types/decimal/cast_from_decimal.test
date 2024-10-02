@@ -13,15 +13,23 @@ SELECT 127::DECIMAL(3,0)::TINYINT, -127::DECIMAL(3,0)::TINYINT, -7::DECIMAL(9,1)
 
 statement error
 SELECT 128::DECIMAL(3,0)::TINYINT
+----
+<REGEX>:Conversion Error.*Failed to cast decimal.*
 
 statement error
 SELECT -128::DECIMAL(9,0)::TINYINT
+----
+<REGEX>:Conversion Error.*Failed to cast decimal.*
 
 statement error
 SELECT 128::DECIMAL(18,0)::TINYINT
+----
+<REGEX>:Conversion Error.*Failed to cast decimal.*
 
 statement error
 SELECT 14751947891758972421513::DECIMAL(38,0)::TINYINT
+----
+<REGEX>:Conversion Error.*Failed to cast decimal.*
 
 # smallint
 query IIIII
@@ -31,12 +39,18 @@ SELECT 127::DECIMAL(3,0)::SMALLINT, -32767::DECIMAL(5,0)::SMALLINT, -7::DECIMAL(
 
 statement error
 SELECT -32768::DECIMAL(9,0)::SMALLINT
+----
+<REGEX>:Conversion Error.*Failed to cast decimal.*
 
 statement error
 SELECT 32768::DECIMAL(18,0)::SMALLINT
+----
+<REGEX>:Conversion Error.*Failed to cast decimal.*
 
 statement error
 SELECT 14751947891758972421513::DECIMAL(38,0)::SMALLINT
+----
+<REGEX>:Conversion Error.*Failed to cast decimal.*
 
 # integer
 query IIIII
@@ -46,9 +60,13 @@ SELECT 127::DECIMAL(3,0)::INTEGER, -2147483647::DECIMAL(10,0)::INTEGER, -7::DECI
 
 statement error
 SELECT 2147483648::DECIMAL(18,0)::INTEGER
+----
+<REGEX>:Conversion Error.*Failed to cast decimal.*
 
 statement error
 SELECT 14751947891758972421513::DECIMAL(38,0)::INTEGER
+----
+<REGEX>:Conversion Error.*Failed to cast decimal.*
 
 # bigint
 query IIIII
@@ -58,6 +76,8 @@ SELECT 127::DECIMAL(3,0)::BIGINT, -9223372036854775807::DECIMAL(19,0)::BIGINT, -
 
 statement error
 SELECT 14751947891758972421513::DECIMAL(38,0)::BIGINT
+----
+<REGEX>:Conversion Error.*Failed to cast decimal.*
 
 # hugeint
 query IIIII

@@ -2,8 +2,7 @@
 # description: Test information_schema functions
 # group: [table_function]
 
-require skip_reload
-
+require noforcestorage
 
 statement ok
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA;
@@ -72,6 +71,55 @@ query ITT
 SELECT ordinal_position, column_name, data_type FROM information_schema.columns WHERE table_schema='scheme' AND table_name='vintegers' AND table_catalog IS NOT NULL
 ----
 1	i	INTEGER
+
+query IIII
+SELECT character_set_name, character_repertoire, form_of_use, default_collate_name FROM information_schema.character_sets
+----
+UTF8	UCS	UTF8	ucs_basic
+
+statement ok
+SELECT * FROM information_schema.referential_constraints
+
+statement ok
+SELECT * FROM information_schema.key_column_usage
+
+statement ok
+SELECT * FROM information_schema.table_constraints
+
+statement ok
+CREATE TABLE scheme.dept (dept_id INT PRIMARY KEY, dept_name VARCHAR(100) NOT NULL)
+
+statement ok
+CREATE TABLE scheme.emp (emp_id INT PRIMARY KEY, first_name VARCHAR(100) NOT NULL, last_name VARCHAR(100) NOT NULL, ssn INT NOT NULL UNIQUE, salary DECIMAL(10, 2) NOT NULL CHECK (salary > 0), dept_id INT REFERENCES scheme.dept(dept_id))
+
+query IIIIIII
+SELECT table_catalog, table_schema, table_name, column_name, constraint_catalog, constraint_schema, constraint_name FROM information_schema.constraint_column_usage WHERE table_schema = 'scheme' AND table_name = 'emp' ORDER BY column_name ASC
+----
+memory	scheme	emp	dept_id	memory	scheme	emp_dept_id_dept_id_fkey
+memory	scheme	emp	emp_id	memory	scheme	emp_emp_id_pkey
+memory	scheme	emp	salary	memory	scheme	emp_salary_check
+memory	scheme	emp	ssn	memory	scheme	emp_ssn_key
+
+query IIIIII
+SELECT table_catalog, table_schema, table_name, constraint_catalog, constraint_schema, constraint_name FROM information_schema.constraint_table_usage WHERE table_schema = 'scheme' AND table_name = 'emp' ORDER BY constraint_name ASC
+----
+memory	scheme	emp	memory	scheme	emp_dept_id_dept_id_fkey
+memory	scheme	emp	memory	scheme	emp_emp_id_pkey
+memory	scheme	emp	memory	scheme	emp_salary_check
+memory	scheme	emp	memory	scheme	emp_ssn_key
+
+query IIII
+SELECT constraint_catalog, constraint_schema, constraint_name, check_clause FROM information_schema.check_constraints WHERE constraint_schema = 'scheme' AND check_clause LIKE 'CHECK%'
+----
+memory	scheme	emp_salary_check	CHECK((salary > 0))
+
+statement ok
+CREATE OR REPLACE VIEW scheme.emp_dept_view AS SELECT emp.*, dept.dept_name FROM scheme.emp JOIN scheme.dept ON emp.dept_id = dept.dept_id;
+
+query IIIIIIIIII
+SELECT table_catalog, table_schema, table_name, SUBSTR (view_definition, 1, 32) AS view_definition_substr, check_option, is_updatable, is_insertable_into, is_trigger_updatable, is_trigger_deletable, is_trigger_insertable_into FROM information_schema.views WHERE table_schema = 'scheme' AND table_name = 'emp_dept_view';
+----
+memory	scheme	emp_dept_view	CREATE VIEW scheme.emp_dept_view	NONE	NO	NO	NO	NO	NO
 
 statement ok
 DROP SCHEMA scheme CASCADE;

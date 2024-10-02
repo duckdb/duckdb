@@ -1,0 +1,27 @@
+# name: test/sql/catalog/dependencies/rename_view_referenced_by_table_macro.test
+# group: [dependencies]
+
+statement ok
+pragma enable_verification;
+
+# Create a table so our view has something to reference
+statement ok
+create table tbl (a varchar);
+
+# Create the view
+statement ok
+create view vw as select * from tbl;
+
+# Create a table macro that references the view
+statement ok
+create macro static_table() as table select * from vw;
+
+# Rename the view (Postgres 16.0 does not block this ALTER)
+statement ok
+alter view vw rename to vw2;
+
+# Our table macro now errors
+statement error
+select * from static_table();
+----
+Catalog Error: Table with name vw does not exist!

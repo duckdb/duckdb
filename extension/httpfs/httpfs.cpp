@@ -1,57 +1,110 @@
 #include "httpfs.hpp"
 
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/file_opener.hpp"
-#include "duckdb/common/http_state.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/http_util.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
+#include "duckdb/logging/http_logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
+#include "http_state.hpp"
 
 #include <chrono>
+#include <map>
 #include <string>
 #include <thread>
 
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.hpp"
 
-#include <map>
-
 namespace duckdb {
 
-static duckdb::unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_headers(HeaderMap &header_map) {
+duckdb::unique_ptr<duckdb_httplib_openssl::Headers> HTTPFileSystem::InitializeHeaders(HeaderMap &header_map,
+                                                                                      const HTTPParams &http_params) {
 	auto headers = make_uniq<duckdb_httplib_openssl::Headers>();
 	for (auto &entry : header_map) {
 		headers->insert(entry);
 	}
+
+	for (auto &entry : http_params.extra_headers) {
+		headers->insert(entry);
+	}
+
 	return headers;
 }
 
-HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
-	uint64_t timeout = DEFAULT_TIMEOUT;
-	uint64_t retries = DEFAULT_RETRIES;
-	uint64_t retry_wait_ms = DEFAULT_RETRY_WAIT_MS;
-	float retry_backoff = DEFAULT_RETRY_BACKOFF;
-	bool force_download = DEFAULT_FORCE_DOWNLOAD;
-	Value value;
-	if (FileOpener::TryGetCurrentSetting(opener, "http_timeout", value)) {
-		timeout = value.GetValue<uint64_t>();
-	}
-	if (FileOpener::TryGetCurrentSetting(opener, "force_download", value)) {
-		force_download = value.GetValue<bool>();
-	}
-	if (FileOpener::TryGetCurrentSetting(opener, "http_retries", value)) {
-		retries = value.GetValue<uint64_t>();
-	}
-	if (FileOpener::TryGetCurrentSetting(opener, "http_retry_wait_ms", value)) {
-		retry_wait_ms = value.GetValue<uint64_t>();
-	}
-	if (FileOpener::TryGetCurrentSetting(opener, "http_retry_backoff", value)) {
-		retry_backoff = value.GetValue<float>();
+HTTPParams HTTPParams::ReadFrom(optional_ptr<FileOpener> opener, optional_ptr<FileOpenerInfo> info) {
+	auto result = HTTPParams();
+
+	// No point in continueing without an opener
+	if (!opener) {
+		return result;
 	}
 
-	return {timeout, retries, retry_wait_ms, retry_backoff, force_download};
+	Value value;
+
+	// Setting lookups
+	FileOpener::TryGetCurrentSetting(opener, "http_timeout", result.timeout, info);
+	FileOpener::TryGetCurrentSetting(opener, "force_download", result.force_download, info);
+	FileOpener::TryGetCurrentSetting(opener, "http_retries", result.retries, info);
+	FileOpener::TryGetCurrentSetting(opener, "http_retry_wait_ms", result.retry_wait_ms, info);
+	FileOpener::TryGetCurrentSetting(opener, "http_retry_backoff", result.retry_backoff, info);
+	FileOpener::TryGetCurrentSetting(opener, "http_keep_alive", result.keep_alive, info);
+	FileOpener::TryGetCurrentSetting(opener, "enable_server_cert_verification", result.enable_server_cert_verification,
+	                                 info);
+	FileOpener::TryGetCurrentSetting(opener, "ca_cert_file", result.ca_cert_file, info);
+	FileOpener::TryGetCurrentSetting(opener, "hf_max_per_page", result.hf_max_per_page, info);
+
+	// HTTP Secret lookups
+	KeyValueSecretReader settings_reader(*opener, info, "http");
+
+	string proxy_setting;
+	if (settings_reader.TryGetSecretKeyOrSetting<string>("http_proxy", "http_proxy", proxy_setting) &&
+	    !proxy_setting.empty()) {
+		idx_t port;
+		string host;
+		HTTPUtil::ParseHTTPProxyHost(proxy_setting, host, port);
+		result.http_proxy = host;
+		result.http_proxy_port = port;
+	}
+	settings_reader.TryGetSecretKeyOrSetting<string>("http_proxy_username", "http_proxy_username",
+	                                                 result.http_proxy_username);
+	settings_reader.TryGetSecretKeyOrSetting<string>("http_proxy_password", "http_proxy_password",
+	                                                 result.http_proxy_password);
+	settings_reader.TryGetSecretKey<string>("bearer_token", result.bearer_token);
+
+	Value extra_headers;
+	if (settings_reader.TryGetSecretKey("extra_http_headers", extra_headers)) {
+		auto children = MapValue::GetChildren(extra_headers);
+		for (const auto &child : children) {
+			auto kv = StructValue::GetChildren(child);
+			D_ASSERT(kv.size() == 2);
+			result.extra_headers[kv[0].GetValue<string>()] = kv[1].GetValue<string>();
+		}
+	}
+
+	return result;
+}
+
+unique_ptr<duckdb_httplib_openssl::Client> HTTPClientCache::GetClient() {
+	lock_guard<mutex> lck(lock);
+	if (clients.size() == 0) {
+		return nullptr;
+	}
+
+	auto client = std::move(clients.back());
+	clients.pop_back();
+	return client;
+}
+
+void HTTPClientCache::StoreClient(unique_ptr<duckdb_httplib_openssl::Client> client) {
+	lock_guard<mutex> lck(lock);
+	clients.push_back(std::move(client));
 }
 
 void HTTPFileSystem::ParseUrl(string &url, string &path_out, string &proto_host_port_out) {
@@ -73,9 +126,10 @@ void HTTPFileSystem::ParseUrl(string &url, string &path_out, string &proto_host_
 
 // Retry the request performed by fun using the exponential backoff strategy defined in params. Before retry, the
 // retry callback is called
-static duckdb::unique_ptr<ResponseWrapper>
-RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &request, string &url, string method,
-                    const HTTPParams &params, const std::function<void(void)> &retry_cb = {}) {
+duckdb::unique_ptr<ResponseWrapper>
+HTTPFileSystem::RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &request, string &url,
+                                    string method, const HTTPParams &params,
+                                    const std::function<void(void)> &retry_cb) {
 	idx_t tries = 0;
 	while (true) {
 		std::exception_ptr caught_e = nullptr;
@@ -100,6 +154,7 @@ RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &r
 			case 408: // Request Timeout
 			case 418: // Server is pretending to be a teapot
 			case 429: // Rate limiter hit
+			case 500: // Server has error
 			case 503: // Server has error
 			case 504: // Server has error
 				break;
@@ -122,7 +177,7 @@ RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &r
 			if (caught_e) {
 				std::rethrow_exception(caught_e);
 			} else if (err == duckdb_httplib_openssl::Error::Success) {
-				throw IOException("Request returned HTTP %d for HTTP %s to '%s'", status, method, url);
+				throw HTTPException(response, "Request returned HTTP %d for HTTP %s to '%s'", status, method, url);
 			} else {
 				throw IOException("%s error for HTTP %s to '%s'", to_string(err), method, url);
 			}
@@ -133,18 +188,18 @@ RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &r
 unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                         duckdb::unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len,
                                                         char *buffer_in, idx_t buffer_in_len, string params) {
-	auto &hfs = (HTTPFileHandle &)handle;
+	auto &hfh = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
-	auto headers = initialize_http_headers(header_map);
+	auto headers = InitializeHeaders(header_map, hfh.http_params);
 	idx_t out_offset = 0;
 
 	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
-		auto client = GetClient(hfs.http_params, proto_host_port.c_str());
+		auto client = GetClient(hfh.http_params, proto_host_port.c_str(), &hfh);
 
-		if (hfs.state) {
-			hfs.state->post_count++;
-			hfs.state->total_bytes_sent += buffer_in_len;
+		if (hfh.state) {
+			hfh.state->post_count++;
+			hfh.state->total_bytes_sent += buffer_in_len;
 		}
 
 		// We use a custom Request method here, because there is no Post call with a contentreceiver in httplib
@@ -155,8 +210,8 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 		req.headers.emplace("Content-Type", "application/octet-stream");
 		req.content_receiver = [&](const char *data, size_t data_length, uint64_t /*offset*/,
 		                           uint64_t /*total_length*/) {
-			if (hfs.state) {
-				hfs.state->total_bytes_received += data_length;
+			if (hfh.state) {
+				hfh.state->total_bytes_received += data_length;
 			}
 			if (out_offset + data_length > buffer_out_len) {
 				// Buffer too small, increase its size by at least 2x to fit the new value
@@ -174,72 +229,98 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 		return client->send(req);
 	});
 
-	return RunRequestWithRetry(request, url, "POST", hfs.http_params);
+	return RunRequestWithRetry(request, url, "POST", hfh.http_params);
 }
 
 unique_ptr<duckdb_httplib_openssl::Client> HTTPFileSystem::GetClient(const HTTPParams &http_params,
-                                                                     const char *proto_host_port) {
+                                                                     const char *proto_host_port,
+                                                                     optional_ptr<HTTPFileHandle> hfh) {
 	auto client = make_uniq<duckdb_httplib_openssl::Client>(proto_host_port);
 	client->set_follow_location(true);
-	client->set_keep_alive(true);
-	client->enable_server_certificate_verification(false);
+	client->set_keep_alive(http_params.keep_alive);
+	if (!http_params.ca_cert_file.empty()) {
+		client->set_ca_cert_path(http_params.ca_cert_file.c_str());
+	}
+	client->enable_server_certificate_verification(http_params.enable_server_cert_verification);
 	client->set_write_timeout(http_params.timeout);
 	client->set_read_timeout(http_params.timeout);
 	client->set_connection_timeout(http_params.timeout);
 	client->set_decompress(false);
+	if (hfh && hfh->http_logger) {
+		client->set_logger(
+		    hfh->http_logger->GetLogger<duckdb_httplib_openssl::Request, duckdb_httplib_openssl::Response>());
+	}
+	if (!http_params.bearer_token.empty()) {
+		client->set_bearer_token_auth(http_params.bearer_token.c_str());
+	}
+
+	if (!http_params.http_proxy.empty()) {
+		client->set_proxy(http_params.http_proxy, http_params.http_proxy_port);
+
+		if (!http_params.http_proxy_username.empty()) {
+			client->set_proxy_basic_auth(http_params.http_proxy_username, http_params.http_proxy_password);
+		}
+	}
+
 	return client;
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                        char *buffer_in, idx_t buffer_in_len, string params) {
-	auto &hfs = (HTTPFileHandle &)handle;
+	auto &hfh = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
-	auto headers = initialize_http_headers(header_map);
+	auto headers = InitializeHeaders(header_map, hfh.http_params);
 
 	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
-		auto client = GetClient(hfs.http_params, proto_host_port.c_str());
-		if (hfs.state) {
-			hfs.state->put_count++;
-			hfs.state->total_bytes_sent += buffer_in_len;
+		auto client = GetClient(hfh.http_params, proto_host_port.c_str(), &hfh);
+		if (hfh.state) {
+			hfh.state->put_count++;
+			hfh.state->total_bytes_sent += buffer_in_len;
 		}
 		return client->Put(path.c_str(), *headers, buffer_in, buffer_in_len, "application/octet-stream");
 	});
 
-	return RunRequestWithRetry(request, url, "PUT", hfs.http_params);
+	return RunRequestWithRetry(request, url, "PUT", hfh.http_params);
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, string url, HeaderMap header_map) {
-	auto &hfs = (HTTPFileHandle &)handle;
+	auto &hfh = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
-	auto headers = initialize_http_headers(header_map);
+	auto headers = InitializeHeaders(header_map, hfh.http_params);
+	auto http_client = hfh.GetClient(nullptr);
 
 	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
-		if (hfs.state) {
-			hfs.state->head_count++;
+		if (hfh.state) {
+			hfh.state->head_count++;
 		}
-		return hfs.http_client->Head(path.c_str(), *headers);
+		return http_client->Head(path.c_str(), *headers);
 	});
 
+	// Refresh the client on retries
 	std::function<void(void)> on_retry(
-	    [&]() { hfs.http_client = GetClient(hfs.http_params, proto_host_port.c_str()); });
+	    [&]() { http_client = GetClient(hfh.http_params, proto_host_port.c_str(), &hfh); });
 
-	return RunRequestWithRetry(request, url, "HEAD", hfs.http_params, on_retry);
+	auto response = RunRequestWithRetry(request, url, "HEAD", hfh.http_params, on_retry);
+	hfh.StoreClient(std::move(http_client));
+	return response;
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, string url, HeaderMap header_map) {
-	auto &hfh = (HTTPFileHandle &)handle;
+	auto &hfh = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
-	auto headers = initialize_http_headers(header_map);
+	auto headers = InitializeHeaders(header_map, hfh.http_params);
 
 	D_ASSERT(hfh.cached_file_handle);
+
+	auto http_client = hfh.GetClient(nullptr);
 
 	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
 		D_ASSERT(hfh.state);
 		hfh.state->get_count++;
-		return hfh.http_client->Get(
+		return http_client->Get(
 		    path.c_str(), *headers,
 		    [&](const duckdb_httplib_openssl::Response &response) {
 			    if (response.status >= 400) {
@@ -279,29 +360,33 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 	});
 
 	std::function<void(void)> on_retry(
-	    [&]() { hfh.http_client = GetClient(hfh.http_params, proto_host_port.c_str()); });
+	    [&]() { http_client = GetClient(hfh.http_params, proto_host_port.c_str(), &hfh); });
 
-	return RunRequestWithRetry(request, url, "GET", hfh.http_params, on_retry);
+	auto response = RunRequestWithRetry(request, url, "GET", hfh.http_params, on_retry);
+	hfh.StoreClient(std::move(http_client));
+	return response;
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                             idx_t file_offset, char *buffer_out, idx_t buffer_out_len) {
-	auto &hfs = (HTTPFileHandle &)handle;
+	auto &hfh = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
-	auto headers = initialize_http_headers(header_map);
+	auto headers = InitializeHeaders(header_map, hfh.http_params);
 
 	// send the Range header to read only subset of file
 	string range_expr = "bytes=" + to_string(file_offset) + "-" + to_string(file_offset + buffer_out_len - 1);
 	headers->insert(pair<string, string>("Range", range_expr));
 
+	auto http_client = hfh.GetClient(nullptr);
+
 	idx_t out_offset = 0;
 
 	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
-		if (hfs.state) {
-			hfs.state->get_count++;
+		if (hfh.state) {
+			hfh.state->get_count++;
 		}
-		return hfs.http_client->Get(
+		return http_client->Get(
 		    path.c_str(), *headers,
 		    [&](const duckdb_httplib_openssl::Response &response) {
 			    if (response.status >= 400) {
@@ -310,7 +395,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 					    error += " This could mean the file was changed. Try disabling the duckdb http metadata cache "
 					             "if enabled, and confirm the server supports range requests.";
 				    }
-				    throw IOException(error);
+				    throw HTTPException(response, error);
 			    }
 			    if (response.status < 300) { // done redirecting
 				    out_offset = 0;
@@ -325,8 +410,8 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 			    return true;
 		    },
 		    [&](const char *data, size_t data_length) {
-			    if (hfs.state) {
-				    hfs.state->total_bytes_received += data_length;
+			    if (hfh.state) {
+				    hfh.state->total_bytes_received += data_length;
 			    }
 			    if (buffer_out != nullptr) {
 				    if (data_length + out_offset > buffer_out_len) {
@@ -346,27 +431,62 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 	});
 
 	std::function<void(void)> on_retry(
-	    [&]() { hfs.http_client = GetClient(hfs.http_params, proto_host_port.c_str()); });
+	    [&]() { http_client = GetClient(hfh.http_params, proto_host_port.c_str(), &hfh); });
 
-	return RunRequestWithRetry(request, url, "GET Range", hfs.http_params, on_retry);
+	auto response = RunRequestWithRetry(request, url, "GET Range", hfh.http_params, on_retry);
+	hfh.StoreClient(std::move(http_client));
+	return response;
 }
 
-HTTPFileHandle::HTTPFileHandle(FileSystem &fs, string path, uint8_t flags, const HTTPParams &http_params)
+HTTPFileHandle::HTTPFileHandle(FileSystem &fs, const string &path, FileOpenFlags flags, const HTTPParams &http_params)
     : FileHandle(fs, path), http_params(http_params), flags(flags), length(0), buffer_available(0), buffer_idx(0),
       file_offset(0), buffer_start(0), buffer_end(0) {
 }
 
-unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const string &path, uint8_t flags, FileLockType lock,
-                                                        FileCompressionType compression, FileOpener *opener) {
-	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
-	return duckdb::make_uniq<HTTPFileHandle>(*this, path, flags, HTTPParams::ReadFrom(opener));
+unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const string &path, FileOpenFlags flags,
+                                                        optional_ptr<FileOpener> opener) {
+	D_ASSERT(flags.Compression() == FileCompressionType::UNCOMPRESSED);
+
+	FileOpenerInfo info;
+	info.file_path = path;
+	auto params = HTTPParams::ReadFrom(opener, info);
+
+	auto secret_manager = FileOpener::TryGetSecretManager(opener);
+	auto transaction = FileOpener::TryGetCatalogTransaction(opener);
+	if (secret_manager && transaction) {
+		auto secret_match = secret_manager->LookupSecret(*transaction, path, "bearer");
+
+		if (secret_match.HasMatch()) {
+			const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*secret_match.secret_entry->secret);
+			params.bearer_token = kv_secret.TryGetValue("token", true).ToString();
+		}
+	}
+
+	auto result = duckdb::make_uniq<HTTPFileHandle>(*this, path, flags, params);
+
+	auto client_context = FileOpener::TryGetClientContext(opener);
+	if (client_context && ClientConfig::GetConfig(*client_context).enable_http_logging) {
+		result->http_logger = client_context->client_data->http_logger.get();
+	}
+
+	return result;
 }
 
-unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
-                                                FileCompressionType compression, FileOpener *opener) {
-	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
+unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, FileOpenFlags flags,
+                                                optional_ptr<FileOpener> opener) {
+	D_ASSERT(flags.Compression() == FileCompressionType::UNCOMPRESSED);
 
-	auto handle = CreateHandle(path, flags, lock, compression, opener);
+	if (flags.ReturnNullIfNotExists()) {
+		try {
+			auto handle = CreateHandle(path, flags, opener);
+			handle->Initialize(opener);
+			return std::move(handle);
+		} catch (...) {
+			return nullptr;
+		}
+	}
+
+	auto handle = CreateHandle(path, flags, opener);
 	handle->Initialize(opener);
 	return std::move(handle);
 }
@@ -374,7 +494,7 @@ unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flag
 // Buffered read from http file.
 // Note that buffering is disabled when FileFlags::FILE_FLAGS_DIRECT_IO is set
 void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	auto &hfh = (HTTPFileHandle &)handle;
+	auto &hfh = handle.Cast<HTTPFileHandle>();
 
 	D_ASSERT(hfh.state);
 	if (hfh.cached_file_handle) {
@@ -389,8 +509,9 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 	idx_t to_read = nr_bytes;
 	idx_t buffer_offset = 0;
 
-	// Don't buffer when DirectIO is set.
-	if (hfh.flags & FileFlags::FILE_FLAGS_DIRECT_IO && to_read > 0) {
+	// Don't buffer when DirectIO is set or when we are doing parallel reads
+	bool skip_buffer = hfh.flags.DirectIO() || hfh.flags.RequireParallelAccess();
+	if (skip_buffer && to_read > 0) {
 		GetRangeRequest(hfh, hfh.path, {}, location, (char *)buffer, to_read);
 		hfh.buffer_available = 0;
 		hfh.buffer_idx = 0;
@@ -467,19 +588,19 @@ void HTTPFileSystem::FileSync(FileHandle &handle) {
 }
 
 int64_t HTTPFileSystem::GetFileSize(FileHandle &handle) {
-	auto &sfh = (HTTPFileHandle &)handle;
+	auto &sfh = handle.Cast<HTTPFileHandle>();
 	return sfh.length;
 }
 
 time_t HTTPFileSystem::GetLastModifiedTime(FileHandle &handle) {
-	auto &sfh = (HTTPFileHandle &)handle;
+	auto &sfh = handle.Cast<HTTPFileHandle>();
 	return sfh.last_modified;
 }
 
-bool HTTPFileSystem::FileExists(const string &filename) {
+bool HTTPFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
 	try {
-		auto handle = OpenFile(filename.c_str(), FileFlags::FILE_FLAGS_READ);
-		auto &sfh = (HTTPFileHandle &)*handle;
+		auto handle = OpenFile(filename, FileFlags::FILE_FLAGS_READ, opener);
+		auto &sfh = handle->Cast<HTTPFileHandle>();
 		if (sfh.length == 0) {
 			return false;
 		}
@@ -494,58 +615,56 @@ bool HTTPFileSystem::CanHandleFile(const string &fpath) {
 }
 
 void HTTPFileSystem::Seek(FileHandle &handle, idx_t location) {
-	auto &sfh = (HTTPFileHandle &)handle;
+	auto &sfh = handle.Cast<HTTPFileHandle>();
 	sfh.file_offset = location;
 }
 
 idx_t HTTPFileSystem::SeekPosition(FileHandle &handle) {
-	auto &sfh = (HTTPFileHandle &)handle;
+	auto &sfh = handle.Cast<HTTPFileHandle>();
 	return sfh.file_offset;
 }
 
+optional_ptr<HTTPMetadataCache> HTTPFileSystem::GetGlobalCache() {
+	lock_guard<mutex> lock(global_cache_lock);
+	if (!global_metadata_cache) {
+		global_metadata_cache = make_uniq<HTTPMetadataCache>(false, true);
+	}
+	return global_metadata_cache.get();
+}
+
 // Get either the local, global, or no cache depending on settings
-static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(FileOpener *opener, HTTPFileSystem &httpfs) {
+static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(optional_ptr<FileOpener> opener, HTTPFileSystem &httpfs) {
+	auto db = FileOpener::TryGetDatabase(opener);
 	auto client_context = FileOpener::TryGetClientContext(opener);
-	if (!client_context) {
+	if (!db) {
 		return nullptr;
 	}
 
-	bool use_shared_cache = client_context->db->config.options.http_metadata_cache_enable;
-
+	bool use_shared_cache = db->config.options.http_metadata_cache_enable;
 	if (use_shared_cache) {
-		if (!httpfs.global_metadata_cache) {
-			httpfs.global_metadata_cache = make_uniq<HTTPMetadataCache>(false, true);
-		}
-		return httpfs.global_metadata_cache.get();
-	} else {
-		auto lookup = client_context->registered_state.find("http_cache");
-		if (lookup == client_context->registered_state.end()) {
-			auto cache = make_shared<HTTPMetadataCache>(true, true);
-			client_context->registered_state["http_cache"] = cache;
-			return cache.get();
-		} else {
-			return (HTTPMetadataCache *)lookup->second.get();
-		}
+		return httpfs.GetGlobalCache();
+	} else if (client_context) {
+		return client_context->registered_state->GetOrCreate<HTTPMetadataCache>("http_cache", true, true).get();
 	}
+	return nullptr;
 }
 
-void HTTPFileHandle::Initialize(FileOpener *opener) {
-	InitializeClient();
-	auto &hfs = (HTTPFileSystem &)file_system;
+void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
+	auto &hfs = file_system.Cast<HTTPFileSystem>();
 	state = HTTPState::TryGetState(opener);
 	if (!state) {
-		if (!opener) {
-			// If opener is not available (e.g., FileExists()), we create the HTTPState here.
-			state = make_shared<HTTPState>();
-		} else {
-			throw InternalException("State was not defined in this HTTP File Handle");
-		}
+		state = make_shared_ptr<HTTPState>();
+	}
+
+	auto client_context = FileOpener::TryGetClientContext(opener);
+	if (client_context && ClientConfig::GetConfig(*client_context).enable_http_logging) {
+		http_logger = client_context->client_data->http_logger.get();
 	}
 
 	auto current_cache = TryGetMetadataCache(opener, hfs);
 
 	bool should_write_cache = false;
-	if (!http_params.force_download && current_cache && !(flags & FileFlags::FILE_FLAGS_WRITE)) {
+	if (!http_params.force_download && current_cache && !flags.OpenForWriting()) {
 
 		HTTPMetadataCacheEntry value;
 		bool found = current_cache->Find(path, value);
@@ -554,7 +673,7 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 			last_modified = value.last_modified;
 			length = value.length;
 
-			if (flags & FileFlags::FILE_FLAGS_READ) {
+			if (flags.OpenForReading()) {
 				read_buffer = duckdb::unique_ptr<data_t[]>(new data_t[READ_BUFFER_LEN]);
 			}
 			return;
@@ -564,7 +683,7 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 	}
 
 	// If we're writing to a file, we might as well remove it from the cache
-	if (current_cache && flags & FileFlags::FILE_FLAGS_WRITE) {
+	if (current_cache && flags.OpenForWriting()) {
 		current_cache->Erase(path);
 	}
 
@@ -572,8 +691,8 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 	string range_length;
 
 	if (res->code != 200) {
-		if ((flags & FileFlags::FILE_FLAGS_WRITE) && res->code == 404) {
-			if (!(flags & FileFlags::FILE_FLAGS_FILE_CREATE) && !(flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW)) {
+		if (flags.OpenForWriting() && res->code == 404) {
+			if (!flags.CreateFileIfNotExists() && !flags.OverwriteExistingFile()) {
 				throw IOException("Unable to open URL \"" + path +
 				                  "\" for writing: file does not exist and CREATE flag is not set");
 			}
@@ -581,7 +700,7 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 			return;
 		} else {
 			// HEAD request fail, use Range request for another try (read only one byte)
-			if ((flags & FileFlags::FILE_FLAGS_READ) && res->code != 404) {
+			if (flags.OpenForReading() && res->code != 404) {
 				auto range_res = hfs.GetRangeRequest(*this, path, {}, 0, nullptr, 2);
 				if (range_res->code != 206) {
 					throw IOException("Unable to connect to URL \"%s\": %d (%s)", path, res->code, res->error);
@@ -600,14 +719,14 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 				}
 				res = std::move(range_res);
 			} else {
-				throw IOException("Unable to connect to URL \"%s\": %s (%s)", res->http_url, to_string(res->code),
-				                  res->error);
+				throw HTTPException(*res, "Unable to connect to URL \"%s\": %s (%s)", res->http_url,
+				                    to_string(res->code), res->error);
 			}
 		}
 	}
 
 	// Initialize the read buffer now that we know the file exists
-	if (flags & FileFlags::FILE_FLAGS_READ) {
+	if (flags.OpenForReading()) {
 		read_buffer = duckdb::unique_ptr<data_t[]>(new data_t[READ_BUFFER_LEN]);
 	}
 
@@ -634,11 +753,18 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 			// Try to fully download the file first
 			auto full_download_result = hfs.GetRequest(*this, path, {});
 			if (full_download_result->code != 200) {
-				throw IOException("Full download failed to to URL \"%s\": %s (%s)", full_download_result->http_url,
-				                  to_string(full_download_result->code), full_download_result->error);
+				throw HTTPException(*res, "Full download failed to to URL \"%s\": %s (%s)",
+				                    full_download_result->http_url, to_string(full_download_result->code),
+				                    full_download_result->error);
 			}
-			// Mark the file as initialized, unlocking it and allowing parallel reads
-			cached_file_handle->SetInitialized();
+
+			// Mark the file as initialized, set its final length, and unlock it to allowing parallel reads
+			cached_file_handle->SetInitialized(length);
+
+			// We shouldn't write these to cache
+			should_write_cache = false;
+		} else {
+			length = cached_file_handle->GetSize();
 		}
 	}
 
@@ -661,10 +787,32 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 	}
 }
 
-void HTTPFileHandle::InitializeClient() {
+unique_ptr<duckdb_httplib_openssl::Client> HTTPFileHandle::GetClient(optional_ptr<ClientContext> context) {
+	// Try to fetch a cached client
+	auto cached_client = client_cache.GetClient();
+	if (cached_client) {
+		return cached_client;
+	}
+
+	// Create a new client
+	return CreateClient(context);
+}
+
+unique_ptr<duckdb_httplib_openssl::Client> HTTPFileHandle::CreateClient(optional_ptr<ClientContext> context) {
+	// Create a new client
 	string path_out, proto_host_port;
 	HTTPFileSystem::ParseUrl(path, path_out, proto_host_port);
-	http_client = HTTPFileSystem::GetClient(this->http_params, proto_host_port.c_str());
+	auto http_client = HTTPFileSystem::GetClient(this->http_params, proto_host_port.c_str(), this);
+	if (context && ClientConfig::GetConfig(*context).enable_http_logging) {
+		http_logger = context->client_data->http_logger.get();
+		http_client->set_logger(
+		    http_logger->GetLogger<duckdb_httplib_openssl::Request, duckdb_httplib_openssl::Response>());
+	}
+	return http_client;
+}
+
+void HTTPFileHandle::StoreClient(unique_ptr<duckdb_httplib_openssl::Client> client) {
+	client_cache.StoreClient(std::move(client));
 }
 
 ResponseWrapper::ResponseWrapper(duckdb_httplib_openssl::Response &res, string &original_url) {

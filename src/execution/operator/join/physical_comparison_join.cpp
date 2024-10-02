@@ -1,5 +1,5 @@
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
+
 #include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
@@ -7,32 +7,69 @@ namespace duckdb {
 PhysicalComparisonJoin::PhysicalComparisonJoin(LogicalOperator &op, PhysicalOperatorType type,
                                                vector<JoinCondition> conditions_p, JoinType join_type,
                                                idx_t estimated_cardinality)
-    : PhysicalJoin(op, type, join_type, estimated_cardinality) {
-	conditions.resize(conditions_p.size());
-	// we reorder conditions so the ones with COMPARE_EQUAL occur first
-	idx_t equal_position = 0;
-	idx_t other_position = conditions_p.size() - 1;
-	for (idx_t i = 0; i < conditions_p.size(); i++) {
-		if (conditions_p[i].comparison == ExpressionType::COMPARE_EQUAL ||
-		    conditions_p[i].comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-			// COMPARE_EQUAL and COMPARE_NOT_DISTINCT_FROM, move to the start
-			conditions[equal_position++] = std::move(conditions_p[i]);
-		} else {
-			// other expression, move to the end
-			conditions[other_position--] = std::move(conditions_p[i]);
-		}
-	}
+    : PhysicalJoin(op, type, join_type, estimated_cardinality), conditions(std::move(conditions_p)) {
+	ReorderConditions(conditions);
 }
 
-string PhysicalComparisonJoin::ParamsToString() const {
-	string extra_info = EnumUtil::ToString(join_type) + "\n";
-	for (auto &it : conditions) {
-		string op = ExpressionTypeToOperator(it.comparison);
-		extra_info += it.left->GetName() + " " + op + " " + it.right->GetName() + "\n";
+InsertionOrderPreservingMap<string> PhysicalComparisonJoin::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	result["Join Type"] = EnumUtil::ToString(join_type);
+	string condition_info;
+	for (idx_t i = 0; i < conditions.size(); i++) {
+		auto &join_condition = conditions[i];
+		if (i > 0) {
+			condition_info += "\n";
+		}
+		condition_info +=
+		    StringUtil::Format("%s %s %s", join_condition.left->GetName(),
+		                       ExpressionTypeToOperator(join_condition.comparison), join_condition.right->GetName());
+		// string op = ExpressionTypeToOperator(it.comparison);
+		// extra_info += it.left->GetName() + " " + op + " " + it.right->GetName() + "\n";
 	}
-	extra_info += "\n[INFOSEPARATOR]\n";
-	extra_info += StringUtil::Format("EC: %llu\n", estimated_cardinality);
-	return extra_info;
+	result["Conditions"] = condition_info;
+	SetEstimatedCardinality(result, estimated_cardinality);
+	return result;
+}
+
+void PhysicalComparisonJoin::ReorderConditions(vector<JoinCondition> &conditions) {
+	// we reorder conditions so the ones with COMPARE_EQUAL occur first
+	// check if this is already the case
+	bool is_ordered = true;
+	bool seen_non_equal = false;
+	for (auto &cond : conditions) {
+		if (cond.comparison == ExpressionType::COMPARE_EQUAL ||
+		    cond.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			if (seen_non_equal) {
+				is_ordered = false;
+				break;
+			}
+		} else {
+			seen_non_equal = true;
+		}
+	}
+	if (is_ordered) {
+		// no need to re-order
+		return;
+	}
+	// gather lists of equal/other conditions
+	vector<JoinCondition> equal_conditions;
+	vector<JoinCondition> other_conditions;
+	for (auto &cond : conditions) {
+		if (cond.comparison == ExpressionType::COMPARE_EQUAL ||
+		    cond.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			equal_conditions.push_back(std::move(cond));
+		} else {
+			other_conditions.push_back(std::move(cond));
+		}
+	}
+	conditions.clear();
+	// reconstruct the sorted conditions
+	for (auto &cond : equal_conditions) {
+		conditions.push_back(std::move(cond));
+	}
+	for (auto &cond : other_conditions) {
+		conditions.push_back(std::move(cond));
+	}
 }
 
 void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool has_null, DataChunk &input,
@@ -80,4 +117,5 @@ void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool h
 		}
 	}
 }
+
 } // namespace duckdb

@@ -1,0 +1,13 @@
+# name: test/sql/storage/wal/test_wal_bc.test
+# description: Test WAL backwards compatibility
+# group: [wal]
+
+# The database is written with a vector size of 2048.
+require vector_size 2048
+
+load data/storage/wal_test_092.db readonly
+
+query II
+SELECT COUNT(*), SUM(i) FROM integers
+----
+1000	499500

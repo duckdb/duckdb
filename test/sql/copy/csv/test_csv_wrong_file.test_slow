@@ -1,0 +1,21 @@
+# name: test/sql/copy/csv/test_csv_wrong_file.test_slow
+# description: Test CSV read from wrong file format
+# group: [csv]
+
+statement ok
+pragma enable_verification;
+
+require tpch
+
+# load the DB from disk
+load __TEST_DIR__/test_csv_tpch.db
+
+statement ok
+CALL dbgen(sf=1)
+
+restart
+
+statement error
+from read_csv('__TEST_DIR__/test_csv_tpch.db')
+----
+It was not possible to automatically detect the CSV Parsing dialect

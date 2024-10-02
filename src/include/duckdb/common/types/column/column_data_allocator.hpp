@@ -32,10 +32,13 @@ public:
 	explicit ColumnDataAllocator(BufferManager &buffer_manager);
 	ColumnDataAllocator(ClientContext &context, ColumnDataAllocatorType allocator_type);
 	ColumnDataAllocator(ColumnDataAllocator &allocator);
+	~ColumnDataAllocator();
 
 	//! Returns an allocator object to allocate with. This returns the allocator in IN_MEMORY_ALLOCATOR, and a buffer
 	//! allocator in case of BUFFER_MANAGER_ALLOCATOR.
 	Allocator &GetAllocator();
+	//! Returns the buffer manager, if this is not an in-memory allocation.
+	BufferManager &GetBufferManager();
 	//! Returns the allocator type
 	ColumnDataAllocatorType GetType() {
 		return type;
@@ -56,6 +59,9 @@ public:
 		}
 		return total_size;
 	}
+	idx_t AllocationSize() const {
+		return allocated_size;
+	}
 
 public:
 	void AllocateData(idx_t size, uint32_t &block_id, uint32_t &offset, ChunkManagementState *chunk_state);
@@ -66,8 +72,8 @@ public:
 	void UnswizzlePointers(ChunkManagementState &state, Vector &result, idx_t v_offset, uint16_t count,
 	                       uint32_t block_id, uint32_t offset);
 
-	//! Deletes the block with the given id
-	void DeleteBlock(uint32_t block_id);
+	//! Prevents the block with the given id from being added to the eviction queue
+	void SetDestroyBufferUponUnpin(uint32_t block_id);
 
 private:
 	void AllocateEmptyBlock(idx_t size);
@@ -99,6 +105,8 @@ private:
 	bool shared = false;
 	//! Lock used in case this ColumnDataAllocator is shared across threads
 	mutex lock;
+	//! Total allocated size
+	idx_t allocated_size = 0;
 };
 
 } // namespace duckdb

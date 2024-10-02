@@ -27,7 +27,7 @@ struct UpdateInfo {
 	//! The vector index within the uncompressed segment
 	idx_t vector_index;
 	//! The amount of updated tuples
-	sel_t N;
+	sel_t N; // NOLINT
 	//! The maximum amount of tuples that can fit into this UpdateInfo
 	sel_t max;
 	//! The row ids of the tuples that have been updated. This should always be kept sorted!

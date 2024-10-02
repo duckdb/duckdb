@@ -1,0 +1,21 @@
+# name: test/sql/create/create_index_on_issue_13643.test
+# description: Issue #13643 - USE not affecting tables referenced after the ON keyword in CREATE INDEX
+# group: [create]
+
+statement ok
+CREATE SCHEMA db0;
+
+statement ok
+USE db0;
+
+statement ok
+CREATE TABLE t0 (a BIGINT PRIMARY KEY, b INT, c INT);
+
+statement ok
+CREATE INDEX t0_idx ON t0 (b);
+
+statement ok
+CREATE UNIQUE INDEX t0_uidx ON t0 (c);
+
+statement ok
+CREATE UNIQUE INDEX t0_uidx2 ON db0.t0 (c);

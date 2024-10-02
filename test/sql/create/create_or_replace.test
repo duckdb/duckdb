@@ -19,3 +19,4 @@ INSERT INTO integers VALUES (1, 2);
 
 statement error
 CREATE OR REPLACE TABLE IF NOT EXISTS integers(i INTEGER)
+----

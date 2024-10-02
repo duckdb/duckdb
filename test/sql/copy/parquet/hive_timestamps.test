@@ -1,0 +1,65 @@
+# name: test/sql/copy/parquet/hive_timestamps.test
+# description: Prefer strict hive timestamps to dates
+# group: [parquet]
+
+require parquet
+
+require skip_reload
+
+# requires notwindows for embedded spaces in the path
+require notwindows
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SELECT SETSEED(0.8675309);
+
+statement ok
+CREATE TABLE raw_data (
+  ts TIMESTAMP_S NOT NULL,
+  hits INTEGER NOT NULL
+);
+
+statement ok
+INSERT INTO raw_data
+SELECT *, (random() * 500)::INTEGER
+FROM RANGE(TIMESTAMP '2023-11-01', TIMESTAMP '2023-11-06', INTERVAL 1 MINUTE);
+
+statement ok
+CREATE TABLE timeseries AS (
+  SELECT DATE_TRUNC('hour', ts) AS bucket, SUM(hits)::BIGINT AS total
+  FROM raw_data
+  GROUP BY bucket
+);
+
+query II
+SELECT * 
+FROM timeseries
+ORDER BY ALL
+LIMIT 5
+----
+2023-11-01 00:00:00	15134
+2023-11-01 01:00:00	16968
+2023-11-01 02:00:00	13882
+2023-11-01 03:00:00	14317
+2023-11-01 04:00:00	14905
+
+statement ok
+COPY (
+  SELECT * FROM timeseries
+) TO '__TEST_DIR__/hive' (
+  FORMAT 'PARQUET', COMPRESSION 'SNAPPY', PARTITION_BY (bucket), OVERWRITE_OR_IGNORE
+);
+
+query II
+SELECT bucket, total 
+FROM read_parquet('__TEST_DIR__/hive/*/*.parquet') 
+ORDER BY ALL
+LIMIT 5
+----
+2023-11-01 00:00:00	15134
+2023-11-01 01:00:00	16968
+2023-11-01 02:00:00	13882
+2023-11-01 03:00:00	14317
+2023-11-01 04:00:00	14905

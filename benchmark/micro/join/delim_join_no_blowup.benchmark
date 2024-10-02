@@ -1,0 +1,32 @@
+# name: benchmark/micro/join/delim_join_no_blowup.benchmark
+# description: Delim joins dont result in a blow up and therefore take forever
+# group: [join]
+
+name High Cardinality Duplicate elimination join
+group join
+
+load
+create table big_table (id integer);
+insert into big_table select range from range(10000000);
+create table medium_1 (id integer, fk_to_big integer, fk_to_medium_2 integer);
+insert into  medium_1  (select 
+				range,
+                CASE WHEN range<10 THEN 0 ELSE range END,
+                range + 9999,
+                from range(10000));
+create table medium_2 (id integer);
+insert into  medium_2 (select range from range(10000));
+pragma disabled_optimizers='statistics_propagation';
+
+run
+SELECT *
+FROM big_table as bt
+WHERE
+exists(
+   SELECT *
+		 FROM medium_2
+			 INNER JOIN medium_1
+				 ON ((medium_2.id = medium_1.fk_to_medium_2))
+		 WHERE  
+		   (medium_1.fk_to_big % 7 = bt.id % 7)
+)

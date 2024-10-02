@@ -1,0 +1,147 @@
+{
+    "group": "threading_information",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_execute_tasks",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_database",
+                    "name": "database"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "max_tasks"
+                }
+            ],
+            "comment": {
+                "description": "Execute DuckDB tasks on this thread.\n\nWill return after `max_tasks` have been executed, or if there are no more tasks present.\n\n",
+                "param_comments": {
+                    "database": "The database object to execute tasks for",
+                    "max_tasks": "The maximum amount of tasks to execute"
+                }
+            }
+        },
+        {
+            "name": "duckdb_create_task_state",
+            "return_type": "duckdb_task_state",
+            "params": [
+                {
+                    "type": "duckdb_database",
+                    "name": "database"
+                }
+            ],
+            "comment": {
+                "description": "Creates a task state that can be used with duckdb_execute_tasks_state to execute tasks until\n`duckdb_finish_execution` is called on the state.\n\n`duckdb_destroy_state` must be called on the result.\n\n",
+                "param_comments": {
+                    "database": "The database object to create the task state for"
+                },
+                "return_value": "The task state that can be used with duckdb_execute_tasks_state."
+            }
+        },
+        {
+            "name": "duckdb_execute_tasks_state",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_task_state",
+                    "name": "state"
+                }
+            ],
+            "comment": {
+                "description": "Execute DuckDB tasks on this thread.\n\nThe thread will keep on executing tasks forever, until duckdb_finish_execution is called on the state.\nMultiple threads can share the same duckdb_task_state.\n\n",
+                "param_comments": {
+                    "state": "The task state of the executor"
+                }
+            }
+        },
+        {
+            "name": "duckdb_execute_n_tasks_state",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_task_state",
+                    "name": "state"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "max_tasks"
+                }
+            ],
+            "comment": {
+                "description": "Execute DuckDB tasks on this thread.\n\nThe thread will keep on executing tasks until either duckdb_finish_execution is called on the state,\nmax_tasks tasks have been executed or there are no more tasks to be executed.\n\nMultiple threads can share the same duckdb_task_state.\n\n",
+                "param_comments": {
+                    "state": "The task state of the executor",
+                    "max_tasks": "The maximum amount of tasks to execute"
+                },
+                "return_value": "The amount of tasks that have actually been executed"
+            }
+        },
+        {
+            "name": "duckdb_finish_execution",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_task_state",
+                    "name": "state"
+                }
+            ],
+            "comment": {
+                "description": "Finish execution on a specific task.\n\n",
+                "param_comments": {
+                    "state": "The task state to finish execution"
+                }
+            }
+        },
+        {
+            "name": "duckdb_task_state_is_finished",
+            "return_type": "bool",
+            "params": [
+                {
+                    "type": "duckdb_task_state",
+                    "name": "state"
+                }
+            ],
+            "comment": {
+                "description": "Check if the provided duckdb_task_state has finished execution\n\n",
+                "param_comments": {
+                    "state": "The task state to inspect"
+                },
+                "return_value": "Whether or not duckdb_finish_execution has been called on the task state"
+            }
+        },
+        {
+            "name": "duckdb_destroy_task_state",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_task_state",
+                    "name": "state"
+                }
+            ],
+            "comment": {
+                "description": "Destroys the task state returned from duckdb_create_task_state.\n\nNote that this should not be called while there is an active duckdb_execute_tasks_state running\non the task state.\n\n",
+                "param_comments": {
+                    "state": "The task state to clean up"
+                }
+            }
+        },
+        {
+            "name": "duckdb_execution_is_finished",
+            "return_type": "bool",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "con"
+                }
+            ],
+            "comment": {
+                "description": "Returns true if the execution of the current query is finished.\n\n",
+                "param_comments": {
+                    "con": "The connection on which to check"
+                }
+            }
+        }
+    ]
+}

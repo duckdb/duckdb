@@ -28,8 +28,8 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_COPY_TO_FILE = 10,
 	LOGICAL_DISTINCT = 11,
 	LOGICAL_SAMPLE = 12,
-	LOGICAL_LIMIT_PERCENT = 13,
 	LOGICAL_PIVOT = 14,
+	LOGICAL_COPY_DATABASE = 15,
 
 	// -----------------------------
 	// Data sources
@@ -91,11 +91,6 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_EXPLAIN = 150,
 
 	// -----------------------------
-	// Show
-	// -----------------------------
-	LOGICAL_SHOW = 160,
-
-	// -----------------------------
 	// Helpers
 	// -----------------------------
 	LOGICAL_PREPARE = 175,
@@ -105,6 +100,12 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_SET = 179,
 	LOGICAL_LOAD = 180,
 	LOGICAL_RESET = 181,
+	LOGICAL_UPDATE_EXTENSIONS = 182,
+
+	// -----------------------------
+	// Secrets
+	// -----------------------------
+	LOGICAL_CREATE_SECRET = 190,
 
 	LOGICAL_EXTENSION_OPERATOR = 255
 };

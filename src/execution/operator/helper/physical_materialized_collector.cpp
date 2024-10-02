@@ -1,5 +1,5 @@
 #include "duckdb/execution/operator/helper/physical_materialized_collector.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
+
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/client_context.hpp"
 
@@ -8,22 +8,6 @@ namespace duckdb {
 PhysicalMaterializedCollector::PhysicalMaterializedCollector(PreparedStatementData &data, bool parallel)
     : PhysicalResultCollector(data), parallel(parallel) {
 }
-
-//===--------------------------------------------------------------------===//
-// Sink
-//===--------------------------------------------------------------------===//
-class MaterializedCollectorGlobalState : public GlobalSinkState {
-public:
-	mutex glock;
-	unique_ptr<ColumnDataCollection> collection;
-	shared_ptr<ClientContext> context;
-};
-
-class MaterializedCollectorLocalState : public LocalSinkState {
-public:
-	unique_ptr<ColumnDataCollection> collection;
-	ColumnDataAppendState append_state;
-};
 
 SinkResultType PhysicalMaterializedCollector::Sink(ExecutionContext &context, DataChunk &chunk,
                                                    OperatorSinkInput &input) const {

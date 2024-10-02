@@ -1,0 +1,16 @@
+# name: test/sql/types/struct/unnamed_struct_casts.test
+# description: Test unnamed struct casts
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+select row(42, 'hello') union all select '{'': 42,'': hello}';
+----
+Conversion Error
+
+statement error
+select row(42, 'hello') union all select '(84, world)';
+----
+unsupported

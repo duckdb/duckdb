@@ -1,0 +1,16 @@
+# name: test/sql/function/list/aggregates/sum_no_overflow.test
+# description: Test the sum_no_overflow aggregate function
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT sum_no_overflow(42)
+----
+internal use only
+
+statement error
+SELECT sum_no_overflow(42.5)
+----
+internal use only

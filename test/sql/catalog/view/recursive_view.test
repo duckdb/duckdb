@@ -3,6 +3,9 @@
 # group: [view]
 
 statement ok
+set storage_compatibility_version='v0.10.2'
+
+statement ok
 PRAGMA enable_verification
 
 statement ok
@@ -24,9 +27,6 @@ Catalog Error: CREATE OR REPLACE is not allowed to depend on itself
 query I
 SELECT * FROM foo;
 ----
-1
-2
-3
 
 # more complex recursive view definition
 statement ok
@@ -41,6 +41,3 @@ Catalog Error: CREATE OR REPLACE is not allowed to depend on itself
 query I
 SELECT * FROM foo;
 ----
-1
-2
-3

@@ -1,0 +1,52 @@
+# name: test/sql/storage/reclaim_space/reclaim_space_lists.test_slow
+# description: Test that we reclaim space of LIST tables
+# group: [reclaim_space]
+
+load __TEST_DIR__/test_reclaim_space.db
+
+statement ok
+PRAGMA force_checkpoint;
+
+statement ok
+SET force_compression='uncompressed'
+
+statement ok
+CREATE TABLE lists AS SELECT [i] l FROM range(10000000) tbl(i);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+CHECKPOINT;
+
+query III
+SELECT MIN(l[1]), MAX(l[1]), COUNT(*) FROM lists
+----
+0	9999999	10000000
+
+statement ok
+DROP TABLE lists;
+
+loop i 0 10
+
+statement ok
+CREATE TABLE lists${i} AS SELECT [i] l FROM range(10000000) tbl(i);
+
+query III
+SELECT MIN(l[1]), MAX(l[1]), COUNT(*) FROM lists${i}
+----
+0	9999999	10000000
+
+statement ok
+CHECKPOINT;
+
+statement ok
+DROP TABLE lists${i}
+
+statement ok
+CHECKPOINT
+
+query I nosort expected_blocks
+select round(total_blocks / 100.0) from pragma_database_size();
+
+endloop

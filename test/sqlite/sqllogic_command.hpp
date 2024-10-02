@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb.hpp"
+#include "duckdb/common/virtual_file_system.hpp"
 
 namespace duckdb {
 class SQLLogicTestRunner;
@@ -40,6 +41,13 @@ struct ExecuteContext {
 	int error_line;
 };
 
+struct Condition {
+	string keyword;
+	string value;
+	ExpressionType comparison;
+	bool skip_if;
+};
+
 class Command {
 public:
 	Command(SQLLogicTestRunner &runner);
@@ -50,6 +58,7 @@ public:
 	int query_line;
 	string base_sql_query;
 	string file_name;
+	vector<Condition> conditions;
 
 public:
 	Connection *CommandConnection(ExecuteContext &context) const;
@@ -91,7 +100,8 @@ public:
 
 class RestartCommand : public Command {
 public:
-	RestartCommand(SQLLogicTestRunner &runner);
+	bool load_extensions;
+	RestartCommand(SQLLogicTestRunner &runner, bool load_extensions);
 
 public:
 	void ExecuteInternal(ExecuteContext &context) const override;
@@ -113,6 +123,58 @@ public:
 	LoopDefinition definition;
 	vector<duckdb::unique_ptr<Command>> loop_commands;
 
+	void ExecuteInternal(ExecuteContext &context) const override;
+};
+
+class ModeCommand : public Command {
+public:
+	ModeCommand(SQLLogicTestRunner &runner, string parameter);
+
+public:
+	string parameter;
+
+	void ExecuteInternal(ExecuteContext &context) const override;
+};
+
+enum class SleepUnit : uint8_t { NANOSECOND, MICROSECOND, MILLISECOND, SECOND };
+
+class SleepCommand : public Command {
+public:
+	SleepCommand(SQLLogicTestRunner &runner, idx_t duration, SleepUnit unit);
+
+public:
+	void ExecuteInternal(ExecuteContext &context) const override;
+
+	static SleepUnit ParseUnit(const string &unit);
+
+private:
+	idx_t duration;
+	SleepUnit unit;
+};
+
+class UnzipCommand : public Command {
+public:
+	// 1 MB
+	static constexpr const int64_t BUFFER_SIZE = 1u << 20;
+
+public:
+	UnzipCommand(SQLLogicTestRunner &runner, string &input, string &output);
+
+	void ExecuteInternal(ExecuteContext &context) const override;
+
+private:
+	string input_path;
+	string extraction_path;
+};
+
+class LoadCommand : public Command {
+public:
+	LoadCommand(SQLLogicTestRunner &runner, string dbpath, bool readonly);
+
+	string dbpath;
+	bool readonly;
+
+public:
 	void ExecuteInternal(ExecuteContext &context) const override;
 };
 

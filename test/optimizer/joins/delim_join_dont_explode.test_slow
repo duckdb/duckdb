@@ -1,0 +1,69 @@
+# name: test/optimizer/joins/delim_join_dont_explode.test_slow
+# description: In the join order optimizer queries need to have the correct bindings
+# group: [joins]
+
+statement ok
+create table big_table (id integer);
+
+statement ok
+insert into big_table select range from range(1000);
+
+statement ok
+create table medium_1 (id integer, fk_to_big integer, fk_to_medium_2 integer);
+
+statement ok
+insert into  medium_1  (select range::varchar,
+                CASE WHEN range<10 THEN 0 ELSE range END,
+                range + 99,
+                from range(100));
+
+
+statement ok
+create table medium_2 (id integer);
+
+statement ok
+insert into medium_2 (select range from range(100));
+
+query I
+select count(*) from medium_2, medium_1 where medium_2.id = medium_1.fk_to_medium_2;
+----
+1
+
+query I
+SELECT *
+FROM big_table as bt
+WHERE
+exists(
+   SELECT *
+		 FROM medium_2
+			 INNER JOIN medium_1
+				 ON ((medium_2.id = medium_1.fk_to_medium_2))
+		 WHERE  
+		   (medium_1.fk_to_big % 7 = bt.id % 7)
+) order by bt.id
+----
+143 values hashing to dc5d1675d206057ccfe13739a38ee082
+
+# The query plan here used to join the two SEQ_SCANs first, and then join the DELIM_SCAN,
+# Since PR #12290, we can reorder DELIM_SCANS
+# Now the DELIM_SCAN is joined with a SEQ_SCAN first, and then with the SEQ_SCAN
+# Now that we reorder semi joins the ordering of the sequential scans has also changed
+query II
+EXPLAIN 
+SELECT *
+FROM big_table as bt
+WHERE
+exists(
+  SELECT *
+	 FROM medium_2
+		 INNER JOIN medium_1
+			 ON ((medium_2.id = medium_1.fk_to_medium_2))
+	 WHERE  
+	   (medium_1.fk_to_big % 7 = bt.id % 7)
+)
+order by bt.id
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*DELIM_SCAN.*SEQ_SCAN.*SEQ_SCAN.*
+
+
+

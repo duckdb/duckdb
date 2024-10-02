@@ -1,0 +1,39 @@
+# name: test/fuzzer/duckfuzz/duck_fuzz_column_binding_tests.test
+# description: test why column bindings fail.
+# group: [duckfuzz]
+
+require tpch
+
+statement ok
+create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types() limit 0;
+
+# https://github.com/duckdb/duckdb-fuzzer/issues/1357
+# simplified query
+statement ok
+SELECT     ref_8.uint AS c0,
+           Argmin(Cast(ref_8."timestamp" AS TIMESTAMP), Cast(ref_10."timestamp" AS TIMESTAMP)) OVER (partition BY ref_10."nested_int_array", ref_10."timestamp" ORDER BY ref_8.hugeint)  AS c1
+FROM main.all_types AS ref_8
+INNER JOIN main.all_types AS ref_9
+INNER JOIN main.all_types AS ref_10
+ON        ( ref_10.dec38_10 IS NOT NULL)
+                      OR         EXISTS
+                                 ( SELECT ref_9."float" FROM main.all_types)
+ON         ((ref_9."smallint" = ref_8."smallint"))
+
+# original query from fuzzer
+statement ok
+SELECT ref_8.uint AS c0, CASE  WHEN ((min_by(CAST(ref_8."varchar" AS VARCHAR), CAST(ref_3."varchar" AS VARCHAR)) OVER (PARTITION BY subq_3.c1, ref_10.double_array ORDER BY ref_7."varchar") ~~* ref_10."varchar")) THEN (argmin(CAST(ref_6."timestamp" AS TIMESTAMP), CAST(ref_10."timestamp" AS TIMESTAMP)) OVER (PARTITION BY ref_10.nested_int_array, ref_10."timestamp" ORDER BY ref_8.hugeint)) ELSE argmin(CAST(ref_6."timestamp" AS TIMESTAMP), CAST(ref_10."timestamp" AS TIMESTAMP)) OVER (PARTITION BY ref_10.nested_int_array, ref_10."timestamp" ORDER BY ref_8.hugeint) END AS c1 FROM main.all_types AS ref_0 INNER JOIN (SELECT ref_1.timestamp_array AS c1 FROM main.all_types AS ref_1 INNER JOIN main.all_types AS ref_2 ON (NULL) WHERE (((CAST(NULL AS VARCHAR) ~~~ CAST(NULL AS VARCHAR)) OR (ref_1.blob IS NOT NULL) OR 0) AND (ref_1.timestamp_ms IS NULL) AND ((SELECT histogram("varchar") FROM main.all_types) IS NOT NULL) AND ((ref_2.timestamp_s IS NULL) OR (((ref_2."varchar" ~~~ ref_1."varchar") OR 1 OR (ref_2."varchar" ~~ (SELECT "varchar" FROM main.all_types LIMIT 1 OFFSET 5))) AND (ref_2."varchar" ~~ ref_2."varchar")) OR ((SELECT "varchar" FROM main.all_types LIMIT 1 OFFSET 6) !~~* ref_1."varchar")))) AS subq_0 ON (ref_0."varchar") LEFT JOIN main.all_types AS ref_3 LEFT JOIN (SELECT ref_4.ubigint AS c0, 13 AS c1, ref_4."time" AS c2, ref_4."float" AS c3, (SELECT double_array FROM main.all_types LIMIT 1 OFFSET 6) AS c4 FROM main.all_types AS ref_4 WHERE NULL) AS subq_1 ON ((ref_3."float" = subq_1.c3)) ON (NULL) INNER JOIN (SELECT ref_5.timestamp_ms AS c4 FROM main.all_types AS ref_5) AS subq_2 LEFT JOIN main.all_types AS ref_6 INNER JOIN main.all_types AS ref_7 ON (((SELECT "varchar" FROM main.all_types LIMIT 1 OFFSET 1) ~~* ref_7."varchar")) INNER JOIN main.all_types AS ref_8 INNER JOIN main.all_types AS ref_9 INNER JOIN main.all_types AS ref_10 ON (((ref_9."varchar" !~~* ref_9."varchar") OR (ref_10.dec38_10 IS NOT NULL) OR EXISTS(SELECT ref_9."float" AS c0, ref_9.usmallint AS c1, ref_10."bigint" AS c2, (SELECT bool FROM main.all_types LIMIT 1 OFFSET 5) AS c3, ref_10.nested_int_array AS c4, ref_9.timestamp_ms AS c5, 4 AS c6, ref_11."map" AS c7, (SELECT uint FROM main.all_types LIMIT 1 OFFSET 3) AS c8, ref_9.dec_4_1 AS c9 FROM main.all_types AS ref_11 WHERE (1 AND EXISTS(SELECT ref_10.varchar_array AS c0 FROM main.all_types AS ref_12 WHERE 0 LIMIT 149) AND 1) LIMIT 180))) ON (EXISTS(SELECT ref_8.double_array AS c0, ref_10."timestamp" AS c1, ref_8.uuid AS c2, ref_13.dec_9_4 AS c3, ref_13."int" AS c4, ref_13.timestamp_ns AS c5, ref_8."float" AS c6, 63 AS c7 FROM main.all_types AS ref_13 WHERE (ref_13."varchar" ~~ ref_9."varchar"))) ON ((ref_7."smallint" = ref_8."smallint")) INNER JOIN (SELECT ref_14."interval" AS c1 FROM main.all_types AS ref_14 WHERE ref_14."varchar") AS subq_3 ON (EXISTS(SELECT ref_15.utinyint AS c0 FROM main.all_types AS ref_15 WHERE (ref_9."varchar" ~~* (SELECT "varchar" FROM main.all_types LIMIT 1 OFFSET 4)))) ON ((ref_9."varchar" !~~ ref_6."varchar")) ON ((ref_3.timestamp_array = ref_6.timestamp_array))
+
+# https://github.com/duckdb/duckdb-fuzzer/issues/1358
+statement ok
+SELECT subq_0.c6 AS c1, subq_0.c14 AS c2, subq_0.c7 AS c4, subq_0.c4 AS c5 FROM (SELECT (SELECT date FROM main.all_types LIMIT 1 OFFSET 6) AS c3, ref_2."time" AS c4, (SELECT uuid FROM main.all_types LIMIT 1 OFFSET 1) AS c5, ref_3.array_of_structs AS c6, CASE  WHEN (((ref_0."varchar" !~~* ref_1."varchar") OR (ref_5."varchar" ~~~ ref_6."varchar"))) THEN (ref_2."bigint") ELSE ref_2."bigint" END AS c7, rtrim(CAST(CASE  WHEN ((((ref_8."varchar" ~~~ ref_2."varchar") AND (ref_2."varchar" ~~~ ref_0."varchar")) OR (1 AND (ref_7."varchar" ~~ ref_2."varchar")))) THEN (ref_8."varchar") ELSE ref_8."varchar" END AS VARCHAR), CAST(ref_2."varchar" AS VARCHAR)) AS c9, ref_8.ubigint AS c14 FROM main.all_types AS ref_0 INNER JOIN main.all_types AS ref_1 INNER JOIN main.all_types AS ref_2 ON ((ref_1.int_array = ref_2.int_array)) ON (((ref_2."varchar" !~~ ref_1."varchar") OR (ref_1.blob IS NOT NULL))) INNER JOIN main.all_types AS ref_3 INNER JOIN main.all_types AS ref_4 RIGHT JOIN main.all_types AS ref_5 ON ((ref_4.dec_18_6 = ref_5.dec_18_6)) ON (ref_5."varchar") LEFT JOIN main.all_types AS ref_6 RIGHT JOIN main.all_types AS ref_7 INNER JOIN main.all_types AS ref_8 ON ((ref_7.timestamp_array = ref_8.timestamp_array)) ON (1) ON (NULL) ON ((ref_0.dec_18_6 = ref_3.dec_18_6)) WHERE (ref_5."varchar" ^@ (SELECT "varchar" FROM main.all_types LIMIT 1 OFFSET 6)) LIMIT 96) AS subq_0 WHERE subq_0.c9
+
+statement ok
+call dbgen(sf=0.1);
+
+
+# https://github.com/duckdb/duckdb-fuzzer/issues/3240
+statement error
+SELECT NULL FROM (SELECT CAST(COALESCE(ref_3.ps_partkey, ref_4.p_partkey) AS BIGINT) AS c0, ref_0.n_regionkey AS c1, ref_5.r_regionkey AS c2, ref_0.n_comment AS c3 FROM main.nation AS ref_0 LEFT JOIN main.part AS ref_1 ON ((CAST(NULL AS VARCHAR) !~~ ref_0.n_comment)) RIGHT JOIN main.part AS ref_2 ON (((ref_1.p_size IS NOT NULL) AND 1)) INNER JOIN main.partsupp AS ref_3 LEFT JOIN main.part AS ref_4 RIGHT JOIN main.region AS ref_5 RIGHT JOIN main.part AS ref_6 INNER JOIN main.part AS ref_7 ON (EXISTS(SELECT ref_6.p_comment AS c0, ref_8.c_phone AS c1, ref_8.c_phone AS c2, ref_6.p_mfgr AS c3, ref_7.p_partkey AS c4 FROM main.customer AS ref_8 WHERE (((ref_6.p_container ^@ ref_8.c_mktsegment) AND 0) OR (0 AND (ref_8.c_comment ~~ ref_6.p_mfgr) AND EXISTS(SELECT ref_9.l_linestatus AS c0, 30 AS c1 FROM main.lineitem AS ref_9 WHERE ((ref_7.p_type ~~~ ref_9.l_shipmode) AND (ref_6.p_comment !~~* ref_6.p_container)) LIMIT 50))) LIMIT 37)) ON (1) ON ((ref_4.p_type = ref_7.p_name)) ON ((ref_5.r_name ^@ ref_4.p_brand)) ON ((ref_2.p_type ~~* ref_7.p_comment)) WHERE (ref_5.r_name IS NULL) LIMIT 145) AS subq_0 WHERE (("map"() IS NOT NULL) OR ((SELECT p_name FROM main.part LIMIT 1 OFFSET 2) !~~* subq_0.c3) OR (dayofweek(CAST(now() AS TIMESTAMP WITH TIME ZONE)) IS NULL))
+----
+<REGEX>:.*Binder Error.*

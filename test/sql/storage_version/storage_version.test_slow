@@ -45,11 +45,6 @@ SELECT * FROM date_values ORDER BY 1
 1992-01-01	12:00:03	1992-09-20 10:00:03
 NULL	NULL	NULL
 
-query I
-SELECT nextval('test3.bla')
-----
-1
-
 query IIIII
 SELECT * FROM v1 ORDER BY 1
 ----
@@ -82,7 +77,7 @@ NULL
 
 # all types function
 query I nosort alltypes
-SELECT * FROM test_all_types();
+SELECT * EXCLUDE (varint) FROM test_all_types();
 
 query I nosort alltypes
 SELECT * FROM all_types
@@ -188,3 +183,8 @@ SELECT i, V29(i) FROM integral_values ORDER BY 1 NULLS LAST
 ----
 1	1
 NULL	1
+
+statement error
+SELECT nextval('test3.bla')
+----
+read-only mode

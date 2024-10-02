@@ -14,6 +14,20 @@ select __internal_compress_string_utinyint('L')
 ----
 Binder Error: Compressed materialization functions are for internal use only!
 
+# internal issue 1576
+statement ok
+create table t0 as select range%400000 a, range%400000 b from range(500000);
+
+query III
+select * from (
+      select *, row_number() OVER () as row_number from (
+          SELECT * FROM t0 ORDER BY 1) ta
+      ) tb where b > 2
+  order by a limit 2;
+----
+3	3	7
+3	3	8
+
 # tricky tests taken from test/sql/subquery/scalar/test_issue_6136.test
 # we run these with one thread since they are order dependent
 statement ok
@@ -36,25 +50,26 @@ select (
         order by all
     )
     group by ra, rb
-    order by all)
+    order by all
+    limit 1)
 from b
 order by all
 ----
+{'x': a, 'y': A, '__matches': 1}
 {'x': b, 'y': B, '__matches': 1}
 {'x': b, 'y': B, '__matches': 1}
 {'x': b, 'y': B, '__matches': 1}
-{'x': c, 'y': C, '__matches': 1}
 {'x': d, 'y': D, '__matches': 1}
 {'x': d, 'y': D, '__matches': 1}
 NULL
 
 query T
 select
-  coalesce((select {'x': first(x), 'y': first(y), '__matches': count(*)} from r where ba = ra and (bb = rb or rb is null) group by ra, rb order by bb = rb), {'x': null, 'y': null, '__matches': 0}) as ref2
+  coalesce((select {'x': first(x), 'y': first(y), '__matches': count(*)} from r where ba = ra and (bb = rb or rb is null) group by ra, rb order by bb = rb limit 1), {'x': null, 'y': null, '__matches': 0}) as ref2
 from b
 ----
-{'x': b, 'y': B, '__matches': 1}
-{'x': b, 'y': B, '__matches': 1}
+{'x': a, 'y': A, '__matches': 1}
+{'x': c, 'y': C, '__matches': 1}
 {'x': b, 'y': B, '__matches': 1}
 {'x': b, 'y': B, '__matches': 1}
 {'x': d, 'y': D, '__matches': 1}

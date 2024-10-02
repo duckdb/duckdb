@@ -13,8 +13,10 @@ BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_t
 	D_ASSERT(types.size() == names.size());
 }
 
-BaseQueryResult::BaseQueryResult(QueryResultType type, PreservedError error)
+BaseQueryResult::BaseQueryResult(QueryResultType type, ErrorData error)
     : type(type), success(false), error(std::move(error)) {
+	// Assert that the error object is initialized
+	D_ASSERT(this->error.HasError());
 }
 
 BaseQueryResult::~BaseQueryResult() {
@@ -25,13 +27,13 @@ void BaseQueryResult::ThrowError(const string &prepended_message) const {
 	error.Throw(prepended_message);
 }
 
-void BaseQueryResult::SetError(PreservedError error) {
-	success = !error;
+void BaseQueryResult::SetError(ErrorData error) {
+	success = !error.HasError();
 	this->error = std::move(error);
 }
 
 bool BaseQueryResult::HasError() const {
-	D_ASSERT((bool)error == !success);
+	D_ASSERT(error.HasError() == !success);
 	return !success;
 }
 
@@ -44,7 +46,7 @@ const std::string &BaseQueryResult::GetError() {
 	return error.Message();
 }
 
-PreservedError &BaseQueryResult::GetErrorObject() {
+ErrorData &BaseQueryResult::GetErrorObject() {
 	return error;
 }
 
@@ -58,11 +60,35 @@ QueryResult::QueryResult(QueryResultType type, StatementType statement_type, Sta
       client_properties(std::move(client_properties_p)) {
 }
 
-QueryResult::QueryResult(QueryResultType type, PreservedError error)
-    : BaseQueryResult(type, std::move(error)), client_properties("UTC", ArrowOffsetSize::REGULAR) {
+QueryResult::QueryResult(QueryResultType type, ErrorData error)
+    : BaseQueryResult(type, std::move(error)), client_properties("UTC", ArrowOffsetSize::REGULAR, false, false, false) {
 }
 
 QueryResult::~QueryResult() {
+}
+
+void QueryResult::DeduplicateColumns(vector<string> &names) {
+	unordered_map<string, idx_t> name_map;
+	for (auto &column_name : names) {
+		// put it all lower_case
+		auto low_column_name = StringUtil::Lower(column_name);
+		if (name_map.find(low_column_name) == name_map.end()) {
+			// Name does not exist yet
+			name_map[low_column_name]++;
+		} else {
+			// Name already exists, we add _x where x is the repetition number
+			string new_column_name = column_name + "_" + std::to_string(name_map[low_column_name]);
+			auto new_column_name_low = StringUtil::Lower(new_column_name);
+			while (name_map.find(new_column_name_low) != name_map.end()) {
+				// This name is already here due to a previous definition
+				name_map[low_column_name]++;
+				new_column_name = column_name + "_" + std::to_string(name_map[low_column_name]);
+				new_column_name_low = StringUtil::Lower(new_column_name);
+			}
+			column_name = new_column_name;
+			name_map[new_column_name_low]++;
+		}
+	}
 }
 
 const string &QueryResult::ColumnName(idx_t index) const {

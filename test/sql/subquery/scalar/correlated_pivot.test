@@ -65,7 +65,7 @@ FROM Product
 PIVOT is not supported in correlated subqueries yet
 
 statement ok
-RESET pivot_filter_threshold
+SET pivot_filter_threshold TO DEFAULT
 
 statement ok
 RESET SESSION pivot_filter_threshold

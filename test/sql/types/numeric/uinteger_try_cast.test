@@ -11,6 +11,7 @@ CREATE TABLE uintegers AS SELECT i::UINTEGER i FROM (VALUES (0), (4294967295)) t
 
 statement error
 SELECT i::UTINYINT FROM uintegers ORDER BY i
+----
 
 # unsigned
 query I
@@ -21,6 +22,7 @@ NULL
 
 statement error
 SELECT i::USMALLINT FROM uintegers ORDER BY i
+----
 
 query I
 SELECT TRY_CAST(i AS USMALLINT) FROM uintegers ORDER BY i
@@ -37,6 +39,7 @@ SELECT i::UBIGINT FROM uintegers ORDER BY i
 # signed
 statement error
 SELECT i::TINYINT FROM uintegers ORDER BY i
+----
 
 query I
 SELECT TRY_CAST(i AS TINYINT) FROM uintegers ORDER BY i
@@ -46,6 +49,7 @@ NULL
 
 statement error
 SELECT i::SMALLINT FROM uintegers ORDER BY i
+----
 
 query I
 SELECT TRY_CAST(i AS SMALLINT) FROM uintegers ORDER BY i
@@ -55,6 +59,7 @@ NULL
 
 statement error
 SELECT i::INTEGER FROM uintegers ORDER BY i
+----
 
 query I
 SELECT TRY_CAST(i AS INTEGER) FROM uintegers ORDER BY i
@@ -107,6 +112,7 @@ CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-1000'),
 
 statement error
 SELECT s::UINTEGER FROM strings
+----
 
 query I
 SELECT TRY_CAST(s AS UINTEGER) FROM strings
@@ -123,9 +129,11 @@ NULL
 # -> decimal casts
 statement error
 SELECT i::DECIMAL(3,0)::UINTEGER FROM uintegers ORDER BY i
+----
 
 statement error
 SELECT i::DECIMAL(9,0)::UINTEGER FROM uintegers ORDER BY i
+----
 
 query I
 SELECT i::DECIMAL(18,0)::UINTEGER FROM uintegers ORDER BY i
@@ -141,9 +149,11 @@ SELECT i::DECIMAL(38,0)::UINTEGER FROM uintegers ORDER BY i
 
 statement error
 SELECT i::DECIMAL(18,9)::UINTEGER FROM uintegers ORDER BY i
+----
 
 statement error
 SELECT i::DECIMAL(38,29)::UINTEGER FROM uintegers ORDER BY i
+----
 
 query I
 SELECT TRY_CAST(i AS DECIMAL(3,0))::UINTEGER FROM uintegers ORDER BY i

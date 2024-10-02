@@ -5,6 +5,9 @@
 # Test read_csv with user defined variable
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 pragma threads=4
 
 statement ok
@@ -46,7 +49,7 @@ PRAGMA profiling_output='__TEST_DIR__/test_2.json'
 # At least one of the lines should contain the word "Optimizer" to verify that we're getting optimizer timings
 query T
 SELECT COUNT(*) > 0
-FROM read_csv('__TEST_DIR__/test.json', columns={'c': 'VARCHAR'}, delim=NULL, header=0, quote=NULL, escape=NULL)
+FROM read_csv('__TEST_DIR__/test.json', columns={'c': 'VARCHAR'}, delim=NULL, header=0, quote=NULL, escape=NULL, auto_detect = false)
 WHERE contains(c, 'Optimizer');
 ----
 true

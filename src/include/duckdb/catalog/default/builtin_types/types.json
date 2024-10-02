@@ -103,6 +103,14 @@
         ],
         "description": "signed sixteen-byte integer"
     },
+	{
+        "id": "UHUGEINT",
+        "names": [
+            "uhugeint",
+            "uint128"
+        ],
+        "description": "unsigned sixteen-byte integer"
+    },
     {
         "id": "BIGINT",
         "names": [
@@ -212,6 +220,13 @@
             "bitstring"
         ],
         "description": "binary value"
+    },
+    {
+        "id": "VARINT",
+        "names": [
+            "varint"
+        ],
+        "description": "Integers with variable size."
     },
     {
         "id": "BOOLEAN",

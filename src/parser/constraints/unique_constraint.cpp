@@ -28,11 +28,13 @@ string UniqueConstraint::ToString() const {
 }
 
 unique_ptr<Constraint> UniqueConstraint::Copy() const {
-	if (index.index == DConstants::INVALID_INDEX) {
+	if (!HasIndex()) {
 		return make_uniq<UniqueConstraint>(columns, is_primary_key);
 	} else {
 		auto result = make_uniq<UniqueConstraint>(index, is_primary_key);
-		result->columns = columns;
+		if (!columns.empty()) {
+			result->columns.push_back(columns[0]);
+		}
 		return std::move(result);
 	}
 }

@@ -165,7 +165,7 @@ function_list_file = normalize_path_separators('src/core_functions/function_list
 with open(function_list_file, 'r') as f:
     text = f.read()
 
-static_function = 'static StaticFunctionDefinition internal_functions[] = {'
+static_function = 'static const StaticFunctionDefinition internal_functions[] = {'
 pos = text.find(static_function)
 header = text[:pos]
 footer_lines = text[pos:].split('\n')

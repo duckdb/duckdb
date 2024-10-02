@@ -11,6 +11,7 @@ INSERT INTO integers VALUES (1, false), (1, true), (2, false)
 # duplicate value!
 statement error
 INSERT INTO integers VALUES (1, false)
+----
 
 statement ok
 INSERT INTO integers VALUES (2, true)

@@ -35,60 +35,63 @@ idx_t GetLambdaParamIndex(const vector<DummyBinding> &lambda_bindings, const Bou
 	return offset;
 }
 
+void ExtractParameter(ParsedExpression &expr, vector<string> &column_names, vector<string> &column_aliases) {
+
+	auto &column_ref = expr.Cast<ColumnRefExpression>();
+	if (column_ref.IsQualified()) {
+		throw BinderException(LambdaExpression::InvalidParametersErrorMessage());
+	}
+
+	column_names.push_back(column_ref.GetName());
+	column_aliases.push_back(column_ref.ToString());
+}
+
+void ExtractParameters(LambdaExpression &expr, vector<string> &column_names, vector<string> &column_aliases) {
+
+	// extract the lambda parameters, which are a single column
+	// reference, or a list of column references (ROW function)
+	string error_message;
+	auto column_refs = expr.ExtractColumnRefExpressions(error_message);
+	if (!error_message.empty()) {
+		throw BinderException(error_message);
+	}
+
+	for (const auto &column_ref : column_refs) {
+		ExtractParameter(column_ref.get(), column_names, column_aliases);
+	}
+	D_ASSERT(!column_names.empty());
+}
+
 BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth, const LogicalType &list_child_type,
                                             optional_ptr<bind_lambda_function_t> bind_lambda_function) {
 
-	// this is for binding JSON
+	// This is not a lambda expression, but the JSON arrow operator.
 	if (!bind_lambda_function) {
-		auto lhs_expr = expr.lhs->Copy();
-		OperatorExpression arrow_expr(ExpressionType::ARROW, std::move(lhs_expr), expr.expr->Copy());
-		return BindExpression(arrow_expr, depth);
-	}
+		OperatorExpression arrow_expr(ExpressionType::ARROW, std::move(expr.lhs), std::move(expr.expr));
+		auto bind_result = BindExpression(arrow_expr, depth);
 
-	// binding the lambda expression
-	D_ASSERT(expr.lhs);
-	if (expr.lhs->expression_class != ExpressionClass::FUNCTION &&
-	    expr.lhs->expression_class != ExpressionClass::COLUMN_REF) {
-		throw BinderException(
-		    "Invalid parameter list! Parameters must be comma-separated column names, e.g. x or (x, y).");
-	}
-
-	// move the lambda parameters to the params vector
-	if (expr.lhs->expression_class == ExpressionClass::COLUMN_REF) {
-		expr.params.push_back(std::move(expr.lhs));
-	} else {
-		auto &func_expr = expr.lhs->Cast<FunctionExpression>();
-		for (idx_t i = 0; i < func_expr.children.size(); i++) {
-			expr.params.push_back(std::move(func_expr.children[i]));
+		// The arrow_expr now contains bound nodes. We move these into the original expression.
+		if (bind_result.HasError()) {
+			D_ASSERT(arrow_expr.children.size() == 2);
+			expr.lhs = std::move(arrow_expr.children[0]);
+			expr.expr = std::move(arrow_expr.children[1]);
 		}
+		return bind_result;
 	}
-	D_ASSERT(!expr.params.empty());
 
-	// create dummy columns for the lambda parameters (lhs)
+	// extract and verify lambda parameters to create dummy columns
 	vector<LogicalType> column_types;
 	vector<string> column_names;
-	vector<string> params_strings;
-
-	// positional parameters as column references
-	for (idx_t i = 0; i < expr.params.size(); i++) {
-		if (expr.params[i]->GetExpressionClass() != ExpressionClass::COLUMN_REF) {
-			throw BinderException("Lambda parameter must be a column name.");
-		}
-
-		auto column_ref = expr.params[i]->Cast<ColumnRefExpression>();
-		if (column_ref.IsQualified()) {
-			throw BinderException("Invalid lambda parameter name '%s': must be unqualified", column_ref.ToString());
-		}
-
+	vector<string> column_aliases;
+	ExtractParameters(expr, column_names, column_aliases);
+	for (idx_t i = 0; i < column_names.size(); i++) {
 		column_types.push_back((*bind_lambda_function)(i, list_child_type));
-		column_names.push_back(column_ref.GetColumnName());
-		params_strings.push_back(expr.params[i]->ToString());
 	}
 
 	// base table alias
-	auto params_alias = StringUtil::Join(params_strings, ", ");
-	if (params_strings.size() > 1) {
-		params_alias = "(" + params_alias + ")";
+	auto table_alias = StringUtil::Join(column_aliases, ", ");
+	if (column_aliases.size() > 1) {
+		table_alias = "(" + table_alias + ")";
 	}
 
 	// create a lambda binding and push it to the lambda bindings vector
@@ -96,16 +99,8 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	if (!lambda_bindings) {
 		lambda_bindings = &local_bindings;
 	}
-	DummyBinding new_lambda_binding(column_types, column_names, params_alias);
+	DummyBinding new_lambda_binding(column_types, column_names, table_alias);
 	lambda_bindings->push_back(new_lambda_binding);
-
-	// bind the parameter expressions
-	for (idx_t i = 0; i < expr.params.size(); i++) {
-		auto result = BindExpression(expr.params[i], depth, false);
-		if (result.HasError()) {
-			throw InternalException("Error during lambda binding: %s", result.error);
-		}
-	}
 
 	auto result = BindExpression(expr.expr, depth, false);
 	lambda_bindings->pop_back();
@@ -117,11 +112,11 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	}
 
 	if (result.HasError()) {
-		throw BinderException(result.error);
+		result.error.Throw();
 	}
 
 	return BindResult(make_uniq<BoundLambdaExpression>(ExpressionType::LAMBDA, LogicalType::LAMBDA,
-	                                                   std::move(result.expression), params_strings.size()));
+	                                                   std::move(result.expression), column_names.size()));
 }
 
 void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &original,
@@ -183,7 +178,7 @@ void ExpressionBinder::CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_
                                             const LogicalType &list_child_type) {
 
 	if (expr->expression_class == ExpressionClass::BOUND_SUBQUERY) {
-		throw InvalidInputException("Subqueries are not supported in lambda expressions!");
+		throw BinderException("subqueries in lambda expressions are not supported");
 	}
 
 	// these are bound depth-first
@@ -199,6 +194,12 @@ void ExpressionBinder::CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_
 	if (expr->expression_class == ExpressionClass::BOUND_COLUMN_REF ||
 	    expr->expression_class == ExpressionClass::BOUND_PARAMETER ||
 	    expr->expression_class == ExpressionClass::BOUND_LAMBDA_REF) {
+
+		if (expr->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+			// Search for UNNEST.
+			auto &column_binding = expr->Cast<BoundColumnRefExpression>().binding;
+			ThrowIfUnnestInLambda(column_binding);
+		}
 
 		// move the expr because we are going to replace it
 		auto original = std::move(expr);

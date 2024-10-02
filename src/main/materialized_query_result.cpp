@@ -13,7 +13,7 @@ MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type, S
       collection(std::move(collection_p)), scan_initialized(false) {
 }
 
-MaterializedQueryResult::MaterializedQueryResult(PreservedError error)
+MaterializedQueryResult::MaterializedQueryResult(ErrorData error)
     : QueryResult(QueryResultType::MATERIALIZED_RESULT, std::move(error)), scan_initialized(false) {
 }
 
@@ -71,6 +71,17 @@ ColumnDataCollection &MaterializedQueryResult::Collection() {
 		throw InternalException("Missing collection from materialized query result");
 	}
 	return *collection;
+}
+
+unique_ptr<ColumnDataCollection> MaterializedQueryResult::TakeCollection() {
+	if (HasError()) {
+		throw InvalidInputException("Attempting to get collection from an unsuccessful query result\n: Error %s",
+		                            GetError());
+	}
+	if (!collection) {
+		throw InternalException("Missing collection from materialized query result");
+	}
+	return std::move(collection);
 }
 
 unique_ptr<DataChunk> MaterializedQueryResult::Fetch() {

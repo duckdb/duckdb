@@ -1,0 +1,13 @@
+# name: test/sql/attach/attach_huggingface_index.test
+# description: Test attach mixed with sequences and default values
+# group: [attach]
+
+require skip_reload
+
+# The database is written with a vector size of 2048.
+require vector_size 2048
+
+unzip data/storage/huggingface_index.db.gz __TEST_DIR__/huggingface_index.db
+
+statement ok
+ATTACH '__TEST_DIR__/huggingface_index.db'

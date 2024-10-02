@@ -21,6 +21,7 @@ template <class T>
 static void CreateTPCDSTable(ClientContext &context, string catalog_name, string schema, string suffix, bool keys,
                              bool overwrite) {
 	auto info = make_uniq<CreateTableInfo>();
+	info->catalog = catalog_name;
 	info->schema = schema;
 	info->table = T::Name + suffix;
 	info->on_conflict = overwrite ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
@@ -114,10 +115,13 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string catalog_
 		assert(builder_func);
 
 		for (ds_key_t i = k_first_row; k_row_count; i++, k_row_count--) {
+			if (k_row_count % 1000 == 0 && context.interrupted) {
+				throw InterruptException();
+			}
 			// append happens directly in builders since they dump child tables
 			// immediately
 			if (builder_func((void *)&append_info, i)) {
-				throw Exception("Table generation failed");
+				throw InternalException("Table generation failed");
 			}
 		}
 	}

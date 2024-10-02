@@ -1,0 +1,40 @@
+# name: test/sql/copy/parquet/writer/parquet_write_compression_level.test
+# description: Parquet compression level
+# group: [writer]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers AS FROM range(100) t(i)
+
+statement error
+COPY integers TO '__TEST_DIR__/compress_level.parquet' (FORMAT 'parquet', COMPRESSION_LEVEL 10);
+----
+only supported
+
+statement error
+COPY integers TO '__TEST_DIR__/compress_level.parquet' (FORMAT 'parquet', CODEC ZSTD, COMPRESSION_LEVEL 0);
+----
+must be between 1 and 22
+
+statement error
+COPY integers TO '__TEST_DIR__/compress_level.parquet' (FORMAT 'parquet', CODEC ZSTD, COMPRESSION_LEVEL 23);
+----
+must be between 1 and 22
+
+statement ok
+COPY integers TO '__TEST_DIR__/compress_level.parquet' (FORMAT 'parquet', CODEC ZSTD, COMPRESSION_LEVEL 1);
+
+statement ok
+COPY integers TO '__TEST_DIR__/compress_level2.parquet' (FORMAT 'parquet', CODEC ZSTD, COMPRESSION_LEVEL 22);
+
+query I nosort clevel
+SELECT * FROM '__TEST_DIR__/compress_level.parquet'
+----
+
+query I nosort clevel
+SELECT * FROM '__TEST_DIR__/compress_level2.parquet'
+----

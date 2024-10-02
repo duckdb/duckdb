@@ -1,0 +1,28 @@
+# name: test/sql/types/nested/array/array_try_cast_vector_types.test
+# group: [array]
+
+require vector_size 2048
+
+statement ok
+PRAGMA enable_verification
+
+# Array try cast
+query I rowsort
+SELECT TRY_CAST(test_vector AS INT[2]) AS a FROM test_vector_types(NULL::INTEGER[])
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+[-2147483648, 2147483647]
+[-2147483648, 2147483647]
+[-2147483648, 2147483647]
+[-2147483648, 2147483647]
+[3, 5]
+
+statement error
+SELECT CAST(test_vector AS INT[2]) AS a FROM test_vector_types(NULL::INTEGER[])
+----
+Cannot cast list with length 0 to array with length 2

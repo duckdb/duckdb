@@ -47,12 +47,15 @@ SELECT * FROM entry
 
 statement error con2
 SELECT * FROM entry2
+----
 
 statement error con2
 SELECT * FROM entry3
+----
 
 statement error con2
 SELECT * FROM entry4
+----
 
 statement ok con1
 ROLLBACK
@@ -64,5 +67,6 @@ SELECT * FROM entry
 
 statement error con2
 SELECT * FROM entry4
+----
 
 

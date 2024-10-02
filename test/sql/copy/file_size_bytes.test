@@ -1,0 +1,162 @@
+# name: test/sql/copy/file_size_bytes.test
+# description: test FILE_SIZE_BYTES parameter for COPY
+# group: [copy]
+
+# different vector sizes result in different number of files
+require no_vector_verification
+
+statement ok
+CREATE TABLE bigdata AS SELECT i AS col_a, i AS col_b FROM range(0,10000) tbl(i);
+
+statement ok
+set threads=1
+
+# parameter in bytes
+statement ok
+COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv1' (FORMAT CSV, FILE_SIZE_BYTES 1000);
+
+query I
+SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv1/*.csv')
+----
+10000
+
+# should lead to 3 files
+query I
+SELECT count(*) FROM glob('__TEST_DIR__/file_size_bytes_csv1/*.csv')
+----
+3
+
+# parameter in human-readable format
+statement ok
+COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv2' (FORMAT CSV, FILE_SIZE_BYTES '1kb');
+
+query I
+SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv2/*.csv')
+----
+10000
+
+# same, should also lead to 3 files
+query I
+SELECT count(*) FROM glob('__TEST_DIR__/file_size_bytes_csv2/*.csv')
+----
+3
+
+# We just do a simple test for JSON/Parquet, because FILE_SIZE_BYTES is handled outside of the format implementations
+require json
+
+statement ok
+COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_json' (FORMAT JSON, FILE_SIZE_BYTES '1kb');
+
+query I
+SELECT COUNT(*) FROM read_json_auto('__TEST_DIR__/file_size_bytes_json/*.json')
+----
+10000
+
+# JSON is a bit more wasteful, 5 files
+query I
+SELECT count(*) FROM glob('__TEST_DIR__/file_size_bytes_json/*.json')
+----
+5
+
+require parquet
+
+# we can trigger early flushes with Parquet by setting a low row group size
+statement ok
+COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2000, FILE_SIZE_BYTES '1kb');
+
+query I
+SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/file_size_bytes_parquet/*.parquet')
+----
+10000
+
+# we get one file per chunk, for a total of 5
+query I
+SELECT count(*) FROM glob('__TEST_DIR__/file_size_bytes_parquet/*.parquet')
+----
+5
+
+# 10x the input, now 100k
+statement ok
+INSERT INTO bigdata SELECT bigdata.* FROM bigdata, range(9)
+
+# now we crank up the threads
+statement ok
+PRAGMA verify_parallelism;
+
+statement ok
+pragma threads=4;
+
+# with parallelism we do best-effort to get to the specified file size, but we are more likely to overshoot
+# this file would be ~950MB if written to a single file, what if we set a 500kb limit
+statement ok
+COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv3' (FORMAT CSV, FILE_SIZE_BYTES '500kb');
+
+query I
+SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv3/*.csv')
+----
+100000
+
+# there should always be 2 files, even with parallelism nondeterminism
+query I
+SELECT count(*) FROM glob('__TEST_DIR__/file_size_bytes_csv3/*.csv')
+----
+2
+
+# what about a 200kb limit, which is <1/4th of the total file size
+statement ok
+COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv4' (FORMAT CSV, FILE_SIZE_BYTES '200kb');
+
+query I
+SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv4/*.csv')
+----
+100000
+
+# there should be around 4 files, not exact due to parallelism
+query I
+SELECT count(*) BETWEEN 3 AND 5 FROM glob('__TEST_DIR__/file_size_bytes_csv4/*.csv')
+----
+1
+
+# should work nicely with per thread output
+# no thread should see more than 700kb (being lenient in case of thread imbalance here),
+# so this should yield one file per thread
+statement ok
+COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv5' (FORMAT CSV, FILE_SIZE_BYTES '700kb', PER_THREAD_OUTPUT TRUE);
+
+query I
+SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv5/*.csv')
+----
+100000
+
+# should yield multiple files, can be less than 4 because we create files lazily
+query I
+SELECT count(*) > 1 FROM glob('__TEST_DIR__/file_size_bytes_csv5/*.csv')
+----
+true
+
+# each thread sees ~240kb if it's balanced, what about a 190kb limit
+# even in the case of extreme thread imbalance, this always yield around 8 files
+statement ok
+COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv6' (FORMAT CSV, FILE_SIZE_BYTES '190kb', PER_THREAD_OUTPUT TRUE);
+
+query I
+SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv6/*.csv')
+----
+100000
+
+# ~2 files per thread, around 8 in total
+query I
+SELECT count(*) BETWEEN 6 AND 10 FROM glob('__TEST_DIR__/file_size_bytes_csv6/*.csv')
+----
+1
+
+# doesn't work in combination with certain params
+statement error
+COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv7' (FORMAT CSV, FILE_SIZE_BYTES '190kb', USE_TMP_FILE TRUE);
+----
+Not implemented Error
+
+statement error
+COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv7' (FORMAT CSV, FILE_SIZE_BYTES '190kb', PARTITION_BY col_a);
+----
+Not implemented Error

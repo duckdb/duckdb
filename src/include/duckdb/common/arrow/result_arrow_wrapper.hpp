@@ -20,7 +20,7 @@ public:
 public:
 	ArrowArrayStream stream;
 	unique_ptr<QueryResult> result;
-	PreservedError last_error;
+	ErrorData last_error;
 	idx_t batch_size;
 	vector<LogicalType> column_types;
 	vector<string> column_names;

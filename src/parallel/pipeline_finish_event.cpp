@@ -1,6 +1,7 @@
 #include "duckdb/parallel/pipeline_finish_event.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/parallel/interrupt.hpp"
+#include "duckdb/parallel/executor_task.hpp"
 
 namespace duckdb {
 
@@ -9,11 +10,10 @@ namespace duckdb {
 class PipelineFinishTask : public ExecutorTask {
 public:
 	explicit PipelineFinishTask(Pipeline &pipeline_p, shared_ptr<Event> event_p)
-	    : ExecutorTask(pipeline_p.executor), pipeline(pipeline_p), event(std::move(event_p)) {
+	    : ExecutorTask(pipeline_p.executor, std::move(event_p)), pipeline(pipeline_p) {
 	}
 
 	Pipeline &pipeline;
-	shared_ptr<Event> event;
 
 public:
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
@@ -51,7 +51,7 @@ private:
 	//! Debugging state: number of times blocked
 	int debug_blocked_count = 0;
 	//! Number of times the Finalize will block before actually returning data
-	int debug_blocked_target_count = 10;
+	int debug_blocked_target_count = 1;
 #endif
 };
 

@@ -7,10 +7,10 @@ PRAGMA enable_verification
 
 statement ok
 CREATE FUNCTION mem_to_bytes(x) AS CASE
-    WHEN CONTAINS(x, 'KB') THEN REPLACE(x, 'KB', '')::INT * 1000
-    WHEN CONTAINS(x, 'MB') THEN REPLACE(x, 'MB', '')::INT * 1000 * 1000
-    WHEN CONTAINS(x, 'GB') THEN REPLACE(x, 'GB', '')::INT * 1000 * 1000 * 1000
-    WHEN CONTAINS(x, 'TB') THEN REPLACE(x, 'TB', '')::INT * 1000 * 1000 * 1000 * 1000
+    WHEN CONTAINS(x, 'KiB') THEN REPLACE(x, 'KiB', '')::INT * 1024.0
+    WHEN CONTAINS(x, 'MiB') THEN REPLACE(x, 'MiB', '')::INT * 1024.0 * 1024
+    WHEN CONTAINS(x, 'GiB') THEN REPLACE(x, 'GiB', '')::INT * 1024.0 * 1024 * 1024
+    WHEN CONTAINS(x, 'TiB') THEN REPLACE(x, 'TiB', '')::INT * 1024.0 * 1024 * 1024 * 1024
     WHEN x = '0 bytes' THEN 0
     ELSE x::INT END;
 
@@ -57,7 +57,7 @@ statement ok
 CREATE INDEX idx ON t(i);
 
 query I
-SELECT mem_to_bytes(current.memory_usage) > 2 * base.usage AND mem_to_bytes(current.memory_usage) < 3 * base.usage
+SELECT mem_to_bytes(current.memory_usage) > 2 * base.usage AND mem_to_bytes(current.memory_usage) < 4 * base.usage
 FROM base, pragma_database_size() current;
 ----
 1
@@ -68,7 +68,7 @@ statement ok
 INSERT INTO t SELECT (range * 4) || 'I am' || (range * 4) || 'a long not' || (range * 4) || 'inlined string' || (range * 4) FROM range(100000) AS range;
 
 query I
-SELECT mem_to_bytes(current.memory_usage) > 4 * base.usage AND mem_to_bytes(current.memory_usage) < 6 * base.usage
+SELECT mem_to_bytes(current.memory_usage) > 4 * base.usage AND mem_to_bytes(current.memory_usage) < 7 * base.usage
 FROM base, pragma_database_size() current;
 ----
 1

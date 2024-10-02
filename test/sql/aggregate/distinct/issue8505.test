@@ -11,14 +11,14 @@ explain select record_key from (
     select distinct on (id, provider) id, provider, record_key from test order by id, provider, record_rank desc, record_date
 )
 ----
-physical_plan	<REGEX>:.*HASH_GROUP_BY.*#0.*#1.*first\(#2, #3, #4\).*first\(#5, #6, #7\).*first\(#8, #9, #10\).*
+physical_plan	<REGEX>:.*HASH_GROUP_BY.*#0.*#1.*arg_min_null.*
 
 
 # this query was slow, but should be equivalent to the first query
 query II
 explain select distinct on (id, provider) record_key from test order by id, provider, record_rank desc, record_date
 ----
-physical_plan	<REGEX>:.*HASH_GROUP_BY.*#0.*#1.*first\(#2, #3, #4\).*first\(#5, #6, #7\).*first\(#8, #9, #10\).*
+physical_plan	<REGEX>:.*HASH_GROUP_BY.*#0.*#1.*arg_min_null.*
 
 # the problem was that our aggregate became way too big in the second case because we didn't de-duplicate columns
 # this regex checks that they both have the same 'minimal' aggregate (this test is a bit fragile to binder changes tho)

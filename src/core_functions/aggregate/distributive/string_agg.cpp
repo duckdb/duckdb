@@ -113,7 +113,8 @@ struct StringAggFunction {
 			// source is not set: skip combining
 			return;
 		}
-		PerformOperation(target, string_t(source.dataptr, source.size), aggr_input_data.bind_data);
+		PerformOperation(target, string_t(source.dataptr, UnsafeNumericCast<uint32_t>(source.size)),
+		                 aggr_input_data.bind_data);
 	}
 };
 
@@ -155,7 +156,8 @@ unique_ptr<FunctionData> StringAggDeserialize(Deserializer &deserializer, Aggreg
 AggregateFunctionSet StringAggFun::GetFunctions() {
 	AggregateFunctionSet string_agg;
 	AggregateFunction string_agg_param(
-	    {LogicalType::VARCHAR}, LogicalType::VARCHAR, AggregateFunction::StateSize<StringAggState>,
+	    {LogicalType::ANY_PARAMS(LogicalType::VARCHAR)}, LogicalType::VARCHAR,
+	    AggregateFunction::StateSize<StringAggState>,
 	    AggregateFunction::StateInitialize<StringAggState, StringAggFunction>,
 	    AggregateFunction::UnaryScatterUpdate<StringAggState, string_t, StringAggFunction>,
 	    AggregateFunction::StateCombine<StringAggState, StringAggFunction>,

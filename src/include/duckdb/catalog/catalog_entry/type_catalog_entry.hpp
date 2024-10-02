@@ -23,13 +23,15 @@ public:
 
 public:
 	//! Create a TypeCatalogEntry and initialize storage for it
-	TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTypeInfo &info,
-	                 optional_ptr<ClientContext> context);
+	TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTypeInfo &info);
 
 	LogicalType user_type;
 
+	bind_type_modifiers_function_t bind_modifiers;
+
 public:
 	unique_ptr<CreateInfo> GetInfo() const override;
+	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
 
 	string ToSQL() const override;
 };

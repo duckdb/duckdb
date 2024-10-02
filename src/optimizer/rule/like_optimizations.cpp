@@ -132,7 +132,7 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<r
 		return ApplyRule(root, SuffixFun::GetFunction(), patt_str, is_not_like);
 	} else if (PatternIsContains(patt_str)) {
 		// Contains LIKE pattern: [%]+[^%_]*[%]+, ignoring underscore
-		return ApplyRule(root, ContainsFun::GetFunction(), patt_str, is_not_like);
+		return ApplyRule(root, ContainsFun::GetStringContains(), patt_str, is_not_like);
 	}
 	return nullptr;
 }

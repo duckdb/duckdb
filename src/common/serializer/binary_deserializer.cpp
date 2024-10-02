@@ -113,7 +113,7 @@ string BinaryDeserializer::ReadString() {
 	if (len == 0) {
 		return string();
 	}
-	auto buffer = make_unsafe_uniq_array<data_t>(len);
+	auto buffer = make_unsafe_uniq_array_uninitialized<data_t>(len);
 	ReadData(buffer.get(), len);
 	return string(const_char_ptr_cast(buffer.get()), len);
 }
@@ -122,6 +122,12 @@ hugeint_t BinaryDeserializer::ReadHugeInt() {
 	auto upper = VarIntDecode<int64_t>();
 	auto lower = VarIntDecode<uint64_t>();
 	return hugeint_t(upper, lower);
+}
+
+uhugeint_t BinaryDeserializer::ReadUhugeInt() {
+	auto upper = VarIntDecode<uint64_t>();
+	auto lower = VarIntDecode<uint64_t>();
+	return uhugeint_t(upper, lower);
 }
 
 void BinaryDeserializer::ReadDataPtr(data_ptr_t &ptr_p, idx_t count) {

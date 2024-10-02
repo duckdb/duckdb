@@ -1,0 +1,48 @@
+# name: test/sql/types/uhugeint/test_uhugeint_exponent.test
+# description: Test uhugeint conversion
+# group: [uhugeint]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select '170141183460469231731687303715884105700e0'::UHUGEINT
+----
+170141183460469231731687303715884105700
+
+query I
+select '340282366920938463463374607431768211455e0'::UHUGEINT
+----
+340282366920938463463374607431768211455
+
+query I
+select 5.4321e4::UHUGEINT
+----
+54321
+
+query I
+select (0.00000000000000000000002e+44)::UHUGEINT;
+----
+2000000000000000000000
+
+# overflow
+statement error
+select '340282366920938463463374607431768211456e0'::UHUGEINT
+----
+Conversion Error
+
+statement error
+select '3.4e39'::UHUGEINT
+----
+Conversion Error
+
+query I
+select '3.4e38'::UHUGEINT
+----
+340000000000000000000000000000000000000
+
+statement error
+select '3.5e38'::UHUGEINT
+----
+Conversion Error
+

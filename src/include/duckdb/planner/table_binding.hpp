@@ -52,7 +52,7 @@ public:
 	bool TryGetBindingIndex(const string &column_name, column_t &column_index);
 	column_t GetBindingIndex(const string &column_name);
 	bool HasMatchingBinding(const string &column_name);
-	virtual string ColumnNotFoundError(const string &column_name) const;
+	virtual ErrorData ColumnNotFoundError(const string &column_name) const;
 	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);
 	virtual optional_ptr<StandardEntry> GetStandardEntry();
 
@@ -107,7 +107,7 @@ public:
 	unique_ptr<ParsedExpression> ExpandGeneratedColumn(const string &column_name);
 	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
 	optional_ptr<StandardEntry> GetStandardEntry() override;
-	string ColumnNotFoundError(const string &column_name) const override;
+	ErrorData ColumnNotFoundError(const string &column_name) const override;
 	// These are columns that are present in the name_map, appearing in the order that they're bound
 	const vector<column_t> &GetBoundColumnIds() const;
 
@@ -133,12 +133,12 @@ public:
 
 public:
 	//! Binding macros
-	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
+	BindResult Bind(ColumnRefExpression &col_ref, idx_t depth) override;
 	//! Binding lambdas
-	BindResult Bind(LambdaRefExpression &lambdaref, idx_t depth);
+	BindResult Bind(LambdaRefExpression &lambda_ref, idx_t depth);
 
-	//! Given the parameter colref, returns a copy of the argument that was supplied for this parameter
-	unique_ptr<ParsedExpression> ParamToArg(ColumnRefExpression &colref);
+	//! Returns a copy of the col_ref parameter as a parsed expression
+	unique_ptr<ParsedExpression> ParamToArg(ColumnRefExpression &col_ref);
 };
 
 } // namespace duckdb

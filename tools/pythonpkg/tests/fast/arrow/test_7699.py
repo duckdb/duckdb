@@ -8,7 +8,7 @@ pl = pytest.importorskip("polars")
 
 
 class Test7699(object):
-    def test_7699(self):
+    def test_7699(self, duckdb_cursor):
         pl_tbl = pl.DataFrame(
             {
                 "col1": pl.Series([string.ascii_uppercase[ix + 10] for ix in list(range(2)) + list(range(3))]).cast(
@@ -18,8 +18,8 @@ class Test7699(object):
         )
 
         nickname = "df1234"
-        duckdb.register(nickname, pl_tbl)
+        duckdb_cursor.register(nickname, pl_tbl)
 
-        rel = duckdb.sql("select * from df1234")
+        rel = duckdb_cursor.sql("select * from df1234")
         res = rel.fetchall()
         assert res == [('K',), ('L',), ('K',), ('L',), ('M',)]

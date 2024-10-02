@@ -13,8 +13,16 @@
 #include "duckdb/storage/arena_allocator.hpp"
 
 namespace duckdb {
-
+class StorageCommitState;
 class WriteAheadLog;
+
+struct UndoBufferProperties {
+	idx_t estimated_size = 0;
+	bool has_updates = false;
+	bool has_deletes = false;
+	bool has_catalog_changes = false;
+	bool has_dropped_entries = false;
+};
 
 //! The undo buffer of a transaction is used to hold previous versions of tuples
 //! that might be required in the future (because of rollbacks or previous
@@ -28,19 +36,21 @@ public:
 	};
 
 public:
-	UndoBuffer(ClientContext &context);
+	explicit UndoBuffer(ClientContext &context);
 
 	//! Reserve space for an entry of the specified type and length in the undo
 	//! buffer
 	data_ptr_t CreateEntry(UndoFlags type, idx_t len);
 
 	bool ChangesMade();
-	idx_t EstimatedSize();
+	UndoBufferProperties GetProperties();
 
 	//! Cleanup the undo buffer
-	void Cleanup();
+	void Cleanup(transaction_t lowest_active_transaction);
 	//! Commit the changes made in the UndoBuffer: should be called on commit
-	void Commit(UndoBuffer::IteratorState &iterator_state, optional_ptr<WriteAheadLog> log, transaction_t commit_id);
+	void WriteToWAL(WriteAheadLog &wal, optional_ptr<StorageCommitState> commit_state);
+	//! Commit the changes made in the UndoBuffer: should be called on commit
+	void Commit(UndoBuffer::IteratorState &iterator_state, transaction_t commit_id);
 	//! Revert committed changes made in the UndoBuffer up until the currently committed state
 	void RevertCommit(UndoBuffer::IteratorState &iterator_state, transaction_t transaction_id);
 	//! Rollback the changes made in this UndoBuffer: should be called on

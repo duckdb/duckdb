@@ -26,12 +26,16 @@ public:
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
 	//! Return a reference to the client context of this optimizer
 	ClientContext &GetContext();
+	//! Whether the specific optimizer is disabled
+	bool OptimizerDisabled(OptimizerType type);
 
+public:
 	ClientContext &context;
 	Binder &binder;
 	ExpressionRewriter rewriter;
 
 private:
+	void RunBuiltInOptimizers();
 	void RunOptimizer(OptimizerType type, const std::function<void()> &callback);
 	void Verify(LogicalOperator &op);
 

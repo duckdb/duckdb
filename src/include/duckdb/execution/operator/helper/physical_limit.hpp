@@ -10,6 +10,7 @@
 
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
 
 namespace duckdb {
 
@@ -18,14 +19,14 @@ class PhysicalLimit : public PhysicalOperator {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::LIMIT;
 
-public:
-	PhysicalLimit(vector<LogicalType> types, idx_t limit, idx_t offset, unique_ptr<Expression> limit_expression,
-	              unique_ptr<Expression> offset_expression, idx_t estimated_cardinality);
+	static constexpr const idx_t MAX_LIMIT_VALUE = 1ULL << 62ULL;
 
-	idx_t limit_value;
-	idx_t offset_value;
-	unique_ptr<Expression> limit_expression;
-	unique_ptr<Expression> offset_expression;
+public:
+	PhysicalLimit(vector<LogicalType> types, BoundLimitNode limit_val, BoundLimitNode offset_val,
+	              idx_t estimated_cardinality);
+
+	BoundLimitNode limit_val;
+	BoundLimitNode offset_val;
 
 public:
 	bool SinkOrderDependent() const override {
@@ -61,11 +62,13 @@ public:
 	}
 
 public:
-	static bool ComputeOffset(ExecutionContext &context, DataChunk &input, idx_t &limit, idx_t &offset,
-	                          idx_t current_offset, idx_t &max_element, Expression *limit_expression,
-	                          Expression *offset_expression);
+	static void SetInitialLimits(const BoundLimitNode &limit_val, const BoundLimitNode &offset_val, optional_idx &limit,
+	                             optional_idx &offset);
+	static bool ComputeOffset(ExecutionContext &context, DataChunk &input, optional_idx &limit, optional_idx &offset,
+	                          idx_t current_offset, idx_t &max_element, const BoundLimitNode &limit_val,
+	                          const BoundLimitNode &offset_val);
 	static bool HandleOffset(DataChunk &input, idx_t &current_offset, idx_t offset, idx_t limit);
-	static Value GetDelimiter(ExecutionContext &context, DataChunk &input, Expression *expr);
+	static Value GetDelimiter(ExecutionContext &context, DataChunk &input, const Expression &expr);
 };
 
 } // namespace duckdb

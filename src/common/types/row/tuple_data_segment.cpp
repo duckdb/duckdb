@@ -1,10 +1,18 @@
 #include "duckdb/common/types/row/tuple_data_segment.hpp"
 
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
 
 namespace duckdb {
 
 TupleDataChunkPart::TupleDataChunkPart(mutex &lock_p) : lock(lock_p) {
+}
+
+void TupleDataChunkPart::SetHeapEmpty() {
+	heap_block_index = INVALID_INDEX;
+	heap_block_offset = INVALID_INDEX;
+	total_heap_size = 0;
+	base_heap_ptr = nullptr;
 }
 
 void SwapTupleDataChunkPart(TupleDataChunkPart &a, TupleDataChunkPart &b) {
@@ -106,9 +114,16 @@ TupleDataSegment::TupleDataSegment(shared_ptr<TupleDataAllocator> allocator_p)
 
 TupleDataSegment::~TupleDataSegment() {
 	lock_guard<mutex> guard(pinned_handles_lock);
+	if (allocator) {
+		allocator->SetDestroyBufferUponUnpin(); // Prevent blocks from being added to eviction queue
+	}
 	pinned_row_handles.clear();
 	pinned_heap_handles.clear();
-	allocator = nullptr;
+	if (Allocator::SupportsFlush() && allocator &&
+	    data_size > allocator->GetBufferManager().GetBufferPool().GetAllocatorBulkDeallocationFlushThreshold()) {
+		Allocator::FlushAll();
+	}
+	allocator.reset();
 }
 
 void SwapTupleDataSegment(TupleDataSegment &a, TupleDataSegment &b) {

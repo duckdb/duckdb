@@ -30,6 +30,7 @@ main_header_files = [
     os.path.join(include_dir, 'duckdb', 'common', 'types', 'blob.hpp'),
     os.path.join(include_dir, 'duckdb', 'common', 'types', 'decimal.hpp'),
     os.path.join(include_dir, 'duckdb', 'common', 'types', 'hugeint.hpp'),
+    os.path.join(include_dir, 'duckdb', 'common', 'types', 'uhugeint.hpp'),
     os.path.join(include_dir, 'duckdb', 'common', 'types', 'uuid.hpp'),
     os.path.join(include_dir, 'duckdb', 'common', 'types', 'interval.hpp'),
     os.path.join(include_dir, 'duckdb', 'common', 'types', 'timestamp.hpp'),
@@ -69,7 +70,6 @@ if '--extended' in sys.argv:
             "duckdb/storage/statistics/base_statistics.hpp",
             "duckdb/planner/filter/conjunction_filter.hpp",
             "duckdb/planner/filter/constant_filter.hpp",
-            "duckdb/execution/operator/scan/csv/buffered_csv_reader.hpp",
             "duckdb/common/types/vector_cache.hpp",
             "duckdb/common/string_map_set.hpp",
             "duckdb/planner/filter/null_filter.hpp",
@@ -264,14 +264,15 @@ def copy_if_different(src, dest):
 
 
 def git_commit_hash():
-    return subprocess.check_output(['git', 'log', '-1', '--format=%h']).strip().decode('utf8')
+    git_describe = package_build.get_git_describe()
+    hash = git_describe.split('-')[2].lstrip('g')
+    return hash
 
 
 def git_dev_version():
     try:
-        version = subprocess.check_output(['git', 'describe', '--tags', '--abbrev=0']).strip().decode('utf8')
-        long_version = subprocess.check_output(['git', 'describe', '--tags', '--long']).strip().decode('utf8')
-        version_splits = version.split('.')
+        long_version = package_build.get_git_describe()
+        version_splits = long_version.split('-')[0].lstrip('v').split('.')
         dev_version = long_version.split('-')[1]
         if int(dev_version) == 0:
             # directly on a tag: emit the regular version
@@ -298,7 +299,13 @@ def generate_duckdb_hpp(header_file):
         if extended_amalgamation:
             hfile.write("#define DUCKDB_AMALGAMATION_EXTENDED 1\n")
         hfile.write("#define DUCKDB_SOURCE_ID \"%s\"\n" % git_commit_hash())
-        hfile.write("#define DUCKDB_VERSION \"%s\"\n" % git_dev_version())
+
+        dev_version = git_dev_version()
+        dev_v_parts = dev_version.lstrip('v').split('.')
+        hfile.write("#define DUCKDB_VERSION \"%s\"\n" % dev_version)
+        hfile.write("#define DUCKDB_MAJOR_VERSION %d\n" % int(dev_v_parts[0]))
+        hfile.write("#define DUCKDB_MINOR_VERSION %d\n" % int(dev_v_parts[1]))
+        hfile.write("#define DUCKDB_PATCH_VERSION \"%s\"\n" % dev_v_parts[2])
 
         for fpath in main_header_files:
             hfile.write(write_file(fpath))
@@ -369,7 +376,7 @@ def list_include_files_recursive(dname, file_list):
         fpath = os.path.join(dname, fname)
         if os.path.isdir(fpath):
             list_include_files_recursive(fpath, file_list)
-        elif fname.endswith(('.hpp', '.h', '.hh', '.tcc', '.inc')):
+        elif fname.endswith(('.hpp', '.ipp', '.h', '.hh', '.tcc', '.inc')):
             file_list.append(fpath)
 
 

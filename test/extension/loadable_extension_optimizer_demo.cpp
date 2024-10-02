@@ -68,12 +68,13 @@ public:
 		}
 	}
 
-	static void WaggleOptimizeFunction(ClientContext &context, OptimizerExtensionInfo *info,
-	                                   duckdb::unique_ptr<LogicalOperator> &plan) {
+	static void WaggleOptimizeFunction(OptimizerExtensionInput &input, duckdb::unique_ptr<LogicalOperator> &plan) {
 		if (!HasParquetScan(*plan)) {
 			return;
 		}
 		// rpc
+
+		auto &context = input.context;
 
 		Value host, port;
 		if (!context.TryGetCurrentSetting("waggle_location_host", host) ||

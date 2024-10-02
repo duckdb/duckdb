@@ -73,12 +73,15 @@ SELECT * FROM test ORDER BY a
 # now verify that we get conflicts when we update values that have been updated AFTER we started
 statement error con1
 UPDATE test SET a=99 WHERE a=1
+----
 
 statement error con2
 UPDATE test SET a=99 WHERE a=2
+----
 
 statement error con3
 UPDATE test SET a=99 WHERE a=3
+----
 
 # revert to previous state
 statement ok updater

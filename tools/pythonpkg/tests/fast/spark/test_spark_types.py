@@ -28,6 +28,7 @@ from duckdb.experimental.spark.sql.types import (
     LongType,
     UnsignedLongType,
     HugeIntegerType,
+    UnsignedHugeIntegerType,
     DayTimeIntervalType,
     ArrayType,
     MapType,
@@ -45,7 +46,16 @@ class TestTypes(object):
 				small_enum,
 				medium_enum,
 				large_enum,
-				'union'
+				'union',
+				fixed_int_array, 
+				fixed_varchar_array, 
+				fixed_nested_int_array,
+            	fixed_nested_varchar_array, 
+            	fixed_struct_array, 
+            	struct_of_fixed_array, 
+            	fixed_array_of_int_list,
+                list_of_fixed_int_array,
+                varint
 			) from test_all_types()
 		"""
         )
@@ -58,6 +68,7 @@ class TestTypes(object):
                 StructField('int', IntegerType(), True),
                 StructField('bigint', LongType(), True),
                 StructField('hugeint', HugeIntegerType(), True),
+                StructField('uhugeint', UnsignedHugeIntegerType(), True),
                 StructField('utinyint', UnsignedByteType(), True),
                 StructField('usmallint', UnsignedShortType(), True),
                 StructField('uint', UnsignedIntegerType(), True),

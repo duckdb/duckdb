@@ -69,6 +69,7 @@ True
 # this wouldn't work if we would upcast to integer
 statement error
 SELECT bool_and(i) FROM (SELECT * FROM (SELECT NULL::INTEGER) tbl(i) UNION ALL SELECT CAST(1 as BOOLEAN)) tbl(i)
+----
 
 # cross product
 query II
@@ -142,7 +143,7 @@ True
 query I
 SELECT typeof(#1) FROM v1
 ----
-NULL
+"NULL"
 
 # also with unions
 statement ok
@@ -164,7 +165,7 @@ True
 query I
 SELECT typeof(#1) FROM v2 LIMIT 1
 ----
-NULL
+"NULL"
 
 # nulls in lists
 query I
@@ -197,7 +198,7 @@ SELECT * FROM cte
 ----
 NULL
 
-require noalternativeverify
+require no_alternative_verify
 
 query I
 WITH cte AS (SELECT NULL)

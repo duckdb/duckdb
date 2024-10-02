@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-static inline string_t GetType(yyjson_val *val, yyjson_alc *alc, Vector &result) {
+static inline string_t GetType(yyjson_val *val, yyjson_alc *, Vector &, ValidityMask &mask, idx_t idx) {
 	return JSONCommon::ValTypeToStringT(val);
 }
 
@@ -31,7 +31,7 @@ static void GetTypeFunctionsInternal(ScalarFunctionSet &set, const LogicalType &
 ScalarFunctionSet JSONFunctions::GetTypeFunction() {
 	ScalarFunctionSet set("json_type");
 	GetTypeFunctionsInternal(set, LogicalType::VARCHAR);
-	GetTypeFunctionsInternal(set, JSONCommon::JSONType());
+	GetTypeFunctionsInternal(set, LogicalType::JSON());
 	return set;
 }
 

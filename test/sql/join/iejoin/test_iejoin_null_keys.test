@@ -1,0 +1,62 @@
+# name: test/sql/join/iejoin/test_iejoin_null_keys.test
+# description: Issue #10122: wrong result in IEJoin
+# group: [iejoin]
+
+statement ok
+pragma enable_verification
+
+statement ok
+SET merge_join_threshold=0
+
+statement ok
+create table tt (x int, y int, z int);
+
+statement ok
+insert into tt select nullif(r % 3, 0), nullif (r % 5, 0), r from range(10) tbl(r);
+
+query IIIIII
+select * 
+from tt t1 left join tt t2 
+on t1.x < t2.x and t1.y < t2.y 
+order by t1.x nulls first, t1.y nulls first, t1.z, t2.x, t2.y, t2.z;
+----
+NULL	NULL	0	NULL	NULL	NULL
+NULL	1	6	NULL	NULL	NULL
+NULL	3	3	NULL	NULL	NULL
+NULL	4	9	NULL	NULL	NULL
+1	1	1	2	2	2
+1	1	1	2	3	8
+1	2	7	2	3	8
+1	4	4	NULL	NULL	NULL
+2	NULL	5	NULL	NULL	NULL
+2	2	2	NULL	NULL	NULL
+2	3	8	NULL	NULL	NULL
+
+statement ok
+pragma disable_optimizer;
+
+statement ok
+create table tt2 (x int);
+
+statement ok
+insert into tt2 select * from range(10);
+
+query II
+select t1.x, t1.y
+from (
+    select (case when x < 100 then null else 99 end) x, (case when x < 100 then 99 else 99 end) y
+    from tt2
+) t1 left join tt2 t2
+on t1.x < t2.x and t1.y < t2.x
+order by t1.x nulls first, t1.y nulls first;
+----
+NULL	99
+NULL	99
+NULL	99
+NULL	99
+NULL	99
+NULL	99
+NULL	99
+NULL	99
+NULL	99
+NULL	99

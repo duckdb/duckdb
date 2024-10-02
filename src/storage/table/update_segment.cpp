@@ -1,11 +1,11 @@
 #include "duckdb/storage/table/update_segment.hpp"
 
+#include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/common/printer.hpp"
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
-
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/update_info.hpp"
-#include "duckdb/common/printer.hpp"
 
 #include <algorithm>
 
@@ -143,6 +143,8 @@ static UpdateSegment::fetch_update_function_t GetFetchUpdateFunction(PhysicalTyp
 		return UpdateMergeFetch<uint64_t>;
 	case PhysicalType::INT128:
 		return UpdateMergeFetch<hugeint_t>;
+	case PhysicalType::UINT128:
+		return UpdateMergeFetch<uhugeint_t>;
 	case PhysicalType::FLOAT:
 		return UpdateMergeFetch<float>;
 	case PhysicalType::DOUBLE:
@@ -208,6 +210,8 @@ static UpdateSegment::fetch_committed_function_t GetFetchCommittedFunction(Physi
 		return TemplatedFetchCommitted<uint64_t>;
 	case PhysicalType::INT128:
 		return TemplatedFetchCommitted<hugeint_t>;
+	case PhysicalType::UINT128:
+		return TemplatedFetchCommitted<uhugeint_t>;
 	case PhysicalType::FLOAT:
 		return TemplatedFetchCommitted<float>;
 	case PhysicalType::DOUBLE:
@@ -304,6 +308,8 @@ static UpdateSegment::fetch_committed_range_function_t GetFetchCommittedRangeFun
 		return TemplatedFetchCommittedRange<uint64_t>;
 	case PhysicalType::INT128:
 		return TemplatedFetchCommittedRange<hugeint_t>;
+	case PhysicalType::UINT128:
+		return TemplatedFetchCommittedRange<uhugeint_t>;
 	case PhysicalType::FLOAT:
 		return TemplatedFetchCommittedRange<float>;
 	case PhysicalType::DOUBLE:
@@ -406,6 +412,8 @@ static UpdateSegment::fetch_row_function_t GetFetchRowFunction(PhysicalType type
 		return TemplatedFetchRow<uint64_t>;
 	case PhysicalType::INT128:
 		return TemplatedFetchRow<hugeint_t>;
+	case PhysicalType::UINT128:
+		return TemplatedFetchRow<uhugeint_t>;
 	case PhysicalType::FLOAT:
 		return TemplatedFetchRow<float>;
 	case PhysicalType::DOUBLE:
@@ -473,6 +481,8 @@ static UpdateSegment::rollback_update_function_t GetRollbackUpdateFunction(Physi
 		return RollbackUpdate<uint64_t>;
 	case PhysicalType::INT128:
 		return RollbackUpdate<hugeint_t>;
+	case PhysicalType::UINT128:
+		return RollbackUpdate<uhugeint_t>;
 	case PhysicalType::FLOAT:
 		return RollbackUpdate<float>;
 	case PhysicalType::DOUBLE:
@@ -491,7 +501,9 @@ void UpdateSegment::RollbackUpdate(UpdateInfo &info) {
 	auto lock_handle = lock.GetExclusiveLock();
 
 	// move the data from the UpdateInfo back into the base info
-	D_ASSERT(root->info[info.vector_index]);
+	if (!root->info[info.vector_index]) {
+		return;
+	}
 	rollback_update_function(*root->info[info.vector_index]->info, info);
 
 	// clean up the update chain
@@ -564,12 +576,12 @@ void UpdateSegment::InitializeUpdateInfo(UpdateInfo &info, row_t *ids, const Sel
 	info.next = nullptr;
 
 	// set up the tuple ids
-	info.N = count;
+	info.N = UnsafeNumericCast<sel_t>(count);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		auto id = ids[idx];
 		D_ASSERT(idx_t(id) >= vector_offset && idx_t(id) < vector_offset + STANDARD_VECTOR_SIZE);
-		info.tuples[i] = id - vector_offset;
+		info.tuples[i] = NumericCast<sel_t>(NumericCast<idx_t>(id) - vector_offset);
 	};
 }
 
@@ -660,6 +672,8 @@ static UpdateSegment::initialize_update_function_t GetInitializeUpdateFunction(P
 		return InitializeUpdateData<uint64_t>;
 	case PhysicalType::INT128:
 		return InitializeUpdateData<hugeint_t>;
+	case PhysicalType::UINT128:
+		return InitializeUpdateData<uhugeint_t>;
 	case PhysicalType::FLOAT:
 		return InitializeUpdateData<float>;
 	case PhysicalType::DOUBLE:
@@ -683,7 +697,7 @@ static idx_t MergeLoop(row_t a[], sel_t b[], idx_t acount, idx_t bcount, idx_t a
 	idx_t count = 0;
 	while (aidx < acount && bidx < bcount) {
 		auto a_index = asel.get_index(aidx);
-		auto a_id = a[a_index] - aoffset;
+		auto a_id = UnsafeNumericCast<idx_t>(a[a_index]) - aoffset;
 		auto b_id = b[bidx];
 		if (a_id == b_id) {
 			merge(a_id, a_index, bidx, count);
@@ -702,7 +716,7 @@ static idx_t MergeLoop(row_t a[], sel_t b[], idx_t acount, idx_t bcount, idx_t a
 	}
 	for (; aidx < acount; aidx++) {
 		auto a_index = asel.get_index(aidx);
-		pick_a(a[a_index] - aoffset, a_index, count);
+		pick_a(UnsafeNumericCast<idx_t>(a[a_index]) - aoffset, a_index, count);
 		count++;
 	}
 	for (; bidx < bcount; bidx++) {
@@ -763,7 +777,7 @@ static void MergeUpdateLoopInternal(UpdateInfo *base_info, V *base_table_data, U
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		// we have to merge the info for "ids[i]"
-		auto update_id = ids[idx] - base_id;
+		auto update_id = UnsafeNumericCast<idx_t>(ids[idx]) - base_id;
 
 		while (update_info_offset < update_info->N && update_info->tuples[update_info_offset] < update_id) {
 			// old id comes before the current id: write it
@@ -792,7 +806,7 @@ static void MergeUpdateLoopInternal(UpdateInfo *base_info, V *base_table_data, U
 			result_values[result_offset] = UpdateSelectElement::Operation<T>(
 			    base_info->segment, OP::template Extract<T, V>(base_table_data, update_id));
 		}
-		result_ids[result_offset++] = update_id;
+		result_ids[result_offset++] = UnsafeNumericCast<sel_t>(update_id);
 	}
 	// write any remaining entries from the old updates
 	while (update_info_offset < update_info->N) {
@@ -801,7 +815,7 @@ static void MergeUpdateLoopInternal(UpdateInfo *base_info, V *base_table_data, U
 		update_info_offset++;
 	}
 	// now copy them back
-	update_info->N = result_offset;
+	update_info->N = UnsafeNumericCast<sel_t>(result_offset);
 	memcpy(update_info_data, result_values, result_offset * sizeof(T));
 	memcpy(update_info->tuples, result_ids, result_offset * sizeof(sel_t));
 
@@ -809,12 +823,12 @@ static void MergeUpdateLoopInternal(UpdateInfo *base_info, V *base_table_data, U
 	result_offset = 0;
 	auto pick_new = [&](idx_t id, idx_t aidx, idx_t count) {
 		result_values[result_offset] = OP::template Extract<T, V>(update_vector_data, aidx);
-		result_ids[result_offset] = id;
+		result_ids[result_offset] = UnsafeNumericCast<sel_t>(id);
 		result_offset++;
 	};
 	auto pick_old = [&](idx_t id, idx_t bidx, idx_t count) {
 		result_values[result_offset] = base_info_data[bidx];
-		result_ids[result_offset] = id;
+		result_ids[result_offset] = UnsafeNumericCast<sel_t>(id);
 		result_offset++;
 	};
 	// now we perform a merge of the new ids with the old ids
@@ -823,7 +837,7 @@ static void MergeUpdateLoopInternal(UpdateInfo *base_info, V *base_table_data, U
 	};
 	MergeLoop(ids, base_info->tuples, count, base_info->N, base_id, merge, pick_new, pick_old, sel);
 
-	base_info->N = result_offset;
+	base_info->N = UnsafeNumericCast<sel_t>(result_offset);
 	memcpy(base_info_data, result_values, result_offset * sizeof(T));
 	memcpy(base_info->tuples, result_ids, result_offset * sizeof(sel_t));
 }
@@ -867,6 +881,8 @@ static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalTyp
 		return MergeUpdateLoop<uint64_t>;
 	case PhysicalType::INT128:
 		return MergeUpdateLoop<hugeint_t>;
+	case PhysicalType::UINT128:
+		return MergeUpdateLoop<uhugeint_t>;
 	case PhysicalType::FLOAT:
 		return MergeUpdateLoop<float>;
 	case PhysicalType::DOUBLE:
@@ -895,7 +911,7 @@ idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats,
 	if (!mask.AllValid() && !validity.CanHaveNull()) {
 		for (idx_t i = 0; i < count; i++) {
 			if (!mask.RowIsValid(i)) {
-				validity.SetHasNull();
+				validity.SetHasNullFast();
 				break;
 			}
 		}
@@ -912,7 +928,7 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 
 	if (mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			NumericStats::Update<T>(stats.statistics, update_data[i]);
+			stats.statistics.UpdateNumericStats<T>(update_data[i]);
 		}
 		sel.Initialize(nullptr);
 		return count;
@@ -922,7 +938,7 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 		for (idx_t i = 0; i < count; i++) {
 			if (mask.RowIsValid(i)) {
 				sel.set_index(not_null_count++, i);
-				NumericStats::Update<T>(stats.statistics, update_data[i]);
+				stats.statistics.UpdateNumericStats<T>(update_data[i]);
 			}
 		}
 		return not_null_count;
@@ -981,6 +997,8 @@ UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(Physical
 		return TemplatedUpdateNumericStatistics<uint64_t>;
 	case PhysicalType::INT128:
 		return TemplatedUpdateNumericStatistics<hugeint_t>;
+	case PhysicalType::UINT128:
+		return TemplatedUpdateNumericStatistics<uhugeint_t>;
 	case PhysicalType::FLOAT:
 		return TemplatedUpdateNumericStatistics<float>;
 	case PhysicalType::DOUBLE:
@@ -1044,7 +1062,8 @@ static idx_t SortSelectionVector(SelectionVector &sel, idx_t count, row_t *ids) 
 
 UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, idx_t type_size, idx_t count,
                                   unsafe_unique_array<char> &data) {
-	data = make_unsafe_uniq_array<char>(sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
+	data = make_unsafe_uniq_array_uninitialized<char>(sizeof(UpdateInfo) +
+	                                                  (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
 	auto update_info = reinterpret_cast<UpdateInfo *>(data.get());
 	update_info->max = STANDARD_VECTOR_SIZE;
 	update_info->tuples = reinterpret_cast<sel_t *>((data_ptr_cast(update_info)) + sizeof(UpdateInfo));
@@ -1085,7 +1104,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 	// get the vector index based on the first id
 	// we assert that all updates must be part of the same vector
 	auto first_id = ids[sel.get_index(0)];
-	idx_t vector_index = (first_id - column_data.start) / STANDARD_VECTOR_SIZE;
+	idx_t vector_index = (UnsafeNumericCast<idx_t>(first_id) - column_data.start) / STANDARD_VECTOR_SIZE;
 	idx_t vector_offset = column_data.start + vector_index * STANDARD_VECTOR_SIZE;
 
 	D_ASSERT(idx_t(first_id) >= column_data.start);
@@ -1098,7 +1117,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		// there is already a version here, check if there are any conflicts and search for the node that belongs to
 		// this transaction in the version chain
 		auto base_info = root->info[vector_index]->info.get();
-		CheckForConflicts(base_info->next, transaction, ids, sel, count, vector_offset, node);
+		CheckForConflicts(base_info->next, transaction, ids, sel, count, UnsafeNumericCast<row_t>(vector_offset), node);
 
 		// there are no conflicts
 		// first, check if this thread has already done any updates
@@ -1145,8 +1164,8 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		auto result = make_uniq<UpdateNodeData>();
 
 		result->info = make_uniq<UpdateInfo>();
-		result->tuples = make_unsafe_uniq_array<sel_t>(STANDARD_VECTOR_SIZE);
-		result->tuple_data = make_unsafe_uniq_array<data_t>(STANDARD_VECTOR_SIZE * type_size);
+		result->tuples = make_unsafe_uniq_array_uninitialized<sel_t>(STANDARD_VECTOR_SIZE);
+		result->tuple_data = make_unsafe_uniq_array_uninitialized<data_t>(STANDARD_VECTOR_SIZE * type_size);
 		result->info->tuples = result->tuples.get();
 		result->info->tuple_data = result->tuple_data.get();
 		result->info->version_number = TRANSACTION_ID_START - 1;

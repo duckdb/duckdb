@@ -4,8 +4,6 @@ add_library_unity(
   OBJECT
   test_buffer_manager.cpp
   test_checksum.cpp
-  test_big_storage.cpp
-  test_repeated_checkpoint.cpp
   test_storage.cpp
   test_database_size.cpp
   wal_torn_write.cpp)

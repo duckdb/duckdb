@@ -578,7 +578,7 @@ SQLITE_API int sqlite3_exec(
 
 // we need to somehow communicate this through open_v2
 #define DUCKDB_UNSIGNED_EXTENSIONS   0x10000000
-
+#define DUCKDB_UNREDACTED_SECRETS    0x20000000
 
 /*
 ** CAPI3REF: Device Characteristics
@@ -2488,6 +2488,7 @@ SQLITE_API void sqlite3_set_last_insert_rowid(sqlite3*,sqlite3_int64);
 ** </ul>
 */
 SQLITE_API int sqlite3_changes(sqlite3*);
+SQLITE_API sqlite3_int64 sqlite3_changes64(sqlite3*);
 
 /*
 ** CAPI3REF: Total Number Of Rows Modified
@@ -2525,6 +2526,7 @@ SQLITE_API int sqlite3_changes(sqlite3*);
 ** </ul>
 */
 SQLITE_API int sqlite3_total_changes(sqlite3*);
+SQLITE_API sqlite3_int64 sqlite3_total_changes64(sqlite3*);
 
 /*
 ** CAPI3REF: Interrupt A Long-Running Query

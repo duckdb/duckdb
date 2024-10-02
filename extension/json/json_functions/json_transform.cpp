@@ -13,13 +13,13 @@
 
 namespace duckdb {
 
-JSONTransformOptions::JSONTransformOptions() {
+JSONTransformOptions::JSONTransformOptions() : parameters(false, &error_message) {
 }
 
 JSONTransformOptions::JSONTransformOptions(bool strict_cast_p, bool error_duplicate_key_p, bool error_missing_key_p,
                                            bool error_unkown_key_p)
     : strict_cast(strict_cast_p), error_duplicate_key(error_duplicate_key_p), error_missing_key(error_missing_key_p),
-      error_unknown_key(error_unkown_key_p) {
+      error_unknown_key(error_unkown_key_p), parameters(false, &error_message) {
 }
 
 //! Forward declaration for recursion
@@ -59,6 +59,7 @@ static LogicalType StructureStringToType(yyjson_val *val, ClientContext &context
 		return StructureStringToTypeArray(val, context);
 	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
 		return StructureToTypeObject(val, context);
+	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
 		return TransformStringToLogicalType(unsafe_yyjson_get_str(val), context);
 	default:
@@ -79,7 +80,7 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
 	if (structure_val.IsNull() || arguments[1]->return_type == LogicalTypeId::SQLNULL) {
 		bound_function.return_type = LogicalTypeId::SQLNULL;
 	} else {
-		if (!structure_val.DefaultTryCastAs(JSONCommon::JSONType())) {
+		if (!structure_val.DefaultTryCastAs(LogicalType::JSON())) {
 			throw BinderException("Cannot cast JSON structure to string");
 		}
 		auto structure_string = structure_val.GetValueUnsafe<string_t>();
@@ -99,6 +100,7 @@ static inline bool GetValueNumerical(yyjson_val *val, T &result, JSONTransformOp
 	D_ASSERT(unsafe_yyjson_get_tag(val) != (YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE));
 	bool success;
 	switch (unsafe_yyjson_get_tag(val)) {
+	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
 		success = OP::template Operation<string_t, T>(GetString(val), result, options.strict_cast);
 		break;
@@ -134,8 +136,9 @@ static inline bool GetValueDecimal(yyjson_val *val, T &result, uint8_t w, uint8_
 	D_ASSERT(unsafe_yyjson_get_tag(val) != (YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE));
 	bool success;
 	switch (unsafe_yyjson_get_tag(val)) {
+	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
-		success = OP::template Operation<string_t, T>(GetString(val), result, &options.error_message, w, s);
+		success = OP::template Operation<string_t, T>(GetString(val), result, options.parameters, w, s);
 		break;
 	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
 	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
@@ -143,17 +146,16 @@ static inline bool GetValueDecimal(yyjson_val *val, T &result, uint8_t w, uint8_
 		break;
 	case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_TRUE:
 	case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_FALSE:
-		success = OP::template Operation<bool, T>(unsafe_yyjson_get_bool(val), result, &options.error_message, w, s);
+		success = OP::template Operation<bool, T>(unsafe_yyjson_get_bool(val), result, options.parameters, w, s);
 		break;
 	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_UINT:
-		success =
-		    OP::template Operation<uint64_t, T>(unsafe_yyjson_get_uint(val), result, &options.error_message, w, s);
+		success = OP::template Operation<uint64_t, T>(unsafe_yyjson_get_uint(val), result, options.parameters, w, s);
 		break;
 	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_SINT:
-		success = OP::template Operation<int64_t, T>(unsafe_yyjson_get_sint(val), result, &options.error_message, w, s);
+		success = OP::template Operation<int64_t, T>(unsafe_yyjson_get_sint(val), result, options.parameters, w, s);
 		break;
 	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_REAL:
-		success = OP::template Operation<double, T>(unsafe_yyjson_get_real(val), result, &options.error_message, w, s);
+		success = OP::template Operation<double, T>(unsafe_yyjson_get_real(val), result, options.parameters, w, s);
 		break;
 	default:
 		throw InternalException("Unknown yyjson tag in GetValueString");
@@ -168,6 +170,7 @@ static inline bool GetValueDecimal(yyjson_val *val, T &result, uint8_t w, uint8_
 static inline bool GetValueString(yyjson_val *val, yyjson_alc *alc, string_t &result, Vector &vector) {
 	D_ASSERT(unsafe_yyjson_get_tag(val) != (YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE));
 	switch (unsafe_yyjson_get_tag(val)) {
+	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
 		result = string_t(unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val));
 		return true;
@@ -826,7 +829,7 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 		return TransformFromStringWithFormat(vals, result, count, options);
 	}
 
-	if (JSONCommon::LogicalTypeIsJSON(result_type)) {
+	if (result_type.IsJSONType()) {
 		return TransformToJSON(vals, alc, result, count);
 	}
 
@@ -854,6 +857,8 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 		return TransformNumerical<uint64_t>(vals, result, count, options);
 	case LogicalTypeId::HUGEINT:
 		return TransformNumerical<hugeint_t>(vals, result, count, options);
+	case LogicalTypeId::UHUGEINT:
+		return TransformNumerical<uhugeint_t>(vals, result, count, options);
 	case LogicalTypeId::FLOAT:
 		return TransformNumerical<float>(vals, result, count, options);
 	case LogicalTypeId::DOUBLE:
@@ -954,7 +959,7 @@ static void GetTransformFunctionInternal(ScalarFunctionSet &set, const LogicalTy
 ScalarFunctionSet JSONFunctions::GetTransformFunction() {
 	ScalarFunctionSet set("json_transform");
 	GetTransformFunctionInternal(set, LogicalType::VARCHAR);
-	GetTransformFunctionInternal(set, JSONCommon::JSONType());
+	GetTransformFunctionInternal(set, LogicalType::JSON());
 	return set;
 }
 
@@ -966,7 +971,7 @@ static void GetTransformStrictFunctionInternal(ScalarFunctionSet &set, const Log
 ScalarFunctionSet JSONFunctions::GetTransformStrictFunction() {
 	ScalarFunctionSet set("json_transform_strict");
 	GetTransformStrictFunctionInternal(set, LogicalType::VARCHAR);
-	GetTransformStrictFunctionInternal(set, JSONCommon::JSONType());
+	GetTransformStrictFunctionInternal(set, LogicalType::JSON());
 	return set;
 }
 
@@ -980,7 +985,7 @@ static bool JSONToAnyCast(Vector &source, Vector &result, idx_t count, CastParam
 
 	auto success = TransformFunctionInternal(source, count, result, alc, options);
 	if (!success) {
-		HandleCastError::AssignError(options.error_message, parameters.error_message);
+		HandleCastError::AssignError(options.error_message, parameters);
 	}
 	return success;
 }
@@ -1007,7 +1012,7 @@ void JSONFunctions::RegisterJSONTransformCastFunctions(CastFunctionSet &casts) {
 			target_type = LogicalType::UNION({{"any", LogicalType::ANY}});
 			break;
 		case LogicalTypeId::ARRAY:
-			target_type = LogicalType::ARRAY(LogicalType::ANY);
+			target_type = LogicalType::ARRAY(LogicalType::ANY, optional_idx());
 			break;
 		case LogicalTypeId::VARCHAR:
 			// We skip this one here as it's handled in json_functions.cpp
@@ -1017,7 +1022,7 @@ void JSONFunctions::RegisterJSONTransformCastFunctions(CastFunctionSet &casts) {
 		}
 		// Going from JSON to another type has the same cost as going from VARCHAR to that type
 		const auto json_to_target_cost = casts.ImplicitCastCost(LogicalType::VARCHAR, target_type);
-		casts.RegisterCastFunction(JSONCommon::JSONType(), target_type, JSONToAnyCastBind, json_to_target_cost);
+		casts.RegisterCastFunction(LogicalType::JSON(), target_type, JSONToAnyCastBind, json_to_target_cost);
 	}
 }
 

@@ -3,13 +3,19 @@
 # group: [csv]
 
 statement ok
+PRAGMA enable_verification
+
+
+statement ok
 CREATE TABLE integers(i INTEGER, j INTEGER);
 
 statement ok
-COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little.csv' (HEADER, IGNORE_ERRORS, NULL_PADDING FALSE)
+COPY integers FROM 'data/csv/test/error_too_little.csv' (HEADER, IGNORE_ERRORS, NULL_PADDING FALSE)
 
 statement error
-COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little.csv' (HEADER, NULL_PADDING FALSE)
+COPY integers FROM 'data/csv/test/error_too_little.csv' (HEADER, NULL_PADDING FALSE)
+----
+It was not possible to automatically detect the CSV Parsing dialect
 
 # not enough columns provided
 query II
@@ -25,10 +31,12 @@ statement ok
 DELETE FROM integers;
 
 statement ok
-INSERT INTO integers SELECT * FROM read_csv('test/sql/copy/csv/data/test/error_too_little.csv', columns={'i': 'INTEGER', 'j': 'INTEGER'}, header=1, ignore_errors=1, null_padding=0)
+INSERT INTO integers SELECT * FROM read_csv('data/csv/test/error_too_little.csv', columns={'i': 'INTEGER', 'j': 'INTEGER'},  ignore_errors=1, null_padding=0)
 
 statement error
-INSERT INTO integers SELECT * FROM read_csv('test/sql/copy/csv/data/test/error_too_little.csv', columns={'i': 'INTEGER'}, header=1, null_padding=0)
+INSERT INTO integers SELECT * FROM read_csv('data/csv/test/error_too_little.csv', columns={'i': 'INTEGER'}, null_padding=0)
+----
+table integers has 2 columns but 1 values were supplied
 
 # not enough columns provided
 query II
@@ -44,10 +52,12 @@ statement ok
 DELETE FROM integers;
 
 statement ok
-COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_single.csv' (HEADER, IGNORE_ERRORS, NULL_PADDING 0)
+COPY integers FROM 'data/csv/test/error_too_little_single.csv' (HEADER, IGNORE_ERRORS, NULL_PADDING 0)
 
 statement error
-COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_single.csv' (HEADER, NULL_PADDING 0)
+COPY integers FROM 'data/csv/test/error_too_little_single.csv' (HEADER, NULL_PADDING 0)
+----
+It was not possible to automatically detect the CSV Parsing dialect
 
 # not enough columns provided, single value
 query II
@@ -59,10 +69,12 @@ statement ok
 DELETE FROM integers;
 
 statement ok
-COPY integers FROM 'test/sql/copy/csv/data/test/error_too_many.csv' (HEADER, IGNORE_ERRORS, SAMPLE_SIZE -1)
+COPY integers FROM 'data/csv/test/error_too_many.csv' (HEADER, IGNORE_ERRORS, SAMPLE_SIZE -1)
 
 statement error
-COPY integers FROM 'test/sql/copy/csv/data/test/error_too_many.csv' (HEADER)
+COPY integers FROM 'data/csv/test/error_too_many.csv' (HEADER)
+----
+It was not possible to automatically detect the CSV Parsing dialect
 
 # too many columns provided
 query II
@@ -78,10 +90,12 @@ statement ok
 DELETE FROM integers;
 
 statement ok
-COPY integers FROM 'test/sql/copy/csv/data/test/error_invalid_type.csv' (HEADER, IGNORE_ERRORS)
+COPY integers FROM 'data/csv/test/error_invalid_type.csv' (HEADER, IGNORE_ERRORS)
 
 statement error
-COPY integers FROM 'test/sql/copy/csv/data/test/error_invalid_type.csv' (HEADER)
+COPY integers FROM 'data/csv/test/error_invalid_type.csv' (HEADER)
+----
+This type was either manually set or derived from an existing table. Select a different type to correctly parse this column.
 
 # too many columns provided
 query II
@@ -97,10 +111,33 @@ statement ok
 CREATE TABLE nullable_type (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10), col_d VARCHAR(10));
 
 statement ok
-COPY nullable_type FROM 'test/sql/copy/csv/data/test/test_incompatible_type_with_nullable.csv'
+COPY nullable_type FROM 'data/csv/test/test_incompatible_type_with_nullable.csv'
 
 query IIII
 SELECT * FROM nullable_type
 ----
 1	NULL	test	null
 2	NULL	test	null
+
+query IIIIIIIIIIII
+FROM read_csv('data/csv/titanic.csv', ignore_errors=1) limit 10
+----
+1	0	3	Braund, Mr. Owen Harris	male	22.0	1	0	A/5 21171	7.25	NULL	S
+2	1	1	Cumings, Mrs. John Bradley (Florence Briggs Thayer)	female	38.0	1	0	PC 17599	71.2833	C85	C
+3	1	3	Heikkinen, Miss. Laina	female	26.0	0	0	STON/O2. 3101282	7.925	NULL	S
+4	1	1	Futrelle, Mrs. Jacques Heath (Lily May Peel)	female	35.0	1	0	113803	53.1	C123	S
+5	0	3	Allen, Mr. William Henry	male	35.0	0	0	373450	8.05	NULL	S
+6	0	3	Moran, Mr. James	male	NULL	0	0	330877	8.4583	NULL	Q
+7	0	1	McCarthy, Mr. Timothy J	male	54.0	0	0	17463	51.8625	E46	S
+8	0	3	Palsson, Master. Gosta Leonard	male	2.0	3	1	349909	21.075	NULL	S
+9	1	3	Johnson, Mrs. Oscar W (Elisabeth Vilhelmina Berg)	female	27.0	0	2	347742	11.1333	NULL	S
+10	1	2	Nasser, Mrs. Nicholas (Adele Achem)	female	14.0	1	0	237736	30.0708	NULL	C
+
+query I
+SELECT * FROM read_csv('data/csv/test_ignore_errors.csv', columns = {'Order ref ID': 'VARCHAR'}, ignore_errors=true);
+----
+
+query IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+SELECT * FROM read_csv('data/csv/test_ignore_errors.csv', types = {'Order ref ID': 'VARCHAR'}, ignore_errors=true);
+----
+40243121-bechamelfoodsin@gmail_com_item_01_2024.csv	523944955	163178211923806	163178211923806	swiggy	Completed	AMD_VASTRAPUR_JUNOS	NFD	-	-	AMD_VASTRAPUR_JUNOS_swiggy_JP	675029	NFD	NFD	NFD	-	2024-01-02	20:46:54	2235571	474092	Exotica Pizza	exotica pizza	1	539.0	26.95	aggregator	10.0	575.95	Medium | 1mm" Thin Crust	1797632 | 1876675	None	Ahmedabad	JP	1.0	0.0	27.45	10.0	0.0	27.45	10.0	Cooked	996331	5.0	0.0	549.0

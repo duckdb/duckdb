@@ -7,8 +7,6 @@ on:
       - '**'
       - '!main'
       - '!feature'
-    tags:
-      - '**'
     paths-ignore:
       - '**.md'
       - 'examples/**'
@@ -47,22 +45,19 @@ jobs:
         destination:
           - 'macOS'
           - 'iOS Simulator,name=iPhone 14'
-          - 'watchOS Simulator,name=Apple Watch Ultra (49mm)'
           - 'tvOS Simulator,name=Apple TV 4K (at 1080p) (2nd generation)'
         isRelease:
-          - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
+          - ${{ github.ref == 'refs/heads/main' }}
         exclude:
           - isRelease: false
             destination: 'iOS Simulator,name=iPhone 14'
-          - isRelease: false
-            destination: 'watchOS Simulator,name=Apple Watch Ultra (49mm)'
           - isRelease: false
             destination: 'tvOS Simulator,name=Apple TV 4K (at 1080p) (2nd generation)'
     runs-on: macos-12
     steps:
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           # we need tags for the ubiquity build script to run without errors
           fetch-depth: '0'
@@ -79,30 +74,3 @@ jobs:
             -workspace tools/swift/duckdb-swift/DuckDB.xcworkspace \
             -scheme DuckDB \
             -destination platform='${{ matrix.destination }}'
-
-  test-linux:
-    name: Test Linux
-    runs-on: ubuntu-latest
-    container:
-      image: swift:latest
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          # we need tags for the ubiquity build script to run without errors
-          fetch-depth: '0'
-
-      - name: Install Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-
-      - name: Prepare Package
-        run: python3 tools/swift/create_package.py tools/swift
-
-      - name: Build Package
-        run: swift build --package-path tools/swift/duckdb-swift
-
-      - name: Test Package
-        run: swift test --package-path tools/swift/duckdb-swift

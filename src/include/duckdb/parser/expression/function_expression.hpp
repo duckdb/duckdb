@@ -61,11 +61,14 @@ public:
 
 	void Verify() const override;
 
+	//! Returns true, if the function has a lambda expression as a child.
+	bool IsLambdaFunction() const;
+
 public:
 	template <class T, class BASE, class ORDER_MODIFIER = OrderModifier>
-	static string ToString(const T &entry, const string &schema, const string &function_name, bool is_operator = false,
-	                       bool distinct = false, BASE *filter = nullptr, ORDER_MODIFIER *order_bys = nullptr,
-	                       bool export_state = false, bool add_alias = false) {
+	static string ToString(const T &entry, const string &catalog, const string &schema, const string &function_name,
+	                       bool is_operator = false, bool distinct = false, BASE *filter = nullptr,
+	                       ORDER_MODIFIER *order_bys = nullptr, bool export_state = false, bool add_alias = false) {
 		if (is_operator) {
 			// built-in operator
 			D_ASSERT(!distinct);
@@ -82,7 +85,14 @@ public:
 			}
 		}
 		// standard function call
-		string result = schema.empty() ? function_name : schema + "." + function_name;
+		string result;
+		if (!catalog.empty()) {
+			result += KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
+		}
+		if (!schema.empty()) {
+			result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
+		}
+		result += KeywordHelper::WriteOptionallyQuoted(function_name);
 		result += "(";
 		if (distinct) {
 			result += "DISTINCT ";

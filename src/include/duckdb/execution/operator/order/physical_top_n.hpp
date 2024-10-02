@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 
@@ -55,7 +54,7 @@ public:
 		return true;
 	}
 
-	string ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 };
 
 } // namespace duckdb

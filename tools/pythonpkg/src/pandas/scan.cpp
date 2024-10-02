@@ -7,26 +7,31 @@
 #include "duckdb_python/numpy/numpy_bind.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb_python/pandas/column/pandas_numpy_column.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 
 #include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 
-struct PandasScanFunctionData : public PyTableFunctionData {
+struct PandasScanFunctionData : public TableFunctionData {
 	PandasScanFunctionData(py::handle df, idx_t row_count, vector<PandasColumnBindData> pandas_bind_data,
-	                       vector<LogicalType> sql_types)
+	                       vector<LogicalType> sql_types, shared_ptr<DependencyItem> dependency)
 	    : df(df), row_count(row_count), lines_read(0), pandas_bind_data(std::move(pandas_bind_data)),
-	      sql_types(std::move(sql_types)) {
+	      sql_types(std::move(sql_types)), copied_df(std::move(dependency)) {
 	}
 	py::handle df;
 	idx_t row_count;
 	atomic<idx_t> lines_read;
 	vector<PandasColumnBindData> pandas_bind_data;
 	vector<LogicalType> sql_types;
+	shared_ptr<DependencyItem> copied_df;
 
 	~PandasScanFunctionData() override {
-		py::gil_scoped_acquire acquire;
-		pandas_bind_data.clear();
+		try {
+			py::gil_scoped_acquire acquire;
+			pandas_bind_data.clear();
+		} catch (...) { // NOLINT
+		}
 	}
 };
 
@@ -86,9 +91,21 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
 	}
 	auto df_columns = py::list(df.attr("keys")());
 
+	auto &ref = input.ref;
+
+	shared_ptr<DependencyItem> dependency_item;
+	if (ref.external_dependency) {
+		// This was created during the replacement scan if this was a pandas DataFrame (see python_replacement_scan.cpp)
+		dependency_item = ref.external_dependency->GetDependency("copy");
+		if (!dependency_item) {
+			// This was created during the replacement if this was a numpy scan
+			dependency_item = ref.external_dependency->GetDependency("data");
+		}
+	}
+
 	auto get_fun = df.attr("__getitem__");
 	idx_t row_count = py::len(get_fun(df_columns[0]));
-	return make_uniq<PandasScanFunctionData>(df, row_count, std::move(pandas_bind_data), return_types);
+	return make_uniq<PandasScanFunctionData>(df, row_count, std::move(pandas_bind_data), return_types, dependency_item);
 }
 
 unique_ptr<GlobalTableFunctionState> PandasScanFunction::PandasScanInitGlobal(ClientContext &context,
@@ -194,43 +211,20 @@ unique_ptr<NodeStatistics> PandasScanFunction::PandasScanCardinality(ClientConte
 }
 
 py::object PandasScanFunction::PandasReplaceCopiedNames(const py::object &original_df) {
-	auto copy_df = original_df.attr("copy")(false);
-	unordered_map<string, idx_t> name_map;
-	unordered_set<string> columns_seen;
-	py::list column_name_list;
+	py::object copy_df = original_df.attr("copy")(false);
 	auto df_columns = py::list(original_df.attr("columns"));
-
-	for (auto &column_name_py : df_columns) {
-		string column_name = py::str(column_name_py);
-		// put it all lower_case
-		auto column_name_low = StringUtil::Lower(column_name);
-		name_map[column_name_low] = 1;
+	vector<string> columns;
+	for (const auto &str : df_columns) {
+		columns.push_back(string(py::str(str)));
 	}
-	for (auto &column_name_py : df_columns) {
-		const string column_name = py::str(column_name_py);
-		auto column_name_low = StringUtil::Lower(column_name);
-		if (columns_seen.find(column_name_low) == columns_seen.end()) {
-			// `column_name` has not been seen before -> It isn't a duplicate
-			column_name_list.append(column_name);
-			columns_seen.insert(column_name_low);
-		} else {
-			// `column_name` already seen. Deduplicate by with suffix _{x} where x starts at the repetition number of
-			// `column_name` If `column_name_{x}` already exists in `name_map`, increment x and try again.
-			string new_column_name = column_name + "_" + std::to_string(name_map[column_name_low]);
-			auto new_column_name_low = StringUtil::Lower(new_column_name);
-			while (name_map.find(new_column_name_low) != name_map.end()) {
-				// This name is already here due to a previous definition
-				name_map[column_name_low]++;
-				new_column_name = column_name + "_" + std::to_string(name_map[column_name_low]);
-				new_column_name_low = StringUtil::Lower(new_column_name);
-			}
-			column_name_list.append(new_column_name);
-			columns_seen.insert(new_column_name_low);
-			name_map[column_name_low]++;
-		}
-	}
+	QueryResult::DeduplicateColumns(columns);
 
-	copy_df.attr("columns") = column_name_list;
+	py::list new_columns(columns.size());
+	for (idx_t i = 0; i < columns.size(); i++) {
+		new_columns[i] = std::move(columns[i]);
+	}
+	copy_df.attr("columns") = std::move(new_columns);
+	columns.clear();
 	return copy_df;
 }
 

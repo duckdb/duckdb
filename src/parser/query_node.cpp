@@ -24,6 +24,7 @@ CommonTableExpressionMap CommonTableExpressionMap::Copy() const {
 		kv_info->materialized = kv.second->materialized;
 		res.map[kv.first] = std::move(kv_info);
 	}
+
 	return res;
 }
 
@@ -44,6 +45,7 @@ string CommonTableExpressionMap::ToString() const {
 		result += "RECURSIVE ";
 	}
 	bool first_cte = true;
+
 	for (auto &kv : map) {
 		if (!first_cte) {
 			result += ", ";
@@ -131,15 +133,17 @@ bool QueryNode::Equals(const QueryNode *other) const {
 	if (cte_map.map.size() != other->cte_map.map.size()) {
 		return false;
 	}
+
 	for (auto &entry : cte_map.map) {
 		auto other_entry = other->cte_map.map.find(entry.first);
 		if (other_entry == other->cte_map.map.end()) {
 			return false;
 		}
-		if (entry.second->aliases != other_entry->second->aliases) {
+
+		if (entry.second->aliases != other->cte_map.map.at(entry.first)->aliases) {
 			return false;
 		}
-		if (!entry.second->query->Equals(*other_entry->second->query)) {
+		if (!entry.second->query->Equals(*other->cte_map.map.at(entry.first)->query)) {
 			return false;
 		}
 	}

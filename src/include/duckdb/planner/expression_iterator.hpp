@@ -27,10 +27,20 @@ public:
 
 	static void EnumerateExpression(unique_ptr<Expression> &expr,
 	                                const std::function<void(Expression &child)> &callback);
+};
 
-	static void EnumerateTableRefChildren(BoundTableRef &ref, const std::function<void(Expression &child)> &callback);
-	static void EnumerateQueryNodeChildren(BoundQueryNode &node,
-	                                       const std::function<void(Expression &child)> &callback);
+class BoundNodeVisitor {
+public:
+	virtual ~BoundNodeVisitor() = default;
+
+	virtual void VisitBoundQueryNode(BoundQueryNode &op);
+	virtual void VisitBoundTableRef(BoundTableRef &ref);
+	virtual void VisitExpression(unique_ptr<Expression> &expression);
+
+protected:
+	// The VisitExpressionChildren method is called at the end of every call to VisitExpression to recursively visit all
+	// expressions in an expression tree. It can be overloaded to prevent automatically visiting the entire tree.
+	virtual void VisitExpressionChildren(Expression &expression);
 };
 
 } // namespace duckdb

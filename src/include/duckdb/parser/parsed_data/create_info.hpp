@@ -10,21 +10,13 @@
 
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/enums/on_create_conflict.hpp"
+#include "duckdb/common/types/value.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 struct AlterInfo;
-
-enum class OnCreateConflict : uint8_t {
-	// Standard: throw error
-	ERROR_ON_CONFLICT,
-	// CREATE IF NOT EXISTS, silently do nothing on conflict
-	IGNORE_ON_CONFLICT,
-	// CREATE OR REPLACE
-	REPLACE_ON_CONFLICT,
-	// Update on conflict - only support for functions. Add a function overload if the function already exists.
-	ALTER_ON_CONFLICT
-};
 
 struct CreateInfo : public ParseInfo {
 public:
@@ -32,7 +24,7 @@ public:
 
 public:
 	explicit CreateInfo(CatalogType type, string schema = DEFAULT_SCHEMA, string catalog_p = INVALID_CATALOG)
-	    : ParseInfo(TYPE), type(type), catalog(std::move(catalog_p)), schema(schema),
+	    : ParseInfo(TYPE), type(type), catalog(std::move(catalog_p)), schema(std::move(schema)),
 	      on_conflict(OnCreateConflict::ERROR_ON_CONFLICT), temporary(false), internal(false) {
 	}
 	~CreateInfo() override {
@@ -54,6 +46,10 @@ public:
 	string sql;
 	//! The inherent dependencies of the created entry
 	LogicalDependencyList dependencies;
+	//! User provided comment
+	Value comment;
+	//! Key-value tags with additional metadata
+	unordered_map<string, string> tags;
 
 public:
 	void Serialize(Serializer &serializer) const override;
@@ -66,9 +62,9 @@ public:
 	DUCKDB_API virtual unique_ptr<AlterInfo> GetAlterInfo() const;
 
 	virtual string ToString() const {
-		throw InternalException("ToString not supported for this create catalog type statement: '%s'",
-		                        CatalogTypeToString(type));
-	};
+		throw NotImplementedException("ToString not supported for this type of CreateInfo: '%s'",
+		                              EnumUtil::ToString(info_type));
+	}
 };
 
 } // namespace duckdb

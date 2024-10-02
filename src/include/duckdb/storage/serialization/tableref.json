@@ -20,6 +20,12 @@
         "id": 102,
         "name": "sample",
         "type": "SampleOptions*"
+      },
+      {
+        "id": 103,
+        "name": "query_location",
+        "type": "optional_idx",
+        "default": "optional_idx()"
       }
     ]
   },
@@ -85,6 +91,16 @@
         "id": 205,
         "name": "using_columns",
         "type": "vector<string>"
+      },
+      {
+        "id": 206,
+        "name": "delim_flipped",
+        "type": "bool"
+      },
+      {
+        "id": 207,
+        "name": "duplicate_eliminated_columns",
+        "type": "vector<unique_ptr<ParsedExpression>>"
       }
     ]
   },
@@ -125,7 +141,7 @@
   {
     "class": "EmptyTableRef",
     "base": "TableRef",
-    "enum": "EMPTY",
+    "enum": "EMPTY_FROM",
     "members": [
     ]
   },
@@ -150,6 +166,24 @@
         "type": "vector<vector<ParsedExpression*>>"
       }
     ]
+  },
+  {
+    "class": "ColumnDataRef",
+    "base": "TableRef",
+    "enum": "COLUMN_DATA",
+    "members": [
+      {
+        "id": 200,
+        "name": "expected_names",
+        "type": "vector<string>"
+      },
+      {
+        "id": 202,
+        "name": "collection",
+        "type": "shared_ptr<ColumnDataCollection>"
+      }
+    ],
+    "constructor": ["collection", "expected_names"]
   },
   {
     "class": "PivotRef",
@@ -190,6 +224,28 @@
         "id": 206,
         "name": "include_nulls",
         "type": "bool"
+      }
+    ]
+  },
+  {
+    "class": "ShowRef",
+    "base": "TableRef",
+    "enum": "SHOW_REF",
+    "members": [
+      {
+        "id": 200,
+        "name": "table_name",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "query",
+        "type": "QueryNode*"
+      },
+      {
+        "id": 202,
+        "name": "show_type",
+        "type": "ShowType"
       }
     ]
   }

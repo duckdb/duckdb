@@ -1,10 +1,9 @@
-#include "duckdb/parser/statement/create_statement.hpp"
-#include "duckdb/parser/parsed_data/create_table_info.hpp"
-#include "duckdb/parser/transformer.hpp"
+#include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/expression/collate_expression.hpp"
-#include "duckdb/catalog/catalog_entry/table_column_type.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
 
@@ -102,7 +101,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 			auto centry = TransformColumnDefinition(*cdef);
 			if (cdef->constraints) {
 				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {
-					auto constraint = TransformConstraint(constr, centry, info->columns.LogicalColumnCount());
+					auto constraint = TransformConstraint(*constr, centry, info->columns.LogicalColumnCount());
 					if (constraint) {
 						info->constraints.push_back(std::move(constraint));
 					}
@@ -113,7 +112,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 			break;
 		}
 		case duckdb_libpgquery::T_PGConstraint: {
-			info->constraints.push_back(TransformConstraint(c));
+			info->constraints.push_back(TransformConstraint(*c));
 			break;
 		}
 		default:

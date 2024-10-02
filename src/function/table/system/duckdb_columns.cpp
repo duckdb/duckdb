@@ -47,6 +47,9 @@ static unique_ptr<FunctionData> DuckDBColumnsBind(ClientContext &context, TableF
 	names.emplace_back("column_index");
 	return_types.emplace_back(LogicalType::INTEGER);
 
+	names.emplace_back("comment");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	names.emplace_back("internal");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
@@ -102,6 +105,7 @@ public:
 	virtual const LogicalType &ColumnType(idx_t col) = 0;
 	virtual const Value ColumnDefault(idx_t col) = 0;
 	virtual bool IsNullable(idx_t col) = 0;
+	virtual const Value ColumnComment(idx_t col) = 0;
 
 	void WriteColumns(idx_t index, idx_t start_col, idx_t end_col, DataChunk &output);
 };
@@ -133,13 +137,16 @@ public:
 		auto &column = entry.GetColumn(LogicalIndex(col));
 		if (column.Generated()) {
 			return Value(column.GeneratedExpression().ToString());
-		} else if (column.DefaultValue()) {
-			return Value(column.DefaultValue()->ToString());
+		} else if (column.HasDefaultValue()) {
+			return Value(column.DefaultValue().ToString());
 		}
 		return Value();
 	}
 	bool IsNullable(idx_t col) override {
 		return not_null_cols.find(col) == not_null_cols.end();
+	}
+	const Value ColumnComment(idx_t col) override {
+		return entry.GetColumn(LogicalIndex(col)).Comment();
 	}
 
 private:
@@ -159,7 +166,7 @@ public:
 		return entry.types.size();
 	}
 	const string &ColumnName(idx_t col) override {
-		return entry.aliases[col];
+		return col < entry.aliases.size() ? entry.aliases[col] : entry.names[col];
 	}
 	const LogicalType &ColumnType(idx_t col) override {
 		return entry.types[col];
@@ -169,6 +176,13 @@ public:
 	}
 	bool IsNullable(idx_t col) override {
 		return true;
+	}
+	const Value ColumnComment(idx_t col) override {
+		if (entry.column_comments.empty()) {
+			return Value();
+		}
+		D_ASSERT(entry.column_comments.size() == entry.types.size());
+		return entry.column_comments[col];
 	}
 
 private:
@@ -195,19 +209,21 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 		// database_name, VARCHAR
 		output.SetValue(col++, index, entry.catalog.GetName());
 		// database_oid, BIGINT
-		output.SetValue(col++, index, Value::BIGINT(entry.catalog.GetOid()));
+		output.SetValue(col++, index, Value::BIGINT(NumericCast<int64_t>(entry.catalog.GetOid())));
 		// schema_name, VARCHAR
 		output.SetValue(col++, index, entry.schema.name);
 		// schema_oid, BIGINT
-		output.SetValue(col++, index, Value::BIGINT(entry.schema.oid));
+		output.SetValue(col++, index, Value::BIGINT(NumericCast<int64_t>(entry.schema.oid)));
 		// table_name, VARCHAR
 		output.SetValue(col++, index, entry.name);
 		// table_oid, BIGINT
-		output.SetValue(col++, index, Value::BIGINT(entry.oid));
+		output.SetValue(col++, index, Value::BIGINT(NumericCast<int64_t>(entry.oid)));
 		// column_name, VARCHAR
 		output.SetValue(col++, index, Value(ColumnName(i)));
 		// column_index, INTEGER
-		output.SetValue(col++, index, Value::INTEGER(i + 1));
+		output.SetValue(col++, index, Value::INTEGER(UnsafeNumericCast<int32_t>(i + 1)));
+		// comment, VARCHAR
+		output.SetValue(col++, index, ColumnComment(i));
 		// internal, BOOLEAN
 		output.SetValue(col++, index, Value::BOOLEAN(entry.internal));
 		// column_default, VARCHAR

@@ -59,15 +59,7 @@ void ExpressionRewriter::VisitOperator(LogicalOperator &op) {
 
 	to_apply_rules.clear();
 	for (auto &rule : rules) {
-		if (rule->logical_root && !rule->logical_root->Match(op.type)) {
-			// this rule does not apply to this type of LogicalOperator
-			continue;
-		}
 		to_apply_rules.push_back(*rule);
-	}
-	if (to_apply_rules.empty()) {
-		// no rules to apply on this node
-		return;
 	}
 
 	VisitOperatorExpressions(op);

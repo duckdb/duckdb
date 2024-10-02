@@ -43,20 +43,21 @@ struct OptionValueSet {
 void RequireValueEqual(ConfigurationOption *op, const Value &left, const Value &right, int line);
 #define REQUIRE_VALUE_EQUAL(op, lhs, rhs) RequireValueEqual(op, lhs, rhs, __LINE__)
 
-OptionValueSet &GetValueForOption(const string &name) {
+OptionValueSet GetValueForOption(const string &name, LogicalTypeId type) {
 	static unordered_map<string, OptionValueSet> value_map = {
 	    {"threads", {Value::BIGINT(42), Value::BIGINT(42)}},
-	    {"checkpoint_threshold", {"4.2GB"}},
+	    {"checkpoint_threshold", {"4.0 GiB"}},
 	    {"debug_checkpoint_abort", {{"none", "before_truncate", "before_header", "after_free_list_write"}}},
 	    {"default_collation", {"nocase"}},
 	    {"default_order", {"desc"}},
 	    {"default_null_order", {"nulls_first"}},
 	    {"disabled_optimizers", {"extension"}},
-	    {"debug_asof_iejoin", {Value(true)}},
 	    {"debug_force_external", {Value(true)}},
-	    {"debug_force_no_cross_product", {Value(true)}},
-	    {"debug_force_external", {Value(true)}},
+	    {"old_implicit_casting", {Value(true)}},
 	    {"prefer_range_joins", {Value(true)}},
+	    {"allow_persistent_secrets", {Value(false)}},
+	    {"secret_directory", {"/tmp/some/path"}},
+	    {"default_secret_storage", {"custom_storage"}},
 	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"autoinstall_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 #ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
@@ -69,41 +70,60 @@ OptionValueSet &GetValueForOption(const string &name) {
 #else
 	    {"autoinstall_known_extensions", {true}},
 #endif
-	    {"enable_fsst_vectors", {true}},
-	    {"enable_object_cache", {true}},
 	    {"enable_profiling", {"json"}},
-	    {"enable_progress_bar", {true}},
 	    {"explain_output", {{"all", "optimized_only", "physical_only"}}},
-	    {"external_threads", {8}},
 	    {"file_search_path", {"test"}},
 	    {"force_compression", {"uncompressed", "Uncompressed"}},
 	    {"home_directory", {"test"}},
-	    {"integer_division", {true}},
+	    {"allow_extensions_metadata_mismatch", {"true"}},
 	    {"extension_directory", {"test"}},
-	    {"immediate_transaction_mode", {true}},
 	    {"max_expression_depth", {50}},
-	    {"max_memory", {"4.2GB"}},
-	    {"memory_limit", {"4.2GB"}},
+	    {"max_memory", {"4.0 GiB"}},
+	    {"max_temp_directory_size", {"10.0 GiB"}},
+	    {"merge_join_threshold", {73}},
+	    {"nested_loop_join_threshold", {73}},
+	    {"memory_limit", {"4.0 GiB"}},
+	    {"storage_compatibility_version", {"v0.10.0"}},
 	    {"ordered_aggregate_threshold", {Value::UBIGINT(idx_t(1) << 12)}},
 	    {"null_order", {"nulls_first"}},
 	    {"perfect_ht_threshold", {0}},
 	    {"pivot_filter_threshold", {999}},
 	    {"pivot_limit", {999}},
+	    {"partitioned_write_flush_threshold", {123}},
 	    {"preserve_identifier_case", {false}},
 	    {"preserve_insertion_order", {false}},
 	    {"profile_output", {"test"}},
 	    {"profiling_mode", {"detailed"}},
 	    {"enable_progress_bar_print", {false}},
+	    {"scalar_subquery_error_on_multiple_rows", {false}},
+	    {"ieee_floating_point_ops", {false}},
 	    {"progress_bar_time", {0}},
 	    {"temp_directory", {"tmp"}},
-	    {"wal_autocheckpoint", {"4.2GB"}},
-	    {"worker_threads", {42}},
-	    {"enable_http_metadata_cache", {true}},
+	    {"wal_autocheckpoint", {"4.0 GiB"}},
 	    {"force_bitpacking_mode", {"constant"}},
-	    {"allocator_flush_threshold", {"4.2GB"}},
-	    {"arrow_large_buffer_size", {true}}};
+	    {"http_proxy", {"localhost:80"}},
+	    {"http_proxy_username", {"john"}},
+	    {"http_proxy_password", {"doe"}},
+	    {"http_logging_output", {"my_cool_outputfile"}},
+	    {"allocator_flush_threshold", {"4.0 GiB"}},
+	    {"allocator_bulk_deallocation_flush_threshold", {"4.0 GiB"}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
+		switch (type) {
+		case LogicalTypeId::BOOLEAN:
+			return OptionValueSet(Value::BOOLEAN(true));
+		case LogicalTypeId::TINYINT:
+		case LogicalTypeId::SMALLINT:
+		case LogicalTypeId::INTEGER:
+		case LogicalTypeId::BIGINT:
+		case LogicalTypeId::UTINYINT:
+		case LogicalTypeId::USMALLINT:
+		case LogicalTypeId::UINTEGER:
+		case LogicalTypeId::UBIGINT:
+			return OptionValueSet(Value::Numeric(type, 42));
+		default:
+			break;
+		}
 		REQUIRE(name == "MISSING_FROM_MAP");
 	}
 	return value_map[name];
@@ -116,16 +136,26 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "search_path",
 	    "debug_window_mode",
 	    "experimental_parallel_csv",
-	    "lock_configuration",        // cant change this while db is running
-	    "disabled_filesystems",      // cant change this while db is running
-	    "enable_external_access",    // cant change this while db is running
-	    "allow_unsigned_extensions", // cant change this while db is running
+	    "lock_configuration",         // cant change this while db is running
+	    "disabled_filesystems",       // cant change this while db is running
+	    "enable_external_access",     // cant change this while db is running
+	    "allow_unsigned_extensions",  // cant change this while db is running
+	    "allow_community_extensions", // cant change this while db is running
+	    "allow_unredacted_secrets",   // cant change this while db is running
+	    "streaming_buffer_size",
 	    "log_query_path",
 	    "password",
 	    "username",
 	    "user",
+	    "external_threads", // tested in test_threads.cpp
 	    "profiling_output", // just an alias
-	    "profiler_history_size"};
+	    "duckdb_api",
+	    "custom_user_agent",
+	    "custom_profiling_settings",
+	    "custom_user_agent",
+	    "default_block_size",
+	    "index_scan_percentage",
+	    "index_scan_max_count"};
 	return excluded_options.count(name) == 1;
 }
 
@@ -133,12 +163,12 @@ bool ValueEqual(const Value &left, const Value &right) {
 	return Value::NotDistinctFrom(left, right);
 }
 
-void RequireValueEqual(ConfigurationOption *op, const Value &left, const Value &right, int line) {
+void RequireValueEqual(const ConfigurationOption &op, const Value &left, const Value &right, int line) {
 	if (ValueEqual(left, right)) {
 		return;
 	}
 	auto error = StringUtil::Format("\nLINE[%d] (Option:%s) | Expected left:'%s' and right:'%s' to be equal", line,
-	                                op->name, left.ToString(), right.ToString());
+	                                op.name, left.ToString(), right.ToString());
 	cerr << error << endl;
 	REQUIRE(false);
 }
@@ -168,7 +198,7 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 		// Get the current value of the option
 		auto original_value = op->get_setting(*con.context);
 
-		auto &value_set = GetValueForOption(option.name);
+		auto value_set = GetValueForOption(option.name, option.parameter_type);
 		// verify that at least one value is different
 		bool any_different = false;
 		string options;
@@ -200,7 +230,7 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 			}
 			// Get the value of the option again
 			auto changed_value = op->get_setting(*con.context);
-			REQUIRE_VALUE_EQUAL(op, changed_value, value_pair.output);
+			REQUIRE_VALUE_EQUAL(*op, changed_value, value_pair.output);
 
 			if (op->reset_local) {
 				op->reset_local(*con.context);
@@ -210,7 +240,7 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 
 			// Get the reset value of the option
 			auto reset_value = op->get_setting(*con.context);
-			REQUIRE_VALUE_EQUAL(op, reset_value, original_value);
+			REQUIRE_VALUE_EQUAL(*op, reset_value, original_value);
 		}
 	}
 }

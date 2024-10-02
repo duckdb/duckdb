@@ -10,10 +10,19 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
+#include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
+
+void ExtensionUtil::RegisterExtension(DatabaseInstance &db, const string &name,
+                                      const ExtensionLoadedInfo &description) {
+
+	db.AddExtensionInfo(name, description);
+}
 
 void ExtensionUtil::RegisterFunction(DatabaseInstance &db, ScalarFunctionSet set) {
 	D_ASSERT(!set.name.empty());
@@ -43,6 +52,12 @@ void ExtensionUtil::RegisterFunction(DatabaseInstance &db, AggregateFunctionSet 
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, info);
+}
+
+void ExtensionUtil::RegisterFunction(DatabaseInstance &db, CreateSecretFunction function) {
+	D_ASSERT(!function.secret_type.empty());
+	auto &config = DBConfig::GetConfig(db);
+	config.secret_manager->RegisterSecretFunction(std::move(function), OnCreateConflict::ERROR_ON_CONFLICT);
 }
 
 void ExtensionUtil::RegisterFunction(DatabaseInstance &db, TableFunction function) {
@@ -94,6 +109,11 @@ void ExtensionUtil::RegisterCollation(DatabaseInstance &db, CreateCollationInfo 
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	system_catalog.CreateCollation(data, info);
+
+	// Also register as a function for serialisation
+	CreateScalarFunctionInfo finfo(info.function);
+	finfo.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	system_catalog.CreateFunction(data, finfo);
 }
 
 void ExtensionUtil::AddFunctionOverload(DatabaseInstance &db, ScalarFunction function) {
@@ -142,14 +162,20 @@ TableFunctionCatalogEntry &ExtensionUtil::GetTableFunction(DatabaseInstance &db,
 	return catalog_entry->Cast<TableFunctionCatalogEntry>();
 }
 
-void ExtensionUtil::RegisterType(DatabaseInstance &db, string type_name, LogicalType type) {
+void ExtensionUtil::RegisterType(DatabaseInstance &db, string type_name, LogicalType type,
+                                 bind_type_modifiers_function_t bind_modifiers) {
 	D_ASSERT(!type_name.empty());
-	CreateTypeInfo info(std::move(type_name), std::move(type));
+	CreateTypeInfo info(std::move(type_name), std::move(type), bind_modifiers);
 	info.temporary = true;
 	info.internal = true;
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateType(data, info);
+}
+
+void ExtensionUtil::RegisterSecretType(DatabaseInstance &db, SecretType secret_type) {
+	auto &config = DBConfig::GetConfig(db);
+	config.secret_manager->RegisterSecretType(secret_type);
 }
 
 void ExtensionUtil::RegisterCastFunction(DatabaseInstance &db, const LogicalType &source, const LogicalType &target,

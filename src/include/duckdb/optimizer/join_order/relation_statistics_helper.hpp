@@ -60,6 +60,7 @@ public:
 	static RelationStats ExtractProjectionStats(LogicalProjection &proj, RelationStats &child_stats);
 	static RelationStats ExtractAggregationStats(LogicalAggregate &aggr, RelationStats &child_stats);
 	static RelationStats ExtractWindowStats(LogicalWindow &window, RelationStats &child_stats);
+	static RelationStats ExtractEmptyResultStats(LogicalEmptyResult &empty);
 	//! Called after reordering a query plan with potentially 2+ relations.
 	static RelationStats CombineStatsOfReorderableOperator(vector<ColumnBinding> &bindings,
 	                                                       vector<RelationStats> relation_stats);

@@ -1,0 +1,34 @@
+# name: test/sql/cte/cte_describe.test
+# description: Test CTE describe
+# group: [cte]
+
+statement ok
+PRAGMA enable_verification
+
+query I nosort describe
+DESCRIBE select 42 AS a
+
+query I nosort describe
+with cte as (select 42 AS a) FROM (DESCRIBE TABLE cte)
+
+query I nosort describe
+with cte as (select 42 AS a) FROM (DESCRIBE TABLE cte)
+
+query I nosort summarize
+SUMMARIZE select 42 AS a
+
+query I nosort summarize
+with cte as (select 42 AS a) FROM (SUMMARIZE TABLE cte)
+
+query I nosort summarize
+with cte as (select 42 AS a) FROM (SUMMARIZE TABLE cte)
+
+statement error
+with cte as (select 42 AS a) (DESCRIBE TABLE cte)
+----
+not allowed
+
+statement error
+(DESCRIBE TABLE cte) ORDER BY 1
+----
+not allowed

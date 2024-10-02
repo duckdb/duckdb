@@ -34,8 +34,8 @@ class TestSparkCatalog(object):
         spark.sql('create table tbl(a varchar, b bool)')
         columns = spark.catalog.listColumns('tbl')
         assert columns == [
-            Column(name='a', description=None, dataType='VARCHAR', nullable=False, isPartition=False, isBucket=False),
-            Column(name='b', description=None, dataType='BOOLEAN', nullable=False, isPartition=False, isBucket=False),
+            Column(name='a', description=None, dataType='VARCHAR', nullable=True, isPartition=False, isBucket=False),
+            Column(name='b', description=None, dataType='BOOLEAN', nullable=True, isPartition=False, isBucket=False),
         ]
 
         # FIXME: should this error instead?

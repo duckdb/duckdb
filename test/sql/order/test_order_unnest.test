@@ -1,0 +1,53 @@
+# name: test/sql/order/test_order_unnest.test
+# description: Test ORDER BY keyword with unnesting structs
+# group: [order]
+
+# issue #9433
+
+statement ok
+CREATE TABLE tbl_structs AS SELECT
+	{'a': 2.0, 'b': 'hello', 'c': [1, 2]} AS s1,
+	1::BIGINT AS i,
+	{'k': 1::TINYINT, 'j': 0::BOOL} AS s2;
+
+statement ok
+INSERT INTO tbl_structs VALUES (
+	{'a': 1.0, 'b': 'yay', 'c': [10, 20]},
+	42,
+	{'k': 2, 'j': 1});
+
+query IIII
+SELECT UNNEST(s1), s1.a AS id FROM tbl_structs ORDER BY id;
+----
+1.0	yay	[10, 20]	1.0
+2.0	hello	[1, 2]	2.0
+
+query II
+SELECT s1, s1.a FROM tbl_structs ORDER BY 1;
+----
+{'a': 1.0, 'b': yay, 'c': [10, 20]}	1.0
+{'a': 2.0, 'b': hello, 'c': [1, 2]}	2.0
+
+query IIII
+SELECT UNNEST(s1), s1.a AS id FROM tbl_structs ORDER BY 1;
+----
+1.0	yay	[10, 20]	1.0
+2.0	hello	[1, 2]	2.0
+
+query IIIIII
+SELECT UNNEST(s1), UNNEST(s2), i FROM tbl_structs ORDER BY i;
+----
+2.0	hello	[1, 2]	1	False	1
+1.0	yay	[10, 20]	2	True	42
+
+query IIIIII
+SELECT UNNEST(s1), UNNEST(s2), i FROM tbl_structs ORDER BY 2 DESC;
+----
+1.0	yay	[10, 20]	2	True	42
+2.0	hello	[1, 2]	1	False	1
+
+query IIIIII
+SELECT i, UNNEST(s1), UNNEST(s2) FROM tbl_structs ORDER BY 5 DESC;
+----
+42	1.0	yay	[10, 20]	2	True
+1	2.0	hello	[1, 2]	1	False

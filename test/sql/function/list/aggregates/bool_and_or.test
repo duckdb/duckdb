@@ -5,9 +5,11 @@
 # incorrect usage
 statement error
 select list_bool_or()
+----
 
 statement error
 select list_bool_and()
+----
 
 # list of booleans
 statement ok

@@ -76,7 +76,7 @@ public:
 		rhs_layout.Initialize(op.children[1]->types);
 		vector<BoundOrderByNode> rhs_order;
 		rhs_order.emplace_back(op.rhs_orders[0].Copy());
-		table = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_layout);
+		table = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_layout, op);
 	}
 
 	inline idx_t Count() const {
@@ -105,7 +105,7 @@ unique_ptr<GlobalSinkState> PhysicalPiecewiseMergeJoin::GetGlobalSinkState(Clien
 
 unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(ExecutionContext &context) const {
 	// We only sink the RHS
-	return make_uniq<MergeJoinLocalState>(context.client, *this, 1);
+	return make_uniq<MergeJoinLocalState>(context.client, *this, 1U);
 }
 
 SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, DataChunk &chunk,
@@ -125,7 +125,7 @@ SinkCombineResultType PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &cont
 	gstate.table->Combine(lstate.table);
 	auto &client_profiler = QueryProfiler::Get(context.client);
 
-	context.thread.profiler.Flush(*this, lstate.table.executor, "rhs_executor", 1);
+	context.thread.profiler.Flush(*this);
 	client_profiler.Flush(context.thread.profiler);
 
 	return SinkCombineResultType::FINISHED;
@@ -139,7 +139,7 @@ SinkFinalizeType PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, Event 
 	auto &gstate = input.global_state.Cast<MergeJoinGlobalState>();
 	auto &global_sort_state = gstate.table->global_sort_state;
 
-	if (IsRightOuterJoin(join_type)) {
+	if (PropagatesBuildSide(join_type)) {
 		// for FULL/RIGHT OUTER JOIN, initialize found_match to false for every tuple
 		gstate.table->IntializeMatches();
 	}
@@ -223,7 +223,7 @@ public:
 	void ResolveJoinKeys(DataChunk &input) {
 		// sort by join key
 		lhs_global_state = make_uniq<GlobalSortState>(buffer_manager, lhs_order, lhs_layout);
-		lhs_local_table = make_uniq<LocalSortedTable>(context, op, 0);
+		lhs_local_table = make_uniq<LocalSortedTable>(context, op, 0U);
 		lhs_local_table->Sink(input, *lhs_global_state);
 
 		// Set external (can be forced with the PRAGMA)
@@ -250,7 +250,7 @@ public:
 
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
 		if (lhs_local_table) {
-			context.thread.profiler.Flush(op, lhs_local_table->executor, "lhs_executor", 0);
+			context.thread.profiler.Flush(op);
 		}
 	}
 };
@@ -618,7 +618,12 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 
 				if (tail_count < result_count) {
 					result_count = tail_count;
-					chunk.Slice(*sel, result_count);
+					if (result_count == 0) {
+						// Need to reset here otherwise we may use the non-flat chunk when constructing LEFT/OUTER
+						chunk.Reset();
+					} else {
+						chunk.Slice(*sel, result_count);
+					}
 				}
 			}
 
@@ -700,7 +705,7 @@ unique_ptr<GlobalSourceState> PhysicalPiecewiseMergeJoin::GetGlobalSourceState(C
 
 SourceResultType PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &result,
                                                      OperatorSourceInput &input) const {
-	D_ASSERT(IsRightOuterJoin(join_type));
+	D_ASSERT(PropagatesBuildSide(join_type));
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 	auto &sink = sink_state->Cast<MergeJoinGlobalState>();
 	auto &state = input.global_state.Cast<PiecewiseJoinScanState>();

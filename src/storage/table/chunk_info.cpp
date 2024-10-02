@@ -1,8 +1,10 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/transaction/delete_info.hpp"
 
 namespace duckdb {
 
@@ -22,12 +24,16 @@ struct CommittedVersionOperator {
 	}
 
 	static bool UseDeletedVersion(transaction_t min_start_time, transaction_t min_transaction_id, transaction_t id) {
-		return (id >= min_start_time && id < TRANSACTION_ID_START) || (id >= min_transaction_id);
+		return (id >= min_start_time && id < TRANSACTION_ID_START) || id == NOT_DELETED_ID;
 	}
 };
 
 static bool UseVersion(TransactionData transaction, transaction_t id) {
 	return TransactionVersionOperator::UseInsertedVersion(transaction.start_time, transaction.transaction_id, id);
+}
+
+bool ChunkInfo::Cleanup(transaction_t lowest_transaction, unique_ptr<ChunkInfo> &result) const {
+	return false;
 }
 
 void ChunkInfo::Write(WriteStream &writer) const {
@@ -91,6 +97,18 @@ bool ChunkConstantInfo::HasDeletes() const {
 
 idx_t ChunkConstantInfo::GetCommittedDeletedCount(idx_t max_count) {
 	return delete_id < TRANSACTION_ID_START ? max_count : 0;
+}
+
+bool ChunkConstantInfo::Cleanup(transaction_t lowest_transaction, unique_ptr<ChunkInfo> &result) const {
+	if (delete_id != NOT_DELETED_ID) {
+		// the chunk info is labeled as deleted - we need to keep it around
+		return false;
+	}
+	if (insert_id > lowest_transaction) {
+		// there are still transactions active that need this ChunkInfo
+		return false;
+	}
+	return true;
 }
 
 void ChunkConstantInfo::Write(WriteStream &writer) const {
@@ -197,9 +215,16 @@ idx_t ChunkVectorInfo::Delete(transaction_t transaction_id, row_t rows[], idx_t 
 	return deleted_tuples;
 }
 
-void ChunkVectorInfo::CommitDelete(transaction_t commit_id, row_t rows[], idx_t count) {
-	for (idx_t i = 0; i < count; i++) {
-		deleted[rows[i]] = commit_id;
+void ChunkVectorInfo::CommitDelete(transaction_t commit_id, const DeleteInfo &info) {
+	if (info.is_consecutive) {
+		for (idx_t i = 0; i < info.count; i++) {
+			deleted[i] = commit_id;
+		}
+	} else {
+		auto rows = info.GetRows();
+		for (idx_t i = 0; i < info.count; i++) {
+			deleted[rows[i]] = commit_id;
+		}
 	}
 }
 
@@ -222,6 +247,28 @@ void ChunkVectorInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t e
 	for (idx_t i = start; i < end; i++) {
 		inserted[i] = commit_id;
 	}
+}
+
+bool ChunkVectorInfo::Cleanup(transaction_t lowest_transaction, unique_ptr<ChunkInfo> &result) const {
+	if (any_deleted) {
+		// if any rows are deleted we can't clean-up
+		return false;
+	}
+	// check if the insertion markers have to be used by all transactions going forward
+	if (!same_inserted_id) {
+		for (idx_t idx = 1; idx < STANDARD_VECTOR_SIZE; idx++) {
+			if (inserted[idx] > lowest_transaction) {
+				// transaction was inserted after the lowest transaction start
+				// we still need to use an older version - cannot compress
+				return false;
+			}
+		}
+	} else if (insert_id > lowest_transaction) {
+		// transaction was inserted after the lowest transaction start
+		// we still need to use an older version - cannot compress
+		return false;
+	}
+	return true;
 }
 
 bool ChunkVectorInfo::HasDeletes() const {

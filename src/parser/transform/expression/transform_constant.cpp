@@ -21,7 +21,9 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 		string_t str_val(val.val.str);
 		bool try_cast_as_integer = true;
 		bool try_cast_as_decimal = true;
-		int decimal_position = -1;
+		optional_idx decimal_position = optional_idx::Invalid();
+		idx_t num_underscores = 0;
+		idx_t num_integer_underscores = 0;
 		for (idx_t i = 0; i < str_val.GetSize(); i++) {
 			if (val.val.str[i] == '.') {
 				// decimal point: cast as either decimal or double
@@ -32,6 +34,12 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 				// found exponent, cast as double
 				try_cast_as_integer = false;
 				try_cast_as_decimal = false;
+			}
+			if (val.val.str[i] == '_') {
+				num_underscores++;
+				if (!decimal_position.IsValid()) {
+					num_integer_underscores++;
+				}
 			}
 		}
 		if (try_cast_as_integer) {
@@ -49,11 +57,11 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 			}
 		}
 		idx_t decimal_offset = val.val.str[0] == '-' ? 3 : 2;
-		if (try_cast_as_decimal && decimal_position >= 0 &&
-		    str_val.GetSize() < Decimal::MAX_WIDTH_DECIMAL + decimal_offset) {
+		if (try_cast_as_decimal && decimal_position.IsValid() &&
+		    str_val.GetSize() - num_underscores < Decimal::MAX_WIDTH_DECIMAL + decimal_offset) {
 			// figure out the width/scale based on the decimal position
-			auto width = uint8_t(str_val.GetSize() - 1);
-			auto scale = uint8_t(width - decimal_position);
+			auto width = NumericCast<uint8_t>(str_val.GetSize() - 1 - num_underscores);
+			auto scale = NumericCast<uint8_t>(width - decimal_position.GetIndex() + num_integer_underscores);
 			if (val.val.str[0] == '-') {
 				width--;
 			}
@@ -76,7 +84,9 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformConstant(duckdb_libpgquery::PGAConst &c) {
-	return TransformValue(c.val);
+	auto constant = TransformValue(c.val);
+	SetQueryLocation(*constant, c.location);
+	return std::move(constant);
 }
 
 bool Transformer::ConstructConstantFromExpression(const ParsedExpression &expr, Value &value) {
@@ -99,6 +109,43 @@ bool Transformer::ConstructConstantFromExpression(const ParsedExpression &expr, 
 				values.emplace_back(child->alias, std::move(child_value));
 			}
 			value = Value::STRUCT(std::move(values));
+			return true;
+		} else if (function.function_name == "list_value") {
+			vector<Value> values;
+			values.reserve(function.children.size());
+			for (const auto &child : function.children) {
+				Value child_value;
+				if (!ConstructConstantFromExpression(*child, child_value)) {
+					return false;
+				}
+				values.emplace_back(std::move(child_value));
+			}
+
+			// figure out child type
+			LogicalType child_type(LogicalTypeId::SQLNULL);
+			for (auto &child_value : values) {
+				child_type = LogicalType::ForceMaxLogicalType(child_type, child_value.type());
+			}
+
+			// finally create the list
+			value = Value::LIST(child_type, values);
+			return true;
+		} else if (function.function_name == "map") {
+			Value keys;
+			if (!ConstructConstantFromExpression(*function.children[0], keys)) {
+				return false;
+			}
+
+			Value values;
+			if (!ConstructConstantFromExpression(*function.children[1], values)) {
+				return false;
+			}
+
+			vector<Value> keys_unpacked = ListValue::GetChildren(keys);
+			vector<Value> values_unpacked = ListValue::GetChildren(values);
+
+			value = Value::MAP(ListType::GetChildType(keys.type()), ListType::GetChildType(values.type()),
+			                   keys_unpacked, values_unpacked);
 			return true;
 		} else {
 			return false;

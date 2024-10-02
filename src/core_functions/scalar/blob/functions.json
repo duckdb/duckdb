@@ -27,5 +27,12 @@
         "example": "base64('A'::blob)",
         "type": "scalar_function",
         "aliases": ["base64"]
+    },
+    {
+        "name": "create_sort_key",
+        "parameters": "parameters...",
+        "description": "Constructs a binary-comparable sort key based on a set of input parameters and sort qualifiers",
+        "example": "create_sort_key('A', 'DESC')",
+        "type": "scalar_function"
     }
 ]

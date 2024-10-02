@@ -57,6 +57,13 @@
         "type": "scalar_function"
     },
     {
+        "name": "can_cast_implicitly",
+        "parameters": "source_type,target_type",
+        "description": "Whether or not we can implicitly cast from the source type to the other type",
+        "example": "can_implicitly_cast(NULL::INTEGER, NULL::BIGINT)",
+        "type": "scalar_function"
+    },
+    {
         "name": "current_query",
         "parameters": "",
         "description": "Returns the current query as a string",
@@ -104,6 +111,20 @@
         "parameters": "",
         "description": "Returns the currently active version of DuckDB in this format: v0.3.2\t",
         "example": "version()",
+        "type": "scalar_function"
+    },
+    {
+        "name": "equi_width_bins",
+        "parameters": "min,max,bin_count,nice_rounding",
+        "description": "Generates bin_count equi-width bins between the min and max. If enabled nice_rounding makes the numbers more readable/less jagged",
+        "example": "equi_width_bins(0, 10, 2, true)",
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "is_histogram_other_bin",
+        "parameters": "val",
+        "description": "Whether or not the provided value is the histogram \"other\" bin (used for values not belonging to any provided bin)",
+        "example": "is_histogram_other_bin(v)",
         "type": "scalar_function"
     }
 ]

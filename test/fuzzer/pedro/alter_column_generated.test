@@ -16,9 +16,13 @@ ALTER TABLE t0 ALTER c1 SET NOT NULL;
 
 statement error
 ALTER TABLE t0 ALTER c0 SET NOT NULL;
+----
+<REGEX>:Binder Error.*Unsupported constraint.*
 
 statement error
 INSERT INTO t0 VALUES (NULL);
+----
+<REGEX>:Constraint Error.*NOT NULL.*failed.*
 
 statement ok
 DROP TABLE t0;
@@ -31,4 +35,5 @@ INSERT INTO t0 VALUES (NULL);
 
 statement error
 ALTER TABLE t0 ALTER c1 SET NOT NULL;
-
+----
+<REGEX>:Constraint Error.*NOT NULL.*failed.*

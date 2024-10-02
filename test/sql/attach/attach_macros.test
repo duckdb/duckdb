@@ -1,0 +1,35 @@
+# name: test/sql/attach/attach_macros.test
+# description: Tests for macro functions in attached databases
+# group: [attach]
+
+require noforcestorage
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH ':memory:' AS db1;
+
+statement ok
+CREATE TABLE db1.tbl AS SELECT 42 AS x, 3 AS y;
+
+statement ok
+CREATE MACRO db1.two_x_plus_y(x, y) AS 2 * x + y;
+
+query I
+SELECT db1.two_x_plus_y(x, y) FROM db1.tbl;
+----
+87
+
+query I
+SELECT db1.main.two_x_plus_y(x, y) FROM db1.tbl;
+----
+87
+
+statement ok
+USE db1
+
+query I
+SELECT two_x_plus_y(x, y) FROM db1.tbl;
+----
+87

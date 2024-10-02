@@ -1,9 +1,9 @@
-
 #include "duckdb/function/cast/cast_function_set.hpp"
 
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/type_map.hpp"
 #include "duckdb/function/cast_rules.hpp"
+#include "duckdb/planner/collation_binding.hpp"
 #include "duckdb/main/config.hpp"
 
 namespace duckdb {
@@ -15,6 +15,7 @@ BindCastInput::BindCastInput(CastFunctionSet &function_set, optional_ptr<BindCas
 
 BoundCastInfo BindCastInput::GetCastFunction(const LogicalType &source, const LogicalType &target) {
 	GetCastFunctionInput input(context);
+	input.query_location = query_location;
 	return function_set.GetCastFunction(source, target, input);
 }
 
@@ -26,12 +27,24 @@ CastFunctionSet::CastFunctionSet() : map_info(nullptr) {
 	bind_functions.emplace_back(DefaultCasts::GetDefaultCastFunction);
 }
 
+CastFunctionSet::CastFunctionSet(DBConfig &config_p) : CastFunctionSet() {
+	this->config = &config_p;
+}
+
 CastFunctionSet &CastFunctionSet::Get(ClientContext &context) {
 	return DBConfig::GetConfig(context).GetCastFunctions();
 }
 
+CollationBinding &CollationBinding::Get(ClientContext &context) {
+	return DBConfig::GetConfig(context).GetCollationBinding();
+}
+
 CastFunctionSet &CastFunctionSet::Get(DatabaseInstance &db) {
 	return DBConfig::GetConfig(db).GetCastFunctions();
+}
+
+CollationBinding &CollationBinding::Get(DatabaseInstance &db) {
+	return DBConfig::GetConfig(db).GetCollationBinding();
 }
 
 BoundCastInfo CastFunctionSet::GetCastFunction(const LogicalType &source, const LogicalType &target,
@@ -44,6 +57,7 @@ BoundCastInfo CastFunctionSet::GetCastFunction(const LogicalType &source, const 
 	for (idx_t i = bind_functions.size(); i > 0; i--) {
 		auto &bind_function = bind_functions[i - 1];
 		BindCastInput input(*this, bind_function.info.get(), get_input.context);
+		input.query_location = get_input.query_location;
 		auto result = bind_function.function(input, source, target);
 		if (result.function) {
 			// found a cast function! return it
@@ -92,7 +106,7 @@ static auto RelaxedTypeMatch(type_map_t<MAP_VALUE_TYPE> &map, const LogicalType 
 	case LogicalTypeId::UNION:
 		return map.find(LogicalType::UNION({{"any", LogicalType::ANY}}));
 	case LogicalTypeId::ARRAY:
-		return map.find(LogicalType::ARRAY(LogicalType::ANY));
+		return map.find(LogicalType::ARRAY(LogicalType::ANY, optional_idx()));
 	default:
 		return map.find(LogicalType::ANY);
 	}
@@ -156,7 +170,13 @@ int64_t CastFunctionSet::ImplicitCastCost(const LogicalType &source, const Logic
 		}
 	}
 	// if not, fallback to the default implicit cast rules
-	return CastRules::ImplicitCast(source, target);
+	auto score = CastRules::ImplicitCast(source, target);
+	if (score < 0 && config && config->options.old_implicit_casting) {
+		if (source.id() != LogicalTypeId::BLOB && target.id() == LogicalTypeId::VARCHAR) {
+			score = 149;
+		}
+	}
+	return score;
 }
 
 BoundCastInfo MapCastFunction(BindCastInput &input, const LogicalType &source, const LogicalType &target) {

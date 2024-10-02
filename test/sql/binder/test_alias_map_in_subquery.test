@@ -1,0 +1,88 @@
+# name: test/sql/binder/test_alias_map_in_subquery.test
+# description: Test binding an alias in a subquery
+# group: [binder]
+
+# Simple reproduction.
+statement ok
+CREATE OR REPLACE TABLE tbl (example VARCHAR);
+
+statement ok
+INSERT INTO tbl VALUES ('hello');
+
+query I
+SELECT (WITH keys AS (
+    		SELECT example AS k
+    	), nonNull AS (
+    		SELECT keys.k, example AS v
+    		FROM keys
+    		WHERE v IS NOT NULL
+    	)
+    	SELECT nonNull.v
+    	FROM nonNull
+)
+FROM tbl;
+----
+hello
+
+# With the JSON extension and lambdas.
+require json
+
+statement ok
+CREATE OR REPLACE TABLE testjson (example JSON);
+
+statement ok
+INSERT INTO testjson VALUES ('{ "location" : { "address" : "123 Main St" }, "sampleField" : null, "anotherField" : 123, "yetAnotherField" : "abc" }');
+
+query I
+SELECT (WITH keys AS (SELECT unnest(json_keys(example)) AS k), nonNull AS (
+    		SELECT keys.k, example->keys.k AS v
+    		FROM keys WHERE nullif(v, 'null') IS NOT NULL
+    	)
+    	SELECT json_group_object(nonNull.k, nonNull.v)
+    	FROM nonNull
+)
+FROM testjson;
+----
+{"location":{"address":"123 Main St"},"anotherField":123,"yetAnotherField":"abc"}
+
+# With a MACRO (issue #10491).
+statement ok
+CREATE OR REPLACE MACRO strip_null_value(jsonValue) AS (
+	WITH keys AS (SELECT UNNEST(json_keys(jsonValue)) AS k),
+		nonNull AS (
+		SELECT keys.k, jsonValue->keys.k AS v
+		FROM keys WHERE nullif(v, 'null') IS NOT NULL
+	)
+	SELECT json_group_object(nonNull.k, nonNull.v)
+	FROM nonNull
+);
+
+query I
+SELECT strip_null_value('{ "location" : { "address" : "123 Main St" }, "sampleField" : null, "anotherField" : 123, "yetAnotherField" : "abc" }')
+AS example;
+----
+{"location":{"address":"123 Main St"},"anotherField":123,"yetAnotherField":"abc"}
+
+# Testing with a table.
+
+statement ok
+CREATE OR REPLACE TABLE testjson (example JSON);
+
+statement ok
+INSERT INTO testjson
+VALUES ('{ "location" : { "address" : "123 Main St" }, "sampleField" : null, "anotherField" : 123, "yetAnotherField" : "abc" }');
+
+query I
+SELECT strip_null_value(example) FROM testjson;
+----
+{"location":{"address":"123 Main St"},"anotherField":123,"yetAnotherField":"abc"}
+
+# Testing with a CTE.
+query I
+WITH x AS (
+	SELECT '{ "location" : { "address" : "123 Main St" }, "sampleField" : null, "anotherField" : 123, "yetAnotherField" : "abc" }'
+	AS example)
+SELECT strip_null_value(x.example) AS test
+FROM x;
+----
+{"location":{"address":"123 Main St"},"anotherField":123,"yetAnotherField":"abc"}

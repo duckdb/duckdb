@@ -1,0 +1,43 @@
+# name: test/sql/catalog/dependencies/test_write_after_rename.test
+# group: [dependencies]
+
+load __TEST_DIR__/create_after_rename.db
+
+# Create 'tbl'
+statement ok
+create table tbl (i integer);
+
+statement ok
+insert into tbl VALUES (5);
+
+statement ok
+begin transaction;
+
+# Rename 'tbl' -> 'tbl2'
+statement ok
+alter table tbl rename to tbl2;
+
+# Create a new table with the old name: 'tbl'
+statement ok
+create table tbl (b varchar);
+
+statement ok
+insert into tbl VALUES ('test')
+
+statement ok
+commit;
+
+statement ok
+checkpoint;
+
+restart
+
+query I
+select * from tbl2;
+----
+5
+
+query I
+select * from tbl;
+----
+test

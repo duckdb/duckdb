@@ -27,7 +27,7 @@ struct StaticFunctionDefinition {
 	get_aggregate_function_t get_aggregate_function;
 	get_aggregate_function_set_t get_aggregate_function_set;
 
-	static StaticFunctionDefinition *GetFunctionList();
+	static const StaticFunctionDefinition *GetFunctionList();
 };
 
 } // namespace duckdb

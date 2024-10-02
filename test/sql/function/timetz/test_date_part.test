@@ -1,0 +1,382 @@
+# name: test/sql/function/timetz/test_date_part.test
+# description: DATE_PART test
+# group: [timetz]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE timetzs(d TIMETZ, s VARCHAR);
+
+statement ok
+INSERT INTO timetzs VALUES 
+	(NULL, NULL),
+	('00:00:00+1559', 'timezone'),
+	('00:00:00+1558', 'timezone_hour'),
+	('02:30:00', 'hour'),
+	('02:30:00+04', 'timezone_hour'),
+	('02:30:00+04:30', 'timezone_minute'),
+	('02:30:00+04:30:45', 'timezone_minute'),
+	('16:15:03.123456', 'microseconds'),
+	('02:30:00+1200', 'minute'),
+	('02:30:00-1200', 'second'),
+	('24:00:00-1558', 'timezone_hour'),
+	('24:00:00-1559', 'timezone'),
+	;
+
+# test date_part with different combinations of constant/non-constant columns
+query I
+SELECT date_part(NULL::VARCHAR, NULL::TIMETZ) FROM timetzs;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT date_part(s, NULL::TIMETZ) FROM timetzs;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+# timetzs
+query I
+SELECT date_part(NULL, d) FROM timetzs;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT date_part(s, '14:28:50.447+07:15'::TIMETZ) FROM timetzs;
+----
+NULL
+26100
+7
+14
+7
+15
+15
+50447000
+28
+50
+7
+26100
+
+query I
+SELECT date_part('hour', d) FROM timetzs;
+----
+NULL
+0
+0
+2
+2
+2
+2
+16
+2
+2
+24
+24
+
+query I
+SELECT date_part(s, d) FROM timetzs;
+----
+NULL
+57540
+15
+2
+4
+30
+30
+3123456
+30
+0
+-15
+-57540
+
+foreach datepart timezone timezone_hour timezone_minute
+
+query I
+select date_part('${datepart}', '10:00:00'::TIMETZ);
+----
+0
+
+endloop
+
+# time gives errors for date-only parts
+statement error
+SELECT era(d) FROM timetzs
+----
+No function matches the given name and argument types
+
+statement error
+SELECT year(d) FROM timetzs
+----
+No function matches the given name and argument types
+
+statement error
+SELECT month(d) FROM timetzs
+----
+No function matches the given name and argument types
+
+statement error
+SELECT day(d) FROM timetzs
+----
+No function matches the given name and argument types
+
+statement error
+SELECT decade(d) FROM timetzs
+----
+No function matches the given name and argument types
+
+statement error
+SELECT century(d) FROM timetzs
+----
+No function matches the given name and argument types
+
+statement error
+SELECT millennium(d) FROM timetzs
+----
+No function matches the given name and argument types
+
+statement error
+SELECT quarter(d) FROM timetzs
+----
+No function matches the given name and argument types
+
+statement error
+SELECT dayofweek(d) FROM timetzs
+----
+No function matches the given name and argument types
+
+statement error
+SELECT isodow(d) FROM timetzs
+----
+No function matches the given name and argument types
+
+statement error
+SELECT dayofyear(d) FROM timetzs
+----
+No function matches the given name and argument types
+
+statement error
+SELECT week(d) FROM timetzs
+----
+No function matches the given name and argument types
+
+statement error
+SELECT yearweek(d) FROM timetzs
+----
+No function matches the given name and argument types
+
+statement error
+select extract(dow from time '10:00:00');
+----
+No function matches the given name and argument types
+
+statement error
+select extract(doy from time '10:00:00');
+----
+No function matches the given name and argument types
+
+statement error
+select extract(yearweek from time '10:00:00');
+----
+No function matches the given name and argument types
+
+statement error
+select extract(century from time '10:00:00');
+----
+No function matches the given name and argument types
+
+statement error
+select extract(era from time '10:00:00');
+----
+Not implemented Error: "time" units "era" not recognized
+
+statement error
+select date_part('era', time '10:00:00');
+----
+Not implemented Error: "time" units "era" not recognized
+
+statement error
+select extract(julian from time '10:00:00');
+----
+julian can only take DATE or TIMESTAMP arguments
+
+statement error
+select date_part('julian', time '10:00:00');
+----
+julian can only take DATE or TIMESTAMP arguments
+
+# Correctness: Compare date_part against function value
+foreach partcode hour minute second millisecond microsecond epoch
+
+query III
+SELECT * FROM (
+	SELECT d, DATE_PART('${partcode}', d) AS p, ${partcode}(d) AS f
+	FROM timetzs
+) tbl
+WHERE p <> f;
+----
+
+endloop
+
+#
+# Structs
+#
+
+# Correctness: Compare against scalar extract
+foreach partcode hour minute second millisecond microsecond epoch timezone timezone_hour timezone_minute
+
+query III
+SELECT d, DATE_PART('${partcode}', d) AS p, DATE_PART(['${partcode}'], d) AS st
+FROM timetzs
+WHERE p <> st['${partcode}'];
+----
+
+endloop
+
+# Time parts
+query II
+SELECT d, DATE_PART(['hour', 'minute', 'microsecond'], d) AS parts
+FROM timetzs
+ORDER BY 1;
+----
+00:00:00+15:59	{'hour': 0, 'minute': 0, 'microsecond': 0}
+00:00:00+15:58	{'hour': 0, 'minute': 0, 'microsecond': 0}
+02:30:00+12	{'hour': 2, 'minute': 30, 'microsecond': 0}
+02:30:00+04:30:45	{'hour': 2, 'minute': 30, 'microsecond': 0}
+02:30:00+04:30	{'hour': 2, 'minute': 30, 'microsecond': 0}
+02:30:00+04	{'hour': 2, 'minute': 30, 'microsecond': 0}
+02:30:00+00	{'hour': 2, 'minute': 30, 'microsecond': 0}
+02:30:00-12	{'hour': 2, 'minute': 30, 'microsecond': 0}
+16:15:03.123456+00	{'hour': 16, 'minute': 15, 'microsecond': 3123456}
+24:00:00-15:58	{'hour': 24, 'minute': 0, 'microsecond': 0}
+24:00:00-15:59	{'hour': 24, 'minute': 0, 'microsecond': 0}
+NULL	NULL
+
+# Miscellaneous parts
+query II
+SELECT d, DATE_PART(['epoch', 'second', 'timezone', 'timezone_hour', 'timezone_minute'], d) AS parts
+FROM timetzs
+ORDER BY 1;
+----
+00:00:00+15:59	{'epoch': 0.0, 'second': 0, 'timezone': 57540, 'timezone_hour': 15, 'timezone_minute': 59}
+00:00:00+15:58	{'epoch': 0.0, 'second': 0, 'timezone': 57480, 'timezone_hour': 15, 'timezone_minute': 58}
+02:30:00+12	{'epoch': 9000.0, 'second': 0, 'timezone': 43200, 'timezone_hour': 12, 'timezone_minute': 0}
+02:30:00+04:30:45	{'epoch': 9000.0, 'second': 0, 'timezone': 16245, 'timezone_hour': 4, 'timezone_minute': 30}
+02:30:00+04:30	{'epoch': 9000.0, 'second': 0, 'timezone': 16200, 'timezone_hour': 4, 'timezone_minute': 30}
+02:30:00+04	{'epoch': 9000.0, 'second': 0, 'timezone': 14400, 'timezone_hour': 4, 'timezone_minute': 0}
+02:30:00+00	{'epoch': 9000.0, 'second': 0, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+02:30:00-12	{'epoch': 9000.0, 'second': 0, 'timezone': -43200, 'timezone_hour': -12, 'timezone_minute': 0}
+16:15:03.123456+00	{'epoch': 58503.123456, 'second': 3, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+24:00:00-15:58	{'epoch': 86400.0, 'second': 0, 'timezone': -57480, 'timezone_hour': -15, 'timezone_minute': -58}
+24:00:00-15:59	{'epoch': 86400.0, 'second': 0, 'timezone': -57540, 'timezone_hour': -15, 'timezone_minute': -59}
+NULL	NULL
+
+# Function-only parts
+query II
+SELECT d, epoch_ns(d) FROM timetzs ORDER BY ALL;
+----
+00:00:00+15:59	0
+00:00:00+15:58	0
+02:30:00+12	9000000000000
+02:30:00+04:30:45	9000000000000
+02:30:00+04:30	9000000000000
+02:30:00+04	9000000000000
+02:30:00+00	9000000000000
+02:30:00-12	9000000000000
+16:15:03.123456+00	58503123456000
+24:00:00-15:58	86400000000000
+24:00:00-15:59	86400000000000
+NULL	NULL
+
+query II
+SELECT d, epoch_us(d) FROM timetzs ORDER BY ALL;
+----
+00:00:00+15:59	0
+00:00:00+15:58	0
+02:30:00+12	9000000000
+02:30:00+04:30:45	9000000000
+02:30:00+04:30	9000000000
+02:30:00+04	9000000000
+02:30:00+00	9000000000
+02:30:00-12	9000000000
+16:15:03.123456+00	58503123456
+24:00:00-15:58	86400000000
+24:00:00-15:59	86400000000
+NULL	NULL
+
+query II
+SELECT d, epoch_ms(d) FROM timetzs ORDER BY ALL;
+----
+00:00:00+15:59	0
+00:00:00+15:58	0
+02:30:00+12	9000000
+02:30:00+04:30:45	9000000
+02:30:00+04:30	9000000
+02:30:00+04	9000000
+02:30:00+00	9000000
+02:30:00-12	9000000
+16:15:03.123456+00	58503123
+24:00:00-15:58	86400000
+24:00:00-15:59	86400000
+NULL	NULL
+
+query II
+SELECT d, nanosecond(d) FROM timetzs ORDER BY ALL;
+----
+00:00:00+15:59	0
+00:00:00+15:58	0
+02:30:00+12	0
+02:30:00+04:30:45	0
+02:30:00+04:30	0
+02:30:00+04	0
+02:30:00+00	0
+02:30:00-12	0
+16:15:03.123456+00	3123456000
+24:00:00-15:58	0
+24:00:00-15:59	0
+NULL	NULL
+
+# Invalid parts
+
+foreach datepart year month day decade century millennium quarter dow isodow doy week isoyear yearweek era julian
+
+statement error
+SELECT d, DATE_PART(['${datepart}'], d) AS parts
+FROM timetzs
+ORDER BY 1;
+----
+not recognized
+
+endloop

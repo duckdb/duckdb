@@ -22,7 +22,7 @@
 
 
 #ifdef _WIN32
-#if defined(_M_IX86) || defined(_M_X64)
+#if defined(_M_IX86) || defined(_M_X64) || defined(_M_ARM) || defined(_M_ARM64)
 #define ARITHMETIC_RIGHT_SHIFT 1
 #define SIGNED_RIGHT_SHIFT_IS 1
 #endif

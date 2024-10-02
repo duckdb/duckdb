@@ -7,8 +7,6 @@ on:
       - '**'
       - '!main'
       - '!feature'
-    tags:
-      - '**'
     paths-ignore:
       - '**.md'
       - 'examples/**'
@@ -24,7 +22,6 @@ on:
     paths-ignore:
       - '**.md'
       - 'tools/**'
-      - '!tools/odbc/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/R_CMD_CHECK.yml'
@@ -35,6 +32,7 @@ name: R-CMD-check
 env:
   DUCKDB_R_REPO: 'duckdb/duckdb-r'
   TARGET_REF: 'main'
+  DUCKDB_R_REF: '0ed106a71c6e54a509e693a71aba49145c0a3a0f'
   DUCKDB_R_SRC: 'duckdb-r'
   DUCKDB_SRC: 'duckdb'
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -52,18 +50,18 @@ jobs:
           - {os: ubuntu-latest,   r: 'release'}
 
     env:
-      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       R_KEEP_PKG_SOURCE: yes
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           path: ${{ env.DUCKDB_SRC }}
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: ${{ env.DUCKDB_R_REPO }}
           path: ${{ env.DUCKDB_R_SRC }}
+          ref: ${{ env.DUCKDB_R_REF }}
 
       - uses: r-lib/actions/setup-pandoc@v2
 
@@ -79,6 +77,15 @@ jobs:
           extra-packages: any::rcmdcheck
           needs: check
 
+      - name: Apply duckdb-r patches
+        shell: bash
+        working-directory: ${{ env.DUCKDB_R_SRC }}
+        run: |
+          shopt -s nullglob
+          for filename in $GITHUB_WORKSPACE/$DUCKDB_SRC/.github/patches/duckdb-r/*.patch; do
+            git apply $filename
+          done
+
       # needed so we can run git commit in vendor.sh
       - name: setup github and create parallel builds
         shell: bash
@@ -92,7 +99,9 @@ jobs:
       - name: update duckdb-r src code with PR code
         shell: bash
         working-directory: ${{ env.DUCKDB_R_SRC }}
-        run: ./vendor.sh $GITHUB_WORKSPACE/$DUCKDB_SRC
+        env:
+          DUCKDB_PATH: ${{ env.DUCKDB_SRC }}
+        run: ./vendor.sh
 
       - uses: r-lib/actions/check-r-package@v2
         with:

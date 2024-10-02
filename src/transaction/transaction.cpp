@@ -6,19 +6,19 @@
 namespace duckdb {
 
 Transaction::Transaction(TransactionManager &manager_p, ClientContext &context_p)
-    : manager(manager_p), context(context_p.shared_from_this()), active_query(MAXIMUM_QUERY_ID) {
+    : manager(manager_p), context(context_p.shared_from_this()), active_query(MAXIMUM_QUERY_ID), is_read_only(true) {
 }
 
 Transaction::~Transaction() {
 }
 
 bool Transaction::IsReadOnly() {
-	auto ctxt = context.lock();
-	if (!ctxt) {
-		throw InternalException("Transaction::IsReadOnly() called after client context has been destroyed");
-	}
-	auto &db = manager.GetDB();
-	return MetaTransaction::Get(*ctxt).ModifiedDatabase().get() != &db;
+	return is_read_only;
+}
+
+void Transaction::SetReadWrite() {
+	D_ASSERT(is_read_only);
+	is_read_only = false;
 }
 
 } // namespace duckdb

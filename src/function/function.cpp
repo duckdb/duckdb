@@ -47,7 +47,7 @@ SimpleFunction::~SimpleFunction() {
 }
 
 string SimpleFunction::ToString() const {
-	return Function::CallToString(name, arguments);
+	return Function::CallToString(name, arguments, varargs);
 }
 
 bool SimpleFunction::HasVarArgs() const {
@@ -71,17 +71,17 @@ bool SimpleNamedParameterFunction::HasNamedParameters() const {
 }
 
 BaseScalarFunction::BaseScalarFunction(string name_p, vector<LogicalType> arguments_p, LogicalType return_type_p,
-                                       FunctionSideEffects side_effects, LogicalType varargs_p,
+                                       FunctionStability stability, LogicalType varargs_p,
                                        FunctionNullHandling null_handling)
     : SimpleFunction(std::move(name_p), std::move(arguments_p), std::move(varargs_p)),
-      return_type(std::move(return_type_p)), side_effects(side_effects), null_handling(null_handling) {
+      return_type(std::move(return_type_p)), stability(stability), null_handling(null_handling) {
 }
 
 BaseScalarFunction::~BaseScalarFunction() {
 }
 
 string BaseScalarFunction::ToString() const {
-	return Function::CallToString(name, arguments, return_type);
+	return Function::CallToString(name, arguments, varargs, return_type);
 }
 
 // add your initializer for new functions here
@@ -118,16 +118,22 @@ hash_t BaseScalarFunction::Hash() const {
 	return hash;
 }
 
-string Function::CallToString(const string &name, const vector<LogicalType> &arguments) {
+string Function::CallToString(const string &name, const vector<LogicalType> &arguments, const LogicalType &varargs) {
 	string result = name + "(";
-	result += StringUtil::Join(arguments, arguments.size(), ", ",
-	                           [](const LogicalType &argument) { return argument.ToString(); });
+	vector<string> string_arguments;
+	for (auto &arg : arguments) {
+		string_arguments.push_back(arg.ToString());
+	}
+	if (varargs.IsValid()) {
+		string_arguments.push_back("[" + varargs.ToString() + "...]");
+	}
+	result += StringUtil::Join(string_arguments, ", ");
 	return result + ")";
 }
 
-string Function::CallToString(const string &name, const vector<LogicalType> &arguments,
+string Function::CallToString(const string &name, const vector<LogicalType> &arguments, const LogicalType &varargs,
                               const LogicalType &return_type) {
-	string result = CallToString(name, arguments);
+	string result = CallToString(name, arguments, varargs);
 	result += " -> " + return_type.ToString();
 	return result;
 }
@@ -152,8 +158,8 @@ void Function::EraseArgument(SimpleFunction &bound_function, vector<unique_ptr<E
 	}
 	D_ASSERT(arguments.size() == bound_function.arguments.size());
 	D_ASSERT(argument_index < arguments.size());
-	arguments.erase(arguments.begin() + argument_index);
-	bound_function.arguments.erase(bound_function.arguments.begin() + argument_index);
+	arguments.erase_at(argument_index);
+	bound_function.arguments.erase_at(argument_index);
 }
 
 } // namespace duckdb

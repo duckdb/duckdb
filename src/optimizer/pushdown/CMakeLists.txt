@@ -11,8 +11,10 @@ add_library_unity(
   pushdown_left_join.cpp
   pushdown_mark_join.cpp
   pushdown_projection.cpp
+  pushdown_semi_anti_join.cpp
   pushdown_set_operation.cpp
-  pushdown_single_join.cpp)
+  pushdown_single_join.cpp
+  pushdown_window.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_optimizer_pushdown>
     PARENT_SCOPE)

@@ -5,11 +5,14 @@
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sort/comparators.hpp"
 #include "duckdb/common/sort/sort.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/parallel/executor_task.hpp"
 
 #include <thread>
 
@@ -40,13 +43,15 @@ void PhysicalRangeJoin::LocalSortedTable::Sink(DataChunk &input, GlobalSortState
 	keys.Reset();
 	executor.Execute(input, keys);
 
+	// Do not operate on primary key directly to avoid modifying the input chunk
+	Vector primary = keys.data[0];
 	// Count the NULLs so we can exclude them later
-	has_null += MergeNulls(op.conditions);
+	has_null += MergeNulls(primary, op.conditions);
 	count += keys.size();
 
 	//	Only sort the primary key
 	DataChunk join_head;
-	join_head.data.emplace_back(keys.data[0]);
+	join_head.data.emplace_back(primary);
 	join_head.SetCardinality(keys.size());
 
 	// Sink the data into the local sort state
@@ -54,9 +59,9 @@ void PhysicalRangeJoin::LocalSortedTable::Sink(DataChunk &input, GlobalSortState
 }
 
 PhysicalRangeJoin::GlobalSortedTable::GlobalSortedTable(ClientContext &context, const vector<BoundOrderByNode> &orders,
-                                                        RowLayout &payload_layout)
-    : global_sort_state(BufferManager::GetBufferManager(context), orders, payload_layout), has_null(0), count(0),
-      memory_per_thread(0) {
+                                                        RowLayout &payload_layout, const PhysicalOperator &op_p)
+    : op(op_p), global_sort_state(BufferManager::GetBufferManager(context), orders, payload_layout), has_null(0),
+      count(0), memory_per_thread(0) {
 	D_ASSERT(orders.size() == 1);
 
 	// Set external (can be forced with the PRAGMA)
@@ -72,7 +77,7 @@ void PhysicalRangeJoin::GlobalSortedTable::Combine(LocalSortedTable &ltable) {
 }
 
 void PhysicalRangeJoin::GlobalSortedTable::IntializeMatches() {
-	found_match = make_unsafe_uniq_array<bool>(Count());
+	found_match = make_unsafe_uniq_array_uninitialized<bool>(Count());
 	memset(found_match.get(), 0, sizeof(bool) * Count());
 }
 
@@ -86,7 +91,7 @@ public:
 
 public:
 	RangeJoinMergeTask(shared_ptr<Event> event_p, ClientContext &context, GlobalSortedTable &table)
-	    : ExecutorTask(context), event(std::move(event_p)), context(context), table(table) {
+	    : ExecutorTask(context, std::move(event_p), table.op), context(context), table(table) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
@@ -100,7 +105,6 @@ public:
 	}
 
 private:
-	shared_ptr<Event> event;
 	ClientContext &context;
 	GlobalSortedTable &table;
 };
@@ -122,7 +126,7 @@ public:
 
 		// Schedule tasks equal to the number of threads, which will each merge multiple partitions
 		auto &ts = TaskScheduler::GetScheduler(context);
-		idx_t num_threads = ts.NumberOfThreads();
+		auto num_threads = NumericCast<idx_t>(ts.NumberOfThreads());
 
 		vector<shared_ptr<Task>> iejoin_tasks;
 		for (idx_t tnum = 0; tnum < num_threads; tnum++) {
@@ -145,7 +149,7 @@ public:
 void PhysicalRangeJoin::GlobalSortedTable::ScheduleMergeTasks(Pipeline &pipeline, Event &event) {
 	// Initialize global sort state for a round of merging
 	global_sort_state.InitializeMergeRound();
-	auto new_event = make_shared<RangeJoinMergeEvent>(*this, pipeline);
+	auto new_event = make_shared_ptr<RangeJoinMergeEvent>(*this, pipeline);
 	event.InsertEvent(std::move(new_event));
 }
 
@@ -214,7 +218,7 @@ PhysicalRangeJoin::PhysicalRangeJoin(LogicalComparisonJoin &op, PhysicalOperator
 	unprojected_types.insert(unprojected_types.end(), types.begin(), types.end());
 }
 
-idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition> &conditions) {
+idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vector<JoinCondition> &conditions) {
 	// Merge the validity masks of the comparison keys into the primary
 	// Return the number of NULLs in the resulting chunk
 	D_ASSERT(keys.ColumnCount() > 0);
@@ -227,11 +231,23 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition
 		}
 	}
 
-	auto &primary = keys.data[0];
 	if (all_constant == keys.data.size()) {
 		//	Either all NULL or no NULLs
-		for (auto &v : keys.data) {
+		if (ConstantVector::IsNull(primary)) {
+			// Primary is already NULL
+			return count;
+		}
+		for (size_t c = 1; c < keys.data.size(); ++c) {
+			// Skip comparisons that accept NULLs
+			if (conditions[c].comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
+				continue;
+			}
+			auto &v = keys.data[c];
 			if (ConstantVector::IsNull(v)) {
+				// Create a new validity mask to avoid modifying original mask
+				auto &pvalidity = ConstantVector::Validity(primary);
+				ValidityMask pvalidity_copy = ConstantVector::Validity(primary);
+				pvalidity.Copy(pvalidity_copy, count);
 				ConstantVector::SetNull(primary, true);
 				return count;
 			}
@@ -241,6 +257,10 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition
 		//	Flatten the primary, as it will need to merge arbitrary validity masks
 		primary.Flatten(count);
 		auto &pvalidity = FlatVector::Validity(primary);
+		// Make a copy of validity to avoid modifying original mask
+		ValidityMask pvalidity_copy = FlatVector::Validity(primary);
+		pvalidity.Copy(pvalidity_copy, count);
+
 		D_ASSERT(keys.ColumnCount() == conditions.size());
 		for (size_t c = 1; c < keys.data.size(); ++c) {
 			// Skip comparisons that accept NULLs

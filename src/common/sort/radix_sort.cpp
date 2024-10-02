@@ -17,7 +17,7 @@ static void SortTiedBlobs(BufferManager &buffer_manager, const data_ptr_t datapt
 		return;
 	}
 	// Fill pointer array for sorting
-	auto ptr_block = make_unsafe_uniq_array<data_ptr_t>(end - start);
+	auto ptr_block = make_unsafe_uniq_array_uninitialized<data_ptr_t>(end - start);
 	auto entry_ptrs = (data_ptr_t *)ptr_block.get();
 	for (idx_t i = start; i < end; i++) {
 		entry_ptrs[i - start] = row_ptr;
@@ -73,7 +73,7 @@ static void SortTiedBlobs(BufferManager &buffer_manager, SortedBlock &sb, bool *
 			continue;
 		}
 		idx_t j;
-		for (j = i; j < count; j++) {
+		for (j = i + 1; j < count; j++) {
 			if (!ties[j]) {
 				break;
 			}
@@ -158,7 +158,7 @@ inline void InsertionSort(const data_ptr_t orig_ptr, const data_ptr_t temp_ptr, 
 	const data_ptr_t target_ptr = swap ? orig_ptr : temp_ptr;
 	if (count > 1) {
 		const idx_t total_offset = col_offset + offset;
-		auto temp_val = make_unsafe_uniq_array<data_t>(row_width);
+		auto temp_val = make_unsafe_uniq_array_uninitialized<data_t>(row_width);
 		const data_ptr_t val = temp_val.get();
 		const auto comp_width = total_comp_width - offset;
 		for (idx_t i = 1; i < count; i++) {
@@ -238,21 +238,29 @@ void RadixSortMSD(const data_ptr_t orig_ptr, const data_ptr_t temp_ptr, const id
 //! Calls different sort functions, depending on the count and sorting sizes
 void RadixSort(BufferManager &buffer_manager, const data_ptr_t &dataptr, const idx_t &count, const idx_t &col_offset,
                const idx_t &sorting_size, const SortLayout &sort_layout, bool contains_string) {
+
 	if (contains_string) {
 		auto begin = duckdb_pdqsort::PDQIterator(dataptr, sort_layout.entry_size);
 		auto end = begin + count;
 		duckdb_pdqsort::PDQConstants constants(sort_layout.entry_size, col_offset, sorting_size, *end);
-		duckdb_pdqsort::pdqsort_branchless(begin, begin + count, constants);
-	} else if (count <= SortConstants::INSERTION_SORT_THRESHOLD) {
-		InsertionSort(dataptr, nullptr, count, 0, sort_layout.entry_size, sort_layout.comparison_size, 0, false);
-	} else if (sorting_size <= SortConstants::MSD_RADIX_SORT_SIZE_THRESHOLD) {
-		RadixSortLSD(buffer_manager, dataptr, count, col_offset, sort_layout.entry_size, sorting_size);
-	} else {
-		auto temp_block = buffer_manager.Allocate(MaxValue(count * sort_layout.entry_size, (idx_t)Storage::BLOCK_SIZE));
-		auto preallocated_array = make_unsafe_uniq_array<idx_t>(sorting_size * SortConstants::MSD_RADIX_LOCATIONS);
-		RadixSortMSD(dataptr, temp_block.Ptr(), count, col_offset, sort_layout.entry_size, sorting_size, 0,
-		             preallocated_array.get(), false);
+		return duckdb_pdqsort::pdqsort_branchless(begin, begin + count, constants);
 	}
+
+	if (count <= SortConstants::INSERTION_SORT_THRESHOLD) {
+		return InsertionSort(dataptr, nullptr, count, col_offset, sort_layout.entry_size, sorting_size, 0, false);
+	}
+
+	if (sorting_size <= SortConstants::MSD_RADIX_SORT_SIZE_THRESHOLD) {
+		return RadixSortLSD(buffer_manager, dataptr, count, col_offset, sort_layout.entry_size, sorting_size);
+	}
+
+	const auto block_size = buffer_manager.GetBlockSize();
+	auto temp_block =
+	    buffer_manager.Allocate(MemoryTag::ORDER_BY, MaxValue(count * sort_layout.entry_size, block_size));
+	auto pre_allocated_array =
+	    make_unsafe_uniq_array_uninitialized<idx_t>(sorting_size * SortConstants::MSD_RADIX_LOCATIONS);
+	RadixSortMSD(dataptr, temp_block.Ptr(), count, col_offset, sort_layout.entry_size, sorting_size, 0,
+	             pre_allocated_array.get(), false);
 }
 
 //! Identifies sequences of rows that are tied, and calls radix sort on these
@@ -305,7 +313,7 @@ void LocalSortState::SortInMemory() {
 		if (!ties) {
 			// This is the first sort
 			RadixSort(*buffer_manager, dataptr, count, col_offset, sorting_size, *sort_layout, contains_string);
-			ties_ptr = make_unsafe_uniq_array<bool>(count);
+			ties_ptr = make_unsafe_uniq_array_uninitialized<bool>(count);
 			ties = ties_ptr.get();
 			std::fill_n(ties, count - 1, true);
 			ties[count - 1] = false;

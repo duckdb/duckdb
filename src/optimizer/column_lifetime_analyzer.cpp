@@ -1,7 +1,10 @@
-#include "duckdb/optimizer/column_lifetime_optimizer.hpp"
+#include "duckdb/optimizer/column_lifetime_analyzer.hpp"
+
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -45,6 +48,14 @@ void ColumnLifetimeAnalyzer::StandardVisitOperator(LogicalOperator &op) {
 	LogicalOperatorVisitor::VisitOperatorChildren(op);
 }
 
+void ExtractColumnBindings(Expression &expr, vector<ColumnBinding> &bindings) {
+	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+		auto &bound_ref = expr.Cast<BoundColumnRefExpression>();
+		bindings.push_back(bound_ref.binding);
+	}
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &expr) { ExtractColumnBindings(expr, bindings); });
+}
+
 void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
@@ -62,10 +73,6 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 			break;
 		}
 		auto &comp_join = op.Cast<LogicalComparisonJoin>();
-		if (comp_join.join_type == JoinType::MARK || comp_join.join_type == JoinType::SEMI ||
-		    comp_join.join_type == JoinType::ANTI) {
-			break;
-		}
 		// FIXME for now, we only push into the projection map for equality (hash) joins
 		// FIXME: add projection to LHS as well
 		bool has_equality = false;
@@ -82,7 +89,7 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		LogicalOperatorVisitor::VisitOperatorExpressions(op);
 
 		column_binding_set_t unused_bindings;
-		auto old_op_bindings = op.GetColumnBindings();
+		auto old_bindings = op.GetColumnBindings();
 		ExtractUnusedColumnBindings(op.children[1]->GetColumnBindings(), unused_bindings);
 
 		// now recurse into the filter and its children
@@ -90,12 +97,14 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 
 		// then generate the projection map
 		GenerateProjectionMap(op.children[1]->GetColumnBindings(), unused_bindings, comp_join.right_projection_map);
+		auto new_bindings = op.GetColumnBindings();
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
-		// for set operations we don't remove anything, just recursively visit the children
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+		// for set operations/materialized CTEs we don't remove anything, just recursively visit the children
 		// FIXME: for UNION we can remove unreferenced columns as long as everything_referenced is false (i.e. we
 		// encounter a UNION node that is not preceded by a DISTINCT)
 		for (auto &child : op.children) {
@@ -110,6 +119,26 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		analyzer.VisitOperator(*op.children[0]);
 		return;
 	}
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+		if (!everything_referenced) {
+			auto &order = op.Cast<LogicalOrder>();
+
+			column_binding_set_t unused_bindings;
+			ExtractUnusedColumnBindings(op.children[0]->GetColumnBindings(), unused_bindings);
+
+			// now recurse into the order and its children
+			LogicalOperatorVisitor::VisitOperatorExpressions(op);
+			LogicalOperatorVisitor::VisitOperatorChildren(op);
+
+			// then generate the projection map
+			GenerateProjectionMap(op.children[0]->GetColumnBindings(), unused_bindings, order.projections);
+			return;
+		}
+		// order by, for now reference all columns
+		// FIXME: for ORDER BY we remove columns below an ORDER BY, we just need to make sure that the projections are
+		// updated
+		everything_referenced = true;
+		break;
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
 		// distinct, all projected columns are used for the DISTINCT computation
 		// mark all columns as used and continue to the children
@@ -133,6 +162,12 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 
 		// then generate the projection map
 		GenerateProjectionMap(op.children[0]->GetColumnBindings(), unused_bindings, filter.projection_map);
+		auto bindings = filter.GetColumnBindings();
+
+		if (bindings.empty()) {
+			return;
+		}
+
 		return;
 	}
 	default:

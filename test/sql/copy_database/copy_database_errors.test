@@ -1,0 +1,53 @@
+# name: test/sql/copy_database/copy_database_errors.test
+# description: Test COPY DATABASE errors
+# group: [copy_database]
+
+require noforcestorage
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH DATABASE ':memory:' AS db1;
+
+statement ok
+ATTACH DATABASE ':memory:' AS db2;
+
+# copying an empty database should work
+statement ok
+COPY FROM DATABASE db1 TO db2
+
+statement ok
+CREATE TABLE db1.test(a INTEGER, b INTEGER, c VARCHAR);
+
+statement ok
+INSERT INTO db1.test VALUES (42, 84, 'hello')
+
+# we cannot copy from the same database to the same database
+statement error
+COPY FROM DATABASE db1 TO db1
+----
+FROM and TO databases are the same
+
+# read-only test
+statement ok
+ATTACH DATABASE '__TEST_DIR__/read_only.db' AS read_only
+
+statement ok
+CREATE TABLE read_only.t(i INT);
+
+statement ok
+DETACH read_only
+
+statement ok
+ATTACH DATABASE '__TEST_DIR__/read_only.db' AS read_only (READ_ONLY)
+
+# we cannot copy TO a read-only database
+statement error
+COPY FROM DATABASE db1 TO read_only
+----
+attached in read-only mode
+
+# we can copy FROM a read-only database
+statement ok
+COPY FROM DATABASE read_only TO db1

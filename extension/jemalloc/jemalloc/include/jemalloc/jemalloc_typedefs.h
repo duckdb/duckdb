@@ -6,7 +6,7 @@ typedef struct extent_hooks_s extent_hooks_t;
  *     size_t alignment, bool *zero, bool *commit, unsigned arena_ind);
  */
 typedef void *(extent_alloc_t)(extent_hooks_t *, void *, size_t, size_t, bool *,
-                               bool *, unsigned);
+    bool *, unsigned);
 
 /*
  * bool
@@ -14,7 +14,7 @@ typedef void *(extent_alloc_t)(extent_hooks_t *, void *, size_t, size_t, bool *,
  *     bool committed, unsigned arena_ind);
  */
 typedef bool (extent_dalloc_t)(extent_hooks_t *, void *, size_t, bool,
-                              unsigned);
+    unsigned);
 
 /*
  * void
@@ -22,7 +22,7 @@ typedef bool (extent_dalloc_t)(extent_hooks_t *, void *, size_t, bool,
  *     bool committed, unsigned arena_ind);
  */
 typedef void (extent_destroy_t)(extent_hooks_t *, void *, size_t, bool,
-                               unsigned);
+    unsigned);
 
 /*
  * bool
@@ -30,7 +30,7 @@ typedef void (extent_destroy_t)(extent_hooks_t *, void *, size_t, bool,
  *     size_t offset, size_t length, unsigned arena_ind);
  */
 typedef bool (extent_commit_t)(extent_hooks_t *, void *, size_t, size_t, size_t,
-                              unsigned);
+    unsigned);
 
 /*
  * bool
@@ -38,7 +38,7 @@ typedef bool (extent_commit_t)(extent_hooks_t *, void *, size_t, size_t, size_t,
  *     size_t offset, size_t length, unsigned arena_ind);
  */
 typedef bool (extent_decommit_t)(extent_hooks_t *, void *, size_t, size_t,
-                                size_t, unsigned);
+    size_t, unsigned);
 
 /*
  * bool
@@ -46,7 +46,7 @@ typedef bool (extent_decommit_t)(extent_hooks_t *, void *, size_t, size_t,
  *     size_t offset, size_t length, unsigned arena_ind);
  */
 typedef bool (extent_purge_t)(extent_hooks_t *, void *, size_t, size_t, size_t,
-                             unsigned);
+    unsigned);
 
 /*
  * bool
@@ -54,7 +54,7 @@ typedef bool (extent_purge_t)(extent_hooks_t *, void *, size_t, size_t, size_t,
  *     size_t size_a, size_t size_b, bool committed, unsigned arena_ind);
  */
 typedef bool (extent_split_t)(extent_hooks_t *, void *, size_t, size_t, size_t,
-                             bool, unsigned);
+    bool, unsigned);
 
 /*
  * bool
@@ -62,7 +62,7 @@ typedef bool (extent_split_t)(extent_hooks_t *, void *, size_t, size_t, size_t,
  *     void *addr_b, size_t size_b, bool committed, unsigned arena_ind);
  */
 typedef bool (extent_merge_t)(extent_hooks_t *, void *, size_t, void *, size_t,
-                             bool, unsigned);
+    bool, unsigned);
 
 struct extent_hooks_s {
 	extent_alloc_t		*alloc;

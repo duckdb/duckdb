@@ -143,25 +143,15 @@
       {
         "id": 200,
         "name": "limit_val",
-        "type": "int64_t"
+        "type": "BoundLimitNode"
       },
       {
         "id": 201,
         "name": "offset_val",
-        "type": "int64_t"
-      },
-      {
-        "id": 202,
-        "name": "limit",
-        "type": "Expression*"
-      },
-      {
-        "id": 203,
-        "name": "offset",
-        "type": "Expression*"
+        "type": "BoundLimitNode"
       }
     ],
-    "constructor": ["limit_val", "offset_val", "limit", "offset"]
+    "constructor": ["limit_val", "offset_val"]
   },
   {
     "class": "LogicalOrder",
@@ -240,34 +230,6 @@
     ]
   },
   {
-    "class": "LogicalLimitPercent",
-    "base": "LogicalOperator",
-    "enum": "LOGICAL_LIMIT_PERCENT",
-    "members": [
-      {
-        "id": 200,
-        "name": "limit_percent",
-        "type": "double"
-      },
-      {
-        "id": 201,
-        "name": "offset_val",
-        "type": "int64_t"
-      },
-      {
-        "id": 202,
-        "name": "limit",
-        "type": "Expression*"
-      },
-      {
-        "id": 203,
-        "name": "offset",
-        "type": "Expression*"
-      }
-    ],
-    "constructor": ["limit_percent", "offset_val", "limit", "offset"]
-  },
-  {
     "class": "LogicalColumnDataGet",
     "base": "LogicalOperator",
     "enum": "LOGICAL_CHUNK_GET",
@@ -285,7 +247,7 @@
       {
         "id": 202,
         "name": "collection",
-        "type": "ColumnDataCollection*"
+        "type": "optionally_owned_ptr<ColumnDataCollection>"
       }
     ],
     "constructor": ["table_index", "chunk_types", "collection"]
@@ -367,7 +329,7 @@
     "enum": "LOGICAL_CTE_REF",
     "members": [
       {
-        "id": 200,  
+        "id": 200,
         "name": "table_index",
         "type": "idx_t"
       },
@@ -433,6 +395,12 @@
         "id": 206,
         "name": "duplicate_eliminated_columns",
         "type": "vector<Expression*>"
+      },
+      {
+        "id": 207,
+        "name": "delim_flipped",
+        "type": "bool",
+        "default": "false"
       }
     ],
     "constructor": ["join_type", "type"]
@@ -498,9 +466,21 @@
         "id": 201,
         "name": "column_count",
         "type": "idx_t"
+      },
+      {
+        "id": 202,
+        "name": "setop_all",
+        "type": "bool",
+        "default": "true"
+      },
+      {
+        "id": 203,
+        "name": "allow_out_of_order",
+        "type": "bool",
+        "default": "true"
       }
     ],
-    "constructor": ["table_index", "column_count", "type"]
+    "constructor": ["table_index", "column_count", "type", "setop_all", "allow_out_of_order"]
   },
   {
     "class": "LogicalRecursiveCTE",
@@ -783,23 +763,6 @@
     "constructor": ["explain_type"]
   },
   {
-    "class": "LogicalShow",
-    "base": "LogicalOperator",
-    "enum": "LOGICAL_SHOW",
-    "members": [
-      {
-        "id": 200,
-        "name": "types_select",
-        "type": "vector<LogicalType>"
-      },
-      {
-        "id": 201,
-        "name": "aliases",
-        "type": "vector<string>"
-      }
-    ]
-  },
-  {
     "class": "LogicalSet",
     "base": "LogicalOperator",
     "enum": "LOGICAL_SET",
@@ -843,7 +806,7 @@
   {
     "class": "LogicalSimple",
     "base": "LogicalOperator",
-    "enum": ["LOGICAL_ALTER", "LOGICAL_VACUUM", "LOGICAL_LOAD", "LOGICAL_ATTACH", "LOGICAL_TRANSACTION", "LOGICAL_DROP", "LOGICAL_DETACH"],
+    "enum": ["LOGICAL_ALTER", "LOGICAL_LOAD", "LOGICAL_ATTACH", "LOGICAL_TRANSACTION", "LOGICAL_DROP", "LOGICAL_DETACH"],
     "members": [
       {
         "id": 200,
@@ -877,6 +840,20 @@
     "custom_implementation": true
   },
   {
+    "class": "LogicalCopyDatabase",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_COPY_DATABASE",
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "CopyDatabaseInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": ["info"]
+  },
+  {
     "class": "LogicalCopyToFile",
     "base": "LogicalOperator",
     "enum": "LOGICAL_COPY_TO_FILE",
@@ -906,5 +883,32 @@
     "base": "LogicalOperator",
     "enum": "LOGICAL_EXTENSION_OPERATOR",
     "custom_implementation": true
+  },
+  {
+    "class": "LogicalVacuum",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_VACUUM",
+    "custom_implementation": true
+  },
+  {
+    "class": "FilenamePattern",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 200,
+        "name": "base",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "pos",
+        "type": "idx_t"
+      },
+      {
+        "id": 202,
+        "name": "uuid",
+        "type": "bool"
+      }
+    ]
   }
 ]

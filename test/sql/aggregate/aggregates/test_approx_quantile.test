@@ -141,27 +141,52 @@ FROM (
 ----
 [true, true, true]
 
+# Array lists
+query I
+SELECT approx_quantile(col, [0.5, 0.4, 0.1]) AS percentile 
+FROM VALUES (0), (1), (2), (10) AS tab(col);
+----
+[2, 1, 0]
+
+query I
+SELECT approx_quantile(col, ARRAY_VALUE(0.5, 0.4, 0.1)) AS percentile 
+FROM VALUES (0), (1), (2), (10) AS tab(col);
+----
+[2, 1, 0]
+
 # Errors
 statement error
 SELECT approx_quantile(r, -0.1) FROM quantile
+----
 
 statement error
 SELECT approx_quantile(r, 1.1) FROM quantile
+----
 
 statement error
 SELECT approx_quantile(r, NULL) FROM quantile
+----
 
 statement error
 SELECT approx_quantile(r, r) FROM quantile
+----
 
 statement error
 SELECT approx_quantile(r::string, 0.5) FROM quantile
+----
 
 statement error
 SELECT approx_quantile(r) FROM quantile
+----
 
 statement error
 SELECT approx_quantile(r, 0.1, 0.2) FROM quantile
+----
+
+statement error
+SELECT approx_quantile(42, CAST(NULL AS INT[]));
+----
+APPROXIMATE QUANTILE parameter list cannot be NULL
 
 statement ok
 pragma threads=4
@@ -234,21 +259,34 @@ GROUP BY a
 
 statement error
 SELECT reservoir_quantile(r, r)  from quantile
+----
 
 statement error
 SELECT reservoir_quantile(r, NULL)  from quantile
+----
 
 statement error
 SELECT reservoir_quantile(r, r, r)  from quantile
+----
 
 statement error
 SELECT reservoir_quantile(r, 0.9, NULL)  from quantile
+----
 
 statement error
 SELECT reservoir_quantile(r, 0.9, r)  from quantile
+----
 
 statement error
 SELECT reservoir_quantile(r, random()::float)  from quantile
+----
 
 statement error
 SELECT reservoir_quantile(r, 0.9, random()::float)  from quantile
+----
+
+# DECIMAL binding
+query I
+SELECT RESERVOIR_QUANTILE(0., 0.9, 1000);
+----
+0

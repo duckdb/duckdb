@@ -10,23 +10,31 @@
 
 
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/catalog/catalog_entry/dependency/dependency_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/aggregate_handling.hpp"
+#include "duckdb/common/enums/catalog_lookup_behavior.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
+#include "duckdb/common/enums/copy_overwrite_mode.hpp"
 #include "duckdb/common/enums/cte_materialize.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/enums/debug_initialize.hpp"
+#include "duckdb/common/enums/destroy_buffer_upon.hpp"
+#include "duckdb/common/enums/explain_format.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
-#include "duckdb/common/enums/index_type.hpp"
+#include "duckdb/common/enums/index_constraint_type.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/joinref_type.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/enums/memory_tag.hpp"
+#include "duckdb/common/enums/metric_type.hpp"
+#include "duckdb/common/enums/on_create_conflict.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
@@ -35,6 +43,7 @@
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/enums/pending_execution_result.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
+#include "duckdb/common/enums/prepared_statement_mode.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/enums/relation_type.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
@@ -42,16 +51,20 @@
 #include "duckdb/common/enums/set_scope.hpp"
 #include "duckdb/common/enums/set_type.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/enums/stream_execution_result.hpp"
 #include "duckdb/common/enums/subquery_type.hpp"
 #include "duckdb/common/enums/tableref_type.hpp"
 #include "duckdb/common/enums/undo_flags.hpp"
 #include "duckdb/common/enums/vector_type.hpp"
 #include "duckdb/common/enums/wal_type.hpp"
 #include "duckdb/common/enums/window_aggregation_mode.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception_format_value.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/file_buffer.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/file_open_flags.hpp"
+#include "duckdb/common/multi_file_list.hpp"
+#include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/sort/partition_state.hpp"
 #include "duckdb/common/types.hpp"
@@ -60,31 +73,40 @@
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/common/types/row/partitioned_tuple_data.hpp"
-#include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/common/types/row/tuple_data_states.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
-#include "duckdb/core_functions/lambda_functions.hpp"
+#include "duckdb/core_functions/aggregate/quantile_enum.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/execution/operator/scan/csv/base_csv_reader.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_state.hpp"
-#include "duckdb/execution/operator/scan/csv/quote_rules.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
+#include "duckdb/execution/operator/csv_scanner/quote_rules.hpp"
+#include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/macro_function.hpp"
 #include "duckdb/function/scalar/compressed_materialization_functions.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
-#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
+#include "duckdb/function/table/arrow/enum/arrow_datetime_type.hpp"
+#include "duckdb/function/table/arrow/enum/arrow_type_info_type.hpp"
+#include "duckdb/function/table/arrow/enum/arrow_variable_size_type.hpp"
+#include "duckdb/function/table_function.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
+#include "duckdb/main/client_properties.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/error_manager.hpp"
+#include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/main/secret/secret.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/interrupt.hpp"
+#include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
@@ -93,8 +115,8 @@
 #include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/alter_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
-#include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
+#include "duckdb/parser/parsed_data/extra_drop_info.hpp"
 #include "duckdb/parser/parsed_data/load_info.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
@@ -104,8 +126,10 @@
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/simplified_token.hpp"
+#include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/table_filter.hpp"
@@ -131,7 +155,7 @@ const char* EnumUtil::ToChars<AccessMode>(AccessMode value) {
 	case AccessMode::READ_WRITE:
 		return "READ_WRITE";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<AccessMode>", value));
 	}
 }
 
@@ -149,7 +173,30 @@ AccessMode EnumUtil::FromString<AccessMode>(const char *value) {
 	if (StringUtil::Equals(value, "READ_WRITE")) {
 		return AccessMode::READ_WRITE;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<AccessMode>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<AggregateCombineType>(AggregateCombineType value) {
+	switch(value) {
+	case AggregateCombineType::PRESERVE_INPUT:
+		return "PRESERVE_INPUT";
+	case AggregateCombineType::ALLOW_DESTRUCTIVE:
+		return "ALLOW_DESTRUCTIVE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<AggregateCombineType>", value));
+	}
+}
+
+template<>
+AggregateCombineType EnumUtil::FromString<AggregateCombineType>(const char *value) {
+	if (StringUtil::Equals(value, "PRESERVE_INPUT")) {
+		return AggregateCombineType::PRESERVE_INPUT;
+	}
+	if (StringUtil::Equals(value, "ALLOW_DESTRUCTIVE")) {
+		return AggregateCombineType::ALLOW_DESTRUCTIVE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<AggregateCombineType>", value));
 }
 
 template<>
@@ -162,7 +209,7 @@ const char* EnumUtil::ToChars<AggregateHandling>(AggregateHandling value) {
 	case AggregateHandling::FORCE_AGGREGATES:
 		return "FORCE_AGGREGATES";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<AggregateHandling>", value));
 	}
 }
 
@@ -177,7 +224,7 @@ AggregateHandling EnumUtil::FromString<AggregateHandling>(const char *value) {
 	if (StringUtil::Equals(value, "FORCE_AGGREGATES")) {
 		return AggregateHandling::FORCE_AGGREGATES;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<AggregateHandling>", value));
 }
 
 template<>
@@ -188,7 +235,7 @@ const char* EnumUtil::ToChars<AggregateOrderDependent>(AggregateOrderDependent v
 	case AggregateOrderDependent::NOT_ORDER_DEPENDENT:
 		return "NOT_ORDER_DEPENDENT";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<AggregateOrderDependent>", value));
 	}
 }
 
@@ -200,7 +247,7 @@ AggregateOrderDependent EnumUtil::FromString<AggregateOrderDependent>(const char
 	if (StringUtil::Equals(value, "NOT_ORDER_DEPENDENT")) {
 		return AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<AggregateOrderDependent>", value));
 }
 
 template<>
@@ -211,7 +258,7 @@ const char* EnumUtil::ToChars<AggregateType>(AggregateType value) {
 	case AggregateType::DISTINCT:
 		return "DISTINCT";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<AggregateType>", value));
 	}
 }
 
@@ -223,7 +270,7 @@ AggregateType EnumUtil::FromString<AggregateType>(const char *value) {
 	if (StringUtil::Equals(value, "DISTINCT")) {
 		return AggregateType::DISTINCT;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<AggregateType>", value));
 }
 
 template<>
@@ -234,7 +281,7 @@ const char* EnumUtil::ToChars<AlterForeignKeyType>(AlterForeignKeyType value) {
 	case AlterForeignKeyType::AFT_DELETE:
 		return "AFT_DELETE";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<AlterForeignKeyType>", value));
 	}
 }
 
@@ -246,7 +293,7 @@ AlterForeignKeyType EnumUtil::FromString<AlterForeignKeyType>(const char *value)
 	if (StringUtil::Equals(value, "AFT_DELETE")) {
 		return AlterForeignKeyType::AFT_DELETE;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<AlterForeignKeyType>", value));
 }
 
 template<>
@@ -257,7 +304,7 @@ const char* EnumUtil::ToChars<AlterScalarFunctionType>(AlterScalarFunctionType v
 	case AlterScalarFunctionType::ADD_FUNCTION_OVERLOADS:
 		return "ADD_FUNCTION_OVERLOADS";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<AlterScalarFunctionType>", value));
 	}
 }
 
@@ -269,7 +316,7 @@ AlterScalarFunctionType EnumUtil::FromString<AlterScalarFunctionType>(const char
 	if (StringUtil::Equals(value, "ADD_FUNCTION_OVERLOADS")) {
 		return AlterScalarFunctionType::ADD_FUNCTION_OVERLOADS;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<AlterScalarFunctionType>", value));
 }
 
 template<>
@@ -280,7 +327,7 @@ const char* EnumUtil::ToChars<AlterTableFunctionType>(AlterTableFunctionType val
 	case AlterTableFunctionType::ADD_FUNCTION_OVERLOADS:
 		return "ADD_FUNCTION_OVERLOADS";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<AlterTableFunctionType>", value));
 	}
 }
 
@@ -292,7 +339,7 @@ AlterTableFunctionType EnumUtil::FromString<AlterTableFunctionType>(const char *
 	if (StringUtil::Equals(value, "ADD_FUNCTION_OVERLOADS")) {
 		return AlterTableFunctionType::ADD_FUNCTION_OVERLOADS;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<AlterTableFunctionType>", value));
 }
 
 template<>
@@ -318,8 +365,10 @@ const char* EnumUtil::ToChars<AlterTableType>(AlterTableType value) {
 		return "SET_NOT_NULL";
 	case AlterTableType::DROP_NOT_NULL:
 		return "DROP_NOT_NULL";
+	case AlterTableType::SET_COLUMN_COMMENT:
+		return "SET_COLUMN_COMMENT";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<AlterTableType>", value));
 	}
 }
 
@@ -355,7 +404,10 @@ AlterTableType EnumUtil::FromString<AlterTableType>(const char *value) {
 	if (StringUtil::Equals(value, "DROP_NOT_NULL")) {
 		return AlterTableType::DROP_NOT_NULL;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "SET_COLUMN_COMMENT")) {
+		return AlterTableType::SET_COLUMN_COMMENT;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<AlterTableType>", value));
 }
 
 template<>
@@ -375,8 +427,12 @@ const char* EnumUtil::ToChars<AlterType>(AlterType value) {
 		return "ALTER_SCALAR_FUNCTION";
 	case AlterType::ALTER_TABLE_FUNCTION:
 		return "ALTER_TABLE_FUNCTION";
+	case AlterType::SET_COMMENT:
+		return "SET_COMMENT";
+	case AlterType::SET_COLUMN_COMMENT:
+		return "SET_COLUMN_COMMENT";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<AlterType>", value));
 	}
 }
 
@@ -403,7 +459,13 @@ AlterType EnumUtil::FromString<AlterType>(const char *value) {
 	if (StringUtil::Equals(value, "ALTER_TABLE_FUNCTION")) {
 		return AlterType::ALTER_TABLE_FUNCTION;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "SET_COMMENT")) {
+		return AlterType::SET_COMMENT;
+	}
+	if (StringUtil::Equals(value, "SET_COLUMN_COMMENT")) {
+		return AlterType::SET_COLUMN_COMMENT;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<AlterType>", value));
 }
 
 template<>
@@ -414,7 +476,7 @@ const char* EnumUtil::ToChars<AlterViewType>(AlterViewType value) {
 	case AlterViewType::RENAME_VIEW:
 		return "RENAME_VIEW";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<AlterViewType>", value));
 	}
 }
 
@@ -426,7 +488,7 @@ AlterViewType EnumUtil::FromString<AlterViewType>(const char *value) {
 	if (StringUtil::Equals(value, "RENAME_VIEW")) {
 		return AlterViewType::RENAME_VIEW;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<AlterViewType>", value));
 }
 
 template<>
@@ -437,7 +499,7 @@ const char* EnumUtil::ToChars<AppenderType>(AppenderType value) {
 	case AppenderType::PHYSICAL:
 		return "PHYSICAL";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<AppenderType>", value));
 	}
 }
 
@@ -449,7 +511,7 @@ AppenderType EnumUtil::FromString<AppenderType>(const char *value) {
 	if (StringUtil::Equals(value, "PHYSICAL")) {
 		return AppenderType::PHYSICAL;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<AppenderType>", value));
 }
 
 template<>
@@ -470,7 +532,7 @@ const char* EnumUtil::ToChars<ArrowDateTimeType>(ArrowDateTimeType value) {
 	case ArrowDateTimeType::MONTH_DAY_NANO:
 		return "MONTH_DAY_NANO";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ArrowDateTimeType>", value));
 	}
 }
 
@@ -497,35 +559,124 @@ ArrowDateTimeType EnumUtil::FromString<ArrowDateTimeType>(const char *value) {
 	if (StringUtil::Equals(value, "MONTH_DAY_NANO")) {
 		return ArrowDateTimeType::MONTH_DAY_NANO;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ArrowDateTimeType>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<ArrowOffsetSize>(ArrowOffsetSize value) {
+	switch(value) {
+	case ArrowOffsetSize::REGULAR:
+		return "REGULAR";
+	case ArrowOffsetSize::LARGE:
+		return "LARGE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ArrowOffsetSize>", value));
+	}
+}
+
+template<>
+ArrowOffsetSize EnumUtil::FromString<ArrowOffsetSize>(const char *value) {
+	if (StringUtil::Equals(value, "REGULAR")) {
+		return ArrowOffsetSize::REGULAR;
+	}
+	if (StringUtil::Equals(value, "LARGE")) {
+		return ArrowOffsetSize::LARGE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ArrowOffsetSize>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<ArrowTypeInfoType>(ArrowTypeInfoType value) {
+	switch(value) {
+	case ArrowTypeInfoType::LIST:
+		return "LIST";
+	case ArrowTypeInfoType::STRUCT:
+		return "STRUCT";
+	case ArrowTypeInfoType::DATE_TIME:
+		return "DATE_TIME";
+	case ArrowTypeInfoType::STRING:
+		return "STRING";
+	case ArrowTypeInfoType::ARRAY:
+		return "ARRAY";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ArrowTypeInfoType>", value));
+	}
+}
+
+template<>
+ArrowTypeInfoType EnumUtil::FromString<ArrowTypeInfoType>(const char *value) {
+	if (StringUtil::Equals(value, "LIST")) {
+		return ArrowTypeInfoType::LIST;
+	}
+	if (StringUtil::Equals(value, "STRUCT")) {
+		return ArrowTypeInfoType::STRUCT;
+	}
+	if (StringUtil::Equals(value, "DATE_TIME")) {
+		return ArrowTypeInfoType::DATE_TIME;
+	}
+	if (StringUtil::Equals(value, "STRING")) {
+		return ArrowTypeInfoType::STRING;
+	}
+	if (StringUtil::Equals(value, "ARRAY")) {
+		return ArrowTypeInfoType::ARRAY;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ArrowTypeInfoType>", value));
 }
 
 template<>
 const char* EnumUtil::ToChars<ArrowVariableSizeType>(ArrowVariableSizeType value) {
 	switch(value) {
-	case ArrowVariableSizeType::FIXED_SIZE:
-		return "FIXED_SIZE";
 	case ArrowVariableSizeType::NORMAL:
 		return "NORMAL";
+	case ArrowVariableSizeType::FIXED_SIZE:
+		return "FIXED_SIZE";
 	case ArrowVariableSizeType::SUPER_SIZE:
 		return "SUPER_SIZE";
+	case ArrowVariableSizeType::VIEW:
+		return "VIEW";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ArrowVariableSizeType>", value));
 	}
 }
 
 template<>
 ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *value) {
-	if (StringUtil::Equals(value, "FIXED_SIZE")) {
-		return ArrowVariableSizeType::FIXED_SIZE;
-	}
 	if (StringUtil::Equals(value, "NORMAL")) {
 		return ArrowVariableSizeType::NORMAL;
+	}
+	if (StringUtil::Equals(value, "FIXED_SIZE")) {
+		return ArrowVariableSizeType::FIXED_SIZE;
 	}
 	if (StringUtil::Equals(value, "SUPER_SIZE")) {
 		return ArrowVariableSizeType::SUPER_SIZE;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "VIEW")) {
+		return ArrowVariableSizeType::VIEW;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ArrowVariableSizeType>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<BinderType>(BinderType value) {
+	switch(value) {
+	case BinderType::REGULAR_BINDER:
+		return "REGULAR_BINDER";
+	case BinderType::VIEW_BINDER:
+		return "VIEW_BINDER";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<BinderType>", value));
+	}
+}
+
+template<>
+BinderType EnumUtil::FromString<BinderType>(const char *value) {
+	if (StringUtil::Equals(value, "REGULAR_BINDER")) {
+		return BinderType::REGULAR_BINDER;
+	}
+	if (StringUtil::Equals(value, "VIEW_BINDER")) {
+		return BinderType::VIEW_BINDER;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<BinderType>", value));
 }
 
 template<>
@@ -535,8 +686,10 @@ const char* EnumUtil::ToChars<BindingMode>(BindingMode value) {
 		return "STANDARD_BINDING";
 	case BindingMode::EXTRACT_NAMES:
 		return "EXTRACT_NAMES";
+	case BindingMode::EXTRACT_REPLACEMENT_SCANS:
+		return "EXTRACT_REPLACEMENT_SCANS";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<BindingMode>", value));
 	}
 }
 
@@ -548,7 +701,10 @@ BindingMode EnumUtil::FromString<BindingMode>(const char *value) {
 	if (StringUtil::Equals(value, "EXTRACT_NAMES")) {
 		return BindingMode::EXTRACT_NAMES;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "EXTRACT_REPLACEMENT_SCANS")) {
+		return BindingMode::EXTRACT_REPLACEMENT_SCANS;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<BindingMode>", value));
 }
 
 template<>
@@ -567,7 +723,7 @@ const char* EnumUtil::ToChars<BitpackingMode>(BitpackingMode value) {
 	case BitpackingMode::FOR:
 		return "FOR";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<BitpackingMode>", value));
 	}
 }
 
@@ -591,7 +747,7 @@ BitpackingMode EnumUtil::FromString<BitpackingMode>(const char *value) {
 	if (StringUtil::Equals(value, "FOR")) {
 		return BitpackingMode::FOR;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<BitpackingMode>", value));
 }
 
 template<>
@@ -602,7 +758,7 @@ const char* EnumUtil::ToChars<BlockState>(BlockState value) {
 	case BlockState::BLOCK_LOADED:
 		return "BLOCK_LOADED";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<BlockState>", value));
 	}
 }
 
@@ -614,7 +770,7 @@ BlockState EnumUtil::FromString<BlockState>(const char *value) {
 	if (StringUtil::Equals(value, "BLOCK_LOADED")) {
 		return BlockState::BLOCK_LOADED;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<BlockState>", value));
 }
 
 template<>
@@ -629,7 +785,7 @@ const char* EnumUtil::ToChars<CAPIResultSetType>(CAPIResultSetType value) {
 	case CAPIResultSetType::CAPI_RESULT_TYPE_DEPRECATED:
 		return "CAPI_RESULT_TYPE_DEPRECATED";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<CAPIResultSetType>", value));
 	}
 }
 
@@ -647,7 +803,7 @@ CAPIResultSetType EnumUtil::FromString<CAPIResultSetType>(const char *value) {
 	if (StringUtil::Equals(value, "CAPI_RESULT_TYPE_DEPRECATED")) {
 		return CAPIResultSetType::CAPI_RESULT_TYPE_DEPRECATED;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<CAPIResultSetType>", value));
 }
 
 template<>
@@ -667,12 +823,18 @@ const char* EnumUtil::ToChars<CSVState>(CSVState value) {
 		return "UNQUOTED";
 	case CSVState::ESCAPE:
 		return "ESCAPE";
-	case CSVState::EMPTY_LINE:
-		return "EMPTY_LINE";
 	case CSVState::INVALID:
 		return "INVALID";
+	case CSVState::NOT_SET:
+		return "NOT_SET";
+	case CSVState::QUOTED_NEW_LINE:
+		return "QUOTED_NEW_LINE";
+	case CSVState::EMPTY_SPACE:
+		return "EMPTY_SPACE";
+	case CSVState::COMMENT:
+		return "COMMENT";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<CSVState>", value));
 	}
 }
 
@@ -699,13 +861,22 @@ CSVState EnumUtil::FromString<CSVState>(const char *value) {
 	if (StringUtil::Equals(value, "ESCAPE")) {
 		return CSVState::ESCAPE;
 	}
-	if (StringUtil::Equals(value, "EMPTY_LINE")) {
-		return CSVState::EMPTY_LINE;
-	}
 	if (StringUtil::Equals(value, "INVALID")) {
 		return CSVState::INVALID;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "NOT_SET")) {
+		return CSVState::NOT_SET;
+	}
+	if (StringUtil::Equals(value, "QUOTED_NEW_LINE")) {
+		return CSVState::QUOTED_NEW_LINE;
+	}
+	if (StringUtil::Equals(value, "EMPTY_SPACE")) {
+		return CSVState::EMPTY_SPACE;
+	}
+	if (StringUtil::Equals(value, "COMMENT")) {
+		return CSVState::COMMENT;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<CSVState>", value));
 }
 
 template<>
@@ -718,7 +889,7 @@ const char* EnumUtil::ToChars<CTEMaterialize>(CTEMaterialize value) {
 	case CTEMaterialize::CTE_MATERIALIZE_NEVER:
 		return "CTE_MATERIALIZE_NEVER";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<CTEMaterialize>", value));
 	}
 }
 
@@ -733,7 +904,35 @@ CTEMaterialize EnumUtil::FromString<CTEMaterialize>(const char *value) {
 	if (StringUtil::Equals(value, "CTE_MATERIALIZE_NEVER")) {
 		return CTEMaterialize::CTE_MATERIALIZE_NEVER;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<CTEMaterialize>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<CatalogLookupBehavior>(CatalogLookupBehavior value) {
+	switch(value) {
+	case CatalogLookupBehavior::STANDARD:
+		return "STANDARD";
+	case CatalogLookupBehavior::LOWER_PRIORITY:
+		return "LOWER_PRIORITY";
+	case CatalogLookupBehavior::NEVER_LOOKUP:
+		return "NEVER_LOOKUP";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<CatalogLookupBehavior>", value));
+	}
+}
+
+template<>
+CatalogLookupBehavior EnumUtil::FromString<CatalogLookupBehavior>(const char *value) {
+	if (StringUtil::Equals(value, "STANDARD")) {
+		return CatalogLookupBehavior::STANDARD;
+	}
+	if (StringUtil::Equals(value, "LOWER_PRIORITY")) {
+		return CatalogLookupBehavior::LOWER_PRIORITY;
+	}
+	if (StringUtil::Equals(value, "NEVER_LOOKUP")) {
+		return CatalogLookupBehavior::NEVER_LOOKUP;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<CatalogLookupBehavior>", value));
 }
 
 template<>
@@ -773,12 +972,20 @@ const char* EnumUtil::ToChars<CatalogType>(CatalogType value) {
 		return "MACRO_ENTRY";
 	case CatalogType::TABLE_MACRO_ENTRY:
 		return "TABLE_MACRO_ENTRY";
-	case CatalogType::UPDATED_ENTRY:
-		return "UPDATED_ENTRY";
 	case CatalogType::DELETED_ENTRY:
 		return "DELETED_ENTRY";
+	case CatalogType::RENAMED_ENTRY:
+		return "RENAMED_ENTRY";
+	case CatalogType::SECRET_ENTRY:
+		return "SECRET_ENTRY";
+	case CatalogType::SECRET_TYPE_ENTRY:
+		return "SECRET_TYPE_ENTRY";
+	case CatalogType::SECRET_FUNCTION_ENTRY:
+		return "SECRET_FUNCTION_ENTRY";
+	case CatalogType::DEPENDENCY_ENTRY:
+		return "DEPENDENCY_ENTRY";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<CatalogType>", value));
 	}
 }
 
@@ -835,13 +1042,25 @@ CatalogType EnumUtil::FromString<CatalogType>(const char *value) {
 	if (StringUtil::Equals(value, "TABLE_MACRO_ENTRY")) {
 		return CatalogType::TABLE_MACRO_ENTRY;
 	}
-	if (StringUtil::Equals(value, "UPDATED_ENTRY")) {
-		return CatalogType::UPDATED_ENTRY;
-	}
 	if (StringUtil::Equals(value, "DELETED_ENTRY")) {
 		return CatalogType::DELETED_ENTRY;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "RENAMED_ENTRY")) {
+		return CatalogType::RENAMED_ENTRY;
+	}
+	if (StringUtil::Equals(value, "SECRET_ENTRY")) {
+		return CatalogType::SECRET_ENTRY;
+	}
+	if (StringUtil::Equals(value, "SECRET_TYPE_ENTRY")) {
+		return CatalogType::SECRET_TYPE_ENTRY;
+	}
+	if (StringUtil::Equals(value, "SECRET_FUNCTION_ENTRY")) {
+		return CatalogType::SECRET_FUNCTION_ENTRY;
+	}
+	if (StringUtil::Equals(value, "DEPENDENCY_ENTRY")) {
+		return CatalogType::DEPENDENCY_ENTRY;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<CatalogType>", value));
 }
 
 template<>
@@ -856,7 +1075,7 @@ const char* EnumUtil::ToChars<CheckpointAbort>(CheckpointAbort value) {
 	case CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE:
 		return "DEBUG_ABORT_AFTER_FREE_LIST_WRITE";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<CheckpointAbort>", value));
 	}
 }
 
@@ -874,7 +1093,7 @@ CheckpointAbort EnumUtil::FromString<CheckpointAbort>(const char *value) {
 	if (StringUtil::Equals(value, "DEBUG_ABORT_AFTER_FREE_LIST_WRITE")) {
 		return CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<CheckpointAbort>", value));
 }
 
 template<>
@@ -887,7 +1106,7 @@ const char* EnumUtil::ToChars<ChunkInfoType>(ChunkInfoType value) {
 	case ChunkInfoType::EMPTY_INFO:
 		return "EMPTY_INFO";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ChunkInfoType>", value));
 	}
 }
 
@@ -902,7 +1121,7 @@ ChunkInfoType EnumUtil::FromString<ChunkInfoType>(const char *value) {
 	if (StringUtil::Equals(value, "EMPTY_INFO")) {
 		return ChunkInfoType::EMPTY_INFO;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ChunkInfoType>", value));
 }
 
 template<>
@@ -915,7 +1134,7 @@ const char* EnumUtil::ToChars<ColumnDataAllocatorType>(ColumnDataAllocatorType v
 	case ColumnDataAllocatorType::HYBRID:
 		return "HYBRID";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ColumnDataAllocatorType>", value));
 	}
 }
 
@@ -930,7 +1149,7 @@ ColumnDataAllocatorType EnumUtil::FromString<ColumnDataAllocatorType>(const char
 	if (StringUtil::Equals(value, "HYBRID")) {
 		return ColumnDataAllocatorType::HYBRID;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ColumnDataAllocatorType>", value));
 }
 
 template<>
@@ -943,7 +1162,7 @@ const char* EnumUtil::ToChars<ColumnDataScanProperties>(ColumnDataScanProperties
 	case ColumnDataScanProperties::DISALLOW_ZERO_COPY:
 		return "DISALLOW_ZERO_COPY";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ColumnDataScanProperties>", value));
 	}
 }
 
@@ -958,7 +1177,7 @@ ColumnDataScanProperties EnumUtil::FromString<ColumnDataScanProperties>(const ch
 	if (StringUtil::Equals(value, "DISALLOW_ZERO_COPY")) {
 		return ColumnDataScanProperties::DISALLOW_ZERO_COPY;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ColumnDataScanProperties>", value));
 }
 
 template<>
@@ -969,7 +1188,7 @@ const char* EnumUtil::ToChars<ColumnSegmentType>(ColumnSegmentType value) {
 	case ColumnSegmentType::PERSISTENT:
 		return "PERSISTENT";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ColumnSegmentType>", value));
 	}
 }
 
@@ -981,7 +1200,7 @@ ColumnSegmentType EnumUtil::FromString<ColumnSegmentType>(const char *value) {
 	if (StringUtil::Equals(value, "PERSISTENT")) {
 		return ColumnSegmentType::PERSISTENT;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ColumnSegmentType>", value));
 }
 
 template<>
@@ -994,7 +1213,7 @@ const char* EnumUtil::ToChars<CompressedMaterializationDirection>(CompressedMate
 	case CompressedMaterializationDirection::DECOMPRESS:
 		return "DECOMPRESS";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<CompressedMaterializationDirection>", value));
 	}
 }
 
@@ -1009,7 +1228,7 @@ CompressedMaterializationDirection EnumUtil::FromString<CompressedMaterializatio
 	if (StringUtil::Equals(value, "DECOMPRESS")) {
 		return CompressedMaterializationDirection::DECOMPRESS;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<CompressedMaterializationDirection>", value));
 }
 
 template<>
@@ -1035,10 +1254,14 @@ const char* EnumUtil::ToChars<CompressionType>(CompressionType value) {
 		return "COMPRESSION_CHIMP";
 	case CompressionType::COMPRESSION_PATAS:
 		return "COMPRESSION_PATAS";
+	case CompressionType::COMPRESSION_ALP:
+		return "COMPRESSION_ALP";
+	case CompressionType::COMPRESSION_ALPRD:
+		return "COMPRESSION_ALPRD";
 	case CompressionType::COMPRESSION_COUNT:
 		return "COMPRESSION_COUNT";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<CompressionType>", value));
 	}
 }
 
@@ -1074,10 +1297,16 @@ CompressionType EnumUtil::FromString<CompressionType>(const char *value) {
 	if (StringUtil::Equals(value, "COMPRESSION_PATAS")) {
 		return CompressionType::COMPRESSION_PATAS;
 	}
+	if (StringUtil::Equals(value, "COMPRESSION_ALP")) {
+		return CompressionType::COMPRESSION_ALP;
+	}
+	if (StringUtil::Equals(value, "COMPRESSION_ALPRD")) {
+		return CompressionType::COMPRESSION_ALPRD;
+	}
 	if (StringUtil::Equals(value, "COMPRESSION_COUNT")) {
 		return CompressionType::COMPRESSION_COUNT;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<CompressionType>", value));
 }
 
 template<>
@@ -1088,7 +1317,7 @@ const char* EnumUtil::ToChars<ConflictManagerMode>(ConflictManagerMode value) {
 	case ConflictManagerMode::THROW:
 		return "THROW";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ConflictManagerMode>", value));
 	}
 }
 
@@ -1100,7 +1329,7 @@ ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value)
 	if (StringUtil::Equals(value, "THROW")) {
 		return ConflictManagerMode::THROW;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ConflictManagerMode>", value));
 }
 
 template<>
@@ -1117,7 +1346,7 @@ const char* EnumUtil::ToChars<ConstraintType>(ConstraintType value) {
 	case ConstraintType::FOREIGN_KEY:
 		return "FOREIGN_KEY";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ConstraintType>", value));
 	}
 }
 
@@ -1138,7 +1367,86 @@ ConstraintType EnumUtil::FromString<ConstraintType>(const char *value) {
 	if (StringUtil::Equals(value, "FOREIGN_KEY")) {
 		return ConstraintType::FOREIGN_KEY;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ConstraintType>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<CopyFunctionReturnType>(CopyFunctionReturnType value) {
+	switch(value) {
+	case CopyFunctionReturnType::CHANGED_ROWS:
+		return "CHANGED_ROWS";
+	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST:
+		return "CHANGED_ROWS_AND_FILE_LIST";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<CopyFunctionReturnType>", value));
+	}
+}
+
+template<>
+CopyFunctionReturnType EnumUtil::FromString<CopyFunctionReturnType>(const char *value) {
+	if (StringUtil::Equals(value, "CHANGED_ROWS")) {
+		return CopyFunctionReturnType::CHANGED_ROWS;
+	}
+	if (StringUtil::Equals(value, "CHANGED_ROWS_AND_FILE_LIST")) {
+		return CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<CopyFunctionReturnType>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<CopyOverwriteMode>(CopyOverwriteMode value) {
+	switch(value) {
+	case CopyOverwriteMode::COPY_ERROR_ON_CONFLICT:
+		return "COPY_ERROR_ON_CONFLICT";
+	case CopyOverwriteMode::COPY_OVERWRITE:
+		return "COPY_OVERWRITE";
+	case CopyOverwriteMode::COPY_OVERWRITE_OR_IGNORE:
+		return "COPY_OVERWRITE_OR_IGNORE";
+	case CopyOverwriteMode::COPY_APPEND:
+		return "COPY_APPEND";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<CopyOverwriteMode>", value));
+	}
+}
+
+template<>
+CopyOverwriteMode EnumUtil::FromString<CopyOverwriteMode>(const char *value) {
+	if (StringUtil::Equals(value, "COPY_ERROR_ON_CONFLICT")) {
+		return CopyOverwriteMode::COPY_ERROR_ON_CONFLICT;
+	}
+	if (StringUtil::Equals(value, "COPY_OVERWRITE")) {
+		return CopyOverwriteMode::COPY_OVERWRITE;
+	}
+	if (StringUtil::Equals(value, "COPY_OVERWRITE_OR_IGNORE")) {
+		return CopyOverwriteMode::COPY_OVERWRITE_OR_IGNORE;
+	}
+	if (StringUtil::Equals(value, "COPY_APPEND")) {
+		return CopyOverwriteMode::COPY_APPEND;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<CopyOverwriteMode>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<CopyToType>(CopyToType value) {
+	switch(value) {
+	case CopyToType::COPY_TO_FILE:
+		return "COPY_TO_FILE";
+	case CopyToType::EXPORT_DATABASE:
+		return "EXPORT_DATABASE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<CopyToType>", value));
+	}
+}
+
+template<>
+CopyToType EnumUtil::FromString<CopyToType>(const char *value) {
+	if (StringUtil::Equals(value, "COPY_TO_FILE")) {
+		return CopyToType::COPY_TO_FILE;
+	}
+	if (StringUtil::Equals(value, "EXPORT_DATABASE")) {
+		return CopyToType::EXPORT_DATABASE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<CopyToType>", value));
 }
 
 template<>
@@ -1153,7 +1461,7 @@ const char* EnumUtil::ToChars<DataFileType>(DataFileType value) {
 	case DataFileType::PARQUET_FILE:
 		return "PARQUET_FILE";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<DataFileType>", value));
 	}
 }
 
@@ -1171,7 +1479,7 @@ DataFileType EnumUtil::FromString<DataFileType>(const char *value) {
 	if (StringUtil::Equals(value, "PARQUET_FILE")) {
 		return DataFileType::PARQUET_FILE;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<DataFileType>", value));
 }
 
 template<>
@@ -1228,7 +1536,7 @@ const char* EnumUtil::ToChars<DatePartSpecifier>(DatePartSpecifier value) {
 	case DatePartSpecifier::INVALID:
 		return "INVALID";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<DatePartSpecifier>", value));
 	}
 }
 
@@ -1309,7 +1617,7 @@ DatePartSpecifier EnumUtil::FromString<DatePartSpecifier>(const char *value) {
 	if (StringUtil::Equals(value, "INVALID")) {
 		return DatePartSpecifier::INVALID;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<DatePartSpecifier>", value));
 }
 
 template<>
@@ -1322,7 +1630,7 @@ const char* EnumUtil::ToChars<DebugInitialize>(DebugInitialize value) {
 	case DebugInitialize::DEBUG_ONE_INITIALIZE:
 		return "DEBUG_ONE_INITIALIZE";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<DebugInitialize>", value));
 	}
 }
 
@@ -1337,7 +1645,7 @@ DebugInitialize EnumUtil::FromString<DebugInitialize>(const char *value) {
 	if (StringUtil::Equals(value, "DEBUG_ONE_INITIALIZE")) {
 		return DebugInitialize::DEBUG_ONE_INITIALIZE;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<DebugInitialize>", value));
 }
 
 template<>
@@ -1354,7 +1662,7 @@ const char* EnumUtil::ToChars<DefaultOrderByNullType>(DefaultOrderByNullType val
 	case DefaultOrderByNullType::NULLS_LAST_ON_ASC_FIRST_ON_DESC:
 		return "NULLS_LAST_ON_ASC_FIRST_ON_DESC";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<DefaultOrderByNullType>", value));
 	}
 }
 
@@ -1375,7 +1683,86 @@ DefaultOrderByNullType EnumUtil::FromString<DefaultOrderByNullType>(const char *
 	if (StringUtil::Equals(value, "NULLS_LAST_ON_ASC_FIRST_ON_DESC")) {
 		return DefaultOrderByNullType::NULLS_LAST_ON_ASC_FIRST_ON_DESC;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<DefaultOrderByNullType>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<DependencyEntryType>(DependencyEntryType value) {
+	switch(value) {
+	case DependencyEntryType::SUBJECT:
+		return "SUBJECT";
+	case DependencyEntryType::DEPENDENT:
+		return "DEPENDENT";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<DependencyEntryType>", value));
+	}
+}
+
+template<>
+DependencyEntryType EnumUtil::FromString<DependencyEntryType>(const char *value) {
+	if (StringUtil::Equals(value, "SUBJECT")) {
+		return DependencyEntryType::SUBJECT;
+	}
+	if (StringUtil::Equals(value, "DEPENDENT")) {
+		return DependencyEntryType::DEPENDENT;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<DependencyEntryType>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<DeprecatedIndexType>(DeprecatedIndexType value) {
+	switch(value) {
+	case DeprecatedIndexType::INVALID:
+		return "INVALID";
+	case DeprecatedIndexType::ART:
+		return "ART";
+	case DeprecatedIndexType::EXTENSION:
+		return "EXTENSION";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<DeprecatedIndexType>", value));
+	}
+}
+
+template<>
+DeprecatedIndexType EnumUtil::FromString<DeprecatedIndexType>(const char *value) {
+	if (StringUtil::Equals(value, "INVALID")) {
+		return DeprecatedIndexType::INVALID;
+	}
+	if (StringUtil::Equals(value, "ART")) {
+		return DeprecatedIndexType::ART;
+	}
+	if (StringUtil::Equals(value, "EXTENSION")) {
+		return DeprecatedIndexType::EXTENSION;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<DeprecatedIndexType>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<DestroyBufferUpon>(DestroyBufferUpon value) {
+	switch(value) {
+	case DestroyBufferUpon::BLOCK:
+		return "BLOCK";
+	case DestroyBufferUpon::EVICTION:
+		return "EVICTION";
+	case DestroyBufferUpon::UNPIN:
+		return "UNPIN";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<DestroyBufferUpon>", value));
+	}
+}
+
+template<>
+DestroyBufferUpon EnumUtil::FromString<DestroyBufferUpon>(const char *value) {
+	if (StringUtil::Equals(value, "BLOCK")) {
+		return DestroyBufferUpon::BLOCK;
+	}
+	if (StringUtil::Equals(value, "EVICTION")) {
+		return DestroyBufferUpon::EVICTION;
+	}
+	if (StringUtil::Equals(value, "UNPIN")) {
+		return DestroyBufferUpon::UNPIN;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<DestroyBufferUpon>", value));
 }
 
 template<>
@@ -1386,7 +1773,7 @@ const char* EnumUtil::ToChars<DistinctType>(DistinctType value) {
 	case DistinctType::DISTINCT_ON:
 		return "DISTINCT_ON";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<DistinctType>", value));
 	}
 }
 
@@ -1398,7 +1785,7 @@ DistinctType EnumUtil::FromString<DistinctType>(const char *value) {
 	if (StringUtil::Equals(value, "DISTINCT_ON")) {
 		return DistinctType::DISTINCT_ON;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<DistinctType>", value));
 }
 
 template<>
@@ -1415,7 +1802,7 @@ const char* EnumUtil::ToChars<ErrorType>(ErrorType value) {
 	case ErrorType::INVALID:
 		return "INVALID";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ErrorType>", value));
 	}
 }
 
@@ -1436,7 +1823,7 @@ ErrorType EnumUtil::FromString<ErrorType>(const char *value) {
 	if (StringUtil::Equals(value, "INVALID")) {
 		return ErrorType::INVALID;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ErrorType>", value));
 }
 
 template<>
@@ -1449,7 +1836,7 @@ const char* EnumUtil::ToChars<ExceptionFormatValueType>(ExceptionFormatValueType
 	case ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING:
 		return "FORMAT_VALUE_TYPE_STRING";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ExceptionFormatValueType>", value));
 	}
 }
 
@@ -1464,7 +1851,273 @@ ExceptionFormatValueType EnumUtil::FromString<ExceptionFormatValueType>(const ch
 	if (StringUtil::Equals(value, "FORMAT_VALUE_TYPE_STRING")) {
 		return ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ExceptionFormatValueType>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<ExceptionType>(ExceptionType value) {
+	switch(value) {
+	case ExceptionType::INVALID:
+		return "INVALID";
+	case ExceptionType::OUT_OF_RANGE:
+		return "OUT_OF_RANGE";
+	case ExceptionType::CONVERSION:
+		return "CONVERSION";
+	case ExceptionType::UNKNOWN_TYPE:
+		return "UNKNOWN_TYPE";
+	case ExceptionType::DECIMAL:
+		return "DECIMAL";
+	case ExceptionType::MISMATCH_TYPE:
+		return "MISMATCH_TYPE";
+	case ExceptionType::DIVIDE_BY_ZERO:
+		return "DIVIDE_BY_ZERO";
+	case ExceptionType::OBJECT_SIZE:
+		return "OBJECT_SIZE";
+	case ExceptionType::INVALID_TYPE:
+		return "INVALID_TYPE";
+	case ExceptionType::SERIALIZATION:
+		return "SERIALIZATION";
+	case ExceptionType::TRANSACTION:
+		return "TRANSACTION";
+	case ExceptionType::NOT_IMPLEMENTED:
+		return "NOT_IMPLEMENTED";
+	case ExceptionType::EXPRESSION:
+		return "EXPRESSION";
+	case ExceptionType::CATALOG:
+		return "CATALOG";
+	case ExceptionType::PARSER:
+		return "PARSER";
+	case ExceptionType::PLANNER:
+		return "PLANNER";
+	case ExceptionType::SCHEDULER:
+		return "SCHEDULER";
+	case ExceptionType::EXECUTOR:
+		return "EXECUTOR";
+	case ExceptionType::CONSTRAINT:
+		return "CONSTRAINT";
+	case ExceptionType::INDEX:
+		return "INDEX";
+	case ExceptionType::STAT:
+		return "STAT";
+	case ExceptionType::CONNECTION:
+		return "CONNECTION";
+	case ExceptionType::SYNTAX:
+		return "SYNTAX";
+	case ExceptionType::SETTINGS:
+		return "SETTINGS";
+	case ExceptionType::BINDER:
+		return "BINDER";
+	case ExceptionType::NETWORK:
+		return "NETWORK";
+	case ExceptionType::OPTIMIZER:
+		return "OPTIMIZER";
+	case ExceptionType::NULL_POINTER:
+		return "NULL_POINTER";
+	case ExceptionType::IO:
+		return "IO";
+	case ExceptionType::INTERRUPT:
+		return "INTERRUPT";
+	case ExceptionType::FATAL:
+		return "FATAL";
+	case ExceptionType::INTERNAL:
+		return "INTERNAL";
+	case ExceptionType::INVALID_INPUT:
+		return "INVALID_INPUT";
+	case ExceptionType::OUT_OF_MEMORY:
+		return "OUT_OF_MEMORY";
+	case ExceptionType::PERMISSION:
+		return "PERMISSION";
+	case ExceptionType::PARAMETER_NOT_RESOLVED:
+		return "PARAMETER_NOT_RESOLVED";
+	case ExceptionType::PARAMETER_NOT_ALLOWED:
+		return "PARAMETER_NOT_ALLOWED";
+	case ExceptionType::DEPENDENCY:
+		return "DEPENDENCY";
+	case ExceptionType::HTTP:
+		return "HTTP";
+	case ExceptionType::MISSING_EXTENSION:
+		return "MISSING_EXTENSION";
+	case ExceptionType::AUTOLOAD:
+		return "AUTOLOAD";
+	case ExceptionType::SEQUENCE:
+		return "SEQUENCE";
+	case ExceptionType::INVALID_CONFIGURATION:
+		return "INVALID_CONFIGURATION";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ExceptionType>", value));
+	}
+}
+
+template<>
+ExceptionType EnumUtil::FromString<ExceptionType>(const char *value) {
+	if (StringUtil::Equals(value, "INVALID")) {
+		return ExceptionType::INVALID;
+	}
+	if (StringUtil::Equals(value, "OUT_OF_RANGE")) {
+		return ExceptionType::OUT_OF_RANGE;
+	}
+	if (StringUtil::Equals(value, "CONVERSION")) {
+		return ExceptionType::CONVERSION;
+	}
+	if (StringUtil::Equals(value, "UNKNOWN_TYPE")) {
+		return ExceptionType::UNKNOWN_TYPE;
+	}
+	if (StringUtil::Equals(value, "DECIMAL")) {
+		return ExceptionType::DECIMAL;
+	}
+	if (StringUtil::Equals(value, "MISMATCH_TYPE")) {
+		return ExceptionType::MISMATCH_TYPE;
+	}
+	if (StringUtil::Equals(value, "DIVIDE_BY_ZERO")) {
+		return ExceptionType::DIVIDE_BY_ZERO;
+	}
+	if (StringUtil::Equals(value, "OBJECT_SIZE")) {
+		return ExceptionType::OBJECT_SIZE;
+	}
+	if (StringUtil::Equals(value, "INVALID_TYPE")) {
+		return ExceptionType::INVALID_TYPE;
+	}
+	if (StringUtil::Equals(value, "SERIALIZATION")) {
+		return ExceptionType::SERIALIZATION;
+	}
+	if (StringUtil::Equals(value, "TRANSACTION")) {
+		return ExceptionType::TRANSACTION;
+	}
+	if (StringUtil::Equals(value, "NOT_IMPLEMENTED")) {
+		return ExceptionType::NOT_IMPLEMENTED;
+	}
+	if (StringUtil::Equals(value, "EXPRESSION")) {
+		return ExceptionType::EXPRESSION;
+	}
+	if (StringUtil::Equals(value, "CATALOG")) {
+		return ExceptionType::CATALOG;
+	}
+	if (StringUtil::Equals(value, "PARSER")) {
+		return ExceptionType::PARSER;
+	}
+	if (StringUtil::Equals(value, "PLANNER")) {
+		return ExceptionType::PLANNER;
+	}
+	if (StringUtil::Equals(value, "SCHEDULER")) {
+		return ExceptionType::SCHEDULER;
+	}
+	if (StringUtil::Equals(value, "EXECUTOR")) {
+		return ExceptionType::EXECUTOR;
+	}
+	if (StringUtil::Equals(value, "CONSTRAINT")) {
+		return ExceptionType::CONSTRAINT;
+	}
+	if (StringUtil::Equals(value, "INDEX")) {
+		return ExceptionType::INDEX;
+	}
+	if (StringUtil::Equals(value, "STAT")) {
+		return ExceptionType::STAT;
+	}
+	if (StringUtil::Equals(value, "CONNECTION")) {
+		return ExceptionType::CONNECTION;
+	}
+	if (StringUtil::Equals(value, "SYNTAX")) {
+		return ExceptionType::SYNTAX;
+	}
+	if (StringUtil::Equals(value, "SETTINGS")) {
+		return ExceptionType::SETTINGS;
+	}
+	if (StringUtil::Equals(value, "BINDER")) {
+		return ExceptionType::BINDER;
+	}
+	if (StringUtil::Equals(value, "NETWORK")) {
+		return ExceptionType::NETWORK;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER")) {
+		return ExceptionType::OPTIMIZER;
+	}
+	if (StringUtil::Equals(value, "NULL_POINTER")) {
+		return ExceptionType::NULL_POINTER;
+	}
+	if (StringUtil::Equals(value, "IO")) {
+		return ExceptionType::IO;
+	}
+	if (StringUtil::Equals(value, "INTERRUPT")) {
+		return ExceptionType::INTERRUPT;
+	}
+	if (StringUtil::Equals(value, "FATAL")) {
+		return ExceptionType::FATAL;
+	}
+	if (StringUtil::Equals(value, "INTERNAL")) {
+		return ExceptionType::INTERNAL;
+	}
+	if (StringUtil::Equals(value, "INVALID_INPUT")) {
+		return ExceptionType::INVALID_INPUT;
+	}
+	if (StringUtil::Equals(value, "OUT_OF_MEMORY")) {
+		return ExceptionType::OUT_OF_MEMORY;
+	}
+	if (StringUtil::Equals(value, "PERMISSION")) {
+		return ExceptionType::PERMISSION;
+	}
+	if (StringUtil::Equals(value, "PARAMETER_NOT_RESOLVED")) {
+		return ExceptionType::PARAMETER_NOT_RESOLVED;
+	}
+	if (StringUtil::Equals(value, "PARAMETER_NOT_ALLOWED")) {
+		return ExceptionType::PARAMETER_NOT_ALLOWED;
+	}
+	if (StringUtil::Equals(value, "DEPENDENCY")) {
+		return ExceptionType::DEPENDENCY;
+	}
+	if (StringUtil::Equals(value, "HTTP")) {
+		return ExceptionType::HTTP;
+	}
+	if (StringUtil::Equals(value, "MISSING_EXTENSION")) {
+		return ExceptionType::MISSING_EXTENSION;
+	}
+	if (StringUtil::Equals(value, "AUTOLOAD")) {
+		return ExceptionType::AUTOLOAD;
+	}
+	if (StringUtil::Equals(value, "SEQUENCE")) {
+		return ExceptionType::SEQUENCE;
+	}
+	if (StringUtil::Equals(value, "INVALID_CONFIGURATION")) {
+		return ExceptionType::INVALID_CONFIGURATION;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ExceptionType>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<ExplainFormat>(ExplainFormat value) {
+	switch(value) {
+	case ExplainFormat::DEFAULT:
+		return "DEFAULT";
+	case ExplainFormat::TEXT:
+		return "TEXT";
+	case ExplainFormat::JSON:
+		return "JSON";
+	case ExplainFormat::HTML:
+		return "HTML";
+	case ExplainFormat::GRAPHVIZ:
+		return "GRAPHVIZ";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ExplainFormat>", value));
+	}
+}
+
+template<>
+ExplainFormat EnumUtil::FromString<ExplainFormat>(const char *value) {
+	if (StringUtil::Equals(value, "DEFAULT")) {
+		return ExplainFormat::DEFAULT;
+	}
+	if (StringUtil::Equals(value, "TEXT")) {
+		return ExplainFormat::TEXT;
+	}
+	if (StringUtil::Equals(value, "JSON")) {
+		return ExplainFormat::JSON;
+	}
+	if (StringUtil::Equals(value, "HTML")) {
+		return ExplainFormat::HTML;
+	}
+	if (StringUtil::Equals(value, "GRAPHVIZ")) {
+		return ExplainFormat::GRAPHVIZ;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ExplainFormat>", value));
 }
 
 template<>
@@ -1477,7 +2130,7 @@ const char* EnumUtil::ToChars<ExplainOutputType>(ExplainOutputType value) {
 	case ExplainOutputType::PHYSICAL_ONLY:
 		return "PHYSICAL_ONLY";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ExplainOutputType>", value));
 	}
 }
 
@@ -1492,7 +2145,7 @@ ExplainOutputType EnumUtil::FromString<ExplainOutputType>(const char *value) {
 	if (StringUtil::Equals(value, "PHYSICAL_ONLY")) {
 		return ExplainOutputType::PHYSICAL_ONLY;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ExplainOutputType>", value));
 }
 
 template<>
@@ -1503,7 +2156,7 @@ const char* EnumUtil::ToChars<ExplainType>(ExplainType value) {
 	case ExplainType::EXPLAIN_ANALYZE:
 		return "EXPLAIN_ANALYZE";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ExplainType>", value));
 	}
 }
 
@@ -1515,7 +2168,35 @@ ExplainType EnumUtil::FromString<ExplainType>(const char *value) {
 	if (StringUtil::Equals(value, "EXPLAIN_ANALYZE")) {
 		return ExplainType::EXPLAIN_ANALYZE;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ExplainType>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<ExponentType>(ExponentType value) {
+	switch(value) {
+	case ExponentType::NONE:
+		return "NONE";
+	case ExponentType::POSITIVE:
+		return "POSITIVE";
+	case ExponentType::NEGATIVE:
+		return "NEGATIVE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ExponentType>", value));
+	}
+}
+
+template<>
+ExponentType EnumUtil::FromString<ExponentType>(const char *value) {
+	if (StringUtil::Equals(value, "NONE")) {
+		return ExponentType::NONE;
+	}
+	if (StringUtil::Equals(value, "POSITIVE")) {
+		return ExponentType::POSITIVE;
+	}
+	if (StringUtil::Equals(value, "NEGATIVE")) {
+		return ExponentType::NEGATIVE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ExponentType>", value));
 }
 
 template<>
@@ -1599,8 +2280,10 @@ const char* EnumUtil::ToChars<ExpressionClass>(ExpressionClass value) {
 		return "BOUND_LAMBDA_REF";
 	case ExpressionClass::BOUND_EXPRESSION:
 		return "BOUND_EXPRESSION";
+	case ExpressionClass::BOUND_EXPANDED:
+		return "BOUND_EXPANDED";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ExpressionClass>", value));
 	}
 }
 
@@ -1723,7 +2406,10 @@ ExpressionClass EnumUtil::FromString<ExpressionClass>(const char *value) {
 	if (StringUtil::Equals(value, "BOUND_EXPRESSION")) {
 		return ExpressionClass::BOUND_EXPRESSION;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "BOUND_EXPANDED")) {
+		return ExpressionClass::BOUND_EXPANDED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ExpressionClass>", value));
 }
 
 template<>
@@ -1865,8 +2551,10 @@ const char* EnumUtil::ToChars<ExpressionType>(ExpressionType value) {
 		return "POSITIONAL_REFERENCE";
 	case ExpressionType::BOUND_LAMBDA_REF:
 		return "BOUND_LAMBDA_REF";
+	case ExpressionType::BOUND_EXPANDED:
+		return "BOUND_EXPANDED";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ExpressionType>", value));
 	}
 }
 
@@ -2076,7 +2764,76 @@ ExpressionType EnumUtil::FromString<ExpressionType>(const char *value) {
 	if (StringUtil::Equals(value, "BOUND_LAMBDA_REF")) {
 		return ExpressionType::BOUND_LAMBDA_REF;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "BOUND_EXPANDED")) {
+		return ExpressionType::BOUND_EXPANDED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ExpressionType>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<ExtensionABIType>(ExtensionABIType value) {
+	switch(value) {
+	case ExtensionABIType::UNKNOWN:
+		return "UNKNOWN";
+	case ExtensionABIType::CPP:
+		return "CPP";
+	case ExtensionABIType::C_STRUCT:
+		return "C_STRUCT";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ExtensionABIType>", value));
+	}
+}
+
+template<>
+ExtensionABIType EnumUtil::FromString<ExtensionABIType>(const char *value) {
+	if (StringUtil::Equals(value, "UNKNOWN")) {
+		return ExtensionABIType::UNKNOWN;
+	}
+	if (StringUtil::Equals(value, "CPP")) {
+		return ExtensionABIType::CPP;
+	}
+	if (StringUtil::Equals(value, "C_STRUCT")) {
+		return ExtensionABIType::C_STRUCT;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ExtensionABIType>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<ExtensionInstallMode>(ExtensionInstallMode value) {
+	switch(value) {
+	case ExtensionInstallMode::UNKNOWN:
+		return "UNKNOWN";
+	case ExtensionInstallMode::REPOSITORY:
+		return "REPOSITORY";
+	case ExtensionInstallMode::CUSTOM_PATH:
+		return "CUSTOM_PATH";
+	case ExtensionInstallMode::STATICALLY_LINKED:
+		return "STATICALLY_LINKED";
+	case ExtensionInstallMode::NOT_INSTALLED:
+		return "NOT_INSTALLED";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ExtensionInstallMode>", value));
+	}
+}
+
+template<>
+ExtensionInstallMode EnumUtil::FromString<ExtensionInstallMode>(const char *value) {
+	if (StringUtil::Equals(value, "UNKNOWN")) {
+		return ExtensionInstallMode::UNKNOWN;
+	}
+	if (StringUtil::Equals(value, "REPOSITORY")) {
+		return ExtensionInstallMode::REPOSITORY;
+	}
+	if (StringUtil::Equals(value, "CUSTOM_PATH")) {
+		return ExtensionInstallMode::CUSTOM_PATH;
+	}
+	if (StringUtil::Equals(value, "STATICALLY_LINKED")) {
+		return ExtensionInstallMode::STATICALLY_LINKED;
+	}
+	if (StringUtil::Equals(value, "NOT_INSTALLED")) {
+		return ExtensionInstallMode::NOT_INSTALLED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ExtensionInstallMode>", value));
 }
 
 template<>
@@ -2089,7 +2846,7 @@ const char* EnumUtil::ToChars<ExtensionLoadResult>(ExtensionLoadResult value) {
 	case ExtensionLoadResult::NOT_LOADED:
 		return "NOT_LOADED";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ExtensionLoadResult>", value));
 	}
 }
 
@@ -2104,7 +2861,83 @@ ExtensionLoadResult EnumUtil::FromString<ExtensionLoadResult>(const char *value)
 	if (StringUtil::Equals(value, "NOT_LOADED")) {
 		return ExtensionLoadResult::NOT_LOADED;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ExtensionLoadResult>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<ExtensionUpdateResultTag>(ExtensionUpdateResultTag value) {
+	switch(value) {
+	case ExtensionUpdateResultTag::UNKNOWN:
+		return "UNKNOWN";
+	case ExtensionUpdateResultTag::NO_UPDATE_AVAILABLE:
+		return "NO_UPDATE_AVAILABLE";
+	case ExtensionUpdateResultTag::NOT_A_REPOSITORY:
+		return "NOT_A_REPOSITORY";
+	case ExtensionUpdateResultTag::NOT_INSTALLED:
+		return "NOT_INSTALLED";
+	case ExtensionUpdateResultTag::STATICALLY_LOADED:
+		return "STATICALLY_LOADED";
+	case ExtensionUpdateResultTag::MISSING_INSTALL_INFO:
+		return "MISSING_INSTALL_INFO";
+	case ExtensionUpdateResultTag::REDOWNLOADED:
+		return "REDOWNLOADED";
+	case ExtensionUpdateResultTag::UPDATED:
+		return "UPDATED";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ExtensionUpdateResultTag>", value));
+	}
+}
+
+template<>
+ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const char *value) {
+	if (StringUtil::Equals(value, "UNKNOWN")) {
+		return ExtensionUpdateResultTag::UNKNOWN;
+	}
+	if (StringUtil::Equals(value, "NO_UPDATE_AVAILABLE")) {
+		return ExtensionUpdateResultTag::NO_UPDATE_AVAILABLE;
+	}
+	if (StringUtil::Equals(value, "NOT_A_REPOSITORY")) {
+		return ExtensionUpdateResultTag::NOT_A_REPOSITORY;
+	}
+	if (StringUtil::Equals(value, "NOT_INSTALLED")) {
+		return ExtensionUpdateResultTag::NOT_INSTALLED;
+	}
+	if (StringUtil::Equals(value, "STATICALLY_LOADED")) {
+		return ExtensionUpdateResultTag::STATICALLY_LOADED;
+	}
+	if (StringUtil::Equals(value, "MISSING_INSTALL_INFO")) {
+		return ExtensionUpdateResultTag::MISSING_INSTALL_INFO;
+	}
+	if (StringUtil::Equals(value, "REDOWNLOADED")) {
+		return ExtensionUpdateResultTag::REDOWNLOADED;
+	}
+	if (StringUtil::Equals(value, "UPDATED")) {
+		return ExtensionUpdateResultTag::UPDATED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ExtensionUpdateResultTag>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<ExtraDropInfoType>(ExtraDropInfoType value) {
+	switch(value) {
+	case ExtraDropInfoType::INVALID:
+		return "INVALID";
+	case ExtraDropInfoType::SECRET_INFO:
+		return "SECRET_INFO";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ExtraDropInfoType>", value));
+	}
+}
+
+template<>
+ExtraDropInfoType EnumUtil::FromString<ExtraDropInfoType>(const char *value) {
+	if (StringUtil::Equals(value, "INVALID")) {
+		return ExtraDropInfoType::INVALID;
+	}
+	if (StringUtil::Equals(value, "SECRET_INFO")) {
+		return ExtraDropInfoType::SECRET_INFO;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ExtraDropInfoType>", value));
 }
 
 template<>
@@ -2130,8 +2963,12 @@ const char* EnumUtil::ToChars<ExtraTypeInfoType>(ExtraTypeInfoType value) {
 		return "AGGREGATE_STATE_TYPE_INFO";
 	case ExtraTypeInfoType::ARRAY_TYPE_INFO:
 		return "ARRAY_TYPE_INFO";
+	case ExtraTypeInfoType::ANY_TYPE_INFO:
+		return "ANY_TYPE_INFO";
+	case ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO:
+		return "INTEGER_LITERAL_TYPE_INFO";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ExtraTypeInfoType>", value));
 	}
 }
 
@@ -2167,7 +3004,13 @@ ExtraTypeInfoType EnumUtil::FromString<ExtraTypeInfoType>(const char *value) {
 	if (StringUtil::Equals(value, "ARRAY_TYPE_INFO")) {
 		return ExtraTypeInfoType::ARRAY_TYPE_INFO;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "ANY_TYPE_INFO")) {
+		return ExtraTypeInfoType::ANY_TYPE_INFO;
+	}
+	if (StringUtil::Equals(value, "INTEGER_LITERAL_TYPE_INFO")) {
+		return ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ExtraTypeInfoType>", value));
 }
 
 template<>
@@ -2180,7 +3023,7 @@ const char* EnumUtil::ToChars<FileBufferType>(FileBufferType value) {
 	case FileBufferType::TINY_BUFFER:
 		return "TINY_BUFFER";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<FileBufferType>", value));
 	}
 }
 
@@ -2195,7 +3038,7 @@ FileBufferType EnumUtil::FromString<FileBufferType>(const char *value) {
 	if (StringUtil::Equals(value, "TINY_BUFFER")) {
 		return FileBufferType::TINY_BUFFER;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<FileBufferType>", value));
 }
 
 template<>
@@ -2210,7 +3053,7 @@ const char* EnumUtil::ToChars<FileCompressionType>(FileCompressionType value) {
 	case FileCompressionType::ZSTD:
 		return "ZSTD";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<FileCompressionType>", value));
 	}
 }
 
@@ -2228,7 +3071,35 @@ FileCompressionType EnumUtil::FromString<FileCompressionType>(const char *value)
 	if (StringUtil::Equals(value, "ZSTD")) {
 		return FileCompressionType::ZSTD;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<FileCompressionType>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<FileExpandResult>(FileExpandResult value) {
+	switch(value) {
+	case FileExpandResult::NO_FILES:
+		return "NO_FILES";
+	case FileExpandResult::SINGLE_FILE:
+		return "SINGLE_FILE";
+	case FileExpandResult::MULTIPLE_FILES:
+		return "MULTIPLE_FILES";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<FileExpandResult>", value));
+	}
+}
+
+template<>
+FileExpandResult EnumUtil::FromString<FileExpandResult>(const char *value) {
+	if (StringUtil::Equals(value, "NO_FILES")) {
+		return FileExpandResult::NO_FILES;
+	}
+	if (StringUtil::Equals(value, "SINGLE_FILE")) {
+		return FileExpandResult::SINGLE_FILE;
+	}
+	if (StringUtil::Equals(value, "MULTIPLE_FILES")) {
+		return FileExpandResult::MULTIPLE_FILES;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<FileExpandResult>", value));
 }
 
 template<>
@@ -2239,7 +3110,7 @@ const char* EnumUtil::ToChars<FileGlobOptions>(FileGlobOptions value) {
 	case FileGlobOptions::ALLOW_EMPTY:
 		return "ALLOW_EMPTY";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<FileGlobOptions>", value));
 	}
 }
 
@@ -2251,7 +3122,7 @@ FileGlobOptions EnumUtil::FromString<FileGlobOptions>(const char *value) {
 	if (StringUtil::Equals(value, "ALLOW_EMPTY")) {
 		return FileGlobOptions::ALLOW_EMPTY;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<FileGlobOptions>", value));
 }
 
 template<>
@@ -2264,7 +3135,7 @@ const char* EnumUtil::ToChars<FileLockType>(FileLockType value) {
 	case FileLockType::WRITE_LOCK:
 		return "WRITE_LOCK";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<FileLockType>", value));
 	}
 }
 
@@ -2279,7 +3150,7 @@ FileLockType EnumUtil::FromString<FileLockType>(const char *value) {
 	if (StringUtil::Equals(value, "WRITE_LOCK")) {
 		return FileLockType::WRITE_LOCK;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<FileLockType>", value));
 }
 
 template<>
@@ -2296,7 +3167,7 @@ const char* EnumUtil::ToChars<FilterPropagateResult>(FilterPropagateResult value
 	case FilterPropagateResult::FILTER_FALSE_OR_NULL:
 		return "FILTER_FALSE_OR_NULL";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<FilterPropagateResult>", value));
 	}
 }
 
@@ -2317,7 +3188,7 @@ FilterPropagateResult EnumUtil::FromString<FilterPropagateResult>(const char *va
 	if (StringUtil::Equals(value, "FILTER_FALSE_OR_NULL")) {
 		return FilterPropagateResult::FILTER_FALSE_OR_NULL;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<FilterPropagateResult>", value));
 }
 
 template<>
@@ -2330,7 +3201,7 @@ const char* EnumUtil::ToChars<ForeignKeyType>(ForeignKeyType value) {
 	case ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE:
 		return "FK_TYPE_SELF_REFERENCE_TABLE";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ForeignKeyType>", value));
 	}
 }
 
@@ -2345,7 +3216,7 @@ ForeignKeyType EnumUtil::FromString<ForeignKeyType>(const char *value) {
 	if (StringUtil::Equals(value, "FK_TYPE_SELF_REFERENCE_TABLE")) {
 		return ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ForeignKeyType>", value));
 }
 
 template<>
@@ -2356,7 +3227,7 @@ const char* EnumUtil::ToChars<FunctionNullHandling>(FunctionNullHandling value) 
 	case FunctionNullHandling::SPECIAL_HANDLING:
 		return "SPECIAL_HANDLING";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<FunctionNullHandling>", value));
 	}
 }
 
@@ -2368,48 +3239,81 @@ FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *valu
 	if (StringUtil::Equals(value, "SPECIAL_HANDLING")) {
 		return FunctionNullHandling::SPECIAL_HANDLING;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<FunctionNullHandling>", value));
 }
 
 template<>
-const char* EnumUtil::ToChars<FunctionSideEffects>(FunctionSideEffects value) {
+const char* EnumUtil::ToChars<FunctionStability>(FunctionStability value) {
 	switch(value) {
-	case FunctionSideEffects::NO_SIDE_EFFECTS:
-		return "NO_SIDE_EFFECTS";
-	case FunctionSideEffects::HAS_SIDE_EFFECTS:
-		return "HAS_SIDE_EFFECTS";
+	case FunctionStability::CONSISTENT:
+		return "CONSISTENT";
+	case FunctionStability::VOLATILE:
+		return "VOLATILE";
+	case FunctionStability::CONSISTENT_WITHIN_QUERY:
+		return "CONSISTENT_WITHIN_QUERY";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<FunctionStability>", value));
 	}
 }
 
 template<>
-FunctionSideEffects EnumUtil::FromString<FunctionSideEffects>(const char *value) {
-	if (StringUtil::Equals(value, "NO_SIDE_EFFECTS")) {
-		return FunctionSideEffects::NO_SIDE_EFFECTS;
+FunctionStability EnumUtil::FromString<FunctionStability>(const char *value) {
+	if (StringUtil::Equals(value, "CONSISTENT")) {
+		return FunctionStability::CONSISTENT;
 	}
-	if (StringUtil::Equals(value, "HAS_SIDE_EFFECTS")) {
-		return FunctionSideEffects::HAS_SIDE_EFFECTS;
+	if (StringUtil::Equals(value, "VOLATILE")) {
+		return FunctionStability::VOLATILE;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "CONSISTENT_WITHIN_QUERY")) {
+		return FunctionStability::CONSISTENT_WITHIN_QUERY;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<FunctionStability>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<GateStatus>(GateStatus value) {
+	switch(value) {
+	case GateStatus::GATE_NOT_SET:
+		return "GATE_NOT_SET";
+	case GateStatus::GATE_SET:
+		return "GATE_SET";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<GateStatus>", value));
+	}
+}
+
+template<>
+GateStatus EnumUtil::FromString<GateStatus>(const char *value) {
+	if (StringUtil::Equals(value, "GATE_NOT_SET")) {
+		return GateStatus::GATE_NOT_SET;
+	}
+	if (StringUtil::Equals(value, "GATE_SET")) {
+		return GateStatus::GATE_SET;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<GateStatus>", value));
 }
 
 template<>
 const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value) {
 	switch(value) {
-	case HLLStorageType::UNCOMPRESSED:
-		return "UNCOMPRESSED";
+	case HLLStorageType::HLL_V1:
+		return "HLL_V1";
+	case HLLStorageType::HLL_V2:
+		return "HLL_V2";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<HLLStorageType>", value));
 	}
 }
 
 template<>
 HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value) {
-	if (StringUtil::Equals(value, "UNCOMPRESSED")) {
-		return HLLStorageType::UNCOMPRESSED;
+	if (StringUtil::Equals(value, "HLL_V1")) {
+		return HLLStorageType::HLL_V1;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "HLL_V2")) {
+		return HLLStorageType::HLL_V2;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<HLLStorageType>", value));
 }
 
 template<>
@@ -2424,7 +3328,7 @@ const char* EnumUtil::ToChars<IndexConstraintType>(IndexConstraintType value) {
 	case IndexConstraintType::FOREIGN:
 		return "FOREIGN";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<IndexConstraintType>", value));
 	}
 }
 
@@ -2442,35 +3346,7 @@ IndexConstraintType EnumUtil::FromString<IndexConstraintType>(const char *value)
 	if (StringUtil::Equals(value, "FOREIGN")) {
 		return IndexConstraintType::FOREIGN;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
-}
-
-template<>
-const char* EnumUtil::ToChars<IndexType>(IndexType value) {
-	switch(value) {
-	case IndexType::INVALID:
-		return "INVALID";
-	case IndexType::ART:
-		return "ART";
-	case IndexType::EXTENSION:
-		return "EXTENSION";
-	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
-	}
-}
-
-template<>
-IndexType EnumUtil::FromString<IndexType>(const char *value) {
-	if (StringUtil::Equals(value, "INVALID")) {
-		return IndexType::INVALID;
-	}
-	if (StringUtil::Equals(value, "ART")) {
-		return IndexType::ART;
-	}
-	if (StringUtil::Equals(value, "EXTENSION")) {
-		return IndexType::EXTENSION;
-	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<IndexConstraintType>", value));
 }
 
 template<>
@@ -2481,7 +3357,7 @@ const char* EnumUtil::ToChars<InsertColumnOrder>(InsertColumnOrder value) {
 	case InsertColumnOrder::INSERT_BY_NAME:
 		return "INSERT_BY_NAME";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<InsertColumnOrder>", value));
 	}
 }
 
@@ -2493,7 +3369,7 @@ InsertColumnOrder EnumUtil::FromString<InsertColumnOrder>(const char *value) {
 	if (StringUtil::Equals(value, "INSERT_BY_NAME")) {
 		return InsertColumnOrder::INSERT_BY_NAME;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<InsertColumnOrder>", value));
 }
 
 template<>
@@ -2506,7 +3382,7 @@ const char* EnumUtil::ToChars<InterruptMode>(InterruptMode value) {
 	case InterruptMode::BLOCKING:
 		return "BLOCKING";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<InterruptMode>", value));
 	}
 }
 
@@ -2521,7 +3397,7 @@ InterruptMode EnumUtil::FromString<InterruptMode>(const char *value) {
 	if (StringUtil::Equals(value, "BLOCKING")) {
 		return InterruptMode::BLOCKING;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<InterruptMode>", value));
 }
 
 template<>
@@ -2540,7 +3416,7 @@ const char* EnumUtil::ToChars<JoinRefType>(JoinRefType value) {
 	case JoinRefType::DEPENDENT:
 		return "DEPENDENT";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<JoinRefType>", value));
 	}
 }
 
@@ -2564,7 +3440,7 @@ JoinRefType EnumUtil::FromString<JoinRefType>(const char *value) {
 	if (StringUtil::Equals(value, "DEPENDENT")) {
 		return JoinRefType::DEPENDENT;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<JoinRefType>", value));
 }
 
 template<>
@@ -2588,8 +3464,12 @@ const char* EnumUtil::ToChars<JoinType>(JoinType value) {
 		return "MARK";
 	case JoinType::SINGLE:
 		return "SINGLE";
+	case JoinType::RIGHT_SEMI:
+		return "RIGHT_SEMI";
+	case JoinType::RIGHT_ANTI:
+		return "RIGHT_ANTI";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<JoinType>", value));
 	}
 }
 
@@ -2622,7 +3502,13 @@ JoinType EnumUtil::FromString<JoinType>(const char *value) {
 	if (StringUtil::Equals(value, "SINGLE")) {
 		return JoinType::SINGLE;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "RIGHT_SEMI")) {
+		return JoinType::RIGHT_SEMI;
+	}
+	if (StringUtil::Equals(value, "RIGHT_ANTI")) {
+		return JoinType::RIGHT_ANTI;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<JoinType>", value));
 }
 
 template<>
@@ -2636,8 +3522,10 @@ const char* EnumUtil::ToChars<KeywordCategory>(KeywordCategory value) {
 		return "KEYWORD_TYPE_FUNC";
 	case KeywordCategory::KEYWORD_COL_NAME:
 		return "KEYWORD_COL_NAME";
+	case KeywordCategory::KEYWORD_NONE:
+		return "KEYWORD_NONE";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<KeywordCategory>", value));
 	}
 }
 
@@ -2655,35 +3543,48 @@ KeywordCategory EnumUtil::FromString<KeywordCategory>(const char *value) {
 	if (StringUtil::Equals(value, "KEYWORD_COL_NAME")) {
 		return KeywordCategory::KEYWORD_COL_NAME;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "KEYWORD_NONE")) {
+		return KeywordCategory::KEYWORD_NONE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<KeywordCategory>", value));
 }
 
 template<>
-const char* EnumUtil::ToChars<LambdaType>(LambdaType value) {
+const char* EnumUtil::ToChars<LimitNodeType>(LimitNodeType value) {
 	switch(value) {
-	case LambdaType::TRANSFORM:
-		return "TRANSFORM";
-	case LambdaType::FILTER:
-		return "FILTER";
-	case LambdaType::REDUCE:
-		return "REDUCE";
+	case LimitNodeType::UNSET:
+		return "UNSET";
+	case LimitNodeType::CONSTANT_VALUE:
+		return "CONSTANT_VALUE";
+	case LimitNodeType::CONSTANT_PERCENTAGE:
+		return "CONSTANT_PERCENTAGE";
+	case LimitNodeType::EXPRESSION_VALUE:
+		return "EXPRESSION_VALUE";
+	case LimitNodeType::EXPRESSION_PERCENTAGE:
+		return "EXPRESSION_PERCENTAGE";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<LimitNodeType>", value));
 	}
 }
 
 template<>
-LambdaType EnumUtil::FromString<LambdaType>(const char *value) {
-	if (StringUtil::Equals(value, "TRANSFORM")) {
-		return LambdaType::TRANSFORM;
+LimitNodeType EnumUtil::FromString<LimitNodeType>(const char *value) {
+	if (StringUtil::Equals(value, "UNSET")) {
+		return LimitNodeType::UNSET;
 	}
-	if (StringUtil::Equals(value, "FILTER")) {
-		return LambdaType::FILTER;
+	if (StringUtil::Equals(value, "CONSTANT_VALUE")) {
+		return LimitNodeType::CONSTANT_VALUE;
 	}
-	if (StringUtil::Equals(value, "REDUCE")) {
-		return LambdaType::REDUCE;
+	if (StringUtil::Equals(value, "CONSTANT_PERCENTAGE")) {
+		return LimitNodeType::CONSTANT_PERCENTAGE;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "EXPRESSION_VALUE")) {
+		return LimitNodeType::EXPRESSION_VALUE;
+	}
+	if (StringUtil::Equals(value, "EXPRESSION_PERCENTAGE")) {
+		return LimitNodeType::EXPRESSION_PERCENTAGE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<LimitNodeType>", value));
 }
 
 template<>
@@ -2696,7 +3597,7 @@ const char* EnumUtil::ToChars<LoadType>(LoadType value) {
 	case LoadType::FORCE_INSTALL:
 		return "FORCE_INSTALL";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<LoadType>", value));
 	}
 }
 
@@ -2711,7 +3612,7 @@ LoadType EnumUtil::FromString<LoadType>(const char *value) {
 	if (StringUtil::Equals(value, "FORCE_INSTALL")) {
 		return LoadType::FORCE_INSTALL;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<LoadType>", value));
 }
 
 template<>
@@ -2741,10 +3642,10 @@ const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value) {
 		return "LOGICAL_DISTINCT";
 	case LogicalOperatorType::LOGICAL_SAMPLE:
 		return "LOGICAL_SAMPLE";
-	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT:
-		return "LOGICAL_LIMIT_PERCENT";
 	case LogicalOperatorType::LOGICAL_PIVOT:
 		return "LOGICAL_PIVOT";
+	case LogicalOperatorType::LOGICAL_COPY_DATABASE:
+		return "LOGICAL_COPY_DATABASE";
 	case LogicalOperatorType::LOGICAL_GET:
 		return "LOGICAL_GET";
 	case LogicalOperatorType::LOGICAL_CHUNK_GET:
@@ -2819,8 +3720,6 @@ const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value) {
 		return "LOGICAL_DETACH";
 	case LogicalOperatorType::LOGICAL_EXPLAIN:
 		return "LOGICAL_EXPLAIN";
-	case LogicalOperatorType::LOGICAL_SHOW:
-		return "LOGICAL_SHOW";
 	case LogicalOperatorType::LOGICAL_PREPARE:
 		return "LOGICAL_PREPARE";
 	case LogicalOperatorType::LOGICAL_EXECUTE:
@@ -2835,10 +3734,14 @@ const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value) {
 		return "LOGICAL_LOAD";
 	case LogicalOperatorType::LOGICAL_RESET:
 		return "LOGICAL_RESET";
+	case LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS:
+		return "LOGICAL_UPDATE_EXTENSIONS";
+	case LogicalOperatorType::LOGICAL_CREATE_SECRET:
+		return "LOGICAL_CREATE_SECRET";
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
 		return "LOGICAL_EXTENSION_OPERATOR";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<LogicalOperatorType>", value));
 	}
 }
 
@@ -2880,11 +3783,11 @@ LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value)
 	if (StringUtil::Equals(value, "LOGICAL_SAMPLE")) {
 		return LogicalOperatorType::LOGICAL_SAMPLE;
 	}
-	if (StringUtil::Equals(value, "LOGICAL_LIMIT_PERCENT")) {
-		return LogicalOperatorType::LOGICAL_LIMIT_PERCENT;
-	}
 	if (StringUtil::Equals(value, "LOGICAL_PIVOT")) {
 		return LogicalOperatorType::LOGICAL_PIVOT;
+	}
+	if (StringUtil::Equals(value, "LOGICAL_COPY_DATABASE")) {
+		return LogicalOperatorType::LOGICAL_COPY_DATABASE;
 	}
 	if (StringUtil::Equals(value, "LOGICAL_GET")) {
 		return LogicalOperatorType::LOGICAL_GET;
@@ -2997,9 +3900,6 @@ LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value)
 	if (StringUtil::Equals(value, "LOGICAL_EXPLAIN")) {
 		return LogicalOperatorType::LOGICAL_EXPLAIN;
 	}
-	if (StringUtil::Equals(value, "LOGICAL_SHOW")) {
-		return LogicalOperatorType::LOGICAL_SHOW;
-	}
 	if (StringUtil::Equals(value, "LOGICAL_PREPARE")) {
 		return LogicalOperatorType::LOGICAL_PREPARE;
 	}
@@ -3021,10 +3921,16 @@ LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value)
 	if (StringUtil::Equals(value, "LOGICAL_RESET")) {
 		return LogicalOperatorType::LOGICAL_RESET;
 	}
+	if (StringUtil::Equals(value, "LOGICAL_UPDATE_EXTENSIONS")) {
+		return LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS;
+	}
+	if (StringUtil::Equals(value, "LOGICAL_CREATE_SECRET")) {
+		return LogicalOperatorType::LOGICAL_CREATE_SECRET;
+	}
 	if (StringUtil::Equals(value, "LOGICAL_EXTENSION_OPERATOR")) {
 		return LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<LogicalOperatorType>", value));
 }
 
 template<>
@@ -3090,6 +3996,14 @@ const char* EnumUtil::ToChars<LogicalTypeId>(LogicalTypeId value) {
 		return "TIME WITH TIME ZONE";
 	case LogicalTypeId::BIT:
 		return "BIT";
+	case LogicalTypeId::STRING_LITERAL:
+		return "STRING_LITERAL";
+	case LogicalTypeId::INTEGER_LITERAL:
+		return "INTEGER_LITERAL";
+	case LogicalTypeId::VARINT:
+		return "VARINT";
+	case LogicalTypeId::UHUGEINT:
+		return "UHUGEINT";
 	case LogicalTypeId::HUGEINT:
 		return "HUGEINT";
 	case LogicalTypeId::POINTER:
@@ -3117,7 +4031,7 @@ const char* EnumUtil::ToChars<LogicalTypeId>(LogicalTypeId value) {
 	case LogicalTypeId::ARRAY:
 		return "ARRAY";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<LogicalTypeId>", value));
 	}
 }
 
@@ -3213,6 +4127,18 @@ LogicalTypeId EnumUtil::FromString<LogicalTypeId>(const char *value) {
 	if (StringUtil::Equals(value, "BIT")) {
 		return LogicalTypeId::BIT;
 	}
+	if (StringUtil::Equals(value, "STRING_LITERAL")) {
+		return LogicalTypeId::STRING_LITERAL;
+	}
+	if (StringUtil::Equals(value, "INTEGER_LITERAL")) {
+		return LogicalTypeId::INTEGER_LITERAL;
+	}
+	if (StringUtil::Equals(value, "VARINT")) {
+		return LogicalTypeId::VARINT;
+	}
+	if (StringUtil::Equals(value, "UHUGEINT")) {
+		return LogicalTypeId::UHUGEINT;
+	}
 	if (StringUtil::Equals(value, "HUGEINT")) {
 		return LogicalTypeId::HUGEINT;
 	}
@@ -3252,7 +4178,7 @@ LogicalTypeId EnumUtil::FromString<LogicalTypeId>(const char *value) {
 	if (StringUtil::Equals(value, "ARRAY")) {
 		return LogicalTypeId::ARRAY;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<LogicalTypeId>", value));
 }
 
 template<>
@@ -3265,7 +4191,7 @@ const char* EnumUtil::ToChars<LookupResultType>(LookupResultType value) {
 	case LookupResultType::LOOKUP_NULL:
 		return "LOOKUP_NULL";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<LookupResultType>", value));
 	}
 }
 
@@ -3280,7 +4206,7 @@ LookupResultType EnumUtil::FromString<LookupResultType>(const char *value) {
 	if (StringUtil::Equals(value, "LOOKUP_NULL")) {
 		return LookupResultType::LOOKUP_NULL;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<LookupResultType>", value));
 }
 
 template<>
@@ -3293,7 +4219,7 @@ const char* EnumUtil::ToChars<MacroType>(MacroType value) {
 	case MacroType::SCALAR_MACRO:
 		return "SCALAR_MACRO";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<MacroType>", value));
 	}
 }
 
@@ -3308,7 +4234,7 @@ MacroType EnumUtil::FromString<MacroType>(const char *value) {
 	if (StringUtil::Equals(value, "SCALAR_MACRO")) {
 		return MacroType::SCALAR_MACRO;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<MacroType>", value));
 }
 
 template<>
@@ -3316,14 +4242,16 @@ const char* EnumUtil::ToChars<MapInvalidReason>(MapInvalidReason value) {
 	switch(value) {
 	case MapInvalidReason::VALID:
 		return "VALID";
-	case MapInvalidReason::NULL_KEY_LIST:
-		return "NULL_KEY_LIST";
 	case MapInvalidReason::NULL_KEY:
 		return "NULL_KEY";
 	case MapInvalidReason::DUPLICATE_KEY:
 		return "DUPLICATE_KEY";
+	case MapInvalidReason::NOT_ALIGNED:
+		return "NOT_ALIGNED";
+	case MapInvalidReason::INVALID_PARAMS:
+		return "INVALID_PARAMS";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<MapInvalidReason>", value));
 	}
 }
 
@@ -3332,16 +4260,338 @@ MapInvalidReason EnumUtil::FromString<MapInvalidReason>(const char *value) {
 	if (StringUtil::Equals(value, "VALID")) {
 		return MapInvalidReason::VALID;
 	}
-	if (StringUtil::Equals(value, "NULL_KEY_LIST")) {
-		return MapInvalidReason::NULL_KEY_LIST;
-	}
 	if (StringUtil::Equals(value, "NULL_KEY")) {
 		return MapInvalidReason::NULL_KEY;
 	}
 	if (StringUtil::Equals(value, "DUPLICATE_KEY")) {
 		return MapInvalidReason::DUPLICATE_KEY;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "NOT_ALIGNED")) {
+		return MapInvalidReason::NOT_ALIGNED;
+	}
+	if (StringUtil::Equals(value, "INVALID_PARAMS")) {
+		return MapInvalidReason::INVALID_PARAMS;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<MapInvalidReason>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<MemoryTag>(MemoryTag value) {
+	switch(value) {
+	case MemoryTag::BASE_TABLE:
+		return "BASE_TABLE";
+	case MemoryTag::HASH_TABLE:
+		return "HASH_TABLE";
+	case MemoryTag::PARQUET_READER:
+		return "PARQUET_READER";
+	case MemoryTag::CSV_READER:
+		return "CSV_READER";
+	case MemoryTag::ORDER_BY:
+		return "ORDER_BY";
+	case MemoryTag::ART_INDEX:
+		return "ART_INDEX";
+	case MemoryTag::COLUMN_DATA:
+		return "COLUMN_DATA";
+	case MemoryTag::METADATA:
+		return "METADATA";
+	case MemoryTag::OVERFLOW_STRINGS:
+		return "OVERFLOW_STRINGS";
+	case MemoryTag::IN_MEMORY_TABLE:
+		return "IN_MEMORY_TABLE";
+	case MemoryTag::ALLOCATOR:
+		return "ALLOCATOR";
+	case MemoryTag::EXTENSION:
+		return "EXTENSION";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<MemoryTag>", value));
+	}
+}
+
+template<>
+MemoryTag EnumUtil::FromString<MemoryTag>(const char *value) {
+	if (StringUtil::Equals(value, "BASE_TABLE")) {
+		return MemoryTag::BASE_TABLE;
+	}
+	if (StringUtil::Equals(value, "HASH_TABLE")) {
+		return MemoryTag::HASH_TABLE;
+	}
+	if (StringUtil::Equals(value, "PARQUET_READER")) {
+		return MemoryTag::PARQUET_READER;
+	}
+	if (StringUtil::Equals(value, "CSV_READER")) {
+		return MemoryTag::CSV_READER;
+	}
+	if (StringUtil::Equals(value, "ORDER_BY")) {
+		return MemoryTag::ORDER_BY;
+	}
+	if (StringUtil::Equals(value, "ART_INDEX")) {
+		return MemoryTag::ART_INDEX;
+	}
+	if (StringUtil::Equals(value, "COLUMN_DATA")) {
+		return MemoryTag::COLUMN_DATA;
+	}
+	if (StringUtil::Equals(value, "METADATA")) {
+		return MemoryTag::METADATA;
+	}
+	if (StringUtil::Equals(value, "OVERFLOW_STRINGS")) {
+		return MemoryTag::OVERFLOW_STRINGS;
+	}
+	if (StringUtil::Equals(value, "IN_MEMORY_TABLE")) {
+		return MemoryTag::IN_MEMORY_TABLE;
+	}
+	if (StringUtil::Equals(value, "ALLOCATOR")) {
+		return MemoryTag::ALLOCATOR;
+	}
+	if (StringUtil::Equals(value, "EXTENSION")) {
+		return MemoryTag::EXTENSION;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<MemoryTag>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<MetaPipelineType>(MetaPipelineType value) {
+	switch(value) {
+	case MetaPipelineType::REGULAR:
+		return "REGULAR";
+	case MetaPipelineType::JOIN_BUILD:
+		return "JOIN_BUILD";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<MetaPipelineType>", value));
+	}
+}
+
+template<>
+MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value) {
+	if (StringUtil::Equals(value, "REGULAR")) {
+		return MetaPipelineType::REGULAR;
+	}
+	if (StringUtil::Equals(value, "JOIN_BUILD")) {
+		return MetaPipelineType::JOIN_BUILD;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<MetaPipelineType>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
+	switch(value) {
+	case MetricsType::QUERY_NAME:
+		return "QUERY_NAME";
+	case MetricsType::BLOCKED_THREAD_TIME:
+		return "BLOCKED_THREAD_TIME";
+	case MetricsType::CPU_TIME:
+		return "CPU_TIME";
+	case MetricsType::EXTRA_INFO:
+		return "EXTRA_INFO";
+	case MetricsType::CUMULATIVE_CARDINALITY:
+		return "CUMULATIVE_CARDINALITY";
+	case MetricsType::OPERATOR_TYPE:
+		return "OPERATOR_TYPE";
+	case MetricsType::OPERATOR_CARDINALITY:
+		return "OPERATOR_CARDINALITY";
+	case MetricsType::CUMULATIVE_ROWS_SCANNED:
+		return "CUMULATIVE_ROWS_SCANNED";
+	case MetricsType::OPERATOR_ROWS_SCANNED:
+		return "OPERATOR_ROWS_SCANNED";
+	case MetricsType::OPERATOR_TIMING:
+		return "OPERATOR_TIMING";
+	case MetricsType::RESULT_SET_SIZE:
+		return "RESULT_SET_SIZE";
+	case MetricsType::ALL_OPTIMIZERS:
+		return "ALL_OPTIMIZERS";
+	case MetricsType::CUMULATIVE_OPTIMIZER_TIMING:
+		return "CUMULATIVE_OPTIMIZER_TIMING";
+	case MetricsType::PLANNER:
+		return "PLANNER";
+	case MetricsType::PLANNER_BINDING:
+		return "PLANNER_BINDING";
+	case MetricsType::PHYSICAL_PLANNER:
+		return "PHYSICAL_PLANNER";
+	case MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING:
+		return "PHYSICAL_PLANNER_COLUMN_BINDING";
+	case MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES:
+		return "PHYSICAL_PLANNER_RESOLVE_TYPES";
+	case MetricsType::PHYSICAL_PLANNER_CREATE_PLAN:
+		return "PHYSICAL_PLANNER_CREATE_PLAN";
+	case MetricsType::OPTIMIZER_EXPRESSION_REWRITER:
+		return "OPTIMIZER_EXPRESSION_REWRITER";
+	case MetricsType::OPTIMIZER_FILTER_PULLUP:
+		return "OPTIMIZER_FILTER_PULLUP";
+	case MetricsType::OPTIMIZER_FILTER_PUSHDOWN:
+		return "OPTIMIZER_FILTER_PUSHDOWN";
+	case MetricsType::OPTIMIZER_CTE_FILTER_PUSHER:
+		return "OPTIMIZER_CTE_FILTER_PUSHER";
+	case MetricsType::OPTIMIZER_REGEX_RANGE:
+		return "OPTIMIZER_REGEX_RANGE";
+	case MetricsType::OPTIMIZER_IN_CLAUSE:
+		return "OPTIMIZER_IN_CLAUSE";
+	case MetricsType::OPTIMIZER_JOIN_ORDER:
+		return "OPTIMIZER_JOIN_ORDER";
+	case MetricsType::OPTIMIZER_DELIMINATOR:
+		return "OPTIMIZER_DELIMINATOR";
+	case MetricsType::OPTIMIZER_UNNEST_REWRITER:
+		return "OPTIMIZER_UNNEST_REWRITER";
+	case MetricsType::OPTIMIZER_UNUSED_COLUMNS:
+		return "OPTIMIZER_UNUSED_COLUMNS";
+	case MetricsType::OPTIMIZER_STATISTICS_PROPAGATION:
+		return "OPTIMIZER_STATISTICS_PROPAGATION";
+	case MetricsType::OPTIMIZER_COMMON_SUBEXPRESSIONS:
+		return "OPTIMIZER_COMMON_SUBEXPRESSIONS";
+	case MetricsType::OPTIMIZER_COMMON_AGGREGATE:
+		return "OPTIMIZER_COMMON_AGGREGATE";
+	case MetricsType::OPTIMIZER_COLUMN_LIFETIME:
+		return "OPTIMIZER_COLUMN_LIFETIME";
+	case MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE:
+		return "OPTIMIZER_BUILD_SIDE_PROBE_SIDE";
+	case MetricsType::OPTIMIZER_LIMIT_PUSHDOWN:
+		return "OPTIMIZER_LIMIT_PUSHDOWN";
+	case MetricsType::OPTIMIZER_TOP_N:
+		return "OPTIMIZER_TOP_N";
+	case MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION:
+		return "OPTIMIZER_COMPRESSED_MATERIALIZATION";
+	case MetricsType::OPTIMIZER_DUPLICATE_GROUPS:
+		return "OPTIMIZER_DUPLICATE_GROUPS";
+	case MetricsType::OPTIMIZER_REORDER_FILTER:
+		return "OPTIMIZER_REORDER_FILTER";
+	case MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN:
+		return "OPTIMIZER_JOIN_FILTER_PUSHDOWN";
+	case MetricsType::OPTIMIZER_EXTENSION:
+		return "OPTIMIZER_EXTENSION";
+	case MetricsType::OPTIMIZER_MATERIALIZED_CTE:
+		return "OPTIMIZER_MATERIALIZED_CTE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<MetricsType>", value));
+	}
+}
+
+template<>
+MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
+	if (StringUtil::Equals(value, "QUERY_NAME")) {
+		return MetricsType::QUERY_NAME;
+	}
+	if (StringUtil::Equals(value, "BLOCKED_THREAD_TIME")) {
+		return MetricsType::BLOCKED_THREAD_TIME;
+	}
+	if (StringUtil::Equals(value, "CPU_TIME")) {
+		return MetricsType::CPU_TIME;
+	}
+	if (StringUtil::Equals(value, "EXTRA_INFO")) {
+		return MetricsType::EXTRA_INFO;
+	}
+	if (StringUtil::Equals(value, "CUMULATIVE_CARDINALITY")) {
+		return MetricsType::CUMULATIVE_CARDINALITY;
+	}
+	if (StringUtil::Equals(value, "OPERATOR_TYPE")) {
+		return MetricsType::OPERATOR_TYPE;
+	}
+	if (StringUtil::Equals(value, "OPERATOR_CARDINALITY")) {
+		return MetricsType::OPERATOR_CARDINALITY;
+	}
+	if (StringUtil::Equals(value, "CUMULATIVE_ROWS_SCANNED")) {
+		return MetricsType::CUMULATIVE_ROWS_SCANNED;
+	}
+	if (StringUtil::Equals(value, "OPERATOR_ROWS_SCANNED")) {
+		return MetricsType::OPERATOR_ROWS_SCANNED;
+	}
+	if (StringUtil::Equals(value, "OPERATOR_TIMING")) {
+		return MetricsType::OPERATOR_TIMING;
+	}
+	if (StringUtil::Equals(value, "RESULT_SET_SIZE")) {
+		return MetricsType::RESULT_SET_SIZE;
+	}
+	if (StringUtil::Equals(value, "ALL_OPTIMIZERS")) {
+		return MetricsType::ALL_OPTIMIZERS;
+	}
+	if (StringUtil::Equals(value, "CUMULATIVE_OPTIMIZER_TIMING")) {
+		return MetricsType::CUMULATIVE_OPTIMIZER_TIMING;
+	}
+	if (StringUtil::Equals(value, "PLANNER")) {
+		return MetricsType::PLANNER;
+	}
+	if (StringUtil::Equals(value, "PLANNER_BINDING")) {
+		return MetricsType::PLANNER_BINDING;
+	}
+	if (StringUtil::Equals(value, "PHYSICAL_PLANNER")) {
+		return MetricsType::PHYSICAL_PLANNER;
+	}
+	if (StringUtil::Equals(value, "PHYSICAL_PLANNER_COLUMN_BINDING")) {
+		return MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING;
+	}
+	if (StringUtil::Equals(value, "PHYSICAL_PLANNER_RESOLVE_TYPES")) {
+		return MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES;
+	}
+	if (StringUtil::Equals(value, "PHYSICAL_PLANNER_CREATE_PLAN")) {
+		return MetricsType::PHYSICAL_PLANNER_CREATE_PLAN;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_EXPRESSION_REWRITER")) {
+		return MetricsType::OPTIMIZER_EXPRESSION_REWRITER;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_FILTER_PULLUP")) {
+		return MetricsType::OPTIMIZER_FILTER_PULLUP;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_FILTER_PUSHDOWN")) {
+		return MetricsType::OPTIMIZER_FILTER_PUSHDOWN;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_CTE_FILTER_PUSHER")) {
+		return MetricsType::OPTIMIZER_CTE_FILTER_PUSHER;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_REGEX_RANGE")) {
+		return MetricsType::OPTIMIZER_REGEX_RANGE;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_IN_CLAUSE")) {
+		return MetricsType::OPTIMIZER_IN_CLAUSE;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_JOIN_ORDER")) {
+		return MetricsType::OPTIMIZER_JOIN_ORDER;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_DELIMINATOR")) {
+		return MetricsType::OPTIMIZER_DELIMINATOR;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_UNNEST_REWRITER")) {
+		return MetricsType::OPTIMIZER_UNNEST_REWRITER;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_UNUSED_COLUMNS")) {
+		return MetricsType::OPTIMIZER_UNUSED_COLUMNS;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_STATISTICS_PROPAGATION")) {
+		return MetricsType::OPTIMIZER_STATISTICS_PROPAGATION;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_COMMON_SUBEXPRESSIONS")) {
+		return MetricsType::OPTIMIZER_COMMON_SUBEXPRESSIONS;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_COMMON_AGGREGATE")) {
+		return MetricsType::OPTIMIZER_COMMON_AGGREGATE;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_COLUMN_LIFETIME")) {
+		return MetricsType::OPTIMIZER_COLUMN_LIFETIME;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_BUILD_SIDE_PROBE_SIDE")) {
+		return MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_LIMIT_PUSHDOWN")) {
+		return MetricsType::OPTIMIZER_LIMIT_PUSHDOWN;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_TOP_N")) {
+		return MetricsType::OPTIMIZER_TOP_N;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_COMPRESSED_MATERIALIZATION")) {
+		return MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_DUPLICATE_GROUPS")) {
+		return MetricsType::OPTIMIZER_DUPLICATE_GROUPS;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_REORDER_FILTER")) {
+		return MetricsType::OPTIMIZER_REORDER_FILTER;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_JOIN_FILTER_PUSHDOWN")) {
+		return MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_EXTENSION")) {
+		return MetricsType::OPTIMIZER_EXTENSION;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_MATERIALIZED_CTE")) {
+		return MetricsType::OPTIMIZER_MATERIALIZED_CTE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<MetricsType>", value));
 }
 
 template<>
@@ -3361,8 +4611,14 @@ const char* EnumUtil::ToChars<NType>(NType value) {
 		return "NODE_256";
 	case NType::LEAF_INLINED:
 		return "LEAF_INLINED";
+	case NType::NODE_7_LEAF:
+		return "NODE_7_LEAF";
+	case NType::NODE_15_LEAF:
+		return "NODE_15_LEAF";
+	case NType::NODE_256_LEAF:
+		return "NODE_256_LEAF";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<NType>", value));
 	}
 }
 
@@ -3389,40 +4645,49 @@ NType EnumUtil::FromString<NType>(const char *value) {
 	if (StringUtil::Equals(value, "LEAF_INLINED")) {
 		return NType::LEAF_INLINED;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "NODE_7_LEAF")) {
+		return NType::NODE_7_LEAF;
+	}
+	if (StringUtil::Equals(value, "NODE_15_LEAF")) {
+		return NType::NODE_15_LEAF;
+	}
+	if (StringUtil::Equals(value, "NODE_256_LEAF")) {
+		return NType::NODE_256_LEAF;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<NType>", value));
 }
 
 template<>
 const char* EnumUtil::ToChars<NewLineIdentifier>(NewLineIdentifier value) {
 	switch(value) {
-	case NewLineIdentifier::SINGLE:
-		return "SINGLE";
+	case NewLineIdentifier::SINGLE_N:
+		return "SINGLE_N";
 	case NewLineIdentifier::CARRY_ON:
 		return "CARRY_ON";
-	case NewLineIdentifier::MIX:
-		return "MIX";
 	case NewLineIdentifier::NOT_SET:
 		return "NOT_SET";
+	case NewLineIdentifier::SINGLE_R:
+		return "SINGLE_R";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<NewLineIdentifier>", value));
 	}
 }
 
 template<>
 NewLineIdentifier EnumUtil::FromString<NewLineIdentifier>(const char *value) {
-	if (StringUtil::Equals(value, "SINGLE")) {
-		return NewLineIdentifier::SINGLE;
+	if (StringUtil::Equals(value, "SINGLE_N")) {
+		return NewLineIdentifier::SINGLE_N;
 	}
 	if (StringUtil::Equals(value, "CARRY_ON")) {
 		return NewLineIdentifier::CARRY_ON;
 	}
-	if (StringUtil::Equals(value, "MIX")) {
-		return NewLineIdentifier::MIX;
-	}
 	if (StringUtil::Equals(value, "NOT_SET")) {
 		return NewLineIdentifier::NOT_SET;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "SINGLE_R")) {
+		return NewLineIdentifier::SINGLE_R;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<NewLineIdentifier>", value));
 }
 
 template<>
@@ -3437,7 +4702,7 @@ const char* EnumUtil::ToChars<OnConflictAction>(OnConflictAction value) {
 	case OnConflictAction::REPLACE:
 		return "REPLACE";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<OnConflictAction>", value));
 	}
 }
 
@@ -3455,7 +4720,7 @@ OnConflictAction EnumUtil::FromString<OnConflictAction>(const char *value) {
 	if (StringUtil::Equals(value, "REPLACE")) {
 		return OnConflictAction::REPLACE;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<OnConflictAction>", value));
 }
 
 template<>
@@ -3470,7 +4735,7 @@ const char* EnumUtil::ToChars<OnCreateConflict>(OnCreateConflict value) {
 	case OnCreateConflict::ALTER_ON_CONFLICT:
 		return "ALTER_ON_CONFLICT";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<OnCreateConflict>", value));
 	}
 }
 
@@ -3488,7 +4753,7 @@ OnCreateConflict EnumUtil::FromString<OnCreateConflict>(const char *value) {
 	if (StringUtil::Equals(value, "ALTER_ON_CONFLICT")) {
 		return OnCreateConflict::ALTER_ON_CONFLICT;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<OnCreateConflict>", value));
 }
 
 template<>
@@ -3499,7 +4764,7 @@ const char* EnumUtil::ToChars<OnEntryNotFound>(OnEntryNotFound value) {
 	case OnEntryNotFound::RETURN_NULL:
 		return "RETURN_NULL";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<OnEntryNotFound>", value));
 	}
 }
 
@@ -3511,7 +4776,7 @@ OnEntryNotFound EnumUtil::FromString<OnEntryNotFound>(const char *value) {
 	if (StringUtil::Equals(value, "RETURN_NULL")) {
 		return OnEntryNotFound::RETURN_NULL;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<OnEntryNotFound>", value));
 }
 
 template<>
@@ -3522,7 +4787,7 @@ const char* EnumUtil::ToChars<OperatorFinalizeResultType>(OperatorFinalizeResult
 	case OperatorFinalizeResultType::FINISHED:
 		return "FINISHED";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<OperatorFinalizeResultType>", value));
 	}
 }
 
@@ -3534,7 +4799,7 @@ OperatorFinalizeResultType EnumUtil::FromString<OperatorFinalizeResultType>(cons
 	if (StringUtil::Equals(value, "FINISHED")) {
 		return OperatorFinalizeResultType::FINISHED;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<OperatorFinalizeResultType>", value));
 }
 
 template<>
@@ -3549,7 +4814,7 @@ const char* EnumUtil::ToChars<OperatorResultType>(OperatorResultType value) {
 	case OperatorResultType::BLOCKED:
 		return "BLOCKED";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<OperatorResultType>", value));
 	}
 }
 
@@ -3567,7 +4832,7 @@ OperatorResultType EnumUtil::FromString<OperatorResultType>(const char *value) {
 	if (StringUtil::Equals(value, "BLOCKED")) {
 		return OperatorResultType::BLOCKED;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<OperatorResultType>", value));
 }
 
 template<>
@@ -3581,6 +4846,8 @@ const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
 		return "FILTER_PULLUP";
 	case OptimizerType::FILTER_PUSHDOWN:
 		return "FILTER_PUSHDOWN";
+	case OptimizerType::CTE_FILTER_PUSHER:
+		return "CTE_FILTER_PUSHER";
 	case OptimizerType::REGEX_RANGE:
 		return "REGEX_RANGE";
 	case OptimizerType::IN_CLAUSE:
@@ -3601,6 +4868,10 @@ const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
 		return "COMMON_AGGREGATE";
 	case OptimizerType::COLUMN_LIFETIME:
 		return "COLUMN_LIFETIME";
+	case OptimizerType::BUILD_SIDE_PROBE_SIDE:
+		return "BUILD_SIDE_PROBE_SIDE";
+	case OptimizerType::LIMIT_PUSHDOWN:
+		return "LIMIT_PUSHDOWN";
 	case OptimizerType::TOP_N:
 		return "TOP_N";
 	case OptimizerType::COMPRESSED_MATERIALIZATION:
@@ -3609,10 +4880,14 @@ const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
 		return "DUPLICATE_GROUPS";
 	case OptimizerType::REORDER_FILTER:
 		return "REORDER_FILTER";
+	case OptimizerType::JOIN_FILTER_PUSHDOWN:
+		return "JOIN_FILTER_PUSHDOWN";
 	case OptimizerType::EXTENSION:
 		return "EXTENSION";
+	case OptimizerType::MATERIALIZED_CTE:
+		return "MATERIALIZED_CTE";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<OptimizerType>", value));
 	}
 }
 
@@ -3629,6 +4904,9 @@ OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "FILTER_PUSHDOWN")) {
 		return OptimizerType::FILTER_PUSHDOWN;
+	}
+	if (StringUtil::Equals(value, "CTE_FILTER_PUSHER")) {
+		return OptimizerType::CTE_FILTER_PUSHER;
 	}
 	if (StringUtil::Equals(value, "REGEX_RANGE")) {
 		return OptimizerType::REGEX_RANGE;
@@ -3660,6 +4938,12 @@ OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
 	if (StringUtil::Equals(value, "COLUMN_LIFETIME")) {
 		return OptimizerType::COLUMN_LIFETIME;
 	}
+	if (StringUtil::Equals(value, "BUILD_SIDE_PROBE_SIDE")) {
+		return OptimizerType::BUILD_SIDE_PROBE_SIDE;
+	}
+	if (StringUtil::Equals(value, "LIMIT_PUSHDOWN")) {
+		return OptimizerType::LIMIT_PUSHDOWN;
+	}
 	if (StringUtil::Equals(value, "TOP_N")) {
 		return OptimizerType::TOP_N;
 	}
@@ -3672,10 +4956,16 @@ OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
 	if (StringUtil::Equals(value, "REORDER_FILTER")) {
 		return OptimizerType::REORDER_FILTER;
 	}
+	if (StringUtil::Equals(value, "JOIN_FILTER_PUSHDOWN")) {
+		return OptimizerType::JOIN_FILTER_PUSHDOWN;
+	}
 	if (StringUtil::Equals(value, "EXTENSION")) {
 		return OptimizerType::EXTENSION;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "MATERIALIZED_CTE")) {
+		return OptimizerType::MATERIALIZED_CTE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<OptimizerType>", value));
 }
 
 template<>
@@ -3690,7 +4980,7 @@ const char* EnumUtil::ToChars<OrderByNullType>(OrderByNullType value) {
 	case OrderByNullType::NULLS_LAST:
 		return "NULLS_LAST";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<OrderByNullType>", value));
 	}
 }
 
@@ -3708,7 +4998,7 @@ OrderByNullType EnumUtil::FromString<OrderByNullType>(const char *value) {
 	if (StringUtil::Equals(value, "NULLS_LAST") || StringUtil::Equals(value, "NULLS LAST")) {
 		return OrderByNullType::NULLS_LAST;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<OrderByNullType>", value));
 }
 
 template<>
@@ -3721,7 +5011,7 @@ const char* EnumUtil::ToChars<OrderPreservationType>(OrderPreservationType value
 	case OrderPreservationType::FIXED_ORDER:
 		return "FIXED_ORDER";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<OrderPreservationType>", value));
 	}
 }
 
@@ -3736,7 +5026,7 @@ OrderPreservationType EnumUtil::FromString<OrderPreservationType>(const char *va
 	if (StringUtil::Equals(value, "FIXED_ORDER")) {
 		return OrderPreservationType::FIXED_ORDER;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<OrderPreservationType>", value));
 }
 
 template<>
@@ -3751,7 +5041,7 @@ const char* EnumUtil::ToChars<OrderType>(OrderType value) {
 	case OrderType::DESCENDING:
 		return "DESCENDING";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<OrderType>", value));
 	}
 }
 
@@ -3769,7 +5059,7 @@ OrderType EnumUtil::FromString<OrderType>(const char *value) {
 	if (StringUtil::Equals(value, "DESCENDING") || StringUtil::Equals(value, "DESC")) {
 		return OrderType::DESCENDING;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<OrderType>", value));
 }
 
 template<>
@@ -3780,7 +5070,7 @@ const char* EnumUtil::ToChars<OutputStream>(OutputStream value) {
 	case OutputStream::STREAM_STDERR:
 		return "STREAM_STDERR";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<OutputStream>", value));
 	}
 }
 
@@ -3792,7 +5082,7 @@ OutputStream EnumUtil::FromString<OutputStream>(const char *value) {
 	if (StringUtil::Equals(value, "STREAM_STDERR")) {
 		return OutputStream::STREAM_STDERR;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<OutputStream>", value));
 }
 
 template<>
@@ -3806,6 +5096,8 @@ const char* EnumUtil::ToChars<ParseInfoType>(ParseInfoType value) {
 		return "COPY_INFO";
 	case ParseInfoType::CREATE_INFO:
 		return "CREATE_INFO";
+	case ParseInfoType::CREATE_SECRET_INFO:
+		return "CREATE_SECRET_INFO";
 	case ParseInfoType::DETACH_INFO:
 		return "DETACH_INFO";
 	case ParseInfoType::DROP_INFO:
@@ -3822,8 +5114,16 @@ const char* EnumUtil::ToChars<ParseInfoType>(ParseInfoType value) {
 		return "TRANSACTION_INFO";
 	case ParseInfoType::VACUUM_INFO:
 		return "VACUUM_INFO";
+	case ParseInfoType::COMMENT_ON_INFO:
+		return "COMMENT_ON_INFO";
+	case ParseInfoType::COMMENT_ON_COLUMN_INFO:
+		return "COMMENT_ON_COLUMN_INFO";
+	case ParseInfoType::COPY_DATABASE_INFO:
+		return "COPY_DATABASE_INFO";
+	case ParseInfoType::UPDATE_EXTENSIONS_INFO:
+		return "UPDATE_EXTENSIONS_INFO";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ParseInfoType>", value));
 	}
 }
 
@@ -3840,6 +5140,9 @@ ParseInfoType EnumUtil::FromString<ParseInfoType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "CREATE_INFO")) {
 		return ParseInfoType::CREATE_INFO;
+	}
+	if (StringUtil::Equals(value, "CREATE_SECRET_INFO")) {
+		return ParseInfoType::CREATE_SECRET_INFO;
 	}
 	if (StringUtil::Equals(value, "DETACH_INFO")) {
 		return ParseInfoType::DETACH_INFO;
@@ -3865,7 +5168,19 @@ ParseInfoType EnumUtil::FromString<ParseInfoType>(const char *value) {
 	if (StringUtil::Equals(value, "VACUUM_INFO")) {
 		return ParseInfoType::VACUUM_INFO;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "COMMENT_ON_INFO")) {
+		return ParseInfoType::COMMENT_ON_INFO;
+	}
+	if (StringUtil::Equals(value, "COMMENT_ON_COLUMN_INFO")) {
+		return ParseInfoType::COMMENT_ON_COLUMN_INFO;
+	}
+	if (StringUtil::Equals(value, "COPY_DATABASE_INFO")) {
+		return ParseInfoType::COPY_DATABASE_INFO;
+	}
+	if (StringUtil::Equals(value, "UPDATE_EXTENSIONS_INFO")) {
+		return ParseInfoType::UPDATE_EXTENSIONS_INFO;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ParseInfoType>", value));
 }
 
 template<>
@@ -3878,7 +5193,7 @@ const char* EnumUtil::ToChars<ParserExtensionResultType>(ParserExtensionResultTy
 	case ParserExtensionResultType::DISPLAY_EXTENSION_ERROR:
 		return "DISPLAY_EXTENSION_ERROR";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ParserExtensionResultType>", value));
 	}
 }
 
@@ -3893,35 +5208,7 @@ ParserExtensionResultType EnumUtil::FromString<ParserExtensionResultType>(const 
 	if (StringUtil::Equals(value, "DISPLAY_EXTENSION_ERROR")) {
 		return ParserExtensionResultType::DISPLAY_EXTENSION_ERROR;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
-}
-
-template<>
-const char* EnumUtil::ToChars<ParserMode>(ParserMode value) {
-	switch(value) {
-	case ParserMode::PARSING:
-		return "PARSING";
-	case ParserMode::SNIFFING_DATATYPES:
-		return "SNIFFING_DATATYPES";
-	case ParserMode::PARSING_HEADER:
-		return "PARSING_HEADER";
-	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
-	}
-}
-
-template<>
-ParserMode EnumUtil::FromString<ParserMode>(const char *value) {
-	if (StringUtil::Equals(value, "PARSING")) {
-		return ParserMode::PARSING;
-	}
-	if (StringUtil::Equals(value, "SNIFFING_DATATYPES")) {
-		return ParserMode::SNIFFING_DATATYPES;
-	}
-	if (StringUtil::Equals(value, "PARSING_HEADER")) {
-		return ParserMode::PARSING_HEADER;
-	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ParserExtensionResultType>", value));
 }
 
 template<>
@@ -3937,8 +5224,10 @@ const char* EnumUtil::ToChars<PartitionSortStage>(PartitionSortStage value) {
 		return "MERGE";
 	case PartitionSortStage::SORTED:
 		return "SORTED";
+	case PartitionSortStage::FINISHED:
+		return "FINISHED";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<PartitionSortStage>", value));
 	}
 }
 
@@ -3959,7 +5248,10 @@ PartitionSortStage EnumUtil::FromString<PartitionSortStage>(const char *value) {
 	if (StringUtil::Equals(value, "SORTED")) {
 		return PartitionSortStage::SORTED;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "FINISHED")) {
+		return PartitionSortStage::FINISHED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<PartitionSortStage>", value));
 }
 
 template<>
@@ -3972,7 +5264,7 @@ const char* EnumUtil::ToChars<PartitionedColumnDataType>(PartitionedColumnDataTy
 	case PartitionedColumnDataType::HIVE:
 		return "HIVE";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<PartitionedColumnDataType>", value));
 	}
 }
 
@@ -3987,7 +5279,7 @@ PartitionedColumnDataType EnumUtil::FromString<PartitionedColumnDataType>(const 
 	if (StringUtil::Equals(value, "HIVE")) {
 		return PartitionedColumnDataType::HIVE;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<PartitionedColumnDataType>", value));
 }
 
 template<>
@@ -3998,7 +5290,7 @@ const char* EnumUtil::ToChars<PartitionedTupleDataType>(PartitionedTupleDataType
 	case PartitionedTupleDataType::RADIX:
 		return "RADIX";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<PartitionedTupleDataType>", value));
 	}
 }
 
@@ -4010,7 +5302,7 @@ PartitionedTupleDataType EnumUtil::FromString<PartitionedTupleDataType>(const ch
 	if (StringUtil::Equals(value, "RADIX")) {
 		return PartitionedTupleDataType::RADIX;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<PartitionedTupleDataType>", value));
 }
 
 template<>
@@ -4022,10 +5314,14 @@ const char* EnumUtil::ToChars<PendingExecutionResult>(PendingExecutionResult val
 		return "RESULT_NOT_READY";
 	case PendingExecutionResult::EXECUTION_ERROR:
 		return "EXECUTION_ERROR";
+	case PendingExecutionResult::BLOCKED:
+		return "BLOCKED";
 	case PendingExecutionResult::NO_TASKS_AVAILABLE:
 		return "NO_TASKS_AVAILABLE";
+	case PendingExecutionResult::EXECUTION_FINISHED:
+		return "EXECUTION_FINISHED";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<PendingExecutionResult>", value));
 	}
 }
 
@@ -4040,10 +5336,16 @@ PendingExecutionResult EnumUtil::FromString<PendingExecutionResult>(const char *
 	if (StringUtil::Equals(value, "EXECUTION_ERROR")) {
 		return PendingExecutionResult::EXECUTION_ERROR;
 	}
+	if (StringUtil::Equals(value, "BLOCKED")) {
+		return PendingExecutionResult::BLOCKED;
+	}
 	if (StringUtil::Equals(value, "NO_TASKS_AVAILABLE")) {
 		return PendingExecutionResult::NO_TASKS_AVAILABLE;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "EXECUTION_FINISHED")) {
+		return PendingExecutionResult::EXECUTION_FINISHED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<PendingExecutionResult>", value));
 }
 
 template<>
@@ -4079,8 +5381,6 @@ const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) 
 		return "COPY_TO_FILE";
 	case PhysicalOperatorType::BATCH_COPY_TO_FILE:
 		return "BATCH_COPY_TO_FILE";
-	case PhysicalOperatorType::FIXED_BATCH_COPY_TO_FILE:
-		return "FIXED_BATCH_COPY_TO_FILE";
 	case PhysicalOperatorType::RESERVOIR_SAMPLE:
 		return "RESERVOIR_SAMPLE";
 	case PhysicalOperatorType::STREAMING_SAMPLE:
@@ -4089,6 +5389,8 @@ const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) 
 		return "STREAMING_WINDOW";
 	case PhysicalOperatorType::PIVOT:
 		return "PIVOT";
+	case PhysicalOperatorType::COPY_DATABASE:
+		return "COPY_DATABASE";
 	case PhysicalOperatorType::TABLE_SCAN:
 		return "TABLE_SCAN";
 	case PhysicalOperatorType::DUMMY_SCAN:
@@ -4119,10 +5421,10 @@ const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) 
 		return "PIECEWISE_MERGE_JOIN";
 	case PhysicalOperatorType::IE_JOIN:
 		return "IE_JOIN";
-	case PhysicalOperatorType::DELIM_JOIN:
-		return "DELIM_JOIN";
-	case PhysicalOperatorType::INDEX_JOIN:
-		return "INDEX_JOIN";
+	case PhysicalOperatorType::LEFT_DELIM_JOIN:
+		return "LEFT_DELIM_JOIN";
+	case PhysicalOperatorType::RIGHT_DELIM_JOIN:
+		return "RIGHT_DELIM_JOIN";
 	case PhysicalOperatorType::POSITIONAL_JOIN:
 		return "POSITIONAL_JOIN";
 	case PhysicalOperatorType::ASOF_JOIN:
@@ -4187,6 +5489,8 @@ const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) 
 		return "EXPORT";
 	case PhysicalOperatorType::SET:
 		return "SET";
+	case PhysicalOperatorType::SET_VARIABLE:
+		return "SET_VARIABLE";
 	case PhysicalOperatorType::LOAD:
 		return "LOAD";
 	case PhysicalOperatorType::INOUT_FUNCTION:
@@ -4197,8 +5501,14 @@ const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) 
 		return "RESET";
 	case PhysicalOperatorType::EXTENSION:
 		return "EXTENSION";
+	case PhysicalOperatorType::VERIFY_VECTOR:
+		return "VERIFY_VECTOR";
+	case PhysicalOperatorType::UPDATE_EXTENSIONS:
+		return "UPDATE_EXTENSIONS";
+	case PhysicalOperatorType::CREATE_SECRET:
+		return "CREATE_SECRET";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<PhysicalOperatorType>", value));
 	}
 }
 
@@ -4249,9 +5559,6 @@ PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *valu
 	if (StringUtil::Equals(value, "BATCH_COPY_TO_FILE")) {
 		return PhysicalOperatorType::BATCH_COPY_TO_FILE;
 	}
-	if (StringUtil::Equals(value, "FIXED_BATCH_COPY_TO_FILE")) {
-		return PhysicalOperatorType::FIXED_BATCH_COPY_TO_FILE;
-	}
 	if (StringUtil::Equals(value, "RESERVOIR_SAMPLE")) {
 		return PhysicalOperatorType::RESERVOIR_SAMPLE;
 	}
@@ -4263,6 +5570,9 @@ PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *valu
 	}
 	if (StringUtil::Equals(value, "PIVOT")) {
 		return PhysicalOperatorType::PIVOT;
+	}
+	if (StringUtil::Equals(value, "COPY_DATABASE")) {
+		return PhysicalOperatorType::COPY_DATABASE;
 	}
 	if (StringUtil::Equals(value, "TABLE_SCAN")) {
 		return PhysicalOperatorType::TABLE_SCAN;
@@ -4309,11 +5619,11 @@ PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *valu
 	if (StringUtil::Equals(value, "IE_JOIN")) {
 		return PhysicalOperatorType::IE_JOIN;
 	}
-	if (StringUtil::Equals(value, "DELIM_JOIN")) {
-		return PhysicalOperatorType::DELIM_JOIN;
+	if (StringUtil::Equals(value, "LEFT_DELIM_JOIN")) {
+		return PhysicalOperatorType::LEFT_DELIM_JOIN;
 	}
-	if (StringUtil::Equals(value, "INDEX_JOIN")) {
-		return PhysicalOperatorType::INDEX_JOIN;
+	if (StringUtil::Equals(value, "RIGHT_DELIM_JOIN")) {
+		return PhysicalOperatorType::RIGHT_DELIM_JOIN;
 	}
 	if (StringUtil::Equals(value, "POSITIONAL_JOIN")) {
 		return PhysicalOperatorType::POSITIONAL_JOIN;
@@ -4411,6 +5721,9 @@ PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *valu
 	if (StringUtil::Equals(value, "SET")) {
 		return PhysicalOperatorType::SET;
 	}
+	if (StringUtil::Equals(value, "SET_VARIABLE")) {
+		return PhysicalOperatorType::SET_VARIABLE;
+	}
 	if (StringUtil::Equals(value, "LOAD")) {
 		return PhysicalOperatorType::LOAD;
 	}
@@ -4426,7 +5739,16 @@ PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *valu
 	if (StringUtil::Equals(value, "EXTENSION")) {
 		return PhysicalOperatorType::EXTENSION;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "VERIFY_VECTOR")) {
+		return PhysicalOperatorType::VERIFY_VECTOR;
+	}
+	if (StringUtil::Equals(value, "UPDATE_EXTENSIONS")) {
+		return PhysicalOperatorType::UPDATE_EXTENSIONS;
+	}
+	if (StringUtil::Equals(value, "CREATE_SECRET")) {
+		return PhysicalOperatorType::CREATE_SECRET;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<PhysicalOperatorType>", value));
 }
 
 template<>
@@ -4464,6 +5786,8 @@ const char* EnumUtil::ToChars<PhysicalType>(PhysicalType value) {
 		return "ARRAY";
 	case PhysicalType::VARCHAR:
 		return "VARCHAR";
+	case PhysicalType::UINT128:
+		return "UINT128";
 	case PhysicalType::INT128:
 		return "INT128";
 	case PhysicalType::UNKNOWN:
@@ -4473,7 +5797,7 @@ const char* EnumUtil::ToChars<PhysicalType>(PhysicalType value) {
 	case PhysicalType::INVALID:
 		return "INVALID";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<PhysicalType>", value));
 	}
 }
 
@@ -4527,6 +5851,9 @@ PhysicalType EnumUtil::FromString<PhysicalType>(const char *value) {
 	if (StringUtil::Equals(value, "VARCHAR")) {
 		return PhysicalType::VARCHAR;
 	}
+	if (StringUtil::Equals(value, "UINT128")) {
+		return PhysicalType::UINT128;
+	}
 	if (StringUtil::Equals(value, "INT128")) {
 		return PhysicalType::INT128;
 	}
@@ -4539,7 +5866,7 @@ PhysicalType EnumUtil::FromString<PhysicalType>(const char *value) {
 	if (StringUtil::Equals(value, "INVALID")) {
 		return PhysicalType::INVALID;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<PhysicalType>", value));
 }
 
 template<>
@@ -4550,7 +5877,7 @@ const char* EnumUtil::ToChars<PragmaType>(PragmaType value) {
 	case PragmaType::PRAGMA_CALL:
 		return "PRAGMA_CALL";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<PragmaType>", value));
 	}
 }
 
@@ -4562,7 +5889,7 @@ PragmaType EnumUtil::FromString<PragmaType>(const char *value) {
 	if (StringUtil::Equals(value, "PRAGMA_CALL")) {
 		return PragmaType::PRAGMA_CALL;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<PragmaType>", value));
 }
 
 template<>
@@ -4577,7 +5904,7 @@ const char* EnumUtil::ToChars<PreparedParamType>(PreparedParamType value) {
 	case PreparedParamType::INVALID:
 		return "INVALID";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<PreparedParamType>", value));
 	}
 }
 
@@ -4595,7 +5922,30 @@ PreparedParamType EnumUtil::FromString<PreparedParamType>(const char *value) {
 	if (StringUtil::Equals(value, "INVALID")) {
 		return PreparedParamType::INVALID;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<PreparedParamType>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<PreparedStatementMode>(PreparedStatementMode value) {
+	switch(value) {
+	case PreparedStatementMode::PREPARE_ONLY:
+		return "PREPARE_ONLY";
+	case PreparedStatementMode::PREPARE_AND_EXECUTE:
+		return "PREPARE_AND_EXECUTE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<PreparedStatementMode>", value));
+	}
+}
+
+template<>
+PreparedStatementMode EnumUtil::FromString<PreparedStatementMode>(const char *value) {
+	if (StringUtil::Equals(value, "PREPARE_ONLY")) {
+		return PreparedStatementMode::PREPARE_ONLY;
+	}
+	if (StringUtil::Equals(value, "PREPARE_AND_EXECUTE")) {
+		return PreparedStatementMode::PREPARE_AND_EXECUTE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<PreparedStatementMode>", value));
 }
 
 template<>
@@ -4607,8 +5957,10 @@ const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value) {
 		return "JSON";
 	case ProfilerPrintFormat::QUERY_TREE_OPTIMIZER:
 		return "QUERY_TREE_OPTIMIZER";
+	case ProfilerPrintFormat::NO_OUTPUT:
+		return "NO_OUTPUT";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ProfilerPrintFormat>", value));
 	}
 }
 
@@ -4623,7 +5975,48 @@ ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value)
 	if (StringUtil::Equals(value, "QUERY_TREE_OPTIMIZER")) {
 		return ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "NO_OUTPUT")) {
+		return ProfilerPrintFormat::NO_OUTPUT;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ProfilerPrintFormat>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<QuantileSerializationType>(QuantileSerializationType value) {
+	switch(value) {
+	case QuantileSerializationType::NON_DECIMAL:
+		return "NON_DECIMAL";
+	case QuantileSerializationType::DECIMAL_DISCRETE:
+		return "DECIMAL_DISCRETE";
+	case QuantileSerializationType::DECIMAL_DISCRETE_LIST:
+		return "DECIMAL_DISCRETE_LIST";
+	case QuantileSerializationType::DECIMAL_CONTINUOUS:
+		return "DECIMAL_CONTINUOUS";
+	case QuantileSerializationType::DECIMAL_CONTINUOUS_LIST:
+		return "DECIMAL_CONTINUOUS_LIST";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<QuantileSerializationType>", value));
+	}
+}
+
+template<>
+QuantileSerializationType EnumUtil::FromString<QuantileSerializationType>(const char *value) {
+	if (StringUtil::Equals(value, "NON_DECIMAL")) {
+		return QuantileSerializationType::NON_DECIMAL;
+	}
+	if (StringUtil::Equals(value, "DECIMAL_DISCRETE")) {
+		return QuantileSerializationType::DECIMAL_DISCRETE;
+	}
+	if (StringUtil::Equals(value, "DECIMAL_DISCRETE_LIST")) {
+		return QuantileSerializationType::DECIMAL_DISCRETE_LIST;
+	}
+	if (StringUtil::Equals(value, "DECIMAL_CONTINUOUS")) {
+		return QuantileSerializationType::DECIMAL_CONTINUOUS;
+	}
+	if (StringUtil::Equals(value, "DECIMAL_CONTINUOUS_LIST")) {
+		return QuantileSerializationType::DECIMAL_CONTINUOUS_LIST;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<QuantileSerializationType>", value));
 }
 
 template<>
@@ -4640,7 +6033,7 @@ const char* EnumUtil::ToChars<QueryNodeType>(QueryNodeType value) {
 	case QueryNodeType::CTE_NODE:
 		return "CTE_NODE";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<QueryNodeType>", value));
 	}
 }
 
@@ -4661,7 +6054,7 @@ QueryNodeType EnumUtil::FromString<QueryNodeType>(const char *value) {
 	if (StringUtil::Equals(value, "CTE_NODE")) {
 		return QueryNodeType::CTE_NODE;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<QueryNodeType>", value));
 }
 
 template<>
@@ -4673,8 +6066,10 @@ const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value) {
 		return "STREAM_RESULT";
 	case QueryResultType::PENDING_RESULT:
 		return "PENDING_RESULT";
+	case QueryResultType::ARROW_RESULT:
+		return "ARROW_RESULT";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<QueryResultType>", value));
 	}
 }
 
@@ -4689,7 +6084,10 @@ QueryResultType EnumUtil::FromString<QueryResultType>(const char *value) {
 	if (StringUtil::Equals(value, "PENDING_RESULT")) {
 		return QueryResultType::PENDING_RESULT;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "ARROW_RESULT")) {
+		return QueryResultType::ARROW_RESULT;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<QueryResultType>", value));
 }
 
 template<>
@@ -4702,7 +6100,7 @@ const char* EnumUtil::ToChars<QuoteRule>(QuoteRule value) {
 	case QuoteRule::NO_QUOTES:
 		return "NO_QUOTES";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<QuoteRule>", value));
 	}
 }
 
@@ -4717,7 +6115,7 @@ QuoteRule EnumUtil::FromString<QuoteRule>(const char *value) {
 	if (StringUtil::Equals(value, "NO_QUOTES")) {
 		return QuoteRule::NO_QUOTES;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<QuoteRule>", value));
 }
 
 template<>
@@ -4755,6 +6153,8 @@ const char* EnumUtil::ToChars<RelationType>(RelationType value) {
 		return "INSERT_RELATION";
 	case RelationType::VALUE_LIST_RELATION:
 		return "VALUE_LIST_RELATION";
+	case RelationType::MATERIALIZED_RELATION:
+		return "MATERIALIZED_RELATION";
 	case RelationType::DELETE_RELATION:
 		return "DELETE_RELATION";
 	case RelationType::UPDATE_RELATION:
@@ -4773,8 +6173,12 @@ const char* EnumUtil::ToChars<RelationType>(RelationType value) {
 		return "VIEW_RELATION";
 	case RelationType::QUERY_RELATION:
 		return "QUERY_RELATION";
+	case RelationType::DELIM_JOIN_RELATION:
+		return "DELIM_JOIN_RELATION";
+	case RelationType::DELIM_GET_RELATION:
+		return "DELIM_GET_RELATION";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<RelationType>", value));
 	}
 }
 
@@ -4828,6 +6232,9 @@ RelationType EnumUtil::FromString<RelationType>(const char *value) {
 	if (StringUtil::Equals(value, "VALUE_LIST_RELATION")) {
 		return RelationType::VALUE_LIST_RELATION;
 	}
+	if (StringUtil::Equals(value, "MATERIALIZED_RELATION")) {
+		return RelationType::MATERIALIZED_RELATION;
+	}
 	if (StringUtil::Equals(value, "DELETE_RELATION")) {
 		return RelationType::DELETE_RELATION;
 	}
@@ -4855,7 +6262,13 @@ RelationType EnumUtil::FromString<RelationType>(const char *value) {
 	if (StringUtil::Equals(value, "QUERY_RELATION")) {
 		return RelationType::QUERY_RELATION;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "DELIM_JOIN_RELATION")) {
+		return RelationType::DELIM_JOIN_RELATION;
+	}
+	if (StringUtil::Equals(value, "DELIM_GET_RELATION")) {
+		return RelationType::DELIM_GET_RELATION;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<RelationType>", value));
 }
 
 template<>
@@ -4866,7 +6279,7 @@ const char* EnumUtil::ToChars<RenderMode>(RenderMode value) {
 	case RenderMode::COLUMNS:
 		return "COLUMNS";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<RenderMode>", value));
 	}
 }
 
@@ -4878,7 +6291,7 @@ RenderMode EnumUtil::FromString<RenderMode>(const char *value) {
 	if (StringUtil::Equals(value, "COLUMNS")) {
 		return RenderMode::COLUMNS;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<RenderMode>", value));
 }
 
 template<>
@@ -4893,7 +6306,7 @@ const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value) {
 	case ResultModifierType::LIMIT_PERCENT_MODIFIER:
 		return "LIMIT_PERCENT_MODIFIER";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ResultModifierType>", value));
 	}
 }
 
@@ -4911,7 +6324,7 @@ ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value) {
 	if (StringUtil::Equals(value, "LIMIT_PERCENT_MODIFIER")) {
 		return ResultModifierType::LIMIT_PERCENT_MODIFIER;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ResultModifierType>", value));
 }
 
 template<>
@@ -4924,7 +6337,7 @@ const char* EnumUtil::ToChars<SampleMethod>(SampleMethod value) {
 	case SampleMethod::RESERVOIR_SAMPLE:
 		return "Reservoir";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<SampleMethod>", value));
 	}
 }
 
@@ -4939,7 +6352,109 @@ SampleMethod EnumUtil::FromString<SampleMethod>(const char *value) {
 	if (StringUtil::Equals(value, "Reservoir")) {
 		return SampleMethod::RESERVOIR_SAMPLE;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<SampleMethod>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<SampleType>(SampleType value) {
+	switch(value) {
+	case SampleType::BLOCKING_SAMPLE:
+		return "BLOCKING_SAMPLE";
+	case SampleType::RESERVOIR_SAMPLE:
+		return "RESERVOIR_SAMPLE";
+	case SampleType::RESERVOIR_PERCENTAGE_SAMPLE:
+		return "RESERVOIR_PERCENTAGE_SAMPLE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<SampleType>", value));
+	}
+}
+
+template<>
+SampleType EnumUtil::FromString<SampleType>(const char *value) {
+	if (StringUtil::Equals(value, "BLOCKING_SAMPLE")) {
+		return SampleType::BLOCKING_SAMPLE;
+	}
+	if (StringUtil::Equals(value, "RESERVOIR_SAMPLE")) {
+		return SampleType::RESERVOIR_SAMPLE;
+	}
+	if (StringUtil::Equals(value, "RESERVOIR_PERCENTAGE_SAMPLE")) {
+		return SampleType::RESERVOIR_PERCENTAGE_SAMPLE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<SampleType>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<ScanType>(ScanType value) {
+	switch(value) {
+	case ScanType::TABLE:
+		return "TABLE";
+	case ScanType::PARQUET:
+		return "PARQUET";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ScanType>", value));
+	}
+}
+
+template<>
+ScanType EnumUtil::FromString<ScanType>(const char *value) {
+	if (StringUtil::Equals(value, "TABLE")) {
+		return ScanType::TABLE;
+	}
+	if (StringUtil::Equals(value, "PARQUET")) {
+		return ScanType::PARQUET;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ScanType>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<SecretDisplayType>(SecretDisplayType value) {
+	switch(value) {
+	case SecretDisplayType::REDACTED:
+		return "REDACTED";
+	case SecretDisplayType::UNREDACTED:
+		return "UNREDACTED";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<SecretDisplayType>", value));
+	}
+}
+
+template<>
+SecretDisplayType EnumUtil::FromString<SecretDisplayType>(const char *value) {
+	if (StringUtil::Equals(value, "REDACTED")) {
+		return SecretDisplayType::REDACTED;
+	}
+	if (StringUtil::Equals(value, "UNREDACTED")) {
+		return SecretDisplayType::UNREDACTED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<SecretDisplayType>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<SecretPersistType>(SecretPersistType value) {
+	switch(value) {
+	case SecretPersistType::DEFAULT:
+		return "DEFAULT";
+	case SecretPersistType::TEMPORARY:
+		return "TEMPORARY";
+	case SecretPersistType::PERSISTENT:
+		return "PERSISTENT";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<SecretPersistType>", value));
+	}
+}
+
+template<>
+SecretPersistType EnumUtil::FromString<SecretPersistType>(const char *value) {
+	if (StringUtil::Equals(value, "DEFAULT")) {
+		return SecretPersistType::DEFAULT;
+	}
+	if (StringUtil::Equals(value, "TEMPORARY")) {
+		return SecretPersistType::TEMPORARY;
+	}
+	if (StringUtil::Equals(value, "PERSISTENT")) {
+		return SecretPersistType::PERSISTENT;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<SecretPersistType>", value));
 }
 
 template<>
@@ -4958,7 +6473,7 @@ const char* EnumUtil::ToChars<SequenceInfo>(SequenceInfo value) {
 	case SequenceInfo::SEQ_OWN:
 		return "SEQ_OWN";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<SequenceInfo>", value));
 	}
 }
 
@@ -4982,7 +6497,7 @@ SequenceInfo EnumUtil::FromString<SequenceInfo>(const char *value) {
 	if (StringUtil::Equals(value, "SEQ_OWN")) {
 		return SequenceInfo::SEQ_OWN;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<SequenceInfo>", value));
 }
 
 template<>
@@ -4999,7 +6514,7 @@ const char* EnumUtil::ToChars<SetOperationType>(SetOperationType value) {
 	case SetOperationType::UNION_BY_NAME:
 		return "UNION_BY_NAME";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<SetOperationType>", value));
 	}
 }
 
@@ -5020,7 +6535,7 @@ SetOperationType EnumUtil::FromString<SetOperationType>(const char *value) {
 	if (StringUtil::Equals(value, "UNION_BY_NAME")) {
 		return SetOperationType::UNION_BY_NAME;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<SetOperationType>", value));
 }
 
 template<>
@@ -5034,8 +6549,10 @@ const char* EnumUtil::ToChars<SetScope>(SetScope value) {
 		return "SESSION";
 	case SetScope::GLOBAL:
 		return "GLOBAL";
+	case SetScope::VARIABLE:
+		return "VARIABLE";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<SetScope>", value));
 	}
 }
 
@@ -5053,7 +6570,10 @@ SetScope EnumUtil::FromString<SetScope>(const char *value) {
 	if (StringUtil::Equals(value, "GLOBAL")) {
 		return SetScope::GLOBAL;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "VARIABLE")) {
+		return SetScope::VARIABLE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<SetScope>", value));
 }
 
 template<>
@@ -5064,7 +6584,7 @@ const char* EnumUtil::ToChars<SetType>(SetType value) {
 	case SetType::RESET:
 		return "RESET";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<SetType>", value));
 	}
 }
 
@@ -5076,7 +6596,63 @@ SetType EnumUtil::FromString<SetType>(const char *value) {
 	if (StringUtil::Equals(value, "RESET")) {
 		return SetType::RESET;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<SetType>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<SettingScope>(SettingScope value) {
+	switch(value) {
+	case SettingScope::GLOBAL:
+		return "GLOBAL";
+	case SettingScope::LOCAL:
+		return "LOCAL";
+	case SettingScope::SECRET:
+		return "SECRET";
+	case SettingScope::INVALID:
+		return "INVALID";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<SettingScope>", value));
+	}
+}
+
+template<>
+SettingScope EnumUtil::FromString<SettingScope>(const char *value) {
+	if (StringUtil::Equals(value, "GLOBAL")) {
+		return SettingScope::GLOBAL;
+	}
+	if (StringUtil::Equals(value, "LOCAL")) {
+		return SettingScope::LOCAL;
+	}
+	if (StringUtil::Equals(value, "SECRET")) {
+		return SettingScope::SECRET;
+	}
+	if (StringUtil::Equals(value, "INVALID")) {
+		return SettingScope::INVALID;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<SettingScope>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<ShowType>(ShowType value) {
+	switch(value) {
+	case ShowType::SUMMARY:
+		return "SUMMARY";
+	case ShowType::DESCRIBE:
+		return "DESCRIBE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ShowType>", value));
+	}
+}
+
+template<>
+ShowType EnumUtil::FromString<ShowType>(const char *value) {
+	if (StringUtil::Equals(value, "SUMMARY")) {
+		return ShowType::SUMMARY;
+	}
+	if (StringUtil::Equals(value, "DESCRIBE")) {
+		return ShowType::DESCRIBE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ShowType>", value));
 }
 
 template<>
@@ -5095,7 +6671,7 @@ const char* EnumUtil::ToChars<SimplifiedTokenType>(SimplifiedTokenType value) {
 	case SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT:
 		return "SIMPLIFIED_TOKEN_COMMENT";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<SimplifiedTokenType>", value));
 	}
 }
 
@@ -5119,7 +6695,7 @@ SimplifiedTokenType EnumUtil::FromString<SimplifiedTokenType>(const char *value)
 	if (StringUtil::Equals(value, "SIMPLIFIED_TOKEN_COMMENT")) {
 		return SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<SimplifiedTokenType>", value));
 }
 
 template<>
@@ -5130,7 +6706,7 @@ const char* EnumUtil::ToChars<SinkCombineResultType>(SinkCombineResultType value
 	case SinkCombineResultType::BLOCKED:
 		return "BLOCKED";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<SinkCombineResultType>", value));
 	}
 }
 
@@ -5142,7 +6718,7 @@ SinkCombineResultType EnumUtil::FromString<SinkCombineResultType>(const char *va
 	if (StringUtil::Equals(value, "BLOCKED")) {
 		return SinkCombineResultType::BLOCKED;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<SinkCombineResultType>", value));
 }
 
 template<>
@@ -5155,7 +6731,7 @@ const char* EnumUtil::ToChars<SinkFinalizeType>(SinkFinalizeType value) {
 	case SinkFinalizeType::BLOCKED:
 		return "BLOCKED";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<SinkFinalizeType>", value));
 	}
 }
 
@@ -5170,7 +6746,30 @@ SinkFinalizeType EnumUtil::FromString<SinkFinalizeType>(const char *value) {
 	if (StringUtil::Equals(value, "BLOCKED")) {
 		return SinkFinalizeType::BLOCKED;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<SinkFinalizeType>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<SinkNextBatchType>(SinkNextBatchType value) {
+	switch(value) {
+	case SinkNextBatchType::READY:
+		return "READY";
+	case SinkNextBatchType::BLOCKED:
+		return "BLOCKED";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<SinkNextBatchType>", value));
+	}
+}
+
+template<>
+SinkNextBatchType EnumUtil::FromString<SinkNextBatchType>(const char *value) {
+	if (StringUtil::Equals(value, "READY")) {
+		return SinkNextBatchType::READY;
+	}
+	if (StringUtil::Equals(value, "BLOCKED")) {
+		return SinkNextBatchType::BLOCKED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<SinkNextBatchType>", value));
 }
 
 template<>
@@ -5183,7 +6782,7 @@ const char* EnumUtil::ToChars<SinkResultType>(SinkResultType value) {
 	case SinkResultType::BLOCKED:
 		return "BLOCKED";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<SinkResultType>", value));
 	}
 }
 
@@ -5198,7 +6797,7 @@ SinkResultType EnumUtil::FromString<SinkResultType>(const char *value) {
 	if (StringUtil::Equals(value, "BLOCKED")) {
 		return SinkResultType::BLOCKED;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<SinkResultType>", value));
 }
 
 template<>
@@ -5211,7 +6810,7 @@ const char* EnumUtil::ToChars<SourceResultType>(SourceResultType value) {
 	case SourceResultType::BLOCKED:
 		return "BLOCKED";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<SourceResultType>", value));
 	}
 }
 
@@ -5226,7 +6825,7 @@ SourceResultType EnumUtil::FromString<SourceResultType>(const char *value) {
 	if (StringUtil::Equals(value, "BLOCKED")) {
 		return SourceResultType::BLOCKED;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<SourceResultType>", value));
 }
 
 template<>
@@ -5239,7 +6838,7 @@ const char* EnumUtil::ToChars<StatementReturnType>(StatementReturnType value) {
 	case StatementReturnType::NOTHING:
 		return "NOTHING";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<StatementReturnType>", value));
 	}
 }
 
@@ -5254,7 +6853,7 @@ StatementReturnType EnumUtil::FromString<StatementReturnType>(const char *value)
 	if (StringUtil::Equals(value, "NOTHING")) {
 		return StatementReturnType::NOTHING;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<StatementReturnType>", value));
 }
 
 template<>
@@ -5296,8 +6895,6 @@ const char* EnumUtil::ToChars<StatementType>(StatementType value) {
 		return "EXPORT_STATEMENT";
 	case StatementType::PRAGMA_STATEMENT:
 		return "PRAGMA_STATEMENT";
-	case StatementType::SHOW_STATEMENT:
-		return "SHOW_STATEMENT";
 	case StatementType::VACUUM_STATEMENT:
 		return "VACUUM_STATEMENT";
 	case StatementType::CALL_STATEMENT:
@@ -5318,8 +6915,12 @@ const char* EnumUtil::ToChars<StatementType>(StatementType value) {
 		return "DETACH_STATEMENT";
 	case StatementType::MULTI_STATEMENT:
 		return "MULTI_STATEMENT";
+	case StatementType::COPY_DATABASE_STATEMENT:
+		return "COPY_DATABASE_STATEMENT";
+	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
+		return "UPDATE_EXTENSIONS_STATEMENT";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<StatementType>", value));
 	}
 }
 
@@ -5379,9 +6980,6 @@ StatementType EnumUtil::FromString<StatementType>(const char *value) {
 	if (StringUtil::Equals(value, "PRAGMA_STATEMENT")) {
 		return StatementType::PRAGMA_STATEMENT;
 	}
-	if (StringUtil::Equals(value, "SHOW_STATEMENT")) {
-		return StatementType::SHOW_STATEMENT;
-	}
 	if (StringUtil::Equals(value, "VACUUM_STATEMENT")) {
 		return StatementType::VACUUM_STATEMENT;
 	}
@@ -5412,7 +7010,13 @@ StatementType EnumUtil::FromString<StatementType>(const char *value) {
 	if (StringUtil::Equals(value, "MULTI_STATEMENT")) {
 		return StatementType::MULTI_STATEMENT;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "COPY_DATABASE_STATEMENT")) {
+		return StatementType::COPY_DATABASE_STATEMENT;
+	}
+	if (StringUtil::Equals(value, "UPDATE_EXTENSIONS_STATEMENT")) {
+		return StatementType::UPDATE_EXTENSIONS_STATEMENT;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<StatementType>", value));
 }
 
 template<>
@@ -5431,7 +7035,7 @@ const char* EnumUtil::ToChars<StatisticsType>(StatisticsType value) {
 	case StatisticsType::ARRAY_STATS:
 		return "ARRAY_STATS";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<StatisticsType>", value));
 	}
 }
 
@@ -5455,7 +7059,7 @@ StatisticsType EnumUtil::FromString<StatisticsType>(const char *value) {
 	if (StringUtil::Equals(value, "ARRAY_STATS")) {
 		return StatisticsType::ARRAY_STATS;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<StatisticsType>", value));
 }
 
 template<>
@@ -5472,7 +7076,7 @@ const char* EnumUtil::ToChars<StatsInfo>(StatsInfo value) {
 	case StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES:
 		return "CAN_HAVE_NULL_AND_VALID_VALUES";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<StatsInfo>", value));
 	}
 }
 
@@ -5493,7 +7097,7 @@ StatsInfo EnumUtil::FromString<StatsInfo>(const char *value) {
 	if (StringUtil::Equals(value, "CAN_HAVE_NULL_AND_VALID_VALUES")) {
 		return StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<StatsInfo>", value));
 }
 
 template<>
@@ -5565,8 +7169,14 @@ const char* EnumUtil::ToChars<StrTimeSpecifier>(StrTimeSpecifier value) {
 		return "LOCALE_APPROPRIATE_TIME";
 	case StrTimeSpecifier::NANOSECOND_PADDED:
 		return "NANOSECOND_PADDED";
+	case StrTimeSpecifier::YEAR_ISO:
+		return "YEAR_ISO";
+	case StrTimeSpecifier::WEEKDAY_ISO:
+		return "WEEKDAY_ISO";
+	case StrTimeSpecifier::WEEK_NUMBER_ISO:
+		return "WEEK_NUMBER_ISO";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<StrTimeSpecifier>", value));
 	}
 }
 
@@ -5671,7 +7281,64 @@ StrTimeSpecifier EnumUtil::FromString<StrTimeSpecifier>(const char *value) {
 	if (StringUtil::Equals(value, "NANOSECOND_PADDED")) {
 		return StrTimeSpecifier::NANOSECOND_PADDED;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "YEAR_ISO")) {
+		return StrTimeSpecifier::YEAR_ISO;
+	}
+	if (StringUtil::Equals(value, "WEEKDAY_ISO")) {
+		return StrTimeSpecifier::WEEKDAY_ISO;
+	}
+	if (StringUtil::Equals(value, "WEEK_NUMBER_ISO")) {
+		return StrTimeSpecifier::WEEK_NUMBER_ISO;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<StrTimeSpecifier>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<StreamExecutionResult>(StreamExecutionResult value) {
+	switch(value) {
+	case StreamExecutionResult::CHUNK_READY:
+		return "CHUNK_READY";
+	case StreamExecutionResult::CHUNK_NOT_READY:
+		return "CHUNK_NOT_READY";
+	case StreamExecutionResult::EXECUTION_ERROR:
+		return "EXECUTION_ERROR";
+	case StreamExecutionResult::EXECUTION_CANCELLED:
+		return "EXECUTION_CANCELLED";
+	case StreamExecutionResult::BLOCKED:
+		return "BLOCKED";
+	case StreamExecutionResult::NO_TASKS_AVAILABLE:
+		return "NO_TASKS_AVAILABLE";
+	case StreamExecutionResult::EXECUTION_FINISHED:
+		return "EXECUTION_FINISHED";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<StreamExecutionResult>", value));
+	}
+}
+
+template<>
+StreamExecutionResult EnumUtil::FromString<StreamExecutionResult>(const char *value) {
+	if (StringUtil::Equals(value, "CHUNK_READY")) {
+		return StreamExecutionResult::CHUNK_READY;
+	}
+	if (StringUtil::Equals(value, "CHUNK_NOT_READY")) {
+		return StreamExecutionResult::CHUNK_NOT_READY;
+	}
+	if (StringUtil::Equals(value, "EXECUTION_ERROR")) {
+		return StreamExecutionResult::EXECUTION_ERROR;
+	}
+	if (StringUtil::Equals(value, "EXECUTION_CANCELLED")) {
+		return StreamExecutionResult::EXECUTION_CANCELLED;
+	}
+	if (StringUtil::Equals(value, "BLOCKED")) {
+		return StreamExecutionResult::BLOCKED;
+	}
+	if (StringUtil::Equals(value, "NO_TASKS_AVAILABLE")) {
+		return StreamExecutionResult::NO_TASKS_AVAILABLE;
+	}
+	if (StringUtil::Equals(value, "EXECUTION_FINISHED")) {
+		return StreamExecutionResult::EXECUTION_FINISHED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<StreamExecutionResult>", value));
 }
 
 template<>
@@ -5688,7 +7355,7 @@ const char* EnumUtil::ToChars<SubqueryType>(SubqueryType value) {
 	case SubqueryType::ANY:
 		return "ANY";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<SubqueryType>", value));
 	}
 }
 
@@ -5709,7 +7376,7 @@ SubqueryType EnumUtil::FromString<SubqueryType>(const char *value) {
 	if (StringUtil::Equals(value, "ANY")) {
 		return SubqueryType::ANY;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<SubqueryType>", value));
 }
 
 template<>
@@ -5720,7 +7387,7 @@ const char* EnumUtil::ToChars<TableColumnType>(TableColumnType value) {
 	case TableColumnType::GENERATED:
 		return "GENERATED";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<TableColumnType>", value));
 	}
 }
 
@@ -5732,7 +7399,7 @@ TableColumnType EnumUtil::FromString<TableColumnType>(const char *value) {
 	if (StringUtil::Equals(value, "GENERATED")) {
 		return TableColumnType::GENERATED;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<TableColumnType>", value));
 }
 
 template<>
@@ -5748,8 +7415,10 @@ const char* EnumUtil::ToChars<TableFilterType>(TableFilterType value) {
 		return "CONJUNCTION_OR";
 	case TableFilterType::CONJUNCTION_AND:
 		return "CONJUNCTION_AND";
+	case TableFilterType::STRUCT_EXTRACT:
+		return "STRUCT_EXTRACT";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<TableFilterType>", value));
 	}
 }
 
@@ -5770,7 +7439,10 @@ TableFilterType EnumUtil::FromString<TableFilterType>(const char *value) {
 	if (StringUtil::Equals(value, "CONJUNCTION_AND")) {
 		return TableFilterType::CONJUNCTION_AND;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "STRUCT_EXTRACT")) {
+		return TableFilterType::STRUCT_EXTRACT;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<TableFilterType>", value));
 }
 
 template<>
@@ -5790,12 +7462,18 @@ const char* EnumUtil::ToChars<TableReferenceType>(TableReferenceType value) {
 		return "EXPRESSION_LIST";
 	case TableReferenceType::CTE:
 		return "CTE";
-	case TableReferenceType::EMPTY:
+	case TableReferenceType::EMPTY_FROM:
 		return "EMPTY";
 	case TableReferenceType::PIVOT:
 		return "PIVOT";
+	case TableReferenceType::SHOW_REF:
+		return "SHOW_REF";
+	case TableReferenceType::COLUMN_DATA:
+		return "COLUMN_DATA";
+	case TableReferenceType::DELIM_GET:
+		return "DELIM_GET";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<TableReferenceType>", value));
 	}
 }
 
@@ -5823,12 +7501,21 @@ TableReferenceType EnumUtil::FromString<TableReferenceType>(const char *value) {
 		return TableReferenceType::CTE;
 	}
 	if (StringUtil::Equals(value, "EMPTY")) {
-		return TableReferenceType::EMPTY;
+		return TableReferenceType::EMPTY_FROM;
 	}
 	if (StringUtil::Equals(value, "PIVOT")) {
 		return TableReferenceType::PIVOT;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "SHOW_REF")) {
+		return TableReferenceType::SHOW_REF;
+	}
+	if (StringUtil::Equals(value, "COLUMN_DATA")) {
+		return TableReferenceType::COLUMN_DATA;
+	}
+	if (StringUtil::Equals(value, "DELIM_GET")) {
+		return TableReferenceType::DELIM_GET;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<TableReferenceType>", value));
 }
 
 template<>
@@ -5842,8 +7529,10 @@ const char* EnumUtil::ToChars<TableScanType>(TableScanType value) {
 		return "TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES";
 	case TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED:
 		return "TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED";
+	case TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS:
+		return "TABLE_SCAN_LATEST_COMMITTED_ROWS";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<TableScanType>", value));
 	}
 }
 
@@ -5861,7 +7550,10 @@ TableScanType EnumUtil::FromString<TableScanType>(const char *value) {
 	if (StringUtil::Equals(value, "TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED")) {
 		return TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "TABLE_SCAN_LATEST_COMMITTED_ROWS")) {
+		return TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<TableScanType>", value));
 }
 
 template<>
@@ -5872,7 +7564,7 @@ const char* EnumUtil::ToChars<TaskExecutionMode>(TaskExecutionMode value) {
 	case TaskExecutionMode::PROCESS_PARTIAL:
 		return "PROCESS_PARTIAL";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<TaskExecutionMode>", value));
 	}
 }
 
@@ -5884,7 +7576,7 @@ TaskExecutionMode EnumUtil::FromString<TaskExecutionMode>(const char *value) {
 	if (StringUtil::Equals(value, "PROCESS_PARTIAL")) {
 		return TaskExecutionMode::PROCESS_PARTIAL;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<TaskExecutionMode>", value));
 }
 
 template<>
@@ -5899,7 +7591,7 @@ const char* EnumUtil::ToChars<TaskExecutionResult>(TaskExecutionResult value) {
 	case TaskExecutionResult::TASK_BLOCKED:
 		return "TASK_BLOCKED";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<TaskExecutionResult>", value));
 	}
 }
 
@@ -5917,7 +7609,7 @@ TaskExecutionResult EnumUtil::FromString<TaskExecutionResult>(const char *value)
 	if (StringUtil::Equals(value, "TASK_BLOCKED")) {
 		return TaskExecutionResult::TASK_BLOCKED;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<TaskExecutionResult>", value));
 }
 
 template<>
@@ -5930,7 +7622,7 @@ const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value) {
 	case TimestampCastResult::ERROR_NON_UTC_TIMEZONE:
 		return "ERROR_NON_UTC_TIMEZONE";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<TimestampCastResult>", value));
 	}
 }
 
@@ -5945,7 +7637,35 @@ TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value)
 	if (StringUtil::Equals(value, "ERROR_NON_UTC_TIMEZONE")) {
 		return TimestampCastResult::ERROR_NON_UTC_TIMEZONE;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<TimestampCastResult>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<TransactionModifierType>(TransactionModifierType value) {
+	switch(value) {
+	case TransactionModifierType::TRANSACTION_DEFAULT_MODIFIER:
+		return "TRANSACTION_DEFAULT_MODIFIER";
+	case TransactionModifierType::TRANSACTION_READ_ONLY:
+		return "TRANSACTION_READ_ONLY";
+	case TransactionModifierType::TRANSACTION_READ_WRITE:
+		return "TRANSACTION_READ_WRITE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<TransactionModifierType>", value));
+	}
+}
+
+template<>
+TransactionModifierType EnumUtil::FromString<TransactionModifierType>(const char *value) {
+	if (StringUtil::Equals(value, "TRANSACTION_DEFAULT_MODIFIER")) {
+		return TransactionModifierType::TRANSACTION_DEFAULT_MODIFIER;
+	}
+	if (StringUtil::Equals(value, "TRANSACTION_READ_ONLY")) {
+		return TransactionModifierType::TRANSACTION_READ_ONLY;
+	}
+	if (StringUtil::Equals(value, "TRANSACTION_READ_WRITE")) {
+		return TransactionModifierType::TRANSACTION_READ_WRITE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<TransactionModifierType>", value));
 }
 
 template<>
@@ -5960,7 +7680,7 @@ const char* EnumUtil::ToChars<TransactionType>(TransactionType value) {
 	case TransactionType::ROLLBACK:
 		return "ROLLBACK";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<TransactionType>", value));
 	}
 }
 
@@ -5978,7 +7698,7 @@ TransactionType EnumUtil::FromString<TransactionType>(const char *value) {
 	if (StringUtil::Equals(value, "ROLLBACK")) {
 		return TransactionType::ROLLBACK;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<TransactionType>", value));
 }
 
 template<>
@@ -5995,7 +7715,7 @@ const char* EnumUtil::ToChars<TupleDataPinProperties>(TupleDataPinProperties val
 	case TupleDataPinProperties::ALREADY_PINNED:
 		return "ALREADY_PINNED";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<TupleDataPinProperties>", value));
 	}
 }
 
@@ -6016,7 +7736,7 @@ TupleDataPinProperties EnumUtil::FromString<TupleDataPinProperties>(const char *
 	if (StringUtil::Equals(value, "ALREADY_PINNED")) {
 		return TupleDataPinProperties::ALREADY_PINNED;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<TupleDataPinProperties>", value));
 }
 
 template<>
@@ -6032,8 +7752,10 @@ const char* EnumUtil::ToChars<UndoFlags>(UndoFlags value) {
 		return "DELETE_TUPLE";
 	case UndoFlags::UPDATE_TUPLE:
 		return "UPDATE_TUPLE";
+	case UndoFlags::SEQUENCE_VALUE:
+		return "SEQUENCE_VALUE";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<UndoFlags>", value));
 	}
 }
 
@@ -6054,7 +7776,10 @@ UndoFlags EnumUtil::FromString<UndoFlags>(const char *value) {
 	if (StringUtil::Equals(value, "UPDATE_TUPLE")) {
 		return UndoFlags::UPDATE_TUPLE;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "SEQUENCE_VALUE")) {
+		return UndoFlags::SEQUENCE_VALUE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<UndoFlags>", value));
 }
 
 template<>
@@ -6070,8 +7795,10 @@ const char* EnumUtil::ToChars<UnionInvalidReason>(UnionInvalidReason value) {
 		return "VALIDITY_OVERLAP";
 	case UnionInvalidReason::TAG_MISMATCH:
 		return "TAG_MISMATCH";
+	case UnionInvalidReason::NULL_TAG:
+		return "NULL_TAG";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<UnionInvalidReason>", value));
 	}
 }
 
@@ -6092,7 +7819,10 @@ UnionInvalidReason EnumUtil::FromString<UnionInvalidReason>(const char *value) {
 	if (StringUtil::Equals(value, "TAG_MISMATCH")) {
 		return UnionInvalidReason::TAG_MISMATCH;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	if (StringUtil::Equals(value, "NULL_TAG")) {
+		return UnionInvalidReason::NULL_TAG;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<UnionInvalidReason>", value));
 }
 
 template<>
@@ -6101,7 +7831,7 @@ const char* EnumUtil::ToChars<VectorAuxiliaryDataType>(VectorAuxiliaryDataType v
 	case VectorAuxiliaryDataType::ARROW_AUXILIARY:
 		return "ARROW_AUXILIARY";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<VectorAuxiliaryDataType>", value));
 	}
 }
 
@@ -6110,7 +7840,7 @@ VectorAuxiliaryDataType EnumUtil::FromString<VectorAuxiliaryDataType>(const char
 	if (StringUtil::Equals(value, "ARROW_AUXILIARY")) {
 		return VectorAuxiliaryDataType::ARROW_AUXILIARY;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<VectorAuxiliaryDataType>", value));
 }
 
 template<>
@@ -6137,7 +7867,7 @@ const char* EnumUtil::ToChars<VectorBufferType>(VectorBufferType value) {
 	case VectorBufferType::ARRAY_BUFFER:
 		return "ARRAY_BUFFER";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<VectorBufferType>", value));
 	}
 }
 
@@ -6173,7 +7903,7 @@ VectorBufferType EnumUtil::FromString<VectorBufferType>(const char *value) {
 	if (StringUtil::Equals(value, "ARRAY_BUFFER")) {
 		return VectorBufferType::ARRAY_BUFFER;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<VectorBufferType>", value));
 }
 
 template<>
@@ -6190,7 +7920,7 @@ const char* EnumUtil::ToChars<VectorType>(VectorType value) {
 	case VectorType::SEQUENCE_VECTOR:
 		return "SEQUENCE_VECTOR";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<VectorType>", value));
 	}
 }
 
@@ -6211,7 +7941,7 @@ VectorType EnumUtil::FromString<VectorType>(const char *value) {
 	if (StringUtil::Equals(value, "SEQUENCE_VECTOR")) {
 		return VectorType::SEQUENCE_VECTOR;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<VectorType>", value));
 }
 
 template<>
@@ -6233,10 +7963,12 @@ const char* EnumUtil::ToChars<VerificationType>(VerificationType value) {
 		return "PREPARED";
 	case VerificationType::EXTERNAL:
 		return "EXTERNAL";
+	case VerificationType::FETCH_ROW_AS_SCAN:
+		return "FETCH_ROW_AS_SCAN";
 	case VerificationType::INVALID:
 		return "INVALID";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<VerificationType>", value));
 	}
 }
 
@@ -6266,10 +7998,13 @@ VerificationType EnumUtil::FromString<VerificationType>(const char *value) {
 	if (StringUtil::Equals(value, "EXTERNAL")) {
 		return VerificationType::EXTERNAL;
 	}
+	if (StringUtil::Equals(value, "FETCH_ROW_AS_SCAN")) {
+		return VerificationType::FETCH_ROW_AS_SCAN;
+	}
 	if (StringUtil::Equals(value, "INVALID")) {
 		return VerificationType::INVALID;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<VerificationType>", value));
 }
 
 template<>
@@ -6282,7 +8017,7 @@ const char* EnumUtil::ToChars<VerifyExistenceType>(VerifyExistenceType value) {
 	case VerifyExistenceType::DELETE_FK:
 		return "DELETE_FK";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<VerifyExistenceType>", value));
 	}
 }
 
@@ -6297,7 +8032,7 @@ VerifyExistenceType EnumUtil::FromString<VerifyExistenceType>(const char *value)
 	if (StringUtil::Equals(value, "DELETE_FK")) {
 		return VerifyExistenceType::DELETE_FK;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<VerifyExistenceType>", value));
 }
 
 template<>
@@ -6349,12 +8084,16 @@ const char* EnumUtil::ToChars<WALType>(WALType value) {
 		return "DELETE_TUPLE";
 	case WALType::UPDATE_TUPLE:
 		return "UPDATE_TUPLE";
+	case WALType::ROW_GROUP_DATA:
+		return "ROW_GROUP_DATA";
+	case WALType::WAL_VERSION:
+		return "WAL_VERSION";
 	case WALType::CHECKPOINT:
 		return "CHECKPOINT";
 	case WALType::WAL_FLUSH:
 		return "WAL_FLUSH";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<WALType>", value));
 	}
 }
 
@@ -6429,13 +8168,19 @@ WALType EnumUtil::FromString<WALType>(const char *value) {
 	if (StringUtil::Equals(value, "UPDATE_TUPLE")) {
 		return WALType::UPDATE_TUPLE;
 	}
+	if (StringUtil::Equals(value, "ROW_GROUP_DATA")) {
+		return WALType::ROW_GROUP_DATA;
+	}
+	if (StringUtil::Equals(value, "WAL_VERSION")) {
+		return WALType::WAL_VERSION;
+	}
 	if (StringUtil::Equals(value, "CHECKPOINT")) {
 		return WALType::CHECKPOINT;
 	}
 	if (StringUtil::Equals(value, "WAL_FLUSH")) {
 		return WALType::WAL_FLUSH;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<WALType>", value));
 }
 
 template<>
@@ -6448,7 +8193,7 @@ const char* EnumUtil::ToChars<WindowAggregationMode>(WindowAggregationMode value
 	case WindowAggregationMode::SEPARATE:
 		return "SEPARATE";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<WindowAggregationMode>", value));
 	}
 }
 
@@ -6463,7 +8208,7 @@ WindowAggregationMode EnumUtil::FromString<WindowAggregationMode>(const char *va
 	if (StringUtil::Equals(value, "SEPARATE")) {
 		return WindowAggregationMode::SEPARATE;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<WindowAggregationMode>", value));
 }
 
 template<>
@@ -6488,7 +8233,7 @@ const char* EnumUtil::ToChars<WindowBoundary>(WindowBoundary value) {
 	case WindowBoundary::EXPR_FOLLOWING_RANGE:
 		return "EXPR_FOLLOWING_RANGE";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<WindowBoundary>", value));
 	}
 }
 
@@ -6521,7 +8266,7 @@ WindowBoundary EnumUtil::FromString<WindowBoundary>(const char *value) {
 	if (StringUtil::Equals(value, "EXPR_FOLLOWING_RANGE")) {
 		return WindowBoundary::EXPR_FOLLOWING_RANGE;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<WindowBoundary>", value));
 }
 
 template<>
@@ -6536,7 +8281,7 @@ const char* EnumUtil::ToChars<WindowExcludeMode>(WindowExcludeMode value) {
 	case WindowExcludeMode::TIES:
 		return "TIES";
 	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<WindowExcludeMode>", value));
 	}
 }
 
@@ -6554,35 +8299,7 @@ WindowExcludeMode EnumUtil::FromString<WindowExcludeMode>(const char *value) {
 	if (StringUtil::Equals(value, "TIES")) {
 		return WindowExcludeMode::TIES;
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
-}
-
-template<>
-const char* EnumUtil::ToChars<WithinCollection>(WithinCollection value) {
-	switch(value) {
-	case WithinCollection::NO:
-		return "NO";
-	case WithinCollection::LIST:
-		return "LIST";
-	case WithinCollection::ARRAY:
-		return "ARRAY";
-	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
-	}
-}
-
-template<>
-WithinCollection EnumUtil::FromString<WithinCollection>(const char *value) {
-	if (StringUtil::Equals(value, "NO")) {
-		return WithinCollection::NO;
-	}
-	if (StringUtil::Equals(value, "LIST")) {
-		return WithinCollection::LIST;
-	}
-	if (StringUtil::Equals(value, "ARRAY")) {
-		return WithinCollection::ARRAY;
-	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<WindowExcludeMode>", value));
 }
 
 }

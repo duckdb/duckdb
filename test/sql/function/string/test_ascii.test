@@ -38,7 +38,7 @@ SELECT ASCII('Ä')
 196
 
 query I
-SELECT ASCII(5)
+SELECT ASCII('5')
 ----
 53
 
@@ -49,6 +49,7 @@ NULL
 
 statement error
 SELECT ASCII()
+----
 
 query T
 SELECT CHR(97)
@@ -72,9 +73,12 @@ NULL
 
 statement error
 SELECT CHR(-10)
+----
 
 statement error
 SELECT CHR(1073741824)
+----
 
 statement error
 SELECT CHR()
+----

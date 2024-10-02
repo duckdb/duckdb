@@ -1,0 +1,47 @@
+# name: test/sql/window/test_window_order_collate.test
+# description: Test collation is honoured by over(partition/order by)
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+query III rowsort
+select
+    *,
+    array_agg(col) over(partition by id order by col collate nocase) as lead_col_nocase
+from (
+	select 
+		unnest(array[1, 1, 1, 1]) as id, 
+		unnest(array['A', 'a', 'b', 'B']) as col
+)
+----
+1	A	[A, a]
+1	B	[A, a, b, B]
+1	a	[A, a]
+1	b	[A, a, b, B]
+
+statement ok
+CREATE TABLE db_city (name VARCHAR, city VARCHAR COLLATE NOCASE);
+
+statement ok
+INSERT INTO db_city VALUES
+	('DuckDB', 'Amsterdam'), 
+	('MonetDB','amsterdam'),
+	('VectorWise', 'Amstërdam');
+	
+
+query III rowsort
+SELECT name, city, row_number() OVER (PARTITION BY city) AS row_id 
+FROM db_city;
+----
+DuckDB	Amsterdam	1
+MonetDB	amsterdam	2
+VectorWise	Amstërdam	1
+
+query III rowsort
+SELECT name, city, row_number() OVER (PARTITION BY city COLLATE NOCASE) AS row_id 
+FROM db_city;
+----
+DuckDB	Amsterdam	1
+MonetDB	amsterdam	2
+VectorWise	Amstërdam	1

@@ -1,0 +1,33 @@
+# name: test/sql/storage/concurrent_table_insertion.test_slow
+# description: Test concurrent table insertions
+# group: [storage]
+
+# Fails with VERIFY_VECTOR=dictionary_expression.
+# The test calls into VerifyFlatVector after emitting a dictionary vector.
+# This is spurious and I cannot reproduce it locally.
+require no_vector_verification
+
+load __TEST_DIR__/concurrent_table_insertions.db
+
+statement ok
+CREATE OR REPLACE TABLE d (x INT, y INT, z INT);
+
+concurrentloop c 0 100
+
+loop i 0 10
+
+statement ok
+CREATE OR REPLACE TEMP TABLE _tt AS SELECT 1 AS x, (SELECT COUNT(*) FROM d WHERE z != ${i}) AS y, ${i} AS z;
+
+statement ok
+INSERT INTO d SELECT * FROM _tt
+
+statement ok
+CREATE OR REPLACE TEMP TABLE _tt AS SELECT * FROM d LIMIT 20000
+
+statement ok
+INSERT INTO d SELECT * FROM _tt
+
+endloop
+
+endloop

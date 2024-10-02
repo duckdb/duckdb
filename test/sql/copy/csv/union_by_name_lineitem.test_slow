@@ -5,6 +5,9 @@
 require tpch
 
 statement ok
+pragma enable_verification;
+
+statement ok
 CALL dbgen(sf=0.1);
 
 statement ok

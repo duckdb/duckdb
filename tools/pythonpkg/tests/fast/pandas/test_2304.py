@@ -36,7 +36,19 @@ class TestPandasMergeSameName(object):
         result_df = con.execute(query).fetchdf()
         expected_result = con.execute(query).fetchall()
         con.register('result_df', result_df)
-        result = con.execute('select * from result_df order by id_1, agedate, age, v, id_1_2, agedate_2,v2').fetchall()
+        rel = con.sql(
+            """
+            select * from result_df order by
+                id_1,
+                agedate,
+                age,
+                v,
+                id_1_1,
+                agedate_1,
+                v2
+        """
+        )
+        result = rel.fetchall()
 
         assert result == expected_result
 
@@ -58,8 +70,8 @@ class TestPandasMergeSameName(object):
                 'id_1': [1, 1, 2, 1, 1],
                 'id_3': [1, 1, 2, 1, 1],
                 'id_2': [1, 1, 2, 1, 1],
-                'id_1_2': [1, 1, 2, 1, 1],
-                'id_2_2': [1, 1, 1, 1, 1],
+                'id_1_1': [1, 1, 2, 1, 1],
+                'id_2_1': [1, 1, 1, 1, 1],
             }
         )
 
@@ -90,7 +102,7 @@ class TestPandasMergeSameName(object):
                 'id': [1],
                 'id_1': [1],
                 'id_2': [1],
-                'id_2_1': [1],
+                'id_3': [1],
             }
         )
 

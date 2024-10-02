@@ -1,0 +1,40 @@
+[build-system]
+requires = [
+	"setuptools>=60",
+	"setuptools_scm>=6.4",
+	"pybind11>=2.6.0",
+]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+root = "../.."
+local_scheme = "no-local-version"
+
+### CI Builwheel configurations ###
+
+# Default config runs all tests and requires at least one extension to be tested against
+[tool.cibuildwheel]
+dependency-versions = "latest"
+before-build = 'pip install oldest-supported-numpy'
+before-test = 'python scripts/optional_requirements.py'
+test-requires = 'pytest'
+test-command = 'DUCKDB_PYTHON_TEST_EXTENSION_PATH={project} DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED=1 python -m pytest {project}/tests --verbose'
+
+[tool.cibuildwheel.environment]
+PIP_CONSTRAINT = 'build-constraints.txt'
+
+[[tool.cibuildwheel.overrides]]
+select = [
+    "*-musllinux*", # For musllinux we currently don't build extensions yet
+    "*i686*", # For 32 bit we don't build extensions
+    "*aarch64*", # For aarch64 we don't build extensions
+]
+test-command = "python -m pytest {project}/tests/fast --verbose"
+
+[tool.cibuildwheel.windows]
+archs = ["AMD64"]
+test-command = "python -m pytest {project}/tests/fast --verbose"
+
+# See https://github.com/duckdblabs/duckdb-internal/issues/1923 for context
+[tool.cibuildwheel.macos]
+before-test = 'python scripts/optional_requirements.py --exclude polars --exclude tensorflow'

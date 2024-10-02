@@ -23,6 +23,16 @@ struct HistogramFun {
 
 	static AggregateFunctionSet GetFunctions();
 	static AggregateFunction GetHistogramUnorderedMap(LogicalType &type);
+	static AggregateFunction BinnedHistogramFunction();
+};
+
+struct HistogramExactFun {
+	static constexpr const char *Name = "histogram_exact";
+	static constexpr const char *Parameters = "arg,bins";
+	static constexpr const char *Description = "Returns a LIST of STRUCTs with the fields bucket and count matching the buckets exactly.";
+	static constexpr const char *Example = "histogram_exact(A, [0, 1, 2])";
+
+	static AggregateFunction GetFunction();
 };
 
 struct ListFun {

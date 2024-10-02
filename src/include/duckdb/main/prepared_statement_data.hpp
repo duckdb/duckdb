@@ -41,18 +41,17 @@ public:
 	//! The statement properties
 	StatementProperties properties;
 
-	//! The catalog version of when the prepared statement was bound
-	//! If this version is lower than the current catalog version, we have to rebind the prepared statement
-	idx_t catalog_version;
 	//! The map of parameter index to the actual value entry
 	bound_parameter_map_t value_map;
+	//! Whether we are creating a streaming result or not
+	bool is_streaming = false;
 
 public:
 	void CheckParameterCount(idx_t parameter_count);
 	//! Whether or not the prepared statement data requires the query to rebound for the given parameters
-	bool RequireRebind(ClientContext &context, optional_ptr<case_insensitive_map_t<Value>> values);
+	bool RequireRebind(ClientContext &context, optional_ptr<case_insensitive_map_t<BoundParameterData>> values);
 	//! Bind a set of values to the prepared statement data
-	DUCKDB_API void Bind(case_insensitive_map_t<Value> values);
+	DUCKDB_API void Bind(case_insensitive_map_t<BoundParameterData> values);
 	//! Get the expected SQL Type of the bound parameter
 	DUCKDB_API LogicalType GetType(const string &identifier);
 	//! Try to get the expected SQL Type of the bound parameter

@@ -2,6 +2,7 @@
 
 #include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/sort/sort.hpp"
+#include "duckdb/common/uhugeint.hpp"
 
 namespace duckdb {
 
@@ -135,6 +136,8 @@ int Comparators::CompareValAndAdvance(data_ptr_t &l_ptr, data_ptr_t &r_ptr, cons
 		return TemplatedCompareAndAdvance<uint64_t>(l_ptr, r_ptr);
 	case PhysicalType::INT128:
 		return TemplatedCompareAndAdvance<hugeint_t>(l_ptr, r_ptr);
+	case PhysicalType::UINT128:
+		return TemplatedCompareAndAdvance<uhugeint_t>(l_ptr, r_ptr);
 	case PhysicalType::FLOAT:
 		return TemplatedCompareAndAdvance<float>(l_ptr, r_ptr);
 	case PhysicalType::DOUBLE:
@@ -387,6 +390,9 @@ int Comparators::CompareListAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_p
 		case PhysicalType::INT128:
 			comp_res = TemplatedCompareListLoop<hugeint_t>(left_ptr, right_ptr, left_validity, right_validity, count);
 			break;
+		case PhysicalType::UINT128:
+			comp_res = TemplatedCompareListLoop<uhugeint_t>(left_ptr, right_ptr, left_validity, right_validity, count);
+			break;
 		case PhysicalType::FLOAT:
 			comp_res = TemplatedCompareListLoop<float>(left_ptr, right_ptr, left_validity, right_validity, count);
 			break;
@@ -495,7 +501,7 @@ void Comparators::SwizzleSingleValue(data_ptr_t data_ptr, const data_ptr_t &heap
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		data_ptr += string_t::HEADER_SIZE;
 	}
-	Store<idx_t>(Load<data_ptr_t>(data_ptr) - heap_ptr, data_ptr);
+	Store<idx_t>(UnsafeNumericCast<idx_t>(Load<data_ptr_t>(data_ptr) - heap_ptr), data_ptr);
 }
 
 } // namespace duckdb

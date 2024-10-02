@@ -103,17 +103,17 @@ SELECT i<2 FROM integers JOIN integers2 USING (i);
 0
 0
 
-query I
+query I rowsort
 SELECT i>2 FROM integers JOIN integers2 USING (i);
 ----
 0
 1
 
-query I
+query I rowsort
 SELECT i<3 FROM integers JOIN integers2 USING (i);
 ----
-1
 0
+1
 
 query I
 SELECT i2.i=4 FROM integers i1 JOIN integers2 i2 ON (i2.i<i1.i);

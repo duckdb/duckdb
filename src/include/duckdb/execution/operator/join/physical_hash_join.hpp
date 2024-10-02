@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/execution/join_hashtable.hpp"
 #include "duckdb/execution/operator/join/perfect_hash_join_executor.hpp"
@@ -27,7 +26,8 @@ public:
 	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
 	                 vector<JoinCondition> cond, JoinType join_type, const vector<idx_t> &left_projection_map,
 	                 const vector<idx_t> &right_projection_map, vector<LogicalType> delim_types,
-	                 idx_t estimated_cardinality, PerfectHashJoinStats perfect_join_stats);
+	                 idx_t estimated_cardinality, PerfectHashJoinStats perfect_join_stats,
+	                 unique_ptr<JoinFilterPushdownInfo> pushdown_info);
 	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
 	                 vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality,
 	                 PerfectHashJoinStats join_state);
@@ -35,15 +35,26 @@ public:
 	//! Initialize HT for this operator
 	unique_ptr<JoinHashTable> InitializeHashTable(ClientContext &context) const;
 
-	vector<idx_t> right_projection_map;
-	//! The types of the keys
+	//! The types of the join keys
 	vector<LogicalType> condition_types;
-	//! The types of all conditions
-	vector<LogicalType> build_types;
+
+	//! The indices for getting the payload columns
+	vector<idx_t> payload_column_idxs;
+	//! The types of the payload columns
+	vector<LogicalType> payload_types;
+
+	//! Positions of the RHS columns that need to output
+	vector<idx_t> rhs_output_columns;
+	//! The types of the output
+	vector<LogicalType> rhs_output_types;
+
 	//! Duplicate eliminated types; only used for delim_joins (i.e. correlated subqueries)
 	vector<LogicalType> delim_types;
 	//! Used in perfect hash join
 	PerfectHashJoinStats perfect_join_statistics;
+
+public:
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
 public:
 	// Operator Interface
@@ -64,6 +75,8 @@ protected:
 	                                                 GlobalSourceState &gstate) const override;
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
 
+	double GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
+
 	//! Becomes a source when it is an external join
 	bool IsSource() const override {
 		return true;
@@ -80,6 +93,7 @@ public:
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
+	void PrepareFinalize(ClientContext &context, GlobalSinkState &global_state) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          OperatorSinkFinalizeInput &input) const override;
 

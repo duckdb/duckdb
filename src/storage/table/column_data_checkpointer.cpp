@@ -13,6 +13,7 @@ ColumnDataCheckpointer::ColumnDataCheckpointer(ColumnData &col_data_p, RowGroup 
       is_validity(GetType().id() == LogicalTypeId::VALIDITY),
       intermediate(is_validity ? LogicalType::BOOLEAN : GetType(), true, is_validity),
       checkpoint_info(checkpoint_info_p) {
+
 	auto &config = DBConfig::GetConfig(GetDatabase());
 	auto functions = config.GetCompressionFunctions(GetType().InternalType());
 	for (auto &func : functions) {
@@ -63,8 +64,13 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 
 CompressionType ForceCompression(vector<optional_ptr<CompressionFunction>> &compression_functions,
                                  CompressionType compression_type) {
-	// On of the force_compression flags has been set
-	// check if this compression method is available
+// On of the force_compression flags has been set
+// check if this compression method is available
+#ifdef DEBUG
+	if (CompressionTypeIsDeprecated(compression_type)) {
+		throw InternalException("Deprecated compression type: %s", CompressionTypeToString(compression_type));
+	}
+#endif
 	bool found = false;
 	for (idx_t i = 0; i < compression_functions.size(); i++) {
 		auto &compression_function = *compression_functions[i];
@@ -95,7 +101,7 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 	auto &config = DBConfig::GetConfig(GetDatabase());
 	CompressionType forced_method = CompressionType::COMPRESSION_AUTO;
 
-	auto compression_type = checkpoint_info.compression_type;
+	auto compression_type = checkpoint_info.GetCompressionType();
 	if (compression_type != CompressionType::COMPRESSION_AUTO) {
 		forced_method = ForceCompression(compression_functions, compression_type);
 	}
@@ -120,7 +126,10 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 			if (!compression_functions[i]) {
 				continue;
 			}
-			auto success = compression_functions[i]->analyze(*analyze_states[i], scan_vector, count);
+			bool success = false;
+			if (analyze_states[i]) {
+				success = compression_functions[i]->analyze(*analyze_states[i], scan_vector, count);
+			}
 			if (!success) {
 				// could not use this compression function on this data set
 				// erase it
@@ -137,6 +146,9 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 	idx_t best_score = NumericLimits<idx_t>::Maximum();
 	for (idx_t i = 0; i < compression_functions.size(); i++) {
 		if (!compression_functions[i]) {
+			continue;
+		}
+		if (!analyze_states[i]) {
 			continue;
 		}
 		//! Check if the method type is the forced method (if forced is used)
@@ -185,6 +197,7 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	// now that we have analyzed the compression functions we can start writing to disk
 	auto best_function = compression_functions[compression_idx];
 	auto compress_state = best_function->init_compression(*this, std::move(analyze_state));
+
 	ScanSegments(
 	    [&](Vector &scan_vector, idx_t count) { best_function->compress(*compress_state, scan_vector, count); });
 	best_function->compress_finalize(*compress_state);
@@ -215,18 +228,7 @@ void ColumnDataCheckpointer::WritePersistentSegments() {
 	// we only need to write the metadata
 	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
 		auto segment = nodes[segment_idx].node.get();
-		D_ASSERT(segment->segment_type == ColumnSegmentType::PERSISTENT);
-
-		// set up the data pointer directly using the data from the persistent segment
-		DataPointer pointer(segment->stats.statistics.Copy());
-		pointer.block_pointer.block_id = segment->GetBlockId();
-		pointer.block_pointer.offset = segment->GetBlockOffset();
-		pointer.row_start = segment->start;
-		pointer.tuple_count = segment->count;
-		pointer.compression_type = segment->function.get().type;
-		if (segment->function.get().serialize_state) {
-			pointer.segment_state = segment->function.get().serialize_state(*segment);
-		}
+		auto pointer = segment->GetDataPointer();
 
 		// merge the persistent stats into the global column stats
 		state.global_stats->Merge(segment->stats.statistics);

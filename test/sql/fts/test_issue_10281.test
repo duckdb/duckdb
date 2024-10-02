@@ -1,0 +1,19 @@
+# name: test/sql/fts/test_issue_10281.test
+# description: Test issue #10281: Error when trying to create FTS index for column with struct data
+# group: [fts]
+
+require fts
+
+require no_alternative_verify
+
+statement ok
+CREATE OR REPLACE TABLE data AS SELECT {'duck': 42} conversations, 42::bigint _id;
+
+statement ok
+PRAGMA create_fts_index('data', '_id', 'conversations');
+
+# we should be able to retrieve the struct col
+query I
+SELECT _id FROM (SELECT *, fts_main_data.match_bm25(_id, 'duck') AS score FROM data) sq WHERE score IS NOT NULL ORDER BY score DESC;
+----
+42

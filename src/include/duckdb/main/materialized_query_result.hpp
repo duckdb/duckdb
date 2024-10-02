@@ -27,7 +27,7 @@ public:
 	                                   vector<string> names, unique_ptr<ColumnDataCollection> collection,
 	                                   ClientProperties client_properties);
 	//! Creates an unsuccessful query result with error condition
-	DUCKDB_API explicit MaterializedQueryResult(PreservedError error);
+	DUCKDB_API explicit MaterializedQueryResult(ErrorData error);
 
 public:
 	//! Fetches a DataChunk from the query result.
@@ -52,6 +52,9 @@ public:
 
 	//! Returns a reference to the underlying column data collection
 	ColumnDataCollection &Collection();
+
+	//! Takes ownership of the collection, 'collection' is null after this operation
+	unique_ptr<ColumnDataCollection> TakeCollection();
 
 private:
 	unique_ptr<ColumnDataCollection> collection;

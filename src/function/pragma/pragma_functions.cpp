@@ -2,14 +2,16 @@
 
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/function/function_set.hpp"
+#include "duckdb/logging/http_logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/function/function_set.hpp"
 
 #include <cctype>
 
@@ -76,16 +78,16 @@ static void PragmaDisableExternalVerification(ClientContext &context, const Func
 	ClientConfig::GetConfig(context).verify_external = false;
 }
 
+static void PragmaEnableFetchRowVerification(ClientContext &context, const FunctionParameters &parameters) {
+	ClientConfig::GetConfig(context).verify_fetch_row = true;
+}
+
+static void PragmaDisableFetchRowVerification(ClientContext &context, const FunctionParameters &parameters) {
+	ClientConfig::GetConfig(context).verify_fetch_row = false;
+}
+
 static void PragmaEnableForceParallelism(ClientContext &context, const FunctionParameters &parameters) {
 	ClientConfig::GetConfig(context).verify_parallelism = true;
-}
-
-static void PragmaEnableIndexJoin(ClientContext &context, const FunctionParameters &parameters) {
-	ClientConfig::GetConfig(context).enable_index_join = true;
-}
-
-static void PragmaEnableForceIndexJoin(ClientContext &context, const FunctionParameters &parameters) {
-	ClientConfig::GetConfig(context).force_index_join = true;
 }
 
 static void PragmaForceCheckpoint(ClientContext &context, const FunctionParameters &parameters) {
@@ -132,6 +134,9 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("verify_external", PragmaEnableExternalVerification));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_verify_external", PragmaDisableExternalVerification));
 
+	set.AddFunction(PragmaFunction::PragmaStatement("verify_fetch_row", PragmaEnableFetchRowVerification));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_verify_fetch_row", PragmaDisableFetchRowVerification));
+
 	set.AddFunction(PragmaFunction::PragmaStatement("verify_serializer", PragmaVerifySerializer));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_verify_serializer", PragmaDisableVerifySerializer));
 
@@ -144,8 +149,6 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_optimizer", PragmaEnableOptimizer));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_optimizer", PragmaDisableOptimizer));
 
-	set.AddFunction(PragmaFunction::PragmaStatement("enable_index_join", PragmaEnableIndexJoin));
-	set.AddFunction(PragmaFunction::PragmaStatement("force_index_join", PragmaEnableForceIndexJoin));
 	set.AddFunction(PragmaFunction::PragmaStatement("force_checkpoint", PragmaForceCheckpoint));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_progress_bar", PragmaEnableProgressBar));

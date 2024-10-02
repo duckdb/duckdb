@@ -115,7 +115,7 @@ select a.*, b.*, c.* from a, b natural right outer join c;
 42	80	NULL	NULL	44	84
 
 query IIIIII
-select * from a natural full outer join b, a a1 natural full outer join c;
+select * from a natural full outer join b, a a1 natural full outer join c order by all;
 ----
 42	80	NULL	42	80	NULL
 42	80	NULL	44	NULL	84

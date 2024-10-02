@@ -1,0 +1,247 @@
+# name: test/sql/storage/compression/alp/alp_tpch.test_slow
+# group: [alp]
+
+require tpch
+
+# load the DB from disk
+load __TEST_DIR__/test_alp.db
+
+# This needs to be single-threaded to be consistent (because of floating point issues)
+statement ok
+pragma threads=1
+
+statement ok
+PRAGMA force_compression='alp';
+
+statement ok
+call dbgen(sf=1, suffix='_original');
+
+# Test both DOUBLE and FLOAT
+
+foreach type DOUBLE FLOAT
+
+# Create tables
+
+statement ok
+CREATE TABLE lineitem(
+	l_orderkey ${type} NOT NULL,
+	l_partkey ${type} NOT NULL,
+	l_suppkey ${type} NOT NULL,
+	l_linenumber ${type} NOT NULL,
+	l_quantity ${type} NOT NULL,
+	l_extendedprice ${type} NOT NULL,
+	l_discount ${type} NOT NULL,
+	l_tax ${type} NOT NULL,
+	l_returnflag VARCHAR NOT NULL,
+	l_linestatus VARCHAR NOT NULL,
+	l_shipdate DATE NOT NULL,
+	l_commitdate DATE NOT NULL,
+	l_receiptdate DATE NOT NULL,
+	l_shipinstruct VARCHAR NOT NULL,
+	l_shipmode VARCHAR NOT NULL,
+	l_comment VARCHAR NOT NULL
+);
+
+statement ok
+CREATE TABLE orders(
+	o_orderkey ${type} NOT NULL,
+	o_custkey ${type} NOT NULL,
+	o_orderstatus VARCHAR NOT NULL,
+	o_totalprice ${type} NOT NULL,
+	o_orderdate DATE NOT NULL,
+	o_orderpriority VARCHAR NOT NULL,
+	o_clerk VARCHAR NOT NULL,
+	o_shippriority ${type} NOT NULL,
+	o_comment VARCHAR NOT NULL
+);
+
+statement ok
+CREATE TABLE partsupp(
+	ps_partkey ${type} NOT NULL,
+	ps_suppkey ${type} NOT NULL,
+	ps_availqty ${type} NOT NULL,
+	ps_supplycost ${type} NOT NULL,
+	ps_comment VARCHAR NOT NULL
+);
+
+# 'p_partkey' being INTEGER is imperative to TPCH(17)
+statement ok
+CREATE TABLE part(
+	p_partkey INTEGER NOT NULL,
+	p_name VARCHAR NOT NULL,
+	p_mfgr VARCHAR NOT NULL,
+	p_brand VARCHAR NOT NULL,
+	p_type VARCHAR NOT NULL,
+	p_size ${type} NOT NULL,
+	p_container VARCHAR NOT NULL,
+	p_retailprice ${type} NOT NULL,
+	p_comment VARCHAR NOT NULL
+);
+
+statement ok
+CREATE TABLE customer(
+	c_custkey ${type} NOT NULL,
+	c_name VARCHAR NOT NULL,
+	c_address VARCHAR NOT NULL,
+	c_nationkey ${type} NOT NULL,
+	c_phone VARCHAR NOT NULL,
+	c_acctbal ${type} NOT NULL,
+	c_mktsegment VARCHAR NOT NULL,
+	c_comment VARCHAR NOT NULL
+);
+
+statement ok
+CREATE TABLE supplier(
+	s_suppkey ${type} NOT NULL,
+	s_name VARCHAR NOT NULL,
+	s_address VARCHAR NOT NULL,
+	s_nationkey ${type} NOT NULL,
+	s_phone VARCHAR NOT NULL,
+	s_acctbal ${type} NOT NULL,
+	s_comment VARCHAR NOT NULL
+);
+
+statement ok
+CREATE TABLE nation(
+	n_nationkey ${type} NOT NULL,
+	n_name VARCHAR NOT NULL,
+	n_regionkey ${type} NOT NULL,
+	n_comment VARCHAR NOT NULL
+);
+
+statement ok
+CREATE TABLE region(
+	r_regionkey ${type} NOT NULL,
+	r_name VARCHAR NOT NULL,
+	r_comment VARCHAR NOT NULL
+);
+
+# Populate tables
+
+statement ok
+insert into lineitem select * from lineitem_original;
+
+statement ok
+insert into orders select * from orders_original;
+
+statement ok
+insert into partsupp select * from partsupp_original;
+
+statement ok
+insert into part select * from part_original;
+
+statement ok
+insert into customer select * from customer_original;
+
+statement ok
+insert into supplier select * from supplier_original;
+
+statement ok
+insert into nation select * from nation_original;
+
+statement ok
+insert into region select * from region_original;
+
+# Checkpoint to compress the data
+
+statement ok
+checkpoint
+
+# Run the tpch queries
+
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+
+endloop
+
+loop i 10 15
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+
+endloop
+
+#TPCH 15 - 'sum' replaced with 'kahan_sum'
+query I
+SELECT
+    s_suppkey,
+    s_name,
+    s_address,
+    s_phone,
+    total_revenue
+FROM
+    supplier,
+    (
+        SELECT
+            l_suppkey AS supplier_no,
+            kahan_sum(l_extendedprice * (1 - l_discount)) AS total_revenue
+        FROM
+            lineitem
+        WHERE
+            l_shipdate >= CAST('1996-01-01' AS date)
+            AND l_shipdate < CAST('1996-04-01' AS date)
+        GROUP BY
+            supplier_no) revenue0
+WHERE
+    s_suppkey = supplier_no
+    AND total_revenue = (
+        SELECT
+            max(total_revenue)
+        FROM (
+            SELECT
+                l_suppkey AS supplier_no,
+                kahan_sum(l_extendedprice * (1 - l_discount)) AS total_revenue
+            FROM
+                lineitem
+            WHERE
+                l_shipdate >= CAST('1996-01-01' AS date)
+                AND l_shipdate < CAST('1996-04-01' AS date)
+            GROUP BY
+                supplier_no) revenue1)
+ORDER BY
+    s_suppkey;
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q15.csv
+
+loop i 16 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+
+endloop
+
+# Drop tables
+
+statement ok
+DROP TABLE lineitem;
+
+statement ok
+DROP TABLE orders;
+
+statement ok
+DROP TABLE partsupp;
+
+statement ok
+DROP TABLE part;
+
+statement ok
+DROP TABLE customer;
+
+statement ok
+DROP TABLE supplier;
+
+statement ok
+DROP TABLE nation;
+
+statement ok
+DROP TABLE region;
+
+endloop

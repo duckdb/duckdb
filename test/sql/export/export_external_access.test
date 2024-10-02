@@ -19,6 +19,8 @@ SET enable_external_access=false
 
 statement error
 IMPORT DATABASE '__TEST_DIR__/export_permissions_test'
+----
 
 statement error
 EXPORT DATABASE '__TEST_DIR__/export_permissions_test2' (FORMAT CSV)
+----

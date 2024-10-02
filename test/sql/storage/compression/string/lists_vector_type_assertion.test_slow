@@ -1,0 +1,29 @@
+# name: test/sql/storage/compression/string/lists_vector_type_assertion.test_slow
+# description: For smaller block sizes, this test ensures that the vector type of result vectors does not change for partial scans
+# group: [string]
+
+load __TEST_DIR__/test_string_compression.db
+
+statement ok
+SET enable_fsst_vectors='true'
+
+statement ok
+pragma threads=1
+
+statement ok
+PRAGMA force_compression='fsst'
+
+statement ok
+CREATE TABLE test (l VARCHAR[]);
+
+statement ok
+INSERT INTO test SELECT
+	CASE WHEN (i//1000)%2=0
+	THEN [1::VARCHAR, 1::VARCHAR, 1::VARCHAR]
+	ELSE [2::VARCHAR, 2::VARCHAR] END
+FROM range(200000) tbl(i)
+
+query II
+SELECT COUNT(*), SUM(i::INT) FROM (SELECT UNNEST(l) FROM test) tbl(i)
+----
+500000	700000

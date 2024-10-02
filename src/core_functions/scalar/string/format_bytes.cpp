@@ -4,6 +4,7 @@
 
 namespace duckdb {
 
+template <int64_t MULTIPLIER>
 static void FormatBytesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	UnaryExecutor::Execute<int64_t, string_t>(args.data[0], result, args.size(), [&](int64_t bytes) {
 		bool is_negative = bytes < 0;
@@ -18,12 +19,16 @@ static void FormatBytesFunction(DataChunk &args, ExpressionState &state, Vector 
 			unsigned_bytes = idx_t(bytes);
 		}
 		return StringVector::AddString(result, (is_negative ? "-" : "") +
-		                                           StringUtil::BytesToHumanReadableString(unsigned_bytes));
+		                                           StringUtil::BytesToHumanReadableString(unsigned_bytes, MULTIPLIER));
 	});
 }
 
 ScalarFunction FormatBytesFun::GetFunction() {
-	return ScalarFunction({LogicalType::BIGINT}, LogicalType::VARCHAR, FormatBytesFunction);
+	return ScalarFunction({LogicalType::BIGINT}, LogicalType::VARCHAR, FormatBytesFunction<1024>);
+}
+
+ScalarFunction FormatreadabledecimalsizeFun::GetFunction() {
+	return ScalarFunction({LogicalType::BIGINT}, LogicalType::VARCHAR, FormatBytesFunction<1000>);
 }
 
 } // namespace duckdb

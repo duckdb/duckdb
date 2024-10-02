@@ -9,13 +9,13 @@
 #pragma once
 
 #include "buffered_json_reader.hpp"
-#include "json_enums.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/type_map.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "json_enums.hpp"
 #include "json_transform.hpp"
 
 namespace duckdb {
@@ -124,8 +124,15 @@ public:
 	idx_t max_depth = NumericLimits<idx_t>::Maximum();
 	//! We divide the number of appearances of each JSON field by the auto-detection sample size
 	//! If the average over the fields of an object is less than this threshold,
-	//! we default to the JSON type for this object rather than the shredded type
+	//! we default to the MAP type with value type of merged field types
 	double field_appearance_threshold = 0.1;
+	//! The maximum number of files we sample to sample sample_size rows
+	idx_t maximum_sample_files = 32;
+	//! Whether we auto-detect and convert JSON strings to integers
+	bool convert_strings_to_integers = false;
+	//! If a struct contains more fields than this threshold with at least 80% similar types,
+	//! we infer it as MAP type
+	idx_t map_inference_threshold = 25;
 
 	//! All column names (in order)
 	vector<string> names;
@@ -222,19 +229,26 @@ public:
 
 private:
 	bool ReadNextBuffer(JSONScanGlobalState &gstate);
-	void ReadNextBufferInternal(JSONScanGlobalState &gstate, optional_idx &buffer_index);
-	void ReadNextBufferSeek(JSONScanGlobalState &gstate, optional_idx &buffer_index);
-	void ReadNextBufferNoSeek(JSONScanGlobalState &gstate, optional_idx &buffer_index);
+	bool ReadNextBufferInternal(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index,
+	                            bool &file_done);
+	bool ReadNextBufferSeek(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index,
+	                        bool &file_done);
+	bool ReadNextBufferNoSeek(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index,
+	                          bool &file_done);
+	AllocatedData AllocateBuffer(JSONScanGlobalState &gstate);
+	data_ptr_t GetReconstructBuffer(JSONScanGlobalState &gstate);
+
 	void SkipOverArrayStart();
 
-	void ReadAndAutoDetect(JSONScanGlobalState &gstate, optional_idx &buffer_index);
-	void ReconstructFirstObject();
-	void ParseNextChunk();
+	void ReadAndAutoDetect(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index,
+	                       bool &file_done);
+	bool ReconstructFirstObject(JSONScanGlobalState &gstate);
+	void ParseNextChunk(JSONScanGlobalState &gstate);
 
 	void ParseJSON(char *const json_start, const idx_t json_size, const idx_t remaining);
 	void ThrowObjectSizeError(const idx_t object_size);
-	void ThrowInvalidAtEndError();
 
+	//! Must hold the lock
 	void TryIncrementFileIndex(JSONScanGlobalState &gstate) const;
 	bool IsParallel(JSONScanGlobalState &gstate) const;
 
@@ -249,6 +263,12 @@ private:
 	optional_ptr<JSONBufferHandle> current_buffer_handle;
 	//! Whether this is the last batch of the file
 	bool is_last;
+
+	//! The current main filesystem
+	FileSystem &fs;
+
+	//! For some filesystems (e.g. S3), using a filehandle per thread increases performance
+	unique_ptr<FileHandle> thread_local_filehandle;
 
 	//! Current buffer read info
 	char *buffer_ptr;

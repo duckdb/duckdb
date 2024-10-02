@@ -1,0 +1,16 @@
+# name: benchmark/micro/list/list_value.benchmark
+# description: LIST_VALUE performance
+# group: [list]
+
+name List Value
+group micro
+subgroup list
+
+load
+CREATE TABLE uuids AS SELECT uuid() AS uuid FROM range(100000000) tbl(i) UNION ALL SELECT UUID '00000000-0000-0000-0000-000000000000';
+
+run
+SELECT MIN(l::VARCHAR) FROM (SELECT [uuid] AS l FROM uuids)
+
+result I
+[00000000-0000-0000-0000-000000000000]

@@ -24,14 +24,88 @@ static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const B
 static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatistics &input, const LogicalType &target) {
 	//	Downcasting timestamps to times is not a truncation operation
 	switch (target.id()) {
-	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME: {
 		switch (input.GetType().id()) {
 		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_SEC:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_NS:
 		case LogicalTypeId::TIMESTAMP_TZ:
 			return nullptr;
 		default:
 			break;
 		}
+		break;
+	}
+	// FIXME: perform actual stats propagation for these casts
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ: {
+		const bool to_timestamp = target.id() == LogicalTypeId::TIMESTAMP;
+		const bool to_timestamp_tz = target.id() == LogicalTypeId::TIMESTAMP_TZ;
+		//  Casting to timestamp[_tz] (us) from a different unit can not re-use stats
+		switch (input.GetType().id()) {
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return nullptr;
+		case LogicalTypeId::TIMESTAMP: {
+			if (to_timestamp_tz) {
+				// Both use INT64 physical type, but should not be treated equal
+				return nullptr;
+			}
+			break;
+		}
+		case LogicalTypeId::TIMESTAMP_TZ: {
+			if (to_timestamp) {
+				// Both use INT64 physical type, but should not be treated equal
+				return nullptr;
+			}
+			break;
+		}
+		default:
+			break;
+		}
+		break;
+	}
+	case LogicalTypeId::TIMESTAMP_NS: {
+		// Same as above ^
+		switch (input.GetType().id()) {
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_TZ:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return nullptr;
+		default:
+			break;
+		}
+		break;
+	}
+	case LogicalTypeId::TIMESTAMP_MS: {
+		// Same as above ^
+		switch (input.GetType().id()) {
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_TZ:
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return nullptr;
+		default:
+			break;
+		}
+		break;
+	}
+	case LogicalTypeId::TIMESTAMP_SEC: {
+		// Same as above ^
+		switch (input.GetType().id()) {
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_TZ:
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIMESTAMP_MS:
+			return nullptr;
+		default:
+			break;
+		}
+		break;
+	}
 	default:
 		break;
 	}
@@ -51,7 +125,7 @@ static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatisti
 }
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCastExpression &cast,
-                                                                     unique_ptr<Expression> *expr_ptr) {
+                                                                     unique_ptr<Expression> &expr_ptr) {
 	auto child_stats = PropagateExpression(cast.child);
 	if (!child_stats) {
 		return nullptr;

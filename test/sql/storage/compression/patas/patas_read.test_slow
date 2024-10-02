@@ -1,51 +1,39 @@
 # name: test/sql/storage/compression/patas/patas_read.test_slow
 # group: [patas]
 
-require parquet
+# The database is written with a vector size of 2048.
+require vector_size 2048
 
-require httpfs
+load test/sql/storage/compression/patas/patas.db readonly
 
-load __TEST_DIR__/test_patas.db
+query I
+select count(temperature) from temperatures_double;
+----
+245000
 
-statement ok
-DROP TABLE IF EXISTS temperatures;
+query I
+select count(temperature) from temperatures_float;
+----
+245000
 
-statement ok
-pragma threads=1;
-
-statement ok
-PRAGMA force_compression='patas';
-
-statement ok
-CREATE TABLE temperatures (
-	temperature DOUBLE
-);
-
-statement ok
-INSERT INTO temperatures SELECT temp from 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/city_temperature.parquet' t(temp), range(1);
-
-statement ok
-CHECKPOINT;
-
-statement ok
-create table reference_temperatures (
-	temperature DOUBLE
-);
-
-statement ok
-PRAGMA force_compression='uncompressed';
-
-statement ok
-INSERT INTO reference_temperatures SELECT temp from 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/city_temperature.parquet' t(temp), range(1);
-
-statement ok
-checkpoint;
-
-query I nosort r1
-select temperature from reference_temperatures;
+query I nosort res
+select temperature from temperatures_double;
 ----
 
-query I nosort r1
-select temperature from temperatures
+query I nosort res
+select temperature from temperatures_float;
 ----
 
+query I
+SELECT compression FROM pragma_storage_info('temperatures_double') WHERE segment_type == 'double' AND compression != 'Patas';
+----
+
+query I
+SELECT compression FROM pragma_storage_info('temperatures_float') WHERE segment_type == 'float' AND compression != 'Patas';
+----
+
+# Verify that the compression method is deprecated
+statement error
+pragma force_compression='patas'
+----
+deprecated

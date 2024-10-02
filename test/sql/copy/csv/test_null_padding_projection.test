@@ -1,0 +1,162 @@
+# name: test/sql/copy/csv/test_null_padding_projection.test
+# description: Test CSV with nullpading interoping with other options and projection pushdown
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+# Test simple null_padding, this will fail because we have a row with more columns that defined
+statement error
+from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false)
+----
+Expected Number of Columns: 4 Found: 5
+
+# Create a view
+statement ok
+CREATE VIEW np AS  from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors = true);
+
+# With ignore errors this should work, with last row being ignored
+query IIII
+from np
+----
+10	100	1000	NULL
+10	100	1000	10000
+10	NULL	NULL	NULL
+10	100	NULL	NULL
+
+# Try a couple projections
+query I
+select a from np
+----
+10
+10
+10
+10
+
+query II
+select b,d from np
+----
+100	NULL
+100	10000
+NULL	NULL
+100	NULL
+
+# Now let's try with options that give a const value
+query IIIII
+from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect => false, ignore_errors => true, filename => true);
+----
+10	100	1000	NULL	data/csv/nullpadding.csv
+10	100	1000	10000	data/csv/nullpadding.csv
+10	NULL	NULL	NULL	data/csv/nullpadding.csv
+10	100	NULL	NULL	data/csv/nullpadding.csv
+
+query II
+select a, filename from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect => false, ignore_errors => true, filename => true);
+----
+10	data/csv/nullpadding.csv
+10	data/csv/nullpadding.csv
+10	data/csv/nullpadding.csv
+10	data/csv/nullpadding.csv
+
+query I
+select filename from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect => false, ignore_errors => true, filename => true);
+----
+data/csv/nullpadding.csv
+data/csv/nullpadding.csv
+data/csv/nullpadding.csv
+data/csv/nullpadding.csv
+
+query I
+select a from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors => true, filename => true);
+----
+10
+10
+10
+10
+
+# Let's try some filters
+
+query IIII
+select * from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect := false, ignore_errors := true)
+where  b = 100;
+----
+10	100	1000	NULL
+10	100	1000	10000
+10	100	NULL	NULL
+
+
+query IIIII
+select * from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors = true, filename = true)
+where a = 10 and d = 10000;
+----
+10	100	1000	10000	data/csv/nullpadding.csv
+
+# Try All Columns
+query IIIIII
+select * from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER', 'e': 'INTEGER'}, auto_detect = false, filename = true)
+where a = 10 and d = 10000;
+----
+10	100	1000	10000	NULL	data/csv/nullpadding.csv
+10	100	1000	10000	100000	data/csv/nullpadding.csv
+
+query IIIII
+select * from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER', 'e': 'INTEGER'}, auto_detect := false)
+----
+10	100	1000	NULL	NULL
+10	100	1000	10000	NULL
+10	NULL	NULL	NULL	NULL
+10	100	NULL	NULL	NULL
+10	100	1000	10000	100000
+
+# Try more columns
+query IIIIII
+select * from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER', 'e': 'INTEGER', 'f': 'INTEGER'}, auto_detect = false)
+----
+10	100	1000	NULL	NULL	NULL
+10	100	1000	10000	NULL	NULL
+10	NULL	NULL	NULL	NULL	NULL
+10	100	NULL	NULL	NULL	NULL
+10	100	1000	10000	100000	NULL
+
+# Moreee
+query IIIIIII
+select * from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER', 'e': 'INTEGER', 'f': 'INTEGER', 'g': 'INTEGER'}, auto_detect = false)
+----
+10	100	1000	NULL	NULL	NULL	NULL
+10	100	1000	10000	NULL	NULL	NULL
+10	NULL	NULL	NULL	NULL	NULL	NULL
+10	100	NULL	NULL	NULL	NULL	NULL
+10	100	1000	10000	100000	NULL	NULL
+
+
+# Test Null Padding + Projection + Multiple files running Single Threaded
+statement ok
+set threads =1
+
+statement ok
+create view T as
+SELECT SETTLEMENTDATE, DUID, I, filename, UNIT, CAST(LOWER6SEC AS DOUBLE) AS LOWER6SEC, CAST(LOWER6SECFLAGS AS DOUBLE) AS LOWER6SECFLAGS, CAST(LOWER60SECFLAGS AS DOUBLE) AS LOWER60SECFLAGS, CAST(RAISE5MINACTUALAVAILABILITY AS DOUBLE) AS RAISE5MINACTUALAVAILABILITY, CAST(INTERVENTION AS DOUBLE) AS INTERVENTION, CAST(LOWER5MINFLAGS AS DOUBLE) AS LOWER5MINFLAGS, CAST(RAISEREGAVAILABILITY AS DOUBLE) AS RAISEREGAVAILABILITY, CAST(LOWERREGACTUALAVAILABILITY AS DOUBLE) AS LOWERREGACTUALAVAILABILITY, CAST(VIOLATION60SECDEGREE AS DOUBLE) AS VIOLATION60SECDEGREE, CAST(LOWER60SEC AS DOUBLE) AS LOWER60SEC, CAST(MARGINAL5MINVALUE AS DOUBLE) AS MARGINAL5MINVALUE, CAST(RAISE60SEC AS DOUBLE) AS RAISE60SEC, CAST(RAMPUPRATE AS DOUBLE) AS RAMPUPRATE, CAST(TOTALCLEARED AS DOUBLE) AS TOTALCLEARED, CAST(VIOLATION5MINDEGREE AS DOUBLE) AS VIOLATION5MINDEGREE, CAST(LOWER6SECACTUALAVAILABILITY AS DOUBLE) AS LOWER6SECACTUALAVAILABILITY, CAST(AGCSTATUS AS DOUBLE) AS AGCSTATUS, CAST(RAISE60SECFLAGS AS DOUBLE) AS RAISE60SECFLAGS, CAST("VERSION" AS DOUBLE) AS "VERSION", CAST(RAISE5MINFLAGS AS DOUBLE) AS RAISE5MINFLAGS, CAST(LOWER60SECACTUALAVAILABILITY AS DOUBLE) AS LOWER60SECACTUALAVAILABILITY, CAST(RAMPDOWNRATE AS DOUBLE) AS RAMPDOWNRATE, CAST(RAISE6SECFLAGS AS DOUBLE) AS RAISE6SECFLAGS, CAST(RAISE60SECACTUALAVAILABILITY AS DOUBLE) AS RAISE60SECACTUALAVAILABILITY, CAST(VIOLATIONDEGREE AS DOUBLE) AS VIOLATIONDEGREE, CAST(RAISE5MIN AS DOUBLE) AS RAISE5MIN, CAST(MARGINALVALUE AS DOUBLE) AS MARGINALVALUE, CAST(LOWERREGFLAGS AS DOUBLE) AS LOWERREGFLAGS, CAST(RAISEREG AS DOUBLE) AS RAISEREG, CAST(LOWERREGENABLEMENTMIN AS DOUBLE) AS LOWERREGENABLEMENTMIN, CAST(LOWERREGENABLEMENTMAX AS DOUBLE) AS LOWERREGENABLEMENTMAX, CAST(DISPATCHMODE AS DOUBLE) AS DISPATCHMODE, CAST(VIOLATION6SECDEGREE AS DOUBLE) AS VIOLATION6SECDEGREE, CAST(LOWERREG AS DOUBLE) AS LOWERREG, CAST(LOWERREGAVAILABILITY AS DOUBLE) AS LOWERREGAVAILABILITY, CAST(RAISEREGACTUALAVAILABILITY AS DOUBLE) AS RAISEREGACTUALAVAILABILITY, CAST(RAISEREGFLAGS AS DOUBLE) AS RAISEREGFLAGS, CAST(MARGINAL60SECVALUE AS DOUBLE) AS MARGINAL60SECVALUE, CAST(LOWER5MINACTUALAVAILABILITY AS DOUBLE) AS LOWER5MINACTUALAVAILABILITY, CAST(RAISEREGENABLEMENTMAX AS DOUBLE) AS RAISEREGENABLEMENTMAX, CAST(INITIALMW AS DOUBLE) AS INITIALMW, CAST(AVAILABILITY AS DOUBLE) AS AVAILABILITY, CAST(RUNNO AS DOUBLE) AS RUNNO, CAST(RAISE6SECACTUALAVAILABILITY AS DOUBLE) AS RAISE6SECACTUALAVAILABILITY, CAST(MARGINAL6SECVALUE AS DOUBLE) AS MARGINAL6SECVALUE, CAST(RAISE6SEC AS DOUBLE) AS RAISE6SEC, CAST(XX AS DOUBLE) AS XX, CAST(RAISEREGENABLEMENTMIN AS DOUBLE) AS RAISEREGENABLEMENTMIN, CAST(LOWER5MIN AS DOUBLE) AS LOWER5MIN FROM (SELECT *
+FROM read_csv(main.list_value('data/csv/public_daily_sample.csv','data/csv/public_daily_sample.csv','data/csv/public_daily_sample.csv')
+, ("Skip" = 1), ("header" = 0), (all_varchar = 1), ("columns" = main.struct_pack(I := 'VARCHAR', UNIT := 'VARCHAR', XX := 'VARCHAR', "VERSION" := 'VARCHAR', SETTLEMENTDATE := 'VARCHAR', RUNNO := 'VARCHAR', DUID := 'VARCHAR', INTERVENTION := 'VARCHAR', DISPATCHMODE := 'VARCHAR', AGCSTATUS := 'VARCHAR', INITIALMW := 'VARCHAR', TOTALCLEARED := 'VARCHAR', RAMPDOWNRATE := 'VARCHAR', RAMPUPRATE := 'VARCHAR', LOWER5MIN := 'VARCHAR', LOWER60SEC := 'VARCHAR', LOWER6SEC := 'VARCHAR', RAISE5MIN := 'VARCHAR', RAISE60SEC := 'VARCHAR', RAISE6SEC := 'VARCHAR', MARGINAL5MINVALUE := 'VARCHAR', MARGINAL60SECVALUE := 'VARCHAR', MARGINAL6SECVALUE := 'VARCHAR', MARGINALVALUE := 'VARCHAR', VIOLATION5MINDEGREE := 'VARCHAR', VIOLATION60SECDEGREE := 'VARCHAR', VIOLATION6SECDEGREE := 'VARCHAR', VIOLATIONDEGREE := 'VARCHAR', LOWERREG := 'VARCHAR', RAISEREG := 'VARCHAR', AVAILABILITY := 'VARCHAR', RAISE6SECFLAGS := 'VARCHAR', RAISE60SECFLAGS := 'VARCHAR', RAISE5MINFLAGS := 'VARCHAR', RAISEREGFLAGS := 'VARCHAR', LOWER6SECFLAGS := 'VARCHAR', LOWER60SECFLAGS := 'VARCHAR', LOWER5MINFLAGS := 'VARCHAR', LOWERREGFLAGS := 'VARCHAR', RAISEREGAVAILABILITY := 'VARCHAR', RAISEREGENABLEMENTMAX := 'VARCHAR', RAISEREGENABLEMENTMIN := 'VARCHAR', LOWERREGAVAILABILITY := 'VARCHAR', LOWERREGENABLEMENTMAX := 'VARCHAR', LOWERREGENABLEMENTMIN := 'VARCHAR', RAISE6SECACTUALAVAILABILITY := 'VARCHAR', RAISE60SECACTUALAVAILABILITY := 'VARCHAR', RAISE5MINACTUALAVAILABILITY := 'VARCHAR', RAISEREGACTUALAVAILABILITY := 'VARCHAR', LOWER6SECACTUALAVAILABILITY := 'VARCHAR', LOWER60SECACTUALAVAILABILITY := 'VARCHAR', LOWER5MINACTUALAVAILABILITY := 'VARCHAR', LOWERREGACTUALAVAILABILITY := 'VARCHAR')), (filename = 1), (null_padding = CAST('t' AS BOOLEAN)), (ignore_errors = 1), (auto_detect = CAST('f' AS BOOLEAN))) WHERE ((I = 'D') AND (UNIT = 'DUNIT')));
+
+statement ok
+create view T_2 as
+SELECT * EXCLUDE (SETTLEMENTDATE, XX, filename, I), CAST(SETTLEMENTDATE AS TIMESTAMP) AS SETTLEMENTDATE, split(filename, '/')[8] AS file, isoyear(CAST(SETTLEMENTDATE AS TIMESTAMP)) AS "YEAR" FROM T
+
+
+query I
+select count(*) from T_2
+----
+8349

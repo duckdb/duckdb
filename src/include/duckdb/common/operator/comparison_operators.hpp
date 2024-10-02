@@ -210,10 +210,6 @@ inline bool GreaterThan::Operation(const interval_t &left, const interval_t &rig
 	return Interval::GreaterThan(left, right);
 }
 
-inline bool operator<(const interval_t &lhs, const interval_t &rhs) {
-	return LessThan::Operation(lhs, rhs);
-}
-
 //===--------------------------------------------------------------------===//
 // Specialized Hugeint Comparison Operators
 //===--------------------------------------------------------------------===//

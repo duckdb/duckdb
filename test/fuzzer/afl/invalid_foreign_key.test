@@ -7,3 +7,4 @@ PRAGMA enable_verification
 
 statement error
 create table y(y int, foreign key (y) references y(y));
+----

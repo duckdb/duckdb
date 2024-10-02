@@ -39,68 +39,84 @@ namespace duckdb {
 
 template <class... T>
 struct AlwaysFalse {
-	static constexpr bool value = false;
+	static constexpr bool VALUE = false;
 };
 
 template<typename T>
 using reference = std::reference_wrapper<T>;
 
-template<class _Tp, bool SAFE = true>
-struct __unique_if
+template<class DATA_TYPE, bool SAFE = true>
+struct TemplatedUniqueIf
 {
-    typedef unique_ptr<_Tp, std::default_delete<_Tp>, SAFE> __unique_single;
+    typedef unique_ptr<DATA_TYPE, std::default_delete<DATA_TYPE>, SAFE> templated_unique_single_t;
 };
 
-template<class _Tp>
-struct __unique_if<_Tp[]>
+template<class DATA_TYPE, size_t N>
+struct TemplatedUniqueIf<DATA_TYPE[N]>
 {
-    typedef unique_ptr<_Tp[]> __unique_array_unknown_bound;
+    typedef void TemplatedUniqueArrayKnownBound; // NOLINT: mimic std style
 };
 
-template<class _Tp, size_t _Np>
-struct __unique_if<_Tp[_Np]>
-{
-    typedef void __unique_array_known_bound;
-};
-
-template<class _Tp, class... _Args>
+template<class DATA_TYPE, class... ARGS>
 inline 
-typename __unique_if<_Tp, true>::__unique_single
-make_uniq(_Args&&... __args)
+typename TemplatedUniqueIf<DATA_TYPE, true>::templated_unique_single_t
+make_uniq(ARGS&&... args) // NOLINT: mimic std style
 {
-    return unique_ptr<_Tp, std::default_delete<_Tp>, true>(new _Tp(std::forward<_Args>(__args)...));
+    return unique_ptr<DATA_TYPE, std::default_delete<DATA_TYPE>, true>(new DATA_TYPE(std::forward<ARGS>(args)...));
 }
 
-template<class _Tp, class... _Args>
+template<class DATA_TYPE, class... ARGS>
 inline 
-typename __unique_if<_Tp, false>::__unique_single
-make_unsafe_uniq(_Args&&... __args)
+shared_ptr<DATA_TYPE>
+make_shared_ptr(ARGS&&... args) // NOLINT: mimic std style
 {
-    return unique_ptr<_Tp, std::default_delete<_Tp>, false>(new _Tp(std::forward<_Args>(__args)...));
+	return shared_ptr<DATA_TYPE>(std::make_shared<DATA_TYPE>(std::forward<ARGS>(args)...));
 }
 
-template<class _Tp>
-inline unique_ptr<_Tp[], std::default_delete<_Tp>, true>
-make_uniq_array(size_t __n)
+template<class DATA_TYPE, class... ARGS>
+inline 
+typename TemplatedUniqueIf<DATA_TYPE, false>::templated_unique_single_t
+make_unsafe_uniq(ARGS&&... args) // NOLINT: mimic std style
 {
-    return unique_ptr<_Tp[], std::default_delete<_Tp>, true>(new _Tp[__n]());
+    return unique_ptr<DATA_TYPE, std::default_delete<DATA_TYPE>, false>(new DATA_TYPE(std::forward<ARGS>(args)...));
 }
 
-template<class _Tp>
-inline unique_ptr<_Tp[], std::default_delete<_Tp>, false>
-make_unsafe_uniq_array(size_t __n)
+template<class DATA_TYPE>
+inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>
+make_uniq_array(size_t n) // NOLINT: mimic std style
 {
-    return unique_ptr<_Tp[], std::default_delete<_Tp>, false>(new _Tp[__n]());
+	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>(new DATA_TYPE[n]());
 }
 
-template<class _Tp, class... _Args>
-    typename __unique_if<_Tp>::__unique_array_known_bound
-    make_uniq(_Args&&...) = delete;
+template<class DATA_TYPE>
+inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>
+make_uniq_array_uninitialized(size_t n) // NOLINT: mimic std style
+{
+	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>(new DATA_TYPE[n]);
+}
+
+template<class DATA_TYPE>
+inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>
+make_unsafe_uniq_array(size_t n) // NOLINT: mimic std style
+{
+	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>(new DATA_TYPE[n]());
+}
+
+template<class DATA_TYPE>
+inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>
+make_unsafe_uniq_array_uninitialized(size_t n) // NOLINT: mimic std style
+{
+	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>(new DATA_TYPE[n]);
+}
+
+template<class DATA_TYPE, class... ARGS>
+    typename TemplatedUniqueIf<DATA_TYPE>::TemplatedUniqueArrayKnownBound
+    make_uniq(ARGS&&...) = delete; // NOLINT: mimic std style
 
 
-template <typename S, typename T, typename... Args>
-unique_ptr<S> make_uniq_base(Args &&... args) {
-	return unique_ptr<S>(new T(std::forward<Args>(args)...));
+template <typename S, typename T, typename... ARGS>
+unique_ptr<S> make_uniq_base(ARGS &&... args) { // NOLINT: mimic std style
+	return unique_ptr<S>(new T(std::forward<ARGS>(args)...));
 }
 
 #ifdef DUCKDB_ENABLE_DEPRECATED_API
@@ -110,15 +126,20 @@ unique_ptr<S> make_unique_base(Args &&... args) {
 }
 #endif // DUCKDB_ENABLE_DEPRECATED_API
 
-template <typename T, typename S>
-unique_ptr<S> unique_ptr_cast(unique_ptr<T> src) {
-	return unique_ptr<S>(static_cast<S *>(src.release()));
+template <typename SRC, typename TGT>
+unique_ptr<TGT> unique_ptr_cast(unique_ptr<SRC> src) { // NOLINT: mimic std style
+	return unique_ptr<TGT>(static_cast<TGT *>(src.release()));
+}
+
+template <typename SRC, typename TGT>
+shared_ptr<TGT> shared_ptr_cast(shared_ptr<SRC> src) { // NOLINT: mimic std style
+	return shared_ptr<TGT>(std::static_pointer_cast<TGT, SRC>(src.internal));
 }
 
 struct SharedConstructor {
 	template <class T, typename... ARGS>
 	static shared_ptr<T> Create(ARGS &&...args) {
-		return make_shared<T>(std::forward<ARGS>(args)...);
+		return make_shared_ptr<T>(std::forward<ARGS>(args)...);
 	}
 };
 
@@ -137,21 +158,29 @@ typename std::remove_reference<T>::type&& move(T&& t) noexcept {
 }
 #endif
 
-template <class T, class... _Args>
-static duckdb::unique_ptr<T> make_unique(_Args&&... __args) {
+template <class T, class... ARGS>
+static duckdb::unique_ptr<T> make_unique(ARGS&&... __args) { // NOLINT: mimic std style
 #ifndef DUCKDB_ENABLE_DEPRECATED_API
 	static_assert(sizeof(T) == 0, "Use make_uniq instead of make_unique!");
 #endif // DUCKDB_ENABLE_DEPRECATED_API
-	return unique_ptr<T>(new T(std::forward<_Args>(__args)...));
+	return unique_ptr<T>(new T(std::forward<ARGS>(__args)...));
+}
+
+template <class T, class... ARGS>
+static duckdb::shared_ptr<T> make_shared(ARGS&&... __args) { // NOLINT: mimic std style
+#ifndef DUCKDB_ENABLE_DEPRECATED_API
+	static_assert(sizeof(T) == 0, "Use make_shared_ptr instead of make_shared!");
+#endif // DUCKDB_ENABLE_DEPRECATED_API
+	return shared_ptr<T>(new T(std::forward<ARGS>(__args)...));
 }
 
 template <typename T>
-T MaxValue(T a, T b) {
+constexpr T MaxValue(T a, T b) {
 	return a > b ? a : b;
 }
 
 template <typename T>
-T MinValue(T a, T b) {
+constexpr T MinValue(T a, T b) {
 	return a < b ? a : b;
 }
 
@@ -160,10 +189,15 @@ T AbsValue(T a) {
 	return a < 0 ? -a : a;
 }
 
-//Align value (ceiling)
+//! Align value (ceiling)
 template<class T, T val=8>
 static inline T AlignValue(T n) {
 	return ((n + (val - 1)) / val) * val;
+}
+
+template<class T, T val=8>
+constexpr inline T AlignValueFloor(T n) {
+	return (n / val) * val;
 }
 
 template<class T, T val=8>
@@ -179,13 +213,13 @@ T SignValue(T a) {
 template <typename T>
 const T Load(const_data_ptr_t ptr) {
 	T ret;
-	memcpy(&ret, ptr, sizeof(ret));
+	memcpy(&ret, ptr, sizeof(ret)); // NOLINT
 	return ret;
 }
 
 template <typename T>
 void Store(const T &val, data_ptr_t ptr) {
-	memcpy(ptr, (void *)&val, sizeof(val));
+	memcpy(ptr, (void *)&val, sizeof(val)); // NOLINT
 }
 
 //! This assigns a shared pointer, but ONLY assigns if "target" is not equal to "source"
@@ -206,8 +240,21 @@ using const_reference = std::reference_wrapper<const T>;
 
 //! Returns whether or not two reference wrappers refer to the same object
 template<class T>
-bool RefersToSameObject(const reference<T> &A, const reference<T> &B) {
-	return &A.get() == &B.get();
+bool RefersToSameObject(const reference<T> &a, const reference<T> &b) {
+	return &a.get() == &b.get();
+}
+
+template<class T>
+bool RefersToSameObject(const T &a, const T &b) {
+	return &a == &b;
+}
+
+template<class T, class SRC>
+void DynamicCastCheck(const SRC *source) {
+#ifndef __APPLE__
+	// Actual check is on the fact that dynamic_cast and reinterpret_cast are equivalent
+	D_ASSERT(reinterpret_cast<const T *>(source) == dynamic_cast<const T *>(source));
+#endif
 }
 
 } // namespace duckdb

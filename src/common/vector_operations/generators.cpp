@@ -6,6 +6,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
@@ -13,11 +14,11 @@ template <class T>
 void TemplatedGenerateSequence(Vector &result, idx_t count, int64_t start, int64_t increment) {
 	D_ASSERT(result.GetType().IsNumeric());
 	if (start > NumericLimits<T>::Maximum() || increment > NumericLimits<T>::Maximum()) {
-		throw Exception("Sequence start or increment out of type range");
+		throw InternalException("Sequence start or increment out of type range");
 	}
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<T>(result);
-	auto value = (T)start;
+	auto value = T(start);
 	for (idx_t i = 0; i < count; i++) {
 		if (i > 0) {
 			value += increment;
@@ -43,12 +44,6 @@ void VectorOperations::GenerateSequence(Vector &result, idx_t count, int64_t sta
 	case PhysicalType::INT64:
 		TemplatedGenerateSequence<int64_t>(result, count, start, increment);
 		break;
-	case PhysicalType::FLOAT:
-		TemplatedGenerateSequence<float>(result, count, start, increment);
-		break;
-	case PhysicalType::DOUBLE:
-		TemplatedGenerateSequence<double>(result, count, start, increment);
-		break;
 	default:
 		throw NotImplementedException("Unimplemented type for generate sequence");
 	}
@@ -59,14 +54,14 @@ void TemplatedGenerateSequence(Vector &result, idx_t count, const SelectionVecto
                                int64_t increment) {
 	D_ASSERT(result.GetType().IsNumeric());
 	if (start > NumericLimits<T>::Maximum() || increment > NumericLimits<T>::Maximum()) {
-		throw Exception("Sequence start or increment out of type range");
+		throw InternalException("Sequence start or increment out of type range");
 	}
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<T>(result);
-	auto value = (T)start;
+	auto value = static_cast<uint64_t>(start);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
-		result_data[idx] = value + increment * idx;
+		result_data[idx] = static_cast<T>(value + static_cast<uint64_t>(increment) * idx);
 	}
 }
 
@@ -87,12 +82,6 @@ void VectorOperations::GenerateSequence(Vector &result, idx_t count, const Selec
 		break;
 	case PhysicalType::INT64:
 		TemplatedGenerateSequence<int64_t>(result, count, sel, start, increment);
-		break;
-	case PhysicalType::FLOAT:
-		TemplatedGenerateSequence<float>(result, count, sel, start, increment);
-		break;
-	case PhysicalType::DOUBLE:
-		TemplatedGenerateSequence<double>(result, count, sel, start, increment);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for generate sequence");

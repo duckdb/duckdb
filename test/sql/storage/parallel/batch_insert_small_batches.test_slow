@@ -12,6 +12,12 @@ statement ok
 COPY (FROM range(1000000) tbl(i)) TO '__TEST_DIR__/small_batches.parquet' (ROW_GROUP_SIZE ${row_group_size})
 
 statement ok
+drop view if exists v2;
+
+statement ok
+drop view if exists v3;
+
+statement ok
 CREATE VIEW v1 AS SELECT * FROM '__TEST_DIR__/small_batches.parquet'
 
 statement ok
@@ -159,7 +165,13 @@ SELECT * FROM integers3 LIMIT 5 OFFSET 9999
 20003
 
 statement ok
-DROP VIEW v1 CASCADE;
+DROP VIEW v2
+
+statement ok
+DROP VIEW v3
+
+statement ok
+DROP VIEW v1;
 
 statement ok
 DROP TABLE integers

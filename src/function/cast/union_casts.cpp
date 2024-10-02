@@ -1,3 +1,5 @@
+#include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/bound_cast_data.hpp"
@@ -41,7 +43,7 @@ unique_ptr<BoundCastData> BindToUnionCast(BindCastInput &input, const LogicalTyp
 				message += ", ";
 			}
 		}
-		throw CastException(message);
+		throw ConversionException(message);
 	}
 
 	// sort the candidate casts by cost
@@ -68,7 +70,7 @@ unique_ptr<BoundCastData> BindToUnionCast(BindCastInput &input, const LogicalTyp
 		}
 		message += ". Disambiguate the target type by using the 'union_value(<tag> := <arg>)' function to promote the "
 		           "source value to a single member union before casting.";
-		throw CastException(message);
+		throw ConversionException(message);
 	}
 
 	// otherwise, return the selected cast
@@ -169,7 +171,7 @@ unique_ptr<BoundCastData> BindUnionToUnionCast(BindCastInput &input, const Logic
 			auto &target_member_name = UnionType::GetMemberName(target, target_idx);
 
 			// found a matching member
-			if (source_member_name == target_member_name) {
+			if (StringUtil::CIEquals(source_member_name, target_member_name)) {
 				auto &target_member_type = UnionType::GetMemberType(target, target_idx);
 				tag_map[source_idx] = target_idx;
 				member_casts.push_back(input.GetCastFunction(source_member_type, target_member_type));
@@ -182,7 +184,7 @@ unique_ptr<BoundCastData> BindUnionToUnionCast(BindCastInput &input, const Logic
 			auto message =
 			    StringUtil::Format("Type %s can't be cast as %s. The member '%s' is not present in target union",
 			                       source.ToString(), target.ToString(), source_member_name);
-			throw CastException(message);
+			throw ConversionException(message);
 		}
 	}
 
@@ -256,7 +258,7 @@ static bool UnionToUnionCast(Vector &source, Vector &result, idx_t count, CastPa
 			// map the tag
 			auto source_tag = ConstantVector::GetData<union_tag_t>(source_tag_vector)[0];
 			auto mapped_tag = cast_data.tag_map[source_tag];
-			ConstantVector::GetData<union_tag_t>(result_tag_vector)[0] = mapped_tag;
+			ConstantVector::GetData<union_tag_t>(result_tag_vector)[0] = UnsafeNumericCast<union_tag_t>(mapped_tag);
 		}
 	} else {
 		// Otherwise, use the unified vector format to access the source vector.
@@ -278,7 +280,8 @@ static bool UnionToUnionCast(Vector &source, Vector &result, idx_t count, CastPa
 				// map the tag
 				auto source_tag = (UnifiedVectorFormat::GetData<union_tag_t>(source_tag_format))[source_row_idx];
 				auto target_tag = cast_data.tag_map[source_tag];
-				FlatVector::GetData<union_tag_t>(result_tag_vector)[row_idx] = target_tag;
+				FlatVector::GetData<union_tag_t>(result_tag_vector)[row_idx] =
+				    UnsafeNumericCast<union_tag_t>(target_tag);
 			} else {
 
 				// Issue: The members of the result is not always flatvectors
@@ -302,28 +305,24 @@ static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 	UnionToUnionCast(source, varchar_union, count, parameters);
 
 	// now construct the actual varchar vector
-	varchar_union.Flatten(count);
-	auto &tag_vector = UnionVector::GetTags(source);
-	auto tag_vector_type = tag_vector.GetVectorType();
-	if (tag_vector_type != VectorType::CONSTANT_VECTOR && tag_vector_type != VectorType::FLAT_VECTOR) {
-		tag_vector.Flatten(count);
-	}
+	// varchar_union.Flatten(count);
+	auto &tag_vector = UnionVector::GetTags(varchar_union);
+	UnifiedVectorFormat tag_format;
+	tag_vector.ToUnifiedFormat(count, tag_format);
 
-	auto tags = FlatVector::GetData<union_tag_t>(tag_vector);
-
-	auto &validity = FlatVector::Validity(varchar_union);
 	auto result_data = FlatVector::GetData<string_t>(result);
 
 	for (idx_t i = 0; i < count; i++) {
-		if (!validity.RowIsValid(i)) {
+		auto tag_idx = tag_format.sel->get_index(i);
+		if (!tag_format.validity.RowIsValid(tag_idx)) {
 			FlatVector::SetNull(result, i, true);
 			continue;
 		}
 
-		auto &member = UnionVector::GetMember(varchar_union, tags[i]);
+		auto tag = UnifiedVectorFormat::GetData<union_tag_t>(tag_format)[tag_idx];
+		auto &member = UnionVector::GetMember(varchar_union, tag);
 		UnifiedVectorFormat member_vdata;
 		member.ToUnifiedFormat(count, member_vdata);
-
 		auto mapped_idx = member_vdata.sel->get_index(i);
 		auto member_valid = member_vdata.validity.RowIsValid(mapped_idx);
 		if (member_valid) {

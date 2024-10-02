@@ -1,0 +1,27 @@
+# name: test/sql/types/union/union_validity.test
+# group: [union]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl (u UNION(a INT, b VARCHAR));
+
+statement ok
+INSERT INTO tbl VALUES (1), (NULL), (NULL::VARCHAR), (NULL::INT);
+
+statement ok
+DELETE FROM tbl
+
+statement ok
+INSERT INTO tbl VALUES (1), (NULL), (NULL::VARCHAR), (NULL::INT);
+
+query II rowsort
+SELECT union_tag(u) as tag, u as val FROM tbl;
+----
+NULL	NULL
+a	1
+a	NULL
+b	NULL
+
+

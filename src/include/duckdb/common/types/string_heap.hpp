@@ -18,7 +18,7 @@ namespace duckdb {
 //! returned pointer will remain valid until the StringHeap is destroyed
 class StringHeap {
 public:
-	DUCKDB_API StringHeap(Allocator &allocator = Allocator::DefaultAllocator());
+	DUCKDB_API explicit StringHeap(Allocator &allocator = Allocator::DefaultAllocator());
 
 	DUCKDB_API void Destroy();
 	DUCKDB_API void Move(StringHeap &other);
@@ -40,6 +40,8 @@ public:
 
 	//! Size of strings
 	DUCKDB_API idx_t SizeInBytes() const;
+	//! Total allocation size (cached)
+	DUCKDB_API idx_t AllocationSize() const;
 
 private:
 	ArenaAllocator allocator;

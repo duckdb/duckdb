@@ -8,26 +8,16 @@ PRAGMA enable_verification
 statement ok
 CREATE TABLE T1 (name VARCHAR);
 
-loop thr 1 8
-
-statement ok
-pragma threads=${thr}
 
 foreach path data/csv/line_too_long.csv.gz data/csv/line_too_long_with_newline.csv.gz data/csv/multiple_line_too_long.csv.gz
-
-foreach parallel true false
 
 foreach header true false
 
 
 statement error
-COPY T1(name) from '${path}' (DELIMITER ',', HEADER ${header} , COMPRESSION gzip, ALLOW_QUOTED_NULLS false, PARALLEL ${parallel});
+COPY T1(name) from '${path}' (DELIMITER ',', HEADER ${header} , COMPRESSION gzip, ALLOW_QUOTED_NULLS false);
 ----
 Maximum line size of 2097152 bytes exceeded
-
-endloop
-
-endloop
 
 endloop
 

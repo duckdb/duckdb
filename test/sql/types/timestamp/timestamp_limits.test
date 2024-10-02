@@ -19,6 +19,7 @@ select '290309-12-22 (BC) 00:00:00'::timestamp
 
 statement error
 select '290309-12-21 (BC) 12:59:59.999999'::timestamp
+----
 
 query I
 select '290309-12-22 (BC) 00:00:00'::timestamp + interval (1) day
@@ -27,18 +28,23 @@ select '290309-12-22 (BC) 00:00:00'::timestamp + interval (1) day
 
 statement error
 select '290309-12-22 (BC) 00:00:00'::timestamp - interval (1) microsecond
+----
 
 statement error
 select '290309-12-22 (BC) 00:00:00'::timestamp - interval (1) second
+----
 
 statement error
 select '290309-12-22 (BC) 00:00:00'::timestamp - interval (1) day
+----
 
 statement error
 select '290309-12-22 (BC) 00:00:00'::timestamp - interval (1) month
+----
 
 statement error
 select '290309-12-22 (BC) 00:00:00'::timestamp - interval (1) year
+----
 
 # max date for timestamp micros is 294247-01-10 04:00:54.775806
 query I
@@ -48,24 +54,31 @@ select timestamp '294247-01-10 04:00:54.775806'
 
 statement error
 select timestamp '294247-01-10 04:00:54.775807'
+----
 
 statement error
 select timestamp '294247-01-10 04:00:54.775806' + interval (1) microsecond
+----
 
 statement error
 select timestamp '294247-01-10 04:00:54.775806' + interval (1) second
+----
 
 statement error
 select timestamp '294247-01-10 04:00:54.775806' + interval (1) hour
+----
 
 statement error
 select timestamp '294247-01-10 04:00:54.775806' + interval (1) day
+----
 
 statement error
 select timestamp '294247-01-10 04:00:54.775806' + interval (1) month
+----
 
 statement error
 select timestamp '294247-01-10 04:00:54.775806' + interval (1) year
+----
 
 # Offset overflow
 statement error

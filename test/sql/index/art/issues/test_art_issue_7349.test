@@ -38,7 +38,7 @@ INSERT INTO tab0 VALUES('2006-12-25');
 statement error
 INSERT INTO td VALUES (date '2008-02-29');
 ----
-Constraint Error: Duplicate key "tz: 2008-02-29" violates unique constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
+Constraint Error: Duplicate key "tz: 2008-02-29" violates unique constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (https://duckdb.org/docs/sql/indexes).
 
 statement ok
 COMMIT TRANSACTION;
@@ -54,7 +54,7 @@ INSERT INTO tab0 VALUES('2006-12-25');
 statement error
 INSERT INTO td VALUES (date '2008-02-29');
 ----
-Constraint Error: Duplicate key "tz: 2008-02-29" violates unique constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
+Constraint Error: Duplicate key "tz: 2008-02-29" violates unique constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (https://duckdb.org/docs/sql/indexes).
 
 statement ok
 COMMIT TRANSACTION;

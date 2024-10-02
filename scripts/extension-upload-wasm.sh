@@ -2,17 +2,23 @@
 
 # Usage: ./extension-upload-wasm.sh <architecture> <commithash or version_tag>
 
-# The directory that the script lives in, thanks @Tishj
-script_dir="$(dirname "$(readlink -f "$0")")"
-
 set -e
 
 # Ensure we do nothing on failed globs
 shopt -s nullglob
 
-echo "$DUCKDB_EXTENSION_SIGNING_PK" > private.pem
+if [[ -z "${DUCKDB_EXTENSION_SIGNING_PK}" ]]; then
+	# no private key provided, use the test private key (NOT SAFE)
+	# this is made so private.pem at the end of the block will be in
+	# a valid state, and the rest of the signing process can be tested
+	# even without providing the key
+	cp test/mbedtls/private.pem private.pem
+else
+	# actual private key provided
+	echo "$DUCKDB_EXTENSION_SIGNING_PK" > private.pem
+fi
 
-FILES="loadable_extensions/*.duckdb_extension.wasm"
+FILES="build/to_be_deployed/$2/$1/*.duckdb_extension.wasm"
 for f in $FILES
 do
         ext=`basename $f .duckdb_extension.wasm`
@@ -33,7 +39,7 @@ do
         # for a grand total of 2 bytes
         echo -n -e '\x80\x02' >> $f.append
         # the actual payload, 256 bytes, to be added later
-        $script_dir/compute-extension-hash.sh $f.append > $f.hash
+        scripts/compute-extension-hash.sh $f.append > $f.hash
         # encrypt hash with extension signing private key to create signature
         openssl pkeyutl -sign -in $f.hash -inkey private.pem -pkeyopt digest:sha256 -out $f.sign
         # append signature to extension binary
@@ -41,8 +47,13 @@ do
         # compress extension binary
         brotli < $f.append > "$f.brotli"
         # upload compressed extension binary to S3
-        aws s3 cp $f.brotli s3://duckdb-extensions/duckdb-wasm/$2/$1/$ext.duckdb_extension.wasm --acl public-read --content-encoding br --content-type="application/wasm"
+	if [[ -z "${AWS_SECRET_ACCESS_KEY}" ]]; then
+		#AWS_SECRET_ACCESS_KEY is empty -> dry run
+		aws s3 cp $f.brotli s3://duckdb-extensions/$2/$1/$ext.duckdb_extension.wasm --acl public-read --content-encoding br --content-type="application/wasm" --dryrun
+	else
+		aws s3 cp $f.brotli s3://duckdb-extensions/$2/$1/$ext.duckdb_extension.wasm --acl public-read --content-encoding br --content-type="application/wasm"
+	fi
 done
 
+# remove private key
 rm private.pem
-

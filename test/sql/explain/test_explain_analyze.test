@@ -14,7 +14,7 @@ EXPLAIN ANALYZE SELECT SUM(i) FROM integers
 analyzed_plan	<REGEX>:.*integers.*
 
 query II
-EXPLAIN ANALYZE SELECT SUM(i) FROM (SELECT * FROM integers i1, integers i2 UNION ALL SELECT * FROM integers i1, integers i2);
+EXPLAIN (ANALYZE) SELECT SUM(i) FROM (SELECT * FROM integers i1, integers i2 UNION ALL SELECT * FROM integers i1, integers i2);
 ----
 analyzed_plan	<REGEX>:.*CROSS_PRODUCT.*
 
@@ -33,6 +33,11 @@ query II
 EXPLAIN ANALYZE SELECT SUM(i) FROM (SELECT * FROM integers i1, integers i2 UNION ALL SELECT * FROM integers i1, integers i2);
 ----
 analyzed_plan	<REGEX>:.*CROSS_PRODUCT.*
+
+query II
+EXPLAIN (ANALYZE, FORMAT JSON) SELECT SUM(i) FROM (SELECT * FROM integers i1, integers i2 UNION ALL SELECT * FROM integers i1, integers i2);
+----
+analyzed_plan	<REGEX>:.*"operator_type": "CROSS_PRODUCT".*
 
 statement ok
 PRAGMA profiling_output='__TEST_DIR__/test.json'
@@ -63,9 +68,9 @@ PRAGMA enable_profiling='json'
 query II
 EXPLAIN ANALYZE SELECT SUM(i) FROM integers
 ----
-analyzed_plan	<REGEX>:.*integers.*"timings":.*
+analyzed_plan	<REGEX>:.*"extra_info".*integers.*:.*
 
-statement ok
+statement ok		
 PRAGMA disable_profiling
 
 statement ok

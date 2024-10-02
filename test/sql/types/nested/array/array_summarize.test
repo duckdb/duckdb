@@ -13,7 +13,7 @@ INSERT INTO arrays VALUES ([1, 2, 3]), ([1, 2, 4]), ([7, 8, 9]), ([-1, -2, -3]),
 query IIIIIIIIIIII
 SUMMARIZE arrays
 ----
-a	INTEGER[3]	[-1, -2, -3]	[7, 8, 9]	5	NULL	NULL	NULL	NULL	NULL	6	16.67%
+a	INTEGER[3]	[-1, -2, -3]	[7, 8, 9]	5	NULL	NULL	NULL	NULL	NULL	6	16.67
 
 query I
 SELECT a FROM arrays ORDER BY a LIMIT 1

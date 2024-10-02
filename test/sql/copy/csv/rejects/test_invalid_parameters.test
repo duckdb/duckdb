@@ -1,0 +1,113 @@
+# name: test/sql/copy/csv/rejects/test_invalid_parameters.test
+# group: [rejects]
+
+require skip_reload
+
+# Test will fail on windows because byte_position is slightly different due to \r\n instead of \n
+require notwindows
+
+# Test invalid arguments
+statement error
+SELECT * FROM read_csv(
+    'data/csv/error/mismatch/bad.csv',
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
+    ignore_errors=false,
+    store_rejects=true
+)
+----
+STORE_REJECTS option is only supported when IGNORE_ERRORS is not manually set to false
+
+statement error
+SELECT * FROM read_csv(
+    'data/csv/error/mismatch/bad.csv',
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
+    ignore_errors=true,
+    rejects_table='')
+----
+REJECTS_TABLE option cannot be empty
+
+statement error
+SELECT * FROM read_csv(
+    'data/csv/error/mismatch/bad.csv',
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
+    ignore_errors=true,
+    rejects_table='csv_rejects_table',
+    union_by_name=true)
+----
+UNION_BY_NAME is set to true
+
+statement error
+SELECT * FROM read_csv(
+    'data/csv/error/mismatch/bad.csv',
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
+    ignore_errors=true,
+    rejects_limit=10)
+----
+REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name
+
+statement error
+SELECT * FROM read_csv(
+    'data/csv/error/mismatch/bad.csv',
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
+    ignore_errors=true,
+    rejects_table='csv_rejects_table',
+    rejects_limit=-1)
+----
+REJECTS_LIMIT: cannot be negative
+
+# Test invalid arguments
+statement error
+SELECT * FROM read_csv_auto(
+    'data/csv/error/mismatch/bad.csv',
+    ignore_errors=false,
+    rejects_table='csv_rejects_table'
+)
+----
+option is only supported when IGNORE_ERRORS is not manually set to false
+
+statement error
+SELECT * FROM read_csv_auto(
+    'data/csv/error/mismatch/bad.csv',
+    ignore_errors=true,
+    rejects_table='')
+----
+REJECTS_TABLE option cannot be empty
+
+statement error
+SELECT * FROM read_csv_auto(
+    'data/csv/error/mismatch/bad.csv',
+    ignore_errors=true,
+    rejects_table='csv_rejects_table',
+    union_by_name=true)
+----
+UNION_BY_NAME is set to true
+
+statement error
+SELECT * FROM read_csv_auto(
+    'data/csv/error/mismatch/bad.csv',
+    ignore_errors=true,
+    rejects_limit=10)
+----
+REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name
+
+statement error
+SELECT * FROM read_csv_auto(
+    'data/csv/error/mismatch/bad.csv',
+    ignore_errors=true,
+    rejects_table='csv_rejects_table',
+    rejects_limit=-1)
+----
+REJECTS_LIMIT: cannot be negative
+
+
+query III
+SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*) FROM read_csv_auto(
+    'data/csv/error/mismatch/big_bad*.csv',
+    sample_size=3000,
+    rejects_table='csv_rejects_table',
+    ignore_errors=true, header = 0);
+----
+VARCHAR	VARCHAR	11048
+
+statement ok
+DROP TABLE csv_rejects_table;

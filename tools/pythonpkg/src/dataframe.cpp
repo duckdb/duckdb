@@ -7,7 +7,7 @@ bool PolarsDataFrame::IsDataFrame(const py::handle &object) {
 		return false;
 	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return py::isinstance(object, import_cache.polars().DataFrame());
+	return py::isinstance(object, import_cache.polars.DataFrame());
 }
 
 bool PolarsDataFrame::IsLazyFrame(const py::handle &object) {
@@ -15,7 +15,7 @@ bool PolarsDataFrame::IsLazyFrame(const py::handle &object) {
 		return false;
 	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return py::isinstance(object, import_cache.polars().LazyFrame());
+	return py::isinstance(object, import_cache.polars.LazyFrame());
 }
 
 bool PandasDataFrame::check_(const py::handle &object) { // NOLINT
@@ -23,7 +23,7 @@ bool PandasDataFrame::check_(const py::handle &object) { // NOLINT
 		return false;
 	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return py::isinstance(object, import_cache.pandas().DataFrame());
+	return py::isinstance(object, import_cache.pandas.DataFrame());
 }
 
 bool PandasDataFrame::IsPyArrowBacked(const py::handle &df) {
@@ -37,7 +37,7 @@ bool PandasDataFrame::IsPyArrowBacked(const py::handle &df) {
 		return false;
 	}
 
-	auto arrow_dtype = import_cache.pandas().ArrowDtype();
+	auto arrow_dtype = import_cache.pandas.ArrowDtype();
 	for (auto &dtype : dtypes) {
 		if (py::isinstance(dtype, arrow_dtype)) {
 			return true;
@@ -46,9 +46,21 @@ bool PandasDataFrame::IsPyArrowBacked(const py::handle &df) {
 	return false;
 }
 
+py::object PandasDataFrame::ToArrowTable(const py::object &df) {
+	D_ASSERT(py::gil_check());
+	try {
+		return py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_pandas")(df);
+	} catch (py::error_already_set &) {
+		// We don't fetch the original Python exception because it can cause a segfault
+		// The cause of this is not known yet, for now we just side-step the issue.
+		throw InvalidInputException(
+		    "The dataframe could not be converted to a pyarrow.lib.Table, because a Python exception occurred.");
+	}
+}
+
 bool PolarsDataFrame::check_(const py::handle &object) { // NOLINT
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return py::isinstance(object, import_cache.polars().DataFrame());
+	return py::isinstance(object, import_cache.polars.DataFrame());
 }
 
 } // namespace duckdb

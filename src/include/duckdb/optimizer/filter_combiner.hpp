@@ -47,14 +47,14 @@ public:
 
 	void GenerateFilters(const std::function<void(unique_ptr<Expression> filter)> &callback);
 	bool HasFilters();
-	TableFilterSet GenerateTableScanFilters(vector<idx_t> &column_ids);
+	TableFilterSet GenerateTableScanFilters(const vector<idx_t> &column_ids);
 	// vector<unique_ptr<TableFilter>> GenerateZonemapChecks(vector<idx_t> &column_ids, vector<unique_ptr<TableFilter>>
 	// &pushed_filters);
 
 private:
 	FilterResult AddFilter(Expression &expr);
 	FilterResult AddBoundComparisonFilter(Expression &expr);
-	FilterResult AddTransitiveFilters(BoundComparisonExpression &comparison);
+	FilterResult AddTransitiveFilters(BoundComparisonExpression &comparison, bool is_root = true);
 	unique_ptr<Expression> FindTransitiveFilter(Expression &expr);
 	// unordered_map<idx_t, std::pair<Value *, Value *>>
 	// FindZonemapChecks(vector<idx_t> &column_ids, unordered_set<idx_t> &not_constants, Expression *filter);

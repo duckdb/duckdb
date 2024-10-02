@@ -3,6 +3,9 @@
 # group: [batched_write]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE integers AS SELECT i, i // 5 AS j FROM range(1000000) t(i) ;
 
 statement ok

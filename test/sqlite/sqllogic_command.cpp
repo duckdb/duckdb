@@ -10,6 +10,8 @@
 #include "catch.hpp"
 #include <list>
 #include <thread>
+#include "duckdb/main/stream_query_result.hpp"
+#include <chrono>
 
 namespace duckdb {
 
@@ -66,17 +68,20 @@ void Command::RestartDatabase(ExecuteContext &context, Connection *&connection, 
 		query_fail = true;
 	}
 	bool can_restart = true;
-	for (auto &conn : connection->context->db->GetConnectionManager().connections) {
-		if (!conn.first->client_data->prepared_statements.empty()) {
+	auto &connection_manager = connection->context->db->GetConnectionManager();
+	auto &connection_list = connection_manager.GetConnectionListReference();
+	for (auto &conn_ref : connection_list) {
+		auto &conn = conn_ref.first.get();
+		if (!conn.client_data->prepared_statements.empty()) {
 			can_restart = false;
 		}
-		if (conn.first->transaction.HasActiveTransaction()) {
+		if (conn.transaction.HasActiveTransaction()) {
 			can_restart = false;
 		}
 	}
 	if (!query_fail && can_restart && !runner.skip_reload) {
 		// We basically restart the database if no transaction is active and if the query is valid
-		auto command = make_uniq<RestartCommand>(runner);
+		auto command = make_uniq<RestartCommand>(runner, true);
 		runner.ExecuteCommand(std::move(command));
 		connection = CommandConnection(context);
 	}
@@ -88,12 +93,102 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &contex
 	if (TestForceReload() && TestForceStorage()) {
 		RestartDatabase(context, connection, context.sql_query);
 	}
-
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+	auto ccontext = connection->context;
+	auto result = ccontext->Query(context.sql_query, true);
+	if (result->type == QueryResultType::STREAM_RESULT) {
+		auto &stream_result = result->Cast<StreamQueryResult>();
+		return stream_result.Materialize();
+	} else {
+		D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
+		return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
+	}
+#else
 	return connection->Query(context.sql_query);
+#endif
+}
+
+bool CheckLoopCondition(ExecuteContext &context, const vector<Condition> &conditions) {
+	if (conditions.empty()) {
+		// no conditions
+		return true;
+	}
+	if (context.running_loops.empty()) {
+		throw BinderException("Conditions (onlyif/skipif) on loop parameters can only occur within a loop");
+	}
+	for (auto &condition : conditions) {
+		bool condition_holds = false;
+		bool found_loop = false;
+		for (auto &loop : context.running_loops) {
+			if (loop.loop_iterator_name != condition.keyword) {
+				continue;
+			}
+			found_loop = true;
+
+			string loop_value;
+			if (loop.tokens.empty()) {
+				loop_value = to_string(loop.loop_idx);
+			} else {
+				loop_value = loop.tokens[loop.loop_idx];
+			}
+			if (condition.comparison == ExpressionType::COMPARE_EQUAL ||
+			    condition.comparison == ExpressionType::COMPARE_NOTEQUAL) {
+				// equality/non-equality is done on the string value
+				if (condition.comparison == ExpressionType::COMPARE_EQUAL) {
+					condition_holds = loop_value == condition.value;
+				} else {
+					condition_holds = loop_value != condition.value;
+				}
+			} else {
+				// > >= < <= are done on numeric values
+				int64_t loop_val = std::stoll(loop_value);
+				int64_t condition_val = std::stoll(condition.value);
+				switch (condition.comparison) {
+				case ExpressionType::COMPARE_GREATERTHAN:
+					condition_holds = loop_val > condition_val;
+					break;
+				case ExpressionType::COMPARE_LESSTHAN:
+					condition_holds = loop_val < condition_val;
+					break;
+				case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+					condition_holds = loop_val >= condition_val;
+					break;
+				case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+					condition_holds = loop_val <= condition_val;
+					break;
+				default:
+					throw BinderException("Unrecognized comparison for loop condition");
+				}
+			}
+		}
+		if (!found_loop) {
+			throw BinderException("Condition in onlyif/skipif not found: %s must be a loop iterator name",
+			                      condition.keyword);
+		}
+		if (condition_holds) {
+			// the condition holds
+			if (condition.skip_if) {
+				// skip on condition holding
+				return false;
+			}
+		} else {
+			// the condition does not hold
+			if (!condition.skip_if) {
+				// skip on condition not holding
+				return false;
+			}
+		}
+	}
+	// all conditions pass - execute
+	return true;
 }
 
 void Command::Execute(ExecuteContext &context) const {
 	if (runner.finished_processing_file) {
+		return;
+	}
+	if (!CheckLoopCondition(context, conditions)) {
+		// condition excludes this file
 		return;
 	}
 	if (context.running_loops.empty()) {
@@ -113,7 +208,8 @@ Statement::Statement(SQLLogicTestRunner &runner) : Command(runner) {
 Query::Query(SQLLogicTestRunner &runner) : Command(runner) {
 }
 
-RestartCommand::RestartCommand(SQLLogicTestRunner &runner) : Command(runner) {
+RestartCommand::RestartCommand(SQLLogicTestRunner &runner, bool load_extensions_p)
+    : Command(runner), load_extensions(load_extensions_p) {
 }
 
 ReconnectCommand::ReconnectCommand(SQLLogicTestRunner &runner) : Command(runner) {
@@ -121,6 +217,22 @@ ReconnectCommand::ReconnectCommand(SQLLogicTestRunner &runner) : Command(runner)
 
 LoopCommand::LoopCommand(SQLLogicTestRunner &runner, LoopDefinition definition_p)
     : Command(runner), definition(std::move(definition_p)) {
+}
+
+ModeCommand::ModeCommand(SQLLogicTestRunner &runner, string parameter_p)
+    : Command(runner), parameter(std::move(parameter_p)) {
+}
+
+SleepCommand::SleepCommand(SQLLogicTestRunner &runner, idx_t duration, SleepUnit unit)
+    : Command(runner), duration(duration), unit(unit) {
+}
+
+UnzipCommand::UnzipCommand(SQLLogicTestRunner &runner, string &input, string &output)
+    : Command(runner), input_path(input), extraction_path(output) {
+}
+
+LoadCommand::LoadCommand(SQLLogicTestRunner &runner, string dbpath_p, bool readonly)
+    : Command(runner), dbpath(std::move(dbpath_p)), readonly(readonly) {
 }
 
 struct ParallelExecuteContext {
@@ -173,8 +285,10 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 	LoopDefinition loop_def = definition;
 	loop_def.loop_idx = definition.loop_start;
 	if (loop_def.is_parallel) {
-		if (context.is_parallel || !context.running_loops.empty()) {
-			throw std::runtime_error("Nested parallel loop commands not allowed");
+		for (auto &running_loop : context.running_loops) {
+			if (running_loop.is_parallel) {
+				throw std::runtime_error("Nested parallel loop commands not allowed");
+			}
 		}
 		// parallel loop: launch threads
 		std::list<ParallelExecuteContext> contexts;
@@ -255,6 +369,9 @@ void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 	if (context.is_parallel) {
 		throw std::runtime_error("Cannot restart database in parallel");
 	}
+	if (runner.dbpath.empty()) {
+		throw std::runtime_error("cannot restart an in-memory database, did you forget to call \"load\"?");
+	}
 	// We save the main connection configurations to pass it to the new connection
 	runner.config->options = runner.con->context->db->config.options;
 	auto client_config = runner.con->context->config;
@@ -264,7 +381,7 @@ void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 		low_query_writer_path = runner.con->context->client_data->log_query_writer->path;
 	}
 
-	runner.LoadDatabase(runner.dbpath);
+	runner.LoadDatabase(runner.dbpath, load_extensions);
 
 	runner.con->context->config = client_config;
 
@@ -282,6 +399,54 @@ void ReconnectCommand::ExecuteInternal(ExecuteContext &context) const {
 		throw std::runtime_error("Cannot reconnect in parallel");
 	}
 	runner.Reconnect();
+}
+
+void ModeCommand::ExecuteInternal(ExecuteContext &context) const {
+	if (parameter == "output_hash") {
+		runner.output_hash_mode = true;
+	} else if (parameter == "output_result") {
+		runner.output_result_mode = true;
+	} else if (parameter == "no_output") {
+		runner.output_hash_mode = false;
+		runner.output_result_mode = false;
+	} else if (parameter == "debug") {
+		runner.debug_mode = true;
+	} else {
+		throw std::runtime_error("unrecognized mode: " + parameter);
+	}
+}
+
+void SleepCommand::ExecuteInternal(ExecuteContext &context) const {
+	switch (unit) {
+	case SleepUnit::NANOSECOND:
+		std::this_thread::sleep_for(std::chrono::duration<double, std::nano>(duration));
+		break;
+	case SleepUnit::MICROSECOND:
+		std::this_thread::sleep_for(std::chrono::duration<double, std::micro>(duration));
+		break;
+	case SleepUnit::MILLISECOND:
+		std::this_thread::sleep_for(std::chrono::duration<double, std::milli>(duration));
+		break;
+	case SleepUnit::SECOND:
+		std::this_thread::sleep_for(std::chrono::duration<double, std::milli>(duration * 1000));
+		break;
+	default:
+		throw std::runtime_error("Unrecognized sleep unit");
+	}
+}
+
+SleepUnit SleepCommand::ParseUnit(const string &unit) {
+	if (unit == "second" || unit == "seconds" || unit == "sec") {
+		return SleepUnit::SECOND;
+	} else if (unit == "millisecond" || unit == "milliseconds" || unit == "milli") {
+		return SleepUnit::MILLISECOND;
+	} else if (unit == "microsecond" || unit == "microseconds" || unit == "micro") {
+		return SleepUnit::MICROSECOND;
+	} else if (unit == "nanosecond" || unit == "nanoseconds" || unit == "nano") {
+		return SleepUnit::NANOSECOND;
+	} else {
+		throw std::runtime_error("Unrecognized sleep mode - expected second/millisecond/microescond/nanosecond");
+	}
 }
 
 void Statement::ExecuteInternal(ExecuteContext &context) const {
@@ -314,6 +479,56 @@ void Statement::ExecuteInternal(ExecuteContext &context) const {
 			FAIL_LINE(file_name, query_line, 0);
 		}
 	}
+}
+
+void UnzipCommand::ExecuteInternal(ExecuteContext &context) const {
+	VirtualFileSystem vfs;
+
+	// input
+	FileOpenFlags in_flags(FileFlags::FILE_FLAGS_READ);
+	in_flags.SetCompression(FileCompressionType::GZIP);
+	auto compressed_file_handle = vfs.OpenFile(input_path, in_flags);
+	if (compressed_file_handle == nullptr) {
+		throw CatalogException("Cannot open the file \"%s\"", input_path);
+	}
+
+	// output
+	FileOpenFlags out_flags(FileOpenFlags::FILE_FLAGS_FILE_CREATE | FileOpenFlags::FILE_FLAGS_WRITE);
+	auto output_file = vfs.OpenFile(extraction_path, out_flags);
+	if (!output_file) {
+		throw CatalogException("Cannot open the file \"%s\"", extraction_path);
+	}
+
+	// read the compressed data from the file
+	while (true) {
+		std::unique_ptr<char[]> compressed_buffer(new char[BUFFER_SIZE]);
+		int64_t bytes_read = vfs.Read(*compressed_file_handle, compressed_buffer.get(), BUFFER_SIZE);
+		if (bytes_read == 0) {
+			break;
+		}
+
+		vfs.Write(*output_file, compressed_buffer.get(), bytes_read);
+	}
+}
+
+void LoadCommand::ExecuteInternal(ExecuteContext &context) const {
+	auto resolved_path = SQLLogicTestRunner::LoopReplacement(dbpath, context.running_loops);
+	if (!readonly) {
+		// delete the target database file, if it exists
+		DeleteDatabase(resolved_path);
+	}
+	runner.dbpath = resolved_path;
+
+	// set up the config file
+	if (readonly) {
+		runner.config->options.use_temporary_directory = false;
+		runner.config->options.access_mode = AccessMode::READ_ONLY;
+	} else {
+		runner.config->options.use_temporary_directory = true;
+		runner.config->options.access_mode = AccessMode::AUTOMATIC;
+	}
+	// now create the database file
+	runner.LoadDatabase(resolved_path, true);
 }
 
 } // namespace duckdb

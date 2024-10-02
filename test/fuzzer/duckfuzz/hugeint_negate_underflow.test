@@ -1,0 +1,8 @@
+# name: test/fuzzer/duckfuzz/hugeint_negate_underflow.test
+# description: Negating of hugeint min leads to signed integer overflow
+# group: [duckfuzz]
+
+statement error
+select -(-170141183460469231731687303715884105728)::HUGEINT;
+----
+Overflow

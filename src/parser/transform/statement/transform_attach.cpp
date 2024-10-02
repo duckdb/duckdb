@@ -10,6 +10,7 @@ unique_ptr<AttachStatement> Transformer::TransformAttach(duckdb_libpgquery::PGAt
 	auto info = make_uniq<AttachInfo>();
 	info->name = stmt.name ? stmt.name : string();
 	info->path = stmt.path;
+	info->on_conflict = TransformOnConflict(stmt.onconflict);
 
 	if (stmt.options) {
 		duckdb_libpgquery::PGListCell *cell;

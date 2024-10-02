@@ -2,23 +2,20 @@
 # description: Test nullpadding setting
 # group: [csv]
 
-require vector_size 512
-
 statement ok
 PRAGMA enable_verification
 
 # null padding with a header
 query IIII
-FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=True)
+FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=True, comment = '')
 ----
-# this file has a bunch of gunk at the top	NULL	NULL	NULL
 one	two	three	four
 1	a	alice	NULL
 2	b	bob	NULL
 
 # without null padding we can only read one column
 query I
-FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=False)
+FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=False, header = 0)
 ----
 # this file has a bunch of gunk at the top
 one,two,three,four
@@ -26,14 +23,7 @@ one,two,three,four
 2,b,bob
 
 query I
-FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=False, skip=1)
-----
-one,two,three,four
-1,a,alice
-2,b,bob
-
-query I
-FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=False, skip=1)
+FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=False, skip=1, header = 0, comment = '')
 ----
 one,two,three,four
 1,a,alice

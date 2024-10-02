@@ -186,3 +186,17 @@ statement ok
 select * from parquet_metadata('${parquet_file}');
 
 endloop
+
+# internal issue 2037
+statement ok
+copy (select '' i) to '__TEST_DIR__/test.parquet';
+
+query I
+select i is null c0 from '__TEST_DIR__/test.parquet';
+----
+false
+
+query II
+select stats_min_value is null c0, stats_max_value is null c1 from parquet_metadata('__TEST_DIR__/test.parquet');
+----
+false	false

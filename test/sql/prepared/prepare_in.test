@@ -1,0 +1,17 @@
+# name: test/sql/prepared/prepare_in.test
+# description: Test IN with a single NULL element
+# group: [prepared]
+
+statement ok
+pragma enable_verification
+
+statement ok
+create table test(id varchar);
+
+statement ok
+prepare p as delete from test where ("id") in ((?));
+
+query I
+execute p(null);
+----
+0

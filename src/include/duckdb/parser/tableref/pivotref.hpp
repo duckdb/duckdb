@@ -14,10 +14,10 @@
 namespace duckdb {
 
 struct PivotColumnEntry {
-	//! The set of values to match on
+	//! The set of values to match on (PIVOT only)
 	vector<Value> values;
-	//! The star expression (UNPIVOT only)
-	unique_ptr<ParsedExpression> star_expr;
+	//! The expression (UNPIVOT only)
+	unique_ptr<ParsedExpression> expr;
 	//! The alias of the pivot column entry
 	string alias;
 
@@ -72,8 +72,6 @@ public:
 	vector<PivotColumn> pivots;
 	//! The groups to pivot over. If none are specified all columns not included in the pivots/aggregate are chosen.
 	vector<string> groups;
-	//! Aliases for the column names
-	vector<string> column_name_alias;
 	//! Whether or not to include nulls in the result (UNPIVOT only)
 	bool include_nulls;
 	//! The set of values to pivot on (bound pivot only)

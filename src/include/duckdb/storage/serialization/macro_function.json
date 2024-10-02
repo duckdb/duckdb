@@ -19,7 +19,7 @@
       {
         "id": 102,
         "name": "default_parameters",
-        "type": "unordered_map<string, ParsedExpression*>"
+        "type": "case_insensitive_map_t<ParsedExpression*>"
       }
     ]
   },

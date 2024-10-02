@@ -24,7 +24,7 @@ require-env DUCKDB_S3_USE_SSL
 set ignore_error_messages
 
 statement ok
-CREATE TABLE web_page as (SELECT * FROM "test/sql/copy/csv/data/real/web_page.csv");
+CREATE TABLE web_page as (SELECT * FROM "data/csv/real/web_page.csv");
 
 query IIIIIIIIIIIIII
 SELECT * FROM web_page LIMIT 10;
@@ -60,7 +60,7 @@ SELECT * FROM "s3://test-bucket/multipart/web_page.parquet" LIMIT 10;
 
 # CSV file
 statement ok
-COPY web_page TO 's3://test-bucket/multipart/web_page.csv' WITH (HEADER 1);
+COPY web_page TO 's3://test-bucket/multipart/web_page.csv';
 
 query IIIIIIIIIIIIII
 SELECT * FROM "s3://test-bucket/multipart/web_page.csv" LIMIT 10;

@@ -2,6 +2,7 @@
 
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -45,6 +46,21 @@ ColumnDataAllocator::ColumnDataAllocator(ColumnDataAllocator &other) {
 	}
 }
 
+ColumnDataAllocator::~ColumnDataAllocator() {
+	if (type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
+		return;
+	}
+	for (auto &block : blocks) {
+		block.handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+	}
+	const auto data_size = SizeInBytes();
+	blocks.clear();
+	if (Allocator::SupportsFlush() &&
+	    data_size > alloc.buffer_manager->GetBufferPool().GetAllocatorBulkDeallocationFlushThreshold()) {
+		Allocator::FlushAll();
+	}
+}
+
 BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
 	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR || type == ColumnDataAllocatorType::HYBRID);
 	shared_ptr<BlockHandle> handle;
@@ -61,12 +77,14 @@ BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
 
 BufferHandle ColumnDataAllocator::AllocateBlock(idx_t size) {
 	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR || type == ColumnDataAllocatorType::HYBRID);
-	auto block_size = MaxValue<idx_t>(size, Storage::BLOCK_SIZE);
+	auto max_size = MaxValue<idx_t>(size, GetBufferManager().GetBlockSize());
 	BlockMetaData data;
 	data.size = 0;
-	data.capacity = block_size;
-	auto pin = alloc.buffer_manager->Allocate(block_size, false, &data.handle);
+	data.capacity = NumericCast<uint32_t>(max_size);
+	auto pin = alloc.buffer_manager->Allocate(MemoryTag::COLUMN_DATA, max_size, false);
+	data.handle = pin.GetBlockHandle();
 	blocks.push_back(std::move(data));
+	allocated_size += max_size;
 	return pin;
 }
 
@@ -74,15 +92,16 @@ void ColumnDataAllocator::AllocateEmptyBlock(idx_t size) {
 	auto allocation_amount = MaxValue<idx_t>(NextPowerOfTwo(size), 4096);
 	if (!blocks.empty()) {
 		idx_t last_capacity = blocks.back().capacity;
-		auto next_capacity = MinValue<idx_t>(last_capacity * 2, last_capacity + Storage::BLOCK_SIZE);
+		auto next_capacity = MinValue<idx_t>(last_capacity * 2, last_capacity + Storage::DEFAULT_BLOCK_SIZE);
 		allocation_amount = MaxValue<idx_t>(next_capacity, allocation_amount);
 	}
 	D_ASSERT(type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR);
 	BlockMetaData data;
 	data.size = 0;
-	data.capacity = allocation_amount;
+	data.capacity = NumericCast<uint32_t>(allocation_amount);
 	data.handle = nullptr;
 	blocks.push_back(std::move(data));
+	allocated_size += allocation_amount;
 }
 
 void ColumnDataAllocator::AssignPointer(uint32_t &block_id, uint32_t &offset, data_ptr_t pointer) {
@@ -110,7 +129,7 @@ void ColumnDataAllocator::AllocateBuffer(idx_t size, uint32_t &block_id, uint32_
 	}
 	auto &block = blocks.back();
 	D_ASSERT(size <= block.capacity - block.size);
-	block_id = blocks.size() - 1;
+	block_id = NumericCast<uint32_t>(blocks.size() - 1);
 	if (chunk_state && chunk_state->handles.find(block_id) == chunk_state->handles.end()) {
 		// not guaranteed to be pinned already by this thread (if shared allocator)
 		chunk_state->handles[block_id] = alloc.buffer_manager->Pin(blocks[block_id].handle);
@@ -186,8 +205,8 @@ void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector 
 	auto strings = FlatVector::GetData<string_t>(result);
 
 	// find first non-inlined string
-	uint32_t i = v_offset;
-	const uint32_t end = v_offset + count;
+	auto i = NumericCast<uint32_t>(v_offset);
+	const uint32_t end = NumericCast<uint32_t>(v_offset + count);
 	for (; i < end; i++) {
 		if (!validity.RowIsValid(i)) {
 			continue;
@@ -218,13 +237,22 @@ void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector 
 	}
 }
 
-void ColumnDataAllocator::DeleteBlock(uint32_t block_id) {
-	blocks[block_id].handle->SetCanDestroy(true);
+void ColumnDataAllocator::SetDestroyBufferUponUnpin(uint32_t block_id) {
+	blocks[block_id].handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
 }
 
 Allocator &ColumnDataAllocator::GetAllocator() {
-	return type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR ? *alloc.allocator
-	                                                            : alloc.buffer_manager->GetBufferAllocator();
+	if (type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
+		return *alloc.allocator;
+	}
+	return alloc.buffer_manager->GetBufferAllocator();
+}
+
+BufferManager &ColumnDataAllocator::GetBufferManager() {
+	if (type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
+		throw InternalException("cannot obtain the buffer manager for in memory allocations");
+	}
+	return *alloc.buffer_manager;
 }
 
 void ColumnDataAllocator::InitializeChunkState(ChunkManagementState &state, ChunkMetaData &chunk) {
@@ -237,7 +265,7 @@ void ColumnDataAllocator::InitializeChunkState(ChunkManagementState &state, Chun
 	do {
 		found_handle = false;
 		for (auto it = state.handles.begin(); it != state.handles.end(); it++) {
-			if (chunk.block_ids.find(it->first) != chunk.block_ids.end()) {
+			if (chunk.block_ids.find(NumericCast<uint32_t>(it->first)) != chunk.block_ids.end()) {
 				// still required: do not release
 				continue;
 			}

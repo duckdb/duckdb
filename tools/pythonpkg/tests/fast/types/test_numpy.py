@@ -17,11 +17,18 @@ class TestNumpyDatetime64(object):
             "select * from tbl"
         ).fetchall()
 
-    def test_numpy_datetime_overflow(self):
+    def test_numpy_datetime_big(self):
         duckdb_con = duckdb.connect()
 
         duckdb_con.execute("create table test (date DATE)")
         duckdb_con.execute("INSERT INTO TEST VALUES ('2263-02-28')")
 
-        with pytest.raises(duckdb.ConversionException):
-            res1 = duckdb_con.execute("select * from test").fetchnumpy()
+        res1 = duckdb_con.execute("select * from test").fetchnumpy()
+        date_value = {'date': np.array(['2263-02-28'], dtype='datetime64[us]')}
+        assert res1 == date_value
+
+    def test_numpy_enum_conversion(self, duckdb_cursor):
+        arr = np.array(['a', 'b', 'c'])
+        rel = duckdb_cursor.sql("select * from arr")
+        res = rel.fetchnumpy()['column0']
+        np.testing.assert_equal(res, arr)

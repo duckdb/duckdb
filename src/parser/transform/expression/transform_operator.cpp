@@ -57,6 +57,35 @@ unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(string op, uni
 	}
 }
 
+unique_ptr<ParsedExpression> Transformer::TransformInExpression(const string &name, duckdb_libpgquery::PGAExpr &root) {
+	auto left_expr = TransformExpression(root.lexpr);
+	ExpressionType operator_type;
+	// this looks very odd, but seems to be the way to find out its NOT IN
+	if (name == "<>") {
+		// NOT IN
+		operator_type = ExpressionType::COMPARE_NOT_IN;
+	} else {
+		// IN
+		operator_type = ExpressionType::COMPARE_IN;
+	}
+
+	if (root.rexpr->type == duckdb_libpgquery::T_PGList) {
+		auto result = make_uniq<OperatorExpression>(operator_type, std::move(left_expr));
+		TransformExpressionList(*PGPointerCast<duckdb_libpgquery::PGList>(root.rexpr), result->children);
+		return std::move(result);
+	}
+	auto expr = TransformExpression(*root.rexpr);
+
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(std::move(expr));
+	children.push_back(std::move(left_expr));
+	auto result = make_uniq_base<ParsedExpression, FunctionExpression>("contains", std::move(children));
+	if (operator_type == ExpressionType::COMPARE_NOT_IN) {
+		result = make_uniq_base<ParsedExpression, OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(result));
+	}
+	return result;
+}
+
 unique_ptr<ParsedExpression> Transformer::TransformAExprInternal(duckdb_libpgquery::PGAExpr &root) {
 	auto name = string(PGPointerCast<duckdb_libpgquery::PGValue>(root.name->head->data.ptr_value)->val.str);
 
@@ -81,7 +110,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExprInternal(duckdb_libpgque
 		subquery_expr->subquery_type = SubqueryType::ANY;
 		subquery_expr->child = std::move(left_expr);
 		subquery_expr->comparison_type = OperatorToExpressionType(name);
-		subquery_expr->query_location = root.location;
+		SetQueryLocation(*subquery_expr, root.location);
 		if (subquery_expr->comparison_type == ExpressionType::INVALID) {
 			throw ParserException("Unsupported comparison \"%s\" for ANY/ALL subquery", name);
 		}
@@ -96,20 +125,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExprInternal(duckdb_libpgque
 		return std::move(subquery_expr);
 	}
 	case duckdb_libpgquery::PG_AEXPR_IN: {
-		auto left_expr = TransformExpression(root.lexpr);
-		ExpressionType operator_type;
-		// this looks very odd, but seems to be the way to find out its NOT IN
-		if (name == "<>") {
-			// NOT IN
-			operator_type = ExpressionType::COMPARE_NOT_IN;
-		} else {
-			// IN
-			operator_type = ExpressionType::COMPARE_IN;
-		}
-		auto result = make_uniq<OperatorExpression>(operator_type, std::move(left_expr));
-		result->query_location = root.location;
-		TransformExpressionList(*PGPointerCast<duckdb_libpgquery::PGList>(root.rexpr), result->children);
-		return std::move(result);
+		return TransformInExpression(name, root);
 	}
 	// rewrite NULLIF(a, b) into CASE WHEN a=b THEN NULL ELSE a END
 	case duckdb_libpgquery::PG_AEXPR_NULLIF: {
@@ -210,7 +226,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExprInternal(duckdb_libpgque
 unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAExpr &root) {
 	auto result = TransformAExprInternal(root);
 	if (result) {
-		result->query_location = root.location;
+		SetQueryLocation(*result, root.location);
 	}
 	return result;
 }

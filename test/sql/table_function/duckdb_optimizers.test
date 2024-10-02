@@ -1,0 +1,11 @@
+# name: test/sql/table_function/duckdb_optimizers.test
+# description: Test duckdb_optimizers function
+# group: [table_function]
+
+statement ok
+SELECT * FROM duckdb_optimizers();
+
+query I
+SELECT name FROM duckdb_optimizers() WHERE name='join_order';
+----
+join_order

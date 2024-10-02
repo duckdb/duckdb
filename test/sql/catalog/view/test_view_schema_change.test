@@ -3,6 +3,9 @@
 # group: [view]
 
 statement ok
+set storage_compatibility_version='v0.10.2'
+
+statement ok
 PRAGMA enable_verification
 
 # create a table
@@ -38,6 +41,7 @@ CREATE TABLE t1(i DATE)
 # querying the view fails because the column types don't match the expected types
 statement error
 SELECT * FROM v1
+----
 
 # now drop the table and create one that has extra columns
 statement ok
@@ -49,6 +53,7 @@ CREATE TABLE t1(i INTEGER, j INTEGER)
 # again querying the view fails: there are extra columns present
 statement error
 SELECT * FROM v1
+----
 
 # now drop the table and create one that has differently named columns
 statement ok
@@ -57,11 +62,11 @@ DROP TABLE t1
 statement ok
 CREATE TABLE t1(k INTEGER)
 
-# v1 was deleted earlier as part of CASCADE
+# names returned by the view have changed
 statement error
-SELECT i FROM v1
+SELECT * FROM v1
 ----
-Catalog Error: Table with name v1 does not exist!
+Binder Error: Contents of view were altered: names don't match!
 
 statement ok
 DROP TABLE t1
@@ -76,3 +81,29 @@ CREATE VIEW v1 AS SELECT * FROM t1
 query I
 SELECT * FROM v1
 ----
+
+# Changing the types of the table that the view references also makes the view unusable
+statement ok
+ALTER TABLE t1 ALTER i TYPE VARCHAR;
+
+statement error
+select * from v1;
+----
+Binder Error: Contents of view were altered: types don't match!
+
+# reverting the types fixes the issue
+statement ok
+ALTER TABLE t1 ALTER i TYPE INTEGER
+
+query I
+SELECT * FROM v1
+----
+
+# changing the column names makes the view unusable again
+statement ok
+ALTER TABLE t1 RENAME i TO j
+
+statement error
+SELECT * FROM v1
+----
+Binder Error: Contents of view were altered: names don't match!

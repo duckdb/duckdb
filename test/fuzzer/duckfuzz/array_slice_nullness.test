@@ -1,0 +1,16 @@
+# name: test/fuzzer/duckfuzz/array_slice_nullness.test
+# description: array_slice did not early out on NULL
+# group: [duckfuzz]
+
+statement ok
+PRAGMA enable_verification
+
+# simplified
+query I
+SELECT array_reverse(NULL::INTEGER[])
+----
+NULL
+
+# https://github.com/duckdb/duckdb-fuzzer/issues/2692
+statement ok
+SELECT NULL LIMIT array_reverse(TRY_CAST(5722 AS TIMESTAMP WITH TIME ZONE[]))

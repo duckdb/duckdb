@@ -1,0 +1,52 @@
+# name: test/sql/returning/no_crash_when_no_returning_columns.test
+# description: Test returning with top level INSERT statement
+# group: [returning]
+
+statement ok
+CREATE TABLE v0 ( c1 INT ); 
+
+statement error 
+INSERT INTO v0 VALUES (1), (2), (3), (4) RETURNING * EXCLUDE c1;
+----
+Binder Error
+
+# make sure nothing was inserted
+query I
+SELECT * FROM v0;
+----
+
+
+statement ok
+INSERT INTO v0 VALUES (1), (2), (3), (4), (0);
+
+
+statement error 
+DELETE from v0 WHERE c1 = 0 RETURNING * EXCLUDE c1;
+----
+Binder Error
+
+query I
+select * from v0 where c1 = 0;
+----
+0
+
+
+statement error 
+UPDATE v0 SET c1 = 0 WHERE true RETURNING * EXCLUDE c1;
+----
+Binder Error
+
+query I
+Select * from v0 order by all;
+----
+0
+1
+2
+3
+4
+
+# reported issue https://github.com/duckdb/duckdb/issues/10139
+statement error
+INSERT INTO v0 BY POSITION ( SELECT TRUE ) OFFSET 1 ROWS RETURNING v0 . * EXCLUDE c1 ;
+----
+Binder Error

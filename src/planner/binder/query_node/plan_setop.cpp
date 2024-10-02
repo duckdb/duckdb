@@ -4,6 +4,8 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
+#include "duckdb/function/table/read_csv.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
 namespace duckdb {
 
@@ -23,14 +25,45 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalTyp
 	if (node->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		// "node" is a projection; we can just do the casts in there
 		D_ASSERT(node->expressions.size() == source_types.size());
+		if (node->children.size() == 1 && node->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
+			// If this projection only has one child and that child is a logical get we can try to pushdown types
+			auto &logical_get = node->children[0]->Cast<LogicalGet>();
+			auto &column_ids = logical_get.GetColumnIds();
+			if (logical_get.function.type_pushdown) {
+				unordered_map<idx_t, LogicalType> new_column_types;
+				bool do_pushdown = true;
+				for (idx_t i = 0; i < op->expressions.size(); i++) {
+					if (op->expressions[i]->type == ExpressionType::BOUND_COLUMN_REF) {
+						auto &col_ref = op->expressions[i]->Cast<BoundColumnRefExpression>();
+						if (new_column_types.find(column_ids[col_ref.binding.column_index]) != new_column_types.end()) {
+							// Only one reference per column is accepted
+							do_pushdown = false;
+							break;
+						}
+						new_column_types[column_ids[col_ref.binding.column_index]] = target_types[i];
+					} else {
+						do_pushdown = false;
+						break;
+					}
+				}
+				if (do_pushdown) {
+					logical_get.function.type_pushdown(context, logical_get.bind_data, new_column_types);
+					// We also have to modify the types to the logical_get.returned_types
+					for (auto &type : new_column_types) {
+						logical_get.returned_types[type.first] = type.second;
+					}
+					return op;
+				}
+			}
+		}
 		// add the casts to the selection list
 		for (idx_t i = 0; i < target_types.size(); i++) {
 			if (source_types[i] != target_types[i]) {
 				// differing types, have to add a cast
-				string alias = node->expressions[i]->alias;
+				string cur_alias = node->expressions[i]->alias;
 				node->expressions[i] =
 				    BoundCastExpression::AddCastToType(context, std::move(node->expressions[i]), target_types[i]);
-				node->expressions[i]->alias = alias;
+				node->expressions[i]->alias = cur_alias;
 			}
 		}
 		return op;
@@ -95,8 +128,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 	}
 
 	// check if there are any unplanned subqueries left in either child
-	has_unplanned_dependent_joins =
-	    node.left_binder->has_unplanned_dependent_joins || node.right_binder->has_unplanned_dependent_joins;
+	has_unplanned_dependent_joins = has_unplanned_dependent_joins || node.left_binder->has_unplanned_dependent_joins ||
+	                                node.right_binder->has_unplanned_dependent_joins;
 
 	// create actual logical ops for setops
 	LogicalOperatorType logical_type;
@@ -108,14 +141,16 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 	case SetOperationType::EXCEPT:
 		logical_type = LogicalOperatorType::LOGICAL_EXCEPT;
 		break;
-	default:
-		D_ASSERT(node.setop_type == SetOperationType::INTERSECT);
+	case SetOperationType::INTERSECT:
 		logical_type = LogicalOperatorType::LOGICAL_INTERSECT;
+		break;
+	default:
+		D_ASSERT(false);
 		break;
 	}
 
 	auto root = make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(left_node),
-	                                           std::move(right_node), logical_type);
+	                                           std::move(right_node), logical_type, node.setop_all);
 
 	return VisitQueryNode(node, std::move(root));
 }

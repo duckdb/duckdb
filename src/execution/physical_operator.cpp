@@ -1,6 +1,7 @@
 #include "duckdb/execution/physical_operator.hpp"
 
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/render_tree.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/execution/execution_context.hpp"
@@ -9,6 +10,7 @@
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -17,9 +19,12 @@ string PhysicalOperator::GetName() const {
 	return PhysicalOperatorToString(type);
 }
 
-string PhysicalOperator::ToString() const {
-	TreeRenderer renderer;
-	return renderer.ToString(*this);
+string PhysicalOperator::ToString(ExplainFormat format) const {
+	auto renderer = TreeRenderer::CreateRenderer(format);
+	stringstream ss;
+	auto tree = RenderTree::CreateRenderTree(*this);
+	renderer->ToStream(*tree, ss);
+	return ss.str();
 }
 
 // LCOV_EXCL_START
@@ -34,6 +39,40 @@ vector<const_reference<PhysicalOperator>> PhysicalOperator::GetChildren() const 
 		result.push_back(*child);
 	}
 	return result;
+}
+
+void PhysicalOperator::SetEstimatedCardinality(InsertionOrderPreservingMap<string> &result,
+                                               idx_t estimated_cardinality) {
+	result[RenderTreeNode::ESTIMATED_CARDINALITY] = StringUtil::Format("%llu", estimated_cardinality);
+}
+
+idx_t PhysicalOperator::EstimatedThreadCount() const {
+	idx_t result = 0;
+	if (children.empty()) {
+		// Terminal operator, e.g., base table, these decide the degree of parallelism of pipelines
+		result = MaxValue<idx_t>(estimated_cardinality / (Storage::ROW_GROUP_SIZE * 2), 1);
+	} else if (type == PhysicalOperatorType::UNION) {
+		// We can run union pipelines in parallel, so we sum up the thread count of the children
+		for (auto &child : children) {
+			result += child->EstimatedThreadCount();
+		}
+	} else {
+		// For other operators we take the maximum of the children
+		for (auto &child : children) {
+			result = MaxValue(child->EstimatedThreadCount(), result);
+		}
+	}
+	return result;
+}
+
+bool PhysicalOperator::CanSaturateThreads(ClientContext &context) const {
+#ifdef DEBUG
+	// In debug mode we always return true here so that the code that depends on it is well-tested
+	return true;
+#else
+	const auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+	return EstimatedThreadCount() >= num_threads;
+#endif
 }
 
 //===--------------------------------------------------------------------===//
@@ -101,12 +140,16 @@ SinkCombineResultType PhysicalOperator::Combine(ExecutionContext &context, Opera
 	return SinkCombineResultType::FINISHED;
 }
 
+void PhysicalOperator::PrepareFinalize(ClientContext &context, GlobalSinkState &sink_state) const {
+}
+
 SinkFinalizeType PhysicalOperator::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                             OperatorSinkFinalizeInput &input) const {
 	return SinkFinalizeType::READY;
 }
 
-void PhysicalOperator::NextBatch(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p) const {
+SinkNextBatchType PhysicalOperator::NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const {
+	return SinkNextBatchType::READY;
 }
 
 unique_ptr<LocalSinkState> PhysicalOperator::GetLocalSinkState(ExecutionContext &context) const {
@@ -120,8 +163,8 @@ unique_ptr<GlobalSinkState> PhysicalOperator::GetGlobalSinkState(ClientContext &
 idx_t PhysicalOperator::GetMaxThreadMemory(ClientContext &context) {
 	// Memory usage per thread should scale with max mem / num threads
 	// We take 1/4th of this, to be conservative
-	idx_t max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();
-	idx_t num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
+	auto max_memory = BufferManager::GetBufferManager(context).GetQueryMaxMemory();
+	auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
 	return (max_memory / num_threads) / 4;
 }
 

@@ -36,11 +36,14 @@ SELECT {i: r, j: 2} FROM range(3) tbl(r);
 # duplicate key
 statement error
 SELECT {'i': 3, 'i': 4}
+----
 
 # empty struct is not allowed
 statement error
 SELECT {};
+----
 
 # need string keys
 statement error
 SELECT {1:3};
+----

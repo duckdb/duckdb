@@ -2,13 +2,16 @@
 # description: Issue #5077: Segfault on malformed CSV with variable length rows and carriage return newlines
 # group: [csv]
 
+statement ok
+PRAGMA enable_verification
+
 query III
 select * from 'data/csv/issue5077_aligned.csv'
 ----
 d	e	false
 
 query III
-select * from 'data/csv/issue5077.csv'
+select * from read_csv('data/csv/issue5077.csv', header=0)
 ----
 c	d	e
 

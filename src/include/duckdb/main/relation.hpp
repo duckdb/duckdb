@@ -17,6 +17,7 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/common/named_parameter_map.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_context_wrapper.hpp"
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
@@ -28,15 +29,14 @@
 namespace duckdb {
 struct BoundStatement;
 
-class ClientContextWrapper;
 class Binder;
 class LogicalOperator;
 class QueryNode;
 class TableRef;
 
-class Relation : public std::enable_shared_from_this<Relation> {
+class Relation : public enable_shared_from_this<Relation> {
 public:
-	Relation(const std::shared_ptr<ClientContext> &context, RelationType type) : context(context), type(type) {
+	Relation(const shared_ptr<ClientContext> &context, RelationType type) : context(context), type(type) {
 	}
 	Relation(ClientContextWrapper &context, RelationType type) : context(context.GetContext()), type(type) {
 	}
@@ -44,10 +44,8 @@ public:
 	}
 
 	ClientContextWrapper context;
-
 	RelationType type;
-
-	shared_ptr<ExternalDependency> extra_dependencies;
+	vector<shared_ptr<ExternalDependency>> external_dependencies;
 
 public:
 	DUCKDB_API virtual const vector<ColumnDefinition> &Columns() = 0;
@@ -70,7 +68,8 @@ public:
 	DUCKDB_API unique_ptr<QueryResult> Query(const string &name, const string &sql);
 
 	//! Explain the query plan of this relation
-	DUCKDB_API unique_ptr<QueryResult> Explain(ExplainType type = ExplainType::EXPLAIN_STANDARD);
+	DUCKDB_API unique_ptr<QueryResult> Explain(ExplainType type = ExplainType::EXPLAIN_STANDARD,
+	                                           ExplainFormat explain_format = ExplainFormat::DEFAULT);
 
 	DUCKDB_API virtual unique_ptr<TableRef> GetTableRef();
 	virtual bool IsReadOnly() {
@@ -121,6 +120,7 @@ public:
 	// AGGREGATES
 	DUCKDB_API shared_ptr<Relation> Aggregate(const string &aggregate_list);
 	DUCKDB_API shared_ptr<Relation> Aggregate(const vector<string> &aggregates);
+	DUCKDB_API shared_ptr<Relation> Aggregate(vector<unique_ptr<ParsedExpression>> expressions);
 	DUCKDB_API shared_ptr<Relation> Aggregate(const string &aggregate_list, const string &group_list);
 	DUCKDB_API shared_ptr<Relation> Aggregate(const vector<string> &aggregates, const vector<string> &groups);
 	DUCKDB_API shared_ptr<Relation> Aggregate(vector<unique_ptr<ParsedExpression>> expressions,
@@ -136,9 +136,10 @@ public:
 	//! Insert a row (i.e.,list of values) into a table
 	DUCKDB_API void Insert(const vector<vector<Value>> &values);
 	//! Create a table and insert the data from this relation into that table
-	DUCKDB_API shared_ptr<Relation> CreateRel(const string &schema_name, const string &table_name);
-	DUCKDB_API void Create(const string &table_name);
-	DUCKDB_API void Create(const string &schema_name, const string &table_name);
+	DUCKDB_API shared_ptr<Relation> CreateRel(const string &schema_name, const string &table_name,
+	                                          bool temporary = false);
+	DUCKDB_API void Create(const string &table_name, bool temporary = false);
+	DUCKDB_API void Create(const string &schema_name, const string &table_name, bool temporary = false);
 
 	//! Write a relation to a CSV file
 	DUCKDB_API shared_ptr<Relation>
@@ -172,6 +173,7 @@ public:
 	virtual Relation *ChildRelation() {
 		return nullptr;
 	}
+	void AddExternalDependency(shared_ptr<ExternalDependency> dependency);
 	DUCKDB_API vector<shared_ptr<ExternalDependency>> GetAllDependencies();
 
 protected:
@@ -180,12 +182,12 @@ protected:
 public:
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };

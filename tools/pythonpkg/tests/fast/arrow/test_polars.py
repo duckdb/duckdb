@@ -1,5 +1,6 @@
 import duckdb
 import pytest
+import sys
 
 pl = pytest.importorskip("polars")
 arrow = pytest.importorskip("pyarrow")
@@ -17,12 +18,12 @@ class TestPolars(object):
             }
         )
         # scan plus return a polars dataframe
-        polars_result = duckdb.sql('SELECT * FROM df').pl()
+        polars_result = duckdb_cursor.sql('SELECT * FROM df').pl()
         pl_testing.assert_frame_equal(df, polars_result)
 
         # now do the same for a lazy dataframe
         lazy_df = df.lazy()
-        lazy_result = duckdb.sql('SELECT * FROM lazy_df').pl()
+        lazy_result = duckdb_cursor.sql('SELECT * FROM lazy_df').pl()
         pl_testing.assert_frame_equal(df, lazy_result)
 
         con = duckdb.connect()
@@ -50,3 +51,29 @@ class TestPolars(object):
         con.register('polars_df', df.lazy())
         polars_result = con.execute('select * from polars_df').pl()
         pl_testing.assert_frame_equal(df, polars_result)
+
+    def test_empty_polars_dataframe(self, duckdb_cursor):
+        polars_empty_df = pl.DataFrame()
+        with pytest.raises(
+            duckdb.InvalidInputException, match='Provided table/dataframe must have at least one column'
+        ):
+            duckdb_cursor.sql("from polars_empty_df")
+
+    def test_polars_from_json(self, duckdb_cursor):
+        from io import StringIO
+
+        duckdb_cursor.sql("set arrow_lossless_conversion=false")
+        string = StringIO("""{"entry":[{"content":{"ManagedSystem":{"test":null}}}]}""")
+        res = duckdb_cursor.read_json(string).pl()
+        assert str(res['entry'][0][0]) == "{'content': {'ManagedSystem': {'test': None}}}"
+
+    @pytest.mark.skipif(
+        not hasattr(pl.exceptions, "PanicException"), reason="Polars has no PanicException in this version"
+    )
+    def test_polars_from_json_error(self, duckdb_cursor):
+        from io import StringIO
+
+        duckdb_cursor.sql("set arrow_lossless_conversion=true")
+        string = StringIO("""{"entry":[{"content":{"ManagedSystem":{"test":null}}}]}""")
+        with pytest.raises(pl.exceptions.PanicException):
+            res = duckdb_cursor.read_json(string).pl()

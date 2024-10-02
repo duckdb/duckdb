@@ -1,0 +1,115 @@
+# name: test/sql/storage/temp_directory/max_swap_space_inmemory.test
+# group: [temp_directory]
+
+require noforcestorage
+
+require skip_reload
+
+# In in-memory mode, the 'temp_directory' defaults to '.tmp'
+# So there are no guarantees about the value of 'max_temp_directory_size'
+# (if .tmp exists, it's set to the available disk space | if it doesn't exist, it'll stay at 0 bytes)
+
+# So we set it explicitly to empty, to have guarantees
+statement ok
+set temp_directory='';
+
+statement ok
+PRAGMA memory_limit='2MB'
+
+# --- Set by default to 0 when temp_directory is empty ---
+
+query I
+select current_setting('max_temp_directory_size')
+----
+0 bytes
+
+# Set the max size explicitly
+statement ok
+set max_temp_directory_size='15gb'
+
+# Should not be 0 anymore
+query I
+select current_setting('max_temp_directory_size') a where a == '0 bytes'
+----
+
+# Then reset it, default should be 0 again
+statement ok
+reset max_temp_directory_size;
+
+query I
+select current_setting('max_temp_directory_size')
+----
+0 bytes
+
+# --- Set by default to the available disk space when temp_directory exists ---
+
+statement ok
+set temp_directory = '__TEST_DIR__';
+
+# even though '__TEST_DIR__' exists, we haven't used the temporary directory so the max size is still 0
+query I
+select current_setting('max_temp_directory_size')
+----
+0 bytes
+
+# --- Set explicitly by the user ---
+
+# If we set 'max_temp_directory_size' explicitly, it will not be overridden
+statement ok
+set max_temp_directory_size='15gb'
+
+# Reported size should not be 0, we set it explicitly
+query I
+select current_setting('max_temp_directory_size') a where a == '0 bytes'
+----
+
+query I nosort unchanged
+select current_setting('max_temp_directory_size')
+----
+
+# When we change the temp_directory to something that doesnt exist
+statement ok
+set temp_directory = '__TEST_DIR__/does_not_exist'
+
+query I nosort unchanged
+select current_setting('max_temp_directory_size')
+----
+
+# When we change the temp_directory to something that does exist
+statement ok
+set temp_directory = '__TEST_DIR__'
+
+query I nosort unchanged
+select current_setting('max_temp_directory_size')
+----
+
+# When we reset the temp_directory ..
+statement ok
+reset temp_directory;
+
+query I nosort unchanged
+select current_setting('max_temp_directory_size')
+----
+
+# --- Set to the available disk space when we create the (previously non-existant) 'temp_directory'
+
+# Reset it so it's no longer set explicitly
+statement ok
+reset max_temp_directory_size;
+
+# When we change the temp_directory to something that doesnt exist
+statement ok
+set temp_directory = '__TEST_DIR__/does_not_exist'
+
+query I
+select current_setting('max_temp_directory_size')
+----
+0 bytes
+
+statement ok
+CREATE TABLE t2 AS SELECT * FROM range(1000000);
+
+# Reported size should not be 0, the directory was created
+query I
+select current_setting('max_temp_directory_size') a where a == '0 bytes'
+----

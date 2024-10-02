@@ -19,6 +19,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 
 #include <algorithm>
 
@@ -34,62 +35,64 @@ static void CreateColumnDependencyManager(BoundCreateTableInfo &info) {
 	}
 }
 
-static void BindCheckConstraint(Binder &binder, BoundCreateTableInfo &info, const unique_ptr<Constraint> &cond) {
-	auto &base = info.base->Cast<CreateTableInfo>();
-
+static unique_ptr<BoundConstraint> BindCheckConstraint(Binder &binder, const string &table_name,
+                                                       const ColumnList &columns, const unique_ptr<Constraint> &cond) {
 	auto bound_constraint = make_uniq<BoundCheckConstraint>();
 	// check constraint: bind the expression
-	CheckBinder check_binder(binder, binder.context, base.table, base.columns, bound_constraint->bound_columns);
+	CheckBinder check_binder(binder, binder.context, table_name, columns, bound_constraint->bound_columns);
 	auto &check = cond->Cast<CheckConstraint>();
 	// create a copy of the unbound expression because the binding destroys the constraint
 	auto unbound_expression = check.expression->Copy();
 	// now bind the constraint and create a new BoundCheckConstraint
-	bound_constraint->expression = check_binder.Bind(check.expression);
-	info.bound_constraints.push_back(std::move(bound_constraint));
-	// move the unbound constraint back into the original check expression
-	check.expression = std::move(unbound_expression);
+	bound_constraint->expression = check_binder.Bind(unbound_expression);
+	return std::move(bound_constraint);
 }
 
-static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
-	auto &base = info.base->Cast<CreateTableInfo>();
+vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(ClientContext &context,
+                                                            const vector<unique_ptr<Constraint>> &constraints,
+                                                            const string &table_name, const ColumnList &columns) {
+	auto binder = Binder::CreateBinder(context);
+	return binder->BindConstraints(constraints, table_name, columns);
+}
 
-	bool has_primary_key = false;
-	logical_index_set_t not_null_columns;
-	vector<LogicalIndex> primary_keys;
-	for (idx_t i = 0; i < base.constraints.size(); i++) {
-		auto &cond = base.constraints[i];
-		switch (cond->type) {
+vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(const TableCatalogEntry &table) {
+	return BindConstraints(table.GetConstraints(), table.name, table.GetColumns());
+}
+
+vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(const vector<unique_ptr<Constraint>> &constraints,
+                                                            const string &table_name, const ColumnList &columns) {
+	vector<unique_ptr<BoundConstraint>> bound_constraints;
+	for (auto &constr : constraints) {
+		switch (constr->type) {
 		case ConstraintType::CHECK: {
-			BindCheckConstraint(binder, info, cond);
+			bound_constraints.push_back(BindCheckConstraint(*this, table_name, columns, constr));
 			break;
 		}
 		case ConstraintType::NOT_NULL: {
-			auto &not_null = cond->Cast<NotNullConstraint>();
-			auto &col = base.columns.GetColumn(LogicalIndex(not_null.index));
-			info.bound_constraints.push_back(make_uniq<BoundNotNullConstraint>(PhysicalIndex(col.StorageOid())));
-			not_null_columns.insert(not_null.index);
+			auto &not_null = constr->Cast<NotNullConstraint>();
+			auto &col = columns.GetColumn(LogicalIndex(not_null.index));
+			bound_constraints.push_back(make_uniq<BoundNotNullConstraint>(PhysicalIndex(col.StorageOid())));
 			break;
 		}
 		case ConstraintType::UNIQUE: {
-			auto &unique = cond->Cast<UniqueConstraint>();
+			auto &unique = constr->Cast<UniqueConstraint>();
 			// have to resolve columns of the unique constraint
 			vector<LogicalIndex> keys;
 			logical_index_set_t key_set;
-			if (unique.index.index != DConstants::INVALID_INDEX) {
-				D_ASSERT(unique.index.index < base.columns.LogicalColumnCount());
+			if (unique.HasIndex()) {
+				D_ASSERT(unique.GetIndex().index < columns.LogicalColumnCount());
 				// unique constraint is given by single index
-				unique.columns.push_back(base.columns.GetColumn(unique.index).Name());
-				keys.push_back(unique.index);
-				key_set.insert(unique.index);
+				unique.SetColumnName(columns.GetColumn(unique.GetIndex()).Name());
+				keys.push_back(unique.GetIndex());
+				key_set.insert(unique.GetIndex());
 			} else {
 				// unique constraint is given by list of names
 				// have to resolve names
-				D_ASSERT(!unique.columns.empty());
-				for (auto &keyname : unique.columns) {
-					if (!base.columns.ColumnExists(keyname)) {
+				for (auto &keyname : unique.GetColumnNames()) {
+					if (!columns.ColumnExists(keyname)) {
 						throw ParserException("column \"%s\" named in key does not exist", keyname);
 					}
-					auto &column = base.columns.GetColumn(keyname);
+					auto &column = columns.GetColumn(keyname);
 					auto column_index = column.Logical();
 					if (key_set.find(column_index) != key_set.end()) {
 						throw ParserException("column \"%s\" appears twice in "
@@ -100,43 +103,72 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 					key_set.insert(column_index);
 				}
 			}
-
-			if (unique.is_primary_key) {
-				// we can only have one primary key per table
-				if (has_primary_key) {
-					throw ParserException("table \"%s\" has more than one primary key", base.table);
-				}
-				has_primary_key = true;
-				primary_keys = keys;
-			}
-			info.bound_constraints.push_back(
-			    make_uniq<BoundUniqueConstraint>(std::move(keys), std::move(key_set), unique.is_primary_key));
+			bound_constraints.push_back(
+			    make_uniq<BoundUniqueConstraint>(std::move(keys), std::move(key_set), unique.IsPrimaryKey()));
 			break;
 		}
 		case ConstraintType::FOREIGN_KEY: {
-			auto &fk = cond->Cast<ForeignKeyConstraint>();
+			auto &fk = constr->Cast<ForeignKeyConstraint>();
 			D_ASSERT((fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE && !fk.info.pk_keys.empty()) ||
 			         (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE && !fk.info.pk_keys.empty()) ||
 			         fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE);
 			physical_index_set_t fk_key_set, pk_key_set;
-			for (idx_t i = 0; i < fk.info.pk_keys.size(); i++) {
-				if (pk_key_set.find(fk.info.pk_keys[i]) != pk_key_set.end()) {
+			for (auto &pk_key : fk.info.pk_keys) {
+				if (pk_key_set.find(pk_key) != pk_key_set.end()) {
 					throw BinderException("Duplicate primary key referenced in FOREIGN KEY constraint");
 				}
-				pk_key_set.insert(fk.info.pk_keys[i]);
+				pk_key_set.insert(pk_key);
 			}
-			for (idx_t i = 0; i < fk.info.fk_keys.size(); i++) {
-				if (fk_key_set.find(fk.info.fk_keys[i]) != fk_key_set.end()) {
+			for (auto &fk_key : fk.info.fk_keys) {
+				if (fk_key_set.find(fk_key) != fk_key_set.end()) {
 					throw BinderException("Duplicate key specified in FOREIGN KEY constraint");
 				}
-				fk_key_set.insert(fk.info.fk_keys[i]);
+				fk_key_set.insert(fk_key);
 			}
-			info.bound_constraints.push_back(
+			bound_constraints.push_back(
 			    make_uniq<BoundForeignKeyConstraint>(fk.info, std::move(pk_key_set), std::move(fk_key_set)));
 			break;
 		}
 		default:
 			throw NotImplementedException("unrecognized constraint type in bind");
+		}
+	}
+	return bound_constraints;
+}
+
+vector<unique_ptr<BoundConstraint>> Binder::BindNewConstraints(vector<unique_ptr<Constraint>> &constraints,
+                                                               const string &table_name, const ColumnList &columns) {
+	auto bound_constraints = BindConstraints(constraints, table_name, columns);
+
+	// handle primary keys/not null constraints
+	bool has_primary_key = false;
+	logical_index_set_t not_null_columns;
+	vector<LogicalIndex> primary_keys;
+	for (idx_t c = 0; c < constraints.size(); c++) {
+		auto &constr = constraints[c];
+		switch (constr->type) {
+		case ConstraintType::NOT_NULL: {
+			auto &not_null = constr->Cast<NotNullConstraint>();
+			auto &col = columns.GetColumn(LogicalIndex(not_null.index));
+			bound_constraints.push_back(make_uniq<BoundNotNullConstraint>(PhysicalIndex(col.StorageOid())));
+			not_null_columns.insert(not_null.index);
+			break;
+		}
+		case ConstraintType::UNIQUE: {
+			auto &unique = constr->Cast<UniqueConstraint>();
+			auto &bound_unique = bound_constraints[c]->Cast<BoundUniqueConstraint>();
+			if (unique.IsPrimaryKey()) {
+				// we can only have one primary key per table
+				if (has_primary_key) {
+					throw ParserException("table \"%s\" has more than one primary key", table_name);
+				}
+				has_primary_key = true;
+				primary_keys = bound_unique.keys;
+			}
+			break;
+		}
+		default:
+			break;
 		}
 	}
 	if (has_primary_key) {
@@ -146,11 +178,12 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 				//! No need to create a NotNullConstraint, it's already present
 				continue;
 			}
-			auto physical_index = base.columns.LogicalToPhysical(column_index);
-			base.constraints.push_back(make_uniq<NotNullConstraint>(column_index));
-			info.bound_constraints.push_back(make_uniq<BoundNotNullConstraint>(physical_index));
+			auto physical_index = columns.LogicalToPhysical(column_index);
+			constraints.push_back(make_uniq<NotNullConstraint>(column_index));
+			bound_constraints.push_back(make_uniq<BoundNotNullConstraint>(physical_index));
 		}
 	}
+	return bound_constraints;
 }
 
 void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
@@ -171,9 +204,9 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 	binder->SetCatalogLookupCallback(entry_retriever.GetCallback());
 	binder->bind_context.AddGenericBinding(table_index, base.table, names, types);
 	auto expr_binder = ExpressionBinder(*binder, context);
-	string ignore;
+	ErrorData ignore;
 	auto table_binding = binder->bind_context.GetBinding(base.table, ignore);
-	D_ASSERT(table_binding && ignore.empty());
+	D_ASSERT(table_binding && !ignore.HasError());
 
 	auto bind_order = info.column_dependency_manager.GetBindOrder(base.columns);
 	logical_index_set_t bound_indices;
@@ -202,7 +235,6 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 			col.SetType(bound_expression->return_type);
 
 			// Update the type in the binding, for future expansions
-			string ignore;
 			table_binding->types[i.index] = col.Type();
 		}
 		bound_indices.insert(i);
@@ -212,10 +244,13 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults) {
 	for (auto &column : columns.Physical()) {
 		unique_ptr<Expression> bound_default;
-		if (column.DefaultValue()) {
+		if (column.HasDefaultValue()) {
 			// we bind a copy of the DEFAULT value because binding is destructive
 			// and we want to keep the original expression around for serialization
-			auto default_copy = column.DefaultValue()->Copy();
+			auto default_copy = column.DefaultValue().Copy();
+			if (default_copy->HasParameter()) {
+				throw BinderException("DEFAULT values cannot contain parameters");
+			}
 			ConstantBinder default_binder(*this, context, "DEFAULT value");
 			default_binder.target_type = column.Type();
 			bound_default = default_binder.Bind(default_copy);
@@ -227,7 +262,7 @@ void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expr
 	}
 }
 
-static void ExtractExpressionDependencies(Expression &expr, PhysicalDependencyList &dependencies) {
+static void ExtractExpressionDependencies(Expression &expr, LogicalDependencyList &dependencies) {
 	if (expr.type == ExpressionType::BOUND_FUNCTION) {
 		auto &function = expr.Cast<BoundFunctionExpression>();
 		if (function.function.dependency) {
@@ -238,13 +273,14 @@ static void ExtractExpressionDependencies(Expression &expr, PhysicalDependencyLi
 	    expr, [&](Expression &child) { ExtractExpressionDependencies(child, dependencies); });
 }
 
-static void ExtractDependencies(BoundCreateTableInfo &info) {
-	for (auto &default_value : info.bound_defaults) {
+static void ExtractDependencies(BoundCreateTableInfo &info, vector<unique_ptr<Expression>> &defaults,
+                                vector<unique_ptr<BoundConstraint>> &constraints) {
+	for (auto &default_value : defaults) {
 		if (default_value) {
 			ExtractExpressionDependencies(*default_value, info.dependencies);
 		}
 	}
-	for (auto &constraint : info.bound_constraints) {
+	for (auto &constraint : constraints) {
 		if (constraint->type == ConstraintType::CHECK) {
 			auto &bound_check = constraint->Cast<BoundCheckConstraint>();
 			ExtractExpressionDependencies(*bound_check.expression, info.dependencies);
@@ -253,9 +289,24 @@ static void ExtractDependencies(BoundCreateTableInfo &info) {
 }
 
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema) {
+	vector<unique_ptr<Expression>> bound_defaults;
+	return BindCreateTableInfo(std::move(info), schema, bound_defaults);
+}
+
+unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableCheckpoint(unique_ptr<CreateInfo> info,
+                                                                   SchemaCatalogEntry &schema) {
+	auto result = make_uniq<BoundCreateTableInfo>(schema, std::move(info));
+	CreateColumnDependencyManager(*result);
+	return result;
+}
+
+unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
+                                                             vector<unique_ptr<Expression>> &bound_defaults) {
 	auto &base = info->Cast<CreateTableInfo>();
 	auto result = make_uniq<BoundCreateTableInfo>(schema, std::move(info));
 	auto &dependencies = result->dependencies;
+
+	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	if (base.query) {
 		// construct the result object
 		auto query_obj = Bind(*base.query);
@@ -282,12 +333,12 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		// bind the generated column expressions
 		BindGeneratedColumns(*result);
 		// bind any constraints
-		BindConstraints(*this, *result);
+		bound_constraints = BindNewConstraints(base.constraints, base.table, base.columns);
 		// bind the default values
-		BindDefaultValues(base.columns, result->bound_defaults);
+		BindDefaultValues(base.columns, bound_defaults);
 	}
 	// extract dependencies from any default values or CHECK constraints
-	ExtractDependencies(*result);
+	ExtractDependencies(*result, bound_defaults, bound_constraints);
 
 	if (base.columns.PhysicalColumnCount() == 0) {
 		throw BinderException("Creating a table without physical (non-generated) columns is not supported");
@@ -298,9 +349,11 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		if (column.Type().id() == LogicalTypeId::VARCHAR) {
 			ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
 		}
-		BindLogicalType(column.TypeMutable(), &result->schema.catalog);
+		BindLogicalType(column.TypeMutable(), &result->schema.catalog, result->schema.name);
 	}
 	result->dependencies.VerifyDependencies(schema.catalog, result->Base().table);
+
+	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = false;
 	return result;
 }
@@ -309,17 +362,6 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	auto &base = info->Cast<CreateTableInfo>();
 	auto &schema = BindCreateSchema(base);
 	return BindCreateTableInfo(std::move(info), schema);
-}
-
-vector<unique_ptr<Expression>> Binder::BindCreateIndexExpressions(TableCatalogEntry &table, CreateIndexInfo &info) {
-	auto index_binder = IndexBinder(*this, this->context, &table, &info);
-	vector<unique_ptr<Expression>> expressions;
-	expressions.reserve(info.expressions.size());
-	for (auto &expr : info.expressions) {
-		expressions.push_back(index_binder.Bind(expr));
-	}
-
-	return expressions;
 }
 
 } // namespace duckdb

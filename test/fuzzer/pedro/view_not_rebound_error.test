@@ -1,6 +1,12 @@
 # name: test/fuzzer/pedro/view_not_rebound_error.test
 # group: [pedro]
 
+# FIXME: for this to work we need to serialize/deserialize dependencies
+require skip_reload
+
+statement ok
+set enable_view_dependencies=true
+
 statement ok
 CREATE TABLE t1 (c1 INT);
 
@@ -10,7 +16,7 @@ CREATE VIEW t0 AS SELECT 1 FROM t1 GROUP BY c1;
 statement error
 DROP TABLE t1;
 ----
-Dependency Error: Cannot drop entry "t1" because there are entries that depend on it
+view "t0" depends on table "t1".
 
 # We need CASCADE to drop t1 because t0 depends on it
 statement ok

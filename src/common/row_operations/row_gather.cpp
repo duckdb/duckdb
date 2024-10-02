@@ -9,6 +9,7 @@
 #include "duckdb/common/types/row/row_data_collection.hpp"
 #include "duckdb/common/types/row/row_layout.hpp"
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
+#include "duckdb/common/uhugeint.hpp"
 
 namespace duckdb {
 
@@ -95,8 +96,8 @@ static void GatherNestedVector(Vector &rows, const SelectionVector &row_sel, Vec
 	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
 
 	// Build the gather locations
-	auto data_locations = make_unsafe_uniq_array<data_ptr_t>(count);
-	auto mask_locations = make_unsafe_uniq_array<data_ptr_t>(count);
+	auto data_locations = make_unsafe_uniq_array_uninitialized<data_ptr_t>(count);
+	auto mask_locations = make_unsafe_uniq_array_uninitialized<data_ptr_t>(count);
 	for (idx_t i = 0; i < count; i++) {
 		auto row_idx = row_sel.get_index(i);
 		auto row = ptrs[row_idx];
@@ -112,7 +113,8 @@ static void GatherNestedVector(Vector &rows, const SelectionVector &row_sel, Vec
 	}
 
 	// Deserialise into the selected locations
-	RowOperations::HeapGather(col, count, col_sel, col_no, data_locations.get(), mask_locations.get());
+	NestedValidity parent_validity(mask_locations.get(), col_no);
+	RowOperations::HeapGather(col, count, col_sel, data_locations.get(), &parent_validity);
 }
 
 void RowOperations::Gather(Vector &rows, const SelectionVector &row_sel, Vector &col, const SelectionVector &col_sel,
@@ -134,6 +136,9 @@ void RowOperations::Gather(Vector &rows, const SelectionVector &row_sel, Vector 
 		break;
 	case PhysicalType::UINT64:
 		TemplatedGatherLoop<uint64_t>(rows, row_sel, col, col_sel, count, layout, col_no, build_size);
+		break;
+	case PhysicalType::UINT128:
+		TemplatedGatherLoop<uhugeint_t>(rows, row_sel, col, col_sel, count, layout, col_no, build_size);
 		break;
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:

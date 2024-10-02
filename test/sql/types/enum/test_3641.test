@@ -21,11 +21,19 @@ statement ok
 insert into m values ('sad', 'very sad')
 
 query II
-select *  from m where m = ''
+select * from m where m = ''::VARCHAR
 ----
 
 query I
 SELECT m='' FROM m
+----
+false
+
+statement ok
+PREPARE v1 AS SELECT m=? FROM m;
+
+query I
+EXECUTE v1('')
 ----
 false
 
@@ -37,3 +45,4 @@ SELECT * FROM m WHERE m=m_2
 # explicit cast
 statement error
 SELECT * FROM m WHERE m::mood_2=m_2
+----

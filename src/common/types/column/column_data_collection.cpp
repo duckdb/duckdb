@@ -4,6 +4,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
 #include "duckdb/common/types/value_map.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -50,17 +51,17 @@ ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p) {
 	types.clear();
 	count = 0;
 	this->finished_append = false;
-	allocator = make_shared<ColumnDataAllocator>(allocator_p);
+	allocator = make_shared_ptr<ColumnDataAllocator>(allocator_p);
 }
 
 ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p, vector<LogicalType> types_p) {
 	Initialize(std::move(types_p));
-	allocator = make_shared<ColumnDataAllocator>(allocator_p);
+	allocator = make_shared_ptr<ColumnDataAllocator>(allocator_p);
 }
 
 ColumnDataCollection::ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types_p) {
 	Initialize(std::move(types_p));
-	allocator = make_shared<ColumnDataAllocator>(buffer_manager);
+	allocator = make_shared_ptr<ColumnDataAllocator>(buffer_manager);
 }
 
 ColumnDataCollection::ColumnDataCollection(shared_ptr<ColumnDataAllocator> allocator_p, vector<LogicalType> types_p) {
@@ -70,7 +71,7 @@ ColumnDataCollection::ColumnDataCollection(shared_ptr<ColumnDataAllocator> alloc
 
 ColumnDataCollection::ColumnDataCollection(ClientContext &context, vector<LogicalType> types_p,
                                            ColumnDataAllocatorType type)
-    : ColumnDataCollection(make_shared<ColumnDataAllocator>(context, type), std::move(types_p)) {
+    : ColumnDataCollection(make_shared_ptr<ColumnDataAllocator>(context, type), std::move(types_p)) {
 	D_ASSERT(!types.empty());
 }
 
@@ -106,6 +107,14 @@ idx_t ColumnDataCollection::SizeInBytes() const {
 	idx_t total_size = 0;
 	for (const auto &segment : segments) {
 		total_size += segment->SizeInBytes();
+	}
+	return total_size;
+}
+
+idx_t ColumnDataCollection::AllocationSize() const {
+	idx_t total_size = 0;
+	for (const auto &segment : segments) {
+		total_size += segment->AllocationSize();
 	}
 	return total_size;
 }
@@ -190,7 +199,7 @@ ColumnDataChunkIterationHelper::ColumnDataChunkIterationHelper(const ColumnDataC
 
 ColumnDataChunkIterationHelper::ColumnDataChunkIterator::ColumnDataChunkIterator(
     const ColumnDataCollection *collection_p, vector<column_t> column_ids_p)
-    : collection(collection_p), scan_chunk(make_shared<DataChunk>()), row_index(0) {
+    : collection(collection_p), scan_chunk(make_shared_ptr<DataChunk>()), row_index(0) {
 	if (!collection) {
 		return;
 	}
@@ -237,7 +246,7 @@ ColumnDataRowIterationHelper::ColumnDataRowIterationHelper(const ColumnDataColle
 }
 
 ColumnDataRowIterationHelper::ColumnDataRowIterator::ColumnDataRowIterator(const ColumnDataCollection *collection_p)
-    : collection(collection_p), scan_chunk(make_shared<DataChunk>()), current_row(*scan_chunk, 0, 0) {
+    : collection(collection_p), scan_chunk(make_shared_ptr<DataChunk>()), current_row(*scan_chunk, 0, 0) {
 	if (!collection) {
 		return;
 	}
@@ -288,6 +297,7 @@ const ColumnDataRow &ColumnDataRowIterationHelper::ColumnDataRowIterator::operat
 //===--------------------------------------------------------------------===//
 void ColumnDataCollection::InitializeAppend(ColumnDataAppendState &state) {
 	D_ASSERT(!finished_append);
+	state.current_chunk_state.handles.clear();
 	state.vector_data.resize(types.size());
 	if (segments.empty()) {
 		CreateSegment();
@@ -457,6 +467,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 
 	auto current_index = meta_data.vector_data_index;
 	idx_t remaining = copy_count;
+	auto block_size = meta_data.segment.allocator->GetBufferManager().GetBlockSize();
 	while (remaining > 0) {
 		// how many values fit in the current string vector
 		idx_t vector_remaining =
@@ -475,19 +486,18 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 			if (entry.IsInlined()) {
 				continue;
 			}
-			if (heap_size + entry.GetSize() > Storage::BLOCK_SIZE) {
+			if (heap_size + entry.GetSize() > block_size) {
 				break;
 			}
 			heap_size += entry.GetSize();
 		}
 
 		if (vector_remaining != 0 && append_count == 0) {
-			// single string is longer than Storage::BLOCK_SIZE
-			// we allocate one block at a time for long strings
+			// The string exceeds Storage::DEFAULT_BLOCK_SIZE, so we allocate one block at a time for long strings.
 			auto source_idx = source_data.sel->get_index(offset + append_count);
 			D_ASSERT(source_data.validity.RowIsValid(source_idx));
 			D_ASSERT(!source_entries[source_idx].IsInlined());
-			D_ASSERT(source_entries[source_idx].GetSize() > Storage::BLOCK_SIZE);
+			D_ASSERT(source_entries[source_idx].GetSize() > block_size);
 			heap_size += source_entries[source_idx].GetSize();
 			append_count++;
 		}
@@ -531,7 +541,8 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 			} else {
 				D_ASSERT(heap_ptr != nullptr);
 				memcpy(heap_ptr, source_entry.GetData(), source_entry.GetSize());
-				target_entry = string_t(const_char_ptr_cast(heap_ptr), source_entry.GetSize());
+				target_entry =
+				    string_t(const_char_ptr_cast(heap_ptr), UnsafeNumericCast<uint32_t>(source_entry.GetSize()));
 				heap_ptr += source_entry.GetSize();
 			}
 		}
@@ -679,8 +690,16 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 		}
 	}
 
-	child_function.function(child_meta_data, child_vector_data, child_vector, offset * array_size,
-	                        array_size * copy_count);
+	auto is_constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	// If the array is constant, we need to copy the child vector n times
+	if (is_constant) {
+		for (idx_t i = 0; i < copy_count; i++) {
+			child_function.function(child_meta_data, child_vector_data, child_vector, 0, array_size);
+		}
+	} else {
+		child_function.function(child_meta_data, child_vector_data, child_vector, offset * array_size,
+		                        copy_count * array_size);
+	}
 }
 
 ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &type) {
@@ -716,6 +735,9 @@ ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &
 		break;
 	case PhysicalType::UINT64:
 		function = ColumnDataCopy<uint64_t>;
+		break;
+	case PhysicalType::UINT128:
+		function = ColumnDataCopy<uhugeint_t>;
 		break;
 	case PhysicalType::FLOAT:
 		function = ColumnDataCopy<float>;
@@ -1027,7 +1049,7 @@ void ColumnDataCollection::Reset() {
 	segments.clear();
 
 	// Refreshes the ColumnDataAllocator to prevent holding on to allocated data unnecessarily
-	allocator = make_shared<ColumnDataAllocator>(*allocator);
+	allocator = make_shared_ptr<ColumnDataAllocator>(*allocator);
 }
 
 struct ValueResultEquals {

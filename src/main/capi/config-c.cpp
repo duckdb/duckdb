@@ -10,13 +10,14 @@ duckdb_state duckdb_create_config(duckdb_config *out_config) {
 	if (!out_config) {
 		return DuckDBError;
 	}
-	DBConfig *config;
 	try {
-		config = new DBConfig();
+		*out_config = nullptr;
+		auto config = new DBConfig();
+		*out_config = reinterpret_cast<duckdb_config>(config);
+		config->SetOptionByName("duckdb_api", "capi");
 	} catch (...) { // LCOV_EXCL_START
 		return DuckDBError;
 	} // LCOV_EXCL_STOP
-	*out_config = reinterpret_cast<duckdb_config>(config);
 	return DuckDBSuccess;
 }
 

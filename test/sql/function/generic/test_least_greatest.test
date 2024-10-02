@@ -12,6 +12,11 @@ SELECT LEAST(1)
 1
 
 query I
+SELECT LEAST('hello world')
+----
+hello world
+
+query I
 SELECT LEAST(1, 3)
 ----
 1
@@ -101,10 +106,10 @@ SELECT GREATEST(TIMESTAMP '1992-01-01 13:45:21.890123', TIMESTAMP '1994-02-02 05
 infinity
 
 # test mix of types
-query T
+statement error
 SELECT LEAST(DATE '1992-01-01', 'hello', 123)
 ----
-123
+Cannot combine types
 
 # tables
 statement ok
@@ -163,3 +168,7 @@ SELECT LEAST(REPEAT(i::VARCHAR, 20), j::VARCHAR) FROM t1;
 1
 33333333333333333333
 
+query I
+SELECT greatest(CAST(52392441565678.308 AS DECIMAL(17,3)), CAST(52392441565678.308 AS DECIMAL(17,3)));
+----
+52392441565678.308

@@ -17,12 +17,17 @@ namespace duckdb {
 
 // structs
 struct AggregateInputData;
+
+// The bounds of a window frame
 struct FrameBounds {
 	FrameBounds() : start(0), end(0) {};
 	FrameBounds(idx_t start, idx_t end) : start(start), end(end) {};
 	idx_t start = 0;
 	idx_t end = 0;
 };
+
+// A set of window subframes for windowed EXCLUDE
+using SubFrames = vector<FrameBounds>;
 
 class AggregateExecutor {
 private:
@@ -382,21 +387,21 @@ public:
 		}
 	}
 
-	using Frames = vector<FrameBounds>;
-
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static void UnaryWindow(Vector &input, const ValidityMask &ifilter, AggregateInputData &aggr_input_data,
-	                        data_ptr_t state_p, const Frames &frames, Vector &result, idx_t rid) {
+	static void UnaryWindow(const Vector &input, const ValidityMask &ifilter, AggregateInputData &aggr_input_data,
+	                        data_ptr_t state_p, const SubFrames &frames, Vector &result, idx_t ridx,
+	                        const_data_ptr_t gstate_p) {
 
 		auto idata = FlatVector::GetData<const INPUT_TYPE>(input);
 		const auto &ivalid = FlatVector::Validity(input);
 		auto &state = *reinterpret_cast<STATE *>(state_p);
+		auto gstate = reinterpret_cast<const STATE *>(gstate_p);
 		OP::template Window<STATE, INPUT_TYPE, RESULT_TYPE>(idata, ifilter, ivalid, aggr_input_data, state, frames,
-		                                                    result, rid);
+		                                                    result, ridx, gstate);
 	}
 
 	template <typename OP>
-	static void IntersectFrames(const Frames &lefts, const Frames &rights, OP &op) {
+	static void IntersectFrames(const SubFrames &lefts, const SubFrames &rights, OP &op) {
 		const auto cover_start = MinValue(rights[0].start, lefts[0].start);
 		const auto cover_end = MaxValue(rights.back().end, lefts.back().end);
 		const FrameBounds last(cover_end, cover_end);
@@ -439,6 +444,8 @@ public:
 				op.Right(i, limit);
 				break;
 			case 0x03:
+			default:
+				D_ASSERT(overlap == 0x03);
 				// i ∈ F ∩ P
 				limit = MinValue(right->end, left->end);
 				op.Both(i, limit);

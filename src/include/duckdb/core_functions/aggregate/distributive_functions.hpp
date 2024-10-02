@@ -17,17 +17,17 @@ namespace duckdb {
 
 struct ApproxCountDistinctFun {
 	static constexpr const char *Name = "approx_count_distinct";
-	static constexpr const char *Parameters = "x";
+	static constexpr const char *Parameters = "any";
 	static constexpr const char *Description = "Computes the approximate count of distinct elements using HyperLogLog.";
 	static constexpr const char *Example = "approx_count_distinct(A)";
 
-	static AggregateFunctionSet GetFunctions();
+	static AggregateFunction GetFunction();
 };
 
 struct ArgMinFun {
 	static constexpr const char *Name = "arg_min";
 	static constexpr const char *Parameters = "arg,val";
-	static constexpr const char *Description = "Finds the row with the minimum val. Calculates the arg expression at that row.";
+	static constexpr const char *Description = "Finds the row with the minimum val. Calculates the non-NULL arg expression at that row.";
 	static constexpr const char *Example = "arg_min(A,B)";
 
 	static AggregateFunctionSet GetFunctions();
@@ -45,10 +45,19 @@ struct MinByFun {
 	static constexpr const char *Name = "min_by";
 };
 
+struct ArgMinNullFun {
+	static constexpr const char *Name = "arg_min_null";
+	static constexpr const char *Parameters = "arg,val";
+	static constexpr const char *Description = "Finds the row with the minimum val. Calculates the arg expression at that row.";
+	static constexpr const char *Example = "arg_min_null(A,B)";
+
+	static AggregateFunctionSet GetFunctions();
+};
+
 struct ArgMaxFun {
 	static constexpr const char *Name = "arg_max";
 	static constexpr const char *Parameters = "arg,val";
-	static constexpr const char *Description = "Finds the row with the maximum val. Calculates the arg expression at that row.";
+	static constexpr const char *Description = "Finds the row with the maximum val. Calculates the non-NULL arg expression at that row.";
 	static constexpr const char *Example = "arg_max(A,B)";
 
 	static AggregateFunctionSet GetFunctions();
@@ -64,6 +73,15 @@ struct MaxByFun {
 	using ALIAS = ArgMaxFun;
 
 	static constexpr const char *Name = "max_by";
+};
+
+struct ArgMaxNullFun {
+	static constexpr const char *Name = "arg_max_null";
+	static constexpr const char *Parameters = "arg,val";
+	static constexpr const char *Description = "Finds the row with the maximum val. Calculates the arg expression at that row.";
+	static constexpr const char *Example = "arg_max_null(A,B)";
+
+	static AggregateFunctionSet GetFunctions();
 };
 
 struct BitAndFun {
@@ -159,6 +177,15 @@ struct KurtosisFun {
 	static AggregateFunction GetFunction();
 };
 
+struct KurtosisPopFun {
+	static constexpr const char *Name = "kurtosis_pop";
+	static constexpr const char *Parameters = "x";
+	static constexpr const char *Description = "Returns the excess kurtosis (Fisher’s definition) of all input values, without bias correction";
+	static constexpr const char *Example = "";
+
+	static AggregateFunction GetFunction();
+};
+
 struct MinFun {
 	static constexpr const char *Name = "min";
 	static constexpr const char *Parameters = "arg";
@@ -166,6 +193,7 @@ struct MinFun {
 	static constexpr const char *Example = "min(A)";
 
 	static AggregateFunctionSet GetFunctions();
+	static AggregateFunction GetFunction();
 };
 
 struct MaxFun {
@@ -175,6 +203,7 @@ struct MaxFun {
 	static constexpr const char *Example = "max(A)";
 
 	static AggregateFunctionSet GetFunctions();
+	static AggregateFunction GetFunction();
 };
 
 struct ProductFun {
@@ -210,6 +239,12 @@ struct GroupConcatFun {
 	static constexpr const char *Name = "group_concat";
 };
 
+struct ListaggFun {
+	using ALIAS = StringAggFun;
+
+	static constexpr const char *Name = "listagg";
+};
+
 struct SumFun {
 	static constexpr const char *Name = "sum";
 	static constexpr const char *Parameters = "arg";
@@ -222,7 +257,7 @@ struct SumFun {
 struct SumNoOverflowFun {
 	static constexpr const char *Name = "sum_no_overflow";
 	static constexpr const char *Parameters = "arg";
-	static constexpr const char *Description = "Calculates the sum value for all tuples in arg without overflow checks.";
+	static constexpr const char *Description = "Internal only. Calculates the sum value for all tuples in arg without overflow checks.";
 	static constexpr const char *Example = "sum_no_overflow(A)";
 
 	static AggregateFunctionSet GetFunctions();

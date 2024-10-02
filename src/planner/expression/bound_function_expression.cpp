@@ -18,8 +18,12 @@ BoundFunctionExpression::BoundFunctionExpression(LogicalType return_type, Scalar
 	D_ASSERT(!function.name.empty());
 }
 
-bool BoundFunctionExpression::HasSideEffects() const {
-	return function.side_effects == FunctionSideEffects::HAS_SIDE_EFFECTS ? true : Expression::HasSideEffects();
+bool BoundFunctionExpression::IsVolatile() const {
+	return function.stability == FunctionStability::VOLATILE ? true : Expression::IsVolatile();
+}
+
+bool BoundFunctionExpression::IsConsistent() const {
+	return function.stability != FunctionStability::CONSISTENT ? false : Expression::IsConsistent();
 }
 
 bool BoundFunctionExpression::IsFoldable() const {
@@ -30,16 +34,16 @@ bool BoundFunctionExpression::IsFoldable() const {
 		auto &lambda_bind_data = bind_info->Cast<ListLambdaBindData>();
 		if (lambda_bind_data.lambda_expr) {
 			auto &expr = *lambda_bind_data.lambda_expr;
-			if (expr.HasSideEffects()) {
+			if (expr.IsVolatile()) {
 				return false;
 			}
 		}
 	}
-	return function.side_effects == FunctionSideEffects::HAS_SIDE_EFFECTS ? false : Expression::IsFoldable();
+	return function.stability == FunctionStability::VOLATILE ? false : Expression::IsFoldable();
 }
 
 string BoundFunctionExpression::ToString() const {
-	return FunctionExpression::ToString<BoundFunctionExpression, Expression>(*this, string(), function.name,
+	return FunctionExpression::ToString<BoundFunctionExpression, Expression>(*this, string(), string(), function.name,
 	                                                                         is_operator);
 }
 bool BoundFunctionExpression::PropagatesNullValues() const {
@@ -69,7 +73,7 @@ bool BoundFunctionExpression::Equals(const BaseExpression &other_p) const {
 	return true;
 }
 
-unique_ptr<Expression> BoundFunctionExpression::Copy() {
+unique_ptr<Expression> BoundFunctionExpression::Copy() const {
 	vector<unique_ptr<Expression>> new_children;
 	new_children.reserve(children.size());
 	for (auto &child : children) {
@@ -100,9 +104,15 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deseri
 	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");
 	auto entry = FunctionSerializer::Deserialize<ScalarFunction, ScalarFunctionCatalogEntry>(
 	    deserializer, CatalogType::SCALAR_FUNCTION_ENTRY, children, return_type);
-	auto result = make_uniq<BoundFunctionExpression>(std::move(return_type), std::move(entry.first),
+	auto function_return_type = entry.first.return_type;
+	auto result = make_uniq<BoundFunctionExpression>(std::move(function_return_type), std::move(entry.first),
 	                                                 std::move(children), std::move(entry.second));
 	deserializer.ReadProperty(202, "is_operator", result->is_operator);
+	if (result->return_type != return_type) {
+		// return type mismatch - push a cast
+		auto &context = deserializer.Get<ClientContext &>();
+		return BoundCastExpression::AddCastToType(context, std::move(result), return_type);
+	}
 	return std::move(result);
 }
 

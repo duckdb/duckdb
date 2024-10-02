@@ -81,9 +81,11 @@ SELECT MIN(i), (SELECT SUM(i1.i)) FROM integers i1;
 # this will fail, because "i" is not an aggregate but the SUM(i1.i) turns this query into an aggregate
 statement error
 SELECT i, (SELECT SUM(i1.i)) FROM integers i1;
+----
 
 statement error
 SELECT i+1, (SELECT SUM(i1.i)) FROM integers i1;
+----
 
 query IR
 SELECT MIN(i), (SELECT SUM(i1.i)) FROM integers i1;
@@ -109,6 +111,7 @@ SELECT SUM(i), (SELECT SUM(i) FROM integers WHERE i>SUM(i1.i)) FROM integers i1;
 # subquery with aggregation inside aggregation should fail
 statement error
 SELECT SUM((SELECT SUM(i))) FROM integers
+----
 
 # aggregate with correlation in filter
 query II
@@ -192,12 +195,17 @@ SELECT SUM((SELECT i+i1.i FROM integers WHERE i=1)) FROM integers i1;
 9.000000
 
 query IRR
-SELECT i, SUM(i1.i), (SELECT SUM(i1.i) FROM integers) AS k FROM integers i1 GROUP BY i ORDER BY i;
+SELECT i, SUM(i1.i), (SELECT SUM(i1.i)) AS k FROM integers i1 GROUP BY i ORDER BY i;
 ----
 NULL	NULL	NULL
 1	1.000000	1.000000
 2	2.000000	2.000000
 3	3.000000	3.000000
+
+statement error
+SELECT i, SUM(i1.i), (SELECT SUM(i1.i) FROM integers) AS k FROM integers i1 GROUP BY i ORDER BY i;
+----
+More than one row returned by a subquery
 
 # aggregation of both entries inside subquery
 # aggregate on group inside subquery
@@ -264,6 +272,7 @@ NULL	NULL
 # aggregate subqueries cannot be nested
 statement error
 SELECT i, SUM((SELECT SUM(i)*SUM(i1.i) FROM integers)) AS k FROM integers i1 GROUP BY i ORDER BY i;
+----
 
 # aggregation but ONLY inside subquery results in implicit aggregation
 query R
@@ -287,12 +296,17 @@ NULL	NULL
 
 # ORDER BY correlated subquery
 query IR
-SELECT i, SUM(i1.i) FROM integers i1 GROUP BY i ORDER BY (SELECT SUM(i1.i) FROM integers);
+SELECT i, SUM(i1.i) FROM integers i1 GROUP BY i ORDER BY (SELECT SUM(i1.i));
 ----
 NULL	NULL
 1	1.000000
 2	2.000000
 3	3.000000
+
+statement error
+SELECT i, SUM(i1.i) FROM integers i1 GROUP BY i ORDER BY (SELECT SUM(i1.i) FROM integers);
+----
+More than one row returned by a subquery
 
 # LIMIT 0 on correlated subquery
 query IR

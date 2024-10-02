@@ -21,6 +21,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/adbc/driver_manager.h"
 #include "duckdb/common/adbc/adbc.h"
 #include "duckdb/common/adbc/adbc.hpp"
@@ -41,8 +42,6 @@
 #else
 #include <dlfcn.h>
 #endif // defined(_WIN32)
-
-namespace duckdb_adbc {
 
 // Platform-specific helpers
 
@@ -515,7 +514,7 @@ std::string AdbcDriverManagerDefaultEntrypoint(const std::string &driver) {
 		// if pos == npos this is the entire filename
 		std::string token = filename.substr(prev, pos - prev);
 		// capitalize first letter
-		token[0] = std::toupper(static_cast<unsigned char>(token[0]));
+		token[0] = duckdb::NumericCast<char>(std::toupper(static_cast<unsigned char>(token[0])));
 
 		entrypoint += token;
 
@@ -573,6 +572,80 @@ const struct AdbcError *AdbcErrorFromArrayStream(struct ArrowArrayStream *stream
 	AdbcStatusCode status_code = EXPR;                                                                                 \
 	ErrorArrayStreamInit(OUT, (SOURCE)->private_driver);                                                               \
 	return status_code;
+
+AdbcStatusCode DatabaseSetOption(struct AdbcDatabase *database, const char *key, const char *value,
+                                 struct AdbcError *error) {
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
+AdbcStatusCode ConnectionCommit(struct AdbcConnection *, struct AdbcError *error) {
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
+AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, const uint32_t *info_codes,
+                                 size_t info_codes_length, struct ArrowArrayStream *out, struct AdbcError *error) {
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
+AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *, int, const char *, const char *, const char *,
+                                    const char **, const char *, struct ArrowArrayStream *, struct AdbcError *error) {
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
+AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection *, const char *, const char *, const char *,
+                                        struct ArrowSchema *, struct AdbcError *error) {
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
+AdbcStatusCode ConnectionGetTableTypes(struct AdbcConnection *, struct ArrowArrayStream *, struct AdbcError *error) {
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
+AdbcStatusCode ConnectionReadPartition(struct AdbcConnection *connection, const uint8_t *serialized_partition,
+                                       size_t serialized_length, struct ArrowArrayStream *out,
+                                       struct AdbcError *error) {
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
+AdbcStatusCode ConnectionRollback(struct AdbcConnection *, struct AdbcError *error) {
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
+AdbcStatusCode ConnectionSetOption(struct AdbcConnection *, const char *, const char *, struct AdbcError *error) {
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
+AdbcStatusCode StatementBind(struct AdbcStatement *, struct ArrowArray *, struct ArrowSchema *,
+                             struct AdbcError *error) {
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
+AdbcStatusCode StatementExecutePartitions(struct AdbcStatement *statement, struct ArrowSchema *schema,
+                                          struct AdbcPartitions *partitions, int64_t *rows_affected,
+                                          struct AdbcError *error) {
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
+AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, struct ArrowSchema *schema,
+                                           struct AdbcError *error) {
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
+AdbcStatusCode StatementPrepare(struct AdbcStatement *, struct AdbcError *error) {
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
+AdbcStatusCode StatementSetOption(struct AdbcStatement *, const char *, const char *, struct AdbcError *error) {
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
+AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *, const char *, struct AdbcError *error) {
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
+AdbcStatusCode StatementSetSubstraitPlan(struct AdbcStatement *, const uint8_t *, size_t, struct AdbcError *error) {
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
 
 AdbcStatusCode AdbcDatabaseNew(struct AdbcDatabase *database, struct AdbcError *error) {
 	// Allocate a temporary structure to store options pre-Init
@@ -1549,4 +1622,3 @@ AdbcStatusCode AdbcLoadDriverFromInitFunc(AdbcDriverInitFunc init_func, int vers
 #undef FILL_DEFAULT
 #undef CHECK_REQUIRED
 }
-} // namespace duckdb_adbc

@@ -66,9 +66,9 @@ public:
 		}
 
 		stream.next_in = (const unsigned char *)compressed_data + GZIP_HEADER_MINSIZE;
-		stream.avail_in = compressed_size - GZIP_HEADER_MINSIZE;
+		stream.avail_in = static_cast<unsigned int >(compressed_size - GZIP_HEADER_MINSIZE);
 		stream.next_out = (unsigned char *)out_data;
-		stream.avail_out = out_size;
+		stream.avail_out =  static_cast<unsigned int >(out_size);
 
 		mz_ret = mz_inflate(&stream, duckdb_miniz::MZ_FINISH);
 		if (mz_ret != duckdb_miniz::MZ_OK && mz_ret != duckdb_miniz::MZ_STREAM_END) {
@@ -116,9 +116,9 @@ public:
 		auto gzip_body = gzip_header + GZIP_HEADER_MINSIZE;
 
 		stream.next_in = (const unsigned char*) uncompressed_data;
-		stream.avail_in = uncompressed_size;
+		stream.avail_in =  static_cast<unsigned int >(uncompressed_size);
 		stream.next_out = gzip_body;
-		stream.avail_out = *out_size - GZIP_HEADER_MINSIZE;
+		stream.avail_out =  static_cast<unsigned int >(*out_size - GZIP_HEADER_MINSIZE);
 
 		mz_ret = mz_deflate(&stream, duckdb_miniz::MZ_FINISH);
 		if (mz_ret != duckdb_miniz::MZ_OK && mz_ret != duckdb_miniz::MZ_STREAM_END) {

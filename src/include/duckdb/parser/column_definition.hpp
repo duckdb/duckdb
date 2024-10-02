@@ -31,7 +31,8 @@ public:
 
 public:
 	//! default_value
-	const unique_ptr<ParsedExpression> &DefaultValue() const;
+	const ParsedExpression &DefaultValue() const;
+	bool HasDefaultValue() const;
 	void SetDefaultValue(unique_ptr<ParsedExpression> default_value);
 
 	//! type
@@ -42,6 +43,10 @@ public:
 	//! name
 	DUCKDB_API const string &Name() const;
 	void SetName(const string &name);
+
+	//! comment
+	DUCKDB_API const Value &Comment() const;
+	void SetComment(const Value &comment);
 
 	//! compression_type
 	const duckdb::CompressionType &CompressionType() const;
@@ -97,6 +102,10 @@ private:
 	//! The default value of the column (for non-generated columns)
 	//! The generated column expression (for generated columns)
 	unique_ptr<ParsedExpression> expression;
+	//! Comment on this column
+	Value comment;
+	//! Tags on this column
+	unordered_map<string, string> tags;
 };
 
 } // namespace duckdb

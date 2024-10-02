@@ -19,6 +19,7 @@ ALTER TABLE test ALTER j TYPE VARCHAR
 # con2 cannot alter another column now!
 statement error con2
 ALTER TABLE test ALTER i TYPE VARCHAR
+----
 
 statement ok con1
 COMMIT
@@ -47,6 +48,7 @@ ALTER TABLE test ALTER i TYPE VARCHAR
 # con2 cannot append now!
 statement error con2
 INSERT INTO test (i, j) VALUES (3, 3)
+----
 
 # but we can delete rows!
 statement ok con2
@@ -66,9 +68,11 @@ SELECT * FROM test
 # we cannot update rows on tables that have been altered
 statement error con2
 UPDATE test SET i=1000
+----
 
 statement error con2
 UPDATE test SET j=100
+----
 
 query TI con1
 SELECT * FROM test
@@ -107,6 +111,7 @@ ALTER TABLE test ALTER i TYPE VARCHAR
 # cannot commit con2! conflict on append
 statement error con2
 COMMIT
+----
 
 statement ok con1
 DROP TABLE test
@@ -128,4 +133,5 @@ ALTER TABLE test ALTER j TYPE VARCHAR
 # now con tries to add an index to that column: this should fail
 statement error con1
 CREATE INDEX i_index ON test(j
+----
 

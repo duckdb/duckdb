@@ -31,6 +31,8 @@ create table y (y int references x(x));
 
 statement error
 insert into y values (1);
+----
+<REGEX>:Constraint Error.*Violates foreign key.*does not exist.*
 
 statement ok
 insert into x values (1);
@@ -40,12 +42,16 @@ insert into y values (1);
 
 statement error
 insert into x values (NULL);
+----
+<REGEX>:Constraint Error.*NOT NULL constraint failed.*
 
 statement ok
 insert into y values (NULL);
 
 statement error
 delete from x;
+----
+<REGEX>:Constraint Error.*Violates foreign key.*in a different table.*
 
 statement ok
 delete from y;

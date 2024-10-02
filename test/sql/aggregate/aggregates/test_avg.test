@@ -59,12 +59,15 @@ NULL
 # invalid use of average
 statement error
 SELECT AVG()
+----
 
 statement error
 SELECT AVG(1, 2, 3)
+----
 
 statement error
 SELECT AVG(AVG(1))
+----
 
 # empty average
 statement ok

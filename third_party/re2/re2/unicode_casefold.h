@@ -73,6 +73,6 @@ extern const CaseFold* LookupCaseFold(const CaseFold*, int, Rune rune);
 // Returns the result of applying the fold f to the rune r.
 extern Rune ApplyFold(const CaseFold *f, Rune r);
 
-}  // namespace duckdb_re2
+}  // namespace re2
 
 #endif  // RE2_UNICODE_CASEFOLD_H_

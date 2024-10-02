@@ -46,8 +46,22 @@ CopyStmt:	COPY opt_binary qualified_name opt_column_list opt_oids
 
 					$$ = (PGNode *)n;
 				}
+			|  COPY FROM DATABASE ColId TO ColId copy_database_flag
+    		{
+				PGCopyDatabaseStmt *n = makeNode(PGCopyDatabaseStmt);
+				n->from_database = $4;
+				n->to_database = $6;
+				n->copy_database_flag = $7;
+				$$ = (PGNode *)n;
+			}
 		;
 
+
+copy_database_flag:
+			/* empty */									{ $$ = NULL; }
+			| '(' SCHEMA ')'							{ $$ = "schema"; }
+			| '(' DATA_P ')'							{ $$ = "data"; }
+		;
 
 copy_from:
 			FROM									{ $$ = true; }
@@ -101,9 +115,11 @@ copy_options: copy_opt_list							{ $$ = $1; }
 copy_generic_opt_arg:
 			opt_boolean_or_string			{ $$ = (PGNode *) makeString($1); }
 			| NumericOnly					{ $$ = (PGNode *) $1; }
+			| list_expr                     { $$ = (PGNode *) $1; }
 			| '*'							{ $$ = (PGNode *) makeNode(PGAStar); }
 			| '(' copy_generic_opt_arg_list ')'		{ $$ = (PGNode *) $2; }
 			| struct_expr					{ $$ = (PGNode *) $1; }
+			| map_expr					    { $$ = (PGNode *) $1; }
 			| /* EMPTY */					{ $$ = NULL; }
 		;
 
@@ -213,11 +229,13 @@ copy_generic_opt_arg_list_item:
 		;
 
 
-
 copy_file_name:
 			Sconst									{ $$ = $1; }
 			| STDIN									{ $$ = NULL; }
 			| STDOUT								{ $$ = NULL; }
+			| IDENT '.' ColId						{ $$ = psprintf("%s.%s", $1, $3); }
+			| IDENT									{ $$ = $1; }
+
 		;
 
 

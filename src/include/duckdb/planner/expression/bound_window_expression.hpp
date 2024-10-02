@@ -40,6 +40,8 @@ public:
 	unique_ptr<Expression> filter_expr;
 	//! True to ignore NULL values
 	bool ignore_nulls;
+	//! Whether or not the aggregate function is distinct, only used for aggregates
+	bool distinct;
 	//! The window boundaries
 	WindowBoundary start = WindowBoundary::INVALID;
 	WindowBoundary end = WindowBoundary::INVALID;
@@ -52,6 +54,9 @@ public:
 	unique_ptr<Expression> offset_expr;
 	unique_ptr<Expression> default_expr;
 
+	//! Statistics belonging to the other expressions (start, end, offset, default)
+	vector<unique_ptr<BaseStatistics>> expr_stats;
+
 public:
 	bool IsWindow() const override {
 		return true;
@@ -62,10 +67,14 @@ public:
 
 	string ToString() const override;
 
+	//! The number of ordering clauses the functions share
+	idx_t GetSharedOrders(const BoundWindowExpression &other) const;
+
+	bool PartitionsAreEquivalent(const BoundWindowExpression &other) const;
 	bool KeysAreCompatible(const BoundWindowExpression &other) const;
 	bool Equals(const BaseExpression &other) const override;
 
-	unique_ptr<Expression> Copy() override;
+	unique_ptr<Expression> Copy() const override;
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);

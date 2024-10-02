@@ -10,7 +10,7 @@ public:
 		block_value_count = ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_);
 		miniblocks_per_block = ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_);
 		total_value_count = ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_);
-		start_value = ParquetDecodeUtils::ZigzagToInt(ParquetDecodeUtils::VarintDecode<int64_t>(buffer_));
+		start_value = ParquetDecodeUtils::ZigzagToInt<int64_t>(ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_));
 
 		// some derivatives
 		D_ASSERT(miniblocks_per_block > 0);
@@ -61,7 +61,8 @@ public:
 				if (bitpack_pos > 0) {       // have to eat the leftovers if any
 					buffer_.inc(1);
 				}
-				min_delta = ParquetDecodeUtils::ZigzagToInt(ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_));
+				min_delta =
+				    ParquetDecodeUtils::ZigzagToInt<int64_t>(ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_));
 				for (idx_t miniblock_idx = 0; miniblock_idx < miniblocks_per_block; miniblock_idx++) {
 					miniblock_bit_widths[miniblock_idx] = buffer_.read<uint8_t>();
 					// TODO what happens if width is 0?
@@ -80,7 +81,7 @@ public:
 			ParquetDecodeUtils::BitUnpack<T>(buffer_, bitpack_pos, &values[value_offset], read_now,
 			                                 miniblock_bit_widths[miniblock_offset]);
 			for (idx_t i = value_offset; i < value_offset + read_now; i++) {
-				values[i] = ((i == 0) ? start_value : values[i - 1]) + min_delta + values[i];
+				values[i] = T(uint64_t((i == 0) ? start_value : values[i - 1]) + min_delta + uint64_t(values[i]));
 			}
 			value_offset += read_now;
 			values_left_in_miniblock -= read_now;

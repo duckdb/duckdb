@@ -25,12 +25,12 @@ struct BindCastInfo {
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -43,12 +43,12 @@ struct BoundCastData {
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -56,13 +56,17 @@ struct BoundCastData {
 struct CastParameters {
 	CastParameters() {
 	}
+	CastParameters(bool strict, string *error_message) : CastParameters(nullptr, strict, error_message, nullptr) {
+	}
 	CastParameters(BoundCastData *cast_data, bool strict, string *error_message,
-	               optional_ptr<FunctionLocalState> local_state)
-	    : cast_data(cast_data), strict(strict), error_message(error_message), local_state(local_state) {
+	               optional_ptr<FunctionLocalState> local_state, bool nullify_parent_p = false)
+	    : cast_data(cast_data), strict(strict), error_message(error_message), local_state(local_state),
+	      nullify_parent(nullify_parent_p) {
 	}
 	CastParameters(CastParameters &parent, optional_ptr<BoundCastData> cast_data,
 	               optional_ptr<FunctionLocalState> local_state)
-	    : cast_data(cast_data), strict(parent.strict), error_message(parent.error_message), local_state(local_state) {
+	    : cast_data(cast_data), strict(parent.strict), error_message(parent.error_message), local_state(local_state),
+	      query_location(parent.query_location) {
 	}
 
 	//! The bound cast data (if any)
@@ -73,6 +77,10 @@ struct CastParameters {
 	string *error_message = nullptr;
 	//! Local state
 	optional_ptr<FunctionLocalState> local_state;
+	//! Query location (if any)
+	optional_idx query_location;
+	//! In the case of a nested type, when facing a cast error, if we nullify the parent
+	bool nullify_parent = false;
 };
 
 struct CastLocalStateParameters {
@@ -96,9 +104,9 @@ typedef unique_ptr<FunctionLocalState> (*init_cast_local_state_t)(CastLocalState
 
 struct BoundCastInfo {
 	DUCKDB_API
-	BoundCastInfo(
+	BoundCastInfo( // NOLINT: allow explicit cast from cast_function_t
 	    cast_function_t function, unique_ptr<BoundCastData> cast_data = nullptr,
-	    init_cast_local_state_t init_local_state = nullptr); // NOLINT: allow explicit cast from cast_function_t
+	    init_cast_local_state_t init_local_state = nullptr);
 	cast_function_t function;
 	init_cast_local_state_t init_local_state;
 	unique_ptr<BoundCastData> cast_data;
@@ -114,6 +122,7 @@ struct BindCastInput {
 	CastFunctionSet &function_set;
 	optional_ptr<BindCastInfo> info;
 	optional_ptr<ClientContext> context;
+	optional_idx query_location;
 
 public:
 	DUCKDB_API BoundCastInfo GetCastFunction(const LogicalType &source, const LogicalType &target);
@@ -155,7 +164,7 @@ private:
 	                                            const LogicalType &target);
 	static BoundCastInfo UnionCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
 	static BoundCastInfo UUIDCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
-
+	static BoundCastInfo VarintCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
 	static BoundCastInfo ImplicitToUnionCast(BindCastInput &input, const LogicalType &source,
 	                                         const LogicalType &target);
 };

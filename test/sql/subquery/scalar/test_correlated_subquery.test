@@ -9,13 +9,10 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE integers(i INTEGER)
+CREATE TABLE integers(i INTEGER);
 
 statement ok
-INSERT INTO integers VALUES (1), (2), (3), (NULL)
-
-# temporary solution until decorrelation of materialized CTEs is implemented
-require noalternativeverify
+INSERT INTO integers VALUES (1), (2), (3), (NULL);
 
 # scalar select with correlation
 query II
@@ -36,6 +33,14 @@ NULL
 1
 
 # subquery returning multiple results
+statement error
+SELECT i, (SELECT 42+i1.i FROM integers) AS j FROM integers i1 ORDER BY i;
+----
+More than one row returned by a subquery used as an expression
+
+statement ok
+SET scalar_subquery_error_on_multiple_rows=false
+
 query II
 SELECT i, (SELECT 42+i1.i FROM integers) AS j FROM integers i1 ORDER BY i;
 ----
@@ -43,6 +48,9 @@ NULL	NULL
 1	43
 2	44
 3	45
+
+statement ok
+SET scalar_subquery_error_on_multiple_rows=true
 
 # subquery with LIMIT
 query II
@@ -97,6 +105,21 @@ NULL	NULL
 1	2
 2	3
 3	4
+
+# subquery with OFFSET and without LIMIT
+query I
+select (select val + i from generate_series(1, 2, 1) t(i) offset 1) from (select 42 val) t;
+----
+44
+
+# subquery with OFFSET and without LIMIT with ORDER BY
+query II
+select i, (select i1.i + i + i from generate_series(1, 100, 1) t(i) ORDER BY i DESC OFFSET 99) from integers i1 order by i;
+----
+NULL	NULL
+1	3
+2	4
+3	5
 
 # subquery with ORDER BY
 query II

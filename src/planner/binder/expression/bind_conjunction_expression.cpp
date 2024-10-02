@@ -7,12 +7,12 @@ namespace duckdb {
 
 BindResult ExpressionBinder::BindExpression(ConjunctionExpression &expr, idx_t depth) {
 	// first try to bind the children of the case expression
-	string error;
+	ErrorData error;
 	for (idx_t i = 0; i < expr.children.size(); i++) {
 		BindChild(expr.children[i], depth, error);
 	}
-	if (!error.empty()) {
-		return BindResult(error);
+	if (error.HasError()) {
+		return BindResult(std::move(error));
 	}
 	// the children have been successfully resolved
 	// cast the input types to boolean (if necessary)

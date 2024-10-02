@@ -12,15 +12,19 @@ CREATE TABLE tinyints AS SELECT i::TINYINT i FROM (VALUES (-128), (0), (127)) tb
 # tinyint -> unsigned
 statement error
 SELECT i::UTINYINT FROM tinyints
+----
 
 statement error
 SELECT i::USMALLINT FROM tinyints
+----
 
 statement error
 SELECT i::UINTEGER FROM tinyints
+----
 
 statement error
 SELECT i::UBIGINT FROM tinyints
+----
 
 query I
 SELECT i::UTINYINT::TINYINT FROM tinyints WHERE i>=0 ORDER BY i
@@ -140,6 +144,7 @@ CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-1000'),
 
 statement error
 SELECT s::TINYINT FROM strings
+----
 
 query I
 SELECT TRY_CAST(s AS TINYINT) FROM strings
@@ -183,15 +188,19 @@ SELECT i::DECIMAL(38,0)::TINYINT FROM tinyints ORDER BY i
 
 statement error
 SELECT i::DECIMAL(3,1)::TINYINT FROM tinyints ORDER BY i
+----
 
 statement error
 SELECT i::DECIMAL(9,7)::TINYINT FROM tinyints ORDER BY i
+----
 
 statement error
 SELECT i::DECIMAL(18,16)::TINYINT FROM tinyints ORDER BY i
+----
 
 statement error
 SELECT i::DECIMAL(38,36)::TINYINT FROM tinyints ORDER BY i
+----
 
 query I
 SELECT TRY_CAST(i AS DECIMAL(3,1))::TINYINT FROM tinyints ORDER BY i

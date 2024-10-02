@@ -112,19 +112,25 @@ NULL	NULL	NULL
 # test incorrect usage of ltrim/rtrim/trim
 statement error
 select LTRIM()
+----
 
 statement error
 select LTRIM('hello', 'world', 'aaa')
+----
 
 statement error
 select RTRIM()
+----
 
 statement error
 select RTRIM('hello', 'world', 'aaa')
+----
 
 statement error
 select TRIM()
+----
 
 statement error
 select TRIM('hello', 'world', 'aaa')
+----
 

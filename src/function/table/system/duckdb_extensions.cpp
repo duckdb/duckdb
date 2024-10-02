@@ -8,6 +8,10 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension_helper.hpp"
 
+#include "duckdb/common/serializer/buffered_file_reader.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/main/extension_install_info.hpp"
+
 namespace duckdb {
 
 struct ExtensionInformation {
@@ -15,8 +19,11 @@ struct ExtensionInformation {
 	bool loaded = false;
 	bool installed = false;
 	string file_path;
+	ExtensionInstallMode install_mode;
+	string installed_from;
 	string description;
 	vector<Value> aliases;
+	string extension_version;
 };
 
 struct DuckDBExtensionsData : public GlobalTableFunctionState {
@@ -47,6 +54,15 @@ static unique_ptr<FunctionData> DuckDBExtensionsBind(ClientContext &context, Tab
 	names.emplace_back("aliases");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
 
+	names.emplace_back("extension_version");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("install_mode");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("installed_from");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	return nullptr;
 }
 
@@ -56,6 +72,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto &db = DatabaseInstance::GetDatabase(context);
 
+	// Firstly, we go over all Default Extensions: duckdb_extensions always prints those, installed/loaded or not
 	map<string, ExtensionInformation> installed_extensions;
 	auto extension_count = ExtensionHelper::DefaultExtensionCount();
 	auto alias_count = ExtensionHelper::ExtensionAliasCount();
@@ -66,6 +83,8 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 		info.installed = extension.statically_loaded;
 		info.loaded = false;
 		info.file_path = extension.statically_loaded ? "(BUILT-IN)" : string();
+		info.install_mode =
+		    extension.statically_loaded ? ExtensionInstallMode::STATICALLY_LINKED : ExtensionInstallMode::UNKNOWN;
 		info.description = extension.description;
 		for (idx_t k = 0; k < alias_count; k++) {
 			auto alias = ExtensionHelper::GetExtensionAlias(k);
@@ -75,8 +94,9 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 		}
 		installed_extensions[info.name] = std::move(info);
 	}
+
+	// Secondly we scan all installed extensions and their install info
 #ifndef WASM_LOADABLE_EXTENSIONS
-	// scan the install directory for installed extensions
 	auto ext_directory = ExtensionHelper::ExtensionDirectory(context);
 	fs.ListFiles(ext_directory, [&](const string &path, bool is_directory) {
 		if (!StringUtil::EndsWith(path, ".duckdb_extension")) {
@@ -84,30 +104,66 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 		}
 		ExtensionInformation info;
 		info.name = fs.ExtractBaseName(path);
+		info.installed = true;
 		info.loaded = false;
 		info.file_path = fs.JoinPath(ext_directory, path);
+
+		// Check the info file for its installation source
+		auto info_file_path = fs.JoinPath(ext_directory, path + ".info");
+
+		// Read the info file
+		auto extension_install_info = ExtensionInstallInfo::TryReadInfoFile(fs, info_file_path, info.name);
+		info.install_mode = extension_install_info->mode;
+		info.extension_version = extension_install_info->version;
+		if (extension_install_info->mode == ExtensionInstallMode::REPOSITORY) {
+			info.installed_from = ExtensionRepository::GetRepository(extension_install_info->repository_url);
+		} else {
+			info.installed_from = extension_install_info->full_path;
+		}
+
 		auto entry = installed_extensions.find(info.name);
 		if (entry == installed_extensions.end()) {
 			installed_extensions[info.name] = std::move(info);
 		} else {
-			if (!entry->second.loaded) {
+			if (entry->second.install_mode != ExtensionInstallMode::STATICALLY_LINKED) {
 				entry->second.file_path = info.file_path;
+				entry->second.install_mode = info.install_mode;
+				entry->second.installed_from = info.installed_from;
+				entry->second.install_mode = info.install_mode;
+				entry->second.extension_version = info.extension_version;
 			}
 			entry->second.installed = true;
 		}
 	});
 #endif
-	// now check the list of currently loaded extensions
-	auto &loaded_extensions = db.LoadedExtensions();
-	for (auto &ext_name : loaded_extensions) {
-		auto entry = installed_extensions.find(ext_name);
-		if (entry == installed_extensions.end()) {
-			ExtensionInformation info;
-			info.name = ext_name;
-			info.loaded = true;
-			installed_extensions[ext_name] = std::move(info);
-		} else {
-			entry->second.loaded = true;
+
+	// Finally, we check the list of currently loaded extensions
+	auto &extensions = db.GetExtensions();
+	for (auto &e : extensions) {
+		if (!e.second.is_loaded) {
+			continue;
+		}
+		auto &ext_name = e.first;
+		auto &ext_data = e.second;
+		if (auto &ext_install_info = ext_data.install_info) {
+			auto entry = installed_extensions.find(ext_name);
+			if (entry == installed_extensions.end() || !entry->second.installed) {
+				ExtensionInformation &info = installed_extensions[ext_name];
+				info.name = ext_name;
+				info.loaded = true;
+				info.extension_version = ext_install_info->version;
+				info.installed = ext_install_info->mode == ExtensionInstallMode::STATICALLY_LINKED;
+				info.install_mode = ext_install_info->mode;
+			} else {
+				entry->second.loaded = true;
+				entry->second.extension_version = ext_install_info->version;
+			}
+		}
+		if (auto &ext_load_info = ext_data.load_info) {
+			auto entry = installed_extensions.find(ext_name);
+			if (entry != installed_extensions.end()) {
+				entry->second.description = ext_load_info->description;
+			}
 		}
 	}
 
@@ -136,13 +192,19 @@ void DuckDBExtensionsFunction(ClientContext &context, TableFunctionInput &data_p
 		// loaded LogicalType::BOOLEAN
 		output.SetValue(1, count, Value::BOOLEAN(entry.loaded));
 		// installed LogicalType::BOOLEAN
-		output.SetValue(2, count, !entry.installed && entry.loaded ? Value() : Value::BOOLEAN(entry.installed));
+		output.SetValue(2, count, Value::BOOLEAN(entry.installed));
 		// install_path LogicalType::VARCHAR
 		output.SetValue(3, count, Value(entry.file_path));
 		// description LogicalType::VARCHAR
 		output.SetValue(4, count, Value(entry.description));
 		// aliases     LogicalType::LIST(LogicalType::VARCHAR)
 		output.SetValue(5, count, Value::LIST(LogicalType::VARCHAR, entry.aliases));
+		// extension version     LogicalType::LIST(LogicalType::VARCHAR)
+		output.SetValue(6, count, Value(entry.extension_version));
+		// installed_mode LogicalType::VARCHAR
+		output.SetValue(7, count, entry.installed ? Value(EnumUtil::ToString(entry.install_mode)) : Value());
+		// installed_source LogicalType::VARCHAR
+		output.SetValue(8, count, Value(entry.installed_from));
 
 		data.offset++;
 		count++;

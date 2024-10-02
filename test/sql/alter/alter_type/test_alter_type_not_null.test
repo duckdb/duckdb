@@ -10,6 +10,7 @@ INSERT INTO test VALUES (1, 1), (2, 2)
 
 statement error
 INSERT INTO test VALUES (NULL, 4)
+----
 
 statement ok
 ALTER TABLE test ALTER i SET DATA TYPE VARCHAR
@@ -19,6 +20,7 @@ INSERT INTO test VALUES ('hello', 3)
 
 statement error
 INSERT INTO test VALUES (NULL, 4)
+----
 
 query TI
 SELECT * FROM test

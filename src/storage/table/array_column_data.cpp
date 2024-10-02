@@ -24,10 +24,17 @@ void ArrayColumnData::SetStart(idx_t new_start) {
 	validity.SetStart(new_start);
 }
 
-bool ArrayColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
+FilterPropagateResult ArrayColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
 	// FIXME: There is nothing preventing us from supporting this, but it's not implemented yet.
 	// table filters are not supported yet for fixed size list columns
-	return false;
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+}
+
+void ArrayColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
+	ColumnData::InitializePrefetch(prefetch_state, scan_state, rows);
+	validity.InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
+	auto array_size = ArrayType::GetSize(type);
+	child_column->InitializePrefetch(prefetch_state, scan_state.child_states[1], rows * array_size);
 }
 
 void ArrayColumnData::InitializeScan(ColumnScanState &state) {
@@ -59,20 +66,23 @@ void ArrayColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row
 	validity.InitializeScanWithOffset(state.child_states[0], row_idx);
 
 	auto array_size = ArrayType::GetSize(type);
-	auto child_offset = (row_idx - start) * array_size;
+	auto child_count = (row_idx - start) * array_size;
 
-	D_ASSERT(child_offset <= child_column->GetMaxEntry());
-	if (child_offset < child_column->GetMaxEntry()) {
-		child_column->InitializeScanWithOffset(state.child_states[1], start + child_offset);
+	D_ASSERT(child_count <= child_column->GetMaxEntry());
+	if (child_count < child_column->GetMaxEntry()) {
+		const auto child_offset = start + child_count;
+		child_column->InitializeScanWithOffset(state.child_states[1], child_offset);
 	}
 }
 
-idx_t ArrayColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
-	return ScanCount(state, result, STANDARD_VECTOR_SIZE);
+idx_t ArrayColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                            idx_t scan_count) {
+	return ScanCount(state, result, scan_count);
 }
 
-idx_t ArrayColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
-	return ScanCount(state, result, STANDARD_VECTOR_SIZE);
+idx_t ArrayColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
+                                     idx_t scan_count) {
+	return ScanCount(state, result, scan_count);
 }
 
 idx_t ArrayColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
@@ -120,9 +130,9 @@ void ArrayColumnData::RevertAppend(row_t start_row) {
 	validity.RevertAppend(start_row);
 	// Revert child column
 	auto array_size = ArrayType::GetSize(type);
-	child_column->RevertAppend(start_row * array_size);
+	child_column->RevertAppend(start_row * UnsafeNumericCast<row_t>(array_size));
 
-	this->count = start_row - this->start;
+	this->count = UnsafeNumericCast<idx_t>(start_row) - this->start;
 }
 
 idx_t ArrayColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
@@ -146,16 +156,29 @@ unique_ptr<BaseStatistics> ArrayColumnData::GetUpdateStatistics() {
 void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
                                idx_t result_idx) {
 
-	// Create state for child column
-	state.child_states.push_back(make_uniq<ColumnFetchState>());
+	// Create state for validity & child column
+	if (state.child_states.empty()) {
+		state.child_states.push_back(make_uniq<ColumnFetchState>());
+	}
 
 	// Fetch validity
 	validity.FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
 
 	// Fetch child column
 	auto &child_vec = ArrayVector::GetEntry(result);
+	auto &child_type = ArrayType::GetChildType(type);
 	auto array_size = ArrayType::GetSize(type);
-	child_column->FetchRow(transaction, *state.child_states[1], row_id * array_size, child_vec, result_idx);
+
+	// We need to fetch between [row_id * array_size, (row_id + 1) * array_size)
+	auto child_state = make_uniq<ColumnScanState>();
+	child_state->Initialize(child_type, nullptr);
+
+	const auto child_offset = start + (UnsafeNumericCast<idx_t>(row_id) - start) * array_size;
+
+	child_column->InitializeScanWithOffset(*child_state, child_offset);
+	Vector child_scan(child_type, array_size);
+	child_column->ScanCount(*child_state, child_scan, array_size);
+	VectorOperations::Copy(child_scan, child_vec, array_size, 0, result_idx * array_size);
 }
 
 void ArrayColumnData::CommitDropColumn() {
@@ -179,11 +202,11 @@ public:
 		return stats.ToUnique();
 	}
 
-	void WriteDataPointers(RowGroupWriter &writer, Serializer &serializer) override {
-		serializer.WriteObject(101, "validity",
-		                       [&](Serializer &serializer) { validity_state->WriteDataPointers(writer, serializer); });
-		serializer.WriteObject(102, "child_column",
-		                       [&](Serializer &serializer) { child_state->WriteDataPointers(writer, serializer); });
+	PersistentColumnData ToPersistentData() override {
+		PersistentColumnData data(PhysicalType::ARRAY);
+		data.child_columns.push_back(validity_state->ToPersistentData());
+		data.child_columns.push_back(child_state->ToPersistentData());
+		return data;
 	}
 };
 
@@ -193,20 +216,31 @@ unique_ptr<ColumnCheckpointState> ArrayColumnData::CreateCheckpointState(RowGrou
 }
 
 unique_ptr<ColumnCheckpointState> ArrayColumnData::Checkpoint(RowGroup &row_group,
-                                                              PartialBlockManager &partial_block_manager,
                                                               ColumnCheckpointInfo &checkpoint_info) {
 
-	auto checkpoint_state = make_uniq<ArrayColumnCheckpointState>(row_group, *this, partial_block_manager);
-	checkpoint_state->validity_state = validity.Checkpoint(row_group, partial_block_manager, checkpoint_info);
-	checkpoint_state->child_state = child_column->Checkpoint(row_group, partial_block_manager, checkpoint_info);
+	auto checkpoint_state = make_uniq<ArrayColumnCheckpointState>(row_group, *this, checkpoint_info.info.manager);
+	checkpoint_state->validity_state = validity.Checkpoint(row_group, checkpoint_info);
+	checkpoint_state->child_state = child_column->Checkpoint(row_group, checkpoint_info);
 	return std::move(checkpoint_state);
 }
 
-void ArrayColumnData::DeserializeColumn(Deserializer &deserializer) {
-	deserializer.ReadObject(101, "validity", [&](Deserializer &source) { validity.DeserializeColumn(source); });
-	deserializer.ReadObject(102, "child_column",
-	                        [&](Deserializer &source) { child_column->DeserializeColumn(source); });
-	this->count = validity.count;
+bool ArrayColumnData::IsPersistent() {
+	return validity.IsPersistent() && child_column->IsPersistent();
+}
+
+PersistentColumnData ArrayColumnData::Serialize() {
+	PersistentColumnData persistent_data(PhysicalType::ARRAY);
+	persistent_data.child_columns.push_back(validity.Serialize());
+	persistent_data.child_columns.push_back(child_column->Serialize());
+	return persistent_data;
+}
+
+void ArrayColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
+	D_ASSERT(column_data.pointers.empty());
+	validity.InitializeColumn(column_data.child_columns[0], target_stats);
+	auto &child_stats = ArrayStats::GetChildStats(target_stats);
+	child_column->InitializeColumn(column_data.child_columns[1], child_stats);
+	this->count = validity.count.load();
 }
 
 void ArrayColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_path,

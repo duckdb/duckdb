@@ -1,0 +1,18 @@
+# name: test/issues/general/test_11566.test
+# description: Issue 11566: Assertion failure when using DISTINCT ON + ORDER BY with JSON column
+# group: [general]
+
+require json
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT typeof(arg_min({foo: 'bar'}::JSON, 1));
+----
+JSON
+
+query II
+SELECT DISTINCT ON (my_row_id) my_row_id, value FROM (SELECT * FROM (VALUES ('1', {foo: 'bar'}::JSON, 1), ('1', {foo: 'baz'}::JSON, 2), ) AS t(my_row_id, value, idx)) ORDER BY idx;
+----
+1	{"foo":"bar"}

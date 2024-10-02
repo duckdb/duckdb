@@ -8,16 +8,15 @@
 
 #pragma once
 
-#include "duckdb/common/types/validity_mask.hpp"
-#include "duckdb/common/unordered_set.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/metadata/metadata_manager.hpp"
-#include "duckdb/storage/metadata/metadata_writer.hpp"
-#include "duckdb/execution/index/fixed_size_buffer.hpp"
-#include "duckdb/execution/index/index_pointer.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/map.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/execution/index/fixed_size_buffer.hpp"
+#include "duckdb/execution/index/index_pointer.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/partial_block_manager.hpp"
 
 namespace duckdb {
 
@@ -30,31 +29,70 @@ public:
 	static constexpr uint8_t VACUUM_THRESHOLD = 10;
 
 public:
+	//! Construct a new fixed-size allocator
 	FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager);
 
 	//! Block manager of the database instance
 	BlockManager &block_manager;
 	//! Buffer manager of the database instance
 	BufferManager &buffer_manager;
-	//! Metadata manager for (de)serialization
-	MetadataManager &metadata_manager;
 
 public:
 	//! Get a new IndexPointer to a segment, might cause a new buffer allocation
 	IndexPointer New();
 	//! Free the segment of the IndexPointer
 	void Free(const IndexPointer ptr);
-	//! Returns a pointer of type T to a segment. If dirty is false, then T should be a const class
+
+	//! Returns a pointer of type T to a segment. If dirty is false, then T must be a const class.
 	template <class T>
-	inline T *Get(const IndexPointer ptr, const bool dirty = true) {
+	inline unsafe_optional_ptr<T> Get(const IndexPointer ptr, const bool dirty = true) {
 		return (T *)Get(ptr, dirty);
+	}
+
+	//! Returns the data_ptr_t to a segment, and sets the dirty flag of the buffer containing that segment.
+	inline data_ptr_t Get(const IndexPointer ptr, const bool dirty = true) {
+		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
+		D_ASSERT(buffers.find(ptr.GetBufferId()) != buffers.end());
+
+		auto &buffer = buffers.find(ptr.GetBufferId())->second;
+		auto buffer_ptr = buffer.Get(dirty);
+		return buffer_ptr + ptr.GetOffset() * segment_size + bitmask_offset;
+	}
+
+	//! Returns a pointer of type T to a segment, or nullptr, if the buffer is not in memory.
+	template <class T>
+	inline unsafe_optional_ptr<T> GetIfLoaded(const IndexPointer ptr) {
+		return (T *)GetIfLoaded(ptr);
+	}
+
+	//! Returns the data_ptr_t to a segment, or nullptr, if the buffer is not in memory.
+	inline data_ptr_t GetIfLoaded(const IndexPointer ptr) {
+		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
+		D_ASSERT(buffers.find(ptr.GetBufferId()) != buffers.end());
+
+		auto &buffer = buffers.find(ptr.GetBufferId())->second;
+		if (!buffer.InMemory()) {
+			return nullptr;
+		}
+
+		auto buffer_ptr = buffer.Get();
+		auto raw_ptr = buffer_ptr + ptr.GetOffset() * segment_size + bitmask_offset;
+		return raw_ptr;
 	}
 
 	//! Resets the allocator, e.g., during 'DELETE FROM table'
 	void Reset();
 
-	//! Returns the in-memory usage in bytes
-	inline idx_t GetMemoryUsage() const;
+	//! Returns the in-memory size in bytes
+	idx_t GetInMemorySize() const;
+	//! Returns the segment size.
+	inline idx_t GetSegmentSize() const {
+		return segment_size;
+	}
+	//! Returns the total segment count.
+	inline idx_t GetSegmentCount() const {
+		return total_segment_count;
+	}
 
 	//! Returns the upper bound of the available buffer IDs, i.e., upper_bound > max_buffer_id
 	idx_t GetUpperBoundBufferId() const;
@@ -75,10 +113,22 @@ public:
 	//! Vacuums an IndexPointer
 	IndexPointer VacuumPointer(const IndexPointer ptr);
 
-	//! Serializes all in-memory buffers and the metadata
-	BlockPointer Serialize(PartialBlockManager &partial_block_manager, MetadataWriter &writer);
-	//! Deserializes all metadata
-	void Deserialize(const BlockPointer &block_pointer);
+	//! Returns all FixedSizeAllocator information for serialization
+	FixedSizeAllocatorInfo GetInfo() const;
+	//! Serializes all in-memory buffers
+	void SerializeBuffers(PartialBlockManager &partial_block_manager);
+	//! Sets the allocation sizes and returns data to serialize each buffer
+	vector<IndexBufferInfo> InitSerializationToWAL();
+	//! Initialize a fixed-size allocator from allocator storage information
+	void Init(const FixedSizeAllocatorInfo &info);
+	//! Deserializes all metadata of older storage files
+	void Deserialize(MetadataManager &metadata_manager, const BlockPointer &block_pointer);
+	//! Removes empty buffers.
+	void RemoveEmptyBuffers();
+	//! Returns true, if the allocator does not contain any segments.
+	inline bool IsEmpty() {
+		return total_segment_count == 0;
+	}
 
 private:
 	//! Allocation size of one segment in a buffer
@@ -105,14 +155,6 @@ private:
 	unordered_set<idx_t> vacuum_buffers;
 
 private:
-	//! Returns the data_ptr_t to a segment, and sets the dirty flag of the buffer containing that segment
-	inline data_ptr_t Get(const IndexPointer ptr, const bool dirty = true) {
-		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
-		D_ASSERT(buffers.find(ptr.GetBufferId()) != buffers.end());
-		auto &buffer = buffers.find(ptr.GetBufferId())->second;
-		auto buffer_ptr = buffer.Get(dirty);
-		return buffer_ptr + ptr.GetOffset() * segment_size + bitmask_offset;
-	}
 	//! Returns an available buffer id
 	idx_t GetAvailableBufferId() const;
 };

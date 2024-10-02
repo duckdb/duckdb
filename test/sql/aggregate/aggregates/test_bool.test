@@ -8,9 +8,11 @@ SET default_null_order='nulls_first';
 # Corner Cases
 statement error
 select bool_or(0)
+----
 
 statement error
 select bool_and(0)
+----
 
 query I
 select bool_or(NULL)
@@ -24,15 +26,19 @@ NULL
 
 statement error
 select bool_or()
+----
 
 statement error
 select bool_and()
+----
 
 statement error
 select bool_or(*)
+----
 
 statement error
 select bool_and(*)
+----
 
 query I
 SELECT bool_or(True) FROM range(100);

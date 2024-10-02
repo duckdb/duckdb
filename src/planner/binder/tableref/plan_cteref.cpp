@@ -5,15 +5,7 @@
 namespace duckdb {
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundCTERef &ref) {
-	auto index = ref.bind_index;
-
-	vector<LogicalType> types;
-	types.reserve(ref.types.size());
-	for (auto &type : ref.types) {
-		types.push_back(type);
-	}
-
-	return make_uniq<LogicalCTERef>(index, ref.cte_index, types, ref.bound_columns, ref.materialized_cte);
+	return make_uniq<LogicalCTERef>(ref.bind_index, ref.cte_index, ref.types, ref.bound_columns, ref.materialized_cte);
 }
 
 } // namespace duckdb

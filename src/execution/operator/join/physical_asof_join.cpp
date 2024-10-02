@@ -48,7 +48,7 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(LogicalComparisonJoin &op, unique_ptr<Physica
 			break;
 		case ExpressionType::COMPARE_EQUAL:
 			null_sensitive.emplace_back(lhs_orders.size());
-			// Fall through
+			DUCKDB_EXPLICIT_FALLTHROUGH;
 		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 			lhs_partitions.emplace_back(std::move(left));
 			rhs_partitions.emplace_back(std::move(right));
@@ -159,7 +159,7 @@ SinkFinalizeType PhysicalAsOfJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	// The data is all in so we can initialise the left partitioning.
 	const vector<unique_ptr<BaseStatistics>> partitions_stats;
 	gstate.lhs_sink = make_uniq<PartitionGlobalSinkState>(context, lhs_partitions, lhs_orders, children[0]->types,
-	                                                      partitions_stats, 0);
+	                                                      partitions_stats, 0U);
 	gstate.lhs_sink->SyncPartitioning(gstate.rhs_sink);
 
 	// Find the first group to sort
@@ -169,7 +169,7 @@ SinkFinalizeType PhysicalAsOfJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	}
 
 	// Schedule all the sorts for maximum thread utilisation
-	auto new_event = make_shared<PartitionMergeEvent>(gstate.rhs_sink, pipeline);
+	auto new_event = make_shared_ptr<PartitionMergeEvent>(gstate.rhs_sink, pipeline, *this);
 	event.InsertEvent(std::move(new_event));
 
 	return SinkFinalizeType::READY;
@@ -238,6 +238,7 @@ bool AsOfLocalState::Sink(DataChunk &input) {
 	//	Compute the join keys
 	lhs_keys.Reset();
 	lhs_executor.Execute(input, lhs_keys);
+	lhs_keys.Flatten();
 
 	//	Combine the NULLs
 	const auto count = input.size();

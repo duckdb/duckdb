@@ -24,6 +24,7 @@ SELECT enum_code(x) FROM test
 
 statement error
 SELECT enum_code('bla')
+----
 
 statement ok
 PREPARE p1 as SELECT enum_code(x) FROM test

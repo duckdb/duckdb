@@ -6,7 +6,6 @@ require tpch
 
 load __TEST_DIR__/test_enum_blowup.db
 
-
 statement ok
 CALL DBGEN(sf=0.01);
 

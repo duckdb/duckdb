@@ -29,9 +29,6 @@ install_deps() {
     ./aws/install
     aws --version
 
-  elif [ "$1" = "odbc" ]; then
-    yum install -y unixODBC-devel
-
   elif [ "$1" = "vcpkg" ]; then
     # Note: it is preferred to use the lukka/run-vcpkg@v11 over this when running this
     # in a Github Actions job. When running locally or in the aarch64, these can be used instead
@@ -40,7 +37,7 @@ install_deps() {
     (
       cd $VCPKG_TARGET_DIR ;
       git clone https://github.com/Microsoft/vcpkg.git ;
-      git checkout 501db0f17ef6df184fcdbfbe0f87cde2313b6ab1 ;
+      git checkout a1a1cbc975abf909a6c8985a6a2b8fe20bbd9bd6 ;
       cd vcpkg ;
       ./bootstrap-vcpkg.sh
     )
@@ -66,6 +63,9 @@ install_deps() {
 
   elif [ "$1" = "gcc_4_8" ]; then
     yum install -y gcc-c++
+
+  elif [ "$1" = "nodejs" ]; then
+    yum install -y nodejs
 
   else
       >&2 echo "unknown input for setup_manylinux2014.sh: '$1'"

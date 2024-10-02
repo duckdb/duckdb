@@ -2,6 +2,7 @@
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/fstream.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -75,8 +76,7 @@ TEST_CASE("Test file operations", "[file_system]") {
 	// standard reading/writing test
 
 	// open file for writing
-	REQUIRE_NOTHROW(handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE,
-	                                      FileLockType::NO_LOCK));
+	REQUIRE_NOTHROW(handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE));
 	// write 10 integers
 	REQUIRE_NOTHROW(handle->Write((void *)test_data, sizeof(int64_t) * INTEGER_COUNT, 0));
 	// close the file
@@ -86,7 +86,7 @@ TEST_CASE("Test file operations", "[file_system]") {
 		test_data[i] = 0;
 	}
 	// now open the file for reading
-	REQUIRE_NOTHROW(handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK));
+	REQUIRE_NOTHROW(handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_READ));
 	// read the 10 integers back
 	REQUIRE_NOTHROW(handle->Read((void *)test_data, sizeof(int64_t) * INTEGER_COUNT, 0));
 	// check the values of the integers
@@ -95,4 +95,24 @@ TEST_CASE("Test file operations", "[file_system]") {
 	}
 	handle.reset();
 	fs->RemoveFile(fname);
+}
+
+TEST_CASE("absolute paths", "[file_system]") {
+	duckdb::LocalFileSystem fs;
+
+#ifndef _WIN32
+	REQUIRE(fs.IsPathAbsolute("/home/me"));
+	REQUIRE(!fs.IsPathAbsolute("./me"));
+	REQUIRE(!fs.IsPathAbsolute("me"));
+#else
+	const std::string long_path = "\\\\?\\D:\\very long network\\";
+	REQUIRE(fs.IsPathAbsolute(long_path));
+	const std::string network = "\\\\network_drive\\filename.csv";
+	REQUIRE(fs.IsPathAbsolute(network));
+	REQUIRE(fs.IsPathAbsolute("C:\\folder\\filename.csv"));
+	REQUIRE(fs.IsPathAbsolute("C:/folder\\filename.csv"));
+	REQUIRE(fs.NormalizeAbsolutePath("C:/folder\\filename.csv") == "c:\\folder\\filename.csv");
+	REQUIRE(fs.NormalizeAbsolutePath(network) == network);
+	REQUIRE(fs.NormalizeAbsolutePath(long_path) == "\\\\?\\d:\\very long network\\");
+#endif
 }

@@ -17,7 +17,7 @@ CREATE TABLE foo (bar struct(pip int));
 statement error
 INSERT INTO foo VALUES ({'ignoreme': 3});
 ----
-Mismatch Type Error: Type STRUCT(ignoreme INTEGER) does not match with STRUCT(pip INTEGER). Cannot cast STRUCTs with different names
+element "ignoreme" in source struct was not found in target struct
 
 statement error
 create table wrong as from (VALUES (ROW(3)));
@@ -38,12 +38,12 @@ CREATE OR REPLACE TABLE T AS SELECT [{'a': 'A', 'b':'B'}] as x, [{'b':'BB','a':'
 statement error
 SELECT x, y, ARRAY_CONCAT(x, y) FROM T;
 ----
-Mismatch Type Error: Type STRUCT(b VARCHAR, a VARCHAR) does not match with STRUCT(a VARCHAR, b VARCHAR). Cannot cast STRUCTs with different names
+an explicit cast is required
 
 statement error
 INSERT INTO t1 VALUES ({c: 34});
 ----
-Mismatch Type Error: Type STRUCT(c INTEGER) does not match with STRUCT(v VARCHAR). Cannot cast STRUCTs with different names
+element "c" in source struct was not found in target struct
 
 statement ok
 CREATE OR REPLACE TABLE T (s STRUCT(a INT, b INT));
@@ -51,7 +51,7 @@ CREATE OR REPLACE TABLE T (s STRUCT(a INT, b INT));
 statement error
 INSERT INTO T VALUES ({l: 1, m: 2}), ({x: 3, y: 4});
 ----
-Mismatch Type Error: Type STRUCT(l INTEGER, m INTEGER) does not match with STRUCT(a INTEGER, b INTEGER). Cannot cast STRUCTs with different names
+element "l" in source struct was not found in target struct
 
 # Can insert unnamed struct into named struct
 
@@ -70,7 +70,12 @@ Invalid Input Error: A table cannot be created from an unnamed struct
 statement error
 SELECT [{'foo': True}, {'bar': False}, {'foobar': NULL}];
 ----
-Mismatch Type Error: Type STRUCT(bar BOOLEAN) does not match with STRUCT(foo BOOLEAN). Cannot cast STRUCTs with different names
+an explicit cast is required
+
+statement error
+select [(13,24), {'a': 42, 'b': 84}, (43, 85), {'b':10, 'a':123123}] as res;
+----
+an explicit cast is required
 
 statement ok
 PREPARE v1 as SELECT ROW(?);

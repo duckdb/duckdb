@@ -1,8 +1,8 @@
+#include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
-#include "duckdb/common/arrow/arrow.hpp"
 
 using duckdb::ArrowConverter;
 using duckdb::ArrowResultWrapper;
@@ -27,8 +27,12 @@ duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema 
 		return DuckDBSuccess;
 	}
 	auto wrapper = reinterpret_cast<ArrowResultWrapper *>(result);
-	ArrowConverter::ToArrowSchema((ArrowSchema *)*out_schema, wrapper->result->types, wrapper->result->names,
-	                              wrapper->options);
+	try {
+		ArrowConverter::ToArrowSchema((ArrowSchema *)*out_schema, wrapper->result->types, wrapper->result->names,
+		                              wrapper->result->client_properties);
+	} catch (...) {
+		return DuckDBError;
+	}
 	return DuckDBSuccess;
 }
 
@@ -83,8 +87,19 @@ duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *o
 	if (!wrapper->current_chunk || wrapper->current_chunk->size() == 0) {
 		return DuckDBSuccess;
 	}
-	ArrowConverter::ToArrowArray(*wrapper->current_chunk, reinterpret_cast<ArrowArray *>(*out_array), wrapper->options);
+	ArrowConverter::ToArrowArray(*wrapper->current_chunk, reinterpret_cast<ArrowArray *>(*out_array),
+	                             wrapper->result->client_properties);
 	return DuckDBSuccess;
+}
+
+void duckdb_result_arrow_array(duckdb_result result, duckdb_data_chunk chunk, duckdb_arrow_array *out_array) {
+	if (!out_array) {
+		return;
+	}
+	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
+	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result.internal_data));
+	ArrowConverter::ToArrowArray(*dchunk, reinterpret_cast<ArrowArray *>(*out_array),
+	                             result_data.result->client_properties);
 }
 
 idx_t duckdb_arrow_row_count(duckdb_arrow result) {
@@ -112,7 +127,7 @@ idx_t duckdb_arrow_rows_changed(duckdb_arrow result) {
 		auto rows = collection.GetRows();
 		D_ASSERT(row_count == 1);
 		D_ASSERT(rows.size() == 1);
-		rows_changed = rows[0].GetValue(0).GetValue<int64_t>();
+		rows_changed = duckdb::NumericCast<idx_t>(rows[0].GetValue(0).GetValue<int64_t>());
 	}
 	return rows_changed;
 }
@@ -130,14 +145,27 @@ void duckdb_destroy_arrow(duckdb_arrow *result) {
 	}
 }
 
+void duckdb_destroy_arrow_stream(duckdb_arrow_stream *stream_p) {
+
+	auto stream = reinterpret_cast<ArrowArrayStream *>(*stream_p);
+	if (!stream) {
+		return;
+	}
+	if (stream->release) {
+		stream->release(stream);
+	}
+	D_ASSERT(!stream->release);
+
+	delete stream;
+	*stream_p = nullptr;
+}
+
 duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_statement, duckdb_arrow *out_result) {
 	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(prepared_statement);
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError() || !out_result) {
 		return DuckDBError;
 	}
 	auto arrow_wrapper = new ArrowResultWrapper();
-	arrow_wrapper->options = wrapper->statement->context->GetClientProperties();
-
 	auto result = wrapper->statement->Execute(wrapper->values, false);
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
 	arrow_wrapper->result = duckdb::unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
@@ -168,15 +196,14 @@ void EmptyStreamRelease(ArrowArrayStream *stream) {
 	stream->release = nullptr;
 }
 
-void FactoryGetSchema(uintptr_t stream_factory_ptr, duckdb::ArrowSchemaWrapper &schema) {
-	auto stream = reinterpret_cast<ArrowArrayStream *>(stream_factory_ptr);
-	stream->get_schema(stream, &schema.arrow_schema);
+void FactoryGetSchema(ArrowArrayStream *stream, ArrowSchema &schema) {
+	stream->get_schema(stream, &schema);
 
 	// Need to nullify the root schema's release function here, because streams don't allow us to set the release
 	// function. For the schema's children, we nullify the release functions in `duckdb_arrow_scan`, so we don't need to
 	// handle them again here. We set this to nullptr and not EmptySchemaRelease to prevent ArrowSchemaWrapper's
 	// destructor from destroying the schema (it's the caller's responsibility).
-	schema.arrow_schema.release = nullptr;
+	schema.release = nullptr;
 }
 
 int GetSchema(struct ArrowArrayStream *stream, struct ArrowSchema *out) {
@@ -264,8 +291,8 @@ duckdb_state duckdb_arrow_scan(duckdb_connection connection, const char *table_n
 	}
 
 	typedef void (*release_fn_t)(ArrowSchema *);
-	std::vector<release_fn_t> release_fns(schema.n_children);
-	for (int64_t i = 0; i < schema.n_children; i++) {
+	std::vector<release_fn_t> release_fns(duckdb::NumericCast<idx_t>(schema.n_children));
+	for (idx_t i = 0; i < duckdb::NumericCast<idx_t>(schema.n_children); i++) {
 		auto child = schema.children[i];
 		release_fns[i] = child->release;
 		child->release = arrow_array_stream_wrapper::EmptySchemaRelease;
@@ -274,7 +301,7 @@ duckdb_state duckdb_arrow_scan(duckdb_connection connection, const char *table_n
 	auto ret = arrow_array_stream_wrapper::Ingest(connection, table_name, stream);
 
 	// Restore release functions.
-	for (int64_t i = 0; i < schema.n_children; i++) {
+	for (idx_t i = 0; i < duckdb::NumericCast<idx_t>(schema.n_children); i++) {
 		schema.children[i]->release = release_fns[i];
 	}
 

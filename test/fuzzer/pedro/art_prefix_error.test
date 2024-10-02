@@ -5,7 +5,6 @@
 statement ok
 CREATE TABLE t0 (c0 BLOB PRIMARY KEY);
 
-statement error
+statement ok
 INSERT INTO t0(c0) VALUES (BLOB '\x00a'), (BLOB '');
-----
-Not implemented Error: Indexes cannot contain BLOBs that contain null-terminated bytes.
+

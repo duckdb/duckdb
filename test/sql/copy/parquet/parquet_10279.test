@@ -1,0 +1,11 @@
+# name: test/sql/copy/parquet/parquet_10279.test
+# description: Issue #10279: Data loss with parquet INT64 and DELTA encoding
+# group: [parquet]
+
+require parquet
+
+query IIIIIIII
+SELECT * FROM 'data/parquet-testing/issue10279_delta_encoding.parquet'
+----
+MIN_VALUE	false	-128	-32768	-2147483648	-9223372036854775808	1e-45	5e-324
+MAX_VALUE	true	127	32767	2147483647	9223372036854775807	3.4028235e+38	1.7976931348623157e+308

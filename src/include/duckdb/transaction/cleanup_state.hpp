@@ -21,7 +21,7 @@ struct UpdateInfo;
 
 class CleanupState {
 public:
-	CleanupState();
+	explicit CleanupState(transaction_t lowest_active_transaction);
 	~CleanupState();
 
 	// all tables with indexes that possibly need a vacuum (after e.g. a delete)
@@ -31,6 +31,8 @@ public:
 	void CleanupEntry(UndoFlags type, data_ptr_t data);
 
 private:
+	//! Lowest active transaction
+	transaction_t lowest_active_transaction;
 	// data for index cleanup
 	optional_ptr<DataTable> current_table;
 	DataChunk chunk;

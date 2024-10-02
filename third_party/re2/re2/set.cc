@@ -7,30 +7,49 @@
 #include <stddef.h>
 #include <algorithm>
 #include <memory>
+#include <utility>
 
 #include "util/util.h"
 #include "util/logging.h"
-#include "util/pod_array.h"
-#include "re2/stringpiece.h"
+#include "re2/pod_array.h"
 #include "re2/prog.h"
 #include "re2/re2.h"
 #include "re2/regexp.h"
+#include "re2/stringpiece.h"
 
 namespace duckdb_re2 {
 
-RE2::Set::Set(const RE2::Options& options, RE2::Anchor anchor) {
-  options_.Copy(options);
+RE2::Set::Set(const RE2::Options& options, RE2::Anchor anchor)
+    : options_(options),
+      anchor_(anchor),
+      compiled_(false),
+      size_(0) {
   options_.set_never_capture(true);  // might unblock some optimisations
-  anchor_ = anchor;
-  prog_ = NULL;
-  compiled_ = false;
-  size_ = 0;
 }
 
 RE2::Set::~Set() {
   for (size_t i = 0; i < elem_.size(); i++)
     elem_[i].second->Decref();
-  delete prog_;
+}
+
+RE2::Set::Set(Set&& other)
+    : options_(other.options_),
+      anchor_(other.anchor_),
+      elem_(std::move(other.elem_)),
+      compiled_(other.compiled_),
+      size_(other.size_),
+      prog_(std::move(other.prog_)) {
+  other.elem_.clear();
+  other.elem_.shrink_to_fit();
+  other.compiled_ = false;
+  other.size_ = 0;
+  other.prog_.reset();
+}
+
+RE2::Set& RE2::Set::operator=(Set&& other) {
+  this->~Set();
+  (void) new (this) Set(std::move(other));
+  return *this;
 }
 
 int RE2::Set::Add(const StringPiece& pattern, std::string* error) {
@@ -97,9 +116,9 @@ bool RE2::Set::Compile() {
     options_.ParseFlags());
   duckdb_re2::Regexp* re = duckdb_re2::Regexp::Alternate(sub.data(), size_, pf);
 
-  prog_ = Prog::CompileSet(re, anchor_, options_.max_mem());
+  prog_.reset(Prog::CompileSet(re, anchor_, options_.max_mem()));
   re->Decref();
-  return prog_ != NULL;
+  return prog_ != nullptr;
 }
 
 bool RE2::Set::Match(const StringPiece& text, std::vector<int>* v) const {
@@ -109,11 +128,14 @@ bool RE2::Set::Match(const StringPiece& text, std::vector<int>* v) const {
 bool RE2::Set::Match(const StringPiece& text, std::vector<int>* v,
                      ErrorInfo* error_info) const {
   if (!compiled_) {
-    LOG(DFATAL) << "RE2::Set::Match() called before compiling";
     if (error_info != NULL)
       error_info->kind = kNotCompiled;
+    LOG(DFATAL) << "RE2::Set::Match() called before compiling";
     return false;
   }
+#ifdef RE2_HAVE_THREAD_LOCAL
+  hooks::context = NULL;
+#endif
   bool dfa_failed = false;
   std::unique_ptr<SparseSet> matches;
   if (v != NULL) {
@@ -124,9 +146,10 @@ bool RE2::Set::Match(const StringPiece& text, std::vector<int>* v,
                               NULL, &dfa_failed, matches.get());
   if (dfa_failed) {
     if (options_.log_errors())
-      LOG(ERROR) << "DFA out of memory: size " << prog_->size() << ", "
-                 << "bytemap range " << prog_->bytemap_range() << ", "
-                 << "list count " << prog_->list_count();
+      LOG(ERROR) << "DFA out of memory: "
+                 << "program size " << prog_->size() << ", "
+                 << "list count " << prog_->list_count() << ", "
+                 << "bytemap range " << prog_->bytemap_range();
     if (error_info != NULL)
       error_info->kind = kOutOfMemory;
     return false;
@@ -138,9 +161,9 @@ bool RE2::Set::Match(const StringPiece& text, std::vector<int>* v,
   }
   if (v != NULL) {
     if (matches->empty()) {
-      LOG(DFATAL) << "RE2::Set::Match() matched, but no matches returned?!";
       if (error_info != NULL)
         error_info->kind = kInconsistent;
+      LOG(DFATAL) << "RE2::Set::Match() matched, but no matches returned?!";
       return false;
     }
     v->assign(matches->begin(), matches->end());
@@ -150,4 +173,4 @@ bool RE2::Set::Match(const StringPiece& text, std::vector<int>* v,
   return true;
 }
 
-}  // namespace duckdb_re2
+}  // namespace re2

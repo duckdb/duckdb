@@ -1,0 +1,43 @@
+# name: test/sql/join/inner/perfect_hash_join.test
+# description: Test perfect hash join
+# group: [inner]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t1 (a INTEGER)
+
+statement ok
+CREATE TABLE t2 (a INTEGER)
+
+statement ok
+INSERT INTO t1 SELECT * FROM range(10)
+
+statement ok
+INSERT INTO t2 SELECT * FROM range(100)
+
+# perfect hash join is used when build range is small
+query II
+EXPLAIN SELECT * FROM t1 INNER JOIN t2 on t1.a = t2.a + 1
+----
+physical_plan	<REGEX>:.*Build Min:.*\s0\s.*Build Max:.*\s9\s.*
+
+
+statement ok
+CREATE TABLE t3 (a INTEGER)
+
+statement ok
+CREATE TABLE t4 (a INTEGER)
+
+statement ok
+INSERT INTO t3 SELECT * FROM range(0, 10000000, 1000000)
+
+statement ok
+INSERT INTO t4 SELECT * FROM range(0, 10000000, 1000000)
+
+# perfect hash join is not used when build range is large
+query II
+EXPLAIN SELECT * FROM t3 INNER JOIN t4 on t3.a = t4.a
+----
+physical_plan	<!REGEX>:.*Build Min: .*

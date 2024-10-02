@@ -1,0 +1,61 @@
+# Creates and uploads a Coverity build on a schedule
+# Requires that two secrets be created:
+# COVERITY_SCAN_EMAIL, with the email address that should be notified with scan results
+# COVERITY_SCAN_TOKEN, with the token from the Coverity project page (e.g., https://scan.coverity.com/projects/moshekaplan-duckdb?tab=project_settings )
+# Also, ensure that the 'github.repository' comparison and 'COVERITY_PROJECT_NAME' values below are accurate
+name: Coverity Scan
+on:
+  repository_dispatch:
+  # Run once daily (via repository_dispatch), duckdb is at ~900k LOC
+  # Scan frequency limits from https://scan.coverity.com/faq#frequency :
+  # Up to 28 builds per week, with a maximum of 4 builds per day, for projects with fewer than 100K lines of code
+  # Up to 21 builds per week, with a maximum of 3 builds per day, for projects with 100K to 500K lines of code
+  # Up to 14 builds per week, with a maximum of 2 build per day, for projects with 500K to 1 million lines of code
+  # Up to 7 builds per week, with a maximum of 1 build per day, for projects with more than 1 million lines of code
+  # Support manual execution
+  workflow_dispatch:
+
+jobs:
+  coverity:
+    # So it doesn't try to run on forks
+    if: github.repository == 'duckdb/duckdb'
+    runs-on: ubuntu-latest
+    env:
+      COVERITY_PROJECT_NAME: DuckDB
+    steps:
+    - uses: actions/checkout@v4
+    - name: Download and extract the Coverity Build Tool
+      run: |
+          wget https://scan.coverity.com/download/cxx/linux64 --post-data "token=${{ secrets.COVERITY_SCAN_TOKEN }}&project=${{ env.COVERITY_PROJECT_NAME  }}" -O cov-analysis-linux64.tar.gz
+          mkdir cov-analysis-linux64
+          tar xzf cov-analysis-linux64.tar.gz --strip 1 -C cov-analysis-linux64
+    - name: Install dependencies
+      run: sudo apt update -y -qq && sudo apt install -y git g++ cmake ninja-build libssl-dev default-jdk
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Build with cov-build
+      run: cov-analysis-linux64/bin/cov-build --dir cov-int make
+      env:
+        PYTHON_USER_SPACE: 1
+        BUILD_PYTHON: 1
+        BUILD_AUTOCOMPLETE: 1
+        BUILD_ICU: 1
+        BUILD_TPCDS: 1
+        BUILD_TCPE: 1
+        BUILD_FTS: 1
+        BUILD_HTTPFS: 1
+        BUILD_JSON: 1
+        CORE_EXTENSIONS: "inet"
+
+    - name: Upload the result
+      run: |
+          tar czvf cov-int.tgz cov-int
+          curl \
+            --form project=${{ env.COVERITY_PROJECT_NAME }} \
+            --form email=${{ secrets.COVERITY_SCAN_EMAIL }} \
+            --form token=${{ secrets.COVERITY_SCAN_TOKEN }} \
+            --form file=@cov-int.tgz \
+            https://scan.coverity.com/builds

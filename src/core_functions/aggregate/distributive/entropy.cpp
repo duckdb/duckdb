@@ -50,11 +50,12 @@ struct EntropyFunctionBase {
 
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		double count = state.count;
+		double count = static_cast<double>(state.count);
 		if (state.distinct) {
 			double entropy = 0;
 			for (auto &val : *state.distinct) {
-				entropy += (val.second / count) * log2(count / val.second);
+				double val_sec = static_cast<double>(val.second);
+				entropy += (val_sec / count) * log2(count / val_sec);
 			}
 			target = entropy;
 		} else {
@@ -146,10 +147,11 @@ AggregateFunction GetEntropyFunctionInternal(PhysicalType type) {
 	case PhysicalType::DOUBLE:
 		return AggregateFunction::UnaryAggregateDestructor<EntropyState<double>, double, double, EntropyFunction>(
 		    LogicalType::DOUBLE, LogicalType::DOUBLE);
-	case PhysicalType::VARCHAR:
+	case PhysicalType::VARCHAR: {
 		return AggregateFunction::UnaryAggregateDestructor<EntropyState<string>, string_t, double,
-		                                                   EntropyFunctionString>(LogicalType::VARCHAR,
-		                                                                          LogicalType::DOUBLE);
+		                                                   EntropyFunctionString>(
+		    LogicalType::ANY_PARAMS(LogicalType::VARCHAR, 150), LogicalType::DOUBLE);
+	}
 
 	default:
 		throw InternalException("Unimplemented approximate_count aggregate");

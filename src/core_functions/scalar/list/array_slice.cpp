@@ -40,22 +40,22 @@ unique_ptr<FunctionData> ListSliceBindData::Copy() const {
 }
 
 template <typename INDEX_TYPE>
-static int CalculateSliceLength(idx_t begin, idx_t end, INDEX_TYPE step, bool svalid) {
+static idx_t CalculateSliceLength(idx_t begin, idx_t end, INDEX_TYPE step, bool svalid) {
 	if (step < 0) {
-		step = abs(step);
+		step = AbsValue(step);
 	}
 	if (step == 0 && svalid) {
 		throw InvalidInputException("Slice step cannot be zero");
 	}
 	if (step == 1) {
-		return end - begin;
+		return NumericCast<idx_t>(end - begin);
 	} else if (static_cast<idx_t>(step) >= (end - begin)) {
 		return 1;
 	}
-	if ((end - begin) % step != 0) {
-		return (end - begin) / step + 1;
+	if ((end - begin) % UnsafeNumericCast<idx_t>(step) != 0) {
+		return (end - begin) / UnsafeNumericCast<idx_t>(step) + 1;
 	}
-	return (end - begin) / step;
+	return (end - begin) / UnsafeNumericCast<idx_t>(step);
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
@@ -65,7 +65,7 @@ INDEX_TYPE ValueLength(const INPUT_TYPE &value) {
 
 template <>
 int64_t ValueLength(const list_entry_t &value) {
-	return value.length;
+	return UnsafeNumericCast<int64_t>(value.length);
 }
 
 template <>
@@ -97,7 +97,7 @@ static bool ClampSlice(const INPUT_TYPE &value, INDEX_TYPE &begin, INDEX_TYPE &e
 	}
 
 	const auto length = ValueLength<INPUT_TYPE, INDEX_TYPE>(value);
-	if (begin < 0 && -begin > length && end < 0 && -end > length) {
+	if (begin < 0 && -begin > length && end < 0 && end < -length) {
 		begin = 0;
 		end = 0;
 		return true;
@@ -119,8 +119,8 @@ INPUT_TYPE SliceValue(Vector &result, INPUT_TYPE input, INDEX_TYPE begin, INDEX_
 
 template <>
 list_entry_t SliceValue(Vector &result, list_entry_t input, int64_t begin, int64_t end) {
-	input.offset += begin;
-	input.length = end - begin;
+	input.offset = UnsafeNumericCast<uint64_t>(UnsafeNumericCast<int64_t>(input.offset) + begin);
+	input.length = UnsafeNumericCast<uint64_t>(end - begin);
 	return input;
 }
 
@@ -144,15 +144,15 @@ list_entry_t SliceValueWithSteps(Vector &result, SelectionVector &sel, list_entr
 		input.offset = sel_idx;
 		return input;
 	}
-	input.length = CalculateSliceLength(begin, end, step, true);
-	idx_t child_idx = input.offset + begin;
+	input.length = CalculateSliceLength(UnsafeNumericCast<idx_t>(begin), UnsafeNumericCast<idx_t>(end), step, true);
+	idx_t child_idx = input.offset + UnsafeNumericCast<idx_t>(begin);
 	if (step < 0) {
-		child_idx = input.offset + end - 1;
+		child_idx = input.offset + UnsafeNumericCast<idx_t>(end) - 1;
 	}
 	input.offset = sel_idx;
 	for (idx_t i = 0; i < input.length; i++) {
 		sel.set_index(sel_idx, child_idx);
-		child_idx += step;
+		child_idx += static_cast<idx_t>(step); // intentional overflow??
 		sel_idx++;
 	}
 	return input;
@@ -163,6 +163,18 @@ static void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &beg
                                  optional_ptr<Vector> step_vector, const idx_t count, SelectionVector &sel,
                                  idx_t &sel_idx, optional_ptr<Vector> result_child_vector, bool begin_is_empty,
                                  bool end_is_empty) {
+
+	// check all this nullness early
+	auto str_valid = !ConstantVector::IsNull(str_vector);
+	auto begin_valid = !ConstantVector::IsNull(begin_vector);
+	auto end_valid = !ConstantVector::IsNull(end_vector);
+	auto step_valid = step_vector && !ConstantVector::IsNull(*step_vector);
+
+	if (!str_valid || !begin_valid || !end_valid || (step_vector && !step_valid)) {
+		ConstantVector::SetNull(result, true);
+		return;
+	}
+
 	auto result_data = ConstantVector::GetData<INPUT_TYPE>(result);
 	auto str_data = ConstantVector::GetData<INPUT_TYPE>(str_vector);
 	auto begin_data = ConstantVector::GetData<INDEX_TYPE>(begin_vector);
@@ -180,27 +192,23 @@ static void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &beg
 		end = begin_is_empty ? ValueLength<INPUT_TYPE, INDEX_TYPE>(str) : end;
 	}
 
-	auto str_valid = !ConstantVector::IsNull(str_vector);
-	auto begin_valid = !ConstantVector::IsNull(begin_vector);
-	auto end_valid = !ConstantVector::IsNull(end_vector);
-	auto step_valid = step_vector && !ConstantVector::IsNull(*step_vector);
-
 	// Clamp offsets
 	bool clamp_result = false;
-	if (str_valid && begin_valid && end_valid && (step_valid || step == 1)) {
+	if (step_valid || step == 1) {
 		clamp_result = ClampSlice(str, begin, end);
 	}
 
-	auto sel_length = 0;
+	idx_t sel_length = 0;
 	bool sel_valid = false;
-	if (step_vector && step_valid && str_valid && begin_valid && end_valid && step != 1 && end - begin > 0) {
-		sel_length = CalculateSliceLength(begin, end, step, step_valid);
+	if (step_valid && step != 1 && end - begin > 0) {
+		sel_length =
+		    CalculateSliceLength(UnsafeNumericCast<idx_t>(begin), UnsafeNumericCast<idx_t>(end), step, step_valid);
 		sel.Initialize(sel_length);
 		sel_valid = true;
 	}
 
 	// Try to slice
-	if (!str_valid || !begin_valid || !end_valid || (step_vector && !step_valid) || !clamp_result) {
+	if (!clamp_result) {
 		ConstantVector::SetNull(result, true);
 	} else if (step == 1) {
 		result_data[0] = SliceValue<INPUT_TYPE, INDEX_TYPE>(result, str, begin, end);
@@ -210,6 +218,7 @@ static void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &beg
 
 	if (sel_valid) {
 		result_child_vector->Slice(sel, sel_length);
+		result_child_vector->Flatten(sel_length);
 		ListVector::SetListSize(result, sel_length);
 	}
 }
@@ -265,9 +274,10 @@ static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_
 			clamp_result = ClampSlice(sliced, begin, end);
 		}
 
-		auto length = 0;
+		idx_t length = 0;
 		if (end - begin > 0) {
-			length = CalculateSliceLength(begin, end, step, step_valid);
+			length =
+			    CalculateSliceLength(UnsafeNumericCast<idx_t>(begin), UnsafeNumericCast<idx_t>(end), step, step_valid);
 		}
 		sel_length += length;
 
@@ -286,6 +296,7 @@ static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_
 			new_sel.set_index(i, sel.get_index(i));
 		}
 		result_child_vector->Slice(new_sel, sel_length);
+		result_child_vector->Flatten(sel_length);
 		ListVector::SetListSize(result, sel_length);
 	}
 }
@@ -318,10 +329,13 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 	D_ASSERT(args.data.size() == 3 || args.data.size() == 4);
 	auto count = args.size();
 
-	Vector &list_or_str_vector = args.data[0];
+	Vector &list_or_str_vector = result;
+	// this ensures that we do not change the input chunk
+	VectorOperations::Copy(args.data[0], list_or_str_vector, count, 0, 0);
+
 	if (list_or_str_vector.GetType().id() == LogicalTypeId::SQLNULL) {
-		auto &result_validity = FlatVector::Validity(result);
-		result_validity.SetInvalid(0);
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, true);
 		return;
 	}
 
@@ -346,7 +360,6 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 		    list_or_str_vector.GetVectorType() != VectorType::CONSTANT_VECTOR) {
 			list_or_str_vector.Flatten(count);
 		}
-		ListVector::ReferenceEntry(result, list_or_str_vector);
 		ExecuteSlice<list_entry_t, int64_t>(result, list_or_str_vector, begin_vector, end_vector, step_vector, count,
 		                                    begin_is_empty, end_is_empty);
 		break;

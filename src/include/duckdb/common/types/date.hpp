@@ -18,7 +18,7 @@
 
 namespace duckdb {
 
-struct timestamp_t;
+struct timestamp_t; // NOLINT: primitive case
 
 //! Type used to represent dates (days since 1970-01-01)
 struct date_t { // NOLINT
@@ -122,6 +122,9 @@ public:
 	DUCKDB_API static date_t FromCString(const char *str, idx_t len, bool strict = false);
 	//! Convert a date object to a string in the format "YYYY-MM-DD"
 	DUCKDB_API static string ToString(date_t date);
+	//! Try to convert the string as a give "special" date (e.g, PINF, ...)
+	//! Returns true if it was successful and updates the scan pos.
+	DUCKDB_API static bool TryConvertDateSpecial(const char *buf, idx_t len, idx_t &pos, const char *special);
 	//! Try to convert text in a buffer to a date; returns true if parsing was successful
 	//! If the date was a "special" value, the special flag will be set.
 	DUCKDB_API static bool TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result, bool &special,
@@ -170,9 +173,6 @@ public:
 
 	//! Extract year of a date entry
 	DUCKDB_API static int32_t ExtractYear(date_t date);
-	//! Extract year of a date entry, but optimized to first try the last year found
-	DUCKDB_API static int32_t ExtractYear(date_t date, int32_t *last_year);
-	DUCKDB_API static int32_t ExtractYear(timestamp_t ts, int32_t *last_year);
 	//! Extract month of a date entry
 	DUCKDB_API static int32_t ExtractMonth(date_t date);
 	//! Extract day of a date entry

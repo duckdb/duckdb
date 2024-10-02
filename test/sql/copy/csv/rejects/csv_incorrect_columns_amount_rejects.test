@@ -1,0 +1,141 @@
+# name: test/sql/copy/csv/rejects/csv_incorrect_columns_amount_rejects.test
+# description: Test that incorrect column amounts return correct info as rejects tables
+# group: [rejects]
+
+require skip_reload
+
+# Test will fail on windows because byte_position is slightly different due to \r\n instead of \n
+require notwindows
+
+statement ok
+SELECT * FROM read_csv(
+    'data/csv/rejects/incorrect_columns/few_columns.csv',
+    columns = {'a': 'INTEGER', 'b': 'INTEGER', 'c': 'INTEGER', 'd': 'INTEGER'},
+    store_rejects=true, auto_detect=false, header = 1);
+
+query IIIIIIIII rowsort
+SELECT * EXCLUDE (scan_id) FROM reject_errors order by all;
+----
+0	1814	14505	14510	3	d	MISSING COLUMNS	1,2,3	Expected Number of Columns: 4 Found: 3
+0	1823	14575	14576	1	b	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 1
+0	1823	14575	14576	2	c	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 2
+0	1823	14575	14576	3	d	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 3
+0	2378	19009	19010	1	b	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 1
+0	2378	19009	19010	2	c	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 2
+0	2378	19009	19010	3	d	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 3
+0	2762	22075	22078	2	c	MISSING COLUMNS	1,2	Expected Number of Columns: 4 Found: 2
+0	2762	22075	22078	3	d	MISSING COLUMNS	1,2	Expected Number of Columns: 4 Found: 3
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+statement ok
+SELECT * FROM read_csv(
+    'data/csv/rejects/incorrect_columns/many_columns.csv',
+    columns = {'a': 'INTEGER', 'b': 'INTEGER', 'c': 'INTEGER', 'd': 'INTEGER'},
+    store_rejects=true, auto_detect=false, header = 1);
+
+query IIIIIIIII rowsort
+SELECT * EXCLUDE (scan_id) FROM reject_errors order by all;
+----
+0	1096	8761	8768	5	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 5
+0	1096	8761	8770	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 6
+0	1159	9269	9276	5	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 5
+0	1159	9269	9278	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 6
+0	1206	9649	9656	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	Expected Number of Columns: 4 Found: 5
+0	2769	22155	22162	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	Expected Number of Columns: 4 Found: 5
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+statement ok
+SELECT * FROM read_csv(
+    'data/csv/rejects/incorrect_columns/mix_columns.csv',
+    columns = {'a': 'INTEGER', 'b': 'INTEGER', 'c': 'INTEGER', 'd': 'INTEGER'},
+    store_rejects=true, auto_detect=false, header = 1);
+
+query IIIIIIIII rowsort
+SELECT * EXCLUDE (scan_id) FROM reject_errors order by all;
+----
+0	1604	12825	12826	1	b	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 1
+0	1604	12825	12826	2	c	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 2
+0	1604	12825	12826	3	d	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 3
+0	1671	13355	13362	5	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 5
+0	1671	13355	13364	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 6
+0	2751	21999	22002	2	c	MISSING COLUMNS	1,2	Expected Number of Columns: 4 Found: 2
+0	2751	21999	22002	3	d	MISSING COLUMNS	1,2	Expected Number of Columns: 4 Found: 3
+0	2768	22131	22138	5	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 5
+0	2768	22131	22140	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 6
+
+
+# Different Buffer Sizes
+loop buffer_size 10 15
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+statement ok
+SELECT * FROM read_csv(
+    'data/csv/rejects/incorrect_columns/small_mix.csv',
+    columns = {'a': 'INTEGER', 'b': 'INTEGER', 'c': 'INTEGER', 'd': 'INTEGER'},
+    store_rejects=true, auto_detect=false, header = 1);
+
+query IIIIIIIII rowsort
+SELECT * EXCLUDE (scan_id) FROM reject_errors order by all
+----
+0	3	17	24	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	Expected Number of Columns: 4 Found: 5
+0	4	27	32	3	d	MISSING COLUMNS	1,2,3	Expected Number of Columns: 4 Found: 3
+
+endloop
+
+# All files
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+statement ok
+SELECT * FROM read_csv(
+    'data/csv/rejects/incorrect_columns/*.csv',
+    columns = {'a': 'INTEGER', 'b': 'INTEGER', 'c': 'INTEGER', 'd': 'INTEGER'},
+   store_rejects=true, auto_detect=false, header = 1);
+
+query IIIIIIIII rowsort
+SELECT * EXCLUDE (scan_id) FROM reject_errors order by all
+----
+0	1814	14505	14510	3	d	MISSING COLUMNS	1,2,3	Expected Number of Columns: 4 Found: 3
+0	1823	14575	14576	1	b	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 1
+0	1823	14575	14576	2	c	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 2
+0	1823	14575	14576	3	d	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 3
+0	2378	19009	19010	1	b	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 1
+0	2378	19009	19010	2	c	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 2
+0	2378	19009	19010	3	d	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 3
+0	2762	22075	22078	2	c	MISSING COLUMNS	1,2	Expected Number of Columns: 4 Found: 2
+0	2762	22075	22078	3	d	MISSING COLUMNS	1,2	Expected Number of Columns: 4 Found: 3
+1	1096	8761	8768	5	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 5
+1	1096	8761	8770	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 6
+1	1159	9269	9276	5	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 5
+1	1159	9269	9278	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 6
+1	1206	9649	9656	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	Expected Number of Columns: 4 Found: 5
+1	2769	22155	22162	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	Expected Number of Columns: 4 Found: 5
+2	1604	12825	12826	1	b	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 1
+2	1604	12825	12826	2	c	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 2
+2	1604	12825	12826	3	d	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 3
+2	1671	13355	13362	5	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 5
+2	1671	13355	13364	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 6
+2	2751	21999	22002	2	c	MISSING COLUMNS	1,2	Expected Number of Columns: 4 Found: 2
+2	2751	21999	22002	3	d	MISSING COLUMNS	1,2	Expected Number of Columns: 4 Found: 3
+2	2768	22131	22138	5	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 5
+2	2768	22131	22140	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 6
+3	3	17	24	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	Expected Number of Columns: 4 Found: 5
+3	4	27	32	3	d	MISSING COLUMNS	1,2,3	Expected Number of Columns: 4 Found: 3

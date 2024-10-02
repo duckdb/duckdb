@@ -19,7 +19,7 @@ select * from t where i in ('1','2','y');
 2
 
 query T
-SELECT x::VARCHAR IN ('1', y) FROM (VALUES (1, 2), (2, 3)) tbl(x, y);
+SELECT x::VARCHAR IN ('1', y::VARCHAR) FROM (VALUES (1, 2), (2, 3)) tbl(x, y);
 ----
 1
 0

@@ -1,0 +1,19 @@
+# name: test/sql/subquery/lateral/lateral_binding_views.test
+# description: Verify that views cannot reference lateral join columns
+# group: [lateral]
+
+statement ok
+copy (select date '2000-01-01' as dt) to '__TEST_DIR__/datetest.csv';
+
+statement ok
+create view v1 as select * from read_csv('__TEST_DIR__/datetest.csv', columns={'dt': date});
+
+query I
+from v1
+----
+2000-01-01
+
+query II
+select * from (select date '1992-01-01' as date), v1;
+----
+1992-01-01	2000-01-01

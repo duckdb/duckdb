@@ -32,10 +32,12 @@ struct ChangeColumnTypeInfo;
 struct AlterForeignKeyInfo;
 struct SetNotNullInfo;
 struct DropNotNullInfo;
+struct SetColumnCommentInfo;
 
 class TableFunction;
 struct FunctionData;
 
+class Binder;
 class TableColumnInfo;
 struct ColumnSegmentInfo;
 class TableStorageInfo;
@@ -52,8 +54,7 @@ public:
 
 public:
 	//! Create a TableCatalogEntry and initialize storage for it
-	DUCKDB_API TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info,
-	                             optional_ptr<ClientContext> context);
+	DUCKDB_API TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info);
 
 public:
 	DUCKDB_API unique_ptr<CreateInfo> GetInfo() const override;
@@ -61,24 +62,22 @@ public:
 	DUCKDB_API bool HasGeneratedColumns() const;
 
 	//! Returns whether or not a column with the given name exists
-	DUCKDB_API bool ColumnExists(const string &name);
+	DUCKDB_API bool ColumnExists(const string &name) const;
 	//! Returns a reference to the column of the specified name. Throws an
 	//! exception if the column does not exist.
-	DUCKDB_API const ColumnDefinition &GetColumn(const string &name);
+	DUCKDB_API const ColumnDefinition &GetColumn(const string &name) const;
 	//! Returns a reference to the column of the specified logical index. Throws an
 	//! exception if the column does not exist.
-	DUCKDB_API const ColumnDefinition &GetColumn(LogicalIndex idx);
+	DUCKDB_API const ColumnDefinition &GetColumn(LogicalIndex idx) const;
 	//! Returns a list of types of the table, excluding generated columns
-	DUCKDB_API vector<LogicalType> GetTypes();
+	DUCKDB_API vector<LogicalType> GetTypes() const;
 	//! Returns a list of the columns of the table
 	DUCKDB_API const ColumnList &GetColumns() const;
 	//! Returns the underlying storage of the table
 	virtual DataTable &GetStorage();
-	//! Returns a list of the bound constraints of the table
-	virtual const vector<unique_ptr<BoundConstraint>> &GetBoundConstraints();
 
 	//! Returns a list of the constraints of the table
-	DUCKDB_API const vector<unique_ptr<Constraint>> &GetConstraints();
+	DUCKDB_API const vector<unique_ptr<Constraint>> &GetConstraints() const;
 	DUCKDB_API string ToSQL() const override;
 
 	//! Get statistics of a column (physical or virtual) within the table
@@ -88,7 +87,7 @@ public:
 	//! If the column does not exist:
 	//! If if_column_exists is true, returns DConstants::INVALID_INDEX
 	//! If if_column_exists is false, throws an exception
-	DUCKDB_API LogicalIndex GetColumnIndex(string &name, bool if_exists = false);
+	DUCKDB_API LogicalIndex GetColumnIndex(string &name, bool if_exists = false) const;
 
 	//! Returns the scan function that can be used to scan the given table
 	virtual TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) = 0;
@@ -105,7 +104,7 @@ public:
 	//! Returns the storage info of this table
 	virtual TableStorageInfo GetStorageInfo(ClientContext &context) = 0;
 
-	virtual void BindUpdateConstraints(LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
+	virtual void BindUpdateConstraints(Binder &binder, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
 	                                   ClientContext &context);
 
 protected:

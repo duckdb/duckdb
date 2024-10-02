@@ -154,14 +154,16 @@ DROP TABLE mixed_batches_v3
 statement ok
 DROP TABLE mixed_batches_v4
 
-statement error
-CREATE OR REPLACE VIEW v1 AS FROM '__TEST_DIR__/mix_batches_small.parquet' UNION ALL FROM '__TEST_DIR__/mix_batches_large.parquet' UNION ALL FROM '__TEST_DIR__/mix_batches_odd.parquet' UNION ALL FROM '__TEST_DIR__/mix_batches_odd_again.parquet'
-----
-Dependency Error: Cannot drop entry "v1" because there are entries that depend on it
+# Drop the VIEWs that depend on V1
 
-# Because v2 depends on v1 we have to drop with CASCADE
 statement ok
-DROP VIEW v1 CASCADE;
+DROP VIEW IF EXISTS v2
+
+statement ok
+DROP VIEW IF EXISTS v3
+
+statement ok
+DROP VIEW IF EXISTS v4
 
 # create views that read the batches using unions
 statement ok

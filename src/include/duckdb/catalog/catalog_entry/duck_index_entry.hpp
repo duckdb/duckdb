@@ -11,21 +11,43 @@
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 
 namespace duckdb {
+class TableCatalogEntry;
 
-//! An index catalog entry
+//! Wrapper class to allow copying a DuckIndexEntry (for altering the DuckIndexEntry metadata such as comments)
+struct IndexDataTableInfo {
+	IndexDataTableInfo(shared_ptr<DataTableInfo> info_p, const string &index_name_p);
+	~IndexDataTableInfo();
+
+	//! Pointer to the DataTableInfo
+	shared_ptr<DataTableInfo> info;
+	//! The index to be removed on destruction
+	string index_name;
+};
+
+//! A duck index entry
 class DuckIndexEntry : public IndexCatalogEntry {
 public:
-	//! Create an IndexCatalogEntry and initialize storage for it
-	DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info,
-	               optional_ptr<ClientContext> context);
-	~DuckIndexEntry();
+	//! Create a DuckIndexEntry
+	DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &create_info,
+	               TableCatalogEntry &table);
+	DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &create_info,
+	               shared_ptr<IndexDataTableInfo> storage_info);
 
-	shared_ptr<DataTableInfo> info;
+	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
+
+	//! The indexed table information
+	shared_ptr<IndexDataTableInfo> info;
+	//! We need the initial size of the index after the CREATE INDEX statement,
+	//! as it is necessary to determine the auto checkpoint threshold
+	idx_t initial_index_size;
 
 public:
 	string GetSchemaName() const override;
 	string GetTableName() const override;
-	//! This drops in-memory index data and marks all blocks on disk as free blocks, allowing to reclaim them
+
+	DataTableInfo &GetDataTableInfo() const;
+
+	//! Drops in-memory index data and marks all blocks on disk as free blocks, allowing to reclaim them
 	void CommitDrop();
 };
 

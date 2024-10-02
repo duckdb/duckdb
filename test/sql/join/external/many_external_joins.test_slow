@@ -1,0 +1,36 @@
+# name: test/sql/join/external/many_external_joins.test_slow
+# description: Test many external joins (TemporaryMemoryManager)
+# group: [external]
+
+load __TEST_DIR__/many_external_joins.db
+
+statement ok
+CREATE TABLE tbl AS
+SELECT range i,
+       range j
+FROM range(10000000);
+
+statement ok
+SET threads=4;
+
+# each HT should be around 400mb
+statement ok
+SET memory_limit='500mb';
+
+# disable the join order optimizer to be sure we probe all HTs in a single pipeline
+statement ok
+SET disabled_optimizers TO 'join_order,build_side_probe_side';
+
+# we shouldn't run out of memory
+query IIIII
+SELECT max(i),
+       max(t1.j),
+       max(t2.j),
+       max(t3.j),
+       max(t4.j),
+FROM tbl AS t1
+JOIN tbl AS t2 USING (i)
+JOIN tbl AS t3 USING (i)
+JOIN tbl AS t4 USING (i);
+----
+9999999	9999999	9999999	9999999	9999999

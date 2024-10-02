@@ -7,8 +7,6 @@ on:
       - '**'
       - '!main'
       - '!feature'
-    tags:
-      - '**'
     paths-ignore:
       - '**.md'
       - 'tools/**'
@@ -40,7 +38,6 @@ jobs:
  regression-test-benchmark-runner:
   name: Regression Tests
   runs-on: ubuntu-20.04
-  if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
   env:
     CC: gcc-10
     CXX: g++-10
@@ -50,15 +47,16 @@ jobs:
     BUILD_TPCDS: 1
     BUILD_HTTPFS: 1
     BUILD_JEMALLOC: 1
+    CORE_EXTENSIONS: "inet"
 
   steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
-        python-version: '3.7'
+        python-version: '3.12'
 
     - name: Install
       shell: bash
@@ -89,6 +87,12 @@ jobs:
       shell: bash
       run: |
         python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/micro.csv --verbose --threads=2
+
+    - name: Regression Test Ingestion Perf
+      if: always()
+      shell: bash
+      run: |
+        python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/ingestion.csv --verbose --threads=2
 
     - name: Regression Test TPCH
       if: always()
@@ -129,7 +133,6 @@ jobs:
  regression-test-storage:
   name: Storage Size Regression Test
   runs-on: ubuntu-20.04
-  if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
   env:
     CC: gcc-10
     CXX: g++-10
@@ -138,13 +141,13 @@ jobs:
     BUILD_TPCDS: 1
 
   steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
-        python-version: '3.7'
+        python-version: '3.12'
 
     - name: Install
       shell: bash
@@ -211,26 +214,25 @@ jobs:
  regression-test-python:
   name: Regression Test (Python Client)
   runs-on: ubuntu-20.04
-  if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
   env:
     CC: gcc-10
     CXX: g++-10
     GEN: ninja
 
   steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
-        python-version: '3.7'
+        python-version: '3.12'
 
     - name: Install
       shell: bash
       run: |
         sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-        pip install numpy pytest pandas mypy psutil "pyarrow<=11.0.0"
+        pip install numpy pytest pandas mypy psutil pyarrow
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -242,7 +244,7 @@ jobs:
       shell: bash
       run: |
         cd tools/pythonpkg
-        python setup.py install --user
+        pip install --use-pep517 . --user
         cd ../..
 
     - name: Run New Version
@@ -262,7 +264,7 @@ jobs:
       run: |
         git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
         cd duckdb/tools/pythonpkg
-        python setup.py install --user
+        pip install --use-pep517 . --user
         cd ../../..
 
     - name: Run Current Version
@@ -279,7 +281,6 @@ jobs:
  regression-test-plan-cost:
   name: Regression Test Join Order Plan Cost
   runs-on: ubuntu-20.04
-  if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
   env:
     CC: gcc-10
     CXX: g++-10
@@ -288,13 +289,13 @@ jobs:
     BUILD_HTTPFS: 1
 
   steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
-        python-version: '3.7'
+        python-version: '3.12'
 
     - name: Install
       shell: bash
@@ -321,13 +322,13 @@ jobs:
         cp -r benchmark duckdb/
 
     - name: Regression Test IMDB
-      continue-on-error: true
+      if: always()
       shell: bash
       run: |
         python scripts/plan_cost_runner.py --old=duckdb/build/release/duckdb --new=build/release/duckdb --dir=benchmark/imdb_plan_cost
 
     - name: Regression Test TPCH
-      continue-on-error: true
+      if: always()
       shell: bash
       run: |
         python scripts/plan_cost_runner.py --old=duckdb/build/release/duckdb --new=build/release/duckdb --dir=benchmark/tpch_plan_cost

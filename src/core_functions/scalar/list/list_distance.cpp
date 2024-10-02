@@ -1,58 +1,64 @@
 #include "duckdb/core_functions/scalar/list_functions.hpp"
-#include <cmath>
+#include "duckdb/core_functions/array_kernels.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
-template <class NUMERIC_TYPE>
-static void ListDistance(DataChunk &args, ExpressionState &, Vector &result) {
-	D_ASSERT(args.ColumnCount() == 2);
+//------------------------------------------------------------------------------
+// Generic "fold" function
+//------------------------------------------------------------------------------
+// Given two lists of the same size, combine and reduce their elements into a
+// single scalar value.
+
+template <class TYPE, class OP>
+static void ListGenericFold(DataChunk &args, ExpressionState &state, Vector &result) {
+	const auto &lstate = state.Cast<ExecuteFunctionState>();
+	const auto &expr = lstate.expr.Cast<BoundFunctionExpression>();
+	const auto &func_name = expr.function.name;
 
 	auto count = args.size();
-	auto &left = args.data[0];
-	auto &right = args.data[1];
-	auto left_count = ListVector::GetListSize(left);
-	auto right_count = ListVector::GetListSize(right);
 
-	auto &left_child = ListVector::GetEntry(left);
-	auto &right_child = ListVector::GetEntry(right);
+	auto &lhs_vec = args.data[0];
+	auto &rhs_vec = args.data[1];
 
-	D_ASSERT(left_child.GetVectorType() == VectorType::FLAT_VECTOR);
-	D_ASSERT(right_child.GetVectorType() == VectorType::FLAT_VECTOR);
+	const auto lhs_count = ListVector::GetListSize(lhs_vec);
+	const auto rhs_count = ListVector::GetListSize(rhs_vec);
 
-	if (!FlatVector::Validity(left_child).CheckAllValid(left_count)) {
-		throw InvalidInputException("list_distance: left argument can not contain NULL values");
+	auto &lhs_child = ListVector::GetEntry(lhs_vec);
+	auto &rhs_child = ListVector::GetEntry(rhs_vec);
+
+	lhs_child.Flatten(lhs_count);
+	rhs_child.Flatten(rhs_count);
+
+	D_ASSERT(lhs_child.GetVectorType() == VectorType::FLAT_VECTOR);
+	D_ASSERT(rhs_child.GetVectorType() == VectorType::FLAT_VECTOR);
+
+	if (!FlatVector::Validity(lhs_child).CheckAllValid(lhs_count)) {
+		throw InvalidInputException("%s: left argument can not contain NULL values", func_name);
 	}
 
-	if (!FlatVector::Validity(right_child).CheckAllValid(right_count)) {
-		throw InvalidInputException("list_distance: right argument can not contain NULL values");
+	if (!FlatVector::Validity(rhs_child).CheckAllValid(rhs_count)) {
+		throw InvalidInputException("%s: right argument can not contain NULL values", func_name);
 	}
 
-	auto left_data = FlatVector::GetData<NUMERIC_TYPE>(left_child);
-	auto right_data = FlatVector::GetData<NUMERIC_TYPE>(right_child);
+	auto lhs_data = FlatVector::GetData<TYPE>(lhs_child);
+	auto rhs_data = FlatVector::GetData<TYPE>(rhs_child);
 
-	BinaryExecutor::Execute<list_entry_t, list_entry_t, NUMERIC_TYPE>(
-	    left, right, result, count, [&](list_entry_t left, list_entry_t right) {
+	BinaryExecutor::ExecuteWithNulls<list_entry_t, list_entry_t, TYPE>(
+	    lhs_vec, rhs_vec, result, count,
+	    [&](const list_entry_t &left, const list_entry_t &right, ValidityMask &mask, idx_t row_idx) {
 		    if (left.length != right.length) {
-			    throw InvalidInputException(StringUtil::Format(
-			        "list_distance: list dimensions must be equal, got left length %d and right length %d", left.length,
-			        right.length));
+			    throw InvalidInputException(
+			        "%s: list dimensions must be equal, got left length '%d' and right length '%d'", func_name,
+			        left.length, right.length);
 		    }
 
-		    auto dimensions = left.length;
-
-		    NUMERIC_TYPE distance = 0;
-
-		    auto l_ptr = left_data + left.offset;
-		    auto r_ptr = right_data + right.offset;
-
-		    for (idx_t i = 0; i < dimensions; i++) {
-			    auto x = *l_ptr++;
-			    auto y = *r_ptr++;
-			    auto diff = x - y;
-			    distance += diff * diff;
+		    if (!OP::ALLOW_EMPTY && left.length == 0) {
+			    mask.SetInvalid(row_idx);
+			    return TYPE();
 		    }
 
-		    return std::sqrt(distance);
+		    return OP::Operation(lhs_data + left.offset, rhs_data + right.offset, left.length);
 	    });
 
 	if (args.AllConstant()) {
@@ -60,12 +66,59 @@ static void ListDistance(DataChunk &args, ExpressionState &, Vector &result) {
 	}
 }
 
+//-------------------------------------------------------------------------
+// Function Registration
+//-------------------------------------------------------------------------
+
+template <class OP>
+static void AddListFoldFunction(ScalarFunctionSet &set, const LogicalType &type) {
+	const auto list = LogicalType::LIST(type);
+	if (type.id() == LogicalTypeId::FLOAT) {
+		set.AddFunction(ScalarFunction({list, list}, type, ListGenericFold<float, OP>));
+	} else if (type.id() == LogicalTypeId::DOUBLE) {
+		set.AddFunction(ScalarFunction({list, list}, type, ListGenericFold<double, OP>));
+	} else {
+		throw NotImplementedException("List function not implemented for type %s", type.ToString());
+	}
+}
+
 ScalarFunctionSet ListDistanceFun::GetFunctions() {
 	ScalarFunctionSet set("list_distance");
-	set.AddFunction(ScalarFunction({LogicalType::LIST(LogicalType::FLOAT), LogicalType::LIST(LogicalType::FLOAT)},
-	                               LogicalType::FLOAT, ListDistance<float>));
-	set.AddFunction(ScalarFunction({LogicalType::LIST(LogicalType::DOUBLE), LogicalType::LIST(LogicalType::DOUBLE)},
-	                               LogicalType::DOUBLE, ListDistance<double>));
+	for (auto &type : LogicalType::Real()) {
+		AddListFoldFunction<DistanceOp>(set, type);
+	}
+	return set;
+}
+
+ScalarFunctionSet ListInnerProductFun::GetFunctions() {
+	ScalarFunctionSet set("list_inner_product");
+	for (auto &type : LogicalType::Real()) {
+		AddListFoldFunction<InnerProductOp>(set, type);
+	}
+	return set;
+}
+
+ScalarFunctionSet ListNegativeInnerProductFun::GetFunctions() {
+	ScalarFunctionSet set("list_negative_inner_product");
+	for (auto &type : LogicalType::Real()) {
+		AddListFoldFunction<NegativeInnerProductOp>(set, type);
+	}
+	return set;
+}
+
+ScalarFunctionSet ListCosineSimilarityFun::GetFunctions() {
+	ScalarFunctionSet set("list_cosine_similarity");
+	for (auto &type : LogicalType::Real()) {
+		AddListFoldFunction<CosineSimilarityOp>(set, type);
+	}
+	return set;
+}
+
+ScalarFunctionSet ListCosineDistanceFun::GetFunctions() {
+	ScalarFunctionSet set("list_cosine_distance");
+	for (auto &type : LogicalType::Real()) {
+		AddListFoldFunction<CosineDistanceOp>(set, type);
+	}
 	return set;
 }
 

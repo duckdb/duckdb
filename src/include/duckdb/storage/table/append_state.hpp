@@ -9,10 +9,12 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/storage/storage_lock.hpp"
-#include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/planner/bound_constraint.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/storage/storage_lock.hpp"
+#include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/transaction/transaction_data.hpp"
 
 namespace duckdb {
@@ -21,6 +23,7 @@ class DataTable;
 class LocalTableStorage;
 class RowGroup;
 class UpdateSegment;
+class TableCatalogEntry;
 
 struct TableAppendState;
 
@@ -36,7 +39,7 @@ struct ColumnAppendState {
 };
 
 struct RowGroupAppendState {
-	RowGroupAppendState(TableAppendState &parent_p) : parent(parent_p) {
+	explicit RowGroupAppendState(TableAppendState &parent_p) : parent(parent_p) {
 	}
 
 	//! The parent append state
@@ -67,13 +70,23 @@ struct TableAppendState {
 	RowGroup *start_row_group;
 	//! The transaction data
 	TransactionData transaction;
-	//! The remaining append count, only if the append count is known beforehand
-	idx_t remaining;
+	//! Table statistics
+	TableStatistics stats;
+};
+
+struct ConstraintState {
+	explicit ConstraintState(TableCatalogEntry &table_p, const vector<unique_ptr<BoundConstraint>> &bound_constraints)
+	    : table(table_p), bound_constraints(bound_constraints) {
+	}
+
+	TableCatalogEntry &table;
+	const vector<unique_ptr<BoundConstraint>> &bound_constraints;
 };
 
 struct LocalAppendState {
 	TableAppendState append_state;
 	LocalTableStorage *storage;
+	unique_ptr<ConstraintState> constraint_state;
 };
 
 } // namespace duckdb

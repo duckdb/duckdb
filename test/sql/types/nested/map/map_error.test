@@ -1,0 +1,94 @@
+# name: test/sql/types/nested/map/map_error.test
+# description: Test map queries triggering various error messages
+# group: [map]
+
+statement ok
+PRAGMA enable_verification;
+
+statement error
+SELECT MAP(list_value(NULL, NULL, NULL, NULL, NULL), list_value(10, 9, 10, 11, 13))
+----
+Map keys can not be NULL
+
+statement error
+SELECT MAP(list_value(1, NULL, 3), list_value(6, 5, 4))
+----
+Map keys can not be NULL
+
+statement error
+SELECT MAP(list_value(1, 2, 3, 4, 1), list_value(10, 9, 8, 7, 6))
+----
+Map keys must be unique
+
+statement error
+SELECT MAP(NULL)
+----
+Invalid map argument(s)
+
+statement ok
+CREATE TABLE tbl (a INTEGER[], b TEXT[])
+
+statement ok
+INSERT INTO tbl VALUES (ARRAY[7, 5, 7], ARRAY['a', 'b', 'c'])
+
+statement error
+SELECT MAP(a, b) FROM tbl;
+----
+Map keys must be unique
+
+statement error
+SELECT MAP(list_value(10), list_value())
+----
+The map key list does not align with the map value list
+
+statement error
+SELECT MAP(10, 12)
+----
+Invalid map argument(s)
+
+statement error
+SELECT MAP(list_value(10), list_value(10), list_value(10))
+----
+Invalid map argument(s)
+
+statement error
+SELECT MAP(list_value(10), 10)
+----
+Invalid map argument(s)
+
+statement error
+SELECT MAP(list_value(10, 20), list_value(10))
+----
+The map key list does not align with the map value list
+
+statement ok
+CREATE TABLE t AS SELECT MAP(list_value(1, 2, 3), list_value(10, 9, 10)) AS m;
+
+statement error
+SELECT struct_extract(m, 'key') FROM t;
+----
+No function matches the given name and argument types
+
+statement ok
+CREATE TABLE null_keys_list (k INT[], v INT[]);
+
+statement ok
+INSERT INTO null_keys_list VALUES ([1], [2]), (NULL, [4]);
+
+query I
+SELECT MAP(k, v) FROM null_keys_list;
+----
+{1=2}
+NULL
+
+statement ok
+CREATE TABLE null_values_list (k INT[], v INT[]);
+
+statement ok
+INSERT INTO null_values_list VALUES ([1], [2]), ([4], NULL);
+
+query I
+SELECT MAP(k, v) FROM null_values_list;
+----
+{1=2}
+NULL

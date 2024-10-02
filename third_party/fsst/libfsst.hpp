@@ -381,7 +381,7 @@ struct Counters {
       // read 16-bits single symbol counter, split into two 8-bits numbers (count1Low, count1High), while skipping over zeros
 	   u64 high = fsst_unaligned_load(&count1High[pos1]);
 
-      u32 zero = high?(__builtin_ctzl(high)>>3):7UL; // number of zero bytes
+      u32 zero = high?(__builtin_ctzll(high)>>3):7UL; // number of zero bytes
       high = (high >> (zero << 3)) & 255; // advance to nonzero counter
       if (((pos1 += zero) >= FSST_CODE_MAX) || !high) // SKIP! advance pos2
          return 0; // all zero
@@ -395,7 +395,7 @@ struct Counters {
 	  u64 high = fsst_unaligned_load(&count2High[pos1][pos2>>1]);
       high >>= ((pos2&1) << 2); // odd pos2: ignore the lowest 4 bits & we see only 15 counters
 
-      u32 zero = high?(__builtin_ctzl(high)>>2):(15UL-(pos2&1UL)); // number of zero 4-bits counters
+      u32 zero = high?(__builtin_ctzll(high)>>2):(15UL-(pos2&1UL)); // number of zero 4-bits counters
       high = (high >> (zero << 2)) & 15;  // advance to nonzero counter
       if (((pos2 += zero) >= FSST_CODE_MAX) || !high) // SKIP! advance pos2
          return 0UL; // all zero
@@ -431,19 +431,6 @@ struct Encoder {
 struct SIMDjob {
    u64 out:19,pos:9,end:18,cur:18; // cur/end is input offsets (2^18=256KB), out is output offset (2^19=512KB)  
 };
-
-extern bool 
-duckdb_fsst_hasAVX512(); // runtime check for avx512 capability
-
-extern size_t 
-duckdb_fsst_compressAVX512(
-   SymbolTable &symbolTable, 
-   u8* codeBase,    // IN: base address for codes, i.e. compression output (points to simdbuf+256KB)
-   u8* symbolBase,  // IN: base address for string bytes, i.e. compression input (points to simdbuf)
-   SIMDjob* input,  // IN: input array (size n) with job information: what to encode, where to store it.
-   SIMDjob* output, // OUT: output array (size n) with job information: how much got encoded, end output pointer.
-   size_t n,         // IN: size of arrays input and output (should be max 512)
-   size_t unroll);   // IN: degree of SIMD unrolling
 
 // C++ fsst-compress function with some more control of how the compression happens (algorithm flavor, simd unroll degree)
 size_t compressImpl(Encoder *encoder, size_t n, size_t lenIn[], u8 *strIn[], size_t size, u8 * output, size_t *lenOut, u8 *strOut[], bool noSuffixOpt, bool avoidBranch, int simd);

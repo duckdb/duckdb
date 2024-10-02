@@ -64,7 +64,7 @@ static string IndexingScript(ClientContext &context, QualifiedName &qname, const
 	}
 
 	// create tokenize macro based on parameters
-	string tokenize = "s";
+	string tokenize = "s::VARCHAR";
 	vector<string> before;
 	vector<string> after;
 	if (strip_accents) {
@@ -73,7 +73,7 @@ static string IndexingScript(ClientContext &context, QualifiedName &qname, const
 	if (lower) {
 		tokenize = "lower(" + tokenize + ")";
 	}
-	tokenize = "regexp_replace(" + tokenize + ", '" + ignore + "', " + "' ', 'g')";
+	tokenize = "regexp_replace(" + tokenize + ", $$" + ignore + "$$, " + "' ', 'g')";
 	tokenize = "string_split_regex(" + tokenize + ", '\\s+')";
 	result += "CREATE MACRO %fts_schema%.tokenize(s) AS " + tokenize + ";";
 
@@ -149,7 +149,7 @@ static string IndexingScript(ClientContext &context, QualifiedName &qname, const
             FROM %fts_schema%.docs AS docs
         );
 
-        CREATE MACRO %fts_schema%.match_bm25(docname, query_string, fields := NULL, k := 1.2, b := 0.75, conjunctive := 0) AS (
+        CREATE MACRO %fts_schema%.match_bm25(docname, query_string, fields := NULL, k := 1.2, b := 0.75, conjunctive := false) AS (
             WITH tokens AS (
                 SELECT DISTINCT stem(unnest(%fts_schema%.tokenize(query_string)), '%stemmer%') AS t
             ),
@@ -171,43 +171,46 @@ static string IndexingScript(ClientContext &context, QualifiedName &qname, const
                 WHERE CASE WHEN fields IS NULL THEN 1 ELSE fieldid IN (SELECT * FROM fieldids) END
                   AND termid IN (SELECT qtermids.termid FROM qtermids)
             ),
+			term_tf AS (
+				SELECT termid,
+				   	   docid,
+                       COUNT(*) AS tf
+				FROM qterms
+				GROUP BY docid,
+						 termid
+			),
+			cdocs AS (
+				SELECT docid
+				FROM qterms
+				GROUP BY docid
+				HAVING CASE WHEN conjunctive THEN COUNT(DISTINCT termid) = (SELECT COUNT(*) FROM tokens) ELSE 1 END
+			),
             subscores AS (
                 SELECT docs.docid,
                        len,
                        term_tf.termid,
                        tf,
                        df,
-                       (log(((SELECT num_docs FROM %fts_schema%.stats) - df + 0.5) / (df + 0.5))* ((tf * (k + 1)/(tf + k * (1 - b + b * (len / (SELECT avgdl FROM %fts_schema%.stats))))))) AS subscore
-                FROM (
-                    SELECT termid,
-                           docid,
-                           COUNT(*) AS tf
-                    FROM qterms
-                    GROUP BY docid,
-                             termid
-                ) AS term_tf
-                JOIN (
-                    SELECT docid
-                    FROM qterms
-                    GROUP BY docid
-                    HAVING CASE WHEN conjunctive THEN COUNT(DISTINCT termid) = (SELECT COUNT(*) FROM tokens) ELSE 1 END
-                ) AS cdocs
-                ON term_tf.docid = cdocs.docid
-                JOIN %fts_schema%.docs AS docs
-                ON term_tf.docid = docs.docid
-                JOIN %fts_schema%.dict AS dict
-                ON term_tf.termid = dict.termid
-            )
+                       (log(((SELECT num_docs FROM %fts_schema%.stats) - df + 0.5) / (df + 0.5) + 1) * ((tf * (k + 1)/(tf + k * (1 - b + b * (len / (SELECT avgdl FROM %fts_schema%.stats))))))) AS subscore
+                FROM term_tf,
+					 cdocs,
+					 %fts_schema%.docs AS docs,
+					 %fts_schema%.dict AS dict
+				WHERE term_tf.docid = cdocs.docid
+				  AND term_tf.docid = docs.docid
+                  AND term_tf.termid = dict.termid
+            ),
+			scores AS (
+				SELECT docid,
+					   sum(subscore) AS score
+				FROM subscores
+				GROUP BY docid
+			)
             SELECT score
-            FROM (
-                SELECT docid,
-                       sum(subscore) AS score
-                FROM subscores
-                GROUP BY docid
-            ) AS scores
-            JOIN %fts_schema%.docs AS docs
-            ON  scores.docid = docs.docid
-            AND docs.name = docname
+            FROM scores,
+				 %fts_schema%.docs AS docs
+            WHERE scores.docid = docs.docid
+              AND docs.name = docname
         );
     )";
 
@@ -266,7 +269,7 @@ string FTSIndexing::CreateFTSIndexQuery(ClientContext &context, const FunctionPa
 		}
 	}
 
-	string ignore = "(\\\\.|[^a-z])+";
+	string ignore = "[0-9!@#$%^&*()_+={}\\[\\]:;<>,.?~\\\\/\\|''\"`-]+";
 	auto ignore_entry = parameters.named_parameters.find("ignore");
 	if (ignore_entry != parameters.named_parameters.end()) {
 		ignore = StringValue::Get(ignore_entry->second);
@@ -323,7 +326,7 @@ string FTSIndexing::CreateFTSIndexQuery(ClientContext &context, const FunctionPa
 		doc_values.push_back(col_name);
 	}
 	if (doc_values.empty()) {
-		throw Exception("at least one column must be supplied for indexing!");
+		throw InvalidInputException("at least one column must be supplied for indexing!");
 	}
 
 	return IndexingScript(context, qname, doc_id, doc_values, stemmer, stopwords, ignore, strip_accents, lower);

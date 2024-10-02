@@ -5,6 +5,7 @@
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/parser/query_error_context.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -17,7 +18,7 @@ using catalog_entry_callback_t = std::function<void(CatalogEntry &)>;
 // Wraps the Catalog::GetEntry method
 class CatalogEntryRetriever {
 public:
-	CatalogEntryRetriever(ClientContext &context) : context(context) {
+	explicit CatalogEntryRetriever(ClientContext &context) : context(context) {
 	}
 	CatalogEntryRetriever(const CatalogEntryRetriever &other) : callback(other.callback), context(other.context) {
 	}
@@ -37,8 +38,12 @@ public:
 	LogicalType GetType(Catalog &catalog, const string &schema, const string &name,
 	                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::RETURN_NULL);
 
+	optional_ptr<SchemaCatalogEntry> GetSchema(const string &catalog, const string &name,
+	                                           OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION,
+	                                           QueryErrorContext error_context = QueryErrorContext());
+
 	void SetCallback(catalog_entry_callback_t callback) {
-		this->callback = callback;
+		this->callback = std::move(callback);
 	}
 	catalog_entry_callback_t GetCallback() {
 		return callback;
@@ -46,7 +51,7 @@ public:
 
 private:
 	using catalog_entry_retrieve_func_t = std::function<optional_ptr<CatalogEntry>()>;
-	optional_ptr<CatalogEntry> GetEntryInternal(catalog_entry_retrieve_func_t retriever) {
+	optional_ptr<CatalogEntry> GetEntryInternal(const catalog_entry_retrieve_func_t &retriever) {
 		auto result = retriever();
 		if (!result) {
 			return result;

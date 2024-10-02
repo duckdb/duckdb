@@ -24,16 +24,13 @@ public:
 
 	string filename;
 	string repository;
+	bool repo_is_alias;
+	string version;
 	LoadType load_type;
 
 public:
-	unique_ptr<LoadInfo> Copy() const {
-		auto result = make_uniq<LoadInfo>();
-		result->filename = filename;
-		result->repository = repository;
-		result->load_type = load_type;
-		return result;
-	}
+	unique_ptr<LoadInfo> Copy() const;
+	string ToString() const;
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);

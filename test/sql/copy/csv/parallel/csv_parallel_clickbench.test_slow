@@ -2,12 +2,18 @@
 # description: Test parallel read CSV function on Clickbench
 # group: [parallel]
 
+mode skip
+
 require parquet
 
 require httpfs
 
 statement ok
 pragma threads=4
+
+statement ok
+PRAGMA enable_verification
+
 
 statement ok
 CREATE TABLE hits_og
@@ -131,7 +137,7 @@ statement ok
 create table hits as select * from hits_og limit 0;
 
 statement ok
-copy hits from '__TEST_DIR__/hits.csv';
+insert into hits from read_csv('__TEST_DIR__/hits.csv', compression = 'none', nullstr = 'null');
 
 #Q 01
 query I

@@ -8,12 +8,10 @@
 
 namespace duckdb {
 
-PhysicalLimit::PhysicalLimit(vector<LogicalType> types, idx_t limit, idx_t offset,
-                             unique_ptr<Expression> limit_expression, unique_ptr<Expression> offset_expression,
+PhysicalLimit::PhysicalLimit(vector<LogicalType> types, BoundLimitNode limit_val_p, BoundLimitNode offset_val_p,
                              idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::LIMIT, std::move(types), estimated_cardinality), limit_value(limit),
-      offset_value(offset), limit_expression(std::move(limit_expression)),
-      offset_expression(std::move(offset_expression)) {
+    : PhysicalOperator(PhysicalOperatorType::LIMIT, std::move(types), estimated_cardinality),
+      limit_val(std::move(limit_val_p)), offset_val(std::move(offset_val_p)) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -36,13 +34,12 @@ class LimitLocalState : public LocalSinkState {
 public:
 	explicit LimitLocalState(ClientContext &context, const PhysicalLimit &op)
 	    : current_offset(0), data(context, op.types, true) {
-		this->limit = op.limit_expression ? DConstants::INVALID_INDEX : op.limit_value;
-		this->offset = op.offset_expression ? DConstants::INVALID_INDEX : op.offset_value;
+		PhysicalLimit::SetInitialLimits(op.limit_val, op.offset_val, limit, offset);
 	}
 
 	idx_t current_offset;
-	idx_t limit;
-	idx_t offset;
+	optional_idx limit;
+	optional_idx offset;
 	BatchedDataCollection data;
 };
 
@@ -54,38 +51,56 @@ unique_ptr<LocalSinkState> PhysicalLimit::GetLocalSinkState(ExecutionContext &co
 	return make_uniq<LimitLocalState>(context.client, *this);
 }
 
-bool PhysicalLimit::ComputeOffset(ExecutionContext &context, DataChunk &input, idx_t &limit, idx_t &offset,
-                                  idx_t current_offset, idx_t &max_element, Expression *limit_expression,
-                                  Expression *offset_expression) {
-	if (limit != DConstants::INVALID_INDEX && offset != DConstants::INVALID_INDEX) {
-		max_element = limit + offset;
-		if ((limit == 0 || current_offset >= max_element) && !(limit_expression || offset_expression)) {
-			return false;
-		}
+void PhysicalLimit::SetInitialLimits(const BoundLimitNode &limit_val, const BoundLimitNode &offset_val,
+                                     optional_idx &limit, optional_idx &offset) {
+	switch (limit_val.Type()) {
+	case LimitNodeType::CONSTANT_VALUE:
+		limit = limit_val.GetConstantValue();
+		break;
+	case LimitNodeType::UNSET:
+		limit = MAX_LIMIT_VALUE;
+		break;
+	default:
+		break;
 	}
+	switch (offset_val.Type()) {
+	case LimitNodeType::CONSTANT_VALUE:
+		offset = offset_val.GetConstantValue();
+		break;
+	case LimitNodeType::UNSET:
+		offset = 0;
+		break;
+	default:
+		break;
+	}
+}
 
-	// get the next chunk from the child
-	if (limit == DConstants::INVALID_INDEX) {
-		limit = 1ULL << 62ULL;
-		Value val = GetDelimiter(context, input, limit_expression);
+bool PhysicalLimit::ComputeOffset(ExecutionContext &context, DataChunk &input, optional_idx &limit,
+                                  optional_idx &offset, idx_t current_offset, idx_t &max_element,
+                                  const BoundLimitNode &limit_val, const BoundLimitNode &offset_val) {
+	if (!limit.IsValid()) {
+		Value val = GetDelimiter(context, input, limit_val.GetValueExpression());
 		if (!val.IsNull()) {
 			limit = val.GetValue<idx_t>();
+		} else {
+			limit = MAX_LIMIT_VALUE;
 		}
-		if (limit > 1ULL << 62ULL) {
-			throw BinderException("Max value %lld for LIMIT/OFFSET is %lld", limit, 1ULL << 62ULL);
+		if (limit.GetIndex() > MAX_LIMIT_VALUE) {
+			throw BinderException("Max value %lld for LIMIT/OFFSET is %lld", limit.GetIndex(), MAX_LIMIT_VALUE);
 		}
 	}
-	if (offset == DConstants::INVALID_INDEX) {
-		offset = 0;
-		Value val = GetDelimiter(context, input, offset_expression);
+	if (!offset.IsValid()) {
+		Value val = GetDelimiter(context, input, offset_val.GetValueExpression());
 		if (!val.IsNull()) {
 			offset = val.GetValue<idx_t>();
+		} else {
+			offset = 0;
 		}
-		if (offset > 1ULL << 62ULL) {
-			throw BinderException("Max value %lld for LIMIT/OFFSET is %lld", offset, 1ULL << 62ULL);
+		if (offset.GetIndex() > MAX_LIMIT_VALUE) {
+			throw BinderException("Max value %lld for LIMIT/OFFSET is %lld", offset.GetIndex(), MAX_LIMIT_VALUE);
 		}
 	}
-	max_element = limit + offset;
+	max_element = limit.GetIndex() + offset.GetIndex();
 	if (limit == 0 || current_offset >= max_element) {
 		return false;
 	}
@@ -100,8 +115,7 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, DataChunk &chunk, 
 	auto &offset = state.offset;
 
 	idx_t max_element;
-	if (!ComputeOffset(context, chunk, limit, offset, state.current_offset, max_element, limit_expression.get(),
-	                   offset_expression.get())) {
+	if (!ComputeOffset(context, chunk, limit, offset, state.current_offset, max_element, limit_val, offset_val)) {
 		return SinkResultType::FINISHED;
 	}
 	auto max_cardinality = max_element - state.current_offset;
@@ -121,8 +135,12 @@ SinkCombineResultType PhysicalLimit::Combine(ExecutionContext &context, Operator
 	auto &state = input.local_state.Cast<LimitLocalState>();
 
 	lock_guard<mutex> lock(gstate.glock);
-	gstate.limit = state.limit;
-	gstate.offset = state.offset;
+	if (state.limit.IsValid()) {
+		gstate.limit = state.limit.GetIndex();
+	}
+	if (state.offset.IsValid()) {
+		gstate.offset = state.offset.GetIndex();
+	}
 	gstate.data.Merge(state.data);
 
 	return SinkCombineResultType::FINISHED;
@@ -209,12 +227,12 @@ bool PhysicalLimit::HandleOffset(DataChunk &input, idx_t &current_offset, idx_t 
 	return true;
 }
 
-Value PhysicalLimit::GetDelimiter(ExecutionContext &context, DataChunk &input, Expression *expr) {
+Value PhysicalLimit::GetDelimiter(ExecutionContext &context, DataChunk &input, const Expression &expr) {
 	DataChunk limit_chunk;
-	vector<LogicalType> types {expr->return_type};
+	vector<LogicalType> types {expr.return_type};
 	auto &allocator = Allocator::Get(context.client);
 	limit_chunk.Initialize(allocator, types);
-	ExpressionExecutor limit_executor(context.client, expr);
+	ExpressionExecutor limit_executor(context.client, &expr);
 	auto input_size = input.size();
 	input.SetCardinality(1);
 	limit_executor.Execute(input, limit_chunk);

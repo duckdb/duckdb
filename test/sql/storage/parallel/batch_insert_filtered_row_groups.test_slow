@@ -8,16 +8,13 @@ require parquet
 
 load __TEST_DIR__/insert_mix_batches.db
 
-statement ok
-COPY (FROM range(10000000)) to '__TEST_DIR__/many_small_batches.parquet' (row_group_size 5000)
+loop i 0 2
 
 statement ok
-create table test as from '__TEST_DIR__/many_small_batches.parquet' t(i) where (i//6144) % 3 = 0;
+COPY (FROM range(10000000)) TO '__TEST_DIR__/many_small_batches.parquet' (row_group_size 5000)
 
-query I
-SELECT MEDIAN(count) FROM pragma_storage_info('test')
-----
-122880
+statement ok
+CREATE TABLE test AS FROM '__TEST_DIR__/many_small_batches.parquet' t(i) WHERE (i // 6144) % 3 = 0;
 
 query I
 SELECT * FROM test LIMIT 5 OFFSET 500000
@@ -27,3 +24,30 @@ SELECT * FROM test LIMIT 5 OFFSET 500000
 1495330
 1495331
 1495332
+
+query I
+SELECT * FROM test QUALIFY i <= lag(i) over ()
+----
+
+# ensure that we still write 122880 as our row group size count, even for different block sizes
+query I
+SELECT MAX(count) FROM pragma_storage_info('test')
+----
+122880
+
+# The median differs between block sizes because the upper bound of the segment size is the block size.
+require block_size 262144
+
+query I
+SELECT MEDIAN(count) > 100000 FROM pragma_storage_info('test')
+----
+true
+
+statement ok
+DROP TABLE test
+
+# repeat with a low memory limit
+statement ok
+SET memory_limit='500MB'
+
+endloop

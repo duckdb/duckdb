@@ -1,0 +1,46 @@
+# name: test/sql/copy/parquet/parquet_hive2.test
+# description: Test generating hive partitioning scheme
+# group: [parquet]
+
+require parquet
+
+# See https://github.com/duckdb/duckdb/pull/9473#issuecomment-1786231577
+
+statement ok
+create or replace table orders(m int,v int,j int);
+
+statement ok
+insert into orders select i%12+1,i,j from range(360)t(i),range(1000)s(j);
+
+statement ok
+copy (select 2000+(v//12)y,m,v,j from orders) TO '__TEST_DIR__/orders_m' (FORMAT PARQUET, PARTITION_BY (m));
+
+query IIII
+SELECT AVG(y), AVG(m), AVG(v), AVG(j) FROM '__TEST_DIR__/orders_m/**/*.parquet'
+----
+2014.5	6.5	179.5	499.5
+
+statement ok
+copy (select 2000+(v//12)y,m,v,j from orders) TO '__TEST_DIR__/orders_y' (FORMAT PARQUET, PARTITION_BY (y));
+
+query IIII
+SELECT AVG(y), AVG(m), AVG(v), AVG(j) FROM '__TEST_DIR__/orders_y/**/*.parquet'
+----
+2014.5	6.5	179.5	499.5
+
+statement ok
+copy (select 2000+(v//12)y,m,v,j from orders) TO '__TEST_DIR__/orders_ym' (FORMAT PARQUET,PARTITION_BY (y,m));
+
+query IIII
+SELECT AVG(y), AVG(m), AVG(v), AVG(j) FROM '__TEST_DIR__/orders_ym/**/*.parquet'
+----
+2014.5	6.5	179.5	499.5
+
+# random shuffle
+statement ok
+copy (select 2000+(v//12)y,m,v,j from orders order by random()) TO '__TEST_DIR__/orders_ym_rand' (FORMAT PARQUET,PARTITION_BY (y,m));
+
+query IIII
+SELECT AVG(y), AVG(m), AVG(v), AVG(j) FROM '__TEST_DIR__/orders_ym_rand/**/*.parquet'
+----
+2014.5	6.5	179.5	499.5

@@ -34,10 +34,12 @@ SELECT * FROM a
 # we can't update rowids
 statement error
 UPDATE a SET rowid=5
+----
 
 # we also can't insert with explicit row ids
 statement error
 INSERT INTO a (rowid, i)  VALUES (5, 6)
+----
 
 # we can use rowid as column name
 statement ok

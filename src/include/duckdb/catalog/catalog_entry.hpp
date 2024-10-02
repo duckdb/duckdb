@@ -13,6 +13,8 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/exception/catalog_exception.hpp"
+#include "duckdb/common/types/value.hpp"
 #include <memory>
 
 namespace duckdb {
@@ -23,7 +25,9 @@ class ClientContext;
 class SchemaCatalogEntry;
 class Serializer;
 class Deserializer;
+class Value;
 
+struct CatalogTransaction;
 struct CreateInfo;
 
 //! Abstract base class of an entry in the catalog
@@ -49,6 +53,12 @@ public:
 	bool internal;
 	//! Timestamp at which the catalog entry was created
 	atomic<transaction_t> timestamp;
+	//! (optional) comment on this entry
+	Value comment;
+	//! (optional) extra data associated with this entry
+	unordered_map<string, string> tags;
+
+private:
 	//! Child entry
 	unique_ptr<CatalogEntry> child;
 	//! Parent entry (the node that dependents_map this node)
@@ -56,6 +66,7 @@ public:
 
 public:
 	virtual unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo &info);
+	virtual unique_ptr<CatalogEntry> AlterEntry(CatalogTransaction transaction, AlterInfo &info);
 	virtual void UndoAlter(ClientContext &context, AlterInfo &info);
 
 	virtual unique_ptr<CatalogEntry> Copy(ClientContext &context) const;
@@ -70,7 +81,9 @@ public:
 	virtual string ToSQL() const;
 
 	virtual Catalog &ParentCatalog();
+	virtual const Catalog &ParentCatalog() const;
 	virtual SchemaCatalogEntry &ParentSchema();
+	virtual const SchemaCatalogEntry &ParentSchema() const;
 
 	virtual void Verify(Catalog &catalog);
 
@@ -78,14 +91,22 @@ public:
 	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
 
 public:
+	void SetChild(unique_ptr<CatalogEntry> child);
+	unique_ptr<CatalogEntry> TakeChild();
+	bool HasChild() const;
+	bool HasParent() const;
+	CatalogEntry &Child();
+	CatalogEntry &Parent();
+
+public:
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -100,6 +121,9 @@ public:
 
 public:
 	Catalog &ParentCatalog() override {
+		return catalog;
+	}
+	const Catalog &ParentCatalog() const override {
 		return catalog;
 	}
 

@@ -1,0 +1,209 @@
+# name: test/sql/json/scalar/test_json_dot_syntax.test
+# description: Test JSON extract with dot syntax
+# group: [scalar]
+
+require json
+
+statement ok
+pragma enable_verification
+
+# should work within other functions (no conflict with list Lambda functions)
+query T
+SELECT json_structure(json('{"duck":"goose"}').duck);
+----
+"VARCHAR"
+
+# should go to our NULL
+query T
+select json('{"foo": null}').foo
+----
+null
+
+query T
+select json('{"foo": null}').foo.bar
+----
+NULL
+
+query T
+select json('null')
+----
+null
+
+query T
+select json('[null]')."0"
+----
+NULL
+
+# this doesn't work, we can't extract array elements using dots
+query T
+select json('{"my_field": {"my_nested_field": ["goose", "duck"]}}').my_field.my_nested_field."1"
+----
+NULL
+
+# but we can using array extract syntax
+query T
+select json('{"my_field": {"my_nested_field": ["goose", "duck"]}}').my_field.my_nested_field[1]
+----
+"duck"
+
+# again, this won't work
+query T
+select ('{"my_field": {"my_nested_field": ["goose", "duck"]}}'::JSON).my_field.my_nested_field."1"
+----
+NULL
+
+# but this will
+query T
+select ('{"my_field": {"my_nested_field": ["goose", "duck"]}}'::JSON).my_field.my_nested_field[1]
+----
+"duck"
+
+# can also access from back
+query T
+select ('{"my_field": {"my_nested_field": ["goose", "duck"]}}'::JSON).my_field.my_nested_field[-1]
+----
+"duck"
+
+# array slicing doesn't work (yet) for json extract
+# this looks a bit weird, but this actually does a string slice
+query T
+select ('{"my_field": {"my_nested_field": ["goose", "duck"]}}'::JSON).my_field.my_nested_field[0:1]
+----
+[
+
+query T
+select json('{"my_field": {"my_nested_field": ["goose", "duck"]}}').my_field.my_nested_field[1]
+----
+"duck"
+
+query T
+select json('{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}').my_field.my_nested_field[1]
+----
+"duckduckduckduck"
+
+query T
+select ('{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}'::JSON).my_field.my_nested_field[1]
+----
+"duckduckduckduck"
+
+query T
+select json('{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}').my_field.my_nested_field[1]
+----
+"duckduckduckduck"
+
+# doesn't work
+query T
+select json('[1, 2, 42]')."2"
+----
+NULL
+
+# works!
+query T
+select json('[1, 2, 42]')[2]
+----
+42
+
+query T
+select json('[1, 2, 42]')[2]::text
+----
+42
+
+# chained
+query T
+select ('{"my_field": {"my_nested_field": ["goose", "duck"]}}'::JSON).my_field.my_nested_field[1]
+----
+"duck"
+
+# some sqlite tests
+query T
+SELECT json('{"a":2,"c":[4,5,{"f":7}]}').c
+----
+[4,5,{"f":7}]
+
+query T
+SELECT json('{"a":2,"c":[4,5,{"f":7}]}').c[2]
+----
+{"f":7}
+
+query T
+SELECT json('{"a":2,"c":[4,5,{"f":7}]}').c[2].f
+----
+7
+
+query T
+SELECT json('{"a":2,"c":[4,5,{"f":7}]}').x
+----
+NULL
+
+statement ok
+CREATE TABLE obj(x varchar);
+
+statement ok
+INSERT INTO obj VALUES('{"a":1,"b":2}');
+
+query T
+SELECT json(x).b FROM obj;
+----
+2
+
+query T
+SELECT json(x)."b" FROM obj;
+----
+2
+
+statement ok
+CREATE TABLE t12(x varchar);
+
+statement ok
+INSERT INTO t12(x) VALUES(
+'{"settings":
+    {"layer2":
+       {"hapax.legomenon":
+          {"forceDisplay":true,
+           "transliterate":true,
+           "add.footnote":true,
+           "summary.report":true},
+        "dis.legomenon":
+          {"forceDisplay":true,
+           "transliterate":false,
+           "add.footnote":false,
+           "summary.report":true},
+        "tris.legomenon":
+          {"forceDisplay":true,
+           "transliterate":false,
+           "add.footnote":false,
+           "summary.report":false}
+       }
+    }
+ }');
+
+query T
+SELECT json(x).settings.layer2."tris.legomenon"."summary.report" FROM t12;
+----
+false
+
+query T
+SELECT (x::JSON).settings.layer2."tris.legomenon"."summary.report" FROM t12;
+----
+false
+
+# this will be upcast to JSON, cannot parse 'bar'
+statement error
+SELECT json('{"foo": "bar"}').foo = 'bar';
+----
+Conversion Error
+
+query T
+SELECT json('{"foo": "bar"}').foo = '"bar"';
+----
+true
+
+query T
+SELECT json('{"foo": 1}').foo = 1;
+----
+true
+
+query T
+SELECT json('{"foo": "bar"}') = {foo: 'bar'}
+----
+true

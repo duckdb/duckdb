@@ -10,6 +10,7 @@ namespace duckdb {
 
 template <class T>
 struct BitState {
+	using TYPE = T;
 	bool is_set;
 	T value;
 };
@@ -35,6 +36,8 @@ static AggregateFunction GetBitfieldUnaryAggregate(LogicalType type) {
 		return AggregateFunction::UnaryAggregate<BitState<uint32_t>, uint32_t, uint32_t, OP>(type, type);
 	case LogicalTypeId::UBIGINT:
 		return AggregateFunction::UnaryAggregate<BitState<uint64_t>, uint64_t, uint64_t, OP>(type, type);
+	case LogicalTypeId::UHUGEINT:
+		return AggregateFunction::UnaryAggregate<BitState<uhugeint_t>, uhugeint_t, uhugeint_t, OP>(type, type);
 	default:
 		throw InternalException("Unimplemented bitfield type for unary aggregate");
 	}
@@ -50,10 +53,10 @@ struct BitwiseOperation {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &) {
 		if (!state.is_set) {
-			OP::template Assign(state, input);
+			OP::template Assign<INPUT_TYPE>(state, input);
 			state.is_set = true;
 		} else {
-			OP::template Execute(state, input);
+			OP::template Execute<INPUT_TYPE>(state, input);
 		}
 	}
 
@@ -65,7 +68,7 @@ struct BitwiseOperation {
 
 	template <class INPUT_TYPE, class STATE>
 	static void Assign(STATE &state, INPUT_TYPE input) {
-		state.value = input;
+		state.value = typename STATE::TYPE(input);
 	}
 
 	template <class STATE, class OP>
@@ -76,10 +79,10 @@ struct BitwiseOperation {
 		}
 		if (!target.is_set) {
 			// target is NULL, use source value directly.
-			OP::template Assign(target, source.value);
+			OP::template Assign<typename STATE::TYPE>(target, source.value);
 			target.is_set = true;
 		} else {
-			OP::template Execute(target, source.value);
+			OP::template Execute<typename STATE::TYPE>(target, source.value);
 		}
 	}
 
@@ -88,7 +91,7 @@ struct BitwiseOperation {
 		if (!state.is_set) {
 			finalize_data.ReturnNull();
 		} else {
-			target = state.value;
+			target = T(state.value);
 		}
 	}
 
@@ -100,21 +103,23 @@ struct BitwiseOperation {
 struct BitAndOperation : public BitwiseOperation {
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input) {
-		state.value &= input;
+		state.value &= typename STATE::TYPE(input);
+		;
 	}
 };
 
 struct BitOrOperation : public BitwiseOperation {
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input) {
-		state.value |= input;
+		state.value |= typename STATE::TYPE(input);
+		;
 	}
 };
 
 struct BitXorOperation : public BitwiseOperation {
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input) {
-		state.value ^= input;
+		state.value ^= typename STATE::TYPE(input);
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -144,7 +149,7 @@ struct BitStringBitwiseOperation : public BitwiseOperation {
 			auto ptr = new char[len];
 			memcpy(ptr, input.GetData(), len);
 
-			state.value = string_t(ptr, len);
+			state.value = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
 		}
 	}
 

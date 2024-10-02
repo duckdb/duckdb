@@ -13,12 +13,14 @@ void Expression::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<ExpressionClass>(100, "expression_class", expression_class);
 	serializer.WriteProperty<ExpressionType>(101, "type", type);
 	serializer.WritePropertyWithDefault<string>(102, "alias", alias);
+	serializer.WritePropertyWithDefault<optional_idx>(103, "query_location", query_location, optional_idx());
 }
 
 unique_ptr<Expression> Expression::Deserialize(Deserializer &deserializer) {
 	auto expression_class = deserializer.ReadProperty<ExpressionClass>(100, "expression_class");
 	auto type = deserializer.ReadProperty<ExpressionType>(101, "type");
 	auto alias = deserializer.ReadPropertyWithDefault<string>(102, "alias");
+	auto query_location = deserializer.ReadPropertyWithExplicitDefault<optional_idx>(103, "query_location", optional_idx());
 	deserializer.Set<ExpressionType>(type);
 	unique_ptr<Expression> result;
 	switch (expression_class) {
@@ -78,6 +80,7 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &deserializer) {
 	}
 	deserializer.Unset<ExpressionType>();
 	result->alias = std::move(alias);
+	result->query_location = query_location;
 	return result;
 }
 

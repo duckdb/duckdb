@@ -16,7 +16,8 @@ if(DUCKDB_EXTENSION_AUTOCOMPLETE_SHOULD_LINK)
                        ../../extension/autocomplete/autocomplete_extension.cpp)
   add_definitions(-DSHELL_INLINE_AUTOCOMPLETE)
 endif()
-set(SQLITE_API_WRAPPER_FILES sqlite3_api_wrapper.cpp ${ALL_OBJECT_FILES})
+set(SQLITE_API_WRAPPER_FILES shell_extension.cpp sqlite3_api_wrapper.cpp
+                             ${ALL_OBJECT_FILES})
 
 add_library(sqlite3_api_wrapper_static STATIC ${SQLITE_API_WRAPPER_FILES})
 target_link_libraries(sqlite3_api_wrapper_static duckdb_static)

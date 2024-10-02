@@ -8,81 +8,54 @@
 
 #pragma once
 
+#include <utility>
+
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/function/table/arrow/arrow_type_info.hpp"
 
 namespace duckdb {
-//===--------------------------------------------------------------------===//
-// Arrow Variable Size Types
-//===--------------------------------------------------------------------===//
-enum class ArrowVariableSizeType : uint8_t { FIXED_SIZE = 0, NORMAL = 1, SUPER_SIZE = 2 };
-
-//===--------------------------------------------------------------------===//
-// Arrow Time/Date Types
-//===--------------------------------------------------------------------===//
-enum class ArrowDateTimeType : uint8_t {
-	MILLISECONDS = 0,
-	MICROSECONDS = 1,
-	NANOSECONDS = 2,
-	SECONDS = 3,
-	DAYS = 4,
-	MONTHS = 5,
-	MONTH_DAY_NANO = 6
-};
 
 class ArrowType {
 public:
 	//! From a DuckDB type
-	ArrowType(LogicalType type_p)
-	    : type(std::move(type_p)), size_type(ArrowVariableSizeType::NORMAL),
-	      date_time_precision(ArrowDateTimeType::DAYS) {};
+	explicit ArrowType(LogicalType type_p, unique_ptr<ArrowTypeInfo> type_info = nullptr)
+	    : type(std::move(type_p)), type_info(std::move(type_info)) {
+	}
+	explicit ArrowType(string error_message_p, bool not_implemented_p = false)
+	    : type(LogicalTypeId::INVALID), type_info(nullptr), error_message(std::move(error_message_p)),
+	      not_implemented(not_implemented_p) {
+	}
 
-	//! From a DuckDB type + fixed_size
-	ArrowType(LogicalType type_p, idx_t fixed_size_p)
-	    : type(std::move(type_p)), size_type(ArrowVariableSizeType::FIXED_SIZE),
-	      date_time_precision(ArrowDateTimeType::DAYS), fixed_size(fixed_size_p) {};
-
-	//! From a DuckDB type + variable size type
-	ArrowType(LogicalType type_p, ArrowVariableSizeType size_type_p)
-	    : type(std::move(type_p)), size_type(size_type_p), date_time_precision(ArrowDateTimeType::DAYS) {};
-
-	//! From a DuckDB type + datetime type
-	ArrowType(LogicalType type_p, ArrowDateTimeType date_time_precision_p)
-	    : type(std::move(type_p)), size_type(ArrowVariableSizeType::NORMAL),
-	      date_time_precision(date_time_precision_p) {};
-
-	void AddChild(unique_ptr<ArrowType> child);
-
-	void AssignChildren(vector<unique_ptr<ArrowType>> children);
-
-	const LogicalType &GetDuckType() const;
-
-	ArrowVariableSizeType GetSizeType() const;
-
-	idx_t FixedSize() const;
+public:
+	LogicalType GetDuckType(bool use_dictionary = false) const;
 
 	void SetDictionary(unique_ptr<ArrowType> dictionary);
-
-	ArrowDateTimeType GetDateTimeType() const;
-
+	bool HasDictionary() const;
 	const ArrowType &GetDictionary() const;
 
-	const ArrowType &operator[](idx_t index) const;
+	bool RunEndEncoded() const;
+	void SetRunEndEncoded();
+
+	template <class T>
+	const T &GetTypeInfo() const {
+		return type_info->Cast<T>();
+	}
+	void ThrowIfInvalid() const;
 
 private:
 	LogicalType type;
-	//! If we have a nested type, their children's type.
-	vector<unique_ptr<ArrowType>> children;
-	//! If its a variable size type (e.g., strings, blobs, lists) holds which type it is
-	ArrowVariableSizeType size_type;
-	//! If this is a date/time holds its precision
-	ArrowDateTimeType date_time_precision;
-	//! Only for size types with fixed size
-	idx_t fixed_size = 0;
 	//! Hold the optional type if the array is a dictionary
 	unique_ptr<ArrowType> dictionary_type;
+	//! Is run-end-encoded
+	bool run_end_encoded = false;
+	unique_ptr<ArrowTypeInfo> type_info;
+	//! Error message in case of an invalid type (i.e., from an unsupported extension)
+	string error_message;
+	//! In case of an error do we throw not implemented?
+	bool not_implemented = false;
 };
 
 using arrow_column_map_t = unordered_map<idx_t, unique_ptr<ArrowType>>;

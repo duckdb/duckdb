@@ -79,8 +79,8 @@ SELECT AGE(TIMESTAMPTZ '2001-04-10', t2) FROM timestamps;
 43 years 9 months 28 days
 -13 years -7 days
 -12 years -8 months -22 days
--18 years -2 months -1 days
--18 years -2 months -1 days
+-18 years -2 months -1 day
+-18 years -2 months -1 day
 NULL
 NULL
 

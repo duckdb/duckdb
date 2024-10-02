@@ -73,6 +73,7 @@ SELECT SUM(b) FROM bigints
 # this is too big for a bigint
 statement error
 SELECT SUM(b)::BIGINT FROM bigints
+----
 
 #
 # Order by
@@ -92,4 +93,5 @@ SELECT sum(n ORDER BY ABS(n))::BIGINT FROM doubles;
 # Error as an ordered aggregate
 statement error
 SELECT (sum(n) WITHIN GROUP(ORDER BY ABS(n)))::BIGINT FROM doubles;
+----
 

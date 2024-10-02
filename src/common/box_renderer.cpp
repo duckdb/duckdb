@@ -77,6 +77,9 @@ void BoxRenderer::RenderValue(std::ostream &ss, const string &value, idx_t colum
 }
 
 string BoxRenderer::RenderType(const LogicalType &type) {
+	if (type.HasAlias()) {
+		return StringUtil::Lower(type.ToString());
+	}
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
 		return "int8";
@@ -96,6 +99,8 @@ string BoxRenderer::RenderType(const LogicalType &type) {
 		return "uint32";
 	case LogicalTypeId::UBIGINT:
 		return "uint64";
+	case LogicalTypeId::UHUGEINT:
+		return "uint128";
 	case LogicalTypeId::LIST: {
 		auto child = RenderType(ListType::GetChildType(type));
 		return child + "[]";
@@ -116,6 +121,7 @@ ValueRenderAlignment BoxRenderer::TypeAlignment(const LogicalType &type) {
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::DECIMAL:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
@@ -254,7 +260,55 @@ list<ColumnDataCollection> BoxRenderer::PivotCollections(ClientContext &context,
 }
 
 string ConvertRenderValue(const string &input) {
-	return StringUtil::Replace(StringUtil::Replace(input, "\n", "\\n"), string("\0", 1), "\\0");
+	string result;
+	result.reserve(input.size());
+	for (idx_t c = 0; c < input.size(); c++) {
+		data_t byte_value = const_data_ptr_cast(input.c_str())[c];
+		if (byte_value < 32) {
+			// ASCII control character
+			result += "\\";
+			switch (input[c]) {
+			case 7:
+				// bell
+				result += 'a';
+				break;
+			case 8:
+				// backspace
+				result += 'b';
+				break;
+			case 9:
+				// tab
+				result += 't';
+				break;
+			case 10:
+				// newline
+				result += 'n';
+				break;
+			case 11:
+				// vertical tab
+				result += 'v';
+				break;
+			case 12:
+				// form feed
+				result += 'f';
+				break;
+			case 13:
+				// cariage return
+				result += 'r';
+				break;
+			case 27:
+				// escape
+				result += 'e';
+				break;
+			default:
+				result += to_string(byte_value);
+				break;
+			}
+		} else {
+			result += input[c];
+		}
+	}
+	return result;
 }
 
 string BoxRenderer::GetRenderValue(ColumnDataRowCollection &rows, idx_t c, idx_t r) {
@@ -348,7 +402,7 @@ vector<idx_t> BoxRenderer::ComputeRenderWidths(const vector<string> &names, cons
 			// e.g. if we have 10 columns, we remove #5, then #4, then #6, then #3, then #7, etc
 			int64_t offset = 0;
 			while (total_length > max_width) {
-				idx_t c = column_count / 2 + offset;
+				auto c = NumericCast<idx_t>(NumericCast<int64_t>(column_count) / 2 + offset);
 				total_length -= widths[c] + 3;
 				pruned_columns.insert(c);
 				if (offset >= 0) {
@@ -395,7 +449,7 @@ void BoxRenderer::RenderHeader(const vector<string> &names, const vector<Logical
 		}
 	}
 	ss << config.RTCORNER;
-	ss << std::endl;
+	ss << '\n';
 
 	// render the header names
 	for (idx_t c = 0; c < column_count; c++) {
@@ -409,7 +463,7 @@ void BoxRenderer::RenderHeader(const vector<string> &names, const vector<Logical
 		RenderValue(ss, name, widths[c]);
 	}
 	ss << config.VERTICAL;
-	ss << std::endl;
+	ss << '\n';
 
 	// render the types
 	if (config.render_mode == RenderMode::ROWS) {
@@ -419,22 +473,22 @@ void BoxRenderer::RenderHeader(const vector<string> &names, const vector<Logical
 			RenderValue(ss, type, widths[c]);
 		}
 		ss << config.VERTICAL;
-		ss << std::endl;
+		ss << '\n';
 	}
 
 	// render the line under the header
 	ss << config.LMIDDLE;
 	column_index = 0;
 	for (idx_t k = 0; k < total_length - 2; k++) {
-		if (has_results && column_index + 1 < column_count && k == boundaries[column_index]) {
-			ss << config.MIDDLE;
+		if (column_index + 1 < column_count && k == boundaries[column_index]) {
+			ss << (has_results ? config.MIDDLE : config.DMIDDLE);
 			column_index++;
 		} else {
 			ss << config.HORIZONTAL;
 		}
 	}
 	ss << config.RMIDDLE;
-	ss << std::endl;
+	ss << '\n';
 }
 
 void BoxRenderer::RenderValues(const list<ColumnDataCollection> &collections, const vector<idx_t> &column_map,
@@ -483,7 +537,7 @@ void BoxRenderer::RenderValues(const list<ColumnDataCollection> &collections, co
 			RenderValue(ss, str, widths[c], alignment);
 		}
 		ss << config.VERTICAL;
-		ss << std::endl;
+		ss << '\n';
 	}
 
 	if (bottom_rows > 0) {
@@ -539,7 +593,7 @@ void BoxRenderer::RenderValues(const list<ColumnDataCollection> &collections, co
 				RenderValue(ss, str, widths[c], alignment);
 			}
 			ss << config.VERTICAL;
-			ss << std::endl;
+			ss << '\n';
 		}
 		// note that the bottom rows are in reverse order
 		for (idx_t r = 0; r < bottom_rows; r++) {
@@ -554,7 +608,7 @@ void BoxRenderer::RenderValues(const list<ColumnDataCollection> &collections, co
 				RenderValue(ss, str, widths[c], alignments[c]);
 			}
 			ss << config.VERTICAL;
-			ss << std::endl;
+			ss << '\n';
 		}
 	}
 }
@@ -593,7 +647,7 @@ void BoxRenderer::RenderRowCount(string row_count_str, string shown_str, const s
 			}
 		}
 		ss << (render_anything ? config.RMIDDLE : config.RDCORNER);
-		ss << std::endl;
+		ss << '\n';
 	}
 	if (!render_anything) {
 		return;
@@ -607,16 +661,16 @@ void BoxRenderer::RenderRowCount(string row_count_str, string shown_str, const s
 		ss << column_count_str;
 		ss << " ";
 		ss << config.VERTICAL;
-		ss << std::endl;
+		ss << '\n';
 	} else if (render_rows) {
 		RenderValue(ss, row_count_str, total_length - 4);
 		ss << config.VERTICAL;
-		ss << std::endl;
+		ss << '\n';
 
 		if (display_shown_separately) {
 			RenderValue(ss, shown_str, total_length - 4);
 			ss << config.VERTICAL;
-			ss << std::endl;
+			ss << '\n';
 		}
 	}
 	// render the bottom line
@@ -625,7 +679,7 @@ void BoxRenderer::RenderRowCount(string row_count_str, string shown_str, const s
 		ss << config.HORIZONTAL;
 	}
 	ss << config.RDCORNER;
-	ss << std::endl;
+	ss << '\n';
 }
 
 void BoxRenderer::Render(ClientContext &context, const vector<string> &names, const ColumnDataCollection &result,

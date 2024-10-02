@@ -1,0 +1,8 @@
+# name: benchmark/ingestion/persistent_storage/tpcds/csv/ingest_inventory.benchmark
+# description: benchmark ingestion of inventory
+# group: [csv]
+
+template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion_persistent.benchmark.in
+table_name=inventory
+format=csv
+

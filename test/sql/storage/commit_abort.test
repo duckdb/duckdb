@@ -42,6 +42,7 @@ COMMIT
 
 statement error con2
 COMMIT
+----
 
 statement ok con1
 INSERT INTO test VALUES (15, NULL, NULL)

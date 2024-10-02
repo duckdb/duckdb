@@ -86,54 +86,72 @@ struct VectorOperations {
 	//===--------------------------------------------------------------------===//
 	// Select Comparisons
 	//===--------------------------------------------------------------------===//
-	static idx_t Equals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
-	                    SelectionVector *false_sel);
-	static idx_t NotEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                       SelectionVector *true_sel, SelectionVector *false_sel);
-	static idx_t GreaterThan(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                         SelectionVector *true_sel, SelectionVector *false_sel);
-	static idx_t GreaterThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                               SelectionVector *true_sel, SelectionVector *false_sel);
-	static idx_t LessThan(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                      SelectionVector *true_sel, SelectionVector *false_sel);
-	static idx_t LessThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                            SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t Equals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                    optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+	                    optional_ptr<ValidityMask> null_mask = nullptr);
+	static idx_t NotEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                       optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+	                       optional_ptr<ValidityMask> null_mask = nullptr);
+	static idx_t GreaterThan(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                         optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+	                         optional_ptr<ValidityMask> null_mask = nullptr);
+	static idx_t GreaterThanEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                               optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+	                               optional_ptr<ValidityMask> null_mask = nullptr);
+	static idx_t LessThan(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                      optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+	                      optional_ptr<ValidityMask> null_mask = nullptr);
+	static idx_t LessThanEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                            optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+	                            optional_ptr<ValidityMask> null_mask = nullptr);
 
 	// true := A != B with nulls being equal
-	static idx_t DistinctFrom(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                          SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t DistinctFrom(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                          optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel);
 	// true := A == B with nulls being equal
-	static idx_t NotDistinctFrom(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                             SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t NotDistinctFrom(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                             optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel);
 	// true := A > B with nulls being maximal
-	static idx_t DistinctGreaterThan(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                                 SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t DistinctGreaterThan(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                                 optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+	                                 optional_ptr<ValidityMask> null_mask = nullptr);
 	// true := A >= B with nulls being maximal
-	static idx_t DistinctGreaterThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                                       SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t DistinctGreaterThanEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
+	                                       idx_t count, optional_ptr<SelectionVector> true_sel,
+	                                       optional_ptr<SelectionVector> false_sel,
+	                                       optional_ptr<ValidityMask> null_mask = nullptr);
 	// true := A < B with nulls being maximal
-	static idx_t DistinctLessThan(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                              SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t DistinctLessThan(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                              optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+	                              optional_ptr<ValidityMask> null_mask = nullptr);
 	// true := A <= B with nulls being maximal
-	static idx_t DistinctLessThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                                    SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t DistinctLessThanEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
+	                                    idx_t count, optional_ptr<SelectionVector> true_sel,
+	                                    optional_ptr<SelectionVector> false_sel,
+	                                    optional_ptr<ValidityMask> null_mask = nullptr);
 
 	// true := A > B with nulls being minimal
-	static idx_t DistinctGreaterThanNullsFirst(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                                           SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t DistinctGreaterThanNullsFirst(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
+	                                           idx_t count, optional_ptr<SelectionVector> true_sel,
+	                                           optional_ptr<SelectionVector> false_sel,
+	                                           optional_ptr<ValidityMask> null_mask = nullptr);
 	// true := A < B with nulls being minimal
-	static idx_t DistinctLessThanNullsFirst(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                                        SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t DistinctLessThanNullsFirst(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
+	                                        idx_t count, optional_ptr<SelectionVector> true_sel,
+	                                        optional_ptr<SelectionVector> false_sel,
+	                                        optional_ptr<ValidityMask> null_mask = nullptr);
 
 	//===--------------------------------------------------------------------===//
 	// Nested Comparisons
 	//===--------------------------------------------------------------------===//
 	// true := A != B with nulls being equal
-	static idx_t NestedNotEquals(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
-	                             SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t NestedNotEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                             optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+	                             optional_ptr<ValidityMask> null_mask = nullptr);
 	// true := A == B with nulls being equal
-	static idx_t NestedEquals(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
-	                          SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t NestedEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                          optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+	                          optional_ptr<ValidityMask> null_mask = nullptr);
 
 	//===--------------------------------------------------------------------===//
 	// Hash functions
@@ -158,11 +176,12 @@ struct VectorOperations {
 	//! NULLs. If any elements cannot be converted, returns false and fills in the error_message. If no error message is
 	//! provided, an exception is thrown instead.
 	DUCKDB_API static bool TryCast(CastFunctionSet &set, GetCastFunctionInput &input, Vector &source, Vector &result,
-	                               idx_t count, string *error_message, bool strict = false);
+	                               idx_t count, string *error_message, bool strict = false,
+	                               const bool nullify_parent = false);
 	DUCKDB_API static bool DefaultTryCast(Vector &source, Vector &result, idx_t count, string *error_message,
 	                                      bool strict = false);
 	DUCKDB_API static bool TryCast(ClientContext &context, Vector &source, Vector &result, idx_t count,
-	                               string *error_message, bool strict = false);
+	                               string *error_message, bool strict = false, const bool nullify_parent = false);
 	//! Cast the data from the source type to the target type. Throws an exception if the cast fails.
 	DUCKDB_API static void Cast(ClientContext &context, Vector &source, Vector &result, idx_t count,
 	                            bool strict = false);
@@ -173,6 +192,8 @@ struct VectorOperations {
 	                 idx_t target_offset);
 	static void Copy(const Vector &source, Vector &target, const SelectionVector &sel, idx_t source_count,
 	                 idx_t source_offset, idx_t target_offset);
+	static void Copy(const Vector &source, Vector &target, const SelectionVector &sel, idx_t source_count,
+	                 idx_t source_offset, idx_t target_offset, idx_t copy_count);
 
 	// Copy the data of <source> to the target location, setting null values to
 	// NullValue<T>. Used to store data without separate NULL mask.

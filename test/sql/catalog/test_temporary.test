@@ -54,6 +54,7 @@ DROP SCHEMA temp CASCADE
 
 statement error
 DROP TABLE memory.main.integersx
+----
 
 statement ok
 DROP TABLE integersx
@@ -67,10 +68,12 @@ DROP TABLE temp.integersx
 # unsupported
 statement error
 CREATE TEMPORARY TABLE integers2(i INTEGER) ON COMMIT DELETE ROWS
+----
 
 # temp table already exists
 statement error
 CREATE TEMPORARY TABLE integers(i INTEGER)
+----
 
 statement ok
 INSERT INTO integers VALUES (42)
@@ -149,8 +152,10 @@ ROLLBACK
 
 statement error
 SELECT i from integers3
+----
 
 # table is not visible to other cons
 statement error con2
 INSERT INTO integers VALUES (42)
+----
 

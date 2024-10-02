@@ -1,7 +1,7 @@
 # Copyright 2015 The RE2 Authors.  All Rights Reserved. Use of this source code
 # is governed by a BSD-style license that can be found in the LICENSE file.
 
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.5...3.29)
 
 if(POLICY CMP0048)
   cmake_policy(SET CMP0048 NEW)
@@ -50,6 +50,8 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   add_compile_options(-std=c++11)
 endif()
 
+add_definitions(-DRE2_ON_VALGRIND)
+
 if(WIN32)
   add_definitions(-DUNICODE
                   -D_UNICODE
@@ -62,8 +64,10 @@ elseif(UNIX)
 endif()
 
 set(RE2_SOURCES
+
+        re2/bitmap256.cc
+        re2/compile.cc
     re2/bitstate.cc
-    re2/compile.cc
     re2/dfa.cc
     re2/filtered_re2.cc
     re2/mimics_pcre.cc
@@ -83,7 +87,8 @@ set(RE2_SOURCES
     re2/unicode_casefold.cc
     re2/unicode_groups.cc
     util/rune.cc
-    util/strutil.cc)
+    util/strutil.cc
+)
 
 add_library(duckdb_re2 STATIC ${RE2_SOURCES})
 

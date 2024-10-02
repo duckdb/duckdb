@@ -88,6 +88,8 @@ static void SetPrimaryBinding(UsingColumnSet &set, JoinType join_type, const str
 		set.primary_binding = left_binding;
 		break;
 	case JoinType::RIGHT:
+	case JoinType::RIGHT_SEMI:
+	case JoinType::RIGHT_ANTI:
 		set.primary_binding = right_binding;
 		break;
 	default:
@@ -118,6 +120,13 @@ static vector<string> RemoveDuplicateUsingColumns(const vector<string> &using_co
 	return result;
 }
 
+unique_ptr<BoundTableRef> Binder::BindJoin(Binder &parent_binder, TableRef &ref) {
+	unnamed_subquery_index = parent_binder.unnamed_subquery_index;
+	auto result = Bind(ref);
+	parent_binder.unnamed_subquery_index = unnamed_subquery_index;
+	return result;
+}
+
 unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	auto result = make_uniq<BoundJoinRef>(ref.ref_type);
 	result->left_binder = Binder::CreateBinder(context, this);
@@ -126,10 +135,27 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	auto &right_binder = *result->right_binder;
 
 	result->type = ref.type;
-	result->left = left_binder.Bind(*ref.left);
+	result->left = left_binder.BindJoin(*this, *ref.left);
+	result->delim_flipped = ref.delim_flipped;
+
 	{
 		LateralBinder binder(left_binder, context);
-		result->right = right_binder.Bind(*ref.right);
+		result->right = right_binder.BindJoin(*this, *ref.right);
+		if (!ref.duplicate_eliminated_columns.empty()) {
+			if (ref.delim_flipped) {
+				// We gotta use the expression binder of the right side
+				ExpressionBinder expr_binder(right_binder, context);
+				for (auto &col : ref.duplicate_eliminated_columns) {
+					result->duplicate_eliminated_columns.emplace_back(expr_binder.Bind(col));
+				}
+			} else {
+				// We use the left side
+				ExpressionBinder expr_binder(left_binder, context);
+				for (auto &col : ref.duplicate_eliminated_columns) {
+					result->duplicate_eliminated_columns.emplace_back(expr_binder.Bind(col));
+				}
+			}
+		}
 		bool is_lateral = false;
 		// Store the correlated columns in the right binder in bound ref for planning of LATERALs
 		// Ignore the correlated columns in the left binder, flattening handles those correlations
@@ -205,7 +231,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			}
 			error_msg += "\n   Left candidates: " + left_candidates;
 			error_msg += "\n   Right candidates: " + right_candidates;
-			throw BinderException(FormatError(ref, error_msg));
+			throw BinderException(ref, error_msg);
 		}
 		break;
 	}
@@ -276,6 +302,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	}
 
 	auto right_bindings_list_copy = right_binder.bind_context.GetBindingsList();
+	auto left_bindings_list_copy = left_binder.bind_context.GetBindingsList();
 
 	bind_context.AddContext(std::move(left_binder.bind_context));
 	bind_context.AddContext(std::move(right_binder.bind_context));
@@ -310,8 +337,18 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		result->condition = binder.Bind(ref.condition);
 	}
 
-	if (result->type == JoinType::SEMI || result->type == JoinType::ANTI) {
+	if (result->type == JoinType::SEMI || result->type == JoinType::ANTI || result->type == JoinType::MARK) {
 		bind_context.RemoveContext(right_bindings_list_copy);
+		if (result->type == JoinType::MARK) {
+			auto mark_join_idx = GenerateTableIndex();
+			string mark_join_alias = "__internal_mark_join_ref" + to_string(mark_join_idx);
+			bind_context.AddGenericBinding(mark_join_idx, mark_join_alias, {"__mark_index_column"},
+			                               {LogicalType::BOOLEAN});
+			result->mark_index = mark_join_idx;
+		}
+	}
+	if (result->type == JoinType::RIGHT_SEMI || result->type == JoinType::RIGHT_ANTI) {
+		bind_context.RemoveContext(left_bindings_list_copy);
 	}
 
 	return std::move(result);

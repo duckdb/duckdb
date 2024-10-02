@@ -40,9 +40,9 @@ string_t SubstringEmptyString(Vector &result) {
 }
 
 string_t SubstringSlice(Vector &result, const char *input_data, int64_t offset, int64_t length) {
-	auto result_string = StringVector::EmptyString(result, length);
+	auto result_string = StringVector::EmptyString(result, UnsafeNumericCast<idx_t>(length));
 	auto result_data = result_string.GetDataWriteable();
-	memcpy(result_data, input_data + offset, length);
+	memcpy(result_data, input_data + offset, UnsafeNumericCast<size_t>(length));
 	result_string.Finalize();
 	return result_string;
 }
@@ -88,10 +88,10 @@ string_t SubstringASCII(Vector &result, string_t input, int64_t offset, int64_t 
 	AssertInSupportedRange(input_size, offset, length);
 
 	int64_t start, end;
-	if (!SubstringStartEnd(input_size, offset, length, start, end)) {
+	if (!SubstringStartEnd(UnsafeNumericCast<int64_t>(input_size), offset, length, start, end)) {
 		return SubstringEmptyString(result);
 	}
-	return SubstringSlice(result, input_data, start, end - start);
+	return SubstringSlice(result, input_data, start, UnsafeNumericCast<int64_t>(end - start));
 }
 
 string_t SubstringFun::SubstringUnicode(Vector &result, string_t input, int64_t offset, int64_t length) {
@@ -186,7 +186,8 @@ string_t SubstringFun::SubstringUnicode(Vector &result, string_t input, int64_t 
 	}
 	D_ASSERT(end_pos >= start_pos);
 	// after we have found these, we can slice the substring
-	return SubstringSlice(result, input_data, start_pos, end_pos - start_pos);
+	return SubstringSlice(result, input_data, UnsafeNumericCast<int64_t>(start_pos),
+	                      UnsafeNumericCast<int64_t>(end_pos - start_pos));
 }
 
 string_t SubstringFun::SubstringGrapheme(Vector &result, string_t input, int64_t offset, int64_t length) {
@@ -198,14 +199,14 @@ string_t SubstringFun::SubstringGrapheme(Vector &result, string_t input, int64_t
 	// we don't know yet if the substring is ascii, but we assume it is (for now)
 	// first get the start and end as if this was an ascii string
 	int64_t start, end;
-	if (!SubstringStartEnd(input_size, offset, length, start, end)) {
+	if (!SubstringStartEnd(UnsafeNumericCast<int64_t>(input_size), offset, length, start, end)) {
 		return SubstringEmptyString(result);
 	}
 
 	// now check if all the characters between 0 and end are ascii characters
 	// note that we scan one further to check for a potential combining diacritics (e.g. i + diacritic is ï)
 	bool is_ascii = true;
-	idx_t ascii_end = MinValue<idx_t>(end + 1, input_size);
+	idx_t ascii_end = MinValue<idx_t>(UnsafeNumericCast<idx_t>(end + 1), input_size);
 	for (idx_t i = 0; i < ascii_end; i++) {
 		if (input_data[i] & 0x80) {
 			// found a non-ascii character: eek
@@ -223,33 +224,29 @@ string_t SubstringFun::SubstringGrapheme(Vector &result, string_t input, int64_t
 	if (offset < 0) {
 		// negative offset, this case is more difficult
 		// we first need to count the number of characters in the string
-		idx_t num_characters = 0;
-		utf8proc_grapheme_callback(input_data, input_size, [&](size_t start, size_t end) {
-			num_characters++;
-			return true;
-		});
+		idx_t num_characters = Utf8Proc::GraphemeCount(input_data, input_size);
 		// now call substring start and end again, but with the number of unicode characters this time
-		SubstringStartEnd(num_characters, offset, length, start, end);
+		SubstringStartEnd(UnsafeNumericCast<int64_t>(num_characters), offset, length, start, end);
 	}
 
 	// now scan the graphemes of the string to find the positions of the start and end characters
 	int64_t current_character = 0;
 	idx_t start_pos = DConstants::INVALID_INDEX, end_pos = input_size;
-	utf8proc_grapheme_callback(input_data, input_size, [&](size_t gstart, size_t gend) {
+	for (auto cluster : Utf8Proc::GraphemeClusters(input_data, input_size)) {
 		if (current_character == start) {
-			start_pos = gstart;
+			start_pos = cluster.start;
 		} else if (current_character == end) {
-			end_pos = gstart;
-			return false;
+			end_pos = cluster.start;
+			break;
 		}
 		current_character++;
-		return true;
-	});
+	}
 	if (start_pos == DConstants::INVALID_INDEX) {
 		return SubstringEmptyString(result);
 	}
 	// after we have found these, we can slice the substring
-	return SubstringSlice(result, input_data, start_pos, end_pos - start_pos);
+	return SubstringSlice(result, input_data, UnsafeNumericCast<int64_t>(start_pos),
+	                      UnsafeNumericCast<int64_t>(end_pos - start_pos));
 }
 
 struct SubstringUnicodeOp {

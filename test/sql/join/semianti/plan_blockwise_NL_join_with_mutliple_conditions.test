@@ -1,0 +1,87 @@
+# name: test/sql/join/semianti/plan_blockwise_NL_join_with_mutliple_conditions.test
+# description: Test anti ijoin results
+# group: [semianti]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table t1 as select * from values (1, 2), (2, 4), (3, 8), (6, 25), (1, 25) t(a, b);
+
+statement ok
+create table t2 as select * from values (4), (5) t(b);
+
+query II
+select * from t1 semi join t2 on t1.a < t2.b and t1.b > t2.b order by all;
+----
+1	25
+3	8
+
+query II
+select * from t1 anti join t2 on t1.a < t2.b and t1.b < t2.b order by all;
+----
+1	25
+3	8
+6	25
+
+query II
+Explain select * from t1 anti join t2 on t1.a < t2.b and t1.b < t2.b order by all;
+----
+physical_plan	<REGEX>:.*BLOCKWISE_NL_JOIN.*
+
+query II
+select * from t1 anti join t2 on t1.a < t2.b and t1.b < t2.b order by all;
+----
+1	25
+3	8
+6	25
+
+query II
+select * from t1 semi join t2 on t1.a < t2.b or t1.b < t2.b order by all;
+----
+1	2
+1	25
+2	4
+3	8
+
+query II
+select * from t1 semi join t2 on (t1.a < t2.b and t1.b < t2.b) or (t1.a < t2.b and t1.b = 4) order by all;
+----
+1	2
+2	4
+
+
+query II
+select * from t1 semi join t2 on (t1.a < t2.b or t1.b < t2.b) and (t1.a = 1 or t1.b = 4) order by all;
+----
+1	2
+1	25
+2	4
+
+
+statement ok
+CREATE TABLE flattened ("start" varchar, "end" varchar);
+
+statement ok
+insert into flattened values ('2023-03-15T00:00:00Z', '2023-03-20T00:00:00Z');
+
+statement ok
+create table input_table as select * from VALUES
+('1', '2023-03-14T00:00:00Z', 2),
+('2', '2023-03-15T00:00:00Z', 4),
+('3', '2023-03-16T00:00:00Z', 7),
+('4', '2023-03-17T00:00:00Z', 3),
+('5', '2023-03-18T00:00:00Z', 2),
+('6', '2023-03-19T23:59:59Z', 4),
+('7', '2023-03-20T00:00:00Z', 7),
+('8', '2023-03-21T00:00:00Z', 3) t(user_id, timestamp, value);
+
+
+query III
+SELECT * FROM input_table
+ANTI JOIN flattened
+ON input_table."timestamp" >= flattened.start AND input_table."timestamp" <  flattened.end;
+----
+1	2023-03-14T00:00:00Z	2
+7	2023-03-20T00:00:00Z	7
+8	2023-03-21T00:00:00Z	3

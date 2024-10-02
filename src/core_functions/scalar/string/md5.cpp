@@ -30,19 +30,6 @@ struct MD5Number128Operator {
 	}
 };
 
-template <bool lower>
-struct MD5Number64Operator {
-	template <class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input) {
-		data_t digest[MD5Context::MD5_HASH_LENGTH_BINARY];
-
-		MD5Context context;
-		context.Add(input);
-		context.Finish(digest);
-		return *reinterpret_cast<uint64_t *>(&digest[lower ? 8 : 0]);
-	}
-};
-
 static void MD5Function(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input = args.data[0];
 
@@ -55,32 +42,18 @@ static void MD5NumberFunction(DataChunk &args, ExpressionState &state, Vector &r
 	UnaryExecutor::Execute<string_t, hugeint_t, MD5Number128Operator>(input, result, args.size());
 }
 
-static void MD5NumberUpperFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &input = args.data[0];
-
-	UnaryExecutor::Execute<string_t, uint64_t, MD5Number64Operator<false>>(input, result, args.size());
+ScalarFunctionSet MD5Fun::GetFunctions() {
+	ScalarFunctionSet set("md5");
+	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, MD5Function));
+	set.AddFunction(ScalarFunction({LogicalType::BLOB}, LogicalType::VARCHAR, MD5Function));
+	return set;
 }
 
-static void MD5NumberLowerFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &input = args.data[0];
-
-	UnaryExecutor::Execute<string_t, uint64_t, MD5Number64Operator<true>>(input, result, args.size());
-}
-
-ScalarFunction MD5Fun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, MD5Function);
-}
-
-ScalarFunction MD5NumberFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::HUGEINT, MD5NumberFunction);
-}
-
-ScalarFunction MD5NumberUpperFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::UBIGINT, MD5NumberUpperFunction);
-}
-
-ScalarFunction MD5NumberLowerFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::UBIGINT, MD5NumberLowerFunction);
+ScalarFunctionSet MD5NumberFun::GetFunctions() {
+	ScalarFunctionSet set("md5_number");
+	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::HUGEINT, MD5NumberFunction));
+	set.AddFunction(ScalarFunction({LogicalType::BLOB}, LogicalType::HUGEINT, MD5NumberFunction));
+	return set;
 }
 
 } // namespace duckdb

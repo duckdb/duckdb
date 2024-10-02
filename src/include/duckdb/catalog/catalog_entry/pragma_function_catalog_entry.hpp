@@ -24,8 +24,7 @@ public:
 	static constexpr const char *Name = "pragma function";
 
 public:
-	PragmaFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreatePragmaFunctionInfo &info,
-	                           optional_ptr<ClientContext> context);
+	PragmaFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreatePragmaFunctionInfo &info);
 
 	//! The pragma functions
 	PragmaFunctionSet functions;

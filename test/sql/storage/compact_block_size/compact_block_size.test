@@ -1,0 +1,21 @@
+# name: test/sql/storage/compact_block_size/compact_block_size.test
+# description: Various tests with a compact block size of 16384 bytes
+# group: [compact_block_size]
+
+require noforcestorage
+
+require skip_reload
+
+require exact_vector_size 2048
+
+statement ok
+ATTACH 'data/storage/index_0-9-1.db' (TYPE DUCKDB, READONLY);
+
+# vector size is 2048, block size is 16KB
+statement ok
+ATTACH 'data/storage/block_size_16kb.db' (TYPE DUCKDB, READONLY);
+
+query I
+SELECT * FROM block_size_16kb.tbl;
+----
+42

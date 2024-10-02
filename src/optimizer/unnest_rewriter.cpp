@@ -85,12 +85,14 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> *op_ptr,
 	}
 
 	// LHS child is a window
-	if (delim_join.children[0]->type != LogicalOperatorType::LOGICAL_WINDOW) {
+	idx_t delim_idx = delim_join.delim_flipped ? 1 : 0;
+	idx_t other_idx = 1 - delim_idx;
+	if (delim_join.children[delim_idx]->type != LogicalOperatorType::LOGICAL_WINDOW) {
 		return;
 	}
 
 	// RHS child must be projection(s) followed by an UNNEST
-	auto curr_op = &delim_join.children[1];
+	auto curr_op = &delim_join.children[other_idx];
 	while (curr_op->get()->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		if (curr_op->get()->children.size() != 1) {
 			break;
@@ -116,20 +118,23 @@ bool UnnestRewriter::RewriteCandidate(unique_ptr<LogicalOperator> *candidate) {
 
 	// get the LOGICAL_DELIM_JOIN, which is a child of the candidate
 	D_ASSERT(topmost_op.children.size() == 1);
-	auto &delim_join = *(topmost_op.children[0]);
+	auto &delim_join = topmost_op.children[0]->Cast<LogicalComparisonJoin>();
 	D_ASSERT(delim_join.type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
 	GetDelimColumns(delim_join);
 
 	// LHS of the LOGICAL_DELIM_JOIN is a LOGICAL_WINDOW that contains a LOGICAL_PROJECTION
 	// this lhs_proj later becomes the child of the UNNEST
-	auto &window = *delim_join.children[0];
+
+	idx_t delim_idx = delim_join.delim_flipped ? 1 : 0;
+	idx_t other_idx = 1 - delim_idx;
+	auto &window = *delim_join.children[delim_idx];
 	auto &lhs_op = window.children[0];
 	GetLHSExpressions(*lhs_op);
 
 	// find the LOGICAL_UNNEST
 	// and get the path down to the LOGICAL_UNNEST
 	vector<unique_ptr<LogicalOperator> *> path_to_unnest;
-	auto curr_op = &(delim_join.children[1]);
+	auto curr_op = &delim_join.children[other_idx];
 	while (curr_op->get()->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		path_to_unnest.push_back(curr_op);
 		curr_op = &curr_op->get()->children[0];
@@ -160,7 +165,7 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, un
 	idx_t shift = lhs_bindings.size();
 
 	vector<unique_ptr<LogicalOperator> *> path_to_unnest;
-	auto curr_op = &(topmost_op.children[0]);
+	auto curr_op = &topmost_op.children[0];
 	while (curr_op->get()->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 
 		path_to_unnest.push_back(curr_op);
@@ -253,7 +258,7 @@ void UnnestRewriter::UpdateBoundUnnestBindings(UnnestRewriterPlanUpdater &update
 	auto &topmost_op = (LogicalOperator &)**candidate;
 
 	// traverse LOGICAL_PROJECTION(s)
-	auto curr_op = &(topmost_op.children[0]);
+	auto curr_op = &topmost_op.children[0];
 	while (curr_op->get()->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		curr_op = &curr_op->get()->children[0];
 	}

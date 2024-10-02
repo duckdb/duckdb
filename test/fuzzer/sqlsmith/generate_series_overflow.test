@@ -19,9 +19,13 @@ INSERT INTO tbl VALUES(NULL);
 
 statement error
 SELECT generate_series(CAST(ref_0."bigint" AS BIGINT)) AS c1 FROM tbl AS ref_0
+----
+<REGEX>:Invalid Input Error.*Lists larger.*not supported.*
 
 statement error
 SELECT generate_series(-9223372036854775808, 9223372036854775807, 1) AS c1
+----
+<REGEX>:Invalid Input Error.*Lists larger.*not supported.*
 
 query I
 SELECT generate_series(9223372036854775805, 9223372036854775807, 1) AS c1

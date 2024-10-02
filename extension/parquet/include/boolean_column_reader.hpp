@@ -46,18 +46,29 @@ struct BooleanParquetValueConversion {
 
 	static bool PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
 		plain_data.available(1);
-		auto &byte_pos = reader.Cast<BooleanColumnReader>().byte_pos;
-		bool ret = (*plain_data.ptr >> byte_pos) & 1;
-		byte_pos++;
-		if (byte_pos == 8) {
-			byte_pos = 0;
-			plain_data.inc(1);
-		}
-		return ret;
+		return UnsafePlainRead(plain_data, reader);
 	}
 
 	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
 		PlainRead(plain_data, reader);
+	}
+
+	static bool PlainAvailable(const ByteBuffer &plain_data, const idx_t count) {
+		return plain_data.check_available((count + 7) / 8);
+	}
+
+	static bool UnsafePlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
+		auto &byte_pos = reader.Cast<BooleanColumnReader>().byte_pos;
+		bool ret = (*plain_data.ptr >> byte_pos) & 1;
+		if (++byte_pos == 8) {
+			byte_pos = 0;
+			plain_data.unsafe_inc(1);
+		}
+		return ret;
+	}
+
+	static void UnsafePlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
+		UnsafePlainRead(plain_data, reader);
 	}
 };
 

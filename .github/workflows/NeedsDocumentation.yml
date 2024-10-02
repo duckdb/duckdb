@@ -1,0 +1,42 @@
+name: Create Documentation issue for the Needs Documentation label
+on:
+  discussion:
+    types:
+      - labeled
+  issues:
+    types:
+      - labeled
+  pull_request_target:
+    types:
+      - labeled
+
+env:
+  GH_TOKEN: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
+  # an event triggering this workflow is either an issue or a pull request,
+  # hence only one of the numbers will be filled in the TITLE_PREFIX
+  TITLE_PREFIX: "[duckdb/#${{ github.event.issue.number || github.event.pull_request.number }}]"
+  PUBLIC_ISSUE_TITLE: ${{ github.event.issue.title || github.event.pull_request.title }}
+
+jobs:
+  create_documentation_issue:
+    if: github.event.label.name == 'Needs Documentation'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get mirror issue number
+        run: |
+          gh issue list --repo duckdb/duckdb-web --json title,number --state all --jq ".[] | select(.title | startswith(\"${TITLE_PREFIX}\")).number" > mirror_issue_number.txt
+          echo "MIRROR_ISSUE_NUMBER=$(cat mirror_issue_number.txt)" >> ${GITHUB_ENV}
+
+      - name: Print whether mirror issue exists
+        run: |
+          if [ "${MIRROR_ISSUE_NUMBER}" == "" ]; then
+            echo "Mirror issue with title prefix '${TITLE_PREFIX}' does not exist yet"
+          else
+            echo "Mirror issue with title prefix '${TITLE_PREFIX}' exists with number ${MIRROR_ISSUE_NUMBER}"
+          fi
+
+      - name: Create mirror issue if it does not yet exist
+        run: |
+          if [ "${MIRROR_ISSUE_NUMBER}" == "" ]; then
+            gh issue create --repo duckdb/duckdb-web --title "${TITLE_PREFIX} - ${PUBLIC_ISSUE_TITLE} needs documentation" --body "See https://github.com/duckdb/duckdb/issues/${{ github.event.issue.number || github.event.pull_request.number }}"
+          fi

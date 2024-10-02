@@ -29,7 +29,7 @@ public:
 	idx_t table_index;
 
 	bool union_all;
-	std::shared_ptr<ColumnDataCollection> working_table;
+	shared_ptr<ColumnDataCollection> working_table;
 	shared_ptr<MetaPipeline> recursive_meta_pipeline;
 
 public:
@@ -50,7 +50,11 @@ public:
 		return true;
 	}
 
-	string ParamsToString() const override;
+	bool ParallelSink() const override {
+		return true;
+	}
+
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;

@@ -3,6 +3,7 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/common/types/bit.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
@@ -63,6 +64,10 @@ struct BitStringAggOperation {
 			}
 			state.min = bind_agg_data.min.GetValue<INPUT_TYPE>();
 			state.max = bind_agg_data.max.GetValue<INPUT_TYPE>();
+			if (state.min > state.max) {
+				throw InvalidInputException("Invalid explicit bitstring range: Minimum (%s) > maximum (%s)",
+				                            NumericHelper::ToString(state.min), NumericHelper::ToString(state.max));
+			}
 			idx_t bit_range =
 			    GetRange(bind_agg_data.min.GetValue<INPUT_TYPE>(), bind_agg_data.max.GetValue<INPUT_TYPE>());
 			if (bit_range > MAX_BIT_RANGE) {
@@ -71,7 +76,8 @@ struct BitStringAggOperation {
 				    NumericHelper::ToString(state.min), NumericHelper::ToString(state.max));
 			}
 			idx_t len = Bit::ComputeBitstringLen(bit_range);
-			auto target = len > string_t::INLINE_LENGTH ? string_t(new char[len], len) : string_t(len);
+			auto target = len > string_t::INLINE_LENGTH ? string_t(new char[len], UnsafeNumericCast<uint32_t>(len))
+			                                            : string_t(UnsafeNumericCast<uint32_t>(len));
 			Bit::SetEmptyBitString(target, bit_range);
 
 			state.value = target;
@@ -94,12 +100,14 @@ struct BitStringAggOperation {
 
 	template <class INPUT_TYPE>
 	static idx_t GetRange(INPUT_TYPE min, INPUT_TYPE max) {
-		D_ASSERT(max >= min);
+		if (min > max) {
+			throw InvalidInputException("Invalid explicit bitstring range: Minimum (%d) > maximum (%d)", min, max);
+		}
 		INPUT_TYPE result;
 		if (!TrySubtractOperator::Operation(max, min, result)) {
 			return NumericLimits<idx_t>::Maximum();
 		}
-		idx_t val(result);
+		auto val = NumericCast<idx_t>(result);
 		if (val == NumericLimits<idx_t>::Maximum()) {
 			return val;
 		}
@@ -108,7 +116,7 @@ struct BitStringAggOperation {
 
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input, INPUT_TYPE min) {
-		Bit::SetBit(state.value, input - min, 1);
+		Bit::SetBit(state.value, UnsafeNumericCast<idx_t>(input - min), 1);
 	}
 
 	template <class STATE, class OP>
@@ -135,7 +143,7 @@ struct BitStringAggOperation {
 			auto len = input.GetSize();
 			auto ptr = new char[len];
 			memcpy(ptr, input.GetData(), len);
-			state.value = string_t(ptr, len);
+			state.value = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
 		}
 	}
 
@@ -177,7 +185,30 @@ idx_t BitStringAggOperation::GetRange(hugeint_t min, hugeint_t max) {
 		return NumericLimits<idx_t>::Maximum();
 	}
 	idx_t range;
-	if (!Hugeint::TryCast(result + 1, range)) {
+	if (!Hugeint::TryCast(result + 1, range) || result == NumericLimits<hugeint_t>::Maximum()) {
+		return NumericLimits<idx_t>::Maximum();
+	}
+	return range;
+}
+
+template <>
+void BitStringAggOperation::Execute(BitAggState<uhugeint_t> &state, uhugeint_t input, uhugeint_t min) {
+	idx_t val;
+	if (Uhugeint::TryCast(input - min, val)) {
+		Bit::SetBit(state.value, val, 1);
+	} else {
+		throw OutOfRangeException("Range too large for bitstring aggregation");
+	}
+}
+
+template <>
+idx_t BitStringAggOperation::GetRange(uhugeint_t min, uhugeint_t max) {
+	uhugeint_t result;
+	if (!TrySubtractOperator::Operation(max, min, result)) {
+		return NumericLimits<idx_t>::Maximum();
+	}
+	idx_t range;
+	if (!Uhugeint::TryCast(result + 1, range) || result == NumericLimits<uhugeint_t>::Maximum()) {
 		return NumericLimits<idx_t>::Maximum();
 	}
 	return range;
@@ -252,6 +283,9 @@ void GetBitStringAggregate(const LogicalType &type, AggregateFunctionSet &bitstr
 	}
 	case LogicalType::UBIGINT: {
 		return BindBitString<uint64_t>(bitstring_agg, type.id());
+	}
+	case LogicalType::UHUGEINT: {
+		return BindBitString<uhugeint_t>(bitstring_agg, type.id());
 	}
 	default:
 		throw InternalException("Unimplemented bitstring aggregate");

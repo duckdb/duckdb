@@ -16,8 +16,11 @@ struct StringParquetValueConversion {
 	static string_t DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader);
 
 	static string_t PlainRead(ByteBuffer &plain_data, ColumnReader &reader);
-
 	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader);
+
+	static bool PlainAvailable(const ByteBuffer &plain_data, const idx_t count);
+	static string_t UnsafePlainRead(ByteBuffer &plain_data, ColumnReader &reader);
+	static void UnsafePlainSkip(ByteBuffer &plain_data, ColumnReader &reader);
 };
 
 class StringColumnReader : public TemplatedColumnReader<string_t, StringParquetValueConversion> {
@@ -28,7 +31,7 @@ public:
 	StringColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
 	                   idx_t max_define_p, idx_t max_repeat_p);
 
-	unique_ptr<string_t[]> dict_strings;
+	unsafe_unique_ptr<string_t[]> dict_strings;
 	idx_t fixed_width_string_length;
 	idx_t delta_offset = 0;
 

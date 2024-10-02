@@ -11,6 +11,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/qualified_name_set.hpp"
@@ -37,8 +38,10 @@ struct UsingColumnSet {
 //! encountered during the binding process.
 class BindContext {
 public:
+	explicit BindContext(Binder &binder);
+
 	//! Keep track of recursive CTE references
-	case_insensitive_map_t<std::shared_ptr<idx_t>> cte_references;
+	case_insensitive_map_t<shared_ptr<idx_t>> cte_references;
 
 public:
 	//! Given a column name, find the matching table it belongs to. Throws an
@@ -126,11 +129,11 @@ public:
 	//! (e.g. "column_name" might return "COLUMN_NAME")
 	string GetActualColumnName(const string &binding, const string &column_name);
 
-	case_insensitive_map_t<std::shared_ptr<Binding>> GetCTEBindings() {
+	case_insensitive_map_t<shared_ptr<Binding>> GetCTEBindings() {
 		return cte_bindings;
 	}
-	void SetCTEBindings(case_insensitive_map_t<std::shared_ptr<Binding>> bindings) {
-		cte_bindings = bindings;
+	void SetCTEBindings(case_insensitive_map_t<shared_ptr<Binding>> bindings) {
+		cte_bindings = std::move(bindings);
 	}
 
 	//! Alias a set of column names for the specified table, using the original names if there are not enough aliases
@@ -145,12 +148,13 @@ public:
 
 	//! Gets a binding of the specified name. Returns a nullptr and sets the out_error if the binding could not be
 	//! found.
-	optional_ptr<Binding> GetBinding(const string &name, string &out_error);
+	optional_ptr<Binding> GetBinding(const string &name, ErrorData &out_error);
 
 private:
 	void AddBinding(const string &alias, unique_ptr<Binding> binding);
 
 private:
+	Binder &binder;
 	//! The set of bindings
 	case_insensitive_map_t<unique_ptr<Binding>> bindings;
 	//! The list of bindings in insertion order
@@ -161,6 +165,6 @@ private:
 	vector<unique_ptr<UsingColumnSet>> using_column_sets;
 
 	//! The set of CTE bindings
-	case_insensitive_map_t<std::shared_ptr<Binding>> cte_bindings;
+	case_insensitive_map_t<shared_ptr<Binding>> cte_bindings;
 };
 } // namespace duckdb

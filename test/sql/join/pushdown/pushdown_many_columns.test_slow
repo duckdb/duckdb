@@ -1,0 +1,33 @@
+# name: test/sql/join/pushdown/pushdown_many_columns.test_slow
+# description: Test join filter pushdown on multiple columns
+# group: [pushdown]
+
+statement ok
+PRAGMA enable_verification
+
+# two columns of different types
+statement ok
+CREATE TABLE tbl AS SELECT CASE WHEN i%2=0 THEN NULL ELSE i END i, concat('thisisastring', i) s FROM range(1000) t(i)
+
+query II
+SELECT s, i FROM tbl WHERE i>10 AND s=(SELECT MAX(s) FROM tbl)
+----
+thisisastring999	999
+
+query II
+SELECT s, i FROM tbl JOIN (VALUES (999, 'thisisastring999')) t(i, s) USING (s, i)
+----
+thisisastring999	999
+
+# all types
+statement ok
+CREATE TABLE all_types AS FROM test_all_types();
+
+foreach col <all_types_columns>
+
+query I
+SELECT COUNT(*) FROM all_types WHERE "${col}"=(SELECT MIN("${col}") FROM all_types)
+----
+1
+
+endloop

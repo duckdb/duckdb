@@ -9,7 +9,7 @@ unique_ptr<ParsedExpression> Transformer::TransformGroupingFunction(duckdb_libpg
 		auto n = PGPointerCast<duckdb_libpgquery::PGNode>(node->data.ptr_value);
 		op->children.push_back(TransformExpression(n));
 	}
-	op->query_location = grouping.location;
+	SetQueryLocation(*op, grouping.location);
 	return std::move(op);
 }
 

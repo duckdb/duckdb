@@ -11,6 +11,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
@@ -38,7 +39,7 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_id
 		auto entry = column_references.find(current_binding);
 		if (entry == column_references.end()) {
 			// this entry is not referred to, erase it from the set of expressions
-			list.erase(list.begin() + col_idx);
+			list.erase_at(col_idx);
 			offset++;
 			col_idx--;
 		} else if (offset > 0 && replace) {
@@ -108,12 +109,12 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 		break;
-	case LogicalOperatorType::LOGICAL_UNION:
-		if (!everything_referenced) {
-			// for UNION we can remove unreferenced columns as long as everything_referenced is false (i.e. we
-			// encounter a UNION node that is not preceded by a DISTINCT)
-			// this happens when UNION ALL is used
-			auto &setop = op.Cast<LogicalSetOperation>();
+	case LogicalOperatorType::LOGICAL_UNION: {
+		auto &setop = op.Cast<LogicalSetOperation>();
+		if (setop.setop_all && !everything_referenced) {
+			// for UNION we can remove unreferenced columns if union all is used
+			// it's possible not all columns are referenced, but unreferenced columns in the union can
+			// still have an affect on the result of the union
 			vector<idx_t> entries;
 			for (idx_t i = 0; i < setop.column_count; i++) {
 				entries.push_back(i);
@@ -143,6 +144,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 					}
 					auto new_projection =
 					    make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
+					if (child->has_estimated_cardinality) {
+						new_projection->SetEstimatedCardinality(child->estimated_cardinality);
+					}
 					new_projection->children.push_back(std::move(child));
 					op.children[child_idx] = std::move(new_projection);
 
@@ -156,31 +160,16 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			remove.VisitOperator(*child);
 		}
 		return;
+	}
 	case LogicalOperatorType::LOGICAL_EXCEPT:
-	case LogicalOperatorType::LOGICAL_INTERSECT:
+	case LogicalOperatorType::LOGICAL_INTERSECT: {
 		// for INTERSECT/EXCEPT operations we can't remove anything, just recursively visit the children
 		for (auto &child : op.children) {
 			RemoveUnusedColumns remove(binder, context, true);
 			remove.VisitOperator(*child);
 		}
 		return;
-	case LogicalOperatorType::LOGICAL_ORDER_BY:
-		if (!everything_referenced) {
-			auto &order = op.Cast<LogicalOrder>();
-			D_ASSERT(order.projections.empty()); // should not yet be set
-			const auto all_bindings = order.GetColumnBindings();
-
-			for (idx_t col_idx = 0; col_idx < all_bindings.size(); col_idx++) {
-				if (column_references.find(all_bindings[col_idx]) != column_references.end()) {
-					order.projections.push_back(col_idx);
-				}
-			}
-		}
-		for (auto &child : op.children) {
-			RemoveUnusedColumns remove(binder, context, true);
-			remove.VisitOperator(*child);
-		}
-		return;
+	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		if (!everything_referenced) {
 			auto &proj = op.Cast<LogicalProjection>();
@@ -220,9 +209,11 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				return;
 			}
 
+			auto &final_column_ids = get.GetColumnIds();
+
 			// Create "selection vector" of all column ids
 			vector<idx_t> proj_sel;
-			for (idx_t col_idx = 0; col_idx < get.column_ids.size(); col_idx++) {
+			for (idx_t col_idx = 0; col_idx < final_column_ids.size(); col_idx++) {
 				proj_sel.push_back(col_idx);
 			}
 			// Create a copy that we can use to match ids later
@@ -233,17 +224,17 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			// for every table filter, push a column binding into the column references map to prevent the column from
 			// being projected out
 			for (auto &filter : get.table_filters.filters) {
-				idx_t index = DConstants::INVALID_INDEX;
-				for (idx_t i = 0; i < get.column_ids.size(); i++) {
-					if (get.column_ids[i] == filter.first) {
+				optional_idx index;
+				for (idx_t i = 0; i < final_column_ids.size(); i++) {
+					if (final_column_ids[i] == filter.first) {
 						index = i;
 						break;
 					}
 				}
-				if (index == DConstants::INVALID_INDEX) {
+				if (!index.IsValid()) {
 					throw InternalException("Could not find column index for table filter");
 				}
-				ColumnBinding filter_binding(get.table_index, index);
+				ColumnBinding filter_binding(get.table_index, index.GetIndex());
 				if (column_references.find(filter_binding) == column_references.end()) {
 					column_references.insert(make_pair(filter_binding, vector<BoundColumnRefExpression *>()));
 				}
@@ -256,9 +247,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			vector<column_t> column_ids;
 			column_ids.reserve(col_sel.size());
 			for (auto col_sel_idx : col_sel) {
-				column_ids.push_back(get.column_ids[col_sel_idx]);
+				column_ids.push_back(final_column_ids[col_sel_idx]);
 			}
-			get.column_ids = std::move(column_ids);
+			get.SetColumnIds(std::move(column_ids));
 
 			if (get.function.filter_prune) {
 				// Now set the projection cols by matching the "selection vector" that excludes filter columns
@@ -274,11 +265,11 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				}
 			}
 
-			if (get.column_ids.empty()) {
+			if (final_column_ids.empty()) {
 				// this generally means we are only interested in whether or not anything exists in the table (e.g.
 				// EXISTS(SELECT * FROM tbl)) in this case, we just scan the row identifier column as it means we do not
 				// need to read any of the columns
-				get.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+				get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
 			}
 		}
 		return;
@@ -292,6 +283,12 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
+		auto &distinct = op.Cast<LogicalDistinct>();
+		if (distinct.distinct_type == DistinctType::DISTINCT_ON) {
+			// distinct type references columns that need to be distinct on, so no
+			// need to implicity reference everything.
+			break;
+		}
 		// distinct, all projected columns are used for the DISTINCT computation
 		// mark all columns as used and continue to the children
 		// FIXME: DISTINCT with expression list does not implicitly reference everything
@@ -319,6 +316,27 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	}
 	LogicalOperatorVisitor::VisitOperatorExpressions(op);
 	LogicalOperatorVisitor::VisitOperatorChildren(op);
+
+	if (op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN || op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN ||
+	    op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto &comp_join = op.Cast<LogicalComparisonJoin>();
+		// after removing duplicate columns we may have duplicate join conditions (if the join graph is cyclical)
+		vector<JoinCondition> unique_conditions;
+		for (auto &cond : comp_join.conditions) {
+			bool found = false;
+			for (auto &unique_cond : unique_conditions) {
+				if (cond.comparison == unique_cond.comparison && cond.left->Equals(*unique_cond.left) &&
+				    cond.right->Equals(*unique_cond.right)) {
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				unique_conditions.push_back(std::move(cond));
+			}
+		}
+		comp_join.conditions = std::move(unique_conditions);
+	}
 }
 
 unique_ptr<Expression> RemoveUnusedColumns::VisitReplace(BoundColumnRefExpression &expr,

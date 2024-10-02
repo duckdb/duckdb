@@ -39,6 +39,6 @@ int fullrune(const char* s, int n);
 int utflen(const char* s);
 char* utfrune(const char*, Rune);
 
-}  // namespace duckdb_re2
+}  // namespace re2
 
 #endif  // UTIL_UTF_H_

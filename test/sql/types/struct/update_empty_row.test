@@ -1,0 +1,8 @@
+# name: test/sql/types/struct/update_empty_row.test
+# description: Test storing structs in in-memory tables.
+# group: [struct]
+
+statement error
+UPDATE t0 SET (c0) = ROW();
+----
+expected 1 values, got 0

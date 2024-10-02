@@ -12,24 +12,27 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/constraints/bound_check_constraint.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 
 #include <sstream>
 
 namespace duckdb {
 
-TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info,
-                                     optional_ptr<ClientContext> context)
+TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info)
     : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.table), columns(std::move(info.columns)),
       constraints(std::move(info.constraints)) {
 	this->temporary = info.temporary;
-	this->dependencies = info.dependencies.GetPhysical(catalog, context);
+	this->dependencies = info.dependencies;
+	this->comment = info.comment;
+	this->tags = info.tags;
 }
 
 bool TableCatalogEntry::HasGeneratedColumns() const {
 	return columns.LogicalColumnCount() != columns.PhysicalColumnCount();
 }
 
-LogicalIndex TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exists) {
+LogicalIndex TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exists) const {
 	auto entry = columns.GetColumnIndex(column_name);
 	if (!entry.IsValid()) {
 		if (if_exists) {
@@ -40,15 +43,15 @@ LogicalIndex TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exis
 	return entry;
 }
 
-bool TableCatalogEntry::ColumnExists(const string &name) {
+bool TableCatalogEntry::ColumnExists(const string &name) const {
 	return columns.ColumnExists(name);
 }
 
-const ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) {
+const ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) const {
 	return columns.GetColumn(name);
 }
 
-vector<LogicalType> TableCatalogEntry::GetTypes() {
+vector<LogicalType> TableCatalogEntry::GetTypes() const {
 	vector<LogicalType> types;
 	for (auto &col : columns.Physical()) {
 		types.push_back(col.Type());
@@ -63,9 +66,11 @@ unique_ptr<CreateInfo> TableCatalogEntry::GetInfo() const {
 	result->table = name;
 	result->columns = columns.Copy();
 	result->constraints.reserve(constraints.size());
-	result->dependencies = dependencies.GetLogical();
+	result->dependencies = dependencies;
 	std::for_each(constraints.begin(), constraints.end(),
 	              [&result](const unique_ptr<Constraint> &c) { result->constraints.emplace_back(c->Copy()); });
+	result->comment = comment;
+	result->tags = tags;
 	return std::move(result);
 }
 
@@ -86,19 +91,18 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 			not_null_columns.insert(not_null.index);
 		} else if (constraint->type == ConstraintType::UNIQUE) {
 			auto &pk = constraint->Cast<UniqueConstraint>();
-			vector<string> constraint_columns = pk.columns;
-			if (pk.index.index != DConstants::INVALID_INDEX) {
+			if (pk.HasIndex()) {
 				// no columns specified: single column constraint
-				if (pk.is_primary_key) {
-					pk_columns.insert(pk.index);
+				if (pk.IsPrimaryKey()) {
+					pk_columns.insert(pk.GetIndex());
 				} else {
-					unique_columns.insert(pk.index);
+					unique_columns.insert(pk.GetIndex());
 				}
 			} else {
 				// multi-column constraint, this constraint needs to go at the end after all columns
-				if (pk.is_primary_key) {
+				if (pk.IsPrimaryKey()) {
 					// multi key pk column: insert set of columns into multi_key_pks
-					for (auto &col : pk.columns) {
+					for (auto &col : pk.GetColumnNames()) {
 						multi_key_pks.insert(col);
 					}
 				}
@@ -120,11 +124,35 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 			ss << ", ";
 		}
 		ss << KeywordHelper::WriteOptionallyQuoted(column.Name()) << " ";
-		ss << column.Type().ToString();
+		auto &column_type = column.Type();
+		if (column_type.id() != LogicalTypeId::ANY) {
+			ss << column.Type().ToString();
+		}
+		auto extra_type_info = column_type.AuxInfo();
+		if (extra_type_info && extra_type_info->type == ExtraTypeInfoType::STRING_TYPE_INFO) {
+			auto &string_info = extra_type_info->Cast<StringTypeInfo>();
+			if (!string_info.collation.empty()) {
+				ss << " COLLATE " + string_info.collation;
+			}
+		}
 		bool not_null = not_null_columns.find(column.Logical()) != not_null_columns.end();
 		bool is_single_key_pk = pk_columns.find(column.Logical()) != pk_columns.end();
 		bool is_multi_key_pk = multi_key_pks.find(column.Name()) != multi_key_pks.end();
 		bool is_unique = unique_columns.find(column.Logical()) != unique_columns.end();
+		if (column.Generated()) {
+			reference<const ParsedExpression> generated_expression = column.GeneratedExpression();
+			if (column_type.id() != LogicalTypeId::ANY) {
+				// We artificially add a cast if the type is specified, need to strip it
+				auto &expr = generated_expression.get();
+				D_ASSERT(expr.type == ExpressionType::OPERATOR_CAST);
+				auto &cast_expr = expr.Cast<CastExpression>();
+				D_ASSERT(cast_expr.cast_type.id() == column_type.id());
+				generated_expression = *cast_expr.child;
+			}
+			ss << " GENERATED ALWAYS AS(" << generated_expression.get().ToString() << ")";
+		} else if (column.HasDefaultValue()) {
+			ss << " DEFAULT(" << column.DefaultValue().ToString() << ")";
+		}
 		if (not_null && !is_single_key_pk && !is_multi_key_pk) {
 			// NOT NULL but not a primary key column
 			ss << " NOT NULL";
@@ -136,11 +164,6 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 		if (is_unique) {
 			// single column unique: insert constraint here
 			ss << " UNIQUE";
-		}
-		if (column.Generated()) {
-			ss << " GENERATED ALWAYS AS(" << column.GeneratedExpression().ToString() << ")";
-		} else if (column.DefaultValue()) {
-			ss << " DEFAULT(" << column.DefaultValue()->ToString() << ")";
 		}
 	}
 	// print any extra constraints that still need to be printed
@@ -162,11 +185,11 @@ const ColumnList &TableCatalogEntry::GetColumns() const {
 	return columns;
 }
 
-const ColumnDefinition &TableCatalogEntry::GetColumn(LogicalIndex idx) {
+const ColumnDefinition &TableCatalogEntry::GetColumn(LogicalIndex idx) const {
 	return columns.GetColumn(idx);
 }
 
-const vector<unique_ptr<Constraint>> &TableCatalogEntry::GetConstraints() {
+const vector<unique_ptr<Constraint>> &TableCatalogEntry::GetConstraints() const {
 	return constraints;
 }
 
@@ -174,11 +197,6 @@ const vector<unique_ptr<Constraint>> &TableCatalogEntry::GetConstraints() {
 DataTable &TableCatalogEntry::GetStorage() {
 	throw InternalException("Calling GetStorage on a TableCatalogEntry that is not a DuckTableEntry");
 }
-
-const vector<unique_ptr<BoundConstraint>> &TableCatalogEntry::GetBoundConstraints() {
-	throw InternalException("Calling GetBoundConstraints on a TableCatalogEntry that is not a DuckTableEntry");
-}
-
 // LCOV_EXCL_STOP
 
 static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
@@ -208,8 +226,8 @@ static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalP
 			update.expressions.push_back(make_uniq<BoundColumnRefExpression>(
 			    column.Type(), ColumnBinding(proj.table_index, proj.expressions.size())));
 			proj.expressions.push_back(make_uniq<BoundColumnRefExpression>(
-			    column.Type(), ColumnBinding(get.table_index, get.column_ids.size())));
-			get.column_ids.push_back(check_column_id.index);
+			    column.Type(), ColumnBinding(get.table_index, get.GetColumnIds().size())));
+			get.AddColumnId(check_column_id.index);
 			update.columns.push_back(check_column_id);
 		}
 	}
@@ -218,6 +236,7 @@ static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalP
 static bool TypeSupportsRegularUpdate(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::LIST:
+	case LogicalTypeId::ARRAY:
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::UNION:
 		// lists and maps and unions don't support updates directly
@@ -240,14 +259,15 @@ vector<ColumnSegmentInfo> TableCatalogEntry::GetColumnSegmentInfo() {
 	return {};
 }
 
-void TableCatalogEntry::BindUpdateConstraints(LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
-                                              ClientContext &context) {
+void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, LogicalProjection &proj,
+                                              LogicalUpdate &update, ClientContext &context) {
 	// check the constraints and indexes of the table to see if we need to project any additional columns
 	// we do this for indexes with multiple columns and CHECK constraints in the UPDATE clause
 	// suppose we have a constraint CHECK(i + j < 10); now we need both i and j to check the constraint
 	// if we are only updating one of the two columns we add the other one to the UPDATE set
 	// with a "useless" update (i.e. i=i) so we can verify that the CHECK constraint is not violated
-	for (auto &constraint : GetBoundConstraints()) {
+	auto bound_constraints = binder.BindConstraints(constraints, name, columns);
+	for (auto &constraint : bound_constraints) {
 		if (constraint->type == ConstraintType::CHECK) {
 			auto &check = constraint->Cast<BoundCheckConstraint>();
 			// check constraint! check if we need to add any extra columns to the UPDATE clause

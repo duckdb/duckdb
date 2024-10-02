@@ -2,7 +2,8 @@ import duckdb
 import os
 import pandas as pd
 import pytest
-from typing import Union
+from typing import Union, Optional
+import sys
 
 from duckdb.typing import (
     SQLNULL,
@@ -16,6 +17,7 @@ from duckdb.typing import (
     BIGINT,
     UBIGINT,
     HUGEINT,
+    UHUGEINT,
     UUID,
     FLOAT,
     DOUBLE,
@@ -24,6 +26,7 @@ from duckdb.typing import (
     TIMESTAMP_MS,
     TIMESTAMP_NS,
     TIMESTAMP_S,
+    DuckDBPyType,
     TIME,
     TIME_TZ,
     TIMESTAMP_TZ,
@@ -32,6 +35,7 @@ from duckdb.typing import (
     BIT,
     INTERVAL,
 )
+import duckdb.typing
 
 
 class TestType(object):
@@ -40,7 +44,7 @@ class TestType(object):
         # todo: add tests with invalid type_str
 
     def test_primitive_types(self):
-        assert str(SQLNULL) == 'NULL'
+        assert str(SQLNULL) == '"NULL"'
         assert str(BOOLEAN) == 'BOOLEAN'
         assert str(TINYINT) == 'TINYINT'
         assert str(UTINYINT) == 'UTINYINT'
@@ -51,6 +55,7 @@ class TestType(object):
         assert str(BIGINT) == 'BIGINT'
         assert str(UBIGINT) == 'UBIGINT'
         assert str(HUGEINT) == 'HUGEINT'
+        assert str(UHUGEINT) == 'UHUGEINT'
         assert str(UUID) == 'UUID'
         assert str(FLOAT) == 'FLOAT'
         assert str(DOUBLE) == 'DOUBLE'
@@ -67,9 +72,13 @@ class TestType(object):
         assert str(BIT) == 'BIT'
         assert str(INTERVAL) == 'INTERVAL'
 
-    def test_array_type(self):
-        type = duckdb.array_type(BIGINT)
+    def test_list_type(self):
+        type = duckdb.list_type(BIGINT)
         assert str(type) == 'BIGINT[]'
+
+    def test_array_type(self):
+        type = duckdb.array_type(BIGINT, 3)
+        assert str(type) == 'BIGINT[3]'
 
     def test_struct_type(self):
         type = duckdb.struct_type({'a': BIGINT, 'b': BOOLEAN})
@@ -187,3 +196,41 @@ class TestType(object):
 
         child_type = type.v2.child
         assert str(child_type) == 'MAP(BLOB, BIT)'
+
+    def test_json_type(self):
+        json_type = duckdb.type('JSON')
+
+        val = duckdb.Value('{"duck": 42}', json_type)
+        res = duckdb.execute("select typeof($1)", [val]).fetchone()
+        assert res == ('JSON',)
+
+    # NOTE: we can support this, but I don't think going through hoops for an outdated version of python is worth it
+    @pytest.mark.skipif(sys.version_info < (3, 9), reason="python3.7 does not store Optional[..] in a recognized way")
+    def test_optional(self):
+        type = duckdb.typing.DuckDBPyType(Optional[str])
+        assert type == 'VARCHAR'
+        type = duckdb.typing.DuckDBPyType(Optional[Union[int, bool]])
+        assert type == 'UNION(u1 BIGINT, u2 BOOLEAN)'
+        type = duckdb.typing.DuckDBPyType(Optional[list[int]])
+        assert type == 'BIGINT[]'
+        type = duckdb.typing.DuckDBPyType(Optional[dict[int, str]])
+        assert type == 'MAP(BIGINT, VARCHAR)'
+        type = duckdb.typing.DuckDBPyType(Optional[dict[Optional[int], Optional[str]]])
+        assert type == 'MAP(BIGINT, VARCHAR)'
+        type = duckdb.typing.DuckDBPyType(Optional[dict[Optional[int], Optional[str]]])
+        assert type == 'MAP(BIGINT, VARCHAR)'
+        type = duckdb.typing.DuckDBPyType(Optional[Union[Optional[str], Optional[bool]]])
+        assert type == 'UNION(u1 VARCHAR, u2 BOOLEAN)'
+        type = duckdb.typing.DuckDBPyType(Union[str, None])
+        assert type == 'VARCHAR'
+
+    @pytest.mark.skipif(sys.version_info < (3, 10), reason="'str | None' syntax requires Python 3.10 or higher")
+    def test_optional_310(self):
+        type = duckdb.typing.DuckDBPyType(str | None)
+        assert type == 'VARCHAR'
+
+    def test_children_attribute(self):
+        assert DuckDBPyType('INTEGER[]').children == [('child', DuckDBPyType('INTEGER'))]
+        assert DuckDBPyType('INTEGER[2]').children == [('child', DuckDBPyType('INTEGER')), ('size', 2)]
+        assert DuckDBPyType('INTEGER[2][3]').children == [('child', DuckDBPyType('INTEGER[2]')), ('size', 3)]
+        assert DuckDBPyType("ENUM('a', 'b', 'c')").children == [('values', ['a', 'b', 'c'])]

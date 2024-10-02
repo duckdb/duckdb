@@ -6,7 +6,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
@@ -23,7 +23,7 @@ static void TemplatedCopy(const Vector &source, const SelectionVector &sel, Vect
 	}
 }
 
-static const ValidityMask &CopyValidityMask(const Vector &v) {
+static const ValidityMask &ExtractValidityMask(const Vector &v) {
 	switch (v.GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
 		return FlatVector::Validity(v);
@@ -35,10 +35,7 @@ static const ValidityMask &CopyValidityMask(const Vector &v) {
 }
 
 void VectorOperations::Copy(const Vector &source_p, Vector &target, const SelectionVector &sel_p, idx_t source_count,
-                            idx_t source_offset, idx_t target_offset) {
-	D_ASSERT(source_offset <= source_count);
-	D_ASSERT(source_p.GetType() == target.GetType());
-	idx_t copy_count = source_count - source_offset;
+                            idx_t source_offset, idx_t target_offset, idx_t copy_count) {
 
 	SelectionVector owned_sel;
 	const SelectionVector *sel = &sel_p;
@@ -101,26 +98,8 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 			tmask.Set(target_offset + i, valid);
 		}
 	} else {
-		auto &smask = CopyValidityMask(*source);
-		if (smask.IsMaskSet()) {
-			for (idx_t i = 0; i < copy_count; i++) {
-				auto idx = sel->get_index(source_offset + i);
-
-				if (smask.RowIsValid(idx)) {
-					// set valid
-					if (!tmask.AllValid()) {
-						tmask.SetValidUnsafe(target_offset + i);
-					}
-				} else {
-					// set invalid
-					if (tmask.AllValid()) {
-						auto init_size = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, target_offset + copy_count);
-						tmask.Initialize(init_size);
-					}
-					tmask.SetInvalidUnsafe(target_offset + i);
-				}
-			}
-		}
+		auto &smask = ExtractValidityMask(*source);
+		tmask.CopySel(smask, *sel, source_offset, target_offset, copy_count);
 	}
 
 	D_ASSERT(sel);
@@ -161,6 +140,9 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 	case PhysicalType::INT128:
 		TemplatedCopy<hugeint_t>(*source, *sel, target, source_offset, target_offset, copy_count);
 		break;
+	case PhysicalType::UINT128:
+		TemplatedCopy<uhugeint_t>(*source, *sel, target, source_offset, target_offset, copy_count);
+		break;
 	case PhysicalType::FLOAT:
 		TemplatedCopy<float>(*source, *sel, target, source_offset, target_offset, copy_count);
 		break;
@@ -188,7 +170,7 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 		D_ASSERT(source_children.size() == target_children.size());
 		for (idx_t i = 0; i < source_children.size(); i++) {
 			VectorOperations::Copy(*source_children[i], *target_children[i], sel_p, source_count, source_offset,
-			                       target_offset);
+			                       target_offset, copy_count);
 		}
 		break;
 	}
@@ -201,11 +183,11 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 		auto array_size = ArrayType::GetSize(source->GetType());
 
 		// Create a selection vector for the child elements
-		SelectionVector child_sel(copy_count * array_size);
+		SelectionVector child_sel(source_count * array_size);
 		for (idx_t i = 0; i < copy_count; i++) {
 			auto source_idx = sel->get_index(source_offset + i);
 			for (idx_t j = 0; j < array_size; j++) {
-				child_sel.set_index(i * array_size + j, source_idx * array_size + j);
+				child_sel.set_index((source_offset * array_size) + (i * array_size + j), source_idx * array_size + j);
 			}
 		}
 		VectorOperations::Copy(source_child, target_child, child_sel, source_count * array_size,
@@ -280,6 +262,14 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 	if (target_vector_type != VectorType::FLAT_VECTOR) {
 		target.SetVectorType(target_vector_type);
 	}
+}
+
+void VectorOperations::Copy(const Vector &source_p, Vector &target, const SelectionVector &sel_p, idx_t source_count,
+                            idx_t source_offset, idx_t target_offset) {
+	D_ASSERT(source_offset <= source_count);
+	D_ASSERT(source_p.GetType() == target.GetType());
+	idx_t copy_count = source_count - source_offset;
+	VectorOperations::Copy(source_p, target, sel_p, source_count, source_offset, target_offset, copy_count);
 }
 
 void VectorOperations::Copy(const Vector &source, Vector &target, idx_t source_count, idx_t source_offset,

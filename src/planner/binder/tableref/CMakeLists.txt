@@ -2,16 +2,21 @@ add_library_unity(
   duckdb_bind_tableref
   OBJECT
   bind_basetableref.cpp
+  bind_delimgetref.cpp
   bind_emptytableref.cpp
   bind_expressionlistref.cpp
+  bind_column_data_ref.cpp
   bind_joinref.cpp
   bind_pivot.cpp
+  bind_showref.cpp
   bind_subqueryref.cpp
   bind_table_function.cpp
   bind_named_parameters.cpp
   plan_basetableref.cpp
+  plan_delimgetref.cpp
   plan_dummytableref.cpp
   plan_expressionlistref.cpp
+  plan_column_data_ref.cpp
   plan_joinref.cpp
   plan_subqueryref.cpp
   plan_table_function.cpp

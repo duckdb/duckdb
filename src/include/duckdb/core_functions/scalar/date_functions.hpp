@@ -363,6 +363,15 @@ struct MonthNameFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct NanosecondsFun {
+	static constexpr const char *Name = "nanosecond";
+	static constexpr const char *Parameters = "tsns";
+	static constexpr const char *Description = "Extract the nanosecond component from a date or timestamp";
+	static constexpr const char *Example = "nanosecond(timestamp_ns '2021-08-03 11:59:44.123456789') => 44123456789";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 struct QuarterFun {
 	static constexpr const char *Name = "quarter";
 	static constexpr const char *Parameters = "ts";
@@ -435,11 +444,38 @@ struct TimezoneMinuteFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct TimeTZSortKeyFun {
+	static constexpr const char *Name = "timetz_byte_comparable";
+	static constexpr const char *Parameters = "time_tz";
+	static constexpr const char *Description = "Converts a TIME WITH TIME ZONE to an integer sort key";
+	static constexpr const char *Example = "timetz_byte_comparable('18:18:16.21-07:00'::TIME_TZ)";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ToCenturiesFun {
+	static constexpr const char *Name = "to_centuries";
+	static constexpr const char *Parameters = "integer";
+	static constexpr const char *Description = "Construct a century interval";
+	static constexpr const char *Example = "to_centuries(5)";
+
+	static ScalarFunction GetFunction();
+};
+
 struct ToDaysFun {
 	static constexpr const char *Name = "to_days";
 	static constexpr const char *Parameters = "integer";
 	static constexpr const char *Description = "Construct a day interval";
 	static constexpr const char *Example = "to_days(5)";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ToDecadesFun {
+	static constexpr const char *Name = "to_decades";
+	static constexpr const char *Parameters = "integer";
+	static constexpr const char *Description = "Construct a decade interval";
+	static constexpr const char *Example = "to_decades(5)";
 
 	static ScalarFunction GetFunction();
 };
@@ -462,11 +498,20 @@ struct ToMicrosecondsFun {
 	static ScalarFunction GetFunction();
 };
 
+struct ToMillenniaFun {
+	static constexpr const char *Name = "to_millennia";
+	static constexpr const char *Parameters = "integer";
+	static constexpr const char *Description = "Construct a millenium interval";
+	static constexpr const char *Example = "to_millennia(1)";
+
+	static ScalarFunction GetFunction();
+};
+
 struct ToMillisecondsFun {
 	static constexpr const char *Name = "to_milliseconds";
-	static constexpr const char *Parameters = "integer";
+	static constexpr const char *Parameters = "double";
 	static constexpr const char *Description = "Construct a millisecond interval";
-	static constexpr const char *Example = "to_milliseconds(5)";
+	static constexpr const char *Example = "to_milliseconds(5.5)";
 
 	static ScalarFunction GetFunction();
 };
@@ -489,11 +534,20 @@ struct ToMonthsFun {
 	static ScalarFunction GetFunction();
 };
 
+struct ToQuartersFun {
+	static constexpr const char *Name = "to_quarters";
+	static constexpr const char *Parameters = "integer";
+	static constexpr const char *Description = "Construct a quarter interval";
+	static constexpr const char *Example = "to_quarters(5)";
+
+	static ScalarFunction GetFunction();
+};
+
 struct ToSecondsFun {
 	static constexpr const char *Name = "to_seconds";
-	static constexpr const char *Parameters = "integer";
+	static constexpr const char *Parameters = "double";
 	static constexpr const char *Description = "Construct a second interval";
-	static constexpr const char *Example = "to_seconds(5)";
+	static constexpr const char *Example = "to_seconds(5.5)";
 
 	static ScalarFunction GetFunction();
 };
@@ -503,6 +557,15 @@ struct ToTimestampFun {
 	static constexpr const char *Parameters = "sec";
 	static constexpr const char *Description = "Converts secs since epoch to a timestamp with time zone";
 	static constexpr const char *Example = "to_timestamp(1284352323.5)";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ToWeeksFun {
+	static constexpr const char *Name = "to_weeks";
+	static constexpr const char *Parameters = "integer";
+	static constexpr const char *Description = "Construct a week interval";
+	static constexpr const char *Example = "to_weeks(5)";
 
 	static ScalarFunction GetFunction();
 };

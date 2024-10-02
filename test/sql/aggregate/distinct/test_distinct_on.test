@@ -73,12 +73,12 @@ SELECT DISTINCT ON (3) i, j, k FROM integers ORDER BY 3
 4	5	6
 
 query II
-SELECT DISTINCT ON (2) j, (SELECT i FROM integers) FROM integers ORDER BY 2
+SELECT DISTINCT ON (2) j, (SELECT i FROM integers WHERE i=2 LIMIT 1) FROM integers ORDER BY 2
 ----
 3	2
 
 query II
-SELECT DISTINCT ON (2) j, (SELECT DISTINCT ON (i) i FROM integers ORDER BY 1) FROM integers ORDER BY 2
+SELECT DISTINCT ON (2) j, (SELECT DISTINCT ON (i) i FROM integers ORDER BY 1 LIMIT 1) FROM integers ORDER BY 2
 ----
 3	2
 
@@ -129,4 +129,5 @@ SELECT DISTINCT ON (integers.i) integers.i, integers.j FROM integers ORDER BY i,
 # out of bounds
 statement error
 SELECT DISTINCT ON (2) i FROM integers
-
+----
+Binder Error: ORDER term out of range - should be between 1 and 1

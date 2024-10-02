@@ -7,6 +7,7 @@
 #pragma once
 
 #include "benchmark.hpp"
+#include "duckdb/main/query_result.hpp"
 
 #include <unordered_map>
 #include <unordered_set>
@@ -53,6 +54,12 @@ public:
 	bool RequireReinit() override {
 		return require_reinit;
 	}
+	QueryResultType ResultMode() const {
+		return result_type;
+	}
+	idx_t ArrowBatchSize() const {
+		return arrow_batch_size;
+	}
 
 private:
 	string VerifyInternal(BenchmarkState *state_p, MaterializedQueryResult &result);
@@ -69,6 +76,10 @@ private:
 
 	string benchmark_path;
 	string cache_db = "";
+	string cache_file = "";
+	// check the existence of a cached db, but do not connect
+	// can be used to test accessing data from a different db in a non-persistent connection
+	bool cache_no_connect = false;
 	std::unordered_set<string> extensions;
 	int64_t result_column_count = 0;
 	vector<vector<string>> result_values;
@@ -79,6 +90,8 @@ private:
 	string subgroup;
 
 	bool in_memory = true;
+	QueryResultType result_type = QueryResultType::MATERIALIZED_RESULT;
+	idx_t arrow_batch_size = STANDARD_VECTOR_SIZE;
 	bool require_reinit = false;
 };
 

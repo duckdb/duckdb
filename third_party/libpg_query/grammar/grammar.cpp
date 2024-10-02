@@ -370,6 +370,12 @@ insertSelectOptions(PGSelectStmt *stmt,
 					PGWithClause *withClause,
 					core_yyscan_t yyscanner)
 {
+	if (stmt->type != T_PGSelectStmt) {
+		ereport(ERROR,
+				(errcode(PG_ERRCODE_SYNTAX_ERROR),
+						errmsg("DESCRIBE/SHOW/SUMMARIZE with CTE/ORDER BY/... not allowed - wrap the statement in a subquery instead"),
+						parser_errposition(exprLocation((PGNode *) stmt))));
+	}
 	Assert(IsA(stmt, PGSelectStmt));
 
 	/*
@@ -423,8 +429,8 @@ makeSetOp(PGSetOperation op, bool all, PGNode *larg, PGNode *rarg)
 
 	n->op = op;
 	n->all = all;
-	n->larg = (PGSelectStmt *) larg;
-	n->rarg = (PGSelectStmt *) rarg;
+	n->larg = larg;
+	n->rarg = rarg;
 	return (PGNode *) n;
 }
 
@@ -446,8 +452,7 @@ SystemFuncName(const char *name)
 PGTypeName *
 SystemTypeName(const char *name)
 {
-	return makeTypeNameFromNameList(list_make2(makeString(DEFAULT_SCHEMA),
-											   makeString(name)));
+	return makeTypeNameFromNameList(list_make1(makeString(name)));
 }
 
 /* doNegate()

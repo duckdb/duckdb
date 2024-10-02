@@ -10,7 +10,7 @@ void OuterJoinMarker::Initialize(idx_t count_p) {
 		return;
 	}
 	this->count = count_p;
-	found_match = make_unsafe_uniq_array<bool>(count);
+	found_match = make_unsafe_uniq_array_uninitialized<bool>(count);
 	Reset();
 }
 

@@ -1,0 +1,38 @@
+# name: test/sql/catalog/dependencies/test_concurrent_drop.test
+# description: Test concurrent alter and rename of tables
+# group: [dependencies]
+
+require skip_reload
+
+# Create a sequence object
+statement ok
+create sequence seq;
+
+concurrentloop i 0 100
+
+# Create dependencies on the sequence
+statement ok
+create table tbl${i} (
+	a integer default nextval('seq')
+);
+
+# Cant drop the sequence because we just added a dependency
+statement error
+drop sequence seq;
+----
+Cannot drop entry "seq" because there are entries that depend on it.
+
+# Use the sequence
+statement ok
+insert into tbl${i} VALUES(DEFAULT);
+
+# Drop the table - removing the dependency
+statement ok
+drop table tbl${i};
+
+# i
+endloop
+
+# We can now drop the sequence, all its dependents are gone
+statement ok
+drop sequence seq;

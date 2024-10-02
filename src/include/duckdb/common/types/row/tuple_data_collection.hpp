@@ -33,18 +33,12 @@ struct TupleDataScatterFunction {
 
 typedef void (*tuple_data_gather_function_t)(const TupleDataLayout &layout, Vector &row_locations, const idx_t col_idx,
                                              const SelectionVector &scan_sel, const idx_t scan_count, Vector &target,
-                                             const SelectionVector &target_sel, Vector &list_vector,
+                                             const SelectionVector &target_sel, optional_ptr<Vector> list_vector,
                                              const vector<TupleDataGatherFunction> &child_functions);
 
 struct TupleDataGatherFunction {
 	tuple_data_gather_function_t function;
 	vector<TupleDataGatherFunction> child_functions;
-};
-
-enum class WithinCollection : uint8_t {
-	NO,
-	LIST,
-	ARRAY,
 };
 
 //! TupleDataCollection represents a set of buffer-managed data stored in row format
@@ -74,11 +68,9 @@ public:
 	void Unpin();
 
 	//! Gets the scatter function for the given type
-	static TupleDataScatterFunction GetScatterFunction(const LogicalType &type,
-	                                                   WithinCollection within = WithinCollection::NO);
+	static TupleDataScatterFunction GetScatterFunction(const LogicalType &type, bool within_collection = false);
 	//! Gets the gather function for the given type
-	static TupleDataGatherFunction GetGatherFunction(const LogicalType &type,
-	                                                 WithinCollection within = WithinCollection::NO);
+	static TupleDataGatherFunction GetGatherFunction(const LogicalType &type);
 
 	//! Initializes an Append state - useful for optimizing many appends made to the same tuple data collection
 	void InitializeAppend(TupleDataAppendState &append_state,
@@ -122,6 +114,8 @@ public:
 	static void ToUnifiedFormat(TupleDataChunkState &chunk_state, DataChunk &new_chunk);
 	//! Gets the UnifiedVectorFormat from the Chunk state as an array
 	static void GetVectorData(const TupleDataChunkState &chunk_state, UnifiedVectorFormat result[]);
+	//! Resets the cached cache vectors (used for ARRAY/LIST casts)
+	static void ResetCachedCastVectors(TupleDataChunkState &chunk_state, const vector<column_t> &column_ids);
 	//! Computes the heap sizes for the new DataChunk that will be appended
 	static void ComputeHeapSizes(TupleDataChunkState &chunk_state, const DataChunk &new_chunk,
 	                             const SelectionVector &append_sel, const idx_t append_count);
@@ -153,6 +147,8 @@ public:
 
 	//! Initializes a chunk with the correct types that can be used to call Append/Scan
 	void InitializeChunk(DataChunk &chunk) const;
+	//! Initializes a chunk with the correct types that can be used to call Append/Scan for the given columns
+	void InitializeChunk(DataChunk &chunk, const vector<column_t> &columns) const;
 	//! Initializes a chunk with the correct types for a given scan state
 	void InitializeScanChunk(TupleDataScanState &state, DataChunk &chunk) const;
 	//! Initializes a Scan state for scanning all columns
@@ -176,15 +172,16 @@ public:
 
 	//! Gathers a DataChunk from the TupleDataCollection, given the specific row locations (requires full pin)
 	void Gather(Vector &row_locations, const SelectionVector &scan_sel, const idx_t scan_count, DataChunk &result,
-	            const SelectionVector &target_sel) const;
+	            const SelectionVector &target_sel, vector<unique_ptr<Vector>> &cached_cast_vectors) const;
 	//! Gathers a DataChunk (only the columns given by column_ids) from the TupleDataCollection,
 	//! given the specific row locations (requires full pin)
 	void Gather(Vector &row_locations, const SelectionVector &scan_sel, const idx_t scan_count,
-	            const vector<column_t> &column_ids, DataChunk &result, const SelectionVector &target_sel) const;
+	            const vector<column_t> &column_ids, DataChunk &result, const SelectionVector &target_sel,
+	            vector<unique_ptr<Vector>> &cached_cast_vectors) const;
 	//! Gathers a Vector (from the given column id) from the TupleDataCollection
 	//! given the specific row locations (requires full pin)
 	void Gather(Vector &row_locations, const SelectionVector &sel, const idx_t scan_count, const column_t column_id,
-	            Vector &result, const SelectionVector &target_sel) const;
+	            Vector &result, const SelectionVector &target_sel, optional_ptr<Vector> cached_cast_vector) const;
 
 	//! Converts this TupleDataCollection to a string representation
 	string ToString();

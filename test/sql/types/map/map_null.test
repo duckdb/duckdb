@@ -1,0 +1,69 @@
+# name: test/sql/types/map/map_null.test
+# group: [map]
+
+statement ok
+pragma enable_verification;
+
+query I
+select map(NULL::INT[], [1,2,3])
+----
+NULL
+
+query I
+select map(NULL, [1,2,3])
+----
+NULL
+
+query I
+select map(NULL, NULL)
+----
+NULL
+
+query I
+select map(NULL, [1,2,3]) IS NULL
+----
+true
+
+query I
+select map([1,2,3], NULL)
+----
+NULL
+
+query I
+select map([1,2,3], NULL::INT[])
+----
+NULL
+
+query I
+SELECT * FROM ( VALUES
+	(MAP(NULL, NULL)),
+	(MAP(NULL::INT[], NULL::INT[])),
+	(MAP([1,2,3], [1,2,3]))
+)
+----
+NULL
+NULL
+{1=1, 2=2, 3=3}
+
+query I
+select MAP(a, b) FROM ( VALUES
+	(NULL, ['b', 'c']),
+	(NULL::INT[], NULL),
+	(NULL::INT[], NULL::VARCHAR[]),
+	(NULL::INT[], ['a', 'b', 'c']),
+	(NULL, ['longer string than inlined', 'smol']),
+	(NULL, NULL),
+	([1,2,3], NULL),
+	([1,2,3], ['z', 'y', 'x']),
+	([1,2,3], NULL::VARCHAR[]),
+) t(a, b)
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+{1=z, 2=y, 3=x}
+NULL

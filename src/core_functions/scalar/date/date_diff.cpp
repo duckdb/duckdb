@@ -91,8 +91,8 @@ struct DateDiff {
 	struct WeekOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return Date::Epoch(Date::GetMondayOfCurrentWeek(enddate)) / Interval::SECS_PER_WEEK -
-			       Date::Epoch(Date::GetMondayOfCurrentWeek(startdate)) / Interval::SECS_PER_WEEK;
+			//	Weeks do not count Monday crossings, just distance
+			return (enddate.days - startdate.days) / Interval::DAYS_PER_WEEK;
 		}
 	};
 
@@ -202,22 +202,30 @@ int64_t DateDiff::MicrosecondsOperator::Operation(timestamp_t startdate, timesta
 
 template <>
 int64_t DateDiff::MillisecondsOperator::Operation(timestamp_t startdate, timestamp_t enddate) {
+	D_ASSERT(Timestamp::IsFinite(startdate));
+	D_ASSERT(Timestamp::IsFinite(enddate));
 	return Timestamp::GetEpochMs(enddate) - Timestamp::GetEpochMs(startdate);
 }
 
 template <>
 int64_t DateDiff::SecondsOperator::Operation(timestamp_t startdate, timestamp_t enddate) {
+	D_ASSERT(Timestamp::IsFinite(startdate));
+	D_ASSERT(Timestamp::IsFinite(enddate));
 	return Timestamp::GetEpochSeconds(enddate) - Timestamp::GetEpochSeconds(startdate);
 }
 
 template <>
 int64_t DateDiff::MinutesOperator::Operation(timestamp_t startdate, timestamp_t enddate) {
+	D_ASSERT(Timestamp::IsFinite(startdate));
+	D_ASSERT(Timestamp::IsFinite(enddate));
 	return Timestamp::GetEpochSeconds(enddate) / Interval::SECS_PER_MINUTE -
 	       Timestamp::GetEpochSeconds(startdate) / Interval::SECS_PER_MINUTE;
 }
 
 template <>
 int64_t DateDiff::HoursOperator::Operation(timestamp_t startdate, timestamp_t enddate) {
+	D_ASSERT(Timestamp::IsFinite(startdate));
+	D_ASSERT(Timestamp::IsFinite(enddate));
 	return Timestamp::GetEpochSeconds(enddate) / Interval::SECS_PER_HOUR -
 	       Timestamp::GetEpochSeconds(startdate) / Interval::SECS_PER_HOUR;
 }

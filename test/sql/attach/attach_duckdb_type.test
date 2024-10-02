@@ -1,0 +1,31 @@
+# name: test/sql/attach/attach_duckdb_type.test
+# description: Test attaching a file with type DUCKDB
+# group: [attach]
+
+require noforcestorage
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH '__TEST_DIR__/first.db' (TYPE DUCKDB);
+
+query I
+SELECT database_name FROM duckdb_databases() ORDER BY 1;
+----
+first
+memory
+system
+temp
+
+# DUCKDB type does not allow unrecognized options
+
+statement error
+ATTACH '__TEST_DIR__/error.db' (TYPE DUCKDB, HELLO, OPTION 2);
+----
+Unrecognized option for attach
+
+statement error
+ATTACH '__TEST_DIR__/error.db' (HELLO, OPTION 2);
+----
+Unrecognized option for attach

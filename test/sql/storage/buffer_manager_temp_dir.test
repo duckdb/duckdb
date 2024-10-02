@@ -2,9 +2,11 @@
 # description: Test setting of the temporary directory
 # group: [storage]
 
+require noforcestorage
+
 require skip_reload
 
-# set temporary directory to an empty directory
+# Set the temporary directory to an empty directory.
 statement ok
 PRAGMA temp_directory=''
 
@@ -15,6 +17,8 @@ PRAGMA memory_limit='2MB'
 # hence this creation should fail as the table does not fit within our memory limit
 statement error
 CREATE TABLE t2 AS SELECT * FROM range(1000000);
+----
+could not allocate block of size
 
 # after we set the temp directory, we can create this table
 statement ok
@@ -26,3 +30,4 @@ CREATE TABLE t2 AS SELECT * FROM range(1000000);
 # after the temp directory is created, we can't change the temp directory again
 statement error
 PRAGMA temp_directory=''
+----

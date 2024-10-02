@@ -40,6 +40,8 @@ public:
 	string error_message;
 	//! Index of the object where the error occurred
 	idx_t object_index = DConstants::INVALID_INDEX;
+	//! Cast parameters
+	CastParameters parameters;
 
 public:
 	void Serialize(Serializer &serializer) const;

@@ -2,8 +2,13 @@
 
 namespace duckdb {
 
-MemoryStream::MemoryStream(idx_t capacity)
-    : position(0), capacity(capacity), owns_data(true), data(static_cast<data_ptr_t>(malloc(capacity))) {
+MemoryStream::MemoryStream(idx_t capacity) : position(0), capacity(capacity), owns_data(true) {
+	D_ASSERT(capacity != 0 && IsPowerOfTwo(capacity));
+	auto data_malloc_result = malloc(capacity);
+	if (!data_malloc_result) {
+		throw std::bad_alloc();
+	}
+	data = static_cast<data_ptr_t>(data_malloc_result);
 }
 
 MemoryStream::MemoryStream(data_ptr_t buffer, idx_t capacity)
@@ -25,7 +30,6 @@ void MemoryStream::WriteData(const_data_ptr_t source, idx_t write_size) {
 			throw SerializationException("Failed to serialize: not enough space in buffer to fulfill write request");
 		}
 	}
-
 	memcpy(data + position, source, write_size);
 	position += write_size;
 }

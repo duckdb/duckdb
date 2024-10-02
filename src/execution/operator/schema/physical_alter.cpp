@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/schema/physical_alter.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {

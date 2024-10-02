@@ -1,0 +1,22 @@
+# name: test/sql/alter/rename_table/test_rename_table_case.test
+# description: Test RENAME TABLE only changing the case
+# group: [rename_table]
+
+statement ok
+create table MY_TABLE (i integer);
+
+statement ok
+insert into MY_TABLE values(42);
+
+statement ok
+alter table MY_TABLE rename to my_table;
+
+query I
+select * from my_table;
+----
+42
+
+query I
+select * from MY_TABLE;
+----
+42

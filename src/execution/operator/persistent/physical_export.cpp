@@ -21,43 +21,46 @@ void ReorderTableEntries(catalog_entry_vector_t &tables);
 
 using std::stringstream;
 
+void ReorderTableEntries(catalog_entry_vector_t &tables);
+
 static void WriteCatalogEntries(stringstream &ss, catalog_entry_vector_t &entries) {
 	for (auto &entry : entries) {
 		if (entry.get().internal) {
 			continue;
 		}
-		ss << entry.get().ToSQL() << std::endl;
+		auto create_info = entry.get().GetInfo();
+		try {
+			// Strip the catalog from the info
+			create_info->catalog.clear();
+			auto to_string = create_info->ToString();
+			ss << to_string;
+		} catch (const NotImplementedException &) {
+			ss << entry.get().ToSQL();
+		}
+		ss << '\n';
 	}
-	ss << std::endl;
+	ss << '\n';
 }
 
 static void WriteStringStreamToFile(FileSystem &fs, stringstream &ss, const string &path) {
 	auto ss_string = ss.str();
-	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW,
-	                          FileLockType::WRITE_LOCK);
-	fs.Write(*handle, (void *)ss_string.c_str(), ss_string.size());
+	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW |
+	                                    FileLockType::WRITE_LOCK);
+	fs.Write(*handle, (void *)ss_string.c_str(), NumericCast<int64_t>(ss_string.size()));
 	handle.reset();
-}
-
-static void WriteValueAsSQL(stringstream &ss, Value &val) {
-	if (val.type().IsNumeric()) {
-		ss << val.ToString();
-	} else {
-		ss << "'" << val.ToString() << "'";
-	}
 }
 
 static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info, ExportedTableData &exported_table,
                                CopyFunction const &function) {
 	ss << "COPY ";
 
-	if (exported_table.schema_name != DEFAULT_SCHEMA) {
+	//! NOTE: The catalog is explicitly not set here
+	if (exported_table.schema_name != DEFAULT_SCHEMA && !exported_table.schema_name.empty()) {
 		ss << KeywordHelper::WriteOptionallyQuoted(exported_table.schema_name) << ".";
 	}
 
-	ss << StringUtil::Format("%s FROM %s (", SQLIdentifier(exported_table.table_name),
-	                         SQLString(exported_table.file_path));
-
+	auto file_path = StringUtil::Replace(exported_table.file_path, "\\", "/");
+	ss << StringUtil::Format("%s FROM %s (", SQLIdentifier(exported_table.table_name), SQLString(file_path));
 	// write the copy options
 	ss << "FORMAT '" << info.format << "'";
 	if (info.format == "csv") {
@@ -72,20 +75,35 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 		if (info.options.find("quote") == info.options.end()) {
 			info.options["quote"].push_back(Value("\""));
 		}
+		info.options.erase("force_not_null");
+		for (auto &not_null_column : exported_table.not_null_columns) {
+			info.options["force_not_null"].push_back(not_null_column);
+		}
 	}
 	for (auto &copy_option : info.options) {
 		if (copy_option.first == "force_quote") {
 			continue;
 		}
+		if (copy_option.second.empty()) {
+			// empty options are interpreted as TRUE
+			copy_option.second.push_back(true);
+		}
 		ss << ", " << copy_option.first << " ";
 		if (copy_option.second.size() == 1) {
-			WriteValueAsSQL(ss, copy_option.second[0]);
+			ss << copy_option.second[0].ToSQLString();
 		} else {
-			// FIXME handle multiple options
-			throw NotImplementedException("FIXME: serialize list of options");
+			// For Lists
+			ss << "(";
+			for (idx_t i = 0; i < copy_option.second.size(); i++) {
+				ss << copy_option.second[i].ToSQLString();
+				if (i != copy_option.second.size() - 1) {
+					ss << ", ";
+				}
+			}
+			ss << ")";
 		}
 	}
-	ss << ");" << std::endl;
+	ss << ");" << '\n';
 }
 
 //===--------------------------------------------------------------------===//
@@ -103,73 +121,93 @@ unique_ptr<GlobalSourceState> PhysicalExport::GetGlobalSourceState(ClientContext
 	return make_uniq<ExportSourceState>();
 }
 
+void PhysicalExport::ExtractEntries(ClientContext &context, vector<reference<SchemaCatalogEntry>> &schema_list,
+                                    ExportEntries &result) {
+	for (auto &schema_p : schema_list) {
+		auto &schema = schema_p.get();
+		if (!schema.internal) {
+			result.schemas.push_back(schema);
+		}
+		schema.Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			if (entry.type != CatalogType::TABLE_ENTRY) {
+				result.views.push_back(entry);
+			}
+			if (entry.type == CatalogType::TABLE_ENTRY) {
+				result.tables.push_back(entry);
+			}
+		});
+		schema.Scan(context, CatalogType::SEQUENCE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			result.sequences.push_back(entry);
+		});
+		schema.Scan(context, CatalogType::TYPE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			result.custom_types.push_back(entry);
+		});
+		schema.Scan(context, CatalogType::INDEX_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			result.indexes.push_back(entry);
+		});
+		schema.Scan(context, CatalogType::MACRO_ENTRY, [&](CatalogEntry &entry) {
+			if (!entry.internal && entry.type == CatalogType::MACRO_ENTRY) {
+				result.macros.push_back(entry);
+			}
+		});
+		schema.Scan(context, CatalogType::TABLE_MACRO_ENTRY, [&](CatalogEntry &entry) {
+			if (!entry.internal && entry.type == CatalogType::TABLE_MACRO_ENTRY) {
+				result.macros.push_back(entry);
+			}
+		});
+	}
+}
+
 static void AddEntries(catalog_entry_vector_t &all_entries, catalog_entry_vector_t &to_add) {
-	all_entries.reserve(all_entries.size() + to_add.size());
 	for (auto &entry : to_add) {
 		all_entries.push_back(entry);
 	}
 	to_add.clear();
 }
 
-catalog_entry_vector_t GetNaiveExportOrder(ClientContext &context, const string &catalog) {
-	catalog_entry_vector_t schemas;
-	catalog_entry_vector_t custom_types;
-	catalog_entry_vector_t sequences;
-	catalog_entry_vector_t tables;
-	catalog_entry_vector_t views;
-	catalog_entry_vector_t indexes;
-	catalog_entry_vector_t macros;
-
+catalog_entry_vector_t PhysicalExport::GetNaiveExportOrder(ClientContext &context, Catalog &catalog) {
 	// gather all catalog types to export
-	auto schema_list = Catalog::GetSchemas(context, catalog);
-	for (auto &schema_p : schema_list) {
-		auto &schema = schema_p.get();
-		if (!schema.internal) {
-			schemas.push_back(schema);
-		}
-		schema.Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
-			if (entry.internal) {
-				return;
-			}
-			if (entry.type == CatalogType::TABLE_ENTRY) {
-				auto &table_entry = entry.Cast<TableCatalogEntry>();
-				tables.push_back(table_entry);
-			} else if (entry.type == CatalogType::VIEW_ENTRY) {
-				views.push_back(entry);
-			} else {
-				throw InternalException("Encountered an unrecognized entry type in GetNaiveExportOrder");
-			}
-		});
-		schema.Scan(context, CatalogType::SEQUENCE_ENTRY, [&](CatalogEntry &entry) { sequences.push_back(entry); });
-		schema.Scan(context, CatalogType::TYPE_ENTRY, [&](CatalogEntry &entry) { custom_types.push_back(entry); });
-		schema.Scan(context, CatalogType::INDEX_ENTRY, [&](CatalogEntry &entry) { indexes.push_back(entry); });
-		schema.Scan(context, CatalogType::MACRO_ENTRY, [&](CatalogEntry &entry) {
-			if (!entry.internal && entry.type == CatalogType::MACRO_ENTRY) {
-				macros.push_back(entry);
-			}
-		});
-		schema.Scan(context, CatalogType::TABLE_MACRO_ENTRY, [&](CatalogEntry &entry) {
-			if (!entry.internal && entry.type == CatalogType::TABLE_MACRO_ENTRY) {
-				macros.push_back(entry);
-			}
-		});
-	}
+	ExportEntries entries;
+	auto schema_list = catalog.GetSchemas(context);
+	PhysicalExport::ExtractEntries(context, schema_list, entries);
 
-	ReorderTableEntries(tables);
+	ReorderTableEntries(entries.tables);
 
 	// order macro's by timestamp so nested macro's are imported nicely
-	sort(macros.begin(), macros.end(), [](const reference<CatalogEntry> &lhs, const reference<CatalogEntry> &rhs) {
-		return lhs.get().oid < rhs.get().oid;
-	});
+	sort(entries.macros.begin(), entries.macros.end(),
+	     [](const reference<CatalogEntry> &lhs, const reference<CatalogEntry> &rhs) {
+		     return lhs.get().oid < rhs.get().oid;
+	     });
 
 	catalog_entry_vector_t catalog_entries;
-	AddEntries(catalog_entries, schemas);
-	AddEntries(catalog_entries, custom_types);
-	AddEntries(catalog_entries, sequences);
-	AddEntries(catalog_entries, tables);
-	AddEntries(catalog_entries, views);
-	AddEntries(catalog_entries, indexes);
-	AddEntries(catalog_entries, macros);
+	idx_t size = 0;
+	size += entries.schemas.size();
+	size += entries.custom_types.size();
+	size += entries.sequences.size();
+	size += entries.tables.size();
+	size += entries.views.size();
+	size += entries.indexes.size();
+	size += entries.macros.size();
+	catalog_entries.reserve(size);
+	AddEntries(catalog_entries, entries.schemas);
+	AddEntries(catalog_entries, entries.sequences);
+	AddEntries(catalog_entries, entries.custom_types);
+	AddEntries(catalog_entries, entries.tables);
+	AddEntries(catalog_entries, entries.macros);
+	AddEntries(catalog_entries, entries.views);
+	AddEntries(catalog_entries, entries.indexes);
 	return catalog_entries;
 }
 
@@ -192,7 +230,7 @@ SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &c
 		auto &dependency_manager = duck_catalog.GetDependencyManager();
 		catalog_entries = dependency_manager.GetExportOrder();
 	} else {
-		catalog_entries = GetNaiveExportOrder(context.client, info->catalog);
+		catalog_entries = GetNaiveExportOrder(context.client, catalog);
 	}
 
 	// write the schema.sql file

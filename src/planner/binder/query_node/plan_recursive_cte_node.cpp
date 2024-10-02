@@ -17,8 +17,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundRecursiveCTENode &node) {
 	auto right_node = node.right_binder->CreatePlan(*node.right);
 
 	// check if there are any unplanned subqueries left in either child
-	has_unplanned_dependent_joins =
-	    node.left_binder->has_unplanned_dependent_joins || node.right_binder->has_unplanned_dependent_joins;
+	has_unplanned_dependent_joins = has_unplanned_dependent_joins || node.left_binder->has_unplanned_dependent_joins ||
+	                                node.right_binder->has_unplanned_dependent_joins;
 
 	// for both the left and right sides, cast them to the same types
 	left_node = CastLogicalOperatorToTypes(node.left->types, node.types, std::move(left_node));
@@ -27,7 +27,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundRecursiveCTENode &node) {
 	if (!node.right_binder->bind_context.cte_references[node.ctename] ||
 	    *node.right_binder->bind_context.cte_references[node.ctename] == 0) {
 		auto root = make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(left_node),
-		                                           std::move(right_node), LogicalOperatorType::LOGICAL_UNION);
+		                                           std::move(right_node), LogicalOperatorType::LOGICAL_UNION, true);
 		return VisitQueryNode(node, std::move(root));
 	}
 	auto root = make_uniq<LogicalRecursiveCTE>(node.ctename, node.setop_index, node.types.size(), node.union_all,

@@ -114,27 +114,35 @@ Invalid Input Error
 # path error
 statement error
 select json_extract('{"a": {"b": "c"}}', '$[]');
+----
 
 statement error
 select json_extract('{"a": {"b": "c"}}', '$[#');
+----
 
 statement error
 select json_extract(j, '$.my_field[my_nested_field[#-3]') from test
+----
 
 statement error
 select json_extract(j, '$.my_field.my_nested_field[!]') from test
+----
 
 statement error
 select json_extract('{"a": {"b": "c"}}', '$.a..');
+----
 
 statement error
 select json_extract('{"a": {"b": "c"}}', '$[[');
+----
 
 statement error
 select json_extract('{"a": {"b": "c"}}', '$[.');
+----
 
 statement error
 select json_extract('{"a": {"b": "c"}}', '$]');
+----
 
 # with JSON path we support wildcards in arrays and objects, this results in a LIST
 query T
@@ -206,4 +214,53 @@ select sum((to_json({duck:range})->'$.*')[1]::int) = sum(range) from range(10000
 query T
 select json_extract('[{"duck":null},{"duck":42},{"duck":null},{}]', '$[*].*')
 ----
-[NULL, 42, NULL]
+[null, 42, null]
+
+# test recursive wildcard path
+query T
+select json_extract('{"a":{"b":1,"c":2},"d":["g","h",[{"b":5},{"x":42}]]}', '$..*')
+----
+[{"b":1,"c":2}, ["g","h",[{"b":5},{"x":42}]], 1, 2, "g", "h", [{"b":5},{"x":42}], {"b":5}, {"x":42}, 5, 42]
+
+# alternative syntax
+query T
+select json_extract('{"a":{"b":1,"c":2},"d":["g","h",[{"b":5},{"x":42}]]}', '$.**')
+----
+[{"b":1,"c":2}, ["g","h",[{"b":5},{"x":42}]], 1, 2, "g", "h", [{"b":5},{"x":42}], {"b":5}, {"x":42}, 5, 42]
+
+# recursive non-wildcard path
+query T
+select json_extract('{"a":{"b":1,"c":2},"d":["g","h",[{"b":5},{"x":42}]]}', '$..b')
+----
+[1, 5]
+
+query T
+select json_extract('{"a":{"b":1,"c":2},"d":["g","h",[{"b":5},{"x":42}]]}', '$..[0]')
+----
+["g", {"b":5}]
+
+query T
+with tbl as (
+    select '[{"duck":42},{"duck":{"a":43,"b":null}}]' j
+)
+select json_extract(j, '$[*]..*') from tbl
+----
+[42, {"a":43,"b":null}, 43, null]
+
+query T
+with tbl as (
+    select '{"duck":[{"goose":42},{"goose":43}],"goose":null}' j
+)
+select json_extract(j, '$.duck[*]..goose') from tbl
+----
+[42, 43]
+
+query T
+select json_extract(j,'$..[*]') from test
+----
+["goose", "duck"]
+
+query T
+select json_extract('[[{"a":[1,2,3]}], [{"a":[4,5,6]}]]','$[*]..a[*]')
+----
+[1, 2, 3, 4, 5, 6]

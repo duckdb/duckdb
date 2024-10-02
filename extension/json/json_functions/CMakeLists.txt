@@ -4,14 +4,17 @@ add_library_unity(
   copy_json.cpp
   json_array_length.cpp
   json_contains.cpp
+  json_exists.cpp
   json_extract.cpp
   json_keys.cpp
   json_merge_patch.cpp
+  json_pretty.cpp
   json_structure.cpp
   json_transform.cpp
   json_create.cpp
   json_type.cpp
   json_valid.cpp
+  json_value.cpp
   json_serialize_plan.cpp
   json_serialize_sql.cpp
   read_json.cpp

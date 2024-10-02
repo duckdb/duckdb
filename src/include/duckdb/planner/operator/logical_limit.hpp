@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
 
 namespace duckdb {
 
@@ -18,15 +19,10 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_LIMIT;
 
 public:
-	LogicalLimit(int64_t limit_val, int64_t offset_val, unique_ptr<Expression> limit, unique_ptr<Expression> offset);
+	LogicalLimit(BoundLimitNode limit_val, BoundLimitNode offset_val);
 
-	//! Limit and offset values in case they are constants, used in optimizations.
-	int64_t limit_val;
-	int64_t offset_val;
-	//! The maximum amount of elements to emit
-	unique_ptr<Expression> limit;
-	//! The offset from the start to begin emitting elements
-	unique_ptr<Expression> offset;
+	BoundLimitNode limit_val;
+	BoundLimitNode offset_val;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;

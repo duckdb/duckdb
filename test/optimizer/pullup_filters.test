@@ -30,13 +30,13 @@ physical_plan	<REGEX>:.*=5.*=5.*
 query II
 EXPLAIN SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i=5 AND k=3) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i=tbl2.i AND tbl1.k=tbl2.k
 ----
-physical_plan	<REGEX>:.*=5.*=3.*=5.*=3.*
+physical_plan	<REGEX>:(.*=5.*=3.*=5.*=3.*|.*=3.*=5.*=3.*=5.*)
 
 ## INNER JOIN: pull up two filters in cross product from RHS
 query II
 EXPLAIN SELECT * FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2 WHERE i=5 AND k=3) tbl2 WHERE tbl1.i=tbl2.i AND tbl1.k=tbl2.k
 ----
-physical_plan	<REGEX>:.*=5.*=3.*=5.*=3.*
+physical_plan	<REGEX>:(.*=5.*=3.*=5.*=3.*|.*=3.*=5.*=3.*=5.*)
 
 #### LEFT JOIN: pull up a single filter from LHS ####
 query II
@@ -54,7 +54,7 @@ physical_plan	<!REGEX>:.*=5.*=5.*
 query II
 EXPLAIN SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i=5 AND k=10) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k
 ----
-physical_plan	<REGEX>:.*=5.*=10.*=5.*=10.*
+physical_plan	<REGEX>:((.*=5.*=10.*=5.*=10.*)|(.*=10.*=5.*=10.*=5.*))
 
 ## INNER JOIN: pull up filter from LHS ####
 query II
@@ -72,11 +72,54 @@ physical_plan	<REGEX>:.*=5.*=5.*=5.*=5.*
 query II
 EXPLAIN SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i=3 AND k=5 INTERSECT SELECT * FROM vals1, vals2) tbl1;
 ----
-physical_plan	<REGEX>:.*=3.*=5.*=3.*=5.*
+physical_plan	<REGEX>:((.*=3.*=5.*=3.*=5.*)|(.*=5.*=3.*=5.*=3.*))
 
 ## INTERSECT: pull up filters from RHS
 query II
 EXPLAIN SELECT * FROM (SELECT * FROM vals1, vals2 INTERSECT SELECT * FROM vals1, vals2 WHERE i=3 AND k=5) tbl1;
 ----
-physical_plan	<REGEX>:.*=3.*=5.*=3.*=5.*
+physical_plan	<REGEX>:((.*=3.*=5.*=3.*=5.*)|(.*=5.*=3.*=5.*=3.*))
 
+statement ok
+create table orders as select range o_orderkey from range(10)
+
+statement ok
+create table lineitem as select range % 10 l_orderkey from range(100)
+
+# down here we test that we can pull filters out of explicitly joined relations (using JOIN syntax rather than WHERE)
+
+# even though we are explicitly joining on l_orderkey both times,
+# we can derive that o1.o_orderkey = o2.o_orderkey
+# once we've derived this, the join order optimizer finds it should join o1 with o2 before joining with lineitem
+# rather than joining lineitem with o1 and o2 directly
+# so we should see lineitem first in the regex, and then 2x orders (deeper because joined first)
+
+statement ok
+PRAGMA explain_output='OPTIMIZED_ONLY'
+
+query II
+explain
+select count(*)
+from lineitem l
+join orders o1
+on (l.l_orderkey = o1.o_orderkey)
+join orders o2
+on (l.l_orderkey = o2.o_orderkey)
+----
+logical_opt	<REGEX>:.*lineitem.*orders.*orders.*
+
+# if we disable the FilterPullup, we get the original join order again:
+# orders first (joined last), then lineitem, then orders
+statement ok
+set disabled_optimizers to 'filter_pullup'
+
+query II
+explain
+select count(*)
+from lineitem l
+join orders o1
+on (l.l_orderkey = o1.o_orderkey)
+join orders o2
+on (l.l_orderkey = o2.o_orderkey)
+----
+logical_opt	<REGEX>:.*orders.*lineitem.*orders.*

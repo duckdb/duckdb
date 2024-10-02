@@ -13,9 +13,11 @@ CREATE SCHEMA "SCHEMA";
 
 statement error
 CREATE TYPE "ENUM" AS ENUM('ALL');
+----
 
 statement error
 CREATE TABLE "SCHEMA"."TABLE"("COLUMN" "ENUM");
+----
 
 statement ok
 CREATE TYPE E AS ENUM('ALL');

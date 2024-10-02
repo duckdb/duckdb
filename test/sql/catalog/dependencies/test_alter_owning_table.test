@@ -1,0 +1,44 @@
+# name: test/sql/catalog/dependencies/test_alter_owning_table.test
+# description: Test ALTER of table that owns a sequence
+# group: [dependencies]
+
+# FIXME: we don't preserve OWNED BY on restarts
+require skip_reload
+
+statement ok
+create sequence seq;
+
+statement ok
+create sequence other_seq;
+
+statement ok
+create table tbl (
+	a integer default nextval('other_seq')
+);
+
+statement ok
+alter sequence seq owned by tbl;
+
+statement ok
+alter table tbl rename to tbl2;
+
+statement error
+drop sequence seq;
+----
+table "tbl2" depends on index "seq".
+
+statement error
+drop sequence other_seq;
+----
+table "tbl2" depends on index "other_seq".
+
+statement ok
+drop table tbl2;
+
+statement error
+drop sequence seq;
+----
+Sequence with name seq does not exist!
+
+statement ok
+drop sequence other_seq;

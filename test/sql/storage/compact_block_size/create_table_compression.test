@@ -1,0 +1,194 @@
+# name: test/sql/storage/compact_block_size/create_table_compression.test
+# description: Test CREATE TABLE using compression options
+# group: [compact_block_size]
+
+# This test defaults to another compression function for larger block sizes,
+# because the bitpacking groups fit the blocks.
+require block_size 16384
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE T (a INTEGER USING COMPRESSION RLE)
+
+statement ok
+DROP TABLE T
+
+statement error
+CREATE TABLE T (a INTEGER USING COMPRESSION 'bla')
+----
+
+statement error
+CREATE TABLE T (a INTEGER USING COMPRESSION )
+----
+
+statement error
+CREATE TABLE T (a INTEGER NOT NULL USING COMPRESSION )
+----
+
+statement error
+CREATE TABLE T (a INTEGER USING COMPRESSION bla)
+----
+
+statement ok
+CREATE TABLE T (a INTEGER NOT NULL USING COMPRESSION RLE)
+
+statement ok
+DROP TABLE T
+
+statement ok
+CREATE TABLE T (a INTEGER USING COMPRESSION RLE, b VARCHAR USING COMPRESSION RLE )
+
+statement ok
+DROP TABLE T
+
+statement ok
+CREATE TABLE T (a INTEGER USING COMPRESSION RLE, b VARCHAR )
+
+statement ok
+DROP TABLE T
+
+load __TEST_DIR__/test_compression_hint.db
+
+statement ok
+CREATE TABLE T (a INTEGER USING COMPRESSION RLE, b INTEGER USING COMPRESSION BITPACKING, C INTEGER USING COMPRESSION UNCOMPRESSED)
+
+statement ok
+INSERT INTO T VALUES (1,1,1), (1,1,1), (1,1,1), (2,2,2), (2,2,2), (3,3,3)
+
+query III
+SELECT * FROM T
+----
+1	1	1
+1	1	1
+1	1	1
+2	2	2
+2	2	2
+3	3	3
+
+restart
+
+query III
+SELECT * FROM T
+----
+1	1	1
+1	1	1
+1	1	1
+2	2	2
+2	2	2
+3	3	3
+
+statement ok
+CHECKPOINT
+
+# we default to RLE instead of bitpacking
+
+query I
+SELECT COUNT(*) > 0 FROM pragma_storage_info('T')
+WHERE segment_type ILIKE 'INTEGER' AND compression = 'RLE';
+----
+1
+
+statement ok
+ALTER TABLE T RENAME COLUMN a TO a_1
+
+statement ok
+ALTER TABLE T RENAME COLUMN b TO b_1
+
+statement ok
+ALTER TABLE T RENAME COLUMN c TO c_1
+
+restart
+
+query III
+SELECT * FROM T
+----
+1	1	1
+1	1	1
+1	1	1
+2	2	2
+2	2	2
+3	3	3
+
+# we default to RLE instead of bitpacking
+
+query I
+SELECT COUNT(*) > 0 FROM pragma_storage_info('T')
+WHERE segment_type ILIKE 'INTEGER' AND compression = 'RLE';
+----
+1
+
+statement ok
+ALTER TABLE T RENAME TO T_1
+
+restart
+
+query III
+SELECT * FROM T_1
+----
+1	1	1
+1	1	1
+1	1	1
+2	2	2
+2	2	2
+3	3	3
+
+# we default to RLE instead of bitpacking
+
+query I
+SELECT COUNT(*) > 0 FROM pragma_storage_info('T_1')
+WHERE segment_type ILIKE 'INTEGER' AND compression = 'RLE';
+----
+1
+
+# Test Drop Column
+statement ok
+ALTER TABLE T_1 DROP COLUMN c_1
+
+statement ok
+ALTER TABLE T_1 DROP COLUMN b_1
+
+restart
+
+query I
+SELECT * FROM T_1
+----
+1
+1
+1
+2
+2
+3
+
+query I
+SELECT compression FROM pragma_storage_info('T_1') WHERE segment_type ILIKE 'INTEGER' LIMIT 2
+----
+RLE
+
+# Test Add Column
+statement ok
+ALTER TABLE T_1 ADD COLUMN b INTEGER DEFAULT 2
+
+restart
+
+query II
+SELECT * FROM T_1
+----
+1	2
+1	2
+1	2
+2	2
+2	2
+3	2
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT compression FROM pragma_storage_info('T_1') WHERE segment_type ILIKE 'INTEGER' LIMIT 3
+----
+RLE
+Constant

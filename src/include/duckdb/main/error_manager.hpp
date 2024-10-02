@@ -15,6 +15,7 @@
 namespace duckdb {
 class ClientContext;
 class DatabaseInstance;
+class TransactionException;
 
 enum class ErrorType : uint16_t {
 	// error message types
@@ -31,27 +32,29 @@ enum class ErrorType : uint16_t {
 //! It allows for error messages to be overridden by extensions and clients
 class ErrorManager {
 public:
-	template <typename... Args>
-	string FormatException(ErrorType error_type, Args... params) {
+	template <typename... ARGS>
+	string FormatException(ErrorType error_type, ARGS... params) {
 		vector<ExceptionFormatValue> values;
 		return FormatExceptionRecursive(error_type, values, params...);
 	}
 
 	DUCKDB_API string FormatExceptionRecursive(ErrorType error_type, vector<ExceptionFormatValue> &values);
 
-	template <class T, typename... Args>
+	template <class T, typename... ARGS>
 	string FormatExceptionRecursive(ErrorType error_type, vector<ExceptionFormatValue> &values, T param,
-	                                Args... params) {
+	                                ARGS... params) {
 		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
 		return FormatExceptionRecursive(error_type, values, params...);
 	}
 
-	template <typename... Args>
-	static string FormatException(ClientContext &context, ErrorType error_type, Args... params) {
+	template <typename... ARGS>
+	static string FormatException(ClientContext &context, ErrorType error_type, ARGS... params) {
 		return Get(context).FormatException(error_type, params...);
 	}
 
-	DUCKDB_API static string InvalidUnicodeError(const string &input, const string &context);
+	DUCKDB_API static InvalidInputException InvalidUnicodeError(const string &input, const string &context);
+	DUCKDB_API static FatalException InvalidatedDatabase(ClientContext &context, const string &invalidated_msg);
+	DUCKDB_API static TransactionException InvalidatedTransaction(ClientContext &context);
 
 	//! Adds a custom error for a specific error type
 	void AddCustomError(ErrorType type, string new_error);

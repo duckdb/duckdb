@@ -1,0 +1,13 @@
+# name: test/sql/pivot/unpivot_unnamed_subquery.test
+# description: Test top-level pivot syntax
+# group: [pivot]
+
+statement ok
+PRAGMA enable_verification
+
+query II
+unpivot (select cast(columns(*) as varchar) from (select 42 as col1, 'woot' as col2))
+    on columns(*);
+----
+col1	42
+col2	woot

@@ -27,6 +27,11 @@ void Transformer::TransformWindowDef(duckdb_libpgquery::PGWindowDef &window_spec
 			throw ParserException("Cannot override ORDER BY clause of window \"%s\"", window_name);
 		}
 		TransformOrderBy(window_spec.orderClause, expr.orders);
+		for (auto &order : expr.orders) {
+			if (order.expression->GetExpressionType() == ExpressionType::STAR) {
+				throw ParserException("Cannot ORDER BY ALL in a window expression");
+			}
+		}
 	}
 }
 
@@ -148,8 +153,8 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			throw InternalException("Unknown/unsupported window function");
 		}
 
-		if (root.agg_distinct) {
-			throw ParserException("DISTINCT is not implemented for window functions!");
+		if (win_fun_type != ExpressionType::WINDOW_AGGREGATE && root.agg_distinct) {
+			throw ParserException("DISTINCT is not implemented for non-aggregate window functions!");
 		}
 
 		if (root.agg_order) {
@@ -163,12 +168,14 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			throw ParserException("EXPORT_STATE is not supported for window functions!");
 		}
 
-		if (win_fun_type == ExpressionType::WINDOW_AGGREGATE && root.agg_ignore_nulls) {
-			throw ParserException("IGNORE NULLS is not supported for windowed aggregates");
+		if (win_fun_type == ExpressionType::WINDOW_AGGREGATE &&
+		    root.agg_ignore_nulls != duckdb_libpgquery::PG_DEFAULT_NULLS) {
+			throw ParserException("RESPECT/IGNORE NULLS is not supported for windowed aggregates");
 		}
 
 		auto expr = make_uniq<WindowExpression>(win_fun_type, std::move(catalog), std::move(schema), lowercase_name);
-		expr->ignore_nulls = root.agg_ignore_nulls;
+		expr->ignore_nulls = (root.agg_ignore_nulls == duckdb_libpgquery::PG_IGNORE_NULLS);
+		expr->distinct = root.agg_distinct;
 
 		if (root.agg_filter) {
 			auto filter_expr = TransformExpression(root.agg_filter);
@@ -206,7 +213,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		}
 		auto window_spec = PGPointerCast<duckdb_libpgquery::PGWindowDef>(root.over);
 		if (window_spec->name) {
-			auto it = window_clauses.find(StringUtil::Lower(string(window_spec->name)));
+			auto it = window_clauses.find(string(window_spec->name));
 			if (it == window_clauses.end()) {
 				throw ParserException("window \"%s\" does not exist", window_spec->name);
 			}
@@ -216,7 +223,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		auto window_ref = window_spec;
 		auto window_name = window_ref->refname;
 		if (window_ref->refname) {
-			auto it = window_clauses.find(StringUtil::Lower(string(window_spec->refname)));
+			auto it = window_clauses.find(string(window_spec->refname));
 			if (it == window_clauses.end()) {
 				throw ParserException("window \"%s\" does not exist", window_spec->refname);
 			}
@@ -233,12 +240,12 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		}
 		TransformWindowFrame(*window_spec, *expr);
 		in_window_definition = false;
-		expr->query_location = root.location;
+		SetQueryLocation(*expr, root.location);
 		return std::move(expr);
 	}
 
-	if (root.agg_ignore_nulls) {
-		throw ParserException("IGNORE NULLS is not supported for non-window functions");
+	if (root.agg_ignore_nulls != duckdb_libpgquery::PG_DEFAULT_NULLS) {
+		throw ParserException("RESPECT/IGNORE NULLS is not supported for non-window functions");
 	}
 
 	unique_ptr<ParsedExpression> filter_expr;
@@ -297,6 +304,13 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		auto construct_array = make_uniq<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
 		construct_array->children = std::move(children);
 		return std::move(construct_array);
+	} else if (lowercase_name == "__internal_position_operator") {
+		if (children.size() != 2) {
+			throw ParserException("Wrong number of arguments to __internal_position_operator.");
+		}
+		// swap arguments for POSITION(x IN y)
+		std::swap(children[0], children[1]);
+		lowercase_name = "position";
 	} else if (lowercase_name == "ifnull") {
 		if (children.size() != 2) {
 			throw ParserException("Wrong number of arguments to IFNULL.");
@@ -335,7 +349,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 	auto function = make_uniq<FunctionExpression>(std::move(catalog), std::move(schema), lowercase_name.c_str(),
 	                                              std::move(children), std::move(filter_expr), std::move(order_bys),
 	                                              root.agg_distinct, false, root.export_state);
-	function->query_location = root.location;
+	SetQueryLocation(*function, root.location);
 
 	return std::move(function);
 }

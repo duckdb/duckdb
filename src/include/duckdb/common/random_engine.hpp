@@ -19,7 +19,7 @@ class ClientContext;
 struct RandomState;
 
 struct RandomEngine {
-	RandomEngine(int64_t seed = -1);
+	explicit RandomEngine(int64_t seed = -1);
 	~RandomEngine();
 
 public:
@@ -29,6 +29,7 @@ public:
 	//! Generate a random number between 0 and 1
 	double NextRandom();
 	uint32_t NextRandomInteger();
+	uint32_t NextRandomInteger(uint32_t min, uint32_t max);
 
 	void SetSeed(uint32_t seed);
 

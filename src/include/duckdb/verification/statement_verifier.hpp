@@ -23,6 +23,7 @@ enum class VerificationType : uint8_t {
 	NO_OPERATOR_CACHING,
 	PREPARED,
 	EXTERNAL,
+	FETCH_ROW_AS_SCAN,
 
 	INVALID
 };
@@ -65,6 +66,10 @@ public:
 	}
 
 	virtual bool ForceExternal() const {
+		return false;
+	}
+
+	virtual bool ForceFetchRow() const {
 		return false;
 	}
 };

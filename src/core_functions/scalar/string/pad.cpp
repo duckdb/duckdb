@@ -17,9 +17,9 @@ static pair<idx_t, idx_t> PadCountChars(const idx_t len, const char *data, const
 	idx_t nchars = 0;
 	for (; nchars < len && nbytes < size; ++nchars) {
 		utf8proc_int32_t codepoint;
-		auto bytes = utf8proc_iterate(str + nbytes, size - nbytes, &codepoint);
+		auto bytes = utf8proc_iterate(str + nbytes, UnsafeNumericCast<utf8proc_ssize_t>(size - nbytes), &codepoint);
 		D_ASSERT(bytes > 0);
-		nbytes += bytes;
+		nbytes += UnsafeNumericCast<idx_t>(bytes);
 	}
 
 	return pair<idx_t, idx_t>(nbytes, nchars);
@@ -47,9 +47,9 @@ static bool InsertPadding(const idx_t len, const string_t &pad, vector<char> &re
 
 		//  Write the next character
 		utf8proc_int32_t codepoint;
-		auto bytes = utf8proc_iterate(str + nbytes, size - nbytes, &codepoint);
+		auto bytes = utf8proc_iterate(str + nbytes, UnsafeNumericCast<utf8proc_ssize_t>(size - nbytes), &codepoint);
 		D_ASSERT(bytes > 0);
-		nbytes += bytes;
+		nbytes += UnsafeNumericCast<idx_t>(bytes);
 	}
 
 	//  Flush the remaining pad
@@ -67,17 +67,17 @@ static string_t LeftPadFunction(const string_t &str, const int32_t len, const st
 	auto size_str = str.GetSize();
 
 	//  Count how much of str will fit in the output
-	auto written = PadCountChars(len, data_str, size_str);
+	auto written = PadCountChars(UnsafeNumericCast<idx_t>(len), data_str, size_str);
 
 	//  Left pad by the number of characters still needed
-	if (!InsertPadding(len - written.second, pad, result)) {
-		throw Exception("Insufficient padding in LPAD.");
+	if (!InsertPadding(UnsafeNumericCast<idx_t>(len) - written.second, pad, result)) {
+		throw InvalidInputException("Insufficient padding in LPAD.");
 	}
 
 	//  Append as much of the original string as fits
 	result.insert(result.end(), data_str, data_str + written.first);
 
-	return string_t(result.data(), result.size());
+	return string_t(result.data(), UnsafeNumericCast<uint32_t>(result.size()));
 }
 
 struct LeftPadOperator {
@@ -96,17 +96,17 @@ static string_t RightPadFunction(const string_t &str, const int32_t len, const s
 	auto size_str = str.GetSize();
 
 	// Count how much of str will fit in the output
-	auto written = PadCountChars(len, data_str, size_str);
+	auto written = PadCountChars(UnsafeNumericCast<idx_t>(len), data_str, size_str);
 
 	//  Append as much of the original string as fits
 	result.insert(result.end(), data_str, data_str + written.first);
 
 	//  Right pad by the number of characters still needed
-	if (!InsertPadding(len - written.second, pad, result)) {
-		throw Exception("Insufficient padding in RPAD.");
+	if (!InsertPadding(UnsafeNumericCast<idx_t>(len) - written.second, pad, result)) {
+		throw InvalidInputException("Insufficient padding in RPAD.");
 	};
 
-	return string_t(result.data(), result.size());
+	return string_t(result.data(), UnsafeNumericCast<uint32_t>(result.size()));
 }
 
 struct RightPadOperator {

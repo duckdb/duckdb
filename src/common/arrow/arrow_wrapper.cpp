@@ -1,4 +1,5 @@
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
+#include "duckdb/common/arrow/arrow_util.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
 
 #include "duckdb/common/assert.hpp"
@@ -50,7 +51,7 @@ void ArrowArrayStreamWrapper::GetSchema(ArrowSchemaWrapper &schema) {
 }
 
 shared_ptr<ArrowArrayWrapper> ArrowArrayStreamWrapper::GetNextChunk() {
-	auto current_chunk = make_shared<ArrowArrayWrapper>();
+	auto current_chunk = make_shared_ptr<ArrowArrayWrapper>();
 	if (arrow_array_stream.get_next(&arrow_array_stream, &current_chunk->arrow_array)) { // LCOV_EXCL_START
 		throw InvalidInputException("arrow_scan: get_next failed(): %s", string(GetError()));
 	} // LCOV_EXCL_STOP
@@ -66,10 +67,16 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 	if (!stream->release) {
 		return -1;
 	}
+	out->release = nullptr;
 	auto my_stream = reinterpret_cast<ResultArrowArrayStreamWrapper *>(stream->private_data);
 	if (!my_stream->column_types.empty()) {
-		ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names,
-		                              my_stream->result->client_properties);
+		try {
+			ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names,
+			                              my_stream->result->client_properties);
+		} catch (std::runtime_error &e) {
+			my_stream->last_error = ErrorData(e);
+			return -1;
+		}
 		return 0;
 	}
 
@@ -81,7 +88,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 	if (result.type == QueryResultType::STREAM_RESULT) {
 		auto &stream_result = result.Cast<StreamQueryResult>();
 		if (!stream_result.IsOpen()) {
-			my_stream->last_error = PreservedError("Query Stream is closed");
+			my_stream->last_error = ErrorData("Query Stream is closed");
 			return -1;
 		}
 	}
@@ -89,8 +96,13 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 		my_stream->column_types = result.types;
 		my_stream->column_names = result.names;
 	}
-	ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names,
-	                              my_stream->result->client_properties);
+	try {
+		ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names,
+		                              my_stream->result->client_properties);
+	} catch (std::runtime_error &e) {
+		my_stream->last_error = ErrorData(e);
+		return -1;
+	}
 	return 0;
 }
 
@@ -118,10 +130,10 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 		my_stream->column_names = result.names;
 	}
 	idx_t result_count;
-	PreservedError error;
+	ErrorData error;
 	if (!ArrowUtil::TryFetchChunk(scan_state, result.client_properties, my_stream->batch_size, out, result_count,
 	                              error)) {
-		D_ASSERT(error);
+		D_ASSERT(error.HasError());
 		my_stream->last_error = error;
 		return -1;
 	}
@@ -163,59 +175,6 @@ ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryRes
 	stream.get_next = ResultArrowArrayStreamWrapper::MyStreamGetNext;
 	stream.release = ResultArrowArrayStreamWrapper::MyStreamRelease;
 	stream.get_last_error = ResultArrowArrayStreamWrapper::MyStreamGetLastError;
-}
-
-bool ArrowUtil::TryFetchChunk(ChunkScanState &scan_state, ClientProperties options, idx_t batch_size, ArrowArray *out,
-                              idx_t &count, PreservedError &error) {
-	count = 0;
-	ArrowAppender appender(scan_state.Types(), batch_size, std::move(options));
-	auto remaining_tuples_in_chunk = scan_state.RemainingInChunk();
-	if (remaining_tuples_in_chunk) {
-		// We start by scanning the non-finished current chunk
-		idx_t cur_consumption = MinValue(remaining_tuples_in_chunk, batch_size);
-		count += cur_consumption;
-		auto &current_chunk = scan_state.CurrentChunk();
-		appender.Append(current_chunk, scan_state.CurrentOffset(), scan_state.CurrentOffset() + cur_consumption,
-		                current_chunk.size());
-		scan_state.IncreaseOffset(cur_consumption);
-	}
-	while (count < batch_size) {
-		if (!scan_state.LoadNextChunk(error)) {
-			if (scan_state.HasError()) {
-				error = scan_state.GetError();
-			}
-			return false;
-		}
-		if (scan_state.ChunkIsEmpty()) {
-			// The scan was successful, but an empty chunk was returned
-			break;
-		}
-		auto &current_chunk = scan_state.CurrentChunk();
-		if (scan_state.Finished() || current_chunk.size() == 0) {
-			break;
-		}
-		// The amount we still need to append into this chunk
-		auto remaining = batch_size - count;
-
-		// The amount remaining, capped by the amount left in the current chunk
-		auto to_append_to_batch = MinValue(remaining, scan_state.RemainingInChunk());
-		appender.Append(current_chunk, 0, to_append_to_batch, current_chunk.size());
-		count += to_append_to_batch;
-		scan_state.IncreaseOffset(to_append_to_batch);
-	}
-	if (count > 0) {
-		*out = appender.Finalize();
-	}
-	return true;
-}
-
-idx_t ArrowUtil::FetchChunk(ChunkScanState &scan_state, ClientProperties options, idx_t chunk_size, ArrowArray *out) {
-	PreservedError error;
-	idx_t result_count;
-	if (!TryFetchChunk(scan_state, std::move(options), chunk_size, out, result_count, error)) {
-		error.Throw();
-	}
-	return result_count;
 }
 
 } // namespace duckdb

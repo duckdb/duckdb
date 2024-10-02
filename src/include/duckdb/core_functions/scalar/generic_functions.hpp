@@ -87,6 +87,15 @@ struct TypeOfFun {
 	static ScalarFunction GetFunction();
 };
 
+struct CanCastImplicitlyFun {
+	static constexpr const char *Name = "can_cast_implicitly";
+	static constexpr const char *Parameters = "source_type,target_type";
+	static constexpr const char *Description = "Whether or not we can implicitly cast from the source type to the other type";
+	static constexpr const char *Example = "can_implicitly_cast(NULL::INTEGER, NULL::BIGINT)";
+
+	static ScalarFunction GetFunction();
+};
+
 struct CurrentQueryFun {
 	static constexpr const char *Name = "current_query";
 	static constexpr const char *Parameters = "";
@@ -146,6 +155,24 @@ struct VersionFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "Returns the currently active version of DuckDB in this format: v0.3.2	";
 	static constexpr const char *Example = "version()";
+
+	static ScalarFunction GetFunction();
+};
+
+struct EquiWidthBinsFun {
+	static constexpr const char *Name = "equi_width_bins";
+	static constexpr const char *Parameters = "min,max,bin_count,nice_rounding";
+	static constexpr const char *Description = "Generates bin_count equi-width bins between the min and max. If enabled nice_rounding makes the numbers more readable/less jagged";
+	static constexpr const char *Example = "equi_width_bins(0, 10, 2, true)";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct IsHistogramOtherBinFun {
+	static constexpr const char *Name = "is_histogram_other_bin";
+	static constexpr const char *Parameters = "val";
+	static constexpr const char *Description = "Whether or not the provided value is the histogram \"other\" bin (used for values not belonging to any provided bin)";
+	static constexpr const char *Example = "is_histogram_other_bin(v)";
 
 	static ScalarFunction GetFunction();
 };

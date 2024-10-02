@@ -68,3 +68,17 @@ window w AS (order by i rows between 1 preceding and 1 following)
 order by i;
 ----
 frame clause
+
+# Case insensitivity
+statement error
+SELECT sum(1) over cumulativeSum 
+FROM integers 
+WINDOW cumulativeSum AS (), 
+	cumulativesum AS (order by i rows between 1 preceding and 1 following);
+----
+already defined
+
+statement ok
+SELECT sum(i) over cumulativeSum 
+FROM integers 
+WINDOW cumulativeSum AS ();

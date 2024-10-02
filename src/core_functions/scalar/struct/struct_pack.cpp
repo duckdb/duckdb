@@ -18,7 +18,7 @@ static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &
 #endif
 	bool all_const = true;
 	auto &child_entries = StructVector::GetEntries(result);
-	for (size_t i = 0; i < args.ColumnCount(); i++) {
+	for (idx_t i = 0; i < args.ColumnCount(); i++) {
 		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
 			all_const = false;
 		}
@@ -26,7 +26,6 @@ static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &
 		child_entries[i]->Reference(args.data[i]);
 	}
 	result.SetVectorType(all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
-
 	result.Verify(args.size());
 }
 
@@ -37,7 +36,7 @@ static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFun
 
 	// collect names and deconflict, construct return type
 	if (arguments.empty()) {
-		throw Exception("Can't pack nothing into a struct");
+		throw InvalidInputException("Can't pack nothing into a struct");
 	}
 	child_list_t<LogicalType> struct_children;
 	for (idx_t i = 0; i < arguments.size(); i++) {

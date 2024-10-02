@@ -15,6 +15,7 @@ INSERT INTO t1 VALUES (41), (42), (43)
 # this should fail because there are more aliases for the view than columns in the query
 statement error
 CREATE VIEW v1 (j, "j2") AS SELECT * FROM t1
+----
 
 statement ok
 CREATE VIEW v1 (j, "j2") AS SELECT i,i+1 FROM t1

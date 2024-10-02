@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, unique_ptr<LogicalOperator> *node_ptr) {
+void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, unique_ptr<LogicalOperator> &node_ptr) {
 	for (idx_t i = 0; i < join.conditions.size(); i++) {
 		auto &condition = join.conditions[i];
 		const auto stats_left = PropagateExpression(condition.left);
@@ -36,18 +36,19 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 			case FilterPropagateResult::FILTER_ALWAYS_FALSE:
 				// filter is always false or null, none of the join conditions matter
 				switch (join.join_type) {
+				case JoinType::RIGHT_SEMI:
 				case JoinType::SEMI:
 				case JoinType::INNER:
 					// semi or inner join on false; entire node can be pruned
-					ReplaceWithEmptyResult(*node_ptr);
+					ReplaceWithEmptyResult(node_ptr);
 					return;
+				case JoinType::RIGHT_ANTI:
 				case JoinType::ANTI: {
-					// when the right child has data, return the left child
-					// when the right child has no data, return an empty set
-					auto limit = make_uniq<LogicalLimit>(1, 0, nullptr, nullptr);
-					limit->AddChild(std::move(join.children[1]));
-					auto cross_product = LogicalCrossProduct::Create(std::move(join.children[0]), std::move(limit));
-					*node_ptr = std::move(cross_product);
+					if (join.join_type == JoinType::RIGHT_ANTI) {
+						std::swap(join.children[0], join.children[1]);
+					}
+					// If the filter is always false or Null, just return the left child.
+					node_ptr = std::move(join.children[0]);
 					return;
 				}
 				case JoinType::LEFT:
@@ -67,9 +68,24 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 				break;
 			case FilterPropagateResult::FILTER_ALWAYS_TRUE:
 				// filter is always true
+				// If this is the inequality for an AsOf join,
+				// then we must leave it in because it also flags
+				// the semantics of restricting to a single match
+				// so we can't replace it with an equi-join on the remaining conditions.
+				if (join.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+					switch (condition.comparison) {
+					case ExpressionType::COMPARE_GREATERTHAN:
+					case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+					case ExpressionType::COMPARE_LESSTHAN:
+					case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+						continue;
+					default:
+						break;
+					}
+				}
 				if (join.conditions.size() > 1) {
 					// there are multiple conditions: erase this condition
-					join.conditions.erase(join.conditions.begin() + i);
+					join.conditions.erase_at(i);
 					// remove the corresponding statistics
 					join.join_stats.clear();
 					i--;
@@ -77,26 +93,35 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 				} else {
 					// this is the only condition and it is always true: all conditions are true
 					switch (join.join_type) {
+					case JoinType::RIGHT_SEMI:
 					case JoinType::SEMI: {
-						// when the right child has data, return the left child
+						if (join.join_type == JoinType::RIGHT_SEMI) {
+							std::swap(join.children[0], join.children[1]);
+						}
 						// when the right child has no data, return an empty set
-						auto limit = make_uniq<LogicalLimit>(1, 0, nullptr, nullptr);
+						// cannot just return the left child because if the right child has no cardinality
+						// then the whole result should be empty.
+						// TODO: write better CE logic for limits so that we can just look at
+						//  join.children[1].estimated_cardinality.
+						auto limit = make_uniq<LogicalLimit>(BoundLimitNode::ConstantValue(1), BoundLimitNode());
+						limit->SetEstimatedCardinality(1);
 						limit->AddChild(std::move(join.children[1]));
 						auto cross_product = LogicalCrossProduct::Create(std::move(join.children[0]), std::move(limit));
-						*node_ptr = std::move(cross_product);
+						node_ptr = std::move(cross_product);
 						return;
 					}
 					case JoinType::INNER: {
 						// inner, replace with cross product
 						auto cross_product =
 						    LogicalCrossProduct::Create(std::move(join.children[0]), std::move(join.children[1]));
-						*node_ptr = std::move(cross_product);
+						node_ptr = std::move(cross_product);
 						return;
 					}
 					case JoinType::ANTI:
-						// anti join on true: empty result
-						ReplaceWithEmptyResult(*node_ptr);
+					case JoinType::RIGHT_ANTI: {
+						ReplaceWithEmptyResult(node_ptr);
 						return;
+					}
 					default:
 						// we don't handle mark/single join here yet
 						break;
@@ -131,8 +156,8 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 			auto updated_stats_right = PropagateExpression(condition.right);
 
 			// Try to push lhs stats down rhs and vice versa
-			if (!context.config.force_index_join && stats_left && stats_right && updated_stats_left &&
-			    updated_stats_right && condition.left->type == ExpressionType::BOUND_COLUMN_REF &&
+			if (stats_left && stats_right && updated_stats_left && updated_stats_right &&
+			    condition.left->type == ExpressionType::BOUND_COLUMN_REF &&
 			    condition.right->type == ExpressionType::BOUND_COLUMN_REF) {
 				CreateFilterFromJoinStats(join.children[0], condition.left, *stats_left, *updated_stats_left);
 				CreateFilterFromJoinStats(join.children[1], condition.right, *stats_right, *updated_stats_right);
@@ -151,7 +176,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 	}
 }
 
-void StatisticsPropagator::PropagateStatistics(LogicalAnyJoin &join, unique_ptr<LogicalOperator> *node_ptr) {
+void StatisticsPropagator::PropagateStatistics(LogicalAnyJoin &join, unique_ptr<LogicalOperator> &node_ptr) {
 	// propagate the expression into the join condition
 	PropagateExpression(join.condition);
 }
@@ -163,7 +188,8 @@ void StatisticsPropagator::MultiplyCardinalities(unique_ptr<NodeStatistics> &sta
 		return;
 	}
 	stats->estimated_cardinality = MaxValue<idx_t>(stats->estimated_cardinality, new_stats.estimated_cardinality);
-	auto new_max = Hugeint::Multiply(stats->max_cardinality, new_stats.max_cardinality);
+	auto new_max = Hugeint::Multiply(NumericCast<int64_t>(stats->max_cardinality),
+	                                 NumericCast<int64_t>(new_stats.max_cardinality));
 	if (new_max < NumericLimits<int64_t>::Maximum()) {
 		int64_t result;
 		if (!Hugeint::TryCast<int64_t>(new_max, result)) {
@@ -177,7 +203,7 @@ void StatisticsPropagator::MultiplyCardinalities(unique_ptr<NodeStatistics> &sta
 }
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin &join,
-                                                                     unique_ptr<LogicalOperator> *node_ptr) {
+                                                                     unique_ptr<LogicalOperator> &node_ptr) {
 	// first propagate through the children of the join
 	node_stats = PropagateStatistics(join.children[0]);
 	for (idx_t child_idx = 1; child_idx < join.children.size(); child_idx++) {
@@ -250,7 +276,7 @@ static void MaxCardinalities(unique_ptr<NodeStatistics> &stats, NodeStatistics &
 }
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalPositionalJoin &join,
-                                                                     unique_ptr<LogicalOperator> *node_ptr) {
+                                                                     unique_ptr<LogicalOperator> &node_ptr) {
 	D_ASSERT(join.type == LogicalOperatorType::LOGICAL_POSITIONAL_JOIN);
 
 	// first propagate through the children of the join
@@ -333,7 +359,9 @@ void StatisticsPropagator::CreateFilterFromJoinStats(unique_ptr<LogicalOperator>
 		child->expressions.emplace_back(std::move(filter_expr));
 	}
 
-	FilterPushdown filter_pushdown(optimizer);
+	// not allowed to let filter pushdown change mark joins to semi joins.
+	// semi joins are potentially slower AND the conversion can ruin column binding information
+	FilterPushdown filter_pushdown(optimizer, false);
 	child = filter_pushdown.Rewrite(std::move(child));
 	PropagateExpression(expr);
 }

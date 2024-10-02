@@ -1,12 +1,12 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
-AdaptiveFilter::AdaptiveFilter(const Expression &expr)
-    : iteration_count(0), observe_interval(10), execute_interval(20), warmup(true) {
+AdaptiveFilter::AdaptiveFilter(const Expression &expr) : observe_interval(10), execute_interval(20), warmup(true) {
 	auto &conj_expr = expr.Cast<BoundConjunctionExpression>();
 	D_ASSERT(conj_expr.children.size() > 1);
 	for (idx_t idx = 0; idx < conj_expr.children.size(); idx++) {
@@ -18,15 +18,34 @@ AdaptiveFilter::AdaptiveFilter(const Expression &expr)
 	right_random_border = 100 * (conj_expr.children.size() - 1);
 }
 
-AdaptiveFilter::AdaptiveFilter(TableFilterSet *table_filters)
-    : iteration_count(0), observe_interval(10), execute_interval(20), warmup(true) {
-	for (auto &table_filter : table_filters->filters) {
-		permutation.push_back(table_filter.first);
+AdaptiveFilter::AdaptiveFilter(const TableFilterSet &table_filters)
+    : observe_interval(10), execute_interval(20), warmup(true) {
+	for (idx_t idx = 0; idx < table_filters.filters.size(); idx++) {
+		permutation.push_back(idx);
 		swap_likeliness.push_back(100);
 	}
 	swap_likeliness.pop_back();
-	right_random_border = 100 * (table_filters->filters.size() - 1);
+	right_random_border = 100 * (table_filters.filters.size() - 1);
 }
+
+AdaptiveFilterState AdaptiveFilter::BeginFilter() const {
+	if (permutation.size() <= 1) {
+		return AdaptiveFilterState();
+	}
+	AdaptiveFilterState state;
+	state.start_time = high_resolution_clock::now();
+	return state;
+}
+
+void AdaptiveFilter::EndFilter(AdaptiveFilterState state) {
+	if (permutation.size() <= 1) {
+		// nothing to permute
+		return;
+	}
+	auto end_time = high_resolution_clock::now();
+	AdaptRuntimeStatistics(duration_cast<duration<double>>(end_time - state.start_time).count());
+}
+
 void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 	iteration_count++;
 	runtime_sum += duration;
@@ -35,7 +54,7 @@ void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 		// the last swap was observed
 		if (observe && iteration_count == observe_interval) {
 			// keep swap if runtime decreased, else reverse swap
-			if (prev_mean - (runtime_sum / iteration_count) <= 0) {
+			if (prev_mean - (runtime_sum / static_cast<double>(iteration_count)) <= 0) {
 				// reverse swap because runtime didn't decrease
 				std::swap(permutation[swap_idx], permutation[swap_idx + 1]);
 
@@ -54,11 +73,11 @@ void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 			runtime_sum = 0.0;
 		} else if (!observe && iteration_count == execute_interval) {
 			// save old mean to evaluate swap
-			prev_mean = runtime_sum / iteration_count;
+			prev_mean = runtime_sum / static_cast<double>(iteration_count);
 
 			// get swap index and swap likeliness
-			std::uniform_int_distribution<int> distribution(1, right_random_border); // a <= i <= b
-			idx_t random_number = distribution(generator) - 1;
+			// a <= i <= b
+			auto random_number = generator.NextRandomInteger(1, NumericCast<uint32_t>(right_random_border));
 
 			swap_idx = random_number / 100;                    // index to be swapped
 			idx_t likeliness = random_number - 100 * swap_idx; // random number between [0, 100)

@@ -31,30 +31,44 @@ NULL
 
 statement error
 SELECT ''::TIME
+----
 
 statement error
 SELECT '  '::TIME
+----
 
 statement error
 SELECT '  	'::TIME
+----
 
 statement error
 SELECT '1'::TIME
+----
 
 statement error
 SELECT '11'::TIME
+----
 
-statement error
+query I
 SELECT '11:'::TIME
+----
+11:00:00
 
-statement error
+query I
 SELECT '11:1'::TIME
+----
+11:01:00
 
-statement error
+query I
 SELECT '11:11'::TIME
+----
+11:11:00
 
-statement error
+query I
 SELECT '11:11:'::TIME
+----
+11:11:00
 
 statement error
 SELECT '11:11:f'::TIME
+----

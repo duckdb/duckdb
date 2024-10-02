@@ -88,9 +88,12 @@ select split_part(NULL,',',1)
 # test incorrect usage
 statement error
 select split_part()
+----
 
 statement error
 select split_part('a')
+----
 
 statement error
 select split_part('a','a')
+----

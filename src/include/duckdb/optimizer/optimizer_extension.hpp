@@ -13,14 +13,22 @@
 
 namespace duckdb {
 
+class Optimizer;
+class ClientContext;
+
 //! The OptimizerExtensionInfo holds static information relevant to the optimizer extension
 struct OptimizerExtensionInfo {
 	virtual ~OptimizerExtensionInfo() {
 	}
 };
 
-typedef void (*optimize_function_t)(ClientContext &context, OptimizerExtensionInfo *info,
-                                    unique_ptr<LogicalOperator> &plan);
+struct OptimizerExtensionInput {
+	ClientContext &context;
+	Optimizer &optimizer;
+	optional_ptr<OptimizerExtensionInfo> info;
+};
+
+typedef void (*optimize_function_t)(OptimizerExtensionInput &input, unique_ptr<LogicalOperator> &plan);
 
 class OptimizerExtension {
 public:

@@ -4,13 +4,17 @@
 
 namespace duckdb {
 
-void TerminalProgressBarDisplay::PrintProgressInternal(int percentage) {
+int32_t TerminalProgressBarDisplay::NormalizePercentage(double percentage) {
 	if (percentage > 100) {
-		percentage = 100;
+		return 100;
 	}
 	if (percentage < 0) {
-		percentage = 0;
+		return 0;
 	}
+	return int32_t(percentage);
+}
+
+void TerminalProgressBarDisplay::PrintProgressInternal(int32_t percentage) {
 	string result;
 	// we divide the number of blocks by the percentage
 	// 0%   = 0
@@ -36,7 +40,7 @@ void TerminalProgressBarDisplay::PrintProgressInternal(int percentage) {
 	}
 	if (i < PROGRESS_BAR_WIDTH) {
 		// print a partial block based on the percentage of the progress bar remaining
-		idx_t index = idx_t((blocks_to_draw - idx_t(blocks_to_draw)) * PARTIAL_BLOCK_COUNT);
+		idx_t index = idx_t((blocks_to_draw - static_cast<double>(idx_t(blocks_to_draw))) * PARTIAL_BLOCK_COUNT);
 		if (index >= PARTIAL_BLOCK_COUNT) {
 			index = PARTIAL_BLOCK_COUNT - 1;
 		}
@@ -53,8 +57,13 @@ void TerminalProgressBarDisplay::PrintProgressInternal(int percentage) {
 }
 
 void TerminalProgressBarDisplay::Update(double percentage) {
-	PrintProgressInternal(percentage);
+	auto percentage_int = NormalizePercentage(percentage);
+	if (percentage_int == rendered_percentage) {
+		return;
+	}
+	PrintProgressInternal(percentage_int);
 	Printer::Flush(OutputStream::STREAM_STDOUT);
+	rendered_percentage = percentage_int;
 }
 
 void TerminalProgressBarDisplay::Finish() {

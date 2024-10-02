@@ -7,6 +7,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 
 namespace duckdb {
 
@@ -35,15 +36,8 @@ interval_t AddOperator::Operation(interval_t left, interval_t right) {
 
 template <>
 date_t AddOperator::Operation(date_t left, int32_t right) {
-	if (!Value::IsFinite(left)) {
-		return left;
-	}
-	int32_t days;
-	if (!TryAddOperator::Operation(left.days, right, days)) {
-		throw OutOfRangeException("Date out of range");
-	}
-	date_t result(days);
-	if (!Value::IsFinite(result)) {
+	date_t result;
+	if (!TryAddOperator::Operation(left, right, result)) {
 		throw OutOfRangeException("Date out of range");
 	}
 	return result;
@@ -69,18 +63,42 @@ timestamp_t AddOperator::Operation(date_t left, dtime_t right) {
 }
 
 template <>
+timestamp_t AddOperator::Operation(date_t left, dtime_tz_t right) {
+	if (left == date_t::infinity()) {
+		return timestamp_t::infinity();
+	} else if (left == date_t::ninfinity()) {
+		return timestamp_t::ninfinity();
+	}
+	timestamp_t result;
+	if (!Timestamp::TryFromDatetime(left, right, result)) {
+		throw OutOfRangeException("Timestamp with time zone out of range");
+	}
+	return result;
+}
+
+template <>
 timestamp_t AddOperator::Operation(dtime_t left, date_t right) {
 	return AddOperator::Operation<date_t, dtime_t, timestamp_t>(right, left);
 }
 
 template <>
-date_t AddOperator::Operation(date_t left, interval_t right) {
-	return Interval::Add(left, right);
+timestamp_t AddOperator::Operation(dtime_tz_t left, date_t right) {
+	return AddOperator::Operation<date_t, dtime_tz_t, timestamp_t>(right, left);
 }
 
 template <>
-date_t AddOperator::Operation(interval_t left, date_t right) {
-	return AddOperator::Operation<date_t, interval_t, date_t>(right, left);
+timestamp_t AddOperator::Operation(date_t left, interval_t right) {
+	if (left == date_t::infinity()) {
+		return timestamp_t::infinity();
+	} else if (left == date_t::ninfinity()) {
+		return timestamp_t::ninfinity();
+	}
+	return Interval::Add(Timestamp::FromDatetime(left, dtime_t(0)), right);
+}
+
+template <>
+timestamp_t AddOperator::Operation(interval_t left, date_t right) {
+	return AddOperator::Operation<date_t, interval_t, timestamp_t>(right, left);
 }
 
 template <>
@@ -130,6 +148,23 @@ bool TryAddOperator::Operation(uint64_t left, uint64_t right, uint64_t &result) 
 }
 
 template <>
+bool TryAddOperator::Operation(date_t left, int32_t right, date_t &result) {
+	if (left == date_t::infinity() || left == date_t::ninfinity()) {
+		result = date_t(left);
+		return true;
+	}
+	int32_t days;
+	if (!TryAddOperator::Operation(left.days, right, days)) {
+		return false;
+	}
+	result.days = days;
+	if (!Value::IsFinite(result)) {
+		return false;
+	}
+	return true;
+}
+
+template <>
 bool TryAddOperator::Operation(int8_t left, int8_t right, int8_t &result) {
 	return OverflowCheckedAddition::Operation<int8_t, int16_t>(left, right, result);
 }
@@ -161,8 +196,17 @@ bool TryAddOperator::Operation(int64_t left, int64_t right, int64_t &result) {
 }
 
 template <>
+bool TryAddOperator::Operation(uhugeint_t left, uhugeint_t right, uhugeint_t &result) {
+	if (!Uhugeint::TryAddInPlace(left, right)) {
+		return false;
+	}
+	result = left;
+	return true;
+}
+
+template <>
 bool TryAddOperator::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
-	if (!Hugeint::AddInPlace(left, right)) {
+	if (!Hugeint::TryAddInPlace(left, right)) {
 		return false;
 	}
 	result = left;
@@ -204,7 +248,9 @@ bool TryDecimalAdd::Operation(int64_t left, int64_t right, int64_t &result) {
 
 template <>
 bool TryDecimalAdd::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
-	result = left + right;
+	if (!TryAddOperator::Operation(left, right, result)) {
+		return false;
+	}
 	if (result <= -Hugeint::POWERS_OF_TEN[38] || result >= Hugeint::POWERS_OF_TEN[38]) {
 		return false;
 	}
@@ -232,6 +278,17 @@ dtime_t AddTimeOperator::Operation(dtime_t left, interval_t right) {
 template <>
 dtime_t AddTimeOperator::Operation(interval_t left, dtime_t right) {
 	return AddTimeOperator::Operation<dtime_t, interval_t, dtime_t>(right, left);
+}
+
+template <>
+dtime_tz_t AddTimeOperator::Operation(dtime_tz_t left, interval_t right) {
+	date_t date(0);
+	return Interval::Add(left, right, date);
+}
+
+template <>
+dtime_tz_t AddTimeOperator::Operation(interval_t left, dtime_tz_t right) {
+	return AddTimeOperator::Operation<dtime_tz_t, interval_t, dtime_tz_t>(right, left);
 }
 
 } // namespace duckdb

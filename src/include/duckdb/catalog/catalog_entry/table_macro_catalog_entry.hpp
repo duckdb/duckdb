@@ -21,8 +21,9 @@ public:
 	static constexpr const char *Name = "table macro function";
 
 public:
-	TableMacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateMacroInfo &info,
-	                       optional_ptr<ClientContext> context);
+	TableMacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateMacroInfo &info);
+
+	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
 };
 
 } // namespace duckdb

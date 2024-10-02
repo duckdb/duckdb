@@ -42,7 +42,7 @@ TEST_CASE("Test ObjectCache", "[api]") {
 	auto &cache = ObjectCache::GetObjectCache(context);
 
 	REQUIRE(cache.GetObject("test") == nullptr);
-	cache.Put("test", make_shared<TestObject>(42));
+	cache.Put("test", make_shared_ptr<TestObject>(42));
 
 	REQUIRE(cache.GetObject("test") != nullptr);
 

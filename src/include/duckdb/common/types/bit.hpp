@@ -104,7 +104,7 @@ void Bit::NumericToBit(T numeric, string_t &output_str) {
 	*output = 0; // set padding to 0
 	++output;
 	for (idx_t idx = 0; idx < sizeof(T); ++idx) {
-		output[idx] = data[sizeof(T) - idx - 1];
+		output[idx] = static_cast<char>(data[sizeof(T) - idx - 1]);
 	}
 	Bit::Finalize(output_str);
 }
@@ -112,8 +112,8 @@ void Bit::NumericToBit(T numeric, string_t &output_str) {
 template <class T>
 string Bit::NumericToBit(T numeric) {
 	auto bit_len = sizeof(T) + 1;
-	auto buffer = make_unsafe_uniq_array<char>(bit_len);
-	string_t output_str(buffer.get(), bit_len);
+	auto buffer = make_unsafe_uniq_array_uninitialized<char>(bit_len);
+	string_t output_str(buffer.get(), UnsafeNumericCast<uint32_t>(bit_len));
 	Bit::NumericToBit(numeric, output_str);
 	return output_str.GetString();
 }

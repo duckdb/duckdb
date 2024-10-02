@@ -57,4 +57,13 @@ struct Base64Fun {
 	static constexpr const char *Name = "base64";
 };
 
+struct CreateSortKeyFun {
+	static constexpr const char *Name = "create_sort_key";
+	static constexpr const char *Parameters = "parameters...";
+	static constexpr const char *Description = "Constructs a binary-comparable sort key based on a set of input parameters and sort qualifiers";
+	static constexpr const char *Example = "create_sort_key('A', 'DESC')";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb
