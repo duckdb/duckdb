@@ -2,8 +2,6 @@
 # description: ${DESCRIPTION}
 # group: [taxi]
 
-require httpfs
-
 name Q${QUERY_NUMBER_PADDED}
 group taxi
 
