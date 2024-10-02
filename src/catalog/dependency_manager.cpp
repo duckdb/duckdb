@@ -529,56 +529,6 @@ void DependencyManager::ReorderEntries(catalog_entry_vector_t &entries, CatalogT
 	D_ASSERT(entries.size() == reordered.size());
 	entries.clear();
 	entries = reordered;
-	return;
-	// CatalogEntryOrdering ordering;
-	// auto &entries = ordering.ordered_set;
-	// auto &export_order = ordering.ordered_vector;
-
-	// stack<reference<CatalogEntry>> backlog;
-
-	// catalog_entry_map_t<dependency_set_t> dependents = dependents_map;
-	// catalog_entry_map_t<catalog_entry_set_t> dependencies = dependencies_map;
-	// ExportDependencies map(dependents, dependencies);
-
-	// for (auto &entry_p : dependencies) {
-	//	auto &entry = entry_p.first.get();
-	//	if (entry.type != CatalogType::TABLE_ENTRY) {
-	//		continue;
-	//	}
-	//	auto &table_entry = entry.Cast<TableCatalogEntry>();
-	//	auto &constraints = table_entry.GetConstraints();
-	//	for (auto &con : constraints) {
-	//		if (con->type != ConstraintType::FOREIGN_KEY) {
-	//			continue;
-	//		}
-	//		auto &fk_con = con->Cast<ForeignKeyConstraint>();
-	//		if (fk_con.info.type != ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE) {
-	//			continue;
-	//		}
-	//		map.AddForeignKeyConnection(entry, fk_con.info.table);
-	//	}
-	//}
-
-	// for (auto &entry_p : dependencies) {
-	//	auto &entry = entry_p.first;
-	//	if (entry.get().type == CatalogType::SEQUENCE_ENTRY) {
-	//		auto result = GetEntriesThatObjectDependsOn(entry.get());
-	//		if (result) {
-	//			for (auto &dependency : *result) {
-	//				// Sequences can only depend on schemas, which can't have dependencies
-	//				entries.insert(dependency);
-	//				export_order.push_back(dependency);
-	//			}
-	//		}
-	//		entries.insert(entry);
-	//		export_order.push_back(entry);
-	//	} else {
-	//		backlog.push(entry);
-	//	}
-	//}
-
-	// OrderEntries(map, ordering, backlog);
-	// return std::move(ordering.ordered_vector);
 }
 
 void DependencyManager::Scan(

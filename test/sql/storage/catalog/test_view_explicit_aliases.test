@@ -37,6 +37,7 @@ DROP TABLE test.t CASCADE;
 
 statement error
 PRAGMA table_info('test.v')
+----
 
 loop i 0 2
 
@@ -45,6 +46,7 @@ restart
 
 statement error
 PRAGMA table_info('test.v')
+----
 
 statement error
 SELECT * FROM test.v

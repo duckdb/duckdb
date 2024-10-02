@@ -35,9 +35,4 @@ using catalog_entry_map_t = unordered_map<reference<CatalogEntry>, T, CatalogEnt
 
 using catalog_entry_vector_t = vector<reference<CatalogEntry>>;
 
-struct CatalogEntryOrdering {
-	catalog_entry_set_t ordered_set;
-	catalog_entry_vector_t ordered_vector;
-};
-
 } // namespace duckdb

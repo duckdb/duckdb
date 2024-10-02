@@ -63,8 +63,6 @@ public:
 	bool operator==(const LogicalDependencyList &other) const;
 	const create_info_set_t &Set() const;
 
-	DUCKDB_API LogicalDependencyList GetLogical() const;
-
 private:
 	create_info_set_t set;
 };

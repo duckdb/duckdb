@@ -78,35 +78,6 @@ public:
 	string name;
 };
 
-struct ExportDependencies {
-public:
-	ExportDependencies(catalog_entry_map_t<dependency_set_t> &dependents,
-	                   catalog_entry_map_t<catalog_entry_set_t> &dependencies)
-	    : dependents(dependents), dependencies(dependencies) {
-	}
-
-public:
-	catalog_entry_map_t<dependency_set_t> &dependents;
-	catalog_entry_map_t<catalog_entry_set_t> &dependencies;
-
-public:
-	optional_ptr<dependency_set_t> GetEntriesThatDependOnObject(CatalogEntry &object) {
-		auto entry = dependents.find(object);
-		if (entry == dependents.end()) {
-			return nullptr;
-		}
-		return &entry->second;
-	}
-	optional_ptr<catalog_entry_set_t> GetEntriesThatObjectDependsOn(CatalogEntry &object) {
-		auto entry = dependencies.find(object);
-		if (entry == dependencies.end()) {
-			return nullptr;
-		}
-		return &entry->second;
-	}
-	void AddForeignKeyConnection(CatalogEntry &entry, const string &fk_table);
-};
-
 //! The DependencyManager is in charge of managing dependencies between catalog entries
 class DependencyManager {
 	friend class CatalogSet;
