@@ -818,15 +818,16 @@ void FilterIsNull(Vector &v, parquet_filter_t &filter_mask, idx_t count) {
 		}
 		return;
 	}
-	D_ASSERT(v.GetVectorType() == VectorType::FLAT_VECTOR);
 
-	auto &mask = FlatVector::Validity(v);
-	if (mask.AllValid()) {
+	UnifiedVectorFormat unified;
+	v.ToUnifiedFormat(count, unified);
+
+	if (unified.validity.AllValid()) {
 		filter_mask.reset();
 	} else {
 		for (idx_t i = 0; i < count; i++) {
 			if (filter_mask.test(i)) {
-				filter_mask.set(i, !mask.RowIsValid(i));
+				filter_mask.set(i, !unified.validity.RowIsValid(unified.sel->get_index(i)));
 			}
 		}
 	}
@@ -840,13 +841,14 @@ void FilterIsNotNull(Vector &v, parquet_filter_t &filter_mask, idx_t count) {
 		}
 		return;
 	}
-	D_ASSERT(v.GetVectorType() == VectorType::FLAT_VECTOR);
 
-	auto &mask = FlatVector::Validity(v);
-	if (!mask.AllValid()) {
+	UnifiedVectorFormat unified;
+	v.ToUnifiedFormat(count, unified);
+
+	if (!unified.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			if (filter_mask.test(i)) {
-				filter_mask.set(i, mask.RowIsValid(i));
+				filter_mask.set(i, unified.validity.RowIsValid(unified.sel->get_index(i)));
 			}
 		}
 	}
@@ -866,20 +868,20 @@ void TemplatedFilterOperation(Vector &v, T constant, parquet_filter_t &filter_ma
 		return;
 	}
 
-	D_ASSERT(v.GetVectorType() == VectorType::FLAT_VECTOR);
-	auto v_ptr = FlatVector::GetData<T>(v);
-	auto &mask = FlatVector::Validity(v);
+	UnifiedVectorFormat unified;
+	v.ToUnifiedFormat(count, unified);
+	auto data_ptr = UnifiedVectorFormat::GetData<T>(unified);
 
-	if (!mask.AllValid()) {
+	if (!unified.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			if (filter_mask.test(i) && mask.RowIsValid(i)) {
-				filter_mask.set(i, OP::Operation(v_ptr[i], constant));
+			if (filter_mask.test(i) && unified.validity.RowIsValid(unified.sel->get_index(i))) {
+				filter_mask.set(i, OP::Operation(data_ptr[unified.sel->get_index(i)], constant));
 			}
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {
 			if (filter_mask.test(i)) {
-				filter_mask.set(i, OP::Operation(v_ptr[i], constant));
+				filter_mask.set(i, OP::Operation(data_ptr[unified.sel->get_index(i)], constant));
 			}
 		}
 	}
@@ -1139,8 +1141,6 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				child_reader->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result_vector);
 				need_to_read[id] = false;
 
-				// FIXME filters should run on unified representation
-				result_vector.Flatten(this_output_chunk_rows);
 				ApplyFilter(result_vector, *filter_col.second, filter_mask, this_output_chunk_rows);
 			}
 		}
