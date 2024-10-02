@@ -924,6 +924,9 @@ public:
 
 	void FlushPageState(WriteStream &temp_writer, ColumnWriterPageState *state_p) override {
 		auto &page_state = state_p->Cast<StandardWriterPageState>();
+		if (!page_state.initialized) {
+			page_state.encoder.BeginWrite(temp_writer, 0);
+		}
 		page_state.encoder.FinishWrite(temp_writer);
 	}
 
@@ -938,12 +941,14 @@ public:
 	}
 
 	void Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) override {
+		D_ASSERT(HasAnalyze());
 		auto &state = state_p.Cast<StandardColumnWriterState>();
 
 		const bool check_parent_empty = parent && !parent->is_empty.empty();
 		const idx_t parent_index = state.definition_levels.size();
 
-		const idx_t vcount = parent ? parent->definition_levels.size() - state.definition_levels.size() : count;
+		const idx_t vcount =
+		    check_parent_empty ? parent->definition_levels.size() - state.definition_levels.size() : count;
 		const auto &validity = FlatVector::Validity(vector);
 
 		idx_t vector_index = 0;

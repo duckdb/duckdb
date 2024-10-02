@@ -14,7 +14,6 @@ namespace duckdb {
 
 class DbpEncoder {
 private:
-	//! TODO try 128/4 and 256/8 - or figure these out in ANALYZE
 	static constexpr uint64_t BLOCK_SIZE_IN_VALUES = 256;
 	static constexpr uint64_t NUMBER_OF_MINIBLOCKS_IN_A_BLOCK = 8;
 	static constexpr uint64_t NUMBER_OF_VALUES_IN_A_MINIBLOCK = BLOCK_SIZE_IN_VALUES / NUMBER_OF_MINIBLOCKS_IN_A_BLOCK;
@@ -42,11 +41,14 @@ public:
 		ParquetDecodeUtils::VarintEncode(ParquetDecodeUtils::IntToZigzag(first_value), writer);
 
 		// initialize
-		count++;
+		if (total_value_count != 0) {
+			count++;
+		}
 		previous_value = first_value;
 
 		min_delta = NumericLimits<int64_t>::Maximum();
 		block_count = 0;
+
 	}
 
 	void WriteValue(WriteStream &writer, const int64_t &value) {
@@ -75,7 +77,9 @@ public:
 		if (count + block_count != total_value_count) {
 			throw InternalException("value count mismatch when writing DELTA_BINARY_PACKED");
 		}
-		WriteBlock(writer);
+		if (block_count != 0) {
+			WriteBlock(writer);
+		}
 	}
 
 private:
