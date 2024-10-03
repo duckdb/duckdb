@@ -668,53 +668,41 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 						same_column_id = false;
 						break;
 					}
+					BoundColumnRefExpression *column_ref = nullptr;
+					BoundConstantExpression *const_val = nullptr;
 					auto &comp = child->Cast<BoundComparisonExpression>();
 					if (comp.left->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
 					    comp.right->expression_class == ExpressionClass::BOUND_CONSTANT) {
-						auto &column_ref = comp.left->Cast<BoundColumnRefExpression>();
-						if (!column_id_set) {
-							column_id = column_ids[column_ref.binding.column_index];
-							column_id_set = true;
-						} else if (column_id != column_ids[column_ref.binding.column_index]) {
-							same_column_id = false;
-							break;
-						}
-						auto &const_val = comp.right->Cast<BoundConstantExpression>();
-						if (const_val.value.type().IsTemporal() || !const_val.value.type().IsIntegral()) {
-							same_column_id = false;
-							same_column_id = false;
-							break;
-						}
-						auto const_filter = make_uniq<ConstantFilter>(comp.type, const_val.value);
-						zone_filter = make_uniq<ZoneMapFilter>();
-						zone_filter->child_filter = std::move(const_filter);
-						conj_filter->child_filters.push_back(std::move(zone_filter));
+						column_ref = &comp.left->Cast<BoundColumnRefExpression>();
+						const_val = &comp.right->Cast<BoundConstantExpression>();
 					} else if (comp.left->expression_class == ExpressionClass::BOUND_CONSTANT &&
 					           comp.right->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
-						auto &column_ref = comp.right->Cast<BoundColumnRefExpression>();
-						if (!column_id_set) {
-							column_id = column_ids[column_ref.binding.column_index];
-							column_id_set = true;
-						} else if (column_id != column_ids[column_ref.binding.column_index]) {
-							same_column_id = false;
-							break;
-						}
-						auto &const_val = comp.left->Cast<BoundConstantExpression>();
-						if (const_val.value.type().IsTemporal() || !const_val.value.type().IsIntegral()) {
-							column_id_set = false;
-							same_column_id = false;
-							break;
-						}
-						auto const_filter = make_uniq<ConstantFilter>(comp.type, const_val.value);
-						zone_filter = make_uniq<ZoneMapFilter>();
-						zone_filter->child_filter = std::move(const_filter);
-						conj_filter->child_filters.push_back(std::move(zone_filter));
+						column_ref = &comp.right->Cast<BoundColumnRefExpression>();
+						const_val = &comp.left->Cast<BoundConstantExpression>();
 					} else {
 						// child of OR filter is not simple so we do not push the or filter down at all
 						same_column_id = false;
 						column_id_set = false;
 						break;
 					}
+
+					if (!column_id_set) {
+						column_id = column_ids[column_ref->binding.column_index];
+						column_id_set = true;
+					} else if (column_id != column_ids[column_ref->binding.column_index]) {
+						same_column_id = false;
+						break;
+					}
+
+					if (const_val->value.type().IsTemporal() || !const_val->value.type().IsIntegral()) {
+						same_column_id = false;
+						same_column_id = false;
+						break;
+					}
+					auto const_filter = make_uniq<ConstantFilter>(comp.type, const_val.value);
+					zone_filter = make_uniq<ZoneMapFilter>();
+					zone_filter->child_filter = std::move(const_filter);
+					conj_filter->child_filters.push_back(std::move(zone_filter));
 				}
 				if (same_column_id && column_id_set && column_id != DConstants::INVALID_INDEX) {
 					table_filters.PushFilter(column_id, std::move(conj_filter));
