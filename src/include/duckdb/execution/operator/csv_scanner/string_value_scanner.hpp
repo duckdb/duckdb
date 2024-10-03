@@ -322,7 +322,7 @@ private:
 	//! If the current row we found is valid
 	bool IsRowValid();
 	void TryRow(CSVState state, idx_t &start_pos, idx_t &end_pos, bool &valid);
-
+	idx_t FindNextNewLine() const;
 	StringValueResult result;
 	vector<LogicalType> types;
 
