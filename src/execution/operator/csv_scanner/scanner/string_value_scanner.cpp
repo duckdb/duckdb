@@ -1456,6 +1456,18 @@ bool StringValueScanner::IsRowValid() {
 	return tuples.number_of_rows == 1 && tuples.borked_rows.empty();
 }
 
+void StringValueScanner::TryRow(CSVState state, idx_t &start_pos, idx_t &end_pos, bool &valid) {
+	idx_t initial_pos = iterator.pos.buffer_pos;
+	SkipUntilState(state, CSVState::RECORD_SEPARATOR);
+	idx_t current_pos = iterator.pos.buffer_pos;
+	if (IsRowValid()) {
+		valid = true;
+		start_pos = std::min(start_pos, current_pos);
+	}
+	end_pos = std::max(end_pos, iterator.pos.buffer_pos);
+	// reset buffer
+	iterator.pos.buffer_pos = initial_pos;
+}
 void StringValueScanner::SetStart() {
 	if (iterator.first_one) {
 		if (result.store_line_size) {
@@ -1465,46 +1477,32 @@ void StringValueScanner::SetStart() {
 	}
 	// The result size of the data after skipping the row is one line
 	// We have to look for a new line that fits our schema
-	idx_t initial_pos = iterator.pos.buffer_pos;
+	idx_t potential_start = cur_buffer_handle->actual_size;
 	idx_t largest_end_pos = 0;
-	// 1. We walk until the next new line
-	SkipUntilState(CSVState::STANDARD, CSVState::RECORD_SEPARATOR);
+	bool any_valid_row = false;
 	if (state_machine->options.null_padding) {
 		// When Null Padding, we assume we start from the correct new-line
 		return;
 	}
-	// At this point we have 3 options
+	// At this point we have 3 options:
 	// 1. We are at the start of a valid line
-	bool valid_line = IsRowValid();
+	TryRow(CSVState::STANDARD, potential_start, largest_end_pos, any_valid_row);
 	// 2. We are in the middle of a quoted value
-	idx_t current_pos = iterator.pos.buffer_pos;
-	largest_end_pos = std::max(largest_end_pos, current_pos);
-	if (!valid_line) {
-		iterator.pos.buffer_pos = initial_pos;
-		// We skip from a quoted state to a state newline
-		SkipUntilState(CSVState::QUOTED, CSVState::RECORD_SEPARATOR);
-		valid_line = IsRowValid();
-		largest_end_pos = std::max(largest_end_pos, iterator.pos.buffer_pos);
-	}
+	TryRow(CSVState::QUOTED, potential_start, largest_end_pos, any_valid_row);
 	// 3. We are in an escaped value
-	if (!valid_line) {
-		iterator.pos.buffer_pos = initial_pos;
-		// We skip from a quoted state to a state newline
-		SkipUntilState(CSVState::ESCAPE, CSVState::RECORD_SEPARATOR);
-		valid_line = IsRowValid();
-		largest_end_pos = std::max(largest_end_pos, iterator.pos.buffer_pos);
-	}
-	bool is_this_the_end = largest_end_pos == cur_buffer_handle->actual_size && cur_buffer_handle->is_last_buffer;
-	iterator.done = iterator.pos.buffer_pos == cur_buffer_handle->actual_size;
-	if (!valid_line) {
+	TryRow(CSVState::ESCAPE, potential_start, largest_end_pos, any_valid_row);
+	if (!any_valid_row) {
+		bool is_this_the_end = largest_end_pos == cur_buffer_handle->actual_size && cur_buffer_handle->is_last_buffer;
 		if (is_this_the_end) {
 			iterator.pos.buffer_pos = largest_end_pos;
 			iterator.done = true;
 		} else {
-			iterator.pos.buffer_pos = current_pos;
+			SkipUntilState(CSVState::STANDARD, CSVState::RECORD_SEPARATOR);
 		}
+	} else {
+		iterator.pos.buffer_pos = potential_start;
+		iterator.done = iterator.pos.buffer_pos == cur_buffer_handle->actual_size;
 	}
-
 	// 4. We have an error, if we have an error, we let life go on, the scanner will either ignore it
 	// or throw.
 	result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
