@@ -1,7 +1,6 @@
 #define DUCKDB_EXTENSION_MAIN
 #include "jemalloc_extension.hpp"
 
-#include "duckdb/common/allocator.hpp"
 #include "jemalloc/jemalloc.h"
 
 namespace duckdb {
@@ -12,19 +11,6 @@ void JemallocExtension::Load(DuckDB &db) {
 
 std::string JemallocExtension::Name() {
 	return "jemalloc";
-}
-
-data_ptr_t JemallocExtension::Allocate(PrivateAllocatorData *private_data, idx_t size) {
-	return data_ptr_cast(duckdb_je_malloc(size));
-}
-
-void JemallocExtension::Free(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
-	duckdb_je_free(pointer);
-}
-
-data_ptr_t JemallocExtension::Reallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
-                                         idx_t size) {
-	return data_ptr_cast(duckdb_je_realloc(pointer, size));
 }
 
 static void JemallocCTL(const char *name, void *old_ptr, size_t *old_len, void *new_ptr, size_t new_len) {

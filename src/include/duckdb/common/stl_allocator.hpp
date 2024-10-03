@@ -12,18 +12,26 @@
 
 #include <memory>
 
+#ifndef USE_JEMALLOC
+#if defined(DUCKDB_EXTENSION_JEMALLOC_LINKED) && DUCKDB_EXTENSION_JEMALLOC_LINKED && !defined(WIN32) &&                \
+    INTPTR_MAX == INT64_MAX
+#define USE_JEMALLOC
+#endif
+#endif
+
 namespace duckdb {
 
-DUCKDB_API void *stl_malloc(size_t size); // NOLINT: not using camelcase on purpose here
-DUCKDB_API void stl_free(void *ptr);      // NOLINT: not using camelcase on purpose here
+DUCKDB_API void *stl_malloc(size_t size);             // NOLINT: not using camelcase on purpose here
+DUCKDB_API void *stl_realloc(void *ptr, size_t size); // NOLINT: not using camelcase on purpose here
+DUCKDB_API void stl_free(void *ptr);                  // NOLINT: not using camelcase on purpose here
 
 template <class T>
-T *stl_new_array_uninitialized(size_t size) {
+T *stl_new_array_uninitialized(size_t size) { // NOLINT: not using camelcase on purpose here
 	return static_cast<T *>(stl_malloc(size * sizeof(T)));
 }
 
 template <class T>
-T *stl_new_array(size_t size) {
+T *stl_new_array(size_t size) { // NOLINT: not using camelcase on purpose here
 	auto result = stl_new_array_uninitialized<T>(size);
 	return new (result) T[size]();
 }

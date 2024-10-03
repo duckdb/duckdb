@@ -17,13 +17,6 @@
 #include <execinfo.h>
 #endif
 
-#ifndef USE_JEMALLOC
-#if defined(DUCKDB_EXTENSION_JEMALLOC_LINKED) && DUCKDB_EXTENSION_JEMALLOC_LINKED && !defined(WIN32) &&                \
-    INTPTR_MAX == INT64_MAX
-#define USE_JEMALLOC
-#endif
-#endif
-
 #ifdef USE_JEMALLOC
 #include "jemalloc_extension.hpp"
 #endif
@@ -183,32 +176,20 @@ data_ptr_t Allocator::ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t s
 }
 
 data_ptr_t Allocator::DefaultAllocate(PrivateAllocatorData *private_data, idx_t size) {
-#ifdef USE_JEMALLOC
-	return JemallocExtension::Allocate(private_data, size);
-#else
-	auto default_allocate_result = malloc(size);
+	auto default_allocate_result = stl_malloc(size);
 	if (!default_allocate_result) {
 		throw std::bad_alloc();
 	}
 	return data_ptr_cast(default_allocate_result);
-#endif
 }
 
 void Allocator::DefaultFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
-#ifdef USE_JEMALLOC
-	JemallocExtension::Free(private_data, pointer, size);
-#else
-	free(pointer);
-#endif
+	stl_free(pointer);
 }
 
 data_ptr_t Allocator::DefaultReallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
                                         idx_t size) {
-#ifdef USE_JEMALLOC
-	return JemallocExtension::Reallocate(private_data, pointer, old_size, size);
-#else
-	return data_ptr_cast(realloc(pointer, size));
-#endif
+	return data_ptr_cast(stl_realloc(pointer, size));
 }
 
 shared_ptr<Allocator> &Allocator::DefaultAllocatorReference() {
