@@ -73,6 +73,9 @@ private:
 
 	//! Run a comparison between the statistics and the table filter; returns the prune result
 	FilterPropagateResult PropagateTableFilter(BaseStatistics &stats, TableFilter &filter);
+	//! Run a comparison between the statistics and the table filter with the table cardianlity; returns the prune
+	//! result
+	FilterPropagateResult PropagateTableFilter(BaseStatistics &stats, TableFilter &filter, LogicalGet &get);
 	//! Update filter statistics from a TableFilter
 	void UpdateFilterStatistics(BaseStatistics &input, TableFilter &filter);
 
@@ -87,7 +90,7 @@ private:
 
 	unique_ptr<BaseStatistics> PropagateExpression(unique_ptr<Expression> &expr);
 	unique_ptr<BaseStatistics> PropagateExpression(Expression &expr, unique_ptr<Expression> &expr_ptr);
-
+	//! Run a comparison between the statistics and the table filter; returns the prune result
 	unique_ptr<BaseStatistics> PropagateExpression(BoundAggregateExpression &expr, unique_ptr<Expression> &expr_ptr);
 	unique_ptr<BaseStatistics> PropagateExpression(BoundBetweenExpression &expr, unique_ptr<Expression> &expr_ptr);
 	unique_ptr<BaseStatistics> PropagateExpression(BoundCaseExpression &expr, unique_ptr<Expression> &expr_ptr);
