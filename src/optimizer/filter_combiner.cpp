@@ -596,44 +596,41 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 
 			//! Check if values are consecutive, if yes transform them to >= <= (only for integers)
 			// e.g. if we have x IN (1, 2, 3, 4, 5) we transform this into x >= 1 AND x <= 5
-			if (!type.IsIntegral()) {
-				// we have IN ('Sweden', 'Norway', 'denmark') etc.
-				// We could push this down to an OR filter and check zone maps,
-				// but min max stats on strings do not help as much compared to the same stats on integral types
-				// TODO: you could make a conjunction filter here.
-				// then when propagating statistics, check if the distinct count is > (0.5 * cardinality).
-				// If so, the IN() values are most likely selective, so it is worth it to push the
-				// filter down.
-				break;
-			}
-
-			for (idx_t i = 1; i < func.children.size(); i++) {
-				auto &const_value_expr = func.children[i]->Cast<BoundConstantExpression>();
-				D_ASSERT(!const_value_expr.value.IsNull());
-				in_values.push_back(const_value_expr.value.GetValue<hugeint_t>());
-			}
-			if (in_values.empty()) {
-				continue;
-			}
-
-			sort(in_values.begin(), in_values.end());
-
 			bool can_simplify_in_clause = true;
-			for (idx_t in_val_idx = 1; in_val_idx < in_values.size(); in_val_idx++) {
-				if (in_values[in_val_idx] - in_values[in_val_idx - 1] > 1) {
-					can_simplify_in_clause = false;
-					break;
+			if (type.IsIntegral()) {
+				for (idx_t i = 1; i < func.children.size(); i++) {
+					auto &const_value_expr = func.children[i]->Cast<BoundConstantExpression>();
+					D_ASSERT(!const_value_expr.value.IsNull());
+					in_values.push_back(const_value_expr.value.GetValue<hugeint_t>());
+				}
+
+				if (in_values.empty()) {
+					continue;
+				}
+
+				sort(in_values.begin(), in_values.end());
+
+				for (idx_t in_val_idx = 1; in_val_idx < in_values.size(); in_val_idx++) {
+					if (in_values[in_val_idx] - in_values[in_val_idx - 1] > 1) {
+						can_simplify_in_clause = false;
+						break;
+					}
 				}
 			}
-			if (!can_simplify_in_clause) {
-				auto or_zone_map_filter = make_uniq<ConjunctionOrFilter>();
-				for (idx_t in_val_idx = 1; in_val_idx < func.children.size(); in_val_idx++) {
-					D_ASSERT(func.children[in_val_idx]->type == ExpressionType::VALUE_CONSTANT);
-					auto &const_val = func.children[in_val_idx]->Cast<BoundConstantExpression>();
-					auto constant_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, const_val.value);
-					or_zone_map_filter->child_filters.push_back(std::move(constant_filter));
+			// if we are not consecutive or we are VARCHAR, then we can still push an OR zone_map filter
+			if (!can_simplify_in_clause || !type.IsIntegral()) {
+				if (type.IsIntegral() || type.id() == LogicalTypeId::VARCHAR) {
+					auto or_filter = make_uniq<ConjunctionOrFilter>();
+					for (idx_t in_val_idx = 1; in_val_idx < func.children.size(); in_val_idx++) {
+						D_ASSERT(func.children[in_val_idx]->type == ExpressionType::VALUE_CONSTANT);
+						auto &const_val = func.children[in_val_idx]->Cast<BoundConstantExpression>();
+						auto zone_map_filter = make_uniq<ZoneMapFilter>();
+						zone_map_filter->child_filter =
+						    make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, const_val.value);
+						or_filter->child_filters.push_back(std::move(zone_map_filter));
+					}
+					table_filters.PushFilter(column_index, std::move(or_filter));
 				}
-				table_filters.PushFilter(column_index, std::move(or_zone_map_filter));
 				break;
 			}
 			auto lower_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
@@ -694,7 +691,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 						break;
 					}
 
-					if (const_val->value.type().IsTemporal() || !const_val->value.type().IsIntegral()) {
+					if (const_val->value.type().IsTemporal()) {
 						same_column_id = false;
 						same_column_id = false;
 						break;
