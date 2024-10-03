@@ -13,10 +13,6 @@
 
 namespace duckdb {
 
-enum class CheckStats : uint8_t {
-
-};
-
 class ConjunctionFilter : public TableFilter {
 public:
 	explicit ConjunctionFilter(TableFilterType filter_type_p) : TableFilter(filter_type_p) {
