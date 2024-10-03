@@ -12,13 +12,15 @@
 
 namespace duckdb {
 
-//! The Deliminator optimizer traverses the logical operator tree and removes any redundant DelimGets/DelimJoins
+//! The EmptyResultPullup Optimizer traverses the logical operator tree and Pulls up empty operators when possible
 class EmptyResultPullup : LogicalOperatorVisitor {
 public:
 	EmptyResultPullup() {
 	}
 
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
+
+private:
 	unique_ptr<LogicalOperator> PullUpEmptyJoinChildren(unique_ptr<LogicalOperator> op);
 };
 
