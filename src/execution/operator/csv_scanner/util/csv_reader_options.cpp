@@ -404,7 +404,7 @@ string CSVReaderOptions::ToString(const string &current_file_path) const {
 	auto &skip_rows = dialect_options.skip_rows;
 
 	auto &header = dialect_options.header;
-	string error = "  file=" + current_file_path + "\n  ";
+	string error = "  file = " + current_file_path + "\n  ";
 	// Let's first print options that can either be set by the user or by the sniffer
 	// delimiter
 	error += FormatOptionLine("delimiter", delimiter);
@@ -427,13 +427,13 @@ string CSVReaderOptions::ToString(const string &current_file_path) const {
 
 	// Now we do options that can only be set by the user, that might hold some general significance
 	// null padding
-	error += "null_padding=" + std::to_string(null_padding) + "\n  ";
+	error += "null_padding = " + std::to_string(null_padding) + "\n  ";
 	// sample_size
-	error += "sample_size=" + std::to_string(sample_size_chunks * STANDARD_VECTOR_SIZE) + "\n  ";
+	error += "sample_size = " + std::to_string(sample_size_chunks * STANDARD_VECTOR_SIZE) + "\n  ";
 	// ignore_errors
-	error += "ignore_errors=" + ignore_errors.FormatValue() + "\n  ";
+	error += "ignore_errors = " + ignore_errors.FormatValue() + "\n  ";
 	// all_varchar
-	error += "all_varchar=" + std::to_string(all_varchar) + "\n";
+	error += "all_varchar = " + std::to_string(all_varchar) + "\n";
 
 	// Add information regarding sniffer mismatches (if any)
 	error += sniffer_user_mismatch_error;
