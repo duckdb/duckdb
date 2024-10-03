@@ -15,8 +15,12 @@ insert into t2 from range(10) t(a);
 #statement ok
 #select * from t1 join t2 using (a);
 
-statement ok
-select * from t1 where a = 30000 or a = 50000 or a = 500;
+query I
+select a from t1 where a = 30000 or a = 50000 or a = 500;
+----
+500
+30000
+50000
 
 
 statement ok

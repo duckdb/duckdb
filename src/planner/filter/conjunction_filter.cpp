@@ -29,8 +29,11 @@ FilterPropagateResult ConjunctionOrFilter::CheckStatisticsWithCardinality(BaseSt
 		// otherise it is not.
 		estimated_cardinality = estimated_cardinality / RelationStatisticsHelper::DEFAULT_SELECTIVITY;
 		auto distinct_count = stats.GetDistinctCount();
-		if (estimated_cardinality * 0.7 >= distinct_count) {
-			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		if (estimated_cardinality * 0.08  >= distinct_count) {
+			// means it is useless to execute the condition in the table filters
+			// The filter was not erased when creating the conjunction or, so the
+			// result will still be valid.
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 		}
 	}
 

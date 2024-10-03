@@ -696,7 +696,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 						same_column_id = false;
 						break;
 					}
-					auto const_filter = make_uniq<ConstantFilter>(comp.type, const_val.value);
+					auto const_filter = make_uniq<ConstantFilter>(comp.type, const_val->value);
 					zone_filter = make_uniq<ZoneMapFilter>();
 					zone_filter->child_filter = std::move(const_filter);
 					conj_filter->child_filters.push_back(std::move(zone_filter));
