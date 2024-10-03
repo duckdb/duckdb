@@ -680,7 +680,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 							break;
 						}
 						auto &const_val = comp.right->Cast<BoundConstantExpression>();
-						if (const_val.value.type().IsTemporal()) {
+						if (const_val.value.type().IsTemporal() || !const_val.value.type().IsIntegral()) {
 							same_column_id = false;
 							same_column_id = false;
 							break;
@@ -700,7 +700,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 							break;
 						}
 						auto &const_val = comp.left->Cast<BoundConstantExpression>();
-						if (const_val.value.type().IsTemporal()) {
+						if (const_val.value.type().IsTemporal() || !const_val.value.type().IsIntegral()) {
 							column_id_set = false;
 							same_column_id = false;
 							break;
