@@ -383,6 +383,7 @@ static unique_ptr<GlobalSortState> SortQuantileIndices(const WindowPartitionInpu
 	global_sort->AddLocalState(local_sort);
 
 	//	Sort it
+	global_sort->PrepareMergePhase();
 	while (global_sort->sorted_blocks.size() > 1) {
 		global_sort->InitializeMergeRound();
 		MergeSorter merge_sorter(*global_sort, global_sort->buffer_manager);
