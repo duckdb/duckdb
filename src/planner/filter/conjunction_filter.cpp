@@ -3,6 +3,7 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
+#include <duckdb.h>
 #include <duckdb/optimizer/join_order/cardinality_estimator.hpp>
 
 namespace duckdb {
@@ -27,9 +28,9 @@ FilterPropagateResult ConjunctionOrFilter::CheckStatisticsWithCardinality(BaseSt
 		// we have a or zone map filter. In this case we check if distinct count is >= 70% of the cardinality of
 		// the base table. If so, then or filter pushdown for constant expression checking is worth it.
 		// otherise it is not.
-		estimated_cardinality = estimated_cardinality / RelationStatisticsHelper::DEFAULT_SELECTIVITY;
+		estimated_cardinality = static_cast<idx_t>(estimated_cardinality / RelationStatisticsHelper::DEFAULT_SELECTIVITY);
 		auto distinct_count = stats.GetDistinctCount();
-		if (estimated_cardinality * 0.08  >= distinct_count) {
+		if (estimated_cardinality * 0.08 >= distinct_count) {
 			// means it is useless to execute the condition in the table filters
 			// The filter was not erased when creating the conjunction or, so the
 			// result will still be valid.
