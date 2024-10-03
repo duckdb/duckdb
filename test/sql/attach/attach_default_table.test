@@ -4,6 +4,8 @@
 
 require parquet
 
+require noforcestorage
+
 statement ok
 attach '__TEST_DIR__/test.db' as ddb (default_table 'my_table')
 
@@ -37,9 +39,6 @@ from ddb.main.my_table
 # Now we create a different table that is actually called my_table in the default catalog
 statement ok
 create table ddb as select 42 as value
-
-# The error message is different when forcing storage
-require noforcestorage
 
 # This creates ambiguity: however we can provide the solution to the user in the error message
 statement error
