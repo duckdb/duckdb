@@ -674,6 +674,10 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> st
 	}
 }
 
+unique_ptr<PreparedStatement> ClientContext::Prepare(const char *query) {
+	return Prepare(string(query));
+}
+
 unique_ptr<PreparedStatement> ClientContext::Prepare(const string &query) {
 	auto lock = LockContext();
 	// prepare the query
@@ -906,6 +910,10 @@ unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement,
 		return ErrorResult<MaterializedQueryResult>(pending_query->GetErrorObject());
 	}
 	return pending_query->Execute();
+}
+
+unique_ptr<QueryResult> ClientContext::Query(const char *query, bool allow_stream_result) {
+	return Query(string(query), allow_stream_result);
 }
 
 unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_stream_result) {

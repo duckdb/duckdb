@@ -104,6 +104,7 @@ public:
 	//! Issue a query, returning a QueryResult. The QueryResult can be either a StreamQueryResult or a
 	//! MaterializedQueryResult. The StreamQueryResult will only be returned in the case of a successful SELECT
 	//! statement.
+	DUCKDB_API unique_ptr<QueryResult> Query(const char *query, bool allow_stream_result);
 	DUCKDB_API unique_ptr<QueryResult> Query(const string &query, bool allow_stream_result);
 	DUCKDB_API unique_ptr<QueryResult> Query(unique_ptr<SQLStatement> statement, bool allow_stream_result);
 
@@ -131,6 +132,7 @@ public:
 	DUCKDB_API unique_ptr<QueryResult> Execute(const shared_ptr<Relation> &relation);
 
 	//! Prepare a query
+	DUCKDB_API unique_ptr<PreparedStatement> Prepare(const char *query);
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(const string &query);
 	//! Directly prepare a SQL statement
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(unique_ptr<SQLStatement> statement);
