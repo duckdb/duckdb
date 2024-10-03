@@ -28,7 +28,8 @@ FilterPropagateResult ConjunctionOrFilter::CheckStatisticsWithCardinality(BaseSt
 		// we have a or zone map filter. In this case we check if distinct count is >= 70% of the cardinality of
 		// the base table. If so, then or filter pushdown for constant expression checking is worth it.
 		// otherise it is not.
-		estimated_cardinality = static_cast<idx_t>(estimated_cardinality / RelationStatisticsHelper::DEFAULT_SELECTIVITY);
+		estimated_cardinality =
+		    static_cast<idx_t>(estimated_cardinality / RelationStatisticsHelper::DEFAULT_SELECTIVITY);
 		auto distinct_count = stats.GetDistinctCount();
 		if (estimated_cardinality * 0.08 >= distinct_count) {
 			// means it is useless to execute the condition in the table filters
