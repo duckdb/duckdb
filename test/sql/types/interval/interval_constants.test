@@ -83,61 +83,74 @@ SELECT interval 2 seconds, interval 2 second;
 statement error
 SELECT interval '2 10' years to months
 ----
+<REGEX>:Parser Error.*not supported.*
 
 # 2 days 10 hours
 statement error
 SELECT interval '2 10' days to hours
 ----
+<REGEX>:Parser Error.*not supported.*
 
 # 12 days 15:06:00
 statement error
 SELECT interval '12 15:06' days to minutes
 ----
+<REGEX>:Parser Error.*not supported.*
 
 # 12 days 15:06:04.123
 statement error
 SELECT interval '12 15:06:04.123' days to seconds
 ----
+<REGEX>:Parser Error.*not supported.*
 
 # 12:30:00
 statement error
 SELECT interval '12:30' hours to minutes
 ----
+<REGEX>:Parser Error.*not supported.*
 
 # 15:06:04.123
 statement error
 SELECT interval '15:06:04.123' hours to seconds
 ----
+<REGEX>:Parser Error.*not supported.*
 
 # 00:12:30
 statement error
 SELECT interval '12:30' minutes to seconds
 ----
+<REGEX>:Parser Error.*not supported.*
 
 # test out of range interval constants
 statement error
 SELECT interval '99999999999999' years;
 ----
+<REGEX>:Conversion Error.*out of range for the destination type.*
 
 statement error
 SELECT interval '214748364' years;
 ----
+<REGEX>:Out of Range Error.*Interval value.*out of range.*
 
 statement error
 SELECT interval '9223372036854775807' hours;
 ----
+<REGEX>:Conversion Error.*out of range for the destination type.*
 
 statement error
 SELECT interval '9223372036854775807' minutes;
 ----
+<REGEX>:Conversion Error.*out of range for the destination type.*
 
 statement error
 SELECT interval '9223372036854775807' seconds;
 ----
+<REGEX>:Out of Range Error.*Interval value.*out of range.*
 
 statement error
 SELECT interval '9223372036854775807' milliseconds;
 ----
+<REGEX>:Out of Range Error.*Interval value.*out of range.*
 
 # milliseconds
 query II
@@ -218,7 +231,7 @@ select '31.123456789'::interval;
 statement error
 select '47.210 5'::interval;
 ----
-Could not convert string '47.210 5' to INTERVAL
+<REGEX>:Conversion Error.*Could not convert string.*
 
 #
 # Fractional to_interval parsing - above seconds truncates
