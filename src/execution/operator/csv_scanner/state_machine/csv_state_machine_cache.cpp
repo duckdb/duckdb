@@ -53,9 +53,9 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	vector<uint8_t> std_inv {static_cast<uint8_t>(CSVState::STANDARD), static_cast<uint8_t>(CSVState::INVALID)};
 	for (auto &state : std_inv) {
 		transition_array[delimiter][state] = CSVState::DELIMITER;
-		// transition_array[static_cast<uint8_t>('\n')][state] = CSVState::RECORD_SEPARATOR;
 		if (new_line_id == NewLineIdentifier::CARRY_ON) {
 			transition_array[static_cast<uint8_t>('\r')][state] = CSVState::CARRIAGE_RETURN;
+			transition_array[static_cast<uint8_t>('\n')][state] = CSVState::INVALID;
 		} else {
 			transition_array[static_cast<uint8_t>('\r')][state] = CSVState::RECORD_SEPARATOR;
 			transition_array[static_cast<uint8_t>('\n')][state] = CSVState::RECORD_SEPARATOR;
