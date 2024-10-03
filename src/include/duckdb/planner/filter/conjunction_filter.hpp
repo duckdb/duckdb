@@ -38,13 +38,8 @@ class ConjunctionOrFilter : public ConjunctionFilter {
 public:
 	static constexpr const TableFilterType TYPE = TableFilterType::CONJUNCTION_OR;
 
-private:
-
-
 public:
 	ConjunctionOrFilter();
-
-public:
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override;
 	FilterPropagateResult CheckStatisticsWithCardinality(BaseStatistics &stats, idx_t estimated_cardinality);
 	string ToString(const string &column_name) override;

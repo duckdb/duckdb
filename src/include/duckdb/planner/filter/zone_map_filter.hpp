@@ -12,11 +12,7 @@
 
 namespace duckdb {
 
-
-
 // Conjunction OR filters and Zone maps are tough to optimize
-
-
 /* The main problem is that if a column is not sorted, then there is a chance every value in the
  * conjunction or is in every row group. We would like to avoid this.
  *
@@ -31,10 +27,10 @@ namespace duckdb {
  * min and max values of the row groups will be increasing.
  *
  * Lets go case by case
- * HIGH cardinality >> LOW distinct count, then not worth it to do zone maps. Most likely every row group will be propagated
- * HIGH cardinality ~~ HIGH distinct count. Worth it to do
- * LOW cardinality ~~ LOW distinct count (Not worth it. You may filter out a good number of row groups, but checking
- * each one for min max statistics is not worth the overhead.
+ * HIGH cardinality >> LOW distinct count, then not worth it to do zone maps. Most likely every row group will be
+ * propagated HIGH cardinality ~~ HIGH distinct count. Worth it to do LOW cardinality ~~ LOW distinct count (Not worth
+ * it. You may filter out a good number of row groups, but checking each one for min max statistics is not worth the
+ * overhead.
  *
  * LOW CARDINALITY - HIGH DISTINCT COUNT - impossible.
  *
@@ -43,13 +39,6 @@ namespace duckdb {
 class ZoneMapFilter : public TableFilter {
 public:
 	static constexpr const TableFilterType TYPE = TableFilterType::ZONE_MAP;
-
-
-private:
-
-public:
-	// zonemap filter
-	unique_ptr<TableFilter> child_filter;
 
 public:
 	ZoneMapFilter();
@@ -60,6 +49,10 @@ public:
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override;
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
+
+public:
+	// zonemap filter
+	unique_ptr<TableFilter> child_filter;
 };
 
 } // namespace duckdb
