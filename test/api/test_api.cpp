@@ -580,6 +580,25 @@ TEST_CASE("Issue #4583: Catch Insert/Update/Delete errors", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
 
+TEST_CASE("Issue #14130: InsertStatement::ToString causes InternalException later on", "[api][.]") {
+	auto db = DuckDB(nullptr);
+	auto conn = Connection(db);
+
+	conn.Query("CREATE TABLE foo(a int, b varchar, c int)");
+
+	auto query = "INSERT INTO Foo values (1, 'qwerty', 42)";
+
+	auto stmts = conn.ExtractStatements(query);
+	auto &stmt = stmts[0];
+
+	// Issue was here: calling ToString destroyed the 'alias' of the ValuesList
+	stmt->ToString();
+	// Which caused an 'InternalException: expected non-empty binding_name' here
+	auto prepared_stmt = conn.Prepare(std::move(stmt));
+	REQUIRE(!prepared_stmt->HasError());
+	REQUIRE_NO_FAIL(prepared_stmt->Execute());
+}
+
 TEST_CASE("Issue #6284: CachingPhysicalOperator in pull causes issues", "[api][.]") {
 
 	DBConfig config;

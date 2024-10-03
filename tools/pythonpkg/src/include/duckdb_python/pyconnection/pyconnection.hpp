@@ -347,7 +347,6 @@ public:
 
 private:
 	PathLike GetPathLike(const py::object &object);
-	unique_lock<std::mutex> AcquireConnectionLock();
 	ScalarFunction CreateScalarUDF(const string &name, const py::function &udf, const py::object &parameters,
 	                               const shared_ptr<DuckDBPyType> &return_type, bool vectorized,
 	                               FunctionNullHandling null_handling, PythonExceptionHandling exception_handling,

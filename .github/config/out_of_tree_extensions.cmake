@@ -128,6 +128,7 @@ duckdb_extension_load(sqlsmith
         DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb_sqlsmith
         GIT_TAG f24be8b5b0cd0eeed7541e10cff42d7050771afc
+        APPLY_PATCHES
         )
 
 ################# SUBSTRAIT
