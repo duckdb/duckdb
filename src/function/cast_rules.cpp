@@ -283,6 +283,15 @@ static int64_t ImplicitCastVarint(const LogicalType &to) {
 	}
 }
 
+static int64_t ImplicitCastBitstring(const LogicalType &to) {
+	switch (to.id()) {
+	case LogicalTypeId::VARCHAR:
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
 bool LogicalTypeIsValid(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::STRUCT:
@@ -577,6 +586,8 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		return ImplicitCastTimestamp(to);
 	case LogicalTypeId::VARINT:
 		return ImplicitCastVarint(to);
+	case LogicalTypeId::BIT:
+		return ImplicitCastBitstring(to);
 	default:
 		return -1;
 	}

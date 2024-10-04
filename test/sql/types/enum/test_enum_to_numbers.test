@@ -261,15 +261,29 @@ statement ok
 drop table t2;
 
 statement ok
-create type enum_bits as enum ('11001010110', '110', '0101001010101', 'some enum val that cannot be cast to bit');
+create type enum_bits as enum(
+	'11001010110',
+	'110',
+	'0101001010101',
+	'some enum val that cannot be cast to bit'
+);
 
 statement ok
-create table t1 as select * from values ('110010'::BIT), ('110'::BIT), ('110110110011'::BIT) t(a);
+create table t1 as select * from values
+	('110010'::BIT),
+	('110'::BIT),
+	('110110110011'::BIT)
+t(a);
 
 statement ok
-create table t2 as select * from values ('11001010110'::enum_bits), ('110'::enum_bits), ('0101001010101'::enum_bits), ('some enum val that cannot be cast to bit'::enum_bits) t(b);
+create table t2 as select * from values
+	('11001010110'::enum_bits),
+	('110'::enum_bits),
+	('0101001010101'::enum_bits),
+	('some enum val that cannot be cast to bit'::enum_bits)
+t(b);
 
-statement error
+# Because both enum and bit have implicit casts to VARCHAR,
+# both are cast to VARCHAR when the enum has a value that can not be converted to BIT
+statement ok
 select count(*) from t1, t2 where t1.a = t2.b;
-----
-Conversion Error
