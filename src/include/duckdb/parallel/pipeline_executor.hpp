@@ -39,11 +39,14 @@ public:
 
 public:
 	bool Next() {
-		if (processed >= maximum_to_process) {
+		if (IsDepleted()) {
 			return false;
 		}
 		processed++;
 		return true;
+	}
+	bool IsDepleted() const {
+		return processed >= maximum_to_process;
 	}
 
 private:

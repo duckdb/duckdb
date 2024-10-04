@@ -104,6 +104,7 @@ bool PipelineExecutor::TryFlushCachingOperators(ExecutionBudget &chunk_budget) {
 			return false;
 		}
 		case OperatorResultType::HAVE_MORE_OUTPUT: {
+			D_ASSERT(chunk_budget.IsDepleted());
 			// The chunk budget was used up, pushing the chunk through the pipeline created more chunks
 			// we need to continue this the next time Execute is called.
 			return false;
