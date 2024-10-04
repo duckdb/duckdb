@@ -68,6 +68,18 @@ public:
 		return ret;
 	}
 
+	template <typename T>
+	inline bool WithOptionalProperty(const field_id_t field_id, const char *tag,
+	                                 std::function<void(T value)> callback) {
+		if (!OnOptionalPropertyBegin(field_id, tag)) {
+			OnOptionalPropertyEnd(false);
+			return false;
+		}
+		auto ret = Read<T>();
+		callback(ret);
+		return true;
+	}
+
 	// Default Value return
 	template <typename T>
 	inline T ReadPropertyWithDefault(const field_id_t field_id, const char *tag) {
