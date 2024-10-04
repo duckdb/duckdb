@@ -213,7 +213,6 @@ void Bit::BitString(const string_t &input, const idx_t &bit_length, string_t &re
 			Bit::SetBit(result, i, bit);
 		}
 	}
-	Bit::Finalize(result);
 }
 
 idx_t Bit::BitLength(string_t bits) {
@@ -318,7 +317,6 @@ void Bit::RightShift(const string_t &bit_string, const idx_t &shift, string_t &r
 			Bit::SetBit(result, i, bit);
 		}
 	}
-	Bit::Finalize(result);
 }
 
 void Bit::LeftShift(const string_t &bit_string, const idx_t &shift, string_t &result) {
@@ -334,7 +332,6 @@ void Bit::LeftShift(const string_t &bit_string, const idx_t &shift, string_t &re
 			Bit::SetBit(result, i, 0);
 		}
 	}
-	Bit::Finalize(result);
 }
 
 void Bit::BitwiseAnd(const string_t &rhs, const string_t &lhs, string_t &result) {
