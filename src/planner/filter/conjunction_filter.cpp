@@ -11,45 +11,6 @@ namespace duckdb {
 ConjunctionOrFilter::ConjunctionOrFilter() : ConjunctionFilter(TableFilterType::CONJUNCTION_OR) {
 }
 
-FilterPropagateResult ConjunctionOrFilter::CheckStatisticsWithCardinality(BaseStatistics &stats,
-                                                                          idx_t estimated_cardinality) {
-	// the OR filter is true if ANY of the children is true
-	D_ASSERT(!child_filters.empty());
-	// zone map OR
-	auto or_zone_map = true;
-	for (auto &filter : child_filters) {
-		if (filter->filter_type != TableFilterType::ZONE_MAP) {
-			or_zone_map = false;
-			break;
-		}
-	}
-
-	if (or_zone_map) {
-		// we have a or zone map filter. In this case we check if distinct count is >= 70% of the cardinality of
-		// the base table. If so, then or filter pushdown for constant expression checking is worth it.
-		// otherise it is not.
-		estimated_cardinality =
-		    static_cast<idx_t>(estimated_cardinality / RelationStatisticsHelper::DEFAULT_SELECTIVITY);
-		auto distinct_count = stats.GetDistinctCount();
-		if (estimated_cardinality * 0.08 >= distinct_count) {
-			// means it is useless to execute the condition in the table filters
-			// The filter was not erased when creating the conjunction or, so the
-			// result will still be valid.
-			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		}
-	}
-
-	for (auto &filter : child_filters) {
-		auto prune_result = filter->CheckStatistics(stats);
-		if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		} else if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
-			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		}
-	}
-	return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-}
-
 FilterPropagateResult ConjunctionOrFilter::CheckStatistics(BaseStatistics &stats) {
 	// the OR filter is true if ANY of the children is true
 	D_ASSERT(!child_filters.empty());
