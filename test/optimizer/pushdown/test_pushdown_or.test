@@ -51,25 +51,3 @@ select l_orderkey, l_partkey from lineitem where l_orderkey = 6 or l_partkey = 4
 4437666	4991
 4734181	4991
 5552582	4991
-
-statement ok
-attach 'duckdb_benchmark_data/imdb.duckdb' as imdb;
-
-statement ok
-use imdb;
-
-statement ok
-select *
-from
-	movie_info mi,
-	info_type it
-where it.id = mi.info_type_id and
-mi.info IN ('Sweden',
-			 'Norway',
-			   'Germany',
-			   'Denmark',
-			   'Swedish',
-			   'Denish',
-			   'Norwegian',
-			   'German')
-and it.info = 'genres';
