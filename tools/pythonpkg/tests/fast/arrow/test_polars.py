@@ -67,7 +67,9 @@ class TestPolars(object):
         res = duckdb_cursor.read_json(string).pl()
         assert str(res['entry'][0][0]) == "{'content': {'ManagedSystem': {'test': None}}}"
 
-    @pytest.mark.skipif(sys.version_info < (3, 8), reason="Polars PanicException is not supported in earlier versions")
+    @pytest.mark.skipif(
+        not hasattr(pl.exceptions, "PanicException"), reason="Polars has no PanicException in this version"
+    )
     def test_polars_from_json_error(self, duckdb_cursor):
         from io import StringIO
 

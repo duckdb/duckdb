@@ -1,0 +1,14 @@
+# name: test/sql/aggregate/aggregates/test_minmax_14145.test
+# description: Test minmax aggregation issue 14145
+# group: [aggregates]
+
+require json
+
+statement ok
+PRAGMA enable_verification
+
+query IIIIII
+DESCRIBE SELECT max(l) from (select unnest( [{'a':1}::JSON, [2]::JSON ]) as l);
+----
+max(l)	JSON	YES	NULL	NULL	NULL
+

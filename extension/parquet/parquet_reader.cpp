@@ -639,8 +639,7 @@ uint32_t ParquetReader::ReadData(duckdb_apache::thrift::protocol::TProtocol &ipr
 const ParquetRowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
 	auto file_meta_data = GetFileMetadata();
 	D_ASSERT(state.current_group >= 0 && (idx_t)state.current_group < state.group_idx_list.size());
-	D_ASSERT(state.group_idx_list[state.current_group] >= 0 &&
-	         state.group_idx_list[state.current_group] < file_meta_data->row_groups.size());
+	D_ASSERT(state.group_idx_list[state.current_group] < file_meta_data->row_groups.size());
 	return file_meta_data->row_groups[state.group_idx_list[state.current_group]];
 }
 

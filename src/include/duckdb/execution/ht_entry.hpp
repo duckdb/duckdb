@@ -21,10 +21,10 @@ namespace duckdb {
 */
 struct ht_entry_t { // NOLINT
 public:
-	//! Upper 16 bits are salt
-	static constexpr const hash_t SALT_MASK = 0xFFFF000000000000;
-	//! Lower 48 bits are the pointer
-	static constexpr const hash_t POINTER_MASK = 0x0000FFFFFFFFFFFF;
+	//! Upper 12 bits are salt
+	static constexpr const hash_t SALT_MASK = 0xFFF0000000000000;
+	//! Lower 52 bits are the pointer
+	static constexpr const hash_t POINTER_MASK = 0x000FFFFFFFFFFFFF;
 
 	explicit inline ht_entry_t(hash_t value_p) noexcept : value(value_p) {
 	}

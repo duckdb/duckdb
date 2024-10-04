@@ -165,6 +165,12 @@ class TestReplacementScan(object):
         assert type(pyrel3) == duckdb.DuckDBPyRelation
         assert pyrel3.fetchall() == [(142,), (184,)]
 
+    def test_replacement_scan_not_found(self):
+        con = duckdb.connect()
+        con.execute("set python_scan_all_frames=true")
+        with pytest.raises(duckdb.CatalogException, match='Table with name non_existant does not exist'):
+            res = con.sql("select * from non_existant").fetchall()
+
     def test_replacement_scan_alias(self):
         con = duckdb.connect()
         pyrel1 = con.query('from (values (1, 2)) t(i, j)')
