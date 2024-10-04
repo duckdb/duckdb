@@ -213,6 +213,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 				if (remaining_sink_chunk) {
 					return PipelineExecuteResult::INTERRUPTED;
 				} else {
+					D_ASSERT(chunk_budget.IsDepleted());
 					return PipelineExecuteResult::NOT_FINISHED;
 				}
 			}
