@@ -55,7 +55,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		transition_array[delimiter][state] = CSVState::DELIMITER;
 		if (new_line_id == NewLineIdentifier::CARRY_ON) {
 			transition_array[static_cast<uint8_t>('\r')][state] = CSVState::CARRIAGE_RETURN;
-			transition_array[static_cast<uint8_t>('\n')][state] = CSVState::INVALID;
+			transition_array[static_cast<uint8_t>('\n')][state] = CSVState::STANDARD;
 		} else {
 			transition_array[static_cast<uint8_t>('\r')][state] = CSVState::RECORD_SEPARATOR;
 			transition_array[static_cast<uint8_t>('\n')][state] = CSVState::RECORD_SEPARATOR;

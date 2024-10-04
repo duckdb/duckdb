@@ -1404,15 +1404,19 @@ bool StringValueResult::PrintErrorLine() const {
 	       (state_machine.options.store_rejects.GetValue() || !state_machine.options.ignore_errors.GetValue());
 }
 
-void StringValueScanner::SkipUntilState(CSVState initial_state, CSVState until_state) {
+bool StringValueScanner::SkipUntilState(CSVState initial_state, CSVState until_state) {
 	CSVStates current_state;
 	current_state.Initialize(initial_state);
 	while (iterator.pos.buffer_pos < cur_buffer_handle->actual_size) {
 		state_machine->Transition(current_state, buffer_handle_ptr[iterator.pos.buffer_pos++]);
 		if (current_state.IsState(until_state)) {
-			return;
+			return true;
+		}
+		if (current_state.IsState(CSVState::INVALID)) {
+			return false;
 		}
 	}
+	return true;
 }
 
 bool StringValueScanner::CanDirectlyCast(const LogicalType &type, bool icu_loaded) {
@@ -1458,13 +1462,14 @@ bool StringValueScanner::IsRowValid() {
 
 void StringValueScanner::TryRow(CSVState state, idx_t &start_pos, idx_t &end_pos, bool &valid) {
 	idx_t initial_pos = iterator.pos.buffer_pos;
-	SkipUntilState(state, CSVState::RECORD_SEPARATOR);
-	idx_t current_pos = iterator.pos.buffer_pos;
-	if (IsRowValid()) {
-		valid = true;
-		start_pos = std::min(start_pos, current_pos);
+	if (SkipUntilState(state, CSVState::RECORD_SEPARATOR)) {
+		idx_t current_pos = iterator.pos.buffer_pos;
+		if (IsRowValid()) {
+			valid = true;
+			start_pos = std::min(start_pos, current_pos);
+		}
+		end_pos = std::max(end_pos, iterator.pos.buffer_pos);
 	}
-	end_pos = std::max(end_pos, iterator.pos.buffer_pos);
 	// reset buffer
 	iterator.pos.buffer_pos = initial_pos;
 }
@@ -1521,11 +1526,11 @@ void StringValueScanner::SetStart() {
 	// 1. We are at the start of a valid line
 	TryRow(CSVState::STANDARD, potential_start, largest_end_pos, any_valid_row);
 	// 2. We are in the middle of a quoted value
-	if (potential_start > next_new_line) {
+	if (potential_start > next_new_line && state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0') {
 		TryRow(CSVState::QUOTED, potential_start, largest_end_pos, any_valid_row);
 	}
 	// 3. We are in an escaped value
-	if (!any_valid_row && potential_start > next_new_line) {
+	if (!any_valid_row && potential_start > next_new_line && state_machine->dialect_options.state_machine_options.escape.GetValue() != '\0') {
 		TryRow(CSVState::ESCAPE, potential_start, largest_end_pos, any_valid_row);
 	}
 	if (!any_valid_row) {

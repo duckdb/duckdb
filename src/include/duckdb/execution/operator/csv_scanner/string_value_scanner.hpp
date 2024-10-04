@@ -318,7 +318,7 @@ private:
 	//! Main function, sets the correct start
 	void SetStart();
 	//! From a given initial state, it skips until we reach the until_state
-	void SkipUntilState(CSVState initial_state, CSVState until_state);
+	bool SkipUntilState(CSVState initial_state, CSVState until_state);
 	//! If the current row we found is valid
 	bool IsRowValid();
 	void TryRow(CSVState state, idx_t &start_pos, idx_t &end_pos, bool &valid);
