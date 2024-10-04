@@ -131,9 +131,10 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 				}
 			}
 			if (continue_) {
-				cardinality_after_filters = MaxValue<idx_t>(
-				LossyNumericCast<idx_t>(double(base_table_cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY),
-				1U);
+				cardinality_after_filters =
+				    MaxValue<idx_t>(LossyNumericCast<idx_t>(double(base_table_cardinality) *
+				                                            RelationStatisticsHelper::DEFAULT_SELECTIVITY),
+				                    1U);
 			}
 		}
 		if (base_table_cardinality == 0) {

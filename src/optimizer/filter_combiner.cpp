@@ -642,7 +642,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 			}
 			// if we are not consecutive or we are VARCHAR, then we can still push an OR zone_map filter
 			if (!can_simplify_in_clause || !type.IsIntegral()) {
-				if ((type.IsIntegral() || type.id() == LogicalTypeId::VARCHAR) && ShouldGenerateORFilter(op, column_index)) {
+				if ((type.IsIntegral() || type.id() == LogicalTypeId::VARCHAR) &&
+				    ShouldGenerateORFilter(op, column_index)) {
 					auto or_filter = make_uniq<ConjunctionOrFilter>();
 					for (idx_t in_val_idx = 1; in_val_idx < func.children.size(); in_val_idx++) {
 						D_ASSERT(func.children[in_val_idx]->type == ExpressionType::VALUE_CONSTANT);
@@ -724,7 +725,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 					zone_filter->child_filter = std::move(const_filter);
 					conj_filter->child_filters.push_back(std::move(zone_filter));
 				}
-				if (same_column_id && column_id_set && column_id != DConstants::INVALID_INDEX && !ShouldGenerateORFilter(op, column_id)) {
+				if (same_column_id && column_id_set && column_id != DConstants::INVALID_INDEX &&
+				    !ShouldGenerateORFilter(op, column_id)) {
 					table_filters.PushFilter(column_id, std::move(conj_filter));
 				}
 			}

@@ -37,7 +37,6 @@ public:
 public:
 	ConjunctionOrFilter();
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override;
-	FilterPropagateResult CheckStatisticsWithCardinality(BaseStatistics &stats, idx_t estimated_cardinality);
 	string ToString(const string &column_name) override;
 	bool Equals(const TableFilter &other) const override;
 	unique_ptr<TableFilter> Copy() const override;
