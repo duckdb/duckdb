@@ -122,9 +122,19 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 		// and there are other table filters (i.e cost > 50), use default selectivity.
 		bool has_equality_filter = (cardinality_after_filters != base_table_cardinality);
 		if (!has_equality_filter && !get.table_filters.filters.empty()) {
-			cardinality_after_filters = MaxValue<idx_t>(
-			    LossyNumericCast<idx_t>(double(base_table_cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY),
-			    1U);
+			bool continue_ = true;
+			for (auto &filter : get.table_filters.filters) {
+				if (column_statistics && filter.second->filter_type == TableFilterType::CONJUNCTION_OR) {
+					// now we fuck off. We don't modify base stats based on a conjunction OR.;
+					continue_ = false;
+					break;
+				}
+			}
+			if (continue_) {
+				cardinality_after_filters = MaxValue<idx_t>(
+				LossyNumericCast<idx_t>(double(base_table_cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY),
+				1U);
+			}
 		}
 		if (base_table_cardinality == 0) {
 			cardinality_after_filters = 0;
