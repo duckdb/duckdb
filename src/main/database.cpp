@@ -506,7 +506,7 @@ ValidChecker &DatabaseInstance::GetValidChecker() {
 	return db_validity;
 }
 
-const duckdb_ext_api_v0 &DatabaseInstance::GetExtensionAPIV0() {
+const duckdb_ext_api_v0 DatabaseInstance::GetExtensionAPIV0() {
 	return *extension_api_v0;
 }
 

@@ -59,7 +59,7 @@ public:
 	DUCKDB_API ValidChecker &GetValidChecker();
 	DUCKDB_API void SetExtensionLoaded(const string &extension_name, ExtensionInstallInfo &install_info);
 
-	DUCKDB_API const duckdb_ext_api_v0 &GetExtensionAPIV0();
+	DUCKDB_API const duckdb_ext_api_v0 GetExtensionAPIV0();
 
 	idx_t NumberOfThreads();
 
