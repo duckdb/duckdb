@@ -167,7 +167,7 @@ DROP VIEW IF EXISTS v4
 
 # create views that read the batches using unions
 statement ok
-CREATE VIEW v1 AS FROM '__TEST_DIR__/mix_batches_small.parquet' UNION ALL FROM '__TEST_DIR__/mix_batches_large.parquet' UNION ALL FROM '__TEST_DIR__/mix_batches_odd.parquet' UNION ALL FROM '__TEST_DIR__/mix_batches_odd_again.parquet'
+CREATE OR REPLACE VIEW v1 AS FROM '__TEST_DIR__/mix_batches_small.parquet' UNION ALL FROM '__TEST_DIR__/mix_batches_large.parquet' UNION ALL FROM '__TEST_DIR__/mix_batches_odd.parquet' UNION ALL FROM '__TEST_DIR__/mix_batches_odd_again.parquet'
 
 statement ok
 CREATE OR REPLACE VIEW v2 AS FROM v1 WHERE (i//10000)%2=0;
