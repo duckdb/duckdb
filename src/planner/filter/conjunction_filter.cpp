@@ -2,9 +2,7 @@
 
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
-
-#include <duckdb.h>
-#include <duckdb/optimizer/join_order/cardinality_estimator.hpp>
+#include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
 
 namespace duckdb {
 
