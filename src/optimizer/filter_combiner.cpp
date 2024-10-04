@@ -436,7 +436,30 @@ static unique_ptr<TableFilter> PushDownFilterIntoExpr(const Expression &expr, un
 	return inner_filter;
 }
 
-TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &column_ids) {
+bool FilterCombiner::ShouldGenerateORFilter(LogicalOperator *op, column_t column_id) const {
+	if (!op) {
+		return false;
+	}
+	if (op->type != LogicalOperatorType::LOGICAL_GET) {
+		return false;
+	}
+	auto &get = op->Cast<LogicalGet>();
+	auto estimated_cardinality = get.EstimateCardinality(context);
+	if (estimated_cardinality == 1) {
+		return false;
+	}
+	idx_t distinct_count = 0;
+	if (get.bind_data && get.function.statistics) {
+		auto column_statistics = get.function.statistics(context, get.bind_data.get(), column_id);
+		distinct_count = column_statistics->GetDistinctCount();
+		if (static_cast<double>(estimated_cardinality) * 0.08 <= static_cast<double>(distinct_count)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &column_ids, LogicalOperator *op) {
 	TableFilterSet table_filters;
 	//! First, we figure the filters that have constant expressions that we can push down to the table scan
 	for (auto &constant_value : constant_values) {
@@ -619,7 +642,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 			}
 			// if we are not consecutive or we are VARCHAR, then we can still push an OR zone_map filter
 			if (!can_simplify_in_clause || !type.IsIntegral()) {
-				if (type.IsIntegral() || type.id() == LogicalTypeId::VARCHAR) {
+				if ((type.IsIntegral() || type.id() == LogicalTypeId::VARCHAR) && ShouldGenerateORFilter(op, column_index)) {
 					auto or_filter = make_uniq<ConjunctionOrFilter>();
 					for (idx_t in_val_idx = 1; in_val_idx < func.children.size(); in_val_idx++) {
 						D_ASSERT(func.children[in_val_idx]->type == ExpressionType::VALUE_CONSTANT);
@@ -701,7 +724,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 					zone_filter->child_filter = std::move(const_filter);
 					conj_filter->child_filters.push_back(std::move(zone_filter));
 				}
-				if (same_column_id && column_id_set && column_id != DConstants::INVALID_INDEX) {
+				if (same_column_id && column_id_set && column_id != DConstants::INVALID_INDEX && !ShouldGenerateORFilter(op, column_id)) {
 					table_filters.PushFilter(column_id, std::move(conj_filter));
 				}
 			}
