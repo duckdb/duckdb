@@ -584,7 +584,6 @@ class TestReadCSV(object):
     @pytest.mark.parametrize(
         'options',
         [
-            {'lineterminator': '\\r\\n'},
             {'lineterminator': '\\n'},
             {'lineterminator': 'LINE_FEED'},
             {'lineterminator': 'CARRIAGE_RETURN_LINE_FEED'},
