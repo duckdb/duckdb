@@ -1107,19 +1107,20 @@ void ClientContext::RunFunctionInTransaction(const std::function<void(void)> &fu
 	RunFunctionInTransactionInternal(*lock, fun, requires_valid_transaction);
 }
 
-unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name, const string &table_name) {
+unique_ptr<TableDescription> ClientContext::TableInfo(const string &database_name, const string &schema_name,
+                                                      const string &table_name) {
 	unique_ptr<TableDescription> result;
 	RunFunctionInTransaction([&]() {
-		// obtain the table info
-		auto table = Catalog::GetEntry<TableCatalogEntry>(*this, INVALID_CATALOG, schema_name, table_name,
+		// Obtain the table from the catalog.
+		auto table = Catalog::GetEntry<TableCatalogEntry>(*this, database_name, schema_name, table_name,
 		                                                  OnEntryNotFound::RETURN_NULL);
 		if (!table) {
 			return;
 		}
-		// write the table info to the result
-		result = make_uniq<TableDescription>();
-		result->schema = schema_name;
-		result->table = table_name;
+		// Create the table description.
+		result = make_uniq<TableDescription>(database_name, schema_name, table_name);
+		auto &catalog = Catalog::GetCatalog(*this, database_name);
+		result->readonly = catalog.GetAttached().IsReadOnly();
 		for (auto &column : table->GetColumns().Logical()) {
 			result->columns.emplace_back(column.Copy());
 		}
@@ -1127,10 +1128,14 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name,
 	return result;
 }
 
+unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name, const string &table_name) {
+	return TableInfo(INVALID_CATALOG, schema_name, table_name);
+}
+
 void ClientContext::Append(TableDescription &description, ColumnDataCollection &collection) {
 	RunFunctionInTransaction([&]() {
 		auto &table_entry =
-		    Catalog::GetEntry<TableCatalogEntry>(*this, INVALID_CATALOG, description.schema, description.table);
+		    Catalog::GetEntry<TableCatalogEntry>(*this, description.database, description.schema, description.table);
 		// verify that the table columns and types match up
 		if (description.columns.size() != table_entry.GetColumns().PhysicalColumnCount()) {
 			throw InvalidInputException("Failed to append: table entry has different number of columns!");
