@@ -7,11 +7,17 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // BitStringFunction
 //===--------------------------------------------------------------------===//
+template <bool FROM_STRING>
 static void BitStringFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<string_t, int32_t, string_t>(
 	    args.data[0], args.data[1], result, args.size(), [&](string_t input, int32_t n) {
 		    if (n < 0) {
 			    throw InvalidInputException("The bitstring length cannot be negative");
+		    }
+		    if (!FROM_STRING) {
+			    // FIXME: this could be optimized to not go through the VARCHAR -> BIT path
+			    auto converted = Bit::ToString(input);
+			    input = string_t(converted.c_str(), UnsafeNumericCast<uint32_t>(converted.size()));
 		    }
 		    if (idx_t(n) < input.GetSize()) {
 			    throw InvalidInputException("Length must be equal or larger than input string");
@@ -27,8 +33,13 @@ static void BitStringFunction(DataChunk &args, ExpressionState &state, Vector &r
 	    });
 }
 
-ScalarFunction BitStringFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR, LogicalType::INTEGER}, LogicalType::BIT, BitStringFunction);
+ScalarFunctionSet BitStringFun::GetFunctions() {
+	ScalarFunctionSet bitstring;
+	bitstring.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::INTEGER}, LogicalType::BIT, BitStringFunction<true>));
+	bitstring.AddFunction(
+	    ScalarFunction({LogicalType::BIT, LogicalType::INTEGER}, LogicalType::BIT, BitStringFunction<false>));
+	return bitstring;
 }
 
 //===--------------------------------------------------------------------===//

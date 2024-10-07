@@ -425,3 +425,10 @@ query I
 SELECT NULL::BIT::INT;
 ----
 NULL
+
+#                  (implicit) BIT -> VARCHAR
+# ---------------------------------------------------
+query I
+SELECT bitstring('1010'::BITSTRING, 7);
+----
+0001010
