@@ -16,7 +16,7 @@
 namespace duckdb {
 
 template <class KEY, class VALUE, class HASH = std::hash<KEY>, class EQUAL = std::equal_to<KEY>,
-          class ALLOCATOR = stl_allocator<pair<const KEY, VALUE>>>
+          class ALLOCATOR = std::allocator<pair<const KEY, VALUE>>>
 using unordered_map = std::unordered_map<KEY, VALUE, HASH, EQUAL, ALLOCATOR>;
 
 } // namespace duckdb
