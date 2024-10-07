@@ -8,7 +8,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb/common/operator/add.hpp"
-#include "duckdb/functions_core/to_interval.hpp"
+#include "duckdb/core_functions/to_interval.hpp"
 
 #include "datetime.h" // Python datetime initialize #1
 

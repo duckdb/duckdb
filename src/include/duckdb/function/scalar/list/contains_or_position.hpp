@@ -1,7 +1,7 @@
 #pragma once
 
 #include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/functions_core/create_sort_key.hpp"
+#include "duckdb/core_functions/create_sort_key.hpp"
 
 namespace duckdb {
 

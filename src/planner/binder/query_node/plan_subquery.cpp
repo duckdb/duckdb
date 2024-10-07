@@ -1,7 +1,7 @@
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
-#include "duckdb/functions_core/scalar/generic_functions.hpp"
+#include "duckdb/core_functions/scalar/generic_functions.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"

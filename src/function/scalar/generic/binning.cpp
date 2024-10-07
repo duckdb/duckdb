@@ -4,7 +4,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/generic_executor.hpp"
-#include "duckdb/functions_core/scalar/generic_functions.hpp"
+#include "duckdb/core_functions/scalar/generic_functions.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 
 namespace duckdb {

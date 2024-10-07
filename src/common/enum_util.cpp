@@ -93,7 +93,7 @@
 #include "duckdb/function/table/arrow/enum/arrow_type_info_type.hpp"
 #include "duckdb/function/table/arrow/enum/arrow_variable_size_type.hpp"
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/functions_core/aggregate/quantile_enum.hpp"
+#include "duckdb/core_functions/aggregate/quantile_enum.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/client_properties.hpp"
@@ -8293,4 +8293,3 @@ WindowExcludeMode EnumUtil::FromString<WindowExcludeMode>(const char *value) {
 }
 
 }
-
