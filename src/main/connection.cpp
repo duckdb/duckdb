@@ -50,11 +50,7 @@ Connection::~Connection() {
 
 string Connection::GetProfilingInformation(ProfilerPrintFormat format) {
 	auto &profiler = QueryProfiler::Get(*context);
-	if (format == ProfilerPrintFormat::JSON) {
-		return profiler.ToJSON();
-	} else {
-		return profiler.QueryTreeToString();
-	}
+	return profiler.ToString(format);
 }
 
 optional_ptr<ProfilingNode> Connection::GetProfilingTree() {
