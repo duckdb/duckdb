@@ -6,8 +6,8 @@ namespace duckdb {
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundConstantExpression &expr,
                                                                 ExpressionExecutorState &root) {
-	auto result = make_uniq<ExpressionState>(expr, root);
-	result->Finalize();
+	auto result = make_uniq<ExpressionState>(expr, root, true);
+	result->Finalize(true);
 	return result;
 }
 

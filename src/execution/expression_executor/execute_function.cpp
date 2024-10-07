@@ -13,10 +13,13 @@ ExecuteFunctionState::~ExecuteFunctionState() {
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundFunctionExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<ExecuteFunctionState>(expr, root);
+
+	auto skip_init = true;
 	for (auto &child : expr.children) {
-		result->AddChild(child.get());
+		skip_init &= result->AddChild(child.get());
 	}
-	result->Finalize();
+
+	result->Finalize(skip_init);
 	if (expr.function.init_local_state) {
 		result->local_state = expr.function.init_local_state(*result, expr, expr.bind_info.get());
 	}

@@ -12,9 +12,11 @@ namespace duckdb {
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundComparisonExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<ExpressionState>(expr, root);
-	result->AddChild(expr.left.get());
-	result->AddChild(expr.right.get());
-	result->Finalize();
+
+	auto skip_init = result->AddChild(expr.left.get());
+	skip_init &= result->AddChild(expr.right.get());
+
+	result->Finalize(skip_init);
 	return result;
 }
 

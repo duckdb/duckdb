@@ -17,10 +17,13 @@ struct ConjunctionState : public ExpressionState {
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundConjunctionExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<ConjunctionState>(expr, root);
+
+	bool skip_init = true;
 	for (auto &child : expr.children) {
-		result->AddChild(child.get());
+		skip_init &= result->AddChild(child.get());
 	}
-	result->Finalize();
+
+	result->Finalize(skip_init);
 	return std::move(result);
 }
 

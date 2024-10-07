@@ -17,12 +17,15 @@ struct CaseExpressionState : public ExpressionState {
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCaseExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<CaseExpressionState>(expr, root);
+
+	bool skip_init = true;
 	for (auto &case_check : expr.case_checks) {
-		result->AddChild(case_check.when_expr.get());
-		result->AddChild(case_check.then_expr.get());
+		skip_init &= result->AddChild(case_check.when_expr.get());
+		skip_init &= result->AddChild(case_check.then_expr.get());
 	}
-	result->AddChild(expr.else_expr.get());
-	result->Finalize();
+	skip_init &= result->AddChild(expr.else_expr.get());
+
+	result->Finalize(skip_init);
 	return std::move(result);
 }
 
