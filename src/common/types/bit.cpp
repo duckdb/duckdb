@@ -205,12 +205,13 @@ void Bit::BitString(const string_t &input, const idx_t &bit_length, string_t &re
 
 	auto padding = ComputePadding(bit_length);
 	res_buf[0] = padding;
+	auto padding_len = UnsafeNumericCast<idx_t>(padding);
 	for (idx_t i = 0; i < bit_length; i++) {
 		if (i < bit_length - input.GetSize()) {
-			Bit::SetBitInternal(result, i + GetBitPadding(result), 0);
+			Bit::SetBitInternal(result, i + padding_len, 0);
 		} else {
 			idx_t bit = buf[i - (bit_length - input.GetSize())] == '1' ? 1 : 0;
-			Bit::SetBitInternal(result, i + GetBitPadding(result), bit);
+			Bit::SetBitInternal(result, i + padding_len, bit);
 		}
 	}
 	Bit::Finalize(result);
@@ -310,12 +311,13 @@ void Bit::RightShift(const string_t &bit_string, const idx_t &shift, string_t &r
 	const uint8_t *buf = reinterpret_cast<const uint8_t *>(bit_string.GetData());
 
 	res_buf[0] = buf[0];
+	auto padding = GetBitPadding(result);
 	for (idx_t i = 0; i < Bit::BitLength(result); i++) {
 		if (i < shift) {
-			Bit::SetBitInternal(result, i + GetBitPadding(result), 0);
+			Bit::SetBitInternal(result, i + padding, 0);
 		} else {
 			idx_t bit = Bit::GetBit(bit_string, i - shift);
-			Bit::SetBitInternal(result, i + GetBitPadding(result), bit);
+			Bit::SetBitInternal(result, i + padding, bit);
 		}
 	}
 	Bit::Finalize(result);
@@ -326,12 +328,13 @@ void Bit::LeftShift(const string_t &bit_string, const idx_t &shift, string_t &re
 	const uint8_t *buf = reinterpret_cast<const uint8_t *>(bit_string.GetData());
 
 	res_buf[0] = buf[0];
+	auto padding = GetBitPadding(result);
 	for (idx_t i = 0; i < Bit::BitLength(bit_string); i++) {
 		if (i < (Bit::BitLength(bit_string) - shift)) {
 			idx_t bit = Bit::GetBit(bit_string, shift + i);
-			Bit::SetBitInternal(result, i + GetBitPadding(result), bit);
+			Bit::SetBitInternal(result, i + padding, bit);
 		} else {
-			Bit::SetBitInternal(result, i + GetBitPadding(result), 0);
+			Bit::SetBitInternal(result, i + padding, 0);
 		}
 	}
 	Bit::Finalize(result);
