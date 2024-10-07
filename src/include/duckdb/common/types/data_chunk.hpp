@@ -85,7 +85,6 @@ public:
 
 	//! Initializes a DataChunk with the given types and without any vector data allocation.
 	DUCKDB_API void InitializeEmpty(const vector<LogicalType> &types);
-	DUCKDB_API void InitializeEmpty(vector<LogicalType>::const_iterator begin, vector<LogicalType>::const_iterator end);
 
 	//! Initializes a DataChunk with the given types. Then, if the corresponding boolean in the initialize-vector is
 	//! true, it initializes the vector for that data type.
