@@ -1524,13 +1524,15 @@ void StringValueScanner::SetStart() {
 	}
 	// At this point we have 3 options:
 	// 1. We are at the start of a valid line
-	TryRow(CSVState::STANDARD, potential_start, largest_end_pos, any_valid_row);
+	TryRow(CSVState::STANDARD_NEWLINE, potential_start, largest_end_pos, any_valid_row);
 	// 2. We are in the middle of a quoted value
-	if (potential_start > next_new_line && state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0') {
+	if (potential_start > next_new_line &&
+	    state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0') {
 		TryRow(CSVState::QUOTED, potential_start, largest_end_pos, any_valid_row);
 	}
 	// 3. We are in an escaped value
-	if (!any_valid_row && potential_start > next_new_line && state_machine->dialect_options.state_machine_options.escape.GetValue() != '\0') {
+	if (!any_valid_row && potential_start > next_new_line &&
+	    state_machine->dialect_options.state_machine_options.escape.GetValue() != '\0') {
 		TryRow(CSVState::ESCAPE, potential_start, largest_end_pos, any_valid_row);
 	}
 	if (!any_valid_row) {
@@ -1539,7 +1541,7 @@ void StringValueScanner::SetStart() {
 			iterator.pos.buffer_pos = largest_end_pos;
 			iterator.done = true;
 		} else {
-			SkipUntilState(CSVState::STANDARD, CSVState::RECORD_SEPARATOR);
+			SkipUntilState(CSVState::STANDARD_NEWLINE, CSVState::RECORD_SEPARATOR);
 		}
 	} else {
 		iterator.pos.buffer_pos = potential_start;
