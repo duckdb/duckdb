@@ -31,6 +31,7 @@ DuckDBPyResult::DuckDBPyResult(unique_ptr<QueryResult> result_p) : result(std::m
 
 DuckDBPyResult::~DuckDBPyResult() {
 	try {
+		D_ASSERT(py::gil_check());
 		py::gil_scoped_release gil;
 		result.reset();
 		current_chunk.reset();
@@ -109,6 +110,7 @@ unique_ptr<DataChunk> DuckDBPyResult::FetchNextRaw(QueryResult &query_result) {
 
 Optional<py::tuple> DuckDBPyResult::Fetchone() {
 	{
+		D_ASSERT(py::gil_check());
 		py::gil_scoped_release release;
 		if (!result) {
 			throw InvalidInputException("result closed");
@@ -246,6 +248,7 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 			}
 			unique_ptr<DataChunk> chunk;
 			{
+				D_ASSERT(py::gil_check());
 				py::gil_scoped_release release;
 				chunk = FetchNextRaw(stream_result);
 			}
@@ -339,6 +342,7 @@ bool DuckDBPyResult::FetchArrowChunk(ChunkScanState &scan_state, py::list &batch
 	idx_t count;
 	auto &query_result = *result.get();
 	{
+		D_ASSERT(py::gil_check());
 		py::gil_scoped_release release;
 		count = ArrowUtil::FetchChunk(scan_state, query_result.client_properties, rows_per_batch, &data);
 	}
