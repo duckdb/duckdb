@@ -62,7 +62,7 @@ public:
 	template <class T>
 	static void BitUnpackAligned(ByteBuffer &src, T *dst, const idx_t count, const bitpacking_width_t width) {
 		CheckWidth(width);
-		if (count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) {
+		if (count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE != 0) {
 			throw InvalidInputException("Aligned bitpacking count must be a multiple of %llu",
 			                            BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
 		}
