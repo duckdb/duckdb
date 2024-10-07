@@ -50,6 +50,7 @@ if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux")
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_delta
             GIT_TAG 3933ebd800ad06a64656c9aef6ca7d62897fa4db
+            APPLY_PATCHES
     )
 endif()
 
@@ -74,6 +75,7 @@ if (NOT MINGW)
             ${LOAD_ICEBERG_TESTS}
             GIT_URL https://github.com/duckdb/duckdb_iceberg
             GIT_TAG 3f6d753787252e3da1d12157910b62edf729fc6e
+            APPLY_PATCHES
             )
 endif()
 
@@ -104,6 +106,7 @@ duckdb_extension_load(spatial
     GIT_TAG bb9c829693965f029eb5a312aefed4c538fad781
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
+    APPLY_PATCHES
     )
 
 ################# SQLITE_SCANNER
@@ -118,6 +121,7 @@ duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/sqlite_scanner
         GIT_TAG 315861963c8106397af36cbda10faebc8dae485a
+        APPLY_PATCHES
         )
 
 duckdb_extension_load(sqlsmith

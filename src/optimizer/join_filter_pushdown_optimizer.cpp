@@ -4,7 +4,7 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/core_functions/aggregate/distributive_functions.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"

@@ -120,11 +120,27 @@ struct ListWhereFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct MapContainsFun {
+	static ScalarFunction GetFunction();
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct StructExtractFun {
 	static ScalarFunction KeyExtractFunction();
 	static ScalarFunction IndexExtractFunction();
 	static ScalarFunctionSet GetFunctions();
 	static unique_ptr<FunctionData> GetBindData(idx_t index);
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct StructPackFun {
+	static ScalarFunction GetFunction();
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct RowFun {
+	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

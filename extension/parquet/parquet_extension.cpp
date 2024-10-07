@@ -1679,6 +1679,11 @@ void ParquetExtension::Load(DuckDB &db) {
 	config.replacement_scans.emplace_back(ParquetScanReplacement);
 	config.AddExtensionOption("binary_as_string", "In Parquet files, interpret binary data as a string.",
 	                          LogicalType::BOOLEAN);
+	config.AddExtensionOption("disable_parquet_prefetching", "Disable the prefetching mechanism in Parquet",
+	                          LogicalType::BOOLEAN, Value(false));
+	config.AddExtensionOption("prefetch_all_parquet_files",
+	                          "Use the prefetching mechanism for all types of parquet files", LogicalType::BOOLEAN,
+	                          Value(false));
 }
 
 std::string ParquetExtension::Name() {

@@ -23,6 +23,7 @@ namespace duckdb {
 class BaseStatistics;
 class LogicalDependencyList;
 class LogicalGet;
+class TableFunction;
 class TableFilterSet;
 class TableCatalogEntry;
 struct MultiFileReader;
@@ -139,7 +140,7 @@ public:
 	optional_ptr<GlobalTableFunctionState> global_state;
 };
 
-enum class ScanType : uint8_t { TABLE, PARQUET };
+enum class ScanType : uint8_t { TABLE, PARQUET, EXTERNAL };
 
 struct BindInfo {
 public:
@@ -202,7 +203,7 @@ typedef idx_t (*table_function_get_batch_index_t)(ClientContext &context, const 
 
 typedef BindInfo (*table_function_get_bind_info_t)(const optional_ptr<FunctionData> bind_data);
 
-typedef unique_ptr<MultiFileReader> (*table_function_get_multi_file_reader_t)();
+typedef unique_ptr<MultiFileReader> (*table_function_get_multi_file_reader_t)(const TableFunction &);
 
 typedef bool (*table_function_supports_pushdown_type_t)(const LogicalType &type);
 

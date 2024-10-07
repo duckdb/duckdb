@@ -703,6 +703,10 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 	} else if (parameter == "no_output") {
 		config.profiler_print_format = ProfilerPrintFormat::NO_OUTPUT;
 		config.emit_profiler_output = false;
+	} else if (parameter == "html") {
+		config.profiler_print_format = ProfilerPrintFormat::HTML;
+	} else if (parameter == "graphviz") {
+		config.profiler_print_format = ProfilerPrintFormat::GRAPHVIZ;
 	} else {
 		throw ParserException(
 		    "Unrecognized print format %s, supported formats: [json, query_tree, query_tree_optimizer, no_output]",
@@ -724,6 +728,10 @@ Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
 		return Value("query_tree_optimizer");
 	case ProfilerPrintFormat::NO_OUTPUT:
 		return Value("no_output");
+	case ProfilerPrintFormat::HTML:
+		return Value("html");
+	case ProfilerPrintFormat::GRAPHVIZ:
+		return Value("graphviz");
 	default:
 		throw InternalException("Unsupported profiler print format");
 	}
