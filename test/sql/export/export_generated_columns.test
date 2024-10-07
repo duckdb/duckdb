@@ -3,6 +3,9 @@
 # group: [export]
 
 statement ok
+pragma storage_compatibility_version='v1.1.0'
+
+statement ok
 BEGIN TRANSACTION
 
 # Create a macro that the generated column uses
