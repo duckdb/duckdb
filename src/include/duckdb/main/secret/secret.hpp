@@ -186,7 +186,7 @@ public:
 
 		bool uses_old_serialization;
 		uses_old_serialization = deserializer.WithOptionalProperty<Value>(
-		    201, "secret_map", [&secret_map_value](Value val) { secret_map_value = val; });
+		    201, "secret_map", [&secret_map_value](Value val) { secret_map_value = std::move(val); });
 
 		Value redact_set_value;
 		deserializer.ReadProperty(202, "redact_keys", redact_set_value);
