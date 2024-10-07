@@ -371,6 +371,7 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		DeleteDatabase(full_db_path);
 		state = make_uniq<InterpretedBenchmarkState>(full_db_path);
 	}
+	extensions.insert("core_functions");
 	extensions.insert("parquet");
 	for (auto &extension : extensions) {
 		auto result = ExtensionHelper::LoadExtension(state->db, extension);

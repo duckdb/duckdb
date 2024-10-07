@@ -493,25 +493,38 @@ static bool IsAutoloadableFunction(CatalogType type) {
 	        type == CatalogType::AGGREGATE_FUNCTION_ENTRY || type == CatalogType::PRAGMA_FUNCTION_ENTRY);
 }
 
+bool IsTableFunction(CatalogType type) {
+	switch (type) {
+	case CatalogType::TABLE_FUNCTION_ENTRY:
+	case CatalogType::TABLE_MACRO_ENTRY:
+	case CatalogType::PRAGMA_FUNCTION_ENTRY:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool IsScalarFunction(CatalogType type) {
+	switch (type) {
+	case CatalogType::SCALAR_FUNCTION_ENTRY:
+	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
+	case CatalogType::MACRO_ENTRY:
+		return true;
+	default:
+		return false;
+	}
+}
+
 static bool CompareCatalogTypes(CatalogType type_a, CatalogType type_b) {
 	if (type_a == type_b) {
 		// Types are same
 		return true;
 	}
-	if (!IsAutoloadableFunction(type_a)) {
-		D_ASSERT(IsAutoloadableFunction(type_b));
-		// Make sure that `type_a` is an autoloadable function
-		return CompareCatalogTypes(type_b, type_a);
+	if (IsScalarFunction(type_a) && IsScalarFunction(type_b)) {
+		return true;
 	}
-	if (type_a == CatalogType::TABLE_FUNCTION_ENTRY) {
-		// These are all table functions
-		return type_b == CatalogType::TABLE_MACRO_ENTRY || type_b == CatalogType::PRAGMA_FUNCTION_ENTRY;
-	} else if (type_a == CatalogType::SCALAR_FUNCTION_ENTRY) {
-		// These are all scalar functions
-		return type_b == CatalogType::MACRO_ENTRY;
-	} else if (type_a == CatalogType::PRAGMA_FUNCTION_ENTRY) {
-		// These are all table functions
-		return type_b == CatalogType::TABLE_MACRO_ENTRY || type_b == CatalogType::TABLE_FUNCTION_ENTRY;
+	if (IsTableFunction(type_a) && IsTableFunction(type_b)) {
+		return true;
 	}
 	return false;
 }
