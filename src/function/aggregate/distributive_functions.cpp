@@ -10,6 +10,8 @@ void BuiltinFunctions::RegisterDistributiveAggregates() {
 	Register<CountStarFun>();
 	Register<CountFun>();
 	Register<FirstFun>();
+	Register<MinFun>();
+	Register<MaxFun>();
 }
 
 } // namespace duckdb

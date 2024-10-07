@@ -44,6 +44,7 @@ public:
 	bool enable_verification = false;
 	bool skip_reload = false;
 	unordered_map<string, string> environment_variables;
+	string local_extension_repo;
 
 	// If these error msgs occur in a test, the test will abort but still count as passed
 	unordered_set<string> ignore_error_messages = {"HTTP", "Unable to connect"};

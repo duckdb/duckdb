@@ -65,17 +65,26 @@ static void DistinctExecute(Vector &left, Vector &right, Vector &result, idx_t c
 	DistinctExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(left, right, result, count);
 }
 
+#ifndef DUCKDB_SMALLER_BINARY
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool NO_NULL, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
+#else
+template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
+#endif
 static inline idx_t
 DistinctSelectGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
                           const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
                           const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lmask,
                           ValidityMask &rmask, SelectionVector *true_sel, SelectionVector *false_sel) {
+#ifdef DUCKDB_SMALLER_BINARY
+	bool HAS_TRUE_SEL = true_sel;
+	bool HAS_FALSE_SEL = false_sel;
+#endif
 	idx_t true_count = 0, false_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto result_idx = result_sel->get_index(i);
 		auto lindex = lsel->get_index(i);
 		auto rindex = rsel->get_index(i);
+#ifndef DUCKDB_SMALLER_BINARY
 		if (NO_NULL) {
 			if (OP::Operation(ldata[lindex], rdata[rindex], false, false)) {
 				if (HAS_TRUE_SEL) {
@@ -86,7 +95,9 @@ DistinctSelectGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *_
 					false_sel->set_index(false_count++, result_idx);
 				}
 			}
-		} else {
+		} else
+#endif
+		{
 			if (OP::Operation(ldata[lindex], rdata[rindex], !lmask.RowIsValid(lindex), !rmask.RowIsValid(rindex))) {
 				if (HAS_TRUE_SEL) {
 					true_sel->set_index(true_count++, result_idx);
@@ -104,6 +115,8 @@ DistinctSelectGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *_
 		return count - false_count;
 	}
 }
+
+#ifndef DUCKDB_SMALLER_BINARY
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool NO_NULL>
 static inline idx_t
 DistinctSelectGenericLoopSelSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
@@ -122,6 +135,7 @@ DistinctSelectGenericLoopSelSwitch(const LEFT_TYPE *__restrict ldata, const RIGH
 		    ldata, rdata, lsel, rsel, result_sel, count, lmask, rmask, true_sel, false_sel);
 	}
 }
+#endif
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
 static inline idx_t
@@ -129,6 +143,7 @@ DistinctSelectGenericLoopSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_T
                                 const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
                                 const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lmask,
                                 ValidityMask &rmask, SelectionVector *true_sel, SelectionVector *false_sel) {
+#ifndef DUCKDB_SMALLER_BINARY
 	if (!lmask.AllValid() || !rmask.AllValid()) {
 		return DistinctSelectGenericLoopSelSwitch<LEFT_TYPE, RIGHT_TYPE, OP, false>(
 		    ldata, rdata, lsel, rsel, result_sel, count, lmask, rmask, true_sel, false_sel);
@@ -136,6 +151,10 @@ DistinctSelectGenericLoopSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_T
 		return DistinctSelectGenericLoopSelSwitch<LEFT_TYPE, RIGHT_TYPE, OP, true>(
 		    ldata, rdata, lsel, rsel, result_sel, count, lmask, rmask, true_sel, false_sel);
 	}
+#else
+	return DistinctSelectGenericLoop<LEFT_TYPE, RIGHT_TYPE, OP>(ldata, rdata, lsel, rsel, result_sel, count, lmask,
+	                                                            rmask, true_sel, false_sel);
+#endif
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
@@ -150,6 +169,8 @@ static idx_t DistinctSelectGeneric(Vector &left, Vector &right, const SelectionV
 	    UnifiedVectorFormat::GetData<LEFT_TYPE>(ldata), UnifiedVectorFormat::GetData<RIGHT_TYPE>(rdata), ldata.sel,
 	    rdata.sel, sel, count, ldata.validity, rdata.validity, true_sel, false_sel);
 }
+
+#ifndef DUCKDB_SMALLER_BINARY
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT, bool NO_NULL,
           bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
 static inline idx_t DistinctSelectFlatLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
@@ -205,6 +226,7 @@ static inline idx_t DistinctSelectFlatLoopSwitch(LEFT_TYPE *__restrict ldata, RI
 	return DistinctSelectFlatLoopSelSwitch<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT, true>(
 	    ldata, rdata, sel, count, lmask, rmask, true_sel, false_sel);
 }
+
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
 static idx_t DistinctSelectFlat(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                 SelectionVector *true_sel, SelectionVector *false_sel) {
@@ -229,6 +251,8 @@ static idx_t DistinctSelectFlat(Vector &left, Vector &right, const SelectionVect
 		    ldata, rdata, sel, count, FlatVector::Validity(left), FlatVector::Validity(right), true_sel, false_sel);
 	}
 }
+#endif
+
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
 static idx_t DistinctSelectConstant(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                     SelectionVector *true_sel, SelectionVector *false_sel) {
@@ -287,6 +311,7 @@ static idx_t DistinctSelect(Vector &left, Vector &right, const SelectionVector *
 
 	if (left.GetVectorType() == VectorType::CONSTANT_VECTOR && right.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		return DistinctSelectConstant<LEFT_TYPE, RIGHT_TYPE, OP>(left, right, sel, count, true_sel, false_sel);
+#ifndef DUCKDB_SMALLER_BINARY
 	} else if (left.GetVectorType() == VectorType::CONSTANT_VECTOR &&
 	           right.GetVectorType() == VectorType::FLAT_VECTOR) {
 		return DistinctSelectFlat<LEFT_TYPE, RIGHT_TYPE, OP, true, false>(left, right, sel, count, true_sel, false_sel);
@@ -296,6 +321,7 @@ static idx_t DistinctSelect(Vector &left, Vector &right, const SelectionVector *
 	} else if (left.GetVectorType() == VectorType::FLAT_VECTOR && right.GetVectorType() == VectorType::FLAT_VECTOR) {
 		return DistinctSelectFlat<LEFT_TYPE, RIGHT_TYPE, OP, false, false>(left, right, sel, count, true_sel,
 		                                                                   false_sel);
+#endif
 	} else {
 		return DistinctSelectGeneric<LEFT_TYPE, RIGHT_TYPE, OP>(left, right, sel, count, true_sel, false_sel);
 	}

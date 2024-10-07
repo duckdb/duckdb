@@ -2,50 +2,9 @@
 # description: Test issue 14167 - Dot notation for json field extraction is no longer working in v1.1.*
 # group: [issues]
 
-# we implemented map_extract_first for this to work so here's some tests copied from test_map_subscript.test
-query I
-select map_extract_first(m,1) from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as m) as T
-----
-10
-
-query I
-select map_extract_first(m,3) from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as m) as T
-----
-8
-
-query I
-SELECT map_extract_first(MAP(LIST_VALUE(10,9,12,11,13),LIST_VALUE(10,9,10,11,13)),10)
-----
-10
-
-query I
-select MAP_EXTRACT_FIRST(MAP([],[]), NULL)
-----
-NULL
-
-query I
-select MAP_EXTRACT_FIRST(MAP(NULL, NULL), NULL)
-----
-NULL
-
-query I
-select MAP_EXTRACT_FIRST(NULL, NULL)
-----
-NULL
-
-query I
-select MAP_EXTRACT_FIRST(NULL::MAP("NULL", "NULL"), NULL)
-----
-NULL
-
-query I
-select MAP_EXTRACT_FIRST(NULL::MAP(INT, BIGINT), NULL)
-----
-NULL
-
 require json
 
-# the auto-detected type is a MAP, but we can still extract using the dot syntax because we rewrite to map_extract_first
+# the auto-detected type is a MAP, but we can still extract using the dot syntax because we rewrite to map_extract
 query I
 select columns.v4_c6 from read_ndjson_auto('data/json/14167.json');
 ----

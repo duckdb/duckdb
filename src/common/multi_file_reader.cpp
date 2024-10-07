@@ -23,7 +23,7 @@ MultiFileReader::~MultiFileReader() {
 unique_ptr<MultiFileReader> MultiFileReader::Create(const TableFunction &table_function) {
 	unique_ptr<MultiFileReader> res;
 	if (table_function.get_multi_file_reader) {
-		res = table_function.get_multi_file_reader();
+		res = table_function.get_multi_file_reader(table_function);
 		res->function_name = table_function.name;
 	} else {
 		res = make_uniq<MultiFileReader>();

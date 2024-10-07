@@ -144,7 +144,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		if (extract_expr_type.id() == LogicalTypeId::UNION) {
 			function_name = "union_extract";
 		} else if (extract_expr_type.id() == LogicalTypeId::MAP) {
-			function_name = "map_extract_first";
+			function_name = "map_extract";
 		} else if (extract_expr_type.IsJSONType()) {
 			function_name = "json_extract";
 			// Make sure we only extract fields, not array elements, by adding $. syntax

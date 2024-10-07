@@ -1574,7 +1574,8 @@ typedef struct PGVariableSetStmt {
  */
 typedef struct PGVariableShowStmt {
 	PGNodeTag   type;
-	char       *name;
+	PGRangeVar *relation;   /* relation to describe (if any) */
+	char       *set;        /* set to describe (e.g. set when using SHOW ALL TABLES) */
 	int         is_summary; // whether or not this is a DESCRIBE or a SUMMARIZE
 } PGVariableShowStmt;
 
@@ -2101,7 +2102,7 @@ typedef struct PGIntervalConstant {
 typedef struct PGSampleSize {
 	PGNodeTag type;
 	bool is_percentage;   /* whether or not the sample size is expressed in row numbers or a percentage */
-	PGValue sample_size;  /* sample size */
+	PGNode *sample_size;  /* sample size */
 } PGSampleSize;
 
 typedef struct PGSampleOptions {
