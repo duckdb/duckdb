@@ -12,6 +12,12 @@ namespace duckdb {
 
 unique_ptr<LogicalOperator> InClauseRewriter::Rewrite(unique_ptr<LogicalOperator> op) {
 	if (op->children.size() == 1) {
+		if (op->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
+			auto get = static_cast<LogicalGet *>(op->children[0].get());
+			if (get->function.to_string && get->function.to_string(get->bind_data.get()) == "REMOTE") {
+				return op;
+			}
+		}
 		root = std::move(op->children[0]);
 		VisitOperatorExpressions(*op);
 		op->children[0] = std::move(root);
