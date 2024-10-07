@@ -108,7 +108,7 @@ bool PipelineExecutor::TryFlushCachingOperators() {
 	return true;
 }
 
-SinkNextBatchType PipelineExecutor::NextBatch(duckdb::DataChunk &source_chunk) {
+SinkNextBatchType PipelineExecutor::NextBatch(DataChunk &source_chunk) {
 	D_ASSERT(requires_batch_index);
 	idx_t next_batch_index;
 	auto max_batch_index = pipeline.base_batch_index + PipelineBuildState::BATCH_INCREMENT - 1;

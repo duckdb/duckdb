@@ -957,7 +957,7 @@ double JSONScan::ScanProgress(ClientContext &, const FunctionData *, const Globa
 	return progress / double(gstate.json_readers.size());
 }
 
-OperatorPartitionData JSONScan::GetBatchIndex(ClientContext &, TableFunctionInput &input) {
+OperatorPartitionData JSONScan::GetPartitionData(ClientContext &, TableFunctionInput &input) {
 	auto &lstate = input.local_state->Cast<JSONLocalTableFunctionState>();
 	return OperatorPartitionData(lstate.GetBatchIndex());
 }
@@ -1013,7 +1013,7 @@ void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
 	table_function.named_parameters["compression"] = LogicalType::VARCHAR;
 
 	table_function.table_scan_progress = ScanProgress;
-	table_function.get_partition_info = GetPartitionInfo;
+	table_function.get_partition_data = GetPartitionData;
 	table_function.cardinality = Cardinality;
 
 	table_function.serialize = Serialize;
