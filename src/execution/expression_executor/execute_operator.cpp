@@ -7,13 +7,11 @@ namespace duckdb {
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundOperatorExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<ExpressionState>(expr, root);
-
-	auto skip_init = true;
 	for (auto &child : expr.children) {
-		skip_init &= result->AddChild(child.get());
+		result->AddChild(child.get());
 	}
 
-	result->Finalize(skip_init);
+	result->Finalize();
 	return result;
 }
 

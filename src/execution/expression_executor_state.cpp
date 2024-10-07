@@ -6,22 +6,22 @@
 
 namespace duckdb {
 
-bool ExpressionState::AddChild(Expression *child_expr) {
+void ExpressionState::AddChild(Expression *child_expr) {
 	types.push_back(child_expr->return_type);
 	auto child_state = ExpressionExecutor::InitializeState(*child_expr, root);
 	child_states.push_back(std::move(child_state));
-	return child_states.back()->skip_init;
+
+	auto expr_class = child_expr->GetExpressionClass();
+	auto initialize_child = expr_class != ExpressionClass::BOUND_REF && expr_class != ExpressionClass::BOUND_CONSTANT &&
+	                        expr_class != ExpressionClass::BOUND_PARAMETER;
+	initialize.push_back(initialize_child);
 }
 
-void ExpressionState::Finalize(const bool skip) {
+void ExpressionState::Finalize() {
 	if (types.empty()) {
 		return;
 	}
-	if (skip) {
-		intermediate_chunk.InitializeEmpty(types);
-	} else {
-		intermediate_chunk.Initialize(GetAllocator(), types);
-	}
+	intermediate_chunk.Initialize(GetAllocator(), types, initialize);
 }
 
 Allocator &ExpressionState::GetAllocator() {
@@ -39,8 +39,7 @@ ClientContext &ExpressionState::GetContext() {
 	return root.executor->GetContext();
 }
 
-ExpressionState::ExpressionState(const Expression &expr, ExpressionExecutorState &root, const bool skip_init)
-    : expr(expr), root(root), skip_init(skip_init) {
+ExpressionState::ExpressionState(const Expression &expr, ExpressionExecutorState &root) : expr(expr), root(root) {
 }
 
 ExpressionExecutorState::ExpressionExecutorState() {

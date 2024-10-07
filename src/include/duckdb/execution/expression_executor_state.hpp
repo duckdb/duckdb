@@ -19,7 +19,7 @@ struct ExpressionExecutorState;
 struct FunctionLocalState;
 
 struct ExpressionState {
-	ExpressionState(const Expression &expr, ExpressionExecutorState &root, const bool skip_init = false);
+	ExpressionState(const Expression &expr, ExpressionExecutorState &root);
 	virtual ~ExpressionState() {
 	}
 
@@ -28,13 +28,11 @@ struct ExpressionState {
 	vector<unique_ptr<ExpressionState>> child_states;
 	vector<LogicalType> types;
 	DataChunk intermediate_chunk;
-	bool skip_init;
+	vector<bool> initialize;
 
 public:
-	//! Initializes and adds the child state of the expression. Returns true, if initialization can be skipped, else
-	//! false.
-	bool AddChild(Expression *child_expr);
-	void Finalize(const bool skip);
+	void AddChild(Expression *child_expr);
+	void Finalize();
 	Allocator &GetAllocator();
 	bool HasContext();
 	DUCKDB_API ClientContext &GetContext();
