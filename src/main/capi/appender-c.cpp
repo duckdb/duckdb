@@ -13,8 +13,13 @@ using duckdb::string_t;
 using duckdb::timestamp_t;
 using duckdb::uhugeint_t;
 
-duckdb_state appender_create_internal(duckdb_connection connection, const char *catalog, const char *schema,
-                                      const char *table, duckdb_appender *out_appender) {
+duckdb_state duckdb_appender_create(duckdb_connection connection, const char *schema, const char *table,
+                                    duckdb_appender *out_appender) {
+	return duckdb_appender_create_ext(connection, INVALID_CATALOG, schema, table, out_appender);
+}
+
+duckdb_state duckdb_appender_create_ext(duckdb_connection connection, const char *catalog, const char *schema,
+                                        const char *table, duckdb_appender *out_appender) {
 	Connection *conn = reinterpret_cast<Connection *>(connection);
 
 	if (!connection || !table || !out_appender) {
@@ -40,16 +45,6 @@ duckdb_state appender_create_internal(duckdb_connection connection, const char *
 		return DuckDBError;
 	} // LCOV_EXCL_STOP
 	return DuckDBSuccess;
-}
-
-duckdb_state duckdb_appender_create(duckdb_connection connection, const char *schema, const char *table,
-                                    duckdb_appender *out_appender) {
-	return appender_create_internal(connection, INVALID_CATALOG, schema, table, out_appender);
-}
-
-duckdb_state duckdb_appender_create_ext(duckdb_connection connection, const char *catalog, const char *schema,
-                                        const char *table, duckdb_appender *out_appender) {
-	return appender_create_internal(connection, catalog, schema, table, out_appender);
 }
 
 duckdb_state duckdb_appender_destroy(duckdb_appender *appender) {
