@@ -181,13 +181,13 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 
 	switch (bind_data->options.compression) {
 	case FileCompressionType::GZIP:
-		if (!StringUtil::EndsWith(input.file_extension, ".gz")) {
-			input.file_extension += ".gz";
+		if (!IsFileCompressed(input.file_extension, FileCompressionType::GZIP)) {
+			input.file_extension += CompressionExtensionFromType(FileCompressionType::GZIP);
 		}
 		break;
 	case FileCompressionType::ZSTD:
-		if (!StringUtil::EndsWith(input.file_extension, ".zst")) {
-			input.file_extension += ".zst";
+		if (!IsFileCompressed(input.file_extension, FileCompressionType::ZSTD)) {
+			input.file_extension += CompressionExtensionFromType(FileCompressionType::ZSTD);
 		}
 		break;
 	default:

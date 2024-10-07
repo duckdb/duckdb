@@ -297,13 +297,13 @@ static idx_t FindTypedRangeBound(const WindowInputColumn &over, const idx_t orde
 
 	// Check that the value we are searching for is in range.
 	if (range == WindowBoundary::EXPR_PRECEDING_RANGE) {
-		//	Preceding but value past the end
-		const auto cur_val = over.GetCell<T>(order_end);
+		//	Preceding but value past the current value
+		const auto cur_val = over.GetCell<T>(order_end - 1);
 		if (comp(cur_val, val)) {
 			throw OutOfRangeException("Invalid RANGE PRECEDING value");
 		}
 	} else {
-		//	Following but value before beginning
+		//	Following but value before the current value
 		D_ASSERT(range == WindowBoundary::EXPR_FOLLOWING_RANGE);
 		const auto cur_val = over.GetCell<T>(order_begin);
 		if (comp(val, cur_val)) {
@@ -570,7 +570,7 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 		if (boundary_start.CellIsNull(chunk_idx)) {
 			window_start = peer_start;
 		} else {
-			prev.start = FindOrderedRangeBound<true>(range_collection, range_sense, valid_start, row_idx,
+			prev.start = FindOrderedRangeBound<true>(range_collection, range_sense, valid_start, row_idx + 1,
 			                                         start_boundary, boundary_start, chunk_idx, prev);
 			window_start = prev.start;
 		}
@@ -624,8 +624,8 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 		if (boundary_end.CellIsNull(chunk_idx)) {
 			window_end = peer_end;
 		} else {
-			prev.end = FindOrderedRangeBound<false>(range_collection, range_sense, valid_start, row_idx, end_boundary,
-			                                        boundary_end, chunk_idx, prev);
+			prev.end = FindOrderedRangeBound<false>(range_collection, range_sense, valid_start, row_idx + 1,
+			                                        end_boundary, boundary_end, chunk_idx, prev);
 			window_end = prev.end;
 		}
 		break;

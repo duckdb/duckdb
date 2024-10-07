@@ -90,7 +90,7 @@ void SecretManager::LoadSecretStorageInternal(unique_ptr<SecretStorage> storage)
 }
 
 // FIXME: use serialization scripts?
-unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer &deserializer) {
+unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer &deserializer, const string &secret_path) {
 	auto type = deserializer.ReadProperty<string>(100, "type");
 	auto provider = deserializer.ReadProperty<string>(101, "provider");
 	auto name = deserializer.ReadProperty<string>(102, "name");
@@ -98,14 +98,17 @@ unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer &deserializ
 	deserializer.ReadList(103, "scope",
 	                      [&](Deserializer::List &list, idx_t i) { scope.push_back(list.ReadElement<string>()); });
 
-	auto secret_type = LookupTypeInternal(type);
+	SecretType deserialized_type;
+	if (!TryLookupTypeInternal(type, deserialized_type)) {
+		ThrowTypeNotFoundError(type, secret_path);
+	}
 
-	if (!secret_type.deserializer) {
+	if (!deserialized_type.deserializer) {
 		throw InternalException(
 		    "Attempted to deserialize secret type '%s' which does not have a deserialization method", type);
 	}
 
-	return secret_type.deserializer(deserializer, {scope, type, provider, name});
+	return deserialized_type.deserializer(deserializer, {scope, type, provider, name});
 }
 
 void SecretManager::RegisterSecretType(SecretType &type) {
@@ -415,11 +418,12 @@ void SecretManager::RegisterSecretTypeInternal(SecretType &type) {
 	secret_types[type.name] = type;
 }
 
-SecretType SecretManager::LookupTypeInternal(const string &type) {
+bool SecretManager::TryLookupTypeInternal(const string &type, SecretType &type_out) {
 	unique_lock<mutex> lck(manager_lock);
 	auto lookup = secret_types.find(type);
 	if (lookup != secret_types.end()) {
-		return lookup->second;
+		type_out = lookup->second;
+		return true;
 	}
 
 	// Try autoloading
@@ -429,10 +433,19 @@ SecretType SecretManager::LookupTypeInternal(const string &type) {
 
 	lookup = secret_types.find(type);
 	if (lookup != secret_types.end()) {
-		return lookup->second;
+		type_out = lookup->second;
+		return true;
 	}
 
-	ThrowTypeNotFoundError(type);
+	return false;
+}
+
+SecretType SecretManager::LookupTypeInternal(const string &type) {
+	SecretType return_value;
+	if (!TryLookupTypeInternal(type, return_value)) {
+		ThrowTypeNotFoundError(type);
+	}
+	return return_value;
 }
 
 void SecretManager::RegisterSecretFunctionInternal(CreateSecretFunction function, OnCreateConflict on_conflict) {
@@ -534,15 +547,30 @@ void SecretManager::AutoloadExtensionForType(const string &type) {
 	ExtensionHelper::TryAutoloadFromEntry(*db, StringUtil::Lower(type), EXTENSION_SECRET_TYPES);
 }
 
-void SecretManager::ThrowTypeNotFoundError(const string &type) {
+void SecretManager::ThrowTypeNotFoundError(const string &type, const string &secret_path) {
 	auto entry = ExtensionHelper::FindExtensionInEntries(StringUtil::Lower(type), EXTENSION_SECRET_TYPES);
+	string error_message;
+
 	if (!entry.empty() && db) {
-		auto error_message = "Secret type '" + type + "' does not exist, but it exists in the " + entry + " extension.";
+		error_message = "Secret type '" + type + "' does not exist, but it exists in the " + entry + " extension.";
 		error_message = ExtensionHelper::AddExtensionInstallHintToErrorMsg(*db, error_message, entry);
 
-		throw InvalidInputException(error_message);
+		if (!secret_path.empty()) {
+			error_message += "\n\nAlternatively, ";
+		}
+	} else {
+		error_message = StringUtil::Format("Secret type '%s' not found", type);
+
+		if (!secret_path.empty()) {
+			error_message += ", ";
+		}
 	}
-	throw InvalidInputException("Secret type '%s' not found", type);
+
+	if (!secret_path.empty()) {
+		error_message += StringUtil::Format("try removing the secret at path '%s'.", secret_path);
+	}
+
+	throw InvalidInputException(error_message);
 }
 
 void SecretManager::AutoloadExtensionForFunction(const string &type, const string &provider) {
@@ -617,7 +645,7 @@ unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntryInternal(cons
 			BinaryDeserializer deserializer(file_reader);
 
 			deserializer.Begin();
-			auto deserialized_secret = secret_manager.DeserializeSecret(deserializer);
+			auto deserialized_secret = secret_manager.DeserializeSecret(deserializer, secret_path);
 			deserializer.End();
 
 			auto entry = make_uniq<SecretCatalogEntry>(std::move(deserialized_secret), catalog);

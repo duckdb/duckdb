@@ -253,7 +253,9 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		auto right = GenerateJoins(extracted_relations, node->right_set);
 		if (dp_entry->second->info->filters.empty()) {
 			// no filters, create a cross product
+			auto cardinality = left.op->estimated_cardinality * right.op->estimated_cardinality;
 			result_operator = LogicalCrossProduct::Create(std::move(left.op), std::move(right.op));
+			result_operator->SetEstimatedCardinality(cardinality);
 		} else {
 			// we have filters, create a join node
 			auto chosen_filter = node->info->filters.at(0);

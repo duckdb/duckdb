@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/enums/file_compression_type.hpp"
 
 namespace duckdb {
 
@@ -59,9 +60,9 @@ struct ReplacementScan {
 	static bool CanReplace(const string &table_name, const vector<string> &extensions) {
 		auto lower_name = StringUtil::Lower(table_name);
 
-		if (StringUtil::EndsWith(lower_name, ".gz")) {
+		if (StringUtil::EndsWith(lower_name, CompressionExtensionFromType(FileCompressionType::GZIP))) {
 			lower_name = lower_name.substr(0, lower_name.size() - 3);
-		} else if (StringUtil::EndsWith(lower_name, ".zst")) {
+		} else if (StringUtil::EndsWith(lower_name, CompressionExtensionFromType(FileCompressionType::ZSTD))) {
 			lower_name = lower_name.substr(0, lower_name.size() - 4);
 		}
 
