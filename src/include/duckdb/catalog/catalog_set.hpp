@@ -131,9 +131,11 @@ public:
 private:
 	bool DropDependencies(CatalogTransaction transaction, const string &name, bool cascade,
 	                      bool allow_drop_internal = false);
+	//! Given a root entry, gets the entry valid for this transaction, 'visible' is used to indicate whether the entry
+	//! is actually visible to the transaction
+	CatalogEntry &GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current, bool &visible);
 	//! Given a root entry, gets the entry valid for this transaction
-	CatalogEntry &GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current,
-	                                     bool *visible = nullptr);
+	CatalogEntry &GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current);
 	CatalogEntry &GetCommittedEntry(CatalogEntry &current);
 	optional_ptr<CatalogEntry> GetEntryInternal(CatalogTransaction transaction, const string &name);
 	optional_ptr<CatalogEntry> CreateCommittedEntry(unique_ptr<CatalogEntry> entry);

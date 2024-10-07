@@ -510,20 +510,21 @@ bool CatalogSet::UseTimestamp(CatalogTransaction transaction, transaction_t time
 	return false;
 }
 
-CatalogEntry &CatalogSet::GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current, bool *visible) {
+CatalogEntry &CatalogSet::GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current) {
+	bool visible;
+	return GetEntryForTransaction(transaction, current, visible);
+}
+
+CatalogEntry &CatalogSet::GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current, bool &visible) {
 	reference<CatalogEntry> entry(current);
 	while (entry.get().HasChild()) {
 		if (UseTimestamp(transaction, entry.get().timestamp)) {
-			if (visible) {
-				*visible = true;
-			}
+			visible = true;
 			return entry.get();
 		}
 		entry = entry.get().Child();
 	}
-	if (visible) {
-		*visible = false;
-	}
+	visible = false;
 	return entry.get();
 }
 
@@ -592,7 +593,7 @@ CatalogSet::EntryLookup CatalogSet::GetEntryDetailed(CatalogTransaction transact
 
 		auto &catalog_entry = *entry_value;
 		bool visible;
-		auto &current = GetEntryForTransaction(transaction, catalog_entry, &visible);
+		auto &current = GetEntryForTransaction(transaction, catalog_entry, visible);
 		if (current.deleted) {
 			if (!visible) {
 				return EntryLookup {nullptr, EntryLookup::FailureReason::INVISIBLE};
