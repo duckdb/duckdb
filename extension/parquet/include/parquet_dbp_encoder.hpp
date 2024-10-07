@@ -14,7 +14,7 @@ namespace duckdb {
 
 class DbpEncoder {
 private:
-	static constexpr uint64_t BLOCK_SIZE_IN_VALUES = 256;
+	static constexpr uint64_t BLOCK_SIZE_IN_VALUES = 2048;
 	static constexpr uint64_t NUMBER_OF_MINIBLOCKS_IN_A_BLOCK = 8;
 	static constexpr uint64_t NUMBER_OF_VALUES_IN_A_MINIBLOCK = BLOCK_SIZE_IN_VALUES / NUMBER_OF_MINIBLOCKS_IN_A_BLOCK;
 

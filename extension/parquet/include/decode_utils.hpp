@@ -68,8 +68,18 @@ public:
 		}
 		const auto read_size = count * width / BITPACK_DLEN;
 		src.available(read_size); // check if buffer has enough space available once
-		BitpackingPrimitives::UnPackBuffer<T, true>(data_ptr_cast(dst), src.ptr, count, width);
-		src.unsafe_inc(read_size);
+		for (idx_t i = 0; i < count; i += BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) {
+			// Buffer for alignment
+			T aligned_data[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE];
+
+			// Copy over to aligned buffer
+			const auto next_read = BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE * width / 8;
+			memcpy(aligned_data, src.ptr, next_read);
+			src.unsafe_inc(next_read);
+
+			// Unpack
+			BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(dst), data_ptr_cast(aligned_data), width);
+		}
 	}
 
 	//===--------------------------------------------------------------------===//
