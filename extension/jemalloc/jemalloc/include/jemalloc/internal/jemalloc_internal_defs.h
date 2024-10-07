@@ -299,7 +299,6 @@
  */
 // ----- DuckDB comment -----
 // This makes it feasible to run the larger page size (https://github.com/duckdb/duckdb/discussions/11455),
-// but it causes DuckDB to retain RSS even after closing the connection, so we have to disable it
 #if INTPTR_MAX == INT64_MAX && !defined(__APPLE__)
 #define JEMALLOC_RETAIN
 #endif
