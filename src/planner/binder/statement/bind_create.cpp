@@ -147,8 +147,7 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	auto &catalog = Catalog::GetCatalog(context, base.catalog);
 
 	auto &db_config = DBConfig::GetConfig(context);
-	auto should_create_dependencies = db_config.options.enable_view_dependencies;
-
+	bool should_create_dependencies = db_config.GetSetting<EnableViewDependenciesSetting>(context);
 	if (should_create_dependencies) {
 		view_binder->SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
 			if (&catalog != &entry.ParentCatalog()) {
@@ -219,7 +218,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		BoundSelectNode sel_node;
 		BoundGroupInformation group_info;
 		SelectBinder binder(*this, context, sel_node, group_info);
-		auto should_create_dependencies = db_config.options.enable_macro_dependencies;
+		bool should_create_dependencies = db_config.GetSetting<EnableMacroDependenciesSetting>(context);
 
 		if (should_create_dependencies) {
 			binder.SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
