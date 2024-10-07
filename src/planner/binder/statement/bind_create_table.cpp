@@ -228,7 +228,10 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 
 		auto bound_expression = expr_binder.Bind(expression);
 		D_ASSERT(bound_expression);
-		D_ASSERT(!bound_expression->HasSubquery());
+		if (bound_expression->HasSubquery()) {
+			throw BinderException("Failed to bind generated column '%s' because the expression contains a subquery",
+			                      col.Name());
+		}
 		if (col.Type().id() == LogicalTypeId::ANY) {
 			// Do this before changing the type, so we know it's the first time the type is set
 			col.ChangeGeneratedExpressionType(bound_expression->return_type);
