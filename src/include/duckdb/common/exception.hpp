@@ -329,6 +329,16 @@ public:
 	}
 };
 
+class ExecutorException : public Exception {
+public:
+	DUCKDB_API explicit ExecutorException(const string &msg);
+
+	template <typename... ARGS>
+	explicit ExecutorException(const string &msg, ARGS... params)
+	    : ExecutorException(ConstructMessage(msg, params...)) {
+	}
+};
+
 class InvalidConfigurationException : public Exception {
 public:
 	DUCKDB_API explicit InvalidConfigurationException(const string &msg);
