@@ -8,7 +8,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundOpera
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<ExpressionState>(expr, root);
 	for (auto &child : expr.children) {
-		result->AddChild(child.get());
+		result->AddChild(*child);
 	}
 
 	result->Finalize();

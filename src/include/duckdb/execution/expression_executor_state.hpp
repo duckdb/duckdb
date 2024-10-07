@@ -31,7 +31,7 @@ struct ExpressionState {
 	vector<bool> initialize;
 
 public:
-	void AddChild(Expression *child_expr);
+	void AddChild(Expression &child_expr);
 	void Finalize();
 	Allocator &GetAllocator();
 	bool HasContext();

@@ -18,7 +18,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundConju
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<ConjunctionState>(expr, root);
 	for (auto &child : expr.children) {
-		result->AddChild(child.get());
+		result->AddChild(*child);
 	}
 
 	result->Finalize();

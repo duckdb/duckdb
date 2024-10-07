@@ -6,12 +6,12 @@
 
 namespace duckdb {
 
-void ExpressionState::AddChild(Expression *child_expr) {
-	types.push_back(child_expr->return_type);
-	auto child_state = ExpressionExecutor::InitializeState(*child_expr, root);
+void ExpressionState::AddChild(Expression &child_expr) {
+	types.push_back(child_expr.return_type);
+	auto child_state = ExpressionExecutor::InitializeState(child_expr, root);
 	child_states.push_back(std::move(child_state));
 
-	auto expr_class = child_expr->GetExpressionClass();
+	auto expr_class = child_expr.GetExpressionClass();
 	auto initialize_child = expr_class != ExpressionClass::BOUND_REF && expr_class != ExpressionClass::BOUND_CONSTANT &&
 	                        expr_class != ExpressionClass::BOUND_PARAMETER;
 	initialize.push_back(initialize_child);
