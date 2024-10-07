@@ -176,8 +176,8 @@ void GeoParquetColumnMetadataWriter::Update(GeoParquetColumnMetadata &meta, Vect
 // GeoParquetFileMetadata
 //------------------------------------------------------------------------------
 
-unique_ptr<GeoParquetFileMetadata>
-GeoParquetFileMetadata::TryRead(const duckdb_parquet::FileMetaData &file_meta_data, ClientContext &context) {
+unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_parquet::FileMetaData &file_meta_data,
+                                                                   ClientContext &context) {
 	for (auto &kv : file_meta_data.key_value_metadata) {
 		if (kv.key == "geo") {
 			const auto geo_metadata = yyjson_read(kv.value.c_str(), kv.value.size(), 0);

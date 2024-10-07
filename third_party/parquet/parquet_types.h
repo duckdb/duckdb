@@ -18,7 +18,7 @@
 #include <functional>
 #include <memory>
 
-// I KNOW WHAT I AM DOING
+
 namespace apache = duckdb_apache;
 
 namespace duckdb_parquet {
@@ -506,7 +506,7 @@ class SizeStatistics : public virtual ::apache::thrift::TBase {
    * of information.
    * 
    */
-  std::vector<int64_t>  repetition_level_histogram;
+  duckdb::vector<int64_t>  repetition_level_histogram;
   /**
    * Same as repetition_level_histogram except for definition levels.
    * 
@@ -514,19 +514,20 @@ class SizeStatistics : public virtual ::apache::thrift::TBase {
    * loss of information.
    * 
    */
-  std::vector<int64_t>  definition_level_histogram;
+  duckdb::vector<int64_t>  definition_level_histogram;
 
   _SizeStatistics__isset __isset;
 
   void __set_unencoded_byte_array_data_bytes(const int64_t val);
 
-  void __set_repetition_level_histogram(const std::vector<int64_t> & val);
+  void __set_repetition_level_histogram(const duckdb::vector<int64_t> & val);
 
-  void __set_definition_level_histogram(const std::vector<int64_t> & val);
+  void __set_definition_level_histogram(const duckdb::vector<int64_t> & val);
 
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(SizeStatistics &a, SizeStatistics &b);
@@ -629,6 +630,7 @@ class Statistics : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(Statistics &a, Statistics &b);
@@ -651,6 +653,7 @@ class StringType : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(StringType &a, StringType &b);
@@ -670,6 +673,7 @@ class UUIDType : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(UUIDType &a, UUIDType &b);
@@ -689,6 +693,7 @@ class MapType : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(MapType &a, MapType &b);
@@ -708,6 +713,7 @@ class ListType : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(ListType &a, ListType &b);
@@ -727,6 +733,7 @@ class EnumType : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(EnumType &a, EnumType &b);
@@ -746,6 +753,7 @@ class DateType : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(DateType &a, DateType &b);
@@ -765,6 +773,7 @@ class Float16Type : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(Float16Type &a, Float16Type &b);
@@ -791,6 +800,7 @@ class NullType : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(NullType &a, NullType &b);
@@ -827,6 +837,7 @@ class DecimalType : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(DecimalType &a, DecimalType &b);
@@ -849,6 +860,7 @@ class MilliSeconds : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(MilliSeconds &a, MilliSeconds &b);
@@ -868,6 +880,7 @@ class MicroSeconds : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(MicroSeconds &a, MicroSeconds &b);
@@ -887,6 +900,7 @@ class NanoSeconds : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(NanoSeconds &a, NanoSeconds &b);
@@ -923,6 +937,7 @@ class TimeUnit : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(TimeUnit &a, TimeUnit &b);
@@ -953,6 +968,7 @@ class TimestampType : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(TimestampType &a, TimestampType &b);
@@ -983,6 +999,7 @@ class TimeType : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(TimeType &a, TimeType &b);
@@ -1015,6 +1032,7 @@ class IntType : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(IntType &a, IntType &b);
@@ -1039,6 +1057,7 @@ class JsonType : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(JsonType &a, JsonType &b);
@@ -1063,6 +1082,7 @@ class BsonType : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(BsonType &a, BsonType &b);
@@ -1150,6 +1170,7 @@ class LogicalType : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(LogicalType &a, LogicalType &b);
@@ -1269,6 +1290,7 @@ class SchemaElement : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(SchemaElement &a, SchemaElement &b);
@@ -1338,6 +1360,7 @@ class DataPageHeader : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(DataPageHeader &a, DataPageHeader &b);
@@ -1357,6 +1380,7 @@ class IndexPageHeader : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(IndexPageHeader &a, IndexPageHeader &b);
@@ -1408,6 +1432,7 @@ class DictionaryPageHeader : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(DictionaryPageHeader &a, DictionaryPageHeader &b);
@@ -1498,6 +1523,7 @@ class DataPageHeaderV2 : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(DataPageHeaderV2 &a, DataPageHeaderV2 &b);
@@ -1520,6 +1546,7 @@ class SplitBlockAlgorithm : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(SplitBlockAlgorithm &a, SplitBlockAlgorithm &b);
@@ -1554,6 +1581,7 @@ class BloomFilterAlgorithm : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(BloomFilterAlgorithm &a, BloomFilterAlgorithm &b);
@@ -1578,6 +1606,7 @@ class XxHash : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(XxHash &a, XxHash &b);
@@ -1614,6 +1643,7 @@ class BloomFilterHash : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(BloomFilterHash &a, BloomFilterHash &b);
@@ -1637,6 +1667,7 @@ class Uncompressed : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(Uncompressed &a, Uncompressed &b);
@@ -1665,6 +1696,7 @@ class BloomFilterCompression : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(BloomFilterCompression &a, BloomFilterCompression &b);
@@ -1713,6 +1745,7 @@ class BloomFilterHeader : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(BloomFilterHeader &a, BloomFilterHeader &b);
@@ -1795,6 +1828,7 @@ class PageHeader : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(PageHeader &a, PageHeader &b);
@@ -1829,6 +1863,7 @@ class KeyValue : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(KeyValue &a, KeyValue &b);
@@ -1870,6 +1905,7 @@ class SortingColumn : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(SortingColumn &a, SortingColumn &b);
@@ -1914,6 +1950,7 @@ class PageEncodingStats : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(PageEncodingStats &a, PageEncodingStats &b);
@@ -1953,11 +1990,11 @@ class ColumnMetaData : public virtual ::apache::thrift::TBase {
    * Set of all encodings used for this column. The purpose is to validate
    * whether we can decode those pages. *
    */
-  std::vector<Encoding::type>  encodings;
+  duckdb::vector<Encoding::type>  encodings;
   /**
    * Path in schema *
    */
-  std::vector<std::string>  path_in_schema;
+  duckdb::vector<std::string>  path_in_schema;
   /**
    * Compression codec *
    * 
@@ -1980,7 +2017,7 @@ class ColumnMetaData : public virtual ::apache::thrift::TBase {
   /**
    * Optional key/value metadata *
    */
-  std::vector<KeyValue>  key_value_metadata;
+  duckdb::vector<KeyValue>  key_value_metadata;
   /**
    * Byte offset from beginning of file to first data page *
    */
@@ -2002,7 +2039,7 @@ class ColumnMetaData : public virtual ::apache::thrift::TBase {
    * This information can be used to determine if all data pages are
    * dictionary encoded for example *
    */
-  std::vector<PageEncodingStats>  encoding_stats;
+  duckdb::vector<PageEncodingStats>  encoding_stats;
   /**
    * Byte offset from beginning of file to Bloom filter data. *
    */
@@ -2027,9 +2064,9 @@ class ColumnMetaData : public virtual ::apache::thrift::TBase {
 
   void __set_type(const Type::type val);
 
-  void __set_encodings(const std::vector<Encoding::type> & val);
+  void __set_encodings(const duckdb::vector<Encoding::type> & val);
 
-  void __set_path_in_schema(const std::vector<std::string> & val);
+  void __set_path_in_schema(const duckdb::vector<std::string> & val);
 
   void __set_codec(const CompressionCodec::type val);
 
@@ -2039,7 +2076,7 @@ class ColumnMetaData : public virtual ::apache::thrift::TBase {
 
   void __set_total_compressed_size(const int64_t val);
 
-  void __set_key_value_metadata(const std::vector<KeyValue> & val);
+  void __set_key_value_metadata(const duckdb::vector<KeyValue> & val);
 
   void __set_data_page_offset(const int64_t val);
 
@@ -2049,7 +2086,7 @@ class ColumnMetaData : public virtual ::apache::thrift::TBase {
 
   void __set_statistics(const Statistics& val);
 
-  void __set_encoding_stats(const std::vector<PageEncodingStats> & val);
+  void __set_encoding_stats(const duckdb::vector<PageEncodingStats> & val);
 
   void __set_bloom_filter_offset(const int64_t val);
 
@@ -2060,6 +2097,7 @@ class ColumnMetaData : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(ColumnMetaData &a, ColumnMetaData &b);
@@ -2079,6 +2117,7 @@ class EncryptionWithFooterKey : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(EncryptionWithFooterKey &a, EncryptionWithFooterKey &b);
@@ -2101,7 +2140,7 @@ class EncryptionWithColumnKey : public virtual ::apache::thrift::TBase {
   /**
    * Column path in schema *
    */
-  std::vector<std::string>  path_in_schema;
+  duckdb::vector<std::string>  path_in_schema;
   /**
    * Retrieval metadata of column encryption key *
    */
@@ -2109,13 +2148,14 @@ class EncryptionWithColumnKey : public virtual ::apache::thrift::TBase {
 
   _EncryptionWithColumnKey__isset __isset;
 
-  void __set_path_in_schema(const std::vector<std::string> & val);
+  void __set_path_in_schema(const duckdb::vector<std::string> & val);
 
   void __set_key_metadata(const std::string& val);
 
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(EncryptionWithColumnKey &a, EncryptionWithColumnKey &b);
@@ -2148,6 +2188,7 @@ class ColumnCryptoMetaData : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(ColumnCryptoMetaData &a, ColumnCryptoMetaData &b);
@@ -2247,6 +2288,7 @@ class ColumnChunk : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(ColumnChunk &a, ColumnChunk &b);
@@ -2274,7 +2316,7 @@ class RowGroup : public virtual ::apache::thrift::TBase {
    * This list must have the same order as the SchemaElement list in FileMetaData.
    * 
    */
-  std::vector<ColumnChunk>  columns;
+  duckdb::vector<ColumnChunk>  columns;
   /**
    * Total byte size of all the uncompressed column data in this row group *
    */
@@ -2287,7 +2329,7 @@ class RowGroup : public virtual ::apache::thrift::TBase {
    * If set, specifies a sort ordering of the rows in this RowGroup.
    * The sorting columns can be a subset of all the columns.
    */
-  std::vector<SortingColumn>  sorting_columns;
+  duckdb::vector<SortingColumn>  sorting_columns;
   /**
    * Byte offset from beginning of file to first page (data or dictionary)
    * in this row group *
@@ -2305,13 +2347,13 @@ class RowGroup : public virtual ::apache::thrift::TBase {
 
   _RowGroup__isset __isset;
 
-  void __set_columns(const std::vector<ColumnChunk> & val);
+  void __set_columns(const duckdb::vector<ColumnChunk> & val);
 
   void __set_total_byte_size(const int64_t val);
 
   void __set_num_rows(const int64_t val);
 
-  void __set_sorting_columns(const std::vector<SortingColumn> & val);
+  void __set_sorting_columns(const duckdb::vector<SortingColumn> & val);
 
   void __set_file_offset(const int64_t val);
 
@@ -2322,6 +2364,7 @@ class RowGroup : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(RowGroup &a, RowGroup &b);
@@ -2344,6 +2387,7 @@ class TypeDefinedOrder : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(TypeDefinedOrder &a, TypeDefinedOrder &b);
@@ -2434,6 +2478,7 @@ class ColumnOrder : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(ColumnOrder &a, ColumnOrder &b);
@@ -2474,6 +2519,7 @@ class PageLocation : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(PageLocation &a, PageLocation &b);
@@ -2504,24 +2550,25 @@ class OffsetIndex : public virtual ::apache::thrift::TBase {
    * PageLocations, ordered by increasing PageLocation.offset. It is required
    * that page_locations[i].first_row_index < page_locations[i+1].first_row_index.
    */
-  std::vector<PageLocation>  page_locations;
+  duckdb::vector<PageLocation>  page_locations;
   /**
    * Unencoded/uncompressed size for BYTE_ARRAY types.
    * 
    * See documention for unencoded_byte_array_data_bytes in SizeStatistics for
    * more details on this field.
    */
-  std::vector<int64_t>  unencoded_byte_array_data_bytes;
+  duckdb::vector<int64_t>  unencoded_byte_array_data_bytes;
 
   _OffsetIndex__isset __isset;
 
-  void __set_page_locations(const std::vector<PageLocation> & val);
+  void __set_page_locations(const duckdb::vector<PageLocation> & val);
 
-  void __set_unencoded_byte_array_data_bytes(const std::vector<int64_t> & val);
+  void __set_unencoded_byte_array_data_bytes(const duckdb::vector<int64_t> & val);
 
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(OffsetIndex &a, OffsetIndex &b);
@@ -2560,7 +2607,7 @@ class ColumnIndex : public virtual ::apache::thrift::TBase {
    * byte[0], so that all lists have the same length. If false, the
    * corresponding entries in min_values and max_values must be valid.
    */
-  std::vector<bool>  null_pages;
+  duckdb::vector<bool>  null_pages;
   /**
    * Two lists containing lower and upper bounds for the values of each page
    * determined by the ColumnOrder of the column. These may be the actual
@@ -2571,8 +2618,8 @@ class ColumnIndex : public virtual ::apache::thrift::TBase {
    * logical type. Readers must make sure that list entries are populated before
    * using them by inspecting null_pages.
    */
-  std::vector<std::string>  min_values;
-  std::vector<std::string>  max_values;
+  duckdb::vector<std::string>  min_values;
+  duckdb::vector<std::string>  max_values;
   /**
    * Stores whether both min_values and max_values are ordered and if so, in
    * which direction. This allows readers to perform binary searches in both
@@ -2592,7 +2639,7 @@ class ColumnIndex : public virtual ::apache::thrift::TBase {
    * If null_counts are not present, readers MUST NOT assume all
    * null counts are 0.
    */
-  std::vector<int64_t>  null_counts;
+  duckdb::vector<int64_t>  null_counts;
   /**
    * Contains repetition level histograms for each page
    * concatenated together.  The repetition_level_histogram field on
@@ -2606,32 +2653,33 @@ class ColumnIndex : public virtual ::apache::thrift::TBase {
    * for the second page.
    * 
    */
-  std::vector<int64_t>  repetition_level_histograms;
+  duckdb::vector<int64_t>  repetition_level_histograms;
   /**
    * Same as repetition_level_histograms except for definitions levels.
    * 
    */
-  std::vector<int64_t>  definition_level_histograms;
+  duckdb::vector<int64_t>  definition_level_histograms;
 
   _ColumnIndex__isset __isset;
 
-  void __set_null_pages(const std::vector<bool> & val);
+  void __set_null_pages(const duckdb::vector<bool> & val);
 
-  void __set_min_values(const std::vector<std::string> & val);
+  void __set_min_values(const duckdb::vector<std::string> & val);
 
-  void __set_max_values(const std::vector<std::string> & val);
+  void __set_max_values(const duckdb::vector<std::string> & val);
 
   void __set_boundary_order(const BoundaryOrder::type val);
 
-  void __set_null_counts(const std::vector<int64_t> & val);
+  void __set_null_counts(const duckdb::vector<int64_t> & val);
 
-  void __set_repetition_level_histograms(const std::vector<int64_t> & val);
+  void __set_repetition_level_histograms(const duckdb::vector<int64_t> & val);
 
-  void __set_definition_level_histograms(const std::vector<int64_t> & val);
+  void __set_definition_level_histograms(const duckdb::vector<int64_t> & val);
 
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(ColumnIndex &a, ColumnIndex &b);
@@ -2678,6 +2726,7 @@ class AesGcmV1 : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(AesGcmV1 &a, AesGcmV1 &b);
@@ -2724,6 +2773,7 @@ class AesGcmCtrV1 : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(AesGcmCtrV1 &a, AesGcmCtrV1 &b);
@@ -2756,6 +2806,7 @@ class EncryptionAlgorithm : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(EncryptionAlgorithm &a, EncryptionAlgorithm &b);
@@ -2794,7 +2845,7 @@ class FileMetaData : public virtual ::apache::thrift::TBase {
    * used to map columns to nodes in the schema.
    * The first element is the root *
    */
-  std::vector<SchemaElement>  schema;
+  duckdb::vector<SchemaElement>  schema;
   /**
    * Number of rows in this file *
    */
@@ -2802,11 +2853,11 @@ class FileMetaData : public virtual ::apache::thrift::TBase {
   /**
    * Row groups in this file *
    */
-  std::vector<RowGroup>  row_groups;
+  duckdb::vector<RowGroup>  row_groups;
   /**
    * Optional key/value metadata *
    */
-  std::vector<KeyValue>  key_value_metadata;
+  duckdb::vector<KeyValue>  key_value_metadata;
   /**
    * String for application that wrote this file.  This should be in the format
    * <Application> version <App Version> (build <App Build Hash>).
@@ -2830,7 +2881,7 @@ class FileMetaData : public virtual ::apache::thrift::TBase {
    * The obsolete min and max fields in the Statistics object are always sorted
    * by signed comparison regardless of column_orders.
    */
-  std::vector<ColumnOrder>  column_orders;
+  duckdb::vector<ColumnOrder>  column_orders;
   /**
    * Encryption algorithm. This field is set only in encrypted files
    * with plaintext footer. Files with encrypted footer store algorithm id
@@ -2847,17 +2898,17 @@ class FileMetaData : public virtual ::apache::thrift::TBase {
 
   void __set_version(const int32_t val);
 
-  void __set_schema(const std::vector<SchemaElement> & val);
+  void __set_schema(const duckdb::vector<SchemaElement> & val);
 
   void __set_num_rows(const int64_t val);
 
-  void __set_row_groups(const std::vector<RowGroup> & val);
+  void __set_row_groups(const duckdb::vector<RowGroup> & val);
 
-  void __set_key_value_metadata(const std::vector<KeyValue> & val);
+  void __set_key_value_metadata(const duckdb::vector<KeyValue> & val);
 
   void __set_created_by(const std::string& val);
 
-  void __set_column_orders(const std::vector<ColumnOrder> & val);
+  void __set_column_orders(const duckdb::vector<ColumnOrder> & val);
 
   void __set_encryption_algorithm(const EncryptionAlgorithm& val);
 
@@ -2866,6 +2917,7 @@ class FileMetaData : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(FileMetaData &a, FileMetaData &b);
@@ -2909,6 +2961,7 @@ class FileCryptoMetaData : public virtual ::apache::thrift::TBase {
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
 
+  virtual void printTo(std::ostream& out) const;
 };
 
 void swap(FileCryptoMetaData &a, FileCryptoMetaData &b);

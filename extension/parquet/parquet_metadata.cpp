@@ -166,8 +166,8 @@ void ParquetMetaDataOperatorData::BindMetaData(vector<LogicalType> &return_types
 	return_types.emplace_back(LogicalType::MAP(LogicalType::BLOB, LogicalType::BLOB));
 }
 
-Value ConvertParquetStats(const LogicalType &type, const duckdb_parquet::SchemaElement &schema_ele,
-                          bool stats_is_set, const std::string &stats) {
+Value ConvertParquetStats(const LogicalType &type, const duckdb_parquet::SchemaElement &schema_ele, bool stats_is_set,
+                          const std::string &stats) {
 	if (!stats_is_set) {
 		return Value(LogicalType::VARCHAR);
 	}

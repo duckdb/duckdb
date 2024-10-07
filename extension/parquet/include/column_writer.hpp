@@ -80,10 +80,10 @@ public:
 public:
 	//! Create the column writer for a specific type recursively
 	static unique_ptr<ColumnWriter>
-	CreateWriterRecursive(ClientContext &context, vector<duckdb_parquet::SchemaElement> &schemas,
-	                      ParquetWriter &writer, const LogicalType &type, const string &name,
-	                      vector<string> schema_path, optional_ptr<const ChildFieldIDs> field_ids, idx_t max_repeat = 0,
-	                      idx_t max_define = 1, bool can_have_nulls = true);
+	CreateWriterRecursive(ClientContext &context, vector<duckdb_parquet::SchemaElement> &schemas, ParquetWriter &writer,
+	                      const LogicalType &type, const string &name, vector<string> schema_path,
+	                      optional_ptr<const ChildFieldIDs> field_ids, idx_t max_repeat = 0, idx_t max_define = 1,
+	                      bool can_have_nulls = true);
 
 	virtual unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) = 0;
 

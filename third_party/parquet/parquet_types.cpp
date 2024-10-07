@@ -35,6 +35,25 @@ const char* _kTypeNames[] = {
 };
 const std::map<int, const char*> _Type_VALUES_TO_NAMES(::apache::thrift::TEnumIterator(8, _kTypeValues, _kTypeNames), ::apache::thrift::TEnumIterator(-1, nullptr, nullptr));
 
+std::ostream& operator<<(std::ostream& out, const Type::type& val) {
+  std::map<int, const char*>::const_iterator it = _Type_VALUES_TO_NAMES.find(val);
+  if (it != _Type_VALUES_TO_NAMES.end()) {
+    out << it->second;
+  } else {
+    out << static_cast<int>(val);
+  }
+  return out;
+}
+
+std::string to_string(const Type::type& val) {
+  std::map<int, const char*>::const_iterator it = _Type_VALUES_TO_NAMES.find(val);
+  if (it != _Type_VALUES_TO_NAMES.end()) {
+    return std::string(it->second);
+  } else {
+    return std::to_string(static_cast<int>(val));
+  }
+}
+
 int _kConvertedTypeValues[] = {
   /**
    * a BYTE_ARRAY actually contains UTF8 encoded chars
@@ -285,6 +304,25 @@ const char* _kConvertedTypeNames[] = {
 };
 const std::map<int, const char*> _ConvertedType_VALUES_TO_NAMES(::apache::thrift::TEnumIterator(22, _kConvertedTypeValues, _kConvertedTypeNames), ::apache::thrift::TEnumIterator(-1, nullptr, nullptr));
 
+std::ostream& operator<<(std::ostream& out, const ConvertedType::type& val) {
+  std::map<int, const char*>::const_iterator it = _ConvertedType_VALUES_TO_NAMES.find(val);
+  if (it != _ConvertedType_VALUES_TO_NAMES.end()) {
+    out << it->second;
+  } else {
+    out << static_cast<int>(val);
+  }
+  return out;
+}
+
+std::string to_string(const ConvertedType::type& val) {
+  std::map<int, const char*>::const_iterator it = _ConvertedType_VALUES_TO_NAMES.find(val);
+  if (it != _ConvertedType_VALUES_TO_NAMES.end()) {
+    return std::string(it->second);
+  } else {
+    return std::to_string(static_cast<int>(val));
+  }
+}
+
 int _kFieldRepetitionTypeValues[] = {
   /**
    * This field is required (can not be null) and each row has exactly 1 value.
@@ -314,6 +352,25 @@ const char* _kFieldRepetitionTypeNames[] = {
   "REPEATED"
 };
 const std::map<int, const char*> _FieldRepetitionType_VALUES_TO_NAMES(::apache::thrift::TEnumIterator(3, _kFieldRepetitionTypeValues, _kFieldRepetitionTypeNames), ::apache::thrift::TEnumIterator(-1, nullptr, nullptr));
+
+std::ostream& operator<<(std::ostream& out, const FieldRepetitionType::type& val) {
+  std::map<int, const char*>::const_iterator it = _FieldRepetitionType_VALUES_TO_NAMES.find(val);
+  if (it != _FieldRepetitionType_VALUES_TO_NAMES.end()) {
+    out << it->second;
+  } else {
+    out << static_cast<int>(val);
+  }
+  return out;
+}
+
+std::string to_string(const FieldRepetitionType::type& val) {
+  std::map<int, const char*>::const_iterator it = _FieldRepetitionType_VALUES_TO_NAMES.find(val);
+  if (it != _FieldRepetitionType_VALUES_TO_NAMES.end()) {
+    return std::string(it->second);
+  } else {
+    return std::to_string(static_cast<int>(val));
+  }
+}
 
 int _kEncodingValues[] = {
   /**
@@ -439,6 +496,25 @@ const char* _kEncodingNames[] = {
 };
 const std::map<int, const char*> _Encoding_VALUES_TO_NAMES(::apache::thrift::TEnumIterator(9, _kEncodingValues, _kEncodingNames), ::apache::thrift::TEnumIterator(-1, nullptr, nullptr));
 
+std::ostream& operator<<(std::ostream& out, const Encoding::type& val) {
+  std::map<int, const char*>::const_iterator it = _Encoding_VALUES_TO_NAMES.find(val);
+  if (it != _Encoding_VALUES_TO_NAMES.end()) {
+    out << it->second;
+  } else {
+    out << static_cast<int>(val);
+  }
+  return out;
+}
+
+std::string to_string(const Encoding::type& val) {
+  std::map<int, const char*>::const_iterator it = _Encoding_VALUES_TO_NAMES.find(val);
+  if (it != _Encoding_VALUES_TO_NAMES.end()) {
+    return std::string(it->second);
+  } else {
+    return std::to_string(static_cast<int>(val));
+  }
+}
+
 int _kCompressionCodecValues[] = {
   CompressionCodec::UNCOMPRESSED,
   CompressionCodec::SNAPPY,
@@ -461,6 +537,25 @@ const char* _kCompressionCodecNames[] = {
 };
 const std::map<int, const char*> _CompressionCodec_VALUES_TO_NAMES(::apache::thrift::TEnumIterator(8, _kCompressionCodecValues, _kCompressionCodecNames), ::apache::thrift::TEnumIterator(-1, nullptr, nullptr));
 
+std::ostream& operator<<(std::ostream& out, const CompressionCodec::type& val) {
+  std::map<int, const char*>::const_iterator it = _CompressionCodec_VALUES_TO_NAMES.find(val);
+  if (it != _CompressionCodec_VALUES_TO_NAMES.end()) {
+    out << it->second;
+  } else {
+    out << static_cast<int>(val);
+  }
+  return out;
+}
+
+std::string to_string(const CompressionCodec::type& val) {
+  std::map<int, const char*>::const_iterator it = _CompressionCodec_VALUES_TO_NAMES.find(val);
+  if (it != _CompressionCodec_VALUES_TO_NAMES.end()) {
+    return std::string(it->second);
+  } else {
+    return std::to_string(static_cast<int>(val));
+  }
+}
+
 int _kPageTypeValues[] = {
   PageType::DATA_PAGE,
   PageType::INDEX_PAGE,
@@ -475,6 +570,25 @@ const char* _kPageTypeNames[] = {
 };
 const std::map<int, const char*> _PageType_VALUES_TO_NAMES(::apache::thrift::TEnumIterator(4, _kPageTypeValues, _kPageTypeNames), ::apache::thrift::TEnumIterator(-1, nullptr, nullptr));
 
+std::ostream& operator<<(std::ostream& out, const PageType::type& val) {
+  std::map<int, const char*>::const_iterator it = _PageType_VALUES_TO_NAMES.find(val);
+  if (it != _PageType_VALUES_TO_NAMES.end()) {
+    out << it->second;
+  } else {
+    out << static_cast<int>(val);
+  }
+  return out;
+}
+
+std::string to_string(const PageType::type& val) {
+  std::map<int, const char*>::const_iterator it = _PageType_VALUES_TO_NAMES.find(val);
+  if (it != _PageType_VALUES_TO_NAMES.end()) {
+    return std::string(it->second);
+  } else {
+    return std::to_string(static_cast<int>(val));
+  }
+}
+
 int _kBoundaryOrderValues[] = {
   BoundaryOrder::UNORDERED,
   BoundaryOrder::ASCENDING,
@@ -486,6 +600,25 @@ const char* _kBoundaryOrderNames[] = {
   "DESCENDING"
 };
 const std::map<int, const char*> _BoundaryOrder_VALUES_TO_NAMES(::apache::thrift::TEnumIterator(3, _kBoundaryOrderValues, _kBoundaryOrderNames), ::apache::thrift::TEnumIterator(-1, nullptr, nullptr));
+
+std::ostream& operator<<(std::ostream& out, const BoundaryOrder::type& val) {
+  std::map<int, const char*>::const_iterator it = _BoundaryOrder_VALUES_TO_NAMES.find(val);
+  if (it != _BoundaryOrder_VALUES_TO_NAMES.end()) {
+    out << it->second;
+  } else {
+    out << static_cast<int>(val);
+  }
+  return out;
+}
+
+std::string to_string(const BoundaryOrder::type& val) {
+  std::map<int, const char*>::const_iterator it = _BoundaryOrder_VALUES_TO_NAMES.find(val);
+  if (it != _BoundaryOrder_VALUES_TO_NAMES.end()) {
+    return std::string(it->second);
+  } else {
+    return std::to_string(static_cast<int>(val));
+  }
+}
 
 
 SizeStatistics::~SizeStatistics() noexcept {
@@ -500,15 +633,21 @@ void SizeStatistics::__set_unencoded_byte_array_data_bytes(const int64_t val) {
 __isset.unencoded_byte_array_data_bytes = true;
 }
 
-void SizeStatistics::__set_repetition_level_histogram(const std::vector<int64_t> & val) {
+void SizeStatistics::__set_repetition_level_histogram(const duckdb::vector<int64_t> & val) {
   this->repetition_level_histogram = val;
 __isset.repetition_level_histogram = true;
 }
 
-void SizeStatistics::__set_definition_level_histogram(const std::vector<int64_t> & val) {
+void SizeStatistics::__set_definition_level_histogram(const duckdb::vector<int64_t> & val) {
   this->definition_level_histogram = val;
 __isset.definition_level_histogram = true;
 }
+std::ostream& operator<<(std::ostream& out, const SizeStatistics& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t SizeStatistics::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -605,7 +744,7 @@ uint32_t SizeStatistics::write(::apache::thrift::protocol::TProtocol* oprot) con
     xfer += oprot->writeFieldBegin("repetition_level_histogram", ::apache::thrift::protocol::T_LIST, 2);
     {
       xfer += oprot->writeListBegin(::apache::thrift::protocol::T_I64, static_cast<uint32_t>(this->repetition_level_histogram.size()));
-      std::vector<int64_t> ::const_iterator _iter10;
+      duckdb::vector<int64_t> ::const_iterator _iter10;
       for (_iter10 = this->repetition_level_histogram.begin(); _iter10 != this->repetition_level_histogram.end(); ++_iter10)
       {
         xfer += oprot->writeI64((*_iter10));
@@ -618,7 +757,7 @@ uint32_t SizeStatistics::write(::apache::thrift::protocol::TProtocol* oprot) con
     xfer += oprot->writeFieldBegin("definition_level_histogram", ::apache::thrift::protocol::T_LIST, 3);
     {
       xfer += oprot->writeListBegin(::apache::thrift::protocol::T_I64, static_cast<uint32_t>(this->definition_level_histogram.size()));
-      std::vector<int64_t> ::const_iterator _iter11;
+      duckdb::vector<int64_t> ::const_iterator _iter11;
       for (_iter11 = this->definition_level_histogram.begin(); _iter11 != this->definition_level_histogram.end(); ++_iter11)
       {
         xfer += oprot->writeI64((*_iter11));
@@ -653,6 +792,15 @@ SizeStatistics& SizeStatistics::operator=(const SizeStatistics& other13) {
   __isset = other13.__isset;
   return *this;
 }
+void SizeStatistics::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "SizeStatistics(";
+  out << "unencoded_byte_array_data_bytes="; (__isset.unencoded_byte_array_data_bytes ? (out << to_string(unencoded_byte_array_data_bytes)) : (out << "<null>"));
+  out << ", " << "repetition_level_histogram="; (__isset.repetition_level_histogram ? (out << to_string(repetition_level_histogram)) : (out << "<null>"));
+  out << ", " << "definition_level_histogram="; (__isset.definition_level_histogram ? (out << to_string(definition_level_histogram)) : (out << "<null>"));
+  out << ")";
+}
+
 
 Statistics::~Statistics() noexcept {
 }
@@ -707,6 +855,12 @@ void Statistics::__set_is_min_value_exact(const bool val) {
   this->is_min_value_exact = val;
 __isset.is_min_value_exact = true;
 }
+std::ostream& operator<<(std::ostream& out, const Statistics& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t Statistics::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -891,12 +1045,32 @@ Statistics& Statistics::operator=(const Statistics& other15) {
   __isset = other15.__isset;
   return *this;
 }
+void Statistics::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "Statistics(";
+  out << "max="; (__isset.max ? (out << to_string(max)) : (out << "<null>"));
+  out << ", " << "min="; (__isset.min ? (out << to_string(min)) : (out << "<null>"));
+  out << ", " << "null_count="; (__isset.null_count ? (out << to_string(null_count)) : (out << "<null>"));
+  out << ", " << "distinct_count="; (__isset.distinct_count ? (out << to_string(distinct_count)) : (out << "<null>"));
+  out << ", " << "max_value="; (__isset.max_value ? (out << to_string(max_value)) : (out << "<null>"));
+  out << ", " << "min_value="; (__isset.min_value ? (out << to_string(min_value)) : (out << "<null>"));
+  out << ", " << "is_max_value_exact="; (__isset.is_max_value_exact ? (out << to_string(is_max_value_exact)) : (out << "<null>"));
+  out << ", " << "is_min_value_exact="; (__isset.is_min_value_exact ? (out << to_string(is_min_value_exact)) : (out << "<null>"));
+  out << ")";
+}
+
 
 StringType::~StringType() noexcept {
 }
 
 StringType::StringType() noexcept {
 }
+std::ostream& operator<<(std::ostream& out, const StringType& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t StringType::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -949,12 +1123,24 @@ StringType& StringType::operator=(const StringType& other17) noexcept {
   (void) other17;
   return *this;
 }
+void StringType::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "StringType(";
+  out << ")";
+}
+
 
 UUIDType::~UUIDType() noexcept {
 }
 
 UUIDType::UUIDType() noexcept {
 }
+std::ostream& operator<<(std::ostream& out, const UUIDType& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t UUIDType::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -1007,12 +1193,24 @@ UUIDType& UUIDType::operator=(const UUIDType& other19) noexcept {
   (void) other19;
   return *this;
 }
+void UUIDType::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "UUIDType(";
+  out << ")";
+}
+
 
 MapType::~MapType() noexcept {
 }
 
 MapType::MapType() noexcept {
 }
+std::ostream& operator<<(std::ostream& out, const MapType& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t MapType::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -1065,12 +1263,24 @@ MapType& MapType::operator=(const MapType& other21) noexcept {
   (void) other21;
   return *this;
 }
+void MapType::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "MapType(";
+  out << ")";
+}
+
 
 ListType::~ListType() noexcept {
 }
 
 ListType::ListType() noexcept {
 }
+std::ostream& operator<<(std::ostream& out, const ListType& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t ListType::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -1123,12 +1333,24 @@ ListType& ListType::operator=(const ListType& other23) noexcept {
   (void) other23;
   return *this;
 }
+void ListType::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "ListType(";
+  out << ")";
+}
+
 
 EnumType::~EnumType() noexcept {
 }
 
 EnumType::EnumType() noexcept {
 }
+std::ostream& operator<<(std::ostream& out, const EnumType& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t EnumType::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -1181,12 +1403,24 @@ EnumType& EnumType::operator=(const EnumType& other25) noexcept {
   (void) other25;
   return *this;
 }
+void EnumType::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "EnumType(";
+  out << ")";
+}
+
 
 DateType::~DateType() noexcept {
 }
 
 DateType::DateType() noexcept {
 }
+std::ostream& operator<<(std::ostream& out, const DateType& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t DateType::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -1239,12 +1473,24 @@ DateType& DateType::operator=(const DateType& other27) noexcept {
   (void) other27;
   return *this;
 }
+void DateType::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "DateType(";
+  out << ")";
+}
+
 
 Float16Type::~Float16Type() noexcept {
 }
 
 Float16Type::Float16Type() noexcept {
 }
+std::ostream& operator<<(std::ostream& out, const Float16Type& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t Float16Type::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -1297,12 +1543,24 @@ Float16Type& Float16Type::operator=(const Float16Type& other29) noexcept {
   (void) other29;
   return *this;
 }
+void Float16Type::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "Float16Type(";
+  out << ")";
+}
+
 
 NullType::~NullType() noexcept {
 }
 
 NullType::NullType() noexcept {
 }
+std::ostream& operator<<(std::ostream& out, const NullType& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t NullType::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -1355,6 +1613,12 @@ NullType& NullType::operator=(const NullType& other31) noexcept {
   (void) other31;
   return *this;
 }
+void NullType::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "NullType(";
+  out << ")";
+}
+
 
 DecimalType::~DecimalType() noexcept {
 }
@@ -1371,6 +1635,12 @@ void DecimalType::__set_scale(const int32_t val) {
 void DecimalType::__set_precision(const int32_t val) {
   this->precision = val;
 }
+std::ostream& operator<<(std::ostream& out, const DecimalType& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t DecimalType::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -1460,12 +1730,26 @@ DecimalType& DecimalType::operator=(const DecimalType& other33) noexcept {
   precision = other33.precision;
   return *this;
 }
+void DecimalType::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "DecimalType(";
+  out << "scale=" << to_string(scale);
+  out << ", " << "precision=" << to_string(precision);
+  out << ")";
+}
+
 
 MilliSeconds::~MilliSeconds() noexcept {
 }
 
 MilliSeconds::MilliSeconds() noexcept {
 }
+std::ostream& operator<<(std::ostream& out, const MilliSeconds& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t MilliSeconds::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -1518,12 +1802,24 @@ MilliSeconds& MilliSeconds::operator=(const MilliSeconds& other35) noexcept {
   (void) other35;
   return *this;
 }
+void MilliSeconds::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "MilliSeconds(";
+  out << ")";
+}
+
 
 MicroSeconds::~MicroSeconds() noexcept {
 }
 
 MicroSeconds::MicroSeconds() noexcept {
 }
+std::ostream& operator<<(std::ostream& out, const MicroSeconds& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t MicroSeconds::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -1576,12 +1872,24 @@ MicroSeconds& MicroSeconds::operator=(const MicroSeconds& other37) noexcept {
   (void) other37;
   return *this;
 }
+void MicroSeconds::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "MicroSeconds(";
+  out << ")";
+}
+
 
 NanoSeconds::~NanoSeconds() noexcept {
 }
 
 NanoSeconds::NanoSeconds() noexcept {
 }
+std::ostream& operator<<(std::ostream& out, const NanoSeconds& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t NanoSeconds::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -1634,6 +1942,12 @@ NanoSeconds& NanoSeconds::operator=(const NanoSeconds& other39) noexcept {
   (void) other39;
   return *this;
 }
+void NanoSeconds::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "NanoSeconds(";
+  out << ")";
+}
+
 
 TimeUnit::~TimeUnit() noexcept {
 }
@@ -1655,6 +1969,12 @@ void TimeUnit::__set_NANOS(const NanoSeconds& val) {
   this->NANOS = val;
 __isset.NANOS = true;
 }
+std::ostream& operator<<(std::ostream& out, const TimeUnit& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t TimeUnit::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -1759,6 +2079,15 @@ TimeUnit& TimeUnit::operator=(const TimeUnit& other41) noexcept {
   __isset = other41.__isset;
   return *this;
 }
+void TimeUnit::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "TimeUnit(";
+  out << "MILLIS="; (__isset.MILLIS ? (out << to_string(MILLIS)) : (out << "<null>"));
+  out << ", " << "MICROS="; (__isset.MICROS ? (out << to_string(MICROS)) : (out << "<null>"));
+  out << ", " << "NANOS="; (__isset.NANOS ? (out << to_string(NANOS)) : (out << "<null>"));
+  out << ")";
+}
+
 
 TimestampType::~TimestampType() noexcept {
 }
@@ -1774,6 +2103,12 @@ void TimestampType::__set_isAdjustedToUTC(const bool val) {
 void TimestampType::__set_unit(const TimeUnit& val) {
   this->unit = val;
 }
+std::ostream& operator<<(std::ostream& out, const TimestampType& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t TimestampType::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -1863,6 +2198,14 @@ TimestampType& TimestampType::operator=(const TimestampType& other43) noexcept {
   unit = other43.unit;
   return *this;
 }
+void TimestampType::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "TimestampType(";
+  out << "isAdjustedToUTC=" << to_string(isAdjustedToUTC);
+  out << ", " << "unit=" << to_string(unit);
+  out << ")";
+}
+
 
 TimeType::~TimeType() noexcept {
 }
@@ -1878,6 +2221,12 @@ void TimeType::__set_isAdjustedToUTC(const bool val) {
 void TimeType::__set_unit(const TimeUnit& val) {
   this->unit = val;
 }
+std::ostream& operator<<(std::ostream& out, const TimeType& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t TimeType::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -1967,6 +2316,14 @@ TimeType& TimeType::operator=(const TimeType& other45) noexcept {
   unit = other45.unit;
   return *this;
 }
+void TimeType::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "TimeType(";
+  out << "isAdjustedToUTC=" << to_string(isAdjustedToUTC);
+  out << ", " << "unit=" << to_string(unit);
+  out << ")";
+}
+
 
 IntType::~IntType() noexcept {
 }
@@ -1983,6 +2340,12 @@ void IntType::__set_bitWidth(const int8_t val) {
 void IntType::__set_isSigned(const bool val) {
   this->isSigned = val;
 }
+std::ostream& operator<<(std::ostream& out, const IntType& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t IntType::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -2072,12 +2435,26 @@ IntType& IntType::operator=(const IntType& other47) noexcept {
   isSigned = other47.isSigned;
   return *this;
 }
+void IntType::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "IntType(";
+  out << "bitWidth=" << to_string(bitWidth);
+  out << ", " << "isSigned=" << to_string(isSigned);
+  out << ")";
+}
+
 
 JsonType::~JsonType() noexcept {
 }
 
 JsonType::JsonType() noexcept {
 }
+std::ostream& operator<<(std::ostream& out, const JsonType& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t JsonType::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -2130,12 +2507,24 @@ JsonType& JsonType::operator=(const JsonType& other49) noexcept {
   (void) other49;
   return *this;
 }
+void JsonType::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "JsonType(";
+  out << ")";
+}
+
 
 BsonType::~BsonType() noexcept {
 }
 
 BsonType::BsonType() noexcept {
 }
+std::ostream& operator<<(std::ostream& out, const BsonType& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t BsonType::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -2188,6 +2577,12 @@ BsonType& BsonType::operator=(const BsonType& other51) noexcept {
   (void) other51;
   return *this;
 }
+void BsonType::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "BsonType(";
+  out << ")";
+}
+
 
 LogicalType::~LogicalType() noexcept {
 }
@@ -2264,6 +2659,12 @@ void LogicalType::__set_FLOAT16(const Float16Type& val) {
   this->FLOAT16 = val;
 __isset.FLOAT16 = true;
 }
+std::ostream& operator<<(std::ostream& out, const LogicalType& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t LogicalType::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -2544,6 +2945,26 @@ LogicalType& LogicalType::operator=(const LogicalType& other53) noexcept {
   __isset = other53.__isset;
   return *this;
 }
+void LogicalType::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "LogicalType(";
+  out << "STRING="; (__isset.STRING ? (out << to_string(STRING)) : (out << "<null>"));
+  out << ", " << "MAP="; (__isset.MAP ? (out << to_string(MAP)) : (out << "<null>"));
+  out << ", " << "LIST="; (__isset.LIST ? (out << to_string(LIST)) : (out << "<null>"));
+  out << ", " << "ENUM="; (__isset.ENUM ? (out << to_string(ENUM)) : (out << "<null>"));
+  out << ", " << "DECIMAL="; (__isset.DECIMAL ? (out << to_string(DECIMAL)) : (out << "<null>"));
+  out << ", " << "DATE="; (__isset.DATE ? (out << to_string(DATE)) : (out << "<null>"));
+  out << ", " << "TIME="; (__isset.TIME ? (out << to_string(TIME)) : (out << "<null>"));
+  out << ", " << "TIMESTAMP="; (__isset.TIMESTAMP ? (out << to_string(TIMESTAMP)) : (out << "<null>"));
+  out << ", " << "INTEGER="; (__isset.INTEGER ? (out << to_string(INTEGER)) : (out << "<null>"));
+  out << ", " << "UNKNOWN="; (__isset.UNKNOWN ? (out << to_string(UNKNOWN)) : (out << "<null>"));
+  out << ", " << "JSON="; (__isset.JSON ? (out << to_string(JSON)) : (out << "<null>"));
+  out << ", " << "BSON="; (__isset.BSON ? (out << to_string(BSON)) : (out << "<null>"));
+  out << ", " << "UUID="; (__isset.UUID ? (out << to_string(UUID)) : (out << "<null>"));
+  out << ", " << "FLOAT16="; (__isset.FLOAT16 ? (out << to_string(FLOAT16)) : (out << "<null>"));
+  out << ")";
+}
+
 
 SchemaElement::~SchemaElement() noexcept {
 }
@@ -2608,6 +3029,12 @@ void SchemaElement::__set_logicalType(const LogicalType& val) {
   this->logicalType = val;
 __isset.logicalType = true;
 }
+std::ostream& operator<<(std::ostream& out, const SchemaElement& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t SchemaElement::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -2832,6 +3259,22 @@ SchemaElement& SchemaElement::operator=(const SchemaElement& other58) {
   __isset = other58.__isset;
   return *this;
 }
+void SchemaElement::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "SchemaElement(";
+  out << "type="; (__isset.type ? (out << to_string(type)) : (out << "<null>"));
+  out << ", " << "type_length="; (__isset.type_length ? (out << to_string(type_length)) : (out << "<null>"));
+  out << ", " << "repetition_type="; (__isset.repetition_type ? (out << to_string(repetition_type)) : (out << "<null>"));
+  out << ", " << "name=" << to_string(name);
+  out << ", " << "num_children="; (__isset.num_children ? (out << to_string(num_children)) : (out << "<null>"));
+  out << ", " << "converted_type="; (__isset.converted_type ? (out << to_string(converted_type)) : (out << "<null>"));
+  out << ", " << "scale="; (__isset.scale ? (out << to_string(scale)) : (out << "<null>"));
+  out << ", " << "precision="; (__isset.precision ? (out << to_string(precision)) : (out << "<null>"));
+  out << ", " << "field_id="; (__isset.field_id ? (out << to_string(field_id)) : (out << "<null>"));
+  out << ", " << "logicalType="; (__isset.logicalType ? (out << to_string(logicalType)) : (out << "<null>"));
+  out << ")";
+}
+
 
 DataPageHeader::~DataPageHeader() noexcept {
 }
@@ -2863,6 +3306,12 @@ void DataPageHeader::__set_statistics(const Statistics& val) {
   this->statistics = val;
 __isset.statistics = true;
 }
+std::ostream& operator<<(std::ostream& out, const DataPageHeader& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t DataPageHeader::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -3013,12 +3462,29 @@ DataPageHeader& DataPageHeader::operator=(const DataPageHeader& other63) {
   __isset = other63.__isset;
   return *this;
 }
+void DataPageHeader::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "DataPageHeader(";
+  out << "num_values=" << to_string(num_values);
+  out << ", " << "encoding=" << to_string(encoding);
+  out << ", " << "definition_level_encoding=" << to_string(definition_level_encoding);
+  out << ", " << "repetition_level_encoding=" << to_string(repetition_level_encoding);
+  out << ", " << "statistics="; (__isset.statistics ? (out << to_string(statistics)) : (out << "<null>"));
+  out << ")";
+}
+
 
 IndexPageHeader::~IndexPageHeader() noexcept {
 }
 
 IndexPageHeader::IndexPageHeader() noexcept {
 }
+std::ostream& operator<<(std::ostream& out, const IndexPageHeader& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t IndexPageHeader::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -3071,6 +3537,12 @@ IndexPageHeader& IndexPageHeader::operator=(const IndexPageHeader& other65) noex
   (void) other65;
   return *this;
 }
+void IndexPageHeader::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "IndexPageHeader(";
+  out << ")";
+}
+
 
 DictionaryPageHeader::~DictionaryPageHeader() noexcept {
 }
@@ -3093,6 +3565,12 @@ void DictionaryPageHeader::__set_is_sorted(const bool val) {
   this->is_sorted = val;
 __isset.is_sorted = true;
 }
+std::ostream& operator<<(std::ostream& out, const DictionaryPageHeader& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t DictionaryPageHeader::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -3203,6 +3681,15 @@ DictionaryPageHeader& DictionaryPageHeader::operator=(const DictionaryPageHeader
   __isset = other68.__isset;
   return *this;
 }
+void DictionaryPageHeader::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "DictionaryPageHeader(";
+  out << "num_values=" << to_string(num_values);
+  out << ", " << "encoding=" << to_string(encoding);
+  out << ", " << "is_sorted="; (__isset.is_sorted ? (out << to_string(is_sorted)) : (out << "<null>"));
+  out << ")";
+}
+
 
 DataPageHeaderV2::~DataPageHeaderV2() noexcept {
 }
@@ -3250,6 +3737,12 @@ void DataPageHeaderV2::__set_statistics(const Statistics& val) {
   this->statistics = val;
 __isset.statistics = true;
 }
+std::ostream& operator<<(std::ostream& out, const DataPageHeaderV2& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t DataPageHeaderV2::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -3448,12 +3941,32 @@ DataPageHeaderV2& DataPageHeaderV2::operator=(const DataPageHeaderV2& other71) {
   __isset = other71.__isset;
   return *this;
 }
+void DataPageHeaderV2::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "DataPageHeaderV2(";
+  out << "num_values=" << to_string(num_values);
+  out << ", " << "num_nulls=" << to_string(num_nulls);
+  out << ", " << "num_rows=" << to_string(num_rows);
+  out << ", " << "encoding=" << to_string(encoding);
+  out << ", " << "definition_levels_byte_length=" << to_string(definition_levels_byte_length);
+  out << ", " << "repetition_levels_byte_length=" << to_string(repetition_levels_byte_length);
+  out << ", " << "is_compressed="; (__isset.is_compressed ? (out << to_string(is_compressed)) : (out << "<null>"));
+  out << ", " << "statistics="; (__isset.statistics ? (out << to_string(statistics)) : (out << "<null>"));
+  out << ")";
+}
+
 
 SplitBlockAlgorithm::~SplitBlockAlgorithm() noexcept {
 }
 
 SplitBlockAlgorithm::SplitBlockAlgorithm() noexcept {
 }
+std::ostream& operator<<(std::ostream& out, const SplitBlockAlgorithm& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t SplitBlockAlgorithm::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -3506,6 +4019,12 @@ SplitBlockAlgorithm& SplitBlockAlgorithm::operator=(const SplitBlockAlgorithm& o
   (void) other73;
   return *this;
 }
+void SplitBlockAlgorithm::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "SplitBlockAlgorithm(";
+  out << ")";
+}
+
 
 BloomFilterAlgorithm::~BloomFilterAlgorithm() noexcept {
 }
@@ -3517,6 +4036,12 @@ void BloomFilterAlgorithm::__set_BLOCK(const SplitBlockAlgorithm& val) {
   this->BLOCK = val;
 __isset.BLOCK = true;
 }
+std::ostream& operator<<(std::ostream& out, const BloomFilterAlgorithm& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t BloomFilterAlgorithm::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -3589,12 +4114,25 @@ BloomFilterAlgorithm& BloomFilterAlgorithm::operator=(const BloomFilterAlgorithm
   __isset = other75.__isset;
   return *this;
 }
+void BloomFilterAlgorithm::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "BloomFilterAlgorithm(";
+  out << "BLOCK="; (__isset.BLOCK ? (out << to_string(BLOCK)) : (out << "<null>"));
+  out << ")";
+}
+
 
 XxHash::~XxHash() noexcept {
 }
 
 XxHash::XxHash() noexcept {
 }
+std::ostream& operator<<(std::ostream& out, const XxHash& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t XxHash::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -3647,6 +4185,12 @@ XxHash& XxHash::operator=(const XxHash& other77) noexcept {
   (void) other77;
   return *this;
 }
+void XxHash::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "XxHash(";
+  out << ")";
+}
+
 
 BloomFilterHash::~BloomFilterHash() noexcept {
 }
@@ -3658,6 +4202,12 @@ void BloomFilterHash::__set_XXHASH(const XxHash& val) {
   this->XXHASH = val;
 __isset.XXHASH = true;
 }
+std::ostream& operator<<(std::ostream& out, const BloomFilterHash& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t BloomFilterHash::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -3730,12 +4280,25 @@ BloomFilterHash& BloomFilterHash::operator=(const BloomFilterHash& other79) noex
   __isset = other79.__isset;
   return *this;
 }
+void BloomFilterHash::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "BloomFilterHash(";
+  out << "XXHASH="; (__isset.XXHASH ? (out << to_string(XXHASH)) : (out << "<null>"));
+  out << ")";
+}
+
 
 Uncompressed::~Uncompressed() noexcept {
 }
 
 Uncompressed::Uncompressed() noexcept {
 }
+std::ostream& operator<<(std::ostream& out, const Uncompressed& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t Uncompressed::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -3788,6 +4351,12 @@ Uncompressed& Uncompressed::operator=(const Uncompressed& other81) noexcept {
   (void) other81;
   return *this;
 }
+void Uncompressed::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "Uncompressed(";
+  out << ")";
+}
+
 
 BloomFilterCompression::~BloomFilterCompression() noexcept {
 }
@@ -3799,6 +4368,12 @@ void BloomFilterCompression::__set_UNCOMPRESSED(const Uncompressed& val) {
   this->UNCOMPRESSED = val;
 __isset.UNCOMPRESSED = true;
 }
+std::ostream& operator<<(std::ostream& out, const BloomFilterCompression& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t BloomFilterCompression::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -3871,6 +4446,13 @@ BloomFilterCompression& BloomFilterCompression::operator=(const BloomFilterCompr
   __isset = other83.__isset;
   return *this;
 }
+void BloomFilterCompression::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "BloomFilterCompression(";
+  out << "UNCOMPRESSED="; (__isset.UNCOMPRESSED ? (out << to_string(UNCOMPRESSED)) : (out << "<null>"));
+  out << ")";
+}
+
 
 BloomFilterHeader::~BloomFilterHeader() noexcept {
 }
@@ -3894,6 +4476,12 @@ void BloomFilterHeader::__set_hash(const BloomFilterHash& val) {
 void BloomFilterHeader::__set_compression(const BloomFilterCompression& val) {
   this->compression = val;
 }
+std::ostream& operator<<(std::ostream& out, const BloomFilterHeader& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t BloomFilterHeader::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -4019,6 +4607,16 @@ BloomFilterHeader& BloomFilterHeader::operator=(const BloomFilterHeader& other85
   compression = other85.compression;
   return *this;
 }
+void BloomFilterHeader::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "BloomFilterHeader(";
+  out << "numBytes=" << to_string(numBytes);
+  out << ", " << "algorithm=" << to_string(algorithm);
+  out << ", " << "hash=" << to_string(hash);
+  out << ", " << "compression=" << to_string(compression);
+  out << ")";
+}
+
 
 PageHeader::~PageHeader() noexcept {
 }
@@ -4066,6 +4664,12 @@ void PageHeader::__set_data_page_header_v2(const DataPageHeaderV2& val) {
   this->data_page_header_v2 = val;
 __isset.data_page_header_v2 = true;
 }
+std::ostream& operator<<(std::ostream& out, const PageHeader& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t PageHeader::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -4258,6 +4862,20 @@ PageHeader& PageHeader::operator=(const PageHeader& other88) {
   __isset = other88.__isset;
   return *this;
 }
+void PageHeader::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "PageHeader(";
+  out << "type=" << to_string(type);
+  out << ", " << "uncompressed_page_size=" << to_string(uncompressed_page_size);
+  out << ", " << "compressed_page_size=" << to_string(compressed_page_size);
+  out << ", " << "crc="; (__isset.crc ? (out << to_string(crc)) : (out << "<null>"));
+  out << ", " << "data_page_header="; (__isset.data_page_header ? (out << to_string(data_page_header)) : (out << "<null>"));
+  out << ", " << "index_page_header="; (__isset.index_page_header ? (out << to_string(index_page_header)) : (out << "<null>"));
+  out << ", " << "dictionary_page_header="; (__isset.dictionary_page_header ? (out << to_string(dictionary_page_header)) : (out << "<null>"));
+  out << ", " << "data_page_header_v2="; (__isset.data_page_header_v2 ? (out << to_string(data_page_header_v2)) : (out << "<null>"));
+  out << ")";
+}
+
 
 KeyValue::~KeyValue() noexcept {
 }
@@ -4275,6 +4893,12 @@ void KeyValue::__set_value(const std::string& val) {
   this->value = val;
 __isset.value = true;
 }
+std::ostream& operator<<(std::ostream& out, const KeyValue& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t KeyValue::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -4365,6 +4989,14 @@ KeyValue& KeyValue::operator=(const KeyValue& other90) {
   __isset = other90.__isset;
   return *this;
 }
+void KeyValue::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "KeyValue(";
+  out << "key=" << to_string(key);
+  out << ", " << "value="; (__isset.value ? (out << to_string(value)) : (out << "<null>"));
+  out << ")";
+}
+
 
 SortingColumn::~SortingColumn() noexcept {
 }
@@ -4386,6 +5018,12 @@ void SortingColumn::__set_descending(const bool val) {
 void SortingColumn::__set_nulls_first(const bool val) {
   this->nulls_first = val;
 }
+std::ostream& operator<<(std::ostream& out, const SortingColumn& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t SortingColumn::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -4493,6 +5131,15 @@ SortingColumn& SortingColumn::operator=(const SortingColumn& other92) noexcept {
   nulls_first = other92.nulls_first;
   return *this;
 }
+void SortingColumn::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "SortingColumn(";
+  out << "column_idx=" << to_string(column_idx);
+  out << ", " << "descending=" << to_string(descending);
+  out << ", " << "nulls_first=" << to_string(nulls_first);
+  out << ")";
+}
+
 
 PageEncodingStats::~PageEncodingStats() noexcept {
 }
@@ -4514,6 +5161,12 @@ void PageEncodingStats::__set_encoding(const Encoding::type val) {
 void PageEncodingStats::__set_count(const int32_t val) {
   this->count = val;
 }
+std::ostream& operator<<(std::ostream& out, const PageEncodingStats& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t PageEncodingStats::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -4625,6 +5278,15 @@ PageEncodingStats& PageEncodingStats::operator=(const PageEncodingStats& other96
   count = other96.count;
   return *this;
 }
+void PageEncodingStats::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "PageEncodingStats(";
+  out << "page_type=" << to_string(page_type);
+  out << ", " << "encoding=" << to_string(encoding);
+  out << ", " << "count=" << to_string(count);
+  out << ")";
+}
+
 
 ColumnMetaData::~ColumnMetaData() noexcept {
 }
@@ -4646,11 +5308,11 @@ void ColumnMetaData::__set_type(const Type::type val) {
   this->type = val;
 }
 
-void ColumnMetaData::__set_encodings(const std::vector<Encoding::type> & val) {
+void ColumnMetaData::__set_encodings(const duckdb::vector<Encoding::type> & val) {
   this->encodings = val;
 }
 
-void ColumnMetaData::__set_path_in_schema(const std::vector<std::string> & val) {
+void ColumnMetaData::__set_path_in_schema(const duckdb::vector<std::string> & val) {
   this->path_in_schema = val;
 }
 
@@ -4670,7 +5332,7 @@ void ColumnMetaData::__set_total_compressed_size(const int64_t val) {
   this->total_compressed_size = val;
 }
 
-void ColumnMetaData::__set_key_value_metadata(const std::vector<KeyValue> & val) {
+void ColumnMetaData::__set_key_value_metadata(const duckdb::vector<KeyValue> & val) {
   this->key_value_metadata = val;
 __isset.key_value_metadata = true;
 }
@@ -4694,7 +5356,7 @@ void ColumnMetaData::__set_statistics(const Statistics& val) {
 __isset.statistics = true;
 }
 
-void ColumnMetaData::__set_encoding_stats(const std::vector<PageEncodingStats> & val) {
+void ColumnMetaData::__set_encoding_stats(const duckdb::vector<PageEncodingStats> & val) {
   this->encoding_stats = val;
 __isset.encoding_stats = true;
 }
@@ -4713,6 +5375,12 @@ void ColumnMetaData::__set_size_statistics(const SizeStatistics& val) {
   this->size_statistics = val;
 __isset.size_statistics = true;
 }
+std::ostream& operator<<(std::ostream& out, const ColumnMetaData& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t ColumnMetaData::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -4965,7 +5633,7 @@ uint32_t ColumnMetaData::write(::apache::thrift::protocol::TProtocol* oprot) con
   xfer += oprot->writeFieldBegin("encodings", ::apache::thrift::protocol::T_LIST, 2);
   {
     xfer += oprot->writeListBegin(::apache::thrift::protocol::T_I32, static_cast<uint32_t>(this->encodings.size()));
-    std::vector<Encoding::type> ::const_iterator _iter120;
+    duckdb::vector<Encoding::type> ::const_iterator _iter120;
     for (_iter120 = this->encodings.begin(); _iter120 != this->encodings.end(); ++_iter120)
     {
       xfer += oprot->writeI32(static_cast<int32_t>((*_iter120)));
@@ -4977,7 +5645,7 @@ uint32_t ColumnMetaData::write(::apache::thrift::protocol::TProtocol* oprot) con
   xfer += oprot->writeFieldBegin("path_in_schema", ::apache::thrift::protocol::T_LIST, 3);
   {
     xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRING, static_cast<uint32_t>(this->path_in_schema.size()));
-    std::vector<std::string> ::const_iterator _iter121;
+    duckdb::vector<std::string> ::const_iterator _iter121;
     for (_iter121 = this->path_in_schema.begin(); _iter121 != this->path_in_schema.end(); ++_iter121)
     {
       xfer += oprot->writeString((*_iter121));
@@ -5006,7 +5674,7 @@ uint32_t ColumnMetaData::write(::apache::thrift::protocol::TProtocol* oprot) con
     xfer += oprot->writeFieldBegin("key_value_metadata", ::apache::thrift::protocol::T_LIST, 8);
     {
       xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->key_value_metadata.size()));
-      std::vector<KeyValue> ::const_iterator _iter122;
+      duckdb::vector<KeyValue> ::const_iterator _iter122;
       for (_iter122 = this->key_value_metadata.begin(); _iter122 != this->key_value_metadata.end(); ++_iter122)
       {
         xfer += (*_iter122).write(oprot);
@@ -5038,7 +5706,7 @@ uint32_t ColumnMetaData::write(::apache::thrift::protocol::TProtocol* oprot) con
     xfer += oprot->writeFieldBegin("encoding_stats", ::apache::thrift::protocol::T_LIST, 13);
     {
       xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->encoding_stats.size()));
-      std::vector<PageEncodingStats> ::const_iterator _iter123;
+      duckdb::vector<PageEncodingStats> ::const_iterator _iter123;
       for (_iter123 = this->encoding_stats.begin(); _iter123 != this->encoding_stats.end(); ++_iter123)
       {
         xfer += (*_iter123).write(oprot);
@@ -5127,12 +5795,40 @@ ColumnMetaData& ColumnMetaData::operator=(const ColumnMetaData& other125) {
   __isset = other125.__isset;
   return *this;
 }
+void ColumnMetaData::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "ColumnMetaData(";
+  out << "type=" << to_string(type);
+  out << ", " << "encodings=" << to_string(encodings);
+  out << ", " << "path_in_schema=" << to_string(path_in_schema);
+  out << ", " << "codec=" << to_string(codec);
+  out << ", " << "num_values=" << to_string(num_values);
+  out << ", " << "total_uncompressed_size=" << to_string(total_uncompressed_size);
+  out << ", " << "total_compressed_size=" << to_string(total_compressed_size);
+  out << ", " << "key_value_metadata="; (__isset.key_value_metadata ? (out << to_string(key_value_metadata)) : (out << "<null>"));
+  out << ", " << "data_page_offset=" << to_string(data_page_offset);
+  out << ", " << "index_page_offset="; (__isset.index_page_offset ? (out << to_string(index_page_offset)) : (out << "<null>"));
+  out << ", " << "dictionary_page_offset="; (__isset.dictionary_page_offset ? (out << to_string(dictionary_page_offset)) : (out << "<null>"));
+  out << ", " << "statistics="; (__isset.statistics ? (out << to_string(statistics)) : (out << "<null>"));
+  out << ", " << "encoding_stats="; (__isset.encoding_stats ? (out << to_string(encoding_stats)) : (out << "<null>"));
+  out << ", " << "bloom_filter_offset="; (__isset.bloom_filter_offset ? (out << to_string(bloom_filter_offset)) : (out << "<null>"));
+  out << ", " << "bloom_filter_length="; (__isset.bloom_filter_length ? (out << to_string(bloom_filter_length)) : (out << "<null>"));
+  out << ", " << "size_statistics="; (__isset.size_statistics ? (out << to_string(size_statistics)) : (out << "<null>"));
+  out << ")";
+}
+
 
 EncryptionWithFooterKey::~EncryptionWithFooterKey() noexcept {
 }
 
 EncryptionWithFooterKey::EncryptionWithFooterKey() noexcept {
 }
+std::ostream& operator<<(std::ostream& out, const EncryptionWithFooterKey& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t EncryptionWithFooterKey::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -5185,6 +5881,12 @@ EncryptionWithFooterKey& EncryptionWithFooterKey::operator=(const EncryptionWith
   (void) other127;
   return *this;
 }
+void EncryptionWithFooterKey::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "EncryptionWithFooterKey(";
+  out << ")";
+}
+
 
 EncryptionWithColumnKey::~EncryptionWithColumnKey() noexcept {
 }
@@ -5193,7 +5895,7 @@ EncryptionWithColumnKey::EncryptionWithColumnKey() noexcept
    : key_metadata() {
 }
 
-void EncryptionWithColumnKey::__set_path_in_schema(const std::vector<std::string> & val) {
+void EncryptionWithColumnKey::__set_path_in_schema(const duckdb::vector<std::string> & val) {
   this->path_in_schema = val;
 }
 
@@ -5201,6 +5903,12 @@ void EncryptionWithColumnKey::__set_key_metadata(const std::string& val) {
   this->key_metadata = val;
 __isset.key_metadata = true;
 }
+std::ostream& operator<<(std::ostream& out, const EncryptionWithColumnKey& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t EncryptionWithColumnKey::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -5274,7 +5982,7 @@ uint32_t EncryptionWithColumnKey::write(::apache::thrift::protocol::TProtocol* o
   xfer += oprot->writeFieldBegin("path_in_schema", ::apache::thrift::protocol::T_LIST, 1);
   {
     xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRING, static_cast<uint32_t>(this->path_in_schema.size()));
-    std::vector<std::string> ::const_iterator _iter133;
+    duckdb::vector<std::string> ::const_iterator _iter133;
     for (_iter133 = this->path_in_schema.begin(); _iter133 != this->path_in_schema.end(); ++_iter133)
     {
       xfer += oprot->writeString((*_iter133));
@@ -5311,6 +6019,14 @@ EncryptionWithColumnKey& EncryptionWithColumnKey::operator=(const EncryptionWith
   __isset = other135.__isset;
   return *this;
 }
+void EncryptionWithColumnKey::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "EncryptionWithColumnKey(";
+  out << "path_in_schema=" << to_string(path_in_schema);
+  out << ", " << "key_metadata="; (__isset.key_metadata ? (out << to_string(key_metadata)) : (out << "<null>"));
+  out << ")";
+}
+
 
 ColumnCryptoMetaData::~ColumnCryptoMetaData() noexcept {
 }
@@ -5327,6 +6043,12 @@ void ColumnCryptoMetaData::__set_ENCRYPTION_WITH_COLUMN_KEY(const EncryptionWith
   this->ENCRYPTION_WITH_COLUMN_KEY = val;
 __isset.ENCRYPTION_WITH_COLUMN_KEY = true;
 }
+std::ostream& operator<<(std::ostream& out, const ColumnCryptoMetaData& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t ColumnCryptoMetaData::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -5415,6 +6137,14 @@ ColumnCryptoMetaData& ColumnCryptoMetaData::operator=(const ColumnCryptoMetaData
   __isset = other137.__isset;
   return *this;
 }
+void ColumnCryptoMetaData::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "ColumnCryptoMetaData(";
+  out << "ENCRYPTION_WITH_FOOTER_KEY="; (__isset.ENCRYPTION_WITH_FOOTER_KEY ? (out << to_string(ENCRYPTION_WITH_FOOTER_KEY)) : (out << "<null>"));
+  out << ", " << "ENCRYPTION_WITH_COLUMN_KEY="; (__isset.ENCRYPTION_WITH_COLUMN_KEY ? (out << to_string(ENCRYPTION_WITH_COLUMN_KEY)) : (out << "<null>"));
+  out << ")";
+}
+
 
 ColumnChunk::~ColumnChunk() noexcept {
 }
@@ -5472,6 +6202,12 @@ void ColumnChunk::__set_encrypted_column_metadata(const std::string& val) {
   this->encrypted_column_metadata = val;
 __isset.encrypted_column_metadata = true;
 }
+std::ostream& operator<<(std::ostream& out, const ColumnChunk& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t ColumnChunk::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -5674,6 +6410,21 @@ ColumnChunk& ColumnChunk::operator=(const ColumnChunk& other139) {
   __isset = other139.__isset;
   return *this;
 }
+void ColumnChunk::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "ColumnChunk(";
+  out << "file_path="; (__isset.file_path ? (out << to_string(file_path)) : (out << "<null>"));
+  out << ", " << "file_offset=" << to_string(file_offset);
+  out << ", " << "meta_data="; (__isset.meta_data ? (out << to_string(meta_data)) : (out << "<null>"));
+  out << ", " << "offset_index_offset="; (__isset.offset_index_offset ? (out << to_string(offset_index_offset)) : (out << "<null>"));
+  out << ", " << "offset_index_length="; (__isset.offset_index_length ? (out << to_string(offset_index_length)) : (out << "<null>"));
+  out << ", " << "column_index_offset="; (__isset.column_index_offset ? (out << to_string(column_index_offset)) : (out << "<null>"));
+  out << ", " << "column_index_length="; (__isset.column_index_length ? (out << to_string(column_index_length)) : (out << "<null>"));
+  out << ", " << "crypto_metadata="; (__isset.crypto_metadata ? (out << to_string(crypto_metadata)) : (out << "<null>"));
+  out << ", " << "encrypted_column_metadata="; (__isset.encrypted_column_metadata ? (out << to_string(encrypted_column_metadata)) : (out << "<null>"));
+  out << ")";
+}
+
 
 RowGroup::~RowGroup() noexcept {
 }
@@ -5686,7 +6437,7 @@ RowGroup::RowGroup() noexcept
      ordinal(0) {
 }
 
-void RowGroup::__set_columns(const std::vector<ColumnChunk> & val) {
+void RowGroup::__set_columns(const duckdb::vector<ColumnChunk> & val) {
   this->columns = val;
 }
 
@@ -5698,7 +6449,7 @@ void RowGroup::__set_num_rows(const int64_t val) {
   this->num_rows = val;
 }
 
-void RowGroup::__set_sorting_columns(const std::vector<SortingColumn> & val) {
+void RowGroup::__set_sorting_columns(const duckdb::vector<SortingColumn> & val) {
   this->sorting_columns = val;
 __isset.sorting_columns = true;
 }
@@ -5717,6 +6468,12 @@ void RowGroup::__set_ordinal(const int16_t val) {
   this->ordinal = val;
 __isset.ordinal = true;
 }
+std::ostream& operator<<(std::ostream& out, const RowGroup& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t RowGroup::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -5848,7 +6605,7 @@ uint32_t RowGroup::write(::apache::thrift::protocol::TProtocol* oprot) const {
   xfer += oprot->writeFieldBegin("columns", ::apache::thrift::protocol::T_LIST, 1);
   {
     xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->columns.size()));
-    std::vector<ColumnChunk> ::const_iterator _iter150;
+    duckdb::vector<ColumnChunk> ::const_iterator _iter150;
     for (_iter150 = this->columns.begin(); _iter150 != this->columns.end(); ++_iter150)
     {
       xfer += (*_iter150).write(oprot);
@@ -5869,7 +6626,7 @@ uint32_t RowGroup::write(::apache::thrift::protocol::TProtocol* oprot) const {
     xfer += oprot->writeFieldBegin("sorting_columns", ::apache::thrift::protocol::T_LIST, 4);
     {
       xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->sorting_columns.size()));
-      std::vector<SortingColumn> ::const_iterator _iter151;
+      duckdb::vector<SortingColumn> ::const_iterator _iter151;
       for (_iter151 = this->sorting_columns.begin(); _iter151 != this->sorting_columns.end(); ++_iter151)
       {
         xfer += (*_iter151).write(oprot);
@@ -5931,12 +6688,31 @@ RowGroup& RowGroup::operator=(const RowGroup& other153) {
   __isset = other153.__isset;
   return *this;
 }
+void RowGroup::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "RowGroup(";
+  out << "columns=" << to_string(columns);
+  out << ", " << "total_byte_size=" << to_string(total_byte_size);
+  out << ", " << "num_rows=" << to_string(num_rows);
+  out << ", " << "sorting_columns="; (__isset.sorting_columns ? (out << to_string(sorting_columns)) : (out << "<null>"));
+  out << ", " << "file_offset="; (__isset.file_offset ? (out << to_string(file_offset)) : (out << "<null>"));
+  out << ", " << "total_compressed_size="; (__isset.total_compressed_size ? (out << to_string(total_compressed_size)) : (out << "<null>"));
+  out << ", " << "ordinal="; (__isset.ordinal ? (out << to_string(ordinal)) : (out << "<null>"));
+  out << ")";
+}
+
 
 TypeDefinedOrder::~TypeDefinedOrder() noexcept {
 }
 
 TypeDefinedOrder::TypeDefinedOrder() noexcept {
 }
+std::ostream& operator<<(std::ostream& out, const TypeDefinedOrder& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t TypeDefinedOrder::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -5989,6 +6765,12 @@ TypeDefinedOrder& TypeDefinedOrder::operator=(const TypeDefinedOrder& other155) 
   (void) other155;
   return *this;
 }
+void TypeDefinedOrder::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "TypeDefinedOrder(";
+  out << ")";
+}
+
 
 ColumnOrder::~ColumnOrder() noexcept {
 }
@@ -6000,6 +6782,12 @@ void ColumnOrder::__set_TYPE_ORDER(const TypeDefinedOrder& val) {
   this->TYPE_ORDER = val;
 __isset.TYPE_ORDER = true;
 }
+std::ostream& operator<<(std::ostream& out, const ColumnOrder& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t ColumnOrder::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -6072,6 +6860,13 @@ ColumnOrder& ColumnOrder::operator=(const ColumnOrder& other157) noexcept {
   __isset = other157.__isset;
   return *this;
 }
+void ColumnOrder::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "ColumnOrder(";
+  out << "TYPE_ORDER="; (__isset.TYPE_ORDER ? (out << to_string(TYPE_ORDER)) : (out << "<null>"));
+  out << ")";
+}
+
 
 PageLocation::~PageLocation() noexcept {
 }
@@ -6093,6 +6888,12 @@ void PageLocation::__set_compressed_page_size(const int32_t val) {
 void PageLocation::__set_first_row_index(const int64_t val) {
   this->first_row_index = val;
 }
+std::ostream& operator<<(std::ostream& out, const PageLocation& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t PageLocation::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -6200,6 +7001,15 @@ PageLocation& PageLocation::operator=(const PageLocation& other159) noexcept {
   first_row_index = other159.first_row_index;
   return *this;
 }
+void PageLocation::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "PageLocation(";
+  out << "offset=" << to_string(offset);
+  out << ", " << "compressed_page_size=" << to_string(compressed_page_size);
+  out << ", " << "first_row_index=" << to_string(first_row_index);
+  out << ")";
+}
+
 
 OffsetIndex::~OffsetIndex() noexcept {
 }
@@ -6207,14 +7017,20 @@ OffsetIndex::~OffsetIndex() noexcept {
 OffsetIndex::OffsetIndex() noexcept {
 }
 
-void OffsetIndex::__set_page_locations(const std::vector<PageLocation> & val) {
+void OffsetIndex::__set_page_locations(const duckdb::vector<PageLocation> & val) {
   this->page_locations = val;
 }
 
-void OffsetIndex::__set_unencoded_byte_array_data_bytes(const std::vector<int64_t> & val) {
+void OffsetIndex::__set_unencoded_byte_array_data_bytes(const duckdb::vector<int64_t> & val) {
   this->unencoded_byte_array_data_bytes = val;
 __isset.unencoded_byte_array_data_bytes = true;
 }
+std::ostream& operator<<(std::ostream& out, const OffsetIndex& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t OffsetIndex::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -6300,7 +7116,7 @@ uint32_t OffsetIndex::write(::apache::thrift::protocol::TProtocol* oprot) const 
   xfer += oprot->writeFieldBegin("page_locations", ::apache::thrift::protocol::T_LIST, 1);
   {
     xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->page_locations.size()));
-    std::vector<PageLocation> ::const_iterator _iter170;
+    duckdb::vector<PageLocation> ::const_iterator _iter170;
     for (_iter170 = this->page_locations.begin(); _iter170 != this->page_locations.end(); ++_iter170)
     {
       xfer += (*_iter170).write(oprot);
@@ -6313,7 +7129,7 @@ uint32_t OffsetIndex::write(::apache::thrift::protocol::TProtocol* oprot) const 
     xfer += oprot->writeFieldBegin("unencoded_byte_array_data_bytes", ::apache::thrift::protocol::T_LIST, 2);
     {
       xfer += oprot->writeListBegin(::apache::thrift::protocol::T_I64, static_cast<uint32_t>(this->unencoded_byte_array_data_bytes.size()));
-      std::vector<int64_t> ::const_iterator _iter171;
+      duckdb::vector<int64_t> ::const_iterator _iter171;
       for (_iter171 = this->unencoded_byte_array_data_bytes.begin(); _iter171 != this->unencoded_byte_array_data_bytes.end(); ++_iter171)
       {
         xfer += oprot->writeI64((*_iter171));
@@ -6345,6 +7161,14 @@ OffsetIndex& OffsetIndex::operator=(const OffsetIndex& other173) {
   __isset = other173.__isset;
   return *this;
 }
+void OffsetIndex::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "OffsetIndex(";
+  out << "page_locations=" << to_string(page_locations);
+  out << ", " << "unencoded_byte_array_data_bytes="; (__isset.unencoded_byte_array_data_bytes ? (out << to_string(unencoded_byte_array_data_bytes)) : (out << "<null>"));
+  out << ")";
+}
+
 
 ColumnIndex::~ColumnIndex() noexcept {
 }
@@ -6353,15 +7177,15 @@ ColumnIndex::ColumnIndex() noexcept
    : boundary_order(static_cast<BoundaryOrder::type>(0)) {
 }
 
-void ColumnIndex::__set_null_pages(const std::vector<bool> & val) {
+void ColumnIndex::__set_null_pages(const duckdb::vector<bool> & val) {
   this->null_pages = val;
 }
 
-void ColumnIndex::__set_min_values(const std::vector<std::string> & val) {
+void ColumnIndex::__set_min_values(const duckdb::vector<std::string> & val) {
   this->min_values = val;
 }
 
-void ColumnIndex::__set_max_values(const std::vector<std::string> & val) {
+void ColumnIndex::__set_max_values(const duckdb::vector<std::string> & val) {
   this->max_values = val;
 }
 
@@ -6369,20 +7193,26 @@ void ColumnIndex::__set_boundary_order(const BoundaryOrder::type val) {
   this->boundary_order = val;
 }
 
-void ColumnIndex::__set_null_counts(const std::vector<int64_t> & val) {
+void ColumnIndex::__set_null_counts(const duckdb::vector<int64_t> & val) {
   this->null_counts = val;
 __isset.null_counts = true;
 }
 
-void ColumnIndex::__set_repetition_level_histograms(const std::vector<int64_t> & val) {
+void ColumnIndex::__set_repetition_level_histograms(const duckdb::vector<int64_t> & val) {
   this->repetition_level_histograms = val;
 __isset.repetition_level_histograms = true;
 }
 
-void ColumnIndex::__set_definition_level_histograms(const std::vector<int64_t> & val) {
+void ColumnIndex::__set_definition_level_histograms(const duckdb::vector<int64_t> & val) {
   this->definition_level_histograms = val;
 __isset.definition_level_histograms = true;
 }
+std::ostream& operator<<(std::ostream& out, const ColumnIndex& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t ColumnIndex::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -6567,7 +7397,7 @@ uint32_t ColumnIndex::write(::apache::thrift::protocol::TProtocol* oprot) const 
   xfer += oprot->writeFieldBegin("null_pages", ::apache::thrift::protocol::T_LIST, 1);
   {
     xfer += oprot->writeListBegin(::apache::thrift::protocol::T_BOOL, static_cast<uint32_t>(this->null_pages.size()));
-    std::vector<bool> ::const_iterator _iter205;
+    duckdb::vector<bool> ::const_iterator _iter205;
     for (_iter205 = this->null_pages.begin(); _iter205 != this->null_pages.end(); ++_iter205)
     {
       xfer += oprot->writeBool((*_iter205));
@@ -6579,7 +7409,7 @@ uint32_t ColumnIndex::write(::apache::thrift::protocol::TProtocol* oprot) const 
   xfer += oprot->writeFieldBegin("min_values", ::apache::thrift::protocol::T_LIST, 2);
   {
     xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRING, static_cast<uint32_t>(this->min_values.size()));
-    std::vector<std::string> ::const_iterator _iter206;
+    duckdb::vector<std::string> ::const_iterator _iter206;
     for (_iter206 = this->min_values.begin(); _iter206 != this->min_values.end(); ++_iter206)
     {
       xfer += oprot->writeBinary((*_iter206));
@@ -6591,7 +7421,7 @@ uint32_t ColumnIndex::write(::apache::thrift::protocol::TProtocol* oprot) const 
   xfer += oprot->writeFieldBegin("max_values", ::apache::thrift::protocol::T_LIST, 3);
   {
     xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRING, static_cast<uint32_t>(this->max_values.size()));
-    std::vector<std::string> ::const_iterator _iter207;
+    duckdb::vector<std::string> ::const_iterator _iter207;
     for (_iter207 = this->max_values.begin(); _iter207 != this->max_values.end(); ++_iter207)
     {
       xfer += oprot->writeBinary((*_iter207));
@@ -6608,7 +7438,7 @@ uint32_t ColumnIndex::write(::apache::thrift::protocol::TProtocol* oprot) const 
     xfer += oprot->writeFieldBegin("null_counts", ::apache::thrift::protocol::T_LIST, 5);
     {
       xfer += oprot->writeListBegin(::apache::thrift::protocol::T_I64, static_cast<uint32_t>(this->null_counts.size()));
-      std::vector<int64_t> ::const_iterator _iter208;
+      duckdb::vector<int64_t> ::const_iterator _iter208;
       for (_iter208 = this->null_counts.begin(); _iter208 != this->null_counts.end(); ++_iter208)
       {
         xfer += oprot->writeI64((*_iter208));
@@ -6621,7 +7451,7 @@ uint32_t ColumnIndex::write(::apache::thrift::protocol::TProtocol* oprot) const 
     xfer += oprot->writeFieldBegin("repetition_level_histograms", ::apache::thrift::protocol::T_LIST, 6);
     {
       xfer += oprot->writeListBegin(::apache::thrift::protocol::T_I64, static_cast<uint32_t>(this->repetition_level_histograms.size()));
-      std::vector<int64_t> ::const_iterator _iter209;
+      duckdb::vector<int64_t> ::const_iterator _iter209;
       for (_iter209 = this->repetition_level_histograms.begin(); _iter209 != this->repetition_level_histograms.end(); ++_iter209)
       {
         xfer += oprot->writeI64((*_iter209));
@@ -6634,7 +7464,7 @@ uint32_t ColumnIndex::write(::apache::thrift::protocol::TProtocol* oprot) const 
     xfer += oprot->writeFieldBegin("definition_level_histograms", ::apache::thrift::protocol::T_LIST, 7);
     {
       xfer += oprot->writeListBegin(::apache::thrift::protocol::T_I64, static_cast<uint32_t>(this->definition_level_histograms.size()));
-      std::vector<int64_t> ::const_iterator _iter210;
+      duckdb::vector<int64_t> ::const_iterator _iter210;
       for (_iter210 = this->definition_level_histograms.begin(); _iter210 != this->definition_level_histograms.end(); ++_iter210)
       {
         xfer += oprot->writeI64((*_iter210));
@@ -6681,6 +7511,19 @@ ColumnIndex& ColumnIndex::operator=(const ColumnIndex& other212) {
   __isset = other212.__isset;
   return *this;
 }
+void ColumnIndex::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "ColumnIndex(";
+  out << "null_pages=" << to_string(null_pages);
+  out << ", " << "min_values=" << to_string(min_values);
+  out << ", " << "max_values=" << to_string(max_values);
+  out << ", " << "boundary_order=" << to_string(boundary_order);
+  out << ", " << "null_counts="; (__isset.null_counts ? (out << to_string(null_counts)) : (out << "<null>"));
+  out << ", " << "repetition_level_histograms="; (__isset.repetition_level_histograms ? (out << to_string(repetition_level_histograms)) : (out << "<null>"));
+  out << ", " << "definition_level_histograms="; (__isset.definition_level_histograms ? (out << to_string(definition_level_histograms)) : (out << "<null>"));
+  out << ")";
+}
+
 
 AesGcmV1::~AesGcmV1() noexcept {
 }
@@ -6705,6 +7548,12 @@ void AesGcmV1::__set_supply_aad_prefix(const bool val) {
   this->supply_aad_prefix = val;
 __isset.supply_aad_prefix = true;
 }
+std::ostream& operator<<(std::ostream& out, const AesGcmV1& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t AesGcmV1::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -6809,6 +7658,15 @@ AesGcmV1& AesGcmV1::operator=(const AesGcmV1& other214) {
   __isset = other214.__isset;
   return *this;
 }
+void AesGcmV1::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "AesGcmV1(";
+  out << "aad_prefix="; (__isset.aad_prefix ? (out << to_string(aad_prefix)) : (out << "<null>"));
+  out << ", " << "aad_file_unique="; (__isset.aad_file_unique ? (out << to_string(aad_file_unique)) : (out << "<null>"));
+  out << ", " << "supply_aad_prefix="; (__isset.supply_aad_prefix ? (out << to_string(supply_aad_prefix)) : (out << "<null>"));
+  out << ")";
+}
+
 
 AesGcmCtrV1::~AesGcmCtrV1() noexcept {
 }
@@ -6833,6 +7691,12 @@ void AesGcmCtrV1::__set_supply_aad_prefix(const bool val) {
   this->supply_aad_prefix = val;
 __isset.supply_aad_prefix = true;
 }
+std::ostream& operator<<(std::ostream& out, const AesGcmCtrV1& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t AesGcmCtrV1::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -6937,6 +7801,15 @@ AesGcmCtrV1& AesGcmCtrV1::operator=(const AesGcmCtrV1& other216) {
   __isset = other216.__isset;
   return *this;
 }
+void AesGcmCtrV1::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "AesGcmCtrV1(";
+  out << "aad_prefix="; (__isset.aad_prefix ? (out << to_string(aad_prefix)) : (out << "<null>"));
+  out << ", " << "aad_file_unique="; (__isset.aad_file_unique ? (out << to_string(aad_file_unique)) : (out << "<null>"));
+  out << ", " << "supply_aad_prefix="; (__isset.supply_aad_prefix ? (out << to_string(supply_aad_prefix)) : (out << "<null>"));
+  out << ")";
+}
+
 
 EncryptionAlgorithm::~EncryptionAlgorithm() noexcept {
 }
@@ -6953,6 +7826,12 @@ void EncryptionAlgorithm::__set_AES_GCM_CTR_V1(const AesGcmCtrV1& val) {
   this->AES_GCM_CTR_V1 = val;
 __isset.AES_GCM_CTR_V1 = true;
 }
+std::ostream& operator<<(std::ostream& out, const EncryptionAlgorithm& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t EncryptionAlgorithm::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -7041,6 +7920,14 @@ EncryptionAlgorithm& EncryptionAlgorithm::operator=(const EncryptionAlgorithm& o
   __isset = other218.__isset;
   return *this;
 }
+void EncryptionAlgorithm::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "EncryptionAlgorithm(";
+  out << "AES_GCM_V1="; (__isset.AES_GCM_V1 ? (out << to_string(AES_GCM_V1)) : (out << "<null>"));
+  out << ", " << "AES_GCM_CTR_V1="; (__isset.AES_GCM_CTR_V1 ? (out << to_string(AES_GCM_CTR_V1)) : (out << "<null>"));
+  out << ")";
+}
+
 
 FileMetaData::~FileMetaData() noexcept {
 }
@@ -7056,7 +7943,7 @@ void FileMetaData::__set_version(const int32_t val) {
   this->version = val;
 }
 
-void FileMetaData::__set_schema(const std::vector<SchemaElement> & val) {
+void FileMetaData::__set_schema(const duckdb::vector<SchemaElement> & val) {
   this->schema = val;
 }
 
@@ -7064,11 +7951,11 @@ void FileMetaData::__set_num_rows(const int64_t val) {
   this->num_rows = val;
 }
 
-void FileMetaData::__set_row_groups(const std::vector<RowGroup> & val) {
+void FileMetaData::__set_row_groups(const duckdb::vector<RowGroup> & val) {
   this->row_groups = val;
 }
 
-void FileMetaData::__set_key_value_metadata(const std::vector<KeyValue> & val) {
+void FileMetaData::__set_key_value_metadata(const duckdb::vector<KeyValue> & val) {
   this->key_value_metadata = val;
 __isset.key_value_metadata = true;
 }
@@ -7078,7 +7965,7 @@ void FileMetaData::__set_created_by(const std::string& val) {
 __isset.created_by = true;
 }
 
-void FileMetaData::__set_column_orders(const std::vector<ColumnOrder> & val) {
+void FileMetaData::__set_column_orders(const duckdb::vector<ColumnOrder> & val) {
   this->column_orders = val;
 __isset.column_orders = true;
 }
@@ -7092,6 +7979,12 @@ void FileMetaData::__set_footer_signing_key_metadata(const std::string& val) {
   this->footer_signing_key_metadata = val;
 __isset.footer_signing_key_metadata = true;
 }
+std::ostream& operator<<(std::ostream& out, const FileMetaData& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t FileMetaData::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -7270,7 +8163,7 @@ uint32_t FileMetaData::write(::apache::thrift::protocol::TProtocol* oprot) const
   xfer += oprot->writeFieldBegin("schema", ::apache::thrift::protocol::T_LIST, 2);
   {
     xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->schema.size()));
-    std::vector<SchemaElement> ::const_iterator _iter239;
+    duckdb::vector<SchemaElement> ::const_iterator _iter239;
     for (_iter239 = this->schema.begin(); _iter239 != this->schema.end(); ++_iter239)
     {
       xfer += (*_iter239).write(oprot);
@@ -7286,7 +8179,7 @@ uint32_t FileMetaData::write(::apache::thrift::protocol::TProtocol* oprot) const
   xfer += oprot->writeFieldBegin("row_groups", ::apache::thrift::protocol::T_LIST, 4);
   {
     xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->row_groups.size()));
-    std::vector<RowGroup> ::const_iterator _iter240;
+    duckdb::vector<RowGroup> ::const_iterator _iter240;
     for (_iter240 = this->row_groups.begin(); _iter240 != this->row_groups.end(); ++_iter240)
     {
       xfer += (*_iter240).write(oprot);
@@ -7299,7 +8192,7 @@ uint32_t FileMetaData::write(::apache::thrift::protocol::TProtocol* oprot) const
     xfer += oprot->writeFieldBegin("key_value_metadata", ::apache::thrift::protocol::T_LIST, 5);
     {
       xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->key_value_metadata.size()));
-      std::vector<KeyValue> ::const_iterator _iter241;
+      duckdb::vector<KeyValue> ::const_iterator _iter241;
       for (_iter241 = this->key_value_metadata.begin(); _iter241 != this->key_value_metadata.end(); ++_iter241)
       {
         xfer += (*_iter241).write(oprot);
@@ -7317,7 +8210,7 @@ uint32_t FileMetaData::write(::apache::thrift::protocol::TProtocol* oprot) const
     xfer += oprot->writeFieldBegin("column_orders", ::apache::thrift::protocol::T_LIST, 7);
     {
       xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->column_orders.size()));
-      std::vector<ColumnOrder> ::const_iterator _iter242;
+      duckdb::vector<ColumnOrder> ::const_iterator _iter242;
       for (_iter242 = this->column_orders.begin(); _iter242 != this->column_orders.end(); ++_iter242)
       {
         xfer += (*_iter242).write(oprot);
@@ -7380,6 +8273,21 @@ FileMetaData& FileMetaData::operator=(const FileMetaData& other244) {
   __isset = other244.__isset;
   return *this;
 }
+void FileMetaData::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "FileMetaData(";
+  out << "version=" << to_string(version);
+  out << ", " << "schema=" << to_string(schema);
+  out << ", " << "num_rows=" << to_string(num_rows);
+  out << ", " << "row_groups=" << to_string(row_groups);
+  out << ", " << "key_value_metadata="; (__isset.key_value_metadata ? (out << to_string(key_value_metadata)) : (out << "<null>"));
+  out << ", " << "created_by="; (__isset.created_by ? (out << to_string(created_by)) : (out << "<null>"));
+  out << ", " << "column_orders="; (__isset.column_orders ? (out << to_string(column_orders)) : (out << "<null>"));
+  out << ", " << "encryption_algorithm="; (__isset.encryption_algorithm ? (out << to_string(encryption_algorithm)) : (out << "<null>"));
+  out << ", " << "footer_signing_key_metadata="; (__isset.footer_signing_key_metadata ? (out << to_string(footer_signing_key_metadata)) : (out << "<null>"));
+  out << ")";
+}
+
 
 FileCryptoMetaData::~FileCryptoMetaData() noexcept {
 }
@@ -7396,6 +8304,12 @@ void FileCryptoMetaData::__set_key_metadata(const std::string& val) {
   this->key_metadata = val;
 __isset.key_metadata = true;
 }
+std::ostream& operator<<(std::ostream& out, const FileCryptoMetaData& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
 
 uint32_t FileCryptoMetaData::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -7486,4 +8400,12 @@ FileCryptoMetaData& FileCryptoMetaData::operator=(const FileCryptoMetaData& othe
   __isset = other246.__isset;
   return *this;
 }
+void FileCryptoMetaData::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "FileCryptoMetaData(";
+  out << "encryption_algorithm=" << to_string(encryption_algorithm);
+  out << ", " << "key_metadata="; (__isset.key_metadata ? (out << to_string(key_metadata)) : (out << "<null>"));
+  out << ")";
+}
+
 } // namespace

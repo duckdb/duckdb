@@ -436,7 +436,7 @@ unique_ptr<ColumnWriterState> BasicColumnWriter::InitializeWriteState(duckdb_par
 }
 
 void BasicColumnWriter::RegisterToRowGroup(duckdb_parquet::RowGroup &row_group) {
-	format::ColumnChunk column_chunk;
+	duckdb_parquet::ColumnChunk column_chunk;
 	column_chunk.__isset.meta_data = true;
 	column_chunk.meta_data.codec = writer.GetCodec();
 	column_chunk.meta_data.path_in_schema = schema_path;
@@ -646,8 +646,7 @@ void BasicColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t 
 	}
 }
 
-void BasicColumnWriter::SetParquetStatistics(BasicColumnWriterState &state,
-                                             duckdb_parquet::ColumnChunk &column_chunk) {
+void BasicColumnWriter::SetParquetStatistics(BasicColumnWriterState &state, duckdb_parquet::ColumnChunk &column_chunk) {
 	if (max_repeat == 0) {
 		column_chunk.meta_data.statistics.null_count = NumericCast<int64_t>(state.null_count);
 		column_chunk.meta_data.statistics.__isset.null_count = true;
@@ -1844,8 +1843,7 @@ public:
 
 class ListColumnWriterState : public ColumnWriterState {
 public:
-	ListColumnWriterState(duckdb_parquet::RowGroup &row_group, idx_t col_idx)
-	    : row_group(row_group), col_idx(col_idx) {
+	ListColumnWriterState(duckdb_parquet::RowGroup &row_group, idx_t col_idx) : row_group(row_group), col_idx(col_idx) {
 	}
 	~ListColumnWriterState() override = default;
 

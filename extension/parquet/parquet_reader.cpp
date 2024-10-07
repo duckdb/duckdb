@@ -147,6 +147,10 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 		}
 	}
 	if (s_ele.__isset.converted_type) {
+		// Legacy NULL type, does no longer exist, but files are still around of course
+		if (static_cast<uint8_t>(s_ele.converted_type) == 24) {
+			return LogicalTypeId::SQLNULL;
+		}
 		switch (s_ele.converted_type) {
 		case ConvertedType::INT_8:
 			if (s_ele.type == Type::INT32) {
@@ -251,8 +255,6 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 			return LogicalType::INTERVAL;
 		case ConvertedType::JSON:
 			return LogicalType::JSON();
-		case ConvertedType::NULL_TYPE:
-			return LogicalTypeId::SQLNULL;
 		case ConvertedType::MAP:
 		case ConvertedType::MAP_KEY_VALUE:
 		case ConvertedType::LIST:

@@ -167,8 +167,7 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 	throw NotImplementedException("Unimplemented type for Parquet \"%s\"", duckdb_type.ToString());
 }
 
-void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
-                                        duckdb_parquet::SchemaElement &schema_ele) {
+void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_parquet::SchemaElement &schema_ele) {
 	if (duckdb_type.IsJSONType()) {
 		schema_ele.converted_type = ConvertedType::JSON;
 		schema_ele.__isset.converted_type = true;

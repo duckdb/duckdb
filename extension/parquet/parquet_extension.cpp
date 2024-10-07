@@ -1351,8 +1351,7 @@ unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ExecutionContext &cont
 
 // FIXME: Have these be generated instead
 template <>
-const char *EnumUtil::ToChars<duckdb_parquet::CompressionCodec::type>(
-    duckdb_parquet::CompressionCodec::type value) {
+const char *EnumUtil::ToChars<duckdb_parquet::CompressionCodec::type>(duckdb_parquet::CompressionCodec::type value) {
 	switch (value) {
 	case CompressionCodec::UNCOMPRESSED:
 		return "UNCOMPRESSED";
@@ -1384,8 +1383,7 @@ const char *EnumUtil::ToChars<duckdb_parquet::CompressionCodec::type>(
 }
 
 template <>
-duckdb_parquet::CompressionCodec::type
-EnumUtil::FromString<duckdb_parquet::CompressionCodec::type>(const char *value) {
+duckdb_parquet::CompressionCodec::type EnumUtil::FromString<duckdb_parquet::CompressionCodec::type>(const char *value) {
 	if (StringUtil::Equals(value, "UNCOMPRESSED")) {
 		return CompressionCodec::UNCOMPRESSED;
 	}

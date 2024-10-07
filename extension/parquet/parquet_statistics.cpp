@@ -45,8 +45,7 @@ static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type,
 	return stats.ToUnique();
 }
 
-Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
-                                           const duckdb_parquet::SchemaElement &schema_ele,
+Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb_parquet::SchemaElement &schema_ele,
                                            const std::string &stats) {
 	auto stats_data = const_data_ptr_cast(stats.c_str());
 	switch (type.id()) {
