@@ -473,16 +473,28 @@ void DependencyManager::VerifyCommitDrop(CatalogTransaction transaction, transac
 	ScanDependents(transaction, info, [&](DependencyEntry &dep) {
 		auto dep_committed_at = dep.timestamp.load();
 		if (dep_committed_at > start_time) {
-			// This object was created (and committed) after our transaction started
+			// In the event of a CASCADE, the dependency drop has not committed yet
+			// so we would be halted by the existence of a dependency we are already dropping unless we check the
+			// timestamp
+			//
+			// Which differentiates between objects that we were already aware of (and will subsequently be dropped) and
+			// objects that were introduced inbetween, which should cause this error:
 			throw DependencyException(
 			    "Could not commit DROP of \"%s\" because a dependency was created after the transaction started",
 			    object.name);
 		}
 	});
 	ScanSubjects(transaction, info, [&](DependencyEntry &dep) {
+		auto &subject_entry = dep.Cast<DependencySubjectEntry>();
 		auto dep_committed_at = dep.timestamp.load();
+		if (!dep.Dependent().flags.IsOwnedBy()) {
+			return;
+		}
+		D_ASSERT(dep.Subject().flags.IsOwnership());
 		if (dep_committed_at > start_time) {
-			// This object was created (and committed) after our transaction started
+			// Same as above, objects that are owned by the object that is being dropped will be dropped as part of this
+			// transaction. Only objects that were introduced by other transactions, that this transaction could not
+			// see, should cause this error:
 			throw DependencyException(
 			    "Could not commit DROP of \"%s\" because a dependency was created after the transaction started",
 			    object.name);
