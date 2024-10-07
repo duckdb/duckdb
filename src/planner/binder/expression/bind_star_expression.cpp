@@ -6,7 +6,7 @@
 #include "duckdb/planner/expression_binder/table_function_binder.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/functions_internal/scalar/regexp.hpp"
+#include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 
 namespace duckdb {

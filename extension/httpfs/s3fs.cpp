@@ -12,7 +12,7 @@
 #endif
 
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/functions_internal/scalar/string_common.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 

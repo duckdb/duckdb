@@ -3,8 +3,8 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/functions_core/scalar/string_functions.hpp"
-#include "duckdb/functions_internal/scalar/regexp.hpp"
-#include "duckdb/functions_internal/scalar/string_common.hpp"
+#include "duckdb/function/scalar/regexp.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {

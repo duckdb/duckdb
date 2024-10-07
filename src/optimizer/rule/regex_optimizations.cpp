@@ -3,9 +3,9 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/functions_internal/scalar/regexp.hpp"
-#include "duckdb/functions_internal/scalar/string_common.hpp"
-#include "duckdb/functions_internal/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/regexp.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 #include "utf8proc_wrapper.hpp"
 
 #include "re2/re2.h"

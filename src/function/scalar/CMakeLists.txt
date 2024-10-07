@@ -3,12 +3,14 @@ add_subdirectory(generic)
 add_subdirectory(list)
 add_subdirectory(operators)
 add_subdirectory(sequence)
+add_subdirectory(string)
 add_subdirectory(struct)
 add_subdirectory(system)
 add_library_unity(
   duckdb_func_scalar
   OBJECT
   compressed_materialization_functions.cpp
+  function_list.cpp
   generic_functions.cpp
   nested_functions.cpp
   operators.cpp

@@ -7,7 +7,7 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
-#include "duckdb/functions_internal/scalar/string_common.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
 
 #include <chrono>
 #include <string>

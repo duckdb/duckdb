@@ -3,7 +3,7 @@
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/hash.hpp"
-#include "duckdb/functions_internal/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
