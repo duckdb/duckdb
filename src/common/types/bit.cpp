@@ -207,12 +207,13 @@ void Bit::BitString(const string_t &input, const idx_t &bit_length, string_t &re
 	res_buf[0] = padding;
 	for (idx_t i = 0; i < bit_length; i++) {
 		if (i < bit_length - input.GetSize()) {
-			Bit::SetBit(result, i, 0);
+			Bit::SetBitInternal(result, i + GetBitPadding(result), 0);
 		} else {
 			idx_t bit = buf[i - (bit_length - input.GetSize())] == '1' ? 1 : 0;
-			Bit::SetBit(result, i, bit);
+			Bit::SetBitInternal(result, i + GetBitPadding(result), bit);
 		}
 	}
+	Bit::Finalize(result);
 }
 
 idx_t Bit::BitLength(string_t bits) {
@@ -311,12 +312,13 @@ void Bit::RightShift(const string_t &bit_string, const idx_t &shift, string_t &r
 	res_buf[0] = buf[0];
 	for (idx_t i = 0; i < Bit::BitLength(result); i++) {
 		if (i < shift) {
-			Bit::SetBit(result, i, 0);
+			Bit::SetBitInternal(result, i + GetBitPadding(result), 0);
 		} else {
 			idx_t bit = Bit::GetBit(bit_string, i - shift);
-			Bit::SetBit(result, i, bit);
+			Bit::SetBitInternal(result, i + GetBitPadding(result), bit);
 		}
 	}
+	Bit::Finalize(result);
 }
 
 void Bit::LeftShift(const string_t &bit_string, const idx_t &shift, string_t &result) {
@@ -327,11 +329,12 @@ void Bit::LeftShift(const string_t &bit_string, const idx_t &shift, string_t &re
 	for (idx_t i = 0; i < Bit::BitLength(bit_string); i++) {
 		if (i < (Bit::BitLength(bit_string) - shift)) {
 			idx_t bit = Bit::GetBit(bit_string, shift + i);
-			Bit::SetBit(result, i, bit);
+			Bit::SetBitInternal(result, i + GetBitPadding(result), bit);
 		} else {
-			Bit::SetBit(result, i, 0);
+			Bit::SetBitInternal(result, i + GetBitPadding(result), 0);
 		}
 	}
+	Bit::Finalize(result);
 }
 
 void Bit::BitwiseAnd(const string_t &rhs, const string_t &lhs, string_t &result) {
