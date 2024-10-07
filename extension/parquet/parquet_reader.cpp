@@ -40,15 +40,15 @@
 
 namespace duckdb {
 
-using duckdb_parquet::format::ColumnChunk;
-using duckdb_parquet::format::ConvertedType;
-using duckdb_parquet::format::FieldRepetitionType;
-using duckdb_parquet::format::FileCryptoMetaData;
-using duckdb_parquet::format::FileMetaData;
-using ParquetRowGroup = duckdb_parquet::format::RowGroup;
-using duckdb_parquet::format::SchemaElement;
-using duckdb_parquet::format::Statistics;
-using duckdb_parquet::format::Type;
+using duckdb_parquet::ColumnChunk;
+using duckdb_parquet::ConvertedType;
+using duckdb_parquet::FieldRepetitionType;
+using duckdb_parquet::FileCryptoMetaData;
+using duckdb_parquet::FileMetaData;
+using ParquetRowGroup = duckdb_parquet::RowGroup;
+using duckdb_parquet::SchemaElement;
+using duckdb_parquet::Statistics;
+using duckdb_parquet::Type;
 
 static unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
 CreateThriftFileProtocol(Allocator &allocator, FileHandle &file_handle, bool prefetch_mode) {

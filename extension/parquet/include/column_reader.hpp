@@ -29,12 +29,12 @@ class ParquetReader;
 
 using duckdb_apache::thrift::protocol::TProtocol;
 
-using duckdb_parquet::format::ColumnChunk;
-using duckdb_parquet::format::CompressionCodec;
-using duckdb_parquet::format::FieldRepetitionType;
-using duckdb_parquet::format::PageHeader;
-using duckdb_parquet::format::SchemaElement;
-using duckdb_parquet::format::Type;
+using duckdb_parquet::ColumnChunk;
+using duckdb_parquet::CompressionCodec;
+using duckdb_parquet::FieldRepetitionType;
+using duckdb_parquet::PageHeader;
+using duckdb_parquet::SchemaElement;
+using duckdb_parquet::Type;
 
 typedef std::bitset<STANDARD_VECTOR_SIZE> parquet_filter_t;
 
@@ -169,7 +169,7 @@ private:
 	void DecompressInternal(CompressionCodec::type codec, const_data_ptr_t src, idx_t src_size, data_ptr_t dst,
 	                        idx_t dst_size);
 
-	const duckdb_parquet::format::ColumnChunk *chunk = nullptr;
+	const duckdb_parquet::ColumnChunk *chunk = nullptr;
 
 	duckdb_apache::thrift::protocol::TProtocol *protocol;
 	idx_t page_rows_available;

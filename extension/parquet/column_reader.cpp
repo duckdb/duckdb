@@ -29,11 +29,11 @@
 
 namespace duckdb {
 
-using duckdb_parquet::format::CompressionCodec;
-using duckdb_parquet::format::ConvertedType;
-using duckdb_parquet::format::Encoding;
-using duckdb_parquet::format::PageType;
-using duckdb_parquet::format::Type;
+using duckdb_parquet::CompressionCodec;
+using duckdb_parquet::ConvertedType;
+using duckdb_parquet::Encoding;
+using duckdb_parquet::PageType;
+using duckdb_parquet::Type;
 
 const uint64_t ParquetDecodeUtils::BITPACK_MASKS[] = {0,
                                                       1,
@@ -541,12 +541,12 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 			auto read_buf = make_shared_ptr<ResizeableBuffer>();
 
 			switch (schema.type) {
-			case duckdb_parquet::format::Type::INT32:
+			case duckdb_parquet::Type::INT32:
 				read_buf->resize(reader.allocator, sizeof(int32_t) * (read_now - null_count));
 				dbp_decoder->GetBatch<int32_t>(read_buf->ptr, read_now - null_count);
 
 				break;
-			case duckdb_parquet::format::Type::INT64:
+			case duckdb_parquet::Type::INT64:
 				read_buf->resize(reader.allocator, sizeof(int64_t) * (read_now - null_count));
 				dbp_decoder->GetBatch<int64_t>(read_buf->ptr, read_now - null_count);
 				break;
@@ -571,11 +571,11 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 			auto read_buf = make_shared_ptr<ResizeableBuffer>();
 
 			switch (schema.type) {
-			case duckdb_parquet::format::Type::FLOAT:
+			case duckdb_parquet::Type::FLOAT:
 				read_buf->resize(reader.allocator, sizeof(float) * (read_now - null_count));
 				bss_decoder->GetBatch<float>(read_buf->ptr, read_now - null_count);
 				break;
-			case duckdb_parquet::format::Type::DOUBLE:
+			case duckdb_parquet::Type::DOUBLE:
 				read_buf->resize(reader.allocator, sizeof(double) * (read_now - null_count));
 				bss_decoder->GetBatch<double>(read_buf->ptr, read_now - null_count);
 				break;
@@ -1340,7 +1340,7 @@ static unique_ptr<ColumnReader> CreateDecimalReaderInternal(ParquetReader &reade
 
 template <>
 double ParquetDecimalUtils::ReadDecimalValue(const_data_ptr_t pointer, idx_t size,
-                                             const duckdb_parquet::format::SchemaElement &schema_ele) {
+                                             const duckdb_parquet::SchemaElement &schema_ele) {
 	double res = 0;
 	bool positive = (*pointer & 0x80) == 0;
 	for (idx_t i = 0; i < size; i += 8) {

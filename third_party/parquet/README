@@ -1,0 +1,5 @@
+thrift --gen "cpp:no_ostream_operators=true,no_default_operators=true" parquet.thrift
+
+
+// I'M SURE WHAT I AM DOING
+namespace apache = duckdb_apache;
