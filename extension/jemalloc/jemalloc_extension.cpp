@@ -13,6 +13,26 @@ std::string JemallocExtension::Name() {
 	return "jemalloc";
 }
 
+std::string JemallocExtension::Version() const {
+#ifdef EXT_VERSION_JEMALLOC
+	return EXT_VERSION_JEMALLOC;
+#else
+	return "";
+#endif
+}
+
+void *JemallocExtension::malloc(size_t size) {
+	return duckdb_je_malloc(size);
+}
+
+void *JemallocExtension::realloc(void *ptr, size_t size) {
+	return duckdb_je_realloc(ptr, size);
+}
+
+void JemallocExtension::free(void *ptr) {
+	duckdb_je_free(ptr);
+}
+
 static void JemallocCTL(const char *name, void *old_ptr, size_t *old_len, void *new_ptr, size_t new_len) {
 	if (duckdb_je_mallctl(name, old_ptr, old_len, new_ptr, new_len) != 0) {
 #ifdef DEBUG
@@ -81,14 +101,6 @@ void JemallocExtension::FlushAll() {
 void JemallocExtension::SetBackgroundThreads(bool enable) {
 #ifndef __APPLE__
 	SetJemallocCTL("background_thread", enable);
-#endif
-}
-
-std::string JemallocExtension::Version() const {
-#ifdef EXT_VERSION_JEMALLOC
-	return EXT_VERSION_JEMALLOC;
-#else
-	return "";
 #endif
 }
 

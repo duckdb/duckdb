@@ -1,14 +1,14 @@
 #include "duckdb/common/stl_allocator.hpp"
 
 #ifdef USE_JEMALLOC
-#include "jemalloc/jemalloc/include/jemalloc/jemalloc.h"
+#include "jemalloc_extension.hpp"
 #endif
 
 namespace duckdb {
 
 void *stl_malloc(size_t size) {
 #ifdef USE_JEMALLOC
-	return duckdb_je_malloc(size);
+	return JemallocExtension::malloc(size);
 #else
 	return malloc(size);
 #endif
@@ -16,7 +16,7 @@ void *stl_malloc(size_t size) {
 
 DUCKDB_API void *stl_realloc(void *ptr, size_t size) {
 #ifdef USE_JEMALLOC
-	return duckdb_je_realloc(ptr, size);
+	return JemallocExtension::realloc(ptr, size);
 #else
 	return realloc(ptr, size);
 #endif
@@ -24,7 +24,7 @@ DUCKDB_API void *stl_realloc(void *ptr, size_t size) {
 
 void stl_free(void *ptr) {
 #ifdef USE_JEMALLOC
-	duckdb_je_free(ptr);
+	JemallocExtension::free(ptr);
 #else
 	free(ptr);
 #endif
