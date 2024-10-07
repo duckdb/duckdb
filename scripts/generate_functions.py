@@ -40,7 +40,8 @@ def main():
                 [f'{group}/{function_type}/{f.name}' for f in type_dir.iterdir() if f.is_dir()]
             )
             for function_path in relative_function_paths:
-                create_header_file(function_path, all_functions_group, function_type_set)
+                if Path(normalize_path_separators(f'src/{function_path}/functions.json')).exists():
+                    create_header_file(function_path, all_functions_group, function_type_set)
         create_function_list_file(group, all_functions_group)
 
 
