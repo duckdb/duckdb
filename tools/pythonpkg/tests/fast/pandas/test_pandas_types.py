@@ -1,4 +1,5 @@
 import duckdb
+import pytest
 import pandas as pd
 import numpy
 import string
@@ -73,6 +74,27 @@ class TestNumpyNullableTypes(object):
     def test_pandas_bool(self, duckdb_cursor):
         data = numpy.array([True, False, False, True])
         round_trip(data, 'bool')
+
+    def test_pandas_masked_float64(self, duckdb_cursor, tmp_path):
+        pa = pytest.importorskip("pyarrow")
+        pq = pytest.importorskip("pyarrow.parquet")
+
+        # Create a sample DataFrame
+        testdf = pd.DataFrame({"value": [26.0, 26.0, 26.0, pd.NA, 27.0, pd.NA, pd.NA, pd.NA, pd.NA, 29.0]})
+
+        # Set the correct dtype for the 'value' column
+        testdf["value"] = testdf["value"].astype(pd.Float64Dtype())
+
+        # Write the DataFrame to a Parquet file using tmp_path fixture
+        parquet_path = tmp_path / "testdf.parquet"
+        pq.write_table(pa.Table.from_pandas(testdf), parquet_path)
+
+        # Read the Parquet file back into a DataFrame
+        testdf2 = pd.read_parquet(parquet_path)
+
+        # Use duckdb_cursor to query the parquet data
+        result = duckdb_cursor.execute("SELECT MIN(value) FROM testdf2").fetchall()
+        assert result[0][0] == 26
 
     def test_pandas_boolean(self, duckdb_cursor):
         data = numpy.array([True, None, pd.NA, numpy.nan, True])

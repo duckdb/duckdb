@@ -23,6 +23,6 @@ foreach i 3 4 5 7
 statement error
 select * from parquet_scan('data/parquet-testing/afl/3.parquet')
 ----
-Parquet file is likely corrupted, cannot have dictionary offsets without seeing a non-empty dictionary first.
+Invalid Error: Parquet file is likely corrupted, missing dictionary
 
 endloop

@@ -16,6 +16,8 @@
 
 namespace duckdb {
 
+class BufferManager;
+
 //! A half-open range of frame boundary values _relative to the current row_
 //! This is why they are signed values.
 struct FrameDelta {
@@ -29,14 +31,18 @@ struct FrameDelta {
 using FrameStats = array<FrameDelta, 2>;
 
 //! The partition data for custom window functions
+//! Note that if the inputs is nullptr then the column count is 0,
+//! but the row count will still be valid
+class ColumnDataCollection;
 struct WindowPartitionInput {
-	WindowPartitionInput(const Vector inputs[], idx_t input_count, idx_t count, const ValidityMask &filter_mask,
-	                     const FrameStats &stats)
-	    : inputs(inputs), input_count(input_count), count(count), filter_mask(filter_mask), stats(stats) {
+	WindowPartitionInput(ClientContext &context, const ColumnDataCollection *inputs, idx_t count, bool all_valid,
+	                     const ValidityMask &filter_mask, const FrameStats &stats)
+	    : context(context), inputs(inputs), count(count), all_valid(all_valid), filter_mask(filter_mask), stats(stats) {
 	}
-	const Vector *inputs;
-	idx_t input_count;
+	ClientContext &context;
+	const ColumnDataCollection *inputs;
 	idx_t count;
+	bool all_valid;
 	const ValidityMask &filter_mask;
 	const FrameStats stats;
 };
@@ -263,16 +269,6 @@ public:
 	                        idx_t count) {
 		D_ASSERT(input_count == 1);
 		AggregateExecutor::UnaryUpdate<STATE, INPUT_TYPE, OP>(inputs[0], aggr_input_data, state, count);
-	}
-
-	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static void UnaryWindow(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
-	                        const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames &subframes, Vector &result,
-	                        idx_t rid) {
-
-		D_ASSERT(partition.input_count == 1);
-		AggregateExecutor::UnaryWindow<STATE, INPUT_TYPE, RESULT_TYPE, OP>(
-		    partition.inputs[0], partition.filter_mask, aggr_input_data, l_state, subframes, result, rid, g_state);
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>
