@@ -65,16 +65,19 @@ static bool NodeHasMultipleChildren(RenderTreeNode &node) {
 }
 
 static bool ShouldRenderWhitespace(RenderTree &root, idx_t x, idx_t y) {
+	idx_t found_children = 0;
 	for (;; x--) {
 		auto node = root.GetNode(x, y);
+		if (root.HasNode(x, y + 1)) {
+			found_children++;
+		}
 		if (node) {
 			if (NodeHasMultipleChildren(*node)) {
-				return true;
+				if (found_children < node->child_positions.size()) {
+					return true;
+				}
 			}
 			return false;
-		}
-		if (root.HasNode(x, y + 1)) {
-			break;
 		}
 		if (x == 0) {
 			break;
@@ -190,11 +193,12 @@ void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_
 					if (root.HasNode(x, y + 1)) {
 						// node right below this one
 						ss << StringUtil::Repeat(config.HORIZONTAL, config.node_render_width / 2);
-						ss << config.RTCORNER;
 						if (has_child_to_the_right) {
+							ss << config.TMIDDLE;
 							// but we have another child to the right! keep rendering the line
 							ss << StringUtil::Repeat(config.HORIZONTAL, config.node_render_width / 2);
 						} else {
+							ss << config.RTCORNER;
 							if (has_adjacent_nodes) {
 								// only a child below this one: fill the rest with spaces
 								ss << StringUtil::Repeat(" ", config.node_render_width / 2);

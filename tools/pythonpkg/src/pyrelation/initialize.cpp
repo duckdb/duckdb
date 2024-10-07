@@ -73,7 +73,8 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 
 			https://arrow.apache.org/docs/dev/format/CDataInterface/PyCapsuleInterface.html
 		)";
-	m.def("__arrow_c_stream__", &DuckDBPyRelation::ToArrowCapsule, capsule_docs);
+	m.def("__arrow_c_stream__", &DuckDBPyRelation::ToArrowCapsule, capsule_docs,
+	      py::arg("requested_schema") = py::none());
 	m.def("record_batch", &DuckDBPyRelation::ToRecordBatch,
 	      "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("batch_size") = 1000000)
 	    .def("fetch_arrow_reader", &DuckDBPyRelation::ToRecordBatch,

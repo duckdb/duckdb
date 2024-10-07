@@ -2,6 +2,7 @@
 
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -45,6 +46,21 @@ ColumnDataAllocator::ColumnDataAllocator(ColumnDataAllocator &other) {
 	}
 }
 
+ColumnDataAllocator::~ColumnDataAllocator() {
+	if (type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
+		return;
+	}
+	for (auto &block : blocks) {
+		block.handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+	}
+	const auto data_size = SizeInBytes();
+	blocks.clear();
+	if (Allocator::SupportsFlush() &&
+	    data_size > alloc.buffer_manager->GetBufferPool().GetAllocatorBulkDeallocationFlushThreshold()) {
+		Allocator::FlushAll();
+	}
+}
+
 BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
 	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR || type == ColumnDataAllocatorType::HYBRID);
 	shared_ptr<BlockHandle> handle;
@@ -65,7 +81,8 @@ BufferHandle ColumnDataAllocator::AllocateBlock(idx_t size) {
 	BlockMetaData data;
 	data.size = 0;
 	data.capacity = NumericCast<uint32_t>(max_size);
-	auto pin = alloc.buffer_manager->Allocate(MemoryTag::COLUMN_DATA, max_size, false, &data.handle);
+	auto pin = alloc.buffer_manager->Allocate(MemoryTag::COLUMN_DATA, max_size, false);
+	data.handle = pin.GetBlockHandle();
 	blocks.push_back(std::move(data));
 	allocated_size += max_size;
 	return pin;

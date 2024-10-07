@@ -79,7 +79,7 @@ PivotColumn Transformer::TransformPivotColumn(duckdb_libpgquery::PGPivot &pivot,
 		}
 	}
 	if (pivot.subquery) {
-		col.subquery = TransformSelectNode(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(pivot.subquery));
+		col.subquery = TransformSelectNode(*pivot.subquery);
 	}
 	if (pivot.pivot_enum) {
 		col.pivot_enum = pivot.pivot_enum;

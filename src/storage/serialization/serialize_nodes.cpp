@@ -32,6 +32,7 @@
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 
 namespace duckdb {
 
@@ -203,7 +204,7 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(134, "sql_type_list", sql_type_list);
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<idx_t>>(135, "sql_types_per_column", sql_types_per_column);
 	serializer.WritePropertyWithDefault<bool>(136, "columns_set", columns_set, false);
-	serializer.WritePropertyWithDefault<CSVOption<char>>(137, "dialect_options.state_machine_options.comment", dialect_options.state_machine_options.comment, CSVOption<char>());
+	serializer.WritePropertyWithDefault<CSVOption<char>>(137, "dialect_options.state_machine_options.comment", dialect_options.state_machine_options.comment, CSVOption<char>('\0'));
 	serializer.WritePropertyWithDefault<idx_t>(138, "dialect_options.rows_until_header", dialect_options.rows_until_header);
 }
 
@@ -246,7 +247,7 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(134, "sql_type_list", result.sql_type_list);
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<idx_t>>(135, "sql_types_per_column", result.sql_types_per_column);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(136, "columns_set", result.columns_set, false);
-	deserializer.ReadPropertyWithExplicitDefault<CSVOption<char>>(137, "dialect_options.state_machine_options.comment", result.dialect_options.state_machine_options.comment, CSVOption<char>());
+	deserializer.ReadPropertyWithExplicitDefault<CSVOption<char>>(137, "dialect_options.state_machine_options.comment", result.dialect_options.state_machine_options.comment, CSVOption<char>('\0'));
 	deserializer.ReadPropertyWithDefault<idx_t>(138, "dialect_options.rows_until_header", result.dialect_options.rows_until_header);
 	return result;
 }
@@ -456,6 +457,22 @@ PivotColumnEntry PivotColumnEntry::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<vector<Value>>(100, "values", result.values);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", result.expr);
 	deserializer.ReadPropertyWithDefault<string>(102, "alias", result.alias);
+	return result;
+}
+
+void QualifiedColumnName::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(100, "catalog", catalog);
+	serializer.WritePropertyWithDefault<string>(101, "schema", schema);
+	serializer.WritePropertyWithDefault<string>(102, "table", table);
+	serializer.WritePropertyWithDefault<string>(103, "column", column);
+}
+
+QualifiedColumnName QualifiedColumnName::Deserialize(Deserializer &deserializer) {
+	QualifiedColumnName result;
+	deserializer.ReadPropertyWithDefault<string>(100, "catalog", result.catalog);
+	deserializer.ReadPropertyWithDefault<string>(101, "schema", result.schema);
+	deserializer.ReadPropertyWithDefault<string>(102, "table", result.table);
+	deserializer.ReadPropertyWithDefault<string>(103, "column", result.column);
 	return result;
 }
 

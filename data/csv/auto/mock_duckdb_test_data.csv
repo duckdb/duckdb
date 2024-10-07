@@ -1,0 +1,10 @@
+id,name,age,sex,state
+1,James,30,M,AL
+2,Jill,32,F,CO
+3,Lyla,35,F
+4,John,34,M,AS
+5,Matthew,31,M,
+6,Oliver,33,M,CA,extra_record
+7,Olivia,36,F,OR
+8,James,37,M,AZ
+9,Titus,38,M,WY

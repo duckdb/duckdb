@@ -802,7 +802,7 @@
       {"id": 137,
         "name": "dialect_options.state_machine_options.comment",
         "type": "CSVOption<char>",
-        "default": "CSVOption<char>()"
+        "default": "CSVOption<char>('\\0')"
       },
       {"id": 138,
         "name": "dialect_options.rows_until_header",
@@ -915,6 +915,35 @@
         "id": 3,
         "name": "micros",
         "type": "int64_t"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "QualifiedColumnName",
+    "includes": [
+      "duckdb/parser/qualified_name.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "catalog",
+        "type": "string"
+      },
+      {
+        "id": 101,
+        "name": "schema",
+        "type": "string"
+      },
+      {
+        "id": 102,
+        "name": "table",
+        "type": "string"
+      },
+      {
+        "id": 103,
+        "name": "column",
+        "type": "string"
       }
     ],
     "pointer_type": "none"

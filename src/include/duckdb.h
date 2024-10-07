@@ -16,10 +16,14 @@
 //! duplicate of duckdb/main/winapi.hpp
 #ifndef DUCKDB_API
 #ifdef _WIN32
+#ifdef DUCKDB_STATIC_BUILD
+#define DUCKDB_API
+#else
 #if defined(DUCKDB_BUILD_LIBRARY) && !defined(DUCKDB_BUILD_LOADABLE_EXTENSION)
 #define DUCKDB_API __declspec(dllexport)
 #else
 #define DUCKDB_API __declspec(dllimport)
+#endif
 #endif
 #else
 #define DUCKDB_API
@@ -29,10 +33,14 @@
 //! duplicate of duckdb/main/winapi.hpp
 #ifndef DUCKDB_EXTENSION_API
 #ifdef _WIN32
+#ifdef DUCKDB_STATIC_BUILD
+#define DUCKDB_EXTENSION_API
+#else
 #ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
 #define DUCKDB_EXTENSION_API __declspec(dllexport)
 #else
 #define DUCKDB_EXTENSION_API
+#endif
 #endif
 #else
 #define DUCKDB_EXTENSION_API __attribute__((visibility("default")))
@@ -125,6 +133,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_ANY = 34,
 	// duckdb_varint
 	DUCKDB_TYPE_VARINT = 35,
+	// SQLNULL type
+	DUCKDB_TYPE_SQLNULL = 36,
 } duckdb_type;
 //! An enum over the returned state of different functions.
 typedef enum duckdb_state { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
@@ -858,8 +868,8 @@ Returns the number of rows present in the result object.
 * @return The number of rows present in the result object.
 */
 DUCKDB_API idx_t duckdb_row_count(duckdb_result *result);
-#endif
 
+#endif
 /*!
 Returns the number of rows changed by the query stored in the result. This is relevant only for INSERT/UPDATE/DELETE
 queries. For other queries the rows_changed will be 0.
@@ -890,9 +900,7 @@ printf("Data for row %d: %d\n", row, data[row]);
 * @return The column data of the specified column.
 */
 DUCKDB_API void *duckdb_column_data(duckdb_result *result, idx_t col);
-#endif
 
-#ifndef DUCKDB_API_NO_DEPRECATED
 /*!
 **DEPRECATED**: Prefer using `duckdb_result_get_chunk` instead.
 
@@ -915,8 +923,8 @@ if (nullmask[row]) {
 * @return The nullmask of the specified column.
 */
 DUCKDB_API bool *duckdb_nullmask_data(duckdb_result *result, idx_t col);
-#endif
 
+#endif
 /*!
 Returns the error message contained within the result. The error is only set if `duckdb_query` returns `DuckDBError`.
 
@@ -982,6 +990,7 @@ Returns the number of data chunks present in the result.
 */
 DUCKDB_API idx_t duckdb_result_chunk_count(duckdb_result result);
 
+#endif
 /*!
 Returns the return_type of the given result, or DUCKDB_RETURN_TYPE_INVALID on error
 
@@ -990,7 +999,6 @@ Returns the return_type of the given result, or DUCKDB_RETURN_TYPE_INVALID on er
 */
 DUCKDB_API duckdb_result_type duckdb_result_return_type(duckdb_result result);
 
-#endif
 //===--------------------------------------------------------------------===//
 // Safe Fetch Functions
 //===--------------------------------------------------------------------===//
@@ -1127,8 +1135,8 @@ DUCKDB_API duckdb_timestamp duckdb_value_timestamp(duckdb_result *result, idx_t 
 DUCKDB_API duckdb_interval duckdb_value_interval(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
-**DEPRECATION NOTICE**: use duckdb_value_string instead. This function does not work correctly if the string contains
-null bytes.
+**DEPRECATED**: Use duckdb_value_string instead. This function does not work correctly if the string contains null
+bytes.
 
 * @return The text value at the specified location as a null-terminated string, or nullptr if the value cannot be
 converted. The result must be freed with `duckdb_free`.
@@ -1146,8 +1154,8 @@ The resulting field "string.data" must be freed with `duckdb_free.`
 DUCKDB_API duckdb_string duckdb_value_string(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
-**DEPRECATION NOTICE**: use duckdb_value_string_internal instead. This function does not work correctly if the string
-contains null bytes.
+**DEPRECATED**: Use duckdb_value_string_internal instead. This function does not work correctly if the string contains
+null bytes.
 
 * @return The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.
 If the column is NOT a VARCHAR column this function will return NULL.
@@ -1157,8 +1165,8 @@ The result must NOT be freed.
 DUCKDB_API char *duckdb_value_varchar_internal(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
-**DEPRECATION NOTICE**: use duckdb_value_string_internal instead. This function does not work correctly if the string
-contains null bytes.
+**DEPRECATED**: Use duckdb_value_string_internal instead. This function does not work correctly if the string contains
+null bytes.
 * @return The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.
 If the column is NOT a VARCHAR column this function will return NULL.
 
@@ -1655,8 +1663,8 @@ Note that the result must be freed with `duckdb_destroy_result`.
 */
 DUCKDB_API duckdb_state duckdb_execute_prepared_streaming(duckdb_prepared_statement prepared_statement,
                                                           duckdb_result *out_result);
-#endif
 
+#endif
 //===--------------------------------------------------------------------===//
 // Extract Statements
 //===--------------------------------------------------------------------===//
@@ -1746,8 +1754,8 @@ Note that after calling `duckdb_pending_prepared_streaming`, the pending result 
 */
 DUCKDB_API duckdb_state duckdb_pending_prepared_streaming(duckdb_prepared_statement prepared_statement,
                                                           duckdb_pending_result *out_result);
-#endif
 
+#endif
 /*!
 Closes the pending result and de-allocates all memory allocated for the result.
 
@@ -2897,8 +2905,9 @@ DUCKDB_API void duckdb_destroy_scalar_function_set(duckdb_scalar_function_set *s
 /*!
 Adds the scalar function as a new overload to the scalar function set.
 
-Returns DuckDBError if the function could not be added, for example if the overload already exists.* @param set The
-scalar function set
+Returns DuckDBError if the function could not be added, for example if the overload already exists.
+
+* @param set The scalar function set
 * @param function The function to add
 */
 DUCKDB_API duckdb_state duckdb_add_scalar_function_to_set(duckdb_scalar_function_set set,
@@ -3052,8 +3061,9 @@ DUCKDB_API void duckdb_destroy_aggregate_function_set(duckdb_aggregate_function_
 /*!
 Adds the aggregate function as a new overload to the aggregate function set.
 
-Returns DuckDBError if the function could not be added, for example if the overload already exists.* @param set The
-aggregate function set
+Returns DuckDBError if the function could not be added, for example if the overload already exists.
+
+* @param set The aggregate function set
 * @param function The function to add
 */
 DUCKDB_API duckdb_state duckdb_add_aggregate_function_to_set(duckdb_aggregate_function_set set,
@@ -4053,8 +4063,8 @@ It is not known beforehand how many chunks will be returned by this result.
 * @return The resulting data chunk. Returns `NULL` if the result has an error.
 */
 DUCKDB_API duckdb_data_chunk duckdb_stream_fetch_chunk(duckdb_result result);
-#endif
 
+#endif
 /*!
 Fetches a data chunk from a duckdb_result. This function should be called repeatedly until the result is exhausted.
 

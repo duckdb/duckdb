@@ -400,42 +400,15 @@ void Prefix::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<Fixed
 		return Node::TransformToDeprecated(art, ref, allocator);
 	}
 
-	// Fast path.
-	if (art.prefix_count <= DEPRECATED_COUNT) {
-		reference<Node> ref(node);
-		while (ref.get().GetType() == PREFIX && ref.get().GetGateStatus() == GateStatus::GATE_NOT_SET) {
-			Prefix prefix(art, ref, true, true);
-			if (!prefix.in_memory) {
-				return;
-			}
-
-			Node new_node;
-			new_node = allocator->New();
-			new_node.SetMetadata(static_cast<uint8_t>(PREFIX));
-
-			Prefix new_prefix(allocator, new_node, DEPRECATED_COUNT);
-			new_prefix.data[DEPRECATED_COUNT] = prefix.data[Count(art)];
-			memcpy(new_prefix.data, prefix.data, new_prefix.data[DEPRECATED_COUNT]);
-			*new_prefix.ptr = *prefix.ptr;
-
-			prefix.ptr->Clear();
-			Node::Free(art, ref);
-			ref.get() = new_node;
-			ref = *new_prefix.ptr;
-		}
-
-		return Node::TransformToDeprecated(art, ref, allocator);
-	}
-
-	// Else, we need to create a new prefix chain.
+	// We need to create a new prefix (chain).
 	Node new_node;
 	new_node = allocator->New();
 	new_node.SetMetadata(static_cast<uint8_t>(PREFIX));
 	Prefix new_prefix(allocator, new_node, DEPRECATED_COUNT);
 
-	reference<Node> ref(node);
-	while (ref.get().GetType() == PREFIX && ref.get().GetGateStatus() == GateStatus::GATE_NOT_SET) {
-		Prefix prefix(art, ref, true, true);
+	Node current_node = node;
+	while (current_node.GetType() == PREFIX && current_node.GetGateStatus() == GateStatus::GATE_NOT_SET) {
+		Prefix prefix(art, current_node, true, true);
 		if (!prefix.in_memory) {
 			return;
 		}
@@ -445,11 +418,13 @@ void Prefix::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<Fixed
 		}
 
 		*new_prefix.ptr = *prefix.ptr;
-		Node::GetAllocator(art, PREFIX).Free(ref);
-		ref = *new_prefix.ptr;
+		prefix.ptr->Clear();
+		Node::Free(art, current_node);
+		current_node = *new_prefix.ptr;
 	}
 
-	return Node::TransformToDeprecated(art, ref, allocator);
+	node = new_node;
+	return Node::TransformToDeprecated(art, *new_prefix.ptr, allocator);
 }
 
 Prefix Prefix::Append(ART &art, const uint8_t byte) {

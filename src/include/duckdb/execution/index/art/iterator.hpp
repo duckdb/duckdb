@@ -47,7 +47,7 @@ public:
 	//! Returns true, if key_bytes contains all bytes of key.
 	bool Contains(const ARTKey &key) const;
 	//! Returns true, if key_bytes is greater than [or equal to] the key.
-	bool GreaterThan(const ARTKey &key, bool equal) const;
+	bool GreaterThan(const ARTKey &key, const bool equal, const uint8_t nested_depth) const;
 
 private:
 	unsafe_vector<uint8_t> key_bytes;
@@ -71,6 +71,11 @@ public:
 	//! Finds the lower bound of the ART and adds the nodes to the stack. Returns false, if the lower
 	//! bound exceeds the maximum value of the ART.
 	bool LowerBound(const Node &node, const ARTKey &key, const bool equal, idx_t depth);
+
+	//! Returns the nested depth.
+	uint8_t GetNestedDepth() const {
+		return nested_depth;
+	}
 
 private:
 	//! The ART.

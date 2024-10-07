@@ -853,7 +853,8 @@ public:
 			return file_list_cardinality_estimate;
 		}
 
-		return make_uniq<NodeStatistics>(data.initial_file_cardinality * data.file_list->GetTotalFileCount());
+		return make_uniq<NodeStatistics>(MaxValue(data.initial_file_cardinality, (idx_t)1) *
+		                                 data.file_list->GetTotalFileCount());
 	}
 
 	static idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {
@@ -1680,6 +1681,11 @@ void ParquetExtension::Load(DuckDB &db) {
 	config.replacement_scans.emplace_back(ParquetScanReplacement);
 	config.AddExtensionOption("binary_as_string", "In Parquet files, interpret binary data as a string.",
 	                          LogicalType::BOOLEAN);
+	config.AddExtensionOption("disable_parquet_prefetching", "Disable the prefetching mechanism in Parquet",
+	                          LogicalType::BOOLEAN, Value(false));
+	config.AddExtensionOption("prefetch_all_parquet_files",
+	                          "Use the prefetching mechanism for all types of parquet files", LogicalType::BOOLEAN,
+	                          Value(false));
 }
 
 std::string ParquetExtension::Name() {

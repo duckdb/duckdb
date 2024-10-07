@@ -13,7 +13,7 @@ patches = glob.glob(patch_pattern)
 
 
 def raise_error(error_msg):
-    sys.stderr.write(error_message + '\n')
+    sys.stderr.write(error_msg + '\n')
     sys.exit(1)
 
 

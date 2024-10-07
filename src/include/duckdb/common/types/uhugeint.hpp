@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/limits.hpp"
-#include "duckdb/common/type_util.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/type_util.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/uhugeint.hpp"
 
 namespace duckdb {
@@ -61,33 +61,15 @@ public:
 		return input;
 	}
 
-	static uhugeint_t SlowMultiply(uhugeint_t lhs, uhugeint_t rhs);
-
 	static bool TryMultiply(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &result);
 
 	template <bool CHECK_OVERFLOW = true>
 	inline static uhugeint_t Multiply(uhugeint_t lhs, uhugeint_t rhs) {
-		if (CHECK_OVERFLOW) {
-			uhugeint_t result;
-			if (!TryMultiply(lhs, rhs, result)) {
-				throw OutOfRangeException("Overflow in UHUGEINT multiplication!: %s + %s", lhs.ToString(),
-				                          rhs.ToString());
-			}
-			return result;
-		}
-#if ((__GNUC__ >= 5) || defined(__clang__)) && defined(__SIZEOF_INT128__)
 		uhugeint_t result;
-		__uint128_t left = __uint128_t(lhs.lower) + (__uint128_t(lhs.upper) << 64);
-		__uint128_t right = __uint128_t(rhs.lower) + (__uint128_t(rhs.upper) << 64);
-		__uint128_t result_u128;
-
-		result_u128 = left * right;
-		result.upper = uint64_t(result_u128 >> 64);
-		result.lower = uint64_t(result_u128 & 0xffffffffffffffff);
+		if (!TryMultiply(lhs, rhs, result)) {
+			throw OutOfRangeException("Overflow in UHUGEINT multiplication!: %s + %s", lhs.ToString(), rhs.ToString());
+		}
 		return result;
-#else
-		return SlowMultiply(lhs, rhs);
-#endif
 	}
 
 	static bool TryDivMod(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &result, uhugeint_t &remainder);

@@ -558,12 +558,12 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	ss << "││" + DrawPadded(total_time, TOTAL_BOX_WIDTH - 4) + "││\n";
 	ss << "│└──────────────────────────────────────────────┘│\n";
 	ss << "└────────────────────────────────────────────────┘\n";
-	// print phase timings
-	if (PrintOptimizerOutput()) {
-		PrintPhaseTimingsToStream(ss, root->GetProfilingInfo(), TOTAL_BOX_WIDTH);
-	}
 	// render the main operator tree
 	if (root) {
+		// print phase timings
+		if (PrintOptimizerOutput()) {
+			PrintPhaseTimingsToStream(ss, root->GetProfilingInfo(), TOTAL_BOX_WIDTH);
+		}
 		Render(*root, ss);
 	}
 }
@@ -684,11 +684,12 @@ void QueryProfiler::WriteToFile(const char *path, string &info) const {
 	}
 }
 
-profiler_settings_t ErasePhaseTimingSettings(profiler_settings_t settings) {
+profiler_settings_t EraseQueryRootSettings(profiler_settings_t settings) {
 	profiler_settings_t phase_timing_settings_to_erase;
 
 	for (auto &setting : settings) {
-		if (MetricsUtils::IsOptimizerMetric(setting) || MetricsUtils::IsPhaseTimingMetric(setting)) {
+		if (MetricsUtils::IsOptimizerMetric(setting) || MetricsUtils::IsPhaseTimingMetric(setting) ||
+		    setting == MetricsType::BLOCKED_THREAD_TIME) {
 			phase_timing_settings_to_erase.insert(setting);
 		}
 	}
@@ -711,7 +712,7 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	info = ProfilingInfo(settings, depth);
 	auto child_settings = settings;
 	if (depth == 0) {
-		child_settings = ErasePhaseTimingSettings(child_settings);
+		child_settings = EraseQueryRootSettings(child_settings);
 	}
 	node->depth = depth;
 

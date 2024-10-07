@@ -4,7 +4,7 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/core_functions/aggregate/distributive_functions.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
@@ -118,11 +118,6 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 		}
 	}
 	// pushdown can be performed
-	// set up the dynamic filters (if we don't have any yet)
-	if (!get.dynamic_filters) {
-		get.dynamic_filters = make_shared_ptr<DynamicTableFilterSet>();
-	}
-	pushdown_info->dynamic_filters = get.dynamic_filters;
 
 	// set up the min/max aggregates for each of the filters
 	vector<AggregateFunction> aggr_functions;
@@ -135,9 +130,18 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 			aggr_children.push_back(join.conditions[filter.join_condition].right->Copy());
 			auto aggr_expr = function_binder.BindAggregateFunction(aggr, std::move(aggr_children), nullptr,
 			                                                       AggregateType::NON_DISTINCT);
+			if (aggr_expr->children.size() != 1) {
+				// min/max with collation - not supported
+				return;
+			}
 			pushdown_info->min_max_aggregates.push_back(std::move(aggr_expr));
 		}
 	}
+	// set up the dynamic filters (if we don't have any yet)
+	if (!get.dynamic_filters) {
+		get.dynamic_filters = make_shared_ptr<DynamicTableFilterSet>();
+	}
+	pushdown_info->dynamic_filters = get.dynamic_filters;
 
 	// set up the filter pushdown in the join itself
 	join.filter_pushdown = std::move(pushdown_info);
