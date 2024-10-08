@@ -11,14 +11,18 @@
 namespace duckdb {
 
 AllocationFunctions GetDefaultAllocationFunctions() {
-	// This should be called exactly once, to initialize DEFAULT_ALLOCATION_FUNCTIONS only
-	D_ASSERT(DEFAULT_ALLOCATION_FUNCTIONS.malloc == nullptr && DEFAULT_ALLOCATION_FUNCTIONS.realloc == nullptr &&
-	         DEFAULT_ALLOCATION_FUNCTIONS.free == nullptr);
+	AllocationFunctions result(nullptr, nullptr, nullptr);
 #ifdef USE_JEMALLOC
-	return JemallocExtension::GetAllocationFunctions();
+	result = JemallocExtension::GetAllocationFunctions();
 #else
-	return AllocationFunctions(malloc, realloc, free);
+	result = AllocationFunctions(malloc, realloc, free);
 #endif
+	// If DEFAULT_ALLOCATION_FUNCTIONS was somehow already set, make sure we're setting the same function pointers
+	D_ASSERT(DEFAULT_ALLOCATION_FUNCTIONS.malloc == nullptr ||
+	         (DEFAULT_ALLOCATION_FUNCTIONS.malloc == result.malloc &&
+	          DEFAULT_ALLOCATION_FUNCTIONS.realloc == result.realloc &&
+	          DEFAULT_ALLOCATION_FUNCTIONS.free == result.free));
+	return result;
 }
 
 } // namespace duckdb

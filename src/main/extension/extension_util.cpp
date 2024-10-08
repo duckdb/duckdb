@@ -19,6 +19,23 @@
 
 namespace duckdb {
 
+void ExtensionUtil::InitializeExtension(DatabaseInstance &db) {
+	// Extensions have a "copy" of DuckDB statically compiled into them, so they might have a copy of jemalloc
+	// Therefore, their DEFAULT_ALLOCATION_FUNCTIONS in stl_allocator.hpp are DIFFERENT from the DuckDB binary!
+	// This method gets the function pointers from the DBConfig (which are from the main DuckDB binary),
+	// and overwrites the DEFAULT_ALLOCATION_FUNCTIONS that were statically compiled into extension.
+	// This makes it so that allocations in extensions use the same jemalloc!
+	// This is very important because we'd rather not initialize jemalloc once for every dynamically loaded extension
+	// Important notes:
+	// 1. This function should only be called from WITHIN extensions! Otherwise, it has no effect.
+	// 2. This should be the FIRST thing that extensions call in their Load()
+	// 3. Static containers will be allocated before this function is called, so avoid them in extensions,
+	//    otherwise we will still end up initializing jemalloc within the dynamically loaded extension.
+	//    For these, we have created static_vector, static_unordered_map, etc. which do not use jemalloc
+	auto &config = DBConfig::GetConfig(db);
+	DEFAULT_ALLOCATION_FUNCTIONS = config.allocation_functions;
+}
+
 void ExtensionUtil::RegisterExtension(DatabaseInstance &db, const string &name,
                                       const ExtensionLoadedInfo &description) {
 
@@ -205,11 +222,6 @@ void ExtensionUtil::RegisterCastFunction(DatabaseInstance &db, const LogicalType
 	auto &config = DBConfig::GetConfig(db);
 	auto &casts = config.GetCastFunctions();
 	casts.RegisterCastFunction(source, target, std::move(function), implicit_cast_cost);
-}
-
-void ExtensionUtil::InitializeAllocationFunctions(DatabaseInstance &db) {
-	auto &config = DBConfig::GetConfig(db);
-	DEFAULT_ALLOCATION_FUNCTIONS = config.allocation_functions;
 }
 
 } // namespace duckdb

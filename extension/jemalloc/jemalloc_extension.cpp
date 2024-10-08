@@ -7,7 +7,7 @@
 namespace duckdb {
 
 void JemallocExtension::Load(DuckDB &db) { // This is a static-only extension
-	ExtensionUtil::InitializeAllocationFunctions(*db.instance);
+	ExtensionUtil::InitializeExtension(*db.instance);
 }
 
 std::string JemallocExtension::Name() {

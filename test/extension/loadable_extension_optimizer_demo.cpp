@@ -152,7 +152,7 @@ public:
 //===--------------------------------------------------------------------===//
 extern "C" {
 DUCKDB_EXTENSION_API void loadable_extension_optimizer_demo_init(duckdb::DatabaseInstance &db) {
-	ExtensionUtil::InitializeAllocationFunctions(db);
+	ExtensionUtil::InitializeExtension(db);
 	Connection con(db);
 
 	// add a parser extension
