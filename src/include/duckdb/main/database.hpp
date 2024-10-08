@@ -59,8 +59,6 @@ public:
 	DUCKDB_API ValidChecker &GetValidChecker();
 	DUCKDB_API void SetExtensionLoaded(const string &extension_name, ExtensionInstallInfo &install_info);
 
-	// Note: this function is virtual to ensure extensions that have a copy of DuckDB linked in will receive the correct
-	//       function pointers into the DatabaseInstance that loaads them instead of their copies of DuckDB static lib
 	DUCKDB_API const duckdb_ext_api_v0 GetExtensionAPIV0();
 
 	idx_t NumberOfThreads();
