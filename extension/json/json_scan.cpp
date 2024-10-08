@@ -42,12 +42,12 @@ void JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
 			maximum_object_size = MaxValue<idx_t>(UIntegerValue::Get(kv.second), maximum_object_size);
 		} else if (loption == "format") {
 			auto arg = StringUtil::Lower(StringValue::Get(kv.second));
-			static const auto FORMAT_OPTIONS =
-			    case_insensitive_map_t<JSONFormat> {{"auto", JSONFormat::AUTO_DETECT},
-			                                        {"unstructured", JSONFormat::UNSTRUCTURED},
-			                                        {"newline_delimited", JSONFormat::NEWLINE_DELIMITED},
-			                                        {"nd", JSONFormat::NEWLINE_DELIMITED},
-			                                        {"array", JSONFormat::ARRAY}};
+			static const static_case_insensitive_map_t<JSONFormat> FORMAT_OPTIONS = {
+			    {"auto", JSONFormat::AUTO_DETECT},
+			    {"unstructured", JSONFormat::UNSTRUCTURED},
+			    {"newline_delimited", JSONFormat::NEWLINE_DELIMITED},
+			    {"nd", JSONFormat::NEWLINE_DELIMITED},
+			    {"array", JSONFormat::ARRAY}};
 			auto lookup = FORMAT_OPTIONS.find(arg);
 			if (lookup == FORMAT_OPTIONS.end()) {
 				vector<string> valid_options;
@@ -98,7 +98,7 @@ void JSONScanData::InitializeFormats(bool auto_detect_p) {
 	}
 
 	if (auto_detect_p) {
-		static const type_id_map_t<vector<const char *>> FORMAT_TEMPLATES = {
+		static const static_type_id_map_t<static_vector<const char *>> FORMAT_TEMPLATES = {
 		    {LogicalTypeId::DATE, {"%m-%d-%Y", "%m-%d-%y", "%d-%m-%Y", "%d-%m-%y", "%Y-%m-%d", "%y-%m-%d"}},
 		    {LogicalTypeId::TIMESTAMP,
 		     {"%Y-%m-%d %H:%M:%S.%f", "%m-%d-%Y %I:%M:%S %p", "%m-%d-%y %I:%M:%S %p", "%d-%m-%Y %H:%M:%S",

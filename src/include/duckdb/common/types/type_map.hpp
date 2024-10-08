@@ -47,6 +47,9 @@ struct LogicalTypeIdEquality {
 template <typename T>
 using type_id_map_t = unordered_map<LogicalTypeId, T, LogicalTypeIdHashFunction, LogicalTypeIdEquality>;
 
+template <typename T>
+using static_type_id_map_t = static_unordered_map<LogicalTypeId, T, LogicalTypeIdHashFunction, LogicalTypeIdEquality>;
+
 using type_id_set_t = unordered_set<LogicalTypeId, LogicalTypeIdHashFunction, LogicalTypeIdEquality>;
 
 } // namespace duckdb

@@ -21,13 +21,28 @@
 
 namespace duckdb {
 
-DUCKDB_API void *stl_malloc(size_t size);             // NOLINT: not using camelcase on purpose here
-DUCKDB_API void *stl_realloc(void *ptr, size_t size); // NOLINT: not using camelcase on purpose here
-DUCKDB_API void stl_free(void *ptr);                  // NOLINT: not using camelcase on purpose here
+typedef void *(*malloc_function_t)(size_t);
+typedef void *(*realloc_function_t)(void *, size_t);
+typedef void (*free_function_t)(void *);
+
+class AllocationFunctions {
+public:
+	AllocationFunctions(malloc_function_t malloc_p, realloc_function_t realloc_p, free_function_t free_p)
+	    : malloc(malloc_p), realloc(realloc_p), free(free_p) {
+	}
+
+public:
+	malloc_function_t malloc = nullptr;
+	realloc_function_t realloc = nullptr;
+	free_function_t free = nullptr;
+};
+
+DUCKDB_API AllocationFunctions GetDefaultAllocationFunctions();
+static AllocationFunctions DEFAULT_ALLOCATION_FUNCTIONS = GetDefaultAllocationFunctions(); // NOLINT: non-const static
 
 template <class T>
 T *stl_new_array_uninitialized(size_t size) { // NOLINT: not using camelcase on purpose here
-	return static_cast<T *>(stl_malloc(size * sizeof(T)));
+	return static_cast<T *>(DEFAULT_ALLOCATION_FUNCTIONS.malloc(size * sizeof(T)));
 }
 
 template <class T>
@@ -50,7 +65,7 @@ struct stl_default_delete { // NOLINT: not using camelcase on purpose here
 	void operator()(T *ptr) const noexcept {
 		static_assert(sizeof(T) != 0, "cannot delete an incomplete type");
 		static_assert(!std::is_void<T>::value, "cannot delete an incomplete type");
-		stl_free(ptr);
+		DEFAULT_ALLOCATION_FUNCTIONS.free(ptr);
 	}
 };
 
@@ -72,7 +87,7 @@ public:
 	template <class U>
 	typename _EnableIfConvertible<U>::type operator()(U *ptr) const noexcept { // NOLINT: matching std
 		static_assert(sizeof(U) != 0, "cannot delete an incomplete type");
-		delete[] ptr;
+		DEFAULT_ALLOCATION_FUNCTIONS.free(ptr);
 	}
 };
 
@@ -98,12 +113,16 @@ public:
 		typedef stl_allocator<U> other;
 	};
 
-	stl_allocator() noexcept {
+	stl_allocator() noexcept : malloc(DEFAULT_ALLOCATION_FUNCTIONS.malloc), free(DEFAULT_ALLOCATION_FUNCTIONS.free) {
 	}
-	stl_allocator(const stl_allocator &) noexcept {
+	stl_allocator(const stl_allocator &other) noexcept {
+		malloc = other.malloc;
+		free = other.free;
 	}
 	template <typename U>
-	stl_allocator(const stl_allocator<U> &) noexcept { // NOLINT: allow implicit conversion
+	stl_allocator(const stl_allocator<U> &other) noexcept { // NOLINT: allow implicit conversion
+		malloc = other.malloc;
+		free = other.free;
 	}
 	~stl_allocator() {
 	}
@@ -113,11 +132,11 @@ public:
 	}
 
 	pointer allocate(size_type n, const void * = 0) { // NOLINT: matching name of std
-		return static_cast<pointer>(stl_malloc(n * sizeof(value_type)));
+		return static_cast<pointer>(malloc(n * sizeof(value_type)));
 	}
 
 	void deallocate(T *p, size_type) { // NOLINT: matching name of std
-		stl_free(p);
+		free(p);
 	}
 
 	size_type max_size() const noexcept { // NOLINT: matching name of std
@@ -133,16 +152,19 @@ public:
 	void destroy(U *p) { // NOLINT: matching name of std
 		p->~U();
 	}
+
+	malloc_function_t malloc;
+	free_function_t free;
 };
 
 template <class T, class U>
-bool operator==(const stl_allocator<T> &, const stl_allocator<U> &) noexcept {
-	return true;
+bool operator==(const stl_allocator<T> &lhs, const stl_allocator<U> &rhs) noexcept {
+	return lhs.malloc == rhs.malloc && lhs.free == rhs.free;
 }
 
 template <class T, class U>
-bool operator!=(const stl_allocator<T> &, const stl_allocator<U> &) noexcept {
-	return false;
+bool operator!=(const stl_allocator<T> &lhs, const stl_allocator<U> &rhs) noexcept {
+	return lhs.malloc != rhs.malloc || lhs.free != rhs.free;
 }
 
 } // namespace duckdb

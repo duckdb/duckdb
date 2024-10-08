@@ -30,7 +30,7 @@ namespace duckdb {
 
 template <class DATA_TYPE, bool SAFE = true, // vector<bool> is evil so we work around it
           class ALLOCATOR = typename std::conditional<std::is_same<DATA_TYPE, bool>::value, std::allocator<DATA_TYPE>,
-                                                      std::allocator<DATA_TYPE>>::type>
+                                                      stl_allocator<DATA_TYPE>>::type>
 class vector : public std::vector<DATA_TYPE, ALLOCATOR> { // NOLINT: matching name of std
 public:
 	using original = std::vector<DATA_TYPE, ALLOCATOR>;
@@ -128,5 +128,8 @@ public:
 
 template <typename T>
 using unsafe_vector = vector<T, false>;
+
+template <typename T>
+using static_vector = vector<T, true, std::allocator<T>>;
 
 } // namespace duckdb

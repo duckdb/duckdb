@@ -6,27 +6,14 @@
 
 namespace duckdb {
 
-void *stl_malloc(size_t size) {
+AllocationFunctions GetDefaultAllocationFunctions() {
+	// This should be called exactly once, to initialize DEFAULT_ALLOCATION_FUNCTIONS only
+	D_ASSERT(DEFAULT_ALLOCATION_FUNCTIONS.malloc == nullptr && DEFAULT_ALLOCATION_FUNCTIONS.realloc == nullptr &&
+	         DEFAULT_ALLOCATION_FUNCTIONS.free == nullptr);
 #ifdef USE_JEMALLOC
-	return JemallocExtension::malloc(size);
+	return JemallocExtension::GetAllocationFunctions();
 #else
-	return malloc(size);
-#endif
-}
-
-DUCKDB_API void *stl_realloc(void *ptr, size_t size) {
-#ifdef USE_JEMALLOC
-	return JemallocExtension::realloc(ptr, size);
-#else
-	return realloc(ptr, size);
-#endif
-}
-
-void stl_free(void *ptr) {
-#ifdef USE_JEMALLOC
-	JemallocExtension::free(ptr);
-#else
-	free(ptr);
+	return AllocationFunctions(malloc, realloc, free);
 #endif
 }
 

@@ -3,6 +3,8 @@
 
 #include "jemalloc/jemalloc.h"
 
+#include <jemalloc/jemalloc.h>
+
 namespace duckdb {
 
 void JemallocExtension::Load(DuckDB &db) {
@@ -21,16 +23,8 @@ std::string JemallocExtension::Version() const {
 #endif
 }
 
-void *JemallocExtension::malloc(size_t size) {
-	return duckdb_je_malloc(size);
-}
-
-void *JemallocExtension::realloc(void *ptr, size_t size) {
-	return duckdb_je_realloc(ptr, size);
-}
-
-void JemallocExtension::free(void *ptr) {
-	duckdb_je_free(ptr);
+AllocationFunctions JemallocExtension::GetAllocationFunctions() {
+	return AllocationFunctions(duckdb_je_malloc, duckdb_je_realloc, duckdb_je_free);
 }
 
 static void JemallocCTL(const char *name, void *old_ptr, size_t *old_len, void *new_ptr, size_t new_len) {

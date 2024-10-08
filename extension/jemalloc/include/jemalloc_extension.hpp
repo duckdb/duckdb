@@ -18,10 +18,7 @@ public:
 	std::string Name() override;
 	std::string Version() const override;
 
-	static void *malloc(size_t size);
-	static void *realloc(void *ptr, size_t size);
-	static void free(void *ptr);
-
+	static AllocationFunctions GetAllocationFunctions();
 	static int64_t DecayDelay();
 	static void ThreadFlush(idx_t threshold);
 	static void ThreadIdle();

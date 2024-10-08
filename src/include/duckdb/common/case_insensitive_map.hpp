@@ -8,12 +8,12 @@
 
 #pragma once
 
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/unordered_set.hpp"
-#include "duckdb/common/string.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/map.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
 
@@ -33,7 +33,14 @@ template <typename T>
 using case_insensitive_map_t =
     unordered_map<string, T, CaseInsensitiveStringHashFunction, CaseInsensitiveStringEquality>;
 
+template <typename T>
+using static_case_insensitive_map_t =
+    static_unordered_map<string, T, CaseInsensitiveStringHashFunction, CaseInsensitiveStringEquality>;
+
 using case_insensitive_set_t = unordered_set<string, CaseInsensitiveStringHashFunction, CaseInsensitiveStringEquality>;
+
+using static_case_insensitive_set_t =
+    static_unordered_set<string, CaseInsensitiveStringHashFunction, CaseInsensitiveStringEquality>;
 
 struct CaseInsensitiveStringCompare {
 	bool operator()(const string &s1, const string &s2) const {

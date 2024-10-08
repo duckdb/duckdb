@@ -337,8 +337,8 @@ struct ConcurrentQueueDefaultTraits
 	static inline void* (malloc)(size_t size) { return WORKAROUND_malloc(size); }
 	static inline void (free)(void* ptr) { return WORKAROUND_free(ptr); }
 #else
-	static inline void* malloc(size_t size) { return duckdb::stl_malloc(size); }
-	static inline void free(void* ptr) { return duckdb::stl_free(ptr); }
+	static inline void* malloc(size_t size) { return duckdb::DEFAULT_ALLOCATION_FUNCTIONS.malloc(size); }
+	static inline void free(void* ptr) { return duckdb::DEFAULT_ALLOCATION_FUNCTIONS.free(ptr); }
 #endif
 #else
 	// Debug versions when running under the Relacy race detector (ignore

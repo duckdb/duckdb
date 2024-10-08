@@ -176,7 +176,7 @@ data_ptr_t Allocator::ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t s
 }
 
 data_ptr_t Allocator::DefaultAllocate(PrivateAllocatorData *private_data, idx_t size) {
-	auto default_allocate_result = stl_malloc(size);
+	auto default_allocate_result = DEFAULT_ALLOCATION_FUNCTIONS.malloc(size);
 	if (!default_allocate_result) {
 		throw std::bad_alloc();
 	}
@@ -184,12 +184,12 @@ data_ptr_t Allocator::DefaultAllocate(PrivateAllocatorData *private_data, idx_t 
 }
 
 void Allocator::DefaultFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
-	stl_free(pointer);
+	DEFAULT_ALLOCATION_FUNCTIONS.free(pointer);
 }
 
 data_ptr_t Allocator::DefaultReallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
                                         idx_t size) {
-	return data_ptr_cast(stl_realloc(pointer, size));
+	return data_ptr_cast(DEFAULT_ALLOCATION_FUNCTIONS.realloc(pointer, size));
 }
 
 shared_ptr<Allocator> &Allocator::DefaultAllocatorReference() {

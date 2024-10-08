@@ -1,17 +1,17 @@
 #define DUCKDB_EXTENSION_MAIN
 #include "duckdb.hpp"
-#include "duckdb/parser/parser_extension.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
-#include "duckdb/planner/extension_callback.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/vector_operations/generic_executor.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/extension_util.hpp"
-#include "duckdb/common/vector_operations/generic_executor.hpp"
-#include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/extension_callback.hpp"
 
 using namespace duckdb;
 
@@ -230,10 +230,11 @@ public:
 	}
 };
 
-static set<string> test_loaded_extension_list;
+static static_set<string> test_loaded_extension_list;
 
 class QuackLoadExtension : public ExtensionCallback {
 	void OnExtensionLoaded(DatabaseInstance &db, const string &name) override {
+
 		test_loaded_extension_list.insert(name);
 	}
 };
