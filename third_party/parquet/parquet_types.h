@@ -19,6 +19,7 @@
 #include <memory>
 
 
+#include "windows_compatibility.h"
 namespace apache = duckdb_apache;
 
 namespace duckdb_parquet {

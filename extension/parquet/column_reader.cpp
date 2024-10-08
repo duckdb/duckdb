@@ -237,6 +237,10 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 	block.reset();
 	PageHeader page_hdr;
 	reader.Read(page_hdr, *protocol);
+	// some basic sanity check
+	if (page_hdr.compressed_page_size < 0 || page_hdr.uncompressed_page_size < 0) {
+		throw std::runtime_error("Page sizes can't be < 0");
+	}
 
 	switch (page_hdr.type) {
 	case PageType::DATA_PAGE_V2:
@@ -277,7 +281,6 @@ void ColumnReader::ResetPage() {
 
 void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	D_ASSERT(page_hdr.type == PageType::DATA_PAGE_V2);
-
 	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
 
 	AllocateBlock(page_hdr.uncompressed_page_size + 1);
@@ -299,6 +302,10 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	// copy repeats & defines as-is because FOR SOME REASON they are uncompressed
 	auto uncompressed_bytes = page_hdr.data_page_header_v2.repetition_levels_byte_length +
 	                          page_hdr.data_page_header_v2.definition_levels_byte_length;
+	if (uncompressed_bytes > page_hdr.uncompressed_page_size) {
+		throw std::runtime_error("Page header inconsistency, uncompressed_page_size needs to be larger than "
+		                         "repetition_levels_byte_length + definition_levels_byte_length");
+	}
 	trans.read(block->ptr, uncompressed_bytes);
 
 	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
@@ -719,6 +726,7 @@ void StringColumnReader::PrepareDeltaLengthByteArray(ResizeableBuffer &buffer) {
 	auto string_data = FlatVector::GetData<string_t>(*byte_array_data);
 	for (idx_t i = 0; i < value_count; i++) {
 		auto str_len = length_data[i];
+		buffer.available(str_len);
 		string_data[i] = StringVector::EmptyString(*byte_array_data, str_len);
 		auto result_data = string_data[i].GetDataWriteable();
 		memcpy(result_data, buffer.ptr, length_data[i]);
@@ -747,6 +755,7 @@ void StringColumnReader::PrepareDeltaByteArray(ResizeableBuffer &buffer) {
 	auto string_data = FlatVector::GetData<string_t>(*byte_array_data);
 	for (idx_t i = 0; i < prefix_count; i++) {
 		auto str_len = prefix_data[i] + suffix_data[i];
+		buffer.available(suffix_data[i]);
 		string_data[i] = StringVector::EmptyString(*byte_array_data, str_len);
 		auto result_data = string_data[i].GetDataWriteable();
 		if (prefix_data[i] > 0) {
