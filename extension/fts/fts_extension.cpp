@@ -48,6 +48,7 @@ static void StemFunction(DataChunk &args, ExpressionState &state, Vector &result
 
 static void LoadInternal(DuckDB &db) {
 	auto &db_instance = *db.instance;
+	ExtensionUtil::InitializeAllocationFunctions(db_instance);
 	ScalarFunction stem_func("stem", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, StemFunction);
 
 	auto create_fts_index_func =

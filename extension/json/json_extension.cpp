@@ -33,6 +33,7 @@ static DefaultMacro json_macros[] = {
 
 void JsonExtension::Load(DuckDB &db) {
 	auto &db_instance = *db.instance;
+	ExtensionUtil::InitializeAllocationFunctions(db_instance);
 	// JSON type
 	auto json_type = LogicalType::JSON();
 	ExtensionUtil::RegisterType(db_instance, LogicalType::JSON_TYPE_NAME, std::move(json_type));

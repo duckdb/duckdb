@@ -10,6 +10,7 @@
 namespace duckdb {
 
 static void LoadInternal(DatabaseInstance &instance) {
+	ExtensionUtil::InitializeAllocationFunctions(instance);
 	// Load functions
 	for (const auto &function : DeltaFunctions::GetTableFunctions(instance)) {
 		ExtensionUtil::RegisterFunction(instance, function);

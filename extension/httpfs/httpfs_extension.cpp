@@ -3,14 +3,16 @@
 #include "httpfs_extension.hpp"
 
 #include "create_secret_functions.hpp"
-#include "duckdb.hpp"
-#include "s3fs.hpp"
-#include "hffs.hpp"
 #include "crypto.hpp"
+#include "duckdb.hpp"
+#include "duckdb/main/extension_util.hpp"
+#include "hffs.hpp"
+#include "s3fs.hpp"
 
 namespace duckdb {
 
 static void LoadInternal(DatabaseInstance &instance) {
+	ExtensionUtil::InitializeAllocationFunctions(instance);
 	S3FileSystem::Verify(); // run some tests to see if all the hashes work out
 	auto &fs = instance.GetFileSystem();
 

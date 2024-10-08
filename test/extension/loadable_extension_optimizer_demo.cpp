@@ -1,27 +1,28 @@
 #define DUCKDB_EXTENSION_MAIN
 #include "duckdb.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/common/serializer/binary_serializer.hpp"
-#include "duckdb/common/serializer/binary_deserializer.hpp"
-#include "duckdb/common/serializer/memory_stream.hpp"
 
 using namespace duckdb;
 
 // whatever
-#include <signal.h>
-#include <sys/mman.h>
-#include <unistd.h>
-#include <stdio.h>
+#include <arpa/inet.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <signal.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#include <arpa/inet.h>
+#include <unistd.h>
 
 #ifdef __MVS__
 #define _XOPEN_SOURCE_EXTENDED 1
@@ -151,6 +152,7 @@ public:
 //===--------------------------------------------------------------------===//
 extern "C" {
 DUCKDB_EXTENSION_API void loadable_extension_optimizer_demo_init(duckdb::DatabaseInstance &db) {
+	ExtensionUtil::InitializeAllocationFunctions(db);
 	Connection con(db);
 
 	// add a parser extension

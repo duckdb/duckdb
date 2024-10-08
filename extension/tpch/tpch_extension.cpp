@@ -4,10 +4,10 @@
 
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
-#include "duckdb/main/extension_util.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #endif
 
@@ -166,6 +166,7 @@ static string PragmaTpchQuery(ClientContext &context, const FunctionParameters &
 
 static void LoadInternal(DuckDB &db) {
 	auto &db_instance = *db.instance;
+	ExtensionUtil::InitializeAllocationFunctions(db_instance);
 
 	TableFunction dbgen_func("dbgen", {}, DbgenFunction, DbgenBind);
 	dbgen_func.named_parameters["sf"] = LogicalType::DOUBLE;

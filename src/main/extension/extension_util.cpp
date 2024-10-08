@@ -1,20 +1,21 @@
 #include "duckdb/main/extension_util.hpp"
+
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/parser/parsed_data/create_collation_info.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_macro_info.hpp"
-#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
-#include "duckdb/parser/parsed_data/create_collation_info.hpp"
-#include "duckdb/main/extension_install_info.hpp"
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/main/secret/secret_manager.hpp"
-#include "duckdb/main/database.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
 
 namespace duckdb {
 
@@ -204,6 +205,11 @@ void ExtensionUtil::RegisterCastFunction(DatabaseInstance &db, const LogicalType
 	auto &config = DBConfig::GetConfig(db);
 	auto &casts = config.GetCastFunctions();
 	casts.RegisterCastFunction(source, target, std::move(function), implicit_cast_cost);
+}
+
+void ExtensionUtil::InitializeAllocationFunctions(DatabaseInstance &db) {
+	auto &config = DBConfig::GetConfig(db);
+	DEFAULT_ALLOCATION_FUNCTIONS = config.allocation_functions;
 }
 
 } // namespace duckdb

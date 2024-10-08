@@ -1,14 +1,13 @@
 #define DUCKDB_EXTENSION_MAIN
 #include "jemalloc_extension.hpp"
 
+#include "duckdb/main/extension_util.hpp"
 #include "jemalloc/jemalloc.h"
-
-#include <jemalloc/jemalloc.h>
 
 namespace duckdb {
 
-void JemallocExtension::Load(DuckDB &db) {
-	// NOP: This extension can only be loaded statically
+void JemallocExtension::Load(DuckDB &db) { // This is a static-only extension
+	ExtensionUtil::InitializeAllocationFunctions(*db.instance);
 }
 
 std::string JemallocExtension::Name() {

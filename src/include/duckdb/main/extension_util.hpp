@@ -11,9 +11,9 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
-#include "duckdb/main/extension_install_info.hpp"
 
 namespace duckdb {
 struct CreateMacroInfo;
@@ -78,6 +78,20 @@ public:
 	DUCKDB_API static void RegisterCastFunction(DatabaseInstance &db, const LogicalType &source,
 	                                            const LogicalType &target, BoundCastInfo function,
 	                                            int64_t implicit_cast_cost = -1);
+
+	//! Extensions have a "copy" of DuckDB statically compiled into them, so they might have a copy of jemalloc
+	//! Therefore, their DEFAULT_ALLOCATION_FUNCTIONS in stl_allocator.hpp are DIFFERENT from the DuckDB binary!
+	//! This method gets the function pointers from the DBConfig (which are from the main DuckDB binary),
+	//! and overwrites the DEFAULT_ALLOCATION_FUNCTIONS that were statically compiled into extension.
+	//! This makes it so that allocations in extensions use the same jemalloc!
+	//! This is very important because we'd rather not initialize jemalloc once for every dynamically loaded extension
+	//! Important notes:
+	//! 1. This function should only be called from WITHIN extensions! Otherwise, it has no effect.
+	//! 2. This should be the FIRST thing that extensions call in their Load()
+	//! 3. Static containers will be allocated before this function is called, so avoid them in extensions,
+	//!    otherwise we will still end up initializing jemalloc within the dynamically loaded extension.
+	//!    For these, we have created static_vector, static_unordered_map, etc. which do not use jemalloc
+	DUCKDB_API static void InitializeAllocationFunctions(DatabaseInstance &db);
 };
 
 } // namespace duckdb

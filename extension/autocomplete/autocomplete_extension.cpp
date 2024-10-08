@@ -413,6 +413,7 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 }
 
 static void LoadInternal(DatabaseInstance &db) {
+	ExtensionUtil::InitializeAllocationFunctions(db);
 	TableFunction auto_complete_fun("sql_auto_complete", {LogicalType::VARCHAR}, SQLAutoCompleteFunction,
 	                                SQLAutoCompleteBind, SQLAutoCompleteInit);
 	ExtensionUtil::RegisterFunction(db, auto_complete_fun);

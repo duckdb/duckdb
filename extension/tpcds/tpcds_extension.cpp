@@ -156,6 +156,7 @@ static string PragmaTpcdsQuery(ClientContext &context, const FunctionParameters 
 
 static void LoadInternal(DuckDB &db) {
 	auto &db_instance = *db.instance;
+	ExtensionUtil::InitializeAllocationFunctions(db_instance);
 
 	TableFunction dsdgen_func("dsdgen", {}, DsdgenFunction, DsdgenBind);
 	dsdgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
