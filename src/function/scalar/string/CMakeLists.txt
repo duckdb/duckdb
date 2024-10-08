@@ -1,19 +1,19 @@
 add_subdirectory(regexp)
 add_library_unity(
-  duckdb_func_internal_string_main
+  duckdb_func_string_main
   OBJECT
   caseconvert.cpp
-  concat_ws.cpp
   concat.cpp
-  contains.cpp
+  concat_ws.cpp
   length.cpp
   like.cpp
   nfc_normalize.cpp
-  prefix.cpp
   regexp.cpp
-  strip_accents.cpp
   substring.cpp
-  suffix.cpp)
+  prefix.cpp
+  strip_accents.cpp
+  suffix.cpp
+  contains.cpp)
 set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_internal_string_main>
+    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_string_main>
     PARENT_SCOPE)

@@ -77,6 +77,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
+#include "duckdb/core_functions/aggregate/quantile_enum.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
@@ -93,7 +94,6 @@
 #include "duckdb/function/table/arrow/enum/arrow_type_info_type.hpp"
 #include "duckdb/function/table/arrow/enum/arrow_variable_size_type.hpp"
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/core_functions/aggregate/quantile_enum.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/client_properties.hpp"
@@ -8303,3 +8303,4 @@ WindowExcludeMode EnumUtil::FromString<WindowExcludeMode>(const char *value) {
 }
 
 }
+

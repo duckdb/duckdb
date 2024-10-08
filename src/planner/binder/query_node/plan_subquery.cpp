@@ -1,7 +1,4 @@
-#include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
-#include "duckdb/function/function_binder.hpp"
-#include "duckdb/core_functions/scalar/generic_functions.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -14,10 +11,13 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
-#include "duckdb/planner/operator/logical_dependent_join.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/planner/operator/logical_dependent_join.hpp"
 #include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
+#include "duckdb/core_functions/scalar/generic_functions.hpp"
 
 namespace duckdb {
 

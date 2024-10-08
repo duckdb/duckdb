@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <stdint.h>
-
 namespace duckdb {
 
 enum class QuantileSerializationType : uint8_t {

@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-static void RepeatStringFunction(DataChunk &args, ExpressionState &, Vector &result) {
+static void RepeatFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	auto &str_vector = args.data[0];
 	auto &cnt_vector = args.data[1];
 
@@ -77,7 +77,7 @@ static void RepeatListFunction(DataChunk &args, ExpressionState &, Vector &resul
 ScalarFunctionSet RepeatFun::GetFunctions() {
 	ScalarFunctionSet repeat;
 	for (const auto &type : {LogicalType::VARCHAR, LogicalType::BLOB}) {
-		repeat.AddFunction(ScalarFunction({type, LogicalType::BIGINT}, type, RepeatStringFunction));
+		repeat.AddFunction(ScalarFunction({type, LogicalType::BIGINT}, type, RepeatFunction));
 	}
 	repeat.AddFunction(ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT},
 	                                  LogicalType::LIST(LogicalType::ANY), RepeatListFunction, RepeatBindFunction));

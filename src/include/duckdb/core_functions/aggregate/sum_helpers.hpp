@@ -10,9 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/function/aggregate_state.hpp"
 
 namespace duckdb {
 

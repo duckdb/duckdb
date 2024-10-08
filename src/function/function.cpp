@@ -1,5 +1,4 @@
 #include "duckdb/function/function.hpp"
-#include "duckdb/function/built_in_functions.hpp"
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/hash.hpp"
@@ -100,6 +99,7 @@ void BuiltinFunctions::Initialize() {
 	RegisterGenericFunctions();
 	RegisterOperators();
 	RegisterSequenceFunctions();
+	RegisterStringFunctions();
 	RegisterNestedFunctions();
 
 	RegisterPragmaFunctions();
