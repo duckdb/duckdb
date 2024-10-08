@@ -208,10 +208,19 @@ struct QuantileScalarOperation : public QuantileOperation {
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
-	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &aggr_input_data, STATE &state, const SubFrames &frames, Vector &result,
-	                   idx_t ridx, const STATE *gstate) {
-		QuantileIncluded included(fmask, dmask);
+	static void Window(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
+	                   const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames &frames, Vector &result,
+	                   idx_t ridx) {
+		auto &state = *reinterpret_cast<STATE *>(l_state);
+		auto gstate = reinterpret_cast<const STATE *>(g_state);
+
+		D_ASSERT(partition.inputs);
+		const auto &inputs = *partition.inputs;
+		D_ASSERT(inputs.ColumnCount() == 1);
+		auto &data = state.GetOrCreateWindowCursor(inputs, partition.all_valid);
+		const auto &fmask = partition.filter_mask;
+
+		QuantileIncluded<INPUT_TYPE> included(fmask, data);
 		const auto n = FrameSize(included, frames);
 
 		D_ASSERT(aggr_input_data.bind_data);
@@ -305,13 +314,22 @@ struct QuantileListOperation : QuantileOperation {
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
-	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &aggr_input_data, STATE &state, const SubFrames &frames, Vector &list,
-	                   idx_t lidx, const STATE *gstate) {
+	static void Window(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
+	                   const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames &frames, Vector &list,
+	                   idx_t lidx) {
+		auto &state = *reinterpret_cast<STATE *>(l_state);
+		auto gstate = reinterpret_cast<const STATE *>(g_state);
+
+		D_ASSERT(partition.inputs);
+		const auto &inputs = *partition.inputs;
+		D_ASSERT(inputs.ColumnCount() == 1);
+		auto &data = state.GetOrCreateWindowCursor(inputs, partition.all_valid);
+		const auto &fmask = partition.filter_mask;
+
 		D_ASSERT(aggr_input_data.bind_data);
 		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
 
-		QuantileIncluded included(fmask, dmask);
+		QuantileIncluded<INPUT_TYPE> included(fmask, data);
 		const auto n = FrameSize(included, frames);
 
 		// Result is a constant LIST<RESULT_TYPE> with a fixed length
@@ -410,7 +428,7 @@ struct ScalarDiscreteQuantile {
 		using OP = QuantileScalarOperation<true>;
 		auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
 #ifndef DUCKDB_SMALLER_BINARY
-		fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
+		fun.window = OP::Window<STATE, INPUT_TYPE, INPUT_TYPE>;
 		fun.window_init = OP::WindowInit<STATE, INPUT_TYPE>;
 #endif
 		return fun;
@@ -447,7 +465,7 @@ struct ListDiscreteQuantile {
 		auto fun = QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(type, type);
 		fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 #ifndef DUCKDB_SMALLER_BINARY
-		fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, list_entry_t, OP>;
+		fun.window = OP::template Window<STATE, INPUT_TYPE, list_entry_t>;
 		fun.window_init = OP::template WindowInit<STATE, INPUT_TYPE>;
 #endif
 		return fun;
@@ -538,7 +556,7 @@ struct ScalarContinuousQuantile {
 		    AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP>(input_type, target_type);
 		fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 #ifndef DUCKDB_SMALLER_BINARY
-		fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, TARGET_TYPE, OP>;
+		fun.window = OP::template Window<STATE, INPUT_TYPE, TARGET_TYPE>;
 		fun.window_init = OP::template WindowInit<STATE, INPUT_TYPE>;
 #endif
 		return fun;
@@ -553,7 +571,7 @@ struct ListContinuousQuantile {
 		auto fun = QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(input_type, target_type);
 		fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 #ifndef DUCKDB_SMALLER_BINARY
-		fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, list_entry_t, OP>;
+		fun.window = OP::template Window<STATE, INPUT_TYPE, list_entry_t>;
 		fun.window_init = OP::template WindowInit<STATE, INPUT_TYPE>;
 #endif
 		return fun;
