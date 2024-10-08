@@ -30,13 +30,12 @@ hugeint_t GetRangeHugeint(const BaseStatistics &nstats) {
 	return Hugeint::Convert(NumericStats::GetMax<T>(nstats)) - Hugeint::Convert(NumericStats::GetMin<T>(nstats));
 }
 
-static bool CanUsePartitionedAggregate(ClientContext &context, LogicalAggregate &op, PhysicalOperator &child) {
+static bool CanUsePartitionedAggregate(ClientContext &context, LogicalAggregate &op, PhysicalOperator &child, vector<column_t> &partition_columns) {
 	if (op.grouping_sets.size() > 1 || !op.grouping_functions.empty()) {
 		return false;
 	}
 	// check if the source is partitioned by the aggregate columns
 	// figure out the columns we are grouping by
-	vector<column_t> partition_columns;
 	for(auto &group_expr : op.groups) {
 		// only support bound reference here
 		if (group_expr->type != ExpressionType::BOUND_REF) {
@@ -244,10 +243,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 	} else {
 		// groups! create a GROUP BY aggregator
 		// use a partitioned or perfect hash aggregate if possible
+		vector<column_t> partition_columns;
 		vector<idx_t> required_bits;
-		if (CanUsePartitionedAggregate(context, op, *plan)) {
+		if (CanUsePartitionedAggregate(context, op, *plan, partition_columns)) {
 			groupby = make_uniq_base<PhysicalOperator, PhysicalPartitionedAggregate>(
-				context, op.types, std::move(op.expressions), std::move(op.groups), op.estimated_cardinality);
+				context, op.types, std::move(op.expressions), std::move(op.groups), std::move(partition_columns), op.estimated_cardinality);
 		} else if (CanUsePerfectHashAggregate(context, op, required_bits)) {
 			groupby = make_uniq_base<PhysicalOperator, PhysicalPerfectHashAggregate>(
 			    context, op.types, std::move(op.expressions), std::move(op.groups), std::move(op.group_stats),

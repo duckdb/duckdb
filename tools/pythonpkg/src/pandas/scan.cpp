@@ -69,7 +69,10 @@ PandasScanFunction::PandasScanFunction()
 	projection_pushdown = true;
 }
 
-OperatorPartitionData PandasScanFunction::PandasScanGetPartitionData(ClientContext &context, TableFunctionInput &input) {
+OperatorPartitionData PandasScanFunction::PandasScanGetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input) {
+	if (input.partition_info.RequiresPartitionColumns()) {
+		throw InternalException("PandasScan::GetPartitionData: partition columns not supported");
+	}
 	auto &data = input.local_state->Cast<PandasScanLocalState>();
 	return OperatorPartitionData(data.batch_index);
 }

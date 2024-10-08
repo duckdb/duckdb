@@ -61,7 +61,7 @@ public:
 	                          OperatorSinkFinalizeInput &input) const override;
 
 	OperatorPartitionInfo RequiredPartitionInfo() const override {
-		return OperatorPartitionInfo::RequiresBatchIndex();
+		return OperatorPartitionInfo::BatchIndex();
 	}
 
 	bool IsSink() const override {

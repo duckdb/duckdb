@@ -91,8 +91,8 @@ private:
 	bool finalized = false;
 	//! Whether or not the pipeline has finished processing
 	int32_t finished_processing_idx = -1;
-	//! Whether or not this pipeline requires keeping track of the batch index of the source
-	bool requires_batch_index = false;
+	//! Partition info that is used by this executor
+	OperatorPartitionInfo required_partition_info;
 
 	//! Source has indicated it is exhausted
 	bool exhausted_source = false;

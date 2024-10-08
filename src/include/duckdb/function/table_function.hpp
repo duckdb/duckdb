@@ -27,6 +27,7 @@ class TableFilterSet;
 class TableCatalogEntry;
 struct MultiFileReader;
 struct OperatorPartitionData;
+struct OperatorPartitionInfo;
 
 struct TableFunctionInfo {
 	DUCKDB_API virtual ~TableFunctionInfo();
@@ -150,6 +151,22 @@ struct TableFunctionPartitionInput {
 	const vector<column_t> &partition_ids;
 };
 
+struct TableFunctionGetPartitionInput {
+public:
+	TableFunctionGetPartitionInput(optional_ptr<const FunctionData> bind_data_p,
+			   optional_ptr<LocalTableFunctionState> local_state_p,
+			   optional_ptr<GlobalTableFunctionState> global_state_p,
+			   const OperatorPartitionInfo &partition_info_p)
+	    : bind_data(bind_data_p), local_state(local_state_p), global_state(global_state_p), partition_info(partition_info_p) {
+	}
+
+public:
+	optional_ptr<const FunctionData> bind_data;
+	optional_ptr<LocalTableFunctionState> local_state;
+	optional_ptr<GlobalTableFunctionState> global_state;
+	const OperatorPartitionInfo &partition_info;
+};
+
 enum class ScanType : uint8_t { TABLE, PARQUET, EXTERNAL };
 
 struct BindInfo {
@@ -215,7 +232,7 @@ typedef OperatorResultType (*table_in_out_function_t)(ExecutionContext &context,
                                                       DataChunk &input, DataChunk &output);
 typedef OperatorFinalizeResultType (*table_in_out_function_final_t)(ExecutionContext &context, TableFunctionInput &data,
                                                                     DataChunk &output);
-typedef OperatorPartitionData (*table_function_get_partition_data_t)(ClientContext &context, TableFunctionInput &input);
+typedef OperatorPartitionData (*table_function_get_partition_data_t)(ClientContext &context, TableFunctionGetPartitionInput &input);
 
 typedef BindInfo (*table_function_get_bind_info_t)(const optional_ptr<FunctionData> bind_data);
 
@@ -297,7 +314,7 @@ public:
 	table_function_to_string_t to_string;
 	//! (Optional) return how much of the table we have scanned up to this point (% of the data)
 	table_function_progress_t table_scan_progress;
-	//! (Optional) returns the current batch index of the current scan operator
+	//! (Optional) returns the partition info of the current scan operator
 	table_function_get_partition_data_t get_partition_data;
 	//! (Optional) returns extra bind info
 	table_function_get_bind_info_t get_bind_info;

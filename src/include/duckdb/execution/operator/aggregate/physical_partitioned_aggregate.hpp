@@ -25,9 +25,11 @@ public:
 
 public:
 	PhysicalPartitionedAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
-	                             vector<unique_ptr<Expression>> groups, idx_t estimated_cardinality);
+	                             vector<unique_ptr<Expression>> groups, vector<column_t> partitions, idx_t estimated_cardinality);
 
-	//! The groups
+	//! The partitions over which this is grouped
+	vector<column_t> partitions;
+	//! The groups over which the aggregate is partitioned - note that this is only
 	vector<unique_ptr<Expression>> groups;
 	//! The aggregates that have to be computed
 	vector<unique_ptr<Expression>> aggregates;
@@ -52,6 +54,7 @@ public:
 
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
+	OperatorPartitionInfo RequiredPartitionInfo() const override;
 	bool IsSink() const override {
 		return true;
 	}

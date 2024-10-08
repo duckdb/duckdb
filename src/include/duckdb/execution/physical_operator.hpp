@@ -35,15 +35,30 @@ enum class PartitionInfo {
 };
 
 struct OperatorPartitionInfo {
+	OperatorPartitionInfo() = default;
 	explicit OperatorPartitionInfo(bool batch_index) : batch_index(batch_index) {}
+	explicit OperatorPartitionInfo(vector<column_t> partition_columns_p) : partition_columns(std::move(partition_columns_p)) {}
 
 	bool batch_index = false;
+	vector<column_t> partition_columns;
 
 	static OperatorPartitionInfo NoPartitionInfo() {
 		return OperatorPartitionInfo(false);
 	}
-	static OperatorPartitionInfo RequiresBatchIndex() {
+	static OperatorPartitionInfo BatchIndex() {
 		return OperatorPartitionInfo(true);
+	}
+	static OperatorPartitionInfo PartitionColumns(vector<column_t> columns) {
+		return OperatorPartitionInfo(std::move(columns));
+	}
+	bool RequiresPartitionColumns() const {
+		return !partition_columns.empty();
+	}
+	bool RequiresBatchIndex() const {
+		return batch_index;
+	}
+	bool AnyRequired() const {
+		return RequiresPartitionColumns() || RequiresBatchIndex();
 	}
 };
 
@@ -138,7 +153,7 @@ public:
 	virtual SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const;
 
 	virtual OperatorPartitionData GetPartitionData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-	                            LocalSourceState &lstate) const;
+	                            LocalSourceState &lstate, const OperatorPartitionInfo &partition_info) const;
 
 	virtual bool IsSource() const {
 		return false;

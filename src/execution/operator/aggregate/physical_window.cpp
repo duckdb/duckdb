@@ -888,7 +888,10 @@ double PhysicalWindow::GetProgress(ClientContext &context, GlobalSourceState &gs
 }
 
 OperatorPartitionData PhysicalWindow::GetPartitionData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                                    LocalSourceState &lstate_p) const {
+                                    LocalSourceState &lstate_p, const OperatorPartitionInfo &partition_info) const {
+	if (partition_info.RequiresPartitionColumns()) {
+		throw InternalException("PhysicalWindow::GetPartitionData: partition columns not supported");
+	}
 	auto &lstate = lstate_p.Cast<WindowLocalSourceState>();
 	return OperatorPartitionData(lstate.batch_index);
 }

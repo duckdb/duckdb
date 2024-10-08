@@ -5,11 +5,14 @@
 namespace duckdb {
 
 PhysicalPartitionedAggregate::PhysicalPartitionedAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> aggregates_p,
-							 vector<unique_ptr<Expression>> groups_p, idx_t estimated_cardinality) :
+							 vector<unique_ptr<Expression>> groups_p, vector<column_t> partitions_p, idx_t estimated_cardinality) :
 	PhysicalOperator(PhysicalOperatorType::PARTITIONED_AGGREGATE, std::move(types), estimated_cardinality),
-	groups(std::move(groups_p)), aggregates(std::move(aggregates_p)) {
+	partitions(std::move(partitions_p)), groups(std::move(groups_p)), aggregates(std::move(aggregates_p)) {
 }
 
+OperatorPartitionInfo PhysicalPartitionedAggregate::RequiredPartitionInfo() const {
+	return OperatorPartitionInfo::PartitionColumns(partitions);
+}
 //===--------------------------------------------------------------------===//
 // Global State
 //===--------------------------------------------------------------------===//

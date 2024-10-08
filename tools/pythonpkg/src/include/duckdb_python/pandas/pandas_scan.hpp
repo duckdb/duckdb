@@ -45,7 +45,7 @@ public:
 
 	static unique_ptr<NodeStatistics> PandasScanCardinality(ClientContext &context, const FunctionData *bind_data);
 
-	static OperatorPartitionData PandasScanGetPartitionData(ClientContext &context, const TableFunctionInput &input);
+	static OperatorPartitionData PandasScanGetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input);
 
 	// Helper function that transform pandas df names to make them work with our binder
 	static py::object PandasReplaceCopiedNames(const py::object &original_df);

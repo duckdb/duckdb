@@ -777,7 +777,10 @@ public:
 		return std::move(result);
 	}
 
-	static OperatorPartitionData ParquetScanGetPartitionData(ClientContext &context, TableFunctionInput &input) {
+	static OperatorPartitionData ParquetScanGetPartitionData(ClientContext &context,TableFunctionGetPartitionInput &input) {
+		if (input.partition_info.RequiresPartitionColumns()) {
+			throw InternalException("ParquetScan::GetPartitionData: partition columns not supported");
+		}
 		auto &data = input.local_state->Cast<ParquetReadLocalState>();
 		return OperatorPartitionData(data.batch_index);
 	}

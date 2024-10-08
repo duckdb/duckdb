@@ -175,7 +175,10 @@ double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p
 	return percentage;
 }
 
-OperatorPartitionData TableScanGetPartitionData(ClientContext &context, TableFunctionInput &input) {
+OperatorPartitionData TableScanGetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input) {
+	if (input.partition_info.RequiresPartitionColumns()) {
+		throw InternalException("TableScan::GetPartitionData: partition columns not supported");
+	}
 	auto &state = input.local_state->Cast<TableScanLocalState>();
 	if (state.scan_state.table_state.row_group) {
 		return OperatorPartitionData(state.scan_state.table_state.batch_index);

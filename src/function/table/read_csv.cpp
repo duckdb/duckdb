@@ -249,7 +249,10 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	} while (true);
 }
 
-static OperatorPartitionData CSVReaderGetPartitionData(ClientContext &context, TableFunctionInput &input) {
+static OperatorPartitionData CSVReaderGetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input) {
+	if (input.partition_info.RequiresPartitionColumns()) {
+		throw InternalException("CSVReader::GetPartitionData: partition columns not supported");
+	}
 	auto &data = input.local_state->Cast<CSVLocalState>();
 	return OperatorPartitionData(data.csv_reader->scanner_idx);
 }

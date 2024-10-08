@@ -15,9 +15,9 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 	D_ASSERT(pipeline.source_state);
 	if (pipeline.sink) {
 		local_sink_state = pipeline.sink->GetLocalSinkState(context);
-		auto partition_info = pipeline.sink->RequiredPartitionInfo();
-		requires_batch_index = partition_info.batch_index && pipeline.source->SupportsBatchIndex();
-		if (requires_batch_index) {
+		required_partition_info = pipeline.sink->RequiredPartitionInfo();
+		if (required_partition_info.AnyRequired()) {
+			D_ASSERT(pipeline.source->SupportsBatchIndex());
 			auto &partition_info = local_sink_state->partition_info;
 			D_ASSERT(!partition_info.batch_index.IsValid());
 			// batch index is not set yet - initialize before fetching anything
@@ -109,14 +109,14 @@ bool PipelineExecutor::TryFlushCachingOperators() {
 }
 
 SinkNextBatchType PipelineExecutor::NextBatch(DataChunk &source_chunk) {
-	D_ASSERT(requires_batch_index);
+	D_ASSERT(required_partition_info.AnyRequired());
 	idx_t next_batch_index;
 	auto max_batch_index = pipeline.base_batch_index + PipelineBuildState::BATCH_INCREMENT - 1;
 	if (source_chunk.size() == 0) {
 		// set it to the maximum valid batch index value for the current pipeline
 		next_batch_index = max_batch_index;
 	} else {
-		auto partition_data = pipeline.source->GetPartitionData(context, source_chunk, *pipeline.source_state, *local_source_state);
+		auto partition_data = pipeline.source->GetPartitionData(context, source_chunk, *pipeline.source_state, *local_source_state, required_partition_info);
 		auto batch_index = partition_data.batch_index;
 		// we start with the base_batch_index as a valid starting value. Make sure that next batch is called below
 		next_batch_index = pipeline.base_batch_index + batch_index + 1;
@@ -211,7 +211,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 				}
 			}
 
-			if (requires_batch_index) {
+			if (required_partition_info.AnyRequired()) {
 				auto next_batch_result = NextBatch(source_chunk);
 				next_batch_blocked = next_batch_result == SinkNextBatchType::BLOCKED;
 				if (next_batch_blocked) {

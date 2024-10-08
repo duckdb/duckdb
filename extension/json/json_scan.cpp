@@ -957,7 +957,10 @@ double JSONScan::ScanProgress(ClientContext &, const FunctionData *, const Globa
 	return progress / double(gstate.json_readers.size());
 }
 
-OperatorPartitionData JSONScan::GetPartitionData(ClientContext &, TableFunctionInput &input) {
+OperatorPartitionData JSONScan::GetPartitionData(ClientContext &, TableFunctionGetPartitionInput &input) {
+	if (input.partition_info.RequiresPartitionColumns()) {
+		throw InternalException("JSONScan::GetPartitionData: partition columns not supported");
+	}
 	auto &lstate = input.local_state->Cast<JSONLocalTableFunctionState>();
 	return OperatorPartitionData(lstate.GetBatchIndex());
 }

@@ -38,7 +38,7 @@ public:
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
 	OperatorPartitionInfo RequiredPartitionInfo() const override {
-		return OperatorPartitionInfo::RequiresBatchIndex();
+		return OperatorPartitionInfo::BatchIndex();
 	}
 
 	bool ParallelSink() const override {

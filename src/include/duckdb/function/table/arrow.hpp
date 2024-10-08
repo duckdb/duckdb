@@ -214,7 +214,7 @@ protected:
 	static idx_t ArrowScanMaxThreads(ClientContext &context, const FunctionData *bind_data);
 
 	//! Allows parallel Create Table / Insertion
-	static OperatorPartitionData ArrowGetPartitionData(ClientContext &context, TableFunctionInput &input);
+	static OperatorPartitionData ArrowGetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input);
 
 	//! Specify if a given type can be pushed-down by the arrow engine
 	static bool ArrowPushdownType(const LogicalType &type);
