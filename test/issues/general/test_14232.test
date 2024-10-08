@@ -68,6 +68,7 @@ FROM t2
 WHERE t1a = t2a)
 GROUP BY t1a,
 t1b
+ORDER BY ALL
 ----
 t1b	8
 t1c	8
