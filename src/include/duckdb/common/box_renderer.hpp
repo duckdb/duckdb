@@ -33,6 +33,8 @@ struct BoxRendererConfig {
 	idx_t max_col_width = 20;
 	//! how to render NULL values
 	string null_value = "NULL";
+	//! Thousand separator (if any)
+	char thousand_separator = ' ';
 	//! Whether or not to render row-wise or column-wise
 	RenderMode render_mode = RenderMode::ROWS;
 
@@ -97,7 +99,7 @@ private:
 	                 ValueRenderAlignment alignment = ValueRenderAlignment::MIDDLE);
 	string RenderType(const LogicalType &type);
 	ValueRenderAlignment TypeAlignment(const LogicalType &type);
-	string GetRenderValue(ColumnDataRowCollection &rows, idx_t c, idx_t r);
+	string GetRenderValue(ColumnDataRowCollection &rows, idx_t c, idx_t r, const LogicalType &type);
 	list<ColumnDataCollection> FetchRenderCollections(ClientContext &context, const ColumnDataCollection &result,
 	                                                  idx_t top_rows, idx_t bottom_rows);
 	list<ColumnDataCollection> PivotCollections(ClientContext &context, list<ColumnDataCollection> input,
@@ -115,6 +117,10 @@ private:
 	                    const vector<idx_t> &boundaries, bool has_hidden_rows, bool has_hidden_columns,
 	                    idx_t total_length, idx_t row_count, idx_t column_count, idx_t minimum_row_length,
 	                    std::ostream &ss);
+
+	string FormatNumber(const string &input);
+	string ConvertRenderValue(const string &input, const LogicalType &type);
+	string ConvertRenderValue(const string &input);
 };
 
 } // namespace duckdb

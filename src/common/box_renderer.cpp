@@ -259,7 +259,7 @@ list<ColumnDataCollection> BoxRenderer::PivotCollections(ClientContext &context,
 	return result;
 }
 
-string ConvertRenderValue(const string &input) {
+string BoxRenderer::ConvertRenderValue(const string &input) {
 	string result;
 	result.reserve(input.size());
 	for (idx_t c = 0; c < input.size(); c++) {
@@ -311,13 +311,87 @@ string ConvertRenderValue(const string &input) {
 	return result;
 }
 
-string BoxRenderer::GetRenderValue(ColumnDataRowCollection &rows, idx_t c, idx_t r) {
+string BoxRenderer::FormatNumber(const string &input) {
+	if (config.thousand_separator == '\0') {
+		// no thousand separator
+		return input;
+	}
+	// first check how many digits there are (preceding any decimal point)
+	idx_t character_count = 0;
+	for(auto c : input) {
+		if (!StringUtil::CharacterIsDigit(c)) {
+			break;
+		}
+		character_count++;
+	}
+	if (character_count <= 6) {
+		// we only add thousand separators if there are >= 7 digits
+		// thousand separators mostly look nice if numbers are big - for smaller numbers they add noise
+		return input;
+	}
+	// find the position of the first thousand separator
+	// we want to avoid placing the first character "alone"
+	// so our separator positions are 2, 3 or 4
+	// i.e. we format 1M as "1000 000" instead of "1 000 000"
+	idx_t separator_position;
+	switch(character_count % 3) {
+	case 0:
+		// 6, 9, 12 digits
+		separator_position = 3;
+		break;
+	case 1:
+		// 7, 10, 13 digits
+		separator_position = 4;
+		break;
+	default:
+		// 8, 11, 14 digits
+		separator_position = 2;
+		break;
+	}
+	// now add the thousand separators
+	string result;
+	for(idx_t c = 0; c < character_count; c++) {
+		if (c == separator_position) {
+			result += config.thousand_separator;
+			separator_position += 3;
+		}
+		result += input[c];
+	}
+	// add any remaining characters
+	for(idx_t c = character_count; c < input.size(); c++) {
+		result += input[c];
+	}
+	return result;
+}
+
+string BoxRenderer::ConvertRenderValue(const string &input, const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
+	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+		return FormatNumber(input);
+	default:
+		return ConvertRenderValue(input);
+	}
+}
+
+string BoxRenderer::GetRenderValue(ColumnDataRowCollection &rows, idx_t c, idx_t r, const LogicalType &type) {
 	try {
 		auto row = rows.GetValue(c, r);
 		if (row.IsNull()) {
 			return config.null_value;
 		}
-		return ConvertRenderValue(StringValue::Get(row));
+		return ConvertRenderValue(StringValue::Get(row), type);
 	} catch (std::exception &ex) {
 		return "????INVALID VALUE - " + string(ex.what()) + "?????";
 	}
@@ -346,7 +420,7 @@ vector<idx_t> BoxRenderer::ComputeRenderWidths(const vector<string> &names, cons
 					if (FlatVector::IsNull(chunk.data[c], r)) {
 						render_value = config.null_value;
 					} else {
-						render_value = ConvertRenderValue(string_data[r].GetString());
+						render_value = ConvertRenderValue(string_data[r].GetString(), result_types[c]);
 					}
 					auto render_width = Utf8Proc::RenderWidth(render_value);
 					widths[c] = MaxValue<idx_t>(render_width, widths[c]);
@@ -520,7 +594,7 @@ void BoxRenderer::RenderValues(const list<ColumnDataCollection> &collections, co
 			if (column_idx == SPLIT_COLUMN) {
 				str = config.DOTDOTDOT;
 			} else {
-				str = GetRenderValue(rows, column_idx, r);
+				str = GetRenderValue(rows, column_idx, r, result_types[column_idx]);
 			}
 			ValueRenderAlignment alignment;
 			if (config.render_mode == RenderMode::ROWS) {
@@ -556,8 +630,8 @@ void BoxRenderer::RenderValues(const list<ColumnDataCollection> &collections, co
 					str = config.DOT;
 				} else {
 					// align the dots in the center of the column
-					auto top_value = GetRenderValue(rows, column_idx, top_rows - 1);
-					auto bottom_value = GetRenderValue(brows, column_idx, bottom_rows - 1);
+					auto top_value = GetRenderValue(rows, column_idx, top_rows - 1, result_types[column_idx]);
+					auto bottom_value = GetRenderValue(brows, column_idx, bottom_rows - 1, result_types[column_idx]);
 					auto top_length = MinValue<idx_t>(widths[c], Utf8Proc::RenderWidth(top_value));
 					auto bottom_length = MinValue<idx_t>(widths[c], Utf8Proc::RenderWidth(bottom_value));
 					auto dot_length = MinValue<idx_t>(top_length, bottom_length);
@@ -603,7 +677,7 @@ void BoxRenderer::RenderValues(const list<ColumnDataCollection> &collections, co
 				if (column_idx == SPLIT_COLUMN) {
 					str = config.DOTDOTDOT;
 				} else {
-					str = GetRenderValue(brows, column_idx, bottom_rows - r - 1);
+					str = GetRenderValue(brows, column_idx, bottom_rows - r - 1, result_types[column_idx]);
 				}
 				RenderValue(ss, str, widths[c], alignments[c]);
 			}
