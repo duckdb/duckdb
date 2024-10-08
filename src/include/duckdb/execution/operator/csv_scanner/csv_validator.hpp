@@ -11,6 +11,7 @@
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 

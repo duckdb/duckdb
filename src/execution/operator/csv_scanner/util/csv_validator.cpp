@@ -11,8 +11,8 @@ void ThreadLines::Insert(idx_t thread_idx, ValidatorLine line_info) {
 string ThreadLines::Print() const {
 	string result;
 	for (auto &line : thread_lines) {
-		result +=
-		    "{start_pos: " + to_string(line.second.start_pos) + ", end_pos: " + to_string(line.second.end_pos) + "}";
+		result += "{start_pos: " + std::to_string(line.second.start_pos) +
+		          ", end_pos: " + std::to_string(line.second.end_pos) + "}";
 	}
 	return result;
 }
@@ -28,7 +28,7 @@ bool ThreadLines::Validate() const {
 			if (last_end_pos + error_margin < line_info.second.start_pos) {
 				std::ostringstream error;
 				error << "The Parallel CSV Reader currently does not support a full read on this file." << '\n';
-				error << "To correctly parse  this file, please run with the single threaded error (i.e., parallel = "
+				error << "To correctly parse this file, please run with the single threaded error (i.e., parallel = "
 				         "false)"
 				      << '\n';
 				throw NotImplementedException(error.str());
