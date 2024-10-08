@@ -486,11 +486,11 @@ struct ParquetBloomFilter {
 */
 	bool FilterCheck(uint64_t x) {
 		auto blocks = (ParquetBloomBlock *)(data->ptr);
+		// TODO this can be cached!
 		auto block_count = data->len / sizeof(ParquetBloomBlock);
 		D_ASSERT(data->len % sizeof(ParquetBloomBlock) == 0);
-		uint64_t i = ((x >> 32) * block_count) >> 32;
-		auto b = blocks[i];
-		return ParquetBloomBlock::BlockCheck(b, x);
+		auto i = ((x >> 32) * block_count) >> 32;
+		return ParquetBloomBlock::BlockCheck(blocks[i], x);
 	}
 
 	unique_ptr<ResizeableBuffer> data;

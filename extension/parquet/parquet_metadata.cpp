@@ -164,6 +164,12 @@ void ParquetMetaDataOperatorData::BindMetaData(vector<LogicalType> &return_types
 
 	names.emplace_back("key_value_metadata");
 	return_types.emplace_back(LogicalType::MAP(LogicalType::BLOB, LogicalType::BLOB));
+
+	names.emplace_back("bloom_filter_offset");
+	return_types.emplace_back(LogicalType::BIGINT);
+
+	names.emplace_back("bloom_filter_length");
+	return_types.emplace_back(LogicalType::BIGINT);
 }
 
 Value ConvertParquetStats(const LogicalType &type, const duckdb_parquet::SchemaElement &schema_ele, bool stats_is_set,
@@ -297,6 +303,14 @@ void ParquetMetaDataOperatorData::LoadRowGroupMetadata(ClientContext &context, c
 			current_chunk.SetValue(
 			    23, count,
 			    Value::MAP(LogicalType::BLOB, LogicalType::BLOB, std::move(map_keys), std::move(map_values)));
+
+			// bloom_filter_offset, LogicalType::BIGINT
+			current_chunk.SetValue(
+			    24, count, ParquetElementBigint(col_meta.bloom_filter_offset, col_meta.__isset.bloom_filter_offset));
+
+			// bloom_filter_length, LogicalType::BIGINT
+			current_chunk.SetValue(
+			    25, count, ParquetElementBigint(col_meta.bloom_filter_length, col_meta.__isset.bloom_filter_length));
 
 			count++;
 			if (count >= STANDARD_VECTOR_SIZE) {
