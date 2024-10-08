@@ -183,10 +183,9 @@ public:
 	static unique_ptr<BaseSecret> Deserialize(Deserializer &deserializer, BaseSecret base_secret) {
 		auto result = make_uniq<TYPE>(base_secret);
 		Value secret_map_value;
+		Value secret_struct_value;
 
-		bool uses_old_serialization;
-		uses_old_serialization = deserializer.WithOptionalProperty<Value>(
-		    201, "secret_map", [&secret_map_value](Value val) { secret_map_value = std::move(val); });
+		deserializer.ReadProperty(201, "secret_map", secret_map_value);
 
 		Value redact_set_value;
 		deserializer.ReadProperty(202, "redact_keys", redact_set_value);
@@ -194,23 +193,22 @@ public:
 			result->redact_keys.insert(entry.ToString());
 		}
 
-		if (!uses_old_serialization) {
-			D_ASSERT(secret_map_value.IsNull());
-			deserializer.ReadProperty(203, "secret_struct", secret_map_value);
+		deserializer.ReadProperty(203, "secret_struct", secret_struct_value);
 
-			auto child_count = StructType::GetChildCount(secret_map_value.type());
-			auto &children = StructValue::GetChildren(secret_map_value);
-			for (idx_t i = 0; i < child_count; i++) {
-				auto name = StructType::GetChildName(secret_map_value.type(), i);
-				auto &value = children[i];
+		// Deserialize the secrets that are VARCHAR (stored as MAP(VARCHAR, VARCHAR))
+		for (const auto &entry : ListValue::GetChildren(secret_map_value)) {
+			auto kv_struct = StructValue::GetChildren(entry);
+			result->secret_map[kv_struct[0].ToString()] = kv_struct[1].ToString();
+		}
 
-				result->secret_map[name] = value;
-			}
-		} else {
-			for (const auto &entry : ListValue::GetChildren(secret_map_value)) {
-				auto kv_struct = StructValue::GetChildren(entry);
-				result->secret_map[kv_struct[0].ToString()] = kv_struct[1].ToString();
-			}
+		// Deserialize the secrets that have arbitrary types (stored as STRUCT(<field_name>: <field_type>))
+		auto child_count = StructType::GetChildCount(secret_struct_value.type());
+		auto &children = StructValue::GetChildren(secret_struct_value);
+		for (idx_t i = 0; i < child_count; i++) {
+			auto name = StructType::GetChildName(secret_struct_value.type(), i);
+			auto &value = children[i];
+
+			result->secret_map[name] = value;
 		}
 		return duckdb::unique_ptr_cast<TYPE, BaseSecret>(std::move(result));
 	}
