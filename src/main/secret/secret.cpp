@@ -109,8 +109,11 @@ void KeyValueSecret::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(202, "redact_keys", list);
 
 	// Store the secrets that are not VARCHARs
-	auto secret_struct = Value::STRUCT(std::move(secrets));
-	serializer.WriteProperty(203, "secret_struct", secret_struct);
+	Value secret_struct;
+	if (!secrets.empty()) {
+		secret_struct = Value::STRUCT(std::move(secrets));
+	}
+	serializer.WritePropertyWithDefault(203, "secret_struct", secret_struct, Value());
 }
 
 Value KeyValueSecret::TryGetValue(const string &key, bool error_on_missing) const {

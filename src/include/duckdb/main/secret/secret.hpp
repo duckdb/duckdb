@@ -193,7 +193,7 @@ public:
 			result->redact_keys.insert(entry.ToString());
 		}
 
-		deserializer.ReadProperty(203, "secret_struct", secret_struct_value);
+		deserializer.ReadPropertyWithExplicitDefault(203, "secret_struct", secret_struct_value, Value());
 
 		// Deserialize the secrets that are VARCHAR (stored as MAP(VARCHAR, VARCHAR))
 		for (const auto &entry : ListValue::GetChildren(secret_map_value)) {
@@ -201,14 +201,16 @@ public:
 			result->secret_map[kv_struct[0].ToString()] = kv_struct[1].ToString();
 		}
 
-		// Deserialize the secrets that have arbitrary types (stored as STRUCT(<field_name>: <field_type>))
-		auto child_count = StructType::GetChildCount(secret_struct_value.type());
-		auto &children = StructValue::GetChildren(secret_struct_value);
-		for (idx_t i = 0; i < child_count; i++) {
-			auto name = StructType::GetChildName(secret_struct_value.type(), i);
-			auto &value = children[i];
+		if (!secret_struct_value.IsNull()) {
+			// Deserialize the secrets that have arbitrary types (stored as STRUCT(<field_name>: <field_type>))
+			auto child_count = StructType::GetChildCount(secret_struct_value.type());
+			auto &children = StructValue::GetChildren(secret_struct_value);
+			for (idx_t i = 0; i < child_count; i++) {
+				auto name = StructType::GetChildName(secret_struct_value.type(), i);
+				auto &value = children[i];
 
-			result->secret_map[name] = value;
+				result->secret_map[name] = value;
+			}
 		}
 		return duckdb::unique_ptr_cast<TYPE, BaseSecret>(std::move(result));
 	}
