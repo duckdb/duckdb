@@ -45,6 +45,7 @@
 #include "duckdb/common/enums/physical_operator_type.hpp"
 #include "duckdb/common/enums/prepared_statement_mode.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
+#include "duckdb/common/enums/quantile_enum.hpp"
 #include "duckdb/common/enums/relation_type.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/common/enums/set_operation_type.hpp"
@@ -77,7 +78,6 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
-#include "duckdb/core_functions/aggregate/quantile_enum.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
@@ -5959,6 +5959,10 @@ const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value) {
 		return "QUERY_TREE_OPTIMIZER";
 	case ProfilerPrintFormat::NO_OUTPUT:
 		return "NO_OUTPUT";
+	case ProfilerPrintFormat::HTML:
+		return "HTML";
+	case ProfilerPrintFormat::GRAPHVIZ:
+		return "GRAPHVIZ";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ProfilerPrintFormat>", value));
 	}
@@ -5977,6 +5981,12 @@ ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value)
 	}
 	if (StringUtil::Equals(value, "NO_OUTPUT")) {
 		return ProfilerPrintFormat::NO_OUTPUT;
+	}
+	if (StringUtil::Equals(value, "HTML")) {
+		return ProfilerPrintFormat::HTML;
+	}
+	if (StringUtil::Equals(value, "GRAPHVIZ")) {
+		return ProfilerPrintFormat::GRAPHVIZ;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ProfilerPrintFormat>", value));
 }
@@ -6390,6 +6400,8 @@ const char* EnumUtil::ToChars<ScanType>(ScanType value) {
 		return "TABLE";
 	case ScanType::PARQUET:
 		return "PARQUET";
+	case ScanType::EXTERNAL:
+		return "EXTERNAL";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ScanType>", value));
 	}
@@ -6402,6 +6414,9 @@ ScanType EnumUtil::FromString<ScanType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "PARQUET")) {
 		return ScanType::PARQUET;
+	}
+	if (StringUtil::Equals(value, "EXTERNAL")) {
+		return ScanType::EXTERNAL;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ScanType>", value));
 }

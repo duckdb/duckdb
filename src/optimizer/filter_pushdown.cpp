@@ -1,5 +1,4 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
-
 #include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
@@ -107,6 +106,8 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 		return PushdownLimit(std::move(op));
 	case LogicalOperatorType::LOGICAL_WINDOW:
 		return PushdownWindow(std::move(op));
+	case LogicalOperatorType::LOGICAL_UNNEST:
+		return PushdownUnnest(std::move(op));
 	default:
 		return FinishPushdown(std::move(op));
 	}
@@ -132,6 +133,10 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 
 	switch (join.join_type) {
 	case JoinType::INNER:
+		//	AsOf joins can't push anything into the RHS, so treat it as a left join
+		if (op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+			return PushdownLeftJoin(std::move(op), left_bindings, right_bindings);
+		}
 		return PushdownInnerJoin(std::move(op), left_bindings, right_bindings);
 	case JoinType::LEFT:
 		return PushdownLeftJoin(std::move(op), left_bindings, right_bindings);

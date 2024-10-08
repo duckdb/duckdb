@@ -58,10 +58,8 @@ bool DuckDBPyRelation::CanBeRegisteredBy(shared_ptr<ClientContext> &con) {
 }
 
 DuckDBPyRelation::~DuckDBPyRelation() {
-	// FIXME: It makes sense to release the GIL here, but it causes a crash
-	// because pybind11's gil_scoped_acquire and gil_scoped_release can not be nested
-	// The Relation will need to call the destructor of the ExternalDependency, which might need to hold the GIL
-	// py::gil_scoped_release gil;
+	D_ASSERT(py::gil_check());
+	py::gil_scoped_release gil;
 	rel.reset();
 }
 
@@ -780,6 +778,7 @@ static unique_ptr<QueryResult> PyExecuteRelation(const shared_ptr<Relation> &rel
 		return nullptr;
 	}
 	auto context = rel->context.GetContext();
+	D_ASSERT(py::gil_check());
 	py::gil_scoped_release release;
 	auto pending_query = context->PendingQuery(rel, stream_result);
 	return DuckDBPyConnection::CompletePendingQuery(*pending_query);
@@ -791,6 +790,7 @@ unique_ptr<QueryResult> DuckDBPyRelation::ExecuteInternal(bool stream_result) {
 }
 
 void DuckDBPyRelation::ExecuteOrThrow(bool stream_result) {
+	py::gil_scoped_acquire gil;
 	result.reset();
 	auto query_result = ExecuteInternal(stream_result);
 	if (!query_result) {
@@ -1103,6 +1103,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 	return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, std::move(conditions), dtype));
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Cross(DuckDBPyRelation *other) {
+	return make_uniq<DuckDBPyRelation>(rel->CrossProduct(other->rel));
+}
+
 static Value NestedDictToStruct(const py::object &dictionary) {
 	if (!py::isinstance<py::dict>(dictionary)) {
 		throw InvalidInputException("NestedDictToStruct only accepts a dictionary as input");
@@ -1358,6 +1362,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, co
 		return Query(view_name, query);
 	}
 	{
+		D_ASSERT(py::gil_check());
 		py::gil_scoped_release release;
 		auto query_result = rel->context.GetContext()->Query(std::move(parser.statements[0]), false);
 		// Execute it anyways, for creation/altering statements
@@ -1394,6 +1399,7 @@ void DuckDBPyRelation::Insert(const py::object &params) {
 	}
 	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(params)};
 
+	D_ASSERT(py::gil_check());
 	py::gil_scoped_release release;
 	rel->Insert(values);
 }
@@ -1500,6 +1506,7 @@ static void DisplayHTML(const string &html) {
 
 string DuckDBPyRelation::Explain(ExplainType type) {
 	AssertRelation();
+	D_ASSERT(py::gil_check());
 	py::gil_scoped_release release;
 
 	auto explain_format = GetExplainFormat(type);

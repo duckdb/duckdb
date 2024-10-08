@@ -1,5 +1,6 @@
 import duckdb
 import pytest
+import sys
 
 pl = pytest.importorskip("polars")
 arrow = pytest.importorskip("pyarrow")
@@ -66,6 +67,9 @@ class TestPolars(object):
         res = duckdb_cursor.read_json(string).pl()
         assert str(res['entry'][0][0]) == "{'content': {'ManagedSystem': {'test': None}}}"
 
+    @pytest.mark.skipif(
+        not hasattr(pl.exceptions, "PanicException"), reason="Polars has no PanicException in this version"
+    )
     def test_polars_from_json_error(self, duckdb_cursor):
         from io import StringIO
 

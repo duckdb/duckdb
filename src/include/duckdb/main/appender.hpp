@@ -122,6 +122,8 @@ class Appender : public BaseAppender {
 	unordered_map<idx_t, Value> default_values;
 
 public:
+	DUCKDB_API Appender(Connection &con, const string &database_name, const string &schema_name,
+	                    const string &table_name);
 	DUCKDB_API Appender(Connection &con, const string &schema_name, const string &table_name);
 	DUCKDB_API Appender(Connection &con, const string &table_name);
 	DUCKDB_API ~Appender() override;
