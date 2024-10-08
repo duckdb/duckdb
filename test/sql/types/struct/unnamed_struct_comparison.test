@@ -1,0 +1,68 @@
+# name: test/sql/types/struct/unnamed_struct_comparison.test
+# description: Test unnamed struct casts
+# group: [struct]
+
+statement ok
+pragma enable_verification
+
+
+query I
+select a<>b from VALUES ((NULL, 1, NULL), (5, 6, 7)) t(a, b);
+----
+true
+
+
+query I
+select a<>b is null from VALUES ((NULL, 1, NULL), (5, 6, 7)) t(a, b);
+----
+false
+
+
+query I
+select 1 from values (struct_pack(k := NULL)) t(a) where 1 <> a.k;
+----
+
+query I
+select [NULL, 6] <> [6, 5];
+----
+NULL
+
+
+query I
+select 1 from VALUES ([NULL, 6], [5, 6])  t(a, b) where a<>b;
+----
+1
+
+
+query I
+select 1 from VALUES ([NULL, 1, NULL], [5, 6, 7])  t(a, b) where  a=b;
+----
+
+
+query I
+select 1 from VALUES ((NULL, 1, NULL), (5, 6, 7))  t(a, b) where  a<>b;
+----
+1
+
+
+# a<>b is true
+query I
+select 1 from VALUES ((NULL, 1, NULL), (5, 6, 7))  t(a, b) where a<>b is null;
+----
+
+
+query I
+select a<>b is null from VALUES ((NULL, 1, NULL), (5, 6, 7)) t(a, b) where NULL;
+----
+
+
+query I
+select 1 from VALUES ((NULL, 1, NULL), (5, 6, 7), (NULL, 2), (4, 5)) t(a, b, c, d) where a<>b and c<>d;
+----
+1
+
+query II
+select a<>b, c<>d from VALUES ((NULL, 1, NULL), (5, 6, 7), (NULL, 2), (4, 5)) t(a, b, c, d) where a<>b and c<>d;
+----
+true	true
+

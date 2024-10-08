@@ -1,0 +1,26 @@
+diff --git a/src/functions/delta_scan.cpp b/src/functions/delta_scan.cpp
+index a3e4f11..23482f1 100644
+--- a/src/functions/delta_scan.cpp
++++ b/src/functions/delta_scan.cpp
+@@ -510,7 +510,7 @@ unique_ptr<NodeStatistics> DeltaSnapshot::GetCardinality(ClientContext &context)
+     return make_uniq<NodeStatistics>(total_tuple_count,total_tuple_count);
+ }
+ 
+-unique_ptr<MultiFileReader> DeltaMultiFileReader::CreateInstance() {
++unique_ptr<MultiFileReader> DeltaMultiFileReader::CreateInstance(const TableFunction &table_function) {
+     return std::move(make_uniq<DeltaMultiFileReader>());
+ }
+ 
+diff --git a/src/include/functions/delta_scan.hpp b/src/include/functions/delta_scan.hpp
+index aac35cc..23c937d 100644
+--- a/src/include/functions/delta_scan.hpp
++++ b/src/include/functions/delta_scan.hpp
+@@ -103,7 +103,7 @@ struct DeltaMultiFileReaderGlobalState : public MultiFileReaderGlobalState {
+ };
+ 
+ struct DeltaMultiFileReader : public MultiFileReader {
+-    static unique_ptr<MultiFileReader> CreateInstance();
++    static unique_ptr<MultiFileReader> CreateInstance(const TableFunction &table_function);
+     //! Return a DeltaSnapshot
+     unique_ptr<MultiFileList> CreateFileList(ClientContext &context, const vector<string> &paths,
+                    FileGlobOptions options) override;

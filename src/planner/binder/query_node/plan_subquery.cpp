@@ -17,7 +17,7 @@
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
 #include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
-#include "duckdb/core_functions/scalar/generic_functions.hpp"
+#include "duckdb/function/scalar/generic_functions.hpp"
 
 namespace duckdb {
 
