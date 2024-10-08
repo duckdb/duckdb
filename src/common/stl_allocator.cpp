@@ -1,8 +1,12 @@
 #include "duckdb/common/stl_allocator.hpp"
 
+#include "duckdb/common/assert.hpp"
+
 #ifdef USE_JEMALLOC
 #include "jemalloc_extension.hpp"
 #endif
+
+#include <cstdlib>
 
 namespace duckdb {
 
