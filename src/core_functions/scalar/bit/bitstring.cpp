@@ -14,20 +14,27 @@ static void BitStringFunction(DataChunk &args, ExpressionState &state, Vector &r
 		    if (n < 0) {
 			    throw InvalidInputException("The bitstring length cannot be negative");
 		    }
-		    if (!FROM_STRING) {
-			    // FIXME: this could be optimized to not go through the VARCHAR -> BIT path
-			    auto converted = Bit::ToString(input);
-			    input = string_t(converted.c_str(), UnsafeNumericCast<uint32_t>(converted.size()));
+		    idx_t input_length;
+		    if (FROM_STRING) {
+			    input_length = input.GetSize();
+		    } else {
+			    input_length = Bit::BitLength(input);
 		    }
-		    if (idx_t(n) < input.GetSize()) {
+		    if (idx_t(n) < input_length) {
 			    throw InvalidInputException("Length must be equal or larger than input string");
 		    }
 		    idx_t len;
-		    Bit::TryGetBitStringSize(input, len, nullptr); // string verification
+		    if (FROM_STRING) {
+			    Bit::TryGetBitStringSize(input, len, nullptr); // string verification
+		    }
 
 		    len = Bit::ComputeBitstringLen(UnsafeNumericCast<idx_t>(n));
 		    string_t target = StringVector::EmptyString(result, len);
-		    Bit::BitString(input, UnsafeNumericCast<idx_t>(n), target);
+		    if (FROM_STRING) {
+			    Bit::BitString(input, UnsafeNumericCast<idx_t>(n), target);
+		    } else {
+			    Bit::ExtendBitString(input, UnsafeNumericCast<idx_t>(n), target);
+		    }
 		    target.Finalize();
 		    return target;
 	    });
