@@ -21,6 +21,9 @@ struct ParquetStatisticsUtils {
 
 	static Value ConvertValue(const LogicalType &type, const duckdb_parquet::SchemaElement &schema_ele,
 	                          const std::string &stats);
+
+	static bool BloomFilterExcludes(const TableFilter &filter, const duckdb_parquet::ColumnMetaData &column_meta_data,
+	                                duckdb_apache::thrift::protocol::TProtocol &file_proto, Allocator &allocator);
 };
 
 } // namespace duckdb

@@ -725,18 +725,24 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t c
 
 	// TODO move this to columnreader too
 	if (reader_data.filters) {
+
 		auto stats = column_reader->Stats(state.group_idx_list[state.current_group], group.columns);
 		// filters contain output chunk index, not file col idx!
 		auto global_id = reader_data.column_mapping[col_idx];
 		auto filter_entry = reader_data.filters->filters.find(global_id);
+
 		if (stats && filter_entry != reader_data.filters->filters.end()) {
-			bool skip_chunk = false;
 			auto &filter = *filter_entry->second;
 
 			FilterPropagateResult prune_result;
-			if (column_reader->Type().id() == LogicalTypeId::VARCHAR &&
-			    group.columns[column_reader->FileIdx()].meta_data.statistics.__isset.min_value &&
-			    group.columns[column_reader->FileIdx()].meta_data.statistics.__isset.max_value) {
+			// check the bloom filter if present
+			if (!column_reader->Type().IsNested() &&
+			    ParquetStatisticsUtils::BloomFilterExcludes(filter, group.columns[column_reader->FileIdx()].meta_data,
+			                                                *state.thrift_file_proto, allocator)) {
+				prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
+			} else if (column_reader->Type().id() == LogicalTypeId::VARCHAR &&
+			           group.columns[column_reader->FileIdx()].meta_data.statistics.__isset.min_value &&
+			           group.columns[column_reader->FileIdx()].meta_data.statistics.__isset.max_value) {
 				// our StringStats only store the first 8 bytes of strings (even if Parquet has longer string stats)
 				// however, when reading remote Parquet files, skipping row groups is really important
 				// here, we implement a special case to check the full length for string filters
@@ -763,9 +769,6 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t c
 			}
 
 			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-				skip_chunk = true;
-			}
-			if (skip_chunk) {
 				// this effectively will skip this chunk
 				state.group_offset = group.num_rows;
 				return;

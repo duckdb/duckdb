@@ -5,11 +5,14 @@
 #include "parquet_timestamp.hpp"
 #include "string_column_reader.hpp"
 #include "struct_column_reader.hpp"
+#include "zstd/common/xxhash.h"
+
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
 #endif
 
 namespace duckdb {
@@ -384,6 +387,233 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		}
 	}
 	return row_group_stats;
+}
+
+// bloom filter stuff
+// see https://github.com/apache/parquet-format/blob/master/BloomFilter.md
+
+static uint32_t parquet_bloom_salt[8] = {0x47b6137bU, 0x44974d91U, 0x8824ad5bU, 0xa2b7289dU,
+                                         0x705495c7U, 0x2df1424bU, 0x9efc4947U, 0x5c6bfb31U};
+
+struct ParquetBloomMaskResult {
+	uint8_t bit_set[8] = {0};
+};
+
+struct ParquetBloomBlock {
+	uint32_t block[8] = {0};
+
+	static bool check_bit(uint32_t &x, const uint8_t i) {
+		D_ASSERT(i < 32);
+		return (x >> i) & (uint32_t)1;
+	}
+
+	static void set_bit(uint32_t &x, const uint8_t i) {
+		D_ASSERT(i < 32);
+		x |= (uint32_t)1 << i;
+		D_ASSERT(check_bit(x, i));
+	}
+
+	/*
+	    static ParquetBloomBlock Mask(uint32_t x) {
+	        ParquetBloomBlock result;
+	        for (idx_t i = 0; i < 8; i++) {
+	            auto y = x * parquet_bloom_salt[i];
+	            set_bit(result.block[i], y >> 27);
+	        }
+	        return result;
+	    }*/
+
+	static ParquetBloomMaskResult Mask(uint32_t x) {
+		ParquetBloomMaskResult result;
+		for (idx_t i = 0; i < 8; i++) {
+			result.bit_set[i] = (x * parquet_bloom_salt[i]) >> 27;
+		}
+		return result;
+	}
+
+	/*
+	static void BlockInsert(ParquetBloomBlock& b, uint32_t x) {
+	    auto masked = Mask(x);
+	    for (idx_t i = 0; i < 8; i++) {
+	        for (idx_t j = 0; j < 32; j++) {
+	            if (check_bit(masked.block[i], j)) {
+	                b.set_bit(b.block[i], j);
+	                D_ASSERT(check_bit(b.block[i], j));
+	            }
+	        }
+	    }
+	}
+*/
+
+	//  Similarly, block_check returns true when every bit that is set in the result of mask is also set in the block.
+	/*
+	static bool BlockCheck(ParquetBloomBlock& b, uint32_t x) {
+	    ParquetBloomBlock masked = Mask(x);
+	    for (idx_t i = 0; i < 8; i++) {
+	        for (idx_t j = 0; j < 32; j++) {
+	            // TODO this could be simplified by changing the format of mask into key/value pairs
+	            if (check_bit(masked.block[i], j)) {
+	                if (!check_bit(b.block[i], j)) {
+	                    return false;
+	                }
+	            }
+	        }
+	    }
+	    return true;
+	}
+	*/
+
+	static bool BlockCheck(ParquetBloomBlock &b, uint32_t x) {
+		auto masked = Mask(x);
+		for (idx_t i = 0; i < 8; i++) {
+			if (!check_bit(b.block[i], masked.bit_set[i])) {
+				return false;
+			}
+		}
+		return true;
+	}
+};
+
+struct ParquetBloomFilter {
+	/*
+	void FilterInsert(uint64_t x) {
+	    auto blocks = (ParquetBloomBlock*)(data->ptr);
+	    auto block_count = data->len/sizeof(ParquetBloomBlock);
+	    uint64_t i = ((x >> 32) * block_count) >> 32;
+	    auto b = blocks[i];
+	    ParquetBloomBlock::BlockInsert(b, x);
+	}
+*/
+	bool FilterCheck(uint64_t x) {
+		auto blocks = (ParquetBloomBlock *)(data->ptr);
+		auto block_count = data->len / sizeof(ParquetBloomBlock);
+		D_ASSERT(data->len % sizeof(ParquetBloomBlock) == 0);
+		uint64_t i = ((x >> 32) * block_count) >> 32;
+		auto b = blocks[i];
+		return ParquetBloomBlock::BlockCheck(b, x);
+	}
+
+	unique_ptr<ResizeableBuffer> data;
+};
+
+static bool HasFilterConstants(const TableFilter &duckdb_filter) {
+	switch (duckdb_filter.filter_type) {
+	case TableFilterType::CONSTANT_COMPARISON: {
+		auto &constant_filter = duckdb_filter.Cast<ConstantFilter>();
+		return (constant_filter.comparison_type == ExpressionType::COMPARE_EQUAL && !constant_filter.constant.IsNull());
+	}
+	case TableFilterType::CONJUNCTION_AND: {
+		auto &conjunction_and_filter = duckdb_filter.Cast<ConjunctionAndFilter>();
+		bool child_has_constant = false;
+		for (auto &child_filter : conjunction_and_filter.child_filters) {
+			child_has_constant |= HasFilterConstants(*child_filter);
+		}
+		return child_has_constant;
+	}
+	case TableFilterType::CONJUNCTION_OR: {
+		auto &conjunction_or_filter = duckdb_filter.Cast<ConjunctionOrFilter>();
+		bool child_has_constant = false;
+		for (auto &child_filter : conjunction_or_filter.child_filters) {
+			child_has_constant |= HasFilterConstants(*child_filter);
+		}
+		return child_has_constant;
+	}
+	default:
+		return false;
+	}
+}
+
+template <class T>
+uint64_t ValueXH64FixedWidth(const Value &constant) {
+	T val = constant.GetValue<T>();
+	return duckdb_zstd::XXH64(&val, sizeof(val), 0);
+}
+
+static uint64_t ValueXXH64(const Value &constant) {
+	switch (constant.type().InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::UINT8:
+	case PhysicalType::INT8:
+		return ValueXH64FixedWidth<uint8_t>(constant);
+	case PhysicalType::UINT16:
+	case PhysicalType::INT16:
+		return ValueXH64FixedWidth<uint16_t>(constant);
+	case PhysicalType::UINT32:
+	case PhysicalType::INT32:
+		return ValueXH64FixedWidth<uint32_t>(constant);
+	case PhysicalType::UINT64:
+	case PhysicalType::INT64:
+		return ValueXH64FixedWidth<uint64_t>(constant);
+	case PhysicalType::FLOAT:
+		return ValueXH64FixedWidth<float>(constant);
+	case PhysicalType::DOUBLE:
+		return ValueXH64FixedWidth<double>(constant);
+	case PhysicalType::VARCHAR: {
+		auto val = constant.GetValue<string>();
+		return duckdb_zstd::XXH64(val.c_str(), val.length(), 0);
+	}
+	default:
+		return 0;
+	}
+}
+
+static bool ApplyBloomFilter(const TableFilter &duckdb_filter, ParquetBloomFilter &bloom_filter) {
+	switch (duckdb_filter.filter_type) {
+	case TableFilterType::CONSTANT_COMPARISON: {
+		auto &constant_filter = duckdb_filter.Cast<ConstantFilter>();
+		D_ASSERT(constant_filter.comparison_type == ExpressionType::COMPARE_EQUAL);
+		D_ASSERT(!constant_filter.constant.IsNull());
+		auto hash = ValueXXH64(constant_filter.constant);
+		return hash > 0 && !bloom_filter.FilterCheck(hash);
+	}
+	case TableFilterType::CONJUNCTION_AND: {
+		auto &conjunction_and_filter = duckdb_filter.Cast<ConjunctionAndFilter>();
+		bool any_children_true = false;
+		for (auto &child_filter : conjunction_and_filter.child_filters) {
+			any_children_true |= ApplyBloomFilter(*child_filter, bloom_filter);
+		}
+		return any_children_true;
+	}
+	case TableFilterType::CONJUNCTION_OR: {
+		auto &conjunction_or_filter = duckdb_filter.Cast<ConjunctionOrFilter>();
+		bool all_children_true = true;
+		for (auto &child_filter : conjunction_or_filter.child_filters) {
+			all_children_true &= ApplyBloomFilter(*child_filter, bloom_filter);
+		}
+		return all_children_true;
+	}
+	default:
+		return false;
+	}
+}
+
+bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filter,
+                                                 const duckdb_parquet::ColumnMetaData &column_meta_data,
+                                                 TProtocol &file_proto, Allocator &allocator) {
+	if (!HasFilterConstants(duckdb_filter) || !column_meta_data.__isset.bloom_filter_offset ||
+	    column_meta_data.bloom_filter_offset <= 0) {
+		return false;
+	}
+
+	auto &transport = reinterpret_cast<ThriftFileTransport &>(*file_proto.getTransport());
+	transport.SetLocation(column_meta_data.bloom_filter_offset);
+	if (column_meta_data.__isset.bloom_filter_length && column_meta_data.bloom_filter_length > 0) {
+		transport.Prefetch(column_meta_data.bloom_filter_offset, column_meta_data.bloom_filter_length);
+	}
+
+	duckdb_parquet::BloomFilterHeader filter_header;
+	// TODO the bloom filter could be encrypted, too, so double check that this is NOT the case
+	filter_header.read(&file_proto);
+	if (!filter_header.algorithm.__isset.BLOCK || !filter_header.compression.__isset.UNCOMPRESSED ||
+	    !filter_header.hash.__isset.XXHASH) {
+		return false;
+	}
+
+	ParquetBloomFilter bloom_filter;
+	bloom_filter.data = make_uniq<ResizeableBuffer>(allocator, filter_header.numBytes);
+	transport.read(bloom_filter.data->ptr, filter_header.numBytes);
+
+	return ApplyBloomFilter(duckdb_filter, bloom_filter);
 }
 
 } // namespace duckdb
