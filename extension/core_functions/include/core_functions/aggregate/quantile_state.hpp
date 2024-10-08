@@ -52,11 +52,9 @@ struct QuantileOperation {
 	template <class STATE, class INPUT_TYPE>
 	static void WindowInit(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
 	                       data_ptr_t g_state) {
-		D_ASSERT(partition.input_count == 1);
+		D_ASSERT(partition.inputs);
 
-		auto inputs = partition.inputs;
 		const auto count = partition.count;
-		const auto &filter_mask = partition.filter_mask;
 		const auto &stats = partition.stats;
 
 		//	If frames overlap significantly, then use local skip lists.
@@ -70,22 +68,18 @@ struct QuantileOperation {
 			}
 		}
 
-		const auto data = FlatVector::GetData<const INPUT_TYPE>(inputs[0]);
-		const auto &data_mask = FlatVector::Validity(inputs[0]);
-
 		//	Build the tree
 		auto &state = *reinterpret_cast<STATE *>(g_state);
 		auto &window_state = state.GetOrCreateWindowState();
 		if (count < std::numeric_limits<uint32_t>::max()) {
-			window_state.qst32 = QuantileSortTree<uint32_t>::WindowInit<INPUT_TYPE>(data, aggr_input_data, data_mask,
-			                                                                        filter_mask, count);
+			window_state.qst32 = QuantileSortTree<uint32_t>::WindowInit<INPUT_TYPE>(aggr_input_data, partition);
 		} else {
-			window_state.qst64 = QuantileSortTree<uint64_t>::WindowInit<INPUT_TYPE>(data, aggr_input_data, data_mask,
-			                                                                        filter_mask, count);
+			window_state.qst64 = QuantileSortTree<uint64_t>::WindowInit<INPUT_TYPE>(aggr_input_data, partition);
 		}
 	}
 
-	static idx_t FrameSize(const QuantileIncluded &included, const SubFrames &frames) {
+	template <class INPUT_TYPE>
+	static idx_t FrameSize(QuantileIncluded<INPUT_TYPE> &included, const SubFrames &frames) {
 		//	Count the number of valid values
 		idx_t n = 0;
 		if (included.AllValid()) {
@@ -106,9 +100,9 @@ struct QuantileOperation {
 };
 
 template <class T>
-struct PointerLess {
+struct SkipLess {
 	inline bool operator()(const T &lhi, const T &rhi) const {
-		return *lhi < *rhi;
+		return lhi.second < rhi.second;
 	}
 };
 
@@ -121,15 +115,18 @@ struct WindowQuantileState {
 	unique_ptr<QuantileSortTree64> qst64;
 
 	// Windowed Quantile skip lists
-	using PointerType = const INPUT_TYPE *;
-	using SkipListType = duckdb_skiplistlib::skip_list::HeadNode<PointerType, PointerLess<PointerType>>;
+	using SkipType = pair<idx_t, INPUT_TYPE>;
+	using SkipListType = duckdb_skiplistlib::skip_list::HeadNode<SkipType, SkipLess<SkipType>>;
 	SubFrames prevs;
 	unique_ptr<SkipListType> s;
-	mutable vector<PointerType> dest;
+	mutable vector<SkipType> skips;
 
 	// Windowed MAD indirection
 	idx_t count;
 	vector<idx_t> m;
+
+	using IncludedType = QuantileIncluded<INPUT_TYPE>;
+	using CursorType = QuantileCursor<INPUT_TYPE>;
 
 	WindowQuantileState() : count(0) {
 	}
@@ -151,10 +148,10 @@ struct WindowQuantileState {
 
 	struct SkipListUpdater {
 		SkipListType &skip;
-		const INPUT_TYPE *data;
-		const QuantileIncluded &included;
+		CursorType &data;
+		IncludedType &included;
 
-		inline SkipListUpdater(SkipListType &skip, const INPUT_TYPE *data, const QuantileIncluded &included)
+		inline SkipListUpdater(SkipListType &skip, CursorType &data, IncludedType &included)
 		    : skip(skip), data(data), included(included) {
 		}
 
@@ -164,7 +161,7 @@ struct WindowQuantileState {
 		inline void Left(idx_t begin, idx_t end) {
 			for (; begin < end; ++begin) {
 				if (included(begin)) {
-					skip.remove(data + begin);
+					skip.remove(SkipType(begin, data[begin]));
 				}
 			}
 		}
@@ -172,7 +169,7 @@ struct WindowQuantileState {
 		inline void Right(idx_t begin, idx_t end) {
 			for (; begin < end; ++begin) {
 				if (included(begin)) {
-					skip.insert(data + begin);
+					skip.insert(SkipType(begin, data[begin]));
 				}
 			}
 		}
@@ -181,14 +178,14 @@ struct WindowQuantileState {
 		}
 	};
 
-	void UpdateSkip(const INPUT_TYPE *data, const SubFrames &frames, const QuantileIncluded &included) {
+	void UpdateSkip(CursorType &data, const SubFrames &frames, IncludedType &included) {
 		//	No overlap, or no data
 		if (!s || prevs.back().end <= frames.front().start || frames.back().end <= prevs.front().start) {
 			auto &skip = GetSkipList(true);
 			for (const auto &frame : frames) {
 				for (auto i = frame.start; i < frame.end; ++i) {
 					if (included(i)) {
-						skip.insert(data + i);
+						skip.insert(SkipType(i, data[i]));
 					}
 				}
 			}
@@ -204,7 +201,7 @@ struct WindowQuantileState {
 	}
 
 	template <typename RESULT_TYPE, bool DISCRETE>
-	RESULT_TYPE WindowScalar(const INPUT_TYPE *data, const SubFrames &frames, const idx_t n, Vector &result,
+	RESULT_TYPE WindowScalar(CursorType &data, const SubFrames &frames, const idx_t n, Vector &result,
 	                         const QuantileValue &q) const {
 		D_ASSERT(n > 0);
 		if (qst32) {
@@ -215,7 +212,12 @@ struct WindowQuantileState {
 			// Find the position(s) needed
 			try {
 				Interpolator<DISCRETE> interp(q, s->size(), false);
-				s->at(interp.FRN, interp.CRN - interp.FRN + 1, dest);
+				s->at(interp.FRN, interp.CRN - interp.FRN + 1, skips);
+				array<INPUT_TYPE, 2> dest;
+				dest[0] = skips[0].second;
+				if (skips.size() > 1) {
+					dest[1] = skips[1].second;
+				}
 				return interp.template Extract<INPUT_TYPE, RESULT_TYPE>(dest.data(), result);
 			} catch (const duckdb_skiplistlib::skip_list::IndexError &idx_err) {
 				throw InternalException(idx_err.message());
@@ -226,7 +228,7 @@ struct WindowQuantileState {
 	}
 
 	template <typename CHILD_TYPE, bool DISCRETE>
-	void WindowList(const INPUT_TYPE *data, const SubFrames &frames, const idx_t n, Vector &list, const idx_t lidx,
+	void WindowList(CursorType &data, const SubFrames &frames, const idx_t n, Vector &list, const idx_t lidx,
 	                const QuantileBindData &bind_data) const {
 		D_ASSERT(n > 0);
 		// Result is a constant LIST<CHILD_TYPE> with a fixed length
@@ -269,12 +271,14 @@ struct QuantileStringType {
 template <typename INPUT_TYPE, class TYPE_OP>
 struct QuantileState {
 	using InputType = INPUT_TYPE;
+	using CursorType = QuantileCursor<INPUT_TYPE>;
 
 	// Regular aggregation
 	vector<INPUT_TYPE> v;
 
 	// Window Quantile State
 	unique_ptr<WindowQuantileState<INPUT_TYPE>> window_state;
+	unique_ptr<CursorType> window_cursor;
 
 	void AddElement(INPUT_TYPE element, AggregateInputData &aggr_input) {
 		v.emplace_back(TYPE_OP::Operation(element, aggr_input));
@@ -294,6 +298,19 @@ struct QuantileState {
 	}
 	const WindowQuantileState<INPUT_TYPE> &GetWindowState() const {
 		return *window_state;
+	}
+
+	CursorType &GetOrCreateWindowCursor(const ColumnDataCollection &inputs, bool all_valid) {
+		if (!window_state) {
+			window_cursor = make_uniq<CursorType>(inputs, all_valid);
+		}
+		return *window_cursor;
+	}
+	CursorType &GetWindowCursor() {
+		return *window_cursor;
+	}
+	const CursorType &GetWindowCursor() const {
+		return *window_cursor;
 	}
 };
 

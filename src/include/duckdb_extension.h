@@ -884,7 +884,7 @@ typedef struct {
 #define DUCKDB_EXTENSION_API_INIT(info, access, minimum_api_version)                                                   \
 	duckdb_ext_api_v0 *res = (duckdb_ext_api_v0 *)access->get_api(info, minimum_api_version);                          \
 	if (!res) {                                                                                                        \
-		return;                                                                                                        \
+		return false;                                                                                                  \
 	};                                                                                                                 \
 	duckdb_ext_api = *res;
 
@@ -902,30 +902,31 @@ typedef struct {
 // Main entrypoint: opens (and closes) a connection automatically for the extension to register its functionality
 // through
 #define DUCKDB_EXTENSION_ENTRYPOINT                                                                                    \
-	DUCKDB_EXTENSION_GLOBAL static void DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)(            \
+	DUCKDB_EXTENSION_GLOBAL static bool DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)(            \
 	    duckdb_connection connection, duckdb_extension_info info, duckdb_extension_access * access);                   \
-	DUCKDB_EXTENSION_EXTERN_C_GUARD_OPEN DUCKDB_EXTENSION_API void DUCKDB_EXTENSION_GLUE(                              \
+	DUCKDB_EXTENSION_EXTERN_C_GUARD_OPEN DUCKDB_EXTENSION_API bool DUCKDB_EXTENSION_GLUE(                              \
 	    DUCKDB_EXTENSION_NAME, _init_c_api)(duckdb_extension_info info, duckdb_extension_access * access) {            \
 		DUCKDB_EXTENSION_API_INIT(info, access, DUCKDB_EXTENSION_API_VERSION_STRING);                                  \
 		duckdb_database *db = access->get_database(info);                                                              \
 		duckdb_connection conn;                                                                                        \
 		if (duckdb_connect(*db, &conn) == DuckDBError) {                                                               \
 			access->set_error(info, "Failed to open connection to database");                                          \
-			return;                                                                                                    \
+			return false;                                                                                              \
 		}                                                                                                              \
-		DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)(conn, info, access);                        \
+		auto init_result = DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)(conn, info, access);     \
 		duckdb_disconnect(&conn);                                                                                      \
+		return init_result;                                                                                            \
 	}                                                                                                                  \
-	DUCKDB_EXTENSION_EXTERN_C_GUARD_CLOSE static void DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)
+	DUCKDB_EXTENSION_EXTERN_C_GUARD_CLOSE static bool DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)
 
 // Custom entrypoint: just forwards the info and access
 #define DUCKDB_EXTENSION_ENTRYPOINT_CUSTOM                                                                             \
-	DUCKDB_EXTENSION_GLOBAL static void DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)(            \
+	DUCKDB_EXTENSION_GLOBAL static bool DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)(            \
 	    duckdb_extension_info info, duckdb_extension_access * access);                                                 \
-	DUCKDB_EXTENSION_EXTERN_C_GUARD_OPEN DUCKDB_EXTENSION_API void DUCKDB_EXTENSION_GLUE(                              \
+	DUCKDB_EXTENSION_EXTERN_C_GUARD_OPEN DUCKDB_EXTENSION_API bool DUCKDB_EXTENSION_GLUE(                              \
 	    DUCKDB_EXTENSION_NAME, _init_c_api)(duckdb_extension_info info, duckdb_extension_access * access) {            \
 		DUCKDB_EXTENSION_API_INIT(info, access, DUCKDB_EXTENSION_API_VERSION_STRING);                                  \
-		DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)(info, access);                              \
+		return DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)(info, access);                       \
 	}                                                                                                                  \
-	DUCKDB_EXTENSION_EXTERN_C_GUARD_CLOSE static void DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)
+	DUCKDB_EXTENSION_EXTERN_C_GUARD_CLOSE static bool DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)
 #endif
