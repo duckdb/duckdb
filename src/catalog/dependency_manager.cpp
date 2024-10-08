@@ -485,7 +485,6 @@ void DependencyManager::VerifyCommitDrop(CatalogTransaction transaction, transac
 		}
 	});
 	ScanSubjects(transaction, info, [&](DependencyEntry &dep) {
-		auto &subject_entry = dep.Cast<DependencySubjectEntry>();
 		auto dep_committed_at = dep.timestamp.load();
 		if (!dep.Dependent().flags.IsOwnedBy()) {
 			return;
