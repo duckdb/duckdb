@@ -28,6 +28,11 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
       current_errors(state_machine.options.IgnoreErrors()), sniffing(sniffing_p), path(std::move(path_p)) {
 	// Vector information
 	D_ASSERT(number_of_columns > 0);
+	if (!buffer_handle) {
+		// It Was Over Before It Even Began
+		D_ASSERT(iterator.done);
+		return;
+	}
 	buffer_handles[buffer_handle->buffer_idx] = buffer_handle;
 	// Buffer Information
 	buffer_ptr = buffer_handle->Ptr();
@@ -1463,10 +1468,6 @@ void StringValueScanner::SetStart() {
 		if (result.store_line_size) {
 			result.error_handler.NewMaxLineSize(iterator.pos.buffer_pos);
 		}
-		return;
-	}
-	if (state_machine->options.IgnoreErrors()) {
-		// If we are ignoring errors we don't really need to figure out a line.
 		return;
 	}
 	// The result size of the data after skipping the row is one line
