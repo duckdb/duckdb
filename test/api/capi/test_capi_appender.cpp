@@ -702,4 +702,7 @@ TEST_CASE("Test append to different catalog in C API") {
 
 	result = tester.Query("SELECT SUM(i)::BIGINT FROM append_to_other.tbl");
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 400);
+
+	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBSuccess);
+	tester.Cleanup();
 }
