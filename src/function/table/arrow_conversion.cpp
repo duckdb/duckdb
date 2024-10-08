@@ -1027,7 +1027,7 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 	}
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
-	case LogicalTypeId::VARINT:{
+	case LogicalTypeId::VARINT: {
 		ArrowToDuckDBBlob(vector, array, scan_state, size, arrow_type, nested_offset,
 		                  NumericCast<int64_t>(parent_offset));
 		break;
