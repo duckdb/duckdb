@@ -30,7 +30,7 @@ duckdb_value duckdb_profiling_info_get_value(duckdb_profiling_info info, const c
 	auto &node = *reinterpret_cast<duckdb::ProfilingNode *>(info);
 	auto &profiling_info = node.GetProfilingInfo();
 	auto key_enum = EnumUtil::FromString<MetricsType>(duckdb::StringUtil::Upper(key));
-	if (!profiling_info.Enabled(key_enum)) {
+	if (!profiling_info.IsEnabled(key_enum)) {
 		return nullptr;
 	}
 
@@ -46,10 +46,13 @@ duckdb_value duckdb_profiling_info_get_metrics(duckdb_profiling_info info) {
 	auto &node = *reinterpret_cast<duckdb::ProfilingNode *>(info);
 	auto &profiling_info = node.GetProfilingInfo();
 
-	// FIXME: filter between operator metrics and query node metrics.
 	duckdb::unordered_map<duckdb::string, duckdb::string> metrics_map;
 	for (const auto &metric : profiling_info.metrics) {
 		auto key = EnumUtil::ToString(metric.first);
+		if (!profiling_info.IsEnabled(metric.first)) {
+			continue;
+		}
+
 		if (key == EnumUtil::ToString(MetricsType::OPERATOR_TYPE)) {
 			auto type = duckdb::PhysicalOperatorType(metric.second.GetValue<uint8_t>());
 			metrics_map[key] = EnumUtil::ToString(type);

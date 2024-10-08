@@ -39,8 +39,13 @@ public:
 	explicit ProfilingInfo(profiler_settings_t &n_settings, idx_t depth = 0) : settings(n_settings) {
 		if (depth == 0) {
 			settings.insert(MetricsType::QUERY_NAME);
+			settings.erase(MetricsType::OPERATOR_CARDINALITY);
+			settings.erase(MetricsType::OPERATOR_ROWS_SCANNED);
+			settings.erase(MetricsType::OPERATOR_TIMING);
+			settings.erase(MetricsType::OPERATOR_TYPE);
 		} else {
 			settings.insert(MetricsType::OPERATOR_TYPE);
+			settings.erase(MetricsType::QUERY_NAME);
 		}
 		ResetMetrics();
 	}
@@ -54,10 +59,13 @@ public:
 
 public:
 	void ResetMetrics();
-	bool Enabled(const MetricsType setting) const;
+	//! Returns true, if the query profiler must collect this metric.
+	bool MustCollect(const MetricsType metric) const;
+	//! Enabled TODO. rename + comment
+	bool IsEnabled(const MetricsType metric) const;
 
 public:
-	string GetMetricAsString(MetricsType setting) const;
+	string GetMetricAsString(const MetricsType metric) const;
 	void WriteMetricsToJSON(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyjson::yyjson_mut_val *destination);
 
 public:
@@ -68,20 +76,20 @@ public:
 	}
 
 	template <class METRIC_TYPE>
-	void AddToMetric(const MetricsType setting, const Value &value) {
-		D_ASSERT(!metrics[setting].IsNull());
-		if (metrics.find(setting) == metrics.end()) {
-			metrics[setting] = value;
+	void AddToMetric(const MetricsType type, const Value &value) {
+		D_ASSERT(!metrics[type].IsNull());
+		if (metrics.find(type) == metrics.end()) {
+			metrics[type] = value;
 			return;
 		}
-		auto new_value = metrics[setting].GetValue<METRIC_TYPE>() + value.GetValue<METRIC_TYPE>();
-		metrics[setting] = Value::CreateValue(new_value);
+		auto new_value = metrics[type].GetValue<METRIC_TYPE>() + value.GetValue<METRIC_TYPE>();
+		metrics[type] = Value::CreateValue(new_value);
 	}
 
 	template <class METRIC_TYPE>
-	void AddToMetric(const MetricsType setting, const METRIC_TYPE &value) {
+	void AddToMetric(const MetricsType type, const METRIC_TYPE &value) {
 		auto new_value = Value::CreateValue(value);
-		return AddToMetric<METRIC_TYPE>(setting, new_value);
+		return AddToMetric<METRIC_TYPE>(type, new_value);
 	}
 };
 } // namespace duckdb

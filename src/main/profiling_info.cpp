@@ -13,7 +13,7 @@ profiler_settings_t ProfilingInfo::DefaultSettings() {
 	return {MetricsType::QUERY_NAME,           MetricsType::BLOCKED_THREAD_TIME,     MetricsType::CPU_TIME,
 	        MetricsType::EXTRA_INFO,           MetricsType::CUMULATIVE_CARDINALITY,  MetricsType::OPERATOR_TYPE,
 	        MetricsType::OPERATOR_CARDINALITY, MetricsType::CUMULATIVE_ROWS_SCANNED, MetricsType::OPERATOR_ROWS_SCANNED,
-	        MetricsType::OPERATOR_TIMING,      MetricsType::RESULT_SET_SIZE};
+	        MetricsType::OPERATOR_TIMING,      MetricsType::RESULT_SET_SIZE,         MetricsType::QUERY_TIMING};
 }
 
 profiler_settings_t ProfilingInfo::DefaultOperatorSettings() {
@@ -29,21 +29,18 @@ profiler_settings_t ProfilingInfo::AllSettings() {
 	for (auto &setting : optimizer_settings) {
 		all_settings.insert(setting);
 	}
-
 	for (auto &setting : phase_timings) {
 		all_settings.insert(setting);
 	}
-
 	return all_settings;
 }
 
 void ProfilingInfo::ResetMetrics() {
 	metrics.clear();
-
 	auto all_settings = AllSettings();
 
 	for (auto &metric : all_settings) {
-		if (!Enabled(metric)) {
+		if (!MustCollect(metric)) {
 			continue;
 		}
 
@@ -54,24 +51,24 @@ void ProfilingInfo::ResetMetrics() {
 
 		switch (metric) {
 		case MetricsType::QUERY_NAME:
+			metrics[metric] = Value::CreateValue("");
+			break;
+		case MetricsType::QUERY_TIMING:
 		case MetricsType::BLOCKED_THREAD_TIME:
 		case MetricsType::CPU_TIME:
-		case MetricsType::OPERATOR_TIMING: {
+		case MetricsType::OPERATOR_TIMING:
 			metrics[metric] = Value::CreateValue(0.0);
 			break;
-		}
-		case MetricsType::OPERATOR_TYPE: {
+		case MetricsType::OPERATOR_TYPE:
 			metrics[metric] = Value::CreateValue<uint8_t>(0);
 			break;
-		}
 		case MetricsType::RESULT_SET_SIZE:
 		case MetricsType::CUMULATIVE_CARDINALITY:
 		case MetricsType::OPERATOR_CARDINALITY:
 		case MetricsType::CUMULATIVE_ROWS_SCANNED:
-		case MetricsType::OPERATOR_ROWS_SCANNED: {
+		case MetricsType::OPERATOR_ROWS_SCANNED:
 			metrics[metric] = Value::CreateValue<uint64_t>(0);
 			break;
-		}
 		case MetricsType::EXTRA_INFO:
 			break;
 		default:
@@ -80,35 +77,38 @@ void ProfilingInfo::ResetMetrics() {
 	}
 }
 
-bool ProfilingInfo::Enabled(const MetricsType setting) const {
-	if (settings.find(setting) != settings.end()) {
+bool ProfilingInfo::MustCollect(const MetricsType metric) const {
+	if (IsEnabled(metric)) {
 		return true;
 	}
 
-	switch (setting) {
+	switch (metric) {
 	case MetricsType::OPERATOR_TIMING:
-		return Enabled(MetricsType::CPU_TIME);
+		return MustCollect(MetricsType::CPU_TIME);
 	case MetricsType::OPERATOR_CARDINALITY:
-		return Enabled(MetricsType::CUMULATIVE_CARDINALITY);
+		return MustCollect(MetricsType::CUMULATIVE_CARDINALITY);
 	case MetricsType::OPERATOR_ROWS_SCANNED:
-		return Enabled(MetricsType::CUMULATIVE_ROWS_SCANNED);
+		return MustCollect(MetricsType::CUMULATIVE_ROWS_SCANNED);
 	default:
 		break;
 	}
 
-	if (MetricsUtils::IsOptimizerMetric(setting)) {
-		return Enabled(MetricsType::CUMULATIVE_OPTIMIZER_TIMING);
+	if (MetricsUtils::IsOptimizerMetric(metric)) {
+		return MustCollect(MetricsType::CUMULATIVE_OPTIMIZER_TIMING);
 	}
-
 	return false;
 }
 
-string ProfilingInfo::GetMetricAsString(MetricsType setting) const {
-	if (!Enabled(setting)) {
-		throw InternalException("Metric %s not enabled", EnumUtil::ToString(setting));
+bool ProfilingInfo::IsEnabled(const MetricsType metric) const {
+	return settings.find(metric) != settings.end();
+}
+
+string ProfilingInfo::GetMetricAsString(const MetricsType metric) const {
+	if (!IsEnabled(metric)) {
+		throw InternalException("Metric %s not enabled", EnumUtil::ToString(metric));
 	}
 
-	if (setting == MetricsType::EXTRA_INFO) {
+	if (metric == MetricsType::EXTRA_INFO) {
 		string result;
 		for (auto &it : extra_info) {
 			if (!result.empty()) {
@@ -120,14 +120,12 @@ string ProfilingInfo::GetMetricAsString(MetricsType setting) const {
 	}
 
 	// The metric cannot be NULL and must be initialized.
-	D_ASSERT(!metrics.at(setting).IsNull());
-
-	if (setting == MetricsType::OPERATOR_TYPE) {
-		auto type = PhysicalOperatorType(metrics.at(setting).GetValue<uint8_t>());
+	D_ASSERT(!metrics.at(metric).IsNull());
+	if (metric == MetricsType::OPERATOR_TYPE) {
+		auto type = PhysicalOperatorType(metrics.at(metric).GetValue<uint8_t>());
 		return EnumUtil::ToString(type);
 	}
-
-	return metrics.at(setting).ToString();
+	return metrics.at(metric).ToString();
 }
 
 void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest) {
@@ -169,6 +167,7 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 		case MetricsType::QUERY_NAME:
 			yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, metrics[metric].GetValue<string>().c_str());
 			break;
+		case MetricsType::QUERY_TIMING:
 		case MetricsType::BLOCKED_THREAD_TIME:
 		case MetricsType::CPU_TIME:
 		case MetricsType::OPERATOR_TIMING: {
