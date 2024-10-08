@@ -509,6 +509,7 @@ ValidChecker &DatabaseInstance::GetValidChecker() {
 }
 
 const duckdb_ext_api_v0 DatabaseInstance::GetExtensionAPIV0() {
+	D_ASSERT(create_api_v0);
 	return create_api_v0();
 }
 
