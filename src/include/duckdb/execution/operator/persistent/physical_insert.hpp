@@ -17,6 +17,7 @@
 namespace duckdb {
 
 class InsertLocalState;
+class InsertGlobalState;
 
 //! Physically insert a set of data into a table
 class PhysicalInsert : public PhysicalOperator {
@@ -120,7 +121,8 @@ protected:
 	//! Returns the amount of updated tuples
 	void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry &table, Vector &row_ids,
 	                       DataChunk &result) const;
-	idx_t OnConflictHandling(TableCatalogEntry &table, ExecutionContext &context, InsertLocalState &lstate) const;
+	idx_t OnConflictHandling(TableCatalogEntry &table, ExecutionContext &context, InsertGlobalState &gstate,
+	                         InsertLocalState &lstate) const;
 };
 
 } // namespace duckdb
