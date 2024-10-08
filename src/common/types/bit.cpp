@@ -5,8 +5,6 @@
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/string_type.hpp"
 
-using bitstring_t = duckdb::string_t;
-
 namespace duckdb {
 
 // **** helper functions ****
@@ -222,7 +220,7 @@ void Bit::ExtendBitString(const bitstring_t &input, idx_t bit_length, bitstring_
 	uint8_t *res_buf = reinterpret_cast<uint8_t *>(result.GetDataWriteable());
 
 	auto padding = ComputePadding(bit_length);
-	((char *)res_buf)[0] = padding;
+	res_buf[0] = static_cast<uint8_t>(padding);
 
 	idx_t original_length = Bit::BitLength(input);
 	D_ASSERT(bit_length >= original_length);
