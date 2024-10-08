@@ -1,0 +1,39 @@
+# name: test/sql/aggregate/having/having_alias.test
+# description: Test aliases in the HAVING clause
+# group: [having]
+
+statement ok
+PRAGMA enable_verification
+
+query II
+SELECT b, sum(a) AS a
+FROM (VALUES (1, 0), (1, 1)) t(a, b)
+GROUP BY b
+HAVING a > 0
+ORDER BY ALL
+----
+0	1
+1	1
+
+# if a reference is both a group and an alias, we prefer to bind to the group
+statement ok
+create table t1(a int);
+
+statement ok
+insert into t1 values (42), (84);
+
+query I
+select a+1 as a from t1 group by a having a=42;
+----
+43
+
+statement ok
+create table t2(a int);
+
+statement ok
+insert into t2 values (42), (84), (42);
+
+query II
+select a as b, sum(a) as a from t2 group by b having a=42;
+----
+42	84

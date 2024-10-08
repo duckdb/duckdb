@@ -1,0 +1,15 @@
+diff --git a/spatial/src/spatial/core/functions/table/st_generatepoints.cpp b/spatial/src/spatial/core/functions/table/st_generatepoints.cpp
+index 007d386..8754619 100644
+--- a/spatial/src/spatial/core/functions/table/st_generatepoints.cpp
++++ b/spatial/src/spatial/core/functions/table/st_generatepoints.cpp
+@@ -79,8 +79,8 @@ static void Execute(ClientContext &context, TableFunctionInput &data_p, DataChun
+ 	const auto chunk_size = MinValue<idx_t>(STANDARD_VECTOR_SIZE, bind_data.count - state.current_idx);
+ 	for (idx_t i = 0; i < chunk_size; i++) {
+ 
+-		x_data[i] = state.rng.NextRandom(bind_data.bbox.min.x, bind_data.bbox.max.x);
+-		y_data[i] = state.rng.NextRandom(bind_data.bbox.min.y, bind_data.bbox.max.y);
++		x_data[i] = state.rng.NextRandom32(bind_data.bbox.min.x, bind_data.bbox.max.x);
++		y_data[i] = state.rng.NextRandom32(bind_data.bbox.min.y, bind_data.bbox.max.y);
+ 
+ 		state.current_idx++;
+ 	}
