@@ -49,7 +49,7 @@ struct CSVValidator {
 
 	string Print(idx_t file_idx) const;
 
-	 private:
+private:
 	//! Per file thread lines.
 	vector<ThreadLines> per_file_thread_lines;
 };

@@ -1070,7 +1070,6 @@ void StringValueScanner::Initialize() {
 	result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, cur_buffer_handle->actual_size};
 	result.current_line_position.begin = result.last_position;
 	result.current_line_position.end = result.current_line_position.begin;
-
 }
 
 void StringValueScanner::ProcessExtraRow() {
