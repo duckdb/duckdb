@@ -1,0 +1,9 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+includedir=@PKG_CONFIG_INCLUDEDIR@
+libdir=@PKG_CONFIG_LIBDIR@
+
+Name: DuckDB
+Description: An in-process SQL OLAP database management system.
+Version: @PKG_CONFIG_VERSION@
+Libs: -L${libdir} -lduckdb@PKG_CONFIG_LIBS@
+Cflags: -I${includedir}

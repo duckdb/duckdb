@@ -1559,3 +1559,34 @@ if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
           "${PROJECT_BINARY_DIR}/DuckDBConfigVersion.cmake"
     DESTINATION "${INSTALL_CMAKE_DIR}")
 endif()
+
+# Only write the pkg-config package if the templates exist
+set(PKG_CONFIG_TEMPLATE "${CMAKE_CURRENT_SOURCE_DIR}/duckdb.pc.in")
+if(EXISTS ${PKG_CONFIG_TEMPLATE})
+
+  # Prepare variables for duckdb.pc
+  if(IS_ABSOLUTE "${CMAKE_INSTALL_INCLUDEDIR}")
+    set(PKG_CONFIG_INCLUDEDIR "${CMAKE_INSTALL_INCLUDEDIR}")
+  else()
+    set(PKG_CONFIG_INCLUDEDIR "\${prefix}/${CMAKE_INSTALL_INCLUDEDIR}")
+  endif()
+  if(IS_ABSOLUTE "${CMAKE_INSTALL_LIBDIR}")
+    set(PKG_CONFIG_LIBDIR "${CMAKE_INSTALL_LIBDIR}")
+  else()
+    set(PKG_CONFIG_LIBDIR "\${prefix}/${CMAKE_INSTALL_LIBDIR}")
+  endif()
+  # Remove "v"
+  string(SUBSTRING "${DUCKDB_VERSION}" 1 -1 PKG_CONFIG_VERSION)
+  set(PKG_CONFIG_LIBS "")
+  foreach(DUCKDB_SYSTEM_LIB ${DUCKDB_SYSTEM_LIBS})
+    string(APPEND PKG_CONFIG_LIBS " -l${DUCKDB_SYSTEM_LIB}")
+  endforeach()
+
+  # Configure pkg-config package
+  configure_file(${PKG_CONFIG_TEMPLATE} "${PROJECT_BINARY_DIR}/duckdb.pc" @ONLY)
+
+  # Install the pkg-config package
+  install(
+    FILES "${PROJECT_BINARY_DIR}/duckdb.pc"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig/")
+endif()
