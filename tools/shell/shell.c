@@ -18618,7 +18618,22 @@ static int do_meta_command(char *zLine, ShellState *p){
       rc = 1;
     }
   }else
-
+  if( c=='t' && strncmp(azArg[0], "thousand_separator", n)==0 ) {
+	  if( nArg==1 ){
+	  	raw_printf(p->out, "current thousand separator: %c\n", p->thousands);
+	  }else
+	  	if( nArg!=2 ) {
+	  		raw_printf(stderr, "Usage: .thousand_separator sep\n");
+	  		rc = 1;
+	  	} else if (strcmp(azArg[1], "space") == 0) {
+	  		p->thousands = ' ';
+	  	} else if (strlen(azArg[1]) != 1) {
+	  		raw_printf(stderr, ".thousand_separator must be one byte or \"space\"\n");
+	  		rc = 1;
+	  	} else {
+	  		p->thousands = azArg[1][0];
+	  	}
+  }else
   if( (c=='t' && n>1 && strncmp(azArg[0], "tables", n)==0)
    || (c=='i' && (strncmp(azArg[0], "indices", n)==0
                  || strncmp(azArg[0], "indexes", n)==0) )
