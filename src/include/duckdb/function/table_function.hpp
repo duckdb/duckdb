@@ -142,12 +142,11 @@ public:
 };
 
 struct TableFunctionPartitionInput {
-	TableFunctionPartitionInput(optional_ptr<const FunctionData> bind_data_p, const vector<column_t> &column_ids_p, const vector<column_t> &partition_ids)
-	    : bind_data(bind_data_p), column_ids(column_ids_p), partition_ids(partition_ids) {
+	TableFunctionPartitionInput(optional_ptr<const FunctionData> bind_data_p, const vector<column_t> &partition_ids)
+	    : bind_data(bind_data_p), partition_ids(partition_ids) {
 	}
 
 	optional_ptr<const FunctionData> bind_data;
-	const vector<column_t> &column_ids;
 	const vector<column_t> &partition_ids;
 };
 

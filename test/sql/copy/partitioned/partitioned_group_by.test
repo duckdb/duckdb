@@ -6,16 +6,35 @@ require parquet
 
 # partitions
 statement ok
-CREATE TABLE tbl AS SELECT i%2 AS partition, i FROM range(10000) t(i)
+CREATE TABLE tbl AS SELECT i%2 AS partition, i col1, i + 1 col2, i::VARCHAR col3 FROM range(10000) t(i)
 
 statement ok
 COPY tbl TO '__TEST_DIR__/partition_group_by' (FORMAT parquet, PARTITION_BY (partition))
 
 query II
-SELECT partition, SUM(i)
+SELECT partition, SUM(col1)
 FROM '__TEST_DIR__/partition_group_by/**/*.parquet'
 GROUP BY partition
 ORDER BY ALL
 ----
 0	24995000
 1	25000000
+
+query II
+SELECT SUM(col1), partition
+FROM '__TEST_DIR__/partition_group_by/**/*.parquet'
+GROUP BY partition
+ORDER BY ALL
+----
+24995000	0
+25000000	1
+
+query II
+SELECT partition, SUM(col1)
+FROM '__TEST_DIR__/partition_group_by/**/*.parquet'
+WHERE col2 > 100
+GROUP BY partition
+ORDER BY ALL
+----
+0	24992550
+1	24997500

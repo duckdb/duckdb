@@ -81,8 +81,20 @@ static bool CanUsePartitionedAggregate(ClientContext &context, LogicalAggregate 
 		// this source does not expose partition information - skip
 		return false;
 	}
+	// get the base columns by projecting over the projection_ids/column_ids
+	if (!table_scan.projection_ids.empty()) {
+		for(auto &partition_col : partition_columns) {
+			partition_col = table_scan.projection_ids[partition_col];
+		}
+	}
+	vector<column_t> base_columns;
+	for(const auto &partition_idx : partition_columns) {
+		auto col_idx = partition_idx;
+		col_idx = table_scan.column_ids[col_idx];
+		base_columns.push_back(col_idx);
+	}
 	// check if the source operator is partitioned by the grouping columns
-	TableFunctionPartitionInput input(table_scan.bind_data.get(), table_scan.column_ids, partition_columns);
+	TableFunctionPartitionInput input(table_scan.bind_data.get(), base_columns);
 	auto partition_info = table_scan.function.get_partition_info(context, input);
 	if (partition_info != TablePartitionInfo::SINGLE_VALUE_PARTITIONS) {
 		// we only support single-value partitions currently

@@ -230,7 +230,7 @@ SinkFinalizeType PhysicalPartitionedAggregate::Finalize(Pipeline &pipeline, Even
 //===--------------------------------------------------------------------===//
 class PartitionedAggregateGlobalSourceState : public GlobalSourceState {
 public:
-	PartitionedAggregateGlobalSourceState(PartitionedAggregateGlobalSinkState &gstate) {
+	explicit PartitionedAggregateGlobalSourceState(PartitionedAggregateGlobalSinkState &gstate) {
 		gstate.aggregate_result.InitializeScan(scan_state);
 	}
 
