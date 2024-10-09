@@ -13614,6 +13614,7 @@ static const char *(azHelp[]) = {
 #endif
   ".tables ?TABLE?          List names of tables matching LIKE pattern TABLE",
   ".testcase NAME           Begin redirecting output to 'testcase-out.txt'",
+  ".thousand_separator SEP  Sets the thousand separator used when rendering numbers. Only for duckbox mode.",
   ".timer on|off            Turn SQL timer on or off",
 #ifdef SQLITE_DEBUG
   ".unmodule NAME ...       Unregister virtual table modules",
@@ -18627,8 +18628,10 @@ static int do_meta_command(char *zLine, ShellState *p){
 	  		rc = 1;
 	  	} else if (strcmp(azArg[1], "space") == 0) {
 	  		p->thousands = ' ';
+	  	} else if (strcmp(azArg[1], "none") == 0) {
+	  		p->thousands = '\0';
 	  	} else if (strlen(azArg[1]) != 1) {
-	  		raw_printf(stderr, ".thousand_separator must be one byte or \"space\"\n");
+	  		raw_printf(stderr, ".thousand_separator must be one byte, \"space\" or \"none\"\n");
 	  		rc = 1;
 	  	} else {
 	  		p->thousands = azArg[1][0];

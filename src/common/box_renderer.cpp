@@ -318,7 +318,7 @@ string BoxRenderer::FormatNumber(const string &input) {
 	}
 	// first check how many digits there are (preceding any decimal point)
 	idx_t character_count = 0;
-	for(auto c : input) {
+	for (auto c : input) {
 		if (!StringUtil::CharacterIsDigit(c)) {
 			break;
 		}
@@ -331,7 +331,7 @@ string BoxRenderer::FormatNumber(const string &input) {
 	idx_t separator_position = character_count % 3 == 0 ? 3 : character_count % 3;
 	// now add the thousand separators
 	string result;
-	for(idx_t c = 0; c < character_count; c++) {
+	for (idx_t c = 0; c < character_count; c++) {
 		if (c == separator_position) {
 			result += config.thousand_separator;
 			separator_position += 3;
@@ -339,7 +339,7 @@ string BoxRenderer::FormatNumber(const string &input) {
 		result += input[c];
 	}
 	// add any remaining characters
-	for(idx_t c = character_count; c < input.size(); c++) {
+	for (idx_t c = character_count; c < input.size(); c++) {
 		result += input[c];
 	}
 	return result;

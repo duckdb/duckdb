@@ -1063,4 +1063,23 @@ def test_sqlite_udf_sha3_non_inlined_string(shell):
     result = test.run()
     result.check_stdout('D4')
 
+
+def test_numerics(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".thousand_separator space")
+        .statement("SELECT 10000")
+        .statement(".thousand_separator ,")
+        .statement("SELECT 10000")
+        .statement(".thousand_separator none")
+        .statement("SELECT 10000")
+        .statement(".thousand_separator")
+    )
+
+    result = test.run()
+    result.check_stdout("10 000")
+    result.check_stdout("10,000")
+    result.check_stdout("10000")
+    result.check_stdout("current thousand separator")
+
 # fmt: on
