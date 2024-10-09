@@ -46,7 +46,10 @@ public:
 		return true;
 	}
 
-	bool SupportsBatchIndex() const override {
+	bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const override {
+		if (partition_info.RequiresPartitionColumns()) {
+			return false;
+		}
 		return true;
 	}
 

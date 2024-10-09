@@ -120,9 +120,17 @@ double PhysicalTableScan::GetProgress(ClientContext &context, GlobalSourceState 
 	return -1;
 }
 
+bool PhysicalTableScan::SupportsPartitioning(const OperatorPartitionInfo &partition_info) const {
+	if (!function.get_partition_data) {
+		return false;
+	}
+	// FIXME: actually check if partition info is supported
+	return true;
+}
+
 OperatorPartitionData PhysicalTableScan::GetPartitionData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                        LocalSourceState &lstate, const OperatorPartitionInfo &partition_info) const {
-	D_ASSERT(SupportsBatchIndex());
+	D_ASSERT(SupportsPartitioning(partition_info));
 	D_ASSERT(function.get_partition_data);
 	auto &gstate = gstate_p.Cast<TableScanGlobalSourceState>();
 	auto &state = lstate.Cast<TableScanLocalSourceState>();

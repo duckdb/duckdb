@@ -68,9 +68,7 @@ public:
 	}
 	bool ParallelSource() const override;
 
-	bool SupportsBatchIndex() const override {
-		return function.get_partition_data != nullptr;
-	}
+	bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const override;
 
 	double GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
 };

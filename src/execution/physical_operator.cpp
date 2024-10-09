@@ -243,7 +243,7 @@ vector<const_reference<PhysicalOperator>> PhysicalOperator::GetSources() const {
 bool PhysicalOperator::AllSourcesSupportBatchIndex() const {
 	auto sources = GetSources();
 	for (auto &source : sources) {
-		if (!source.get().SupportsBatchIndex()) {
+		if (!source.get().SupportsPartitioning(OperatorPartitionInfo::BatchIndex())) {
 			return false;
 		}
 	}

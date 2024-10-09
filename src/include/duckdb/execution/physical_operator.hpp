@@ -163,8 +163,11 @@ public:
 		return false;
 	}
 
-	virtual bool SupportsBatchIndex() const {
-		return false;
+	virtual bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const {
+		if (partition_info.AnyRequired()) {
+			return false;
+		}
+		return true;
 	}
 
 	//! The type of order emitted by the operator (as a source)

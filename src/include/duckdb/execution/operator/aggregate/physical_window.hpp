@@ -47,7 +47,7 @@ public:
 		return true;
 	}
 
-	bool SupportsBatchIndex() const override;
+	bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const override;
 	OrderPreservationType SourceOrder() const override;
 
 	double GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const override;

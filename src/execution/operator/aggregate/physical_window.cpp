@@ -856,7 +856,10 @@ unique_ptr<GlobalSourceState> PhysicalWindow::GetGlobalSourceState(ClientContext
 	return make_uniq<WindowGlobalSourceState>(context, gsink);
 }
 
-bool PhysicalWindow::SupportsBatchIndex() const {
+bool PhysicalWindow::SupportsPartitioning(const OperatorPartitionInfo &partition_info) const {
+	if (partition_info.RequiresPartitionColumns()) {
+		return false;
+	}
 	//	We can only preserve order for single partitioning
 	//	or work stealing causes out of order batch numbers
 	auto &wexpr = select_list[order_idx]->Cast<BoundWindowExpression>();
