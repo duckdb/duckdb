@@ -1,11 +1,8 @@
-# name: benchmark/tpch/or_filter_pushdown/ordered_sf1.benchmark
+# name: benchmark/tpch/or_filter_pushdown/ordered_sf10_no_pushdown.benchmark
 # description: pushdown or into lineitem
 # group: [or_filter_pushdown]
 
-require tpch
-
-cache tpch_sf100.duckdb
-
-run
-pragma disabled_optimizers='filter_pushdown';
-select * from lineitem_sf10 where l_orderkey in (99584, 5900006);
+template benchmark/tpch/or_filter_pushdown/or_filter_pushdown.benchmark.in
+QUERY_NAME=ordered_sf10_no_pushdown
+DISABLED_OPTIMIZERS='filter_pushdown'
+TABLE_NAME=lineitem_sf10

@@ -1,10 +1,8 @@
-# name: benchmark/tpch/or_filter_pushdown/ordered_sf1.benchmark
+# name: benchmark/tpch/or_filter_pushdown/unordered_sf1_pushdown.benchmark
 # description: pushdown or into lineitem
 # group: [or_filter_pushdown]
 
-require tpch
-
-cache tpch_sf100.duckdb
-
-run
-select * from lineitem_sf1_random where l_orderkey in (99584, 5900006);
+template benchmark/tpch/or_filter_pushdown/or_filter_pushdown.benchmark.in
+QUERY_NAME=unordered_sf1_pushdown
+DISABLED_OPTIMIZERS=
+TABLE_NAME=lineitem_sf1_random
