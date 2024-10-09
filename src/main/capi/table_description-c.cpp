@@ -8,7 +8,7 @@ using duckdb::TableDescriptionWrapper;
 
 duckdb_state duckdb_table_description_create(duckdb_connection connection, const char *schema, const char *table,
                                              duckdb_table_description *out) {
-	return duckdb_table_description_create_ext(connection, nullptr, schema, table, out);
+	return duckdb_table_description_create_ext(connection, INVALID_CATALOG, schema, table, out);
 }
 
 duckdb_state duckdb_table_description_create_ext(duckdb_connection connection, const char *catalog, const char *schema,

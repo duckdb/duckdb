@@ -4,15 +4,14 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test the table description in C API", "[capi]") {
+TEST_CASE("Test the table description in the C API", "[capi]") {
 	CAPITester tester;
-	duckdb_state status;
 	REQUIRE(tester.OpenDatabase(nullptr));
 	duckdb_table_description table_description = nullptr;
 	tester.Query("SET threads=1;");
 
 	// Test a non-existent table.
-	status = duckdb_table_description_create(tester.connection, nullptr, "test", &table_description);
+	auto status = duckdb_table_description_create(tester.connection, nullptr, "test", &table_description);
 	REQUIRE(status == DuckDBError);
 	duckdb_table_description_destroy(&table_description);
 
@@ -43,41 +42,33 @@ TEST_CASE("Test the table description in C API", "[capi]") {
 
 	bool has_default;
 	SECTION("Passing nullptr to has_default") {
-		status = duckdb_column_has_default(table_description, 2, nullptr);
-		REQUIRE(status == DuckDBError);
-		status = duckdb_column_has_default(nullptr, 2, &has_default);
-		REQUIRE(status == DuckDBError);
+		REQUIRE(duckdb_column_has_default(table_description, 2, nullptr) == DuckDBError);
+		REQUIRE(duckdb_column_has_default(nullptr, 2, &has_default) == DuckDBError);
 	}
 	SECTION("Out of range column for has_default") {
-		status = duckdb_column_has_default(table_description, 2, &has_default);
-		REQUIRE(status == DuckDBError);
+		REQUIRE(duckdb_column_has_default(table_description, 2, &has_default) == DuckDBError);
 	}
 	SECTION("In range column - not default") {
-		status = duckdb_column_has_default(table_description, 0, &has_default);
-		REQUIRE(status == DuckDBSuccess);
+		REQUIRE(duckdb_column_has_default(table_description, 0, &has_default) == DuckDBSuccess);
 		REQUIRE(has_default == false);
 	}
 	SECTION("In range column - default") {
-		status = duckdb_column_has_default(table_description, 1, &has_default);
-		REQUIRE(status == DuckDBSuccess);
+		REQUIRE(duckdb_column_has_default(table_description, 1, &has_default) == DuckDBSuccess);
 		REQUIRE(has_default == true);
 	}
 	duckdb_table_description_destroy(&table_description);
 
 	// Let's get information about the external table.
-
 	status =
 	    duckdb_table_description_create_ext(tester.connection, "ext_description", nullptr, "test", &table_description);
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_table_description_error(table_description) == nullptr);
 
 	SECTION("Passing nullptr to get_name") {
-		auto column_name = duckdb_column_get_name(nullptr, 0);
-		REQUIRE(column_name == nullptr);
+		REQUIRE(duckdb_column_get_name(nullptr, 0) == nullptr);
 	}
 	SECTION("Out of range column for get_name") {
-		auto column_name = duckdb_column_get_name(table_description, 1);
-		REQUIRE(column_name == nullptr);
+		REQUIRE(duckdb_column_get_name(table_description, 1) == nullptr);
 	}
 	SECTION("In range column - get the name") {
 		auto column_name = duckdb_column_get_name(table_description, 0);
