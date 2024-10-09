@@ -465,29 +465,40 @@ PathPatternList:
 		;
 
 PathPattern:
-		PathVariableOptional PathPrefix PathConcatenation
-			{
-				PGPathPattern *n = (PGPathPattern*) $2;
-				PGList *l = (PGList *) $3;
-				PGSubPath *p = (PGSubPath *) lfirst(list_head(l));
+    PathVariableOptional PathPrefix PathConcatenation
+    {
+        PGPathPattern *n = (PGPathPattern*) $2;
+        PGList *l = (PGList *) $3;
 
-				$$ = (PGNode*) n;
-				if ($1 == NULL) {
-					n->path = $3;
-				} else if (list_length(l)==1 && p->type==T_PGSubPath && !p->path_var)  {
-					p->path_var = $1;
-					$$ = (PGNode*) p;
-				} else {
-					/* generate a named subpath because of the variable */
-					p = makeNode(PGSubPath);
-					p->mode = n->mode;
-					p->lower = p->upper = p->single_bind = 1;
-					p->path_var = $1;
-					p->path = $3;
-					n->path = list_make1(p);
-				}
-			}
-		;
+        /* Check if the list is not empty and retrieve the first element */
+        if (l != NULL && list_length(l) > 0) {
+            PGNode *node = (PGNode *) lfirst(list_head(l));
+
+            $$ = (PGNode*) n;
+
+            /* Check if the node is a PGSubPath and not NULL */
+            if ($1 == NULL) {
+                n->path = $3;
+            } else if (list_length(l) == 1 && node != NULL && node->type == T_PGSubPath && !((PGSubPath*)node)->path_var) {
+                PGSubPath *p = (PGSubPath*) node;
+                p->path_var = $1;
+                $$ = (PGNode*) p;
+            }
+            /* If the node is not a PGSubPath or the node is NULL, create a new subpath */
+            else {
+                PGSubPath *p = makeNode(PGSubPath);
+                p->mode = n->mode;
+                p->lower = p->upper = p->single_bind = 1;
+                p->path_var = $1;
+                p->path = $3;
+                n->path = list_make1(p);
+            }
+        } else {
+            /* Handle the case where the list is NULL or empty */
+            $$ = (PGNode*) n; /* Or appropriate fallback */
+        }
+    }
+;
 
 PatternUnion:
 		'|'							{ $$ = 0; }
@@ -638,7 +649,7 @@ PathSequence:
 		;
 
 PathConcatenation:
-		PathSequence 				{ $$ = list_make1($1); }
+		PathSequence 				{ $$ = $1; }
 	|
 		PathSequence PatternUnion PathSequence 
 			{
