@@ -1,0 +1,14 @@
+# name: test/sql/json/issues/issue14162.test
+# description: Test issue 14162 - JSON extraction fail with error "Conversion Error: Failed to cast value to numerical"
+# group: [issues]
+
+require json
+
+statement ok
+CREATE TABLE example (j JSON);
+
+statement ok
+INSERT INTO example VALUES('{ "family": "anatidae", "species": [ "duck", "goose", "swan", null ] }');
+
+statement ok
+SELECT * FROM example where j->>'family' in ('a') and j->>'family' in ('b');

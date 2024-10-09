@@ -2371,7 +2371,7 @@ a_expr:		c_expr									{ $$ = $1; }
 				n->location = @2;
 				$$ = (PGNode *) n;
 			}
-			| a_expr DOUBLE_ARROW a_expr %prec Op
+			| a_expr DOUBLE_ARROW a_expr
 			{
 							$$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "->>", $1, $3, @2);
 			}
