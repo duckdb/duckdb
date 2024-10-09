@@ -638,7 +638,7 @@ PathSequence:
 		;
 
 PathConcatenation:
-		PathSequence 				{ $$ = $1; }
+		PathSequence 				{ $$ = list_make1($1); }
 	|
 		PathSequence PatternUnion PathSequence 
 			{
