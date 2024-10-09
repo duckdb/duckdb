@@ -309,6 +309,7 @@ static void RegisterUpdatedRows(InsertLocalState &lstate, const Vector &row_ids,
 	for (idx_t i = 0; i < count; i++) {
 		auto result = updated_rows.insert(data[i]);
 		if (result.second == false) {
+			// This is following postgres behavior:
 			throw InvalidInputException(
 			    "ON CONFLICT DO UPDATE can not update the same row twice in the same command. Ensure that no rows "
 			    "proposed for insertion within the same command have duplicate constrained values");
