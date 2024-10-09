@@ -292,12 +292,14 @@ void RadixHTConfig::SetRadixBitsInternal(const idx_t radix_bits_p, bool external
 
 idx_t RadixHTConfig::InitialSinkRadixBits(ClientContext &context) {
 	const auto active_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
-	return MinValue(RadixPartitioning::RadixBits(NextPowerOfTwo(active_threads)), MAXIMUM_INITIAL_SINK_RADIX_BITS);
+	return MinValue(RadixPartitioning::RadixBitsOfPowerOfTwo(NextPowerOfTwo(active_threads)),
+	                MAXIMUM_INITIAL_SINK_RADIX_BITS);
 }
 
 idx_t RadixHTConfig::MaximumSinkRadixBits(ClientContext &context) {
 	const auto active_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
-	return MinValue(RadixPartitioning::RadixBits(NextPowerOfTwo(active_threads)), MAXIMUM_FINAL_SINK_RADIX_BITS);
+	return MinValue(RadixPartitioning::RadixBitsOfPowerOfTwo(NextPowerOfTwo(active_threads)),
+	                MAXIMUM_FINAL_SINK_RADIX_BITS);
 }
 
 idx_t RadixHTConfig::ExternalRadixBits(const idx_t &maximum_sink_radix_bits_p) {
@@ -418,7 +420,7 @@ bool MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 	}
 
 	const auto partition_count = partitioned_data->PartitionCount();
-	const auto current_radix_bits = RadixPartitioning::RadixBits(partition_count);
+	const auto current_radix_bits = RadixPartitioning::RadixBitsOfPowerOfTwo(partition_count);
 	D_ASSERT(current_radix_bits <= config.GetRadixBits());
 
 	const auto block_size = BufferManager::GetBufferManager(context).GetBlockSize();

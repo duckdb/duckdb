@@ -25,7 +25,7 @@ public:
 };
 
 template <class OP, class RETURN_TYPE, typename... ARGS>
-RETURN_TYPE RadixBitsSwitch(const idx_t radix_bits, ARGS &&... args) {
+RETURN_TYPE RadixBitsSwitch(const idx_t radix_bits, ARGS &&...args) {
 	D_ASSERT(radix_bits <= RadixPartitioning::MAX_RADIX_BITS);
 	switch (radix_bits) {
 	case 0:
@@ -112,6 +112,7 @@ RadixPartitionedColumnData::RadixPartitionedColumnData(ClientContext &context_p,
 	allocators->allocators.reserve(num_partitions);
 	for (idx_t i = 0; i < num_partitions; i++) {
 		CreateAllocator();
+		allocators->allocators.back()->SetPartitionIndex(i);
 	}
 	D_ASSERT(allocators->allocators.size() == num_partitions);
 }
@@ -176,6 +177,7 @@ RadixPartitionedTupleData::~RadixPartitionedTupleData() {
 void RadixPartitionedTupleData::Initialize() {
 	for (idx_t i = 0; i < RadixPartitioning::NumberOfPartitions(radix_bits); i++) {
 		partitions.emplace_back(CreatePartitionCollection(i));
+		partitions.back()->SetPartitionIndex(i);
 	}
 }
 

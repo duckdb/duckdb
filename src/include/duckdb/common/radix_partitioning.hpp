@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/fast_mem.hpp"
+#include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/types/row/partitioned_tuple_data.hpp"
 
@@ -30,15 +30,15 @@ public:
 		return idx_t(1) << radix_bits;
 	}
 
+	template <class T>
+	static inline idx_t RadixBits(T n) {
+		return sizeof(T) * 8 - CountZeros<T>::Leading(n);
+	}
+
 	//! Inverse of NumberOfPartitions, given a number of partitions, get the number of radix bits
-	static inline idx_t RadixBits(idx_t n_partitions) {
+	static inline idx_t RadixBitsOfPowerOfTwo(idx_t n_partitions) {
 		D_ASSERT(IsPowerOfTwo(n_partitions));
-		for (idx_t r = 0; r < sizeof(idx_t) * 8; r++) {
-			if (n_partitions == NumberOfPartitions(r)) {
-				return r;
-			}
-		}
-		throw InternalException("RadixPartitioning::RadixBits unable to find partition count!");
+		return RadixBits(n_partitions);
 	}
 
 	//! Radix bits begin after uint16_t because these bits are used as salt in the aggregate HT

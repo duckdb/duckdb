@@ -200,8 +200,8 @@ BufferPool::BufferPool(idx_t maximum_memory, bool track_eviction_timestamps,
       allocator_bulk_deallocation_flush_threshold(allocator_bulk_deallocation_flush_threshold),
       track_eviction_timestamps(track_eviction_timestamps),
       temporary_memory_manager(make_uniq<TemporaryMemoryManager>()) {
-	queues.reserve(FILE_BUFFER_TYPE_COUNT);
-	for (idx_t i = 0; i < FILE_BUFFER_TYPE_COUNT; i++) {
+	queues.reserve(EVICTION_QUEUES);
+	for (idx_t i = 0; i < EVICTION_QUEUES; i++) {
 		queues.push_back(make_uniq<EvictionQueue>());
 	}
 }
@@ -209,7 +209,7 @@ BufferPool::~BufferPool() {
 }
 
 bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
-	auto &queue = GetEvictionQueueForType(handle->buffer->type);
+	auto &queue = GetEvictionQueueForBlockHandle(*handle);
 
 	// The block handle is locked during this operation (Unpin),
 	// or the block handle is still a local variable (ConvertToPersistent)
@@ -231,12 +231,33 @@ bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 	return queue.AddToEvictionQueue(BufferEvictionNode(weak_ptr<BlockHandle>(handle), ts));
 }
 
-EvictionQueue &BufferPool::GetEvictionQueueForType(FileBufferType type) {
-	return *queues[uint8_t(type) - 1];
+EvictionQueue &BufferPool::GetEvictionQueueForBlockHandle(const BlockHandle &handle) {
+	// We go from the back, evicting persistent data first.
+	// Then, temporary data (by priority)
+	// Finally, tiny buffers (desperation)
+	idx_t index;
+	switch (handle.buffer->type) {
+	case FileBufferType::BLOCK:
+		index = EVICTION_QUEUES - 1;
+		break;
+	case FileBufferType::MANAGED_BUFFER:
+		if (!handle.managed_buffer_eviction_queue_index.IsValid()) {
+			index = EVICTION_QUEUES - 2; // Not set, assume low priority
+		} else {
+			index = MinValue(handle.managed_buffer_eviction_queue_index.GetIndex() + 1, EVICTION_QUEUES - 2);
+		}
+		break;
+	case FileBufferType::TINY_BUFFER:
+		index = 0;
+		break;
+	default:
+		throw InternalException("Invalid FileBufferType in BufferPool::GetEvictionQueueForBlockHandle");
+	}
+	return *queues[index];
 }
 
-void BufferPool::IncrementDeadNodes(FileBufferType type) {
-	GetEvictionQueueForType(type).IncrementDeadNodes();
+void BufferPool::IncrementDeadNodes(const BlockHandle &handle) {
+	GetEvictionQueueForBlockHandle(handle).IncrementDeadNodes();
 }
 
 void BufferPool::UpdateUsedMemory(MemoryTag tag, int64_t size) {
@@ -261,23 +282,16 @@ TemporaryMemoryManager &BufferPool::GetTemporaryMemoryManager() {
 
 BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_memory, idx_t memory_limit,
                                                    unique_ptr<FileBuffer> *buffer) {
-	// First, we try to evict persistent table data
-	auto block_result =
-	    EvictBlocksInternal(GetEvictionQueueForType(FileBufferType::BLOCK), tag, extra_memory, memory_limit, buffer);
-	if (block_result.success) {
-		return block_result;
+	// Iterate through eviction queues in reverse
+	for (idx_t i = EVICTION_QUEUES; i != 0; i--) {
+		auto &queue = *queues[i - 1];
+		auto block_result = EvictBlocksInternal(queue, tag, extra_memory, memory_limit, buffer);
+		if (block_result.success || i == 1) { // Return upon success or upon last queue
+			return block_result;
+		}
 	}
-
-	// If that does not succeed, we try to evict temporary data
-	auto managed_buffer_result = EvictBlocksInternal(GetEvictionQueueForType(FileBufferType::MANAGED_BUFFER), tag,
-	                                                 extra_memory, memory_limit, buffer);
-	if (managed_buffer_result.success) {
-		return managed_buffer_result;
-	}
-
-	// Finally, we try to evict tiny buffers
-	return EvictBlocksInternal(GetEvictionQueueForType(FileBufferType::TINY_BUFFER), tag, extra_memory, memory_limit,
-	                           buffer);
+	// This can never happen since we always return when i == 1 - Exception to silence compiler warning
+	throw InternalException("Exited BufferPool::EvictBlocksInternal without obtaining BufferPool::EvictionResult");
 }
 
 BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue, MemoryTag tag, idx_t extra_memory,
@@ -381,8 +395,8 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 	}
 }
 
-void BufferPool::PurgeQueue(FileBufferType type) {
-	GetEvictionQueueForType(type).Purge();
+void BufferPool::PurgeQueue(const BlockHandle &block) {
+	GetEvictionQueueForBlockHandle(block).Purge();
 }
 
 void BufferPool::SetLimit(idx_t limit, const char *exception_postscript) {
