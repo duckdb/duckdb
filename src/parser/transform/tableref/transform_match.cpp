@@ -123,6 +123,8 @@ unique_ptr<PathPattern> Transformer::TransformPath(duckdb_libpgquery::PGPathPatt
 			auto subpath = reinterpret_cast<duckdb_libpgquery::PGSubPath *>(path_node);
 			auto subpath_element = TransformSubPathElement(subpath, result);
 			result->path_elements.push_back(std::move(subpath_element));
+		} else {
+			throw NotImplementedException("Path node type " + NodetypeToString(path_node->type) + " not recognized");
 		}
 	}
 
