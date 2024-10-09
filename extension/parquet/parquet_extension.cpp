@@ -778,11 +778,12 @@ public:
 	}
 
 	static OperatorPartitionData ParquetScanGetPartitionData(ClientContext &context,TableFunctionGetPartitionInput &input) {
-		if (input.partition_info.RequiresPartitionColumns()) {
-			throw InternalException("ParquetScan::GetPartitionData: partition columns not supported");
-		}
+		auto &bind_data = input.bind_data->CastNoConst<ParquetReadBindData>();
 		auto &data = input.local_state->Cast<ParquetReadLocalState>();
-		return OperatorPartitionData(data.batch_index);
+		auto &gstate = input.global_state->Cast<ParquetReadGlobalState>();
+		OperatorPartitionData partition_data(data.batch_index);
+		bind_data.multi_file_reader->GetPartitionData(context, bind_data.reader_bind, data.reader->reader_data,gstate.multi_file_reader_state, input.partition_info, partition_data);
+		return partition_data;
 	}
 
 	static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,

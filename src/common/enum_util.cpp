@@ -5373,6 +5373,8 @@ const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) 
 		return "HASH_GROUP_BY";
 	case PhysicalOperatorType::PERFECT_HASH_GROUP_BY:
 		return "PERFECT_HASH_GROUP_BY";
+	case PhysicalOperatorType::PARTITIONED_AGGREGATE:
+		return "PARTITIONED_AGGREGATE";
 	case PhysicalOperatorType::FILTER:
 		return "FILTER";
 	case PhysicalOperatorType::PROJECTION:
@@ -5546,6 +5548,9 @@ PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *valu
 	}
 	if (StringUtil::Equals(value, "PERFECT_HASH_GROUP_BY")) {
 		return PhysicalOperatorType::PERFECT_HASH_GROUP_BY;
+	}
+	if (StringUtil::Equals(value, "PARTITIONED_AGGREGATE")) {
+		return PhysicalOperatorType::PARTITIONED_AGGREGATE;
 	}
 	if (StringUtil::Equals(value, "FILTER")) {
 		return PhysicalOperatorType::FILTER;
@@ -7448,6 +7453,39 @@ TableFilterType EnumUtil::FromString<TableFilterType>(const char *value) {
 		return TableFilterType::STRUCT_EXTRACT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<TableFilterType>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<TablePartitionInfo>(TablePartitionInfo value) {
+	switch(value) {
+	case TablePartitionInfo::NOT_PARTITIONED:
+		return "NOT_PARTITIONED";
+	case TablePartitionInfo::SINGLE_VALUE_PARTITIONS:
+		return "SINGLE_VALUE_PARTITIONS";
+	case TablePartitionInfo::OVERLAPPING_PARTITIONS:
+		return "OVERLAPPING_PARTITIONS";
+	case TablePartitionInfo::DISJOINT_PARTITIONS:
+		return "DISJOINT_PARTITIONS";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<TablePartitionInfo>", value));
+	}
+}
+
+template<>
+TablePartitionInfo EnumUtil::FromString<TablePartitionInfo>(const char *value) {
+	if (StringUtil::Equals(value, "NOT_PARTITIONED")) {
+		return TablePartitionInfo::NOT_PARTITIONED;
+	}
+	if (StringUtil::Equals(value, "SINGLE_VALUE_PARTITIONS")) {
+		return TablePartitionInfo::SINGLE_VALUE_PARTITIONS;
+	}
+	if (StringUtil::Equals(value, "OVERLAPPING_PARTITIONS")) {
+		return TablePartitionInfo::OVERLAPPING_PARTITIONS;
+	}
+	if (StringUtil::Equals(value, "DISJOINT_PARTITIONS")) {
+		return TablePartitionInfo::DISJOINT_PARTITIONS;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<TablePartitionInfo>", value));
 }
 
 template<>

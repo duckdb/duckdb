@@ -625,14 +625,14 @@ void VerifyNullHandling(DataChunk &chunk, UngroupedAggregateState &state,
 #endif
 }
 
-void GlobalUngroupedAggregateState::Finalize(DataChunk &result) {
+void GlobalUngroupedAggregateState::Finalize(DataChunk &result, idx_t column_offset) {
 	result.SetCardinality(1);
 	for (idx_t aggr_idx = 0; aggr_idx < state.aggregate_expressions.size(); aggr_idx++) {
 		auto &aggregate = state.aggregate_expressions[aggr_idx]->Cast<BoundAggregateExpression>();
 
 		Vector state_vector(Value::POINTER(CastPointerToValue(state.aggregate_data[aggr_idx].get())));
 		AggregateInputData aggr_input_data(aggregate.bind_info.get(), allocator);
-		aggregate.function.finalize(state_vector, aggr_input_data, result.data[aggr_idx], 1, 0);
+		aggregate.function.finalize(state_vector, aggr_input_data, result.data[column_offset + aggr_idx], 1, 0);
 	}
 }
 

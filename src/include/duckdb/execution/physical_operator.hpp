@@ -66,6 +66,7 @@ struct OperatorPartitionData {
 	explicit OperatorPartitionData(idx_t batch_index) : batch_index(batch_index) {}
 
 	idx_t batch_index;
+	vector<ColumnPartitionData> partition_data;
 };
 
 //! PhysicalOperator is the base class of the physical operators present in the

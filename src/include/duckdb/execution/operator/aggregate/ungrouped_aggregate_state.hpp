@@ -56,7 +56,7 @@ public:
 	ArenaAllocator &CreateAllocator() const;
 	void Combine(LocalUngroupedAggregateState &other);
 	void CombineDistinct(LocalUngroupedAggregateState &other, DistinctAggregateData &distinct_data);
-	void Finalize(DataChunk &result);
+	void Finalize(DataChunk &result, idx_t column_offset = 0);
 };
 
 struct LocalUngroupedAggregateState {
