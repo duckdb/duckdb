@@ -375,8 +375,8 @@ private:
 	                                         QueryErrorContext error_context);
 
 	//! Looks for a Catalog with a DefaultTable that matches the lookup
-	static CatalogEntryLookup TryLookupDefaultTable(CatalogEntryRetriever &retriever, CatalogType type, const string &catalog,
-	                                                const string &schema, const string &name,
+	static CatalogEntryLookup TryLookupDefaultTable(CatalogEntryRetriever &retriever, CatalogType type,
+	                                                const string &catalog, const string &schema, const string &name,
 	                                                OnEntryNotFound if_not_found, QueryErrorContext error_context);
 
 	//! Return an exception with did-you-mean suggestion.

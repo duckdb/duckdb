@@ -795,8 +795,8 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, vec
 	}
 }
 
-CatalogEntryLookup Catalog::TryLookupDefaultTable(CatalogEntryRetriever &retriever, CatalogType type, const string &catalog,
-                                                  const string &schema, const string &name,
+CatalogEntryLookup Catalog::TryLookupDefaultTable(CatalogEntryRetriever &retriever, CatalogType type,
+                                                  const string &catalog, const string &schema, const string &name,
                                                   OnEntryNotFound if_not_found, QueryErrorContext error_context) {
 	// Default tables of catalogs can only be accessed by the catalog name directly
 	if (!schema.empty() || !catalog.empty()) {
