@@ -1,0 +1,10 @@
+# name: benchmark/tpch/or_filter_pushdown/ordered_sf1.benchmark
+# description: pushdown or into lineitem
+# group: [or_filter_pushdown]
+
+require tpch
+
+cache tpch_sf100.duckdb
+
+run
+select * from lineitem_sf1_random where l_orderkey in (99584, 5900006);
