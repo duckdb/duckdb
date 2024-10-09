@@ -3792,7 +3792,7 @@ The out result must be destroyed with `duckdb_free`.
 * @param index The index of the column to query.
 * @return The column name.
 */
-DUCKDB_API char *duckdb_column_get_name(duckdb_table_description table_description, idx_t index);
+DUCKDB_API char *duckdb_table_description_get_column_name(duckdb_table_description table_description, idx_t index);
 
 //===--------------------------------------------------------------------===//
 // Arrow Interface

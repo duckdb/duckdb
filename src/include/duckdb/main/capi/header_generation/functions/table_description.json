@@ -132,7 +132,7 @@
             }
         },
         {
-            "name": "duckdb_column_get_name",
+            "name": "duckdb_table_description_get_column_name",
             "return_type": "char *",
             "params": [
                 {

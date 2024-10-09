@@ -97,7 +97,7 @@ duckdb_state duckdb_column_has_default(duckdb_table_description table_descriptio
 	return DuckDBSuccess;
 }
 
-char *duckdb_column_get_name(duckdb_table_description table_description, idx_t index) {
+char *duckdb_table_description_get_column_name(duckdb_table_description table_description, idx_t index) {
 	auto wrapper = reinterpret_cast<TableDescriptionWrapper *>(table_description);
 	if (GetTableDescription(wrapper, index) == DuckDBError) {
 		return nullptr;

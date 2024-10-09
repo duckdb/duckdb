@@ -65,13 +65,13 @@ TEST_CASE("Test the table description in the C API", "[capi]") {
 	REQUIRE(duckdb_table_description_error(table_description) == nullptr);
 
 	SECTION("Passing nullptr to get_name") {
-		REQUIRE(duckdb_column_get_name(nullptr, 0) == nullptr);
+		REQUIRE(duckdb_table_description_get_column_name(nullptr, 0) == nullptr);
 	}
 	SECTION("Out of range column for get_name") {
-		REQUIRE(duckdb_column_get_name(table_description, 1) == nullptr);
+		REQUIRE(duckdb_table_description_get_column_name(table_description, 1) == nullptr);
 	}
 	SECTION("In range column - get the name") {
-		auto column_name = duckdb_column_get_name(table_description, 0);
+		auto column_name = duckdb_table_description_get_column_name(table_description, 0);
 		string expected = "my_column";
 		REQUIRE(!expected.compare(column_name));
 		duckdb_free(column_name);
