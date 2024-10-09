@@ -38,18 +38,17 @@ void DataChunk::Initialize(ClientContext &context, const vector<LogicalType> &ty
 }
 
 void DataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &types, idx_t capacity_p) {
-	initialize = vector<bool>(types.size(), true);
+	auto initialize = vector<bool>(types.size(), true);
 	Initialize(allocator, types, initialize, capacity_p);
 }
 
-void DataChunk::Initialize(ClientContext &context, const vector<LogicalType> &types, const vector<bool> &initialize_p,
+void DataChunk::Initialize(ClientContext &context, const vector<LogicalType> &types, const vector<bool> &initialize,
                            idx_t capacity_p) {
-	Initialize(Allocator::Get(context), types, initialize_p, capacity_p);
+	Initialize(Allocator::Get(context), types, initialize, capacity_p);
 }
 
-void DataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &types, const vector<bool> &initialize_p,
+void DataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &types, const vector<bool> &initialize,
                            idx_t capacity_p) {
-	initialize = initialize_p;
 	D_ASSERT(types.size() == initialize.size());
 	D_ASSERT(data.empty());
 
@@ -57,6 +56,7 @@ void DataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &type
 	for (idx_t i = 0; i < types.size(); i++) {
 		if (!initialize[i]) {
 			data.emplace_back(types[i], nullptr);
+			vector_caches.emplace_back();
 			continue;
 		}
 
@@ -79,12 +79,11 @@ void DataChunk::Reset() {
 	if (data.empty() || vector_caches.empty()) {
 		return;
 	}
-	idx_t cache_count = 0;
+	if (vector_caches.size() != data.size()) {
+		throw InternalException("VectorCache and column count mismatch in DataChunk::Reset");
+	}
 	for (idx_t i = 0; i < ColumnCount(); i++) {
-		if (initialize[i]) {
-			data[i].ResetFromCache(vector_caches[cache_count]);
-			cache_count++;
-		}
+		data[i].ResetFromCache(vector_caches[i]);
 	}
 	capacity = STANDARD_VECTOR_SIZE;
 	SetCardinality(0);

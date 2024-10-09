@@ -168,7 +168,5 @@ private:
 	idx_t capacity;
 	//! Vector caches, used to store data when ::Initialize is called
 	vector<VectorCache> vector_caches;
-	//! Initialization vector for initializing and resetting a DataChunk.
-	vector<bool> initialize;
 };
 } // namespace duckdb
