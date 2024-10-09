@@ -316,8 +316,8 @@ static void RegisterUpdatedRows(InsertLocalState &lstate, const Vector &row_ids,
 	}
 }
 
-static unordered_map<idx_t, vector<idx_t>> CheckDistinctness(DataChunk &input, ConflictInfo &info) {
-	unordered_map<idx_t, vector<idx_t>> conflicts;
+static map<idx_t, vector<idx_t>> CheckDistinctness(DataChunk &input, ConflictInfo &info) {
+	map<idx_t, vector<idx_t>> conflicts;
 
 	auto &column_ids = info.column_ids;
 	ValidityMask valid(input.size());
