@@ -108,7 +108,7 @@
 %nonassoc	SET				/* see */
 %left		UNION EXCEPT
 %left		INTERSECT
-%left		LAMBDA_ARROW
+%left		LAMBDA_ARROW DOUBLE_ARROW
 %left		OR
 %left		AND
 %right		NOT
@@ -149,7 +149,6 @@
 %left		'+' '-'
 %left		'*' '/' '%' INTEGER_DIVISION
 %left		'^' POWER_OF
-%left		DOUBLE_ARROW
 /* Unary Operators */
 %left		AT				/* sets precedence for AT TIME ZONE */
 %left		COLLATE
