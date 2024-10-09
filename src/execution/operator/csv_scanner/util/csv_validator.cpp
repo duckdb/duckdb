@@ -25,6 +25,10 @@ bool ThreadLines::Validate() const {
 			// First run, we just set the initialized to true
 			initialized = true;
 		} else {
+			if (line_info.second.start_pos == line_info.second.end_pos) {
+				last_end_pos = line_info.second.end_pos;
+				continue;
+			}
 			if (last_end_pos + error_margin < line_info.second.start_pos) {
 				std::ostringstream error;
 				error << "The Parallel CSV Reader currently does not support a full read on this file." << '\n';

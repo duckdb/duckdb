@@ -1462,7 +1462,7 @@ bool StringValueScanner::IsRowValid() {
 	    make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, make_shared_ptr<CSVErrorHandler>(),
 	                                  csv_file_scan, false, iterator, result_size);
 	auto &tuples = scan_finder->ParseChunk();
-	return tuples.number_of_rows == 1 && tuples.borked_rows.empty();
+	return (tuples.number_of_rows == 1 || tuples.first_line_is_comment) && tuples.borked_rows.empty();
 }
 
 void StringValueScanner::TryRow(CSVState state, idx_t &start_pos, idx_t &end_pos, bool &valid) {
