@@ -448,12 +448,13 @@ bool FilterCombiner::ShouldGenerateORFilter(LogicalOperator *op, column_t column
 	if (estimated_cardinality == 1) {
 		return false;
 	}
-	idx_t distinct_count = 0;
 	if (get.bind_data && get.function.statistics) {
 		auto column_statistics = get.function.statistics(context, get.bind_data.get(), column_id);
-		distinct_count = column_statistics->GetDistinctCount();
-		if (static_cast<double>(estimated_cardinality) * 0.08 <= static_cast<double>(distinct_count)) {
-			return true;
+		if (column_statistics) {
+			auto distinct_count = column_statistics->GetDistinctCount();
+			if (static_cast<double>(estimated_cardinality) * 0.08 <= static_cast<double>(distinct_count)) {
+				return true;
+			}
 		}
 	}
 	return false;
