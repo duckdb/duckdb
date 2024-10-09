@@ -62,7 +62,7 @@ string ParsedExtensionMetaData::GetInvalidMetadataError() {
 			                       DUCKDB_EXTENSION_API_VERSION_MINOR, DUCKDB_EXTENSION_API_VERSION_PATCH);
 		}
 	} else {
-		throw InternalException("Unknown ABI type for extension: " + EnumUtil::ToString(abi_type));
+		throw InternalException("Unknown ABI type for extension: " + extension_abi_metadata);
 	}
 
 	if (engine_platform != platform) {

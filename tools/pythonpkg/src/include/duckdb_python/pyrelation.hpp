@@ -194,7 +194,7 @@ public:
 
 	PolarsDataFrame ToPolars(idx_t batch_size);
 
-	py::object ToArrowCapsule();
+	py::object ToArrowCapsule(const py::object &requested_schema = py::none());
 
 	duckdb::pyarrow::RecordBatchReader ToRecordBatch(idx_t batch_size);
 
@@ -207,6 +207,7 @@ public:
 	unique_ptr<DuckDBPyRelation> Map(py::function fun, Optional<py::object> schema);
 
 	unique_ptr<DuckDBPyRelation> Join(DuckDBPyRelation *other, const py::object &condition, const string &type);
+	unique_ptr<DuckDBPyRelation> Cross(DuckDBPyRelation *other);
 
 	void ToParquet(const string &filename, const py::object &compression = py::none(),
 	               const py::object &field_ids = py::none(), const py::object &row_group_size_bytes = py::none(),

@@ -58,8 +58,8 @@ This is not portable, but we can make it portable if we replace all of it with t
 
 Add this to `jemalloc.h`:
 ```c++
-// DuckDB uses a 10s decay
-#define DUCKDB_JEMALLOC_DECAY 10
+// DuckDB uses a 5s decay
+#define DUCKDB_JEMALLOC_DECAY 5
 ```
 
 We also supply our own config string in `jemalloc.c`.
@@ -74,16 +74,16 @@ JEMALLOC_ATTR(constructor)
 static void
 jemalloc_constructor(void) {
 	unsigned long long cpu_count = malloc_ncpus();
-	unsigned long long bgt_count = cpu_count / 32;
+	unsigned long long bgt_count = cpu_count / 16;
 	if (bgt_count == 0) {
 		bgt_count = 1;
 	}
 	// decay is in ms
 	unsigned long long decay = DUCKDB_JEMALLOC_DECAY * 1000;
 #ifdef DEBUG
-	snprintf(JE_MALLOC_CONF_BUFFER, JE_MALLOC_CONF_BUFFER_SIZE, "junk:true,oversize_threshold:268435456,dirty_decay_ms:%llu,muzzy_decay_ms:%llu,narenas:%llu,max_background_threads:%llu", decay, decay, cpu_count, bgt_count);
+	snprintf(JE_MALLOC_CONF_BUFFER, JE_MALLOC_CONF_BUFFER_SIZE, "junk:true,oversize_threshold:268435456,dirty_decay_ms:%llu,muzzy_decay_ms:%llu,narenas:%llu,max_background_threads:%llu", decay, decay, cpu_count / 2, bgt_count);
 #else
-	snprintf(JE_MALLOC_CONF_BUFFER, JE_MALLOC_CONF_BUFFER_SIZE, "oversize_threshold:268435456,dirty_decay_ms:%llu,muzzy_decay_ms:%llu,narenas:%llu,max_background_threads:%llu", decay, decay, cpu_count, bgt_count);
+	snprintf(JE_MALLOC_CONF_BUFFER, JE_MALLOC_CONF_BUFFER_SIZE, "oversize_threshold:268435456,dirty_decay_ms:%llu,muzzy_decay_ms:%llu,narenas:%llu,max_background_threads:%llu", decay, decay, cpu_count / 2, bgt_count);
 #endif
 	je_malloc_conf = JE_MALLOC_CONF_BUFFER;
 	malloc_init();

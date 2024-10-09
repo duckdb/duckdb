@@ -22,7 +22,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	auto &transition_array = state_machine_cache[state_machine_options];
 
 	for (uint32_t i = 0; i < StateMachine::NUM_STATES; i++) {
-		CSVState cur_state = CSVState(i);
+		CSVState cur_state = static_cast<CSVState>(i);
 		switch (cur_state) {
 		case CSVState::QUOTED:
 		case CSVState::QUOTED_NEW_LINE:
@@ -50,14 +50,20 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 
 	// Now set values depending on configuration
 	// 1) Standard/Invalid State
-	vector<uint8_t> std_inv {static_cast<uint8_t>(CSVState::STANDARD), static_cast<uint8_t>(CSVState::INVALID)};
+	vector<uint8_t> std_inv {static_cast<uint8_t>(CSVState::STANDARD), static_cast<uint8_t>(CSVState::INVALID),
+	                         static_cast<uint8_t>(CSVState::STANDARD_NEWLINE)};
 	for (auto &state : std_inv) {
 		transition_array[delimiter][state] = CSVState::DELIMITER;
-		transition_array[static_cast<uint8_t>('\n')][state] = CSVState::RECORD_SEPARATOR;
 		if (new_line_id == NewLineIdentifier::CARRY_ON) {
 			transition_array[static_cast<uint8_t>('\r')][state] = CSVState::CARRIAGE_RETURN;
+			if (state == static_cast<uint8_t>(CSVState::STANDARD_NEWLINE)) {
+				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::STANDARD;
+			} else {
+				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::INVALID;
+			}
 		} else {
 			transition_array[static_cast<uint8_t>('\r')][state] = CSVState::RECORD_SEPARATOR;
+			transition_array[static_cast<uint8_t>('\n')][state] = CSVState::RECORD_SEPARATOR;
 		}
 		if (comment != '\0') {
 			transition_array[comment][state] = CSVState::COMMENT;
@@ -234,11 +240,11 @@ CSVStateMachineCache::CSVStateMachineCache() {
 	auto default_delimiter = DialectCandidates::GetDefaultDelimiter();
 	auto default_comment = DialectCandidates::GetDefaultComment();
 
-	for (auto quoterule : default_quote_rule) {
-		const auto &quote_candidates = default_quote[static_cast<uint8_t>(quoterule)];
+	for (auto quote_rule : default_quote_rule) {
+		const auto &quote_candidates = default_quote[static_cast<uint8_t>(quote_rule)];
 		for (const auto &quote : quote_candidates) {
 			for (const auto &delimiter : default_delimiter) {
-				const auto &escape_candidates = default_escape[static_cast<uint8_t>(quoterule)];
+				const auto &escape_candidates = default_escape[static_cast<uint8_t>(quote_rule)];
 				for (const auto &escape : escape_candidates) {
 					for (const auto &comment : default_comment) {
 						Insert({delimiter, quote, escape, comment, NewLineIdentifier::SINGLE_N});

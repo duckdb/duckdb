@@ -67,8 +67,15 @@ struct ExtensionAccess {
 	static void SetError(duckdb_extension_info info, const char *error) {
 		auto &load_state = DuckDBExtensionLoadState::Get(info);
 
-		load_state.has_error = true;
-		load_state.error_data = ErrorData(ExceptionType::UNKNOWN_TYPE, error);
+		if (error) {
+			load_state.has_error = true;
+			load_state.error_data = ErrorData(error);
+		} else {
+			load_state.has_error = true;
+			load_state.error_data = ErrorData(
+			    ExceptionType::UNKNOWN_TYPE,
+			    "Extension has indicated an error occured during initialization, but did not set an error message.");
+		}
 	}
 
 	//! Called by the extension get a pointer to the database that is loading it
@@ -118,7 +125,7 @@ struct ExtensionAccess {
 // The C++ init function
 typedef void (*ext_init_fun_t)(DatabaseInstance &);
 // The C init function
-typedef void (*ext_init_c_api_fun_t)(duckdb_extension_info info, duckdb_extension_access *access);
+typedef bool (*ext_init_c_api_fun_t)(duckdb_extension_info info, duckdb_extension_access *access);
 typedef const char *(*ext_version_fun_t)(void);
 typedef bool (*ext_is_storage_t)(void);
 
@@ -173,7 +180,7 @@ static string FilterZeroAtEnd(string s) {
 	return s;
 }
 
-ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(const char *metadata) {
+ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(const char *metadata) noexcept {
 	ParsedExtensionMetaData result;
 
 	vector<string> metadata_field;
@@ -194,12 +201,18 @@ ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(const char *meta
 
 	result.extension_version = FilterZeroAtEnd(metadata_field[3]);
 
-	result.abi_type = EnumUtil::FromString<ExtensionABIType>(FilterZeroAtEnd(metadata_field[4]));
+	auto extension_abi_metadata = FilterZeroAtEnd(metadata_field[4]);
 
-	if (result.abi_type == ExtensionABIType::C_STRUCT) {
+	if (extension_abi_metadata == "C_STRUCT") {
+		result.abi_type = ExtensionABIType::C_STRUCT;
 		result.duckdb_capi_version = FilterZeroAtEnd(metadata_field[2]);
-	} else if (result.abi_type == ExtensionABIType::CPP) {
+	} else if (extension_abi_metadata == "CPP" || extension_abi_metadata.empty()) {
+		result.abi_type = ExtensionABIType::CPP;
 		result.duckdb_version = FilterZeroAtEnd(metadata_field[2]);
+	} else {
+		result.abi_type = ExtensionABIType::UNKNOWN;
+		result.duckdb_version = "unknown";
+		result.extension_abi_metadata = extension_abi_metadata;
 	}
 
 	result.signature = string(metadata, ParsedExtensionMetaData::FOOTER_SIZE - ParsedExtensionMetaData::SIGNATURE_SIZE);
@@ -525,11 +538,21 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 	DuckDBExtensionLoadState load_state(db);
 
 	auto access = ExtensionAccess::CreateAccessStruct();
-	(*init_fun_capi)(load_state.ToCStruct(), &access);
+	auto result = (*init_fun_capi)(load_state.ToCStruct(), &access);
 
 	// Throw any error that the extension might have encountered
 	if (load_state.has_error) {
 		load_state.error_data.Throw("An error was thrown during initialization of the extension '" + extension + "': ");
+	}
+
+	// Extensions are expected to either set an error or return true indicating successful initialization
+	if (result == false) {
+		throw FatalException(
+		    "Extension '%s' failed to initialize but did not return an error. This indicates an "
+		    "error in the extension: C API extensions should return a boolean `true` to indicate succesful "
+		    "initialization. "
+		    "This means that the Extension may be partially initialized resulting in an inconsistent state of DuckDB.",
+		    extension);
 	}
 
 	D_ASSERT(res.install_info);

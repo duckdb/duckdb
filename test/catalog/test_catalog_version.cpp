@@ -44,6 +44,29 @@ TEST_CASE("Test catalog versioning", "[catalog]") {
 		REQUIRE(catalog.GetCatalogVersion(*con1.context) == 2);
 	});
 
+	// The following should not increment the version
+	REQUIRE_NO_FAIL(con1.Query("CREATE TABLE IF NOT EXISTS foo3 as SELECT 42"));
+
+	con1.context->RunFunctionInTransaction([&]() {
+		auto &catalog = Catalog::GetCatalog(*con1.context, "");
+		REQUIRE(catalog.GetCatalogVersion(*con1.context) == 2);
+	});
+
+	REQUIRE_NO_FAIL(con1.Query("CREATE SCHEMA IF NOT EXISTS my_schema"));
+
+	con1.context->RunFunctionInTransaction([&]() {
+		auto &catalog = Catalog::GetCatalog(*con1.context, "");
+		REQUIRE(catalog.GetCatalogVersion(*con1.context) == 3);
+	});
+
+	// The following should not increment the version
+	REQUIRE_NO_FAIL(con1.Query("CREATE SCHEMA IF NOT EXISTS my_schema"));
+
+	con1.context->RunFunctionInTransaction([&]() {
+		auto &catalog = Catalog::GetCatalog(*con1.context, "");
+		REQUIRE(catalog.GetCatalogVersion(*con1.context) == 3);
+	});
+
 	// check catalog version of system catalog
 	con1.context->RunFunctionInTransaction([&]() {
 		auto &catalog = Catalog::GetCatalog(*con1.context, "system");

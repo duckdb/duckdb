@@ -10,6 +10,7 @@
 
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/error_data.hpp"
 
 namespace duckdb {
 class CheckpointLock;
