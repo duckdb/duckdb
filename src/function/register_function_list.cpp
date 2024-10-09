@@ -1,5 +1,4 @@
-#include "duckdb/core_functions/core_functions.hpp"
-#include "duckdb/core_functions/function_list.hpp"
+#include "duckdb/function/function_list.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 
@@ -13,8 +12,8 @@ void FillExtraInfo(const StaticFunctionDefinition &function, T &info) {
 	info.example = function.example;
 }
 
-void CoreFunctions::RegisterFunctions(Catalog &catalog, CatalogTransaction transaction) {
-	auto functions = StaticFunctionDefinition::GetFunctionList();
+static void RegisterFunctionList(Catalog &catalog, CatalogTransaction transaction,
+                                 const StaticFunctionDefinition *functions) {
 	for (idx_t i = 0; functions[i].name; i++) {
 		auto &function = functions[i];
 		if (function.get_function || function.get_function_set) {
@@ -45,6 +44,13 @@ void CoreFunctions::RegisterFunctions(Catalog &catalog, CatalogTransaction trans
 			throw InternalException("Do not know how to register function of this type");
 		}
 	}
+}
+
+void FunctionList::RegisterFunctions(Catalog &catalog, CatalogTransaction transaction) {
+	RegisterFunctionList(catalog, transaction, GetInternalFunctionList());
+#ifndef DISABLE_CORE_FUNCTIONS_EXTENSION
+	RegisterFunctionList(catalog, transaction, GetCoreFunctionList());
+#endif
 }
 
 } // namespace duckdb

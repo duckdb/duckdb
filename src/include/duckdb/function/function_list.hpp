@@ -32,8 +32,8 @@ class Catalog;
 struct CatalogTransaction;
 
 struct FunctionList {
-	static const StaticFunctionDefinition *GetCoreFunctionList();
 	static const StaticFunctionDefinition *GetInternalFunctionList();
+	static const StaticFunctionDefinition *GetCoreFunctionList();
 
 	static void RegisterFunctions(Catalog &catalog, CatalogTransaction transaction);
 };

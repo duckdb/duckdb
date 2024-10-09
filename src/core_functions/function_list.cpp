@@ -1,4 +1,4 @@
-#include "duckdb/core_functions/function_list.hpp"
+#include "duckdb/function/function_list.hpp"
 #include "duckdb/core_functions/aggregate/algebraic_functions.hpp"
 #include "duckdb/core_functions/aggregate/distributive_functions.hpp"
 #include "duckdb/core_functions/aggregate/holistic_functions.hpp"
@@ -421,7 +421,7 @@ static const StaticFunctionDefinition core_functions[] = {
 	FINAL_FUNCTION
 };
 
-const StaticFunctionDefinition *StaticFunctionDefinition::GetFunctionList() {
+const StaticFunctionDefinition *FunctionList::GetCoreFunctionList() {
 	return core_functions;
 }
 

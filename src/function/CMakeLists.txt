@@ -16,8 +16,9 @@ add_library_unity(
   function_binder.cpp
   function_list.cpp
   function_set.cpp
-  pragma_function.cpp
   macro_function.cpp
+  pragma_function.cpp
+  register_function_list.cpp
   scalar_macro_function.cpp
   table_macro_function.cpp
   scalar_function.cpp
