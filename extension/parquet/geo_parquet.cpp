@@ -193,9 +193,9 @@ GeoParquetFileMetadata::TryRead(const duckdb_parquet::format::FileMetaData &file
 				return nullptr;
 			}
 
-			// Check if the spatial extension is loaded, or try to autoload it.
 			if (!context.db->ExtensionIsLoaded("spatial")) {
 				// Spatial extension is not loaded, we can't make use of the metadata anyway.
+				yyjson_doc_free(geo_metadata);
 				return nullptr;
 			}
 
@@ -376,11 +376,7 @@ void GeoParquetFileMetadata::RegisterGeometryColumn(const string &column_name) {
 bool GeoParquetFileMetadata::IsGeoParquetConversionEnabled(const ClientContext &context) {
 	Value geoparquet_enabled;
 	if (context.TryGetCurrentSetting("enable_geoparquet_conversion", geoparquet_enabled)) {
-		const auto is_enabled = geoparquet_enabled.GetValue<bool>();
-		if (!is_enabled) {
-			return false;
-		}
-		return true;
+		return geoparquet_enabled.GetValue<bool>();
 	}
 	return false;
 }
