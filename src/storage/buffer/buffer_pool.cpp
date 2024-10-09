@@ -233,7 +233,7 @@ bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 
 EvictionQueue &BufferPool::GetEvictionQueueForBlockHandle(const BlockHandle &handle) {
 	// We go from the back, evicting persistent data first.
-	// Then, temporary data (by priority)
+	// Then, temporary data (by index)
 	// Finally, tiny buffers (desperation)
 	idx_t index;
 	switch (handle.buffer->type) {
