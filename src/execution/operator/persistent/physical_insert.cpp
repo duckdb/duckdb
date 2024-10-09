@@ -393,6 +393,17 @@ static void VerifyOnConflictCondition(ExecutionContext &context, DataChunk &comb
 	}
 }
 
+namespace {
+
+struct ConflictTupleData {
+	//! The index at which the conflict is registered in the SelectionVector
+	idx_t conflict_idx;
+	//! The index of the (to-be-inserted) tuple that has caused the conflict
+	idx_t tuple_idx;
+};
+
+} // namespace
+
 // Perform an INSERT for inner conflicts, rather than an UPDATE
 template <bool GLOBAL>
 static idx_t HandleUndetectedInsertConflicts(TableCatalogEntry &table, ExecutionContext &context,
@@ -451,6 +462,9 @@ static idx_t HandleUndetectedInsertConflicts(TableCatalogEntry &table, Execution
 	insert_chunk.SetCardinality(update_chunk.size());
 
 	auto &storage = table.GetStorage();
+	// FIXME: this messes with the insertion order, probably want a better solution than this
+	// maybe an idea would be to provide a set of row_ids this should create
+	// which would create gaps that we fill with the other LocalAppend ??
 	storage.LocalAppend(gstate.append_state, table, context.client, insert_chunk, true);
 	return insert_chunk.size();
 }
@@ -512,7 +526,7 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 
 	auto &row_ids = conflict_manager.RowIds();
 
-	ManagedSelection conflicts(conflict_manager.ConflictCount());
+	ManagedSelection remaining_conflicts(conflict_manager.ConflictCount());
 	if (!inner_conflicts.empty()) {
 		// The input data is not all distinct on the relevant column_ids
 
@@ -523,7 +537,7 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 			index_conflicts[conflict_manager.Conflicts()[i]] = i;
 		}
 
-		map<idx_t, idx_t> remaining_conflicts;
+		map<idx_t, ConflictTupleData> remaining_conflict_map;
 		for (auto &it : inner_conflicts) {
 			auto entry = index_conflicts.find(it.first);
 			if (entry == index_conflicts.end()) {
@@ -536,7 +550,8 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 					D_ASSERT(index_conflicts.count(idx));
 				}
 #endif
-				remaining_conflicts[entry->first] = it.second.back();
+				remaining_conflict_map[entry->first] = ConflictTupleData {/*.conflict_idx =*/entry->second,
+				                                                          /*.tuple_idx =*/it.second.back()};
 			}
 		}
 
@@ -550,24 +565,28 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 
 		// The 'inner_conflicts' only contain conflicts within the insert chunk
 		// this does not include conflicts on distinct values that *only* conflict with existing data
+		// i.e if '2' exists in the table, and '2' does not occur more than once in the inserted data, 'inner_conflicts'
+		// would not find it
 		for (auto entry : index_conflicts) {
-			if (!flattened_conflicts.count(entry.second)) {
-				remaining_conflicts[entry.first] = entry.second;
+			if (!flattened_conflicts.count(entry.first)) {
+				remaining_conflict_map[entry.first] = ConflictTupleData {/*.conflict_idx =*/entry.second,
+				                                                         /*.tuple_idx =*/entry.first};
 			}
 		}
 
-		ManagedSelection row_id_selvec(remaining_conflicts.size());
-		for (auto &entry : remaining_conflicts) {
-			row_id_selvec.Append(entry.first);
-			conflicts.Append(entry.second);
+		ManagedSelection row_id_selvec(remaining_conflict_map.size());
+		for (auto &entry : remaining_conflict_map) {
+			auto &conflict_data = entry.second;
+			row_id_selvec.Append(conflict_data.conflict_idx);
+			remaining_conflicts.Append(conflict_data.tuple_idx);
 		}
 
-		D_ASSERT(row_id_selvec.Count() == conflicts.Count());
-		row_ids.Slice(row_id_selvec.Selection(), conflicts.Count());
-		row_ids.Flatten(conflicts.Count());
+		D_ASSERT(row_id_selvec.Count() == remaining_conflicts.Count());
+		row_ids.Slice(row_id_selvec.Selection(), row_id_selvec.Count());
+		row_ids.Flatten(row_id_selvec.Count());
 	} else {
 		for (idx_t i = 0; i < conflict_manager.ConflictCount(); i++) {
-			conflicts.Append(conflict_manager.Conflicts()[i]);
+			remaining_conflicts.Append(conflict_manager.Conflicts()[i]);
 		}
 	}
 
@@ -575,11 +594,11 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 	DataChunk scan_chunk;     // contains the original values, that caused the conflict
 	DataChunk combined_chunk; // contains conflict_chunk + scan_chunk (wide)
 
-	// Filter out everything but the conflicting rows
+	// Filter out everything but the (remaining) conflicting rows
 	conflict_chunk.Initialize(context.client, lstate.insert_chunk.GetTypes());
 	conflict_chunk.Reference(lstate.insert_chunk);
-	conflict_chunk.Slice(conflicts.Selection(), conflicts.Count());
-	conflict_chunk.SetCardinality(conflicts.Count());
+	conflict_chunk.Slice(remaining_conflicts.Selection(), remaining_conflicts.Count());
+	conflict_chunk.SetCardinality(remaining_conflicts.Count());
 
 	// Holds the pins for the fetched rows
 	unique_ptr<ColumnFetchState> fetch_state;
@@ -591,9 +610,10 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 		fetch_state = make_uniq<ColumnFetchState>();
 		if (GLOBAL) {
 			auto &transaction = DuckTransaction::Get(context.client, table.catalog);
-			data_table.Fetch(transaction, scan_chunk, columns_to_fetch, row_ids, conflicts.Count(), *fetch_state);
+			data_table.Fetch(transaction, scan_chunk, columns_to_fetch, row_ids, remaining_conflicts.Count(),
+			                 *fetch_state);
 		} else {
-			local_storage.FetchChunk(data_table, row_ids, conflicts.Count(), columns_to_fetch, scan_chunk,
+			local_storage.FetchChunk(data_table, row_ids, remaining_conflicts.Count(), columns_to_fetch, scan_chunk,
 			                         *fetch_state);
 		}
 	}
@@ -610,8 +630,8 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 
 	// Remove the conflicting tuples from the insert chunk
 	SelectionVector sel_vec(lstate.insert_chunk.size());
-	idx_t new_size =
-	    SelectionVector::Inverted(conflicts.Selection(), sel_vec, conflicts.Count(), lstate.insert_chunk.size());
+	idx_t new_size = SelectionVector::Inverted(conflict_manager.Conflicts().Selection(), sel_vec,
+	                                           conflict_manager.Conflicts().Count(), lstate.insert_chunk.size());
 	lstate.insert_chunk.Slice(sel_vec, new_size);
 	lstate.insert_chunk.SetCardinality(new_size);
 	return updated_tuples;
