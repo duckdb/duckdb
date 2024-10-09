@@ -316,18 +316,11 @@ static void RegisterUpdatedRows(InsertLocalState &lstate, const Vector &row_ids,
 	}
 }
 
-static map<idx_t, vector<idx_t>> CheckDistinctness(DataChunk &input, ConflictInfo &info) {
-	map<idx_t, vector<idx_t>> conflicts;
-
-	auto &column_ids = info.column_ids;
+static void CheckDistinctnessInternal(DataChunk &input, const unordered_set<column_t> &column_ids,
+                                      map<idx_t, vector<idx_t>> &result) {
+	// FIXME: do we want to use the same validity mask across multiple distinctness checks (for different column_ids
+	// inputs) ?
 	ValidityMask valid(input.size());
-	if (column_ids.empty()) {
-		// FIXME: this happens for "INSERT OR REPLACE" or "ON CONFLICT DO .."" (without specific columns)
-		// what we likely need to do is run through all the existing indexes to figure out on which columns they act
-		// and use those same column ids here (running multiple times for each distinct column id set)
-		return conflicts;
-	}
-
 	for (idx_t i = 0; i < input.size(); i++) {
 		if (!valid.RowIsValid(i)) {
 			// Already a conflict
@@ -354,7 +347,7 @@ static map<idx_t, vector<idx_t>> CheckDistinctness(DataChunk &input, ConflictInf
 				}
 			}
 			if (matches) {
-				auto &row_ids = conflicts[i];
+				auto &row_ids = result[i];
 				has_conflicts = true;
 				row_ids.push_back(j);
 				valid.SetInvalid(j);
@@ -363,6 +356,21 @@ static map<idx_t, vector<idx_t>> CheckDistinctness(DataChunk &input, ConflictInf
 		if (has_conflicts) {
 			valid.SetInvalid(i);
 		}
+	}
+}
+
+static map<idx_t, vector<idx_t>> CheckDistinctness(DataChunk &input, ConflictManager &conflict_manager) {
+	map<idx_t, vector<idx_t>> conflicts;
+
+	auto &column_ids = conflict_manager.GetConflictInfo().column_ids;
+	ValidityMask valid(input.size());
+	if (column_ids.empty()) {
+		for (auto index : conflict_manager.MatchedIndexes()) {
+			auto &index_column_ids = index->GetColumnIdSet();
+			CheckDistinctnessInternal(input, index_column_ids, conflicts);
+		}
+	} else {
+		CheckDistinctnessInternal(input, column_ids, conflicts);
 	}
 	return conflicts;
 }
@@ -491,9 +499,6 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 	auto &local_storage = LocalStorage::Get(context.client, data_table.db);
 
 	ConflictInfo conflict_info(conflict_target);
-
-	auto inner_conflicts = CheckDistinctness(lstate.insert_chunk, conflict_info);
-
 	ConflictManager conflict_manager(VerifyExistenceType::APPEND, lstate.insert_chunk.size(), &conflict_info);
 	if (GLOBAL) {
 		auto &constraint_state = lstate.GetConstraintState(data_table, table);
@@ -504,6 +509,8 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 	}
 
 	conflict_manager.Finalize();
+
+	auto inner_conflicts = CheckDistinctness(lstate.insert_chunk, conflict_manager);
 
 	idx_t affected_tuples = 0;
 	if (conflict_manager.ConflictCount() == 0) {

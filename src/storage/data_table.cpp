@@ -688,29 +688,24 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, ClientContext &cont
 	D_ASSERT(conflict_manager);
 	// The conflict manager is only provided when a ON CONFLICT clause was provided to the INSERT statement
 
-	idx_t matching_indexes = 0;
 	auto &conflict_info = conflict_manager->GetConflictInfo();
 	// First we figure out how many indexes match our conflict target
 	// So we can optimize accordingly
-	indexes.Scan([&](Index &index) {
-		matching_indexes += conflict_info.ConflictTargetMatches(index);
-		return false;
-	});
-	conflict_manager->SetMode(ConflictManagerMode::SCAN);
-	conflict_manager->SetIndexCount(matching_indexes);
-	// First we verify only the indexes that match our conflict target
-	unordered_set<Index *> checked_indexes;
 	indexes.Scan([&](Index &index) {
 		if (!index.IsUnique()) {
 			return false;
 		}
 		if (conflict_info.ConflictTargetMatches(index)) {
 			D_ASSERT(index.IsBound());
-			index.Cast<BoundIndex>().VerifyAppend(chunk, *conflict_manager);
-			checked_indexes.insert(&index);
+			conflict_manager->AddIndex(index.Cast<BoundIndex>());
 		}
 		return false;
 	});
+	conflict_manager->SetMode(ConflictManagerMode::SCAN);
+	// First we verify only the indexes that match our conflict target
+	for (auto index : conflict_manager->MatchedIndexes()) {
+		index->VerifyAppend(chunk, *conflict_manager);
+	}
 
 	conflict_manager->SetMode(ConflictManagerMode::THROW);
 	// Then we scan the other indexes, throwing if they cause conflicts on tuples that were not found during
@@ -719,12 +714,13 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, ClientContext &cont
 		if (!index.IsUnique()) {
 			return false;
 		}
-		if (checked_indexes.count(&index)) {
+		D_ASSERT(index.IsBound());
+		auto &bound_index = index.Cast<BoundIndex>();
+		if (conflict_manager->MatchedIndex(bound_index)) {
 			// Already checked this constraint
 			return false;
 		}
-		D_ASSERT(index.IsBound());
-		index.Cast<BoundIndex>().VerifyAppend(chunk, *conflict_manager);
+		bound_index.VerifyAppend(chunk, *conflict_manager);
 		return false;
 	});
 }

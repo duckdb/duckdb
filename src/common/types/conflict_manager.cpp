@@ -163,9 +163,12 @@ bool ConflictManager::AddNull(idx_t chunk_index) {
 }
 
 bool ConflictManager::SingleIndexTarget() const {
-	D_ASSERT(conflict_info);
 	// We are only interested in a specific index
-	return !conflict_info->column_ids.empty();
+	if (conflict_info->column_ids.empty()) {
+		// return matched_indexes.size() == 1;
+		return false;
+	}
+	return true;
 }
 
 bool ConflictManager::ShouldThrow(idx_t chunk_index) const {
@@ -212,6 +215,18 @@ idx_t ConflictManager::ConflictCount() const {
 	return conflicts.Count();
 }
 
+void ConflictManager::AddIndex(BoundIndex &index) {
+	matched_indexes.insert(&index);
+}
+
+bool ConflictManager::MatchedIndex(BoundIndex &index) {
+	return matched_indexes.count(&index);
+}
+
+const unordered_set<BoundIndex *> &ConflictManager::MatchedIndexes() const {
+	return matched_indexes;
+}
+
 void ConflictManager::Finalize() {
 	D_ASSERT(!finalized);
 	if (SingleIndexTarget()) {
@@ -249,10 +264,6 @@ void ConflictManager::Finalize() {
 
 VerifyExistenceType ConflictManager::LookupType() const {
 	return this->lookup_type;
-}
-
-void ConflictManager::SetIndexCount(idx_t count) {
-	index_count = count;
 }
 
 } // namespace duckdb
