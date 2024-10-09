@@ -46,6 +46,9 @@ public:
 		} else {
 			settings.insert(MetricsType::OPERATOR_TYPE);
 			settings.erase(MetricsType::QUERY_NAME);
+			settings.erase(MetricsType::BLOCKED_THREAD_TIME);
+			settings.erase(MetricsType::LATENCY);
+			settings.erase(MetricsType::ROWS_RETURNED);
 		}
 		ResetMetrics();
 	}
@@ -61,8 +64,8 @@ public:
 	void ResetMetrics();
 	//! Returns true, if the query profiler must collect this metric.
 	bool MustCollect(const MetricsType metric) const;
-	//! Enabled TODO. rename + comment
-	bool IsEnabled(const MetricsType metric) const;
+	//! Returns true, if the metric is present in the settings.
+	bool Enabled(const MetricsType metric) const;
 
 public:
 	string GetMetricAsString(const MetricsType metric) const;

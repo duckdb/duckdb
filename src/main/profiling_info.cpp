@@ -13,7 +13,8 @@ profiler_settings_t ProfilingInfo::DefaultSettings() {
 	return {MetricsType::QUERY_NAME,           MetricsType::BLOCKED_THREAD_TIME,     MetricsType::CPU_TIME,
 	        MetricsType::EXTRA_INFO,           MetricsType::CUMULATIVE_CARDINALITY,  MetricsType::OPERATOR_TYPE,
 	        MetricsType::OPERATOR_CARDINALITY, MetricsType::CUMULATIVE_ROWS_SCANNED, MetricsType::OPERATOR_ROWS_SCANNED,
-	        MetricsType::OPERATOR_TIMING,      MetricsType::RESULT_SET_SIZE,         MetricsType::QUERY_TIMING};
+	        MetricsType::OPERATOR_TIMING,      MetricsType::RESULT_SET_SIZE,         MetricsType::LATENCY,
+	        MetricsType::ROWS_RETURNED};
 }
 
 profiler_settings_t ProfilingInfo::DefaultOperatorSettings() {
@@ -53,7 +54,7 @@ void ProfilingInfo::ResetMetrics() {
 		case MetricsType::QUERY_NAME:
 			metrics[metric] = Value::CreateValue("");
 			break;
-		case MetricsType::QUERY_TIMING:
+		case MetricsType::LATENCY:
 		case MetricsType::BLOCKED_THREAD_TIME:
 		case MetricsType::CPU_TIME:
 		case MetricsType::OPERATOR_TIMING:
@@ -62,6 +63,7 @@ void ProfilingInfo::ResetMetrics() {
 		case MetricsType::OPERATOR_TYPE:
 			metrics[metric] = Value::CreateValue<uint8_t>(0);
 			break;
+		case MetricsType::ROWS_RETURNED:
 		case MetricsType::RESULT_SET_SIZE:
 		case MetricsType::CUMULATIVE_CARDINALITY:
 		case MetricsType::OPERATOR_CARDINALITY:
@@ -78,7 +80,7 @@ void ProfilingInfo::ResetMetrics() {
 }
 
 bool ProfilingInfo::MustCollect(const MetricsType metric) const {
-	if (IsEnabled(metric)) {
+	if (Enabled(metric)) {
 		return true;
 	}
 
@@ -99,12 +101,12 @@ bool ProfilingInfo::MustCollect(const MetricsType metric) const {
 	return false;
 }
 
-bool ProfilingInfo::IsEnabled(const MetricsType metric) const {
+bool ProfilingInfo::Enabled(const MetricsType metric) const {
 	return settings.find(metric) != settings.end();
 }
 
 string ProfilingInfo::GetMetricAsString(const MetricsType metric) const {
-	if (!IsEnabled(metric)) {
+	if (!Enabled(metric)) {
 		throw InternalException("Metric %s not enabled", EnumUtil::ToString(metric));
 	}
 
@@ -167,7 +169,7 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 		case MetricsType::QUERY_NAME:
 			yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, metrics[metric].GetValue<string>().c_str());
 			break;
-		case MetricsType::QUERY_TIMING:
+		case MetricsType::LATENCY:
 		case MetricsType::BLOCKED_THREAD_TIME:
 		case MetricsType::CPU_TIME:
 		case MetricsType::OPERATOR_TIMING: {
@@ -178,6 +180,7 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 			yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, GetMetricAsString(metric).c_str());
 			break;
 		}
+		case MetricsType::ROWS_RETURNED:
 		case MetricsType::RESULT_SET_SIZE:
 		case MetricsType::CUMULATIVE_CARDINALITY:
 		case MetricsType::OPERATOR_CARDINALITY:
