@@ -33,12 +33,12 @@ SELECT bitstring('1', 6);
 statement error
 SELECT bitstring('0101011', 3);
 ----
-Length must be equal or larger than input string
+<REGEX>:Invalid Input Error.*Length must be equal or larger than input string.*
 
 statement error
 SELECT bitstring('', 0);
 ----
-Cannot cast empty string to BIT
+<REGEX>:Conversion Error.*Cannot cast empty string to BIT.*
 
 query I
 SELECT bitstring('1', 1);
@@ -48,12 +48,12 @@ SELECT bitstring('1', 1);
 statement error
 SELECT bitstring('5', 10);
 ----
-Invalid character encountered
+<REGEX>:Conversion Error.*Invalid character encountered.*
 
 statement error
 SELECT bitstring('0101011');
 ----
-No function matches
+<REGEX>:Binder Error.*No function matches.*
 
 query I
 SELECT bitstring('0101011', 203);
@@ -93,17 +93,17 @@ SELECT * FROM bits WHERE b = '111';
 statement error
 INSERT INTO bits VALUES('101211010')
 ----
-Conversion Error: Invalid character encountered in string -> bit conversion: '2'
+<REGEX>:Conversion Error.*Invalid character encountered.*
 
 statement error
 INSERT INTO bits VALUES('1A10')
 ----
-Conversion Error: Invalid character encountered in string -> bit conversion: 'A'
+<REGEX>:Conversion Error.*Invalid character encountered.*
 
 statement error
 SELECT ('0101011'::BIT(10))
 ----
-Parser Error: Type BIT does not support any modifiers!
+<REGEX>:Parser Error.*Type BIT does not support any modifiers!.*
 
 # bit null test and empty values
 query I
@@ -114,7 +114,7 @@ NULL
 statement error
 SELECT ''::BIT
 ----
-Conversion Error: Cannot cast empty string to BIT
+<REGEX>:Conversion Error.*Cannot cast empty string to BIT.*
 
 statement ok
 DELETE FROM bits
@@ -125,6 +125,7 @@ INSERT INTO bits VALUES (NULL)
 statement error
 INSERT INTO bits VALUES ('')
 ----
+<REGEX>:Conversion Error.*Cannot cast empty string to BIT.*
 
 query I
 SELECT * FROM bits

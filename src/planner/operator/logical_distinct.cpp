@@ -18,6 +18,7 @@ InsertionOrderPreservingMap<string> LogicalDistinct::ParamsToString() const {
 		    StringUtil::Join(distinct_targets, distinct_targets.size(), "\n",
 		                     [](const unique_ptr<Expression> &child) { return child->GetName(); });
 	}
+	SetParamsEstimatedCardinality(result);
 	return result;
 }
 

@@ -203,6 +203,9 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 			// scan the list for all selected columns and construct a lookup table
 			case_insensitive_map_t<bool> selected_set;
 			for (auto &child : children) {
+				if (child.IsNull()) {
+					throw BinderException(*star, "Columns expression does not support NULL input parameters");
+				}
 				selected_set.insert(make_pair(StringValue::Get(child), false));
 			}
 			// now check the list of all possible expressions and select which ones make it in

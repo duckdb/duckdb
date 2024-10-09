@@ -15,6 +15,7 @@
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 
 namespace duckdb {
 
@@ -258,11 +259,12 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 // Indexes
 //===--------------------------------------------------------------------===//
 
-void SerializeIndexToWAL(WriteAheadLogSerializer &serializer, const unique_ptr<Index> &index) {
+void SerializeIndexToWAL(WriteAheadLogSerializer &serializer, Index &index,
+                         const case_insensitive_map_t<Value> &options) {
 
 	// We will never write an index to the WAL that is not bound
-	D_ASSERT(index->IsBound());
-	auto index_storage_info = index->Cast<BoundIndex>().GetStorageInfo(true);
+	D_ASSERT(index.IsBound());
+	const auto index_storage_info = index.Cast<BoundIndex>().GetStorageInfo(options, true);
 	serializer.WriteProperty(102, "index_storage_info", index_storage_info);
 
 	serializer.WriteList(103, "index_storage", index_storage_info.buffers.size(), [&](Serializer::List &list, idx_t i) {
@@ -277,18 +279,24 @@ void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
 	WriteAheadLogSerializer serializer(*this, WALType::CREATE_INDEX);
 	serializer.WriteProperty(101, "index_catalog_entry", &entry);
 
-	// now serialize the index data to the persistent storage and write the index metadata
-	auto &duck_index_entry = entry.Cast<DuckIndexEntry>();
-	auto &indexes = duck_index_entry.GetDataTableInfo().GetIndexes().Indexes();
-
-	// get the matching index and serialize its storage info
-	for (auto const &index : indexes) {
-		if (duck_index_entry.name == index->GetIndexName()) {
-			SerializeIndexToWAL(serializer, index);
-			break;
-		}
+	auto db_options = database.GetDatabase().config.options;
+	auto v1_0_0_storage = db_options.serialization_compatibility.serialization_version < 3;
+	case_insensitive_map_t<Value> options;
+	if (!v1_0_0_storage) {
+		options.emplace("v1_0_0_storage", v1_0_0_storage);
 	}
 
+	// now serialize the index data to the persistent storage and write the index metadata
+	auto &duck_index_entry = entry.Cast<DuckIndexEntry>();
+	auto &table_idx_list = duck_index_entry.GetDataTableInfo().GetIndexes();
+
+	table_idx_list.Scan([&](Index &index) {
+		if (duck_index_entry.name == index.GetIndexName()) {
+			SerializeIndexToWAL(serializer, index, options);
+			return true;
+		}
+		return false;
+	});
 	serializer.End();
 }
 
@@ -356,6 +364,14 @@ void WriteAheadLog::WriteInsert(DataChunk &chunk) {
 
 	WriteAheadLogSerializer serializer(*this, WALType::INSERT_TUPLE);
 	serializer.WriteProperty(101, "chunk", chunk);
+	serializer.End();
+}
+
+void WriteAheadLog::WriteRowGroupData(const PersistentCollectionData &data) {
+	D_ASSERT(!data.row_group_data.empty());
+
+	WriteAheadLogSerializer serializer(*this, WALType::ROW_GROUP_DATA);
+	serializer.WriteProperty(101, "row_group_data", data);
 	serializer.End();
 }
 

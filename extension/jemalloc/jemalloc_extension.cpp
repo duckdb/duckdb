@@ -58,7 +58,7 @@ static inline string PurgeArenaString(idx_t arena_idx) {
 }
 
 int64_t JemallocExtension::DecayDelay() {
-	return DUCKDB_DECAY_DELAY;
+	return DUCKDB_JEMALLOC_DECAY;
 }
 
 void JemallocExtension::ThreadFlush(idx_t threshold) {

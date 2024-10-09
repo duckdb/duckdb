@@ -1,0 +1,6 @@
+{
+    "version": "dev",
+    "entries": [
+        "duckdb_appender_create_ext"
+    ]
+}

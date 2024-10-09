@@ -12,7 +12,7 @@
 namespace duckdb {
 
 BoundStatement Binder::Bind(ExecuteStatement &stmt) {
-	auto parameter_count = stmt.n_param;
+	auto parameter_count = stmt.named_param_map.size();
 
 	// bind the prepared statement
 	auto &client_data = ClientData::Get(context);

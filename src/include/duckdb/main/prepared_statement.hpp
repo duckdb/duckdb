@@ -24,7 +24,7 @@ class PreparedStatement {
 public:
 	//! Create a successfully prepared prepared statement object with the given name
 	DUCKDB_API PreparedStatement(shared_ptr<ClientContext> context, shared_ptr<PreparedStatementData> data,
-	                             string query, idx_t n_param, case_insensitive_map_t<idx_t> named_param_map);
+	                             string query, case_insensitive_map_t<idx_t> named_param_map);
 	//! Create a prepared statement that was not successfully prepared
 	DUCKDB_API explicit PreparedStatement(ErrorData error);
 
@@ -41,9 +41,7 @@ public:
 	bool success;
 	//! The error message (if success = false)
 	ErrorData error;
-	//! The amount of bound parameters
-	idx_t n_param;
-	//! The (optional) named parameters
+	//! The parameter mapping
 	case_insensitive_map_t<idx_t> named_param_map;
 
 public:

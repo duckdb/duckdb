@@ -172,7 +172,7 @@ nstime_ns_since(const nstime_t *past) {
 }
 
 #ifdef _WIN32
-#  define NSTIME_MONOTONIC true
+#  define NSTIME_MONOTONIC false
 static void
 nstime_get(nstime_t *time) {
 	FILETIME ft;

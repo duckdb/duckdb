@@ -188,7 +188,9 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 	}
 	case LogicalTypeId::TIME_TZ: {
 		int64_t val;
-		if (stats.size() == sizeof(int64_t)) {
+		if (stats.size() == sizeof(int32_t)) {
+			val = Load<int32_t>(stats_data);
+		} else if (stats.size() == sizeof(int64_t)) {
 			val = Load<int64_t>(stats_data);
 		} else {
 			throw InternalException("Incorrect stats size for type TIMETZ");

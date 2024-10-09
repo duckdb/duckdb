@@ -2,6 +2,9 @@
 # description: Test reading csv files with errors return correct error line
 # group: [csv]
 
+statement ok
+pragma enable_verification;
+
 require tpch
 
 statement ok

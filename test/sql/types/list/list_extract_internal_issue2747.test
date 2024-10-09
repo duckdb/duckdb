@@ -1,0 +1,11 @@
+# name: test/sql/types/list/list_extract_internal_issue2747.test
+# description: Internal Issue 2747 - list_extract bug in test/sql/parallelism/intraquery/test_aggregations_parallelism.test_slow
+# group: [list]
+
+statement ok
+pragma enable_verification
+
+query I
+select string_split(string_agg(NULL, ','), ',')[100] from range(10);
+----
+NULL

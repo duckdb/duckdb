@@ -1,0 +1,38 @@
+# name: test/fuzzer/duckfuzz/regex_syntax_2889.test
+# description: Test REGEX syntax
+# group: [duckfuzz]
+
+query I
+SELECT 42
+----
+42
+
+query I
+SELECT 42
+----
+<REGEX>:42
+
+query I
+SELECT 42
+----
+<REGEX>:.*
+
+query I
+SELECT 42
+----
+<!REGEX>:quack
+
+statement error
+SELECT
+----
+SELECT clause without selection list
+
+statement error
+SELECT
+----
+<REGEX>:Parser Error.*clause without selection list.*
+
+statement error
+SELECT
+----
+<!REGEX>:Parser Error

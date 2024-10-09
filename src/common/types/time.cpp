@@ -14,7 +14,6 @@
 #include <sstream>
 
 namespace duckdb {
-
 static_assert(sizeof(dtime_t) == sizeof(int64_t), "dtime_t was padded");
 
 // string format is hh:mm:ss.microsecondsZ
@@ -65,27 +64,38 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 		// invalid separator
 		return false;
 	}
-
-	if (!Date::ParseDoubleDigit(buf, len, pos, min)) {
-		return false;
-	}
-	if (min < 0 || min >= 60) {
-		return false;
-	}
-
-	if (pos >= len) {
-		return false;
-	}
-
-	if (buf[pos++] != sep) {
-		return false;
+	idx_t sep_pos = pos;
+	if (pos == len && !strict) {
+		min = 0;
+	} else {
+		if (!Date::ParseDoubleDigit(buf, len, pos, min)) {
+			return false;
+		}
+		if (min < 0 || min >= 60) {
+			return false;
+		}
 	}
 
-	if (!Date::ParseDoubleDigit(buf, len, pos, sec)) {
+	if (pos > len) {
 		return false;
 	}
-	if (sec < 0 || sec >= 60) {
-		return false;
+	if (pos == len && (!strict || sep_pos + 2 == pos)) {
+		sec = 0;
+	} else {
+		if (buf[pos++] != sep) {
+			return false;
+		}
+
+		if (pos == len && !strict) {
+			sec = 0;
+		} else {
+			if (!Date::ParseDoubleDigit(buf, len, pos, sec)) {
+				return false;
+			}
+			if (sec < 0 || sec >= 60) {
+				return false;
+			}
+		}
 	}
 
 	micros = 0;

@@ -8,6 +8,36 @@
 
 namespace duckdb {
 
+vector<LogicalType> LogicalCopyToFile::GetTypesWithoutPartitions(const vector<LogicalType> &col_types,
+                                                                 const vector<idx_t> &part_cols, bool write_part_cols) {
+	if (write_part_cols || part_cols.empty()) {
+		return col_types;
+	}
+	vector<LogicalType> types;
+	set<idx_t> part_col_set(part_cols.begin(), part_cols.end());
+	for (idx_t col_idx = 0; col_idx < col_types.size(); col_idx++) {
+		if (part_col_set.find(col_idx) == part_col_set.end()) {
+			types.push_back(col_types[col_idx]);
+		}
+	}
+	return types;
+}
+
+vector<string> LogicalCopyToFile::GetNamesWithoutPartitions(const vector<string> &col_names,
+                                                            const vector<column_t> &part_cols, bool write_part_cols) {
+	if (write_part_cols || part_cols.empty()) {
+		return col_names;
+	}
+	vector<string> names;
+	set<idx_t> part_col_set(part_cols.begin(), part_cols.end());
+	for (idx_t col_idx = 0; col_idx < col_names.size(); col_idx++) {
+		if (part_col_set.find(col_idx) == part_col_set.end()) {
+			names.push_back(col_names[col_idx]);
+		}
+	}
+	return names;
+}
+
 void LogicalCopyToFile::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WriteProperty(200, "file_path", file_path);
@@ -35,6 +65,7 @@ void LogicalCopyToFile::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(213, "file_extension", file_extension);
 	serializer.WriteProperty(214, "rotate", rotate);
 	serializer.WriteProperty(215, "return_type", return_type);
+	serializer.WritePropertyWithDefault(216, "write_partition_columns", write_partition_columns, true);
 }
 
 unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deserializer) {
@@ -68,23 +99,29 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 		// Just deserialize the bind data
 		deserializer.ReadObject(212, "function_data",
 		                        [&](Deserializer &obj) { bind_data = function.deserialize(obj, function); });
-	} else {
-		// Otherwise, re-bind with the copy info
-		if (!function.copy_to_bind) {
-			throw InternalException("Copy function \"%s\" has neither bind nor (de)serialize", function.name);
-		}
-
-		CopyFunctionBindInput function_bind_input(*copy_info);
-		bind_data = function.copy_to_bind(context, function_bind_input, names, expected_types);
 	}
 
 	auto default_extension = function.extension;
 
 	auto file_extension =
-	    deserializer.ReadPropertyWithDefault<string>(213, "file_extension", std::move(default_extension));
+	    deserializer.ReadPropertyWithExplicitDefault<string>(213, "file_extension", std::move(default_extension));
 
-	auto rotate = deserializer.ReadPropertyWithDefault(214, "rotate", false);
-	auto return_type = deserializer.ReadPropertyWithDefault(215, "return_type", CopyFunctionReturnType::CHANGED_ROWS);
+	auto rotate = deserializer.ReadPropertyWithExplicitDefault(214, "rotate", false);
+	auto return_type =
+	    deserializer.ReadPropertyWithExplicitDefault(215, "return_type", CopyFunctionReturnType::CHANGED_ROWS);
+	auto write_partition_columns = deserializer.ReadPropertyWithExplicitDefault(216, "write_partition_columns", true);
+
+	if (!has_serialize) {
+		// If not serialized, re-bind with the copy info
+		if (!function.copy_to_bind) {
+			throw InternalException("Copy function \"%s\" has neither bind nor (de)serialize", function.name);
+		}
+
+		CopyFunctionBindInput function_bind_input(*copy_info);
+		auto names_to_write = GetNamesWithoutPartitions(names, partition_columns, write_partition_columns);
+		auto types_to_write = GetTypesWithoutPartitions(expected_types, partition_columns, write_partition_columns);
+		bind_data = function.copy_to_bind(context, function_bind_input, names_to_write, types_to_write);
+	}
 
 	auto result = make_uniq<LogicalCopyToFile>(function, std::move(bind_data), std::move(copy_info));
 	result->file_path = file_path;
@@ -99,6 +136,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	result->expected_types = expected_types;
 	result->rotate = rotate;
 	result->return_type = return_type;
+	result->write_partition_columns = write_partition_columns;
 
 	return std::move(result);
 }

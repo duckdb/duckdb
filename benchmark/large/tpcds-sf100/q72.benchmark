@@ -1,0 +1,15 @@
+# name: benchmark/large/tpcds-sf100/q72.benchmark
+# description: Run query 72 from the TPC-DS benchmark
+# group: [tpcds-sf100]
+
+name q72
+group tpcds
+subgroup sf100
+
+require tpcds
+
+cache tpcds_sf100.duckdb
+
+load benchmark/large/tpcds-sf100/load.sql
+
+run extension/tpcds/dsdgen/queries/72.sql

@@ -28,6 +28,7 @@
 #include "duckdb/storage/table/delete_state.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 
 namespace duckdb {
 
@@ -86,10 +87,9 @@ public:
 		// compute and verify the checksum
 		auto computed_checksum = Checksum(buffer.get(), size);
 		if (stored_checksum != computed_checksum) {
-			throw SerializationException(
-			    "Corrupt WAL file: entry at byte position %llu computed checksum %llu does not match "
-			    "stored checksum %llu",
-			    offset, computed_checksum, stored_checksum);
+			throw IOException("Corrupt WAL file: entry at byte position %llu computed checksum %llu does not match "
+			                  "stored checksum %llu",
+			                  offset, computed_checksum, stored_checksum);
 		}
 		return WriteAheadLogDeserializer(state_p, std::move(buffer), size, deserialize_only);
 	}
@@ -143,6 +143,7 @@ protected:
 
 	void ReplayUseTable();
 	void ReplayInsert();
+	void ReplayRowGroupData();
 	void ReplayDelete();
 	void ReplayUpdate();
 	void ReplayCheckpoint();
@@ -309,6 +310,9 @@ void WriteAheadLogDeserializer::ReplayEntry(WALType entry_type) {
 		break;
 	case WALType::INSERT_TUPLE:
 		ReplayInsert();
+		break;
+	case WALType::ROW_GROUP_DATA:
+		ReplayRowGroupData();
 		break;
 	case WALType::DELETE_TUPLE:
 		ReplayDelete();
@@ -550,9 +554,8 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 		for (idx_t j = 0; j < data_info.allocation_sizes.size(); j++) {
 
 			// read the data into a buffer handle
-			shared_ptr<BlockHandle> block_handle;
-			buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager->GetBlockSize(), false, &block_handle);
-			auto buffer_handle = buffer_manager.Pin(block_handle);
+			auto buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager->GetBlockSize(), false);
+			auto block_handle = buffer_handle.GetBlockHandle();
 			auto data_ptr = buffer_handle.Ptr();
 
 			list.ReadElement<bool>(data_ptr, data_info.allocation_sizes[j]);
@@ -594,7 +597,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 
 	// create a binder to bind the parsed expressions
 	vector<column_t> column_ids;
-	binder->bind_context.AddBaseTable(0, info.table, column_names, column_types, column_ids, &table);
+	binder->bind_context.AddBaseTable(0, string(), column_names, column_types, column_ids, table);
 	IndexBinder idx_binder(*binder, context);
 
 	// bind the parsed expressions to create unbound expressions
@@ -652,6 +655,54 @@ void WriteAheadLogDeserializer::ReplayInsert() {
 	// we don't do any constraint verification here
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	state.current_table->GetStorage().LocalAppend(*state.current_table, context, chunk, bound_constraints);
+}
+
+static void MarkBlocksAsUsed(BlockManager &manager, const PersistentColumnData &col_data) {
+	for (auto &pointer : col_data.pointers) {
+		auto block_id = pointer.block_pointer.block_id;
+		if (block_id != INVALID_BLOCK) {
+			manager.MarkBlockAsUsed(block_id);
+		}
+		if (pointer.segment_state) {
+			for (auto &block : pointer.segment_state->blocks) {
+				manager.MarkBlockAsUsed(block);
+			}
+		}
+	}
+	for (auto &child_column : col_data.child_columns) {
+		MarkBlocksAsUsed(manager, child_column);
+	}
+}
+
+void WriteAheadLogDeserializer::ReplayRowGroupData() {
+	auto &block_manager = db.GetStorageManager().GetBlockManager();
+	PersistentCollectionData data;
+	deserializer.Set<DatabaseInstance &>(db.GetDatabase());
+	CompressionInfo compression_info(block_manager.GetBlockSize());
+	deserializer.Set<const CompressionInfo &>(compression_info);
+	deserializer.ReadProperty(101, "row_group_data", data);
+	deserializer.Unset<const CompressionInfo>();
+	deserializer.Unset<DatabaseInstance>();
+	if (DeserializeOnly()) {
+		// label blocks in data as used - they will be used after the WAL replay is finished
+		// we need to do this during the deserialization phase to ensure the blocks will not be overwritten
+		// by previous deserialization steps
+		for (auto &group : data.row_group_data) {
+			for (auto &col_data : group.column_data) {
+				MarkBlocksAsUsed(block_manager, col_data);
+			}
+		}
+		return;
+	}
+	if (!state.current_table) {
+		throw InternalException("Corrupt WAL: insert without table");
+	}
+	auto &storage = state.current_table->GetStorage();
+	auto &table_info = storage.GetDataTableInfo();
+	RowGroupCollection new_row_groups(table_info, block_manager, storage.GetTypes(), 0);
+	new_row_groups.Initialize(data);
+	TableIndexList index_list;
+	storage.MergeStorage(new_row_groups, index_list, nullptr);
 }
 
 void WriteAheadLogDeserializer::ReplayDelete() {

@@ -122,10 +122,6 @@ class TestReplacementScan(object):
                 duckdb_cursor.sql("select * from df")
             duckdb_cursor.execute("set python_enable_replacements=true")
             with pytest.raises(duckdb.CatalogException, match='Table with name df does not exist'):
-                # We set the depth to look for local variables to 1 so it's still not found because it wasn't defined in this function
-                duckdb_cursor.sql("select * from df")
-            duckdb_cursor.execute("set python_enable_replacements=true")
-            with pytest.raises(duckdb.CatalogException, match='Table with name df does not exist'):
                 # Here it's still not found, because it's not visible to this frame
                 duckdb_cursor.sql("select * from df")
 
@@ -135,6 +131,23 @@ class TestReplacementScan(object):
             rel = duckdb_cursor.sql("select * from df")
             res = rel.fetchall()
             assert res == [(4,), (5,), (6,)]
+
+        inner_func(duckdb_cursor)
+
+    def test_scan_local_unlimited(self, duckdb_cursor):
+        df = pd.DataFrame({'a': [1, 2, 3]})
+
+        def inner_func(duckdb_cursor):
+            duckdb_cursor.execute("set python_enable_replacements=true")
+            with pytest.raises(duckdb.CatalogException, match='Table with name df does not exist'):
+                # We set the depth to look for local variables to 1 so it's still not found because it wasn't defined in this function
+                duckdb_cursor.sql("select * from df")
+            duckdb_cursor.execute("set python_scan_all_frames=true")
+            # Now we can find 'df' because we also scan the previous frame(s)
+            rel = duckdb_cursor.sql("select * from df")
+
+            res = rel.fetchall()
+            assert res == [(1,), (2,), (3,)]
 
         inner_func(duckdb_cursor)
 
@@ -151,6 +164,12 @@ class TestReplacementScan(object):
         pyrel3 = con.query('select i + 100 from pyrel2')
         assert type(pyrel3) == duckdb.DuckDBPyRelation
         assert pyrel3.fetchall() == [(142,), (184,)]
+
+    def test_replacement_scan_not_found(self):
+        con = duckdb.connect()
+        con.execute("set python_scan_all_frames=true")
+        with pytest.raises(duckdb.CatalogException, match='Table with name non_existant does not exist'):
+            res = con.sql("select * from non_existant").fetchall()
 
     def test_replacement_scan_alias(self):
         con = duckdb.connect()
@@ -218,7 +237,7 @@ class TestReplacementScan(object):
                 WITH cte as (select * from df)
                 select * from (
                     WITH cte as (select * from df)
-                    select (
+                    select array(
                         select * from cte
                     ) from cte
                 )
@@ -240,18 +259,18 @@ class TestReplacementScan(object):
             # FIXME: this should probably throw an error...
             assert len(res) >= 0
         else:
-            assert res == [(1,), (1,), (1,)]
+            assert res == [([1, 2, 3],), ([1, 2, 3],), ([1, 2, 3],)]
 
     def test_cte_with_scalar_subquery(self, duckdb_cursor):
         query = """
             WITH cte1 AS (
-                select (select * from df)
+                select array(select * from df)
             )
             select * from cte1;
         """
         rel = create_relation(duckdb_cursor, query)
         res = rel.fetchall()
-        assert res == [(1,)]
+        assert res == [([1, 2, 3],)]
 
     def test_cte_with_joins(self, duckdb_cursor):
         query = """

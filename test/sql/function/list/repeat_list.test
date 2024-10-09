@@ -54,6 +54,22 @@ SELECT repeat(repeat([1], 50), 50) = repeat([1], 2500);
 ----
 true
 
+# fuzzer issue with repeat of different vector types
+query I
+SELECT REPEAT(c,2) FROM TEST_VECTOR_TYPES(CAST(NULL AS INT[])) AS t(c)
+----
+[-2147483648, 2147483647, -2147483648, 2147483647]
+[]
+[NULL, NULL]
+[-2147483648, 2147483647, -2147483648, 2147483647]
+[-2147483648, 2147483647, -2147483648, 2147483647]
+[-2147483648, 2147483647, -2147483648, 2147483647]
+[]
+[NULL, NULL]
+[3, 5, 3, 5]
+[]
+[7, 7]
+
 statement error
 SELECT repeat([1], 99999999999999999);
 ----

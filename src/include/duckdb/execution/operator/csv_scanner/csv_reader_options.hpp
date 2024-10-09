@@ -31,6 +31,7 @@ struct DialectOptions {
 	                                                             {LogicalTypeId::TIMESTAMP, {}}};
 	//! How many leading rows to skip
 	CSVOption<idx_t> skip_rows = 0;
+	idx_t rows_until_header = 0;
 };
 
 struct CSVReaderOptions {
@@ -39,18 +40,18 @@ struct CSVReaderOptions {
 	//===--------------------------------------------------------------------===//
 	//! See struct above.
 	DialectOptions dialect_options;
-	//! Whether or not we should ignore InvalidInput errors
+	//! Whether we should ignore InvalidInput errors
 	CSVOption<bool> ignore_errors = false;
 	//! Whether we store CSV Errors in the rejects table or not
 	CSVOption<bool> store_rejects = false;
 	//! Rejects table name (Name of the table the store rejects errors)
 	CSVOption<string> rejects_table_name = {"reject_errors"};
-	//! Rejects Scan name name  (Name of the table the store rejects scans)
+	//! Rejects Scan name  (Name of the table the store rejects scans)
 	CSVOption<string> rejects_scan_name = {"reject_scans"};
 	//! Rejects table entry limit (0 = no limit)
 	idx_t rejects_limit = 0;
 	//! Number of samples to buffer
-	idx_t buffer_sample_size = (idx_t)STANDARD_VECTOR_SIZE * 50;
+	idx_t buffer_sample_size = static_cast<idx_t>(STANDARD_VECTOR_SIZE * 50);
 	//! Specifies the strings that represents a null value
 	vector<string> null_str = {""};
 	//! Whether file is compressed or not, and if so which compression type
@@ -58,6 +59,7 @@ struct CSVReaderOptions {
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
 	//! Option to convert quoted values to NULL values
 	bool allow_quoted_nulls = true;
+	char comment;
 
 	//===--------------------------------------------------------------------===//
 	// CSVAutoOptions
@@ -90,8 +92,10 @@ struct CSVReaderOptions {
 	unordered_set<string> force_not_null_names;
 	//! True, if column with that index must skip null check
 	vector<bool> force_not_null;
+	//! Result size of sniffing phases
+	static constexpr idx_t sniff_size = 2048;
 	//! Number of sample chunks used in auto-detection
-	idx_t sample_size_chunks = 20480 / STANDARD_VECTOR_SIZE;
+	idx_t sample_size_chunks = 20480 / sniff_size;
 	//! Consider all columns to be of type varchar
 	bool all_varchar = false;
 	//! Whether or not to automatically detect dialect and datatypes
@@ -142,8 +146,10 @@ struct CSVReaderOptions {
 
 	void SetSkipRows(int64_t rows);
 
-	string GetQuote() const;
 	void SetQuote(const string &quote);
+	string GetQuote() const;
+	void SetComment(const string &comment);
+	string GetComment() const;
 	void SetDelimiter(const string &delimiter);
 	string GetDelimiter() const;
 
@@ -169,7 +175,7 @@ struct CSVReaderOptions {
 	//! If the type for column with idx i was manually set
 	bool WasTypeManuallySet(idx_t i) const;
 
-	string NewLineIdentifierToString() {
+	string NewLineIdentifierToString() const {
 		switch (dialect_options.state_machine_options.new_line.GetValue()) {
 		case NewLineIdentifier::SINGLE_N:
 			return "\\n";

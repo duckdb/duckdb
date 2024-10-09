@@ -15,6 +15,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
+#include "duckdb/parallel/interrupt.hpp"
 
 namespace duckdb {
 class Event;
@@ -74,7 +75,7 @@ public:
 	}
 };
 
-class GlobalSinkState {
+class GlobalSinkState : public StateWithBlockableTasks {
 public:
 	GlobalSinkState() : state(SinkFinalizeType::READY) {
 	}
@@ -119,7 +120,7 @@ public:
 	}
 };
 
-class GlobalSourceState {
+class GlobalSourceState : public StateWithBlockableTasks {
 public:
 	virtual ~GlobalSourceState() {
 	}

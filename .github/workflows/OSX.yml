@@ -48,7 +48,7 @@ jobs:
       TREAT_WARNINGS_AS_ERRORS: 1
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
@@ -106,7 +106,7 @@ jobs:
       GEN: ninja
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
@@ -136,24 +136,6 @@ jobs:
         shell: bash
         run: ./build/release/duckdb -c "PRAGMA platform;"
 
-      - name: Unit Test
-        shell: bash
-        if: ${{ inputs.skip_tests != 'true' }}
-        run: make allunit
-
-      - name: Tools Tests
-        shell: bash
-        if: ${{ inputs.skip_tests != 'true' }}
-        run: |
-          python -m pytest tools/shell/tests --shell-binary build/release/duckdb
-
-      - name: Examples
-        shell: bash
-        if: ${{ inputs.skip_tests != 'true' }}
-        run: |
-          (cd examples/embedded-c; make)
-          (cd examples/embedded-c++; make)
-
         #     from https://docs.github.com/en/actions/deployment/deploying-xcode-applications/installing-an-apple-certificate-on-macos-runners-for-xcode-development
       - name: Sign Binaries
         shell: bash
@@ -180,12 +162,30 @@ jobs:
           zip -j libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
           ./scripts/upload-assets-to-staging.sh github_release libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: duckdb-binaries-osx
           path: |
             libduckdb-osx-universal.zip
             duckdb_cli-osx-universal.zip
+
+      - name: Unit Test
+        shell: bash
+        if: ${{ inputs.skip_tests != 'true' }}
+        run: make allunit
+
+      - name: Tools Tests
+        shell: bash
+        if: ${{ inputs.skip_tests != 'true' }}
+        run: |
+          python -m pytest tools/shell/tests --shell-binary build/release/duckdb
+
+      - name: Examples
+        shell: bash
+        if: ${{ inputs.skip_tests != 'true' }}
+        run: |
+          (cd examples/embedded-c; make)
+          (cd examples/embedded-c++; make)
 
   xcode-extensions:
     # Builds extensions for osx_arm64 and osx_amd64
@@ -215,7 +215,7 @@ jobs:
       DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
@@ -232,6 +232,11 @@ jobs:
         with:
           key: ${{ github.job }}-${{ matrix.label }}
           save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+      - name: Install Rust cross compile dependency
+        if: ${{ matrix.osx_arch == 'x86_64'}}
+        run: |
+          rustup target add x86_64-apple-darwin
 
       - uses: ./.github/actions/build_extensions
         with:

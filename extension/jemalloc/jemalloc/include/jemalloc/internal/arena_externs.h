@@ -103,7 +103,6 @@ void arena_nthreads_inc(arena_t *arena, bool internal);
 void arena_nthreads_dec(arena_t *arena, bool internal);
 arena_t *arena_new(tsdn_t *tsdn, unsigned ind, const arena_config_t *config);
 bool arena_init_huge(arena_t *a0);
-bool arena_is_huge(unsigned arena_ind);
 arena_t *arena_choose_huge(tsd_t *tsd);
 bin_t *arena_bin_choose(tsdn_t *tsdn, arena_t *arena, szind_t binind,
     unsigned *binshard);

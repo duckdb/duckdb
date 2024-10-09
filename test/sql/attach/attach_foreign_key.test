@@ -14,3 +14,25 @@ statement error
 CREATE TABLE db1.song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, songalbum) REFERENCES album(artistid, albumname));
 ----
 across different schemas or catalogs
+
+statement ok
+USE db1;
+
+statement ok
+CREATE TABLE album(artistid INTEGER, albumname TEXT, albumcover TEXT, UNIQUE (artistid, albumname));
+
+statement ok
+INSERT INTO album VALUES (1, 'A', 'A_cover'), (2, 'B', 'B_cover'), (3, 'C', 'C_cover'), (4, 'D', 'D_cover');
+
+statement ok
+CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, songalbum) REFERENCES album(artistid, albumname));
+
+statement ok
+ATTACH DATABASE ':memory:' AS db2;
+
+statement ok
+USE db2;
+
+# check that foreign key is correctly resolved even when different catalog search path is used
+statement ok
+INSERT INTO db1.song VALUES (11, 1, 'A', 'A_song'), (12, 2, 'B', 'B_song'), (13, 3, 'C', 'C_song');

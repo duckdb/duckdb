@@ -50,25 +50,26 @@ select (
         order by all
     )
     group by ra, rb
-    order by all)
+    order by all
+    limit 1)
 from b
 order by all
 ----
+{'x': a, 'y': A, '__matches': 1}
 {'x': b, 'y': B, '__matches': 1}
 {'x': b, 'y': B, '__matches': 1}
 {'x': b, 'y': B, '__matches': 1}
-{'x': c, 'y': C, '__matches': 1}
 {'x': d, 'y': D, '__matches': 1}
 {'x': d, 'y': D, '__matches': 1}
 NULL
 
 query T
 select
-  coalesce((select {'x': first(x), 'y': first(y), '__matches': count(*)} from r where ba = ra and (bb = rb or rb is null) group by ra, rb order by bb = rb), {'x': null, 'y': null, '__matches': 0}) as ref2
+  coalesce((select {'x': first(x), 'y': first(y), '__matches': count(*)} from r where ba = ra and (bb = rb or rb is null) group by ra, rb order by bb = rb limit 1), {'x': null, 'y': null, '__matches': 0}) as ref2
 from b
 ----
-{'x': b, 'y': B, '__matches': 1}
-{'x': b, 'y': B, '__matches': 1}
+{'x': a, 'y': A, '__matches': 1}
+{'x': c, 'y': C, '__matches': 1}
 {'x': b, 'y': B, '__matches': 1}
 {'x': b, 'y': B, '__matches': 1}
 {'x': d, 'y': D, '__matches': 1}

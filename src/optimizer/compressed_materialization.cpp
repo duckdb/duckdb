@@ -81,6 +81,7 @@ void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op) {
 
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_DISTINCT:
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		break;
@@ -94,6 +95,9 @@ void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		CompressAggregate(op);
 		break;
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+		CompressComparisonJoin(op);
+		break;
 	case LogicalOperatorType::LOGICAL_DISTINCT:
 		CompressDistinct(op);
 		break;
@@ -101,7 +105,7 @@ void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op) {
 		CompressOrder(op);
 		break;
 	default:
-		return;
+		break;
 	}
 }
 
@@ -168,6 +172,9 @@ void CompressedMaterialization::CreateCompressProjection(unique_ptr<LogicalOpera
 	}
 	const auto table_index = optimizer.binder.GenerateTableIndex();
 	auto compress_projection = make_uniq<LogicalProjection>(table_index, std::move(projections));
+	if (child_op->has_estimated_cardinality) {
+		compress_projection->SetEstimatedCardinality(child_op->estimated_cardinality);
+	}
 	compress_projection->ResolveOperatorTypes();
 
 	compress_projection->children.emplace_back(std::move(child_op));
@@ -254,6 +261,9 @@ void CompressedMaterialization::CreateDecompressProjection(unique_ptr<LogicalOpe
 	// Replace op with a projection
 	const auto table_index = optimizer.binder.GenerateTableIndex();
 	auto decompress_projection = make_uniq<LogicalProjection>(table_index, std::move(decompress_exprs));
+	if (op->has_estimated_cardinality) {
+		decompress_projection->SetEstimatedCardinality(op->estimated_cardinality);
+	}
 
 	decompress_projection->children.emplace_back(std::move(op));
 	op = std::move(decompress_projection);

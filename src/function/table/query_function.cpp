@@ -17,6 +17,11 @@ static unique_ptr<SubqueryRef> ParseSubquery(const string &query, const ParserOp
 }
 
 static void UnionTablesQuery(TableFunctionBindInput &input, string &query) {
+	for (auto &input_val : input.inputs) {
+		if (input_val.IsNull()) {
+			throw BinderException("Cannot use NULL as function argument");
+		}
+	}
 	string by_name = (input.inputs.size() == 2 &&
 	                  (input.inputs[1].type().id() == LogicalTypeId::BOOLEAN && input.inputs[1].GetValue<bool>()))
 	                     ? "BY NAME "

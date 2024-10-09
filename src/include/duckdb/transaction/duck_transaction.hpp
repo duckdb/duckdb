@@ -10,12 +10,16 @@
 
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/error_data.hpp"
 
 namespace duckdb {
+class CheckpointLock;
+class RowGroupCollection;
 class RowVersionManager;
 class DuckTransactionManager;
 class StorageLockKey;
 class StorageCommitState;
+struct DataTableInfo;
 struct UndoBufferProperties;
 
 class DuckTransaction : public Transaction {
@@ -76,6 +80,11 @@ public:
 		return write_lock.get();
 	}
 
+	void UpdateCollection(shared_ptr<RowGroupCollection> &collection);
+
+	//! Get a shared lock on a table
+	shared_ptr<CheckpointLock> SharedLockTable(DataTableInfo &info);
+
 private:
 	DuckTransactionManager &transaction_manager;
 	//! The undo buffer is used to store old versions of rows that are updated
@@ -89,6 +98,12 @@ private:
 	mutex sequence_lock;
 	//! Map of all sequences that were used during the transaction and the value they had in this transaction
 	reference_map_t<SequenceCatalogEntry, reference<SequenceValue>> sequence_usage;
+	//! Collections that are updated by this transaction
+	reference_map_t<RowGroupCollection, shared_ptr<RowGroupCollection>> updated_collections;
+	//! Lock for the active_locks map
+	mutex active_locks_lock;
+	//! Active locks on tables
+	reference_map_t<DataTableInfo, weak_ptr<CheckpointLock>> active_locks;
 };
 
 } // namespace duckdb

@@ -32,7 +32,6 @@ struct S3AuthParams {
 	bool s3_url_compatibility_mode = false;
 
 	static S3AuthParams ReadFrom(optional_ptr<FileOpener> opener, FileOpenerInfo &info);
-	static unique_ptr<S3AuthParams> ReadFromStoredCredentials(optional_ptr<FileOpener> opener, string path);
 };
 
 struct AWSEnvironmentCredentialsProvider {
@@ -76,15 +75,6 @@ struct S3ConfigParams {
 	uint64_t max_upload_threads;
 
 	static S3ConfigParams ReadFrom(optional_ptr<FileOpener> opener);
-};
-
-class S3SecretHelper {
-public:
-	//! Create an S3 type secret
-	static unique_ptr<KeyValueSecret> CreateSecret(vector<string> &prefix_paths_p, string &type, string &provider,
-	                                               string &name, S3AuthParams &params);
-	//! Parse S3AuthParams from secret
-	static S3AuthParams GetParams(const KeyValueSecret &secret);
 };
 
 class S3FileSystem;

@@ -45,7 +45,6 @@ size_t opt_oversize_threshold = OVERSIZE_THRESHOLD_DEFAULT;
 size_t oversize_threshold = OVERSIZE_THRESHOLD_DEFAULT;
 
 uint32_t arena_bin_offsets[SC_NBINS];
-static unsigned nbins_total;
 
 static unsigned huge_arena_ind;
 
@@ -662,10 +661,17 @@ arena_bin_slabs_full_remove(arena_t *arena, bin_t *bin, edata_t *slab) {
 }
 
 static void
-arena_bin_reset(tsd_t *tsd, arena_t *arena, bin_t *bin) {
+arena_bin_reset(tsd_t *tsd, arena_t *arena, bin_t *bin, unsigned binind) {
 	edata_t *slab;
 
 	malloc_mutex_lock(tsd_tsdn(tsd), &bin->lock);
+
+	if (arena_bin_has_batch(binind)) {
+		bin_with_batch_t *batched_bin = (bin_with_batch_t *)bin;
+		batcher_init(&batched_bin->remote_frees,
+		    BIN_REMOTE_FREE_ELEMS_MAX);
+	}
+
 	if (bin->slabcur != NULL) {
 		slab = bin->slabcur;
 		bin->slabcur = NULL;
@@ -816,7 +822,8 @@ arena_reset(tsd_t *tsd, arena_t *arena) {
 	/* Bins. */
 	for (unsigned i = 0; i < SC_NBINS; i++) {
 		for (unsigned j = 0; j < bin_infos[i].n_shards; j++) {
-			arena_bin_reset(tsd, arena, arena_get_bin(arena, i, j));
+			arena_bin_reset(tsd, arena, arena_get_bin(arena, i, j),
+			    i);
 		}
 	}
 	pa_shard_reset(tsd_tsdn(tsd), &arena->pa_shard);
@@ -1081,8 +1088,18 @@ arena_cache_bin_fill_small(tsdn_t *tsdn, arena_t *arena,
 	unsigned binshard;
 	bin_t *bin = arena_bin_choose(tsdn, arena, binind, &binshard);
 
+	/*
+	 * This has some fields that are conditionally initialized down batch
+	 * flush pathways.  This can trigger static analysis warnings deeper
+	 * down in the static.  The accesses are guarded by the same checks as
+	 * the initialization, but the analysis isn't able to track that across
+	 * multiple stack frames.
+	 */
+	arena_bin_flush_batch_state_t batch_flush_state
+	    JEMALLOC_CLANG_ANALYZER_SILENCE_INIT({0});
 label_refill:
 	malloc_mutex_lock(tsdn, &bin->lock);
+	arena_bin_flush_batch_after_lock(tsdn, arena, bin, binind, &batch_flush_state);
 
 	while (filled < nfill) {
 		/* Try batch-fill from slabcur first. */
@@ -1137,7 +1154,11 @@ label_refill:
 		cache_bin->tstats.nrequests = 0;
 	}
 
+	arena_bin_flush_batch_before_unlock(tsdn, arena, bin, binind,
+	    &batch_flush_state);
 	malloc_mutex_unlock(tsdn, &bin->lock);
+	arena_bin_flush_batch_after_unlock(tsdn, arena, bin, binind,
+	    &batch_flush_state);
 
 	if (alloc_and_retry) {
 		assert(fresh_slab == NULL);
@@ -1428,12 +1449,16 @@ arena_dalloc_bin(tsdn_t *tsdn, arena_t *arena, edata_t *edata, void *ptr) {
 	malloc_mutex_lock(tsdn, &bin->lock);
 	arena_dalloc_bin_locked_info_t info;
 	arena_dalloc_bin_locked_begin(&info, binind);
-	bool ret = arena_dalloc_bin_locked_step(tsdn, arena, bin,
-	    &info, binind, edata, ptr);
+	edata_t *dalloc_slabs[1];
+	unsigned dalloc_slabs_count = 0;
+	arena_dalloc_bin_locked_step(tsdn, arena, bin, &info, binind, edata,
+	    ptr, dalloc_slabs, /* ndalloc_slabs */ 1, &dalloc_slabs_count,
+	    /* dalloc_slabs_extra */ NULL);
 	arena_dalloc_bin_locked_finish(tsdn, arena, bin, &info);
 	malloc_mutex_unlock(tsdn, &bin->lock);
 
-	if (ret) {
+	if (dalloc_slabs_count != 0) {
+		assert(dalloc_slabs[0] == edata);
 		arena_slab_dalloc(tsdn, arena, edata);
 	}
 }
@@ -1672,7 +1697,6 @@ arena_t *
 arena_new(tsdn_t *tsdn, unsigned ind, const arena_config_t *config) {
 	arena_t *arena;
 	base_t *base;
-	unsigned i;
 
 	if (ind == 0) {
 		base = b0get();
@@ -1685,15 +1709,12 @@ arena_new(tsdn_t *tsdn, unsigned ind, const arena_config_t *config) {
 	}
 
 	size_t arena_size = ALIGNMENT_CEILING(sizeof(arena_t), CACHELINE) +
-	    sizeof(bin_t) * nbins_total;
+	    sizeof(bin_with_batch_t) * bin_info_nbatched_bins
+	    + sizeof(bin_t) * bin_info_nunbatched_bins;
 	arena = (arena_t *)base_alloc(tsdn, base, arena_size, CACHELINE);
 	if (arena == NULL) {
 		goto label_error;
 	}
-	JEMALLOC_SUPPRESS_WARN_ON_USAGE(
-	assert((uintptr_t)&arena->all_bins[nbins_total -1] + sizeof(bin_t) <=
-	    (uintptr_t)arena + arena_size);
-	)
 
 	atomic_store_u(&arena->nthreads[0], 0, ATOMIC_RELAXED);
 	atomic_store_u(&arena->nthreads[1], 0, ATOMIC_RELAXED);
@@ -1733,12 +1754,13 @@ arena_new(tsdn_t *tsdn, unsigned ind, const arena_config_t *config) {
 
 	/* Initialize bins. */
 	atomic_store_u(&arena->binshard_next, 0, ATOMIC_RELEASE);
-	for (i = 0; i < nbins_total; i++) {
-		JEMALLOC_SUPPRESS_WARN_ON_USAGE(
-		bool err = bin_init(&arena->all_bins[i]);
-		)
-		if (err) {
-			goto label_error;
+	for (unsigned i = 0; i < SC_NBINS; i++) {
+		for (unsigned j = 0; j < bin_infos[i].n_shards; j++) {
+			bin_t *bin = arena_get_bin(arena, i, j);
+			bool err = bin_init(bin, i);
+			if (err) {
+				goto label_error;
+			}
 		}
 	}
 
@@ -1868,14 +1890,6 @@ arena_init_huge(arena_t *a0) {
 }
 
 bool
-arena_is_huge(unsigned arena_ind) {
-	if (huge_arena_ind == 0) {
-		return false;
-	}
-	return (arena_ind == huge_arena_ind);
-}
-
-bool
 arena_boot(sc_data_t *sc_data, base_t *base, bool hpa) {
 	arena_dirty_decay_ms_default_set(opt_dirty_decay_ms);
 	arena_muzzy_decay_ms_default_set(opt_muzzy_decay_ms);
@@ -1890,8 +1904,9 @@ arena_boot(sc_data_t *sc_data, base_t *base, bool hpa) {
 	)
 	for (szind_t i = 0; i < SC_NBINS; i++) {
 		arena_bin_offsets[i] = cur_offset;
-		nbins_total += bin_infos[i].n_shards;
-		cur_offset += (uint32_t)(bin_infos[i].n_shards * sizeof(bin_t));
+		uint32_t bin_sz = (i < bin_info_nbatched_sizes
+		    ? sizeof(bin_with_batch_t) : sizeof(bin_t));
+		cur_offset += (uint32_t)bin_infos[i].n_shards * bin_sz;
 	}
 	return pa_central_init(&arena_pa_central_global, base, hpa,
 	    &hpa_hooks_default);
@@ -1941,19 +1956,21 @@ arena_prefork7(tsdn_t *tsdn, arena_t *arena) {
 
 void
 arena_prefork8(tsdn_t *tsdn, arena_t *arena) {
-	for (unsigned i = 0; i < nbins_total; i++) {
-		JEMALLOC_SUPPRESS_WARN_ON_USAGE(
-		bin_prefork(tsdn, &arena->all_bins[i]);
-		)
+	for (szind_t i = 0; i < SC_NBINS; i++) {
+		for (unsigned j = 0; j < bin_infos[i].n_shards; j++) {
+			bin_t *bin = arena_get_bin(arena, i, j);
+			bin_prefork(tsdn, bin, arena_bin_has_batch(i));
+		}
 	}
 }
 
 void
 arena_postfork_parent(tsdn_t *tsdn, arena_t *arena) {
-	for (unsigned i = 0; i < nbins_total; i++) {
-		JEMALLOC_SUPPRESS_WARN_ON_USAGE(
-		bin_postfork_parent(tsdn, &arena->all_bins[i]);
-		)
+	for (szind_t i = 0; i < SC_NBINS; i++) {
+		for (unsigned j = 0; j < bin_infos[i].n_shards; j++) {
+			bin_t *bin = arena_get_bin(arena, i, j);
+			bin_postfork_parent(tsdn, bin, arena_bin_has_batch(i));
+		}
 	}
 
 	malloc_mutex_postfork_parent(tsdn, &arena->large_mtx);
@@ -1990,10 +2007,11 @@ arena_postfork_child(tsdn_t *tsdn, arena_t *arena) {
 		}
 	}
 
-	for (unsigned i = 0; i < nbins_total; i++) {
-		JEMALLOC_SUPPRESS_WARN_ON_USAGE(
-		bin_postfork_child(tsdn, &arena->all_bins[i]);
-		)
+	for (szind_t i = 0; i < SC_NBINS; i++) {
+		for (unsigned j = 0; j < bin_infos[i].n_shards; j++) {
+			bin_t *bin = arena_get_bin(arena, i, j);
+			bin_postfork_child(tsdn, bin, arena_bin_has_batch(i));
+		}
 	}
 
 	malloc_mutex_postfork_child(tsdn, &arena->large_mtx);

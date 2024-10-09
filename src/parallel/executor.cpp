@@ -2,6 +2,7 @@
 
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
+#include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/operator/set/physical_cte.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/execution/physical_operator.hpp"
@@ -22,7 +23,7 @@
 
 namespace duckdb {
 
-Executor::Executor(ClientContext &context) : context(context), executor_tasks(0) {
+Executor::Executor(ClientContext &context) : context(context), executor_tasks(0), blocked_thread_time(0) {
 }
 
 Executor::~Executor() {
@@ -161,26 +162,15 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 	// add base stack to the event data too
 	event_map.insert(make_pair(reference<Pipeline>(*base_pipeline), base_stack));
 
-	// set up the dependencies within this MetaPipeline
 	for (auto &pipeline : pipelines) {
-		auto &config = DBConfig::GetConfig(context);
 		auto source = pipeline->GetSource();
-		if (source->type == PhysicalOperatorType::TABLE_SCAN && config.options.initialize_in_main_thread) {
-			// this is a work-around for the R client that requires the init to be called in the main thread
-			pipeline->ResetSource(true);
-		}
-		auto dependencies = meta_pipeline->GetDependencies(*pipeline);
-		if (!dependencies) {
-			continue;
-		}
-		auto root_entry = event_map.find(*pipeline);
-		D_ASSERT(root_entry != event_map.end());
-		auto &pipeline_stack = root_entry->second;
-		for (auto &dependency : *dependencies) {
-			auto event_entry = event_map.find(dependency);
-			D_ASSERT(event_entry != event_map.end());
-			auto &dependency_stack = event_entry->second;
-			pipeline_stack.pipeline_event.AddDependency(dependency_stack.pipeline_event);
+		if (source->type == PhysicalOperatorType::TABLE_SCAN) {
+			auto &table_function = source->Cast<PhysicalTableScan>();
+			if (table_function.function.global_initialization == TableFunctionInitialization::INITIALIZE_ON_SCHEDULE) {
+				// certain functions have to be eagerly initialized during scheduling
+				// if that is the case - initialize the function here
+				pipeline->ResetSource(true);
+			}
 		}
 	}
 }
@@ -194,7 +184,7 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 		SchedulePipeline(meta_pipeline, event_data);
 	}
 
-	// set up the dependencies across MetaPipelines
+	// set up the dependencies for complete event
 	auto &event_map = event_data.event_map;
 	for (auto &entry : event_map) {
 		auto &pipeline = entry.first.get();
@@ -211,45 +201,57 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 		}
 	}
 
+	// set the dependencies for pipeline event
+	for (auto &meta_pipeline : event_data.meta_pipelines) {
+		for (auto &entry : meta_pipeline->GetDependencies()) {
+			auto &pipeline = entry.first.get();
+			auto root_entry = event_map.find(pipeline);
+			D_ASSERT(root_entry != event_map.end());
+			auto &pipeline_stack = root_entry->second;
+			for (auto &dependency : entry.second) {
+				auto event_entry = event_map.find(dependency);
+				D_ASSERT(event_entry != event_map.end());
+				auto &dependency_stack = event_entry->second;
+				pipeline_stack.pipeline_event.AddDependency(dependency_stack.pipeline_event);
+			}
+		}
+	}
+
 	// these dependencies make it so that things happen in this order:
 	// 1. all join build child pipelines run until Combine
 	// 2. all join build child pipeline PrepareFinalize
-	// 3. the parent base pipeline is initialized
-	// 4. all join build child pipelines Finalize
+	// 3. all join build child pipelines Finalize
 	// operators communicate their memory usage through the TemporaryMemoryManger (TMM) in PrepareFinalize
 	// then, when the child pipelines Finalize, all required memory is known, and TMM can make an informed decision
 	for (auto &meta_pipeline : event_data.meta_pipelines) {
-		auto &meta_base = *meta_pipeline->GetBasePipeline();
-		auto meta_entry = event_map.find(meta_base);
-		D_ASSERT(meta_entry != event_map.end());
-
 		vector<shared_ptr<MetaPipeline>> children;
 		meta_pipeline->GetMetaPipelines(children, false, true);
 		for (auto &child1 : children) {
 			if (child1->Type() != MetaPipelineType::JOIN_BUILD) {
-				continue;
+				continue; // We only want to do this for join builds
 			}
 			auto &child1_base = *child1->GetBasePipeline();
 			auto child1_entry = event_map.find(child1_base);
 			D_ASSERT(child1_entry != event_map.end());
 
 			for (auto &child2 : children) {
-				if (child2->Type() == MetaPipelineType::JOIN_BUILD || RefersToSameObject(*child1, *child2)) {
-					continue;
+				if (child2->Type() != MetaPipelineType::JOIN_BUILD || RefersToSameObject(*child1, *child2)) {
+					continue; // We don't want to depend on itself
 				}
+				if (!RefersToSameObject(*child1->GetParent(), *child2->GetParent())) {
+					continue; // Different parents, skip
+				}
+
 				auto &child2_base = *child2->GetBasePipeline();
 				auto child2_entry = event_map.find(child2_base);
 				D_ASSERT(child2_entry != event_map.end());
 
-				// all children PrepareFinalizes must wait until all Combine
+				// all children PrepareFinalize must wait until all Combine
 				child1_entry->second.pipeline_prepare_finish_event.AddDependency(child2_entry->second.pipeline_event);
+				// all children Finalize must wait until all PrepareFinalize
+				child1_entry->second.pipeline_finish_event.AddDependency(
+				    child2_entry->second.pipeline_prepare_finish_event);
 			}
-
-			// the parent initializes after all children PrepareFinalize
-			meta_entry->second.pipeline_initialize_event.AddDependency(
-			    child1_entry->second.pipeline_prepare_finish_event);
-			// all children Finalize after parent initializes
-			child1_entry->second.pipeline_finish_event.AddDependency(meta_entry->second.pipeline_initialize_event);
 		}
 	}
 
@@ -466,7 +468,8 @@ void Executor::SignalTaskRescheduled(lock_guard<mutex> &) {
 }
 
 void Executor::WaitForTask() {
-	static constexpr std::chrono::milliseconds WAIT_TIME = std::chrono::milliseconds(20);
+#ifndef DUCKDB_NO_THREADS
+	static constexpr std::chrono::milliseconds WAIT_TIME_MS = std::chrono::milliseconds(WAIT_TIME);
 	std::unique_lock<mutex> l(executor_lock);
 	if (to_be_rescheduled_tasks.empty()) {
 		return;
@@ -476,7 +479,9 @@ void Executor::WaitForTask() {
 		return;
 	}
 
-	task_reschedule.wait_for(l, WAIT_TIME);
+	blocked_thread_time++;
+	task_reschedule.wait_for(l, WAIT_TIME_MS);
+#endif
 }
 
 void Executor::RescheduleTask(shared_ptr<Task> &task_p) {
@@ -668,8 +673,15 @@ void Executor::ThrowException() {
 	error_manager.ThrowException();
 }
 
-void Executor::Flush(ThreadContext &tcontext) {
-	profiler->Flush(tcontext.profiler);
+void Executor::Flush(ThreadContext &thread_context) {
+	static constexpr std::chrono::milliseconds WAIT_TIME_MS = std::chrono::milliseconds(WAIT_TIME);
+	auto global_profiler = profiler;
+	if (global_profiler) {
+		global_profiler->Flush(thread_context.profiler);
+
+		auto blocked_time = blocked_thread_time.load();
+		global_profiler->SetInfo(double(blocked_time * WAIT_TIME_MS.count()) / 1000);
+	}
 }
 
 bool Executor::GetPipelinesProgress(double &current_progress, uint64_t &current_cardinality,

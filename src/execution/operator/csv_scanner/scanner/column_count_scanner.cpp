@@ -4,18 +4,41 @@ namespace duckdb {
 
 ColumnCountResult::ColumnCountResult(CSVStates &states, CSVStateMachine &state_machine, idx_t result_size)
     : ScannerResult(states, state_machine, result_size) {
+	column_counts.resize(result_size);
 }
 
-void ColumnCountResult::AddValue(ColumnCountResult &result, const idx_t buffer_pos) {
+void ColumnCountResult::AddValue(ColumnCountResult &result, idx_t buffer_pos) {
 	result.current_column_count++;
 }
 
 inline void ColumnCountResult::InternalAddRow() {
-	column_counts[result_position].number_of_columns = current_column_count + 1;
+	const idx_t column_count = current_column_count + 1;
+	column_counts[result_position].number_of_columns = column_count;
+	rows_per_column_count[column_count]++;
 	current_column_count = 0;
 }
 
-bool ColumnCountResult::AddRow(ColumnCountResult &result, const idx_t buffer_pos) {
+idx_t ColumnCountResult::GetMostFrequentColumnCount() const {
+	if (rows_per_column_count.empty()) {
+		return 1;
+	}
+	idx_t column_count = 0;
+	idx_t current_max = 0;
+	for (auto &rpc : rows_per_column_count) {
+		if (rpc.second > current_max) {
+			current_max = rpc.second;
+			column_count = rpc.first;
+		} else if (rpc.second == current_max) {
+			// We pick the largest to untie
+			if (rpc.first > column_count) {
+				column_count = rpc.first;
+			}
+		}
+	}
+	return column_count;
+}
+
+bool ColumnCountResult::AddRow(ColumnCountResult &result, idx_t buffer_pos) {
 	result.InternalAddRow();
 	if (!result.states.EmptyLastValue()) {
 		idx_t col_count_idx = result.result_position;
@@ -34,12 +57,33 @@ bool ColumnCountResult::AddRow(ColumnCountResult &result, const idx_t buffer_pos
 	return false;
 }
 
+void ColumnCountResult::SetComment(ColumnCountResult &result, idx_t buffer_pos) {
+	if (!result.states.WasStandard()) {
+		result.cur_line_starts_as_comment = true;
+	}
+	result.comment = true;
+}
+
+bool ColumnCountResult::UnsetComment(ColumnCountResult &result, idx_t buffer_pos) {
+	// If we are unsetting a comment, it means this row started with a comment char.
+	// We add the row but tag it as a comment
+	bool done = result.AddRow(result, buffer_pos);
+	if (result.cur_line_starts_as_comment) {
+		result.column_counts[result.result_position - 1].is_comment = true;
+	} else {
+		result.column_counts[result.result_position - 1].is_mid_comment = true;
+	}
+	result.comment = false;
+	result.cur_line_starts_as_comment = false;
+	return done;
+}
+
 void ColumnCountResult::InvalidState(ColumnCountResult &result) {
 	result.result_position = 0;
 	result.error = true;
 }
 
-bool ColumnCountResult::EmptyLine(ColumnCountResult &result, const idx_t buffer_pos) {
+bool ColumnCountResult::EmptyLine(ColumnCountResult &result, idx_t buffer_pos) {
 	// nop
 	return false;
 }
@@ -58,9 +102,13 @@ ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manag
 }
 
 unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner() {
-	auto iterator = SkipCSVRows(buffer_manager, state_machine, state_machine->dialect_options.skip_rows.GetValue());
+	idx_t rows_to_skip =
+	    std::max(state_machine->dialect_options.skip_rows.GetValue(), state_machine->dialect_options.rows_until_header);
+	auto iterator = SkipCSVRows(buffer_manager, state_machine, rows_to_skip);
 	if (iterator.done) {
-		return make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true);
+		CSVIterator it {};
+		return make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true, it,
+		                                     result_size);
 	}
 	return make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true, iterator,
 	                                     result_size);
@@ -97,7 +145,13 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 					return;
 				}
 				// This means we reached the end of the file, we must add a last line if there is any to be added
-				result.AddRow(result, NumericLimits<idx_t>::Maximum());
+				if (result.comment) {
+					// If it's a comment we add the last line via unsetcomment
+					result.UnsetComment(result, NumericLimits<idx_t>::Maximum());
+				} else {
+					// OW, we do a regular AddRow
+					result.AddRow(result, NumericLimits<idx_t>::Maximum());
+				}
 				return;
 			}
 			iterator.pos.buffer_pos = 0;

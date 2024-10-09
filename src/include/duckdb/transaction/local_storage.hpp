@@ -12,12 +12,14 @@
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/optimistic_data_writer.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/reference_map.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
 class Catalog;
 class DataTable;
+class StorageCommitState;
 class Transaction;
 class WriteAheadLog;
 struct LocalAppendState;
@@ -136,7 +138,7 @@ public:
 	void Update(DataTable &table, Vector &row_ids, const vector<PhysicalIndex> &column_ids, DataChunk &data);
 
 	//! Commits the local storage, writing it to the WAL and completing the commit
-	void Commit();
+	void Commit(optional_ptr<StorageCommitState> commit_state);
 	//! Rollback the local storage
 	void Rollback();
 
@@ -166,7 +168,7 @@ private:
 	DuckTransaction &transaction;
 	LocalTableManager table_manager;
 
-	void Flush(DataTable &table, LocalTableStorage &storage);
+	void Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<StorageCommitState> commit_state);
 };
 
 } // namespace duckdb

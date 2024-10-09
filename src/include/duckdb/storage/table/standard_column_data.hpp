@@ -25,7 +25,7 @@ public:
 public:
 	void SetStart(idx_t new_start) override;
 
-	ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count) override;
+	ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) override;
 	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) override;
 	void InitializeScan(ColumnScanState &state) override;
 	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
@@ -59,7 +59,9 @@ public:
 	void GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,
 	                          vector<duckdb::ColumnSegmentInfo> &result) override;
 
-	void DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) override;
+	bool IsPersistent() override;
+	PersistentColumnData Serialize() override;
+	void InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) override;
 
 	void Verify(RowGroup &parent) override;
 };

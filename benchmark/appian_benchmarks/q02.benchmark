@@ -1,0 +1,7 @@
+# name: benchmark/appian_benchmarks/q02.benchmark
+# description: Run query 02 from the appian benchmarks
+# group: [appian_benchmarks]
+
+template benchmark/appian_benchmarks/appian.benchmark.in
+QUERY_NUMBER=2
+QUERY_NUMBER_PADDED=02

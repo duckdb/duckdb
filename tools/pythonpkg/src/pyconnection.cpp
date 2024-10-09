@@ -58,6 +58,7 @@
 #include "duckdb/main/relation/materialized_relation.hpp"
 #include "duckdb/main/relation/query_relation.hpp"
 #include "duckdb/main/extension_util.hpp"
+#include "duckdb/parser/statement/load_statement.hpp"
 
 #include <random>
 
@@ -65,7 +66,7 @@
 
 namespace duckdb {
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;       // NOLINT: allow global
+DefaultConnectionHolder DuckDBPyConnection::default_connection;                        // NOLINT: allow global
 DBInstanceCache instance_cache;                                                        // NOLINT: allow global
 shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;              // NOLINT: allow global
 PythonEnvironmentType DuckDBPyConnection::environment = PythonEnvironmentType::NORMAL; // NOLINT: allow global
@@ -275,8 +276,10 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      "Create a query object from a JSON protobuf plan", py::arg("json"));
 	m.def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
 	      py::arg("query"));
-	m.def("install_extension", &DuckDBPyConnection::InstallExtension, "Install an extension by name",
-	      py::arg("extension"), py::kw_only(), py::arg("force_install") = false);
+	m.def("install_extension", &DuckDBPyConnection::InstallExtension,
+	      "Install an extension by name, with an optional version and/or repository to get the extension from",
+	      py::arg("extension"), py::kw_only(), py::arg("force_install") = false, py::arg("repository") = py::none(),
+	      py::arg("repository_url") = py::none(), py::arg("version") = py::none());
 	m.def("load_extension", &DuckDBPyConnection::LoadExtension, "Load an installed extension", py::arg("extension"));
 } // END_OF_CONNECTION_METHODS
 
@@ -376,8 +379,7 @@ DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::function &ud
 	auto &context = *connection.context;
 
 	if (context.transaction.HasActiveTransaction()) {
-		throw InvalidInputException(
-		    "This function can not be called with an active transaction!, commit or abort the existing one first");
+		context.CancelTransaction();
 	}
 	if (registered_functions.find(name) != registered_functions.end()) {
 		throw NotImplementedException("A function by the name of '%s' is already created, creating multiple "
@@ -414,6 +416,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const py::object &query, py::object params_p) {
+	py::gil_scoped_acquire gil;
 	con.SetResult(nullptr);
 	if (params_p.is_none()) {
 		params_p = py::list();
@@ -512,11 +515,12 @@ case_insensitive_map_t<BoundParameterData> TransformPreparedParameters(PreparedS
                                                                        const py::object &params) {
 	case_insensitive_map_t<BoundParameterData> named_values;
 	if (py::is_list_like(params)) {
-		if (prep.n_param != py::len(params)) {
+		if (prep.named_param_map.size() != py::len(params)) {
 			if (py::len(params) == 0) {
-				throw InvalidInputException("Expected %d parameters, but none were supplied", prep.n_param);
+				throw InvalidInputException("Expected %d parameters, but none were supplied",
+				                            prep.named_param_map.size());
 			}
-			throw InvalidInputException("Prepared statement needs %d parameters, %d given", prep.n_param,
+			throw InvalidInputException("Prepared statement needs %d parameters, %d given", prep.named_param_map.size(),
 			                            py::len(params));
 		}
 		auto unnamed_values = DuckDBPyConnection::TransformPythonParamList(params);
@@ -538,6 +542,7 @@ unique_ptr<PreparedStatement> DuckDBPyConnection::PrepareQuery(unique_ptr<SQLSta
 	auto &connection = con.GetConnection();
 	unique_ptr<PreparedStatement> prep;
 	{
+		D_ASSERT(py::gil_check());
 		py::gil_scoped_release release;
 		unique_lock<mutex> lock(py_connection_lock);
 
@@ -558,6 +563,7 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(PreparedStatement &p
 	auto named_values = TransformPreparedParameters(prep, params);
 	unique_ptr<QueryResult> res;
 	{
+		D_ASSERT(py::gil_check());
 		py::gil_scoped_release release;
 		unique_lock<std::mutex> lock(py_connection_lock);
 
@@ -595,6 +601,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteFromString(const strin
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const py::object &query, py::object params) {
+	py::gil_scoped_acquire gil;
 	con.SetResult(nullptr);
 
 	auto statements = GetStatements(query);
@@ -874,6 +881,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(
 		auto_detect = true;
 	}
 
+	D_ASSERT(py::gil_check());
+	py::gil_scoped_release gil;
 	auto read_json_relation =
 	    make_shared_ptr<ReadJSONRelation>(connection.context, name, std::move(options), auto_detect);
 	if (read_json_relation == nullptr) {
@@ -889,50 +898,172 @@ PathLike DuckDBPyConnection::GetPathLike(const py::object &object) {
 	return PathLike::Create(object, *this);
 }
 
-static py::object GetValueOrNone(py::kwargs &kwargs, const string &key) {
-	if (kwargs.contains(key)) {
-		return kwargs[key.c_str()];
+static void AcceptableCSVOptions(const string &unkown_parameter) {
+	// List of strings to match against
+	const unordered_set<string> valid_parameters = {"header",
+	                                                "compression",
+	                                                "sep",
+	                                                "delimiter",
+	                                                "dtype",
+	                                                "na_values",
+	                                                "skiprows",
+	                                                "quotechar",
+	                                                "escapechar",
+	                                                "encoding",
+	                                                "parallel",
+	                                                "date_format",
+	                                                "timestamp_format",
+	                                                "sample_size",
+	                                                "all_varchar",
+	                                                "normalize_names",
+	                                                "null_padding",
+	                                                "names",
+	                                                "lineterminator",
+	                                                "columns",
+	                                                "auto_type_candidates",
+	                                                "max_line_size",
+	                                                "ignore_errors",
+	                                                "store_rejects",
+	                                                "rejects_table",
+	                                                "rejects_scan",
+	                                                "rejects_limit",
+	                                                "force_not_null",
+	                                                "buffer_size",
+	                                                "decimal",
+	                                                "allow_quoted_nulls",
+	                                                "filename",
+	                                                "hive_partitioning",
+	                                                "union_by_name",
+	                                                "hive_types",
+	                                                "hive_types_autocast"};
+
+	std::ostringstream error;
+	error << "The methods read_csv and read_csv_auto do not have the \"" << unkown_parameter << "\" argument." << '\n';
+	error << "Possible arguments as suggestions: " << '\n';
+	vector<string> parameters(valid_parameters.begin(), valid_parameters.end());
+	auto suggestions = StringUtil::TopNJaroWinkler(parameters, unkown_parameter, 3);
+	for (auto &suggestion : suggestions) {
+		error << "* " << suggestion << '\n';
 	}
-	return py::none();
+	throw InvalidInputException(error.str());
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_p, py::kwargs &kwargs) {
-	auto header = GetValueOrNone(kwargs, "header");
-	auto compression = GetValueOrNone(kwargs, "compression");
-	auto sep = GetValueOrNone(kwargs, "sep");
-	auto delimiter = GetValueOrNone(kwargs, "delimiter");
-	auto dtype = GetValueOrNone(kwargs, "dtype");
-	auto na_values = GetValueOrNone(kwargs, "na_values");
-	auto skiprows = GetValueOrNone(kwargs, "skiprows");
-	auto quotechar = GetValueOrNone(kwargs, "quotechar");
-	auto escapechar = GetValueOrNone(kwargs, "escapechar");
-	auto encoding = GetValueOrNone(kwargs, "encoding");
-	auto parallel = GetValueOrNone(kwargs, "parallel");
-	auto date_format = GetValueOrNone(kwargs, "date_format");
-	auto timestamp_format = GetValueOrNone(kwargs, "timestamp_format");
-	auto sample_size = GetValueOrNone(kwargs, "sample_size");
-	auto all_varchar = GetValueOrNone(kwargs, "all_varchar");
-	auto normalize_names = GetValueOrNone(kwargs, "normalize_names");
-	auto null_padding = GetValueOrNone(kwargs, "null_padding");
-	auto names_p = GetValueOrNone(kwargs, "names");
-	auto lineterminator = GetValueOrNone(kwargs, "lineterminator");
-	auto columns = GetValueOrNone(kwargs, "columns");
-	auto auto_type_candidates = GetValueOrNone(kwargs, "auto_type_candidates");
-	auto max_line_size = GetValueOrNone(kwargs, "max_line_size");
-	auto ignore_errors = GetValueOrNone(kwargs, "ignore_errors");
-	auto store_rejects = GetValueOrNone(kwargs, "store_rejects");
-	auto rejects_table = GetValueOrNone(kwargs, "rejects_table");
-	auto rejects_scan = GetValueOrNone(kwargs, "rejects_scan");
-	auto rejects_limit = GetValueOrNone(kwargs, "rejects_limit");
-	auto force_not_null = GetValueOrNone(kwargs, "force_not_null");
-	auto buffer_size = GetValueOrNone(kwargs, "buffer_size");
-	auto decimal = GetValueOrNone(kwargs, "decimal");
-	auto allow_quoted_nulls = GetValueOrNone(kwargs, "allow_quoted_nulls");
-	auto filename = GetValueOrNone(kwargs, "filename");
-	auto hive_partitioning = GetValueOrNone(kwargs, "hive_partitioning");
-	auto union_by_name = GetValueOrNone(kwargs, "union_by_name");
-	auto hive_types = GetValueOrNone(kwargs, "hive_types");
-	auto hive_types_autocast = GetValueOrNone(kwargs, "hive_types_autocast");
+	py::object header = py::none();
+	py::object compression = py::none();
+	py::object sep = py::none();
+	py::object delimiter = py::none();
+	py::object dtype = py::none();
+	py::object na_values = py::none();
+	py::object skiprows = py::none();
+	py::object quotechar = py::none();
+	py::object escapechar = py::none();
+	py::object encoding = py::none();
+	py::object parallel = py::none();
+	py::object date_format = py::none();
+	py::object timestamp_format = py::none();
+	py::object sample_size = py::none();
+	py::object all_varchar = py::none();
+	py::object normalize_names = py::none();
+	py::object null_padding = py::none();
+	py::object names_p = py::none();
+	py::object lineterminator = py::none();
+	py::object columns = py::none();
+	py::object auto_type_candidates = py::none();
+	py::object max_line_size = py::none();
+	py::object ignore_errors = py::none();
+	py::object store_rejects = py::none();
+	py::object rejects_table = py::none();
+	py::object rejects_scan = py::none();
+	py::object rejects_limit = py::none();
+	py::object force_not_null = py::none();
+	py::object buffer_size = py::none();
+	py::object decimal = py::none();
+	py::object allow_quoted_nulls = py::none();
+	py::object filename = py::none();
+	py::object hive_partitioning = py::none();
+	py::object union_by_name = py::none();
+	py::object hive_types = py::none();
+	py::object hive_types_autocast = py::none();
+	for (auto &arg : kwargs) {
+		const auto &arg_name = py::str(arg.first).cast<std::string>();
+
+		if (arg_name == "header") {
+			header = kwargs[arg_name.c_str()];
+		} else if (arg_name == "compression") {
+			compression = kwargs[arg_name.c_str()];
+		} else if (arg_name == "sep") {
+			sep = kwargs[arg_name.c_str()];
+		} else if (arg_name == "delimiter") {
+			delimiter = kwargs[arg_name.c_str()];
+		} else if (arg_name == "dtype") {
+			dtype = kwargs[arg_name.c_str()];
+		} else if (arg_name == "na_values") {
+			na_values = kwargs[arg_name.c_str()];
+		} else if (arg_name == "skiprows") {
+			skiprows = kwargs[arg_name.c_str()];
+		} else if (arg_name == "quotechar") {
+			quotechar = kwargs[arg_name.c_str()];
+		} else if (arg_name == "escapechar") {
+			escapechar = kwargs[arg_name.c_str()];
+		} else if (arg_name == "encoding") {
+			encoding = kwargs[arg_name.c_str()];
+		} else if (arg_name == "parallel") {
+			parallel = kwargs[arg_name.c_str()];
+		} else if (arg_name == "date_format") {
+			date_format = kwargs[arg_name.c_str()];
+		} else if (arg_name == "timestamp_format") {
+			timestamp_format = kwargs[arg_name.c_str()];
+		} else if (arg_name == "sample_size") {
+			sample_size = kwargs[arg_name.c_str()];
+		} else if (arg_name == "all_varchar") {
+			all_varchar = kwargs[arg_name.c_str()];
+		} else if (arg_name == "normalize_names") {
+			normalize_names = kwargs[arg_name.c_str()];
+		} else if (arg_name == "null_padding") {
+			null_padding = kwargs[arg_name.c_str()];
+		} else if (arg_name == "names") {
+			names_p = kwargs[arg_name.c_str()];
+		} else if (arg_name == "lineterminator") {
+			lineterminator = kwargs[arg_name.c_str()];
+		} else if (arg_name == "columns") {
+			columns = kwargs[arg_name.c_str()];
+		} else if (arg_name == "auto_type_candidates") {
+			auto_type_candidates = kwargs[arg_name.c_str()];
+		} else if (arg_name == "max_line_size") {
+			max_line_size = kwargs[arg_name.c_str()];
+		} else if (arg_name == "ignore_errors") {
+			ignore_errors = kwargs[arg_name.c_str()];
+		} else if (arg_name == "store_rejects") {
+			store_rejects = kwargs[arg_name.c_str()];
+		} else if (arg_name == "rejects_table") {
+			rejects_table = kwargs[arg_name.c_str()];
+		} else if (arg_name == "rejects_scan") {
+			rejects_scan = kwargs[arg_name.c_str()];
+		} else if (arg_name == "rejects_limit") {
+			rejects_limit = kwargs[arg_name.c_str()];
+		} else if (arg_name == "force_not_null") {
+			force_not_null = kwargs[arg_name.c_str()];
+		} else if (arg_name == "buffer_size") {
+			buffer_size = kwargs[arg_name.c_str()];
+		} else if (arg_name == "decimal") {
+			decimal = kwargs[arg_name.c_str()];
+		} else if (arg_name == "allow_quoted_nulls") {
+			allow_quoted_nulls = kwargs[arg_name.c_str()];
+		} else if (arg_name == "filename") {
+			filename = kwargs[arg_name.c_str()];
+		} else if (arg_name == "hive_partitioning") {
+			hive_partitioning = kwargs[arg_name.c_str()];
+		} else if (arg_name == "union_by_name") {
+			union_by_name = kwargs[arg_name.c_str()];
+		} else if (arg_name == "hive_types") {
+			hive_types = kwargs[arg_name.c_str()];
+		} else if (arg_name == "hive_types_autocast") {
+			hive_types_autocast = kwargs[arg_name.c_str()];
+		} else {
+			AcceptableCSVOptions(arg_name);
+		}
+	}
 
 	auto &connection = con.GetConnection();
 	CSVReaderOptions options;
@@ -1261,6 +1392,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 
 	// Create the ReadCSV Relation using the 'options'
 
+	D_ASSERT(py::gil_check());
+	py::gil_scoped_release gil;
 	auto read_csv_p = connection.ReadCSV(name, std::move(bind_parameters));
 	auto &read_csv = read_csv_p->Cast<ReadCSVRelation>();
 	if (file_like_object_wrapper) {
@@ -1272,11 +1405,13 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 
 void DuckDBPyConnection::ExecuteImmediately(vector<unique_ptr<SQLStatement>> statements) {
 	auto &connection = con.GetConnection();
+	D_ASSERT(py::gil_check());
+	py::gil_scoped_release release;
 	if (statements.empty()) {
 		return;
 	}
 	for (auto &stmt : statements) {
-		if (stmt->n_param != 0) {
+		if (!stmt->named_param_map.empty()) {
 			throw NotImplementedException(
 			    "Prepared parameters are only supported for the last statement, please split your query up into "
 			    "separate 'execute' calls if you want to use prepared parameters");
@@ -1314,15 +1449,19 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const py::object &quer
 	shared_ptr<Relation> relation;
 	if (py::none().is(params)) {
 		// FIXME: currently we can't create relations with prepared parameters
-		auto statement_type = last_statement->type;
-		switch (statement_type) {
-		case StatementType::SELECT_STATEMENT: {
-			auto select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(last_statement));
-			relation = connection.RelationFromQuery(std::move(select_statement), alias);
-			break;
-		}
-		default:
-			break;
+		{
+			D_ASSERT(py::gil_check());
+			py::gil_scoped_release gil;
+			auto statement_type = last_statement->type;
+			switch (statement_type) {
+			case StatementType::SELECT_STATEMENT: {
+				auto select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(last_statement));
+				relation = connection.RelationFromQuery(std::move(select_statement), alias);
+				break;
+			}
+			default:
+				break;
+			}
 		}
 	}
 
@@ -1426,6 +1565,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &file_
 		}
 		named_parameters["compression"] = Value(py::str(compression));
 	}
+	D_ASSERT(py::gil_check());
+	py::gil_scoped_release gil;
 	return make_uniq<DuckDBPyRelation>(connection.TableFunction("parquet_scan", params, named_parameters)->Alias(name));
 }
 
@@ -1514,6 +1655,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterPythonObject(const 
 	if (!registered_objects.count(name)) {
 		return shared_from_this();
 	}
+	D_ASSERT(py::gil_check());
 	py::gil_scoped_release release;
 	// FIXME: DROP TEMPORARY VIEW? doesn't exist?
 	connection.Query("DROP VIEW \"" + name + "\"");
@@ -1559,19 +1701,13 @@ int DuckDBPyConnection::GetRowcount() {
 
 void DuckDBPyConnection::Close() {
 	con.SetResult(nullptr);
+	D_ASSERT(py::gil_check());
+	py::gil_scoped_release release;
 	con.SetConnection(nullptr);
 	con.SetDatabase(nullptr);
 	// https://peps.python.org/pep-0249/#Connection.close
-	for (auto &cur : cursors) {
-		auto cursor = cur.lock();
-		if (!cursor) {
-			// The cursor has already been closed
-			continue;
-		}
-		cursor->Close();
-	}
+	cursors.ClearCursors();
 	registered_functions.clear();
-	cursors.clear();
 }
 
 void DuckDBPyConnection::Interrupt() {
@@ -1579,9 +1715,49 @@ void DuckDBPyConnection::Interrupt() {
 	connection.Interrupt();
 }
 
-void DuckDBPyConnection::InstallExtension(const string &extension, bool force_install) {
+void DuckDBPyConnection::InstallExtension(const string &extension, bool force_install, const py::object &repository,
+                                          const py::object &repository_url, const py::object &version) {
 	auto &connection = con.GetConnection();
-	ExtensionHelper::InstallExtension(*connection.context, extension, force_install);
+
+	auto install_statement = make_uniq<LoadStatement>();
+	install_statement->info = make_uniq<LoadInfo>();
+	auto &info = *install_statement->info;
+
+	info.filename = extension;
+
+	const bool has_repository = !py::none().is(repository);
+	const bool has_repository_url = !py::none().is(repository_url);
+	if (has_repository && has_repository_url) {
+		throw InvalidInputException(
+		    "Both 'repository' and 'repository_url' are set which is not allowed, please pick one or the other");
+	}
+	string repository_string;
+	if (has_repository) {
+		repository_string = py::str(repository);
+	} else if (has_repository_url) {
+		repository_string = py::str(repository_url);
+	}
+
+	if ((has_repository || has_repository_url) && repository_string.empty()) {
+		throw InvalidInputException("The provided 'repository' or 'repository_url' can not be empty!");
+	}
+
+	string version_string;
+	if (!py::none().is(version)) {
+		version_string = py::str(version);
+		if (version_string.empty()) {
+			throw InvalidInputException("The provided 'version' can not be empty!");
+		}
+	}
+
+	info.repository = repository_string;
+	info.repo_is_alias = repository_string.empty() ? false : has_repository;
+	info.version = version_string;
+	info.load_type = force_install ? LoadType::FORCE_INSTALL : LoadType::INSTALL;
+	auto res = connection.Query(std::move(install_statement));
+	if (res->HasError()) {
+		res->ThrowError();
+	}
 }
 
 void DuckDBPyConnection::LoadExtension(const string &extension) {
@@ -1589,12 +1765,64 @@ void DuckDBPyConnection::LoadExtension(const string &extension) {
 	ExtensionHelper::LoadExternalExtension(*connection.context, extension);
 }
 
-// cursor() is stupid
+shared_ptr<DuckDBPyConnection> DefaultConnectionHolder::Get() {
+	lock_guard<mutex> guard(l);
+	if (!connection) {
+		py::dict config_dict;
+		connection = DuckDBPyConnection::Connect(py::str(":memory:"), false, config_dict);
+	}
+	return connection;
+}
+
+void DefaultConnectionHolder::Set(shared_ptr<DuckDBPyConnection> conn) {
+	lock_guard<mutex> guard(l);
+	connection = conn;
+}
+
+void DuckDBPyConnection::Cursors::AddCursor(shared_ptr<DuckDBPyConnection> conn) {
+	lock_guard<mutex> l(lock);
+
+	// Clean up previously created cursors
+	vector<weak_ptr<DuckDBPyConnection>> compacted_cursors;
+	bool needs_compaction = false;
+	for (auto &cur_p : cursors) {
+		auto cur = cur_p.lock();
+		if (!cur) {
+			needs_compaction = true;
+			continue;
+		}
+		compacted_cursors.push_back(cur_p);
+	}
+	if (needs_compaction) {
+		cursors = std::move(compacted_cursors);
+	}
+
+	cursors.push_back(conn);
+}
+
+void DuckDBPyConnection::Cursors::ClearCursors() {
+	lock_guard<mutex> l(lock);
+
+	for (auto &cur : cursors) {
+		auto cursor = cur.lock();
+		if (!cursor) {
+			// The cursor has already been closed
+			continue;
+		}
+		// This is *only* needed because we have a py::gil_scoped_release in Close, so it *needs* the GIL in order to
+		// release it don't ask me why it can't just realize there is no GIL and move on
+		py::gil_scoped_acquire gil;
+		cursor->Close();
+	}
+
+	cursors.clear();
+}
+
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Cursor() {
 	auto res = make_shared_ptr<DuckDBPyConnection>();
 	res->con.SetDatabase(con);
 	res->con.SetConnection(make_uniq<Connection>(res->con.GetDatabase()));
-	cursors.push_back(res);
+	cursors.AddCursor(res);
 	return res;
 }
 
@@ -1740,6 +1968,7 @@ static shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &databa
 	bool cache_instance = database_path != ":memory:" && !database_path.empty();
 	config.replacement_scans.emplace_back(PythonReplacementScan::Replace);
 	{
+		D_ASSERT(py::gil_check());
 		py::gil_scoped_release release;
 		unique_lock<mutex> lock(res->py_connection_lock);
 		auto database =
@@ -1787,6 +2016,10 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const py::object &dat
 	config.AddExtensionOption("python_enable_replacements",
 	                          "Whether variables visible to the current stack should be used for replacement scans.",
 	                          LogicalType::BOOLEAN, Value::BOOLEAN(true));
+	config.AddExtensionOption(
+	    "python_scan_all_frames",
+	    "If set, restores the old behavior of scanning all preceding frames to locate the referenced variable.",
+	    LogicalType::BOOLEAN, Value::BOOLEAN(false));
 	if (!DuckDBPyConnection::IsJupyter()) {
 		config_dict["duckdb_api"] = Value("python");
 	} else {
@@ -1822,11 +2055,11 @@ case_insensitive_map_t<BoundParameterData> DuckDBPyConnection::TransformPythonPa
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::DefaultConnection() {
-	if (!default_connection) {
-		py::dict config_dict;
-		default_connection = DuckDBPyConnection::Connect(py::str(":memory:"), false, config_dict);
-	}
-	return default_connection;
+	return default_connection.Get();
+}
+
+void DuckDBPyConnection::SetDefaultConnection(shared_ptr<DuckDBPyConnection> connection) {
+	return default_connection.Set(std::move(connection));
 }
 
 PythonImportCache *DuckDBPyConnection::ImportCache() {
@@ -1871,7 +2104,7 @@ void DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_ty
 }
 
 void DuckDBPyConnection::Cleanup() {
-	default_connection.reset();
+	default_connection.Set(nullptr);
 	import_cache.reset();
 }
 
@@ -1942,30 +2175,54 @@ NumpyObjectType DuckDBPyConnection::IsAcceptedNumpyObject(const py::object &obje
 	return NumpyObjectType::INVALID;
 }
 
-bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
-	if (!ModuleIsLoaded<PyarrowCacheItem>()) {
-		return false;
+PyArrowObjectType DuckDBPyConnection::GetArrowType(const py::handle &obj) {
+	D_ASSERT(py::gil_check());
+
+	if (py::isinstance<py::capsule>(obj)) {
+		auto capsule = py::reinterpret_borrow<py::capsule>(obj);
+		if (string(capsule.name()) != "arrow_array_stream") {
+			throw InvalidInputException("Expected a 'arrow_array_stream' PyCapsule, got: %s", string(capsule.name()));
+		}
+		auto stream = capsule.get_pointer<struct ArrowArrayStream>();
+		if (!stream->release) {
+			throw InvalidInputException("The ArrowArrayStream was already released");
+		}
+		return PyArrowObjectType::PyCapsule;
 	}
-	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
-	if (py::isinstance(object, import_cache_py.pyarrow.Table()) ||
-	    py::isinstance(object, import_cache_py.pyarrow.RecordBatchReader())) {
-		return true;
+
+	if (ModuleIsLoaded<PyarrowCacheItem>()) {
+		auto &import_cache = *DuckDBPyConnection::ImportCache();
+		// First Verify Lib Types
+		auto table_class = import_cache.pyarrow.Table();
+		auto record_batch_reader_class = import_cache.pyarrow.RecordBatchReader();
+		if (py::isinstance(obj, table_class)) {
+			return PyArrowObjectType::Table;
+		} else if (py::isinstance(obj, record_batch_reader_class)) {
+			return PyArrowObjectType::RecordBatchReader;
+		}
+
+		if (ModuleIsLoaded<PyarrowDatasetCacheItem>()) {
+			// Then Verify dataset types
+			auto dataset_class = import_cache.pyarrow.dataset.Dataset();
+			auto scanner_class = import_cache.pyarrow.dataset.Scanner();
+
+			if (py::isinstance(obj, scanner_class)) {
+				return PyArrowObjectType::Scanner;
+			} else if (py::isinstance(obj, dataset_class)) {
+				return PyArrowObjectType::Dataset;
+			}
+		}
 	}
-	if (!ModuleIsLoaded<PyarrowDatasetCacheItem>()) {
-		return false;
+
+	if (py::hasattr(obj, "__arrow_c_stream__")) {
+		return PyArrowObjectType::PyCapsuleInterface;
 	}
-	return (py::isinstance(object, import_cache_py.pyarrow.dataset.Dataset()) ||
-	        py::isinstance(object, import_cache_py.pyarrow.dataset.Scanner()));
+
+	return PyArrowObjectType::Invalid;
 }
 
-unique_lock<std::mutex> DuckDBPyConnection::AcquireConnectionLock() {
-	// we first release the gil and then acquire the connection lock
-	unique_lock<std::mutex> lock(py_connection_lock, std::defer_lock);
-	{
-		py::gil_scoped_release release;
-		lock.lock();
-	}
-	return lock;
+bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
+	return DuckDBPyConnection::GetArrowType(object) != PyArrowObjectType::Invalid;
 }
 
 } // namespace duckdb

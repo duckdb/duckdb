@@ -350,7 +350,8 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 	file_meta_data.version = 1;
 
 	file_meta_data.__isset.created_by = true;
-	file_meta_data.created_by = "DuckDB";
+	file_meta_data.created_by =
+	    StringUtil::Format("DuckDB version %s (build %s)", DuckDB::LibraryVersion(), DuckDB::SourceID());
 
 	file_meta_data.schema.resize(1);
 
@@ -465,7 +466,7 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 // Validation code adapted from Impala
 static void ValidateOffsetInFile(const string &filename, idx_t col_idx, idx_t file_length, idx_t offset,
                                  const string &offset_name) {
-	if (offset < 0 || offset >= file_length) {
+	if (offset >= file_length) {
 		throw IOException("File '%s': metadata is corrupt. Column %d has invalid "
 		                  "%s (offset=%llu file_size=%llu).",
 		                  filename, col_idx, offset_name, offset, file_length);

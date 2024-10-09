@@ -23,6 +23,7 @@ class CheckpointWriter;
 class DatabaseInstance;
 class TransactionManager;
 class TableCatalogEntry;
+struct PersistentCollectionData;
 
 class StorageCommitState {
 public:
@@ -35,6 +36,14 @@ public:
 	virtual void RevertCommit() = 0;
 	// Make the commit persistent
 	virtual void FlushCommit() = 0;
+
+	virtual void AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
+	                             unique_ptr<PersistentCollectionData> row_group_data) = 0;
+	virtual optional_ptr<PersistentCollectionData> GetRowGroupData(DataTable &table, idx_t start_index,
+	                                                               idx_t &count) = 0;
+	virtual bool HasRowGroupData() {
+		return false;
+	}
 };
 
 struct CheckpointOptions {
@@ -94,6 +103,7 @@ public:
 	virtual DatabaseSize GetDatabaseSize() = 0;
 	virtual vector<MetadataBlockInfo> GetMetadataInfo() = 0;
 	virtual shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) = 0;
+	virtual BlockManager &GetBlockManager() = 0;
 
 protected:
 	virtual void LoadDatabase(const optional_idx block_alloc_size) = 0;
@@ -143,6 +153,7 @@ public:
 	DatabaseSize GetDatabaseSize() override;
 	vector<MetadataBlockInfo> GetMetadataInfo() override;
 	shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) override;
+	BlockManager &GetBlockManager() override;
 
 protected:
 	void LoadDatabase(const optional_idx block_alloc_size) override;

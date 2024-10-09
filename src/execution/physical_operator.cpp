@@ -1,6 +1,7 @@
 #include "duckdb/execution/physical_operator.hpp"
 
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/render_tree.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/execution/execution_context.hpp"
@@ -38,6 +39,40 @@ vector<const_reference<PhysicalOperator>> PhysicalOperator::GetChildren() const 
 		result.push_back(*child);
 	}
 	return result;
+}
+
+void PhysicalOperator::SetEstimatedCardinality(InsertionOrderPreservingMap<string> &result,
+                                               idx_t estimated_cardinality) {
+	result[RenderTreeNode::ESTIMATED_CARDINALITY] = StringUtil::Format("%llu", estimated_cardinality);
+}
+
+idx_t PhysicalOperator::EstimatedThreadCount() const {
+	idx_t result = 0;
+	if (children.empty()) {
+		// Terminal operator, e.g., base table, these decide the degree of parallelism of pipelines
+		result = MaxValue<idx_t>(estimated_cardinality / (Storage::ROW_GROUP_SIZE * 2), 1);
+	} else if (type == PhysicalOperatorType::UNION) {
+		// We can run union pipelines in parallel, so we sum up the thread count of the children
+		for (auto &child : children) {
+			result += child->EstimatedThreadCount();
+		}
+	} else {
+		// For other operators we take the maximum of the children
+		for (auto &child : children) {
+			result = MaxValue(child->EstimatedThreadCount(), result);
+		}
+	}
+	return result;
+}
+
+bool PhysicalOperator::CanSaturateThreads(ClientContext &context) const {
+#ifdef DEBUG
+	// In debug mode we always return true here so that the code that depends on it is well-tested
+	return true;
+#else
+	const auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+	return EstimatedThreadCount() >= num_threads;
+#endif
 }
 
 //===--------------------------------------------------------------------===//

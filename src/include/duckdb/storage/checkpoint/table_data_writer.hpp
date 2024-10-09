@@ -38,6 +38,7 @@ public:
 	virtual CheckpointType GetCheckpointType() const = 0;
 
 	TaskScheduler &GetScheduler();
+	DatabaseInstance &GetDatabase();
 
 protected:
 	DuckTableEntry &table;

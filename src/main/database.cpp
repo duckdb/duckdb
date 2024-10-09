@@ -2,29 +2,29 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
+#include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/execution/operator/helper/physical_set.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection_manager.hpp"
+#include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/database_path_and_type.hpp"
+#include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
+#include "duckdb/planner/collation_binding.hpp"
 #include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/storage/standard_buffer_manager.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/execution/index/index_type_set.hpp"
-#include "duckdb/main/database_file_opener.hpp"
-#include "duckdb/planner/collation_binding.hpp"
-#include "duckdb/main/db_instance_cache.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -202,13 +202,60 @@ void DatabaseInstance::CreateMainDatabase() {
 	initial_database->Initialize();
 }
 
-void ThrowExtensionSetUnrecognizedOptions(const unordered_map<string, Value> &unrecognized_options) {
-	auto unrecognized_options_iter = unrecognized_options.begin();
-	string unrecognized_option_keys = unrecognized_options_iter->first;
-	while (++unrecognized_options_iter != unrecognized_options.end()) {
-		unrecognized_option_keys = "," + unrecognized_options_iter->first;
+static void ThrowExtensionSetUnrecognizedOptions(const case_insensitive_map_t<Value> &unrecognized_options) {
+	D_ASSERT(!unrecognized_options.empty());
+
+	vector<string> options;
+	for (auto &kv : unrecognized_options) {
+		options.push_back(kv.first);
 	}
-	throw InvalidInputException("Unrecognized configuration property \"%s\"", unrecognized_option_keys);
+	auto concatenated = StringUtil::Join(options, ", ");
+	throw InvalidInputException("The following options were not recognized: " + concatenated);
+}
+
+void DatabaseInstance::LoadExtensionSettings() {
+	auto &unrecognized_options = config.options.unrecognized_options;
+
+	if (config.options.autoload_known_extensions) {
+		if (unrecognized_options.empty()) {
+			// Nothing to do
+			return;
+		}
+
+		Connection con(*this);
+		con.BeginTransaction();
+
+		vector<string> extension_options;
+		for (auto &option : unrecognized_options) {
+			auto &name = option.first;
+			auto &value = option.second;
+
+			auto extension_name = ExtensionHelper::FindExtensionInEntries(name, EXTENSION_SETTINGS);
+			if (extension_name.empty()) {
+				continue;
+			}
+			if (!ExtensionHelper::TryAutoLoadExtension(*this, extension_name)) {
+				throw InvalidInputException(
+				    "To set the %s setting, the %s extension needs to be loaded. But it could not be autoloaded.", name,
+				    extension_name);
+			}
+			auto it = config.extension_parameters.find(name);
+			if (it == config.extension_parameters.end()) {
+				throw InternalException("Extension %s did not provide the '%s' config setting", extension_name, name);
+			}
+			auto &context = *con.context;
+			PhysicalSet::SetExtensionVariable(context, it->second, name, SetScope::GLOBAL, value);
+			extension_options.push_back(name);
+		}
+
+		for (auto &option : extension_options) {
+			unrecognized_options.erase(option);
+		}
+		con.Commit();
+	}
+	if (!unrecognized_options.empty()) {
+		ThrowExtensionSetUnrecognizedOptions(unrecognized_options);
+	}
 }
 
 void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_config) {
@@ -254,9 +301,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.database_type);
 	}
 
-	if (!config.options.unrecognized_options.empty()) {
-		ThrowExtensionSetUnrecognizedOptions(config.options.unrecognized_options);
-	}
+	LoadExtensionSettings();
 
 	if (!db_manager->HasDefaultDatabase()) {
 		CreateMainDatabase();
@@ -391,7 +436,8 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		config.buffer_pool = std::move(new_config.buffer_pool);
 	} else {
 		config.buffer_pool = make_shared_ptr<BufferPool>(config.options.maximum_memory,
-		                                                 config.options.buffer_manager_track_eviction_timestamps);
+		                                                 config.options.buffer_manager_track_eviction_timestamps,
+		                                                 config.options.allocator_bulk_deallocation_flush_threshold);
 	}
 }
 

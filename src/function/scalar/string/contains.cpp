@@ -155,9 +155,11 @@ struct ContainsOperator {
 ScalarFunctionSet ContainsFun::GetFunctions() {
 	auto string_fun = GetStringContains();
 	auto list_fun = ListContainsFun::GetFunction();
+	auto map_fun = MapContainsFun::GetFunction();
 	ScalarFunctionSet set("contains");
 	set.AddFunction(string_fun);
 	set.AddFunction(list_fun);
+	set.AddFunction(map_fun);
 	return set;
 }
 

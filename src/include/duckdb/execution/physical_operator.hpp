@@ -64,6 +64,7 @@ public:
 	virtual InsertionOrderPreservingMap<string> ParamsToString() const {
 		return InsertionOrderPreservingMap<string>();
 	}
+	static void SetEstimatedCardinality(InsertionOrderPreservingMap<string> &result, idx_t estimated_cardinality);
 	virtual string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
 	void Print() const;
 	virtual vector<const_reference<PhysicalOperator>> GetChildren() const;
@@ -76,6 +77,10 @@ public:
 	virtual bool Equals(const PhysicalOperator &other) const {
 		return false;
 	}
+
+	//! Functions to help decide how to set up pipeline dependencies
+	idx_t EstimatedThreadCount() const;
+	bool CanSaturateThreads(ClientContext &context) const;
 
 	virtual void Verify();
 
@@ -236,8 +241,12 @@ public:
 	bool caching_supported;
 
 public:
+	//! This Execute will prevent small chunks from entering the pipeline, buffering them until a bigger chunk is
+	//! created.
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const final;
+	//! FinalExecute is used here to send out the remainder of the chunk (< STANDARD_VECTOR_SIZE) that we still had
+	//! cached.
 	OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
 	                                        OperatorState &state) const final;
 

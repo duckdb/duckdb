@@ -63,3 +63,34 @@ query I
 SELECT [len(x) for x in words] from word_tbl
 ----
 [7, 5, 5]
+
+query I
+with base as (
+	select [4,5,6] as l
+)
+select [x for x,i in l if i != 2] as filtered from base;
+----
+[4, 6]
+
+query I
+select [x+i for x, i in [10, 9, 8, 7, 6]]
+----
+[11, 11, 11, 11, 11]
+
+query I
+with base as (
+	select [4,5,6] as l
+)
+select [x + 5 for x in l] as filtered from base;
+----
+[9, 10, 11]
+
+statement error
+select [a for a, b, c in [1,2,3]];
+----
+This lambda function only supports up to two lambda parameters!
+
+statement error
+select [a for a[1], b[2] in [1,2,3,4]];
+----
+Parser Error: syntax error at or near "["

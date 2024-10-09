@@ -71,9 +71,15 @@ public:
 	static bool CharacterIsHex(char c) {
 		return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
 	}
+	static char CharacterToUpper(char c) {
+		if (c >= 'a' && c <= 'z') {
+			return UnsafeNumericCast<char>(c - ('a' - 'A'));
+		}
+		return c;
+	}
 	static char CharacterToLower(char c) {
 		if (c >= 'A' && c <= 'Z') {
-			return UnsafeNumericCast<char>(c - ('A' - 'a'));
+			return UnsafeNumericCast<char>(c + ('a' - 'A'));
 		}
 		return c;
 	}
@@ -181,11 +187,14 @@ public:
 	//! Return a string that formats the give number of bytes
 	DUCKDB_API static string BytesToHumanReadableString(idx_t bytes, idx_t multiplier = 1024);
 
-	//! Convert a string to uppercase
+	//! Convert a string to UPPERCASE
 	DUCKDB_API static string Upper(const string &str);
 
 	//! Convert a string to lowercase
 	DUCKDB_API static string Lower(const string &str);
+
+	//! Convert a string to Title Case
+	DUCKDB_API static string Title(const string &str);
 
 	DUCKDB_API static bool IsLower(const string &str);
 

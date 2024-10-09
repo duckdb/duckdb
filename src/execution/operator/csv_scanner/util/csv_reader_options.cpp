@@ -130,6 +130,21 @@ void CSVReaderOptions::SetQuote(const string &quote_p) {
 	this->dialect_options.state_machine_options.quote.Set(quote_str[0]);
 }
 
+string CSVReaderOptions::GetComment() const {
+	return std::string(1, this->dialect_options.state_machine_options.comment.GetValue());
+}
+
+void CSVReaderOptions::SetComment(const string &comment_p) {
+	auto comment_str = comment_p;
+	if (comment_str.size() > 1) {
+		throw InvalidInputException("The comment option cannot exceed a size of 1 byte.");
+	}
+	if (comment_str.empty()) {
+		comment_str = string("\0", 1);
+	}
+	this->dialect_options.state_machine_options.comment.Set(comment_str[0]);
+}
+
 string CSVReaderOptions::GetNewline() const {
 	switch (dialect_options.state_machine_options.new_line.GetValue()) {
 	case NewLineIdentifier::CARRY_ON:
@@ -303,6 +318,8 @@ bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value, 
 		SetDelimiter(ParseString(value, loption));
 	} else if (loption == "quote") {
 		SetQuote(ParseString(value, loption));
+	} else if (loption == "comment") {
+		SetComment(ParseString(value, loption));
 	} else if (loption == "new_line") {
 		SetNewline(ParseString(value, loption));
 	} else if (loption == "escape") {
@@ -382,11 +399,12 @@ string CSVReaderOptions::ToString(const string &current_file_path) const {
 	auto &delimiter = dialect_options.state_machine_options.delimiter;
 	auto &quote = dialect_options.state_machine_options.quote;
 	auto &escape = dialect_options.state_machine_options.escape;
+	auto &comment = dialect_options.state_machine_options.comment;
 	auto &new_line = dialect_options.state_machine_options.new_line;
 	auto &skip_rows = dialect_options.skip_rows;
 
 	auto &header = dialect_options.header;
-	string error = "  file=" + current_file_path + "\n  ";
+	string error = "  file = " + current_file_path + "\n  ";
 	// Let's first print options that can either be set by the user or by the sniffer
 	// delimiter
 	error += FormatOptionLine("delimiter", delimiter);
@@ -400,6 +418,8 @@ string CSVReaderOptions::ToString(const string &current_file_path) const {
 	error += FormatOptionLine("header", header);
 	// skip_rows
 	error += FormatOptionLine("skip_rows", skip_rows);
+	// comment
+	error += FormatOptionLine("comment", comment);
 	// date format
 	error += FormatOptionLine("date_format", dialect_options.date_format.at(LogicalType::DATE));
 	// timestamp format
@@ -407,13 +427,13 @@ string CSVReaderOptions::ToString(const string &current_file_path) const {
 
 	// Now we do options that can only be set by the user, that might hold some general significance
 	// null padding
-	error += "null_padding=" + std::to_string(null_padding) + "\n  ";
+	error += "null_padding = " + std::to_string(null_padding) + "\n  ";
 	// sample_size
-	error += "sample_size=" + std::to_string(sample_size_chunks * STANDARD_VECTOR_SIZE) + "\n  ";
+	error += "sample_size = " + std::to_string(sample_size_chunks * STANDARD_VECTOR_SIZE) + "\n  ";
 	// ignore_errors
-	error += "ignore_errors=" + ignore_errors.FormatValue() + "\n  ";
+	error += "ignore_errors = " + ignore_errors.FormatValue() + "\n  ";
 	// all_varchar
-	error += "all_varchar=" + std::to_string(all_varchar) + "\n";
+	error += "all_varchar = " + std::to_string(all_varchar) + "\n";
 
 	// Add information regarding sniffer mismatches (if any)
 	error += sniffer_user_mismatch_error;
@@ -590,6 +610,7 @@ void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) {
 	auto &delimiter = dialect_options.state_machine_options.delimiter;
 	auto &quote = dialect_options.state_machine_options.quote;
 	auto &escape = dialect_options.state_machine_options.escape;
+	auto &comment = dialect_options.state_machine_options.comment;
 	auto &header = dialect_options.header;
 	if (delimiter.IsSetByUser()) {
 		named_params["delim"] = Value(GetDelimiter());
@@ -602,6 +623,9 @@ void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) {
 	}
 	if (escape.IsSetByUser()) {
 		named_params["escape"] = Value(GetEscape());
+	}
+	if (comment.IsSetByUser()) {
+		named_params["comment"] = Value(GetComment());
 	}
 	if (header.IsSetByUser()) {
 		named_params["header"] = Value(GetHeader());

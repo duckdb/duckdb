@@ -3,6 +3,8 @@
 #include "duckdb/common/arrow/appender/append_data.hpp"
 #include "duckdb/function/table/arrow.hpp"
 
+#include "duckdb/common/bswap.hpp"
+
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -46,6 +48,25 @@ struct ArrowTimeTzConverter {
 	template <class TGT, class SRC>
 	static TGT Operation(SRC input) {
 		return input.time().micros;
+	}
+
+	static bool SkipNulls() {
+		return true;
+	}
+
+	template <class TGT>
+	static void SetNull(TGT &value) {
+	}
+};
+
+struct ArrowUUIDBlobConverter {
+	template <class TGT, class SRC>
+	static TGT Operation(hugeint_t input) {
+		// Turn into big-end
+		auto upper = BSwap(input.lower);
+		// flip Upper MSD
+		auto lower = BSwap(static_cast<int64_t>(static_cast<uint64_t>(input.upper) ^ (static_cast<uint64_t>(1) << 63)));
+		return {static_cast<int64_t>(upper), static_cast<uint64_t>(lower)};
 	}
 
 	static bool SkipNulls() {

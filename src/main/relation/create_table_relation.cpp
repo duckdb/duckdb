@@ -6,10 +6,11 @@
 
 namespace duckdb {
 
-CreateTableRelation::CreateTableRelation(shared_ptr<Relation> child_p, string schema_name, string table_name)
+CreateTableRelation::CreateTableRelation(shared_ptr<Relation> child_p, string schema_name, string table_name,
+                                         bool temporary_p)
     : Relation(child_p->context, RelationType::CREATE_TABLE_RELATION), child(std::move(child_p)),
-      schema_name(std::move(schema_name)), table_name(std::move(table_name)) {
-	context.GetContext()->TryBindRelation(*this, this->columns);
+      schema_name(std::move(schema_name)), table_name(std::move(table_name)), temporary(temporary_p) {
+	TryBindRelation(columns);
 }
 
 BoundStatement CreateTableRelation::Bind(Binder &binder) {
@@ -22,6 +23,7 @@ BoundStatement CreateTableRelation::Bind(Binder &binder) {
 	info->table = table_name;
 	info->query = std::move(select);
 	info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
+	info->temporary = temporary;
 	stmt.info = std::move(info);
 	return binder.Bind(stmt.Cast<SQLStatement>());
 }

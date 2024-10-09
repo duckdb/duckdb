@@ -2,8 +2,8 @@
 # description: Read a CSV with dtypes and UNION BY NAME
 # group: [csv]
 
-#statement ok
-#PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
 statement ok
 CREATE TABLE ubn1(a BIGINT);

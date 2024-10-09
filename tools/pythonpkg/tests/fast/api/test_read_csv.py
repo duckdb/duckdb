@@ -124,6 +124,12 @@ class TestReadCSV(object):
         print(res)
         assert res == ('"AAA"BB',)
 
+    def test_quote(self, duckdb_cursor):
+        with pytest.raises(
+            duckdb.Error, match="The methods read_csv and read_csv_auto do not have the \"quote\" argument."
+        ):
+            rel = duckdb_cursor.read_csv(TestFile('unquote_without_delimiter.csv'), quote="", header=False)
+
     def test_escapechar(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile('quote_escape.csv'), escapechar=";", header=False)
         res = rel.limit(1, 1).fetchone()
@@ -578,12 +584,9 @@ class TestReadCSV(object):
     @pytest.mark.parametrize(
         'options',
         [
-            {'lineterminator': '\\r\\n'},
             {'lineterminator': '\\n'},
             {'lineterminator': 'LINE_FEED'},
-            {'lineterminator': 'CARRIAGE_RETURN_LINE_FEED'},
             {'lineterminator': CSVLineTerminator.LINE_FEED},
-            {'lineterminator': CSVLineTerminator.CARRIAGE_RETURN_LINE_FEED},
             {'columns': {'id': 'INTEGER', 'name': 'INTEGER', 'c': 'integer', 'd': 'INTEGER'}},
             {'auto_type_candidates': ['INTEGER', 'INTEGER']},
             {'max_line_size': 10000},

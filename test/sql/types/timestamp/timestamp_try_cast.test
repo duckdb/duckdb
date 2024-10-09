@@ -59,7 +59,7 @@ NULL
 query I
 select try_cast('1111-11-11 11:11' as timestamp)
 ----
-NULL
+1111-11-11 11:11:00
 
 query I
 select try_cast('1111-11-11 11:11:999' as timestamp)

@@ -11493,7 +11493,7 @@ static int shell_callback(
       }
       if (strcmp(azArg[0], "logical_plan") == 0
             || strcmp(azArg[0], "logical_opt") == 0
-            || strcmp(azArg[0], "physical_plan") == 0) { 
+            || strcmp(azArg[0], "physical_plan") == 0) {
         utf8_printf(p->out, "\n┌─────────────────────────────┐\n");
         utf8_printf(p->out, "│┌───────────────────────────┐│\n");
         if (strcmp(azArg[0], "logical_plan") == 0) {
@@ -11682,7 +11682,6 @@ static int shell_callback(
         }else if( aiType && aiType[i]==SQLITE_INTEGER ){
           utf8_printf(p->out,"%s", azArg[i]);
         }else if( aiType && aiType[i]==SQLITE_FLOAT ){
-          char z[50];
           double r = sqlite3_column_double(p->pStmt, i);
           sqlite3_uint64 ur;
           memcpy(&ur,&r,sizeof(r));
@@ -11691,13 +11690,16 @@ static int shell_callback(
           }else if( ur==0xfff0000000000000LL ){
             raw_printf(p->out, "-1e999");
           }else{
-            sqlite3_snprintf(50,z,"%!.20g", r);
-            raw_printf(p->out, "%s", z);
+            utf8_printf(p->out,"%s", azArg[i]);
           }
         }else if( aiType && aiType[i]==SQLITE_BLOB && p->pStmt ){
           const void *pBlob = sqlite3_column_blob(p->pStmt, i);
-          int nBlob = sqlite3_column_bytes(p->pStmt, i);
-          output_hex_blob(p->out, pBlob, nBlob);
+          if(pBlob) {
+          	int nBlob = sqlite3_column_bytes(p->pStmt, i);
+          	output_hex_blob(p->out, pBlob, nBlob);
+          } else {
+	        utf8_printf(p->out,"NULL");
+          }
         }else if( isNumber(azArg[i], 0) ){
           utf8_printf(p->out,"%s", azArg[i]);
         }else if( ShellHasFlag(p, SHFLG_Newlines) ){

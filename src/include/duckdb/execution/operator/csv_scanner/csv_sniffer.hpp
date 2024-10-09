@@ -13,12 +13,14 @@
 #include "duckdb/execution/operator/csv_scanner/quote_rules.hpp"
 #include "duckdb/execution/operator/csv_scanner/column_count_scanner.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_schema.hpp"
+#include "duckdb/execution/operator/csv_scanner/header_value.hpp"
 
 namespace duckdb {
 struct DateTimestampSniffing {
 	bool initialized = false;
 	bool had_match = false;
 	vector<string> format;
+	idx_t initial_size;
 };
 //! Struct to store the result of the Sniffer
 struct SnifferResult {
@@ -29,6 +31,36 @@ struct SnifferResult {
 	vector<LogicalType> return_types;
 	//! Column Names that were detected
 	vector<string> names;
+};
+
+//! All the options that will be used to sniff the dialect of the CSV file
+struct DialectCandidates {
+	//! The constructor populates all of our the options that will be used in our sniffer search space
+	explicit DialectCandidates(const CSVStateMachineOptions &options);
+
+	//! Static functions to get defaults of the search space
+	static vector<char> GetDefaultDelimiter();
+
+	static vector<vector<char>> GetDefaultQuote();
+
+	static vector<QuoteRule> GetDefaultQuoteRule();
+
+	static vector<vector<char>> GetDefaultEscape();
+
+	static vector<char> GetDefaultComment();
+
+	string Print();
+
+	//! Candidates for the delimiter
+	vector<char> delim_candidates;
+	//! Candidates for the comment
+	vector<char> comment_candidates;
+	//! Quote-Rule Candidates
+	vector<QuoteRule> quote_rule_candidates;
+	//! Candidates for the quote option
+	unordered_map<uint8_t, vector<char>> quote_candidates_map;
+	//! Candidates for the escape option
+	unordered_map<uint8_t, vector<char>> escape_candidates_map;
 };
 
 //! This represents the data related to columns that have been set by the user
@@ -47,12 +79,12 @@ struct SetColumns {
 	//! Column Names that were detected
 	const vector<string> *names = nullptr;
 	//! If columns are set
-	bool IsSet();
+	bool IsSet() const;
 	//! How many columns
-	idx_t Size();
+	idx_t Size() const;
 	//! Helper function that checks if candidate is acceptable based on the number of columns it produces
 	inline bool IsCandidateUnacceptable(const idx_t num_cols, bool null_padding, bool ignore_errors,
-	                                    bool last_value_always_empty) {
+	                                    bool last_value_always_empty) const {
 		if (!IsSet() || ignore_errors) {
 			// We can't say its unacceptable if it's not set or if we ignore errors
 			return false;
@@ -76,17 +108,10 @@ struct SetColumns {
 	}
 };
 
-struct HeaderValue {
-	HeaderValue() : is_null(true) {
-	}
-	explicit HeaderValue(const string_t value_p) {
-		value = value_p.GetString();
-	}
-	bool IsNull() {
-		return is_null;
-	}
-	bool is_null = false;
-	string value;
+//! Struct used to know if we have a date or timestamp type already identified in this CSV File
+struct HasType {
+	bool date = false;
+	bool timestamp = false;
 };
 
 //! Sniffer that detects Header, Dialect and Types of CSV Files
@@ -135,6 +160,7 @@ private:
 	SetColumns set_columns;
 	shared_ptr<CSVErrorHandler> error_handler;
 	shared_ptr<CSVErrorHandler> detection_error_handler;
+
 	//! Sets the result options
 	void SetResultOptions();
 
@@ -144,42 +170,38 @@ private:
 	//! First phase of auto detection: detect CSV dialect (i.e. delimiter, quote rules, etc)
 	void DetectDialect();
 	//! Functions called in the main DetectDialect(); function
-	//! 1. Generates the search space candidates for the dialect
-	void GenerateCandidateDetectionSearchSpace(vector<char> &delim_candidates, vector<QuoteRule> &quoterule_candidates,
-	                                           unordered_map<uint8_t, vector<char>> &quote_candidates_map,
-	                                           unordered_map<uint8_t, vector<char>> &escape_candidates_map);
-	//! 2. Generates the search space candidates for the state machines
+	//! 1. Generates the search space candidates for the state machines
 	void GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountScanner>> &column_count_scanners,
-	                                     const vector<char> &delimiter_candidates,
-	                                     const vector<QuoteRule> &quoterule_candidates,
-	                                     const unordered_map<uint8_t, vector<char>> &quote_candidates_map,
-	                                     const unordered_map<uint8_t, vector<char>> &escape_candidates_map);
+	                                     const DialectCandidates &dialect_candidates);
 
-	//! 3. Analyzes if dialect candidate is a good candidate to be considered, if so, it adds it to the candidates
+	//! 2. Analyzes if dialect candidate is a good candidate to be considered, if so, it adds it to the candidates
 	void AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner>, idx_t &rows_read, idx_t &best_consistent_rows,
 	                             idx_t &prev_padding_count, idx_t &min_ignored_rows);
-	//! 4. Refine Candidates over remaining chunks
+	//! 3. Refine Candidates over remaining chunks
 	void RefineCandidates();
 
 	//! Checks if candidate still produces good values for the next chunk
-	bool RefineCandidateNextChunk(ColumnCountScanner &candidate);
+	bool RefineCandidateNextChunk(ColumnCountScanner &candidate) const;
 
 	//! ------------------------------------------------------//
 	//! ------------------- Type Detection ------------------ //
 	//! ------------------------------------------------------//
-	//! Second phase of auto detection: detect types, format template candidates
+	//! Second phase of auto-detection: detect types, format template candidates
 	//! ordered by descending specificity (~ from high to low)
 	void DetectTypes();
 	//! Change the date format for the type to the string
 	//! Try to cast a string value to the specified sql type
-	void SetDateFormat(CSVStateMachine &candidate, const string &format_specifier, const LogicalTypeId &sql_type);
+	static void SetDateFormat(CSVStateMachine &candidate, const string &format_specifier,
+	                          const LogicalTypeId &sql_type);
 
 	//! Function that initialized the necessary variables used for date and timestamp detection
 	void InitializeDateAndTimeStampDetection(CSVStateMachine &candidate, const string &separator,
 	                                         const LogicalType &sql_type);
+	//! Sets user defined date and time formats (if any)
+	void SetUserDefinedDateTimeFormat(CSVStateMachine &candidate) const;
 	//! Functions that performs detection for date and timestamp formats
 	void DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const LogicalType &sql_type, const string &separator,
-	                                   string_t &dummy_val);
+	                                   const string_t &dummy_val);
 	//! Sniffs the types from a data chunk
 	void SniffTypes(DataChunk &data_chunk, CSVStateMachine &state_machine,
 	                unordered_map<idx_t, vector<LogicalType>> &info_sql_types_candidates, idx_t start_idx_detection);
@@ -213,10 +235,10 @@ private:
 	//! ------------------------------------------------------//
 	void DetectHeader();
 	static bool DetectHeaderWithSetColumn(ClientContext &context, vector<HeaderValue> &best_header_row,
-	                                      SetColumns &set_columns, CSVReaderOptions &options);
+	                                      const SetColumns &set_columns, CSVReaderOptions &options);
 	static vector<string>
 	DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &best_header_row, CSVStateMachine &state_machine,
-	                     SetColumns &set_columns,
+	                     const SetColumns &set_columns,
 	                     unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
 	                     CSVReaderOptions &options, CSVErrorHandler &error_handler);
 	vector<string> names;

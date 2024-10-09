@@ -23,8 +23,15 @@ public:
 	}
 
 public:
-	virtual void ToStream(RenderTree &root, std::ostream &ss) = 0;
+	void ToStream(RenderTree &root, std::ostream &ss);
+	virtual void ToStreamInternal(RenderTree &root, std::ostream &ss) = 0;
 	static unique_ptr<TreeRenderer> CreateRenderer(ExplainFormat format);
+
+	virtual bool UsesRawKeyNames() {
+		return false;
+	}
+	virtual void Render(const ProfilingNode &op, std::ostream &ss) {
+	}
 };
 
 } // namespace duckdb

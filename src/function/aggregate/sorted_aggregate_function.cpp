@@ -560,7 +560,8 @@ struct SortedAggregateFunction {
 		sliced.Initialize(Allocator::DefaultAllocator(), order_bind.arg_types);
 
 		//	 Reusable inner state
-		vector<data_t> agg_state(order_bind.function.state_size());
+		auto &aggr = order_bind.function;
+		vector<data_t> agg_state(aggr.state_size(aggr));
 		Vector agg_state_vec(Value::POINTER(CastPointerToValue(agg_state.data())));
 
 		// State variables
@@ -568,11 +569,11 @@ struct SortedAggregateFunction {
 		AggregateInputData aggr_bind_info(bind_info, aggr_input_data.allocator);
 
 		// Inner aggregate APIs
-		auto initialize = order_bind.function.initialize;
-		auto destructor = order_bind.function.destructor;
-		auto simple_update = order_bind.function.simple_update;
-		auto update = order_bind.function.update;
-		auto finalize = order_bind.function.finalize;
+		auto initialize = aggr.initialize;
+		auto destructor = aggr.destructor;
+		auto simple_update = aggr.simple_update;
+		auto update = aggr.update;
+		auto finalize = aggr.finalize;
 
 		auto sdata = FlatVector::GetData<SortedAggregateState *>(states);
 
@@ -631,7 +632,7 @@ struct SortedAggregateFunction {
 			}
 
 			auto scanner = make_uniq<PayloadScanner>(*global_sort);
-			initialize(agg_state.data());
+			initialize(aggr, agg_state.data());
 			while (scanner->Remaining()) {
 				chunk.Reset();
 				scanner->Scan(chunk);
@@ -648,7 +649,7 @@ struct SortedAggregateFunction {
 							destructor(agg_state_vec, aggr_bind_info, 1);
 						}
 
-						initialize(agg_state.data());
+						initialize(aggr, agg_state.data());
 					}
 					const auto input_count = MinValue(state_unprocessed[sorted], chunk.size() - consumed);
 					for (column_t col_idx = 0; col_idx < chunk.ColumnCount(); ++col_idx) {
@@ -694,7 +695,7 @@ struct SortedAggregateFunction {
 		}
 
 		for (; sorted < count; ++sorted) {
-			initialize(agg_state.data());
+			initialize(aggr, agg_state.data());
 
 			// Finalize a single value at the next offset
 			agg_state_vec.SetVectorType(states.GetVectorType());

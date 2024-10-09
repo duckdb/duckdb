@@ -253,13 +253,13 @@ public:
 		return std::move(global_stats);
 	}
 
-	void WriteDataPointers(RowGroupWriter &writer, Serializer &serializer) override {
-		serializer.WriteObject(101, "validity",
-		                       [&](Serializer &serializer) { validity_state->WriteDataPointers(writer, serializer); });
-		serializer.WriteList(102, "sub_columns", child_states.size(), [&](Serializer::List &list, idx_t i) {
-			auto &state = child_states[i];
-			list.WriteObject([&](Serializer &serializer) { state->WriteDataPointers(writer, serializer); });
-		});
+	PersistentColumnData ToPersistentData() override {
+		PersistentColumnData data(PhysicalType::STRUCT);
+		data.child_columns.push_back(validity_state->ToPersistentData());
+		for (auto &child_state : child_states) {
+			data.child_columns.push_back(child_state->ToPersistentData());
+		}
+		return data;
 	}
 };
 
@@ -278,15 +278,33 @@ unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(RowGroup &row_gro
 	return std::move(checkpoint_state);
 }
 
-void StructColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) {
-	deserializer.ReadObject(
-	    101, "validity", [&](Deserializer &deserializer) { validity.DeserializeColumn(deserializer, target_stats); });
+bool StructColumnData::IsPersistent() {
+	if (!validity.IsPersistent()) {
+		return false;
+	}
+	for (auto &child_col : sub_columns) {
+		if (!child_col->IsPersistent()) {
+			return false;
+		}
+	}
+	return true;
+}
 
-	deserializer.ReadList(102, "sub_columns", [&](Deserializer::List &list, idx_t i) {
-		auto &child_stats = StructStats::GetChildStats(target_stats, i);
-		list.ReadObject([&](Deserializer &item) { sub_columns[i]->DeserializeColumn(item, child_stats); });
-	});
+PersistentColumnData StructColumnData::Serialize() {
+	PersistentColumnData persistent_data(PhysicalType::STRUCT);
+	persistent_data.child_columns.push_back(validity.Serialize());
+	for (auto &sub_column : sub_columns) {
+		persistent_data.child_columns.push_back(sub_column->Serialize());
+	}
+	return persistent_data;
+}
 
+void StructColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
+	validity.InitializeColumn(column_data.child_columns[0], target_stats);
+	for (idx_t c_idx = 0; c_idx < sub_columns.size(); c_idx++) {
+		auto &child_stats = StructStats::GetChildStats(target_stats, c_idx);
+		sub_columns[c_idx]->InitializeColumn(column_data.child_columns[c_idx + 1], child_stats);
+	}
 	this->count = validity.count.load();
 }
 

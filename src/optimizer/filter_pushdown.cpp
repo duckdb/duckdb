@@ -1,13 +1,12 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
-
 #include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
-#include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
-#include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_window.hpp"
 
 namespace duckdb {
 
@@ -89,9 +88,16 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 		return PushdownSetOperation(std::move(op));
 	case LogicalOperatorType::LOGICAL_DISTINCT:
 		return PushdownDistinct(std::move(op));
-	case LogicalOperatorType::LOGICAL_ORDER_BY: {
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		// we can just push directly through these operations without any rewriting
 		op->children[0] = Rewrite(std::move(op->children[0]));
+		return op;
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
+		// we can't push filters into the materialized CTE (LHS), but we do want to recurse into it
+		FilterPushdown pushdown(optimizer, convert_mark_joins);
+		op->children[0] = pushdown.Rewrite(std::move(op->children[0]));
+		// we can push filters into the rest of the query plan (RHS)
+		op->children[1] = Rewrite(std::move(op->children[1]));
 		return op;
 	}
 	case LogicalOperatorType::LOGICAL_GET:
@@ -100,6 +106,8 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 		return PushdownLimit(std::move(op));
 	case LogicalOperatorType::LOGICAL_WINDOW:
 		return PushdownWindow(std::move(op));
+	case LogicalOperatorType::LOGICAL_UNNEST:
+		return PushdownUnnest(std::move(op));
 	default:
 		return FinishPushdown(std::move(op));
 	}
@@ -125,6 +133,10 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 
 	switch (join.join_type) {
 	case JoinType::INNER:
+		//	AsOf joins can't push anything into the RHS, so treat it as a left join
+		if (op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+			return PushdownLeftJoin(std::move(op), left_bindings, right_bindings);
+		}
 		return PushdownInnerJoin(std::move(op), left_bindings, right_bindings);
 	case JoinType::LEFT:
 		return PushdownLeftJoin(std::move(op), left_bindings, right_bindings);
@@ -184,6 +196,16 @@ unique_ptr<LogicalOperator> FilterPushdown::AddLogicalFilter(unique_ptr<LogicalO
 		return op;
 	}
 	auto filter = make_uniq<LogicalFilter>();
+	if (op->has_estimated_cardinality) {
+		// set the filter's estimated cardinality as the child op's.
+		// if the filter is created during the filter pushdown optimization, the estimated cardinality will be later
+		// overridden during the join order optimization to a more accurate one.
+		// if the filter is created during the statistics propagation, the estimated cardinality won't be set unless set
+		// here. assuming the filters introduced during the statistics propagation have little effect in reducing the
+		// cardinality, we adopt the the cardinality of the child. this could be improved by MinMax info from the
+		// statistics propagation
+		filter->SetEstimatedCardinality(op->estimated_cardinality);
+	}
 	filter->expressions = std::move(expressions);
 	filter->children.push_back(std::move(op));
 	return std::move(filter);

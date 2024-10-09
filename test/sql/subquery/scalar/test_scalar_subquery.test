@@ -72,6 +72,14 @@ statement ok
 INSERT INTO test VALUES (13, 22)
 
 # select single tuple only in scalar subquery
+statement error
+SELECT (SELECT a * 42 FROM test)
+----
+More than one row returned by a subquery used as an expression
+
+statement ok
+SET scalar_subquery_error_on_multiple_rows=false
+
 query I
 SELECT (SELECT a * 42 FROM test)
 ----

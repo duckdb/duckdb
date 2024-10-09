@@ -305,6 +305,8 @@ third_party/sqllogictest
 
 #imdb dataset
 third_party/imdb/data
+#taxi dataset
+benchmark/taxi/data/
 
 # Format timer
 .last_format
@@ -352,4 +354,4 @@ extension_external
 .venv-pyodide
 
 test/sql/pragma/output.json
-
+tools/pythonpkg/duckdb_build/

@@ -20,11 +20,14 @@ namespace duckdb {
 SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)), finished_processing_file(false) {
 	config = GetTestConfig();
 	config->options.allow_unredacted_secrets = true;
+	config->options.load_extensions = false;
 
 	auto env_var = std::getenv("LOCAL_EXTENSION_REPO");
 	if (!env_var) {
-		config->options.load_extensions = false;
 		config->options.autoload_known_extensions = false;
+	} else {
+		local_extension_repo = env_var;
+		config->options.autoload_known_extensions = true;
 	}
 }
 
@@ -90,6 +93,8 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 
 	try {
 		db = make_uniq<DuckDB>(dbpath, config.get());
+		// always load core functions
+		ExtensionHelper::LoadExtension(*db, "core_functions");
 	} catch (std::exception &ex) {
 		ErrorData err(ex);
 		SQLLogicTestLogger::LoadDatabaseFail(dbpath, err.Message());
@@ -121,10 +126,8 @@ void SQLLogicTestRunner::Reconnect() {
 		con->EnableQueryVerification();
 	}
 	// Set the local extension repo for autoinstalling extensions
-	auto env_var = std::getenv("LOCAL_EXTENSION_REPO");
-	if (env_var) {
-		config->options.autoload_known_extensions = true;
-		auto res1 = con->Query("SET autoinstall_extension_repository='" + string(env_var) + "'");
+	if (!local_extension_repo.empty()) {
+		auto res1 = con->Query("SET autoinstall_extension_repository='" + local_extension_repo + "'");
 	}
 }
 
@@ -414,8 +417,16 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		return RequireResult::PRESENT;
 	}
 
-	if (param == "noalternativeverify") {
+	if (param == "no_alternative_verify") {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
+
+	if (param == "no_block_verification") {
+#ifdef DUCKDB_BLOCK_VERIFICATION
 		return RequireResult::MISSING;
 #else
 		return RequireResult::PRESENT;
@@ -847,35 +858,16 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			environment_variables[env_var] = env_actual;
 
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOAD) {
-			if (InLoop()) {
-				parser.Fail("load cannot be called in a loop");
-			}
-
 			bool readonly = token.parameters.size() > 1 && token.parameters[1] == "readonly";
+			string load_db_path;
 			if (!token.parameters.empty()) {
-				dbpath = ReplaceKeywords(token.parameters[0]);
-				if (!readonly) {
-					// delete the target database file, if it exists
-					DeleteDatabase(dbpath);
-				}
+				load_db_path = ReplaceKeywords(token.parameters[0]);
 			} else {
-				dbpath = string();
+				load_db_path = string();
 			}
-			// set up the config file
-			if (readonly) {
-				config->options.use_temporary_directory = false;
-				config->options.access_mode = AccessMode::READ_ONLY;
-			} else {
-				config->options.use_temporary_directory = true;
-				config->options.access_mode = AccessMode::AUTOMATIC;
-			}
-			// now create the database file
-			LoadDatabase(dbpath, true);
+			auto command = make_uniq<LoadCommand>(*this, load_db_path, readonly);
+			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_RESTART) {
-			if (dbpath.empty()) {
-				parser.Fail("cannot restart an in-memory database, did you forget to call \"load\"?");
-			}
-
 			bool load_extensions = !(token.parameters.size() == 1 && token.parameters[0] == "no_extension_load");
 
 			// restart the current database
@@ -904,7 +896,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 
 			// file name
 			idx_t filename_start_pos = input_path.find_last_of("/") + 1;
-			if (!StringUtil::EndsWith(input_path, ".gz")) {
+			if (!StringUtil::EndsWith(input_path, CompressionExtensionFromType(FileCompressionType::GZIP))) {
 				parser.Fail("unzip: input has not a GZIP extension");
 			}
 			string filename = input_path.substr(filename_start_pos, input_path.size() - filename_start_pos - 3);

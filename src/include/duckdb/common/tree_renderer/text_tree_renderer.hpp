@@ -84,16 +84,19 @@ public:
 
 	void Render(const LogicalOperator &op, std::ostream &ss);
 	void Render(const PhysicalOperator &op, std::ostream &ss);
-	void Render(const ProfilingNode &op, std::ostream &ss);
+	void Render(const ProfilingNode &op, std::ostream &ss) override;
 	void Render(const Pipeline &op, std::ostream &ss);
 
-	void ToStream(RenderTree &root, std::ostream &ss) override;
+	void ToStreamInternal(RenderTree &root, std::ostream &ss) override;
 
 	void EnableDetailed() {
 		config.EnableDetailed();
 	}
 	void EnableStandard() {
 		config.EnableStandard();
+	}
+	bool UsesRawKeyNames() override {
+		return true;
 	}
 
 private:
