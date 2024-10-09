@@ -186,12 +186,8 @@ void QueryProfiler::EndQuery() {
 	// Print or output the query profiling after query termination.
 	// EXPLAIN ANALYZE output is not written by the profiler.
 	if (IsEnabled() && !is_explain_analyze) {
-		auto &info = root->GetProfilingInfo();
-
-		if (!root) {
-			info.metrics.erase(MetricsType::QUERY_NAME);
-
-		} else {
+		if (root) {
+			auto &info = root->GetProfilingInfo();
 			info = ProfilingInfo(ClientConfig::GetConfig(context).profiler_settings);
 			auto &child_info = root->children[0]->GetProfilingInfo();
 			info.metrics[MetricsType::QUERY_NAME] = query_info.query_name;
