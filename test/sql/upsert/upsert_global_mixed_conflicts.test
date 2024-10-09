@@ -1,0 +1,44 @@
+# name: test/sql/upsert/upsert_global_mixed_conflicts.test
+# group: [upsert]
+
+statement ok
+create table tbl (
+	number INTEGER PRIMARY KEY,
+	str VARCHAR
+);
+
+statement ok
+insert into tbl VALUES
+	(1, 'd'),
+	(3, 'nope'),
+	(2, 'n'),
+;
+
+# This insert causes both:
+# - conflicts only within the to-be-inserted-data
+# - conflicts only with the existing data
+# - both conflicts with the existing data as well as within the to-be-inserted-data
+statement ok
+insert into tbl VALUES
+	(1, 'a'),	-- conflict (existing)
+	(6, 'yep'),
+	(3, 'abc'),	-- conflict (existing)
+	(4, 'abc'),
+	(7, 'tes'),
+	(2, 'b'),	-- conflict (existing)
+	(1, 'c'),	-- conflict (existing + inner)
+	(5, 'abc'),
+	(7, 'tes'), -- conflict (inner)
+	(2, 'b')	-- conflict (existing + inner)
+ON CONFLICT (number) DO UPDATE SET str = 'e';
+
+query II
+select * from tbl;
+----
+1	e
+3	e
+2	e
+7	e
+6	yep
+4	abc
+5	abc
