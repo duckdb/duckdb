@@ -34,7 +34,7 @@ using namespace duckdb;
 using namespace std;
 
 extern "C" {
-char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, char *null_value, int columnar);
+char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, char *null_value, int columnar, char thousands);
 }
 
 static char *sqlite3_strdup(const char *str);
@@ -233,7 +233,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 	}
 }
 
-char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, char *null_value, int columnar) {
+char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, char *null_value, int columnar, char thousand_separator) {
 	try {
 		if (!pStmt) {
 			return nullptr;
@@ -277,6 +277,7 @@ char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_wid
 		if (columnar) {
 			config.render_mode = RenderMode::COLUMNS;
 		}
+		config.thousand_separator = thousand_separator;
 		config.max_width = max_width;
 		BoxRenderer renderer(config);
 		auto result_rendering =

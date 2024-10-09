@@ -324,30 +324,11 @@ string BoxRenderer::FormatNumber(const string &input) {
 		}
 		character_count++;
 	}
-	if (character_count <= 6) {
-		// we only add thousand separators if there are >= 7 digits
-		// thousand separators mostly look nice if numbers are big - for smaller numbers they add noise
-		return input;
-	}
 	// find the position of the first thousand separator
 	// we want to avoid placing the first character "alone"
 	// so our separator positions are 2, 3 or 4
 	// i.e. we format 1M as "1000 000" instead of "1 000 000"
-	idx_t separator_position;
-	switch(character_count % 3) {
-	case 0:
-		// 6, 9, 12 digits
-		separator_position = 3;
-		break;
-	case 1:
-		// 7, 10, 13 digits
-		separator_position = 4;
-		break;
-	default:
-		// 8, 11, 14 digits
-		separator_position = 2;
-		break;
-	}
+	idx_t separator_position = character_count % 3 == 0 ? 3 : character_count % 3;
 	// now add the thousand separators
 	string result;
 	for(idx_t c = 0; c < character_count; c++) {

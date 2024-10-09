@@ -34,7 +34,7 @@ struct BoxRendererConfig {
 	//! how to render NULL values
 	string null_value = "NULL";
 	//! Thousand separator (if any)
-	char thousand_separator = ' ';
+	char thousand_separator = '\0';
 	//! Whether or not to render row-wise or column-wise
 	RenderMode render_mode = RenderMode::ROWS;
 
