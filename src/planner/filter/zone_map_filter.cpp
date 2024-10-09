@@ -2,6 +2,7 @@
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
 
 namespace duckdb {
 
@@ -17,11 +18,13 @@ FilterPropagateResult ZoneMapFilter::CheckStatistics(BaseStatistics &stats) {
 		return child_filter->CheckStatistics(stats);
 	}
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	return child_filter->CheckStatistics(stats);
 }
 
 string ZoneMapFilter::ToString(const string &column_name) {
-	return child_filter->ToString(column_name);
+	D_ASSERT(child_filter->filter_type == TableFilterType::CONSTANT_COMPARISON);
+	auto const_filter = child_filter->Cast<ConstantFilter>();
+	auto val = const_filter.constant;
+	return val.ToSQLString() + " IN ZoneMap(row_group)";
 }
 
 unique_ptr<Expression> ZoneMapFilter::ToExpression(const Expression &column) const {
