@@ -1,4 +1,4 @@
-# name: test/geoparquet/unsupported.test
+# name: test/geoparquet/disabled.test
 # group: [geoparquet]
 
 require spatial
