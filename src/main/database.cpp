@@ -260,6 +260,10 @@ void DatabaseInstance::LoadExtensionSettings() {
 	}
 }
 
+static duckdb_ext_api_v0 CreateAPIv0Wrapper() {
+	return CreateAPIv0();
+}
+
 void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_config) {
 	DBConfig default_config;
 	DBConfig *config_ptr = &default_config;
@@ -269,7 +273,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	Configure(*config_ptr, database_path);
 
-	create_api_v0 = CreateAPIv0;
+	create_api_v0 = CreateAPIv0Wrapper;
 
 	if (user_config && !user_config->options.use_temporary_directory) {
 		// temporary directories explicitly disabled
