@@ -59,6 +59,7 @@ HTTPParams HTTPParams::ReadFrom(optional_ptr<FileOpener> opener, optional_ptr<Fi
 	                                 info);
 	FileOpener::TryGetCurrentSetting(opener, "ca_cert_file", result.ca_cert_file, info);
 	FileOpener::TryGetCurrentSetting(opener, "hf_max_per_page", result.hf_max_per_page, info);
+	FileOpener::TryGetCurrentSetting(opener, "enable_http_write", result.enable_http_write, info);
 
 	// HTTP Secret lookups
 	KeyValueSecretReader settings_reader(*opener, info, "http");
@@ -574,13 +575,62 @@ int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes)
 }
 
 void HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	throw NotImplementedException("Writing to HTTP files not implemented");
+	auto &hfh = handle.Cast<HTTPFileHandle>(); // Get HTTP file handle
+
+	if (!hfh.http_params.enable_http_write) {
+		throw NotImplementedException("Writing to HTTP files not implemented");
+	}
+
+	// BUG: empty requests get fired after a successful post. Ensure the buffer is non-empty and larger than 1
+	if (!buffer || nr_bytes <= 1) {
+		return;
+	}
+
+	// Prepare the URL and headers for the HTTP POST request
+	string path, proto_host_port;
+	ParseUrl(hfh.path, path, proto_host_port); // Parse URL to get path and host
+
+	// Create an empty HeaderMap and pass it to InitializeHeaders
+	HeaderMap header_map;                                          // Local HeaderMap instance
+	auto headers = InitializeHeaders(header_map, hfh.http_params); // Initialize headers
+
+	// Define the request lambda
+	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
+		auto client = GetClient(hfh.http_params, proto_host_port.c_str(), &hfh); // Get the HTTP client
+
+		// Update internal state for tracking POST requests
+		if (hfh.state) {
+			hfh.state->post_count++;
+			hfh.state->total_bytes_sent += nr_bytes;
+		}
+
+		// Create the HTTP POST request
+		duckdb_httplib_openssl::Request req;
+		req.method = "POST";
+		req.path = path;
+		req.headers = *headers;
+		req.headers.emplace("Content-Type", "application/octet-stream"); // Set content type as binary
+
+		// Set the body using the buffer content
+		req.body = std::string(static_cast<const char *>(buffer), nr_bytes);
+
+		return client->send(req); // Send the request
+	});
+
+	// Perform the HTTP POST request and handle retries
+	auto response = RunRequestWithRetry(request, hfh.path, "POST", hfh.http_params);
+
+	// Check if the response was successful (HTTP 200-299 status code)
+	if (response->code < 200 || response->code >= 300) {
+		throw HTTPException(*response, "HTTP POST request failed to '%s' with status code: %d", hfh.path.c_str(),
+		                    response->code);
+	}
 }
 
 int64_t HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	auto &hfh = (HTTPFileHandle &)handle;
-	Write(handle, buffer, nr_bytes, hfh.file_offset);
-	return nr_bytes;
+	auto &hfh = handle.Cast<HTTPFileHandle>();        // Get HTTP file handle
+	Write(handle, buffer, nr_bytes, hfh.file_offset); // Call the Write function with the current file offset
+	return nr_bytes;                                  // Return the number of bytes written
 }
 
 void HTTPFileSystem::FileSync(FileHandle &handle) {

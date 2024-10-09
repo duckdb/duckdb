@@ -42,6 +42,7 @@ struct HTTPParams {
 	static constexpr uint64_t DEFAULT_RETRY_WAIT_MS = 100;
 	static constexpr float DEFAULT_RETRY_BACKOFF = 4;
 	static constexpr bool DEFAULT_FORCE_DOWNLOAD = false;
+	static constexpr bool DEFAULT_ENABLE_HTTP_WRITE = false;
 	static constexpr bool DEFAULT_KEEP_ALIVE = true;
 	static constexpr bool DEFAULT_ENABLE_SERVER_CERT_VERIFICATION = false;
 	static constexpr uint64_t DEFAULT_HF_MAX_PER_PAGE = 0;
@@ -51,6 +52,7 @@ struct HTTPParams {
 	uint64_t retry_wait_ms = DEFAULT_RETRY_WAIT_MS;
 	float retry_backoff = DEFAULT_RETRY_BACKOFF;
 	bool force_download = DEFAULT_FORCE_DOWNLOAD;
+	bool enable_http_write = DEFAULT_ENABLE_HTTP_WRITE;
 	bool keep_alive = DEFAULT_KEEP_ALIVE;
 	bool enable_server_cert_verification = DEFAULT_ENABLE_SERVER_CERT_VERIFICATION;
 	idx_t hf_max_per_page = DEFAULT_HF_MAX_PER_PAGE;
