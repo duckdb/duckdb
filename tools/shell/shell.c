@@ -10587,7 +10587,7 @@ struct ShellState {
   EQPGraph sGraph;       /* Information for the graphical EXPLAIN QUERY PLAN */
   size_t max_rows;       /* The maximum number of rows to render in DuckBox mode */
   size_t max_width;      /* The maximum number of characters to render horizontally in DuckBox mode */
-  char thousands;        /* Thousand separator to use in DuckBox mode */
+  char thousand_sep;     /* Thousand separator to use in DuckBox mode */
 #if defined(SQLITE_ENABLE_SESSION)
   int nSession;             /* Number of active sessions */
   OpenSession aSession[4];  /* Array of sessions.  [0] is in focus. */
@@ -12750,7 +12750,7 @@ static void exec_prepared_stmt(
   if (pArg->cMode == MODE_DuckBox) {
 	  size_t max_rows = pArg->outfile[0] == '\0' || pArg->outfile[0] == '|' ? pArg->max_rows : (size_t) -1;
 	  size_t max_width = pArg->outfile[0] == '\0' || pArg->outfile[0] == '|' ? pArg->max_width : (size_t) -1;
-	  char *str = sqlite3_print_duckbox(pStmt, max_rows, max_width, pArg->nullValue, pArg->columns, pArg->thousands);
+	  char *str = sqlite3_print_duckbox(pStmt, max_rows, max_width, pArg->nullValue, pArg->columns, pArg->thousand_sep);
 	  if (str) {
 		  utf8_printf(pArg->out, "%s", str);
 		  sqlite3_free(str);
@@ -13614,7 +13614,7 @@ static const char *(azHelp[]) = {
 #endif
   ".tables ?TABLE?          List names of tables matching LIKE pattern TABLE",
   ".testcase NAME           Begin redirecting output to 'testcase-out.txt'",
-  ".thousand_separator SEP  Sets the thousand separator used when rendering numbers. Only for duckbox mode.",
+  ".thousand_sep SEP        Sets the thousand separator used when rendering numbers. Only for duckbox mode.",
   ".timer on|off            Turn SQL timer on or off",
 #ifdef SQLITE_DEBUG
   ".unmodule NAME ...       Unregister virtual table modules",
@@ -18619,22 +18619,22 @@ static int do_meta_command(char *zLine, ShellState *p){
       rc = 1;
     }
   }else
-  if( c=='t' && strncmp(azArg[0], "thousand_separator", n)==0 ) {
+  if( c=='t' && strncmp(azArg[0], "thousand_sep", n)==0 ) {
 	  if( nArg==1 ){
-	  	raw_printf(p->out, "current thousand separator: %c\n", p->thousands);
+	  	raw_printf(p->out, "current thousand separator: %c\n", p->thousand_sep);
 	  }else
 	  	if( nArg!=2 ) {
-	  		raw_printf(stderr, "Usage: .thousand_separator sep\n");
+	  		raw_printf(stderr, "Usage: .thousand_sep sep\n");
 	  		rc = 1;
 	  	} else if (strcmp(azArg[1], "space") == 0) {
-	  		p->thousands = ' ';
+	  		p->thousand_sep = ' ';
 	  	} else if (strcmp(azArg[1], "none") == 0) {
-	  		p->thousands = '\0';
+	  		p->thousand_sep = '\0';
 	  	} else if (strlen(azArg[1]) != 1) {
-	  		raw_printf(stderr, ".thousand_separator must be one byte, \"space\" or \"none\"\n");
+	  		raw_printf(stderr, ".thousand_sep SEP must be one byte, \"space\" or \"none\"\n");
 	  		rc = 1;
 	  	} else {
-	  		p->thousands = azArg[1][0];
+	  		p->thousand_sep = azArg[1][0];
 	  	}
   }else
   if( (c=='t' && n>1 && strncmp(azArg[0], "tables", n)==0)
