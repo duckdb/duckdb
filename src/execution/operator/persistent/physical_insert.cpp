@@ -321,7 +321,13 @@ static map<idx_t, vector<idx_t>> CheckDistinctness(DataChunk &input, ConflictInf
 
 	auto &column_ids = info.column_ids;
 	ValidityMask valid(input.size());
-	D_ASSERT(!column_ids.empty());
+	if (column_ids.empty()) {
+		// FIXME: this happens for "INSERT OR REPLACE" or "ON CONFLICT DO .."" (without specific columns)
+		// what we likely need to do is run through all the existing indexes to figure out on which columns they act
+		// and use those same column ids here (running multiple times for each distinct column id set)
+		return conflicts;
+	}
+
 	for (idx_t i = 0; i < input.size(); i++) {
 		if (!valid.RowIsValid(i)) {
 			// Already a conflict
@@ -465,6 +471,11 @@ static idx_t HandleUndetectedInsertConflicts(TableCatalogEntry &table, Execution
 	// FIXME: this messes with the insertion order, probably want a better solution than this
 	// maybe an idea would be to provide a set of row_ids this should create
 	// which would create gaps that we fill with the other LocalAppend ??
+
+	// FIXME: this is problematic, since we perform this insert from 'HandleInsertConflicts', we have the possibility of
+	// violating a unique constraint if the data is not present in GLOBAL=true but IS present in GLOBAL=false (or vice
+	// versa), then this insert can cause: "Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key
+	// ..."
 	storage.LocalAppend(gstate.append_state, table, context.client, insert_chunk, true);
 	return insert_chunk.size();
 }
