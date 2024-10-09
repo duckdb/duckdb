@@ -312,7 +312,7 @@ string BoxRenderer::ConvertRenderValue(const string &input) {
 }
 
 string BoxRenderer::FormatNumber(const string &input) {
-	if (config.thousand_separator == '\0') {
+	if (config.decimal_separator == '\0' && config.thousand_separator == '\0') {
 		// no thousand separator
 		return input;
 	}
@@ -332,7 +332,7 @@ string BoxRenderer::FormatNumber(const string &input) {
 	// now add the thousand separators
 	string result;
 	for (idx_t c = 0; c < character_count; c++) {
-		if (c == separator_position) {
+		if (c == separator_position && config.thousand_separator != '\0') {
 			result += config.thousand_separator;
 			separator_position += 3;
 		}
@@ -340,7 +340,11 @@ string BoxRenderer::FormatNumber(const string &input) {
 	}
 	// add any remaining characters
 	for (idx_t c = character_count; c < input.size(); c++) {
-		result += input[c];
+		if (input[c] == '.' && config.decimal_separator != '\0') {
+			result += config.decimal_separator;
+		} else {
+			result += input[c];
+		}
 	}
 	return result;
 }

@@ -33,6 +33,8 @@ struct BoxRendererConfig {
 	idx_t max_col_width = 20;
 	//! how to render NULL values
 	string null_value = "NULL";
+	//! Decimal separator (if any)
+	char decimal_separator = '\0';
 	//! Thousand separator (if any)
 	char thousand_separator = '\0';
 	//! Whether or not to render row-wise or column-wise

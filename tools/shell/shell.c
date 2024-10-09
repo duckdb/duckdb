@@ -10587,6 +10587,7 @@ struct ShellState {
   EQPGraph sGraph;       /* Information for the graphical EXPLAIN QUERY PLAN */
   size_t max_rows;       /* The maximum number of rows to render in DuckBox mode */
   size_t max_width;      /* The maximum number of characters to render horizontally in DuckBox mode */
+  char decimal_sep;      /* Decimal separator to use in DuckBox mode */
   char thousand_sep;     /* Thousand separator to use in DuckBox mode */
 #if defined(SQLITE_ENABLE_SESSION)
   int nSession;             /* Number of active sessions */
@@ -12737,7 +12738,7 @@ columnar_end:
   sqlite3_free(azData);
 }
 
-extern char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, char *null_value, int columns, char thousands);
+extern char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, char *null_value, int columns, char thousands, char decimal_sep);
 
 /*
 ** Run a prepared statement
@@ -12750,7 +12751,7 @@ static void exec_prepared_stmt(
   if (pArg->cMode == MODE_DuckBox) {
 	  size_t max_rows = pArg->outfile[0] == '\0' || pArg->outfile[0] == '|' ? pArg->max_rows : (size_t) -1;
 	  size_t max_width = pArg->outfile[0] == '\0' || pArg->outfile[0] == '|' ? pArg->max_width : (size_t) -1;
-	  char *str = sqlite3_print_duckbox(pStmt, max_rows, max_width, pArg->nullValue, pArg->columns, pArg->thousand_sep);
+	  char *str = sqlite3_print_duckbox(pStmt, max_rows, max_width, pArg->nullValue, pArg->columns, pArg->thousand_sep, pArg->decimal_sep);
 	  if (str) {
 		  utf8_printf(pArg->out, "%s", str);
 		  sqlite3_free(str);
@@ -13448,6 +13449,7 @@ static const char *(azHelp[]) = {
   ".constantcode ?CODE?     Sets the syntax highlighting terminal code used for constant values",
 #endif
   ".databases               List names and files of attached databases",
+  ".decimal_sep SEP         Sets the decimal separator used when rendering numbers. Only for duckbox mode.",
   ".dump ?TABLE?            Render database content as SQL",
   "   Options:",
   "     --preserve-rowids      Include ROWID values in the output",
@@ -18618,6 +18620,24 @@ static int do_meta_command(char *zLine, ShellState *p){
       raw_printf(stderr, "Usage: .stats ?on|off?\n");
       rc = 1;
     }
+  }else
+  if( c=='d' && strncmp(azArg[0], "decimal_sep", n)==0 ) {
+  	if( nArg==1 ){
+  		raw_printf(p->out, "current decimal separator: %c\n", p->decimal_sep);
+  	}else
+  		if( nArg!=2 ) {
+  			raw_printf(stderr, "Usage: .decimal_sep sep\n");
+  			rc = 1;
+  		} else if (strcmp(azArg[1], "space") == 0) {
+  			p->decimal_sep = ' ';
+  		} else if (strcmp(azArg[1], "none") == 0) {
+  			p->decimal_sep = '\0';
+  		} else if (strlen(azArg[1]) != 1) {
+  			raw_printf(stderr, ".decimal_sep SEP must be one byte, \"space\" or \"none\"\n");
+  			rc = 1;
+  		} else {
+  			p->decimal_sep = azArg[1][0];
+  		}
   }else
   if( c=='t' && strncmp(azArg[0], "thousand_sep", n)==0 ) {
 	  if( nArg==1 ){
