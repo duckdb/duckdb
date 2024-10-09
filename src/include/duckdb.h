@@ -3510,6 +3510,22 @@ DUCKDB_API duckdb_state duckdb_appender_create(duckdb_connection connection, con
                                                duckdb_appender *out_appender);
 
 /*!
+Creates an appender object.
+
+Note that the object must be destroyed with `duckdb_appender_destroy`.
+
+* @param connection The connection context to create the appender in.
+* @param catalog The catalog of the table to append to, or `nullptr` for the default catalog.
+* @param schema The schema of the table to append to, or `nullptr` for the default schema.
+* @param table The table name to append to.
+* @param out_appender The resulting appender object.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_appender_create_ext(duckdb_connection connection, const char *catalog,
+                                                   const char *schema, const char *table,
+                                                   duckdb_appender *out_appender);
+
+/*!
 Returns the number of columns in the table that belongs to the appender.
 
 * @param appender The appender to get the column count from.
