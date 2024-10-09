@@ -177,7 +177,14 @@ void GeoParquetColumnMetadataWriter::Update(GeoParquetColumnMetadata &meta, Vect
 //------------------------------------------------------------------------------
 
 unique_ptr<GeoParquetFileMetadata>
-GeoParquetFileMetadata::TryRead(const duckdb_parquet::format::FileMetaData &file_meta_data, ClientContext &context) {
+GeoParquetFileMetadata::TryRead(const duckdb_parquet::format::FileMetaData &file_meta_data,
+                                const ClientContext &context) {
+
+	// Conversion not allowed!
+	if (!IsGeoParquetConversionEnabled(context)) {
+		return nullptr;
+	}
+
 	for (auto &kv : file_meta_data.key_value_metadata) {
 		if (kv.key == "geo") {
 			const auto geo_metadata = yyjson_read(kv.value.c_str(), kv.value.size(), 0);
@@ -187,10 +194,8 @@ GeoParquetFileMetadata::TryRead(const duckdb_parquet::format::FileMetaData &file
 			}
 
 			// Check if the spatial extension is loaded, or try to autoload it.
-			const auto is_loaded = ExtensionHelper::TryAutoLoadExtension(context, "spatial");
-			if (!is_loaded) {
-				// Spatial extension is not available, we can't make use of the metadata anyway.
-				yyjson_doc_free(geo_metadata);
+			if (!context.db->ExtensionIsLoaded("spatial")) {
+				// Spatial extension is not loaded, we can't make use of the metadata anyway.
 				return nullptr;
 			}
 
@@ -366,6 +371,18 @@ void GeoParquetFileMetadata::RegisterGeometryColumn(const string &column_name) {
 		primary_geometry_column = column_name;
 	}
 	geometry_columns[column_name] = GeoParquetColumnMetadata();
+}
+
+bool GeoParquetFileMetadata::IsGeoParquetConversionEnabled(const ClientContext &context) {
+	Value geoparquet_enabled;
+	if (context.TryGetCurrentSetting("enable_geoparquet_conversion", geoparquet_enabled)) {
+		const auto is_enabled = geoparquet_enabled.GetValue<bool>();
+		if (!is_enabled) {
+			return false;
+		}
+		return true;
+	}
+	return false;
 }
 
 unique_ptr<ColumnReader> GeoParquetFileMetadata::CreateColumnReader(ParquetReader &reader,
