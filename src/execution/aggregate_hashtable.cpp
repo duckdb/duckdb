@@ -132,7 +132,11 @@ idx_t GroupedAggregateHashTable::Capacity() const {
 }
 
 idx_t GroupedAggregateHashTable::ResizeThreshold() const {
-	return LossyNumericCast<idx_t>(static_cast<double>(Capacity()) / LOAD_FACTOR);
+	return ResizeThreshold(Capacity());
+}
+
+idx_t GroupedAggregateHashTable::ResizeThreshold(const idx_t capacity) {
+	return LossyNumericCast<idx_t>(static_cast<double>(capacity) / LOAD_FACTOR);
 }
 
 idx_t GroupedAggregateHashTable::ApplyBitMask(hash_t hash) const {

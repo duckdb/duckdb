@@ -461,7 +461,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 	auto &ht = *lstate.ht;
 	ht.AddChunk(group_chunk, payload_input, filter);
 
-	if (ht.Count() + STANDARD_VECTOR_SIZE < gstate.config.sink_capacity) {
+	if (ht.Count() + STANDARD_VECTOR_SIZE < GroupedAggregateHashTable::ResizeThreshold(gstate.config.sink_capacity)) {
 		return; // We can fit another chunk
 	}
 
@@ -569,15 +569,15 @@ idx_t RadixPartitionedHashTable::MaxThreads(GlobalSinkState &sink_p) const {
 
 	const auto max_threads = MinValue<idx_t>(
 	    NumericCast<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads()), sink.partitions.size());
-	sink.temporary_memory_state->SetRemainingSizeAndUpdateReservation(sink.context,
-	                                                                  max_threads * sink.max_partition_size);
+	sink.temporary_memory_state->SetRemainingSizeAndUpdateReservation(
+	    sink.context, sink.stored_allocators_size + max_threads * sink.max_partition_size);
 
 	// we cannot spill aggregate state memory
 	const auto usable_memory = sink.temporary_memory_state->GetReservation() > sink.stored_allocators_size
 	                               ? sink.temporary_memory_state->GetReservation() - sink.max_partition_size
 	                               : 0;
 	// This many partitions will fit given our reservation (at least 1))
-	const auto partitions_fit = MaxValue<idx_t>(usable_memory / sink.stored_allocators_size, 1);
+	const auto partitions_fit = MaxValue<idx_t>(usable_memory / sink.max_partition_size, 1);
 
 	// Mininum of the two
 	return MinValue<idx_t>(partitions_fit, max_threads);
