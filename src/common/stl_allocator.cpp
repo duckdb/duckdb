@@ -10,7 +10,7 @@
 
 namespace duckdb {
 
-AllocationFunctions GetDefaultAllocationFunctions() {
+static AllocationFunctions GetDefaultAllocationFunctions() {
 	AllocationFunctions result(nullptr, nullptr, nullptr);
 #ifdef USE_JEMALLOC
 	result = JemallocExtension::GetAllocationFunctions();
@@ -24,5 +24,7 @@ AllocationFunctions GetDefaultAllocationFunctions() {
 	          DEFAULT_ALLOCATION_FUNCTIONS.free == result.free));
 	return result;
 }
+
+AllocationFunctions DEFAULT_ALLOCATION_FUNCTIONS = GetDefaultAllocationFunctions(); // NOLINT: non-const on purpose
 
 } // namespace duckdb

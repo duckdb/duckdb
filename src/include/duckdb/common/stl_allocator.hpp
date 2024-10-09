@@ -37,8 +37,7 @@ public:
 	free_function_t free = nullptr;
 };
 
-DUCKDB_API AllocationFunctions GetDefaultAllocationFunctions();
-static AllocationFunctions DEFAULT_ALLOCATION_FUNCTIONS = GetDefaultAllocationFunctions(); // NOLINT: non-const static
+extern AllocationFunctions DEFAULT_ALLOCATION_FUNCTIONS; // NOLINT: non-const on purpose
 
 template <class T>
 T *stl_new_array_uninitialized(size_t size) { // NOLINT: not using camelcase on purpose here
