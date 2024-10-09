@@ -14,9 +14,6 @@ from duckdb.experimental.spark.sql.types import (
     ArrayType,
     MapType,
 )
-from duckdb.experimental.spark.sql.functions import col, struct, when
-import duckdb
-import re
 
 from duckdb.experimental.spark.errors import PySparkValueError, PySparkTypeError
 
@@ -162,6 +159,22 @@ class TestDataFrame(object):
 
     def test_df_from_name_list(self, spark):
         df = spark.createDataFrame([(42, True), (21, False)], ['a', 'b'])
+        res = df.collect()
+        assert res == [Row(a=42, b=True), Row(a=21, b=False)]
+
+    def test_df_from_dict(self, spark):
+        df = spark.createDataFrame([{'a': 42, 'b': True}, {'b': False, 'a': 21}])
+        res = df.collect()
+        assert res == [Row(a=42, b=True), Row(a=21, b=False)]
+
+    def test_df_from_dict_with_schema(self, spark):
+        schema = StructType([StructField('a', LongType()), StructField('b', BooleanType())])
+        df = spark.createDataFrame([{'a': 42, 'b': True}, {'b': False, 'a': 21}], schema)
+        res = df.collect()
+        assert res == [Row(a=42, b=True), Row(a=21, b=False)]
+
+    def test_df_from_dict_with_name_list(self, spark):
+        df = spark.createDataFrame([{'a': 42, 'b': True}, {'b': False, 'a': 21}], ['a', 'b'])
         res = df.collect()
         assert res == [Row(a=42, b=True), Row(a=21, b=False)]
 
