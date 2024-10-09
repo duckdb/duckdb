@@ -382,3 +382,11 @@ class TestDataFrame(object):
         rows = df.head(2)
         take = df.take(2)
         assert rows == take == expected
+
+    def test_drop(self, spark):
+        data = [(1, 2, 3, 4)]
+        df = spark.createDataFrame(data, ["one", "two", "three", "four"])
+        expected = ["one", "four"]
+        assert df.drop("two", "three").columns == expected
+        assert df.drop("two", col("three")).columns == expected
+        assert df.drop("two", col("three"), col("missing")).columns == expected

@@ -367,9 +367,10 @@ SchemaCatalogEntry &Catalog::GetSchema(CatalogTransaction transaction, const str
 //===--------------------------------------------------------------------===//
 // Lookup
 //===--------------------------------------------------------------------===//
-SimilarCatalogEntry Catalog::SimilarEntryInSchemas(ClientContext &context, const string &entry_name, CatalogType type,
-                                                   const reference_set_t<SchemaCatalogEntry> &schemas) {
-	SimilarCatalogEntry result;
+vector<SimilarCatalogEntry> Catalog::SimilarEntriesInSchemas(ClientContext &context, const string &entry_name,
+                                                             CatalogType type,
+                                                             const reference_set_t<SchemaCatalogEntry> &schemas) {
+	vector<SimilarCatalogEntry> results;
 	for (auto schema_ref : schemas) {
 		auto &schema = schema_ref.get();
 		auto transaction = schema.catalog.GetCatalogTransaction(context);
@@ -378,12 +379,16 @@ SimilarCatalogEntry Catalog::SimilarEntryInSchemas(ClientContext &context, const
 			// no similar entry found
 			continue;
 		}
-		if (!result.Found() || result.score < entry.score) {
-			result = entry;
-			result.schema = &schema;
+		if (results.empty() || results[0].score <= entry.score) {
+			if (!results.empty() && results[0].score < entry.score) {
+				results.clear();
+			}
+
+			results.push_back(entry);
+			results.back().schema = &schema;
 		}
 	}
-	return result;
+	return results;
 }
 
 vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, const string &catalog,
@@ -493,25 +498,38 @@ static bool IsAutoloadableFunction(CatalogType type) {
 	        type == CatalogType::AGGREGATE_FUNCTION_ENTRY || type == CatalogType::PRAGMA_FUNCTION_ENTRY);
 }
 
+bool IsTableFunction(CatalogType type) {
+	switch (type) {
+	case CatalogType::TABLE_FUNCTION_ENTRY:
+	case CatalogType::TABLE_MACRO_ENTRY:
+	case CatalogType::PRAGMA_FUNCTION_ENTRY:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool IsScalarFunction(CatalogType type) {
+	switch (type) {
+	case CatalogType::SCALAR_FUNCTION_ENTRY:
+	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
+	case CatalogType::MACRO_ENTRY:
+		return true;
+	default:
+		return false;
+	}
+}
+
 static bool CompareCatalogTypes(CatalogType type_a, CatalogType type_b) {
 	if (type_a == type_b) {
 		// Types are same
 		return true;
 	}
-	if (!IsAutoloadableFunction(type_a)) {
-		D_ASSERT(IsAutoloadableFunction(type_b));
-		// Make sure that `type_a` is an autoloadable function
-		return CompareCatalogTypes(type_b, type_a);
+	if (IsScalarFunction(type_a) && IsScalarFunction(type_b)) {
+		return true;
 	}
-	if (type_a == CatalogType::TABLE_FUNCTION_ENTRY) {
-		// These are all table functions
-		return type_b == CatalogType::TABLE_MACRO_ENTRY || type_b == CatalogType::PRAGMA_FUNCTION_ENTRY;
-	} else if (type_a == CatalogType::SCALAR_FUNCTION_ENTRY) {
-		// These are all scalar functions
-		return type_b == CatalogType::MACRO_ENTRY;
-	} else if (type_a == CatalogType::PRAGMA_FUNCTION_ENTRY) {
-		// These are all table functions
-		return type_b == CatalogType::TABLE_MACRO_ENTRY || type_b == CatalogType::TABLE_FUNCTION_ENTRY;
+	if (IsTableFunction(type_a) && IsTableFunction(type_b)) {
+		return true;
 	}
 	return false;
 }
@@ -575,7 +593,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
                                                       const reference_set_t<SchemaCatalogEntry> &schemas,
                                                       QueryErrorContext error_context) {
 	auto &context = retriever.GetContext();
-	auto entry = SimilarEntryInSchemas(context, entry_name, type, schemas);
+	auto entries = SimilarEntriesInSchemas(context, entry_name, type, schemas);
 
 	reference_set_t<SchemaCatalogEntry> unseen_schemas;
 	auto &db_manager = DatabaseManager::Get(context);
@@ -655,20 +673,36 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 	// entries in other schemas get a penalty
 	// however, if there is an exact match in another schema, we will always show it
 	static constexpr const double UNSEEN_PENALTY = 0.2;
-	auto unseen_entry = SimilarEntryInSchemas(context, entry_name, type, unseen_schemas);
-	string did_you_mean;
-	if (unseen_entry.Found() && (unseen_entry.score == 1.0 || unseen_entry.score - UNSEEN_PENALTY > entry.score)) {
+	auto unseen_entries = SimilarEntriesInSchemas(context, entry_name, type, unseen_schemas);
+	vector<string> suggestions;
+	if (!unseen_entries.empty() && (unseen_entries[0].score == 1.0 || unseen_entries[0].score - UNSEEN_PENALTY >
+	                                                                      (entries.empty() ? 0.0 : entries[0].score))) {
 		// the closest matching entry requires qualification as it is not in the default search path
 		// check how to minimally qualify this entry
-		auto catalog_name = unseen_entry.schema->catalog.GetName();
-		auto schema_name = unseen_entry.schema->name;
-		bool qualify_database;
-		bool qualify_schema;
-		FindMinimalQualification(retriever, catalog_name, schema_name, qualify_database, qualify_schema);
-		did_you_mean = unseen_entry.GetQualifiedName(qualify_database, qualify_schema);
-	} else if (entry.Found()) {
-		did_you_mean = entry.name;
+		for (auto &unseen_entry : unseen_entries) {
+			auto catalog_name = unseen_entry.schema->catalog.GetName();
+			auto schema_name = unseen_entry.schema->name;
+			bool qualify_database;
+			bool qualify_schema;
+			FindMinimalQualification(retriever, catalog_name, schema_name, qualify_database, qualify_schema);
+			suggestions.push_back(unseen_entry.GetQualifiedName(qualify_database, qualify_schema));
+		}
+	} else if (!entries.empty()) {
+		for (auto &entry : entries) {
+			suggestions.push_back(entry.name);
+		}
 	}
+
+	string did_you_mean;
+	std::sort(suggestions.begin(), suggestions.end());
+	if (suggestions.size() > 2) {
+		auto last = suggestions.back();
+		suggestions.pop_back();
+		did_you_mean = StringUtil::Join(suggestions, ", ") + ", or " + last;
+	} else {
+		did_you_mean = StringUtil::Join(suggestions, " or ");
+	}
+
 	return CatalogException::MissingEntry(type, entry_name, did_you_mean, error_context);
 }
 

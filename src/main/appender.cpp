@@ -53,12 +53,16 @@ InternalAppender::~InternalAppender() {
 	Destructor();
 }
 
-Appender::Appender(Connection &con, const string &schema_name, const string &table_name)
+Appender::Appender(Connection &con, const string &database_name, const string &schema_name, const string &table_name)
     : BaseAppender(Allocator::DefaultAllocator(), AppenderType::LOGICAL), context(con.context) {
-	description = con.TableInfo(schema_name, table_name);
+
+	description = con.TableInfo(database_name, schema_name, table_name);
 	if (!description) {
 		// table could not be found
 		throw CatalogException(StringUtil::Format("Table \"%s.%s\" could not be found", schema_name, table_name));
+	}
+	if (description->readonly) {
+		throw InvalidInputException("Cannot append to a readonly database.");
 	}
 	vector<optional_ptr<const ParsedExpression>> defaults;
 	for (auto &column : description->columns) {
@@ -97,7 +101,12 @@ Appender::Appender(Connection &con, const string &schema_name, const string &tab
 	collection = make_uniq<ColumnDataCollection>(allocator, types);
 }
 
-Appender::Appender(Connection &con, const string &table_name) : Appender(con, DEFAULT_SCHEMA, table_name) {
+Appender::Appender(Connection &con, const string &schema_name, const string &table_name)
+    : Appender(con, INVALID_CATALOG, schema_name, table_name) {
+}
+
+Appender::Appender(Connection &con, const string &table_name)
+    : Appender(con, INVALID_CATALOG, DEFAULT_SCHEMA, table_name) {
 }
 
 Appender::~Appender() {
