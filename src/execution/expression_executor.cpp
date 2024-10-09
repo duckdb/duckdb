@@ -170,10 +170,18 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression
 void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
 #ifdef DEBUG
-	// the result vector has to be used for the first time or has to be reset
-	// otherwise, the validity mask might contain previous (now incorrect) data
+	// The result vector must be used for the first time, or must be reset.
+	// Otherwise, the validity mask can contain previous (now incorrect) data.
 	if (result.GetVectorType() == VectorType::FLAT_VECTOR) {
-		D_ASSERT(FlatVector::Validity(result).CheckAllValid(count));
+		auto expr_class = expr.GetExpressionClass();
+
+		// We do not initialize vector caches for these expressions.
+		if (expr_class != ExpressionClass::BOUND_REF && expr_class != ExpressionClass::BOUND_CONSTANT &&
+		    expr_class != ExpressionClass::BOUND_PARAMETER) {
+
+			auto validity = FlatVector::Validity(result);
+			D_ASSERT(validity.CheckAllValid(count));
+		}
 	}
 #endif
 
