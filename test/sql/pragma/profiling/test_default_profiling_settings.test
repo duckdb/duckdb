@@ -1,0 +1,50 @@
+# name: test/sql/pragma/profiling/test_default_profiling_settings.test
+# description: Test default profiling settings.
+# group: [profiling]
+
+require json
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
+
+statement ok
+PRAGMA disable_profiling;
+
+# Evaluate results.
+
+query I
+SELECT unnest(res) FROM (
+	SELECT current_setting('custom_profiling_settings') AS raw_setting,
+	raw_setting.trim('{}') AS setting,
+	string_split(setting, ', ') AS res
+) ORDER BY ALL
+----
+"BLOCKED_THREAD_TIME": "true"
+"CPU_TIME": "true"
+"CUMULATIVE_CARDINALITY": "true"
+"CUMULATIVE_ROWS_SCANNED": "true"
+"EXTRA_INFO": "true"
+"LATENCY": "true"
+"OPERATOR_CARDINALITY": "true"
+"OPERATOR_ROWS_SCANNED": "true"
+"OPERATOR_TIMING": "true"
+"OPERATOR_TYPE": "true"
+"QUERY_NAME": "true"
+"RESULT_SET_SIZE": "true"
+"ROWS_RETURNED": "true"
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+
+statement ok
+SELECT cpu_time, extra_info, rows_returned, latency FROM metrics_output;
+

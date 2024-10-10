@@ -1,0 +1,41 @@
+# name: test/sql/pragma/profiling/test_custom_profiling_blocked_thread_time.test
+# description: Test BLOCKED_THREAD_TIME metric.
+# group: [profiling]
+
+require json
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+PRAGMA threads = 4;
+
+statement ok
+CREATE TABLE bigdata AS SELECT i AS col_a, i AS col_b FROM range(0, 10000) tbl(i);
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"BLOCKED_THREAD_TIME": "true"}';
+
+statement ok
+SELECT (SELECT COUNT(*) FROM bigdata WHERE col_a = 1) + (SELECT COUNT(*) FROM bigdata WHERE col_b = 1);
+
+statement ok
+PRAGMA disable_profiling;
+
+query I
+SELECT unnest(res) from (
+	select current_setting('custom_profiling_settings') as raw_setting,
+	raw_setting.trim('{}') as setting,
+	string_split(setting, ', ') as res
+) ORDER BY ALL
+----
+"BLOCKED_THREAD_TIME": "true"
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';

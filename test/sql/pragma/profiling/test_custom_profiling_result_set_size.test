@@ -1,0 +1,35 @@
+# name: test/sql/pragma/profiling/test_custom_profiling_result_set_size.test
+# description: Test RESULT_SET_SIZE metric.
+# group: [profiling]
+
+require json
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"RESULT_SET_SIZE": "true", "OPERATOR_CARDINALITY": "true"}'
+
+statement ok
+SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+
+# Expected size: 144 = 9 (length of list) * 12 (size of a string)
+query I
+SELECT
+	CASE WHEN result_set_size = 144 THEN 'true'
+	ELSE 'false' END
+FROM metrics_output;
+----
+true

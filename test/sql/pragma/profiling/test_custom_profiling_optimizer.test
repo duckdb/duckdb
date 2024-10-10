@@ -1,6 +1,6 @@
-# name: test/sql/pragma/test_custom_optimizer_profiling.test
-# description: Test PRAGMA custom_profiling_settings with optimizers
-# group: [pragma]
+# name: test/sql/pragma/profiling/test_custom_profiling_optimizer.test
+# description: Test profiling the optimizer.
+# group: [profiling]
 
 require json
 
@@ -11,23 +11,22 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = 'test/sql/pragma/output.json';
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
 
-# Turn on all optimizer settings
 statement ok
 PRAGMA custom_profiling_settings='{"ALL_OPTIMIZERS": "true"}'
 
 statement ok
-select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();
+SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
 
 statement ok
 PRAGMA disable_profiling;
 
 query I
-SELECT unnest(res) from (
-	select current_setting('custom_profiling_settings') as raw_setting,
-	raw_setting.trim('{}') as setting,
-	string_split(setting, ', ') as res
+SELECT unnest(res) FROM (
+	SELECT current_setting('custom_profiling_settings') as raw_setting,
+	raw_setting.trim('{}') AS setting,
+	string_split(setting, ', ') AS res
 ) ORDER BY ALL
 ----
 "ALL_OPTIMIZERS": "true"
@@ -55,100 +54,90 @@ SELECT unnest(res) from (
 "OPTIMIZER_UNNEST_REWRITER": "true"
 "OPTIMIZER_UNUSED_COLUMNS": "true"
 
-# Turn all settings off
 statement ok
 PRAGMA custom_profiling_settings='{}'
 
 statement ok
-select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();
+SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
 
 query I rowsort
-SELECT unnest(res) from (
-	select current_setting('custom_profiling_settings') as raw_setting,
-	raw_setting.trim('{}') as setting,
-	string_split(setting, ', ') as res
+SELECT unnest(res) FROM (
+	SELECT current_setting('custom_profiling_settings') AS raw_setting,
+	raw_setting.trim('{}') AS setting,
+	string_split(setting, ', ') AS res
 )
 ----
 (empty)
 
-# Turn only one setting on
 statement ok
 PRAGMA custom_profiling_settings='{"OPTIMIZER_JOIN_ORDER": "true"}'
 
 statement ok
-select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();
+SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
 
 statement ok
-PRAGMA disable_profiling
+PRAGMA disable_profiling;
 
 query I rowsort
-SELECT unnest(res) from (
-	select current_setting('custom_profiling_settings') as raw_setting,
-	raw_setting.trim('{}') as setting,
-	string_split(setting, ', ') as res
-)
+SELECT unnest(res) FROM (
+	SELECT current_setting('custom_profiling_settings') AS raw_setting,
+	raw_setting.trim('{}') AS setting,
+	string_split(setting, ', ') AS res
+) ORDER BY ALL;
 ----
 "OPTIMIZER_JOIN_ORDER": "true"
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM 'test/sql/pragma/output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
 
-# test if optimizer_join_order actually records timings
 query I
 SELECT 
-CASE 
-    WHEN optimizer_join_order > 0 THEN 'true'
-    ELSE 'false'
-END
+	CASE WHEN optimizer_join_order > 0 THEN 'true'
+    ELSE 'false' END
 FROM metrics_output;
 ----
 true
 
-# disable join_order optimizer and check that it is not collected
 statement ok
-SET disabled_optimizers = 'JOIN_ORDER'
-
-# Turn only one setting on
-statement ok
-PRAGMA custom_profiling_settings='{"OPTIMIZER_JOIN_ORDER": "true"}'
+SET disabled_optimizers = 'JOIN_ORDER';
 
 statement ok
-select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();
+PRAGMA custom_profiling_settings='{"OPTIMIZER_JOIN_ORDER": "true"}';
+
+statement ok
+SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
 
 query I rowsort
-SELECT unnest(res) from (
-	select current_setting('custom_profiling_settings') as raw_setting,
-	raw_setting.trim('{}') as setting,
-	string_split(setting, ', ') as res
-)
+SELECT unnest(res) FROM (
+	SELECT current_setting('custom_profiling_settings') AS raw_setting,
+	raw_setting.trim('{}') AS setting,
+	string_split(setting, ', ') AS res
+) ORDER BY ALL
 ----
 (empty)
 
-# Test Cumulative Optimizer
 statement ok
-PRAGMA custom_profiling_settings='{"CUMULATIVE_OPTIMIZER_TIMING": "true"}'
+PRAGMA custom_profiling_settings='{"CUMULATIVE_OPTIMIZER_TIMING": "true"}';
 
 statement ok
-select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();
+SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
 
 statement ok
-PRAGMA disable_profiling
+PRAGMA disable_profiling;
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM 'test/sql/pragma/output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
 
-# test if cumulative optimizer actually records timings
 query I
 SELECT 
-CASE 
-    WHEN cumulative_optimizer_timing > 0 THEN 'true'
-    ELSE 'false'
-END
+	CASE WHEN cumulative_optimizer_timing > 0 THEN 'true'
+    ELSE 'false' END
 FROM metrics_output;
 ----
 true
 
-# test if all phase timings are added when detailed profiling is on
+# All phase timings must be collected when using detailed profiling mode.
+
 statement ok
 RESET custom_profiling_settings;
 
@@ -159,13 +148,13 @@ statement ok
 PRAGMA enable_profiling;
 
 statement ok
-select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();
+SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
 
 query I
-SELECT unnest(res) from (
-	select current_setting('custom_profiling_settings') as raw_setting,
-	raw_setting.trim('{}') as setting,
-	string_split(setting, ', ') as res
+SELECT unnest(res) FROM (
+	SELECT current_setting('custom_profiling_settings') AS raw_setting,
+	raw_setting.trim('{}') AS setting,
+	string_split(setting, ', ') AS res
 ) ORDER BY ALL
 ----
 "ALL_OPTIMIZERS": "true"
@@ -175,6 +164,7 @@ SELECT unnest(res) from (
 "CUMULATIVE_OPTIMIZER_TIMING": "true"
 "CUMULATIVE_ROWS_SCANNED": "true"
 "EXTRA_INFO": "true"
+"LATENCY": "true"
 "OPERATOR_CARDINALITY": "true"
 "OPERATOR_ROWS_SCANNED": "true"
 "OPERATOR_TIMING": "true"
@@ -210,8 +200,8 @@ SELECT unnest(res) from (
 "PLANNER_BINDING": "true"
 "QUERY_NAME": "true"
 "RESULT_SET_SIZE": "true"
+"ROWS_RETURNED": "true"
 
-# Test if phase timings are not added if detailed mode is off
 statement ok
 RESET custom_profiling_settings;
 
@@ -219,25 +209,25 @@ statement ok
 PRAGMA profiling_mode = 'standard';
 
 statement ok
-select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();
+SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
 
 query I
-SELECT unnest(res) from (
-	select current_setting('custom_profiling_settings') as raw_setting,
-	raw_setting.trim('{}') as setting,
-	string_split(setting, ', ') as res
-) ORDER BY ALL
+SELECT unnest(res) FROM (
+	SELECT current_setting('custom_profiling_settings') AS raw_setting,
+	raw_setting.trim('{}') AS setting,
+	string_split(setting, ', ') AS res
+) ORDER BY ALL;
 ----
 "BLOCKED_THREAD_TIME": "true"
 "CPU_TIME": "true"
 "CUMULATIVE_CARDINALITY": "true"
 "CUMULATIVE_ROWS_SCANNED": "true"
 "EXTRA_INFO": "true"
+"LATENCY": "true"
 "OPERATOR_CARDINALITY": "true"
 "OPERATOR_ROWS_SCANNED": "true"
 "OPERATOR_TIMING": "true"
 "OPERATOR_TYPE": "true"
 "QUERY_NAME": "true"
 "RESULT_SET_SIZE": "true"
-
-
+"ROWS_RETURNED": "true"
