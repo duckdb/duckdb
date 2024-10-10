@@ -1574,7 +1574,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 		// Spatial types need to be encoded into WKB when writing GeoParquet.
 		// But dont perform this conversion if this is a EXPORT DATABASE statement
 		if (input.copy_to_type == CopyToType::COPY_TO_FILE && type.id() == LogicalTypeId::BLOB && type.HasAlias() &&
-		    type.GetAlias() == "GEOMETRY") {
+		    type.GetAlias() == "GEOMETRY" && GeoParquetFileMetadata::IsGeoParquetConversionEnabled(context)) {
 
 			LogicalType wkb_blob_type(LogicalTypeId::BLOB);
 			wkb_blob_type.SetAlias("WKB_BLOB");
@@ -1681,6 +1681,11 @@ void ParquetExtension::Load(DuckDB &db) {
 	config.replacement_scans.emplace_back(ParquetScanReplacement);
 	config.AddExtensionOption("binary_as_string", "In Parquet files, interpret binary data as a string.",
 	                          LogicalType::BOOLEAN);
+
+	config.AddExtensionOption(
+	    "enable_geoparquet_conversion",
+	    "Attempt to decode/encode geometry data in/as GeoParquet files if the spatial extension is present.",
+	    LogicalType::BOOLEAN, Value::BOOLEAN(true));
 }
 
 std::string ParquetExtension::Name() {
