@@ -28,7 +28,8 @@ enum class TableFilterType : uint8_t {
 	IS_NOT_NULL = 2,
 	CONJUNCTION_OR = 3,
 	CONJUNCTION_AND = 4,
-	STRUCT_EXTRACT = 5
+	STRUCT_EXTRACT = 5,
+	ZONE_MAP = 6
 };
 
 //! TableFilter represents a filter pushed down into the table scan.

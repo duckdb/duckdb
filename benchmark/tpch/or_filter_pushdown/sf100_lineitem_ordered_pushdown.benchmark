@@ -1,0 +1,9 @@
+# name: benchmark/tpch/or_filter_pushdown/sf100_lineitem_ordered_pushdown.benchmark
+# description: pushdown or into lineitem
+# group: [or_filter_pushdown]
+
+template benchmark/tpch/or_filter_pushdown/or_filter_pushdown.benchmark.in
+QUERY_NAME=lineitem_ordered_sf100_pushdown
+DISABLED_OPTIMIZERS=''
+TABLE_NAME=lineitem_sf100
+COLUMN_NAME=l_orderkey

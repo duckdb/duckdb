@@ -187,6 +187,11 @@ SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/date.parquet') where d <
 21
 
 query I
+SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/date.parquet') where d < cast('1975-01-01' as date) or d > cast('1976-01-01' as date)
+----
+21
+
+query I
 SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/date.parquet') where d < cast('1975-01-01' as date) or d >= cast('1976-01-01' as date)
 ----
 22

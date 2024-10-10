@@ -103,5 +103,20 @@
       }
     ],
     "constructor": ["child_idx", "child_name", "child_filter"]
+  },
+  {
+    "class": "ZoneMapFilter",
+    "base": "TableFilter",
+    "enum": "ZONE_MAP",
+    "includes": [
+      "duckdb/planner/filter/zone_map_filter.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "child_filter",
+        "type": "unique_ptr<TableFilter>"
+      }
+    ]
   }
 ]

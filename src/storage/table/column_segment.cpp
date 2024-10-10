@@ -398,6 +398,10 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		SelectionVector result_sel(approved_tuple_count);
 		auto &conjunction_or = filter.Cast<ConjunctionOrFilter>();
 		for (auto &child_filter : conjunction_or.child_filters) {
+			if (child_filter->filter_type == TableFilterType::ZONE_MAP) {
+				// conjunction OR of zone map is handed in row_group.cpp.
+				return scan_count;
+			}
 			SelectionVector temp_sel;
 			temp_sel.Initialize(sel);
 			idx_t temp_tuple_count = approved_tuple_count;
@@ -530,6 +534,9 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		return FilterSelection(sel, *child_vec, child_data, *struct_filter.child_filter, scan_count,
 		                       approved_tuple_count);
 	}
+	case TableFilterType::ZONE_MAP:
+		// we don't execute zone map filters here - we only consider them for zone map pruning
+		return scan_count;
 	default:
 		throw InternalException("FIXME: unsupported type for filter selection");
 	}
