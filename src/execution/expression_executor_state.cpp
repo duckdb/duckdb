@@ -6,20 +6,22 @@
 
 namespace duckdb {
 
-void ExpressionState::AddChild(Expression *expr) {
-	types.push_back(expr->return_type);
-	child_states.push_back(ExpressionExecutor::InitializeState(*expr, root));
+void ExpressionState::AddChild(Expression &child_expr) {
+	types.push_back(child_expr.return_type);
+	auto child_state = ExpressionExecutor::InitializeState(child_expr, root);
+	child_states.push_back(std::move(child_state));
+
+	auto expr_class = child_expr.GetExpressionClass();
+	auto initialize_child = expr_class != ExpressionClass::BOUND_REF && expr_class != ExpressionClass::BOUND_CONSTANT &&
+	                        expr_class != ExpressionClass::BOUND_PARAMETER;
+	initialize.push_back(initialize_child);
 }
 
-void ExpressionState::Finalize(bool empty) {
+void ExpressionState::Finalize() {
 	if (types.empty()) {
 		return;
 	}
-	if (empty) {
-		intermediate_chunk.InitializeEmpty(types);
-	} else {
-		intermediate_chunk.Initialize(GetAllocator(), types);
-	}
+	intermediate_chunk.Initialize(GetAllocator(), types, initialize);
 }
 
 Allocator &ExpressionState::GetAllocator() {
