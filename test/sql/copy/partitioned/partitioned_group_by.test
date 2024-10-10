@@ -25,6 +25,16 @@ ORDER BY ALL
 0	24995000
 1	25000000
 
+# make sure the partitioned aggregate is used
+# all of these are identical, i.e. this gets folded into a single count aggregate
+query II
+EXPLAIN SELECT partition, SUM(col1)
+FROM partitioned_tbl
+GROUP BY partition
+ORDER BY ALL
+----
+physical_plan	<REGEX>:.*PARTITIONED_AGGREGATE.*
+
 # distinct aggregate
 query II
 SELECT partition, COUNT(DISTINCT col2)
