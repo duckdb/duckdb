@@ -9,6 +9,9 @@ require parquet
 statement ok
 pragma enable_object_cache;
 
+statement ok
+SET prefetch_metadata_bytes = 0;
+
 # the constant comparison that is pushed down is longer than DuckDB's 8 bytes that are used in StringStatistics
 # its prefix is equal to the max up to the last byte
 # previously, we would read 5.4MB to figure our that we can prune the entire file
