@@ -180,7 +180,7 @@ unique_ptr<GeoParquetFileMetadata>
 GeoParquetFileMetadata::TryRead(const duckdb_parquet::format::FileMetaData &file_meta_data,
                                 const ClientContext &context) {
 
-	// Conversion not allowed!
+	// Conversion not enabled, or spatial is not loaded!
 	if (!IsGeoParquetConversionEnabled(context)) {
 		return nullptr;
 	}
@@ -190,12 +190,6 @@ GeoParquetFileMetadata::TryRead(const duckdb_parquet::format::FileMetaData &file
 			const auto geo_metadata = yyjson_read(kv.value.c_str(), kv.value.size(), 0);
 			if (!geo_metadata) {
 				// Could not parse the JSON
-				return nullptr;
-			}
-
-			if (!context.db->ExtensionIsLoaded("spatial")) {
-				// Spatial extension is not loaded, we can't make use of the metadata anyway.
-				yyjson_doc_free(geo_metadata);
 				return nullptr;
 			}
 
@@ -375,10 +369,18 @@ void GeoParquetFileMetadata::RegisterGeometryColumn(const string &column_name) {
 
 bool GeoParquetFileMetadata::IsGeoParquetConversionEnabled(const ClientContext &context) {
 	Value geoparquet_enabled;
-	if (context.TryGetCurrentSetting("enable_geoparquet_conversion", geoparquet_enabled)) {
-		return geoparquet_enabled.GetValue<bool>();
+	if (!context.TryGetCurrentSetting("enable_geoparquet_conversion", geoparquet_enabled)) {
+		return false;
 	}
-	return false;
+	if (!geoparquet_enabled.GetValue<bool>()) {
+		// Disabled by setting
+		return false;
+	}
+	if (!context.db->ExtensionIsLoaded("spatial")) {
+		// Spatial extension is not loaded, we cant convert anyway
+		return false;
+	}
+	return true;
 }
 
 unique_ptr<ColumnReader> GeoParquetFileMetadata::CreateColumnReader(ParquetReader &reader,
