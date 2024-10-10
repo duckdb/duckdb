@@ -267,6 +267,17 @@ public:
 	void RemoveLastLine();
 };
 
+struct ValidRowInfo {
+	ValidRowInfo(bool is_valid_p, idx_t start_pos_p, idx_t end_buffer_idx_p, idx_t end_pos_p)
+	    : is_valid(is_valid_p), start_pos(start_pos_p), end_buffer_idx(end_buffer_idx_p), end_pos(end_pos_p) {};
+	explicit ValidRowInfo(bool is_valid_p) : is_valid(is_valid_p), start_pos(0), end_buffer_idx(0), end_pos(0) {};
+	ValidRowInfo() : is_valid(false), start_pos(0), end_buffer_idx(0), end_pos(0) {};
+
+	bool is_valid;
+	idx_t start_pos;
+	idx_t end_buffer_idx;
+	idx_t end_pos;
+};
 //! Our dialect scanner basically goes over the CSV and actually parses the values to a DuckDB vector of string_t
 class StringValueScanner : public BaseScanner {
 public:
@@ -321,10 +332,10 @@ private:
 	//! Main function, sets the correct start
 	void SetStart();
 	//! From a given initial state, it skips until we reach the until_state
-	bool SkipUntilState(CSVState initial_state, CSVState until_state);
+	bool SkipUntilState(CSVState initial_state, CSVState until_state, CSVIterator &current_iterator) const;
 	//! If the current row we found is valid
-	bool IsRowValid();
-	void TryRow(CSVState state, idx_t &start_pos, idx_t &end_pos, bool &valid);
+	bool IsRowValid(CSVIterator &current_iterator) const;
+	ValidRowInfo TryRow(CSVState state, idx_t start_pos, idx_t end_pos) const;
 	idx_t FindNextNewLine() const;
 	StringValueResult result;
 	vector<LogicalType> types;

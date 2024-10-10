@@ -70,6 +70,7 @@ public:
 	void SetCurrentBoundaryToPosition(bool single_threaded);
 
 	void SetStart(idx_t pos);
+	void SetEnd(idx_t pos);
 
 	// Gets the current position for the file
 	idx_t GetGlobalCurrentPos();
