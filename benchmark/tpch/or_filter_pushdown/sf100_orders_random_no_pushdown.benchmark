@@ -3,7 +3,7 @@
 # group: [or_filter_pushdown]
 
 template benchmark/tpch/or_filter_pushdown/or_filter_pushdown.benchmark.in
-QUERY_NAME=unordered_sf100_no_pushdown
+QUERY_NAME=orders_unordered_sf100_no_pushdown
 DISABLED_OPTIMIZERS=filter_pushdown
-TABLE_NAME=lineitem_sf100_random
+TABLE_NAME=orders_sf100_random
 

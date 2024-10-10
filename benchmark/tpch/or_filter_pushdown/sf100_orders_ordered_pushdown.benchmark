@@ -3,6 +3,6 @@
 # group: [or_filter_pushdown]
 
 template benchmark/tpch/or_filter_pushdown/or_filter_pushdown.benchmark.in
-QUERY_NAME=ordered_sf100_pushdown
+QUERY_NAME=orders_ordered_sf100_pushdown
 DISABLED_OPTIMIZERS=''
-TABLE_NAME=lineitem_sf100
+TABLE_NAME=orders_sf100
