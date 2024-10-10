@@ -173,14 +173,12 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 	// The result vector must be used for the first time, or must be reset.
 	// Otherwise, the validity mask can contain previous (now incorrect) data.
 	if (result.GetVectorType() == VectorType::FLAT_VECTOR) {
-		auto expr_class = expr.GetExpressionClass();
 
 		// We do not initialize vector caches for these expressions.
-		if (expr_class != ExpressionClass::BOUND_REF && expr_class != ExpressionClass::BOUND_CONSTANT &&
-		    expr_class != ExpressionClass::BOUND_PARAMETER) {
-
-			auto validity = FlatVector::Validity(result);
-			D_ASSERT(validity.CheckAllValid(count));
+		if (expr.GetExpressionClass() != ExpressionClass::BOUND_REF &&
+		    expr.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT &&
+		    expr.GetExpressionClass() != ExpressionClass::BOUND_PARAMETER) {
+			D_ASSERT(FlatVector::Validity(result).CheckAllValid(count));
 		}
 	}
 #endif
