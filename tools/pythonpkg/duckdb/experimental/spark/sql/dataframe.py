@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from .session import SparkSession
 
 from ..errors import PySparkValueError
-from .functions import _to_column_expr, col
+from .functions import _to_column_expr, col, lit
 
 
 class DataFrame:
@@ -938,11 +938,18 @@ class DataFrame:
         |NULL|   4|   5|   6|
         +----+----+----+----+
         """
-        if not allowMissingColumns:
-            raise ContributionsAcceptedError
-        raise NotImplementedError
-        # The relational API does not have support for 'union_by_name' yet
-        # return DataFrame(self.relation.union_by_name(other.relation, allowMissingColumns), self.session)
+        if allowMissingColumns:
+            cols = []
+            for col in self.relation.columns:
+                if col in other.relation.columns:
+                    cols.append(col)
+                else:
+                    cols.append(lit(None))
+            other = other.select(*cols)
+        else:
+            other = other.select(*self.relation.columns)
+
+        return DataFrame(self.relation.union(other.relation), self.session)
 
     def dropDuplicates(self, subset: Optional[List[str]] = None) -> "DataFrame":
         """Return a new :class:`DataFrame` with duplicate rows removed,
