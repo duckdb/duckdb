@@ -25,6 +25,6 @@ class TestParameterList(object):
             res = conn.execute("select count(*) from bool_table where a =?", [df_in])
 
     def test_explicit_nan_param(self):
-        con = duckdb.default_connection
+        con = duckdb.default_connection()
         res = con.execute('select isnan(cast(? as double))', (float("nan"),))
         assert res.fetchone()[0] == True

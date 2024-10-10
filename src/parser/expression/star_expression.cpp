@@ -33,7 +33,7 @@ string StarExpression::ToString() const {
 			if (!first_entry) {
 				result += ", ";
 			}
-			result += KeywordHelper::WriteOptionallyQuoted(entry);
+			result += entry.ToString();
 			first_entry = false;
 		}
 		result += ")";
@@ -121,6 +121,35 @@ unique_ptr<ParsedExpression> StarExpression::Copy() const {
 	copy->CopyProperties(*this);
 	copy->unpacked = unpacked;
 	return std::move(copy);
+}
+
+StarExpression::StarExpression(const case_insensitive_set_t &exclude_list_p, qualified_column_set_t qualified_set)
+    : ParsedExpression(ExpressionType::STAR, ExpressionClass::STAR), exclude_list(std::move(qualified_set)) {
+	for (auto &entry : exclude_list_p) {
+		exclude_list.insert(QualifiedColumnName(entry));
+	}
+}
+
+case_insensitive_set_t StarExpression::SerializedExcludeList() const {
+	// we serialize non-qualified elements in a separate list of only column names for backwards compatibility
+	case_insensitive_set_t result;
+	for (auto &entry : exclude_list) {
+		if (!entry.IsQualified()) {
+			result.insert(entry.column);
+		}
+	}
+	return result;
+}
+
+qualified_column_set_t StarExpression::SerializedQualifiedExcludeList() const {
+	// we serialize only qualified elements in the qualified list for backwards compatibility
+	qualified_column_set_t result;
+	for (auto &entry : exclude_list) {
+		if (entry.IsQualified()) {
+			result.insert(entry);
+		}
+	}
+	return result;
 }
 
 } // namespace duckdb

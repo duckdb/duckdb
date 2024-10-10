@@ -187,14 +187,14 @@ struct ICUListRange : public ICUDateFunc {
 		range.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
 		                                 LogicalType::LIST(LogicalType::TIMESTAMP_TZ), ICUListRangeFunction<false>,
 		                                 Bind));
-		ExtensionUtil::AddFunctionOverload(db, range);
+		ExtensionUtil::RegisterFunction(db, range);
 
 		// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS
 		ScalarFunctionSet generate_series("generate_series");
 		generate_series.AddFunction(
 		    ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
 		                   LogicalType::LIST(LogicalType::TIMESTAMP_TZ), ICUListRangeFunction<true>, Bind));
-		ExtensionUtil::AddFunctionOverload(db, generate_series);
+		ExtensionUtil::RegisterFunction(db, generate_series);
 	}
 };
 

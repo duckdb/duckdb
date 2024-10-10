@@ -436,6 +436,35 @@ TEST_CASE("Test fetch API with big results", "[api][.]") {
 	VerifyStreamResult(std::move(result));
 }
 
+TEST_CASE("Test TryFlushCachingOperators interrupted ExecutePushInternal", "[api][.]") {
+	DuckDB db;
+	Connection con(db);
+
+	con.Query("create table tbl as select 100000 a from range(2) t(a);");
+	con.Query("pragma threads=1");
+
+	// Use PhysicalCrossProduct with a very low amount of produced tuples, this caches the result in the
+	// CachingOperatorState This gets flushed with FinalExecute in PipelineExecutor::TryFlushCachingOperator
+	auto pending_query = con.PendingQuery("select unnest(range(a.a)) from tbl a, tbl b;");
+
+	// Through `unnest(range(a.a.))` this FinalExecute multiple chunks, more than the ExecutionBudget can handle with
+	// PROCESS_PARTIAL
+	pending_query->ExecuteTask();
+
+	// query the connection as normal after
+	auto res = pending_query->Execute();
+	REQUIRE(!res->HasError());
+	auto &materialized_res = res->Cast<MaterializedQueryResult>();
+	idx_t initial_tuples = 2 * 2;
+	REQUIRE(materialized_res.RowCount() == initial_tuples * 100000);
+	for (idx_t i = 0; i < initial_tuples; i++) {
+		for (idx_t j = 0; j < 100000; j++) {
+			auto value = static_cast<idx_t>(materialized_res.GetValue<int64_t>(0, (i * 100000) + j));
+			REQUIRE(value == j);
+		}
+	}
+}
+
 TEST_CASE("Test streaming query during stack unwinding", "[api]") {
 	DuckDB db;
 	Connection con(db);
@@ -580,6 +609,25 @@ TEST_CASE("Issue #4583: Catch Insert/Update/Delete errors", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
 
+TEST_CASE("Issue #14130: InsertStatement::ToString causes InternalException later on", "[api][.]") {
+	auto db = DuckDB(nullptr);
+	auto conn = Connection(db);
+
+	conn.Query("CREATE TABLE foo(a int, b varchar, c int)");
+
+	auto query = "INSERT INTO Foo values (1, 'qwerty', 42)";
+
+	auto stmts = conn.ExtractStatements(query);
+	auto &stmt = stmts[0];
+
+	// Issue was here: calling ToString destroyed the 'alias' of the ValuesList
+	stmt->ToString();
+	// Which caused an 'InternalException: expected non-empty binding_name' here
+	auto prepared_stmt = conn.Prepare(std::move(stmt));
+	REQUIRE(!prepared_stmt->HasError());
+	REQUIRE_NO_FAIL(prepared_stmt->Execute());
+}
+
 TEST_CASE("Issue #6284: CachingPhysicalOperator in pull causes issues", "[api][.]") {
 
 	DBConfig config;
@@ -618,7 +666,7 @@ TEST_CASE("Issue #6284: CachingPhysicalOperator in pull causes issues", "[api][.
 		count += chunk->size();
 	}
 
-	REQUIRE(951468 - count == 0);
+	REQUIRE(951698 == count);
 }
 
 TEST_CASE("Fuzzer 50 - Alter table heap-use-after-free", "[api]") {

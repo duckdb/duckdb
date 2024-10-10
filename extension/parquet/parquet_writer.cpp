@@ -466,7 +466,7 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 // Validation code adapted from Impala
 static void ValidateOffsetInFile(const string &filename, idx_t col_idx, idx_t file_length, idx_t offset,
                                  const string &offset_name) {
-	if (offset < 0 || offset >= file_length) {
+	if (offset >= file_length) {
 		throw IOException("File '%s': metadata is corrupt. Column %d has invalid "
 		                  "%s (offset=%llu file_size=%llu).",
 		                  filename, col_idx, offset_name, offset, file_length);

@@ -597,7 +597,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 
 	// create a binder to bind the parsed expressions
 	vector<column_t> column_ids;
-	binder->bind_context.AddBaseTable(0, info.table, column_names, column_types, column_ids, &table);
+	binder->bind_context.AddBaseTable(0, string(), column_names, column_types, column_ids, table);
 	IndexBinder idx_binder(*binder, context);
 
 	// bind the parsed expressions to create unbound expressions
