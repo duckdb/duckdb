@@ -25,6 +25,7 @@
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/main/capi/extension_api.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -56,6 +57,7 @@ DBConfig::~DBConfig() {
 
 DatabaseInstance::DatabaseInstance() {
 	config.is_user_config = false;
+	create_api_v0 = nullptr;
 }
 
 DatabaseInstance::~DatabaseInstance() {
@@ -258,6 +260,10 @@ void DatabaseInstance::LoadExtensionSettings() {
 	}
 }
 
+static duckdb_ext_api_v0 CreateAPIv0Wrapper() {
+	return CreateAPIv0();
+}
+
 void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_config) {
 	DBConfig default_config;
 	DBConfig *config_ptr = &default_config;
@@ -266,6 +272,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	}
 
 	Configure(*config_ptr, database_path);
+
+	create_api_v0 = CreateAPIv0Wrapper;
 
 	if (user_config && !user_config->options.use_temporary_directory) {
 		// temporary directories explicitly disabled
@@ -502,6 +510,11 @@ SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &ke
 
 ValidChecker &DatabaseInstance::GetValidChecker() {
 	return db_validity;
+}
+
+const duckdb_ext_api_v0 DatabaseInstance::GetExtensionAPIV0() {
+	D_ASSERT(create_api_v0);
+	return create_api_v0();
 }
 
 ValidChecker &ValidChecker::Get(DatabaseInstance &db) {
