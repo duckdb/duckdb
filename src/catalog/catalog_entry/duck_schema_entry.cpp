@@ -168,6 +168,9 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction trans
 		auto &set = GetCatalogSet(CatalogType::TABLE_ENTRY);
 		info.dependencies.AddDependency(*set.GetEntry(transaction, fk_info.name));
 	}
+	for (auto &dep : info.dependencies.Set()) {
+		table->dependencies.AddDependency(dep);
+	}
 
 	auto entry = AddEntryInternal(transaction, std::move(table), info.Base().on_conflict, info.dependencies);
 	if (!entry) {
