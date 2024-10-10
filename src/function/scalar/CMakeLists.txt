@@ -11,12 +11,11 @@ add_library_unity(
   OBJECT
   compressed_materialization_functions.cpp
   generic_functions.cpp
-  string_functions.cpp
-  strftime_format.cpp
   nested_functions.cpp
   operators.cpp
   pragma_functions.cpp
-  sequence_functions.cpp)
+  sequence_functions.cpp
+  strftime_format.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_scalar>
     PARENT_SCOPE)

@@ -26,8 +26,16 @@ struct StaticFunctionDefinition {
 	get_scalar_function_set_t get_function_set;
 	get_aggregate_function_t get_aggregate_function;
 	get_aggregate_function_set_t get_aggregate_function_set;
+};
 
-	static const StaticFunctionDefinition *GetFunctionList();
+class Catalog;
+struct CatalogTransaction;
+
+struct FunctionList {
+	static const StaticFunctionDefinition *GetInternalFunctionList();
+	static const StaticFunctionDefinition *GetCoreFunctionList();
+
+	static void RegisterFunctions(Catalog &catalog, CatalogTransaction transaction);
 };
 
 } // namespace duckdb

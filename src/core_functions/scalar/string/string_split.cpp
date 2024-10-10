@@ -4,7 +4,7 @@
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/core_functions/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
@@ -36,8 +36,7 @@ struct RegularStringSplit {
 		if (delim_size == 0) {
 			return 0;
 		}
-		return ContainsFun::Find(const_uchar_ptr_cast(input_data), input_size, const_uchar_ptr_cast(delim_data),
-		                         delim_size);
+		return FindStrInStr(const_uchar_ptr_cast(input_data), input_size, const_uchar_ptr_cast(delim_data), delim_size);
 	}
 };
 
@@ -84,7 +83,7 @@ struct StringSplitter {
 				// special case: 0 length match and pos is 0
 				// move to the next character
 				for (pos++; pos < input_size; pos++) {
-					if (LengthFun::IsCharacter(input_data[pos])) {
+					if (IsCharacter(input_data[pos])) {
 						break;
 					}
 				}

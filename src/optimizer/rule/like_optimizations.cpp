@@ -1,6 +1,8 @@
 #include "duckdb/optimizer/rule/like_optimizations.hpp"
 
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
@@ -132,7 +134,7 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<r
 		return ApplyRule(root, SuffixFun::GetFunction(), patt_str, is_not_like);
 	} else if (PatternIsContains(patt_str)) {
 		// Contains LIKE pattern: [%]+[^%_]*[%]+, ignoring underscore
-		return ApplyRule(root, ContainsFun::GetStringContains(), patt_str, is_not_like);
+		return ApplyRule(root, GetStringContains(), patt_str, is_not_like);
 	}
 	return nullptr;
 }
