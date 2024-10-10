@@ -9,6 +9,32 @@ using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
+ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t depth) : settings(n_settings) {
+	// Expand.
+	if (depth == 0) {
+		settings.insert(MetricsType::QUERY_NAME);
+	} else {
+		settings.insert(MetricsType::OPERATOR_TYPE);
+	}
+	for (const auto &metric : settings) {
+		Expand(expanded_settings, metric);
+	}
+
+	// Reduce.
+	if (depth == 0) {
+		auto op_metrics = DefaultOperatorSettings();
+		for (const auto metric : op_metrics) {
+			settings.erase(metric);
+		}
+	} else {
+		auto root_metrics = DefaultRootSettings();
+		for (const auto metric : root_metrics) {
+			settings.erase(metric);
+		}
+	}
+	ResetMetrics();
+}
+
 profiler_settings_t ProfilingInfo::DefaultSettings() {
 	return {MetricsType::QUERY_NAME,           MetricsType::BLOCKED_THREAD_TIME,     MetricsType::CPU_TIME,
 	        MetricsType::EXTRA_INFO,           MetricsType::CUMULATIVE_CARDINALITY,  MetricsType::OPERATOR_TYPE,
@@ -17,34 +43,19 @@ profiler_settings_t ProfilingInfo::DefaultSettings() {
 	        MetricsType::ROWS_RETURNED};
 }
 
-profiler_settings_t ProfilingInfo::DefaultOperatorSettings() {
-	return {MetricsType::OPERATOR_CARDINALITY, MetricsType::OPERATOR_ROWS_SCANNED, MetricsType::OPERATOR_TIMING,
-	        MetricsType::RESULT_SET_SIZE};
+profiler_settings_t ProfilingInfo::DefaultRootSettings() {
+	return {MetricsType::QUERY_NAME, MetricsType::BLOCKED_THREAD_TIME, MetricsType::LATENCY,
+	        MetricsType::ROWS_RETURNED};
 }
 
-profiler_settings_t ProfilingInfo::AllSettings() {
-	auto all_settings = DefaultSettings();
-	auto optimizer_settings = MetricsUtils::GetOptimizerMetrics();
-	auto phase_timings = MetricsUtils::GetPhaseTimingMetrics();
-
-	for (auto &setting : optimizer_settings) {
-		all_settings.insert(setting);
-	}
-	for (auto &setting : phase_timings) {
-		all_settings.insert(setting);
-	}
-	return all_settings;
+profiler_settings_t ProfilingInfo::DefaultOperatorSettings() {
+	return {MetricsType::OPERATOR_CARDINALITY, MetricsType::OPERATOR_ROWS_SCANNED, MetricsType::OPERATOR_TIMING,
+	        MetricsType::OPERATOR_TYPE};
 }
 
 void ProfilingInfo::ResetMetrics() {
 	metrics.clear();
-	auto all_settings = AllSettings();
-
-	for (auto &metric : all_settings) {
-		if (!MustCollect(metric)) {
-			continue;
-		}
-
+	for (auto &metric : expanded_settings) {
 		if (MetricsUtils::IsOptimizerMetric(metric) || MetricsUtils::IsPhaseTimingMetric(metric)) {
 			metrics[metric] = Value::CreateValue(0.0);
 			continue;
@@ -79,34 +90,41 @@ void ProfilingInfo::ResetMetrics() {
 	}
 }
 
-bool ProfilingInfo::MustCollect(const MetricsType metric) const {
-	if (Enabled(metric)) {
+bool ProfilingInfo::Enabled(const profiler_settings_t &settings, const MetricsType metric) {
+	if (settings.find(metric) != settings.end()) {
 		return true;
-	}
-
-	switch (metric) {
-	case MetricsType::OPERATOR_TIMING:
-		return MustCollect(MetricsType::CPU_TIME);
-	case MetricsType::OPERATOR_CARDINALITY:
-		return MustCollect(MetricsType::CUMULATIVE_CARDINALITY);
-	case MetricsType::OPERATOR_ROWS_SCANNED:
-		return MustCollect(MetricsType::CUMULATIVE_ROWS_SCANNED);
-	default:
-		break;
-	}
-
-	if (MetricsUtils::IsOptimizerMetric(metric)) {
-		return MustCollect(MetricsType::CUMULATIVE_OPTIMIZER_TIMING);
 	}
 	return false;
 }
 
-bool ProfilingInfo::Enabled(const MetricsType metric) const {
-	return settings.find(metric) != settings.end();
+void ProfilingInfo::Expand(profiler_settings_t &settings, const MetricsType metric) {
+	settings.insert(metric);
+
+	switch (metric) {
+	case MetricsType::CPU_TIME:
+		settings.insert(MetricsType::OPERATOR_TIMING);
+		return;
+	case MetricsType::CUMULATIVE_CARDINALITY:
+		settings.insert(MetricsType::OPERATOR_CARDINALITY);
+		return;
+	case MetricsType::CUMULATIVE_ROWS_SCANNED:
+		settings.insert(MetricsType::OPERATOR_ROWS_SCANNED);
+		return;
+	case MetricsType::CUMULATIVE_OPTIMIZER_TIMING:
+	case MetricsType::ALL_OPTIMIZERS: {
+		auto optimizer_metrics = MetricsUtils::GetOptimizerMetrics();
+		for (const auto optimizer_metric : optimizer_metrics) {
+			settings.insert(optimizer_metric);
+		}
+		return;
+	}
+	default:
+		return;
+	}
 }
 
 string ProfilingInfo::GetMetricAsString(const MetricsType metric) const {
-	if (!Enabled(metric)) {
+	if (!Enabled(settings, metric)) {
 		throw InternalException("Metric %s not enabled", EnumUtil::ToString(metric));
 	}
 

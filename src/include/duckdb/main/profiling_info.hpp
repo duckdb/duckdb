@@ -26,46 +26,34 @@ namespace duckdb {
 
 class ProfilingInfo {
 public:
-	// Enabling a metric adds it to this set.
+	//! Enabling a metric adds it to this set.
 	profiler_settings_t settings;
-	// Contains all enabled metrics.
+	//! This set contains the expanded to-be-collected metrics, which can differ from 'settings'.
+	profiler_settings_t expanded_settings;
+	//! Contains all enabled metrics.
 	profiler_metrics_t metrics;
-	// Additional metrics.
+	//! Additional metrics.
 	// FIXME: move to metrics.
 	InsertionOrderPreservingMap<string> extra_info;
 
 public:
 	ProfilingInfo() = default;
-	explicit ProfilingInfo(profiler_settings_t &n_settings, idx_t depth = 0) : settings(n_settings) {
-		if (depth == 0) {
-			settings.insert(MetricsType::QUERY_NAME);
-			settings.erase(MetricsType::OPERATOR_CARDINALITY);
-			settings.erase(MetricsType::OPERATOR_ROWS_SCANNED);
-			settings.erase(MetricsType::OPERATOR_TIMING);
-			settings.erase(MetricsType::OPERATOR_TYPE);
-		} else {
-			settings.insert(MetricsType::OPERATOR_TYPE);
-			settings.erase(MetricsType::QUERY_NAME);
-			settings.erase(MetricsType::BLOCKED_THREAD_TIME);
-			settings.erase(MetricsType::LATENCY);
-			settings.erase(MetricsType::ROWS_RETURNED);
-		}
-		ResetMetrics();
-	}
+	explicit ProfilingInfo(const profiler_settings_t &n_settings, const idx_t depth = 0);
 	ProfilingInfo(ProfilingInfo &) = default;
 	ProfilingInfo &operator=(ProfilingInfo const &) = default;
 
 public:
+	// TODO: rename to Metrics
 	static profiler_settings_t DefaultSettings();
+	static profiler_settings_t DefaultRootSettings();
 	static profiler_settings_t DefaultOperatorSettings();
-	static profiler_settings_t AllSettings();
 
 public:
 	void ResetMetrics();
 	//! Returns true, if the query profiler must collect this metric.
-	bool MustCollect(const MetricsType metric) const;
-	//! Returns true, if the metric is present in the settings.
-	bool Enabled(const MetricsType metric) const;
+	static bool Enabled(const profiler_settings_t &settings, const MetricsType metric);
+	//! Expand metrics depending on the collection of other metrics.
+	static void Expand(profiler_settings_t &settings, const MetricsType metric);
 
 public:
 	string GetMetricAsString(const MetricsType metric) const;
