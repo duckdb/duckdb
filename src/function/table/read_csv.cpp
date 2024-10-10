@@ -293,7 +293,6 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["types"] = LogicalType::ANY;
 	table_function.named_parameters["names"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["column_names"] = LogicalType::LIST(LogicalType::VARCHAR);
-	table_function.named_parameters["parallel"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["comment"] = LogicalType::VARCHAR;
 
 	MultiFileReader::AddParameters(table_function);

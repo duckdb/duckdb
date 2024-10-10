@@ -132,11 +132,11 @@ struct MultiFileReader {
 	//! Parse a Value containing 1 or more paths into a vector of paths. Note: no expansion is performed here
 	DUCKDB_API virtual vector<string> ParsePaths(const Value &input);
 	//! Create a MultiFileList from a vector of paths. Any globs will be expanded using the default filesystem
-	DUCKDB_API virtual unique_ptr<MultiFileList>
+	DUCKDB_API virtual shared_ptr<MultiFileList>
 	CreateFileList(ClientContext &context, const vector<string> &paths,
 	               FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
 	//! Shorthand for ParsePaths + CreateFileList
-	DUCKDB_API unique_ptr<MultiFileList> CreateFileList(ClientContext &context, const Value &input,
+	DUCKDB_API shared_ptr<MultiFileList> CreateFileList(ClientContext &context, const Value &input,
 	                                                    FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
 
 	//! Parse the named parameters of a multi-file reader

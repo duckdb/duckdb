@@ -50,6 +50,7 @@ if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux")
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_delta
             GIT_TAG 3933ebd800ad06a64656c9aef6ca7d62897fa4db
+            APPLY_PATCHES
     )
 endif()
 
@@ -127,6 +128,7 @@ duckdb_extension_load(sqlsmith
         DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb_sqlsmith
         GIT_TAG f24be8b5b0cd0eeed7541e10cff42d7050771afc
+        APPLY_PATCHES
         )
 
 ################# SUBSTRAIT

@@ -1,5 +1,5 @@
 #include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
-
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/constraint.hpp"
 
 namespace duckdb {
@@ -22,7 +22,8 @@ CatalogType AlterScalarFunctionInfo::GetCatalogType() const {
 //===--------------------------------------------------------------------===//
 // AddScalarFunctionOverloadInfo
 //===--------------------------------------------------------------------===//
-AddScalarFunctionOverloadInfo::AddScalarFunctionOverloadInfo(AlterEntryData data, ScalarFunctionSet new_overloads_p)
+AddScalarFunctionOverloadInfo::AddScalarFunctionOverloadInfo(AlterEntryData data,
+                                                             unique_ptr<CreateScalarFunctionInfo> new_overloads_p)
     : AlterScalarFunctionInfo(AlterScalarFunctionType::ADD_FUNCTION_OVERLOADS, std::move(data)),
       new_overloads(std::move(new_overloads_p)) {
 	this->allow_internal = true;
@@ -32,7 +33,8 @@ AddScalarFunctionOverloadInfo::~AddScalarFunctionOverloadInfo() {
 }
 
 unique_ptr<AlterInfo> AddScalarFunctionOverloadInfo::Copy() const {
-	return make_uniq_base<AlterInfo, AddScalarFunctionOverloadInfo>(GetAlterEntryData(), new_overloads);
+	return make_uniq_base<AlterInfo, AddScalarFunctionOverloadInfo>(
+	    GetAlterEntryData(), unique_ptr_cast<CreateInfo, CreateScalarFunctionInfo>(new_overloads->Copy()));
 }
 
 string AddScalarFunctionOverloadInfo::ToString() const {

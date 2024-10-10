@@ -525,7 +525,7 @@ public:
 
 	static unique_ptr<FunctionData> ParquetScanBindInternal(ClientContext &context,
 	                                                        unique_ptr<MultiFileReader> multi_file_reader,
-	                                                        unique_ptr<MultiFileList> file_list,
+	                                                        shared_ptr<MultiFileList> file_list,
 	                                                        vector<LogicalType> &return_types, vector<string> &names,
 	                                                        ParquetOptions parquet_options) {
 		auto result = make_uniq<ParquetReadBindData>();
@@ -864,7 +864,8 @@ public:
 			return file_list_cardinality_estimate;
 		}
 
-		return make_uniq<NodeStatistics>(data.initial_file_cardinality * data.file_list->GetTotalFileCount());
+		return make_uniq<NodeStatistics>(MaxValue(data.initial_file_cardinality, (idx_t)1) *
+		                                 data.file_list->GetTotalFileCount());
 	}
 
 	static idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {
