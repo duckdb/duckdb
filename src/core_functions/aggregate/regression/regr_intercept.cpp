@@ -45,10 +45,6 @@ struct RegrInterceptOperation {
 			return;
 		}
 		RegrSlopeOperation::Finalize<T, RegrSlopeState>(state.slope, target, finalize_data);
-		if (Value::IsNan(target)) {
-			finalize_data.ReturnNull();
-			return;
-		}
 		auto x_avg = state.sum_x / state.count;
 		auto y_avg = state.sum_y / state.count;
 		target = y_avg - target * x_avg;

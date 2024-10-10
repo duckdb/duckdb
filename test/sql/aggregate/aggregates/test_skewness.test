@@ -28,7 +28,7 @@ select skewness(*)
 query I
 select skewness (10) from range (5)
 ----
-NAN
+NULL
 
 #Empty Table
 query I
