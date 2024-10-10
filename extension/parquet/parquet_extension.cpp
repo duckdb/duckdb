@@ -1681,6 +1681,9 @@ void ParquetExtension::Load(DuckDB &db) {
 	config.replacement_scans.emplace_back(ParquetScanReplacement);
 	config.AddExtensionOption("binary_as_string", "In Parquet files, interpret binary data as a string.",
 	                          LogicalType::BOOLEAN);
+	config.AddExtensionOption("prefetch_metadata_bytes", "Optimistically prefetch that many bytes of parquet metadata.",
+	                          LogicalType::UBIGINT, Value(0));
+	// prefetch_metadata_bytes to be opt-in only
 }
 
 std::string ParquetExtension::Name() {
