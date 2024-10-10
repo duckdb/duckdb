@@ -123,9 +123,9 @@ public:
 	}
 
 	void SetEvictionQueueIndex(const idx_t index) {
-		D_ASSERT(!managed_buffer_eviction_queue_index.IsValid()); // Cannot overwrite
+		D_ASSERT(!eviction_queue_idx.IsValid());                  // Cannot overwrite
 		D_ASSERT(buffer->type == FileBufferType::MANAGED_BUFFER); // MANAGED_BUFFER only (at least, for now)
-		managed_buffer_eviction_queue_index = index;
+		eviction_queue_idx = index;
 	}
 
 private:
@@ -160,8 +160,8 @@ private:
 	BufferPoolReservation memory_charge;
 	//! Does the block contain any memory pointers?
 	const char *unswizzled;
-	//! Index for eviction queue (FileBufferType::MANAGED_BUFFER only)
-	optional_idx managed_buffer_eviction_queue_index;
+	//! Index for eviction queue (FileBufferType::MANAGED_BUFFER only, for now)
+	optional_idx eviction_queue_idx;
 };
 
 } // namespace duckdb

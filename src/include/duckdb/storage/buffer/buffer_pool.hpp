@@ -91,10 +91,13 @@ protected:
 	//! Increments the dead nodes for the queue with specified type
 	void IncrementDeadNodes(const BlockHandle &handle);
 
-	//! How many eviction queues we have for FileBufferType::MANAGED_BUFFER
-	static constexpr idx_t MANAGED_BUFFER_EVICTION_QUEUES = 6;
-	//! Total eviction queue count (MANAGED_BUFFER + BLOCK + TINY_BUFFER)
-	static constexpr idx_t EVICTION_QUEUES = MANAGED_BUFFER_EVICTION_QUEUES + 2;
+	//! How many eviction queues we have for the different FileBufferTypes
+	static constexpr idx_t BLOCK_EVICTION_QUEUES = 1;
+	static constexpr idx_t MANAGED_BUFFER_EVICTION_QUEUES = 1;
+	static constexpr idx_t TINY_BUFFER_EVICTION_QUEUES = 1;
+	//! Total eviction queue count (TINY_BUFFER + MANAGED_BUFFER + BLOCK)
+	static constexpr idx_t EVICTION_QUEUES =
+	    TINY_BUFFER_EVICTION_QUEUES + MANAGED_BUFFER_EVICTION_QUEUES + BLOCK_EVICTION_QUEUES;
 
 protected:
 	enum class MemoryUsageCaches {

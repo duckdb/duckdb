@@ -287,7 +287,6 @@ void RadixHTConfig::SetRadixBitsInternal(const idx_t radix_bits_p, bool external
 		sink.external = true;
 	}
 	sink_radix_bits = radix_bits_p;
-	return;
 }
 
 idx_t RadixHTConfig::InitialSinkRadixBits(ClientContext &context) {

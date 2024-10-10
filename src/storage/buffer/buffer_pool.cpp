@@ -232,28 +232,38 @@ bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 }
 
 EvictionQueue &BufferPool::GetEvictionQueueForBlockHandle(const BlockHandle &handle) {
-	// We go from the back, evicting persistent data first.
-	// Then, temporary data (by index)
-	// Finally, tiny buffers (desperation)
-	idx_t index;
+	// Obtain offset and number of queues for the FileBufferType
+	idx_t offset;
+	idx_t size;
 	switch (handle.buffer->type) {
-	case FileBufferType::BLOCK:
-		index = EVICTION_QUEUES - 1;
+	case FileBufferType::TINY_BUFFER:
+		// TINY_BUFFER starts at offset 0 (evicted last)
+		offset = 0;
+		size = TINY_BUFFER_EVICTION_QUEUES;
 		break;
 	case FileBufferType::MANAGED_BUFFER:
-		if (!handle.managed_buffer_eviction_queue_index.IsValid()) {
-			index = EVICTION_QUEUES - 2; // Not set, assume low priority
-		} else {
-			index = MinValue(handle.managed_buffer_eviction_queue_index.GetIndex() + 1, EVICTION_QUEUES - 2);
-		}
+		// Followed by MANAGED_BUFFER
+		offset = TINY_BUFFER_EVICTION_QUEUES;
+		size = MANAGED_BUFFER_EVICTION_QUEUES;
 		break;
-	case FileBufferType::TINY_BUFFER:
-		index = 0;
+	case FileBufferType::BLOCK:
+		// Followed by BLOCK (evicted first)
+		offset = TINY_BUFFER_EVICTION_QUEUES + MANAGED_BUFFER_EVICTION_QUEUES;
+		size = BLOCK_EVICTION_QUEUES;
 		break;
 	default:
 		throw InternalException("Invalid FileBufferType in BufferPool::GetEvictionQueueForBlockHandle");
 	}
-	return *queues[index];
+
+	idx_t index;
+	if (handle.eviction_queue_idx.IsValid()) { // Index was set, bound it by the size
+		index = MinValue(handle.eviction_queue_idx.GetIndex(), size - 1);
+	} else { // Index was not set, assume low priority (back of queue)
+		index = size - 1;
+	}
+	D_ASSERT(index < size);
+
+	return *queues[offset + index];
 }
 
 void BufferPool::IncrementDeadNodes(const BlockHandle &handle) {
@@ -290,7 +300,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_me
 			return block_result;
 		}
 	}
-	// This can never happen since we always return when i == 1 - Exception to silence compiler warning
+	// This can never happen since we always return when i == 1. Exception to silence compiler warning
 	throw InternalException("Exited BufferPool::EvictBlocksInternal without obtaining BufferPool::EvictionResult");
 }
 

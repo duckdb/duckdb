@@ -175,7 +175,8 @@ RadixPartitionedTupleData::~RadixPartitionedTupleData() {
 }
 
 void RadixPartitionedTupleData::Initialize() {
-	for (idx_t i = 0; i < RadixPartitioning::NumberOfPartitions(radix_bits); i++) {
+	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
+	for (idx_t i = 0; i < num_partitions; i++) {
 		partitions.emplace_back(CreatePartitionCollection(i));
 		partitions.back()->SetPartitionIndex(i);
 	}

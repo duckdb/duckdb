@@ -132,9 +132,6 @@ protected:
 		return RadixPartitioning::NumberOfPartitions(radix_bits) - 1;
 	}
 
-	bool RepartitionReverseOrder() const override {
-		return true;
-	}
 	void RepartitionFinalizeStates(PartitionedTupleData &old_partitioned_data,
 	                               PartitionedTupleData &new_partitioned_data, PartitionedTupleDataAppendState &state,
 	                               idx_t finished_partition_idx) const override;
