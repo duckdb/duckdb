@@ -62,7 +62,7 @@ struct SkewnessOperation {
 		}
 		double div = std::sqrt(p);
 		if (div == 0) {
-			target = NAN;
+			finalize_data.ReturnNull();
 			return;
 		}
 		double temp1 = std::sqrt(n * (n - 1)) / (n - 2);
