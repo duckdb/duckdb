@@ -139,9 +139,12 @@ void RowVersionManager::CleanupAppend(transaction_t lowest_active_transaction, i
 	for (idx_t vector_idx = start_vector_idx; vector_idx <= end_vector_idx; vector_idx++) {
 		idx_t vcount =
 		    vector_idx == end_vector_idx ? row_group_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
-		if (vcount != STANDARD_VECTOR_SIZE || !vector_info[vector_idx]) {
+		if (vcount != STANDARD_VECTOR_SIZE) {
 			// not written fully - skip
 			continue;
+		}
+		if (!vector_info[vector_idx]) {
+			// already vacuumed - skip
 		}
 		auto &info = *vector_info[vector_idx];
 		// if we wrote the entire chunk info try to compress it
