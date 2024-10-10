@@ -20,6 +20,7 @@
 #include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/execution/partition_info.hpp"
 
 namespace duckdb {
 class Event;
@@ -28,47 +29,6 @@ class PhysicalOperator;
 class Pipeline;
 class PipelineBuildState;
 class MetaPipeline;
-
-enum class PartitionInfo { NONE, REQUIRES_BATCH_INDEX };
-
-struct OperatorPartitionInfo {
-	OperatorPartitionInfo() = default;
-	explicit OperatorPartitionInfo(bool batch_index) : batch_index(batch_index) {
-	}
-	explicit OperatorPartitionInfo(vector<column_t> partition_columns_p)
-	    : partition_columns(std::move(partition_columns_p)) {
-	}
-
-	bool batch_index = false;
-	vector<column_t> partition_columns;
-
-	static OperatorPartitionInfo NoPartitionInfo() {
-		return OperatorPartitionInfo(false);
-	}
-	static OperatorPartitionInfo BatchIndex() {
-		return OperatorPartitionInfo(true);
-	}
-	static OperatorPartitionInfo PartitionColumns(vector<column_t> columns) {
-		return OperatorPartitionInfo(std::move(columns));
-	}
-	bool RequiresPartitionColumns() const {
-		return !partition_columns.empty();
-	}
-	bool RequiresBatchIndex() const {
-		return batch_index;
-	}
-	bool AnyRequired() const {
-		return RequiresPartitionColumns() || RequiresBatchIndex();
-	}
-};
-
-struct OperatorPartitionData {
-	explicit OperatorPartitionData(idx_t batch_index) : batch_index(batch_index) {
-	}
-
-	idx_t batch_index;
-	vector<ColumnPartitionData> partition_data;
-};
 
 //! PhysicalOperator is the base class of the physical operators present in the
 //! execution plan

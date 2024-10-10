@@ -16,6 +16,7 @@
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/parallel/interrupt.hpp"
+#include "duckdb/execution/partition_info.hpp"
 
 namespace duckdb {
 class Event;
@@ -25,27 +26,6 @@ class Pipeline;
 class PipelineBuildState;
 class MetaPipeline;
 class InterruptState;
-
-struct ColumnPartitionData {
-	explicit ColumnPartitionData(Value partition_val) : min(partition_val), max(std::move(partition_val)) {
-	}
-
-	Value min;
-	Value max;
-};
-
-struct SourcePartitionInfo {
-	//! The current batch index
-	//! This is only set in case RequiresBatchIndex() is true, and the source has support for it (SupportsBatchIndex())
-	//! Otherwise this is left on INVALID_INDEX
-	//! The batch index is a globally unique, increasing index that should be used to maintain insertion order
-	//! //! in conjunction with parallelism
-	optional_idx batch_index;
-	//! The minimum batch index that any thread is currently actively reading
-	optional_idx min_batch_index;
-	//! Column partition data
-	vector<ColumnPartitionData> partition_data;
-};
 
 // LCOV_EXCL_START
 class OperatorState {
