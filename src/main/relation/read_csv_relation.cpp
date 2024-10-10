@@ -1,7 +1,7 @@
 #include "duckdb/main/relation/read_csv_relation.hpp"
 
 #include "duckdb/execution/operator/csv_scanner/csv_buffer_manager.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"

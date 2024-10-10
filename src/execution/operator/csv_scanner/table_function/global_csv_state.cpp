@@ -1,6 +1,6 @@
 #include "duckdb/execution/operator/csv_scanner/global_csv_state.hpp"
 
-#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/scanner_boundary.hpp"
 #include "duckdb/execution/operator/csv_scanner/skip_scanner.hpp"
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"

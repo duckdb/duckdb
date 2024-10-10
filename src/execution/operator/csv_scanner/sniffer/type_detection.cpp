@@ -4,7 +4,7 @@
 #include "duckdb/common/operator/integer_cast_operator.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/types/time.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 
 namespace duckdb {
 struct TryCastFloatingOperator {

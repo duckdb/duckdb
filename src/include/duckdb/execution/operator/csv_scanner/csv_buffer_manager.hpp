@@ -35,15 +35,15 @@ public:
 
 	void UnpinBuffer(const idx_t cache_idx);
 	//! Returns the buffer size set for this CSV buffer manager
-	idx_t GetBufferSize();
+	idx_t GetBufferSize() const;
 	//! Returns the number of buffers in the cached_buffers cache
-	idx_t BufferCount();
+	idx_t BufferCount() const;
 	//! If this buffer manager is done. In the context of a buffer manager it means that it read all buffers at least
 	//! once.
-	bool Done();
+	bool Done() const;
 
 	void ResetBufferManager();
-	string GetFilePath();
+	string GetFilePath() const;
 
 	ClientContext &context;
 	idx_t skip_rows = 0;
