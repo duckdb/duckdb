@@ -5,6 +5,12 @@
 statement ok
 PRAGMA enable_verification
 
+query II
+FROM read_csv('data/csv/bad_escape.csv')
+----
+332	Surname, Firstname
+123	foo ("foo")
+
 query I
 FROM read_csv_auto('data/csv/test/dateformat.csv')
 ----
