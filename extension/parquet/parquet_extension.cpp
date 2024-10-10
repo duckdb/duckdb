@@ -1755,8 +1755,8 @@ void ParquetExtension::Load(DuckDB &db) {
 	    "Attempt to decode/encode geometry data in/as GeoParquet files if the spatial extension is present.",
 	    LogicalType::BOOLEAN, Value::BOOLEAN(true));
 	config.AddExtensionOption("prefetch_metadata_bytes", "Optimistically prefetch that many bytes of parquet metadata.",
-	                          LogicalType::UBIGINT, Value(4088));
-	// Default is so that 4088 + 8 bytes that 4KB are always read on the first GET
+	                          LogicalType::UBIGINT, Value(0));
+	// prefetch_metadata_bytes to be opt-in only
 }
 
 std::string ParquetExtension::Name() {
