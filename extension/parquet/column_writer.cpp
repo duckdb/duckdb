@@ -30,15 +30,15 @@ namespace duckdb {
 using namespace duckdb_parquet; // NOLINT
 using namespace duckdb_miniz;   // NOLINT
 
-using duckdb_parquet::format::CompressionCodec;
-using duckdb_parquet::format::ConvertedType;
-using duckdb_parquet::format::Encoding;
-using duckdb_parquet::format::FieldRepetitionType;
-using duckdb_parquet::format::FileMetaData;
-using duckdb_parquet::format::PageHeader;
-using duckdb_parquet::format::PageType;
-using ParquetRowGroup = duckdb_parquet::format::RowGroup;
-using duckdb_parquet::format::Type;
+using duckdb_parquet::CompressionCodec;
+using duckdb_parquet::ConvertedType;
+using duckdb_parquet::Encoding;
+using duckdb_parquet::FieldRepetitionType;
+using duckdb_parquet::FileMetaData;
+using duckdb_parquet::PageHeader;
+using duckdb_parquet::PageType;
+using ParquetRowGroup = duckdb_parquet::RowGroup;
+using duckdb_parquet::Type;
 
 #define PARQUET_DEFINE_VALID 65535
 
@@ -344,13 +344,13 @@ struct PageWriteInformation {
 
 class BasicColumnWriterState : public ColumnWriterState {
 public:
-	BasicColumnWriterState(duckdb_parquet::format::RowGroup &row_group, idx_t col_idx)
+	BasicColumnWriterState(duckdb_parquet::RowGroup &row_group, idx_t col_idx)
 	    : row_group(row_group), col_idx(col_idx) {
 		page_info.emplace_back();
 	}
 	~BasicColumnWriterState() override = default;
 
-	duckdb_parquet::format::RowGroup &row_group;
+	duckdb_parquet::RowGroup &row_group;
 	idx_t col_idx;
 	vector<PageInformation> page_info;
 	vector<PageWriteInformation> write_info;
@@ -387,7 +387,7 @@ public:
 	static constexpr const idx_t STRING_LENGTH_SIZE = sizeof(uint32_t);
 
 public:
-	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) override;
+	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) override;
 	void Prepare(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) override;
 	void BeginWrite(ColumnWriterState &state) override;
 	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override;
@@ -397,7 +397,7 @@ protected:
 	static void WriteLevels(WriteStream &temp_writer, const unsafe_vector<uint16_t> &levels, idx_t max_value,
 	                        idx_t start_offset, idx_t count);
 
-	virtual duckdb_parquet::format::Encoding::type GetEncoding(BasicColumnWriterState &state);
+	virtual duckdb_parquet::Encoding::type GetEncoding(BasicColumnWriterState &state);
 
 	void NextPage(BasicColumnWriterState &state);
 	void FlushPage(BasicColumnWriterState &state);
@@ -425,18 +425,18 @@ protected:
 	void WriteDictionary(BasicColumnWriterState &state, unique_ptr<MemoryStream> temp_writer, idx_t row_count);
 	virtual void FlushDictionary(BasicColumnWriterState &state, ColumnWriterStatistics *stats);
 
-	void SetParquetStatistics(BasicColumnWriterState &state, duckdb_parquet::format::ColumnChunk &column);
-	void RegisterToRowGroup(duckdb_parquet::format::RowGroup &row_group);
+	void SetParquetStatistics(BasicColumnWriterState &state, duckdb_parquet::ColumnChunk &column);
+	void RegisterToRowGroup(duckdb_parquet::RowGroup &row_group);
 };
 
-unique_ptr<ColumnWriterState> BasicColumnWriter::InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) {
+unique_ptr<ColumnWriterState> BasicColumnWriter::InitializeWriteState(duckdb_parquet::RowGroup &row_group) {
 	auto result = make_uniq<BasicColumnWriterState>(row_group, row_group.columns.size());
 	RegisterToRowGroup(row_group);
 	return std::move(result);
 }
 
-void BasicColumnWriter::RegisterToRowGroup(duckdb_parquet::format::RowGroup &row_group) {
-	format::ColumnChunk column_chunk;
+void BasicColumnWriter::RegisterToRowGroup(duckdb_parquet::RowGroup &row_group) {
+	duckdb_parquet::ColumnChunk column_chunk;
 	column_chunk.__isset.meta_data = true;
 	column_chunk.meta_data.codec = writer.GetCodec();
 	column_chunk.meta_data.path_in_schema = schema_path;
@@ -486,7 +486,7 @@ void BasicColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *p
 	}
 }
 
-duckdb_parquet::format::Encoding::type BasicColumnWriter::GetEncoding(BasicColumnWriterState &state) {
+duckdb_parquet::Encoding::type BasicColumnWriter::GetEncoding(BasicColumnWriterState &state) {
 	return Encoding::PLAIN;
 }
 
@@ -646,8 +646,7 @@ void BasicColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t 
 	}
 }
 
-void BasicColumnWriter::SetParquetStatistics(BasicColumnWriterState &state,
-                                             duckdb_parquet::format::ColumnChunk &column_chunk) {
+void BasicColumnWriter::SetParquetStatistics(BasicColumnWriterState &state, duckdb_parquet::ColumnChunk &column_chunk) {
 	if (max_repeat == 0) {
 		column_chunk.meta_data.statistics.null_count = NumericCast<int64_t>(state.null_count);
 		column_chunk.meta_data.statistics.__isset.null_count = true;
@@ -1270,7 +1269,7 @@ public:
 
 class StringColumnWriterState : public BasicColumnWriterState {
 public:
-	StringColumnWriterState(duckdb_parquet::format::RowGroup &row_group, idx_t col_idx)
+	StringColumnWriterState(duckdb_parquet::RowGroup &row_group, idx_t col_idx)
 	    : BasicColumnWriterState(row_group, col_idx) {
 	}
 	~StringColumnWriterState() override = default;
@@ -1320,7 +1319,7 @@ public:
 		return make_uniq<StringStatisticsState>();
 	}
 
-	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) override {
+	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) override {
 		auto result = make_uniq<StringColumnWriterState>(row_group, row_group.columns.size());
 		RegisterToRowGroup(row_group);
 		return std::move(result);
@@ -1451,7 +1450,7 @@ public:
 		}
 	}
 
-	duckdb_parquet::format::Encoding::type GetEncoding(BasicColumnWriterState &state_p) override {
+	duckdb_parquet::Encoding::type GetEncoding(BasicColumnWriterState &state_p) override {
 		auto &state = state_p.Cast<StringColumnWriterState>();
 		return state.IsDictionaryEncoded() ? Encoding::RLE_DICTIONARY : Encoding::PLAIN;
 	}
@@ -1529,7 +1528,7 @@ private:
 // GeoParquet files.
 class WKBColumnWriterState final : public StringColumnWriterState {
 public:
-	WKBColumnWriterState(ClientContext &context, duckdb_parquet::format::RowGroup &row_group, idx_t col_idx)
+	WKBColumnWriterState(ClientContext &context, duckdb_parquet::RowGroup &row_group, idx_t col_idx)
 	    : StringColumnWriterState(row_group, col_idx), geo_data(), geo_data_writer(context) {
 	}
 
@@ -1547,7 +1546,7 @@ public:
 		this->writer.GetGeoParquetData().RegisterGeometryColumn(column_name);
 	}
 
-	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) override {
+	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) override {
 		auto result = make_uniq<WKBColumnWriterState>(context, row_group, row_group.columns.size());
 		RegisterToRowGroup(row_group);
 		return std::move(result);
@@ -1658,7 +1657,7 @@ public:
 		page_state.encoder.FinishWrite(temp_writer);
 	}
 
-	duckdb_parquet::format::Encoding::type GetEncoding(BasicColumnWriterState &state) override {
+	duckdb_parquet::Encoding::type GetEncoding(BasicColumnWriterState &state) override {
 		return Encoding::RLE_DICTIONARY;
 	}
 
@@ -1710,7 +1709,7 @@ public:
 	vector<unique_ptr<ColumnWriter>> child_writers;
 
 public:
-	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) override;
+	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) override;
 	bool HasAnalyze() override;
 	void Analyze(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) override;
 	void FinalizeAnalyze(ColumnWriterState &state) override;
@@ -1723,17 +1722,17 @@ public:
 
 class StructColumnWriterState : public ColumnWriterState {
 public:
-	StructColumnWriterState(duckdb_parquet::format::RowGroup &row_group, idx_t col_idx)
+	StructColumnWriterState(duckdb_parquet::RowGroup &row_group, idx_t col_idx)
 	    : row_group(row_group), col_idx(col_idx) {
 	}
 	~StructColumnWriterState() override = default;
 
-	duckdb_parquet::format::RowGroup &row_group;
+	duckdb_parquet::RowGroup &row_group;
 	idx_t col_idx;
 	vector<unique_ptr<ColumnWriterState>> child_states;
 };
 
-unique_ptr<ColumnWriterState> StructColumnWriter::InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) {
+unique_ptr<ColumnWriterState> StructColumnWriter::InitializeWriteState(duckdb_parquet::RowGroup &row_group) {
 	auto result = make_uniq<StructColumnWriterState>(row_group, row_group.columns.size());
 
 	result->child_states.reserve(child_writers.size());
@@ -1831,7 +1830,7 @@ public:
 	unique_ptr<ColumnWriter> child_writer;
 
 public:
-	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) override;
+	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) override;
 	bool HasAnalyze() override;
 	void Analyze(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) override;
 	void FinalizeAnalyze(ColumnWriterState &state) override;
@@ -1844,18 +1843,17 @@ public:
 
 class ListColumnWriterState : public ColumnWriterState {
 public:
-	ListColumnWriterState(duckdb_parquet::format::RowGroup &row_group, idx_t col_idx)
-	    : row_group(row_group), col_idx(col_idx) {
+	ListColumnWriterState(duckdb_parquet::RowGroup &row_group, idx_t col_idx) : row_group(row_group), col_idx(col_idx) {
 	}
 	~ListColumnWriterState() override = default;
 
-	duckdb_parquet::format::RowGroup &row_group;
+	duckdb_parquet::RowGroup &row_group;
 	idx_t col_idx;
 	unique_ptr<ColumnWriterState> child_state;
 	idx_t parent_index = 0;
 };
 
-unique_ptr<ColumnWriterState> ListColumnWriter::InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) {
+unique_ptr<ColumnWriterState> ListColumnWriter::InitializeWriteState(duckdb_parquet::RowGroup &row_group) {
 	auto result = make_uniq<ListColumnWriterState>(row_group, row_group.columns.size());
 	result->child_state = child_writer->InitializeWriteState(row_group);
 	return std::move(result);
@@ -2083,7 +2081,7 @@ void ArrayColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t 
 //===--------------------------------------------------------------------===//
 
 unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &context,
-                                                             vector<duckdb_parquet::format::SchemaElement> &schemas,
+                                                             vector<duckdb_parquet::SchemaElement> &schemas,
                                                              ParquetWriter &writer, const LogicalType &type,
                                                              const string &name, vector<string> schema_path,
                                                              optional_ptr<const ChildFieldIDs> field_ids,
@@ -2107,7 +2105,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION) {
 		auto &child_types = StructType::GetChildTypes(type);
 		// set up the schema element for this struct
-		duckdb_parquet::format::SchemaElement schema_element;
+		duckdb_parquet::SchemaElement schema_element;
 		schema_element.repetition_type = null_type;
 		schema_element.num_children = UnsafeNumericCast<int32_t>(child_types.size());
 		schema_element.__isset.num_children = true;
@@ -2137,7 +2135,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		// set up the two schema elements for the list
 		// for some reason we only set the converted type in the OPTIONAL element
 		// first an OPTIONAL element
-		duckdb_parquet::format::SchemaElement optional_element;
+		duckdb_parquet::SchemaElement optional_element;
 		optional_element.repetition_type = null_type;
 		optional_element.num_children = 1;
 		optional_element.converted_type = ConvertedType::LIST;
@@ -2154,7 +2152,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		schema_path.push_back(name);
 
 		// then a REPEATED element
-		duckdb_parquet::format::SchemaElement repeated_element;
+		duckdb_parquet::SchemaElement repeated_element;
 		repeated_element.repetition_type = FieldRepetitionType::REPEATED;
 		repeated_element.num_children = 1;
 		repeated_element.__isset.num_children = true;
@@ -2184,7 +2182,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		// 	}
 		// }
 		// top map element
-		duckdb_parquet::format::SchemaElement top_element;
+		duckdb_parquet::SchemaElement top_element;
 		top_element.repetition_type = null_type;
 		top_element.num_children = 1;
 		top_element.converted_type = ConvertedType::MAP;
@@ -2201,7 +2199,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		schema_path.push_back(name);
 
 		// key_value element
-		duckdb_parquet::format::SchemaElement kv_element;
+		duckdb_parquet::SchemaElement kv_element;
 		kv_element.repetition_type = FieldRepetitionType::REPEATED;
 		kv_element.num_children = 2;
 		kv_element.__isset.repetition_type = true;
@@ -2229,7 +2227,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		return make_uniq<ListColumnWriter>(writer, schema_idx, schema_path, max_repeat, max_define,
 		                                   std::move(struct_writer), can_have_nulls);
 	}
-	duckdb_parquet::format::SchemaElement schema_element;
+	duckdb_parquet::SchemaElement schema_element;
 	schema_element.type = ParquetWriter::DuckDBTypeToParquetType(type);
 	schema_element.repetition_type = null_type;
 	schema_element.__isset.num_children = false;

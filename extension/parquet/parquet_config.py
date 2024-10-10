@@ -40,7 +40,6 @@ source_files = [
 source_files += [
     os.path.sep.join(x.split('/'))
     for x in [
-        'third_party/parquet/parquet_constants.cpp',
         'third_party/parquet/parquet_types.cpp',
         'third_party/thrift/thrift/protocol/TProtocol.cpp',
         'third_party/thrift/thrift/transport/TTransportException.cpp',
