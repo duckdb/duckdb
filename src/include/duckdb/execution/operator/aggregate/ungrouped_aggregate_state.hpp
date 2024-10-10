@@ -11,6 +11,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
 
 namespace duckdb {
 struct DistinctAggregateData;
