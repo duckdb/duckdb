@@ -46,11 +46,7 @@ struct RegrSlopeOperation {
 			if (!Value::DoubleIsFinite(var_pop)) {
 				throw OutOfRangeException("VARPOP is out of range!");
 			}
-			if (var_pop == 0) {
-				finalize_data.ReturnNull();
-				return;
-			}
-			target = cov / var_pop;
+			target = var_pop != 0 ? cov / var_pop : NAN;
 		}
 	}
 
