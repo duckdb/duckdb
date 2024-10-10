@@ -15,6 +15,7 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"expression_rewriter", OptimizerType::EXPRESSION_REWRITER},
     {"filter_pullup", OptimizerType::FILTER_PULLUP},
     {"filter_pushdown", OptimizerType::FILTER_PUSHDOWN},
+    {"empty_result_pullup", OptimizerType::EMPTY_RESULT_PULLUP},
     {"cte_filter_pusher", OptimizerType::CTE_FILTER_PUSHER},
     {"regex_range", OptimizerType::REGEX_RANGE},
     {"in_clause", OptimizerType::IN_CLAUSE},
