@@ -32,12 +32,12 @@ insert into t2 select id, map(k,v), k from t1;
 query II
 select id, v_map[array_sort(k, 'DESC', 'NULLS LAST')[1]] from t2 where id > 3 limit 10;
 ----
-4	[20.000]
-5	[24.000]
-6	[28.000]
-7	[32.000]
-8	[36.000]
-9	[40.000]
+4	20.000
+5	24.000
+6	28.000
+7	32.000
+8	36.000
+9	40.000
 
 
 statement ok
@@ -50,5 +50,5 @@ query I
 SELECT MAP([key], [val])[key] FROM tbl
 WHERE key <> '2';
 ----
-[duck]
-[duckDB]
+duck
+duckDB

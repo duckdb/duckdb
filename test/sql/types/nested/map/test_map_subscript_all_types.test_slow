@@ -8,7 +8,7 @@ statement ok
 PRAGMA enable_verification;
 
 query I nosort all_types
-SELECT [columns(*)]
+SELECT columns(*)
 FROM test_all_types()
 WHERE bool IS NOT NULL;
 ----
