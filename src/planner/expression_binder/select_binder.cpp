@@ -8,10 +8,10 @@ SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNo
     : BaseSelectBinder(binder, context, node, info) {
 }
 
-unique_ptr<ParsedExpression> SelectBinder::GetSQLValueFunction(ParsedExpression& expr) {
-	auto& col = dynamic_cast<ColumnRefExpression&>(expr);
-	const auto& column_name = col.GetColumnName();
-	if(column_name == col.alias) {
+unique_ptr<ParsedExpression> SelectBinder::GetSQLValueFunction(ParsedExpression &expr) {
+	auto &col = dynamic_cast<ColumnRefExpression &>(expr);
+	const auto &column_name = col.GetColumnName();
+	if (column_name == col.alias) {
 		return ExpressionBinder::GetSQLValueFunction(expr);
 	}
 	auto alias_entry = node.bind_state.alias_map.find(column_name);

@@ -44,9 +44,9 @@ string GetSQLValueFunctionName(const string &column_name) {
 	return string();
 }
 
-unique_ptr<ParsedExpression> ExpressionBinder::GetSQLValueFunction(ParsedExpression& expr) {
-	auto& col = dynamic_cast<ColumnRefExpression&>(expr);
-	const auto& column_name = col.GetColumnName();
+unique_ptr<ParsedExpression> ExpressionBinder::GetSQLValueFunction(ParsedExpression &expr) {
+	auto &col = dynamic_cast<ColumnRefExpression &>(expr);
+	const auto &column_name = col.GetColumnName();
 	auto value_function = GetSQLValueFunctionName(column_name);
 	if (value_function.empty()) {
 		return nullptr;

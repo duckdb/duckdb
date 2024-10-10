@@ -69,3 +69,10 @@ select a as "CURRENT_TIMESTAMP" from (VALUES (84), (42)) t(a) order by "CURRENT_
 ----
 42
 84
+
+# issue 14275: sql value function aliased to itself
+statement ok
+select current_timestamp as current_timestamp;
+
+statement ok
+select current_user as current_user;
