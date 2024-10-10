@@ -1,20 +1,45 @@
 #include "duckdb/optimizer/common_aggregate_optimizer.hpp"
 
+#include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
-#include "duckdb/parser/expression_map.hpp"
-#include "duckdb/planner/column_binding_map.hpp"
 
 namespace duckdb {
 
+void CommonAggregateOptimizer::StandardVisitOperator(LogicalOperator &op) {
+	VisitOperatorChildren(op);
+	VisitOperatorExpressions(op);
+}
+
 void CommonAggregateOptimizer::VisitOperator(LogicalOperator &op) {
-	LogicalOperatorVisitor::VisitOperator(op);
 	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-		ExtractCommonAggregates(op.Cast<LogicalAggregate>());
-		break;
+	case LogicalOperatorType::LOGICAL_UNION:
+	case LogicalOperatorType::LOGICAL_EXCEPT:
+	case LogicalOperatorType::LOGICAL_INTERSECT:
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
+		CommonAggregateOptimizer common_aggregate(true);
+		common_aggregate.StandardVisitOperator(op);
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_PROJECTION: {
+		CommonAggregateOptimizer common_aggregate;
+		common_aggregate.StandardVisitOperator(op);
+		return;
+	}
 	default:
 		break;
+	}
+
+	if (!everything_referenced && op.HasProjectionMap()) {
+		// Removing aggregates will mess up projection maps. Better to just remove the maps now
+		// They will be re-added by the 2nd pass of ColumnLifetimeAnalyzer
+		// Note that we cannot clear the projection map if everything is referenced
+		LogicalOperator::ClearProjectionMap(op);
+	}
+
+	StandardVisitOperator(op);
+	if (op.type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+		ExtractCommonAggregates(op.Cast<LogicalAggregate>());
 	}
 }
 

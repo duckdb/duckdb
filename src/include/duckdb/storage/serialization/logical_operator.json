@@ -165,7 +165,7 @@
       },
       {
         "id": 201,
-        "name": "projections",
+        "name": "projection_map",
         "type": "vector<idx_t>"
       }
     ],
