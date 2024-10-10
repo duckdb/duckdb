@@ -45,6 +45,8 @@ struct AttachOptions {
 	string db_type;
 	//! We only set this, if we detect any unrecognized option.
 	string unrecognized_option;
+	//! (optionally) a catalog can be provided with a default table
+	QualifiedName default_table;
 };
 
 //! The AttachedDatabase represents an attached database instance.
