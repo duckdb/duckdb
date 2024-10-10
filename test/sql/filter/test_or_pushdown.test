@@ -8,15 +8,10 @@ PRAGMA explain_output = PHYSICAL_ONLY;
 statement ok
 create table t1 as select range a, 'foo' || (range%100)::VARCHAR b, 100000-range c from range(900000);
 
-query II
-select a,b from t1 where a < 5 or b = 'foo8';
+query I
+select count(*) from t1 where a < 5 or b = 'foo8';
 ----
-0	foo0
-1	foo1
-2	foo2
-3	foo3
-4	foo4
-8	foo8
+9005
 
 query II
 explain select * from t1 where a<5 or b = 'foo8';
@@ -30,8 +25,8 @@ explain select * from t1 where a<5 or c>8000;
 physical_plan	<!REGEX>:.*ZoneMap.*
 
 # two different row groups can be propagated here.
-query II
-select * from t1 where a=5 or a=899999;
+query I
+select a from t1 where a=5 or a=899999;
 ----
 5
 899999
@@ -40,7 +35,7 @@ select * from t1 where a=5 or a=899999;
 query II
 explain analyze select * from t1 where a=5 or a=899999;
 ----
-physical_plan	<REGEX>:.*TABLE_SCAN.*19360.*
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*19360.*
 
 query II
 explain select * from t1 where a<5 or a>10;

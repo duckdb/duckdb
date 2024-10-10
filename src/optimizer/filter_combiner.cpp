@@ -617,20 +617,10 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 					}
 				}
 			}
-			// if we are not consecutive or we are VARCHAR, then we can still push an OR zone_map filter
-			if (!can_simplify_in_to_range && type.IsIntegral()) {
-				auto or_filter = make_uniq<ConjunctionOrFilter>();
-				for (idx_t in_val_idx = 1; in_val_idx < func.children.size(); in_val_idx++) {
-					D_ASSERT(func.children[in_val_idx]->type == ExpressionType::VALUE_CONSTANT);
-					auto &const_val = func.children[in_val_idx]->Cast<BoundConstantExpression>();
-					auto zone_map_filter = make_uniq<ZoneMapFilter>();
-					zone_map_filter->child_filter =
-					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, const_val.value);
-					or_filter->child_filters.push_back(std::move(zone_map_filter));
-				}
-				table_filters.PushFilter(column_index, std::move(or_filter));
-				break;
-			} else if (can_simplify_in_to_range && type.IsIntegral()) {
+			if (!type.IsIntegral()) {
+				continue;
+			}
+			if (can_simplify_in_to_range) {
 				auto lower_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
 				                                             Value::Numeric(type, in_values.front()));
 				auto upper_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
@@ -641,6 +631,19 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 
 				remaining_filters.erase_at(rem_fil_idx);
 			}
+			// if we are still Integral, then we can push a zonemap filter.
+			else if (type.IsIntegral()) {
+				auto or_filter = make_uniq<ConjunctionOrFilter>();
+				for (idx_t in_val_idx = 1; in_val_idx < func.children.size(); in_val_idx++) {
+					D_ASSERT(func.children[in_val_idx]->type == ExpressionType::VALUE_CONSTANT);
+					auto &const_val = func.children[in_val_idx]->Cast<BoundConstantExpression>();
+					auto zone_map_filter = make_uniq<ZoneMapFilter>();
+					zone_map_filter->child_filter =
+					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, const_val.value);
+					or_filter->child_filters.push_back(std::move(zone_map_filter));
+				}
+				table_filters.PushFilter(column_index, std::move(or_filter));
+			}
 		}
 	}
 
@@ -649,46 +652,44 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 		if (remaining_filter->expression_class == ExpressionClass::BOUND_CONJUNCTION) {
 			auto &conj = remaining_filter->Cast<BoundConjunctionExpression>();
 			if (conj.type == ExpressionType::CONJUNCTION_OR) {
-				bool column_id_set = false;
-				bool same_column_id = true;
-				idx_t column_id = 0;
+				optional_idx column_id;
 				auto conj_filter = make_uniq<ConjunctionOrFilter>();
 				for (auto &child : conj.children) {
 					unique_ptr<ZoneMapFilter> zone_filter;
 					if (child->GetExpressionClass() != ExpressionClass::BOUND_COMPARISON) {
-						same_column_id = false;
+						column_id.SetInvalid();
 						break;
 					}
-					BoundColumnRefExpression *column_ref = nullptr;
-					BoundConstantExpression *const_val = nullptr;
+					optional_ptr<BoundColumnRefExpression> column_ref = nullptr;
+					optional_ptr<BoundConstantExpression> const_val = nullptr;
 					auto &comp = child->Cast<BoundComparisonExpression>();
 					if (comp.left->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
 					    comp.right->expression_class == ExpressionClass::BOUND_CONSTANT) {
-						column_ref = &comp.left->Cast<BoundColumnRefExpression>();
-						const_val = &comp.right->Cast<BoundConstantExpression>();
+						column_ref = comp.left->Cast<BoundColumnRefExpression>();
+						const_val = comp.right->Cast<BoundConstantExpression>();
 					} else if (comp.left->expression_class == ExpressionClass::BOUND_CONSTANT &&
 					           comp.right->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
-						column_ref = &comp.right->Cast<BoundColumnRefExpression>();
-						const_val = &comp.left->Cast<BoundConstantExpression>();
+						column_ref = comp.right->Cast<BoundColumnRefExpression>();
+						const_val = comp.left->Cast<BoundConstantExpression>();
 					} else {
 						// child of OR filter is not simple so we do not push the or filter down at all
-						same_column_id = false;
-						column_id_set = false;
+						column_id.SetInvalid();
 						break;
 					}
 
-					if (!column_id_set) {
+					if (!column_id.IsValid()) {
+						if (IsRowIdColumnId(column_ids[column_ref->binding.column_index])) {
+							break;
+						}
 						column_id = column_ids[column_ref->binding.column_index];
-						column_id_set = true;
-					} else if (column_id != column_ids[column_ref->binding.column_index]) {
-						same_column_id = false;
+					} else if (column_id.GetIndex() != column_ids[column_ref->binding.column_index]) {
+						column_id.SetInvalid();
 						break;
 					}
 
 					if (const_val->value.type().IsTemporal() ||
 					    const_val->value.type().id() == LogicalTypeId::VARCHAR) {
-						column_id_set = false;
-						same_column_id = false;
+						column_id.SetInvalid();
 						break;
 					}
 					auto const_filter = make_uniq<ConstantFilter>(comp.type, const_val->value);
@@ -696,8 +697,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 					zone_filter->child_filter = std::move(const_filter);
 					conj_filter->child_filters.push_back(std::move(zone_filter));
 				}
-				if (same_column_id && column_id_set && column_id != DConstants::INVALID_INDEX) {
-					table_filters.PushFilter(column_id, std::move(conj_filter));
+				if (column_id.IsValid()) {
+					table_filters.PushFilter(column_id.GetIndex(), std::move(conj_filter));
 				}
 			}
 		}
