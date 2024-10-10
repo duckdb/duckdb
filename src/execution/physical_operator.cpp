@@ -116,8 +116,9 @@ SourceResultType PhysicalOperator::GetData(ExecutionContext &context, DataChunk 
 	throw InternalException("Calling GetData on a node that is not a source!");
 }
 
-OperatorPartitionData PhysicalOperator::GetPartitionData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                                      LocalSourceState &lstate, const OperatorPartitionInfo &partition_info) const {
+OperatorPartitionData PhysicalOperator::GetPartitionData(ExecutionContext &context, DataChunk &chunk,
+                                                         GlobalSourceState &gstate, LocalSourceState &lstate,
+                                                         const OperatorPartitionInfo &partition_info) const {
 	throw InternalException("Calling GetPartitionData on a node that does not support it");
 }
 

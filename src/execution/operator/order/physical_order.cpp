@@ -264,8 +264,9 @@ SourceResultType PhysicalOrder::GetData(ExecutionContext &context, DataChunk &ch
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
-OperatorPartitionData PhysicalOrder::GetPartitionData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-LocalSourceState &lstate_p, const OperatorPartitionInfo &partition_info) const {
+OperatorPartitionData PhysicalOrder::GetPartitionData(ExecutionContext &context, DataChunk &chunk,
+                                                      GlobalSourceState &gstate_p, LocalSourceState &lstate_p,
+                                                      const OperatorPartitionInfo &partition_info) const {
 	if (partition_info.RequiresPartitionColumns()) {
 		throw InternalException("PhysicalOrder::GetPartitionData: partition columns not supported");
 	}

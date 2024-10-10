@@ -411,13 +411,13 @@ void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReade
 }
 
 void MultiFileReader::GetPartitionData(ClientContext &context, const MultiFileReaderBindData &bind_data,
-					  const MultiFileReaderData &reader_data,
-					  optional_ptr<MultiFileReaderGlobalState> global_state,
-					  const OperatorPartitionInfo &partition_info,
-					  OperatorPartitionData &partition_data) {
-	for(auto &col : partition_info.partition_columns) {
+                                       const MultiFileReaderData &reader_data,
+                                       optional_ptr<MultiFileReaderGlobalState> global_state,
+                                       const OperatorPartitionInfo &partition_info,
+                                       OperatorPartitionData &partition_data) {
+	for (auto &col : partition_info.partition_columns) {
 		bool found_constant = false;
-		for(auto &constant : reader_data.constant_map) {
+		for (auto &constant : reader_data.constant_map) {
 			if (constant.column_id == col) {
 				found_constant = true;
 				partition_data.partition_data.emplace_back(constant.value);
@@ -425,18 +425,19 @@ void MultiFileReader::GetPartitionData(ClientContext &context, const MultiFileRe
 			}
 		}
 		if (!found_constant) {
-			throw InternalException("MultiFileReader::GetPartitionData - did not find constant for the given partition");
+			throw InternalException(
+			    "MultiFileReader::GetPartitionData - did not find constant for the given partition");
 		}
 	}
 }
 
 TablePartitionInfo MultiFileReader::GetPartitionInfo(ClientContext &context, const MultiFileReaderBindData &bind_data,
-										TableFunctionPartitionInput &input) {
+                                                     TableFunctionPartitionInput &input) {
 	// check if all of the columns are in the hive partition set
-	for(auto &partition_col : input.partition_ids) {
+	for (auto &partition_col : input.partition_ids) {
 		// check if this column is in the hive partitioned set
 		bool found = false;
-		for(auto &partition : bind_data.hive_partitioning_indexes) {
+		for (auto &partition : bind_data.hive_partitioning_indexes) {
 			if (partition.index == partition_col) {
 				found = true;
 				break;

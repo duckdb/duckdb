@@ -777,12 +777,15 @@ public:
 		return std::move(result);
 	}
 
-	static OperatorPartitionData ParquetScanGetPartitionData(ClientContext &context,TableFunctionGetPartitionInput &input) {
+	static OperatorPartitionData ParquetScanGetPartitionData(ClientContext &context,
+	                                                         TableFunctionGetPartitionInput &input) {
 		auto &bind_data = input.bind_data->CastNoConst<ParquetReadBindData>();
 		auto &data = input.local_state->Cast<ParquetReadLocalState>();
 		auto &gstate = input.global_state->Cast<ParquetReadGlobalState>();
 		OperatorPartitionData partition_data(data.batch_index);
-		bind_data.multi_file_reader->GetPartitionData(context, bind_data.reader_bind, data.reader->reader_data,gstate.multi_file_reader_state, input.partition_info, partition_data);
+		bind_data.multi_file_reader->GetPartitionData(context, bind_data.reader_bind, data.reader->reader_data,
+		                                              gstate.multi_file_reader_state, input.partition_info,
+		                                              partition_data);
 		return partition_data;
 	}
 

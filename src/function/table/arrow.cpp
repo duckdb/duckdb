@@ -513,7 +513,8 @@ unique_ptr<NodeStatistics> ArrowTableFunction::ArrowScanCardinality(ClientContex
 	return make_uniq<NodeStatistics>();
 }
 
-OperatorPartitionData ArrowTableFunction::ArrowGetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input) {
+OperatorPartitionData ArrowTableFunction::ArrowGetPartitionData(ClientContext &context,
+                                                                TableFunctionGetPartitionInput &input) {
 	if (input.partition_info.RequiresPartitionColumns()) {
 		throw InternalException("ArrowTableFunction::GetPartitionData: partition columns not supported");
 	}

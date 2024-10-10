@@ -184,7 +184,8 @@ OperatorPartitionData TableScanGetPartitionData(ClientContext &context, TableFun
 		return OperatorPartitionData(state.scan_state.table_state.batch_index);
 	}
 	if (state.scan_state.local_state.row_group) {
-		return OperatorPartitionData(state.scan_state.table_state.batch_index + state.scan_state.local_state.batch_index);
+		return OperatorPartitionData(state.scan_state.table_state.batch_index +
+		                             state.scan_state.local_state.batch_index);
 	}
 	return OperatorPartitionData(0);
 }

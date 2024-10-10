@@ -27,7 +27,8 @@ class MetaPipeline;
 class InterruptState;
 
 struct ColumnPartitionData {
-	explicit ColumnPartitionData(Value partition_val) : min(partition_val), max(std::move(partition_val)) {}
+	explicit ColumnPartitionData(Value partition_val) : min(partition_val), max(std::move(partition_val)) {
+	}
 
 	Value min;
 	Value max;

@@ -197,10 +197,10 @@ struct MultiFileReader {
 
 	//! Fetch the partition data for the current chunk
 	DUCKDB_API virtual void GetPartitionData(ClientContext &context, const MultiFileReaderBindData &bind_data,
-					      const MultiFileReaderData &reader_data,
-					      optional_ptr<MultiFileReaderGlobalState> global_state,
-					      const OperatorPartitionInfo &partition_info,
-					      OperatorPartitionData &partition_data);
+	                                         const MultiFileReaderData &reader_data,
+	                                         optional_ptr<MultiFileReaderGlobalState> global_state,
+	                                         const OperatorPartitionInfo &partition_info,
+	                                         OperatorPartitionData &partition_data);
 
 	template <class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
 	MultiFileReaderBindData BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,
@@ -290,8 +290,9 @@ struct MultiFileReader {
 	}
 
 	//! Get partition info
-	DUCKDB_API virtual TablePartitionInfo GetPartitionInfo(ClientContext &context, const MultiFileReaderBindData &bind_data,
-											TableFunctionPartitionInput &input);
+	DUCKDB_API virtual TablePartitionInfo GetPartitionInfo(ClientContext &context,
+	                                                       const MultiFileReaderBindData &bind_data,
+	                                                       TableFunctionPartitionInput &input);
 
 protected:
 	virtual void CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,

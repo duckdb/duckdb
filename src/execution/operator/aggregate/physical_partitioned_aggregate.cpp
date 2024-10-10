@@ -4,10 +4,12 @@
 
 namespace duckdb {
 
-PhysicalPartitionedAggregate::PhysicalPartitionedAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> aggregates_p,
-							 vector<unique_ptr<Expression>> groups_p, vector<column_t> partitions_p, idx_t estimated_cardinality) :
-	PhysicalOperator(PhysicalOperatorType::PARTITIONED_AGGREGATE, std::move(types), estimated_cardinality),
-	partitions(std::move(partitions_p)), groups(std::move(groups_p)), aggregates(std::move(aggregates_p)) {
+PhysicalPartitionedAggregate::PhysicalPartitionedAggregate(ClientContext &context, vector<LogicalType> types,
+                                                           vector<unique_ptr<Expression>> aggregates_p,
+                                                           vector<unique_ptr<Expression>> groups_p,
+                                                           vector<column_t> partitions_p, idx_t estimated_cardinality)
+    : PhysicalOperator(PhysicalOperatorType::PARTITIONED_AGGREGATE, std::move(types), estimated_cardinality),
+      partitions(std::move(partitions_p)), groups(std::move(groups_p)), aggregates(std::move(aggregates_p)) {
 }
 
 OperatorPartitionInfo PhysicalPartitionedAggregate::RequiredPartitionInfo() const {
@@ -19,8 +21,8 @@ OperatorPartitionInfo PhysicalPartitionedAggregate::RequiredPartitionInfo() cons
 class PartitionedAggregateLocalSinkState : public LocalSinkState {
 public:
 	PartitionedAggregateLocalSinkState(const PhysicalPartitionedAggregate &op, const vector<LogicalType> &child_types,
-									 ExecutionContext &context)
-		: child_executor(context.client), aggregate_input_chunk(), filter_set() {
+	                                   ExecutionContext &context)
+	    : child_executor(context.client), aggregate_input_chunk(), filter_set() {
 		auto &allocator = BufferAllocator::Get(context.client);
 
 		vector<LogicalType> payload_types;
@@ -60,8 +62,8 @@ public:
 
 class PartitionedAggregateGlobalSinkState : public GlobalSinkState {
 public:
-	PartitionedAggregateGlobalSinkState(const PhysicalPartitionedAggregate &op, ClientContext &context) :
-	    op(op), aggregate_result(BufferAllocator::Get(context), op.types) {
+	PartitionedAggregateGlobalSinkState(const PhysicalPartitionedAggregate &op, ClientContext &context)
+	    : op(op), aggregate_result(BufferAllocator::Get(context), op.types) {
 	}
 
 	mutex lock;
@@ -114,14 +116,14 @@ unique_ptr<LocalSinkState> PhysicalPartitionedAggregate::GetLocalSinkState(Execu
 // Sink
 //===--------------------------------------------------------------------===//
 SinkResultType PhysicalPartitionedAggregate::Sink(ExecutionContext &context, DataChunk &chunk,
-OperatorSinkInput &input) const {
+                                                  OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<PartitionedAggregateGlobalSinkState>();
 	auto &lstate = input.local_state.Cast<PartitionedAggregateLocalSinkState>();
 	if (!lstate.state) {
 		// the local state is not yet initialized for this partition
 		// initialize the partition
 		child_list_t<Value> partition_values;
-		for(idx_t partition_idx = 0; partition_idx < groups.size(); partition_idx++) {
+		for (idx_t partition_idx = 0; partition_idx < groups.size(); partition_idx++) {
 			auto column_name = to_string(partition_idx);
 			auto &partition = input.local_state.partition_info.partition_data[partition_idx];
 			D_ASSERT(Value::NotDistinctFrom(partition.min, partition.max));
@@ -166,7 +168,7 @@ OperatorSinkInput &input) const {
 		// resolve the child expressions of the aggregate (if any)
 		for (idx_t i = 0; i < aggregate.children.size(); ++i) {
 			lstate.child_executor.ExecuteExpression(payload_idx + payload_cnt,
-												  payload_chunk.data[payload_idx + payload_cnt]);
+			                                        payload_chunk.data[payload_idx + payload_cnt]);
 			payload_cnt++;
 		}
 
@@ -178,7 +180,8 @@ OperatorSinkInput &input) const {
 //===--------------------------------------------------------------------===//
 // Next Batch
 //===--------------------------------------------------------------------===//
-SinkNextBatchType PhysicalPartitionedAggregate::NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const {
+SinkNextBatchType PhysicalPartitionedAggregate::NextBatch(ExecutionContext &context,
+                                                          OperatorSinkNextBatchInput &input) const {
 	// flush the local state
 	auto &gstate = input.global_state.Cast<PartitionedAggregateGlobalSinkState>();
 	auto &lstate = input.local_state.Cast<PartitionedAggregateLocalSinkState>();
@@ -192,7 +195,7 @@ SinkNextBatchType PhysicalPartitionedAggregate::NextBatch(ExecutionContext &cont
 // Combine
 //===--------------------------------------------------------------------===//
 SinkCombineResultType PhysicalPartitionedAggregate::Combine(ExecutionContext &context,
-														  OperatorSinkCombineInput &input) const {
+                                                            OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<PartitionedAggregateGlobalSinkState>();
 	auto &lstate = input.local_state.Cast<PartitionedAggregateLocalSinkState>();
 	gstate.Combine(context.client, lstate);
@@ -202,18 +205,19 @@ SinkCombineResultType PhysicalPartitionedAggregate::Combine(ExecutionContext &co
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-SinkFinalizeType PhysicalPartitionedAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context, OperatorSinkFinalizeInput &input) const {
+SinkFinalizeType PhysicalPartitionedAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                                        OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<PartitionedAggregateGlobalSinkState>();
 	ColumnDataAppendState append_state;
 	gstate.aggregate_result.InitializeAppend(append_state);
 	// finalize each of the partitions and append to a ColumnDataCollection
 	DataChunk chunk;
 	chunk.Initialize(context, types);
-	for(auto &entry : gstate.aggregate_states) {
+	for (auto &entry : gstate.aggregate_states) {
 		chunk.Reset();
 		// reference the partitions
 		auto &partitions = StructValue::GetChildren(entry.first);
-		for(idx_t partition_idx = 0; partition_idx < partitions.size(); partition_idx++) {
+		for (idx_t partition_idx = 0; partition_idx < partitions.size(); partition_idx++) {
 			chunk.data[partition_idx].Reference(partitions[partition_idx]);
 		}
 		// finalize the aggregates
@@ -247,7 +251,7 @@ unique_ptr<GlobalSourceState> PhysicalPartitionedAggregate::GetGlobalSourceState
 }
 
 SourceResultType PhysicalPartitionedAggregate::GetData(ExecutionContext &context, DataChunk &chunk,
-													 OperatorSourceInput &input) const {
+                                                       OperatorSourceInput &input) const {
 	auto &gstate = sink_state->Cast<PartitionedAggregateGlobalSinkState>();
 	auto &gsource = input.global_state.Cast<PartitionedAggregateGlobalSourceState>();
 	gstate.aggregate_result.Scan(gsource.scan_state, chunk);
@@ -282,5 +286,4 @@ InsertionOrderPreservingMap<string> PhysicalPartitionedAggregate::ParamsToString
 	return result;
 }
 
-}
-
+} // namespace duckdb

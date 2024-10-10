@@ -29,15 +29,15 @@ class Pipeline;
 class PipelineBuildState;
 class MetaPipeline;
 
-enum class PartitionInfo {
-	NONE,
-	REQUIRES_BATCH_INDEX
-};
+enum class PartitionInfo { NONE, REQUIRES_BATCH_INDEX };
 
 struct OperatorPartitionInfo {
 	OperatorPartitionInfo() = default;
-	explicit OperatorPartitionInfo(bool batch_index) : batch_index(batch_index) {}
-	explicit OperatorPartitionInfo(vector<column_t> partition_columns_p) : partition_columns(std::move(partition_columns_p)) {}
+	explicit OperatorPartitionInfo(bool batch_index) : batch_index(batch_index) {
+	}
+	explicit OperatorPartitionInfo(vector<column_t> partition_columns_p)
+	    : partition_columns(std::move(partition_columns_p)) {
+	}
 
 	bool batch_index = false;
 	vector<column_t> partition_columns;
@@ -63,7 +63,8 @@ struct OperatorPartitionInfo {
 };
 
 struct OperatorPartitionData {
-	explicit OperatorPartitionData(idx_t batch_index) : batch_index(batch_index) {}
+	explicit OperatorPartitionData(idx_t batch_index) : batch_index(batch_index) {
+	}
 
 	idx_t batch_index;
 	vector<ColumnPartitionData> partition_data;
@@ -153,8 +154,9 @@ public:
 	virtual unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
 	virtual SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const;
 
-	virtual OperatorPartitionData GetPartitionData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-	                            LocalSourceState &lstate, const OperatorPartitionInfo &partition_info) const;
+	virtual OperatorPartitionData GetPartitionData(ExecutionContext &context, DataChunk &chunk,
+	                                               GlobalSourceState &gstate, LocalSourceState &lstate,
+	                                               const OperatorPartitionInfo &partition_info) const;
 
 	virtual bool IsSource() const {
 		return false;

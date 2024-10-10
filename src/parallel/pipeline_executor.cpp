@@ -115,7 +115,8 @@ SinkNextBatchType PipelineExecutor::NextBatch(DataChunk &source_chunk) {
 	OperatorPartitionData next_data(max_batch_index);
 	if (source_chunk.size() > 0) {
 		// if we retrieved data - initialize the next batch index
-		auto partition_data = pipeline.source->GetPartitionData(context, source_chunk, *pipeline.source_state, *local_source_state, required_partition_info);
+		auto partition_data = pipeline.source->GetPartitionData(context, source_chunk, *pipeline.source_state,
+		                                                        *local_source_state, required_partition_info);
 		auto batch_index = partition_data.batch_index;
 		// we start with the base_batch_index as a valid starting value. Make sure that next batch is called below
 		next_data = std::move(partition_data);

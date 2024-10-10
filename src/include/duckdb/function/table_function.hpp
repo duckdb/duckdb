@@ -153,10 +153,11 @@ struct TableFunctionPartitionInput {
 struct TableFunctionGetPartitionInput {
 public:
 	TableFunctionGetPartitionInput(optional_ptr<const FunctionData> bind_data_p,
-			   optional_ptr<LocalTableFunctionState> local_state_p,
-			   optional_ptr<GlobalTableFunctionState> global_state_p,
-			   const OperatorPartitionInfo &partition_info_p)
-	    : bind_data(bind_data_p), local_state(local_state_p), global_state(global_state_p), partition_info(partition_info_p) {
+	                               optional_ptr<LocalTableFunctionState> local_state_p,
+	                               optional_ptr<GlobalTableFunctionState> global_state_p,
+	                               const OperatorPartitionInfo &partition_info_p)
+	    : bind_data(bind_data_p), local_state(local_state_p), global_state(global_state_p),
+	      partition_info(partition_info_p) {
 	}
 
 public:
@@ -231,7 +232,8 @@ typedef OperatorResultType (*table_in_out_function_t)(ExecutionContext &context,
                                                       DataChunk &input, DataChunk &output);
 typedef OperatorFinalizeResultType (*table_in_out_function_final_t)(ExecutionContext &context, TableFunctionInput &data,
                                                                     DataChunk &output);
-typedef OperatorPartitionData (*table_function_get_partition_data_t)(ClientContext &context, TableFunctionGetPartitionInput &input);
+typedef OperatorPartitionData (*table_function_get_partition_data_t)(ClientContext &context,
+                                                                     TableFunctionGetPartitionInput &input);
 
 typedef BindInfo (*table_function_get_bind_info_t)(const optional_ptr<FunctionData> bind_data);
 
