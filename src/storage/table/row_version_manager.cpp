@@ -145,6 +145,7 @@ void RowVersionManager::CleanupAppend(transaction_t lowest_active_transaction, i
 		}
 		if (!vector_info[vector_idx]) {
 			// already vacuumed - skip
+			continue;
 		}
 		auto &info = *vector_info[vector_idx];
 		// if we wrote the entire chunk info try to compress it
