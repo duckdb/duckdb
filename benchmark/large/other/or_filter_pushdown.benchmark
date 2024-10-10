@@ -9,7 +9,11 @@ subgroup or_filter_pushdown
 cache or_filter_pushdown_benchmark_big.db
 
 load
-create table t1 as select range id from range(100000000);
+create table t1 as select range id from range(10000000);
 
 run
-select * from t1 where id in (5, 99999999);
+select * from t1 where id in (5, 9999995);
+
+result I
+5
+9999995

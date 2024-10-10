@@ -123,8 +123,8 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 		bool has_equality_filter = (cardinality_after_filters != base_table_cardinality);
 		if (!has_equality_filter && !get.table_filters.filters.empty()) {
 			cardinality_after_filters = MaxValue<idx_t>(
-				LossyNumericCast<idx_t>(double(base_table_cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY),
-				1U);
+			    LossyNumericCast<idx_t>(double(base_table_cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY),
+			    1U);
 		}
 		if (base_table_cardinality == 0) {
 			cardinality_after_filters = 0;
