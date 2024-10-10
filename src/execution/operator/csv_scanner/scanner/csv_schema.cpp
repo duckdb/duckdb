@@ -60,7 +60,7 @@ bool CSVSchema::Empty() const {
 	return columns.empty();
 }
 
-bool CSVSchema::SchemasMatch(string &error_message, weak_ptr<SnifferResult> sniffer_result_ptr,
+bool CSVSchema::SchemasMatch(string &error_message, const weak_ptr<SnifferResult> &sniffer_result_ptr,
                              const string &cur_file_path, bool is_minimal_sniffer) const {
 	auto sniffer_result = sniffer_result_ptr.lock();
 	D_ASSERT(sniffer_result);
