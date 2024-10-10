@@ -1,0 +1,62 @@
+# name: test/sql/filter/test_or_pushdown.test
+# description: Test or filter pushdown into zone maps
+# group: [filter]
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+statement ok
+create table t1 as select range a, 'foo' || (range%100)::VARCHAR b, 100000-range c from range(10000);
+
+
+query II
+select a,b from t1 where a < 5 or b = 'foo8';
+----
+0	foo0
+1	foo1
+2	foo2
+3	foo3
+4	foo4
+8	foo8
+
+query II
+explain select * from t1 where a<5 or b = 'foo8';
+----
+physical_plan	<!REGEX>:.*ZoneMap.*
+
+# columns are different
+query II
+explain select * from t1 where a<5 or c>8000;
+----
+physical_plan	<!REGEX>:.*ZoneMap.*
+
+# a > 5 or a < 10, no pushdown????
+query II
+explain select * from t1 where a<5 or a>10;
+----
+physical_plan	<REGEX>:.*ZoneMap.*
+
+query II
+explain select * from t1 where a in (1, 5, 10);
+----
+physical_plan	<REGEX>:.*ZoneMap.*
+
+query II
+explain select * from t1 where a = 1 or a = 5 or a = 10;
+----
+physical_plan	<REGEX>:.*ZoneMap.*
+
+query II
+explain select * from t1 where a in (1, 2, 3);
+----
+physical_plan	<!REGEX>:.*ZoneMap.*
+
+query II
+explain select * from t1 where a in (1);
+----
+physical_plan	<!REGEX>:.*ZoneMap.*
+
+query II
+explain select b from t1 where b = 'foo9' or b = 'foo10';
+----
+physical_plan	<!REGEX>:.*ZoneMap.*

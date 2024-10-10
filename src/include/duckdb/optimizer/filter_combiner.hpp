@@ -47,7 +47,7 @@ public:
 
 	void GenerateFilters(const std::function<void(unique_ptr<Expression> filter)> &callback);
 	bool HasFilters();
-	TableFilterSet GenerateTableScanFilters(const vector<idx_t> &column_ids, LogicalOperator *op = nullptr);
+	TableFilterSet GenerateTableScanFilters(const vector<idx_t> &column_ids);
 	// vector<unique_ptr<TableFilter>> GenerateZonemapChecks(vector<idx_t> &column_ids, vector<unique_ptr<TableFilter>>
 	// &pushed_filters);
 

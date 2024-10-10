@@ -134,7 +134,7 @@ explain select id, value, part, CAST(date AS DATE) as date_cast from parquet_sca
 ----
 physical_plan	<REGEX>:.*PARQUET_SCAN.*File Filters:.*\(CAST\(date AS DATE\) =.*'2013.*-01-01'::DATE\).*
 
-## Idem
+# Idem
 query II
 explain select id, value, part, CAST(date AS DATE) as date_cast from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where (date_cast=CAST('2012-01-01' as DATE) AND (value='value2' OR concat(date_cast::VARCHAR, part) == '2012-01-01a'));
 ----
@@ -142,7 +142,7 @@ physical_plan	<REGEX>:.*PARQUET_SCAN.*File Filters:.*\(CAST\(date AS DATE\) =.*'
 
 # Confirm that hive partitions override existing columns
 
-## Without hive partitioning we just read the files, note the mismatch here between the hive partition in the filename and the col in the file
+# Without hive partitioning we just read the files, note the mismatch here between the hive partition in the filename and the col in the file
 query III
 SELECT a, b, replace(filename, '\', '/') filename FROM parquet_scan('data/parquet-testing/hive-partitioning/hive_col_also_in_file/*/test.parquet', HIVE_PARTITIONING=0, FILENAME=1) order by filename;
 ----

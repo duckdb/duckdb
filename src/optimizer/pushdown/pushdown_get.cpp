@@ -52,7 +52,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 
 	//! We generate the table filters that will be executed during the table scan
 	//! Right now this only executes simple AND filters
-	get.table_filters = combiner.GenerateTableScanFilters(get.GetColumnIds(), op.get());
+	get.table_filters = combiner.GenerateTableScanFilters(get.GetColumnIds());
 
 	GenerateFilters();
 

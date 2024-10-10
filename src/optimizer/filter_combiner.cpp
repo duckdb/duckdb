@@ -436,7 +436,7 @@ static unique_ptr<TableFilter> PushDownFilterIntoExpr(const Expression &expr, un
 	return inner_filter;
 }
 
-TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &column_ids, LogicalOperator *op) {
+TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &column_ids) {
 	TableFilterSet table_filters;
 	//! First, we figure the filters that have constant expressions that we can push down to the table scan
 	for (auto &constant_value : constant_values) {
@@ -643,11 +643,6 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 			}
 		}
 	}
-	// TODO: add tests for these
-	// OR filters on different columns: X = 1 OR Y = 1
-	// OR filters on composite expressions: X + 1 = 1 OR X + 2 = 1
-	// OR filters combined with different expressions: X = 1 OR X + Y < 0.5
-	// OR filters with different comparison types: X > 1 OR X < 0
 
 	for (idx_t rem_fil_idx = 0; rem_fil_idx < remaining_filters.size(); rem_fil_idx++) {
 		auto &remaining_filter = remaining_filters[rem_fil_idx];

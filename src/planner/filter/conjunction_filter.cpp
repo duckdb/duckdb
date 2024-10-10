@@ -1,8 +1,5 @@
 #include "duckdb/planner/filter/conjunction_filter.hpp"
-
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
-#include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
 
 namespace duckdb {
 

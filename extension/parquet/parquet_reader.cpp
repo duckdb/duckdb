@@ -1055,7 +1055,6 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 
 		auto &group = GetGroup(state);
 		if (state.prefetch_mode && state.group_offset != (idx_t)group.num_rows) {
-			// here means some filter pruning is happening.
 			uint64_t total_row_group_span = GetGroupSpan(state);
 
 			double scan_percentage = (double)(to_scan_compressed_bytes) / static_cast<double>(total_row_group_span);

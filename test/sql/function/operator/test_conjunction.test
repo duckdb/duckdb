@@ -17,6 +17,11 @@ SELECT * FROM a WHERE (i > 3 AND j < 5) OR (i > 3 AND j > 5);
 ----
 5	6
 
+query II
+explain SELECT * FROM a WHERE (i > 3 AND j < 5) OR (i > 3 AND j > 5);
+----
+physical_plan	<REGEX>:.*ZoneMap.*
+
 # test boolean logic in conjunctions
 query T
 SELECT true AND true
