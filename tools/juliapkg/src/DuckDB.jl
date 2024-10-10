@@ -9,7 +9,7 @@ using Tables
 using UUIDs
 using FixedPointDecimals
 
-export DBInterface, DuckDBException
+export DBInterface
 
 abstract type ResultType end
 struct MaterializedResult <: ResultType end
