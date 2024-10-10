@@ -20,6 +20,7 @@
 #include "duckdb/common/enums/stream_execution_result.hpp"
 #include "duckdb_python/arrow/arrow_export_utils.hpp"
 #include "duckdb/main/chunk_scan_state/query_result.hpp"
+#include "duckdb/common/arrow/arrow_query_result.hpp"
 
 namespace duckdb {
 
@@ -336,42 +337,6 @@ py::dict DuckDBPyResult::FetchTF() {
 	return result_dict;
 }
 
-bool DuckDBPyResult::FetchArrowChunk(ChunkScanState &scan_state, py::list &batches, idx_t rows_per_batch,
-                                     bool to_polars) {
-	ArrowArray data;
-	idx_t count;
-	auto &query_result = *result.get();
-	{
-		D_ASSERT(py::gil_check());
-		py::gil_scoped_release release;
-		count = ArrowUtil::FetchChunk(scan_state, query_result.client_properties, rows_per_batch, &data);
-	}
-	if (count == 0) {
-		return false;
-	}
-	ArrowSchema arrow_schema;
-	auto names = query_result.names;
-	if (to_polars) {
-		QueryResult::DeduplicateColumns(names);
-	}
-	ArrowConverter::ToArrowSchema(&arrow_schema, query_result.types, names, query_result.client_properties);
-	TransformDuckToArrowChunk(arrow_schema, data, batches);
-	return true;
-}
-
-py::list DuckDBPyResult::FetchAllArrowChunks(idx_t rows_per_batch, bool to_polars) {
-	if (!result) {
-		throw InvalidInputException("result closed");
-	}
-	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
-
-	py::list batches;
-	QueryResultChunkScanState scan_state(*result.get());
-	while (FetchArrowChunk(scan_state, batches, rows_per_batch, to_polars)) {
-	}
-	return batches;
-}
-
 duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch, bool to_polars) {
 	if (!result) {
 		throw InvalidInputException("There is no query result");
@@ -380,8 +345,52 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch, boo
 	if (to_polars) {
 		QueryResult::DeduplicateColumns(names);
 	}
-	return pyarrow::ToArrowTable(result->types, names, FetchAllArrowChunks(rows_per_batch, to_polars),
-	                             result->client_properties);
+
+	if (!result) {
+		throw InvalidInputException("result closed");
+	}
+	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
+
+	py::list batches;
+	if (result->type == QueryResultType::ARROW_RESULT) {
+		auto &arrow_result = result->Cast<ArrowQueryResult>();
+		auto arrays = arrow_result.ConsumeArrays();
+		for (auto &array : arrays) {
+			ArrowSchema arrow_schema;
+			auto names = arrow_result.names;
+			if (to_polars) {
+				QueryResult::DeduplicateColumns(names);
+			}
+			ArrowArray data = array->arrow_array;
+			array->arrow_array.release = nullptr;
+			ArrowConverter::ToArrowSchema(&arrow_schema, arrow_result.types, names, arrow_result.client_properties);
+			TransformDuckToArrowChunk(arrow_schema, data, batches);
+		}
+	} else {
+		QueryResultChunkScanState scan_state(*result.get());
+		while (true) {
+			ArrowArray data;
+			idx_t count;
+			auto &query_result = *result.get();
+			{
+				D_ASSERT(py::gil_check());
+				py::gil_scoped_release release;
+				count = ArrowUtil::FetchChunk(scan_state, query_result.client_properties, rows_per_batch, &data);
+			}
+			if (count == 0) {
+				break;
+			}
+			ArrowSchema arrow_schema;
+			auto names = query_result.names;
+			if (to_polars) {
+				QueryResult::DeduplicateColumns(names);
+			}
+			ArrowConverter::ToArrowSchema(&arrow_schema, query_result.types, names, query_result.client_properties);
+			TransformDuckToArrowChunk(arrow_schema, data, batches);
+		}
+	}
+
+	return pyarrow::ToArrowTable(result->types, names, std::move(batches), result->client_properties);
 }
 
 ArrowArrayStream DuckDBPyResult::FetchArrowArrayStream(idx_t rows_per_batch) {
