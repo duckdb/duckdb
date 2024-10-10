@@ -23,7 +23,7 @@ protected:
 	BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override;
 
 	bool QualifyColumnAlias(const ColumnRefExpression &colref) override;
-	unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name) override;
+	unique_ptr<ParsedExpression> GetSQLValueFunction(ParsedExpression& expr) override;
 
 protected:
 	idx_t unnest_level = 0;

@@ -44,7 +44,9 @@ string GetSQLValueFunctionName(const string &column_name) {
 	return string();
 }
 
-unique_ptr<ParsedExpression> ExpressionBinder::GetSQLValueFunction(const string &column_name) {
+unique_ptr<ParsedExpression> ExpressionBinder::GetSQLValueFunction(ParsedExpression& expr) {
+	auto& col = dynamic_cast<ColumnRefExpression&>(expr);
+	const auto& column_name = col.GetColumnName();
 	auto value_function = GetSQLValueFunctionName(column_name);
 	if (value_function.empty()) {
 		return nullptr;
@@ -430,7 +432,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 			}
 
 			// column was not found - check if it is a SQL value function
-			auto value_function = GetSQLValueFunction(col_ref_p.GetColumnName());
+			auto value_function = GetSQLValueFunction(col_ref_p);
 			if (value_function) {
 				return BindExpression(value_function, depth);
 			}
