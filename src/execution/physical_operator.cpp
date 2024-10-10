@@ -180,7 +180,7 @@ bool PhysicalOperator::OperatorCachingAllowed(ExecutionContext &context) {
 		return false;
 	} else {
 		auto partition_info = context.pipeline->GetSink()->RequiredPartitionInfo();
-		if (partition_info.batch_index) {
+		if (partition_info.AnyRequired()) {
 			return false;
 		}
 	}
