@@ -118,8 +118,9 @@ public:
 	//! 3. Type Refinement: Refines the types of the columns for the remaining chunks
 	//! 4. Header Detection: Figures out if  the CSV file has a header and produces the names of the columns
 	//! 5. Type Replacement: Replaces the types of the columns if the user specified them
+	void SniffCSVInternal(bool force_match);
+	shared_ptr<SnifferResult> SniffCSVShared(bool force_match = false);
 	SnifferResult SniffCSV(bool force_match = false);
-
 	//! I call it adaptive, since that's a sexier term.
 	//! In practice this Function that only sniffs the first two rows, to verify if a header exists and what are the
 	//! data types It does this considering a priorly set CSV schema. If there is a mismatch of the schema it runs the
@@ -128,7 +129,7 @@ public:
 	SnifferResult AdaptiveSniff(const CSVSchema &file_schema);
 
 	//! Function that only sniffs the first two rows, to verify if a header exists and what are the data types
-	AdaptiveSnifferResult MinimalSniff();
+	shared_ptr<AdaptiveSnifferResult> MinimalSniff();
 
 	static NewLineIdentifier DetectNewLineDelimiter(CSVBufferManager &buffer_manager);
 

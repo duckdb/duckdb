@@ -60,8 +60,10 @@ bool CSVSchema::Empty() const {
 	return columns.empty();
 }
 
-bool CSVSchema::SchemasMatch(string &error_message, SnifferResult *sniffer_result, const string &cur_file_path,
-                             bool is_minimal_sniffer) const {
+bool CSVSchema::SchemasMatch(string &error_message, weak_ptr<SnifferResult> sniffer_result_ptr,
+                             const string &cur_file_path, bool is_minimal_sniffer) const {
+	auto sniffer_result = sniffer_result_ptr.lock();
+	D_ASSERT(sniffer_result);
 	D_ASSERT(sniffer_result->names.size() == sniffer_result->return_types.size());
 	bool match = true;
 	unordered_map<string, TypeIdxPair> current_schema;
@@ -71,8 +73,8 @@ bool CSVSchema::SchemasMatch(string &error_message, SnifferResult *sniffer_resul
 		current_schema[sniffer_result->names[i]] = {sniffer_result->return_types[i], i};
 	}
 	if (is_minimal_sniffer) {
-		auto min_sniffer = static_cast<AdaptiveSnifferResult *>(sniffer_result);
-		if (!min_sniffer->more_than_one_row) {
+		auto min_sniffer = static_cast<AdaptiveSnifferResult *>(sniffer_result.get());
+		if (min_sniffer && !min_sniffer->more_than_one_row) {
 			bool min_sniff_match = true;
 			// If we don't have more than one row, either the names must match or the types must match.
 			for (auto &column : columns) {
