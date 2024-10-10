@@ -48,6 +48,10 @@ InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
 	}
 	result["Filters"] = filters_info;
 
+	if (extra_info.sample_options) {
+		result["Sample Method"] = "System: " + extra_info.sample_options->sample_size.ToString() + "%";
+	}
+
 	if (!extra_info.file_filters.empty()) {
 		result["File Filters"] = extra_info.file_filters;
 		if (extra_info.filtered_files.IsValid() && extra_info.total_files.IsValid()) {
