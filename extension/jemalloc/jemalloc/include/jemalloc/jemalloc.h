@@ -64,7 +64,7 @@ extern "C" {
 #  endif
 #endif
 
-    /* sizeof(void *) == 2^LG_SIZEOF_PTR. */
+/* sizeof(void *) == 2^LG_SIZEOF_PTR. */
 #include <limits.h>
 #ifdef _MSC_VER
 #  define LG_SIZEOF_PTR LG_SIZEOF_PTR_WIN

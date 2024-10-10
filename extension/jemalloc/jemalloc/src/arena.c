@@ -473,7 +473,7 @@ arena_decay_impl(tsdn_t *tsdn, arena_t *arena, decay_t *decay,
 	    arena_decide_unforced_purge_eagerness(is_background_thread);
 	bool epoch_advanced = pac_maybe_decay_purge(tsdn, &arena->pa_shard.pac,
 	    decay, decay_stats, ecache, eagerness);
-	size_t npages_new;
+	size_t npages_new JEMALLOC_CLANG_ANALYZER_SILENCE_INIT(0);
 	if (epoch_advanced) {
 		/* Backlog is updated on epoch advance. */
 		npages_new = decay_epoch_npages_delta(decay);
@@ -1047,14 +1047,16 @@ arena_bin_choose(tsdn_t *tsdn, arena_t *arena, szind_t binind,
 
 void
 arena_cache_bin_fill_small(tsdn_t *tsdn, arena_t *arena,
-    cache_bin_t *cache_bin, szind_t binind, const cache_bin_sz_t nfill) {
+    cache_bin_t *cache_bin, szind_t binind, const cache_bin_sz_t nfill_min,
+    const cache_bin_sz_t nfill_max) {
 	assert(cache_bin_ncached_get_local(cache_bin) == 0);
-	assert(nfill != 0);
+	assert(nfill_min > 0 && nfill_min <= nfill_max);
+	assert(nfill_max <= cache_bin_ncached_max_get(cache_bin));
 
 	const bin_info_t *bin_info = &bin_infos[binind];
 
-	CACHE_BIN_PTR_ARRAY_DECLARE(ptrs, nfill);
-	cache_bin_init_ptr_array_for_fill(cache_bin, &ptrs, nfill);
+	CACHE_BIN_PTR_ARRAY_DECLARE(ptrs, nfill_max);
+	cache_bin_init_ptr_array_for_fill(cache_bin, &ptrs, nfill_max);
 	/*
 	 * Bin-local resources are used first: 1) bin->slabcur, and 2) nonfull
 	 * slabs.  After both are exhausted, new slabs will be allocated through
@@ -1101,13 +1103,19 @@ label_refill:
 	malloc_mutex_lock(tsdn, &bin->lock);
 	arena_bin_flush_batch_after_lock(tsdn, arena, bin, binind, &batch_flush_state);
 
-	while (filled < nfill) {
+	while (filled < nfill_min) {
 		/* Try batch-fill from slabcur first. */
 		edata_t *slabcur = bin->slabcur;
 		if (slabcur != NULL && edata_nfree_get(slabcur) > 0) {
-			unsigned tofill = nfill - filled;
-			unsigned nfree = edata_nfree_get(slabcur);
-			unsigned cnt = tofill < nfree ? tofill : nfree;
+			/*
+			 * Use up the free slots if the total filled <= nfill_max.
+			 * Otherwise, fallback to nfill_min for a more conservative
+			 * memory usage.
+			 */
+			unsigned cnt = edata_nfree_get(slabcur);
+			if (cnt + filled > nfill_max) {
+				cnt = nfill_min - filled;
+			}
 
 			arena_slab_reg_alloc_batch(slabcur, bin_info, cnt,
 			    &ptrs.ptr[filled]);
@@ -1144,7 +1152,7 @@ label_refill:
 		assert(fresh_slab == NULL);
 		assert(!alloc_and_retry);
 		break;
-	} /* while (filled < nfill) loop. */
+	} /* while (filled < nfill_min) loop. */
 
 	if (config_stats && !alloc_and_retry) {
 		bin->stats.nmalloc += filled;
@@ -1162,7 +1170,7 @@ label_refill:
 
 	if (alloc_and_retry) {
 		assert(fresh_slab == NULL);
-		assert(filled < nfill);
+		assert(filled < nfill_min);
 		assert(made_progress);
 
 		fresh_slab = arena_slab_alloc(tsdn, arena, binind, binshard,
@@ -1173,7 +1181,8 @@ label_refill:
 		made_progress = false;
 		goto label_refill;
 	}
-	assert(filled == nfill || (fresh_slab == NULL && !made_progress));
+	assert((filled >= nfill_min && filled <= nfill_max) ||
+	    (fresh_slab == NULL && !made_progress));
 
 	/* Release if allocated but not used. */
 	if (fresh_slab != NULL) {

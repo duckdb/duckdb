@@ -10,10 +10,10 @@
 
 #include "duckdb/common/bitpacking.hpp"
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/pair.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/storage/compression/alp/alp_constants.hpp"
 #include "duckdb/storage/compression/alp/alp_utils.hpp"
 
@@ -233,10 +233,10 @@ struct AlpCompression {
 		// Note that this vector is always small (< 10 combinations)
 		vector<AlpCombination> best_k_combinations;
 		for (auto const &combination : best_k_combinations_hash) {
-			best_k_combinations.emplace_back(
-			    combination.first,  // Encoding Indices
-			    combination.second, // N of times it appeared (hash value)
-			    0 // Compression size is irrelevant at this phase since we compare combinations from different vectors
+			best_k_combinations.emplace_back(combination.first,  // Encoding Indices
+			                                 combination.second, // N of times it appeared (hash value)
+			                                 0ULL // Compression size is irrelevant at this phase since we compare
+			                                      // combinations from different vectors
 			);
 		}
 		sort(best_k_combinations.begin(), best_k_combinations.end(), CompareALPCombinations);

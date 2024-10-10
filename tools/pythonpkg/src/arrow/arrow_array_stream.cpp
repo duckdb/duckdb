@@ -384,7 +384,7 @@ py::object TransformFilterRecursive(TableFilter *filter, vector<string> &column_
 }
 
 py::object PythonTableArrowArrayStreamFactory::TransformFilter(TableFilterSet &filter_collection,
-                                                               std::unordered_map<idx_t, string> &columns,
+                                                               unordered_map<idx_t, string> &columns,
                                                                unordered_map<idx_t, idx_t> filter_to_col,
                                                                const ClientProperties &config,
                                                                const ArrowTableType &arrow_table) {

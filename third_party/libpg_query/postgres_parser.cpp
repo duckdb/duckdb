@@ -27,7 +27,7 @@ vector<duckdb_libpgquery::PGSimplifiedToken> PostgresParser::Tokenize(const std:
 	duckdb_libpgquery::pg_parser_init();
 	auto tokens = duckdb_libpgquery::tokenize(query.c_str());
 	duckdb_libpgquery::pg_parser_cleanup();
-	return std::move(tokens);
+	return tokens;
 }
 
 PostgresParser::~PostgresParser()  {

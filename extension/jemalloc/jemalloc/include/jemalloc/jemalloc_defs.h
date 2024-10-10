@@ -21,7 +21,7 @@
 #define JEMALLOC_HAVE_ATTR_COLD 
 
 /* Defined if deprecated attribute is supported. */
-// #define JEMALLOC_HAVE_ATTR_DEPRECATED
+//#define JEMALLOC_HAVE_ATTR_DEPRECATED
 
 /*
  * Define overrides for non-standard allocator-related functions if they are
@@ -56,11 +56,4 @@
 #endif
 
 /* sizeof(void *) == 2^LG_SIZEOF_PTR. */
-#include <limits.h>
-#ifdef _MSC_VER
-#  define LG_SIZEOF_PTR LG_SIZEOF_PTR_WIN
-#elif INTPTR_MAX == INT64_MAX
-#  define LG_SIZEOF_PTR 3
-#else
-#  define LG_SIZEOF_PTR 2
-#endif
+#define LG_SIZEOF_PTR 3

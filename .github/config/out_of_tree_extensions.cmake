@@ -39,6 +39,7 @@ if (NOT MINGW)
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_azure
             GIT_TAG b0ffe7ada20cdbd0bee2bbe5461ecd22fb468062
+            APPLY_PATCHES
             )
 endif()
 
@@ -137,6 +138,7 @@ if (NOT WIN32)
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/substrait
             GIT_TAG be71387cf0a484dc7b261a0cb21abec0d0e0ce5c
+            APPLY_PATCHES
             )
 endif()
 
