@@ -5,10 +5,11 @@
 statement ok
 PRAGMA enable_verification
 
+# We need to do some precise byte math here
 require notwindows
 
 query I
-FROM read_csv('data/csv/validator/a.csv', header = 0)
+FROM read_csv('data/csv/validator/single_column.csv', header = 0)
 ----
 123
 123
@@ -22,16 +23,26 @@ one
 123
 
 statement error
-FROM read_csv('data/csv/validator/a.csv', header = 0, columns = {'a': 'integer'}, auto_detect = false)
+FROM read_csv('data/csv/validator/single_column.csv', header = 0, columns = {'a': 'integer'}, auto_detect = false)
 ----
 Error when converting column "a". Could not convert string "one" to 'INTEGER'
 
 statement error
-FROM read_csv('data/csv/validator/a.csv', header = 0, columns = {'a': 'integer'}, auto_detect = false, buffer_size = 11)
-----
-Not implemented Error: The Parallel CSV Reader currently does not support a full read on this file.
-
-statement error
-FROM read_csv('data/csv/validator/a.csv', header = 0, columns = {'a': 'integer'}, auto_detect = false, buffer_size = 11, parallel = false)
+FROM read_csv('data/csv/validator/single_column.csv', header = 0, columns = {'a': 'integer'}, auto_detect = false, buffer_size = 11)
 ----
 Error when converting column "a". Could not convert string "one" to 'INTEGER'
+
+statement error
+FROM read_csv('data/csv/validator/single_column.csv', header = 0, columns = {'a': 'integer'}, auto_detect = false, buffer_size = 11, parallel = false)
+----
+Error when converting column "a". Could not convert string "one" to 'INTEGER'
+
+statement ok
+FROM read_csv('data/csv/validator/quoted_new_value.csv')
+
+statement ok
+FROM read_csv('data/csv/validator/quoted_new_value.csv', columns = {'band': 'varchar', 'album': 'varchar', 'release': 'varchar'}, quote = '''', delim = ';', header = 0)
+
+statement error
+FROM read_csv('data/csv/validator/quoted_new_value.csv', columns = {'band': 'varchar', 'album': 'varchar', 'release': 'varchar'}, quote = '''', delim = ';', header = 0, buffer_size = 46)
+----
