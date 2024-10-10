@@ -239,15 +239,11 @@ SELECT i FROM test2_table;
 statement ok
 SET search_path = pg_catalog;
 
-query I
+statement ok
 SELECT current_database();
-----
-memory
 
-query I
+statement ok
 SELECT current_catalog();
-----
-memory
 
 query I
 SELECT current_schema();
