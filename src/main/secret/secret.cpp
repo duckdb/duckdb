@@ -80,40 +80,23 @@ void KeyValueSecret::Serialize(Serializer &serializer) const {
 	BaseSecret::SerializeBaseSecret(serializer);
 
 	vector<Value> map_values;
-	child_list_t<Value> secrets;
-
-	for (auto &it : secret_map) {
-		if (it.second.type().id() == LogicalTypeId::VARCHAR) {
-			child_list_t<Value> map_struct;
-			map_struct.push_back(make_pair("key", Value(it.first)));
-			map_struct.push_back(make_pair("value", Value(it.second)));
-			map_values.push_back(Value::STRUCT(map_struct));
-		} else {
-			// Any secret that doesn't have the value type VARCHAR is stored inside:
-			// STRUCT(<field_name1>: <field_type1>, ..., <field_nameN>: <field_typeN>)
-			secrets.emplace_back(it.first, it.second);
-		}
+	for (auto it = secret_map.begin(); it != secret_map.end(); it++) {
+		child_list_t<Value> map_struct;
+		map_struct.push_back(make_pair("key", Value(it->first)));
+		map_struct.push_back(make_pair("value", Value(it->second)));
+		map_values.push_back(Value::STRUCT(map_struct));
 	}
 
-	// Store the secrets that are VARCHAR
 	auto map_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
 	auto map = Value::MAP(ListType::GetChildType(map_type), map_values);
 	serializer.WriteProperty(201, "secret_map", map);
 
-	// Store the keys of redacted secrets
 	vector<Value> redact_key_values;
 	for (auto it = redact_keys.begin(); it != redact_keys.end(); it++) {
 		redact_key_values.push_back(*it);
 	}
 	auto list = Value::LIST(LogicalType::VARCHAR, redact_key_values);
 	serializer.WriteProperty(202, "redact_keys", list);
-
-	// Store the secrets that are not VARCHARs
-	Value secret_struct;
-	if (!secrets.empty()) {
-		secret_struct = Value::STRUCT(std::move(secrets));
-	}
-	serializer.WritePropertyWithDefault(203, "secret_struct", secret_struct, Value());
 }
 
 Value KeyValueSecret::TryGetValue(const string &key, bool error_on_missing) const {
