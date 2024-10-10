@@ -8,6 +8,10 @@ PRAGMA enable_verification
 # We need to do some precise byte math here
 require notwindows
 
+statement ok
+CREATE TABLE T AS FROM read_csv('data/csv/big_escape.csv', buffer_size = 30, quote = '"', escape = '"', delim = ';', columns = {'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, auto_detect = false);
+
+
 query I
 FROM read_csv('data/csv/validator/single_column.csv', header = 0)
 ----
@@ -43,6 +47,5 @@ FROM read_csv('data/csv/validator/quoted_new_value.csv')
 statement ok
 FROM read_csv('data/csv/validator/quoted_new_value.csv', columns = {'band': 'varchar', 'album': 'varchar', 'release': 'varchar'}, quote = '''', delim = ';', header = 0)
 
-statement error
+statement ok
 FROM read_csv('data/csv/validator/quoted_new_value.csv', columns = {'band': 'varchar', 'album': 'varchar', 'release': 'varchar'}, quote = '''', delim = ';', header = 0, buffer_size = 46)
-----
