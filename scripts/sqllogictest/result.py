@@ -448,10 +448,10 @@ def matches_regex(input: str, actual_str: str) -> bool:
         regex_str = input.replace("<!REGEX>:", "")
     # The exact match will never be the same, allow leading and trailing messages
     if regex_str[:2] != '.*':
-        regex_str = ".*" + regex_str
+        regex_str = "^" + regex_str
     if regex_str[-2:] != '.*':
-        regex_str = regex_str + '.*'
-
+        regex_str = regex_str + '$'
+        
     re_options = re.DOTALL
     re_pattern = re.compile(regex_str, re_options)
     regex_matches = bool(re_pattern.fullmatch(actual_str))
