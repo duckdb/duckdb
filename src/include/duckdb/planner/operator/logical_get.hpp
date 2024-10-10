@@ -12,6 +12,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/extra_operator_info.hpp"
+#include "duckdb/parser/tableref.hpp"
 
 namespace duckdb {
 class DynamicTableFilterSet;
@@ -52,6 +53,9 @@ public:
 	//! Currently stores File Filters (as strings) applied by hive partitioning/complex filter pushdown
 	//! Stored so they can be included in explain output
 	ExtraOperatorInfo extra_info;
+	//! User provided types+names, such as: function(...) as (t integer, j boolean)
+	vector<string> user_provided_names;
+	vector<LogicalType> user_provided_types;
 	//! Contains a reference to dynamically generated table filters (through e.g. a join up in the tree)
 	shared_ptr<DynamicTableFilterSet> dynamic_filters;
 
