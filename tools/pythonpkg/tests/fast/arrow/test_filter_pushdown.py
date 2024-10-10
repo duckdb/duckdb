@@ -56,6 +56,8 @@ def numeric_operators(connection, data_type, tbl_name, create_table):
 
     # Try ==
     assert connection.execute("SELECT count(*) from arrow_table where a = 1").fetchone()[0] == 1
+    # Try !=
+    assert connection.execute("SELECT count(*) from arrow_table where a != 1").fetchone()[0] == 2
     # Try >
     assert connection.execute("SELECT count(*) from arrow_table where a > 1").fetchone()[0] == 2
     # Try >=
@@ -220,6 +222,8 @@ class TestArrowFilterPushdown(object):
 
         # Try ==
         assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a = '1'").fetchone()[0] == 1
+        # Try !=
+        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a != '1'").fetchone()[0] == 2
         # Try >
         assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a > '1'").fetchone()[0] == 2
         # Try >=
@@ -272,6 +276,8 @@ class TestArrowFilterPushdown(object):
 
         # Try ==
         assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a = True").fetchone()[0] == 2
+        # Try !=
+        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a != True").fetchone()[0] == 1
 
         # Try Is Null
         assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a IS NULL").fetchone()[0] == 1
@@ -308,6 +314,8 @@ class TestArrowFilterPushdown(object):
 
         # Try ==
         assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a ='00:01:00'").fetchone()[0] == 1
+        # Try !=
+        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a !='00:01:00'").fetchone()[0] == 2
         # Try >
         assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a >'00:01:00'").fetchone()[0] == 2
         # Try >=
@@ -367,6 +375,10 @@ class TestArrowFilterPushdown(object):
         # Try ==
         assert (
             duckdb_cursor.execute("SELECT count(*) from arrow_table where a ='2008-01-01 00:00:01'").fetchone()[0] == 1
+        )
+        # Try !=
+        assert (
+            duckdb_cursor.execute("SELECT count(*) from arrow_table where a !='2008-01-01 00:00:01'").fetchone()[0] == 2
         )
         # Try >
         assert (
@@ -437,6 +449,11 @@ class TestArrowFilterPushdown(object):
         # Try ==
         assert (
             duckdb_cursor.execute("SELECT count(*) from arrow_table where a = '2008-01-01 00:00:01'").fetchone()[0] == 1
+        )
+        # Try !=
+        assert (
+            duckdb_cursor.execute("SELECT count(*) from arrow_table where a != '2008-01-01 00:00:01'").fetchone()[0]
+            == 2
         )
         # Try >
         assert (
@@ -571,6 +588,8 @@ class TestArrowFilterPushdown(object):
 
         # Try ==
         assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a = '2000-01-01'").fetchone()[0] == 1
+        # Try !=
+        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a != '2000-01-01'").fetchone()[0] == 2
         # Try >
         assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a > '2000-01-01'").fetchone()[0] == 2
         # Try >=
@@ -622,6 +641,8 @@ class TestArrowFilterPushdown(object):
 
         # Try ==
         assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a = '\x01'").fetchone()[0] == 1
+        # Try !=
+        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a != '\x01'").fetchone()[0] == 2
         # # Try >
         assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a > '\x01'").fetchone()[0] == 2
         # Try >=
