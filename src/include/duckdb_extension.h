@@ -491,6 +491,10 @@ typedef struct {
 
 	duckdb_state (*duckdb_appender_create_ext)(duckdb_connection connection, const char *catalog, const char *schema,
 	                                           const char *table, duckdb_appender *out_appender);
+	duckdb_state (*duckdb_table_description_create_ext)(duckdb_connection connection, const char *catalog,
+	                                                    const char *schema, const char *table,
+	                                                    duckdb_table_description *out);
+	char *(*duckdb_table_description_get_column_name)(duckdb_table_description table_description, idx_t index);
 #endif
 
 } duckdb_ext_api_v0;
@@ -873,7 +877,9 @@ typedef struct {
 #define duckdb_destroy_cast_function                duckdb_ext_api.duckdb_destroy_cast_function
 
 // Version dev
-#define duckdb_appender_create_ext duckdb_ext_api.duckdb_appender_create_ext
+#define duckdb_appender_create_ext               duckdb_ext_api.duckdb_appender_create_ext
+#define duckdb_table_description_create_ext      duckdb_ext_api.duckdb_table_description_create_ext
+#define duckdb_table_description_get_column_name duckdb_ext_api.duckdb_table_description_get_column_name
 
 //===--------------------------------------------------------------------===//
 // Struct Global Macros
