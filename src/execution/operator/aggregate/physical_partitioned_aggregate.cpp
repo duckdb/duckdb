@@ -22,42 +22,15 @@ class PartitionedAggregateLocalSinkState : public LocalSinkState {
 public:
 	PartitionedAggregateLocalSinkState(const PhysicalPartitionedAggregate &op, const vector<LogicalType> &child_types,
 	                                   ExecutionContext &context)
-	    : child_executor(context.client), aggregate_input_chunk(), filter_set() {
-		auto &allocator = BufferAllocator::Get(context.client);
-
-		vector<LogicalType> payload_types;
-		vector<AggregateObject> aggregate_objects;
-		for (auto &aggregate : op.aggregates) {
-			D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-			auto &aggr = aggregate->Cast<BoundAggregateExpression>();
-			// initialize the payload chunk
-			for (auto &child : aggr.children) {
-				payload_types.push_back(child->return_type);
-				child_executor.AddExpression(*child);
-			}
-			aggregate_objects.emplace_back(&aggr);
-		}
-		if (!payload_types.empty()) { // for select count(*) from t; there is no payload at all
-			aggregate_input_chunk.Initialize(allocator, payload_types);
-		}
-		filter_set.Initialize(context.client, aggregate_objects, child_types);
+	    : execute_state(context.client, op.aggregates, child_types) {
 	}
 
 	//! The current partition
 	Value current_partition;
 	//! The local aggregate state for the current partition
 	unique_ptr<LocalUngroupedAggregateState> state;
-	//! The executor
-	ExpressionExecutor child_executor;
-	//! The payload chunk, containing all the Vectors for the aggregates
-	DataChunk aggregate_input_chunk;
-	//! Aggregate filter data set
-	AggregateFilterDataSet filter_set;
-
-public:
-	void Reset() {
-		aggregate_input_chunk.Reset();
-	}
+	//! The ungrouped aggregate execute state
+	UngroupedAggregateExecuteState execute_state;
 };
 
 class PartitionedAggregateGlobalSinkState : public GlobalSinkState {
@@ -136,44 +109,8 @@ SinkResultType PhysicalPartitionedAggregate::Sink(ExecutionContext &context, Dat
 		lstate.state = make_uniq<LocalUngroupedAggregateState>(global_aggregate_state);
 	}
 
-	// FIXME: this code can be unified with PhysicalUngroupedAggregate::Sink
-	DataChunk &payload_chunk = lstate.aggregate_input_chunk;
-
-	idx_t payload_idx = 0;
-	idx_t next_payload_idx = 0;
-
-	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
-		auto &aggregate = aggregates[aggr_idx]->Cast<BoundAggregateExpression>();
-
-		payload_idx = next_payload_idx;
-		next_payload_idx = payload_idx + aggregate.children.size();
-
-		if (aggregate.IsDistinct()) {
-			continue;
-		}
-
-		idx_t payload_cnt = 0;
-		// resolve the filter (if any)
-		if (aggregate.filter) {
-			auto &filtered_data = lstate.filter_set.GetFilterData(aggr_idx);
-			auto count = filtered_data.ApplyFilter(chunk);
-
-			lstate.child_executor.SetChunk(filtered_data.filtered_payload);
-			payload_chunk.SetCardinality(count);
-		} else {
-			lstate.child_executor.SetChunk(chunk);
-			payload_chunk.SetCardinality(chunk);
-		}
-
-		// resolve the child expressions of the aggregate (if any)
-		for (idx_t i = 0; i < aggregate.children.size(); ++i) {
-			lstate.child_executor.ExecuteExpression(payload_idx + payload_cnt,
-			                                        payload_chunk.data[payload_idx + payload_cnt]);
-			payload_cnt++;
-		}
-
-		lstate.state->Sink(payload_chunk, payload_idx, aggr_idx);
-	}
+	// perform the aggregation
+	lstate.execute_state.Sink(*lstate.state, chunk);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 

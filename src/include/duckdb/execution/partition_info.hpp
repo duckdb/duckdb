@@ -74,5 +74,4 @@ struct OperatorPartitionData {
 	vector<ColumnPartitionData> partition_data;
 };
 
-
 } // namespace duckdb

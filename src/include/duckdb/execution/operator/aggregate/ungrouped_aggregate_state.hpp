@@ -72,4 +72,23 @@ public:
 	void Sink(DataChunk &payload_chunk, idx_t payload_idx, idx_t aggr_idx);
 };
 
+struct UngroupedAggregateExecuteState {
+public:
+	UngroupedAggregateExecuteState(ClientContext &context, const vector<unique_ptr<Expression>> &aggregates,
+	                               const vector<LogicalType> &child_types);
+
+	//! The set of aggregates
+	const vector<unique_ptr<Expression>> &aggregates;
+	//! The executor
+	ExpressionExecutor child_executor;
+	//! The payload chunk, containing all the Vectors for the aggregates
+	DataChunk aggregate_input_chunk;
+	//! Aggregate filter data set
+	AggregateFilterDataSet filter_set;
+
+public:
+	void Sink(LocalUngroupedAggregateState &state, DataChunk &input);
+	void Reset();
+};
+
 } // namespace duckdb
