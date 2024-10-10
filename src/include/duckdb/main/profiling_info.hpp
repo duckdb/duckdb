@@ -43,7 +43,6 @@ public:
 	ProfilingInfo &operator=(ProfilingInfo const &) = default;
 
 public:
-	// TODO: rename to Metrics
 	static profiler_settings_t DefaultSettings();
 	static profiler_settings_t DefaultRootSettings();
 	static profiler_settings_t DefaultOperatorSettings();
