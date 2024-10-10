@@ -5,6 +5,11 @@
 statement ok
 PRAGMA enable_verification
 
+query II
+FROM read_csv('data/csv/bad_escape.csv', columns = {'foo':'INTEGER', 'bar':'VARCHAR'}, quote = '"', escape = '\', delim = ',', auto_detect = false, header = 1)
+----
+
+
 query I
 FROM read_csv_auto('data/csv/test/dateformat.csv')
 ----
