@@ -236,30 +236,30 @@ EvictionQueue &BufferPool::GetEvictionQueueForBlockHandle(const BlockHandle &han
 	idx_t offset;
 	idx_t size;
 	switch (handle.buffer->type) {
-	case FileBufferType::TINY_BUFFER:
-		// TINY_BUFFER starts at offset 0 (evicted last)
+	case FileBufferType::BLOCK:
+		// TINY_BUFFER starts at offset 0 (evicted first)
 		offset = 0;
-		size = TINY_BUFFER_EVICTION_QUEUES;
+		size = BLOCK_EVICTION_QUEUES;
 		break;
 	case FileBufferType::MANAGED_BUFFER:
 		// Followed by MANAGED_BUFFER
-		offset = TINY_BUFFER_EVICTION_QUEUES;
+		offset = BLOCK_EVICTION_QUEUES;
 		size = MANAGED_BUFFER_EVICTION_QUEUES;
 		break;
-	case FileBufferType::BLOCK:
-		// Followed by BLOCK (evicted first)
-		offset = TINY_BUFFER_EVICTION_QUEUES + MANAGED_BUFFER_EVICTION_QUEUES;
-		size = BLOCK_EVICTION_QUEUES;
+	case FileBufferType::TINY_BUFFER:
+		// Followed by TINY_BUFFER (evicted last)
+		offset = BLOCK_EVICTION_QUEUES + MANAGED_BUFFER_EVICTION_QUEUES;
+		size = TINY_BUFFER_EVICTION_QUEUES;
 		break;
 	default:
 		throw InternalException("Invalid FileBufferType in BufferPool::GetEvictionQueueForBlockHandle");
 	}
 
 	idx_t index;
-	if (handle.eviction_queue_idx.IsValid()) { // Index was set, bound it by the size
-		index = MinValue(handle.eviction_queue_idx.GetIndex(), size - 1);
-	} else { // Index was not set, assume low priority (back of queue)
-		index = size - 1;
+	if (handle.eviction_queue_idx.IsValid() && handle.eviction_queue_idx.GetIndex() < size) {
+		index = size - handle.eviction_queue_idx.GetIndex() - 1;
+	} else { // Index was not set or is greater than queue size, assume low priority (front of queue)
+		index = 0;
 	}
 	D_ASSERT(index < size);
 
@@ -292,12 +292,10 @@ TemporaryMemoryManager &BufferPool::GetTemporaryMemoryManager() {
 
 BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_memory, idx_t memory_limit,
                                                    unique_ptr<FileBuffer> *buffer) {
-	// Iterate through eviction queues in reverse
-	for (idx_t i = EVICTION_QUEUES; i != 0; i--) {
-		auto &queue = *queues[i - 1];
-		auto block_result = EvictBlocksInternal(queue, tag, extra_memory, memory_limit, buffer);
-		if (block_result.success || i == 1) { // Return upon success or upon last queue
-			return block_result;
+	for (auto &queue : queues) {
+		auto block_result = EvictBlocksInternal(*queue, tag, extra_memory, memory_limit, buffer);
+		if (block_result.success || RefersToSameObject(*queue, *queues.back())) {
+			return block_result; // Return upon success or upon last queue
 		}
 	}
 	// This can never happen since we always return when i == 1. Exception to silence compiler warning
