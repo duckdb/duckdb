@@ -6,3 +6,4 @@ template benchmark/tpch/or_filter_pushdown/or_filter_pushdown.benchmark.in
 QUERY_NAME=orders_ordered_sf100_pushdown
 DISABLED_OPTIMIZERS=''
 TABLE_NAME=orders_sf100
+COLUMN_NAME=o_orderkey

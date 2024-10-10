@@ -6,3 +6,4 @@ template benchmark/tpch/or_filter_pushdown/or_filter_pushdown.benchmark.in
 QUERY_NAME=lineitem_unordered_sf10_pushdown
 DISABLED_OPTIMIZERS=''
 TABLE_NAME=lineitem_sf10_random
+COLUMN_NAME=l_orderkey

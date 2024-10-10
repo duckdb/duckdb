@@ -13,4 +13,4 @@ load benchmark/tpch/or_filter_pushdown/load.sql
 
 run
 pragma disabled_optimizers='${DISABLED_OPTIMIZERS}';
-select * from ${TABLE_NAME} where l_orderkey in (99584, 5900006);
+select * from ${TABLE_NAME} where ${COLUMN_NAME} in (99584, 5900006);
