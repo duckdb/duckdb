@@ -1426,7 +1426,6 @@ bool StringValueScanner::SkipUntilState(CSVState initial_state, CSVState until_s
 }
 
 bool StringValueScanner::CanDirectlyCast(const LogicalType &type, bool icu_loaded) {
-
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
@@ -1475,45 +1474,14 @@ ValidRowInfo StringValueScanner::TryRow(CSVState state, idx_t start_pos, idx_t e
 	if (SkipUntilState(state, CSVState::RECORD_SEPARATOR, current_iterator)) {
 		idx_t current_pos = current_iterator.pos.buffer_pos;
 		current_iterator.SetEnd(iterator.GetEndPos());
-		if (iterator.GetEndPos() == current_pos && !cur_buffer_handle->is_last_buffer) {
-			return ValidRowInfo(false);
+		if (iterator.GetEndPos() == current_pos) {
+			return {false, current_pos, current_iterator.pos.buffer_idx, current_iterator.pos.buffer_pos};
 		}
 		if (IsRowValid(current_iterator)) {
 			return {true, current_pos, current_iterator.pos.buffer_idx, current_iterator.pos.buffer_pos};
 		}
 	}
-	return ValidRowInfo(false);
-}
-
-idx_t StringValueScanner::FindNextNewLine() const {
-	idx_t cur_pos = iterator.pos.buffer_pos;
-	// Now skip until next newline
-	if (state_machine->options.dialect_options.state_machine_options.new_line.GetValue() ==
-	    NewLineIdentifier::CARRY_ON) {
-		bool carriage_return = false;
-		bool not_carriage_return = false;
-		for (; cur_pos < cur_buffer_handle->actual_size; cur_pos++) {
-			if (buffer_handle_ptr[cur_pos] == '\r') {
-				carriage_return = true;
-			} else if (buffer_handle_ptr[cur_pos] != '\n') {
-				not_carriage_return = true;
-			}
-			if (buffer_handle_ptr[cur_pos] == '\n') {
-				if (carriage_return || not_carriage_return) {
-					cur_pos++;
-					return cur_pos;
-				}
-			}
-		}
-	} else {
-		for (; cur_pos < cur_buffer_handle->actual_size; cur_pos++) {
-			if (buffer_handle_ptr[cur_pos] == '\n' || buffer_handle_ptr[cur_pos] == '\r') {
-				cur_pos++;
-				return cur_pos;
-			}
-		}
-	}
-	return cur_pos;
+	return {false, current_iterator.pos.buffer_pos, current_iterator.pos.buffer_idx, current_iterator.pos.buffer_pos};
 }
 
 void StringValueScanner::SetStart() {
@@ -1526,7 +1494,6 @@ void StringValueScanner::SetStart() {
 	}
 	// The result size of the data after skipping the row is one line
 	// We have to look for a new line that fits our schema
-	// idx_t next_new_line = FindNextNewLine();
 	if (state_machine->options.null_padding) {
 		// When Null Padding, we assume we start from the correct new-line
 		start_pos = iterator.GetGlobalCurrentPos();
@@ -1549,14 +1516,24 @@ void StringValueScanner::SetStart() {
 		if (quoted_row.is_valid) {
 			best_row = quoted_row;
 		}
+		if (!best_row.is_valid && !quoted_row.is_valid && best_row.start_pos < quoted_row.start_pos) {
+			best_row = quoted_row;
+		}
 	}
 	// 3. We are in an escaped value
 	if (!best_row.is_valid && state_machine->dialect_options.state_machine_options.escape.GetValue() != '\0') {
-		best_row = TryRow(CSVState::ESCAPE, iterator.pos.buffer_pos, iterator.GetEndPos());
+		auto escape_row = TryRow(CSVState::ESCAPE, iterator.pos.buffer_pos, iterator.GetEndPos());
+		if (escape_row.is_valid) {
+			best_row = escape_row;
+		} else {
+			if (best_row.start_pos < escape_row.start_pos) {
+				best_row = escape_row;
+			}
+		}
 	}
 	if (!best_row.is_valid) {
 		bool is_this_the_end =
-		    best_row.start_pos == cur_buffer_handle->actual_size && cur_buffer_handle->is_last_buffer;
+		    best_row.start_pos >= cur_buffer_handle->actual_size && cur_buffer_handle->is_last_buffer;
 		if (is_this_the_end) {
 			iterator.pos.buffer_pos = best_row.start_pos;
 			iterator.done = true;

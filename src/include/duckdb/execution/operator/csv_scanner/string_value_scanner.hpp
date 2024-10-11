@@ -270,7 +270,6 @@ public:
 struct ValidRowInfo {
 	ValidRowInfo(bool is_valid_p, idx_t start_pos_p, idx_t end_buffer_idx_p, idx_t end_pos_p)
 	    : is_valid(is_valid_p), start_pos(start_pos_p), end_buffer_idx(end_buffer_idx_p), end_pos(end_pos_p) {};
-	explicit ValidRowInfo(bool is_valid_p) : is_valid(is_valid_p), start_pos(0), end_buffer_idx(0), end_pos(0) {};
 	ValidRowInfo() : is_valid(false), start_pos(0), end_buffer_idx(0), end_pos(0) {};
 
 	bool is_valid;
@@ -336,7 +335,7 @@ private:
 	//! If the current row we found is valid
 	bool IsRowValid(CSVIterator &current_iterator) const;
 	ValidRowInfo TryRow(CSVState state, idx_t start_pos, idx_t end_pos) const;
-	idx_t FindNextNewLine() const;
+
 	StringValueResult result;
 	vector<LogicalType> types;
 	//! True Position where this scanner started scanning(i.e., after figuring out where the first line starts)
