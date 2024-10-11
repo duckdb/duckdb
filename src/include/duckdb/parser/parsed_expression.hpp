@@ -39,6 +39,7 @@ public:
 	bool HasSubquery() const override;
 	bool IsScalar() const override;
 	bool HasParameter() const override;
+	bool CanThrow() const override;
 
 	bool Equals(const BaseExpression &other) const override;
 	hash_t Hash() const override;

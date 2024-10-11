@@ -32,6 +32,7 @@ public:
 	bool HasSubquery() const override;
 	bool IsScalar() const override;
 	bool HasParameter() const override;
+	bool CanThrow() const override;
 	virtual bool IsVolatile() const;
 	virtual bool IsConsistent() const;
 	virtual bool PropagatesNullValues() const;

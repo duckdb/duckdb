@@ -34,6 +34,7 @@ public:
 	static bool Equal(const CastExpression &a, const CastExpression &b);
 
 	unique_ptr<ParsedExpression> Copy() const override;
+	bool CanThrow() const override;
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);

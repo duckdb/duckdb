@@ -217,4 +217,15 @@ unique_ptr<Expression> BoundCastExpression::Copy() const {
 	return std::move(copy);
 }
 
+bool BoundCastExpression::CanThrow() const {
+	const auto child_type = child->return_type;
+	if (return_type.id() != child_type.id() &&
+	    LogicalType::ForceMaxLogicalType(return_type, child_type) == child_type.id()) {
+		return true;
+	}
+	bool changes_type = false;
+	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) { changes_type |= child.CanThrow(); });
+	return changes_type;
+}
+
 } // namespace duckdb
