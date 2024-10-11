@@ -325,7 +325,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		// TODO check  types and target_col_names are mismatch in size
 		D_ASSERT(names.size() == sql_types.size());
 		base.columns.SetAllowDuplicates(true);
-		if (target_col_names.size() > 0) {
+		if (!target_col_names.empty()) {
 			if (target_col_names.size() > sql_types.size()) {
 				throw BinderException("Target table has more colum names than query result.");
 			} else if (target_col_names.size() < sql_types.size()) {
