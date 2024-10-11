@@ -16,13 +16,13 @@ select count(*) from t1 where a < 5 or b = 'foo8';
 query II
 explain select * from t1 where a<5 or b = 'foo8';
 ----
-physical_plan	<!REGEX>:.*ZoneMap.*
+physical_plan	<!REGEX>:.*optional.*
 
 # columns are different
 query II
 explain select * from t1 where a<5 or c>8000;
 ----
-physical_plan	<!REGEX>:.*ZoneMap.*
+physical_plan	<!REGEX>:.*optional.*
 
 # two different row groups can be propagated here.
 query I
@@ -40,29 +40,29 @@ analyzed_plan	<REGEX>:.*TABLE_SCAN.*19360.*
 query II
 explain select * from t1 where a<5 or a>10;
 ----
-physical_plan	<REGEX>:.*ZoneMap.*
+physical_plan	<REGEX>:.*optional.*
 
 query II
 explain select * from t1 where a in (1, 5, 10);
 ----
-physical_plan	<REGEX>:.*ZoneMap.*
+physical_plan	<REGEX>:.*optional.*
 
 query II
 explain select * from t1 where a = 1 or a = 5 or a = 10;
 ----
-physical_plan	<REGEX>:.*ZoneMap.*
+physical_plan	<REGEX>:.*optional.*
 
 query II
 explain select * from t1 where a in (1, 2, 3);
 ----
-physical_plan	<!REGEX>:.*ZoneMap.*
+physical_plan	<!REGEX>:.*optional.*
 
 query II
 explain select * from t1 where a in (1);
 ----
-physical_plan	<!REGEX>:.*ZoneMap.*
+physical_plan	<!REGEX>:.*optional.*
 
 query II
 explain select b from t1 where b = 'foo9' or b = 'foo10';
 ----
-physical_plan	<!REGEX>:.*ZoneMap.*
+physical_plan	<!REGEX>:.*optional.*

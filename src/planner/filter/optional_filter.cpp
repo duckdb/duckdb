@@ -9,7 +9,7 @@ OptionalFilter::OptionalFilter() : TableFilter(TableFilterType::OPTIONAL) {
 }
 
 FilterPropagateResult OptionalFilter::CheckStatistics(BaseStatistics &stats) {
-	child_filter->CheckStatistics(stats);
+	return child_filter->CheckStatistics(stats);
 }
 
 string OptionalFilter::ToString(const string &column_name) {

@@ -80,6 +80,16 @@ public:
 public:
 	void PushFilter(idx_t column_index, unique_ptr<TableFilter> filter);
 
+	// void wat() {
+	// 	for (auto it = filters.begin(); it != filters.end();) {
+	// 		if (it->second->filter_type == TableFilterType::OPTIONAL) {
+	// 	 		it = filters.erase(it);
+	// 		} else {
+	// 			++it;
+	// 		}
+	// 	}
+	// }
+
 	bool Equals(TableFilterSet &other) {
 		if (filters.size() != other.filters.size()) {
 			return false;

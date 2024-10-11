@@ -44,8 +44,18 @@ py::object PythonTableArrowArrayStreamFactory::ProduceScanner(py::object &arrow_
 	auto filters = parameters.filters;
 	auto &column_list = parameters.projected_columns.columns;
 	auto &filter_to_col = parameters.projected_columns.filter_to_col;
-	bool has_filter = filters && !filters->filters.empty();
 	py::list projection_list = py::cast(column_list);
+
+	for (auto it = filters->filters.begin(); it != filters->filters.end();) {
+		if (it->second->filter_type == TableFilterType::OPTIONAL) {
+			it = filters->filters.erase(it);
+		} else {
+			++it;
+		}
+	}
+
+	bool has_filter = filters && !filters->filters.empty();
+
 	if (has_filter) {
 		auto filter = TransformFilter(*filters, parameters.projected_columns.projection_map, filter_to_col,
 		                              client_properties, arrow_table);
