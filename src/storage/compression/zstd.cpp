@@ -147,6 +147,12 @@ public:
 	//! The offset within the current block
 	// idx_t offset;
 
+	idx_t GetCurrentMetadataOffset() {
+		auto start_of_segment = current_handle.Ptr();
+		D_ASSERT(current_data_ptr >= start_of_segment);
+		return (idx_t)(current_data_ptr - start_of_segment);
+	}
+
 	void CreateCompressionDictionary(const char *str, size_t size) {
 
 		zstd_cdict = duckdb_zstd::ZSTD_createCDict(str, size, COMPRESSION_LEVEL);
@@ -219,14 +225,16 @@ public:
 
 	void AddString(const string_t &str) {
 		// TODO: train dictionary in a better way
+		// FIXME: I don't think the ZSTD API has a better way of doing this
+		// there is no method to incrementally build a dictionary
+		// we would have to hold all (or a sample of) strings and build the dictionary at the end
 		if (!zstd_cdict) {
 			CreateCompressionDictionary(str.GetData(), str.GetSize());
 		}
 
-		// TODO: check space
-		size_t dst_capacity = SIZE_T_MAX;
-
 		auto data_dst = current_data_ptr + sizeof(string_metadata_t);
+		size_t dst_capacity = info.GetBlockSize() - GetCurrentMetadataOffset();
+		// TODO: move to new segment if `dst_capacity` will be too small
 		size_t compressed_size = duckdb_zstd::ZSTD_compress_usingCDict(zstd_context, data_dst, dst_capacity,
 		                                                               str.GetData(), str.GetSize(), zstd_cdict);
 
@@ -265,6 +273,7 @@ void ZSTDStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 		}
 		state.AddString(data[idx]);
 	}
+	state.current_segment->count += count;
 }
 
 void ZSTDStorage::FinalizeCompress(CompressionState &state_p) {
