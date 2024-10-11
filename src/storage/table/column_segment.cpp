@@ -393,7 +393,6 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
                                      const TableFilter &filter, idx_t scan_count, idx_t &approved_tuple_count) {
 	switch (filter.filter_type) {
 	case TableFilterType::OPTIONAL: {
-		// don't
 		return scan_count;
 	}
 	case TableFilterType::CONJUNCTION_OR: {

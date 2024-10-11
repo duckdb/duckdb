@@ -28,7 +28,7 @@ public:
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
 
 public:
-	// zonemap filter
+	// optional child filters
 	unique_ptr<TableFilter> child_filter;
 };
 

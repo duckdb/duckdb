@@ -37,7 +37,6 @@
 #include <cassert>
 #include <chrono>
 #include <cstring>
-
 #include <sstream>
 
 namespace duckdb {
