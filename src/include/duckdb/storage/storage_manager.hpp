@@ -83,6 +83,7 @@ public:
 	idx_t GetWALSize();
 	//! Gets the WAL of the StorageManager, or nullptr, if there is no WAL.
 	optional_ptr<WriteAheadLog> GetWAL();
+	optional_ptr<WriteAheadLog> GetWALIfExists();
 	//! Deletes the WAL file, and resets the unique pointer.
 	void ResetWAL();
 
