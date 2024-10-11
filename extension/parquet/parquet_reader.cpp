@@ -29,7 +29,7 @@
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
-#include "duckdb/planner/filter/zone_map_filter.hpp"
+#include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #endif
@@ -1004,7 +1004,7 @@ static void ApplyFilter(Vector &v, TableFilter &filter, parquet_filter_t &filter
 		auto &child = StructVector::GetEntries(v)[struct_filter.child_idx];
 		ApplyFilter(*child, *struct_filter.child_filter, filter_mask, count);
 	}
-	case TableFilterType::ZONE_MAP: {
+	case TableFilterType::OPTIONAL: {
 		// we don't execute zone map filters here - we only consider them for zone map pruning
 		// do nothing to the mask.
 		break;

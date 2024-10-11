@@ -10,7 +10,7 @@
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
-#include "duckdb/planner/filter/zone_map_filter.hpp"
+#include "duckdb/planner/filter/optional_filter.hpp"
 
 namespace duckdb {
 
@@ -37,11 +37,11 @@ unique_ptr<TableFilter> TableFilter::Deserialize(Deserializer &deserializer) {
 	case TableFilterType::IS_NULL:
 		result = IsNullFilter::Deserialize(deserializer);
 		break;
+	case TableFilterType::OPTIONAL:
+		result = OptionalFilter::Deserialize(deserializer);
+		break;
 	case TableFilterType::STRUCT_EXTRACT:
 		result = StructFilter::Deserialize(deserializer);
-		break;
-	case TableFilterType::ZONE_MAP:
-		result = ZoneMapFilter::Deserialize(deserializer);
 		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of TableFilter!");
@@ -102,6 +102,17 @@ unique_ptr<TableFilter> IsNullFilter::Deserialize(Deserializer &deserializer) {
 	return std::move(result);
 }
 
+void OptionalFilter::Serialize(Serializer &serializer) const {
+	TableFilter::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<TableFilter>>(200, "child_filter", child_filter);
+}
+
+unique_ptr<TableFilter> OptionalFilter::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<OptionalFilter>(new OptionalFilter());
+	deserializer.ReadPropertyWithDefault<unique_ptr<TableFilter>>(200, "child_filter", result->child_filter);
+	return std::move(result);
+}
+
 void StructFilter::Serialize(Serializer &serializer) const {
 	TableFilter::Serialize(serializer);
 	serializer.WritePropertyWithDefault<idx_t>(200, "child_idx", child_idx);
@@ -114,17 +125,6 @@ unique_ptr<TableFilter> StructFilter::Deserialize(Deserializer &deserializer) {
 	auto child_name = deserializer.ReadPropertyWithDefault<string>(201, "child_name");
 	auto child_filter = deserializer.ReadPropertyWithDefault<unique_ptr<TableFilter>>(202, "child_filter");
 	auto result = duckdb::unique_ptr<StructFilter>(new StructFilter(child_idx, std::move(child_name), std::move(child_filter)));
-	return std::move(result);
-}
-
-void ZoneMapFilter::Serialize(Serializer &serializer) const {
-	TableFilter::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<TableFilter>>(200, "child_filter", child_filter);
-}
-
-unique_ptr<TableFilter> ZoneMapFilter::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<ZoneMapFilter>(new ZoneMapFilter());
-	deserializer.ReadPropertyWithDefault<unique_ptr<TableFilter>>(200, "child_filter", result->child_filter);
 	return std::move(result);
 }
 

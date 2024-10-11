@@ -7437,8 +7437,8 @@ const char* EnumUtil::ToChars<TableFilterType>(TableFilterType value) {
 		return "CONJUNCTION_AND";
 	case TableFilterType::STRUCT_EXTRACT:
 		return "STRUCT_EXTRACT";
-	case TableFilterType::ZONE_MAP:
-		return "ZONE_MAP";
+	case TableFilterType::OPTIONAL:
+		return "OPTIONAL";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<TableFilterType>", value));
 	}
@@ -7464,8 +7464,8 @@ TableFilterType EnumUtil::FromString<TableFilterType>(const char *value) {
 	if (StringUtil::Equals(value, "STRUCT_EXTRACT")) {
 		return TableFilterType::STRUCT_EXTRACT;
 	}
-	if (StringUtil::Equals(value, "ZONE_MAP")) {
-		return TableFilterType::ZONE_MAP;
+	if (StringUtil::Equals(value, "OPTIONAL")) {
+		return TableFilterType::OPTIONAL;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<TableFilterType>", value));
 }

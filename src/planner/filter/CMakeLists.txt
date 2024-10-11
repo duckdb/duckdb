@@ -5,7 +5,7 @@ add_library_unity(
   constant_filter.cpp
   null_filter.cpp
   struct_filter.cpp
-  zone_map_filter.cpp)
+  optional_filter.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_planner_filter>
     PARENT_SCOPE)

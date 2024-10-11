@@ -105,11 +105,11 @@
     "constructor": ["child_idx", "child_name", "child_filter"]
   },
   {
-    "class": "ZoneMapFilter",
+    "class": "OptionalFilter",
     "base": "TableFilter",
-    "enum": "ZONE_MAP",
+    "enum": "OPTIONAL",
     "includes": [
-      "duckdb/planner/filter/zone_map_filter.hpp"
+      "duckdb/planner/filter/optional_filter.hpp"
     ],
     "members": [
       {

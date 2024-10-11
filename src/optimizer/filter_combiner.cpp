@@ -13,7 +13,7 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/null_filter.hpp"
-#include "duckdb/planner/filter/zone_map_filter.hpp"
+#include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 
@@ -633,16 +633,16 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 			}
 			// if we are still Integral, then we can push a zonemap filter.
 			else if (type.IsIntegral()) {
+				auto optional_filter = make_uniq<OptionalFilter>();
 				auto or_filter = make_uniq<ConjunctionOrFilter>();
 				for (idx_t in_val_idx = 1; in_val_idx < func.children.size(); in_val_idx++) {
 					D_ASSERT(func.children[in_val_idx]->type == ExpressionType::VALUE_CONSTANT);
 					auto &const_val = func.children[in_val_idx]->Cast<BoundConstantExpression>();
-					auto zone_map_filter = make_uniq<ZoneMapFilter>();
-					zone_map_filter->child_filter =
-					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, const_val.value);
-					or_filter->child_filters.push_back(std::move(zone_map_filter));
+					auto const_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, const_val.value);
+					or_filter->child_filters.push_back(std::move(const_filter));
 				}
-				table_filters.PushFilter(column_index, std::move(or_filter));
+				optional_filter->child_filter = std::move(or_filter);
+				table_filters.PushFilter(column_index, std::move(optional_filter));
 			}
 		}
 	}
@@ -653,9 +653,10 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 			auto &conj = remaining_filter->Cast<BoundConjunctionExpression>();
 			if (conj.type == ExpressionType::CONJUNCTION_OR) {
 				optional_idx column_id;
+				auto optional_filter = make_uniq<OptionalFilter>();
 				auto conj_filter = make_uniq<ConjunctionOrFilter>();
 				for (auto &child : conj.children) {
-					unique_ptr<ZoneMapFilter> zone_filter;
+					unique_ptr<OptionalFilter> zone_filter;
 					if (child->GetExpressionClass() != ExpressionClass::BOUND_COMPARISON) {
 						column_id.SetInvalid();
 						break;
@@ -693,12 +694,11 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 						break;
 					}
 					auto const_filter = make_uniq<ConstantFilter>(comp.type, const_val->value);
-					zone_filter = make_uniq<ZoneMapFilter>();
-					zone_filter->child_filter = std::move(const_filter);
-					conj_filter->child_filters.push_back(std::move(zone_filter));
+					conj_filter->child_filters.push_back(std::move(const_filter));
 				}
 				if (column_id.IsValid()) {
-					table_filters.PushFilter(column_id.GetIndex(), std::move(conj_filter));
+					optional_filter->child_filter = std::move(conj_filter);
+					table_filters.PushFilter(column_id.GetIndex(), std::move(optional_filter));
 				}
 			}
 		}

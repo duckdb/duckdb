@@ -2,7 +2,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/planner/filter/zone_map_filter.hpp
+// duckdb/planner/filter/optional_filter.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,12 +13,12 @@
 
 namespace duckdb {
 
-class ZoneMapFilter : public TableFilter {
+class OptionalFilter : public TableFilter {
 public:
-	static constexpr const TableFilterType TYPE = TableFilterType::ZONE_MAP;
+	static constexpr const TableFilterType TYPE = TableFilterType::OPTIONAL;
 
 public:
-	ZoneMapFilter();
+	OptionalFilter();
 
 	string ToString(const string &column_name) override;
 	unique_ptr<TableFilter> Copy() const override;

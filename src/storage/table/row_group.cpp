@@ -21,7 +21,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
-#include "duckdb/planner/filter/zone_map_filter.hpp"
+#include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 
 namespace duckdb {
@@ -417,8 +417,8 @@ static idx_t GetFilterScanCount(ColumnScanState &state, TableFilter &filter) {
 		}
 		return max_count;
 	}
-	case TableFilterType::ZONE_MAP: {
-		auto &zone_filter = filter.Cast<ZoneMapFilter>();
+	case TableFilterType::OPTIONAL: {
+		auto &zone_filter = filter.Cast<OptionalFilter>();
 		return GetFilterScanCount(state, *zone_filter.child_filter);
 	}
 	case TableFilterType::IS_NULL:
