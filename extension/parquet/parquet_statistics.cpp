@@ -54,7 +54,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN: {
 		if (stats.size() != sizeof(bool)) {
-			throw InternalException("Incorrect stats size for type BOOLEAN");
+			throw InvalidInputException("Incorrect stats size for type BOOLEAN");
 		}
 		return Value::BOOLEAN(Load<bool>(stats_data));
 	}
@@ -62,29 +62,29 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
 		if (stats.size() != sizeof(uint32_t)) {
-			throw InternalException("Incorrect stats size for type UINTEGER");
+			throw InvalidInputException("Incorrect stats size for type UINTEGER");
 		}
 		return Value::UINTEGER(Load<uint32_t>(stats_data));
 	case LogicalTypeId::UBIGINT:
 		if (stats.size() != sizeof(uint64_t)) {
-			throw InternalException("Incorrect stats size for type UBIGINT");
+			throw InvalidInputException("Incorrect stats size for type UBIGINT");
 		}
 		return Value::UBIGINT(Load<uint64_t>(stats_data));
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
 		if (stats.size() != sizeof(int32_t)) {
-			throw InternalException("Incorrect stats size for type INTEGER");
+			throw InvalidInputException("Incorrect stats size for type INTEGER");
 		}
 		return Value::INTEGER(Load<int32_t>(stats_data));
 	case LogicalTypeId::BIGINT:
 		if (stats.size() != sizeof(int64_t)) {
-			throw InternalException("Incorrect stats size for type BIGINT");
+			throw InvalidInputException("Incorrect stats size for type BIGINT");
 		}
 		return Value::BIGINT(Load<int64_t>(stats_data));
 	case LogicalTypeId::FLOAT: {
 		if (stats.size() != sizeof(float)) {
-			throw InternalException("Incorrect stats size for type FLOAT");
+			throw InvalidInputException("Incorrect stats size for type FLOAT");
 		}
 		auto val = Load<float>(stats_data);
 		if (!Value::FloatIsFinite(val)) {
@@ -102,7 +102,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb
 			break;
 		}
 		if (stats.size() != sizeof(double)) {
-			throw InternalException("Incorrect stats size for type DOUBLE");
+			throw InvalidInputException("Incorrect stats size for type DOUBLE");
 		}
 		auto val = Load<double>(stats_data);
 		if (!Value::DoubleIsFinite(val)) {
@@ -116,13 +116,13 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb
 		switch (schema_ele.type) {
 		case Type::INT32: {
 			if (stats.size() != sizeof(int32_t)) {
-				throw InternalException("Incorrect stats size for type %s", type.ToString());
+				throw InvalidInputException("Incorrect stats size for type %s", type.ToString());
 			}
 			return Value::DECIMAL(Load<int32_t>(stats_data), width, scale);
 		}
 		case Type::INT64: {
 			if (stats.size() != sizeof(int64_t)) {
-				throw InternalException("Incorrect stats size for type %s", type.ToString());
+				throw InvalidInputException("Incorrect stats size for type %s", type.ToString());
 			}
 			return Value::DECIMAL(Load<int64_t>(stats_data), width, scale);
 		}
@@ -143,7 +143,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb
 				    ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(stats_data, stats.size(), schema_ele), width,
 				    scale);
 			default:
-				throw InternalException("Unsupported internal type for decimal");
+				throw InvalidInputException("Unsupported internal type for decimal");
 			}
 		default:
 			throw InternalException("Unsupported internal type for decimal?..");
@@ -158,7 +158,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb
 		}
 	case LogicalTypeId::DATE:
 		if (stats.size() != sizeof(int32_t)) {
-			throw InternalException("Incorrect stats size for type DATE");
+			throw InvalidInputException("Incorrect stats size for type DATE");
 		}
 		return Value::DATE(date_t(Load<int32_t>(stats_data)));
 	case LogicalTypeId::TIME: {
@@ -168,7 +168,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb
 		} else if (stats.size() == sizeof(int64_t)) {
 			val = Load<int64_t>(stats_data);
 		} else {
-			throw InternalException("Incorrect stats size for type TIME");
+			throw InvalidInputException("Incorrect stats size for type TIME");
 		}
 		if (schema_ele.__isset.logicalType && schema_ele.logicalType.__isset.TIME) {
 			// logical type
@@ -195,7 +195,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb
 		} else if (stats.size() == sizeof(int64_t)) {
 			val = Load<int64_t>(stats_data);
 		} else {
-			throw InternalException("Incorrect stats size for type TIMETZ");
+			throw InvalidInputException("Incorrect stats size for type TIMETZ");
 		}
 		if (schema_ele.__isset.logicalType && schema_ele.logicalType.__isset.TIME) {
 			// logical type
@@ -216,13 +216,13 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb
 		timestamp_t timestamp_value;
 		if (schema_ele.type == Type::INT96) {
 			if (stats.size() != sizeof(Int96)) {
-				throw InternalException("Incorrect stats size for type TIMESTAMP");
+				throw InvalidInputException("Incorrect stats size for type TIMESTAMP");
 			}
 			timestamp_value = ImpalaTimestampToTimestamp(Load<Int96>(stats_data));
 		} else {
 			D_ASSERT(schema_ele.type == Type::INT64);
 			if (stats.size() != sizeof(int64_t)) {
-				throw InternalException("Incorrect stats size for type TIMESTAMP");
+				throw InvalidInputException("Incorrect stats size for type TIMESTAMP");
 			}
 			auto val = Load<int64_t>(stats_data);
 			if (schema_ele.__isset.logicalType && schema_ele.logicalType.__isset.TIMESTAMP) {
@@ -252,13 +252,13 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb
 		timestamp_ns_t timestamp_value;
 		if (schema_ele.type == Type::INT96) {
 			if (stats.size() != sizeof(Int96)) {
-				throw InternalException("Incorrect stats size for type TIMESTAMP_NS");
+				throw InvalidInputException("Incorrect stats size for type TIMESTAMP_NS");
 			}
 			timestamp_value = ImpalaTimestampToTimestampNS(Load<Int96>(stats_data));
 		} else {
 			D_ASSERT(schema_ele.type == Type::INT64);
 			if (stats.size() != sizeof(int64_t)) {
-				throw InternalException("Incorrect stats size for type TIMESTAMP_NS");
+				throw InvalidInputException("Incorrect stats size for type TIMESTAMP_NS");
 			}
 			auto val = Load<int64_t>(stats_data);
 			if (schema_ele.__isset.logicalType && schema_ele.logicalType.__isset.TIMESTAMP) {
@@ -529,6 +529,9 @@ uint64_t ValueXH64FixedWidth(const Value &constant) {
 	return duckdb_zstd::XXH64(&val, sizeof(val), 0);
 }
 
+// TODO we can only this if the parquet representation of the type exactly matches the duckdb rep!
+// TODO TEST THIS!
+// TODO perhaps we can re-use some writer infra here
 static uint64_t ValueXXH64(const Value &constant) {
 	switch (constant.type().InternalType()) {
 	case PhysicalType::BOOL:
@@ -602,7 +605,7 @@ bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filte
 	}
 
 	duckdb_parquet::BloomFilterHeader filter_header;
-	// TODO the bloom filter could be encrypted, too, so double check that this is NOT the case
+	// TODO the bloom filter could be encrypted, too, so need to double check that this is NOT the case
 	filter_header.read(&file_proto);
 	if (!filter_header.algorithm.__isset.BLOCK || !filter_header.compression.__isset.UNCOMPRESSED ||
 	    !filter_header.hash.__isset.XXHASH) {
