@@ -70,7 +70,7 @@ struct ParquetReadBindData : public TableFunctionData {
 	// These come from the initial_reader, but need to be stored in case the initial_reader is removed by a filter
 	idx_t initial_file_cardinality;
 	idx_t initial_file_row_groups;
-	idx_t explicit_cardinality = 0; // can be set to inject exterior knowledge on total cardinality (e.g. from a data lake)
+	idx_t explicit_cardinality = 0; // can be set to inject exterior cardinality knowledge (e.g. from a data lake)
 	ParquetOptions parquet_options;
 	MultiFileReaderBindData reader_bind;
 
