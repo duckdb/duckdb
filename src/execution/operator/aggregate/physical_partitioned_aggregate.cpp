@@ -99,8 +99,8 @@ SinkResultType PhysicalPartitionedAggregate::Sink(ExecutionContext &context, Dat
 		for (idx_t partition_idx = 0; partition_idx < groups.size(); partition_idx++) {
 			auto column_name = to_string(partition_idx);
 			auto &partition = input.local_state.partition_info.partition_data[partition_idx];
-			D_ASSERT(Value::NotDistinctFrom(partition.min, partition.max));
-			partition_values.emplace_back(make_pair(std::move(column_name), partition.min));
+			D_ASSERT(Value::NotDistinctFrom(partition.min_val, partition.max_val));
+			partition_values.emplace_back(make_pair(std::move(column_name), partition.min_val));
 		}
 		lstate.current_partition = Value::STRUCT(std::move(partition_values));
 

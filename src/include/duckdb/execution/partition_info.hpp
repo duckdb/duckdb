@@ -17,11 +17,11 @@ namespace duckdb {
 enum class PartitionInfo { NONE, REQUIRES_BATCH_INDEX };
 
 struct ColumnPartitionData {
-	explicit ColumnPartitionData(Value partition_val) : min(partition_val), max(std::move(partition_val)) {
+	explicit ColumnPartitionData(Value partition_val) : min_val(partition_val), max_val(std::move(partition_val)) {
 	}
 
-	Value min;
-	Value max;
+	Value min_val;
+	Value max_val;
 };
 
 struct SourcePartitionInfo {
