@@ -79,6 +79,9 @@ struct CSVStates {
 	inline bool IsState(const CSVState state) const {
 		return states[1] == state;
 	}
+	inline bool WasState(const CSVState state) const {
+		return states[0] == state;
+	}
 	CSVState states[2];
 };
 
