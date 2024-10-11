@@ -10,6 +10,11 @@ PRAGMA enable_verification
 statement ok
 COPY (SELECT 42::INTEGER i) TO '__TEST_DIR__/integers.parquet' (FIELD_IDS {i: 0})
 
+foreach bytes_prefetched 0 10 100 1000 4088 10000 100000
+
+statement ok
+SET prefetch_metadata_bytes = ${bytes_prefetched};
+
 statement error
 SELECT *
 FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map{})
@@ -35,6 +40,8 @@ FROM read_parquet('__TEST_DIR__/*.parquet', schema=map {
                   }, hive_partitioning=true)
 ----
 Binder Error: Parquet schema cannot be combined with union_by_name=true or hive_partitioning=true
+
+endloop
 
 statement ok
 COPY (
@@ -64,6 +71,11 @@ COPY (
 ) TO '__TEST_DIR__/partitioned2' (FIELD_IDS {i1: 5, i3: 3, i4: 2, i5: 1}, PARTITION_BY i1, FORMAT parquet)
 ----
 Binder Error: Column name "i1" specified in FIELD_IDS not found. Consider using WRITE_PARTITION_COLUMNS if this column is a partition column. Available column names:
+
+foreach bytes_prefetched 0 10 100 1000 4088 10000 100000
+
+statement ok
+SET prefetch_metadata_bytes = ${bytes_prefetched};
 
 # cannot duplicate field_ids
 statement error
@@ -144,9 +156,16 @@ FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
 ----
 Conversion Error
 
+endloop
+
 # if we don't supply a field id, we can't refer to it using the schema parameter
 statement ok
 COPY (SELECT 42::INTEGER i) TO '__TEST_DIR__/integers.parquet'
+
+foreach bytes_prefetched 0 10 100 1000 4088 10000 100000
+
+statement ok
+SET prefetch_metadata_bytes = ${bytes_prefetched};
 
 query II
 SELECT *
@@ -157,11 +176,18 @@ FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
 ----
 NULL	43
 
+endloop
+
 # let's spice it up with more columns
 statement ok
 COPY (
     SELECT 1 i1, 3 i3, 4 i4, 5 i5
 ) TO '__TEST_DIR__/integers.parquet' (FIELD_IDS {i1: 5, i3: 3, i4: 2, i5: 1})
+
+foreach bytes_prefetched 0 10 100 1000 4088 10000 100000
+
+statement ok
+SET prefetch_metadata_bytes = ${bytes_prefetched};
 
 # this is purposely a bit confusing but we're:
 # 1. deleting field id 2
@@ -228,10 +254,17 @@ FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
 ----
 5	integers.parquet
 
+endloop
+
 statement ok
 COPY (
     SELECT range % 4 g, range i FROM range(1000)
 ) TO '__TEST_DIR__/integers.parquet' (FIELD_IDS {g: 33, i: 42})
+
+foreach bytes_prefetched 0 10 100 1000 4088 10000 100000
+
+statement ok
+SET prefetch_metadata_bytes = ${bytes_prefetched};
 
 # let's also do a query with a filter and a downcast
 query II
@@ -245,6 +278,8 @@ GROUP BY my_cool_group
 ----
 2	125000
 
+endloop
+
 # also test multi-file reading with different field ids
 statement ok
 COPY (
@@ -255,6 +290,11 @@ statement ok
 COPY (
     SELECT 1 j1, 3 j3, 4 j4, 5 j5
 ) TO '__TEST_DIR__/multifile2.parquet' (FIELD_IDS {j1: 1, j3: 2, j4: 3, j5: 4})
+
+foreach bytes_prefetched 0 10 100 1000 4088 10000 100000
+
+statement ok
+SET prefetch_metadata_bytes = ${bytes_prefetched};
 
 query IIIII
 SELECT i1, i3, i4, i5, filename[-18:]
@@ -268,3 +308,5 @@ ORDER BY filename
 ----
 5	3	2	1	multifile1.parquet
 1	4	5	NULL	multifile2.parquet
+
+endloop

@@ -9,6 +9,9 @@ require httpfs
 require tpch
 
 statement ok
+SET prefetch_metadata_bytes = 0;
+
+statement ok
 SET force_download=true;
 
 query II
