@@ -194,7 +194,8 @@ public:
 
 			auto it = options.find(key);
 			if (it == options.end()) {
-				throw InternalException("Found an unexpected secret key: '%s'", key);
+				throw IOException("Failed to deserialize secret '%s', it contains an unexpected key: '%s'",
+				                  base_secret.GetName(), key);
 			}
 			auto &logical_type = it->second;
 			Value value;
