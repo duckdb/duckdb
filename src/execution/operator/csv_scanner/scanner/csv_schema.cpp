@@ -60,21 +60,19 @@ bool CSVSchema::Empty() const {
 	return columns.empty();
 }
 
-bool CSVSchema::SchemasMatch(string &error_message, const weak_ptr<SnifferResult> &sniffer_result_ptr,
-                             const string &cur_file_path, bool is_minimal_sniffer) const {
-	auto sniffer_result = sniffer_result_ptr.lock();
-	D_ASSERT(sniffer_result);
-	D_ASSERT(sniffer_result->names.size() == sniffer_result->return_types.size());
+bool CSVSchema::SchemasMatch(string &error_message, SnifferResult &sniffer_result, const string &cur_file_path,
+                             bool is_minimal_sniffer) const {
+	D_ASSERT(sniffer_result.names.size() == sniffer_result.return_types.size());
 	bool match = true;
 	unordered_map<string, TypeIdxPair> current_schema;
 
-	for (idx_t i = 0; i < sniffer_result->names.size(); i++) {
+	for (idx_t i = 0; i < sniffer_result.names.size(); i++) {
 		// Populate our little schema
-		current_schema[sniffer_result->names[i]] = {sniffer_result->return_types[i], i};
+		current_schema[sniffer_result.names[i]] = {sniffer_result.return_types[i], i};
 	}
 	if (is_minimal_sniffer) {
-		auto min_sniffer = static_cast<AdaptiveSnifferResult *>(sniffer_result.get());
-		if (min_sniffer && !min_sniffer->more_than_one_row) {
+		auto min_sniffer = static_cast<AdaptiveSnifferResult &>(sniffer_result);
+		if (!min_sniffer.more_than_one_row) {
 			bool min_sniff_match = true;
 			// If we don't have more than one row, either the names must match or the types must match.
 			for (auto &column : columns) {
@@ -88,10 +86,10 @@ bool CSVSchema::SchemasMatch(string &error_message, const weak_ptr<SnifferResult
 			}
 			// Otherwise, the types must match.
 			min_sniff_match = true;
-			if (sniffer_result->return_types.size() == columns.size()) {
+			if (sniffer_result.return_types.size() == columns.size()) {
 				idx_t return_type_idx = 0;
 				for (auto &column : columns) {
-					if (column.type != sniffer_result->return_types[return_type_idx++]) {
+					if (column.type != sniffer_result.return_types[return_type_idx++]) {
 						min_sniff_match = false;
 						break;
 					}
@@ -103,7 +101,7 @@ bool CSVSchema::SchemasMatch(string &error_message, const weak_ptr<SnifferResult
 				// If we got here, we have the right types but the wrong names, lets fix the names
 				idx_t sniff_name_idx = 0;
 				for (auto &column : columns) {
-					sniffer_result->names[sniff_name_idx++] = column.name;
+					sniffer_result.names[sniff_name_idx++] = column.name;
 				}
 				return true;
 			}

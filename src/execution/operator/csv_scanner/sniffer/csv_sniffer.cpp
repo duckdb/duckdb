@@ -88,10 +88,10 @@ void CSVSniffer::SetResultOptions() {
 	options.dialect_options.rows_until_header = best_candidate->GetStateMachine().dialect_options.rows_until_header;
 }
 
-shared_ptr<AdaptiveSnifferResult> CSVSniffer::MinimalSniff() {
+AdaptiveSnifferResult CSVSniffer::MinimalSniff() {
 	if (set_columns.IsSet()) {
 		// Nothing to see here
-		return make_shared_ptr<AdaptiveSnifferResult>(*set_columns.types, *set_columns.names, true);
+		return AdaptiveSnifferResult(*set_columns.types, *set_columns.names, true);
 	}
 	// Return Types detected
 	vector<LogicalType> return_types;
@@ -106,7 +106,7 @@ shared_ptr<AdaptiveSnifferResult> CSVSniffer::MinimalSniff() {
 	auto &sniffed_column_counts = count_scanner.ParseChunk();
 	if (sniffed_column_counts.result_position == 0) {
 		// The file is an empty file, we just return
-		return make_shared_ptr<AdaptiveSnifferResult>();
+		return {{}, {}, false};
 	}
 
 	state_machine->dialect_options.num_cols = sniffed_column_counts[0].number_of_columns;
@@ -153,7 +153,7 @@ shared_ptr<AdaptiveSnifferResult> CSVSniffer::MinimalSniff() {
 		detected_types.push_back(d_type);
 	}
 
-	return make_shared_ptr<AdaptiveSnifferResult>(detected_types, names, sniffed_column_counts.result_position > 1);
+	return {detected_types, names, sniffed_column_counts.result_position > 1};
 }
 
 SnifferResult CSVSniffer::AdaptiveSniff(const CSVSchema &file_schema) {
@@ -169,7 +169,7 @@ SnifferResult CSVSniffer::AdaptiveSniff(const CSVSchema &file_schema) {
 	}
 	if (run_full) {
 		// We run full sniffer
-		auto full_sniffer = SniffCSVShared();
+		auto full_sniffer = SniffCSV();
 		if (!set_columns.IsSet() && !options.file_options.AnySet()) {
 			string error;
 			if (!file_schema.SchemasMatch(error, full_sniffer, options.file_path, false) &&
@@ -177,12 +177,11 @@ SnifferResult CSVSniffer::AdaptiveSniff(const CSVSchema &file_schema) {
 				throw InvalidInputException(error);
 			}
 		}
-		return *full_sniffer;
+		return full_sniffer;
 	}
-	return min_sniff_res->ToSnifferResult();
+	return min_sniff_res.ToSnifferResult();
 }
-
-void CSVSniffer::SniffCSVInternal(bool force_match) {
+SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	buffer_manager->sniffing = true;
 	// 1. Dialect Detection
 	DetectDialect();
@@ -267,22 +266,10 @@ void CSVSniffer::SniffCSVInternal(bool force_match) {
 		throw InvalidInputException(error);
 	}
 	options.was_type_manually_set = manually_set;
-}
-
-SnifferResult CSVSniffer::SniffCSV(bool force_match) {
-	SniffCSVInternal(force_match);
 	if (set_columns.IsSet()) {
 		return SnifferResult(*set_columns.types, *set_columns.names);
 	}
 	return SnifferResult(detected_types, names);
-}
-
-shared_ptr<SnifferResult> CSVSniffer::SniffCSVShared(bool force_match) {
-	SniffCSVInternal(force_match);
-	if (set_columns.IsSet()) {
-		return make_shared_ptr<SnifferResult>(*set_columns.types, *set_columns.names);
-	}
-	return make_shared_ptr<SnifferResult>(detected_types, names);
 }
 
 } // namespace duckdb

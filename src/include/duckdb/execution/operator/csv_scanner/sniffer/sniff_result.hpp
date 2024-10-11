@@ -25,8 +25,7 @@ struct SnifferResult {
 };
 
 struct AdaptiveSnifferResult : SnifferResult {
-	explicit AdaptiveSnifferResult(vector<LogicalType> return_types_p = {}, vector<string> names_p = {},
-	                               bool more_than_one_row_p = false)
+	AdaptiveSnifferResult(vector<LogicalType> return_types_p, vector<string> names_p, bool more_than_one_row_p)
 	    : SnifferResult(std::move(return_types_p), std::move(names_p)), more_than_one_row(more_than_one_row_p) {
 	}
 	bool more_than_one_row;
