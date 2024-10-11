@@ -24,10 +24,12 @@ public:
 
 	mutex main_mutex;
 
-public:
 	bool CanSeek();
 	void Seek(idx_t position);
 	bool OnDiskFile();
+	bool IsPipe();
+
+	void Reset();
 
 	idx_t FileSize();
 
@@ -43,13 +45,18 @@ public:
 	                                             FileCompressionType compression);
 	static unique_ptr<CSVFileHandle> OpenFile(FileSystem &fs, Allocator &allocator, const string &path,
 	                                          FileCompressionType compression);
-	bool uncompressed = false;
+	FileCompressionType compression_type;
+
+	double GetProgress();
 
 private:
 	unique_ptr<FileHandle> file_handle;
 	string path;
 	bool can_seek = false;
 	bool on_disk_file = false;
+	bool is_pipe = false;
+	idx_t uncompressed_bytes_read = 0;
+
 	idx_t file_size = 0;
 
 	idx_t requested_bytes = 0;

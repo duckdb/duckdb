@@ -2,6 +2,9 @@
 # description: Test auto checkpointing of the ART after CREATE and INSERT
 # group: [storage]
 
+# this test does not work with vsize = 2 because a low vector size changes the WAL threshold
+require vector_size 2048
+
 # test auto checkpointing after CREATE INDEX
 
 load __TEST_DIR__/idx_checkpoint_create.db

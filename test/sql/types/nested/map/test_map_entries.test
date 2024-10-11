@@ -82,3 +82,28 @@ SELECT map_entries(map_from_entries(
 ));
 ----
 [{'key': a, 'value': 5}, {'key': b, 'value': 6}, {'key': x, 'value': 21}, {'key': abc, 'value': 0}]
+
+query I
+select MAP_ENTRIES(MAP([],[]))
+----
+[]
+
+query I
+select MAP_ENTRIES(MAP(NULL, NULL))
+----
+NULL
+
+query I
+select MAP_ENTRIES(NULL)
+----
+NULL
+
+query I
+select MAP_ENTRIES(NULL::MAP("NULL", "NULL"))
+----
+NULL
+
+query I
+select MAP_ENTRIES(NULL::MAP(INT, BIGINT))
+----
+NULL

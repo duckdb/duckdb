@@ -54,30 +54,30 @@ Pedro	Vacilo
 
 # This actually performs the optimized comparison since they are both ENUMs but of different types.
 
-query II
+query II rowsort
 select person.name, pet.name from person inner join pet on (person.current_mood = pet.current_mood)
 ----
-Pedro	Oogie
 Hannes	Wilbur
+Pedro	Oogie
 
-query II
+query II rowsort
 select person_name,pet_name from
 (select person.name as person_name, pet.name as pet_name, person.current_mood as person_mood, pet.current_mood as pet_mood
 from person,pet) as t
 where person_mood = pet_mood
 ----
-Pedro	Oogie
 Hannes	Wilbur
+Pedro	Oogie
 
 
-query II
+query II rowsort
 select person_name,pet_name from
 (select person.name as person_name, pet.name as pet_name, person.current_mood as person_mood, pet.current_mood as pet_mood
 from person,pet) as t
 where pet_mood = person_mood
 ----
-Pedro	Oogie
 Hannes	Wilbur
+Pedro	Oogie
 
 #SET Operations (e.g. SELECT enum_one UNION ALL SELECT enum_two)
 query I

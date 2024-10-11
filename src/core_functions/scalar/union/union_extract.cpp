@@ -45,7 +45,9 @@ static unique_ptr<FunctionData> UnionExtractBind(ClientContext &context, ScalarF
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
-	D_ASSERT(LogicalTypeId::UNION == arguments[0]->return_type.id());
+	if (arguments[0]->return_type.id() != LogicalTypeId::UNION) {
+		throw BinderException("union_extract can only take a union parameter");
+	}
 	idx_t union_member_count = UnionType::GetMemberCount(arguments[0]->return_type);
 	if (union_member_count == 0) {
 		throw InternalException("Can't extract something from an empty union");
@@ -88,7 +90,7 @@ static unique_ptr<FunctionData> UnionExtractBind(ClientContext &context, ScalarF
 		for (idx_t i = 0; i < union_member_count; i++) {
 			candidates.push_back(UnionType::GetMemberName(arguments[0]->return_type, i));
 		}
-		auto closest_settings = StringUtil::TopNLevenshtein(candidates, key);
+		auto closest_settings = StringUtil::TopNJaroWinkler(candidates, key);
 		auto message = StringUtil::CandidatesMessage(closest_settings, "Candidate Entries");
 		throw BinderException("Could not find key \"%s\" in union\n%s", key, message);
 	}

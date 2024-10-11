@@ -3,6 +3,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
 
@@ -11,10 +12,11 @@ struct SetSelectionVectorSelect {
 	                               ValidityMask &input_validity, Vector &selection_entry, idx_t child_idx,
 	                               idx_t &target_offset, idx_t selection_offset, idx_t input_offset,
 	                               idx_t target_length) {
-		idx_t sel_idx = selection_entry.GetValue(selection_offset + child_idx).GetValue<int64_t>() - 1;
-		if (sel_idx < target_length) {
-			selection_vector.set_index(target_offset, input_offset + sel_idx);
-			if (!input_validity.RowIsValid(input_offset + sel_idx)) {
+		auto sel_idx = selection_entry.GetValue(selection_offset + child_idx).GetValue<int64_t>() - 1;
+		if (sel_idx >= 0 && sel_idx < UnsafeNumericCast<int64_t>(target_length)) {
+			auto sel_idx_unsigned = UnsafeNumericCast<idx_t>(sel_idx);
+			selection_vector.set_index(target_offset, input_offset + sel_idx_unsigned);
+			if (!input_validity.RowIsValid(input_offset + sel_idx_unsigned)) {
 				validity_mask.SetInvalid(target_offset);
 			}
 		} else {
@@ -43,6 +45,12 @@ struct SetSelectionVectorWhere {
 		if (!input_validity.RowIsValid(input_offset + child_idx)) {
 			validity_mask.SetInvalid(target_offset);
 		}
+
+		if (child_idx >= target_length) {
+			selection_vector.set_index(target_offset, 0);
+			validity_mask.SetInvalid(target_offset);
+		}
+
 		target_offset++;
 	}
 
@@ -140,6 +148,10 @@ static void ListSelectFunction(DataChunk &args, ExpressionState &state, Vector &
 static unique_ptr<FunctionData> ListSelectBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
+
+	// If the first argument is an array, cast it to a list
+	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
+
 	LogicalType child_type;
 	if (arguments[0]->return_type == LogicalTypeId::UNKNOWN || arguments[1]->return_type == LogicalTypeId::UNKNOWN) {
 		bound_function.arguments[0] = LogicalTypeId::UNKNOWN;
@@ -149,8 +161,6 @@ static unique_ptr<FunctionData> ListSelectBind(ClientContext &context, ScalarFun
 
 	D_ASSERT(LogicalTypeId::LIST == arguments[0]->return_type.id() ||
 	         LogicalTypeId::SQLNULL == arguments[0]->return_type.id());
-	D_ASSERT(LogicalTypeId::LIST == arguments[1]->return_type.id() ||
-	         LogicalTypeId::SQLNULL == arguments[1]->return_type.id());
 
 	bound_function.return_type = arguments[0]->return_type;
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);

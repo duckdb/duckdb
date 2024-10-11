@@ -1,4 +1,7 @@
 #include "duckdb/function/cast_rules.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 
@@ -23,6 +26,8 @@ static int64_t TargetTypeCost(const LogicalType &type) {
 		return 121;
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return 122;
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return 123;
 	case LogicalTypeId::VARCHAR:
 		return 149;
 	case LogicalTypeId::STRUCT:
@@ -208,6 +213,10 @@ static int64_t ImplicitCastUhugeint(const LogicalType &to) {
 static int64_t ImplicitCastDate(const LogicalType &to) {
 	switch (to.id()) {
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_SEC:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -257,6 +266,17 @@ static int64_t ImplicitCastTimestampNS(const LogicalType &to) {
 static int64_t ImplicitCastTimestamp(const LogicalType &to) {
 	switch (to.id()) {
 	case LogicalTypeId::TIMESTAMP_NS:
+		return TargetTypeCost(to);
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
+static int64_t ImplicitCastVarint(const LogicalType &to) {
+	switch (to.id()) {
+	case LogicalTypeId::DOUBLE:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -381,8 +401,12 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 	}
 	if (from.id() == LogicalTypeId::ARRAY && to.id() == LogicalTypeId::LIST) {
 		// Arrays can be cast to lists for the cost of casting the child type
+		auto child_cost = ImplicitCast(ArrayType::GetChildType(from), ListType::GetChildType(to));
+		if (child_cost < 0) {
+			return -1;
+		}
 		// add 1 because we prefer ARRAY->ARRAY casts over ARRAY->LIST casts
-		return ImplicitCast(ArrayType::GetChildType(from), ListType::GetChildType(to)) + 1;
+		return child_cost + 1;
 	}
 	if (from.id() == LogicalTypeId::LIST && (to.id() == LogicalTypeId::ARRAY && !ArrayType::IsAnySize(to))) {
 		// Lists can be cast to arrays for the cost of casting the child type, if the target size is known
@@ -390,15 +414,17 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		// TODO: if we can access the expression we could resolve the size if the list is constant.
 		return ImplicitCast(ListType::GetChildType(from), ArrayType::GetChildType(to));
 	}
-	if (from.id() == to.id()) {
-		// arguments match: do nothing
-		return 0;
-	}
-
 	if (from.id() == LogicalTypeId::UNION && to.id() == LogicalTypeId::UNION) {
+		// Check that the target union type is fully resolved.
+		if (to.AuxInfo() == nullptr) {
+			// If not, try anyway and let the actual cast logic handle it.
+			// This is to allow passing unions into functions that take a generic union type (without specifying member
+			// types) as an argument.
+			return 0;
+		}
 		// Unions can be cast if the source tags are a subset of the target tags
 		// in which case the most expensive cost is used
-		int cost = -1;
+		int64_t cost = -1;
 		for (idx_t from_member_idx = 0; from_member_idx < UnionType::GetMemberCount(from); from_member_idx++) {
 			auto &from_member_name = UnionType::GetMemberName(from, from_member_idx);
 
@@ -406,14 +432,12 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 			for (idx_t to_member_idx = 0; to_member_idx < UnionType::GetMemberCount(to); to_member_idx++) {
 				auto &to_member_name = UnionType::GetMemberName(to, to_member_idx);
 
-				if (from_member_name == to_member_name) {
+				if (StringUtil::CIEquals(from_member_name, to_member_name)) {
 					auto &from_member_type = UnionType::GetMemberType(from, from_member_idx);
 					auto &to_member_type = UnionType::GetMemberType(to, to_member_idx);
 
-					int child_cost = ImplicitCast(from_member_type, to_member_type);
-					if (child_cost > cost) {
-						cost = child_cost;
-					}
+					auto child_cost = ImplicitCast(from_member_type, to_member_type);
+					cost = MaxValue(cost, child_cost);
 					found = true;
 					break;
 				}
@@ -424,19 +448,92 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		}
 		return cost;
 	}
+	if (from.id() == LogicalTypeId::STRUCT && to.id() == LogicalTypeId::STRUCT) {
+		if (to.AuxInfo() == nullptr) {
+			// If this struct is not fully resolved, we'll leave it to the actual cast logic to handle it.
+			return 0;
+		}
 
+		auto &source_children = StructType::GetChildTypes(from);
+		auto &target_children = StructType::GetChildTypes(to);
+
+		if (source_children.size() != target_children.size()) {
+			// different number of children: not possible
+			return -1;
+		}
+
+		auto target_is_unnamed = StructType::IsUnnamed(to);
+		auto source_is_unnamed = StructType::IsUnnamed(from);
+		auto named_struct_cast = !source_is_unnamed && !target_is_unnamed;
+
+		int64_t cost = -1;
+		if (named_struct_cast) {
+
+			// Collect the target members in a map for easy lookup
+			case_insensitive_map_t<idx_t> target_members;
+			for (idx_t target_idx = 0; target_idx < target_children.size(); target_idx++) {
+				auto &target_name = target_children[target_idx].first;
+				if (target_members.find(target_name) != target_members.end()) {
+					// duplicate name in target struct
+					return -1;
+				}
+				target_members[target_name] = target_idx;
+			}
+			// Match the source members to the target members by name
+			for (idx_t source_idx = 0; source_idx < source_children.size(); source_idx++) {
+				auto &source_child = source_children[source_idx];
+				auto entry = target_members.find(source_child.first);
+				if (entry == target_members.end()) {
+					// element in source struct was not found in target struct
+					return -1;
+				}
+				auto target_idx = entry->second;
+				target_members.erase(entry);
+				auto child_cost = ImplicitCast(source_child.second, target_children[target_idx].second);
+				if (child_cost == -1) {
+					return -1;
+				}
+				cost = MaxValue(cost, child_cost);
+			}
+		} else {
+			// Match the source members to the target members by position
+			for (idx_t i = 0; i < source_children.size(); i++) {
+				auto &source_child = source_children[i];
+				auto &target_child = target_children[i];
+				auto child_cost = ImplicitCast(source_child.second, target_child.second);
+				if (child_cost == -1) {
+					return -1;
+				}
+				cost = MaxValue(cost, child_cost);
+			}
+		}
+		return cost;
+	}
+
+	if (from.id() == to.id()) {
+		// arguments match: do nothing
+		return 0;
+	}
+
+	// Special case: Anything can be cast to a union if the source type is a member of the union
 	if (to.id() == LogicalTypeId::UNION) {
 		// check that the union type is fully resolved.
 		if (to.AuxInfo() == nullptr) {
 			return -1;
 		}
-		// every type can be implicitly be cast to a union if the source type is a member of the union
+		// check if the union contains something castable from the source type
+		// in which case the least expensive (most specific) cast should be used
+		bool found = false;
+		auto cost = NumericLimits<int64_t>::Maximum();
 		for (idx_t i = 0; i < UnionType::GetMemberCount(to); i++) {
-			auto member = UnionType::GetMemberType(to, i);
-			if (from == member) {
-				return 0;
+			auto target_member = UnionType::GetMemberType(to, i);
+			auto target_cost = ImplicitCast(from, target_member);
+			if (target_cost != -1) {
+				found = true;
+				cost = MinValue(cost, target_cost);
 			}
 		}
+		return found ? cost : -1;
 	}
 
 	switch (from.id()) {
@@ -478,6 +575,8 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		return ImplicitCastTimestampNS(to);
 	case LogicalTypeId::TIMESTAMP:
 		return ImplicitCastTimestamp(to);
+	case LogicalTypeId::VARINT:
+		return ImplicitCastVarint(to);
 	default:
 		return -1;
 	}

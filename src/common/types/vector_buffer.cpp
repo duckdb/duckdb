@@ -67,6 +67,11 @@ VectorListBuffer::VectorListBuffer(const LogicalType &list_type, idx_t initial_c
 
 void VectorListBuffer::Reserve(idx_t to_reserve) {
 	if (to_reserve > capacity) {
+		if (to_reserve > DConstants::MAX_VECTOR_SIZE) {
+			// overflow: throw an exception
+			throw OutOfRangeException("Cannot resize vector to %d rows: maximum allowed vector size is %s", to_reserve,
+			                          StringUtil::BytesToHumanReadableString(DConstants::MAX_VECTOR_SIZE));
+		}
 		idx_t new_capacity = NextPowerOfTwo(to_reserve);
 		D_ASSERT(new_capacity >= to_reserve);
 		child->Resize(capacity, new_capacity);

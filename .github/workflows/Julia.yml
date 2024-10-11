@@ -7,8 +7,6 @@ on:
       - '**'
       - '!main'
       - '!feature'
-    tags:
-      - '**'
     paths-ignore:
       - '**.md'
       - 'examples/**'
@@ -39,10 +37,9 @@ concurrency:
 jobs:
   format_check:
     name: Julia Format Check
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -60,7 +57,6 @@ jobs:
 
   main_julia:
     name: Julia ${{ matrix.version }}
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -69,22 +65,21 @@ jobs:
           - '1.6'
           - '1.7'
           - '1'
-          - 'nightly'
         os:
           - ubuntu-latest
         arch:
           - x64
         isRelease:
-          - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
+          - ${{ github.ref == 'refs/heads/main' }}
         exclude:
           - isRelease: false
             version: '1.6'
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: julia-actions/setup-julia@v1
+      - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}

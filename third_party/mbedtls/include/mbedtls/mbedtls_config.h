@@ -1,3 +1,4 @@
+#define MBEDTLS_SHA1_C
 #define MBEDTLS_SHA256_C
 #define MBEDTLS_SHA224_C
 #define MBEDTLS_RSA_C
@@ -17,6 +18,3 @@
 #define MBEDTLS_ARIA_C
 #define MBEDTLS_GCM_C
 #define MBEDTLS_ENTROPY_C
-#if defined(_WIN32)
-#define MBEDTLS_NO_PLATFORM_ENTROPY
-#endif

@@ -1,0 +1,193 @@
+# name: test/sql/json/scalar/test_json_value.test
+# description: Test JSON value
+# group: [scalar]
+
+require json
+
+statement ok
+pragma enable_verification
+
+# unlike JSON extract, this goes our NULL
+query T
+select json_value('{"foo": null}', '$.foo')
+----
+NULL
+
+query T
+select json_value('{"foo": null}', '$.foo.bar')
+----
+NULL
+
+query T
+select json_value('null', '$')
+----
+NULL
+
+query T
+select json_value('[null]', '$[0]')
+----
+NULL
+
+query T
+select json_value('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '/my_field/my_nested_field/1')
+----
+"duck"
+
+query T
+select json_value('{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}', '/my_field/my_nested_field/1')
+----
+"duckduckduckduck"
+
+query T
+select json_value('[1, 2, 42]', 2)
+----
+42
+
+# some sqlite tests
+# this one returns NULL because the extracted value is not scalar
+query T
+SELECT json_value('{"a":2,"c":[4,5,{"f":7}]}', '$');
+----
+NULL
+
+query T
+SELECT json_value('{"a":2,"c":[4,5,{"f":7}]}', '$.c');
+----
+NULL
+
+query T
+SELECT json_value('{"a":2,"c":[4,5,{"f":7}]}', '$.c[2]');
+----
+NULL
+
+query T
+SELECT json_value('{"a":2,"c":[4,5,{"f":7}]}', '$.c[2].f');
+----
+7
+
+query T
+SELECT json_value('{"a":2,"c":[4,5,{"f":7}]}', '$.x');
+----
+NULL
+
+# list of paths must be constant
+statement error
+with tbl as (
+    select '{"a":2,"c":[4,5],"f":7}' j, ['$.c','$.a'] p
+)
+SELECT json_value(j, p);
+----
+Binder Error
+
+# first value is not scalar, so it is set to NULL
+query T
+SELECT json_value('{"a":2,"c":[4,5],"f":7}', ['$.c','$.a']);
+----
+[NULL, 2]
+
+query T
+SELECT json_value('{"a":2,"c":[4,5,{"f":7}]}', ['$.x', '$.a']);
+----
+[NULL, 2]
+
+query T
+SELECT json_value(NULL, ['$.x', '$.a']);
+----
+NULL
+
+statement ok
+CREATE TABLE t1(j varchar);
+
+statement ok
+INSERT INTO t1(j) VALUES('{"a":1,"b":[1,[2,3],4],"c":99}');
+
+query T
+SELECT json_value(j, '$.b[#]') FROM t1;
+----
+NULL
+
+query TT
+SELECT json_value(j, '$.a[#-1]'), json_value(j, '$.a[-1]') FROM t1;
+----
+NULL	NULL
+
+query TT
+SELECT json_value(j, '$.b[#-000001]') a, a = json_value(j, '$.b[-000001]') FROM t1;
+----
+4	true
+
+statement error
+SELECT json_value(j, '$.b[#-]') FROM t1;
+----
+
+statement error
+SELECT json_value(j, '$.b[-]') FROM t1;
+----
+
+statement error
+SELECT json_value(j, '$.b[#9]') FROM t1;
+----
+
+statement error
+SELECT json_value(j, '$.b[#+2]') FROM t1;
+----
+
+statement error
+SELECT json_value(j, '$.b[#-1') FROM t1;
+----
+
+statement error
+SELECT json_value(j, '$.b[#-1x]') FROM t1;
+----
+
+statement ok
+CREATE TABLE obj(x varchar);
+
+statement ok
+INSERT INTO obj VALUES('{"a":1,"b":2}');
+
+query T
+SELECT json_value(x, '$.b') FROM obj;
+----
+2
+
+query T
+SELECT json_value(x, '$."b"') FROM obj;
+----
+2
+
+statement ok
+CREATE TABLE t12(x varchar);
+
+statement ok
+INSERT INTO t12(x) VALUES(
+'{"settings":
+    {"layer2":
+       {"hapax.legomenon":
+          {"forceDisplay":true,
+           "transliterate":true,
+           "add.footnote":true,
+           "summary.report":true},
+        "dis.legomenon":
+          {"forceDisplay":true,
+           "transliterate":false,
+           "add.footnote":false,
+           "summary.report":true},
+        "tris.legomenon":
+          {"forceDisplay":true,
+           "transliterate":false,
+           "add.footnote":false,
+           "summary.report":false}
+       }
+    }
+ }');
+
+query T
+SELECT json_value(x, '$.settings.layer2."tris.legomenon"."summary.report"') FROM t12;
+----
+false
+
+query T
+SELECT json_value(x, '$.settings.layer2."tris.legomenon"') FROM t12;
+----
+NULL

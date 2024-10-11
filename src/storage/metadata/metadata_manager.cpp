@@ -26,14 +26,14 @@ MetadataHandle MetadataManager::AllocateHandle() {
 			break;
 		}
 	}
-	if (free_block == INVALID_BLOCK) {
+	if (free_block == INVALID_BLOCK || free_block > PeekNextBlockId()) {
 		free_block = AllocateNewBlock();
 	}
 	D_ASSERT(free_block != INVALID_BLOCK);
 
 	// select the first free metadata block we can find
 	MetadataPointer pointer;
-	pointer.block_index = free_block;
+	pointer.block_index = UnsafeNumericCast<idx_t>(free_block);
 	auto &block = blocks[free_block];
 	if (block.block->BlockId() < MAXIMUM_BLOCK) {
 		// this block is a disk-backed block, yet we are planning to write to it
@@ -52,7 +52,7 @@ MetadataHandle MetadataManager::AllocateHandle() {
 
 MetadataHandle MetadataManager::Pin(MetadataPointer pointer) {
 	D_ASSERT(pointer.index < METADATA_BLOCK_COUNT);
-	auto &block = blocks[pointer.block_index];
+	auto &block = blocks[UnsafeNumericCast<int64_t>(pointer.block_index)];
 
 	MetadataHandle handle;
 	handle.pointer.block_index = pointer.block_index;
@@ -61,34 +61,34 @@ MetadataHandle MetadataManager::Pin(MetadataPointer pointer) {
 	return handle;
 }
 
-void MetadataManager::ConvertToTransient(MetadataBlock &block) {
+void MetadataManager::ConvertToTransient(MetadataBlock &metadata_block) {
 	// pin the old block
-	auto old_buffer = buffer_manager.Pin(block.block);
+	auto old_buffer = buffer_manager.Pin(metadata_block.block);
 
 	// allocate a new transient block to replace it
-	shared_ptr<BlockHandle> new_block;
-	auto new_buffer = buffer_manager.Allocate(MemoryTag::METADATA, Storage::BLOCK_SIZE, false, &new_block);
+	auto new_buffer = buffer_manager.Allocate(MemoryTag::METADATA, block_manager.GetBlockSize(), false);
+	auto new_block = new_buffer.GetBlockHandle();
 
 	// copy the data to the transient block
-	memcpy(new_buffer.Ptr(), old_buffer.Ptr(), Storage::BLOCK_SIZE);
-
-	block.block = std::move(new_block);
+	memcpy(new_buffer.Ptr(), old_buffer.Ptr(), block_manager.GetBlockSize());
+	metadata_block.block = std::move(new_block);
 
 	// unregister the old block
-	block_manager.UnregisterBlock(block.block_id, false);
+	block_manager.UnregisterBlock(metadata_block.block_id);
 }
 
 block_id_t MetadataManager::AllocateNewBlock() {
 	auto new_block_id = GetNextBlockId();
 
 	MetadataBlock new_block;
-	auto handle = buffer_manager.Allocate(MemoryTag::METADATA, Storage::BLOCK_SIZE, false, &new_block.block);
+	auto handle = buffer_manager.Allocate(MemoryTag::METADATA, block_manager.GetBlockSize(), false);
+	new_block.block = handle.GetBlockHandle();
 	new_block.block_id = new_block_id;
 	for (idx_t i = 0; i < METADATA_BLOCK_COUNT; i++) {
-		new_block.free_blocks.push_back(METADATA_BLOCK_COUNT - i - 1);
+		new_block.free_blocks.push_back(NumericCast<uint8_t>(METADATA_BLOCK_COUNT - i - 1));
 	}
 	// zero-initialize the handle
-	memset(handle.Ptr(), 0, Storage::BLOCK_SIZE);
+	memset(handle.Ptr(), 0, block_manager.GetBlockSize());
 	AddBlock(std::move(new_block));
 	return new_block_id;
 }
@@ -134,8 +134,8 @@ MetadataPointer MetadataManager::FromDiskPointer(MetaBlockPointer pointer) {
 		                        pointer.block_pointer);
 	} // LCOV_EXCL_STOP
 	MetadataPointer result;
-	result.block_index = block_id;
-	result.index = index;
+	result.block_index = UnsafeNumericCast<idx_t>(block_id);
+	result.index = UnsafeNumericCast<uint8_t>(index);
 	return result;
 }
 
@@ -147,25 +147,25 @@ MetadataPointer MetadataManager::RegisterDiskPointer(MetaBlockPointer pointer) {
 	return FromDiskPointer(pointer);
 }
 
-BlockPointer MetadataManager::ToBlockPointer(MetaBlockPointer meta_pointer) {
+BlockPointer MetadataManager::ToBlockPointer(MetaBlockPointer meta_pointer, const idx_t metadata_block_size) {
 	BlockPointer result;
 	result.block_id = meta_pointer.GetBlockId();
-	result.offset = meta_pointer.GetBlockIndex() * MetadataManager::METADATA_BLOCK_SIZE + meta_pointer.offset;
-	D_ASSERT(result.offset < MetadataManager::METADATA_BLOCK_SIZE * MetadataManager::METADATA_BLOCK_COUNT);
+	result.offset = meta_pointer.GetBlockIndex() * NumericCast<uint32_t>(metadata_block_size) + meta_pointer.offset;
+	D_ASSERT(result.offset < metadata_block_size * MetadataManager::METADATA_BLOCK_COUNT);
 	return result;
 }
 
-MetaBlockPointer MetadataManager::FromBlockPointer(BlockPointer block_pointer) {
+MetaBlockPointer MetadataManager::FromBlockPointer(BlockPointer block_pointer, const idx_t metadata_block_size) {
 	if (!block_pointer.IsValid()) {
 		return MetaBlockPointer();
 	}
-	idx_t index = block_pointer.offset / MetadataManager::METADATA_BLOCK_SIZE;
-	auto offset = block_pointer.offset % MetadataManager::METADATA_BLOCK_SIZE;
+	idx_t index = block_pointer.offset / metadata_block_size;
+	auto offset = block_pointer.offset % metadata_block_size;
 	D_ASSERT(index < MetadataManager::METADATA_BLOCK_COUNT);
-	D_ASSERT(offset < MetadataManager::METADATA_BLOCK_SIZE);
+	D_ASSERT(offset < metadata_block_size);
 	MetaBlockPointer result;
 	result.block_pointer = idx_t(block_pointer.block_id) | index << 56ULL;
-	result.offset = offset;
+	result.offset = UnsafeNumericCast<uint32_t>(offset);
 	return result;
 }
 
@@ -174,13 +174,14 @@ idx_t MetadataManager::BlockCount() {
 }
 
 void MetadataManager::Flush() {
-	const idx_t total_metadata_size = MetadataManager::METADATA_BLOCK_SIZE * MetadataManager::METADATA_BLOCK_COUNT;
+	const idx_t total_metadata_size = GetMetadataBlockSize() * MetadataManager::METADATA_BLOCK_COUNT;
+
 	// write the blocks of the metadata manager to disk
 	for (auto &kv : blocks) {
 		auto &block = kv.second;
 		auto handle = buffer_manager.Pin(block.block);
 		// there are a few bytes left-over at the end of the block, zero-initialize them
-		memset(handle.Ptr() + total_metadata_size, 0, Storage::BLOCK_SIZE - total_metadata_size);
+		memset(handle.Ptr() + total_metadata_size, 0, block_manager.GetBlockSize() - total_metadata_size);
 		D_ASSERT(kv.first == block.block_id);
 		if (block.block->BlockId() >= MAXIMUM_BLOCK) {
 			// temporary block - convert to persistent
@@ -220,6 +221,10 @@ void MetadataBlock::Write(WriteStream &sink) {
 	sink.Write<idx_t>(FreeBlocksToInteger());
 }
 
+idx_t MetadataManager::GetMetadataBlockSize() const {
+	return AlignValueFloor(block_manager.GetBlockSize() / METADATA_BLOCK_COUNT);
+}
+
 MetadataBlock MetadataBlock::Read(ReadStream &source) {
 	MetadataBlock result;
 	result.block_id = source.Read<block_id_t>();
@@ -247,7 +252,7 @@ void MetadataBlock::FreeBlocksFromInteger(idx_t free_list) {
 		auto index = i - 1;
 		idx_t mask = idx_t(1) << index;
 		if (free_list & mask) {
-			free_blocks.push_back(index);
+			free_blocks.push_back(UnsafeNumericCast<uint8_t>(index));
 		}
 	}
 }
@@ -313,6 +318,18 @@ vector<MetadataBlockInfo> MetadataManager::GetMetadataInfo() const {
 	std::sort(result.begin(), result.end(),
 	          [](const MetadataBlockInfo &a, const MetadataBlockInfo &b) { return a.block_id < b.block_id; });
 	return result;
+}
+
+vector<shared_ptr<BlockHandle>> MetadataManager::GetBlocks() const {
+	vector<shared_ptr<BlockHandle>> result;
+	for (auto &entry : blocks) {
+		result.push_back(entry.second.block);
+	}
+	return result;
+}
+
+block_id_t MetadataManager::PeekNextBlockId() {
+	return block_manager.PeekFreeBlockId();
 }
 
 block_id_t MetadataManager::GetNextBlockId() {

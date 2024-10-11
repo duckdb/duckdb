@@ -44,7 +44,7 @@ class TestDataFrameGroupBy(object):
         res = df2.collect()
         assert (
             str(res)
-            == "[Row(department='Finance', count_star()=4), Row(department='Marketing', count_star()=2), Row(department='Sales', count_star()=3)]"
+            == "[Row(department='Finance', count=4), Row(department='Marketing', count=2), Row(department='Sales', count=3)]"
         )
 
         df2 = df.groupBy("department").min("salary").sort("department")
@@ -115,3 +115,20 @@ class TestDataFrameGroupBy(object):
             str(res)
             == "[Row(department='Finance', sum_salary=351000, avg_salary=87750.0, sum_bonus=81000, max_bonus=24000), Row(department='Sales', sum_salary=257000, avg_salary=85666.66666666667, sum_bonus=53000, max_bonus=23000)]"
         )
+
+    def test_group_by_empty(self, spark):
+        df = spark.createDataFrame(
+            [(2, 1.0, "1"), (2, 2.0, "2"), (2, 3.0, "3"), (5, 4.0, "4")], schema=["age", "extra", "name"]
+        )
+
+        res = df.groupBy().avg().collect()
+        assert str(res) == "[Row(avg(age)=2.75, avg(extra)=2.5)]"
+
+        res = df.groupBy(["name", "age"]).count().sort("name").collect()
+        assert (
+            str(res)
+            == "[Row(name='1', age=2, count=1), Row(name='2', age=2, count=1), Row(name='3', age=2, count=1), Row(name='4', age=5, count=1)]"
+        )
+
+        res = df.groupBy("name").count().columns
+        assert res == ['name', 'count']

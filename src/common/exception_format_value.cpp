@@ -1,5 +1,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/helper.hpp" // defines DUCKDB_EXPLICIT_FALLTHROUGH which fmt will use to annotate
 #include "fmt/format.h"
 #include "fmt/printf.h"
 #include "duckdb/common/types/hugeint.hpp"

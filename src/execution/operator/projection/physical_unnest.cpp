@@ -88,11 +88,17 @@ static void UnnestNull(idx_t start, idx_t end, Vector &result) {
 	for (idx_t i = start; i < end; i++) {
 		validity.SetInvalid(i);
 	}
-	if (result.GetType().InternalType() == PhysicalType::STRUCT) {
-		auto &struct_children = StructVector::GetEntries(result);
+
+	const auto &logical_type = result.GetType();
+	if (logical_type.InternalType() == PhysicalType::STRUCT) {
+		const auto &struct_children = StructVector::GetEntries(result);
 		for (auto &child : struct_children) {
 			UnnestNull(start, end, *child);
 		}
+	} else if (logical_type.InternalType() == PhysicalType::ARRAY) {
+		auto &array_child = ArrayVector::GetEntry(result);
+		auto array_size = ArrayType::GetSize(logical_type);
+		UnnestNull(start * array_size, end * array_size, array_child);
 	}
 }
 
@@ -202,6 +208,19 @@ static void UnnestVector(UnifiedVectorFormat &child_vector_data, Vector &child_v
 			UnnestVector(child_vector_entries_data, *child_vector_entries[i], list_size, start, end,
 			             *result_entries[i]);
 		}
+		break;
+	}
+	case PhysicalType::ARRAY: {
+		auto array_size = ArrayType::GetSize(child_vector.GetType());
+		auto &source_array = ArrayVector::GetEntry(child_vector);
+		auto &target_array = ArrayVector::GetEntry(result);
+
+		UnnestValidity(child_vector_data, start, end, result);
+
+		UnifiedVectorFormat child_array_data;
+		source_array.ToUnifiedFormat(list_size * array_size, child_array_data);
+		UnnestVector(child_array_data, source_array, list_size * array_size, start * array_size, end * array_size,
+		             target_array);
 		break;
 	}
 	default:

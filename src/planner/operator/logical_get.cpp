@@ -9,6 +9,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 
 namespace duckdb {
 
@@ -29,24 +30,57 @@ optional_ptr<TableCatalogEntry> LogicalGet::GetTable() const {
 	return function.get_bind_info(bind_data.get()).table;
 }
 
-string LogicalGet::ParamsToString() const {
-	string result = "";
+InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+
+	string filters_info;
+	bool first_item = true;
 	for (auto &kv : table_filters.filters) {
 		auto &column_index = kv.first;
 		auto &filter = kv.second;
 		if (column_index < names.size()) {
-			result += filter->ToString(names[column_index]);
+			if (!first_item) {
+				filters_info += "\n";
+			}
+			first_item = false;
+			filters_info += filter->ToString(names[column_index]);
 		}
-		result += "\n";
 	}
+	result["Filters"] = filters_info;
+
 	if (!extra_info.file_filters.empty()) {
-		result += "\n[INFOSEPARATOR]\n";
-		result += "File Filters: " + extra_info.file_filters;
+		result["File Filters"] = extra_info.file_filters;
+		if (extra_info.filtered_files.IsValid() && extra_info.total_files.IsValid()) {
+			result["Scanning Files"] = StringUtil::Format("%llu/%llu", extra_info.filtered_files.GetIndex(),
+			                                              extra_info.total_files.GetIndex());
+		}
 	}
-	if (!function.to_string) {
-		return result;
+
+	if (function.to_string) {
+		result["__text__"] = function.to_string(bind_data.get());
 	}
-	return result + "\n" + function.to_string(bind_data.get());
+	SetParamsEstimatedCardinality(result);
+	return result;
+}
+
+void LogicalGet::SetColumnIds(vector<column_t> &&column_ids) {
+	this->column_ids = std::move(column_ids);
+}
+
+void LogicalGet::AddColumnId(column_t column_id) {
+	column_ids.push_back(column_id);
+}
+
+void LogicalGet::ClearColumnIds() {
+	column_ids.clear();
+}
+
+const vector<column_t> &LogicalGet::GetColumnIds() const {
+	return column_ids;
+}
+
+vector<column_t> &LogicalGet::GetMutableColumnIds() {
+	return column_ids;
 }
 
 vector<ColumnBinding> LogicalGet::GetColumnBindings() {
@@ -80,7 +114,7 @@ void LogicalGet::ResolveTypes() {
 	if (column_ids.empty()) {
 		column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	}
-
+	types.clear();
 	if (projection_ids.empty()) {
 		for (auto &index : column_ids) {
 			if (index == COLUMN_IDENTIFIER_ROW_ID) {
@@ -120,6 +154,9 @@ idx_t LogicalGet::EstimateCardinality(ClientContext &context) {
 		if (node_stats && node_stats->has_estimated_cardinality) {
 			return node_stats->estimated_cardinality;
 		}
+	}
+	if (!children.empty()) {
+		return children[0]->EstimateCardinality(context);
 	}
 	return 1;
 }
@@ -164,8 +201,10 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 		deserializer.ReadProperty(207, "named_parameters", result->named_parameters);
 		deserializer.ReadProperty(208, "input_table_types", result->input_table_types);
 		deserializer.ReadProperty(209, "input_table_names", result->input_table_names);
+		TableFunctionRef empty_ref;
 		TableFunctionBindInput input(result->parameters, result->named_parameters, result->input_table_types,
-		                             result->input_table_names, function.function_info.get());
+		                             result->input_table_names, function.function_info.get(), nullptr, result->function,
+		                             empty_ref);
 
 		vector<LogicalType> bind_return_types;
 		vector<string> bind_names;
@@ -173,15 +212,21 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 			throw InternalException("Table function \"%s\" has neither bind nor (de)serialize", function.name);
 		}
 		bind_data = function.bind(deserializer.Get<ClientContext &>(), input, bind_return_types, bind_names);
-		if (result->returned_types != bind_return_types) {
-			throw SerializationException(
-			    "Table function deserialization failure - bind returned different return types than were serialized");
+
+		for (auto &col_id : result->column_ids) {
+			if (IsRowIdColumnId(col_id)) {
+				// rowid
+				continue;
+			}
+			auto &ret_type = result->returned_types[col_id];
+			auto &col_name = result->names[col_id];
+			if (bind_return_types[col_id] != ret_type) {
+				throw SerializationException("Table function deserialization failure in function \"%s\" - column with "
+				                             "name %s was serialized with type %s, but now has type %s",
+				                             function.name, col_name, ret_type, bind_return_types[col_id]);
+			}
 		}
-		// names can actually be different because of aliases - only the sizes cannot be different
-		if (result->names.size() != bind_names.size()) {
-			throw SerializationException(
-			    "Table function deserialization failure - bind returned different returned names than were serialized");
-		}
+		result->returned_types = std::move(bind_return_types);
 	} else {
 		bind_data = FunctionSerializer::FunctionDeserialize(deserializer, function);
 	}

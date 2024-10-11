@@ -182,11 +182,13 @@ SELECT * FROM t2 EXCEPT SELECT * FROM t1;
 ----
 
 query I
-SELECT t1.c1 = t2.c2 FROM t1, t2 WHERE t1.rowid = t2.rowid;
+SELECT t1.c1 IS NOT DISTINCT FROM t2.c2 
+FROM t1, t2 
+WHERE t1.rowid = t2.rowid;
 ----
 True
 True
-NULL
+True
 
 statement ok
 DROP TABLE t1;

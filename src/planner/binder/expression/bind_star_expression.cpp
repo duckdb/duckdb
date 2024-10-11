@@ -7,6 +7,7 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 
 namespace duckdb {
 
@@ -24,30 +25,36 @@ bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpressi
 	bool has_star = false;
 	if (expr->GetExpressionClass() == ExpressionClass::STAR) {
 		auto &current_star = expr->Cast<StarExpression>();
-		if (!current_star.columns) {
+		if (StarExpression::IsStar(*expr)) {
 			if (is_root) {
+				D_ASSERT(!in_columns);
+				// At the root level
 				*star = &current_star;
 				return true;
 			}
+
 			if (!in_columns) {
+				// '*' can only appear inside COLUMNS or at the root level
 				throw BinderException(
 				    "STAR expression is only allowed as the root element of an expression. Use COLUMNS(*) instead.");
 			}
-			// star expression inside a COLUMNS - convert to a constant list
+
 			if (!current_star.replace_list.empty()) {
+				// '*' inside COLUMNS can not have a REPLACE list
 				throw BinderException(
 				    "STAR expression with REPLACE list is only allowed as the root element of COLUMNS");
 			}
+
+			// '*' expression inside a COLUMNS - convert to a constant list of strings (column names)
 			vector<unique_ptr<ParsedExpression>> star_list;
 			bind_context.GenerateAllColumnExpressions(current_star, star_list);
 
 			vector<Value> values;
 			values.reserve(star_list.size());
-			for (auto &expr : star_list) {
-				values.emplace_back(GetColumnsStringValue(*expr));
+			for (auto &element : star_list) {
+				values.emplace_back(GetColumnsStringValue(*element));
 			}
 			D_ASSERT(!values.empty());
-
 			expr = make_uniq<ConstantExpression>(Value::LIST(LogicalType::VARCHAR, values));
 			return true;
 		}
@@ -55,6 +62,7 @@ bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpressi
 			throw BinderException("COLUMNS expression is not allowed inside another COLUMNS expression");
 		}
 		in_columns = true;
+
 		if (*star) {
 			// we can have multiple
 			if (!(*star)->Equals(current_star)) {
@@ -76,7 +84,7 @@ bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpressi
 
 void Binder::ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement) {
 	D_ASSERT(expr);
-	if (expr->GetExpressionClass() == ExpressionClass::STAR) {
+	if (StarExpression::IsColumns(*expr) || StarExpression::IsStar(*expr)) {
 		D_ASSERT(replacement);
 		auto alias = expr->alias;
 		expr = replacement->Copy();
@@ -195,6 +203,9 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 			// scan the list for all selected columns and construct a lookup table
 			case_insensitive_map_t<bool> selected_set;
 			for (auto &child : children) {
+				if (child.IsNull()) {
+					throw BinderException(*star, "Columns expression does not support NULL input parameters");
+				}
 				selected_set.insert(make_pair(StringValue::Get(child), false));
 			}
 			// now check the list of all possible expressions and select which ones make it in
@@ -221,10 +232,18 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 	}
 
 	// now perform the replacement
+	if (StarExpression::IsColumnsUnpacked(*star)) {
+		if (StarExpression::IsColumnsUnpacked(*expr)) {
+			throw BinderException("*COLUMNS not allowed at the root level, use COLUMNS instead");
+		}
+		ReplaceUnpackedStarExpression(expr, star_list);
+		new_select_list.push_back(std::move(expr));
+		return;
+	}
 	for (idx_t i = 0; i < star_list.size(); i++) {
 		auto new_expr = expr->Copy();
 		ReplaceStarExpression(new_expr, star_list[i]);
-		if (star->columns) {
+		if (StarExpression::IsColumns(*star)) {
 			optional_ptr<ParsedExpression> expr = star_list[i].get();
 			while (expr) {
 				if (expr->type == ExpressionType::COLUMN_REF) {

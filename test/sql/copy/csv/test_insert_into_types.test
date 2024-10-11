@@ -1,0 +1,275 @@
+# name: test/sql/copy/csv/test_insert_into_types.test
+# description: Test type pushdown from insert into operator
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+# Run without enable_verifications set
+
+statement ok
+CREATE TABLE users (
+        id INTEGER NOT NULL,  /*primary key*/
+        name VARCHAR(10) NOT NULL,
+        email VARCHAR
+);
+
+statement ok
+INSERT INTO users
+SELECT *
+FROM read_csv('data/csv/glob/f_*.csv', ignore_errors=true, null_padding=true);
+
+query III
+select * from users;
+----
+1	alice	alice@email.com
+2	eve	eve@email.com
+1	alice	alice@email.com
+3	bob	bob@email.com
+1	alice	alice@email.com
+3	bob	bob@email.com
+
+statement ok
+DROP TABLE users;
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE users (
+        id INTEGER NOT NULL,  /*primary key*/
+        name VARCHAR(10) NOT NULL,
+        email VARCHAR
+);
+
+statement ok
+INSERT INTO users
+SELECT *
+FROM read_csv('data/csv/file_error.csv', ignore_errors=true, null_padding=true);
+
+query III
+select * from users;
+----
+1	alice	alice@email.com
+2	eve	NULL
+
+# Test Projection
+statement ok
+CREATE TABLE proj (
+        id INTEGER NOT NULL,  /*primary key*/
+);
+
+statement ok
+INSERT INTO proj
+SELECT id
+FROM read_csv('data/csv/file_error.csv', ignore_errors=true, null_padding=true);
+
+query I
+select * from proj;
+----
+1
+2
+
+statement error
+INSERT INTO proj
+SELECT id
+FROM read_csv('data/csv/file_error.csv');
+----
+Error when converting column "id". Could not convert string "3r" to 'INTEGER'
+
+statement ok
+DROP table proj;
+
+statement ok
+CREATE TABLE proj (
+        name VARCHAR(10) NOT NULL,
+        id INTEGER NOT NULL,  /*primary key*/
+);
+
+statement ok
+INSERT INTO proj
+SELECT name, id
+FROM read_csv('data/csv/file_error.csv', ignore_errors=true, null_padding=true);
+
+query II
+select * from proj;
+----
+alice	1
+eve	2
+
+statement error
+INSERT INTO proj
+SELECT name, id
+FROM read_csv('data/csv/file_error.csv');
+----
+Could not convert string "3r" to 'INTEGER'
+
+statement ok
+DROP table proj;
+
+statement ok
+CREATE TABLE proj (
+        email VARCHAR,
+        id INTEGER NOT NULL,  /*primary key*/
+);
+
+statement ok
+INSERT INTO proj
+SELECT email, id
+FROM read_csv('data/csv/file_error.csv', ignore_errors=true, null_padding=true);
+
+query II
+select * from proj;
+----
+alice@email.com	1
+NULL	2
+
+statement error
+INSERT INTO proj
+SELECT name, id
+FROM read_csv('data/csv/file_error.csv');
+----
+Could not convert string "3r" to 'INTEGER'
+
+statement ok
+DROP table proj;
+
+statement ok
+CREATE TABLE proj (
+        email VARCHAR,
+        id VARCHAR NOT NULL,  /*primary key*/
+);
+
+# A cast will not be pushed down
+statement error
+INSERT INTO proj
+SELECT name, id::INTEGER
+FROM read_csv('data/csv/file_error.csv');
+----
+Could not convert string '3r' to INT32
+
+statement ok
+DROP table proj;
+
+statement ok
+CREATE TABLE proj (
+        email VARCHAR,
+        id integer NOT NULL,  /*primary key*/
+);
+
+# No pushdown if we have weird projections
+statement error
+INSERT INTO proj
+SELECT 'Pedro', id
+FROM read_csv('data/csv/file_error.csv');
+----
+Could not convert string '3r' to INT32
+
+# No pushdown with mid-ops
+statement ok
+CREATE TABLE ppl (
+        name VARCHAR
+);
+
+statement ok
+insert into ppl values ('alice'), ('bob'), ('pedro')
+
+statement error
+INSERT INTO proj
+SELECT ppl.name,id
+FROM read_csv('data/csv/file_error.csv') T inner join ppl on (ppl.name = T.name);
+----
+Could not convert string '3r' to INT32
+
+statement error
+INSERT INTO proj
+SELECT T.name,id
+FROM read_csv('data/csv/file_error.csv') T inner join ppl on (ppl.name = T.name);
+----
+Could not convert string '3r' to INT32
+
+# Test Glob
+statement ok
+DROP table users;
+
+statement ok
+CREATE TABLE users (
+        id INTEGER NOT NULL,  /*primary key*/
+        name VARCHAR(10) NOT NULL,
+        email VARCHAR
+);
+
+statement ok
+INSERT INTO users
+SELECT *
+FROM read_csv('data/csv/glob/f_*.csv', ignore_errors=true, null_padding=true);
+
+query III
+select * from users;
+----
+1	alice	alice@email.com
+2	eve	eve@email.com
+1	alice	alice@email.com
+3	bob	bob@email.com
+1	alice	alice@email.com
+3	bob	bob@email.com
+
+# Test Glob + Projection
+
+statement ok
+DROP table proj;
+
+statement ok
+CREATE TABLE proj (
+        email VARCHAR,
+        id integer NOT NULL
+);
+
+statement ok
+INSERT INTO proj
+SELECT email, id
+FROM read_csv('data/csv/glob/f_*.csv', ignore_errors=true, null_padding=true);
+
+query II
+select * from proj;
+----
+alice@email.com	1
+eve@email.com	2
+alice@email.com	1
+bob@email.com	3
+alice@email.com	1
+bob@email.com	3
+
+# Test union by name
+statement ok
+CREATE TABLE users_age (
+        id INTEGER NOT NULL,
+        name VARCHAR(10) NOT NULL,
+        email VARCHAR,
+        age integer
+);
+
+statement ok
+INSERT INTO users_age
+SELECT *
+FROM read_csv('data/csv/union-by-name/type_mismatch/f_*.csv', ignore_errors=true, null_padding=true, union_by_name=true);
+
+query IIII
+select * from users_age;
+----
+1	alice	alice@email.com	NULL
+2	eve	eve@email.com	NULL
+1	alice	NULL	20
+3	bob	NULL	32
+
+# Only accept one reference per column
+statement ok
+create table timestamps(ts timestamp, dt date);
+
+statement ok
+insert into timestamps select ts,ts from read_csv('data/csv/timestamp.csv');
+
+query II
+from timestamps;
+----
+2020-01-01 01:02:03	2020-01-01

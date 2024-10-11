@@ -8,7 +8,7 @@
 
 namespace duckdb {
 
-ValueRelation::ValueRelation(const std::shared_ptr<ClientContext> &context, const vector<vector<Value>> &values,
+ValueRelation::ValueRelation(const shared_ptr<ClientContext> &context, const vector<vector<Value>> &values,
                              vector<string> names_p, string alias_p)
     : Relation(context, RelationType::VALUE_LIST_RELATION), names(std::move(names_p)), alias(std::move(alias_p)) {
 	// create constant expressions for the values
@@ -20,13 +20,15 @@ ValueRelation::ValueRelation(const std::shared_ptr<ClientContext> &context, cons
 		}
 		this->expressions.push_back(std::move(expressions));
 	}
+	QueryResult::DeduplicateColumns(names);
 	context->TryBindRelation(*this, this->columns);
 }
 
-ValueRelation::ValueRelation(const std::shared_ptr<ClientContext> &context, const string &values_list,
+ValueRelation::ValueRelation(const shared_ptr<ClientContext> &context, const string &values_list,
                              vector<string> names_p, string alias_p)
     : Relation(context, RelationType::VALUE_LIST_RELATION), names(std::move(names_p)), alias(std::move(alias_p)) {
 	this->expressions = Parser::ParseValuesList(values_list, context->GetParserOptions());
+	QueryResult::DeduplicateColumns(names);
 	context->TryBindRelation(*this, this->columns);
 }
 

@@ -10,6 +10,9 @@
 #include "duckdb/transaction/cleanup_state.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 #include "duckdb/transaction/rollback_state.hpp"
+#include "duckdb/execution/index/bound_index.hpp"
+#include "duckdb/transaction/wal_write_state.hpp"
+#include "duckdb/transaction/delete_info.hpp"
 
 namespace duckdb {
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
@@ -24,7 +27,7 @@ data_ptr_t UndoBuffer::CreateEntry(UndoFlags type, idx_t len) {
 	auto data = allocator.Allocate(needed_space);
 	Store<UndoFlags>(type, data);
 	data += sizeof(UndoFlags);
-	Store<uint32_t>(len, data);
+	Store<uint32_t>(UnsafeNumericCast<uint32_t>(len), data);
 	data += sizeof(uint32_t);
 	return data;
 }
@@ -99,34 +102,63 @@ void UndoBuffer::ReverseIterateEntries(T &&callback) {
 }
 
 bool UndoBuffer::ChangesMade() {
+	// we need to search for any index creation entries
 	return !allocator.IsEmpty();
 }
 
-idx_t UndoBuffer::EstimatedSize() {
-
-	idx_t estimated_size = 0;
+UndoBufferProperties UndoBuffer::GetProperties() {
+	UndoBufferProperties properties;
+	if (!ChangesMade()) {
+		return properties;
+	}
 	auto node = allocator.GetHead();
 	while (node) {
-		estimated_size += node->current_position;
+		properties.estimated_size += node->current_position;
 		node = node->next.get();
 	}
 
 	// we need to search for any index creation entries
 	IteratorState iterator_state;
 	IterateEntries(iterator_state, [&](UndoFlags entry_type, data_ptr_t data) {
-		if (entry_type == UndoFlags::CATALOG_ENTRY) {
-			auto catalog_entry = Load<CatalogEntry *>(data);
-			if (catalog_entry->Parent().type == CatalogType::INDEX_ENTRY) {
-				auto &index = catalog_entry->Parent().Cast<DuckIndexEntry>();
-				estimated_size += index.initial_index_size;
+		switch (entry_type) {
+		case UndoFlags::UPDATE_TUPLE:
+			properties.has_updates = true;
+			break;
+		case UndoFlags::DELETE_TUPLE: {
+			auto info = reinterpret_cast<DeleteInfo *>(data);
+			if (info->is_consecutive) {
+				properties.estimated_size += sizeof(row_t) * info->count;
 			}
+			properties.has_deletes = true;
+			break;
+		}
+		case UndoFlags::CATALOG_ENTRY: {
+			properties.has_catalog_changes = true;
+
+			auto catalog_entry = Load<CatalogEntry *>(data);
+			auto &parent = catalog_entry->Parent();
+			switch (parent.type) {
+			case CatalogType::DELETED_ENTRY:
+				properties.has_dropped_entries = true;
+				break;
+			case CatalogType::INDEX_ENTRY: {
+				auto &index = parent.Cast<DuckIndexEntry>();
+				properties.estimated_size += index.initial_index_size;
+				break;
+			}
+			default:
+				break;
+			}
+			break;
+		}
+		default:
+			break;
 		}
 	});
-
-	return estimated_size;
+	return properties;
 }
 
-void UndoBuffer::Cleanup() {
+void UndoBuffer::Cleanup(transaction_t lowest_active_transaction) {
 	// garbage collect everything in the Undo Chunk
 	// this should only happen if
 	//  (1) the transaction this UndoBuffer belongs to has successfully
@@ -135,33 +167,29 @@ void UndoBuffer::Cleanup() {
 	//      the chunks)
 	//  (2) there is no active transaction with start_id < commit_id of this
 	//  transaction
-	CleanupState state;
+	CleanupState state(lowest_active_transaction);
 	UndoBuffer::IteratorState iterator_state;
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CleanupEntry(type, data); });
 
 	// possibly vacuum indexes
-	for (const auto &table : state.indexed_tables) {
-		table.second->info->indexes.Scan([&](Index &index) {
-			index.Vacuum();
-			return false;
-		});
+	for (auto &table : state.indexed_tables) {
+		table.second->VacuumIndexes();
 	}
 }
 
-void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, optional_ptr<WriteAheadLog> log,
-                        transaction_t commit_id) {
-	CommitState state(commit_id, log);
-	if (log) {
-		// commit WITH write ahead log
-		IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry<true>(type, data); });
-	} else {
-		// commit WITHOUT write ahead log
-		IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry<false>(type, data); });
-	}
+void UndoBuffer::WriteToWAL(WriteAheadLog &wal, optional_ptr<StorageCommitState> commit_state) {
+	WALWriteState state(wal, commit_state);
+	UndoBuffer::IteratorState iterator_state;
+	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
+}
+
+void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, transaction_t commit_id) {
+	CommitState state(commit_id);
+	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
 }
 
 void UndoBuffer::RevertCommit(UndoBuffer::IteratorState &end_state, transaction_t transaction_id) {
-	CommitState state(transaction_id, nullptr);
+	CommitState state(transaction_id);
 	UndoBuffer::IteratorState start_state;
 	IterateEntries(start_state, end_state, [&](UndoFlags type, data_ptr_t data) { state.RevertCommit(type, data); });
 }

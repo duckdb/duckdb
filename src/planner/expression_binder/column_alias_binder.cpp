@@ -1,27 +1,30 @@
 #include "duckdb/planner/expression_binder/column_alias_binder.hpp"
 
 #include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression_binder/select_bind_state.hpp"
 
 namespace duckdb {
 
-ColumnAliasBinder::ColumnAliasBinder(BoundSelectNode &node, const case_insensitive_map_t<idx_t> &alias_map)
-    : node(node), alias_map(alias_map), visited_select_indexes() {
+ColumnAliasBinder::ColumnAliasBinder(SelectBindState &bind_state) : bind_state(bind_state), visited_select_indexes() {
 }
 
-bool ColumnAliasBinder::BindAlias(ExpressionBinder &enclosing_binder, ColumnRefExpression &expr, idx_t depth,
-                                  bool root_expression, BindResult &result) {
+bool ColumnAliasBinder::BindAlias(ExpressionBinder &enclosing_binder, unique_ptr<ParsedExpression> &expr_ptr,
+                                  idx_t depth, bool root_expression, BindResult &result) {
+
+	D_ASSERT(expr_ptr->GetExpressionClass() == ExpressionClass::COLUMN_REF);
+	auto &expr = expr_ptr->Cast<ColumnRefExpression>();
+
+	// Qualified columns cannot be aliases.
 	if (expr.IsQualified()) {
-		// qualified columns cannot be aliases
 		return false;
 	}
 
-	auto alias_entry = alias_map.find(expr.column_names[0]);
-	if (alias_entry == alias_map.end()) {
-		// no alias found
+	// We try to find the alias in the alias_map and return false, if no alias exists.
+	auto alias_entry = bind_state.alias_map.find(expr.column_names[0]);
+	if (alias_entry == bind_state.alias_map.end()) {
 		return false;
 	}
 
@@ -30,15 +33,21 @@ bool ColumnAliasBinder::BindAlias(ExpressionBinder &enclosing_binder, ColumnRefE
 		return false;
 	}
 
-	// found an alias: bind the alias expression
-	auto expression = node.original_expressions[alias_entry->second]->Copy();
+	// We found an alias, so we copy the alias expression into this expression.
+	auto original_expr = bind_state.BindAlias(alias_entry->second);
+	expr_ptr = std::move(original_expr);
 	visited_select_indexes.insert(alias_entry->second);
 
-	// since the alias has been found, pass a depth of 0. See Issue 4978 (#16)
-	// ColumnAliasBinders are only in Having, Qualify and Where Binders
-	result = enclosing_binder.BindExpression(expression, depth, root_expression);
+	result = enclosing_binder.BindExpression(expr_ptr, depth, root_expression);
 	visited_select_indexes.erase(alias_entry->second);
 	return true;
+}
+
+bool ColumnAliasBinder::QualifyColumnAlias(const ColumnRefExpression &colref) {
+	if (!colref.IsQualified()) {
+		return bind_state.alias_map.find(colref.column_names[0]) != bind_state.alias_map.end();
+	}
+	return false;
 }
 
 } // namespace duckdb

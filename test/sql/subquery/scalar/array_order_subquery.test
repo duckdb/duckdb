@@ -1,0 +1,102 @@
+# name: test/sql/subquery/scalar/array_order_subquery.test
+# description: Issue #11293: Unstable ordering of array(subquery) function when using DISTINCT and ORDER BY in subquery
+# group: [scalar]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table t (i int);
+
+statement ok
+insert into t values (1),(2),(3),(4),(4);
+
+query III
+select
+  array(select distinct i from t order by i desc) as a,
+  array(select distinct i from t order by i desc) as b,
+  array(select distinct i from t order by i desc) as c;
+----
+[4, 3, 2, 1]	[4, 3, 2, 1]	[4, 3, 2, 1]
+
+# correlated
+query I
+select array(select unnest(l) AS i order by i desc nulls last) as a from (values ([NULL, 1, 2, 3, 4]), ([5, 6, NULL, 7, 8]), ([]), ([10, 11, 12])) t(l);
+----
+[4, 3, 2, 1, NULL]
+[8, 7, 6, 5, NULL]
+[]
+[12, 11, 10]
+
+query I
+select array(select unnest(l) AS i order by i desc nulls first) as a from (values ([NULL, 1, 2, 3, 4]), ([5, 6, NULL, 7, 8]), ([]), ([10, 11, 12])) t(l);
+----
+[NULL, 4, 3, 2, 1]
+[NULL, 8, 7, 6, 5]
+[]
+[12, 11, 10]
+
+# use integer literals
+query I
+SELECT ARRAY
+  (SELECT 1 UNION ALL
+   SELECT 2 UNION ALL
+   SELECT 3
+   ORDER by 1) AS new_array;
+----
+[1, 2, 3]
+
+# qualified names
+query I
+select
+  array(select distinct i from t order by t.i desc) as a
+----
+[4, 3, 2, 1]
+
+query I
+select
+  array(select distinct i from t union all select distinct i from t order by t.i desc) as a
+----
+[4, 4, 3, 3, 2, 2, 1, 1]
+
+statement error
+select
+  array(select distinct i from t order by x.i desc) as a
+----
+Referenced table "x" not found
+
+query I
+SELECT ARRAY
+  (SELECT 1 UNION ALL
+   SELECT 2 UNION ALL
+   SELECT 3
+   ORDER by 1 DESC) AS new_array;
+----
+[3, 2, 1]
+
+statement error
+SELECT ARRAY
+  (SELECT 1 UNION ALL
+   SELECT 2 UNION ALL
+   SELECT 3
+   ORDER by -1) AS new_array;
+----
+ORDER term out of range
+
+statement error
+SELECT ARRAY
+  (SELECT 1 UNION ALL
+   SELECT 2 UNION ALL
+   SELECT 3
+   ORDER by 2) AS new_array;
+----
+ORDER term out of range
+
+statement error
+SELECT ARRAY
+  (SELECT 1 UNION ALL
+   SELECT 2 UNION ALL
+   SELECT 3
+   ORDER by 'hello world') AS new_array;
+----
+ORDER BY non-integer literal has no effect

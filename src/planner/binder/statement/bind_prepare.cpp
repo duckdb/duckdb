@@ -13,6 +13,7 @@ BoundStatement Binder::Bind(PrepareStatement &stmt) {
 	auto prepare = make_uniq<LogicalPrepare>(stmt.name, std::move(prepared_data), std::move(prepared_planner.plan));
 	// we can always prepare, even if the transaction has been invalidated
 	// this is required because most clients ALWAYS invoke prepared statements
+	auto &properties = GetStatementProperties();
 	properties.requires_valid_transaction = false;
 	properties.allow_stream_result = false;
 	properties.bound_all_parameters = true;

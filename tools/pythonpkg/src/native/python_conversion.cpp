@@ -22,19 +22,25 @@ static Value EmptyMapValue() {
 
 vector<string> TransformStructKeys(py::handle keys, idx_t size, const LogicalType &type = LogicalType::UNKNOWN) {
 	vector<string> res;
-	if (type.id() == LogicalTypeId::STRUCT) {
-		auto &struct_keys = StructType::GetChildTypes(type);
-		res.reserve(struct_keys.size());
-		for (idx_t i = 0; i < struct_keys.size(); i++) {
-			res.push_back(struct_keys[i].first);
-		}
-		return res;
-	}
 	res.reserve(size);
 	for (idx_t i = 0; i < size; i++) {
 		res.emplace_back(py::str(keys.attr("__getitem__")(i)));
 	}
 	return res;
+}
+
+static bool IsValidMapComponent(const py::handle &component) {
+	// The component is either NULL
+	if (py::none().is(component)) {
+		return true;
+	}
+	if (!py::hasattr(component, "__getitem__")) {
+		return false;
+	}
+	if (!py::hasattr(component, "__len__")) {
+		return false;
+	}
+	return true;
 }
 
 bool DictionaryHasMapFormat(const PyDictionary &dict) {
@@ -51,13 +57,19 @@ bool DictionaryHasMapFormat(const PyDictionary &dict) {
 		return false;
 	}
 
-	// Dont check for 'py::list' to allow ducktyping
-	if (!py::hasattr(keys, "__getitem__") || !py::hasattr(keys, "__len__")) {
+	if (!IsValidMapComponent(keys)) {
 		return false;
 	}
-	if (!py::hasattr(values, "__getitem__") || !py::hasattr(values, "__len__")) {
+	if (!IsValidMapComponent(values)) {
 		return false;
 	}
+
+	// If either of the components is NULL, return early
+	if (py::none().is(keys) || py::none().is(values)) {
+		return true;
+	}
+
+	// Verify that both the keys and values are of the same length
 	auto size = py::len(keys);
 	if (size != py::len(values)) {
 		return false;
@@ -69,15 +81,23 @@ Value TransformDictionaryToStruct(const PyDictionary &dict, const LogicalType &t
 	auto struct_keys = TransformStructKeys(dict.keys, dict.len, target_type);
 
 	bool struct_target = target_type.id() == LogicalTypeId::STRUCT;
-	if (struct_target) {
-		D_ASSERT(dict.len == StructType::GetChildCount(target_type));
+	if (struct_target && dict.len != StructType::GetChildCount(target_type)) {
+		throw InvalidInputException("We could not convert the object %s to the desired target type (%s)",
+		                            dict.ToString(), target_type.ToString());
+	}
+
+	case_insensitive_map_t<idx_t> key_mapping;
+	for (idx_t i = 0; i < struct_keys.size(); i++) {
+		key_mapping[struct_keys[i]] = i;
 	}
 
 	child_list_t<Value> struct_values;
 	for (idx_t i = 0; i < dict.len; i++) {
+		auto &key = struct_target ? StructType::GetChildName(target_type, i) : struct_keys[i];
+		auto value_index = key_mapping[key];
 		auto &child_type = struct_target ? StructType::GetChildType(target_type, i) : LogicalType::UNKNOWN;
-		auto val = TransformPythonValue(dict.values.attr("__getitem__")(i), child_type);
-		struct_values.emplace_back(make_pair(std::move(struct_keys[i]), std::move(val)));
+		auto val = TransformPythonValue(dict.values.attr("__getitem__")(value_index), child_type);
+		struct_values.emplace_back(make_pair(std::move(key), std::move(val)));
 	}
 	return Value::STRUCT(std::move(struct_values));
 }
@@ -90,6 +110,11 @@ Value TransformStructFormatDictionaryToMap(const PyDictionary &dict, const Logic
 	if (target_type.id() != LogicalTypeId::MAP) {
 		throw InvalidInputException("Please provide a valid target type for transform from Python to Value");
 	}
+
+	if (py::none().is(dict.keys) || py::none().is(dict.values)) {
+		return Value(LogicalType::MAP(LogicalTypeId::SQLNULL, LogicalTypeId::SQLNULL));
+	}
+
 	auto size = py::len(dict.keys);
 	D_ASSERT(size == py::len(dict.values));
 
@@ -114,6 +139,12 @@ Value TransformStructFormatDictionaryToMap(const PyDictionary &dict, const Logic
 
 		elements.push_back(Value::STRUCT(std::move(struct_values)));
 	}
+	if (key_type.id() == LogicalTypeId::SQLNULL) {
+		key_type = key_target;
+	}
+	if (value_type.id() == LogicalTypeId::SQLNULL) {
+		value_type = value_target;
+	}
 
 	LogicalType map_type = LogicalType::MAP(key_type, value_type);
 
@@ -129,15 +160,29 @@ Value TransformDictionaryToMap(const PyDictionary &dict, const LogicalType &targ
 	auto keys = dict.values.attr("__getitem__")(0);
 	auto values = dict.values.attr("__getitem__")(1);
 
+	if (py::none().is(keys) || py::none().is(values)) {
+		// Either 'key' or 'value' is None, return early with a NULL value
+		return Value(LogicalType::MAP(LogicalTypeId::SQLNULL, LogicalTypeId::SQLNULL));
+	}
+
 	auto key_size = py::len(keys);
 	D_ASSERT(key_size == py::len(values));
 	if (key_size == 0) {
 		// dict == { 'key': [], 'value': [] }
 		return EmptyMapValue();
 	}
+
 	// dict == { 'key': [ ... ], 'value' : [ ... ] }
-	auto key_list = TransformPythonValue(keys);
-	auto value_list = TransformPythonValue(values);
+	LogicalType key_target = LogicalTypeId::UNKNOWN;
+	LogicalType value_target = LogicalTypeId::UNKNOWN;
+
+	if (target_type.id() != LogicalTypeId::UNKNOWN) {
+		key_target = LogicalType::LIST(MapType::KeyType(target_type));
+		value_target = LogicalType::LIST(MapType::ValueType(target_type));
+	}
+
+	auto key_list = TransformPythonValue(keys, key_target);
+	auto value_list = TransformPythonValue(values, value_target);
 
 	LogicalType key_type = LogicalType::SQLNULL;
 	LogicalType value_type = LogicalType::SQLNULL;
@@ -210,6 +255,29 @@ Value TransformListValue(py::handle ele, const LogicalType &target_type = Logica
 	return Value::LIST(element_type, values);
 }
 
+Value TransformArrayValue(py::handle ele, const LogicalType &target_type = LogicalType::UNKNOWN) {
+	auto size = py::len(ele);
+
+	if (size == 0) {
+		return Value::EMPTYARRAY(LogicalType::SQLNULL, size);
+	}
+
+	vector<Value> values;
+	values.reserve(size);
+
+	bool array_target = target_type.id() == LogicalTypeId::ARRAY;
+	auto &child_type = array_target ? ArrayType::GetChildType(target_type) : LogicalType::UNKNOWN;
+
+	LogicalType element_type = LogicalType::SQLNULL;
+	for (idx_t i = 0; i < size; i++) {
+		Value new_value = TransformPythonValue(ele.attr("__getitem__")(i), child_type);
+		element_type = LogicalType::ForceMaxLogicalType(element_type, new_value.type());
+		values.push_back(std::move(new_value));
+	}
+
+	return Value::ARRAY(element_type, std::move(values));
+}
+
 Value TransformDictionary(const PyDictionary &dict) {
 	//! DICT -> MAP FORMAT
 	// keys() = [key, value]
@@ -274,7 +342,10 @@ bool TryTransformPythonNumeric(Value &res, py::handle ele, const LogicalType &ta
 			throw InvalidInputException(StringUtil::Format("Failed to cast value: Python value '%s' to INT64",
 			                                               std::string(pybind11::str(ele))));
 		}
-		return TryTransformPythonIntegerToDouble(res, ele);
+		auto cast_as = target_type.id() == LogicalTypeId::UNKNOWN ? LogicalType::HUGEINT : target_type;
+		auto numeric_string = std::string(py::str(ele));
+		res = Value(numeric_string).DefaultCastAs(cast_as);
+		return true;
 	} else if (overflow == 1) {
 		if (target_type.InternalType() == PhysicalType::INT64) {
 			throw InvalidInputException(StringUtil::Format("Failed to cast value: Python value '%s' to INT64",
@@ -413,6 +484,8 @@ PythonObjectType GetPythonObjectType(py::handle &ele) {
 		return PythonObjectType::Tuple;
 	} else if (py::isinstance<py::dict>(ele)) {
 		return PythonObjectType::Dict;
+	} else if (ele.is(import_cache.numpy.ma.masked())) {
+		return PythonObjectType::None;
 	} else if (py::isinstance(ele, import_cache.numpy.ndarray())) {
 		return PythonObjectType::NdArray;
 	} else if (py::isinstance(ele, import_cache.numpy.datetime64())) {
@@ -491,8 +564,13 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 		auto timedelta = PyTimeDelta(ele);
 		return Value::INTERVAL(timedelta.ToInterval());
 	}
-	case PythonObjectType::String:
-		return ele.cast<string>();
+	case PythonObjectType::String: {
+		auto stringified = ele.cast<string>();
+		if (target_type.id() == LogicalTypeId::UNKNOWN) {
+			return Value(stringified);
+		}
+		return Value(stringified).DefaultCastAs(target_type);
+	}
 	case PythonObjectType::ByteArray: {
 		auto byte_array = ele;
 		const_data_ptr_t bytes = const_data_ptr_cast(PyByteArray_AsString(byte_array.ptr())); // NOLINT
@@ -518,7 +596,11 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 		}
 	}
 	case PythonObjectType::List:
-		return TransformListValue(ele, target_type);
+		if (target_type.id() == LogicalTypeId::ARRAY) {
+			return TransformArrayValue(ele, target_type);
+		} else {
+			return TransformListValue(ele, target_type);
+		}
 	case PythonObjectType::Dict: {
 		PyDictionary dict = PyDictionary(py::reinterpret_borrow<py::object>(ele));
 		switch (target_type.id()) {
@@ -537,6 +619,8 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 		case LogicalTypeId::UNKNOWN:
 		case LogicalTypeId::LIST:
 			return TransformListValue(ele, target_type);
+		case LogicalTypeId::ARRAY:
+			return TransformArrayValue(ele, target_type);
 		default:
 			throw InvalidInputException("Can't convert tuple to a Value of type %s", target_type.ToString());
 		}

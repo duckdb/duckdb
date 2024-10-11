@@ -1,0 +1,40 @@
+# name: test/sql/parallelism/interquery/concurrent_reads_while_renaming.test
+# description: Test concurrent reads while renaming
+# group: [interquery]
+
+statement ok
+CREATE OR REPLACE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers SELECT * FROM range(10000);
+
+concurrentloop threadid 0 20
+
+loop i 0 20
+
+onlyif threadid=0
+statement ok
+ALTER TABLE integers RENAME TO integers_${i}
+
+onlyif threadid=0
+statement ok
+ALTER TABLE integers_${i} RENAME TO integers
+
+endloop
+
+loop i 0 20
+
+skipif threadid=0
+statement maybe
+SELECT * FROM integers
+----
+does not exist
+
+endloop
+
+endloop
+
+query II
+SELECT COUNT(*), SUM(i) FROM integers
+----
+10000	49995000

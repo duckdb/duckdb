@@ -1,0 +1,40 @@
+{
+    "group": "hugeint_helpers",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_hugeint_to_double",
+            "return_type": "double",
+            "params": [
+                {
+                    "type": "duckdb_hugeint",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Converts a duckdb_hugeint object (as obtained from a `DUCKDB_TYPE_HUGEINT` column) into a double.\n\n",
+                "param_comments": {
+                    "val": "The hugeint value."
+                },
+                "return_value": "The converted `double` element."
+            }
+        },
+        {
+            "name": "duckdb_double_to_hugeint",
+            "return_type": "duckdb_hugeint",
+            "params": [
+                {
+                    "type": "double",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Converts a double value to a duckdb_hugeint object.\n\nIf the conversion fails because the double value is too big the result will be 0.\n\n",
+                "param_comments": {
+                    "val": "The double value."
+                },
+                "return_value": "The converted `duckdb_hugeint` element."
+            }
+        }
+    ]
+}

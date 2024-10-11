@@ -138,7 +138,7 @@ struct DateTrunc {
 			dtime_t time;
 			Timestamp::Convert(input, date, time);
 			Time::Convert(time, hour, min, sec, micros);
-			micros -= micros % Interval::MICROS_PER_MSEC;
+			micros -= UnsafeNumericCast<int32_t>(micros % Interval::MICROS_PER_MSEC);
 			return Timestamp::FromDatetime(date, Time::FromTime(hour, min, sec, micros));
 		}
 	};

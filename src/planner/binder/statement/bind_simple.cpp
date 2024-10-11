@@ -17,26 +17,30 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
+
 	BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
 
 	optional_ptr<CatalogEntry> entry;
-
 	if (stmt.info->type == AlterType::SET_COLUMN_COMMENT) {
 		// for column comments we need to an extra step: they can alter a table or a view, we resolve that here.
 		auto &info = stmt.info->Cast<SetColumnCommentInfo>();
-		entry = info.TryResolveCatalogEntry(context);
+		entry = info.TryResolveCatalogEntry(entry_retriever);
 	} else {
 		// All other AlterTypes
-		entry = Catalog::GetEntry(context, stmt.info->GetCatalogType(), stmt.info->catalog, stmt.info->schema,
-		                          stmt.info->name, stmt.info->if_not_found);
+		entry = entry_retriever.GetEntry(stmt.info->GetCatalogType(), stmt.info->catalog, stmt.info->schema,
+		                                 stmt.info->name, stmt.info->if_not_found);
 	}
 
+	auto &properties = GetStatementProperties();
 	if (entry) {
 		D_ASSERT(!entry->deleted);
 		auto &catalog = entry->ParentCatalog();
+		if (catalog.IsSystemCatalog()) {
+			throw BinderException("Can not comment on System Catalog entries");
+		}
 		if (!entry->temporary) {
 			// we can only alter temporary tables/views in read-only mode
-			properties.modified_databases.insert(catalog.GetName());
+			properties.RegisterDBModify(catalog, context);
 		}
 		stmt.info->catalog = catalog.GetName();
 		stmt.info->schema = entry->ParentSchema().name;
@@ -47,6 +51,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 }
 
 BoundStatement Binder::Bind(TransactionStatement &stmt) {
+	auto &properties = GetStatementProperties();
 	// transaction statements do not require a valid transaction
 	properties.requires_valid_transaction = stmt.info->type == TransactionType::BEGIN_TRANSACTION;
 

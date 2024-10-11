@@ -3,13 +3,10 @@
 
 namespace duckdb {
 
-PhysicalStreamingLimit::PhysicalStreamingLimit(vector<LogicalType> types, idx_t limit, idx_t offset,
-                                               unique_ptr<Expression> limit_expression,
-                                               unique_ptr<Expression> offset_expression, idx_t estimated_cardinality,
-                                               bool parallel)
+PhysicalStreamingLimit::PhysicalStreamingLimit(vector<LogicalType> types, BoundLimitNode limit_val_p,
+                                               BoundLimitNode offset_val_p, idx_t estimated_cardinality, bool parallel)
     : PhysicalOperator(PhysicalOperatorType::STREAMING_LIMIT, std::move(types), estimated_cardinality),
-      limit_value(limit), offset_value(offset), limit_expression(std::move(limit_expression)),
-      offset_expression(std::move(offset_expression)), parallel(parallel) {
+      limit_val(std::move(limit_val_p)), offset_val(std::move(offset_val_p)), parallel(parallel) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -18,12 +15,11 @@ PhysicalStreamingLimit::PhysicalStreamingLimit(vector<LogicalType> types, idx_t 
 class StreamingLimitOperatorState : public OperatorState {
 public:
 	explicit StreamingLimitOperatorState(const PhysicalStreamingLimit &op) {
-		this->limit = op.limit_expression ? DConstants::INVALID_INDEX : op.limit_value;
-		this->offset = op.offset_expression ? DConstants::INVALID_INDEX : op.offset_value;
+		PhysicalLimit::SetInitialLimits(op.limit_val, op.offset_val, limit, offset);
 	}
 
-	idx_t limit;
-	idx_t offset;
+	optional_idx limit;
+	optional_idx offset;
 };
 
 class StreamingLimitGlobalState : public GlobalOperatorState {
@@ -50,11 +46,11 @@ OperatorResultType PhysicalStreamingLimit::Execute(ExecutionContext &context, Da
 	auto &offset = state.offset;
 	idx_t current_offset = gstate.current_offset.fetch_add(input.size());
 	idx_t max_element;
-	if (!PhysicalLimit::ComputeOffset(context, input, limit, offset, current_offset, max_element,
-	                                  limit_expression.get(), offset_expression.get())) {
+	if (!PhysicalLimit::ComputeOffset(context, input, limit, offset, current_offset, max_element, limit_val,
+	                                  offset_val)) {
 		return OperatorResultType::FINISHED;
 	}
-	if (PhysicalLimit::HandleOffset(input, current_offset, offset, limit)) {
+	if (PhysicalLimit::HandleOffset(input, current_offset, offset.GetIndex(), limit.GetIndex())) {
 		chunk.Reference(input);
 	}
 	return OperatorResultType::NEED_MORE_INPUT;

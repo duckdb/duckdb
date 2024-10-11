@@ -49,12 +49,12 @@
 
 #if defined(_WIN32) && !defined(EFIX64) && !defined(EFI32)
 
-#if !defined(_WIN32_WINNT)
-#define _WIN32_WINNT 0x0400
-#endif
 #include <windows.h>
-#include <wincrypt.h>
+#include <bcrypt.h>
+#include <intsafe.h>
 
+#if defined(__MINGW32__)
+// MINGW
 int mbedtls_platform_entropy_poll( void *data, unsigned char *output, size_t len,
                            size_t *olen )
 {
@@ -79,6 +79,34 @@ int mbedtls_platform_entropy_poll( void *data, unsigned char *output, size_t len
 
     return( 0 );
 }
+#else
+int mbedtls_platform_entropy_poll(void *data, unsigned char *output, size_t len,
+                                  size_t *olen)
+{
+    ((void) data);
+    *olen = 0;
+
+    /*
+     * BCryptGenRandom takes ULONG for size, which is smaller than size_t on
+     * 64-bit Windows platforms. Extract entropy in chunks of len (dependent
+     * on ULONG_MAX) size.
+     */
+    while (len != 0) {
+        unsigned long ulong_bytes =
+            (len > ULONG_MAX) ? ULONG_MAX : (unsigned long) len;
+
+        if (!BCRYPT_SUCCESS(BCryptGenRandom(NULL, output, ulong_bytes,
+                                            BCRYPT_USE_SYSTEM_PREFERRED_RNG))) {
+            return MBEDTLS_ERR_ENTROPY_SOURCE_FAILED;
+        }
+
+        *olen += ulong_bytes;
+        len -= ulong_bytes;
+    }
+
+    return 0;
+}
+#endif
 #else /* _WIN32 && !EFIX64 && !EFI32 */
 
 /*

@@ -1,12 +1,16 @@
 
-#include "catch.hpp"
-
 #include "sqllogic_test_runner.hpp"
-#include "test_helpers.hpp"
-#include "duckdb/main/extension_helper.hpp"
+
+#include "catch.hpp"
+#include "duckdb/common/file_open_flags.hpp"
+#include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/extension/generated_extension_loader.hpp"
 #include "duckdb/main/extension_entries.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "sqllogic_parser.hpp"
+#include "test_helpers.hpp"
+#include "sqllogic_test_logger.hpp"
+
 #ifdef DUCKDB_OUT_OF_TREE
 #include DUCKDB_EXTENSION_HEADER
 #endif
@@ -75,7 +79,7 @@ void SQLLogicTestRunner::EndLoop() {
 	}
 }
 
-void SQLLogicTestRunner::LoadDatabase(string dbpath) {
+void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 	loaded_databases.push_back(dbpath);
 
 	// restart the database with the specified db path
@@ -84,12 +88,20 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath) {
 	named_connection_map.clear();
 	// now re-open the current database
 
-	db = make_uniq<DuckDB>(dbpath, config.get());
+	try {
+		db = make_uniq<DuckDB>(dbpath, config.get());
+	} catch (std::exception &ex) {
+		ErrorData err(ex);
+		SQLLogicTestLogger::LoadDatabaseFail(dbpath, err.Message());
+		FAIL();
+	}
 	Reconnect();
 
 	// load any previously loaded extensions again
-	for (auto &extension : extensions) {
-		ExtensionHelper::LoadExtension(*db, extension);
+	if (load_extensions) {
+		for (auto &extension : extensions) {
+			ExtensionHelper::LoadExtension(*db, extension);
+		}
 	}
 }
 
@@ -98,9 +110,13 @@ void SQLLogicTestRunner::Reconnect() {
 	if (original_sqlite_test) {
 		con->Query("SET integer_division=true");
 	}
+	con->Query("SET secret_directory='" + TestCreatePath("test_secret_dir") + "'");
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	con->Query("SET pivot_filter_threshold=0");
 #endif
+	auto &client_config = ClientConfig::GetConfig(*con->context);
+	client_config.enable_progress_bar = true;
+	client_config.print_progress_bar = false;
 	if (enable_verification) {
 		con->EnableQueryVerification();
 	}
@@ -156,6 +172,9 @@ string SQLLogicTestRunner::ReplaceKeywords(string input) {
 }
 
 bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<string> &result) {
+	if (parameter.empty()) {
+		return true;
+	}
 	auto token_name = StringUtil::Lower(parameter);
 	StringUtil::Trim(token_name);
 	bool collection = false;
@@ -165,6 +184,18 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 	bool is_integral = is_numeric || token_name == "<integral>";
 	bool is_signed = is_integral || token_name == "<signed>";
 	bool is_unsigned = is_integral || token_name == "<unsigned>";
+	bool is_all_types_column = token_name == "<all_types_columns>";
+	if (token_name[0] == '!') {
+		// !token tries to remove the token from the list of tokens
+		auto entry = std::find(result.begin(), result.end(), parameter.substr(1));
+		if (entry == result.end()) {
+			// not found - insert as-is
+			return false;
+		}
+		// found - erase the entry
+		result.erase(entry);
+		collection = true;
+	}
 	if (is_signed) {
 		result.push_back("tinyint");
 		result.push_back("smallint");
@@ -201,6 +232,62 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 		result.push_back("fsst");
 		result.push_back("alp");
 		result.push_back("alprd");
+		collection = true;
+	}
+	if (is_all_types_column) {
+		result.push_back("bool");
+		result.push_back("tinyint");
+		result.push_back("smallint");
+		result.push_back("int");
+		result.push_back("bigint");
+		result.push_back("hugeint");
+		result.push_back("uhugeint");
+		result.push_back("utinyint");
+		result.push_back("usmallint");
+		result.push_back("uint");
+		result.push_back("ubigint");
+		result.push_back("date");
+		result.push_back("time");
+		result.push_back("timestamp");
+		result.push_back("timestamp_s");
+		result.push_back("timestamp_ms");
+		result.push_back("timestamp_ns");
+		result.push_back("time_tz");
+		result.push_back("timestamp_tz");
+		result.push_back("float");
+		result.push_back("double");
+		result.push_back("dec_4_1");
+		result.push_back("dec_9_4");
+		result.push_back("dec_18_6");
+		result.push_back("dec38_10");
+		result.push_back("uuid");
+		result.push_back("interval");
+		result.push_back("varchar");
+		result.push_back("blob");
+		result.push_back("bit");
+		result.push_back("small_enum");
+		result.push_back("medium_enum");
+		result.push_back("large_enum");
+		result.push_back("int_array");
+		result.push_back("double_array");
+		result.push_back("date_array");
+		result.push_back("timestamp_array");
+		result.push_back("timestamptz_array");
+		result.push_back("varchar_array");
+		result.push_back("nested_int_array");
+		result.push_back("struct");
+		result.push_back("struct_of_arrays");
+		result.push_back("array_of_structs");
+		result.push_back("map");
+		result.push_back("union");
+		result.push_back("fixed_int_array");
+		result.push_back("fixed_varchar_array");
+		result.push_back("fixed_nested_int_array");
+		result.push_back("fixed_nested_varchar_array");
+		result.push_back("fixed_struct_array");
+		result.push_back("struct_of_fixed_array");
+		result.push_back("fixed_array_of_int_list");
+		result.push_back("list_of_fixed_int_array");
 		collection = true;
 	}
 	return collection;
@@ -288,7 +375,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 			parser.Fail("require vector_size requires a parameter");
 		}
 		// require a specific vector size
-		auto required_vector_size = std::stoi(params[1]);
+		auto required_vector_size = NumericCast<idx_t>(std::stoi(params[1]));
 		if (STANDARD_VECTOR_SIZE < required_vector_size) {
 			// vector size is too low for this test: skip it
 			return RequireResult::MISSING;
@@ -301,7 +388,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 			parser.Fail("require exact_vector_size requires a parameter");
 		}
 		// require an exact vector size
-		auto required_vector_size = std::stoi(params[1]);
+		auto required_vector_size = NumericCast<idx_t>(std::stoi(params[1]));
 		if (STANDARD_VECTOR_SIZE != required_vector_size) {
 			// vector size does not match the required vector size: skip it
 			return RequireResult::MISSING;
@@ -314,8 +401,8 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 			parser.Fail("require block_size requires a parameter");
 		}
 		// require a specific block size
-		auto required_block_size = std::stoi(params[1]);
-		if (Storage::BLOCK_ALLOC_SIZE != required_block_size) {
+		auto required_block_size = NumericCast<idx_t>(std::stoi(params[1]));
+		if (config->options.default_block_alloc_size != required_block_size) {
 			// block size does not match the required block size: skip it
 			return RequireResult::MISSING;
 		}
@@ -327,8 +414,24 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		return RequireResult::PRESENT;
 	}
 
-	if (param == "noalternativeverify") {
+	if (param == "no_alternative_verify") {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
+
+	if (param == "no_block_verification") {
+#ifdef DUCKDB_BLOCK_VERIFICATION
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
+
+	if (param == "no_vector_verification") {
+#ifdef DUCKDB_VERIFY_VECTOR
 		return RequireResult::MISSING;
 #else
 		return RequireResult::PRESENT;
@@ -368,6 +471,61 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	return RequireResult::PRESENT;
 }
 
+bool TryParseConditions(SQLLogicParser &parser, const string &condition_text, vector<Condition> &conditions,
+                        bool skip_if) {
+	bool is_condition = false;
+	for (auto &c : condition_text) {
+		switch (c) {
+		case '=':
+		case '>':
+		case '<':
+			is_condition = true;
+			break;
+		default:
+			break;
+		}
+	}
+	if (!is_condition) {
+		// not a condition
+		return false;
+	}
+	// split based on &&
+	auto condition_strings = StringUtil::Split(condition_text, "&&");
+	for (auto &condition_str : condition_strings) {
+		vector<pair<string, ExpressionType>> comparators {
+		    {"<>", ExpressionType::COMPARE_NOTEQUAL},   {">=", ExpressionType::COMPARE_GREATERTHANOREQUALTO},
+		    {">", ExpressionType::COMPARE_GREATERTHAN}, {"<=", ExpressionType::COMPARE_LESSTHANOREQUALTO},
+		    {"<", ExpressionType::COMPARE_LESSTHAN},    {"=", ExpressionType::COMPARE_EQUAL}};
+		ExpressionType comparison_type = ExpressionType::INVALID;
+		vector<string> splits;
+		for (auto &comparator : comparators) {
+			if (!StringUtil::Contains(condition_str, comparator.first)) {
+				continue;
+			}
+			splits = StringUtil::Split(condition_str, comparator.first);
+			comparison_type = comparator.second;
+			break;
+		}
+		// loop condition, e.g. skipif threadid=0
+		if (splits.size() != 2) {
+			parser.Fail("skipif/onlyif must be in the form of x=y or x>y, potentially separated by &&");
+		}
+		// strip white space
+		for (auto &split : splits) {
+			StringUtil::Trim(split);
+		}
+
+		// now create the condition
+		Condition condition;
+		condition.keyword = splits[0];
+		condition.value = splits[1];
+		condition.comparison = comparison_type;
+		condition.skip_if = skip_if;
+		conditions.push_back(condition);
+	}
+	return true;
+}
+
 void SQLLogicTestRunner::ExecuteFile(string script) {
 	SQLLogicParser parser;
 	idx_t skip_level = 0;
@@ -387,7 +545,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	}
 
 	// initialize the database with the default dbpath
-	LoadDatabase(dbpath);
+	LoadDatabase(dbpath, true);
 
 	// open the file and parse it
 	bool success = parser.OpenFile(script);
@@ -405,6 +563,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			parser.Fail("all test statements need to be separated by an empty line");
 		}
 
+		vector<Condition> conditions;
 		bool skip_statement = false;
 		while (token.type == SQLLogicTokenType::SQLLOGIC_SKIP_IF || token.type == SQLLogicTokenType::SQLLOGIC_ONLY_IF) {
 			// skipif/onlyif
@@ -413,16 +572,32 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				parser.Fail("skipif/onlyif requires a single parameter (e.g. skipif duckdb)");
 			}
 			auto system_name = StringUtil::Lower(token.parameters[0]);
-			bool our_system = system_name == "duckdb";
+			// we support two kinds of conditions here
+			// (for original sqllogictests) system comparisons, e.g.:
+			// (1) skipif duckdb
+			// (2) onlyif <other_system>
+			// conditions on loop variables, e.g.:
+			// (1) skipif i=2
+			// (2) onlyif threadid=0
+			// the latter is only supported in our own tests (not in original sqllogic tests)
+			bool is_system_comparison;
 			if (original_sqlite_test) {
-				our_system = our_system || system_name == "postgresql";
+				is_system_comparison = true;
+			} else {
+				is_system_comparison = !TryParseConditions(parser, system_name, conditions, skip_if);
 			}
-			if (our_system == skip_if) {
-				// we skip this command in two situations
-				// (1) skipif duckdb
-				// (2) onlyif <other_system>
-				skip_statement = true;
-				break;
+			if (is_system_comparison) {
+				bool our_system = system_name == "duckdb";
+				if (original_sqlite_test) {
+					our_system = our_system || system_name == "postgresql";
+				}
+				if (our_system == skip_if) {
+					// we skip this command in two situations
+					// (1) skipif duckdb
+					// (2) onlyif <other_system>
+					skip_statement = true;
+					break;
+				}
 			}
 			parser.NextLine();
 			token = parser.Tokenize();
@@ -469,6 +644,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			if (token.parameters.size() >= 2) {
 				command->connection_name = token.parameters[1];
 			}
+			command->conditions = std::move(conditions);
 			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_QUERY) {
 			if (token.parameters.size() < 1) {
@@ -530,6 +706,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			} else {
 				command->query_has_label = false;
 			}
+			command->conditions = std::move(conditions);
 			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_HASH_THRESHOLD) {
 			if (token.parameters.size() != 1) {
@@ -678,36 +855,20 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			environment_variables[env_var] = env_actual;
 
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOAD) {
-			if (InLoop()) {
-				parser.Fail("load cannot be called in a loop");
-			}
-
 			bool readonly = token.parameters.size() > 1 && token.parameters[1] == "readonly";
+			string load_db_path;
 			if (!token.parameters.empty()) {
-				dbpath = ReplaceKeywords(token.parameters[0]);
-				if (!readonly) {
-					// delete the target database file, if it exists
-					DeleteDatabase(dbpath);
-				}
+				load_db_path = ReplaceKeywords(token.parameters[0]);
 			} else {
-				dbpath = string();
+				load_db_path = string();
 			}
-			// set up the config file
-			if (readonly) {
-				config->options.use_temporary_directory = false;
-				config->options.access_mode = AccessMode::READ_ONLY;
-			} else {
-				config->options.use_temporary_directory = true;
-				config->options.access_mode = AccessMode::AUTOMATIC;
-			}
-			// now create the database file
-			LoadDatabase(dbpath);
+			auto command = make_uniq<LoadCommand>(*this, load_db_path, readonly);
+			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_RESTART) {
-			if (dbpath.empty()) {
-				parser.Fail("cannot restart an in-memory database, did you forget to call \"load\"?");
-			}
+			bool load_extensions = !(token.parameters.size() == 1 && token.parameters[0] == "no_extension_load");
+
 			// restart the current database
-			auto command = make_uniq<RestartCommand>(*this);
+			auto command = make_uniq<RestartCommand>(*this, load_extensions);
 			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_RECONNECT) {
 			auto command = make_uniq<ReconnectCommand>(*this);
@@ -720,6 +881,32 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			auto sleep_duration = std::stoull(token.parameters[0]);
 			auto sleep_unit = SleepCommand::ParseUnit(token.parameters[1]);
 			auto command = make_uniq<SleepCommand>(*this, sleep_duration, sleep_unit);
+			ExecuteCommand(std::move(command));
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_UNZIP) {
+			if (token.parameters.size() != 1 && token.parameters.size() != 2) {
+				parser.Fail("unzip requires 1 argument: <path/to/file.db.gz> [optional: "
+				            "<path/to/unzipped_file.db>, default: __TEST_DIR__/<file.db>]");
+			}
+
+			// set input path
+			auto input_path = ReplaceKeywords(token.parameters[0]);
+
+			// file name
+			idx_t filename_start_pos = input_path.find_last_of("/") + 1;
+			if (!StringUtil::EndsWith(input_path, CompressionExtensionFromType(FileCompressionType::GZIP))) {
+				parser.Fail("unzip: input has not a GZIP extension");
+			}
+			string filename = input_path.substr(filename_start_pos, input_path.size() - filename_start_pos - 3);
+
+			// extraction path
+			string default_extraction_path = ReplaceKeywords("__TEST_DIR__/" + filename);
+			string extraction_path =
+			    (token.parameters.size() == 2) ? ReplaceKeywords(token.parameters[1]) : default_extraction_path;
+			if (extraction_path == "NULL") {
+				extraction_path = default_extraction_path;
+			}
+
+			auto command = make_uniq<UnzipCommand>(*this, input_path, extraction_path);
 			ExecuteCommand(std::move(command));
 		}
 	}

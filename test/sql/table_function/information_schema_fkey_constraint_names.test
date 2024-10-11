@@ -1,0 +1,95 @@
+# name: test/sql/table_function/information_schema_fkey_constraint_names.test
+# description: Test foreign key constraint names in information_schema
+# group: [table_function]
+
+statement ok
+create table t (i int primary key);
+
+statement ok
+create table u (i int references t);
+
+query I
+select constraint_name
+from information_schema.table_constraints
+where constraint_type like '%KEY'
+order by 1
+----
+t_i_pkey
+u_i_i_fkey
+
+query I
+select constraint_name
+from information_schema.key_column_usage
+order by 1
+----
+t_i_pkey
+u_i_i_fkey
+
+query II
+select constraint_name, unique_constraint_name
+from information_schema.referential_constraints;
+----
+u_i_i_fkey	t_i_pkey
+
+statement ok
+drop table u
+
+statement ok
+drop table t
+
+statement ok
+create table target_tbl (target_col int primary key);
+
+statement ok
+create table source_tbl(source_col int references target_tbl(target_col));
+
+query I
+select constraint_name
+from information_schema.table_constraints
+where constraint_type like '%KEY'
+order by 1
+----
+source_tbl_source_col_target_col_fkey
+target_tbl_target_col_pkey
+
+query I
+select constraint_name
+from information_schema.key_column_usage
+order by 1
+----
+source_tbl_source_col_target_col_fkey
+target_tbl_target_col_pkey
+
+query II
+select constraint_name, unique_constraint_name
+from information_schema.referential_constraints;
+----
+source_tbl_source_col_target_col_fkey	target_tbl_target_col_pkey
+
+# multiple constraints
+statement ok
+DROP TABLE source_tbl;
+
+statement ok
+DROP TABLE target_tbl;
+
+statement ok
+CREATE TABLE a (
+  a1 INT, a2 INT, a3 INT,
+  UNIQUE (a1, a2), UNIQUE (a2, a3)
+);
+
+statement ok
+CREATE TABLE b (
+  a1 INT, a2 INT, a3 INT,
+  FOREIGN KEY (a1, a2) REFERENCES a (a1, a2),
+  FOREIGN KEY (a2, a3) REFERENCES a (a2, a3)
+);
+
+query II
+SELECT constraint_name, constraint_type FROM information_schema.table_constraints ORDER BY ALL
+----
+a_a1_a2_key	UNIQUE
+a_a2_a3_key	UNIQUE
+b_a1_a2_a1_a2_fkey	FOREIGN KEY
+b_a2_a3_a2_a3_fkey	FOREIGN KEY

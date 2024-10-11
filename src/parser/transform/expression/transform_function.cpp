@@ -27,6 +27,11 @@ void Transformer::TransformWindowDef(duckdb_libpgquery::PGWindowDef &window_spec
 			throw ParserException("Cannot override ORDER BY clause of window \"%s\"", window_name);
 		}
 		TransformOrderBy(window_spec.orderClause, expr.orders);
+		for (auto &order : expr.orders) {
+			if (order.expression->GetExpressionType() == ExpressionType::STAR) {
+				throw ParserException("Cannot ORDER BY ALL in a window expression");
+			}
+		}
 	}
 }
 
@@ -163,12 +168,13 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			throw ParserException("EXPORT_STATE is not supported for window functions!");
 		}
 
-		if (win_fun_type == ExpressionType::WINDOW_AGGREGATE && root.agg_ignore_nulls) {
-			throw ParserException("IGNORE NULLS is not supported for windowed aggregates");
+		if (win_fun_type == ExpressionType::WINDOW_AGGREGATE &&
+		    root.agg_ignore_nulls != duckdb_libpgquery::PG_DEFAULT_NULLS) {
+			throw ParserException("RESPECT/IGNORE NULLS is not supported for windowed aggregates");
 		}
 
 		auto expr = make_uniq<WindowExpression>(win_fun_type, std::move(catalog), std::move(schema), lowercase_name);
-		expr->ignore_nulls = root.agg_ignore_nulls;
+		expr->ignore_nulls = (root.agg_ignore_nulls == duckdb_libpgquery::PG_IGNORE_NULLS);
 		expr->distinct = root.agg_distinct;
 
 		if (root.agg_filter) {
@@ -238,8 +244,8 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		return std::move(expr);
 	}
 
-	if (root.agg_ignore_nulls) {
-		throw ParserException("IGNORE NULLS is not supported for non-window functions");
+	if (root.agg_ignore_nulls != duckdb_libpgquery::PG_DEFAULT_NULLS) {
+		throw ParserException("RESPECT/IGNORE NULLS is not supported for non-window functions");
 	}
 
 	unique_ptr<ParsedExpression> filter_expr;
@@ -298,6 +304,13 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		auto construct_array = make_uniq<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
 		construct_array->children = std::move(children);
 		return std::move(construct_array);
+	} else if (lowercase_name == "__internal_position_operator") {
+		if (children.size() != 2) {
+			throw ParserException("Wrong number of arguments to __internal_position_operator.");
+		}
+		// swap arguments for POSITION(x IN y)
+		std::swap(children[0], children[1]);
+		lowercase_name = "position";
 	} else if (lowercase_name == "ifnull") {
 		if (children.size() != 2) {
 			throw ParserException("Wrong number of arguments to IFNULL.");

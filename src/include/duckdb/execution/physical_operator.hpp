@@ -12,12 +12,14 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
+#include "duckdb/common/enums/explain_format.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 class Event;
@@ -59,10 +61,11 @@ public:
 
 public:
 	virtual string GetName() const;
-	virtual string ParamsToString() const {
-		return "";
+	virtual InsertionOrderPreservingMap<string> ParamsToString() const {
+		return InsertionOrderPreservingMap<string>();
 	}
-	virtual string ToString() const;
+	static void SetEstimatedCardinality(InsertionOrderPreservingMap<string> &result, idx_t estimated_cardinality);
+	virtual string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
 	void Print() const;
 	virtual vector<const_reference<PhysicalOperator>> GetChildren() const;
 
@@ -74,6 +77,10 @@ public:
 	virtual bool Equals(const PhysicalOperator &other) const {
 		return false;
 	}
+
+	//! Functions to help decide how to set up pipeline dependencies
+	idx_t EstimatedThreadCount() const;
+	bool CanSaturateThreads(ClientContext &context) const;
 
 	virtual void Verify();
 
@@ -129,6 +136,11 @@ public:
 	//! Returns the current progress percentage, or a negative value if progress bars are not supported
 	virtual double GetProgress(ClientContext &context, GlobalSourceState &gstate) const;
 
+	//! Returns the current progress percentage, or a negative value if progress bars are not supported
+	virtual double GetSinkProgress(ClientContext &context, GlobalSinkState &gstate, double source_progress) const {
+		return source_progress;
+	}
+
 public:
 	// Sink interface
 
@@ -136,10 +148,13 @@ public:
 	//! CAN be called in parallel, proper locking is needed when accessing dat
 	//! a inside the GlobalSinkState.
 	virtual SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const;
-	// The combine is called when a single thread has completed execution of its part of the pipeline, it is the final
-	// time that a specific LocalSinkState is accessible. This method can be called in parallel while other Sink() or
-	// Combine() calls are active on the same GlobalSinkState.
+	//! The combine is called when a single thread has completed execution of its part of the pipeline, it is the final
+	//! time that a specific LocalSinkState is accessible. This method can be called in parallel while other Sink() or
+	//! Combine() calls are active on the same GlobalSinkState.
 	virtual SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const;
+	//! (optional) function that will be called before Finalize
+	//! For now, its only use is to to communicate memory usage in multi-join pipelines through TemporaryMemoryManager
+	virtual void PrepareFinalize(ClientContext &context, GlobalSinkState &sink_state) const;
 	//! The finalize is called when ALL threads are finished execution. It is called only once per pipeline, and is
 	//! entirely single threaded.
 	//! If Finalize returns SinkResultType::FINISHED, the sink is marked as finished

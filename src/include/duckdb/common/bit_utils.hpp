@@ -10,68 +10,7 @@
 
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/uhugeint.hpp"
-
-#ifdef _MSC_VER
-#define __restrict__
-#define __BYTE_ORDER__          __ORDER_LITTLE_ENDIAN__
-#define __ORDER_LITTLE_ENDIAN__ 2
-#include <intrin.h>
-static inline int __builtin_ctzll(unsigned long long x) {
-#ifdef _WIN64
-	unsigned long ret;
-	_BitScanForward64(&ret, x);
-	return (int)ret;
-#else
-	unsigned long low, high;
-	bool low_set = _BitScanForward(&low, (unsigned __int32)(x)) != 0;
-	_BitScanForward(&high, (unsigned __int32)(x >> 32));
-	high += 32;
-	return low_set ? low : high;
-#endif
-}
-static inline int __builtin_clzll(unsigned long long mask) {
-	unsigned long where;
-// BitScanReverse scans from MSB to LSB for first set bit.
-// Returns 0 if no set bit is found.
-#if defined(_WIN64)
-	if (_BitScanReverse64(&where, mask))
-		return static_cast<int>(63 - where);
-#elif defined(_WIN32)
-	// Scan the high 32 bits.
-	if (_BitScanReverse(&where, static_cast<unsigned long>(mask >> 32)))
-		return static_cast<int>(63 - (where + 32)); // Create a bit offset from the MSB.
-	// Scan the low 32 bits.
-	if (_BitScanReverse(&where, static_cast<unsigned long>(mask)))
-		return static_cast<int>(63 - where);
-#else
-#error "Implementation of __builtin_clzll required"
-#endif
-	return 64; // Undefined Behavior.
-}
-
-static inline int __builtin_ctz(unsigned int value) {
-	unsigned long trailing_zero = 0;
-
-	if (_BitScanForward(&trailing_zero, value)) {
-		return trailing_zero;
-	} else {
-		// This is undefined, I better choose 32 than 0
-		return 32;
-	}
-}
-
-static inline int __builtin_clz(unsigned int value) {
-	unsigned long leading_zero = 0;
-
-	if (_BitScanReverse(&leading_zero, value)) {
-		return 31 - leading_zero;
-	} else {
-		// Same remarks as above
-		return 32;
-	}
-}
-
-#endif
+#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
@@ -79,60 +18,86 @@ template <class T>
 struct CountZeros {};
 
 template <>
-struct CountZeros<uint32_t> {
-	inline static int Leading(uint32_t value) {
-		if (!value) {
-			return 32;
+struct CountZeros<uint64_t> {
+	// see here: https://en.wikipedia.org/wiki/De_Bruijn_sequence
+	inline static idx_t Leading(const uint64_t value_in) {
+		if (!value_in) {
+			return 64;
 		}
-		return __builtin_clz(value);
+
+		uint64_t value = value_in;
+
+		constexpr uint64_t index64msb[] = {0,  47, 1,  56, 48, 27, 2,  60, 57, 49, 41, 37, 28, 16, 3,  61,
+		                                   54, 58, 35, 52, 50, 42, 21, 44, 38, 32, 29, 23, 17, 11, 4,  62,
+		                                   46, 55, 26, 59, 40, 36, 15, 53, 34, 51, 20, 43, 31, 22, 10, 45,
+		                                   25, 39, 14, 33, 19, 30, 9,  24, 13, 18, 8,  12, 7,  6,  5,  63};
+
+		constexpr uint64_t debruijn64msb = 0X03F79D71B4CB0A89;
+
+		value |= value >> 1;
+		value |= value >> 2;
+		value |= value >> 4;
+		value |= value >> 8;
+		value |= value >> 16;
+		value |= value >> 32;
+		auto result = 63 - index64msb[(value * debruijn64msb) >> 58];
+#ifdef __clang__
+		D_ASSERT(result == static_cast<uint64_t>(__builtin_clzl(value_in)));
+#endif
+		return result;
 	}
-	inline static int Trailing(uint32_t value) {
-		if (!value) {
-			return 32;
+	inline static idx_t Trailing(uint64_t value_in) {
+		if (!value_in) {
+			return 64;
 		}
-		return __builtin_ctz(value);
+		uint64_t value = value_in;
+
+		constexpr uint64_t index64lsb[] = {63, 0,  58, 1,  59, 47, 53, 2,  60, 39, 48, 27, 54, 33, 42, 3,
+		                                   61, 51, 37, 40, 49, 18, 28, 20, 55, 30, 34, 11, 43, 14, 22, 4,
+		                                   62, 57, 46, 52, 38, 26, 32, 41, 50, 36, 17, 19, 29, 10, 13, 21,
+		                                   56, 45, 25, 31, 35, 16, 9,  12, 44, 24, 15, 8,  23, 7,  6,  5};
+		constexpr uint64_t debruijn64lsb = 0x07EDD5E59A4E28C2ULL;
+		auto result = index64lsb[((value & -value) * debruijn64lsb) >> 58];
+#ifdef __clang__
+		D_ASSERT(result == static_cast<uint64_t>(__builtin_ctzl(value_in)));
+#endif
+		return result;
 	}
 };
 
 template <>
-struct CountZeros<uint64_t> {
-	inline static int Leading(uint64_t value) {
-		if (!value) {
-			return 64;
-		}
-		return __builtin_clzll(value);
+struct CountZeros<uint32_t> {
+	inline static idx_t Leading(uint32_t value) {
+		return CountZeros<uint64_t>::Leading(static_cast<uint64_t>(value)) - 32;
 	}
-	inline static int Trailing(uint64_t value) {
-		if (!value) {
-			return 64;
-		}
-		return __builtin_ctzll(value);
+	inline static idx_t Trailing(uint32_t value) {
+		return CountZeros<uint64_t>::Trailing(static_cast<uint64_t>(value));
 	}
 };
 
 template <>
 struct CountZeros<hugeint_t> {
-	inline static int Leading(hugeint_t value) {
-		const uint64_t upper = (uint64_t)value.upper;
+	inline static idx_t Leading(hugeint_t value) {
+		const uint64_t upper = static_cast<uint64_t>(value.upper);
 		const uint64_t lower = value.lower;
 
 		if (upper) {
-			return __builtin_clzll(upper);
+			return CountZeros<uint64_t>::Leading(upper);
 		} else if (lower) {
-			return 64 + __builtin_clzll(lower);
+			return 64 + CountZeros<uint64_t>::Leading(lower);
 		} else {
 			return 128;
 		}
 	}
 
-	inline static int Trailing(hugeint_t value) {
-		const uint64_t upper = (uint64_t)value.upper;
+	inline static idx_t Trailing(hugeint_t value) {
+		const uint64_t upper = static_cast<uint64_t>(value.upper);
 		const uint64_t lower = value.lower;
 
 		if (lower) {
-			return __builtin_ctzll(lower);
+			return CountZeros<uint64_t>::Trailing(lower);
 		} else if (upper) {
-			return 64 + __builtin_ctzll(upper);
+			return 64 + CountZeros<uint64_t>::Trailing(upper);
 		} else {
 			return 128;
 		}
@@ -141,27 +106,27 @@ struct CountZeros<hugeint_t> {
 
 template <>
 struct CountZeros<uhugeint_t> {
-	inline static int Leading(uhugeint_t value) {
-		const uint64_t upper = (uint64_t)value.upper;
+	inline static idx_t Leading(uhugeint_t value) {
+		const uint64_t upper = static_cast<uint64_t>(value.upper);
 		const uint64_t lower = value.lower;
 
 		if (upper) {
-			return __builtin_clzll(upper);
+			return CountZeros<uint64_t>::Leading(upper);
 		} else if (lower) {
-			return 64 + __builtin_clzll(lower);
+			return 64 + CountZeros<uint64_t>::Leading(lower);
 		} else {
 			return 128;
 		}
 	}
 
-	inline static int Trailing(uhugeint_t value) {
-		const uint64_t upper = (uint64_t)value.upper;
+	inline static idx_t Trailing(uhugeint_t value) {
+		const uint64_t upper = static_cast<uint64_t>(value.upper);
 		const uint64_t lower = value.lower;
 
 		if (lower) {
-			return __builtin_ctzll(lower);
+			return CountZeros<uint64_t>::Trailing(lower);
 		} else if (upper) {
-			return 64 + __builtin_ctzll(upper);
+			return 64 + CountZeros<uint64_t>::Trailing(upper);
 		} else {
 			return 128;
 		}

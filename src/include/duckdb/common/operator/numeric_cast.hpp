@@ -19,6 +19,10 @@
 
 namespace duckdb {
 
+//! Note: this should not be included directly, when these methods are required
+//! They should be used through the TryCast:: methods defined in 'cast_operators.hpp'
+//! This file produces 'unused static method' warnings/errors when included
+
 template <class SRC, class DST>
 static bool TryCastWithOverflowCheck(SRC value, DST &result) {
 	if (!Value::IsFinite<SRC>(value)) {
@@ -75,7 +79,7 @@ bool TryCastWithOverflowCheckFloat(SRC value, T &result, SRC min, SRC max) {
 		return false;
 	}
 	// PG FLOAT => INT casts use statistical rounding.
-	result = std::nearbyint(value);
+	result = static_cast<T>(std::nearbyint(value));
 	return true;
 }
 
@@ -182,7 +186,7 @@ bool TryCastWithOverflowCheck(double input, float &result) {
 		return true;
 	}
 	auto res = float(input);
-	if (!Value::FloatIsFinite(input)) {
+	if (!Value::FloatIsFinite(res)) {
 		return false;
 	}
 	result = res;

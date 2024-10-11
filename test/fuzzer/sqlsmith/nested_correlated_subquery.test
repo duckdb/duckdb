@@ -1,0 +1,52 @@
+# name: test/fuzzer/sqlsmith/nested_correlated_subquery.test
+# description: Test nested correlated subquery
+# group: [sqlsmith]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t(ps_supplycost INT, n_name INT);
+
+statement ok
+SELECT NULL
+FROM
+    t AS ref_2,
+    (SELECT (SELECT NULL
+         FROM (FROM t AS ref_5,
+              (SELECT ref_2.n_name AS c1))));
+
+query I
+SELECT NULL
+FROM
+    t AS ref_2,
+    (SELECT (SELECT NULL
+         FROM (FROM t AS ref_5,
+              (SELECT ref_5.ps_supplycost AS c0,
+                      ref_2.n_name AS c1))));
+----
+
+# postgres compatible with explicit LATERAL annotations
+query I
+SELECT NULL
+FROM
+    t AS ref_2,
+    LATERAL (SELECT (SELECT NULL
+         FROM (SELECT * FROM t AS ref_5,
+              LATERAL (SELECT ref_5.ps_supplycost AS c0,
+                      ref_2.n_name AS c1) AS alias1) AS alias2) AS alias3) AS alias4;
+----
+
+statement ok
+INSERT INTO t VALUES (1, 100);
+
+query III
+SELECT *
+FROM
+    t AS ref_2,
+    LATERAL (SELECT (SELECT NULL
+         FROM (SELECT * FROM t AS ref_5,
+              LATERAL (SELECT ref_5.ps_supplycost AS c0,
+                      ref_2.n_name AS c1) AS alias1) AS alias2) AS alias3) AS alias4;
+----
+1	100	NULL

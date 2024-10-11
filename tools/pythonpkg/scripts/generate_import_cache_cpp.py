@@ -1,7 +1,7 @@
 import os
 
 script_dir = os.path.dirname(__file__)
-from typing import List, Dict, Union
+from typing import List, Dict
 import json
 
 # Load existing JSON data from a file if it exists
@@ -12,7 +12,6 @@ try:
         json_data = json.load(file)
 except FileNotFoundError:
     print("Please first use 'generate_import_cache_json.py' first to generate json")
-    pass
 
 
 # deal with leaf nodes?? Those are just PythonImportCacheItem

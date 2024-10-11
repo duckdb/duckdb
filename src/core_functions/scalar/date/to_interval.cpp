@@ -8,7 +8,7 @@ namespace duckdb {
 
 template <>
 bool TryMultiplyOperator::Operation(double left, int64_t right, int64_t &result) {
-	return TryCast::Operation<double, int64_t>(left * right, result);
+	return TryCast::Operation<double, int64_t>(left * double(right), result);
 }
 
 struct ToMillenniaOperator {
@@ -61,6 +61,20 @@ struct ToYearsOperator {
 		                                                               result.months)) {
 			throw OutOfRangeException("Interval value %d years out of range", input);
 		}
+		return result;
+	}
+};
+
+struct ToQuartersOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		interval_t result;
+		if (!TryMultiplyOperator::Operation<int32_t, int32_t, int32_t>(input, Interval::MONTHS_PER_QUARTER,
+		                                                               result.months)) {
+			throw OutOfRangeException("Interval value %d quarters out of range", input);
+		}
+		result.days = 0;
+		result.micros = 0;
 		return result;
 	}
 };
@@ -168,6 +182,11 @@ ScalarFunction ToDecadesFun::GetFunction() {
 ScalarFunction ToYearsFun::GetFunction() {
 	return ScalarFunction({LogicalType::INTEGER}, LogicalType::INTERVAL,
 	                      ScalarFunction::UnaryFunction<int32_t, interval_t, ToYearsOperator>);
+}
+
+ScalarFunction ToQuartersFun::GetFunction() {
+	return ScalarFunction({LogicalType::INTEGER}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<int32_t, interval_t, ToQuartersOperator>);
 }
 
 ScalarFunction ToMonthsFun::GetFunction() {

@@ -1,0 +1,535 @@
+{
+    "group": "safe_fetch_functions",
+    "deprecated": true,
+    "description": "// These functions will perform conversions if necessary.\n// On failure (e.g. if conversion cannot be performed or if the value is NULL) a default value is returned.\n// Note that these functions are slow since they perform bounds checking and conversion\n// For fast access of values prefer using `duckdb_result_get_chunk`",
+    "entries": [
+        {
+            "name": "duckdb_value_boolean",
+            "return_type": "bool",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
+                "return_value": "The boolean value at the specified location, or false if the value cannot be converted."
+            }
+        },
+        {
+            "name": "duckdb_value_int8",
+            "return_type": "int8_t",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
+                "return_value": "The int8_t value at the specified location, or 0 if the value cannot be converted."
+            }
+        },
+        {
+            "name": "duckdb_value_int16",
+            "return_type": "int16_t",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
+                "return_value": "The int16_t value at the specified location, or 0 if the value cannot be converted."
+            }
+        },
+        {
+            "name": "duckdb_value_int32",
+            "return_type": "int32_t",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
+                "return_value": "The int32_t value at the specified location, or 0 if the value cannot be converted."
+            }
+        },
+        {
+            "name": "duckdb_value_int64",
+            "return_type": "int64_t",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
+                "return_value": "The int64_t value at the specified location, or 0 if the value cannot be converted."
+            }
+        },
+        {
+            "name": "duckdb_value_hugeint",
+            "return_type": "duckdb_hugeint",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
+                "return_value": "The duckdb_hugeint value at the specified location, or 0 if the value cannot be converted."
+            }
+        },
+        {
+            "name": "duckdb_value_uhugeint",
+            "return_type": "duckdb_uhugeint",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
+                "return_value": "The duckdb_uhugeint value at the specified location, or 0 if the value cannot be converted."
+            }
+        },
+        {
+            "name": "duckdb_value_decimal",
+            "return_type": "duckdb_decimal",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
+                "return_value": "The duckdb_decimal value at the specified location, or 0 if the value cannot be converted."
+            }
+        },
+        {
+            "name": "duckdb_value_uint8",
+            "return_type": "uint8_t",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
+                "return_value": "The uint8_t value at the specified location, or 0 if the value cannot be converted."
+            }
+        },
+        {
+            "name": "duckdb_value_uint16",
+            "return_type": "uint16_t",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
+                "return_value": "The uint16_t value at the specified location, or 0 if the value cannot be converted."
+            }
+        },
+        {
+            "name": "duckdb_value_uint32",
+            "return_type": "uint32_t",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
+                "return_value": "The uint32_t value at the specified location, or 0 if the value cannot be converted."
+            }
+        },
+        {
+            "name": "duckdb_value_uint64",
+            "return_type": "uint64_t",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
+                "return_value": "The uint64_t value at the specified location, or 0 if the value cannot be converted."
+            }
+        },
+        {
+            "name": "duckdb_value_float",
+            "return_type": "float",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
+                "return_value": "The float value at the specified location, or 0 if the value cannot be converted."
+            }
+        },
+        {
+            "name": "duckdb_value_double",
+            "return_type": "double",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
+                "return_value": "The double value at the specified location, or 0 if the value cannot be converted."
+            }
+        },
+        {
+            "name": "duckdb_value_date",
+            "return_type": "duckdb_date",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
+                "return_value": "The duckdb_date value at the specified location, or 0 if the value cannot be converted."
+            }
+        },
+        {
+            "name": "duckdb_value_time",
+            "return_type": "duckdb_time",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
+                "return_value": "The duckdb_time value at the specified location, or 0 if the value cannot be converted."
+            }
+        },
+        {
+            "name": "duckdb_value_timestamp",
+            "return_type": "duckdb_timestamp",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
+                "return_value": "The duckdb_timestamp value at the specified location, or 0 if the value cannot be converted."
+            }
+        },
+        {
+            "name": "duckdb_value_interval",
+            "return_type": "duckdb_interval",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
+                "return_value": "The duckdb_interval value at the specified location, or 0 if the value cannot be converted."
+            }
+        },
+        {
+            "name": "duckdb_value_varchar",
+            "return_type": "char *",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATED**: Use duckdb_value_string instead. This function does not work correctly if the string contains null bytes.\n\n",
+                "return_value": "The text value at the specified location as a null-terminated string, or nullptr if the value cannot be\nconverted. The result must be freed with `duckdb_free`."
+            }
+        },
+        {
+            "name": "duckdb_value_string",
+            "return_type": "duckdb_string",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nNo support for nested types, and for other complex types.\nThe resulting field \"string.data\" must be freed with `duckdb_free.`\n\n",
+                "return_value": "The string value at the specified location. Attempts to cast the result value to string."
+            }
+        },
+        {
+            "name": "duckdb_value_varchar_internal",
+            "return_type": "char *",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATED**: Use duckdb_value_string_internal instead. This function does not work correctly if the string contains\nnull bytes.\n\n",
+                "return_value": "The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.\nIf the column is NOT a VARCHAR column this function will return NULL.\n\nThe result must NOT be freed."
+            }
+        },
+        {
+            "name": "duckdb_value_string_internal",
+            "return_type": "duckdb_string",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATED**: Use duckdb_value_string_internal instead. This function does not work correctly if the string contains\nnull bytes.\n",
+                "return_value": "The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.\nIf the column is NOT a VARCHAR column this function will return NULL.\n\nThe result must NOT be freed."
+            }
+        },
+        {
+            "name": "duckdb_value_blob",
+            "return_type": "duckdb_blob",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
+                "return_value": "The duckdb_blob value at the specified location. Returns a blob with blob.data set to nullptr if the\nvalue cannot be converted. The resulting field \"blob.data\" must be freed with `duckdb_free.`"
+            }
+        },
+        {
+            "name": "duckdb_value_is_null",
+            "return_type": "bool",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
+                "return_value": "Returns true if the value at the specified index is NULL, and false otherwise."
+            }
+        }
+    ]
+}

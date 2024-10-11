@@ -1,7 +1,9 @@
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/serializer/read_stream.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
 
 namespace duckdb {
 
@@ -70,7 +72,7 @@ void ValidityMask::Resize(idx_t old_size, idx_t new_size) {
 	}
 }
 
-idx_t ValidityMask::TargetCount() {
+idx_t ValidityMask::TargetCount() const {
 	return target_count;
 }
 
@@ -93,20 +95,54 @@ bool ValidityMask::IsAligned(idx_t count) {
 	return count % BITS_PER_VALUE == 0;
 }
 
+void ValidityMask::CopySel(const ValidityMask &other, const SelectionVector &sel, idx_t source_offset,
+                           idx_t target_offset, idx_t copy_count) {
+	if (!other.IsMaskSet() && !IsMaskSet()) {
+		// no need to copy anything if neither has any null values
+		return;
+	}
+
+	if (!sel.IsSet() && IsAligned(source_offset) && IsAligned(target_offset)) {
+		// common case where we are shifting into an aligned mask using a flat vector
+		SliceInPlace(other, target_offset, source_offset, copy_count);
+		return;
+	}
+	for (idx_t i = 0; i < copy_count; i++) {
+		auto source_idx = sel.get_index(source_offset + i);
+		Set(target_offset + i, other.RowIsValid(source_idx));
+	}
+}
+
 void ValidityMask::SliceInPlace(const ValidityMask &other, idx_t target_offset, idx_t source_offset, idx_t count) {
 	EnsureWritable();
+	const idx_t ragged = count % BITS_PER_VALUE;
+	const idx_t entire_units = count / BITS_PER_VALUE;
 	if (IsAligned(source_offset) && IsAligned(target_offset)) {
 		auto target_validity = GetData();
 		auto source_validity = other.GetData();
 		auto source_offset_entries = EntryCount(source_offset);
 		auto target_offset_entries = EntryCount(target_offset);
-		memcpy(target_validity + target_offset_entries, source_validity + source_offset_entries,
-		       sizeof(validity_t) * EntryCount(count));
+		if (!source_validity) {
+			// if source has no validity mask - set all bytes to 1
+			memset(target_validity + target_offset_entries, 0xFF, sizeof(validity_t) * entire_units);
+		} else {
+			memcpy(target_validity + target_offset_entries, source_validity + source_offset_entries,
+			       sizeof(validity_t) * entire_units);
+		}
+		if (ragged) {
+			auto src_entry =
+			    source_validity ? source_validity[source_offset_entries + entire_units] : ValidityBuffer::MAX_ENTRY;
+			src_entry &= (ValidityBuffer::MAX_ENTRY >> (BITS_PER_VALUE - ragged));
+
+			target_validity += target_offset_entries + entire_units;
+			auto tgt_entry = *target_validity;
+			tgt_entry &= (ValidityBuffer::MAX_ENTRY << ragged);
+
+			*target_validity = tgt_entry | src_entry;
+		}
 		return;
 	} else if (IsAligned(target_offset)) {
 		//	Simple common case where we are shifting into an aligned mask (e.g., 0 in Slice above)
-		const idx_t entire_units = count / BITS_PER_VALUE;
-		const idx_t ragged = count % BITS_PER_VALUE;
 		const idx_t tail = source_offset % BITS_PER_VALUE;
 		const idx_t head = BITS_PER_VALUE - tail;
 		auto source_validity = other.GetData() + (source_offset / BITS_PER_VALUE);
@@ -195,13 +231,13 @@ void ValidityMask::Write(WriteStream &writer, idx_t count) {
 		// serialize (in)valid value indexes as [COUNT][V0][V1][...][VN]
 		auto flag = serialize_valid ? ValiditySerialization::VALID_VALUES : ValiditySerialization::INVALID_VALUES;
 		writer.Write(flag);
-		writer.Write<uint32_t>(MinValue<uint32_t>(valid_values, invalid_values));
+		writer.Write<uint32_t>(NumericCast<uint32_t>(MinValue(valid_values, invalid_values)));
 		for (idx_t i = 0; i < count; i++) {
 			if (RowIsValid(i) == serialize_valid) {
 				if (need_u32) {
-					writer.Write<uint32_t>(i);
+					writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(i));
 				} else {
-					writer.Write<uint16_t>(i);
+					writer.Write<uint16_t>(UnsafeNumericCast<uint16_t>(i));
 				}
 			}
 		}

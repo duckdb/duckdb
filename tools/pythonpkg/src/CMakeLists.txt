@@ -23,7 +23,10 @@ add_library(
   path_like.cpp
   python_udf.cpp
   pyconnection.cpp
+  pystatement.cpp
   python_import_cache.cpp
+  python_replacement_scan.cpp
+  python_dependency.cpp
   pyrelation.cpp
   pyexpression.cpp
   dataframe.cpp

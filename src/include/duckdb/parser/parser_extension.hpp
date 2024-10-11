@@ -33,15 +33,16 @@ struct ParserExtensionParseData {
 	}
 
 	virtual unique_ptr<ParserExtensionParseData> Copy() const = 0;
+	virtual string ToString() const = 0;
 };
 
 struct ParserExtensionParseResult {
 	ParserExtensionParseResult() : type(ParserExtensionResultType::DISPLAY_ORIGINAL_ERROR) {
 	}
-	ParserExtensionParseResult(string error_p)
+	explicit ParserExtensionParseResult(string error_p)
 	    : type(ParserExtensionResultType::DISPLAY_EXTENSION_ERROR), error(std::move(error_p)) {
 	}
-	ParserExtensionParseResult(unique_ptr<ParserExtensionParseData> parse_data_p)
+	explicit ParserExtensionParseResult(unique_ptr<ParserExtensionParseData> parse_data_p)
 	    : type(ParserExtensionResultType::PARSE_SUCCESSFUL), parse_data(std::move(parse_data_p)) {
 	}
 
@@ -59,13 +60,13 @@ typedef ParserExtensionParseResult (*parse_function_t)(ParserExtensionInfo *info
 //===--------------------------------------------------------------------===//
 // Plan
 //===--------------------------------------------------------------------===//
-struct ParserExtensionPlanResult {
+struct ParserExtensionPlanResult { // NOLINT: work-around bug in clang-tidy
 	//! The table function to execute
 	TableFunction function;
 	//! Parameters to the function
 	vector<Value> parameters;
 	//! The set of databases that will be modified by this statement (empty for a read-only statement)
-	unordered_set<string> modified_databases;
+	unordered_map<string, StatementProperties::CatalogIdentity> modified_databases;
 	//! Whether or not the statement requires a valid transaction to be executed
 	bool requires_valid_transaction = true;
 	//! What type of result set the statement returns

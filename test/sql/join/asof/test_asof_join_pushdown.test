@@ -1,0 +1,144 @@
+# name: test/sql/join/asof/test_asof_join_pushdown.test
+# description: Test prericate pushdown for ASOF joins
+# group: [asof]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE OR REPLACE TABLE right_pushdown(time INTEGER, value FLOAT);
+
+statement ok
+INSERT INTO right_pushdown VALUES
+    (0, 0), 
+    (1, NULL), 
+;
+
+query IIII
+SELECT 
+	d1.time,
+	d2.time,
+	d1.value, 
+	d2.value
+FROM right_pushdown d1 
+ASOF JOIN (
+	SELECT * FROM right_pushdown WHERE value is not NULL
+	) d2
+	ON d1.time >= d2.time;
+----
+0 	0	0.0	0.0
+1 	0	NULL	0.0
+
+query IIII
+SELECT 
+	d1.time,
+	d2.time,
+	d1.value, 
+	d2.value
+FROM right_pushdown d1 
+ASOF LEFT JOIN (
+	SELECT * FROM right_pushdown WHERE value is not NULL
+	) d2
+	ON d1.time >= d2.time;
+----
+0 	0	0.0	0.0
+1 	0	NULL	0.0
+
+statement ok
+CREATE OR REPLACE TABLE issue12215 AS
+	SELECT col0 AS starts, col1 AS ends
+	FROM (VALUES
+		(5, 9),
+		(10, 13),
+		(14, 20),
+		(21, 23)
+	);
+
+query II
+SELECT
+    s1.starts as s1_starts,
+    s2.starts as s2_starts,
+FROM issue12215 AS s1 
+ASOF JOIN issue12215 as s2 
+  ON s2.ends >= (s1.ends - 5)
+WHERE s1_starts <> s2_starts
+ORDER BY ALL
+----
+10	5
+21	14
+
+query II
+WITH t as (
+    SELECT
+        t1.col0 AS left_val,
+        t2.col0 AS right_val,
+    FROM
+        (VALUES (0), (5), (10), (15)) AS t1
+        ASOF JOIN (VALUES (1), (6), (11), (16)) AS t2
+        ON t2.col0 > t1.col0
+)
+SELECT *
+FROM t
+WHERE right_val BETWEEN 3 AND 12
+ORDER BY ALL
+----
+5	6
+10	11
+
+query II
+WITH t as (
+    SELECT
+        t1.col0 AS left_val,
+        t2.col0 AS right_val,
+    FROM
+        (VALUES (0), (5), (10), (15)) AS t1
+        ASOF LEFT JOIN (VALUES (1), (6), (11), (16)) AS t2
+        ON t2.col0 > t1.col0
+)
+SELECT *
+FROM t
+WHERE right_val BETWEEN 3 AND 12
+ORDER BY ALL
+----
+5	6
+10	11
+
+statement ok
+CREATE TABLE issue13899(seq_no INT, amount DECIMAL(10,2));
+
+statement ok
+INSERT INTO issue13899 VALUES
+	(1,1.00),
+	(2,null),
+	(3,null),
+	(4,null),
+	(5,2.00),
+	(6,null),
+	(7,null),
+	(8,3.00),
+	(9,null),
+	(10,null),
+	(11,5.00);
+
+query III
+select 
+	a.seq_no,
+	a.amount,
+	b.amount
+from issue13899 as a 
+asof join issue13899 as b
+    on a.seq_no>=b.seq_no
+   and b.amount is not null
+ORDER BY 1
+----
+1	1.00	1.00
+2	NULL	1.00
+3	NULL	1.00
+4	NULL	1.00
+5	2.00	2.00
+6	NULL	2.00
+7	NULL	2.00
+8	3.00	3.00
+9	NULL	3.00
+10	NULL	3.00
+11	5.00	5.00

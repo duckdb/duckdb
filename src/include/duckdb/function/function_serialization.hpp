@@ -71,10 +71,46 @@ public:
 		return result;
 	}
 
+	static bool TypeRequiresAssignment(const LogicalType &type) {
+		switch (type.id()) {
+		case LogicalTypeId::SQLNULL:
+		case LogicalTypeId::ANY:
+		case LogicalTypeId::INVALID:
+			return true;
+		case LogicalTypeId::DECIMAL:
+		case LogicalTypeId::UNION:
+		case LogicalTypeId::MAP:
+			if (!type.AuxInfo()) {
+				return true;
+			}
+			return false;
+		case LogicalTypeId::LIST:
+			if (!type.AuxInfo()) {
+				return true;
+			}
+			return TypeRequiresAssignment(ListType::GetChildType(type));
+		case LogicalTypeId::ARRAY:
+			if (!type.AuxInfo()) {
+				return true;
+			}
+			return TypeRequiresAssignment(ArrayType::GetChildType(type));
+		case LogicalTypeId::STRUCT:
+			if (!type.AuxInfo()) {
+				return true;
+			}
+			if (StructType::GetChildCount(type) == 0) {
+				return true;
+			}
+			return false;
+		default:
+			return false;
+		}
+	}
+
 	template <class FUNC, class CATALOG_ENTRY>
 	static pair<FUNC, unique_ptr<FunctionData>> Deserialize(Deserializer &deserializer, CatalogType catalog_type,
 	                                                        vector<unique_ptr<Expression>> &children,
-	                                                        LogicalType return_type) {
+	                                                        LogicalType return_type) { // NOLINT: clang-tidy bug
 		auto &context = deserializer.Get<ClientContext &>();
 		auto entry = DeserializeBase<FUNC, CATALOG_ENTRY>(deserializer, catalog_type);
 		auto &function = entry.first;
@@ -82,7 +118,9 @@ public:
 
 		unique_ptr<FunctionData> bind_data;
 		if (has_serialize) {
+			deserializer.Set<const LogicalType &>(return_type);
 			bind_data = FunctionDeserialize<FUNC>(deserializer, function);
+			deserializer.Unset<LogicalType>();
 		} else if (function.bind) {
 			try {
 				bind_data = function.bind(context, function, children);
@@ -92,7 +130,9 @@ public:
 				                             error.RawMessage());
 			}
 		}
-		function.return_type = std::move(return_type);
+		if (TypeRequiresAssignment(function.return_type)) {
+			function.return_type = std::move(return_type);
+		}
 		return make_pair(std::move(function), std::move(bind_data));
 	}
 };

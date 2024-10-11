@@ -1,0 +1,153 @@
+# name: test/optimizer/pushdown/pushdown_window_partition_filter.test
+# description: Test pushdown of filters through window operators that are partitioned by.
+# group: [pushdown]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+create table t1 as from VALUES 
+	('A', 1), 
+	('B', 3),
+	('C', 12), 
+	('A', 5), 
+	('B', 8), 
+	('C', 9), 
+	('A', 10), 
+	('B', 20), 
+	('C', 3) 
+	t(a, b);
+
+statement ok
+pragma explain_output=OPTIMIZED_ONLY
+
+statement ok
+create view window_with_filter as select a,  b, LEAD(b) OVER (partition by a) as lead from t1 where a != 'C';
+
+statement ok
+create view window_no_filter as select a,  b, LEAD(b) OVER (partition by a) as lead from t1;
+
+query III no_sort result_1
+select * from window_with_filter where a != 'C' order by a;
+----
+
+query III no_sort result_1
+select * from window_no_filter where a != 'C' order by a;
+----
+
+statement ok
+create table partition_and_rank_me as from values 
+	('A', 10, 'A', 'id'), 
+	('A', 20, 'A', 'id'),
+	('A', 30, 'B', 'id'),
+	('D', 40, 'B', 'id'),
+	('D', 50, 'C', 'id'),
+	('D', 60, 'C', 'id') 
+t(a, b, c, d);
+
+query IIII
+select a, c, sum(b) OVER (PARTITION BY c), rank() OVER (PARTITION BY d ORDER BY b)
+from partition_and_rank_me order by all
+----
+A	A	30	1
+A	A	30	2
+A	B	70	3
+D	B	70	4
+D	C	110	5
+D	C	110	6
+
+# can't push down the filter c!='B', since the values of the rank() window function
+# are affected by the existence of the rows where c='B'
+query IIII
+select * from (
+	select a, c, sum(b) OVER (PARTITION BY c), rank() OVER (PARTITION BY d ORDER BY b)
+	from partition_and_rank_me
+) where c != 'B' order by all;
+----
+A	A	30	1
+A	A	30	2
+D	C	110	5
+D	C	110	6
+
+# One filter clause is on the partitioned column but the filter clause is an AND conjunction, so we don't push that down.
+query IIII
+select * from (
+	select a, c, sum(b) OVER (PARTITION BY c), rank() OVER (PARTITION BY c ORDER BY b)
+	from partition_and_rank_me
+) where (c = 'B' AND a = 'D') order by all;
+----
+D	B	70	2
+
+# result of above query with pushdown
+query IIII
+select * from (
+	select a, c, sum(b) OVER (PARTITION BY c), rank() OVER (PARTITION BY c ORDER BY b)
+	from partition_and_rank_me where (c = 'B' AND a = 'D')
+) order by all;
+----
+D	B	40	1
+
+
+# The filter is on the partitioned column, but is part of an OR conjunction, so we can push it down
+query IIII
+select * from (
+	select a, c, sum(b) OVER (PARTITION BY c), rank() OVER (PARTITION BY c ORDER BY b)
+	from partition_and_rank_me
+) where (c = 'B' OR a = 'D') order by all;
+----
+A	B	70	1
+D	B	70	2
+D	C	110	1
+D	C	110	2
+
+# result of above query with pushdown
+query IIII
+select * from (
+	select a, c, sum(b) OVER (PARTITION BY c), rank() OVER (PARTITION BY c ORDER BY b)
+	from partition_and_rank_me 
+	where (c = 'B' OR a = 'D')
+) order by all;
+----
+A	B	70	1
+D	B	70	2
+D	C	110	1
+D	C	110	2
+
+# The filter is a function expression, so we don't push it down
+query IIII
+select * from (
+	select a, c, sum(b) OVER (PARTITION BY c), rank() OVER (PARTITION BY c ORDER BY b)
+	from partition_and_rank_me
+) where (c || 'Z' = 'BZ') order by all;
+----
+A	B	70	1
+D	B	70	2
+
+
+# can't push down the filter c!='B', since the values of the rank() window function
+# are affected by the existence of the rows where c='B'
+query II
+explain select * from (select a, sum(b) OVER (PARTITION BY c), rank() OVER (PARTITION BY d ORDER BY b), c from partition_and_rank_me) where c != 'B' order by all;
+----
+logical_opt	<REGEX>:.*FILTER.*WINDOW.*
+
+query II
+explain select * from window_no_filter where a != 'C' order by a;
+----
+logical_opt	<REGEX>:.*WINDOW.*FILTER.*
+
+statement ok
+create table t2 as select range a, range%50 b, range%25 c from range(500);
+
+# second window expression is not paritioned on b, so filter expression cannot be 
+# pushed down
+query II
+explain select * from (select a, b, c, sum(a) OVER (PARTITION BY b, c), sum(b) OVER (PARTITION BY a, c) from t2) where b > 25;
+----
+logical_opt	<REGEX>:.*FILTER.*WINDOW.*
+
+query II
+explain select * from (select a, b, c, sum(a) OVER (PARTITION BY b, c), sum(b) OVER (PARTITION BY a, c) from t2) where c = 20;
+----
+logical_opt	<REGEX>:.*WINDOW.*c=20.*
+

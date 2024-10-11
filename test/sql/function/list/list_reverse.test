@@ -47,8 +47,10 @@ execute q1([5, 42, 3]);
 ----
 [3, 42, 5]
 
+statement ok
+create or replace table tbl_big as select range(5000) as list;
+
 query I
-create table tbl_big as select range(5000) as list;
 select list_sort((list), 'desc') == ${f}(list) from tbl_big;
 ----
 true
@@ -89,11 +91,14 @@ statement ok
 DROP TABLE tbl2;
 
 query IIIIIIII
-select ${f}(${f}(columns(['int_array', 'varchar_array', 'nested_int_array', 'array_of_structs', 'timestamp_array', 'double_array', 'date_array', 'timestamptz_array']))) == columns(['int_array', 'varchar_array', 'nested_int_array', 'array_of_structs', 'timestamp_array', 'double_array', 'date_array', 'timestamptz_array']) from test_all_types();
+select ${f}(${f}(columns(['int_array', 'varchar_array', 'nested_int_array', 'array_of_structs', 'timestamp_array', 'double_array', 'date_array', 'timestamptz_array']))) 
+    IS NOT DISTINCT FROM
+     columns(['int_array', 'varchar_array', 'nested_int_array', 'array_of_structs', 'timestamp_array', 'double_array', 'date_array', 'timestamptz_array']) 
+from test_all_types();
 ----
 true	true	true	true	true	true	true	true
 true	true	true	true	true	true	true	true
-NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+true	true	true	true	true	true	true	true
 
 statement ok
 select ${f}(test_vector) from test_vector_types(null::int[], false);
@@ -106,11 +111,13 @@ select true from test_vector_types(null::int[], false);
 ----
 
 query I nosort q1
-select list_sort((list), 'desc') == list from (select ${f}(test_vector) as list from test_vector_types(null::int[], false));
+select list_sort((list), 'desc') IS NOT DISTINCT FROM list 
+from (select ${f}(test_vector) as list from test_vector_types(null::int[], false));
 ----
 
 query I nosort q1
-select list_sort((list), 'desc') == list from (select ${f}(test_vector) as list from test_vector_types(null::int[], true));
+select list_sort((list), 'desc') IS NOT DISTINCT FROM list 
+from (select ${f}(test_vector) as list from test_vector_types(null::int[], true));
 ----
 
 statement error
@@ -303,4 +310,3 @@ FROM example ORDER BY length(reverse_arr) DESC;
 []
 
 endloop
-

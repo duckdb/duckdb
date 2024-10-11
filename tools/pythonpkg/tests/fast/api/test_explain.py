@@ -30,9 +30,6 @@ class TestExplain(object):
         res = duckdb_cursor.sql('select 42').explain('ANALYZE')
         assert isinstance(res, str)
 
-        res = duckdb_cursor.sql('select 42').explain(duckdb.ANALYZE)
-        assert isinstance(res, str)
-
         res = duckdb_cursor.sql('select 42').explain(duckdb.ExplainType.ANALYZE)
         assert isinstance(res, str)
 

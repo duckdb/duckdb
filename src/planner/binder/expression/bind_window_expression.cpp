@@ -1,6 +1,11 @@
-#include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -8,13 +13,6 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "duckdb/planner/binder.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/function/scalar_function.hpp"
-#include "duckdb/function/function_binder.hpp"
-
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -88,6 +86,27 @@ static unique_ptr<Expression> CastWindowExpression(unique_ptr<ParsedExpression> 
 	return std::move(bound);
 }
 
+static bool IsRangeType(const LogicalType &type) {
+	switch (type.InternalType()) {
+	case PhysicalType::INT8:
+	case PhysicalType::INT16:
+	case PhysicalType::INT32:
+	case PhysicalType::INT64:
+	case PhysicalType::UINT8:
+	case PhysicalType::UINT16:
+	case PhysicalType::UINT32:
+	case PhysicalType::UINT64:
+	case PhysicalType::INT128:
+	case PhysicalType::UINT128:
+	case PhysicalType::FLOAT:
+	case PhysicalType::DOUBLE:
+	case PhysicalType::INTERVAL:
+		return true;
+	default:
+		return false;
+	}
+}
+
 static LogicalType BindRangeExpression(ClientContext &context, const string &name, unique_ptr<ParsedExpression> &expr,
                                        unique_ptr<ParsedExpression> &order_expr) {
 
@@ -101,8 +120,8 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	D_ASSERT(expr.get());
 	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
 	auto &bound = BoundExpression::GetExpression(*expr);
+	QueryErrorContext error_context(bound->query_location);
 	if (bound->return_type == LogicalType::SQLNULL) {
-		QueryErrorContext error_context(bound->query_location);
 		throw BinderException(error_context, "Window RANGE expressions cannot be NULL");
 	}
 	children.emplace_back(std::move(bound));
@@ -112,6 +131,11 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	auto function = function_binder.BindScalarFunction(DEFAULT_SCHEMA, name, std::move(children), error, true);
 	if (!function) {
 		error.Throw();
+	}
+	// +/- can be applied to non-scalar types,
+	// so we can't rely on function binding to catch all problems.
+	if (!IsRangeType(function->return_type)) {
+		throw BinderException(error_context, "Invalid type for Window RANGE expression");
 	}
 	bound = std::move(function);
 	return bound->return_type;
@@ -127,6 +151,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	if (depth > 0) {
 		throw BinderException(error_context, "correlated columns in window functions not supported");
 	}
+
 	// If we have range expressions, then only one order by clause is allowed.
 	const auto is_range =
 	    (window.start == WindowBoundary::EXPR_PRECEDING_RANGE || window.start == WindowBoundary::EXPR_FOLLOWING_RANGE ||
@@ -136,7 +161,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	}
 	// bind inside the children of the window function
 	// we set the inside_window flag to true to prevent binding nested window functions
-	this->inside_window = true;
+	inside_window = true;
 	ErrorData error;
 	for (auto &child : window.children) {
 		BindChild(child, depth, error);
@@ -168,17 +193,21 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	BindChild(window.offset_expr, depth, error);
 	BindChild(window.default_expr, depth, error);
 
-	this->inside_window = false;
+	inside_window = false;
 	if (error.HasError()) {
 		// failed to bind children of window function
 		return BindResult(std::move(error));
 	}
 
 	//	Restore any collation expressions
+	for (auto &part_expr : window.partitions) {
+		auto &bound_partition = BoundExpression::GetExpression(*part_expr);
+		ExpressionBinder::PushCollation(context, bound_partition, bound_partition->return_type);
+	}
 	for (auto &order : window.orders) {
 		auto &order_expr = order.expression;
 		auto &bound_order = BoundExpression::GetExpression(*order_expr);
-		ExpressionBinder::PushCollation(context, bound_order, bound_order->return_type, false);
+		ExpressionBinder::PushCollation(context, bound_order, bound_order->return_type);
 	}
 	// successfully bound all children: create bound window function
 	vector<LogicalType> types;
@@ -219,21 +248,23 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		D_ASSERT(func.type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 
 		// bind the aggregate
-		ErrorData error;
+		ErrorData error_aggr;
 		FunctionBinder function_binder(context);
-		auto best_function = function_binder.BindFunction(func.name, func.functions, types, error);
-		if (best_function == DConstants::INVALID_INDEX) {
-			error.AddQueryLocation(window);
-			error.Throw();
+		auto best_function = function_binder.BindFunction(func.name, func.functions, types, error_aggr);
+		if (!best_function.IsValid()) {
+			error_aggr.AddQueryLocation(window);
+			error_aggr.Throw();
 		}
+
 		// found a matching function! bind it as an aggregate
-		auto bound_function = func.functions.GetFunctionByOffset(best_function);
-		auto bound_aggregate = function_binder.BindAggregateFunction(bound_function, std::move(children));
+		auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
+		auto window_bound_aggregate = function_binder.BindAggregateFunction(bound_function, std::move(children));
 		// create the aggregate
-		aggregate = make_uniq<AggregateFunction>(bound_aggregate->function);
-		bind_info = std::move(bound_aggregate->bind_info);
-		children = std::move(bound_aggregate->children);
-		sql_type = bound_aggregate->return_type;
+		aggregate = make_uniq<AggregateFunction>(window_bound_aggregate->function);
+		bind_info = std::move(window_bound_aggregate->bind_info);
+		children = std::move(window_bound_aggregate->children);
+		sql_type = window_bound_aggregate->return_type;
+
 	} else {
 		// fetch the child of the non-aggregate window function (if any)
 		sql_type = ResolveWindowExpressionType(window.type, types);
@@ -256,26 +287,28 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	if (window.start == WindowBoundary::EXPR_PRECEDING_RANGE) {
 		D_ASSERT(window.orders.size() == 1);
 		range_sense = config.ResolveOrder(window.orders[0].type);
-		const auto name = (range_sense == OrderType::ASCENDING) ? "-" : "+";
-		start_type = BindRangeExpression(context, name, window.start_expr, window.orders[0].expression);
+		const auto range_name = (range_sense == OrderType::ASCENDING) ? "-" : "+";
+		start_type = BindRangeExpression(context, range_name, window.start_expr, window.orders[0].expression);
+
 	} else if (window.start == WindowBoundary::EXPR_FOLLOWING_RANGE) {
 		D_ASSERT(window.orders.size() == 1);
 		range_sense = config.ResolveOrder(window.orders[0].type);
-		const auto name = (range_sense == OrderType::ASCENDING) ? "+" : "-";
-		start_type = BindRangeExpression(context, name, window.start_expr, window.orders[0].expression);
+		const auto range_name = (range_sense == OrderType::ASCENDING) ? "+" : "-";
+		start_type = BindRangeExpression(context, range_name, window.start_expr, window.orders[0].expression);
 	}
 
 	LogicalType end_type = LogicalType::BIGINT;
 	if (window.end == WindowBoundary::EXPR_PRECEDING_RANGE) {
 		D_ASSERT(window.orders.size() == 1);
 		range_sense = config.ResolveOrder(window.orders[0].type);
-		const auto name = (range_sense == OrderType::ASCENDING) ? "-" : "+";
-		end_type = BindRangeExpression(context, name, window.end_expr, window.orders[0].expression);
+		const auto range_name = (range_sense == OrderType::ASCENDING) ? "-" : "+";
+		end_type = BindRangeExpression(context, range_name, window.end_expr, window.orders[0].expression);
+
 	} else if (window.end == WindowBoundary::EXPR_FOLLOWING_RANGE) {
 		D_ASSERT(window.orders.size() == 1);
 		range_sense = config.ResolveOrder(window.orders[0].type);
-		const auto name = (range_sense == OrderType::ASCENDING) ? "+" : "-";
-		end_type = BindRangeExpression(context, name, window.end_expr, window.orders[0].expression);
+		const auto range_name = (range_sense == OrderType::ASCENDING) ? "+" : "-";
+		end_type = BindRangeExpression(context, range_name, window.end_expr, window.orders[0].expression);
 	}
 
 	// Cast ORDER and boundary expressions to the same type
@@ -307,7 +340,6 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	}
 
 	result->filter_expr = CastWindowExpression(window.filter_expr, LogicalType::BOOLEAN);
-
 	result->start_expr = CastWindowExpression(window.start_expr, start_type);
 	result->end_expr = CastWindowExpression(window.end_expr, end_type);
 	result->offset_expr = CastWindowExpression(window.offset_expr, LogicalType::BIGINT);

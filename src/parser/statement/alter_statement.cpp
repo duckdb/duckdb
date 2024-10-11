@@ -12,4 +12,8 @@ unique_ptr<SQLStatement> AlterStatement::Copy() const {
 	return unique_ptr<AlterStatement>(new AlterStatement(*this));
 }
 
+string AlterStatement::ToString() const {
+	return info->ToString();
+}
+
 } // namespace duckdb

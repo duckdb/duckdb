@@ -3,6 +3,9 @@
 # group: [window]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE tenk1d (
         unique1	        int4,
 		four		int4,

@@ -93,6 +93,7 @@
             "datetime.date",
             "datetime.time",
             "datetime.timedelta",
+            "datetime.timezone",
             "datetime.datetime"
         ]
     },
@@ -135,7 +136,8 @@
         "name": "datetime",
         "children": [
             "datetime.datetime.min",
-            "datetime.datetime.max"
+            "datetime.datetime.max",
+            "datetime.datetime.combine"
         ]
     },
     "datetime.datetime.min": {
@@ -148,6 +150,18 @@
         "type": "attribute",
         "full_path": "datetime.datetime.max",
         "name": "max",
+        "children": []
+    },
+    "datetime.datetime.combine": {
+        "type": "attribute",
+        "full_path": "datetime.datetime.combine",
+        "name": "combine",
+        "children": []
+    },
+    "datetime.timezone": {
+        "type": "attribute",
+        "full_path": "datetime.timezone",
+        "name": "timezone",
         "children": []
     },
     "decimal": {
@@ -185,13 +199,20 @@
         "full_path": "IPython.display",
         "name": "display",
         "children": [
-            "IPython.display.display"
+            "IPython.display.display",
+            "IPython.display.HTML"
         ]
     },
     "IPython.display.display": {
         "type": "attribute",
         "full_path": "IPython.display.display",
         "name": "display",
+        "children": []
+    },
+    "IPython.display.HTML": {
+        "type": "attribute",
+        "full_path": "IPython.display.HTML",
+        "name": "HTML",
         "children": []
     },
     "ipywidgets": {
@@ -214,7 +235,8 @@
         "full_path": "numpy",
         "name": "numpy",
         "children": [
-			"numpy.core",
+            "numpy.core",
+            "numpy.ma",
             "numpy.ndarray",
             "numpy.datetime64",
             "numpy.generic",
@@ -237,7 +259,8 @@
             "numpy.csingle",
             "numpy.cdouble",
             "numpy.clongdouble"
-        ]
+        ],
+        "required": false
     },
     "numpy.core": {
         "type": "attribute",
@@ -251,6 +274,20 @@
         "type": "attribute",
         "full_path": "numpy.core.multiarray",
         "name": "multiarray",
+        "children": []
+    },
+    "numpy.ma": {
+        "type": "attribute",
+        "full_path": "numpy.ma",
+        "name": "ma",
+        "children": [
+            "numpy.ma.masked"
+        ]
+    },
+    "numpy.ma.masked": {
+        "type": "attribute",
+        "full_path": "numpy.ma.masked",
+        "name": "masked",
         "children": []
     },
     "numpy.ndarray": {
@@ -472,7 +509,8 @@
         "name": "types",
         "children": [
             "types.UnionType",
-            "types.GenericAlias"
+            "types.GenericAlias",
+            "types.BuiltinFunctionType"
         ]
     },
     "types.UnionType": {
@@ -485,6 +523,12 @@
         "type": "attribute",
         "full_path": "types.GenericAlias",
         "name": "GenericAlias",
+        "children": []
+    },
+    "types.BuiltinFunctionType": {
+        "type": "attribute",
+        "full_path": "types.BuiltinFunctionType",
+        "name": "BuiltinFunctionType",
         "children": []
     },
     "typing": {
@@ -513,6 +557,35 @@
         "type": "attribute",
         "full_path": "uuid.UUID",
         "name": "UUID",
+        "children": []
+    },
+    "collections": {
+        "type": "module",
+        "full_path": "collections",
+        "name": "collections",
+        "children": [
+            "collections.abc"
+        ]
+    },
+    "collections.abc": {
+        "type": "module",
+        "full_path": "collections.abc",
+        "name": "abc",
+        "children": [
+            "collections.abc.Iterable",
+            "collections.abc.Mapping"
+        ]
+    },
+    "collections.abc.Iterable": {
+        "type": "attribute",
+        "full_path": "collections.abc.Iterable",
+        "name": "Iterable",
+        "children": []
+    },
+    "collections.abc.Mapping": {
+        "type": "attribute",
+        "full_path": "collections.abc.Mapping",
+        "name": "Mapping",
         "children": []
     }
 }

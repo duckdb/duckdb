@@ -37,6 +37,7 @@ from .exceptions.base import (  # noqa: F401
     SparkUpgradeException,
     PySparkTypeError,
     PySparkValueError,
+    PySparkIndexError,
     PySparkAttributeError,
     PySparkRuntimeError,
     PySparkAssertionError,

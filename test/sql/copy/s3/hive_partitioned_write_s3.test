@@ -83,8 +83,13 @@ prefix-1	3	7
 prefix-1	0	9
 
 # Test partitioning by all
-statement ok
+statement error
 COPY test TO 's3://test-bucket/partitioned3' (FORMAT PARQUET, PARTITION_BY '*', OVERWRITE_OR_IGNORE TRUE);
+----
+No column to write as all columns are specified as partition columns
+
+statement ok
+COPY test TO 's3://test-bucket/partitioned3' (FORMAT PARQUET, PARTITION_BY '*', OVERWRITE_OR_IGNORE TRUE, WRITE_PARTITION_COLUMNS 1);
 
 query I
 SELECT min(value2_col) as min_val
@@ -157,7 +162,7 @@ Not implemented Error: Can't combine PER_THREAD_OUTPUT and PARTITION_BY for COPY
 
 # partitioning csv files is also a thing
 statement ok
-COPY test TO 's3://test-bucket/partitioned7' (FORMAT CSV, HEADER TRUE, PARTITION_BY part_col, OVERWRITE_OR_IGNORE TRUE);
+COPY test TO 's3://test-bucket/partitioned7' (FORMAT CSV, PARTITION_BY part_col, OVERWRITE_OR_IGNORE TRUE);
 
 query III
 SELECT part_col, value_col, value2_col FROM 's3://test-bucket/partitioned7/part_col=0/*.csv' ORDER BY value2_col;

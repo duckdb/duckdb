@@ -503,3 +503,17 @@ query I
 SELECT origin + (dst2 - origin) FROM london;
 ----
 2000-10-29 03:00:00+00
+
+# Months before days
+statement ok
+set timezone = 'Asia/Kolkata';
+
+query I
+select ('1920-12-12 01:02:02+05:30'::timestamptz + interval '-1 month 400 day')::timestamptz as r;
+----
+1921-12-17 01:02:02+05:30
+
+query I
+select ('1920-12-12 01:02:02+05:30'::timestamptz + interval '1 month -400 day')::timestamptz as r;
+----
+1919-12-09 01:02:02+05:30

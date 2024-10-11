@@ -1,7 +1,7 @@
-#include "duckdb/common/platform.h"
+#include "duckdb/common/platform.hpp"
 #include <iostream>
 
 int main() {
-	std::cout << duckdb::DuckDBPlatform() << "\n";
+	std::cout << duckdb::DuckDBPlatform();
 	return 0;
 }

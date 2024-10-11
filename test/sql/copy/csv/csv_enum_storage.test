@@ -15,7 +15,7 @@ CREATE TYPE bla AS ENUM ('Y', 'N');
 restart
 
 query I
-select * from read_csv_auto('data/csv/response.csv')
+select * from read_csv_auto('data/csv/response.csv', header = 0)
 ----
 Y
 Y
@@ -32,7 +32,7 @@ NULL
 
 
 query I
-FROM read_csv_auto('data/csv/response.csv', types={'column0': 'bla'}, nullstr = 'Null');
+FROM read_csv_auto('data/csv/response.csv', types={'column0': 'bla'}, nullstr = 'Null', header = 0);
 ----
 Y
 Y

@@ -7,7 +7,16 @@ IndexCatalogEntry::IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
       index_type(info.index_type), index_constraint_type(info.constraint_type), column_ids(info.column_ids) {
 
 	this->temporary = info.temporary;
+	this->dependencies = info.dependencies;
 	this->comment = info.comment;
+	for (auto &expr : expressions) {
+		D_ASSERT(expr);
+		expressions.push_back(expr->Copy());
+	}
+	for (auto &parsed_expr : info.parsed_expressions) {
+		D_ASSERT(parsed_expr);
+		parsed_expressions.push_back(parsed_expr->Copy());
+	}
 }
 
 unique_ptr<CreateInfo> IndexCatalogEntry::GetInfo() const {
@@ -21,6 +30,7 @@ unique_ptr<CreateInfo> IndexCatalogEntry::GetInfo() const {
 	result->index_type = index_type;
 	result->constraint_type = index_constraint_type;
 	result->column_ids = column_ids;
+	result->dependencies = dependencies;
 
 	for (auto &expr : expressions) {
 		result->expressions.push_back(expr->Copy());
@@ -30,26 +40,22 @@ unique_ptr<CreateInfo> IndexCatalogEntry::GetInfo() const {
 	}
 
 	result->comment = comment;
+	result->tags = tags;
 
 	return std::move(result);
 }
 
 string IndexCatalogEntry::ToSQL() const {
-	if (sql.empty()) {
-		return sql;
-	}
-	if (sql.back() != ';') {
-		return sql + ";";
-	}
-	return sql;
+	auto info = GetInfo();
+	return info->ToString();
 }
 
-bool IndexCatalogEntry::IsUnique() {
+bool IndexCatalogEntry::IsUnique() const {
 	return (index_constraint_type == IndexConstraintType::UNIQUE ||
 	        index_constraint_type == IndexConstraintType::PRIMARY);
 }
 
-bool IndexCatalogEntry::IsPrimary() {
+bool IndexCatalogEntry::IsPrimary() const {
 	return (index_constraint_type == IndexConstraintType::PRIMARY);
 }
 

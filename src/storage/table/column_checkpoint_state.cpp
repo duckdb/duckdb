@@ -56,7 +56,6 @@ void PartialBlockForCheckpoint::Flush(const idx_t free_space_left) {
 
 	for (idx_t i = 0; i < segments.size(); i++) {
 		auto &segment = segments[i];
-		segment.data.IncrementVersion();
 		if (i == 0) {
 			// the first segment is converted to persistent - this writes the data for ALL segments to disk
 			D_ASSERT(segment.offset_in_block == 0);
@@ -97,7 +96,7 @@ void PartialBlockForCheckpoint::Merge(PartialBlock &other_p, idx_t offset, idx_t
 
 	// move over the segments
 	for (auto &segment : other.segments) {
-		AddSegmentToTail(segment.data, segment.segment, segment.offset_in_block + offset);
+		AddSegmentToTail(segment.data, segment.segment, NumericCast<uint32_t>(segment.offset_in_block + offset));
 	}
 
 	other.Clear();
@@ -114,7 +113,9 @@ void PartialBlockForCheckpoint::Clear() {
 }
 
 void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_t segment_size) {
-	D_ASSERT(segment_size <= Storage::BLOCK_SIZE);
+	auto block_size = partial_block_manager.GetBlockManager().GetBlockSize();
+	D_ASSERT(segment_size <= block_size);
+
 	auto tuple_count = segment->count.load();
 	if (tuple_count == 0) { // LCOV_EXCL_START
 		return;
@@ -134,7 +135,8 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 		partial_block_lock = partial_block_manager.GetLock();
 
 		// non-constant block
-		PartialBlockAllocation allocation = partial_block_manager.GetBlockAllocation(segment_size);
+		PartialBlockAllocation allocation =
+		    partial_block_manager.GetBlockAllocation(NumericCast<uint32_t>(segment_size));
 		block_id = allocation.state.block_id;
 		offset_in_block = allocation.state.offset;
 
@@ -151,11 +153,11 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 			pstate.AddSegmentToTail(column_data, *segment, offset_in_block);
 		} else {
 			// Create a new block for future reuse.
-			if (segment->SegmentSize() != Storage::BLOCK_SIZE) {
+			if (segment->SegmentSize() != block_size) {
 				// the segment is smaller than the block size
 				// allocate a new block and copy the data over
-				D_ASSERT(segment->SegmentSize() < Storage::BLOCK_SIZE);
-				segment->Resize(Storage::BLOCK_SIZE);
+				D_ASSERT(segment->SegmentSize() < block_size);
+				segment->Resize(block_size);
 			}
 			D_ASSERT(offset_in_block == 0);
 			allocation.partial_block = make_uniq<PartialBlockForCheckpoint>(column_data, *segment, allocation.state,
@@ -192,8 +194,10 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 	data_pointers.push_back(std::move(data_pointer));
 }
 
-void ColumnCheckpointState::WriteDataPointers(RowGroupWriter &writer, Serializer &serializer) {
-	writer.WriteColumnDataPointers(*this, serializer);
+PersistentColumnData ColumnCheckpointState::ToPersistentData() {
+	PersistentColumnData data(column_data.type.InternalType());
+	data.pointers = std::move(data_pointers);
+	return data;
 }
 
 } // namespace duckdb

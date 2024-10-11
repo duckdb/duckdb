@@ -1,22 +1,22 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/persistent/physical_batch_copy_to_file.hpp
+// duckdb/execution/operator/persistent/physical_fixed_batch_copy.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/parser/parsed_data/copy_info.hpp"
-#include "duckdb/function/copy_function.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/filename_pattern.hpp"
+#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/function/copy_function.hpp"
+#include "duckdb/parser/parsed_data/copy_info.hpp"
 
 namespace duckdb {
+struct FixedRawBatchData;
 
-//! Copy the contents of a query into a table
 class PhysicalBatchCopyToFile : public PhysicalOperator {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::BATCH_COPY_TO_FILE;
@@ -29,6 +29,7 @@ public:
 	unique_ptr<FunctionData> bind_data;
 	string file_path;
 	bool use_tmp_file;
+	CopyFunctionReturnType return_type;
 
 public:
 	// Source interface
@@ -60,22 +61,15 @@ public:
 		return true;
 	}
 
-private:
-	void PrepareBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t batch_index,
-	                      unique_ptr<ColumnDataCollection> collection) const;
-	void FlushBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index) const;
+public:
+	void AddLocalBatch(ClientContext &context, GlobalSinkState &gstate, LocalSinkState &state) const;
+	void AddRawBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t batch_index,
+	                     unique_ptr<FixedRawBatchData> collection) const;
+	void RepartitionBatches(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index,
+	                        bool final = false) const;
+	void FlushBatchData(ClientContext &context, GlobalSinkState &gstate_p) const;
+	bool ExecuteTask(ClientContext &context, GlobalSinkState &gstate_p) const;
+	void ExecuteTasks(ClientContext &context, GlobalSinkState &gstate_p) const;
 	SinkFinalizeType FinalFlush(ClientContext &context, GlobalSinkState &gstate_p) const;
 };
-
-struct ActiveFlushGuard {
-	explicit ActiveFlushGuard(atomic<bool> &bool_value_p) : bool_value(bool_value_p) {
-		bool_value = true;
-	}
-	~ActiveFlushGuard() {
-		bool_value = false;
-	}
-
-	atomic<bool> &bool_value;
-};
-
 } // namespace duckdb

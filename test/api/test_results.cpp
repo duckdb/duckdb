@@ -158,12 +158,7 @@ TEST_CASE("Error in streaming result after initial query", "[api][.]") {
 
 	// now create a streaming result
 	auto result = con.SendQuery("SELECT CAST(v AS INTEGER) FROM strings");
-	REQUIRE_NO_FAIL(*result);
-	auto chunk = result->Fetch();
-	REQUIRE(!chunk);
-	REQUIRE(result->HasError());
-	auto str = result->ToString();
-	REQUIRE(!str.empty());
+	REQUIRE_FAIL(result);
 }
 
 TEST_CASE("Test UUID", "[api][uuid]") {
@@ -200,7 +195,10 @@ TEST_CASE("Test ARRAY_AGG with ORDER BY", "[api][array_agg]") {
 }
 
 TEST_CASE("Issue #9417", "[api][.]") {
-	DuckDB db("issue_replication.db");
+	DBConfig config;
+	config.options.allow_unsigned_extensions = true;
+
+	DuckDB db(TestCreatePath("issue_replication.db"), &config);
 	Connection con(db);
 	auto result = con.SendQuery("with max_period as ("
 	                            "            select max(reporting_date) as max_record\n"

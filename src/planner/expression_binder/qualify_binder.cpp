@@ -9,44 +9,29 @@
 
 namespace duckdb {
 
-QualifyBinder::QualifyBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info,
-                             case_insensitive_map_t<idx_t> &alias_map)
-    : BaseSelectBinder(binder, context, node, info), column_alias_binder(node, alias_map) {
+QualifyBinder::QualifyBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info)
+    : BaseSelectBinder(binder, context, node, info), column_alias_binder(node.bind_state) {
 	target_type = LogicalType(LogicalTypeId::BOOLEAN);
 }
 
 BindResult QualifyBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = expr_ptr->Cast<ColumnRefExpression>();
-	auto result = duckdb::BaseSelectBinder::BindExpression(expr_ptr, depth);
+	auto result = duckdb::BaseSelectBinder::BindColumnRef(expr_ptr, depth, root_expression);
 	if (!result.HasError()) {
 		return result;
 	}
 
+	// Keep the original column reference's string to return a meaningful error message.
+	auto expr_string = expr_ptr->Cast<ColumnRefExpression>().ToString();
+
+	// Try to bind as an alias.
 	BindResult alias_result;
-	auto found_alias = column_alias_binder.BindAlias(*this, expr, depth, root_expression, alias_result);
+	auto found_alias = column_alias_binder.BindAlias(*this, expr_ptr, depth, root_expression, alias_result);
 	if (found_alias) {
 		return alias_result;
 	}
 
-	return BindResult(StringUtil::Format("Referenced column %s not found in FROM clause and can't find in alias map.",
-	                                     expr.ToString()));
-}
-
-BindResult QualifyBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = *expr_ptr;
-	// check if the expression binds to one of the groups
-	auto group_index = TryBindGroup(expr, depth);
-	if (group_index != DConstants::INVALID_INDEX) {
-		return BindGroup(expr, depth, group_index);
-	}
-	switch (expr.expression_class) {
-	case ExpressionClass::WINDOW:
-		return BindWindow(expr.Cast<WindowExpression>(), depth);
-	case ExpressionClass::COLUMN_REF:
-		return BindColumnRef(expr_ptr, depth, root_expression);
-	default:
-		return duckdb::BaseSelectBinder::BindExpression(expr_ptr, depth);
-	}
+	return BindResult(BinderException(
+	    *expr_ptr, "Referenced column %s not found in FROM clause and can't find in alias map.", expr_string));
 }
 
 } // namespace duckdb

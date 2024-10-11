@@ -1,7 +1,7 @@
+import platform
 import pandas as pd
 import duckdb
 import datetime
-import numpy as np
 import pytest
 
 
@@ -47,6 +47,7 @@ class TestTimedelta(object):
     @pytest.mark.parametrize('minutes', [0, 60])
     @pytest.mark.parametrize('hours', [0, 24])
     @pytest.mark.parametrize('weeks', [0, 51])
+    @pytest.mark.skipif(platform.system() == "Emscripten", reason="Bind parameters are broken when running on Pyodide")
     def test_timedelta_coverage(self, duckdb_cursor, days, seconds, microseconds, milliseconds, minutes, hours, weeks):
         def create_duck_interval(days, seconds, microseconds, milliseconds, minutes, hours, weeks) -> str:
             instant = f"""

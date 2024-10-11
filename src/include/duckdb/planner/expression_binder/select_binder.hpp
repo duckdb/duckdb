@@ -15,22 +15,18 @@ namespace duckdb {
 //! The SELECT binder is responsible for binding an expression within the SELECT clause of a SQL statement
 class SelectBinder : public BaseSelectBinder {
 public:
-	SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info,
-	             case_insensitive_map_t<idx_t> alias_map);
 	SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info);
 
-	bool HasExpandedExpressions() {
-		return !expanded_expressions.empty();
-	}
-	vector<unique_ptr<Expression>> &ExpandedExpressions() {
-		return expanded_expressions;
-	}
+protected:
+	void ThrowIfUnnestInLambda(const ColumnBinding &column_binding) override;
+	BindResult BindUnnest(FunctionExpression &function, idx_t depth, bool root_expression) override;
+	BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override;
+
+	bool QualifyColumnAlias(const ColumnRefExpression &colref) override;
+	unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name) override;
 
 protected:
-	BindResult BindUnnest(FunctionExpression &function, idx_t depth, bool root_expression) override;
-
 	idx_t unnest_level = 0;
-	vector<unique_ptr<Expression>> expanded_expressions;
 };
 
 } // namespace duckdb

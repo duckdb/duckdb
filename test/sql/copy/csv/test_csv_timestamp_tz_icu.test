@@ -1,0 +1,24 @@
+# name: test/sql/copy/csv/test_csv_timestamp_tz_icu.test
+# description: Test CSV with timestamp_tz and timestampformat
+# group: [csv]
+
+statement ok
+pragma enable_verification
+
+require icu
+
+statement ok
+SET Calendar = 'gregorian';
+
+statement ok
+SET TimeZone = 'America/Los_Angeles';
+
+statement ok
+COPY (
+    SELECT make_timestamptz(1713193669561000) AS t
+) TO '__TEST_DIR__/timestamp-format.csv' (FORMAT CSV, timestampformat '%x %X.%g%z');
+
+query I
+select * from read_csv('__TEST_DIR__/timestamp-format.csv', all_varchar=true)
+----
+2024-04-15 08:07:49.561-07

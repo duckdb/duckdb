@@ -22,7 +22,7 @@ enum class TaskExecutionMode : uint8_t { PROCESS_ALL, PROCESS_PARTIAL };
 enum class TaskExecutionResult : uint8_t { TASK_FINISHED, TASK_NOT_FINISHED, TASK_ERROR, TASK_BLOCKED };
 
 //! Generic parallel task
-class Task : public std::enable_shared_from_this<Task> {
+class Task : public enable_shared_from_this<Task> {
 public:
 	virtual ~Task() {
 	}
@@ -50,26 +50,6 @@ public:
 	virtual bool TaskBlockedOnResult() const {
 		return false;
 	}
-};
-
-//! Execute a task within an executor, including exception handling
-//! This should be used within queries
-class ExecutorTask : public Task {
-public:
-	ExecutorTask(Executor &executor);
-	ExecutorTask(ClientContext &context);
-	virtual ~ExecutorTask();
-
-public:
-	void Deschedule() override;
-	void Reschedule() override;
-
-public:
-	Executor &executor;
-
-public:
-	virtual TaskExecutionResult ExecuteTask(TaskExecutionMode mode) = 0;
-	TaskExecutionResult Execute(TaskExecutionMode mode) override;
 };
 
 } // namespace duckdb

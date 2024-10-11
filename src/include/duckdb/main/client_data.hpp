@@ -26,6 +26,7 @@ class HTTPState;
 class QueryProfiler;
 class PreparedStatementData;
 class SchemaCatalogEntry;
+class HTTPLogger;
 struct RandomEngine;
 
 struct ClientData {
@@ -34,6 +35,9 @@ struct ClientData {
 
 	//! Query profiler
 	shared_ptr<QueryProfiler> profiler;
+
+	//! HTTP logger
+	shared_ptr<HTTPLogger> http_logger;
 
 	//! The set of temporary objects that belong to this client
 	shared_ptr<AttachedDatabase> temporary_objects;
@@ -64,6 +68,7 @@ struct ClientData {
 
 public:
 	DUCKDB_API static ClientData &Get(ClientContext &context);
+	DUCKDB_API static const ClientData &Get(const ClientContext &context);
 };
 
 } // namespace duckdb

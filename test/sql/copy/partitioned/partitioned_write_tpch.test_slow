@@ -1,0 +1,73 @@
+# name: test/sql/copy/partitioned/partitioned_write_tpch.test_slow
+# description: TPC-H test for hive partitioned write
+# group: [partitioned]
+
+require parquet
+
+require tpch
+
+statement ok
+CALL dbgen(sf=1);
+
+# test writing with a very low partition threshold
+statement ok
+SET partitioned_write_flush_threshold=10000;
+
+# write lineitem partitioned by l_returnflag and l_linestatus
+statement ok
+COPY lineitem TO  '__TEST_DIR__/lineitem_partitioned_parquet' (FORMAT PARQUET, PARTITION_BY (l_returnflag, l_linestatus));
+
+# write to CSV as well
+statement ok
+COPY lineitem TO  '__TEST_DIR__/lineitem_partitioned_csv' (FORMAT CSV, PARTITION_BY (l_returnflag, l_linestatus));
+
+statement ok
+DROP TABLE lineitem
+
+statement ok
+CREATE VIEW lineitem AS FROM '__TEST_DIR__/lineitem_partitioned_parquet/**/*.parquet'
+
+# now run tpc-h - results should be the same
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+
+endloop
+
+statement ok
+DROP VIEW lineitem
+
+# try the CSV next - but copy it into a regular table
+statement ok
+CREATE TABLE lineitem AS FROM read_csv('__TEST_DIR__/lineitem_partitioned_csv/**/*.csv')
+
+# now run tpc-h - results should be the same
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+
+endloop

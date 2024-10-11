@@ -11,6 +11,7 @@
 #include "duckdb/common/vector.hpp"
 #include <list>
 #include "duckdb/common/arrow/arrow_appender.hpp"
+#include "duckdb/common/arrow/schema_metadata.hpp"
 
 namespace duckdb {
 
@@ -43,6 +44,8 @@ struct DuckDBArrowSchemaHolder {
 	//! This holds strings created to represent decimal types
 	vector<unsafe_unique_array<char>> owned_type_names;
 	vector<unsafe_unique_array<char>> owned_column_names;
+	//! This holds any values created for metadata info
+	vector<unsafe_unique_array<char>> metadata_info;
 };
 
 static void ReleaseDuckDBArrowSchema(ArrowSchema *schema) {
@@ -121,26 +124,88 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::FLOAT:
 		child.format = "f";
 		break;
-	case LogicalTypeId::HUGEINT:
-		child.format = "d:38,0";
+	case LogicalTypeId::HUGEINT: {
+		if (options.arrow_lossless_conversion) {
+			child.format = "w:16";
+			auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("duckdb.hugeint");
+			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+			child.metadata = root_holder.metadata_info.back().get();
+		} else {
+			child.format = "d:38,0";
+		}
 		break;
+	}
+	case LogicalTypeId::UHUGEINT: {
+		child.format = "w:16";
+		auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("duckdb.uhugeint");
+		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+		child.metadata = root_holder.metadata_info.back().get();
+		break;
+	}
+	case LogicalTypeId::VARINT: {
+		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+			child.format = "Z";
+		} else {
+			child.format = "z";
+		}
+		auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("duckdb.varint");
+		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+		child.metadata = root_holder.metadata_info.back().get();
+		break;
+	}
 	case LogicalTypeId::DOUBLE:
 		child.format = "g";
 		break;
-	case LogicalTypeId::UUID:
-	case LogicalTypeId::VARCHAR:
-		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
-			child.format = "U";
+	case LogicalTypeId::UUID: {
+		if (options.arrow_lossless_conversion) {
+			// This is a canonical extension, hence needs the "arrow." prefix
+			child.format = "w:16";
+			auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("arrow.uuid");
+			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+			child.metadata = root_holder.metadata_info.back().get();
 		} else {
-			child.format = "u";
+			if (options.produce_arrow_string_view) {
+				child.format = "vu";
+			} else {
+				if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+					child.format = "U";
+				} else {
+					child.format = "u";
+				}
+			}
+		}
+		break;
+	}
+	case LogicalTypeId::VARCHAR:
+		if (type.IsJSONType() && options.arrow_lossless_conversion) {
+			auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("arrow.json");
+			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+			child.metadata = root_holder.metadata_info.back().get();
+		}
+		if (options.produce_arrow_string_view) {
+			child.format = "vu";
+		} else {
+			if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+				child.format = "U";
+			} else {
+				child.format = "u";
+			}
 		}
 		break;
 	case LogicalTypeId::DATE:
 		child.format = "tdD";
 		break;
-#ifdef DUCKDB_WASM
-	case LogicalTypeId::TIME_TZ:
-#endif
+	case LogicalTypeId::TIME_TZ: {
+		if (options.arrow_lossless_conversion) {
+			child.format = "w:8";
+			auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("duckdb.time_tz");
+			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+			child.metadata = root_holder.metadata_info.back().get();
+		} else {
+			child.format = "ttu";
+		}
+		break;
+	}
 	case LogicalTypeId::TIME:
 		child.format = "ttu";
 		break;
@@ -178,19 +243,38 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	}
 	case LogicalTypeId::BLOB:
-	case LogicalTypeId::BIT: {
 		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			child.format = "Z";
 		} else {
 			child.format = "z";
 		}
 		break;
+	case LogicalTypeId::BIT: {
+		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+			child.format = "Z";
+		} else {
+			child.format = "z";
+		}
+		if (options.arrow_lossless_conversion) {
+			auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("duckdb.bit");
+			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+			child.metadata = root_holder.metadata_info.back().get();
+		}
+		break;
 	}
 	case LogicalTypeId::LIST: {
-		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
-			child.format = "+L";
+		if (options.arrow_use_list_view) {
+			if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+				child.format = "+vL";
+			} else {
+				child.format = "+vl";
+			}
 		} else {
-			child.format = "+l";
+			if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+				child.format = "+L";
+			} else {
+				child.format = "+l";
+			}
 		}
 		child.n_children = 1;
 		root_holder.nested_children.emplace_back();
@@ -206,7 +290,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::STRUCT: {
 		child.format = "+s";
 		auto &child_types = StructType::GetChildTypes(type);
-		child.n_children = child_types.size();
+		child.n_children = NumericCast<int64_t>(child_types.size());
 		root_holder.nested_children.emplace_back();
 		root_holder.nested_children.back().resize(child_types.size());
 		root_holder.nested_children_ptr.emplace_back();
@@ -226,6 +310,23 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		}
 		break;
 	}
+	case LogicalTypeId::ARRAY: {
+		auto array_size = ArrayType::GetSize(type);
+		auto &child_type = ArrayType::GetChildType(type);
+		auto format = "+w:" + to_string(array_size);
+		root_holder.owned_type_names.push_back(AddName(format));
+		child.format = root_holder.owned_type_names.back().get();
+
+		child.n_children = 1;
+		root_holder.nested_children.emplace_back();
+		root_holder.nested_children.back().resize(1);
+		root_holder.nested_children_ptr.emplace_back();
+		root_holder.nested_children_ptr.back().push_back(&root_holder.nested_children.back()[0]);
+		InitializeChild(root_holder.nested_children.back()[0], root_holder);
+		child.children = &root_holder.nested_children_ptr.back()[0];
+		SetArrowFormat(root_holder, **child.children, child_type, options);
+		break;
+	}
 	case LogicalTypeId::MAP: {
 		SetArrowMapFormat(root_holder, child, type, options);
 		break;
@@ -234,7 +335,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		std::string format = "+us:";
 
 		auto &child_types = UnionType::CopyMemberTypes(type);
-		child.n_children = child_types.size();
+		child.n_children = NumericCast<int64_t>(child_types.size());
 		root_holder.nested_children.emplace_back();
 		root_holder.nested_children.back().resize(child_types.size());
 		root_holder.nested_children_ptr.emplace_back();
@@ -306,7 +407,7 @@ void ArrowConverter::ToArrowSchema(ArrowSchema *out_schema, const vector<Logical
 		root_holder->children_ptrs[i] = &root_holder->children[i];
 	}
 	out_schema->children = root_holder->children_ptrs.data();
-	out_schema->n_children = column_count;
+	out_schema->n_children = NumericCast<int64_t>(column_count);
 
 	// Store the schema
 	out_schema->format = "+s"; // struct apparently

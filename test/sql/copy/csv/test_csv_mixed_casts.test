@@ -1,0 +1,139 @@
+# name: test/sql/copy/csv/test_csv_mixed_casts.test
+# description: Try mixed casts that have unique CSVCast implementations with ignore_errors
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+# Try Date
+query II
+FROM read_csv(
+    'data/csv/mixed_dates.csv',
+    auto_detect = false,
+    header = true,
+     columns = {
+      'A': 'INTEGER',
+      'B': 'DATE',
+    },
+    dateformat = '%m/%d/%Y',
+    ignore_errors = true
+);
+----
+3	2024-03-10
+
+# Try Timestamp
+query II
+FROM read_csv(
+    'data/csv/mixed_timestamps.csv',
+    auto_detect = false,
+    header = true,
+     columns = {
+      'A': 'INTEGER',
+      'B': 'TIMESTAMP',
+    },
+    timestampformat = '%m/%d/%Y %H:%M:%S',
+    ignore_errors = true
+);
+----
+3	2024-03-10 01:25:58
+
+# Try Float
+query II
+FROM read_csv(
+    'data/csv/mixed_double.csv',
+    auto_detect = false,
+    header = true,
+     columns = {
+      'A': 'INTEGER',
+      'B': 'FLOAT',
+    },
+    ignore_errors = true
+);
+----
+3	5.0
+4	5.555
+
+# Try Double
+query II
+FROM read_csv(
+    'data/csv/mixed_double.csv',
+    auto_detect = false,
+    header = true,
+     columns = {
+      'A': 'INTEGER',
+      'B': 'DOUBLE',
+    },
+    ignore_errors = true
+);
+----
+3	5.0
+4	5.555
+
+# Try Decimal
+query II
+FROM read_csv(
+    'data/csv/mixed_double.csv',
+    auto_detect = false,
+    header = true,
+     columns = {
+      'A': 'INTEGER',
+      'B': 'DECIMAL',
+    },
+    ignore_errors = true
+);
+----
+3	5.0
+4	5.555
+
+
+query II
+FROM read_csv(
+    'data/csv/mixed_decimal.csv',
+    auto_detect = false,
+    header = true,
+    delim = ';',
+     columns = {
+      'A': 'INTEGER',
+      'B': 'DECIMAL',
+    },
+    ignore_errors = true
+);
+----
+3	5.0
+4	5.555
+
+query II
+FROM read_csv(
+    'data/csv/mixed_decimal.csv',
+    auto_detect = false,
+    header = true,
+    delim = ';',
+    decimal_separator = ',',
+     columns = {
+      'A': 'INTEGER',
+      'B': 'DECIMAL',
+    },
+    ignore_errors = true
+);
+----
+1	5.500
+2	5.500
+3	5.000
+5	5.500
+
+statement error
+FROM read_csv(
+    'data/csv/mixed_decimal.csv',
+    auto_detect = false,
+    header = true,
+    delim = '|',
+    decimal_separator = ';',
+     columns = {
+      'A': 'INTEGER',
+      'B': 'DECIMAL',
+    },
+    ignore_errors = true
+);
+----
+Unsupported parameter for DECIMAL_SEPARATOR: should be '.' or ','
+

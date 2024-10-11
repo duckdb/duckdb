@@ -167,7 +167,8 @@ ScalarFunctionSet AbsOperatorFun::GetFunctions() {
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
 		case LogicalTypeId::INTEGER:
-		case LogicalTypeId::BIGINT: {
+		case LogicalTypeId::BIGINT:
+		case LogicalTypeId::HUGEINT: {
 			ScalarFunction func({type}, type, ScalarFunction::GetScalarUnaryFunction<TryAbsOperator>(type));
 			func.statistics = PropagateAbsStats;
 			abs.AddFunction(func);
@@ -344,14 +345,14 @@ unique_ptr<FunctionData> BindGenericRoundFunctionDecimal(ClientContext &context,
 struct CeilDecimalOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
-		T power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale];
+		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale]);
 		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
 			if (input <= 0) {
 				// below 0 we floor the number (e.g. -10.5 -> -10)
-				return input / power_of_ten;
+				return UnsafeNumericCast<T>(input / power_of_ten);
 			} else {
 				// above 0 we ceil the number
-				return ((input - 1) / power_of_ten) + 1;
+				return UnsafeNumericCast<T>(((input - 1) / power_of_ten) + 1);
 			}
 		});
 	}
@@ -397,14 +398,14 @@ struct FloorOperator {
 struct FloorDecimalOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
-		T power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale];
+		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale]);
 		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
 			if (input < 0) {
 				// below 0 we ceil the number (e.g. -10.5 -> -11)
-				return ((input + 1) / power_of_ten) - 1;
+				return UnsafeNumericCast<T>(((input + 1) / power_of_ten) - 1);
 			} else {
 				// above 0 we floor the number
-				return input / power_of_ten;
+				return UnsafeNumericCast<T>(input / power_of_ten);
 			}
 		});
 	}
@@ -451,10 +452,10 @@ struct TruncOperator {
 struct TruncDecimalOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
-		T power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale];
+		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale]);
 		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
 			//	Always floor
-			return (input / power_of_ten);
+			return UnsafeNumericCast<T>((input / power_of_ten));
 		});
 	}
 };
@@ -515,7 +516,7 @@ struct RoundOperatorPrecision {
 				return input;
 			}
 		}
-		return rounded_value;
+		return LossyNumericCast<TR>(rounded_value);
 	}
 };
 
@@ -526,14 +527,14 @@ struct RoundOperator {
 		if (std::isinf(rounded_value) || std::isnan(rounded_value)) {
 			return input;
 		}
-		return rounded_value;
+		return LossyNumericCast<TR>(rounded_value);
 	}
 };
 
 struct RoundDecimalOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
-		T power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale];
+		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale]);
 		T addition = power_of_ten / 2;
 		// regular round rounds towards the nearest number
 		// in case of a tie we round away from zero
@@ -548,7 +549,7 @@ struct RoundDecimalOperator {
 			} else {
 				input += addition;
 			}
-			return input / power_of_ten;
+			return UnsafeNumericCast<T>(input / power_of_ten);
 		});
 	}
 };
@@ -575,14 +576,14 @@ static void DecimalRoundNegativePrecisionFunction(DataChunk &input, ExpressionSt
 	auto &info = func_expr.bind_info->Cast<RoundPrecisionFunctionData>();
 	auto source_scale = DecimalType::GetScale(func_expr.children[0]->return_type);
 	auto width = DecimalType::GetWidth(func_expr.children[0]->return_type);
-	if (info.target_scale <= -int32_t(width)) {
+	if (info.target_scale <= -int32_t(width - source_scale)) {
 		// scale too big for width
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		result.SetValue(0, Value::INTEGER(0));
 		return;
 	}
-	T divide_power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale + source_scale];
-	T multiply_power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale];
+	T divide_power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale + source_scale]);
+	T multiply_power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale]);
 	T addition = divide_power_of_ten / 2;
 
 	UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
@@ -591,7 +592,7 @@ static void DecimalRoundNegativePrecisionFunction(DataChunk &input, ExpressionSt
 		} else {
 			input += addition;
 		}
-		return input / divide_power_of_ten * multiply_power_of_ten;
+		return UnsafeNumericCast<T>(input / divide_power_of_ten * multiply_power_of_ten);
 	});
 }
 
@@ -600,7 +601,7 @@ static void DecimalRoundPositivePrecisionFunction(DataChunk &input, ExpressionSt
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<RoundPrecisionFunctionData>();
 	auto source_scale = DecimalType::GetScale(func_expr.children[0]->return_type);
-	T power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[source_scale - info.target_scale];
+	T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[source_scale - info.target_scale]);
 	T addition = power_of_ten / 2;
 	UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
 		if (input < 0) {
@@ -608,7 +609,7 @@ static void DecimalRoundPositivePrecisionFunction(DataChunk &input, ExpressionSt
 		} else {
 			input += addition;
 		}
-		return input / power_of_ten;
+		return UnsafeNumericCast<T>(input / power_of_ten);
 	});
 }
 
@@ -656,7 +657,7 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, Scala
 			bound_function.function = ScalarFunction::NopFunction;
 			target_scale = scale;
 		} else {
-			target_scale = round_value;
+			target_scale = NumericCast<uint8_t>(round_value);
 			switch (decimal_type.InternalType()) {
 			case PhysicalType::INT16:
 				bound_function.function = DecimalRoundPositivePrecisionFunction<int16_t, NumericHelper>;
@@ -1115,6 +1116,9 @@ ScalarFunction Atan2Fun::GetFunction() {
 struct ACos {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
+		if (input < -1 || input > 1) {
+			throw InvalidInputException("ACOS is undefined outside [-1,1]");
+		}
 		return (double)std::acos(input);
 	}
 };
@@ -1122,6 +1126,102 @@ struct ACos {
 ScalarFunction AcosFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                      ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<ACos>>);
+}
+
+//===--------------------------------------------------------------------===//
+// cosh
+//===--------------------------------------------------------------------===//
+struct CoshOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return (double)std::cosh(input);
+	}
+};
+
+ScalarFunction CoshFun::GetFunction() {
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, CoshOperator>);
+}
+
+//===--------------------------------------------------------------------===//
+// acosh
+//===--------------------------------------------------------------------===//
+struct AcoshOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return (double)std::acosh(input);
+	}
+};
+
+ScalarFunction AcoshFun::GetFunction() {
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, AcoshOperator>);
+}
+
+//===--------------------------------------------------------------------===//
+// sinh
+//===--------------------------------------------------------------------===//
+struct SinhOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return (double)std::sinh(input);
+	}
+};
+
+ScalarFunction SinhFun::GetFunction() {
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, SinhOperator>);
+}
+
+//===--------------------------------------------------------------------===//
+// asinh
+//===--------------------------------------------------------------------===//
+struct AsinhOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return (double)std::asinh(input);
+	}
+};
+
+ScalarFunction AsinhFun::GetFunction() {
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, AsinhOperator>);
+}
+
+//===--------------------------------------------------------------------===//
+// tanh
+//===--------------------------------------------------------------------===//
+struct TanhOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return (double)std::tanh(input);
+	}
+};
+
+ScalarFunction TanhFun::GetFunction() {
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, TanhOperator>);
+}
+
+//===--------------------------------------------------------------------===//
+// atanh
+//===--------------------------------------------------------------------===//
+struct AtanhOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		if (input < -1 || input > 1) {
+			throw InvalidInputException("ATANH is undefined outside [-1,1]");
+		}
+		if (input == -1 || input == 1) {
+			return INFINITY;
+		}
+		return (double)std::atanh(input);
+	}
+};
+
+ScalarFunction AtanhFun::GetFunction() {
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, AtanhOperator>);
 }
 
 //===--------------------------------------------------------------------===//

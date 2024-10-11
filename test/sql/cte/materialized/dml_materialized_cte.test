@@ -5,7 +5,7 @@
 statement ok
 PRAGMA enable_verification
 
-require noalternativeverify
+require no_alternative_verify
 
 statement ok
 create table a(i integer);
@@ -13,17 +13,99 @@ create table a(i integer);
 statement ok
 insert into a values (42);
 
-statement error
+query I
 WITH t(x) AS MATERIALIZED (VALUES (42))
 INSERT INTO a (SELECT * FROM t);
 ----
+1
 
-statement error
+query I
 WITH t(x) AS MATERIALIZED (VALUES (42))
 DELETE FROM a WHERE a.i IN (SELECT * FROM t);
 ----
+2
 
-statement error
+statement ok
+insert into a values (42);
+
+query I
 WITH t(x) AS MATERIALIZED (VALUES (42))
 UPDATE a SET i = 0 WHERE a.i IN (SELECT * FROM t);
 ----
+1
+
+query I
+FROM a
+----
+0
+
+statement ok
+insert into a values (2);
+
+query I
+WITH t(x) AS MATERIALIZED (SELECT 1),
+     u(x) AS MATERIALIZED (SELECT 2 UNION ALL SELECT * FROM t)
+DELETE FROM a WHERE a.i IN (SELECT * FROM u);
+----
+1
+
+statement ok
+insert into a values (2);
+
+query I
+WITH t(x) AS MATERIALIZED (SELECT 1),
+     u(x) AS MATERIALIZED (SELECT 2 UNION ALL SELECT * FROM t)
+UPDATE a SET i = 99 WHERE a.i IN (SELECT * FROM u);
+----
+1
+
+query I
+FROM a ORDER BY 1
+----
+0
+99
+
+query I
+WITH t(x) AS MATERIALIZED (SELECT 1),
+     u(x) AS MATERIALIZED (SELECT 2 UNION ALL SELECT * FROM t)
+INSERT INTO a (SELECT * FROM u);
+----
+2
+
+query I
+FROM a ORDER BY 1
+----
+0
+1
+2
+99
+
+statement ok
+insert into a values (42);
+
+query I
+WITH t(x) AS MATERIALIZED (SELECT 1)
+DELETE FROM a WHERE i IN (WITH s(x) AS MATERIALIZED (SELECT x + 41 FROM t) SELECT * FROM t);
+----
+1
+
+query I
+FROM a ORDER BY 1
+----
+0
+2
+42
+99
+
+query I
+WITH t(x) AS MATERIALIZED (SELECT 1)
+DELETE FROM a WHERE i IN (WITH s(x) AS MATERIALIZED (SELECT x + 41 FROM t) SELECT * FROM s);
+----
+1
+
+query I
+FROM a ORDER BY 1
+----
+0
+2
+99

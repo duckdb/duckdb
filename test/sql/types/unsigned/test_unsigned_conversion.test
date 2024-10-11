@@ -30,35 +30,43 @@ SELECT '7'::UBIGINT, '130'::UBIGINT, '18446744073709551615'::UBIGINT
 statement error
 SELECT '265'::UTINYINT
 ----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 statement error
 SELECT '65536'::USMALLINT
 ----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 statement error
 SELECT '4294967296'::UINTEGER
 ----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 statement error
 SELECT '18446744073709551616'::UBIGINT
 ----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 # Negative Numbers
 statement error
 SELECT '-1'::UTINYINT
 ----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 statement error
 SELECT '-1'::USMALLINT
 ----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 statement error
 SELECT '-1'::UINTEGER
 ----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 statement error
 SELECT '-1'::UBIGINT
 ----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 # zero
 query II
@@ -92,14 +100,17 @@ SELECT 42::TINYINT::UBIGINT, 42::SMALLINT::UBIGINT, 42::INTEGER::UBIGINT, 42::BI
 statement error
 SELECT (9223372036854775807)::BIGINT::UTINYINT
 ----
+<REGEX>:Conversion Error.*INT64.*is out of range for.*UINT8.*
 
 statement error
 SELECT (9223372036854775807)::BIGINT::USMALLINT
 ----
+<REGEX>:Conversion Error.*INT64.*is out of range for.*UINT16.*
 
 statement error
 SELECT (9223372036854775807)::BIGINT::UINTEGER
 ----
+<REGEX>:Conversion Error.*INT64.*is out of range for.*UINT32.*
 
 # These should fit though
 query I
@@ -121,18 +132,22 @@ SELECT (9223372036854775808)::UHUGEINT::UBIGINT
 statement error
 SELECT (-42)::TINYINT::UTINYINT
 ----
+<REGEX>:Conversion Error.*INT8.*is out of range for.*UINT8.*
 
 statement error
 SELECT (-42)::TINYINT::USMALLINT
 ----
+<REGEX>:Conversion Error.*INT8.*is out of range for.*UINT16.*
 
 statement error
 SELECT (-42)::TINYINT::UINTEGER
 ----
+<REGEX>:Conversion Error.*INT8.*is out of range for.*UINT32.*
 
 statement error
 SELECT (-42)::TINYINT::UBIGINT
 ----
+<REGEX>:Conversion Error.*INT8.*is out of range for.*UINT64.*
 
 query I
 SELECT -42::TINYINT::UTINYINT
@@ -157,18 +172,22 @@ SELECT -42::TINYINT::UBIGINT
 statement error
 SELECT (-42)::SMALLINT::UTINYINT
 ----
+<REGEX>:Conversion Error.*INT16.*is out of range for.*UINT8.*
 
 statement error
 SELECT (-42)::SMALLINT::USMALLINT
 ----
+<REGEX>:Conversion Error.*INT16.*is out of range for.*UINT16.*
 
 statement error
 SELECT (-42)::SMALLINT::UINTEGER
 ----
+<REGEX>:Conversion Error.*INT16.*is out of range for.*UINT32.*
 
 statement error
 SELECT (-42)::SMALLINT::UBIGINT
 ----
+<REGEX>:Conversion Error.*INT16.*is out of range for.*UINT64.*
 
 query I
 SELECT -42::SMALLINT::UTINYINT
@@ -193,18 +212,22 @@ SELECT -42::SMALLINT::UBIGINT
 statement error
 SELECT (-42)::INTEGER::UTINYINT
 ----
+<REGEX>:Conversion Error.*INT32.*is out of range for.*UINT8.*
 
 statement error
 SELECT (-42)::INTEGER::USMALLINT
 ----
+<REGEX>:Conversion Error.*INT32.*is out of range for.*UINT16.*
 
 statement error
 SELECT (-42)::INTEGER::UINTEGER
 ----
+<REGEX>:Conversion Error.*INT32.*is out of range for.*UINT32.*
 
 statement error
 SELECT (-42)::INTEGER::UBIGINT
 ----
+<REGEX>:Conversion Error.*INT32.*is out of range for.*UINT64.*
 
 query I
 SELECT -42::INTEGER::UTINYINT
@@ -229,18 +252,22 @@ SELECT -42::INTEGER::UBIGINT
 statement error
 SELECT (-42)::BIGINT::UTINYINT
 ----
+<REGEX>:Conversion Error.*INT64.*is out of range for.*UINT8.*
 
 statement error
 SELECT (-42)::BIGINT::USMALLINT
 ----
+<REGEX>:Conversion Error.*INT64.*is out of range for.*UINT16.*
 
 statement error
 SELECT (-42)::BIGINT::UINTEGER
 ----
+<REGEX>:Conversion Error.*INT64.*is out of range for.*UINT32.*
 
 statement error
 SELECT (-42)::BIGINT::UBIGINT
 ----
+<REGEX>:Conversion Error.*INT64.*is out of range for.*UINT64.*
 
 query I
 SELECT -42::BIGINT::UTINYINT
@@ -265,18 +292,22 @@ SELECT -42::BIGINT::UBIGINT
 statement error
 SELECT (-42)::FLOAT::UTINYINT
 ----
+<REGEX>:Conversion Error.*FLOAT.*is out of range for.*UINT8.*
 
 statement error
 SELECT (-42)::FLOAT::USMALLINT
 ----
+<REGEX>:Conversion Error.*FLOAT.*is out of range for.*UINT16.*
 
 statement error
 SELECT (-42)::FLOAT::UINTEGER
 ----
+<REGEX>:Conversion Error.*FLOAT.*is out of range for.*UINT32.*
 
 statement error
 SELECT (-42)::FLOAT::UBIGINT
 ----
+<REGEX>:Conversion Error.*FLOAT.*is out of range for.*UINT64.*
 
 query I
 SELECT -42::FLOAT::UTINYINT
@@ -301,18 +332,22 @@ SELECT -42::FLOAT::UBIGINT
 statement error
 SELECT (-42)::DOUBLE::UTINYINT
 ----
+<REGEX>:Conversion Error.*DOUBLE.*is out of range for.*UINT8.*
 
 statement error
 SELECT (-42)::DOUBLE::USMALLINT
 ----
+<REGEX>:Conversion Error.*DOUBLE.*is out of range for.*UINT16.*
 
 statement error
 SELECT (-42)::DOUBLE::UINTEGER
 ----
+<REGEX>:Conversion Error.*DOUBLE.*is out of range for.*UINT32.*
 
 statement error
 SELECT (-42)::DOUBLE::UBIGINT
 ----
+<REGEX>:Conversion Error.*DOUBLE.*is out of range for.*UINT64.*
 
 query I
 SELECT -42::DOUBLE::UTINYINT
@@ -338,6 +373,7 @@ SELECT -42::DOUBLE::UBIGINT
 statement error
 SELECT (200)::UTINYINT::TINYINT
 ----
+<REGEX>:Conversion Error.*UINT8.*is out of range for.*INT8.*
 
 query I
 SELECT (10)::UTINYINT::TINYINT
@@ -362,10 +398,12 @@ SELECT (10)::UTINYINT::BIGINT
 statement error
 SELECT (200)::USMALLINT::TINYINT
 ----
+<REGEX>:Conversion Error.*UINT16.*is out of range for.*INT8.*
 
 statement error
 SELECT (33000)::USMALLINT::SMALLINT
 ----
+<REGEX>:Conversion Error.*UINT16.*is out of range for.*INT16.*
 
 query I
 SELECT (10)::USMALLINT::TINYINT
@@ -390,14 +428,17 @@ SELECT (10)::USMALLINT::BIGINT
 statement error
 SELECT (200)::UINTEGER::TINYINT
 ----
+<REGEX>:Conversion Error.*UINT32.*is out of range for.*INT8.*
 
 statement error
 SELECT (33000)::UINTEGER::SMALLINT
 ----
+<REGEX>:Conversion Error.*UINT32.*is out of range for.*INT16.*
 
 statement error
 SELECT (3147483647)::UINTEGER::INTEGER
 ----
+<REGEX>:Conversion Error.*UINT32.*is out of range for.*INT32.*
 
 query I
 SELECT (10)::UINTEGER::TINYINT
@@ -422,19 +463,22 @@ SELECT (10)::UINTEGER::BIGINT
 statement error
 SELECT (200)::UBIGINT::TINYINT
 ----
+<REGEX>:Conversion Error.*UINT64.*is out of range for.*INT8.*
 
 statement error
 SELECT (33000)::UBIGINT::SMALLINT
 ----
+<REGEX>:Conversion Error.*UINT64.*is out of range for.*INT16.*
 
 statement error
 SELECT (3147483647)::UBIGINT::INTEGER
 ----
-
+<REGEX>:Conversion Error.*UINT64.*is out of range for.*INT32.*
 
 statement error
 SELECT (10223372036854775807)::UBIGINT::INTEGER
 ----
+<REGEX>:Conversion Error.*UINT64.*is out of range for.*INT32.*
 
 query I
 SELECT (10)::UBIGINT::TINYINT
@@ -460,10 +504,12 @@ SELECT (10)::UBIGINT::BIGINT
 statement error
 SELECT (9223372036854775807)::BIGINT::USMALLINT
 ----
+<REGEX>:Conversion Error.*INT64.*is out of range for.*UINT16.*
 
 statement error
 SELECT (9223372036854775807)::BIGINT::UINTEGER
 ----
+<REGEX>:Conversion Error.*INT64.*is out of range for.*UINT32.*
 
 # These should fit though
 query I
@@ -491,6 +537,7 @@ SELECT (200.32)::DECIMAL::UTINYINT
 statement error
 SELECT (260.32)::DECIMAL::UTINYINT
 ----
+<REGEX>:Conversion Error.*Failed to cast decimal value.*
 
 query I
 SELECT (200.32)::DECIMAL::USMALLINT
@@ -505,7 +552,7 @@ SELECT (65535.32)::DECIMAL::USMALLINT
 statement error
 SELECT (65536.32)::DECIMAL::USMALLINT
 ----
-
+<REGEX>:Conversion Error.*Failed to cast decimal value.*
 
 query I
 SELECT (200.32)::DECIMAL::UINTEGER
@@ -520,6 +567,7 @@ SELECT (4294967295.32)::DECIMAL::UINTEGER
 statement error
 SELECT (4294967296.32)::DECIMAL::UINTEGER
 ----
+<REGEX>:Conversion Error.*Failed to cast decimal value.*
 
 query I
 SELECT (200.32)::DECIMAL::UBIGINT
@@ -535,6 +583,7 @@ SELECT (200.32)::REAL::UTINYINT
 statement error
 SELECT (260.32)::REAL::UTINYINT
 ----
+<REGEX>:Conversion Error.*FLOAT.*is out of range for.*UINT8.*
 
 query I
 SELECT (200.32)::REAL::USMALLINT
@@ -549,7 +598,7 @@ SELECT (65534.32)::REAL::USMALLINT
 statement error
 SELECT (65536.32)::REAL::USMALLINT
 ----
-
+<REGEX>:Conversion Error.*FLOAT.*is out of range for.*UINT16.*
 
 query I
 SELECT (200.32)::REAL::UINTEGER

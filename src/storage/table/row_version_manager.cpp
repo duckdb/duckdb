@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-RowVersionManager::RowVersionManager(idx_t start) : start(start), has_changes(false) {
+RowVersionManager::RowVersionManager(idx_t start) noexcept : start(start), has_changes(false) {
 }
 
 void RowVersionManager::SetStart(idx_t new_start) {
@@ -69,7 +69,7 @@ bool RowVersionManager::Fetch(TransactionData transaction, idx_t row) {
 	if (!info) {
 		return true;
 	}
-	return info->Fetch(transaction, row - vector_index * STANDARD_VECTOR_SIZE);
+	return info->Fetch(transaction, UnsafeNumericCast<row_t>(row - vector_index * STANDARD_VECTOR_SIZE));
 }
 
 void RowVersionManager::AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start,
@@ -127,6 +127,32 @@ void RowVersionManager::CommitAppend(transaction_t commit_id, idx_t row_group_st
 	}
 }
 
+void RowVersionManager::CleanupAppend(transaction_t lowest_active_transaction, idx_t row_group_start, idx_t count) {
+	if (count == 0) {
+		return;
+	}
+	idx_t row_group_end = row_group_start + count;
+
+	lock_guard<mutex> lock(version_lock);
+	idx_t start_vector_idx = row_group_start / STANDARD_VECTOR_SIZE;
+	idx_t end_vector_idx = (row_group_end - 1) / STANDARD_VECTOR_SIZE;
+	for (idx_t vector_idx = start_vector_idx; vector_idx <= end_vector_idx; vector_idx++) {
+		idx_t vcount =
+		    vector_idx == end_vector_idx ? row_group_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
+		auto &info = *vector_info[vector_idx];
+		if (vcount != STANDARD_VECTOR_SIZE) {
+			// not written fully - skip
+			continue;
+		}
+		// if we wrote the entire chunk info try to compress it
+		unique_ptr<ChunkInfo> new_info;
+		auto cleanup = info.Cleanup(lowest_active_transaction, new_info);
+		if (cleanup) {
+			vector_info[vector_idx] = std::move(new_info);
+		}
+	}
+}
+
 void RowVersionManager::RevertAppend(idx_t start_row) {
 	lock_guard<mutex> lock(version_lock);
 	idx_t start_vector_idx = (start_row + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
@@ -159,10 +185,10 @@ idx_t RowVersionManager::DeleteRows(idx_t vector_idx, transaction_t transaction_
 	return GetVectorInfo(vector_idx).Delete(transaction_id, rows, count);
 }
 
-void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, row_t rows[], idx_t count) {
+void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, const DeleteInfo &info) {
 	lock_guard<mutex> lock(version_lock);
 	has_changes = true;
-	GetVectorInfo(vector_idx).CommitDelete(commit_id, rows, count);
+	GetVectorInfo(vector_idx).CommitDelete(commit_id, info);
 }
 
 vector<MetaBlockPointer> RowVersionManager::Checkpoint(MetadataManager &manager) {
@@ -212,7 +238,7 @@ shared_ptr<RowVersionManager> RowVersionManager::Deserialize(MetaBlockPointer de
 	if (!delete_pointer.IsValid()) {
 		return nullptr;
 	}
-	auto version_info = make_shared<RowVersionManager>(start);
+	auto version_info = make_shared_ptr<RowVersionManager>(start);
 	MetadataReader source(manager, delete_pointer, &version_info->storage_pointers);
 	auto chunk_count = source.Read<idx_t>();
 	D_ASSERT(chunk_count > 0);

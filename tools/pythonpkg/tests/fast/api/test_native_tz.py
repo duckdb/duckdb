@@ -32,8 +32,11 @@ class TestNativeTimeZone(object):
         assert res[0].tzinfo.zone == 'UTC'
 
     def test_native_python_time_timezone(self, duckdb_cursor):
-        with pytest.raises(duckdb.NotImplementedException, match="Not implemented Error: Unsupported type"):
-            duckdb_cursor.execute(f"select TimeRecStart::TIMETZ  as tz  from '{filename}'").fetchone()
+        res = duckdb_cursor.execute(f"select TimeRecStart::TIMETZ as tz from '{filename}'").fetchone()
+        assert res == (datetime.time(21, 52, 27, tzinfo=datetime.timezone.utc),)
+
+        roundtrip = duckdb_cursor.execute("select $1", [res[0]]).fetchone()
+        assert roundtrip == res
 
     def test_pandas_timestamp_timezone(self, duckdb_cursor):
         res = duckdb_cursor.execute("SET timezone='America/Los_Angeles';")
@@ -67,5 +70,14 @@ class TestNativeTimeZone(object):
         assert res['tz'][0].hour == 21 and res['tz'][0].minute == 52
 
     def test_arrow_timestamp_time(self, duckdb_cursor):
-        with pytest.raises(duckdb.NotImplementedException, match="Unsupported Arrow type"):
-            duckdb_cursor.execute(f"select TimeRecStart::TIMETZ  as tz  from '{filename}'").arrow()
+        duckdb_cursor.execute("SET timezone='America/Los_Angeles';")
+        res1 = duckdb_cursor.execute(f"select TimeRecStart::TIMETZ  as tz  from '{filename}'").arrow().to_pandas()
+        res2 = duckdb_cursor.execute(f"select TimeRecStart::TIMETZ::TIME  as tz  from '{filename}'").arrow().to_pandas()
+        assert res1['tz'][0].hour == 21 and res1['tz'][0].minute == 52
+        assert res2['tz'][0].hour == res2['tz'][0].hour and res2['tz'][0].minute == res1['tz'][0].minute
+
+        duckdb_cursor.execute("SET timezone='UTC';")
+        res1 = duckdb_cursor.execute(f"select TimeRecStart::TIMETZ  as tz  from '{filename}'").arrow().to_pandas()
+        res2 = duckdb_cursor.execute(f"select TimeRecStart::TIMETZ::TIME  as tz  from '{filename}'").arrow().to_pandas()
+        assert res1['tz'][0].hour == 21 and res1['tz'][0].minute == 52
+        assert res2['tz'][0].hour == res2['tz'][0].hour and res2['tz'][0].minute == res1['tz'][0].minute

@@ -61,14 +61,20 @@ static void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &r
 		auto &result_entry = result_data[i];
 		vector<MapKeyIndexPair> index_to_map;
 		vector<Value> keys_list;
+		bool all_null = true;
 		for (idx_t map_idx = 0; map_idx < map_count; map_idx++) {
 			if (args.data[map_idx].GetType().id() == LogicalTypeId::SQLNULL) {
 				continue;
 			}
-			auto &map_format = map_formats[map_idx];
-			auto &keys = MapVector::GetKeys(args.data[map_idx]);
 
+			auto &map_format = map_formats[map_idx];
 			auto index = map_format.sel->get_index(i);
+			if (!map_format.validity.RowIsValid(index)) {
+				continue;
+			}
+
+			all_null = false;
+			auto &keys = MapVector::GetKeys(args.data[map_idx]);
 			auto entry = UnifiedVectorFormat::GetData<list_entry_t>(map_format)[index];
 
 			// Update the list for this row
@@ -89,6 +95,15 @@ static void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &r
 				}
 			}
 		}
+
+		result_entry.offset = ListVector::GetListSize(result);
+		result_entry.length = keys_list.size();
+		if (all_null) {
+			D_ASSERT(keys_list.empty() && index_to_map.empty());
+			FlatVector::SetNull(result, i, true);
+			continue;
+		}
+
 		vector<Value> values_list;
 		D_ASSERT(keys_list.size() == index_to_map.size());
 		// Get the values from the mapping
@@ -98,8 +113,6 @@ static void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &r
 			values_list.push_back(values.GetValue(mapping.key_index));
 		}
 		D_ASSERT(values_list.size() == keys_list.size());
-		result_entry.offset = ListVector::GetListSize(result);
-		result_entry.length = values_list.size();
 		auto list_entries = GetListEntries(std::move(keys_list), std::move(values_list));
 		for (auto &list_entry : list_entries) {
 			ListVector::PushBack(result, list_entry);

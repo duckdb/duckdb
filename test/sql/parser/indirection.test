@@ -1,0 +1,37 @@
+# name: test/sql/parser/indirection.test
+# description: Test indirection
+# group: [parser]
+
+statement ok
+PRAGMA enable_verification
+
+# . after case
+query I
+select case when true then {'a': 42} end.a;
+----
+42
+
+# brackets after ARRAY constant
+query I
+select [42][1];
+----
+42
+
+query I
+select array[42][1];
+----
+42
+
+# brackets after list comprehension
+query I
+select [a for a in [42, 84]][1];
+----
+42
+
+statement ok
+prepare v1 as select $1[1];
+
+query I
+execute v1([42]);
+----
+42

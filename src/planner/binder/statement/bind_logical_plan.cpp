@@ -24,6 +24,8 @@ BoundStatement Binder::Bind(LogicalPlanStatement &stmt) {
 		result.names.push_back(StringUtil::Format("col%d", i));
 	}
 	result.plan = std::move(stmt.plan);
+
+	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = true;
 	properties.return_type = StatementReturnType::QUERY_RESULT; // TODO could also be something else
 

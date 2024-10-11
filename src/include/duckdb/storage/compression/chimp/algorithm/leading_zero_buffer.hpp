@@ -10,6 +10,7 @@
 
 #include "duckdb.h"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #ifdef DEBUG
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/assert.hpp"
@@ -76,7 +77,7 @@ public:
 	}
 
 	uint64_t BitsWritten() const {
-		return counter * 3;
+		return counter * 3ULL;
 	}
 
 	// Reset the counter, but don't replace the buffer
@@ -91,12 +92,13 @@ public:
 public:
 #ifdef DEBUG
 	uint8_t ExtractValue(uint32_t value, uint8_t index) {
-		return (value & LeadingZeroBufferConstants::MASKS[index]) >> LeadingZeroBufferConstants::SHIFTS[index];
+		return NumericCast<uint8_t>((value & LeadingZeroBufferConstants::MASKS[index]) >>
+		                            LeadingZeroBufferConstants::SHIFTS[index]);
 	}
 #endif
 
 	inline uint64_t BlockIndex() const {
-		return ((counter >> 3) * (LEADING_ZERO_BLOCK_BIT_SIZE / 8));
+		return ((counter >> 3ULL) * (LEADING_ZERO_BLOCK_BIT_SIZE / 8ULL));
 	}
 
 	void FlushBuffer() {
@@ -109,7 +111,7 @@ public:
 		// Verify that the bits are copied correctly
 
 		uint32_t temp_value = 0;
-		memcpy((uint8_t *)&temp_value, (void *)(buffer + buffer_idx), 3);
+		memcpy(reinterpret_cast<uint8_t *>(&temp_value), (void *)(buffer + buffer_idx), 3);
 		for (idx_t i = 0; i < flags.size(); i++) {
 			D_ASSERT(flags[i] == ExtractValue(temp_value, i));
 		}
@@ -140,8 +142,8 @@ public:
 		const auto buffer_idx = BlockIndex();
 		auto const temp = Load<uint32_t>(buffer + buffer_idx);
 
-		const uint8_t result =
-		    (temp & LeadingZeroBufferConstants::MASKS[counter & 7]) >> LeadingZeroBufferConstants::SHIFTS[counter & 7];
+		const uint8_t result = UnsafeNumericCast<uint8_t>((temp & LeadingZeroBufferConstants::MASKS[counter & 7]) >>
+		                                                  LeadingZeroBufferConstants::SHIFTS[counter & 7]);
 		counter++;
 		return result;
 	}

@@ -110,7 +110,7 @@ select '340282366920938463463374607431768211455.1'::UHUGEINT;
 ----
 340282366920938463463374607431768211455
 
-# going over limit should error (signed)
+# going above the limit should error (signed)
 
 statement error
 select '127.5'::TINYINT;
@@ -162,7 +162,7 @@ select '-170141183460469231731687303715884105728.5'::HUGEINT;
 ----
 Conversion Error
 
-# going over limit should error (unsigned)
+# going above the limit should error (unsigned)
 
 statement error
 select '255.5'::UTINYINT;

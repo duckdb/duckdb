@@ -1,0 +1,311 @@
+{
+    "group": "arrow_interface",
+    "deprecated": true,
+    "entries": [
+        {
+            "name": "duckdb_query_arrow",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "connection"
+                },
+                {
+                    "type": "const char *",
+                    "name": "query"
+                },
+                {
+                    "type": "duckdb_arrow *",
+                    "name": "out_result"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nExecutes a SQL query within a connection and stores the full (materialized) result in an arrow structure.\nIf the query fails to execute, DuckDBError is returned and the error message can be retrieved by calling\n`duckdb_query_arrow_error`.\n\nNote that after running `duckdb_query_arrow`, `duckdb_destroy_arrow` must be called on the result object even if the\nquery fails, otherwise the error stored within the result will not be freed correctly.\n\n",
+                "param_comments": {
+                    "connection": "The connection to perform the query in.",
+                    "query": "The SQL query to run.",
+                    "out_result": "The query result."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_query_arrow_schema",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_arrow",
+                    "name": "result"
+                },
+                {
+                    "type": "duckdb_arrow_schema *",
+                    "name": "out_schema"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nFetch the internal arrow schema from the arrow result. Remember to call release on the respective\nArrowSchema object.\n\n",
+                "param_comments": {
+                    "result": "The result to fetch the schema from.",
+                    "out_schema": "The output schema."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_prepared_arrow_schema",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared"
+                },
+                {
+                    "type": "duckdb_arrow_schema *",
+                    "name": "out_schema"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nFetch the internal arrow schema from the prepared statement. Remember to call release on the respective\nArrowSchema object.\n\n",
+                "param_comments": {
+                    "prepared": "The prepared statement to fetch the schema from.",
+                    "out_schema": "The output schema."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_result_arrow_array",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_result",
+                    "name": "result"
+                },
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "chunk"
+                },
+                {
+                    "type": "duckdb_arrow_array *",
+                    "name": "out_array"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nConvert a data chunk into an arrow struct array. Remember to call release on the respective\nArrowArray object.\n\n",
+                "param_comments": {
+                    "result": "The result object the data chunk have been fetched from.",
+                    "chunk": "The data chunk to convert.",
+                    "out_array": "The output array."
+                }
+            }
+        },
+        {
+            "name": "duckdb_query_arrow_array",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_arrow",
+                    "name": "result"
+                },
+                {
+                    "type": "duckdb_arrow_array *",
+                    "name": "out_array"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nFetch an internal arrow struct array from the arrow result. Remember to call release on the respective\nArrowArray object.\n\nThis function can be called multiple time to get next chunks, which will free the previous out_array.\nSo consume the out_array before calling this function again.\n\n",
+                "param_comments": {
+                    "result": "The result to fetch the array from.",
+                    "out_array": "The output array."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_arrow_column_count",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_arrow",
+                    "name": "result"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nReturns the number of columns present in the arrow result object.\n\n",
+                "param_comments": {
+                    "result": "The result object."
+                },
+                "return_value": "The number of columns present in the result object."
+            }
+        },
+        {
+            "name": "duckdb_arrow_row_count",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_arrow",
+                    "name": "result"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nReturns the number of rows present in the arrow result object.\n\n",
+                "param_comments": {
+                    "result": "The result object."
+                },
+                "return_value": "The number of rows present in the result object."
+            }
+        },
+        {
+            "name": "duckdb_arrow_rows_changed",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_arrow",
+                    "name": "result"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nReturns the number of rows changed by the query stored in the arrow result. This is relevant only for\nINSERT/UPDATE/DELETE queries. For other queries the rows_changed will be 0.\n\n",
+                "param_comments": {
+                    "result": "The result object."
+                },
+                "return_value": "The number of rows changed."
+            }
+        },
+        {
+            "name": "duckdb_query_arrow_error",
+            "return_type": "const char *",
+            "params": [
+                {
+                    "type": "duckdb_arrow",
+                    "name": "result"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n Returns the error message contained within the result. The error is only set if `duckdb_query_arrow` returns\n`DuckDBError`.\n\nThe error message should not be freed. It will be de-allocated when `duckdb_destroy_arrow` is called.\n\n",
+                "param_comments": {
+                    "result": "The result object to fetch the error from."
+                },
+                "return_value": "The error of the result."
+            }
+        },
+        {
+            "name": "duckdb_destroy_arrow",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_arrow *",
+                    "name": "result"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nCloses the result and de-allocates all memory allocated for the arrow result.\n\n",
+                "param_comments": {
+                    "result": "The result to destroy."
+                }
+            }
+        },
+        {
+            "name": "duckdb_destroy_arrow_stream",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_arrow_stream *",
+                    "name": "stream_p"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nReleases the arrow array stream and de-allocates its memory.\n\n",
+                "param_comments": {
+                    "stream_p": "The arrow array stream to destroy."
+                }
+            }
+        },
+        {
+            "name": "duckdb_execute_prepared_arrow",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "duckdb_arrow *",
+                    "name": "out_result"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nExecutes the prepared statement with the given bound parameters, and returns an arrow query result.\nNote that after running `duckdb_execute_prepared_arrow`, `duckdb_destroy_arrow` must be called on the result object.\n\n",
+                "param_comments": {
+                    "prepared_statement": "The prepared statement to execute.",
+                    "out_result": "The query result."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_arrow_scan",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "connection"
+                },
+                {
+                    "type": "const char *",
+                    "name": "table_name"
+                },
+                {
+                    "type": "duckdb_arrow_stream",
+                    "name": "arrow"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nScans the Arrow stream and creates a view with the given name.\n\n",
+                "param_comments": {
+                    "connection": "The connection on which to execute the scan.",
+                    "table_name": "Name of the temporary view to create.",
+                    "arrow": "Arrow stream wrapper."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_arrow_array_scan",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "connection"
+                },
+                {
+                    "type": "const char *",
+                    "name": "table_name"
+                },
+                {
+                    "type": "duckdb_arrow_schema",
+                    "name": "arrow_schema"
+                },
+                {
+                    "type": "duckdb_arrow_array",
+                    "name": "arrow_array"
+                },
+                {
+                    "type": "duckdb_arrow_stream *",
+                    "name": "out_stream"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nScans the Arrow array and creates a view with the given name.\nNote that after running `duckdb_arrow_array_scan`, `duckdb_destroy_arrow_stream` must be called on the out stream.\n\n",
+                "param_comments": {
+                    "connection": "The connection on which to execute the scan.",
+                    "table_name": "Name of the temporary view to create.",
+                    "arrow_schema": "Arrow schema wrapper.",
+                    "arrow_array": "Arrow array wrapper.",
+                    "out_stream": "Output array stream that wraps around the passed schema, for releasing/deleting once done."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        }
+    ]
+}

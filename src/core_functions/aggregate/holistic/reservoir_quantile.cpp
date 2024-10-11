@@ -52,11 +52,11 @@ struct ReservoirQuantileState {
 struct ReservoirQuantileBindData : public FunctionData {
 	ReservoirQuantileBindData() {
 	}
-	ReservoirQuantileBindData(double quantile_p, int32_t sample_size_p)
+	ReservoirQuantileBindData(double quantile_p, idx_t sample_size_p)
 	    : quantiles(1, quantile_p), sample_size(sample_size_p) {
 	}
 
-	ReservoirQuantileBindData(vector<double> quantiles_p, int32_t sample_size_p)
+	ReservoirQuantileBindData(vector<double> quantiles_p, idx_t sample_size_p)
 	    : quantiles(std::move(quantiles_p)), sample_size(sample_size_p) {
 	}
 
@@ -84,7 +84,7 @@ struct ReservoirQuantileBindData : public FunctionData {
 	}
 
 	vector<double> quantiles;
-	int32_t sample_size;
+	idx_t sample_size;
 };
 
 struct ReservoirQuantileOperation {
@@ -325,12 +325,13 @@ unique_ptr<FunctionData> BindReservoirQuantile(ClientContext &context, Aggregate
 	}
 
 	if (arguments.size() == 2) {
+		// remove the quantile argument so we can use the unary aggregate
 		if (function.arguments.size() == 2) {
 			Function::EraseArgument(function, arguments, arguments.size() - 1);
 		} else {
 			arguments.pop_back();
 		}
-		return make_uniq<ReservoirQuantileBindData>(quantiles, 8192);
+		return make_uniq<ReservoirQuantileBindData>(quantiles, 8192ULL);
 	}
 	if (!arguments[2]->IsFoldable()) {
 		throw BinderException("RESERVOIR_QUANTILE can only take constant sample size parameters");
@@ -345,10 +346,15 @@ unique_ptr<FunctionData> BindReservoirQuantile(ClientContext &context, Aggregate
 		throw BinderException("Size of the RESERVOIR_QUANTILE sample must be bigger than 0");
 	}
 
-	// remove the quantile argument so we can use the unary aggregate
-	Function::EraseArgument(function, arguments, arguments.size() - 1);
-	Function::EraseArgument(function, arguments, arguments.size() - 1);
-	return make_uniq<ReservoirQuantileBindData>(quantiles, sample_size);
+	// remove the quantile arguments so we can use the unary aggregate
+	if (function.arguments.size() == arguments.size()) {
+		Function::EraseArgument(function, arguments, arguments.size() - 1);
+		Function::EraseArgument(function, arguments, arguments.size() - 1);
+	} else {
+		arguments.pop_back();
+		arguments.pop_back();
+	}
+	return make_uniq<ReservoirQuantileBindData>(quantiles, NumericCast<idx_t>(sample_size));
 }
 
 unique_ptr<FunctionData> BindReservoirQuantileDecimal(ClientContext &context, AggregateFunction &function,

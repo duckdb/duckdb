@@ -45,7 +45,7 @@ void DuckDBTemporaryFilesFunction(ClientContext &context, TableFunctionInput &da
 		// database_name, VARCHAR
 		output.SetValue(col++, count, entry.path);
 		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(entry.size));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(entry.size)));
 		count++;
 	}
 	output.SetCardinality(count);

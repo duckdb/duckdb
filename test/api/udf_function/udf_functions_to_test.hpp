@@ -131,15 +131,20 @@ inline string_t udf_varchar(string_t a, string_t b, string_t c) {
  */
 template <typename TYPE>
 static void udf_unary_function(DataChunk &input, ExpressionState &state, Vector &result) {
+	input.Flatten();
 	switch (GetTypeId<TYPE>()) {
 	case PhysicalType::VARCHAR: {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetData<string_t>(result);
 		auto ldata = FlatVector::GetData<string_t>(input.data[0]);
+		auto &validity = FlatVector::Validity(input.data[0]);
 
 		FlatVector::SetValidity(result, FlatVector::Validity(input.data[0]));
 
 		for (idx_t i = 0; i < input.size(); i++) {
+			if (!validity.RowIsValid(i)) {
+				continue;
+			}
 			auto input_length = ldata[i].GetSize();
 			string_t target = StringVector::EmptyString(result, input_length);
 			auto target_data = target.GetDataWriteable();
@@ -171,15 +176,20 @@ static void udf_unary_function(DataChunk &input, ExpressionState &state, Vector 
  */
 template <typename TYPE>
 static void udf_binary_function(DataChunk &input, ExpressionState &state, Vector &result) {
+	input.Flatten();
 	switch (GetTypeId<TYPE>()) {
 	case PhysicalType::VARCHAR: {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetData<string_t>(result);
 		auto ldata = FlatVector::GetData<string_t>(input.data[1]);
+		auto &validity = FlatVector::Validity(input.data[0]);
 
 		FlatVector::SetValidity(result, FlatVector::Validity(input.data[1]));
 
 		for (idx_t i = 0; i < input.size(); i++) {
+			if (!validity.RowIsValid(i)) {
+				continue;
+			}
 			auto input_length = ldata[i].GetSize();
 			string_t target = StringVector::EmptyString(result, input_length);
 			auto target_data = target.GetDataWriteable();
@@ -211,15 +221,20 @@ static void udf_binary_function(DataChunk &input, ExpressionState &state, Vector
  */
 template <typename TYPE>
 static void udf_ternary_function(DataChunk &input, ExpressionState &state, Vector &result) {
+	input.Flatten();
 	switch (GetTypeId<TYPE>()) {
 	case PhysicalType::VARCHAR: {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetData<string_t>(result);
 		auto ldata = FlatVector::GetData<string_t>(input.data[2]);
+		auto &validity = FlatVector::Validity(input.data[0]);
 
 		FlatVector::SetValidity(result, FlatVector::Validity(input.data[2]));
 
 		for (idx_t i = 0; i < input.size(); i++) {
+			if (!validity.RowIsValid(i)) {
+				continue;
+			}
 			auto input_length = ldata[i].GetSize();
 			string_t target = StringVector::EmptyString(result, input_length);
 			auto target_data = target.GetDataWriteable();
@@ -287,6 +302,7 @@ static void udf_max_constant(DataChunk &args, ExpressionState &state, Vector &re
  */
 template <typename TYPE>
 static void udf_max_flat(DataChunk &args, ExpressionState &state, Vector &result) {
+	args.Flatten();
 	D_ASSERT(TypeIsNumeric(GetTypeId<TYPE>()));
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -438,12 +454,12 @@ struct UDFSum {
 	} sum_state_t;
 
 	template <class STATE>
-	static idx_t StateSize() {
+	static idx_t StateSize(const AggregateFunction &function) {
 		return sizeof(STATE);
 	}
 
 	template <class STATE>
-	static void Initialize(data_ptr_t state) {
+	static void Initialize(const AggregateFunction &function, data_ptr_t state) {
 		((STATE *)state)->value = 0;
 		((STATE *)state)->isset = false;
 	}
@@ -475,8 +491,8 @@ struct UDFSum {
 			auto idata = ConstantVector::GetData<INPUT_TYPE>(inputs[0]);
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			UDFSum::ConstantOperation<INPUT_TYPE, STATE_TYPE>(*sdata, aggr_input_data, idata, count);
-		} else if (inputs[0].GetVectorType() == VectorType::FLAT_VECTOR &&
-		           states.GetVectorType() == VectorType::FLAT_VECTOR) {
+		} else {
+			inputs[0].Flatten(input_count);
 			auto idata = FlatVector::GetData<INPUT_TYPE>(inputs[0]);
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 			auto mask = FlatVector::Validity(inputs[0]);
@@ -493,8 +509,6 @@ struct UDFSum {
 					UDFSum::Operation<INPUT_TYPE, STATE_TYPE>(sdata[i], aggr_input_data, idata, i);
 				}
 			}
-		} else {
-			throw duckdb::NotImplementedException("UDFSum only supports CONSTANT and FLAT vectors!");
 		}
 	}
 
@@ -511,7 +525,8 @@ struct UDFSum {
 			UDFSum::ConstantOperation<INPUT_TYPE, STATE_TYPE>((STATE_TYPE *)state, aggr_input_data, idata, count);
 			break;
 		}
-		case VectorType::FLAT_VECTOR: {
+		default: {
+			inputs[0].Flatten(count);
 			auto idata = FlatVector::GetData<INPUT_TYPE>(inputs[0]);
 			auto &mask = FlatVector::Validity(inputs[0]);
 			if (!mask.AllValid()) {
@@ -528,9 +543,6 @@ struct UDFSum {
 				}
 			}
 			break;
-		}
-		default: {
-			throw duckdb::NotImplementedException("UDFSum only supports CONSTANT and FLAT vectors!");
 		}
 		}
 	}

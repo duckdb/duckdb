@@ -26,13 +26,14 @@ for file in sys.argv[1:]:
     f = open(file)
     data = json.load(f)
 
-    for dep in data['dependencies']:
-        if type(dep) is str:
-            dependencies_str.append(dep)
-        elif type(dep) is dict:
-            dependencies_dict.append(dep)
-        else:
-            raise Exception(f"Unknown entry type found in dependencies: '{dep}'")
+    if 'dependencies' in data:
+        for dep in data['dependencies']:
+            if type(dep) is str:
+                dependencies_str.append(dep)
+            elif type(dep) is dict:
+                dependencies_dict.append(dep)
+            else:
+                raise Exception(f"Unknown entry type found in dependencies: '{dep}'")
 
     if 'vcpkg-configuration' in data:
         if 'overlay-ports' in data['vcpkg-configuration']:
@@ -55,7 +56,7 @@ for dep in dependencies_str:
 
 data = {
     "description": f"Auto-generated vcpkg.json for combined DuckDB extension build",
-    "builtin-baseline": "a42af01b72c28a8e1d7b48107b33e4f286a55ef6",
+    "builtin-baseline": "a1a1cbc975abf909a6c8985a6a2b8fe20bbd9bd6",
     "dependencies": final_deduplicated_deps,
     "overrides": [{"name": "openssl", "version": "3.0.8"}],
 }

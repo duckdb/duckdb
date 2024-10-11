@@ -6,12 +6,12 @@
 namespace duckdb {
 
 struct ReduceExecuteInfo {
-	ReduceExecuteInfo(LambdaFunctions::LambdaInfo &info, ClientContext &context) : left_slice(*info.child_vector) {
+	ReduceExecuteInfo(LambdaFunctions::LambdaInfo &info, ClientContext &context)
+	    : left_slice(make_uniq<Vector>(*info.child_vector)) {
 		SelectionVector left_vector(info.row_count);
 		active_rows.Resize(0, info.row_count);
 		active_rows.SetAllValid(info.row_count);
 
-		right_sel.Initialize(info.row_count);
 		left_sel.Initialize(info.row_count);
 		active_rows_sel.Initialize(info.row_count);
 
@@ -26,19 +26,18 @@ struct ReduceExecuteInfo {
 				left_vector.set_index(reduced_row_idx, info.list_entries[list_column_format_index].offset);
 				reduced_row_idx++;
 			} else {
-				// Remove the invalid rows
-				info.result_validity->SetInvalid(original_row_idx);
+				// Set the row as invalid and remove it from the active rows.
+				FlatVector::SetNull(info.result, original_row_idx, true);
 				active_rows.SetInvalid(original_row_idx);
 			}
 		}
-
-		left_slice.Slice(left_vector, reduced_row_idx);
+		left_slice->Slice(left_vector, reduced_row_idx);
 
 		if (info.has_index) {
 			input_types.push_back(LogicalType::BIGINT);
 		}
-		input_types.push_back(left_slice.GetType());
-		input_types.push_back(left_slice.GetType());
+		input_types.push_back(left_slice->GetType());
+		input_types.push_back(left_slice->GetType());
 		for (auto &entry : info.column_infos) {
 			input_types.push_back(entry.vector.get().GetType());
 		}
@@ -46,11 +45,10 @@ struct ReduceExecuteInfo {
 		expr_executor = make_uniq<ExpressionExecutor>(context, *info.lambda_expr);
 	};
 	ValidityMask active_rows;
-	Vector left_slice;
+	unique_ptr<Vector> left_slice;
 	unique_ptr<ExpressionExecutor> expr_executor;
 	vector<LogicalType> input_types;
 
-	SelectionVector right_sel;
 	SelectionVector left_sel;
 	SelectionVector active_rows_sel;
 };
@@ -63,6 +61,10 @@ static bool ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFu
 
 	// create selection vectors for the left and right slice
 	auto data = execute_info.active_rows.GetData();
+
+	// reset right_sel each iteration to prevent referencing issues
+	SelectionVector right_sel;
+	right_sel.Initialize(info.row_count);
 
 	idx_t bits_per_entry = sizeof(idx_t) * 8;
 	for (idx_t entry_idx = 0; original_row_idx < info.row_count; entry_idx++) {
@@ -78,16 +80,17 @@ static bool ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFu
 			}
 			auto list_column_format_index = info.list_column_format.sel->get_index(original_row_idx);
 			if (info.list_entries[list_column_format_index].length > loops + 1) {
-				execute_info.right_sel.set_index(reduced_row_idx,
-				                                 info.list_entries[list_column_format_index].offset + loops + 1);
+				right_sel.set_index(reduced_row_idx, info.list_entries[list_column_format_index].offset + loops + 1);
 				execute_info.left_sel.set_index(reduced_row_idx, valid_row_idx);
 				execute_info.active_rows_sel.set_index(reduced_row_idx, original_row_idx);
-
 				reduced_row_idx++;
+
 			} else {
 				execute_info.active_rows.SetInvalid(original_row_idx);
-				info.result.SetValue(original_row_idx, execute_info.left_slice.GetValue(valid_row_idx));
+				auto val = execute_info.left_slice->GetValue(valid_row_idx);
+				info.result.SetValue(original_row_idx, val);
 			}
+
 			original_row_idx++;
 			valid_row_idx++;
 		}
@@ -98,11 +101,11 @@ static bool ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFu
 	}
 
 	// create the index vector
-	Vector index_vector(Value::BIGINT(loops + 1));
+	Vector index_vector(Value::BIGINT(UnsafeNumericCast<int64_t>(loops + 1)));
 
 	// slice the left and right slice
-	execute_info.left_slice.Slice(execute_info.left_slice, execute_info.left_sel, reduced_row_idx);
-	Vector right_slice(*info.child_vector, execute_info.right_sel, reduced_row_idx);
+	execute_info.left_slice->Slice(*execute_info.left_slice, execute_info.left_sel, reduced_row_idx);
+	Vector right_slice(*info.child_vector, right_sel, reduced_row_idx);
 
 	// create the input chunk
 	DataChunk input_chunk;
@@ -113,7 +116,7 @@ static bool ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFu
 	if (info.has_index) {
 		input_chunk.data[0].Reference(index_vector);
 	}
-	input_chunk.data[slice_offset + 1].Reference(execute_info.left_slice);
+	input_chunk.data[slice_offset + 1].Reference(*execute_info.left_slice);
 	input_chunk.data[slice_offset].Reference(right_slice);
 
 	// add the other columns
@@ -131,16 +134,16 @@ static bool ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFu
 
 	result_chunk.Reset();
 	result_chunk.SetCardinality(reduced_row_idx);
-
 	execute_info.expr_executor->Execute(input_chunk, result_chunk);
 
-	// use the result chunk to update the left slice
-	execute_info.left_slice.Reference(result_chunk.data[0]);
+	// We need to copy the result into left_slice to avoid data loss due to vector.Reference(...).
+	// Otherwise, we only keep the data of the previous iteration alive, not that of previous iterations.
+	execute_info.left_slice = make_uniq<Vector>(result_chunk.data[0].GetType(), reduced_row_idx);
+	VectorOperations::Copy(result_chunk.data[0], *execute_info.left_slice, reduced_row_idx, 0, 0);
 	return false;
 }
 
-void LambdaFunctions::ListReduceFunction(duckdb::DataChunk &args, duckdb::ExpressionState &state,
-                                         duckdb::Vector &result) {
+void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// Initializes the left slice from the list entries, active rows, the expression executor and the input types
 	bool completed = false;
 	LambdaFunctions::LambdaInfo info(args, state, result, completed);
@@ -159,16 +162,15 @@ void LambdaFunctions::ListReduceFunction(duckdb::DataChunk &args, duckdb::Expres
 	DataChunk even_result_chunk;
 	even_result_chunk.Initialize(Allocator::DefaultAllocator(), {info.lambda_expr->return_type});
 
+	// Execute reduce until all rows are finished.
 	idx_t loops = 0;
 	bool end = false;
-	// Execute reduce until all rows are finished
 	while (!end) {
 		auto &result_chunk = loops % 2 ? odd_result_chunk : even_result_chunk;
 		auto &spare_result_chunk = loops % 2 ? even_result_chunk : odd_result_chunk;
 
 		end = ExecuteReduce(loops, execute_info, info, result_chunk);
 		spare_result_chunk.Reset();
-
 		loops++;
 	}
 

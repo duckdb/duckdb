@@ -341,6 +341,7 @@ SELECT q1 FROM int8_tbl EXCEPT ALL SELECT DISTINCT q2 FROM int8_tbl ORDER BY 1;
 statement error
 SELECT q1 FROM int8_tbl EXCEPT ALL SELECT q1 FROM int8_tbl FOR NO KEY UPDATE;
 ----
+<REGEX>:Parser Error.*SELECT locking clause is not supported.*
 
 #-- nested cases
 query III
@@ -455,6 +456,7 @@ ORDER BY q2,q1;
 statement error
 SELECT q1 FROM int8_tbl EXCEPT SELECT q2 FROM int8_tbl ORDER BY q2 LIMIT 1;
 ----
+<REGEX>:Parser Error.*SELECT locking clause is not supported.*
 
 mode unskip
 

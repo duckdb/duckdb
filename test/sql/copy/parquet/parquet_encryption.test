@@ -1,0 +1,98 @@
+# name: test/sql/copy/parquet/parquet_encryption.test
+# description: Test Parquet encryption
+# group: [parquet]
+
+require parquet
+
+# parquet keys are not persisted across restarts
+require noforcestorage
+
+statement ok
+PRAGMA enable_verification
+
+# AES key must have one of the three specified lengths or be valid Base64
+statement error
+PRAGMA add_parquet_key('my_cool_key', '42')
+----
+Invalid Input Error: Invalid AES key. Not a plain AES key NOR a base64 encoded string
+
+# Valid Base64 AES key must have one of the three specified lengths
+statement error
+PRAGMA add_parquet_key('my_invalid_duck_key', 'ZHVjaw==')
+----
+Invalid Input Error: Invalid AES key. Must have a length of 128, 192, or 256 bits (16, 24, or 32 bytes)
+
+# we dont support this yet
+statement error
+COPY (SELECT 42 i) to '__TEST_DIR__/encrypted.parquet' (ENCRYPTION_CONFIG {column_keys: {key_name: ['col0', 'col1']}})
+----
+Not implemented Error: Parquet encryption_config column_keys not yet implemented
+
+statement error
+COPY (SELECT 42 i) to '__TEST_DIR__/encrypted.parquet' (ENCRYPTION_CONFIG {footer_key: 'nonexistant'})
+----
+Binder Error: No key with name "nonexistant" exists. Add it with PRAGMA add_parquet_key('<key_name>','<key>');
+
+# add keys of 3 different lengths
+statement ok
+PRAGMA add_parquet_key('key128', '0123456789112345')
+
+statement ok
+PRAGMA add_parquet_key('key192', '012345678911234501234567')
+
+statement ok
+PRAGMA add_parquet_key('key256', '01234567891123450123456789112345')
+
+# test all valid AES key lengths
+foreach key_len 128 192 256
+
+statement ok
+COPY (SELECT 42 i) to '__TEST_DIR__/encrypted${key_len}.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
+
+query I
+SELECT * FROM read_parquet('__TEST_DIR__/encrypted${key_len}.parquet', encryption_config={footer_key: 'key${key_len}'})
+----
+42
+
+statement ok
+CREATE OR REPLACE TABLE test (i INTEGER)
+
+statement ok
+COPY test FROM '__TEST_DIR__/encrypted${key_len}.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
+
+query I
+SELECT * FROM test
+----
+42
+
+endloop
+
+# what happens if we don't try to decrypt even if the file is encrypted?
+statement error
+SELECT * FROM read_parquet('__TEST_DIR__/encrypted128.parquet')
+----
+Invalid Input Error
+
+# what if we try to decrypt with the wrong key?
+statement error
+SELECT * FROM read_parquet('__TEST_DIR__/encrypted128.parquet', encryption_config={footer_key: 'key192'})
+----
+Invalid Input Error: Computed AES tag differs from read AES tag, are you using the right key?
+
+# what if we don't encrypt, but try to decrypt?
+statement ok
+COPY (SELECT 42 i) to '__TEST_DIR__/unencrypted.parquet'
+
+statement error
+SELECT * FROM read_parquet('__TEST_DIR__/unencrypted.parquet', encryption_config={footer_key: 'key256'})
+----
+Invalid Input Error
+
+# Use Base64 encoded key
+statement ok
+PRAGMA add_parquet_key('key256base64', 'MDEyMzQ1Njc4OTExMjM0NTAxMjM0NTY3ODkxMTIzNDU=')
+
+query I
+SELECT * FROM read_parquet('__TEST_DIR__/encrypted256.parquet', encryption_config={footer_key: 'key256base64'})
+----
+42

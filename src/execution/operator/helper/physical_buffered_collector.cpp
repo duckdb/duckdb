@@ -19,31 +19,23 @@ public:
 	shared_ptr<BufferedData> buffered_data;
 };
 
-class BufferedCollectorLocalState : public LocalSinkState {
-public:
-	bool blocked = false;
-};
+class BufferedCollectorLocalState : public LocalSinkState {};
 
 SinkResultType PhysicalBufferedCollector::Sink(ExecutionContext &context, DataChunk &chunk,
                                                OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<BufferedCollectorGlobalState>();
 	auto &lstate = input.local_state.Cast<BufferedCollectorLocalState>();
+	(void)lstate;
 
 	lock_guard<mutex> l(gstate.glock);
 	auto &buffered_data = gstate.buffered_data->Cast<SimpleBufferedData>();
 
-	if (!lstate.blocked || buffered_data.BufferIsFull()) {
-		lstate.blocked = true;
+	if (buffered_data.BufferIsFull()) {
 		auto callback_state = input.interrupt_state;
-		auto blocked_sink = BlockedSink(callback_state, chunk.size());
-		buffered_data.BlockSink(blocked_sink);
+		buffered_data.BlockSink(callback_state);
 		return SinkResultType::BLOCKED;
 	}
-
-	auto to_append = make_uniq<DataChunk>();
-	to_append->Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
-	chunk.Copy(*to_append, 0);
-	buffered_data.Append(std::move(to_append));
+	buffered_data.Append(chunk);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -55,7 +47,7 @@ SinkCombineResultType PhysicalBufferedCollector::Combine(ExecutionContext &conte
 unique_ptr<GlobalSinkState> PhysicalBufferedCollector::GetGlobalSinkState(ClientContext &context) const {
 	auto state = make_uniq<BufferedCollectorGlobalState>();
 	state->context = context.shared_from_this();
-	state->buffered_data = make_shared<SimpleBufferedData>(state->context);
+	state->buffered_data = make_shared_ptr<SimpleBufferedData>(state->context);
 	return std::move(state);
 }
 

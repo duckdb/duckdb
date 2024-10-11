@@ -13,6 +13,7 @@ ColumnDataCheckpointer::ColumnDataCheckpointer(ColumnData &col_data_p, RowGroup 
       is_validity(GetType().id() == LogicalTypeId::VALIDITY),
       intermediate(is_validity ? LogicalType::BOOLEAN : GetType(), true, is_validity),
       checkpoint_info(checkpoint_info_p) {
+
 	auto &config = DBConfig::GetConfig(GetDatabase());
 	auto functions = config.GetCompressionFunctions(GetType().InternalType());
 	for (auto &func : functions) {
@@ -100,7 +101,7 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 	auto &config = DBConfig::GetConfig(GetDatabase());
 	CompressionType forced_method = CompressionType::COMPRESSION_AUTO;
 
-	auto compression_type = checkpoint_info.compression_type;
+	auto compression_type = checkpoint_info.GetCompressionType();
 	if (compression_type != CompressionType::COMPRESSION_AUTO) {
 		forced_method = ForceCompression(compression_functions, compression_type);
 	}
@@ -145,6 +146,9 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 	idx_t best_score = NumericLimits<idx_t>::Maximum();
 	for (idx_t i = 0; i < compression_functions.size(); i++) {
 		if (!compression_functions[i]) {
+			continue;
+		}
+		if (!analyze_states[i]) {
 			continue;
 		}
 		//! Check if the method type is the forced method (if forced is used)
@@ -224,18 +228,7 @@ void ColumnDataCheckpointer::WritePersistentSegments() {
 	// we only need to write the metadata
 	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
 		auto segment = nodes[segment_idx].node.get();
-		D_ASSERT(segment->segment_type == ColumnSegmentType::PERSISTENT);
-
-		// set up the data pointer directly using the data from the persistent segment
-		DataPointer pointer(segment->stats.statistics.Copy());
-		pointer.block_pointer.block_id = segment->GetBlockId();
-		pointer.block_pointer.offset = segment->GetBlockOffset();
-		pointer.row_start = segment->start;
-		pointer.tuple_count = segment->count;
-		pointer.compression_type = segment->function.get().type;
-		if (segment->function.get().serialize_state) {
-			pointer.segment_state = segment->function.get().serialize_state(*segment);
-		}
+		auto pointer = segment->GetDataPointer();
 
 		// merge the persistent stats into the global column stats
 		state.global_stats->Merge(segment->stats.statistics);

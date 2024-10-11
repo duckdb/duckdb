@@ -75,10 +75,11 @@ CREATE TABLE null_keys_list (k INT[], v INT[]);
 statement ok
 INSERT INTO null_keys_list VALUES ([1], [2]), (NULL, [4]);
 
-statement error
+query I
 SELECT MAP(k, v) FROM null_keys_list;
 ----
-The list of map keys must not be NULL.
+{1=2}
+NULL
 
 statement ok
 CREATE TABLE null_values_list (k INT[], v INT[]);
@@ -86,7 +87,8 @@ CREATE TABLE null_values_list (k INT[], v INT[]);
 statement ok
 INSERT INTO null_values_list VALUES ([1], [2]), ([4], NULL);
 
-statement error
+query I
 SELECT MAP(k, v) FROM null_values_list;
 ----
-The list of map values must not be NULL.
+{1=2}
+NULL

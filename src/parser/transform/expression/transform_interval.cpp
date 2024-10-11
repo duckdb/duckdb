@@ -32,8 +32,9 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::P
 		return make_uniq<CastExpression>(LogicalType::INTERVAL, std::move(expr));
 	}
 
-	int32_t mask = PGPointerCast<duckdb_libpgquery::PGAConst>(node.typmods->head->data.ptr_value)->val.val.ival;
-	// these seemingly random constants are from datetime.hpp
+	int32_t mask = NumericCast<int32_t>(
+	    PGPointerCast<duckdb_libpgquery::PGAConst>(node.typmods->head->data.ptr_value)->val.val.ival);
+	// these seemingly random constants are from libpg_query/include/utils/datetime.hpp
 	// they are copied here to avoid having to include this header
 	// the bitshift is from the function INTERVAL_MASK in the parser
 	constexpr int32_t MONTH_MASK = 1 << 1;
@@ -48,6 +49,7 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::P
 	constexpr int32_t DECADE_MASK = 1 << 25;
 	constexpr int32_t CENTURY_MASK = 1 << 26;
 	constexpr int32_t MILLENNIUM_MASK = 1 << 27;
+	constexpr int32_t QUARTER_MASK = 1 << 29;
 
 	// we need to check certain combinations
 	// because certain interval masks (e.g. INTERVAL '10' HOURS TO DAYS) set multiple bits
@@ -113,6 +115,10 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::P
 	} else if (mask & WEEK_MASK) {
 		// WEEK
 		fname = "to_weeks";
+		target_type = LogicalType::INTEGER;
+	} else if (mask & QUARTER_MASK) {
+		// QUARTER
+		fname = "to_quarters";
 		target_type = LogicalType::INTEGER;
 	} else if (mask & DECADE_MASK) {
 		// DECADE

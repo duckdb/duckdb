@@ -16,12 +16,12 @@ ScalarFunctionSet::ScalarFunctionSet(ScalarFunction fun) : FunctionSet(std::move
 ScalarFunction ScalarFunctionSet::GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments) {
 	ErrorData error;
 	FunctionBinder binder(context);
-	idx_t index = binder.BindFunction(name, *this, arguments, error);
-	if (index == DConstants::INVALID_INDEX) {
+	auto index = binder.BindFunction(name, *this, arguments, error);
+	if (!index.IsValid()) {
 		throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
 		                        error.Message());
 	}
-	return GetFunctionByOffset(index);
+	return GetFunctionByOffset(index.GetIndex());
 }
 
 AggregateFunctionSet::AggregateFunctionSet() : FunctionSet("") {
@@ -38,8 +38,8 @@ AggregateFunction AggregateFunctionSet::GetFunctionByArguments(ClientContext &co
                                                                const vector<LogicalType> &arguments) {
 	ErrorData error;
 	FunctionBinder binder(context);
-	idx_t index = binder.BindFunction(name, *this, arguments, error);
-	if (index == DConstants::INVALID_INDEX) {
+	auto index = binder.BindFunction(name, *this, arguments, error);
+	if (!index.IsValid()) {
 		// check if the arguments are a prefix of any of the arguments
 		// this is used for functions such as quantile or string_agg that delete part of their arguments during bind
 		// FIXME: we should come up with a better solution here
@@ -61,7 +61,7 @@ AggregateFunction AggregateFunctionSet::GetFunctionByArguments(ClientContext &co
 		throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
 		                        error.Message());
 	}
-	return GetFunctionByOffset(index);
+	return GetFunctionByOffset(index.GetIndex());
 }
 
 TableFunctionSet::TableFunctionSet(string name) : FunctionSet(std::move(name)) {
@@ -74,12 +74,12 @@ TableFunctionSet::TableFunctionSet(TableFunction fun) : FunctionSet(std::move(fu
 TableFunction TableFunctionSet::GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments) {
 	ErrorData error;
 	FunctionBinder binder(context);
-	idx_t index = binder.BindFunction(name, *this, arguments, error);
-	if (index == DConstants::INVALID_INDEX) {
+	auto index = binder.BindFunction(name, *this, arguments, error);
+	if (!index.IsValid()) {
 		throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
 		                        error.Message());
 	}
-	return GetFunctionByOffset(index);
+	return GetFunctionByOffset(index.GetIndex());
 }
 
 PragmaFunctionSet::PragmaFunctionSet(string name) : FunctionSet(std::move(name)) {

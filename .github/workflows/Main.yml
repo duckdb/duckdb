@@ -7,12 +7,9 @@ on:
       - '**'
       - '!main'
       - '!feature'
-    tags:
-      - '**'
     paths-ignore:
       - '**.md'
       - 'tools/**'
-      - '!tools/odbc/**'
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
@@ -23,7 +20,6 @@ on:
     paths-ignore:
       - '**.md'
       - 'tools/**'
-      - '!tools/odbc/**'
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
@@ -41,6 +37,8 @@ jobs:
  linux-debug:
     name: Linux Debug
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    outputs:
+      git_describe: ${{ steps.describe_step.outputs.git_describe }}
     runs-on: ubuntu-20.04
     env:
       CC: gcc-10
@@ -49,9 +47,12 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
+
+    - id: describe_step
+      run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
 
     - name: Install
       shell: bash
@@ -66,6 +67,10 @@ jobs:
     - name: Build
       shell: bash
       run:  make debug
+
+    - name: Output version info
+      shell: bash
+      run: ./build/debug/duckdb -c "PRAGMA version;"
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: bash
@@ -85,24 +90,22 @@ jobs:
     runs-on: ubuntu-20.04
     needs: linux-debug
     env:
+      OVERRIDE_GIT_DESCRIBE: ${{needs.linux-debug.outputs.git_describe}}
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
       BUILD_ICU: 1
-      BUILD_INET: 1
       BUILD_PARQUET: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
       BUILD_JSON: 1
-      BUILD_EXCEL: 1
       BUILD_JEMALLOC: 1
+      BUILD_EXTENSIONS: ""
       RUN_SLOW_VERIFIERS: 1
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+    - uses: actions/checkout@v4
 
     - name: Install
       shell: bash
@@ -117,6 +120,10 @@ jobs:
     - name: Build
       shell: bash
       run: make reldebug
+
+    - name: Output version info
+      shell: bash
+      run: ./build/reldebug/duckdb -c "PRAGMA version;"
 
     - name: Test
       shell: bash
@@ -128,23 +135,20 @@ jobs:
     runs-on: ubuntu-20.04
     needs: linux-debug
     env:
+      OVERRIDE_GIT_DESCRIBE: ${{needs.linux-debug.outputs.git_describe}}
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
       BUILD_ICU: 1
-      BUILD_INET: 1
       BUILD_PARQUET: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
       BUILD_JSON: 1
-      BUILD_EXCEL: 1
       BUILD_JEMALLOC: 1
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+    - uses: actions/checkout@v4
 
     - name: Install
       shell: bash
@@ -160,6 +164,10 @@ jobs:
       shell: bash
       run: make reldebug
 
+    - name: Output version info
+      shell: bash
+      run: ./build/reldebug/duckdb -c "PRAGMA version;"
+
     - name: Test
       shell: bash
       run: build/reldebug/test/unittest --force-reload --force-storage
@@ -170,6 +178,7 @@ jobs:
     runs-on: ubuntu-20.04
     needs: linux-debug
     env:
+      OVERRIDE_GIT_DESCRIBE: ${{needs.linux-debug.outputs.git_describe}}
       CC: gcc-10
       CXX: g++-10
       DISABLE_SANITIZER: 1
@@ -177,9 +186,7 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+    - uses: actions/checkout@v4
 
     - name: Install
       shell: bash
@@ -195,108 +202,10 @@ jobs:
       shell: bash
       run: make debug
 
+    - name: Output version info
+      shell: bash
+      run: ./build/debug/duckdb -c "PRAGMA version;"
+
     - name: Test
       shell: bash
       run: valgrind ./build/debug/test/unittest test/sql/tpch/tpch_sf001.test_slow
-
- docs:
-    name: Website Docs
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Clone Website
-      shell: bash
-      run: git clone https://github.com/duckdb/duckdb-web
-
-    - name: Set up Python 3.9
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
-
-    - name: Package
-      shell: bash
-      run: |
-        cd duckdb-web
-        python3 scripts/generate_docs.py ..
-
- odbc:
-    name: ODBC
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-    runs-on: ubuntu-22.04
-    needs: linux-debug
-    env:
-      BUILD_ODBC: 1
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.7'
-
-    - name: Dependencies
-      shell: bash
-      run: |
-        sudo apt-get update -y -qq
-        sudo apt-get install -y -qq ninja-build unixodbc-dev
-        pip3 install pyodbc
-
-    - name: Install nanodbc
-      shell: bash
-      run: |
-        wget https://github.com/nanodbc/nanodbc/archive/refs/tags/v2.14.0.tar.gz -O nanodbc.tgz
-        mkdir nanodbc
-        tar xvf nanodbc.tgz -C nanodbc --strip-components=1
-        cd nanodbc
-        wget https://github.com/catchorg/Catch2/releases/download/v2.13.9/catch.hpp
-        cp catch.hpp test/catch/catch.hpp
-        sed -i -e "s/set(test_list/set(test_list odbc/" test/CMakeLists.txt
-        mkdir build
-        cd build
-        cmake -DNANODBC_DISABLE_TESTS=OFF ..
-        cmake --build .
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      run: DISABLE_SANITIZER=1 make debug
-
-    - name: Test Standard ODBC tests
-      shell: bash
-      run:  build/debug/tools/odbc/test/test_odbc
-
-    - name: Test Connection ODBC tests
-      shell: bash
-      run: |
-        chmod +x tools/odbc/scripts/create_ini_file.sh
-        tools/odbc/scripts/create_ini_file.sh
-        build/debug/tools/odbc/test/test_connection_odbc
-
-    - name: Test nanodbc
-      shell: bash
-      run: ./tools/odbc/test/run_nanodbc_tests.sh
-
-    - name: Test isql
-      shell: bash
-      run: ./tools/odbc/test/run_isql_tests.sh
-
-    - name: Test R ODBC
-      shell: bash
-      run: R -f tools/odbc/test/rodbc.R
-
-    - name: Test Python ODBC
-      shell: bash
-      run: ./tools/odbc/test/run_pyodbc_tests.sh

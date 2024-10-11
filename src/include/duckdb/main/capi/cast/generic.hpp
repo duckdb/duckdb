@@ -23,7 +23,7 @@ RESULT_TYPE GetInternalCValue(duckdb_result *result, idx_t col, idx_t row) {
 	if (!CanFetchValue(result, col, row)) {
 		return FetchDefaultValue::Operation<RESULT_TYPE>();
 	}
-	switch (result->__deprecated_columns[col].__deprecated_type) {
+	switch (result->deprecated_columns[col].deprecated_type) {
 	case DUCKDB_TYPE_BOOLEAN:
 		return TryCastCInternal<bool, RESULT_TYPE, OP>(result, col, row);
 	case DUCKDB_TYPE_TINYINT:
@@ -65,8 +65,8 @@ RESULT_TYPE GetInternalCValue(duckdb_result *result, idx_t col, idx_t row) {
 	case DUCKDB_TYPE_BLOB:
 		return TryCastCInternal<duckdb_blob, RESULT_TYPE, FromCBlobCastWrapper>(result, col, row);
 	default: { // LCOV_EXCL_START
-		// invalid type for C to C++ conversion
-		D_ASSERT(0);
+		// Invalid type for C to C++ conversion. Internally, we set the null mask to NULL.
+		// This is a deprecated code path. Use the Vector Interface for nested and complex types.
 		return FetchDefaultValue::Operation<RESULT_TYPE>();
 	} // LCOV_EXCL_STOP
 	}

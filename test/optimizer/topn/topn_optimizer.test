@@ -1,0 +1,61 @@
+# name: test/optimizer/topn/topn_optimizer.test
+# description: Test Top N optimization
+# group: [topn]
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER)
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+# standalone limit
+query II
+EXPLAIN SELECT i FROM integers LIMIT 4
+----
+logical_opt	<REGEX>:.*LIMIT.*
+
+# standalone order by
+query II
+EXPLAIN SELECT i FROM integers ORDER BY i
+----
+logical_opt	<REGEX>:.*ORDER.*
+
+# order by + limit is transformed into top-n
+query II
+EXPLAIN SELECT i FROM integers ORDER BY i LIMIT 4
+----
+logical_opt	<REGEX>:.*TOP_N.*
+
+# also works with offset
+query II
+EXPLAIN SELECT i FROM integers ORDER BY i LIMIT 4 OFFSET 3
+----
+logical_opt	<REGEX>:.*TOP_N.*
+
+# only offset but no limit: no top-n
+query II
+EXPLAIN SELECT i FROM integers ORDER BY i OFFSET 3
+----
+logical_opt	<!REGEX>:.*TOP_N.*
+
+# only limit, but in subquery with projection pull up optimization
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM range(100000000) AS _(x) ORDER BY x) AS cte LIMIT 10
+----
+logical_opt	<REGEX>:.*TOP_N.*
+
+require noalternativeverify
+
+# top n optimization with more complex projection pull up
+query II
+EXPLAIN
+WITH cte1 AS (SELECT range%2000 a,
+					(range%2000 + 2000) b,
+					(range%2000 + 4000) c,
+					(range%2000 + 6000) d
+			FROM range(10000) ORDER BY range),
+	cte2 as (select *, a as x, b as y, c as z from cte1),
+	cte3 as (select *, a as l, b as m, c as n, d as o from cte2)
+SELECT * FROM cte3 LIMIT 4;
+----
+logical_opt	<REGEX>:.*TOP_N.*

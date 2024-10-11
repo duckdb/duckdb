@@ -14,9 +14,6 @@ void MapUtil::ReinterpretMap(Vector &result, Vector &input, idx_t count) {
 	auto &result_struct = ListVector::GetEntry(result);
 	FlatVector::SetValidity(result_struct, input_struct_data.validity);
 
-	// Set the right vector type
-	result.SetVectorType(input.GetVectorType());
-
 	// Copy the list size
 	auto list_size = ListVector::GetListSize(input);
 	ListVector::SetListSize(result, list_size);
@@ -31,6 +28,13 @@ void MapUtil::ReinterpretMap(Vector &result, Vector &input, idx_t count) {
 	auto &input_values = MapVector::GetValues(input);
 	auto &result_values = MapVector::GetValues(result);
 	result_values.Reference(input_values);
+
+	if (input.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		result.Slice(*input_data.sel, count);
+	}
+
+	// Set the right vector type
+	result.SetVectorType(input.GetVectorType());
 }
 
 void BuiltinFunctions::RegisterNestedFunctions() {

@@ -2,6 +2,9 @@
 # description: test FILE_SIZE_BYTES parameter for COPY
 # group: [copy]
 
+# different vector sizes result in different number of files
+require no_vector_verification
+
 statement ok
 CREATE TABLE bigdata AS SELECT i AS col_a, i AS col_b FROM range(0,10000) tbl(i);
 
@@ -13,7 +16,7 @@ statement ok
 COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv1' (FORMAT CSV, FILE_SIZE_BYTES 1000);
 
 query I
-SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv1/*.csv', header = 1)
+SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv1/*.csv')
 ----
 10000
 
@@ -28,7 +31,7 @@ statement ok
 COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv2' (FORMAT CSV, FILE_SIZE_BYTES '1kb');
 
 query I
-SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv2/*.csv', header = 1)
+SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv2/*.csv')
 ----
 10000
 
@@ -89,7 +92,7 @@ statement ok
 COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv3' (FORMAT CSV, FILE_SIZE_BYTES '500kb');
 
 query I
-SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv3/*.csv', header = 1)
+SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv3/*.csv')
 ----
 100000
 
@@ -104,7 +107,7 @@ statement ok
 COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv4' (FORMAT CSV, FILE_SIZE_BYTES '200kb');
 
 query I
-SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv4/*.csv', header = 1)
+SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv4/*.csv')
 ----
 100000
 
@@ -121,15 +124,15 @@ statement ok
 COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv5' (FORMAT CSV, FILE_SIZE_BYTES '700kb', PER_THREAD_OUTPUT TRUE);
 
 query I
-SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv5/*.csv', header = 1)
+SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv5/*.csv')
 ----
 100000
 
-# 4 threads, 4 files
+# should yield multiple files, can be less than 4 because we create files lazily
 query I
-SELECT count(*) FROM glob('__TEST_DIR__/file_size_bytes_csv5/*.csv')
+SELECT count(*) > 1 FROM glob('__TEST_DIR__/file_size_bytes_csv5/*.csv')
 ----
-4
+true
 
 # each thread sees ~240kb if it's balanced, what about a 190kb limit
 # even in the case of extreme thread imbalance, this always yield around 8 files
@@ -137,7 +140,7 @@ statement ok
 COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv6' (FORMAT CSV, FILE_SIZE_BYTES '190kb', PER_THREAD_OUTPUT TRUE);
 
 query I
-SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv6/*.csv', header = 1)
+SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv6/*.csv')
 ----
 100000
 

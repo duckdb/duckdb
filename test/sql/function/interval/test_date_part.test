@@ -56,10 +56,11 @@ SELECT date_part('seconds', i) FROM intervals;
 query I
 SELECT date_part('epoch', i) FROM intervals;
 ----
-63115200
-41925600
-3628800
-2066
+63115200.0
+41925600.0
+3628800.0
+2066.3434
+
 
 query I
 SELECT date_part(s, i) FROM intervals;
@@ -204,6 +205,16 @@ ORDER BY 1;
 42 days	3628800000
 1 year 4 months	41472000000
 2 years	62208000000
+
+query II
+SELECT i, nanosecond(i) AS parts
+FROM intervals
+ORDER BY 1;
+----
+00:34:26.3434	26343400000
+42 days	0
+1 year 4 months	0
+2 years	0
 
 # Invalid parts
 

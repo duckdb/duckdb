@@ -16,6 +16,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 #include <cmath>
 
@@ -33,7 +34,7 @@ struct AlpRDLeftPartInfo {
 template <class T, bool EMPTY>
 class AlpRDCompressionState {
 public:
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
+	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 	AlpRDCompressionState() : right_bit_width(0), left_bit_width(0), exceptions_count(0) {
 	}
@@ -62,7 +63,7 @@ public:
 template <class T, bool EMPTY>
 struct AlpRDCompression {
 	using State = AlpRDCompressionState<T, EMPTY>;
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
+	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 	static constexpr uint8_t EXACT_TYPE_BITSIZE = sizeof(EXACT_TYPE) * 8;
 
 	/*
@@ -72,7 +73,8 @@ struct AlpRDCompression {
 	                                      uint64_t sample_count) {
 		double exceptions_size =
 		    exceptions_count * ((AlpRDConstants::EXCEPTION_POSITION_SIZE + AlpRDConstants::EXCEPTION_SIZE) * 8);
-		double estimated_size = right_bit_width + left_bit_width + (exceptions_size / sample_count);
+		double estimated_size =
+		    right_bit_width + left_bit_width + (exceptions_size / static_cast<double>(sample_count));
 		return estimated_size;
 	}
 
@@ -104,12 +106,14 @@ struct AlpRDCompression {
 		// The left parts bit width after compression is determined by how many elements are in the dictionary
 		uint64_t actual_dictionary_size =
 		    MinValue<uint64_t>(AlpRDConstants::MAX_DICTIONARY_SIZE, left_parts_sorted_repetitions.size());
-		uint8_t left_bit_width = MaxValue<uint8_t>(1, std::ceil(std::log2(actual_dictionary_size)));
+		uint8_t left_bit_width =
+		    MaxValue<uint8_t>(1, ExactNumericCast<uint8_t>(std::ceil(std::log2(actual_dictionary_size))));
 
 		if (PERSIST_DICT) {
 			for (idx_t dict_idx = 0; dict_idx < actual_dictionary_size; dict_idx++) {
 				//! The dict keys are mapped to the left part themselves
-				state.left_parts_dict[dict_idx] = left_parts_sorted_repetitions[dict_idx].hash;
+				state.left_parts_dict[dict_idx] =
+				    UnsafeNumericCast<uint16_t>(left_parts_sorted_repetitions[dict_idx].hash);
 				state.left_parts_dict_map.insert({state.left_parts_dict[dict_idx], dict_idx});
 			}
 			//! Pararelly we store a map of the dictionary to quickly resolve exceptions during encoding
@@ -118,24 +122,24 @@ struct AlpRDCompression {
 			}
 			state.left_bit_width = left_bit_width;
 			state.right_bit_width = right_bit_width;
-			state.actual_dictionary_size = actual_dictionary_size;
+			state.actual_dictionary_size = UnsafeNumericCast<uint8_t>(actual_dictionary_size);
 
 			D_ASSERT(state.left_bit_width > 0 && state.right_bit_width > 0 &&
 			         state.left_bit_width <= AlpRDConstants::MAX_DICTIONARY_BIT_WIDTH &&
 			         state.actual_dictionary_size <= AlpRDConstants::MAX_DICTIONARY_SIZE);
 		}
 
-		double estimated_size =
-		    EstimateCompressionSize(right_bit_width, left_bit_width, exceptions_count, values.size());
+		double estimated_size = EstimateCompressionSize(right_bit_width, left_bit_width,
+		                                                UnsafeNumericCast<uint16_t>(exceptions_count), values.size());
 		return estimated_size;
 	}
 
 	static double FindBestDictionary(const vector<EXACT_TYPE> &values, State &state) {
-		uint8_t right_bit_width;
+		uint8_t right_bit_width = 0;
 		double best_dict_size = NumericLimits<int32_t>::Maximum();
 		//! Finding the best position to CUT the values
 		for (idx_t i = 1; i <= AlpRDConstants::CUTTING_LIMIT; i++) {
-			uint8_t candidate_right_bit_width = EXACT_TYPE_BITSIZE - i;
+			uint8_t candidate_right_bit_width = UnsafeNumericCast<uint8_t>(EXACT_TYPE_BITSIZE - i);
 			double estimated_size = BuildLeftPartsDictionary<false>(values, candidate_right_bit_width, state);
 			if (estimated_size <= best_dict_size) {
 				right_bit_width = candidate_right_bit_width;
@@ -156,7 +160,7 @@ struct AlpRDCompression {
 		for (idx_t i = 0; i < n_values; i++) {
 			EXACT_TYPE tmp = input_vector[i];
 			right_parts[i] = tmp & ((1ULL << state.right_bit_width) - 1);
-			left_parts[i] = (tmp >> state.right_bit_width);
+			left_parts[i] = UnsafeNumericCast<uint16_t>(tmp >> state.right_bit_width);
 		}
 
 		// Dictionary encoding for left parts
@@ -174,7 +178,7 @@ struct AlpRDCompression {
 			//! Left parts not found in the dictionary are stored as exceptions
 			if (dictionary_index >= state.actual_dictionary_size) {
 				state.exceptions[state.exceptions_count] = dictionary_key;
-				state.exceptions_positions[state.exceptions_count] = i;
+				state.exceptions_positions[state.exceptions_count] = UnsafeNumericCast<uint16_t>(i);
 				state.exceptions_count++;
 			}
 		}
@@ -197,7 +201,7 @@ struct AlpRDCompression {
 
 template <class T>
 struct AlpRDDecompression {
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
+	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 	static void Decompress(uint8_t *left_encoded, uint8_t *right_encoded, const uint16_t *left_parts_dict,
 	                       EXACT_TYPE *output, idx_t values_count, uint16_t exceptions_count,

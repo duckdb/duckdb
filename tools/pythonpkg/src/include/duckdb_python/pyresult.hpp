@@ -10,6 +10,7 @@
 
 #include "duckdb_python/numpy/numpy_result_conversion.hpp"
 #include "duckdb.hpp"
+#include "duckdb/main/chunk_scan_state.hpp"
 #include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb_python/python_objects.hpp"
 #include "duckdb_python/pybind11/dataframe.hpp"
@@ -19,6 +20,7 @@ namespace duckdb {
 struct DuckDBPyResult {
 public:
 	explicit DuckDBPyResult(unique_ptr<QueryResult> result);
+	~DuckDBPyResult();
 
 public:
 	Optional<py::tuple> Fetchone();
@@ -36,13 +38,15 @@ public:
 
 	duckdb::pyarrow::Table FetchArrowTable(idx_t rows_per_batch, bool to_polars);
 
-	PandasDataFrame FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object);
+	PandasDataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false);
 
 	py::dict FetchPyTorch();
 
 	py::dict FetchTF();
 
-	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t rows_per_batch);
+	ArrowArrayStream FetchArrowArrayStream(idx_t rows_per_batch = 1000000);
+	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t rows_per_batch = 1000000);
+	py::object FetchArrowCapsule(idx_t rows_per_batch = 1000000);
 
 	static py::list GetDescription(const vector<string> &names, const vector<LogicalType> &types);
 

@@ -1,4 +1,8 @@
 import pytest
+from duckdb.experimental.spark.exception import (
+    ContributionsAcceptedError,
+)
+from duckdb.experimental.spark.sql.types import Row
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 from duckdb.experimental.spark.sql import SparkSession
@@ -72,6 +76,18 @@ class TestSparkSession(object):
         spark.sql('create table tbl(a varchar(10))')
         df = spark.table('tbl')
 
+    def test_range(self, spark):
+        res_1 = spark.range(3).collect()
+        res_2 = spark.range(3, 10, 2).collect()
+        res_3 = spark.range(3, 6).collect()
+
+        assert res_1 == [Row(id=0), Row(id=1), Row(id=2)]
+        assert res_2 == [Row(id=3), Row(id=5), Row(id=7), Row(id=9)]
+        assert res_3 == [Row(id=3), Row(id=4), Row(id=5)]
+
+        with pytest.raises(ContributionsAcceptedError):
+            # partition size is not supported
+            spark.range(0, 10, 2, 2)
+
     def test_udf(self, spark):
-        with pytest.raises(NotImplementedError):
-            udf_registration = spark.udf
+        udf_registration = spark.udf

@@ -12,13 +12,16 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
-#include "duckdb/common/types/value.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/main/profiling_info.hpp"
 
 namespace duckdb {
+
 class ClientContext;
 class PhysicalResultCollector;
 class PreparedStatementData;
+class HTTPLogger;
 
 typedef std::function<unique_ptr<PhysicalResultCollector>(ClientContext &context, PreparedStatementData &data)>
     get_result_collector_t;
@@ -35,6 +38,9 @@ struct ClientConfig {
 	//! The file to save query profiling information to, instead of printing it to the console
 	//! (empty = print to console)
 	string profiler_save_location;
+	//! The custom settings for the profiler
+	//! (empty = use the default settings)
+	profiler_settings_t profiler_settings = ProfilingInfo::DefaultSettings();
 
 	//! Allows suppressing profiler output, even if enabled. We turn on the profiler on all test runs but don't want
 	//! to output anything
@@ -87,6 +93,17 @@ struct ClientConfig {
 	idx_t perfect_ht_threshold = 12;
 	//! The maximum number of rows to accumulate before sorting ordered aggregates.
 	idx_t ordered_aggregate_threshold = (idx_t(1) << 18);
+	//! The number of rows to accumulate before flushing during a partitioned write
+	idx_t partitioned_write_flush_threshold = idx_t(1) << idx_t(19);
+	//! The amount of rows we can keep open before we close and flush them during a partitioned write
+	idx_t partitioned_write_max_open_files = idx_t(100);
+	//! The number of rows we need on either table to choose a nested loop join
+	idx_t nested_loop_join_threshold = 5;
+	//! The number of rows we need on either table to choose a merge join over an IE join
+	idx_t merge_join_threshold = 1000;
+
+	//! The maximum amount of memory to keep buffered in a streaming query result. Default: 1mb.
+	idx_t streaming_buffer_size = 1000000;
 
 	//! Callback to create a progress bar display
 	progress_bar_display_create_func_t display_create_func = nullptr;
@@ -98,10 +115,16 @@ struct ClientConfig {
 	idx_t pivot_limit = 100000;
 
 	//! The threshold at which we switch from using filtered aggregates to LIST with a dedicated pivot operator
-	idx_t pivot_filter_threshold = 10;
+	idx_t pivot_filter_threshold = 20;
 
 	//! Whether or not the "/" division operator defaults to integer division or floating point division
 	bool integer_division = false;
+	//! When a scalar subquery returns multiple rows - return a random row instead of returning an error
+	bool scalar_subquery_error_on_multiple_rows = true;
+	//! Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL)
+	bool ieee_floating_point_ops = true;
+	//! Allow ordering by non-integer literals - ordering by such literals has no effect
+	bool order_by_non_integer_literal = false;
 
 	//! Output error messages as structured JSON instead of as a raw string
 	bool errors_as_json = false;
@@ -109,9 +132,18 @@ struct ClientConfig {
 	//! Generic options
 	case_insensitive_map_t<Value> set_variables;
 
+	//! Variables set by the user
+	case_insensitive_map_t<Value> user_variables;
+
 	//! Function that is used to create the result collector for a materialized result
 	//! Defaults to PhysicalMaterializedCollector
 	get_result_collector_t result_collector = nullptr;
+
+	//! If HTTP logging is enabled or not.
+	bool enable_http_logging = false;
+	//! The file to save query HTTP logging information to, instead of printing it to the console
+	//! (empty = print to console)
+	string http_logging_output;
 
 public:
 	static ClientConfig &GetConfig(ClientContext &context);
@@ -120,6 +152,50 @@ public:
 	bool AnyVerification() {
 		return query_verification_enabled || verify_external || verify_serializer || verify_fetch_row;
 	}
+
+	void SetUserVariable(const string &name, Value value) {
+		user_variables[name] = std::move(value);
+	}
+
+	bool GetUserVariable(const string &name, Value &result) {
+		auto entry = user_variables.find(name);
+		if (entry == user_variables.end()) {
+			return false;
+		}
+		result = entry->second;
+		return true;
+	}
+
+	void ResetUserVariable(const string &name) {
+		user_variables.erase(name);
+	}
+
+public:
+	void SetDefaultStreamingBufferSize();
+};
+
+struct ScopedConfigSetting {
+public:
+	using config_modify_func_t = std::function<void(ClientConfig &config)>;
+
+public:
+	explicit ScopedConfigSetting(ClientConfig &config, config_modify_func_t set_f = nullptr,
+	                             config_modify_func_t unset_f = nullptr)
+	    : config(config), set(std::move(set_f)), unset(std::move(unset_f)) {
+		if (set) {
+			set(config);
+		}
+	}
+	~ScopedConfigSetting() {
+		if (unset) {
+			unset(config);
+		}
+	}
+
+public:
+	ClientConfig &config;
+	config_modify_func_t set;
+	config_modify_func_t unset;
 };
 
 } // namespace duckdb

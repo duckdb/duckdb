@@ -1,0 +1,49 @@
+# name: test/sql/attach/attach_dbname_quotes.test
+# description: Test ATTACH with a quoted database name
+# group: [attach]
+
+require noforcestorage
+
+statement ok
+ATTACH ':memory:' as "my""db";
+
+statement ok
+CREATE TABLE "my""db".tbl(i int);
+
+statement ok
+INSERT INTO "my""db".tbl VALUES (42)
+
+# use with a table name in quotes
+statement ok
+USE "my""db";
+
+query I
+SELECT * FROM tbl
+----
+42
+
+statement ok
+USE memory
+
+statement ok
+CREATE SCHEMA "my""db"."my""schema"
+
+statement ok
+CREATE TABLE "my""db"."my""schema".tbl(i int);
+
+statement ok
+INSERT INTO "my""db"."my""schema".tbl VALUES (84)
+
+statement ok
+USE "my""db"."my""schema"
+
+query I
+SELECT * FROM tbl
+----
+84
+
+statement ok
+CREATE SCHEMA """"
+
+statement ok
+USE """"

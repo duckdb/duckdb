@@ -1,0 +1,391 @@
+# name: test/extension/update_extensions_ci.test
+# description: Tests for the update extensions statement
+# group: [extension]
+
+# NOTE: this test requires specific setup and should probably only by ran through `scripts/run_extension_medata_tests.sh`
+
+load __TEST_DIR__/update_extensions_ci.db
+
+# This test expects a specific state, which is marked to be present through setting this env variable.
+require-env RUN_EXTENSION_UPDATE_TEST
+
+# This repo is expected to contain json and tpch, where tpch was updated from v0.0.1 to v0.0.2
+require-env LOCAL_EXTENSION_REPO_UPDATED
+
+# This repo is expected to contain the json extension built with a binary with an incorrect platform
+require-env LOCAL_EXTENSION_REPO_INCORRECT_PLATFORM
+
+# This repo is expected to contain the json extension built with a binary with an incorrect duckdb_version
+require-env LOCAL_EXTENSION_REPO_INCORRECT_DUCKDB_VERSION
+
+# This repo is expected to contain the json extension built with a binary with an incorrect version and platform
+require-env LOCAL_EXTENSION_REPO_VERSION_AND_PLATFORM_INCORRECT
+
+# This extension dir is expected to contain json, tpch and tpcds all at version v0.0.1 and tpcds installed directly, not through
+# a repo
+require-env LOCAL_EXTENSION_DIR
+
+# This dir holds some directly installable, incorrectly matched extensions, but also a correctly installable
+require-env DIRECT_INSTALL_DIR
+
+# This extension dir is expected to contain tpch and tpcds, but with a corrupted tpcds metadata file 
+require-env LOCAL_EXTENSION_DIR_MALFORMED_INFO
+
+# This extension dir is expected to contain tpch and tpcds, but with a corrupted tpcds metadata file 
+require-env LOCAL_EXTENSION_DIR_INFO_INCORRECT_VERSION
+
+# Address on a minio server that has the LOCAL_EXTENSION_REPO_UPDATED copied to it
+require-env REMOTE_EXTENSION_REPO_UPDATED
+
+# Direct path with version and platform, for testing http direct install
+require-env REMOTE_EXTENSION_REPO_DIRECT_PATH
+
+# Parquet is statically loaded for this test
+require parquet
+
+# We start by testing some malformed dirs
+statement ok
+set extension_directory='${LOCAL_EXTENSION_DIR_MALFORMED_INFO}'
+
+# this will now throw IOError
+statement error
+FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
+----
+IO Error: Failed to read info file for 'tpcds' extension
+
+# this will now throw IOError
+statement error
+UPDATE EXTENSIONS
+----
+IO Error: Failed to read info file for 'tpcds' extension
+
+# lets restore by reinstalling tpcds
+statement ok
+FORCE INSTALL '${DIRECT_INSTALL_DIR}/tpcds.duckdb_extension';
+
+# Things are back to normal
+query IIII
+SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
+----
+tpcds	CUSTOM_PATH	./build/extension_metadata_test_data/direct_install/tpcds.duckdb_extension	v0.0.1
+
+statement ok
+load tpcds
+
+# Same here
+query IIIII
+UPDATE EXTENSIONS
+----
+tpcds	(empty)	NOT_A_REPOSITORY	v0.0.1	v0.0.1
+
+restart
+
+# Here the metadata mismatches the actually installed extension
+statement ok
+set extension_directory='${LOCAL_EXTENSION_DIR_INFO_INCORRECT_VERSION}'
+
+# duckdb_extensions() only reads the metadata. No extension files are opened
+query IIII
+SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
+----
+tpch	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.1
+
+# However when trying to load, we detect the mismatch
+statement error
+load tpch
+----
+Metadata mismatch detected when loading extension
+
+# Recovery is done by force installing
+statement ok
+FORCE INSTALL tpch FROM '${LOCAL_EXTENSION_REPO_UPDATED}'
+
+statement ok
+load tpch;
+
+restart
+
+statement ok
+set custom_extension_repository='${LOCAL_EXTENSION_REPO_UPDATED}'
+
+statement ok
+set extension_directory='${LOCAL_EXTENSION_DIR}'
+
+query IIII rowsort
+SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
+----
+inet	UNKNOWN	(empty)	(empty)
+json	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.1
+tpcds	CUSTOM_PATH	./build/extension_metadata_test_data/direct_install/tpcds.duckdb_extension	v0.0.1
+tpch	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.1
+
+query III rowsort
+SELECT extension_name, install_mode, installed_from FROM duckdb_extensions() where extension_name = 'parquet'
+----
+parquet	STATICALLY_LINKED	(empty)
+
+# Get the parquet version
+query I rowsort parquet_version
+SELECT extension_version FROM duckdb_extensions() where extension_name = 'parquet'
+----
+
+# ensure the parquet version matches duckdb's sourceid
+query I rowsort parquet_version
+select source_id from pragma_version();
+----
+
+query IIIII rowsort
+UPDATE EXTENSIONS;
+----
+inet	(empty)	MISSING_INSTALL_INFO	(empty)	(empty)
+json	<REGEX>:.*	NO_UPDATE_AVAILABLE	v0.0.1	v0.0.1
+tpcds	<REGEX>:.*	NOT_A_REPOSITORY	v0.0.1	v0.0.1
+tpch	<REGEX>:.*	UPDATED	v0.0.1	v0.0.2
+
+# duckdb_extensions() now also showing updated version
+query IIII rowsort
+SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
+----
+inet	UNKNOWN	(empty)	(empty)
+json	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.1
+tpcds	CUSTOM_PATH	./build/extension_metadata_test_data/direct_install/tpcds.duckdb_extension	v0.0.1
+tpch	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.2
+
+# Now lets restored the corrupt inet extension (it has a missing info file)
+statement ok
+FORCE INSTALL inet;
+
+# Rerunning update will now show everything being up-to-date (inet extension was force installed and is now v0.0.2)
+query IIIII rowsort
+UPDATE EXTENSIONS;
+----
+inet	<REGEX>:.*	NO_UPDATE_AVAILABLE	v0.0.2	v0.0.2
+json	<REGEX>:.*	NO_UPDATE_AVAILABLE	v0.0.1	v0.0.1
+tpcds	<REGEX>:.*	NOT_A_REPOSITORY	v0.0.1	v0.0.1
+tpch	<REGEX>:.*	NO_UPDATE_AVAILABLE	v0.0.2	v0.0.2
+
+statement ok
+load json;
+
+statement ok
+load tpch;
+
+statement ok
+load tpcds;
+
+statement ok
+load inet;
+
+# Ensure the result is still fine after loading; this will ensure Version() call matches the encoded footer value
+query IIII rowsort
+SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
+----
+inet	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.2
+json	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.1
+tpcds	CUSTOM_PATH	./build/extension_metadata_test_data/direct_install/tpcds.duckdb_extension	v0.0.1
+tpch	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.2
+
+## Try various failing installations and match their error
+statement error
+FORCE INSTALL '${DIRECT_INSTALL_DIR}/json_incorrect_platform.duckdb_extension';
+----
+Failed to install './build/extension_metadata_test_data/direct_install/json_incorrect_platform.duckdb_extension'
+The file was built for the platform 'test_platform', but we can only load extensions built for platform
+
+statement error
+FORCE INSTALL json_incorrect_platform FROM '${LOCAL_EXTENSION_REPO_INCORRECT_PLATFORM}'
+----
+Failed to install 'json_incorrect_platform'
+The file was built for the platform 'test_platform', but we can only load extensions built for platform
+
+statement error
+FORCE INSTALL '${DIRECT_INSTALL_DIR}/json_incorrect_version.duckdb_extension';
+----
+Failed to install './build/extension_metadata_test_data/direct_install/json_incorrect_version.duckdb_extension'
+The file was built for DuckDB version 'v1337', but we can only load extensions built for DuckDB version
+
+statement error
+FORCE INSTALL json_incorrect_version FROM '${LOCAL_EXTENSION_REPO_INCORRECT_DUCKDB_VERSION}';
+----
+Failed to install 'json_incorrect_version'
+The file was built for DuckDB version 'v1337', but we can only load extensions built for DuckDB version
+
+# These should print both errors
+statement error
+FORCE INSTALL '${DIRECT_INSTALL_DIR}/json_incorrect_version_and_platform.duckdb_extension';
+----
+Also, the file was built for the platform 'test_platform', but we can only load extensions built for platform
+
+statement error
+FORCE INSTALL json_incorrect_version_and_platform FROM '${LOCAL_EXTENSION_REPO_VERSION_AND_PLATFORM_INCORRECT}'
+----
+Also, the file was built for the platform 'test_platform', but we can only load extensions built for platform
+
+## Now try the same for loading, this time only with the direct load syntax
+statement error
+LOAD '${DIRECT_INSTALL_DIR}/json_incorrect_version_and_platform.duckdb_extension';
+----
+Also, the file was built for the platform 'test_platform', but we can only load extensions built for platform
+
+statement error
+LOAD '${DIRECT_INSTALL_DIR}/json_incorrect_platform.duckdb_extension';
+----
+The file was built for the platform 'test_platform', but we can only load extensions built for platform
+
+statement error
+LOAD '${DIRECT_INSTALL_DIR}/json_incorrect_version.duckdb_extension';
+----
+The file was built for DuckDB version 'v1337', but we can only load extensions built for DuckDB version
+
+# Note that this is the json extension with incorrect platform and version
+statement error
+FORCE INSTALL '${DIRECT_INSTALL_DIR}/json.duckdb_extension';
+----
+Also, the file was built for the platform 'test_platform', but we can only load extensions built for platform
+
+restart
+
+# override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues
+set ignore_error_messages
+
+# Set extension dir to a fresh one
+statement ok
+set extension_directory='__TEST_DIR__/update_extensions_ci_fresh'
+
+# Nothing installed beforehand
+query IIII
+SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
+----
+
+# Install from the remote repo
+statement ok
+force install inet from '${REMOTE_EXTENSION_REPO_UPDATED}'
+
+# Installed from the minio repo now
+query IIII
+SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
+----
+inet	REPOSITORY	http://duckdb-minio.com:9000/test-bucket-public/ci-test-repo	v0.0.2
+
+# Installed from the minio repo now
+query IIIII
+UPDATE EXTENSIONS
+----
+inet	http://duckdb-minio.com:9000/test-bucket-public/ci-test-repo	NO_UPDATE_AVAILABLE	v0.0.2	v0.0.2
+
+# Rerunning install with matching origin is a NOP and totally fine
+statement ok
+install inet from '${REMOTE_EXTENSION_REPO_UPDATED}'
+
+# Direct installing the same extension is now not allowed
+statement error
+install '${REMOTE_EXTENSION_REPO_DIRECT_PATH}/inet.duckdb_extension.gz'
+----
+Invalid Input Error: Installing extension 'inet' failed. The extension is already installed but the origin is different.
+Currently installed extension is from repository 'http://duckdb-minio.com:9000/test-bucket-public/ci-test-repo', while the extension to be installed is from custom_path
+
+# Installing the same extension from a different repository is also not allowed
+statement error
+install '${REMOTE_EXTENSION_REPO_DIRECT_PATH}/inet.duckdb_extension.gz' FROM './dummy_repo'
+----
+Invalid Input Error: Installing extension 'inet' failed. The extension is already installed but the origin is different.
+Currently installed extension is from repository 'http://duckdb-minio.com:9000/test-bucket-public/ci-test-repo', while the extension to be installed is from repository './dummy_repo'.
+To solve this rerun this command with `FORCE INSTALL`
+
+# We can circumvent this by disabling metadata checks
+statement ok
+set allow_extensions_metadata_mismatch=true;
+
+# Note that this is a NOP
+statement ok
+install '${REMOTE_EXTENSION_REPO_DIRECT_PATH}/inet.duckdb_extension.gz'
+
+# inet still the same
+query IIII
+SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
+----
+inet	REPOSITORY	http://duckdb-minio.com:9000/test-bucket-public/ci-test-repo	v0.0.2
+
+# now we force install to override
+statement ok
+force install '${REMOTE_EXTENSION_REPO_DIRECT_PATH}/inet.duckdb_extension.gz'
+
+# inet is now from a custom path
+query IIII
+SELECT extension_name, install_mode, parse_filename(installed_from), extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
+----
+inet	CUSTOM_PATH	inet.duckdb_extension.gz	v0.0.2
+
+# Other way around is fine and still a nop for now
+statement ok
+install inet from '${REMOTE_EXTENSION_REPO_UPDATED}'
+
+query IIII
+SELECT extension_name, install_mode, parse_filename(installed_from), extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
+----
+inet	CUSTOM_PATH	inet.duckdb_extension.gz	v0.0.2
+
+statement ok
+set allow_extensions_metadata_mismatch=false;
+
+### Now we test autoloading: it should be unaffected by error messages 
+statement ok
+set autoload_known_extensions=true
+
+statement ok
+set autoinstall_known_extensions=true
+
+# Set a non-existent autoinstall repo
+statement ok
+set autoinstall_extension_repository='hocus_pocus_this_is_bogus'
+
+statement ok
+set custom_extension_repository='hocus_pocus_this_is_bogus'
+
+statement ok
+FORCE INSTALL tpcds FROM '${LOCAL_EXTENSION_REPO_UPDATED}';
+
+# Note: this would trigger the origin check normally, but now 
+statement ok
+from tpcds_queries();
+
+# The file should be from the custom path, NOT the autoinstall repo
+query IIII
+SELECT extension_name, install_mode, parse_filename(installed_from), extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
+----
+inet	CUSTOM_PATH	inet.duckdb_extension.gz	v0.0.2
+tpcds	REPOSITORY	repository	v0.0.1
+
+### Tests with allow_unsigned extensions = false
+restart
+
+statement ok
+set extension_directory='${LOCAL_EXTENSION_DIR}'
+
+# Now we allow mismatching metadata
+statement ok
+set allow_extensions_metadata_mismatch=true;
+
+# Meaning that now it works
+statement ok
+FORCE INSTALL '${DIRECT_INSTALL_DIR}/json.duckdb_extension';
+
+# We can even load it
+statement ok
+LOAD json;
+
+restart
+
+# However, when signed unsigned extensions are not allowed, things are different
+statement ok
+set allow_unsigned_extensions=false
+
+# Installing is still fine
+statement ok
+FORCE INSTALL '${DIRECT_INSTALL_DIR}/json.duckdb_extension';
+
+# But loading is not
+statement error
+LOAD json;
+----
+ Also, the file was built for the platform 'test_platform', but we can only load extensions built for platform

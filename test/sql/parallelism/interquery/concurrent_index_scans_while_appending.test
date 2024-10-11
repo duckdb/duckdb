@@ -1,0 +1,34 @@
+# name: test/sql/parallelism/interquery/concurrent_index_scans_while_appending.test
+# description: Test concurrent index scans while appending
+# group: [interquery]
+
+statement ok
+CREATE TABLE integers(i INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO integers SELECT * FROM range(10000);
+
+concurrentloop threadid 0 20
+
+loop i 0 20
+
+onlyif threadid=0
+statement ok
+INSERT INTO integers SELECT * FROM range(10000 + ${i} * 100, 10100 + ${i} * 100);
+
+endloop
+
+loop i 0 100
+
+skipif threadid=0
+statement ok
+SELECT * FROM integers WHERE i=${i} * (${threadid} * 300);
+
+endloop
+
+endloop
+
+query II
+SELECT COUNT(*), SUM(i) FROM integers
+----
+12000	71994000

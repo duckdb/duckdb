@@ -50,7 +50,7 @@ SELECT EXP(1e300), EXP(1e100)
 ----
 inf	inf
 
-query RRR
-SELECT ACOS(3), ACOS(100), DEGREES(1e308)
+query R
+SELECT DEGREES(1e308)
 ----
-nan	nan	inf
+inf

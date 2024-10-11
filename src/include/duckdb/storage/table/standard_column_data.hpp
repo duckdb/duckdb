@@ -24,13 +24,16 @@ public:
 
 public:
 	void SetStart(idx_t new_start) override;
-	bool CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
 
+	ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) override;
+	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) override;
 	void InitializeScan(ColumnScanState &state) override;
 	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
 
-	idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) override;
-	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) override;
+	idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+	           idx_t target_count) override;
+	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
+	                    idx_t target_count) override;
 	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count) override;
 
 	void InitializeAppend(ColumnAppendState &state) override;
@@ -49,15 +52,16 @@ public:
 
 	unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group,
 	                                                        PartialBlockManager &partial_block_manager) override;
-	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, PartialBlockManager &partial_block_manager,
-	                                             ColumnCheckpointInfo &checkpoint_info) override;
+	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &info) override;
 	void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
 	                    Vector &scan_vector) override;
 
 	void GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,
 	                          vector<duckdb::ColumnSegmentInfo> &result) override;
 
-	void DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) override;
+	bool IsPersistent() override;
+	PersistentColumnData Serialize() override;
+	void InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) override;
 
 	void Verify(RowGroup &parent) override;
 };

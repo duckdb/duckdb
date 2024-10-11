@@ -24,20 +24,36 @@ struct FunctionLocalState {
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+};
+
+struct ScalarFunctionInfo {
+	DUCKDB_API virtual ~ScalarFunctionInfo();
+
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
 class Binder;
 class BoundFunctionExpression;
-class DependencyList;
+class LogicalDependencyList;
 class ScalarFunctionCatalogEntry;
+struct StatementProperties;
 
 struct FunctionStatisticsInput {
 	FunctionStatisticsInput(BoundFunctionExpression &expr_p, optional_ptr<FunctionData> bind_data_p,
@@ -51,6 +67,26 @@ struct FunctionStatisticsInput {
 	unique_ptr<Expression> *expr_ptr;
 };
 
+struct FunctionModifiedDatabasesInput {
+	FunctionModifiedDatabasesInput(optional_ptr<FunctionData> bind_data_p, StatementProperties &properties)
+	    : bind_data(bind_data_p), properties(properties) {
+	}
+
+	optional_ptr<FunctionData> bind_data;
+	StatementProperties &properties;
+};
+
+struct FunctionBindExpressionInput {
+	FunctionBindExpressionInput(ClientContext &context_p, optional_ptr<FunctionData> bind_data_p,
+	                            BoundFunctionExpression &function_p)
+	    : context(context_p), bind_data(bind_data_p), function(function_p) {
+	}
+
+	ClientContext &context;
+	optional_ptr<FunctionData> bind_data;
+	BoundFunctionExpression &function;
+};
+
 //! The scalar function type
 typedef std::function<void(DataChunk &, ExpressionState &, Vector &)> scalar_function_t;
 //! The type to bind the scalar function and to create the function data
@@ -61,17 +97,22 @@ typedef unique_ptr<FunctionLocalState> (*init_local_state_t)(ExpressionState &st
                                                              const BoundFunctionExpression &expr,
                                                              FunctionData *bind_data);
 //! The type to add the dependencies of this BoundFunctionExpression to the set of dependencies
-typedef void (*dependency_function_t)(BoundFunctionExpression &expr, DependencyList &dependencies);
+typedef void (*dependency_function_t)(BoundFunctionExpression &expr, LogicalDependencyList &dependencies);
 //! The type to propagate statistics for this scalar function
 typedef unique_ptr<BaseStatistics> (*function_statistics_t)(ClientContext &context, FunctionStatisticsInput &input);
 //! The type to bind lambda-specific parameter types
 typedef LogicalType (*bind_lambda_function_t)(const idx_t parameter_idx, const LogicalType &list_child_type);
+//! The type to bind lambda-specific parameter types
+typedef void (*get_modified_databases_t)(ClientContext &context, FunctionModifiedDatabasesInput &input);
 
 typedef void (*function_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                      const ScalarFunction &function);
 typedef unique_ptr<FunctionData> (*function_deserialize_t)(Deserializer &deserializer, ScalarFunction &function);
 
-class ScalarFunction : public BaseScalarFunction {
+//! The type to bind lambda-specific parameter types
+typedef unique_ptr<Expression> (*function_bind_expression_t)(FunctionBindExpressionInput &input);
+
+class ScalarFunction : public BaseScalarFunction { // NOLINT: work-around bug in clang-tidy
 public:
 	DUCKDB_API ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
 	                          scalar_function_t function, bind_scalar_function_t bind = nullptr,
@@ -102,9 +143,15 @@ public:
 	function_statistics_t statistics;
 	//! The lambda bind function (if any)
 	bind_lambda_function_t bind_lambda;
+	//! Function to bind the result function expression directly (if any)
+	function_bind_expression_t bind_expression;
+	//! Gets the modified databases (if any)
+	get_modified_databases_t get_modified_databases;
 
 	function_serialize_t serialize;
 	function_deserialize_t deserialize;
+	//! Additional function info, passed to the bind
+	shared_ptr<ScalarFunctionInfo> function_info;
 
 	DUCKDB_API bool operator==(const ScalarFunction &rhs) const;
 	DUCKDB_API bool operator!=(const ScalarFunction &rhs) const;
@@ -135,7 +182,7 @@ public:
 
 public:
 	template <class OP>
-	static scalar_function_t GetScalarUnaryFunction(LogicalType type) {
+	static scalar_function_t GetScalarUnaryFunction(const LogicalType &type) {
 		scalar_function_t function;
 		switch (type.id()) {
 		case LogicalTypeId::TINYINT:
@@ -181,7 +228,7 @@ public:
 	}
 
 	template <class TR, class OP>
-	static scalar_function_t GetScalarUnaryFunctionFixedReturn(LogicalType type) {
+	static scalar_function_t GetScalarUnaryFunctionFixedReturn(const LogicalType &type) {
 		scalar_function_t function;
 		switch (type.id()) {
 		case LogicalTypeId::TINYINT:

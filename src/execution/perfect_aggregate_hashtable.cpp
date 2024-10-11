@@ -1,5 +1,6 @@
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
 
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
@@ -25,11 +26,11 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(ClientContext &context, All
 	tuple_size = layout.GetRowWidth();
 
 	// allocate and null initialize the data
-	owned_data = make_unsafe_uniq_array<data_t>(tuple_size * total_groups);
+	owned_data = make_unsafe_uniq_array_uninitialized<data_t>(tuple_size * total_groups);
 	data = owned_data.get();
 
 	// set up the empty payloads for every tuple, and initialize the "occupied" flag to false
-	group_is_set = make_unsafe_uniq_array<bool>(total_groups);
+	group_is_set = make_unsafe_uniq_array_uninitialized<bool>(total_groups);
 	memset(group_is_set.get(), 0, total_groups * sizeof(bool));
 
 	// initialize the hash table for each entry
@@ -64,7 +65,7 @@ static void ComputeGroupLocationTemplated(UnifiedVectorFormat &group_data, Value
 			// we only need to handle non-null values here
 			if (group_data.validity.RowIsValid(index)) {
 				D_ASSERT(data[index] >= min_val);
-				uintptr_t adjusted_value = (data[index] - min_val) + 1;
+				auto adjusted_value = UnsafeNumericCast<uintptr_t>((data[index] - min_val) + 1);
 				address_data[i] += adjusted_value << current_shift;
 			}
 		}
@@ -72,7 +73,7 @@ static void ComputeGroupLocationTemplated(UnifiedVectorFormat &group_data, Value
 		// no null values: we can directly compute the addresses
 		for (idx_t i = 0; i < count; i++) {
 			auto index = group_data.sel->get_index(i);
-			uintptr_t adjusted_value = (data[index] - min_val) + 1;
+			auto adjusted_value = UnsafeNumericCast<uintptr_t>((data[index] - min_val) + 1);
 			address_data[i] += adjusted_value << current_shift;
 		}
 	}
@@ -149,7 +150,7 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 		}
 		// move to the next aggregate
 		payload_idx += input_count;
-		VectorOperations::AddInPlace(addresses, aggregate.payload_size, payload.size());
+		VectorOperations::AddInPlace(addresses, UnsafeNumericCast<int64_t>(aggregate.payload_size), payload.size());
 	}
 }
 
@@ -199,13 +200,14 @@ static void ReconstructGroupVectorTemplated(uint32_t group_values[], Value &min,
 	auto min_data = min.GetValueUnsafe<T>();
 	for (idx_t i = 0; i < entry_count; i++) {
 		// extract the value of this group from the total group index
-		auto group_index = (group_values[i] >> shift) & mask;
+		auto group_index = UnsafeNumericCast<int32_t>((group_values[i] >> shift) & mask);
 		if (group_index == 0) {
 			// if it is 0, the value is NULL
 			validity_mask.SetInvalid(i);
 		} else {
 			// otherwise we add the value (minus 1) to the min value
-			data[i] = min_data + group_index - 1;
+			data[i] = UnsafeNumericCast<T>(UnsafeNumericCast<int64_t>(min_data) +
+			                               UnsafeNumericCast<int64_t>(group_index) - 1);
 		}
 	}
 }
@@ -254,7 +256,7 @@ void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 		if (group_is_set[scan_position]) {
 			// this group is set: add it to the set of groups to extract
 			data_pointers[entry_count] = data + tuple_size * scan_position;
-			group_values[entry_count] = scan_position;
+			group_values[entry_count] = NumericCast<uint32_t>(scan_position);
 			entry_count++;
 			if (entry_count == STANDARD_VECTOR_SIZE) {
 				scan_position++;

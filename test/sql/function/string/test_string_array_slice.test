@@ -230,3 +230,27 @@ SELECT array_slice(s, (-2147483646-1), -2147483647) FROM strings
 (empty)
 (empty)
 NULL
+
+# out of bounds array slice
+query I
+select array_slice([], -1, -9223372036854775808)
+----
+[]
+
+# With constant null
+query I
+select * from (SELECT list_slice(NULL, 1, 3, 2));
+----
+NULL
+
+# With constant null
+query I
+select s[1:2] from (SELECT NULL) as t(s);
+----
+NULL
+
+# Also for arrays
+query I
+select * from (SELECT list_slice(NULL::INT[3], 1, 3, 2));
+----
+NULL

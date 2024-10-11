@@ -1,0 +1,21 @@
+# name: test/sql/function/timetz/test_icu_cast.test
+# description: Test default TIMETZ offsets with ICU loaded.
+# group: [timetz]
+
+require icu
+
+statement ok
+SET CALENDAR='gregorian';
+
+statement ok
+SET TIMEZONE='America/Phoenix';
+
+query I
+SELECT '01:00:00'::TIMETZ AS ttz
+----
+01:00:00-07
+
+query I
+SELECT '01:00:00+02'::TIMETZ AS ttz
+----
+01:00:00+02

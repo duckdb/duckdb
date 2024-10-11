@@ -87,9 +87,7 @@ void ExpressionExecutor::ExecuteExpression(DataChunk &input, Vector &result) {
 idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionVector &sel) {
 	D_ASSERT(expressions.size() == 1);
 	SetChunk(&input);
-	states[0]->profiler.BeginSample();
 	idx_t selected_tuples = Select(*expressions[0], states[0]->root_state.get(), nullptr, input.size(), &sel, nullptr);
-	states[0]->profiler.EndSample(chunk ? chunk->size() : 0);
 	return selected_tuples;
 }
 
@@ -101,9 +99,7 @@ void ExpressionExecutor::ExecuteExpression(Vector &result) {
 void ExpressionExecutor::ExecuteExpression(idx_t expr_idx, Vector &result) {
 	D_ASSERT(expr_idx < expressions.size());
 	D_ASSERT(result.GetType().id() == expressions[expr_idx]->return_type.id());
-	states[expr_idx]->profiler.BeginSample();
 	Execute(*expressions[expr_idx], states[expr_idx]->root_state.get(), nullptr, chunk ? chunk->size() : 1, result);
-	states[expr_idx]->profiler.EndSample(chunk ? chunk->size() : 0);
 }
 
 Value ExpressionExecutor::EvaluateScalar(ClientContext &context, const Expression &expr, bool allow_unfoldable) {
@@ -138,6 +134,9 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 	if (expr.verification_stats) {
 		expr.verification_stats->Verify(vector, count);
 	}
+#ifdef DUCKDB_VERIFY_DICTIONARY_EXPRESSION
+	Vector::DebugTransformToDictionary(vector, count);
+#endif
 }
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression &expr,
@@ -250,7 +249,7 @@ static inline idx_t DefaultSelectLoop(const SelectionVector *bsel, const uint8_t
 	for (idx_t i = 0; i < count; i++) {
 		auto bidx = bsel->get_index(i);
 		auto result_idx = sel->get_index(i);
-		if (bdata[bidx] > 0 && (NO_NULL || mask.RowIsValid(bidx))) {
+		if ((NO_NULL || mask.RowIsValid(bidx)) && bdata[bidx] > 0) {
 			if (HAS_TRUE_SEL) {
 				true_sel->set_index(true_count++, result_idx);
 			}

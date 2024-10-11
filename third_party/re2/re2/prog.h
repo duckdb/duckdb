@@ -18,10 +18,10 @@
 
 #include "util/util.h"
 #include "util/logging.h"
-#include "util/pod_array.h"
-#include "util/sparse_array.h"
-#include "util/sparse_set.h"
+#include "re2/pod_array.h"
 #include "re2/re2.h"
+#include "re2/sparse_array.h"
+#include "re2/sparse_set.h"
 
 namespace duckdb_re2 {
 
@@ -48,18 +48,6 @@ enum EmptyOp {
   kEmptyNonWordBoundary  = 1<<5,      // \B - not \b
   kEmptyAllFlags         = (1<<6)-1,
 };
-
-struct inst_byte_range_data_t {             // opcode == kInstByteRange
-    uint8_t lo_;       //   byte range is lo_-hi_ inclusive
-    uint8_t hi_;       //
-    uint16_t hint_foldcase_;  // 15 bits: hint, 1 (low) bit: foldcase
-    //   hint to execution engines: the delta to the
-    //   next instruction (in the current list) worth
-    //   exploring iff this instruction matched; 0
-    //   means there are no remaining possibilities,
-    //   which is most likely for character classes.
-    //   foldcase: A-Z -> a-z before checking range.
-} ;
 
 class DFA;
 class Regexp;
@@ -96,10 +84,10 @@ class Prog {
     int out()       { return out_opcode_>>4; }
     int out1()      { DCHECK(opcode() == kInstAlt || opcode() == kInstAltMatch); return out1_; }
     int cap()       { DCHECK_EQ(opcode(), kInstCapture); return cap_; }
-    int lo()        { DCHECK_EQ(opcode(), kInstByteRange); return inst_byte_range_data_.lo_; }
-    int hi()        { DCHECK_EQ(opcode(), kInstByteRange); return inst_byte_range_data_.hi_; }
-    int foldcase()  { DCHECK_EQ(opcode(), kInstByteRange); return inst_byte_range_data_.hint_foldcase_&1; }
-    int hint()      { DCHECK_EQ(opcode(), kInstByteRange); return inst_byte_range_data_.hint_foldcase_>>1; }
+    int lo()        { DCHECK_EQ(opcode(), kInstByteRange); return byte_range.lo_; }
+    int hi()        { DCHECK_EQ(opcode(), kInstByteRange); return byte_range.hi_; }
+    int foldcase()  { DCHECK_EQ(opcode(), kInstByteRange); return byte_range.hint_foldcase_&1; }
+    int hint()      { DCHECK_EQ(opcode(), kInstByteRange); return byte_range.hint_foldcase_>>1; }
     int match_id()  { DCHECK_EQ(opcode(), kInstMatch); return match_id_; }
     EmptyOp empty() { DCHECK_EQ(opcode(), kInstEmptyWidth); return empty_; }
 
@@ -115,7 +103,7 @@ class Prog {
       DCHECK_EQ(opcode(), kInstByteRange);
       if (foldcase() && 'A' <= c && c <= 'Z')
         c += 'a' - 'A';
-      return inst_byte_range_data_.lo_ <= c && c <= inst_byte_range_data_.hi_;
+      return byte_range.lo_ <= c && c <= byte_range.hi_;
     }
 
     // Returns string representation for debugging.
@@ -157,7 +145,17 @@ class Prog {
       int32_t match_id_;   // opcode == kInstMatch
                            //   Match ID to identify this match (for duckdb_re2::Set).
 
-      struct inst_byte_range_data_t inst_byte_range_data_;
+      struct {             // opcode == kInstByteRange
+        uint8_t lo_;       //   byte range is lo_-hi_ inclusive
+        uint8_t hi_;       //
+        uint16_t hint_foldcase_;  // 15 bits: hint, 1 (low) bit: foldcase
+                           //   hint to execution engines: the delta to the
+                           //   next instruction (in the current list) worth
+                           //   exploring iff this instruction matched; 0
+                           //   means there are no remaining possibilities,
+                           //   which is most likely for character classes.
+                           //   foldcase: A-Z -> a-z before checking range.
+      } byte_range;
 
       EmptyOp empty_;       // opcode == kInstEmptyWidth
                             //   empty_ is bitwise OR of kEmpty* flags above.
@@ -200,8 +198,8 @@ class Prog {
 
   Inst *inst(int id) { return &inst_[id]; }
   int start() { return start_; }
-  int start_unanchored() { return start_unanchored_; }
   void set_start(int start) { start_ = start; }
+  int start_unanchored() { return start_unanchored_; }
   void set_start_unanchored(int start) { start_unanchored_ = start; }
   int size() { return size_; }
   bool reversed() { return reversed_; }
@@ -209,19 +207,40 @@ class Prog {
   int list_count() { return list_count_; }
   int inst_count(InstOp op) { return inst_count_[op]; }
   uint16_t* list_heads() { return list_heads_.data(); }
-  void set_dfa_mem(int64_t dfa_mem) { dfa_mem_ = dfa_mem; }
+  size_t bit_state_text_max_size() { return bit_state_text_max_size_; }
   int64_t dfa_mem() { return dfa_mem_; }
-  int flags() { return flags_; }
-  void set_flags(int flags) { flags_ = flags; }
+  void set_dfa_mem(int64_t dfa_mem) { dfa_mem_ = dfa_mem; }
   bool anchor_start() { return anchor_start_; }
   void set_anchor_start(bool b) { anchor_start_ = b; }
   bool anchor_end() { return anchor_end_; }
   void set_anchor_end(bool b) { anchor_end_ = b; }
   int bytemap_range() { return bytemap_range_; }
   const uint8_t* bytemap() { return bytemap_; }
+  bool can_prefix_accel() { return prefix_size_ != 0; }
 
-  // Lazily computed.
-  int first_byte();
+  // Accelerates to the first likely occurrence of the prefix.
+  // Returns a pointer to the first byte or NULL if not found.
+  const void* PrefixAccel(const void* data, size_t size) {
+    DCHECK(can_prefix_accel());
+    if (prefix_foldcase_) {
+      return PrefixAccel_ShiftDFA(data, size);
+    } else if (prefix_size_ != 1) {
+      return PrefixAccel_FrontAndBack(data, size);
+    } else {
+      return memchr(data, prefix_front_back.prefix_front_, size);
+    }
+  }
+
+  // Configures prefix accel using the analysis performed during compilation.
+  void ConfigurePrefixAccel(const std::string& prefix, bool prefix_foldcase);
+
+  // An implementation of prefix accel that uses prefix_dfa_ to perform
+  // case-insensitive search.
+  const void* PrefixAccel_ShiftDFA(const void* data, size_t size);
+
+  // An implementation of prefix accel that looks for prefix_front_ and
+  // prefix_back_ to return fewer false positives than memchr(3) alone.
+  const void* PrefixAccel_FrontAndBack(const void* data, size_t size);
 
   // Returns string representation of program for debugging.
   std::string Dump();
@@ -292,16 +311,8 @@ class Prog {
   // FOR TESTING OR EXPERIMENTAL PURPOSES ONLY.
   int BuildEntireDFA(MatchKind kind, const DFAStateCallback& cb);
 
-  // Controls whether the DFA should bail out early if the NFA would be faster.
-  // FOR TESTING ONLY.
-  static void TEST_dfa_should_bail_when_slow(bool b);
-
   // Compute bytemap.
   void ComputeByteMap();
-
-  // Computes whether all matches must begin with the same first
-  // byte, and if so, returns that byte.  If not, returns -1.
-  int ComputeFirstByte();
 
   // Run peep-hole optimizer on program.
   void Optimize();
@@ -350,7 +361,6 @@ class Prog {
   // Returns true on success, false on error.
   bool PossibleMatchRange(std::string* min, std::string* max, int maxlen);
 
-  // EXPERIMENTAL! SUBJECT TO CHANGE!
   // Outputs the program fanout into the given sparse array.
   void Fanout(SparseArray<int>* fanout);
 
@@ -388,6 +398,10 @@ class Prog {
   // Computes hints for ByteRange instructions in [begin, end).
   void ComputeHints(std::vector<Inst>* flat, int begin, int end);
 
+  // Controls whether the DFA should bail out early if the NFA would be faster.
+  // FOR TESTING ONLY.
+  static void TESTING_ONLY_set_dfa_should_bail_when_slow(bool b);
+
  private:
   friend class Compiler;
 
@@ -404,13 +418,22 @@ class Prog {
   int start_unanchored_;    // unanchored entry point for program
   int size_;                // number of instructions
   int bytemap_range_;       // bytemap_[x] < bytemap_range_
-  int first_byte_;          // required first byte for match, or -1 if none
-  int flags_;               // regexp parse flags
 
-  int list_count_;                 // count of lists (see above)
-  int inst_count_[kNumInst];       // count of instructions by opcode
-  PODArray<uint16_t> list_heads_;  // sparse array enumerating list heads
-                                   // not populated if size_ is overly large
+  bool prefix_foldcase_;    // whether prefix is case-insensitive
+  size_t prefix_size_;      // size of prefix (0 if no prefix)
+  union {
+    uint64_t* prefix_dfa_;  // "Shift DFA" for prefix
+    struct {
+      int prefix_front_;    // first byte of prefix
+      int prefix_back_;     // last byte of prefix
+    } prefix_front_back;
+  };
+
+  int list_count_;                  // count of lists (see above)
+  int inst_count_[kNumInst];        // count of instructions by opcode
+  PODArray<uint16_t> list_heads_;   // sparse array enumerating list heads
+                                    // not populated if size_ is overly large
+  size_t bit_state_text_max_size_;  // upper bound (inclusive) on text.size()
 
   PODArray<Inst> inst_;              // pointer to instruction array
   PODArray<uint8_t> onepass_nodes_;  // data for OnePass nodes
@@ -421,7 +444,6 @@ class Prog {
 
   uint8_t bytemap_[256];    // map from input bytes to byte classes
 
-  std::once_flag first_byte_once_;
   std::once_flag dfa_first_once_;
   std::once_flag dfa_longest_once_;
 
@@ -429,6 +451,17 @@ class Prog {
   Prog& operator=(const Prog&) = delete;
 };
 
-}  // namespace duckdb_re2
+// std::string_view in MSVC has iterators that aren't just pointers and
+// that don't allow comparisons between different objects - not even if
+// those objects are views into the same string! Thus, we provide these
+// conversion functions for convenience.
+static inline const char* BeginPtr(const StringPiece& s) {
+  return s.data();
+}
+static inline const char* EndPtr(const StringPiece& s) {
+  return s.data() + s.size();
+}
+
+}  // namespace re2
 
 #endif  // RE2_PROG_H_

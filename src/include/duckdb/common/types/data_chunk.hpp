@@ -73,6 +73,8 @@ public:
 	DUCKDB_API Value GetValue(idx_t col_idx, idx_t index) const;
 	DUCKDB_API void SetValue(idx_t col_idx, idx_t index, const Value &val);
 
+	idx_t GetAllocationSize() const;
+
 	//! Returns true if all vectors in the DataChunk are constant
 	DUCKDB_API bool AllConstant() const;
 
@@ -131,7 +133,7 @@ public:
 
 	//! Slice all Vectors from other.data[i] to data[i + 'col_offset']
 	//! Turning all Vectors into Dictionary Vectors, using 'sel'
-	DUCKDB_API void Slice(DataChunk &other, const SelectionVector &sel, idx_t count, idx_t col_offset = 0);
+	DUCKDB_API void Slice(const DataChunk &other, const SelectionVector &sel, idx_t count, idx_t col_offset = 0);
 
 	//! Slice a DataChunk from "offset" to "offset + count"
 	DUCKDB_API void Slice(idx_t offset, idx_t count);
@@ -150,7 +152,7 @@ public:
 	DUCKDB_API void Hash(vector<idx_t> &column_ids, Vector &result);
 
 	//! Returns a list of types of the vectors of this data chunk
-	DUCKDB_API vector<LogicalType> GetTypes();
+	DUCKDB_API vector<LogicalType> GetTypes() const;
 
 	//! Converts this DataChunk to a printable string representation
 	DUCKDB_API string ToString() const;

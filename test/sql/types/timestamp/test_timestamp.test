@@ -153,3 +153,9 @@ query T
 SELECT TIMESTAMP '100000-01-01 00:00:01.5'::VARCHAR
 ----
 100000-01-01 00:00:01.5
+
+# Avoid infinite recursion.
+statement error
+SELECT CAST(REPEAT('1992-02-02 ', 100000) AS TIMESTAMP);
+----
+Conversion Error: timestamp field value out of range

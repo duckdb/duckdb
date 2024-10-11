@@ -28,8 +28,6 @@ struct BoundGroupInformation {
 //! functions.
 class BaseSelectBinder : public ExpressionBinder {
 public:
-	BaseSelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info,
-	                 case_insensitive_map_t<idx_t> alias_map);
 	BaseSelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info);
 
 	bool BoundAggregates() {
@@ -51,17 +49,16 @@ protected:
 
 	BoundSelectNode &node;
 	BoundGroupInformation &info;
-	case_insensitive_map_t<idx_t> alias_map;
 
 protected:
-	BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth);
 	BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth) override;
-	BindResult BindWindow(WindowExpression &expr, idx_t depth);
 
-	idx_t TryBindGroup(ParsedExpression &expr, idx_t depth);
+	//! Binds a WINDOW expression and returns the result.
+	virtual BindResult BindWindow(WindowExpression &expr, idx_t depth);
+	virtual BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression);
+
+	idx_t TryBindGroup(ParsedExpression &expr);
 	BindResult BindGroup(ParsedExpression &expr, idx_t depth, idx_t group_index);
-
-	bool QualifyColumnAlias(const ColumnRefExpression &colref) override;
 };
 
 } // namespace duckdb

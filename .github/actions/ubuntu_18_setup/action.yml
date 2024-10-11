@@ -16,6 +16,9 @@ inputs:
   ccache:
     description: 'Install ccache'
     default: 0
+  git_ref:
+    description: 'git reference to checkout'
+    default: ''
 
 runs:
   using: "composite"
@@ -27,7 +30,7 @@ runs:
         apt-get install -y -qq software-properties-common
         add-apt-repository ppa:git-core/ppa
         apt-get update -y -qq
-        apt-get install -y -qq ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev libc6-dev-i386 lib32readline6-dev libssl-dev libcurl4-gnutls-dev libexpat1-dev gettext unzip build-essential checkinstall libffi-dev curl libz-dev openssh-client pkg-config
+        apt-get install -y -qq --fix-missing ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev libc6-dev-i386 lib32readline6-dev libssl-dev libcurl4-gnutls-dev libexpat1-dev gettext unzip build-essential checkinstall libffi-dev curl libz-dev openssh-client pkg-config
 
     - name: Install
       shell: bash
@@ -48,6 +51,7 @@ runs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
 
     - name: Install CMake 3.21
       shell: bash
@@ -84,7 +88,7 @@ runs:
       if: ${{ inputs.vcpkg == 1 }}
       uses: lukka/run-vcpkg@v11.1
       with:
-        vcpkgGitCommitId: a42af01b72c28a8e1d7b48107b33e4f286a55ef6
+        vcpkgGitCommitId: a1a1cbc975abf909a6c8985a6a2b8fe20bbd9bd6
 
     - name: Setup Ccache
       if: ${{ inputs.ccache == 1 }}

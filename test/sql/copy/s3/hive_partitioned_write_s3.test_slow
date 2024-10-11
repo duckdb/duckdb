@@ -24,7 +24,7 @@ require-env DUCKDB_S3_USE_SSL
 set ignore_error_messages
 
 statement ok
-pragma memory_limit='100mb'
+pragma memory_limit='200MB'
 
 statement ok
 set http_timeout=120000;

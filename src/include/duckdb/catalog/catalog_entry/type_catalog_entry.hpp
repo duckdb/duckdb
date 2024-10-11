@@ -26,6 +26,8 @@ public:
 
 	LogicalType user_type;
 
+	bind_type_modifiers_function_t bind_modifiers;
+
 public:
 	unique_ptr<CreateInfo> GetInfo() const override;
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;

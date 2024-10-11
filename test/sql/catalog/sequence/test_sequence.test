@@ -77,19 +77,15 @@ SELECT currval(NULL)
 ----
 NULL
 
-query I
+statement error
 SELECT nextval(a) FROM (VALUES ('seq'), (NULL), ('seq')) tbl1(a)
 ----
-5
-NULL
-6
+non-constant sequences are no longer supported
 
-query I
+statement error
 SELECT currval(a) FROM (VALUES ('seq'), (NULL), ('seq')) tbl1(a)
 ----
-6
-NULL
-6
+non-constant sequences are no longer supported
 
 # can't create a sequence that already exists
 statement error
@@ -479,18 +475,16 @@ SELECT s, currval('seq') FROM strings
 seq	2
 seq2	2
 
-# we can also use the strings from the table as input to the sequence
-query TI
+# we cannot use the strings from the table as input to the sequence
+statement error
 SELECT s, nextval(s) FROM strings
 ----
-seq	3
-seq2	1
+non-constant sequences are no longer supported
 
-query TI
+statement error
 SELECT s, currval(s) FROM strings
 ----
-seq	3
-seq2	1
+non-constant sequences are no longer supported
 
 # this will also cause an error if the sequence does not exist
 statement ok

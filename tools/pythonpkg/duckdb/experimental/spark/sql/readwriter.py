@@ -1,12 +1,13 @@
-from typing import TYPE_CHECKING, Iterable, List, Optional, Union, cast
+from typing import TYPE_CHECKING, List, Optional, Union, cast
 
 from ..exception import ContributionsAcceptedError
 from .types import StructType
 
-PrimitiveType = Union[bool, float, int, str]
-OptionalPrimitiveType = Optional[PrimitiveType]
 
 from ..errors import PySparkNotImplementedError, PySparkTypeError
+
+PrimitiveType = Union[bool, float, int, str]
+OptionalPrimitiveType = Optional[PrimitiveType]
 
 if TYPE_CHECKING:
     from duckdb.experimental.spark.sql.dataframe import DataFrame
@@ -340,92 +341,92 @@ class DataFrameReader:
         +---+------------+
         """
 
-        if schema != None:
+        if schema is not None:
             raise ContributionsAcceptedError("The 'schema' option is not supported")
-        if primitivesAsString != None:
+        if primitivesAsString is not None:
             raise ContributionsAcceptedError(
                 "The 'primitivesAsString' option is not supported"
             )
-        if prefersDecimal != None:
+        if prefersDecimal is not None:
             raise ContributionsAcceptedError(
                 "The 'prefersDecimal' option is not supported"
             )
-        if allowComments != None:
+        if allowComments is not None:
             raise ContributionsAcceptedError(
                 "The 'allowComments' option is not supported"
             )
-        if allowUnquotedFieldNames != None:
+        if allowUnquotedFieldNames is not None:
             raise ContributionsAcceptedError(
                 "The 'allowUnquotedFieldNames' option is not supported"
             )
-        if allowSingleQuotes != None:
+        if allowSingleQuotes is not None:
             raise ContributionsAcceptedError(
                 "The 'allowSingleQuotes' option is not supported"
             )
-        if allowNumericLeadingZero != None:
+        if allowNumericLeadingZero is not None:
             raise ContributionsAcceptedError(
                 "The 'allowNumericLeadingZero' option is not supported"
             )
-        if allowBackslashEscapingAnyCharacter != None:
+        if allowBackslashEscapingAnyCharacter is not None:
             raise ContributionsAcceptedError(
                 "The 'allowBackslashEscapingAnyCharacter' option is not supported"
             )
-        if mode != None:
+        if mode is not None:
             raise ContributionsAcceptedError("The 'mode' option is not supported")
-        if columnNameOfCorruptRecord != None:
+        if columnNameOfCorruptRecord is not None:
             raise ContributionsAcceptedError(
                 "The 'columnNameOfCorruptRecord' option is not supported"
             )
-        if dateFormat != None:
+        if dateFormat is not None:
             raise ContributionsAcceptedError("The 'dateFormat' option is not supported")
-        if timestampFormat != None:
+        if timestampFormat is not None:
             raise ContributionsAcceptedError(
                 "The 'timestampFormat' option is not supported"
             )
-        if multiLine != None:
+        if multiLine is not None:
             raise ContributionsAcceptedError("The 'multiLine' option is not supported")
-        if allowUnquotedControlChars != None:
+        if allowUnquotedControlChars is not None:
             raise ContributionsAcceptedError(
                 "The 'allowUnquotedControlChars' option is not supported"
             )
-        if lineSep != None:
+        if lineSep is not None:
             raise ContributionsAcceptedError("The 'lineSep' option is not supported")
-        if samplingRatio != None:
+        if samplingRatio is not None:
             raise ContributionsAcceptedError(
                 "The 'samplingRatio' option is not supported"
             )
-        if dropFieldIfAllNull != None:
+        if dropFieldIfAllNull is not None:
             raise ContributionsAcceptedError(
                 "The 'dropFieldIfAllNull' option is not supported"
             )
-        if encoding != None:
+        if encoding is not None:
             raise ContributionsAcceptedError("The 'encoding' option is not supported")
-        if locale != None:
+        if locale is not None:
             raise ContributionsAcceptedError("The 'locale' option is not supported")
-        if pathGlobFilter != None:
+        if pathGlobFilter is not None:
             raise ContributionsAcceptedError(
                 "The 'pathGlobFilter' option is not supported"
             )
-        if recursiveFileLookup != None:
+        if recursiveFileLookup is not None:
             raise ContributionsAcceptedError(
                 "The 'recursiveFileLookup' option is not supported"
             )
-        if modifiedBefore != None:
+        if modifiedBefore is not None:
             raise ContributionsAcceptedError(
                 "The 'modifiedBefore' option is not supported"
             )
-        if modifiedAfter != None:
+        if modifiedAfter is not None:
             raise ContributionsAcceptedError(
                 "The 'modifiedAfter' option is not supported"
             )
-        if allowNonNumericNumbers != None:
+        if allowNonNumericNumbers is not None:
             raise ContributionsAcceptedError(
                 "The 'allowNonNumericNumbers' option is not supported"
             )
 
         if isinstance(path, str):
             path = [path]
-        if type(path) == list:
+        if  isinstance(path, list):
             if len(path) == 1:
                 rel = self.session.conn.read_json(path[0])
                 from .dataframe import DataFrame

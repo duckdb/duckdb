@@ -17,10 +17,10 @@ class HTTPException : public Exception {
 public:
 	template <typename>
 	struct ResponseShape {
-		typedef int status;
+		typedef int status; // NOLINT
 	};
 
-	explicit HTTPException(string message) : Exception(ExceptionType::HTTP, std::move(message)) {
+	explicit HTTPException(const string &message) : Exception(ExceptionType::HTTP, message) {
 	}
 
 	template <class RESPONSE, typename ResponseShape<decltype(RESPONSE::status)>::status = 0, typename... ARGS>
@@ -30,7 +30,7 @@ public:
 
 	template <typename>
 	struct ResponseWrapperShape {
-		typedef int code;
+		typedef int code; // NOLINT
 	};
 
 	template <class RESPONSE, typename ResponseWrapperShape<decltype(RESPONSE::code)>::code = 0, typename... ARGS>

@@ -39,13 +39,12 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	// lookup the function in the catalog
 	QueryErrorContext error_context(function.query_location);
 	binder.BindSchemaOrCatalog(function.catalog, function.schema);
-	auto func = Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
-	                              function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
+	auto func = GetCatalogEntry(CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
+	                            function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
 	if (!func) {
 		// function was not found - check if we this is a table function
-		auto table_func =
-		    Catalog::GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, function.catalog, function.schema,
-		                      function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
+		auto table_func = GetCatalogEntry(CatalogType::TABLE_FUNCTION_ENTRY, function.catalog, function.schema,
+		                                  function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
 		if (table_func) {
 			throw BinderException(function,
 			                      "Function \"%s\" is a table function but it was used as a scalar function. This "
@@ -75,8 +74,8 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 			}
 		}
 		// rebind the function
-		func = Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
-		                         function.function_name, OnEntryNotFound::THROW_EXCEPTION, error_context);
+		func = GetCatalogEntry(CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
+		                       function.function_name, OnEntryNotFound::THROW_EXCEPTION, error_context);
 	}
 
 	if (func->type != CatalogType::AGGREGATE_FUNCTION_ENTRY &&
@@ -88,9 +87,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 
 	switch (func->type) {
 	case CatalogType::SCALAR_FUNCTION_ENTRY: {
-		// scalar function
-		if (IsLambdaFunction(function)) {
-			// special case
+		if (function.IsLambdaFunction()) {
 			return TryBindLambdaOrJson(function, depth, *func);
 		}
 		return BindFunction(function, func->Cast<ScalarFunctionCatalogEntry>(), depth);
@@ -266,11 +263,14 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function,
                                            idx_t depth) {
-	return BindResult(BinderException(expr, UnsupportedAggregateMessage()));
+	return BindUnsupportedExpression(expr, depth, UnsupportedAggregateMessage());
 }
 
 BindResult ExpressionBinder::BindUnnest(FunctionExpression &expr, idx_t depth, bool root_expression) {
-	return BindResult(BinderException(expr, UnsupportedUnnestMessage()));
+	return BindUnsupportedExpression(expr, depth, UnsupportedUnnestMessage());
+}
+
+void ExpressionBinder::ThrowIfUnnestInLambda(const ColumnBinding &column_binding) {
 }
 
 string ExpressionBinder::UnsupportedAggregateMessage() {
@@ -279,6 +279,13 @@ string ExpressionBinder::UnsupportedAggregateMessage() {
 
 string ExpressionBinder::UnsupportedUnnestMessage() {
 	return "UNNEST not supported here";
+}
+
+optional_ptr<CatalogEntry> ExpressionBinder::GetCatalogEntry(CatalogType type, const string &catalog,
+                                                             const string &schema, const string &name,
+                                                             OnEntryNotFound on_entry_not_found,
+                                                             QueryErrorContext &error_context) {
+	return binder.GetCatalogEntry(type, catalog, schema, name, on_entry_not_found, error_context);
 }
 
 } // namespace duckdb

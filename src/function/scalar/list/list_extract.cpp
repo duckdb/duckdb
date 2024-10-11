@@ -1,159 +1,40 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
-
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
 
 namespace duckdb {
 
-template <class T, bool HEAP_REF = false, bool VALIDITY_ONLY = false>
-void ListExtractTemplate(idx_t count, UnifiedVectorFormat &list_data, UnifiedVectorFormat &offsets_data,
-                         Vector &child_vector, idx_t list_size, Vector &result) {
-	UnifiedVectorFormat child_format;
-	child_vector.ToUnifiedFormat(list_size, child_format);
-
-	T *result_data;
-
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	if (!VALIDITY_ONLY) {
-		result_data = FlatVector::GetData<T>(result);
-	}
-	auto &result_mask = FlatVector::Validity(result);
-
-	// heap-ref once
-	if (HEAP_REF) {
-		StringVector::AddHeapReference(result, child_vector);
+static optional_idx TryGetChildOffset(const list_entry_t &list_entry, const int64_t offset) {
+	// 1-based indexing
+	if (offset == 0) {
+		return optional_idx::Invalid();
 	}
 
-	// this is lifted from ExecuteGenericLoop because we can't push the list child data into this otherwise
-	// should have gone with GetValue perhaps
-	auto child_data = UnifiedVectorFormat::GetData<T>(child_format);
-	for (idx_t i = 0; i < count; i++) {
-		auto list_index = list_data.sel->get_index(i);
-		auto offsets_index = offsets_data.sel->get_index(i);
-		if (!list_data.validity.RowIsValid(list_index)) {
-			result_mask.SetInvalid(i);
-			continue;
+	const auto index_offset = (offset > 0) ? offset - 1 : offset;
+	if (index_offset < 0) {
+		const auto signed_list_length = UnsafeNumericCast<int64_t>(list_entry.length);
+		if (signed_list_length + index_offset < 0) {
+			return optional_idx::Invalid();
 		}
-		if (!offsets_data.validity.RowIsValid(offsets_index)) {
-			result_mask.SetInvalid(i);
-			continue;
-		}
-		auto list_entry = (UnifiedVectorFormat::GetData<list_entry_t>(list_data))[list_index];
-		auto offsets_entry = (UnifiedVectorFormat::GetData<int64_t>(offsets_data))[offsets_index];
+		return optional_idx(list_entry.offset + UnsafeNumericCast<idx_t>(signed_list_length + index_offset));
+	}
 
-		// 1-based indexing
-		if (offsets_entry == 0) {
-			result_mask.SetInvalid(i);
-			continue;
-		}
-		offsets_entry = (offsets_entry > 0) ? offsets_entry - 1 : offsets_entry;
+	const auto unsigned_offset = UnsafeNumericCast<idx_t>(index_offset);
 
-		idx_t child_offset;
-		if (offsets_entry < 0) {
-			if (offsets_entry < -int64_t(list_entry.length)) {
-				result_mask.SetInvalid(i);
-				continue;
-			}
-			child_offset = list_entry.offset + list_entry.length + offsets_entry;
-		} else {
-			if ((idx_t)offsets_entry >= list_entry.length) {
-				result_mask.SetInvalid(i);
-				continue;
-			}
-			child_offset = list_entry.offset + offsets_entry;
-		}
-		auto child_index = child_format.sel->get_index(child_offset);
-		if (child_format.validity.RowIsValid(child_index)) {
-			if (!VALIDITY_ONLY) {
-				result_data[i] = child_data[child_index];
-			}
-		} else {
-			result_mask.SetInvalid(i);
-		}
+	// Check that the offset is within the list
+	if (unsigned_offset >= list_entry.length) {
+		return optional_idx::Invalid();
 	}
-	if (count == 1) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-}
-static void ExecuteListExtractInternal(const idx_t count, UnifiedVectorFormat &list, UnifiedVectorFormat &offsets,
-                                       Vector &child_vector, idx_t list_size, Vector &result) {
-	D_ASSERT(child_vector.GetType() == result.GetType());
-	switch (result.GetType().InternalType()) {
-	case PhysicalType::BOOL:
-	case PhysicalType::INT8:
-		ListExtractTemplate<int8_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case PhysicalType::INT16:
-		ListExtractTemplate<int16_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case PhysicalType::INT32:
-		ListExtractTemplate<int32_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case PhysicalType::INT64:
-		ListExtractTemplate<int64_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case PhysicalType::INT128:
-		ListExtractTemplate<hugeint_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case PhysicalType::UINT8:
-		ListExtractTemplate<uint8_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case PhysicalType::UINT16:
-		ListExtractTemplate<uint16_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case PhysicalType::UINT32:
-		ListExtractTemplate<uint32_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case PhysicalType::UINT64:
-		ListExtractTemplate<uint64_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case PhysicalType::UINT128:
-		ListExtractTemplate<uhugeint_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case PhysicalType::FLOAT:
-		ListExtractTemplate<float>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case PhysicalType::DOUBLE:
-		ListExtractTemplate<double>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case PhysicalType::VARCHAR:
-		ListExtractTemplate<string_t, true>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case PhysicalType::INTERVAL:
-		ListExtractTemplate<interval_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case PhysicalType::STRUCT: {
-		auto &entries = StructVector::GetEntries(child_vector);
-		auto &result_entries = StructVector::GetEntries(result);
-		D_ASSERT(entries.size() == result_entries.size());
-		// extract the child entries of the struct
-		for (idx_t i = 0; i < entries.size(); i++) {
-			ExecuteListExtractInternal(count, list, offsets, *entries[i], list_size, *result_entries[i]);
-		}
-		// extract the validity mask
-		ListExtractTemplate<bool, false, true>(count, list, offsets, child_vector, list_size, result);
-		break;
-	}
-	case PhysicalType::LIST: {
-		// nested list: we have to reference the child
-		auto &child_child_list = ListVector::GetEntry(child_vector);
 
-		ListVector::GetEntry(result).Reference(child_child_list);
-		ListVector::SetListSize(result, ListVector::GetListSize(child_vector));
-		ListExtractTemplate<list_entry_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	}
-	default:
-		throw NotImplementedException("Unimplemented type for LIST_EXTRACT");
-	}
+	return optional_idx(list_entry.offset + unsigned_offset);
 }
 
 static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, const idx_t count) {
@@ -163,8 +44,62 @@ static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, co
 
 	list.ToUnifiedFormat(count, list_data);
 	offsets.ToUnifiedFormat(count, offsets_data);
-	ExecuteListExtractInternal(count, list_data, offsets_data, ListVector::GetEntry(list),
-	                           ListVector::GetListSize(list), result);
+
+	const auto list_ptr = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
+	const auto offsets_ptr = UnifiedVectorFormat::GetData<int64_t>(offsets_data);
+
+	UnifiedVectorFormat child_data;
+	auto &child_vector = ListVector::GetEntry(list);
+	auto child_count = ListVector::GetListSize(list);
+	child_vector.ToUnifiedFormat(child_count, child_data);
+
+	SelectionVector sel(count);
+	vector<idx_t> invalid_offsets;
+
+	optional_idx first_valid_child_idx;
+	for (idx_t i = 0; i < count; i++) {
+		const auto list_index = list_data.sel->get_index(i);
+		const auto offsets_index = offsets_data.sel->get_index(i);
+
+		if (!list_data.validity.RowIsValid(list_index) || !offsets_data.validity.RowIsValid(offsets_index)) {
+			invalid_offsets.push_back(i);
+			continue;
+		}
+
+		const auto child_offset = TryGetChildOffset(list_ptr[list_index], offsets_ptr[offsets_index]);
+
+		if (!child_offset.IsValid()) {
+			invalid_offsets.push_back(i);
+			continue;
+		}
+
+		const auto child_idx = child_data.sel->get_index(child_offset.GetIndex());
+		sel.set_index(i, child_idx);
+
+		if (!first_valid_child_idx.IsValid()) {
+			// Save the first valid child as a dummy index to copy in VectorOperations::Copy later
+			first_valid_child_idx = child_idx;
+		}
+	}
+
+	if (first_valid_child_idx.IsValid()) {
+		// Only copy if we found at least one valid child
+		for (const auto &invalid_offset : invalid_offsets) {
+			sel.set_index(invalid_offset, first_valid_child_idx.GetIndex());
+		}
+		VectorOperations::Copy(child_vector, result, sel, count, 0, 0);
+	}
+
+	// Copy:ing the vectors also copies the validity mask, so we set the rows with invalid offsets (0) to false here.
+	for (const auto &invalid_idx : invalid_offsets) {
+		FlatVector::SetNull(result, invalid_idx, true);
+	}
+
+	if (count == 1 || (list.GetVectorType() == VectorType::CONSTANT_VECTOR &&
+	                   offsets.GetVectorType() == VectorType::CONSTANT_VECTOR)) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
+
 	result.Verify(count);
 }
 
@@ -178,13 +113,6 @@ static void ExecuteStringExtract(Vector &result, Vector &input_vector, Vector &s
 static void ListExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 2);
 	auto count = args.size();
-
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	for (idx_t i = 0; i < args.ColumnCount(); i++) {
-		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(VectorType::FLAT_VECTOR);
-		}
-	}
 
 	Vector &base = args.data[0];
 	Vector &subscript = args.data[1];

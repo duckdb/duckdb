@@ -52,9 +52,10 @@ statement error
 SELECT MIN()
 ----
 
-statement error
+query I
 SELECT MIN(1, 2)
 ----
+[1]
 
 query IIRTTTT
 SELECT MAX(1), MAX(NULL), MAX(33.3), MAX('hello'), MAX(True), MAX(DATE '1992-02-02'), MAX(TIMESTAMP '2008-01-01 00:00:01')
@@ -65,9 +66,10 @@ statement error
 SELECT MAX()
 ----
 
-statement error
+query I
 SELECT MAX(1, 2)
 ----
+[1]
 
 query IIRTTTT
 SELECT FIRST(1), FIRST(NULL), FIRST(33.3), FIRST('hello'), FIRST(True), FIRST(DATE '1992-02-02'), FIRST(TIMESTAMP '2008-01-01 00:00:01')
@@ -145,12 +147,12 @@ statement ok
 INSERT INTO test_val VALUES(1), (2), (3), (3), (2)
 
 query T
-SELECT STRING_AGG(DISTINCT val::VARCHAR ORDER BY val DESC) from test_val;
+SELECT STRING_AGG(DISTINCT val::VARCHAR ORDER BY val::VARCHAR DESC) from test_val;
 ----
 3,2,1
 
 query IT
-SELECT COUNT(NULL), STRING_AGG(DISTINCT val::VARCHAR ORDER BY val ASC) from test_val;
+SELECT COUNT(NULL), STRING_AGG(DISTINCT val::VARCHAR ORDER BY val::VARCHAR ASC) from test_val;
 ----
 0
 1,2,3

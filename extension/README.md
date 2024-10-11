@@ -170,6 +170,7 @@ duckdb_extension_load(extension_2
     GIT_TAG some_git_hash
 )
 ```
+
 Now to merge the vcpkg.json manifests from these two extension run:
 ```shell   
 make extension_configuration

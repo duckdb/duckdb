@@ -115,9 +115,11 @@ copy_options: copy_opt_list							{ $$ = $1; }
 copy_generic_opt_arg:
 			opt_boolean_or_string			{ $$ = (PGNode *) makeString($1); }
 			| NumericOnly					{ $$ = (PGNode *) $1; }
+			| list_expr                     { $$ = (PGNode *) $1; }
 			| '*'							{ $$ = (PGNode *) makeNode(PGAStar); }
 			| '(' copy_generic_opt_arg_list ')'		{ $$ = (PGNode *) $2; }
 			| struct_expr					{ $$ = (PGNode *) $1; }
+			| map_expr					    { $$ = (PGNode *) $1; }
 			| /* EMPTY */					{ $$ = NULL; }
 		;
 

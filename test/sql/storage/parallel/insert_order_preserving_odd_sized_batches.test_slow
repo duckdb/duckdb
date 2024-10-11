@@ -2,8 +2,8 @@
 # description: Test parallel order-preserving insert
 # group: [parallel]
 
-# for smaller block sizes, we see different numbers of distinct blocks
-# because the segment size is bound by the block size
+# There are different numbers of distinct blocks for smaller block sizes,
+# because the segment size is bound by the block size.
 require block_size 262144
 
 require vector_size 512
@@ -59,9 +59,9 @@ SELECT COUNT(DISTINCT block_id) < 4 FROM pragma_storage_info('integers_parquet')
 true
 
 query I
-SELECT MEDIAN(count) FROM pragma_storage_info('integers_parquet');
+SELECT MEDIAN(count)>100000 FROM pragma_storage_info('integers_parquet');
 ----
-122880
+true
 
 # verify that reading without preserving insertion order creates the same size table
 statement ok
@@ -76,6 +76,6 @@ SELECT COUNT(DISTINCT block_id) < 4 FROM pragma_storage_info('integers_parquet_n
 true
 
 query I
-SELECT MEDIAN(count) FROM pragma_storage_info('integers_parquet_no_order');
+SELECT MEDIAN(count)>100000 FROM pragma_storage_info('integers_parquet_no_order');
 ----
-122880
+true

@@ -57,6 +57,10 @@ struct DuckDBSecretsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DuckDBWhichSecretFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBDatabasesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -106,6 +110,10 @@ struct DuckDBTemporaryFilesFun {
 };
 
 struct DuckDBTypesFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBVariablesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

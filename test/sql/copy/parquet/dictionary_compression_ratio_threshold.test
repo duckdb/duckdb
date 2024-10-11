@@ -1,0 +1,76 @@
+# name: test/sql/copy/parquet/dictionary_compression_ratio_threshold.test
+# description: Test Parquet dictionary_compression_ratio_threshold parameter
+# group: [parquet]
+
+require parquet
+
+statement ok
+CREATE TABLE test AS SELECT 'thisisaverylongstringbutitrepeatsmanytimessoitshighlycompressible' || (range % 10) i FROM range(100000)
+
+# cannot be negative
+statement error
+COPY test TO '__TEST_DIR__/dictionary_compression_ratio_threshold.parquet' (dictionary_compression_ratio_threshold -2)
+----
+Binder Error: dictionary_compression_ratio_threshold must be greater than 0, or -1 to disable dictionary compression
+
+# default is 1.0
+statement ok
+COPY test TO '__TEST_DIR__/dictionary_compression_ratio_threshold.parquet'
+
+# dictionary compression is applied so page offset is non-null
+query I
+SELECT dictionary_page_offset IS NULL FROM parquet_metadata('__TEST_DIR__/dictionary_compression_ratio_threshold.parquet')
+----
+false
+
+# -1 to disable
+statement ok
+COPY test TO '__TEST_DIR__/dictionary_compression_ratio_threshold.parquet' (dictionary_compression_ratio_threshold -1)
+
+# disabled, so no dictionary compression
+query I
+SELECT dictionary_page_offset IS NULL FROM parquet_metadata('__TEST_DIR__/dictionary_compression_ratio_threshold.parquet')
+----
+true
+
+# the data compresses more than 10x
+statement ok
+COPY test TO '__TEST_DIR__/dictionary_compression_ratio_threshold.parquet' (dictionary_compression_ratio_threshold 10)
+
+# dictionary compression should be enabled
+query I
+SELECT dictionary_page_offset IS NULL FROM parquet_metadata('__TEST_DIR__/dictionary_compression_ratio_threshold.parquet')
+----
+false
+
+# compresses less than 20x
+statement ok
+COPY test TO '__TEST_DIR__/dictionary_compression_ratio_threshold.parquet' (dictionary_compression_ratio_threshold 20)
+
+# dictionary compression should be disabled
+query I
+SELECT dictionary_page_offset IS NULL FROM parquet_metadata('__TEST_DIR__/dictionary_compression_ratio_threshold.parquet')
+----
+true
+
+# create table with all uniques
+statement ok
+CREATE OR REPLACE TABLE test AS SELECT 'coolstring' || range i FROM range(100000)
+
+# shouldn't have dictionary compression with default of 1.0
+statement ok
+COPY test TO '__TEST_DIR__/dictionary_compression_ratio_threshold.parquet'
+
+query I
+SELECT dictionary_page_offset IS NULL FROM parquet_metadata('__TEST_DIR__/dictionary_compression_ratio_threshold.parquet')
+----
+true
+
+# but if we set our threshold to 0 we create a dictionary anyway
+statement ok
+COPY test TO '__TEST_DIR__/dictionary_compression_ratio_threshold.parquet' (dictionary_compression_ratio_threshold 0)
+
+query I
+SELECT dictionary_page_offset IS NULL FROM parquet_metadata('__TEST_DIR__/dictionary_compression_ratio_threshold.parquet')
+----
+false

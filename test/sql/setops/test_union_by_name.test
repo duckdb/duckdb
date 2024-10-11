@@ -51,10 +51,10 @@ NULL	5
 
 # Ambiguous name
 
-#Error: Binder Error: Ambiguous reference to column
 statement error
 SELECT x AS a FROM t1 UNION BY NAME SELECT x AS b FROM t1 ORDER BY t1.x;
 ----
+<REGEX>:Binder Error.*Ambiguous reference to column.*
 
 query II
 (SELECT x FROM t1 UNION ALL SELECT y FROM t1) UNION BY NAME (SELECT z FROM t2 UNION ALL SELECT y FROM t2) ORDER BY y, z;
@@ -93,10 +93,10 @@ SELECT x, y FROM t1 UNION BY NAME SELECT y, z FROM t2 ORDER BY 3, 1;
 NULL	2	2
 NULL	4	4
 
-# Error: Binder Error: ORDER term out of range - should be between 1 and 3
 statement error
 SELECT x, y FROM t1 UNION BY NAME SELECT y, z FROM t2 ORDER BY 4;
 ----
+<REGEX>:Binder Error.*out of range.*
 
 ########## multi set operations
 
@@ -146,6 +146,31 @@ NULL	3
 1	NULL
 3	NULL
 
+# union by name with different types
+query I
+select '0' as c union all select 0 as c;
+----
+0
+0
 
+query I
+select '0' as c union all by name select 0 as c;
+----
+0
+0
 
+query I
+select {'a': '0'} as c union all by name select {'a': 0} as c
+----
+{'a': 0}
+{'a': 0}
 
+statement error
+select {'a': 'hello'} as c union all by name select {'b': 'hello'} as c;
+----
+<REGEX>:Mismatch Type Error.*Type STRUCT\(b VARCHAR\) does not match with STRUCT\(a VARCHAR\).*
+
+statement error
+select {'a': 'hello'} as c union all by name select {'a': 'hello', 'b': 'world'} as c;
+----
+<REGEX>:Mismatch Type Error.*Type STRUCT\(a VARCHAR, b VARCHAR\).*with STRUCT\(a VARCHAR\).*

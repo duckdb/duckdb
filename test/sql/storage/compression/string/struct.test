@@ -19,10 +19,10 @@ statement ok
 CREATE TABLE test (s ROW(a VARCHAR));
 
 statement ok
-INSERT INTO test SELECT {'a': (i%250)::VARCHAR} FROM range(0, 10000) tbl(i);
-INSERT INTO test SELECT {'a': (i%250)::VARCHAR} FROM range(22767, 32767) tbl(i);
-INSERT INTO test SELECT {'a': (i%250)::VARCHAR} FROM range(2147473647, 2147483647) tbl(i);
-INSERT INTO test SELECT {'a': (i%250)::VARCHAR} FROM range(2147473647, 2147483647) tbl(i);
+INSERT INTO test SELECT {'a': concat('0000000000000000000', (i%250)::VARCHAR)} FROM range(0, 10000) tbl(i);
+INSERT INTO test SELECT {'a': concat('0000000000000000000', (i%250)::VARCHAR)} FROM range(22767, 32767) tbl(i);
+INSERT INTO test SELECT {'a': concat('0000000000000000000', (i%250)::VARCHAR)} FROM range(2147473647, 2147483647) tbl(i);
+INSERT INTO test SELECT {'a': concat('0000000000000000000', (i%250)::VARCHAR)} FROM range(2147473647, 2147483647) tbl(i);
 
 query IIII
 SELECT SUM(s['a']::INT), MIN(s['a']::INT), MAX(s['a']::INT), COUNT(*) FROM test

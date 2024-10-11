@@ -1,0 +1,1111 @@
+[
+	{
+		"name": "cursor",
+		"function": "Cursor",
+		"docs": "Create a duplicate of the current connection",
+		"return": "DuckDBPyConnection"
+	},
+	{
+		"name": "register_filesystem",
+		"function": "RegisterFilesystem",
+		"docs": "Register a fsspec compliant filesystem",
+		"args": [
+			{
+				"name": "filesystem",
+				"type": "str"
+			}
+		],
+		"return": "None"
+	},
+	{
+		"name": "unregister_filesystem",
+		"function": "UnregisterFilesystem",
+		"docs": "Unregister a filesystem",
+		"args": [
+			{
+				"name": "name",
+				"type": "str"
+			}
+		],
+		"return": "None"
+	},
+	{
+		"name": "list_filesystems",
+		"function": "ListFilesystems",
+		"docs": "List registered filesystems, including builtin ones",
+		"return": "list"
+	},
+	{
+		"name": "filesystem_is_registered",
+		"function": "FileSystemIsRegistered",
+		"docs": "Check if a filesystem with the provided name is currently registered",
+		"args": [
+			{
+				"name": "name",
+				"type": "str"
+			}
+		],
+		"return": "bool"
+	},
+	{
+		"name": "create_function",
+		"function": "RegisterScalarUDF",
+		"docs": "Create a DuckDB function out of the passing in Python function so it can be used in queries",
+		"args": [
+			{
+				"name": "name",
+				"type": "str"
+			},
+			{
+				"name": "function",
+				"type": "function"
+			},
+			{
+				"name": "parameters",
+				"type": "Optional[List[DuckDBPyType]]",
+				"default": "None"
+			},
+			{
+				"name": "return_type",
+				"type": "Optional[DuckDBPyType]",
+				"default": "None"
+			}
+		],
+		"kwargs": [
+			{
+				"name": "type",
+				"type": "Optional[PythonUDFType]",
+				"default": "PythonUDFType.NATIVE"
+			},
+			{
+				"name": "null_handling",
+				"type": "Optional[FunctionNullHandling]",
+				"default": "FunctionNullHandling.DEFAULT"
+			},
+			{
+				"name": "exception_handling",
+				"type": "Optional[PythonExceptionHandling]",
+				"default": "PythonExceptionHandling.DEFAULT"
+			},
+			{
+				"name": "side_effects",
+				"type": "bool",
+				"default": "False"
+			}
+		],
+		"return": "DuckDBPyConnection"
+	},
+	{
+		"name": "remove_function",
+		"function": "UnregisterUDF",
+		"docs": "Remove a previously created function",
+		"args": [
+			{
+				"name": "name",
+				"type": "str"
+			}
+		],
+		"return": "DuckDBPyConnection"
+	},
+	{
+		"name": ["sqltype", "dtype", "type"],
+		"function": "Type",
+		"docs": "Create a type object by parsing the 'type_str' string",
+		"args": [
+			{
+				"name": "type_str",
+				"type": "str"
+			}
+		],
+		"return": "DuckDBPyType"
+	},
+	{
+		"name": "array_type",
+		"function": "ArrayType",
+		"docs": "Create an array type object of 'type'",
+		"args": [
+			{
+				"name": "type",
+				"type": "DuckDBPyType",
+				"allow_none": false
+			},
+			{
+				"name": "size",
+				"type": "int"
+			}
+		],
+		"return": "DuckDBPyType"
+	},
+	{
+		"name": "list_type",
+		"function": "ListType",
+		"docs": "Create a list type object of 'type'",
+		"args": [
+			{
+				"name": "type",
+				"type": "DuckDBPyType",
+				"allow_none": false
+			}
+		],
+		"return": "DuckDBPyType"
+	},
+	{
+		"name": "union_type",
+		"function": "UnionType",
+		"docs": "Create a union type object from 'members'",
+		"args": [
+			{
+				"name": "members",
+				"type": "DuckDBPyType",
+				"allow_none": false
+			}
+		],
+		"return": "DuckDBPyType"
+	},
+	{
+		"name": "string_type",
+		"function": "StringType",
+		"docs": "Create a string type with an optional collation",
+		"args": [
+			{
+				"name": "collation",
+				"type": "str",
+				"default": "\"\""
+			}
+		],
+		"return": "DuckDBPyType"
+	},
+	{
+		"name": "enum_type",
+		"function": "EnumType",
+		"docs": "Create an enum type of underlying 'type', consisting of the list of 'values'",
+		"args": [
+			{
+				"name": "name",
+				"type": "str"
+			},
+			{
+				"name": "type",
+				"type": "DuckDBPyType"
+			},
+			{
+				"name": "values",
+				"type": "List[Any]"
+			}
+		],
+		"return": "DuckDBPyType"
+	},
+	{
+		"name": "decimal_type",
+		"function": "DecimalType",
+		"docs": "Create a decimal type with 'width' and 'scale'",
+		"args": [
+			{
+				"name": "width",
+				"type": "int"
+			},
+			{
+				"name": "scale",
+				"type": "int"
+			}
+		],
+		"return": "DuckDBPyType"
+	},
+	{
+		"name": ["struct_type", "row_type"],
+		"function": "StructType",
+		"docs": "Create a struct type object from 'fields'",
+		"args": [
+			{
+				"name": "fields",
+				"type": "Union[Dict[str, DuckDBPyType], List[str]]"
+			}
+		],
+		"return": "DuckDBPyType"
+	},
+	{
+		"name": "map_type",
+		"function": "MapType",
+		"docs": "Create a map type object from 'key_type' and 'value_type'",
+		"args": [
+			{
+				"name": "key",
+				"allow_none": false,
+				"type": "DuckDBPyType"
+			},
+			{
+				"name": "value",
+				"allow_none": false,
+				"type": "DuckDBPyType"
+			}
+		],
+		"return": "DuckDBPyType"
+	},
+	{
+		"name": "duplicate",
+		"function": "Cursor",
+		"docs": "Create a duplicate of the current connection",
+		"return": "DuckDBPyConnection"
+	},
+	{
+		"name": "execute",
+		"function": "Execute",
+		"docs": "Execute the given SQL query, optionally using prepared statements with parameters set",
+		"args": [
+			{
+				"name": "query",
+				"type": "object"
+			},
+			{
+				"name": "parameters",
+				"default": "None",
+				"type": "object"
+			}
+		],
+		"return": "DuckDBPyConnection"
+	},
+	{
+		"name": "executemany",
+		"function": "ExecuteMany",
+		"docs": "Execute the given prepared statement multiple times using the list of parameter sets in parameters",
+		"args": [
+			{
+				"name": "query",
+				"type": "object"
+			},
+			{
+				"name": "parameters",
+				"default": "None",
+				"type": "object"
+			}
+		],
+		"return": "DuckDBPyConnection"
+	},
+	{
+		"name": "close",
+		"function": "Close",
+		"docs": "Close the connection",
+		"return": "None"
+	},
+	{
+		"name": "interrupt",
+		"function": "Interrupt",
+		"docs": "Interrupt pending operations",
+		"return": "None"
+	},
+	{
+		"name": "fetchone",
+		"function": "FetchOne",
+		"docs": "Fetch a single row from a result following execute",
+		"return": "Optional[tuple]"
+	},
+	{
+		"name": "fetchmany",
+		"function": "FetchMany",
+		"docs": "Fetch the next set of rows from a result following execute",
+		"args": [
+			{
+				"name": "size",
+				"default": "1",
+				"type": "int"
+			}
+		],
+		"return": "List[Any]"
+	},
+	{
+		"name": "fetchall",
+		"function": "FetchAll",
+		"docs": "Fetch all rows from a result following execute",
+		"return": "List[Any]"
+	},
+	{
+		"name": "fetchnumpy",
+		"function": "FetchNumpy",
+		"docs": "Fetch a result as list of NumPy arrays following execute",
+		"return": "dict"
+	},
+	{
+		"name": ["fetchdf", "fetch_df", "df"],
+		"function": "FetchDF",
+		"docs": "Fetch a result as DataFrame following execute()",
+		"kwargs": [
+			{
+				"name": "date_as_object",
+				"default": "False",
+				"type": "bool"
+			}
+		],
+		"return": "pandas.DataFrame"
+	},
+	{
+		"name": "fetch_df_chunk",
+		"function": "FetchDFChunk",
+		"docs": "Fetch a chunk of the result as DataFrame following execute()",
+		"args": [
+			{
+				"name": "vectors_per_chunk",
+				"default": "1",
+				"type": "int"
+			}
+		],
+		"kwargs": [
+			{
+				"name": "date_as_object",
+				"default": "False",
+				"type": "bool"
+			}
+		],
+		"return": "pandas.DataFrame"
+	},
+	{
+		"name": "pl",
+		"function": "FetchPolars",
+		"docs": "Fetch a result as Polars DataFrame following execute()",
+		"args": [
+			{
+				"name": "rows_per_batch",
+				"default": "1000000",
+				"type": "int"
+			}
+		],
+		"return": "polars.DataFrame"
+	},
+	{
+		"name": ["fetch_arrow_table", "arrow"],
+		"function": "FetchArrow",
+		"docs": "Fetch a result as Arrow table following execute()",
+		"args": [
+			{
+				"name": "rows_per_batch",
+				"default": "1000000",
+				"type": "int"
+			}
+		],
+		"return": "pyarrow.lib.Table"
+	},
+	{
+		"name": "fetch_record_batch",
+		"function": "FetchRecordBatchReader",
+		"docs": "Fetch an Arrow RecordBatchReader following execute()",
+		"args": [
+			{
+				"name": "rows_per_batch",
+				"default": "1000000",
+				"type": "int"
+			}
+		],
+		"return": "pyarrow.lib.RecordBatchReader"
+	},
+	{
+		"name": "torch",
+		"function": "FetchPyTorch",
+		"docs": "Fetch a result as dict of PyTorch Tensors following execute()",
+		"return": "dict"
+	},
+	{
+		"name": "tf",
+		"function": "FetchTF",
+		"docs": "Fetch a result as dict of TensorFlow Tensors following execute()",
+		"return": "dict"
+	},
+	{
+		"name": "begin",
+		"function": "Begin",
+		"docs": "Start a new transaction",
+		"return": "DuckDBPyConnection"
+	},
+	{
+		"name": "commit",
+		"function": "Commit",
+		"docs": "Commit changes performed within a transaction",
+		"return": "DuckDBPyConnection"
+	},
+	{
+		"name": "rollback",
+		"function": "Rollback",
+		"docs": "Roll back changes performed within a transaction",
+		"return": "DuckDBPyConnection"
+	},
+	{
+		"name": "checkpoint",
+		"function": "Checkpoint",
+		"docs": "Synchronizes data in the write-ahead log (WAL) to the database data file (no-op for in-memory connections)",
+		"return": "DuckDBPyConnection"
+	},
+	{
+		"name": "append",
+		"function": "Append",
+		"docs": "Append the passed DataFrame to the named table",
+		"args": [
+			{
+				"name": "table_name",
+				"type": "str"
+			},
+			{
+				"name": "df",
+				"type": "pandas.DataFrame"
+			}
+		],
+		"kwargs": [
+			{
+				"name": "by_name",
+				"default": "False",
+				"type": "bool"
+			}
+		],
+		"return": "DuckDBPyConnection"
+	},
+	{
+		"name": "register",
+		"function": "RegisterPythonObject",
+		"docs": "Register the passed Python Object value for querying with a view",
+		"args": [
+			{
+				"name": "view_name",
+				"type": "str"
+			},
+			{
+				"name": "python_object",
+				"type": "object"
+			}
+		],
+		"return": "DuckDBPyConnection"
+	},
+	{
+		"name": "unregister",
+		"function": "UnregisterPythonObject",
+		"docs": "Unregister the view name",
+		"args": [
+			{
+				"name": "view_name",
+				"type": "str"
+			}
+		],
+		"return": "DuckDBPyConnection"
+	},
+	{
+		"name": "table",
+		"function": "Table",
+		"docs": "Create a relation object for the named table",
+		"args": [
+			{
+				"name": "table_name",
+				"type": "str"
+			}
+		],
+		"return": "DuckDBPyRelation"
+	},
+	{
+		"name": "view",
+		"function": "View",
+		"docs": "Create a relation object for the named view",
+		"args": [
+			{
+				"name": "view_name",
+				"type": "str"
+			}
+		],
+		"return": "DuckDBPyRelation"
+	},
+	{
+		"name": "values",
+		"function": "Values",
+		"docs": "Create a relation object from the passed values",
+		"args": [
+			{
+				"name": "values",
+				"type": "List[Any]"
+			}
+		],
+		"return": "DuckDBPyRelation"
+	},
+	{
+		"name": "table_function",
+		"function": "TableFunction",
+		"docs": "Create a relation object from the named table function with given parameters",
+		"args": [
+			{
+				"name": "name",
+				"type": "str"
+			},
+			{
+				"name": "parameters",
+				"default": "None",
+				"type": "object"
+			}
+		],
+		"return": "DuckDBPyRelation"
+	},
+	{
+		"name": "read_json",
+		"function": "ReadJSON",
+		"docs": "Create a relation object from the JSON file in 'name'",
+		"args": [
+			{
+				"name": "path_or_buffer",
+				"type": "Union[str, StringIO, TextIOBase]"
+			}
+		],
+		"kwargs": [
+			{
+				"name": "columns",
+				"default": "None",
+				"type": "Optional[Dict[str,str]]"
+			},
+			{
+				"name": "sample_size",
+				"default": "None",
+				"type": "Optional[int]"
+			},
+			{
+				"name": "maximum_depth",
+				"default": "None",
+				"type": "Optional[int]"
+			},
+			{
+				"name": "records",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "format",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "date_format",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "timestamp_format",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "compression",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "maximum_object_size",
+				"default": "None",
+				"type": "Optional[int]"
+			},
+			{
+				"name": "ignore_errors",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "convert_strings_to_integers",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "field_appearance_threshold",
+				"default": "None",
+				"type": "Optional[float]"
+			},
+			{
+				"name": "map_inference_threshold",
+				"default": "None",
+				"type": "Optional[int]"
+			},
+			{
+				"name": "maximum_sample_files",
+				"default": "None",
+				"type": "Optional[int]"
+			},
+			{
+				"name": "filename",
+				"default": "None",
+				"type": "Optional[bool | str]"
+			},
+			{
+				"name": "hive_partitioning",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "union_by_name",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "hive_types",
+				"default": "None",
+				"type": "Optional[Dict[str, str]]"
+			},
+			{
+				"name": "hive_types_autocast",
+				"default": "None",
+				"type": "Optional[bool]"
+			}
+		],
+		"return": "DuckDBPyRelation"
+	},
+	{
+		"name": "extract_statements",
+		"function": "ExtractStatements",
+		"docs": "Parse the query string and extract the Statement object(s) produced",
+		"args": [
+			{
+				"name": "query",
+				"type": "str"
+			}
+		],
+		"return": "List[Statement]"
+	},
+	{
+		"name": ["sql", "query", "from_query"],
+		"function": "RunQuery",
+		"docs": "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, otherwise run the query as-is.",
+		"args": [
+			{
+				"name": "query",
+				"type": "str"
+			}
+		],
+		"kwargs": [
+			{
+				"name": "alias",
+				"default": "\"\"",
+				"type": "str"
+			},
+			{
+				"name": "params",
+				"default": "None",
+				"type": "object"
+			}
+		],
+		"return": "DuckDBPyRelation"
+	},
+	{
+		"name": ["read_csv", "from_csv_auto"],
+		"function": "ReadCSV",
+		"docs": "Create a relation object from the CSV file in 'name'",
+		"args": [
+			{
+				"name": "path_or_buffer",
+				"type": "Union[str, StringIO, TextIOBase]"
+			}
+		],
+		"kwargs_as_dict": true,
+		"kwargs": [
+			{
+				"name": "header",
+				"default": "None",
+				"type": "Optional[bool | int]"
+			},
+			{
+				"name": "compression",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "sep",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "delimiter",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "dtype",
+				"default": "None",
+				"type": "Optional[Dict[str, str] | List[str]]"
+			},
+			{
+				"name": "na_values",
+				"default": "None",
+				"type": "Optional[str| List[str]]"
+			},
+			{
+				"name": "skiprows",
+				"default": "None",
+				"type": "Optional[int]"
+			},
+			{
+				"name": "quotechar",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "escapechar",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "encoding",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "parallel",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "date_format",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "timestamp_format",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "sample_size",
+				"default": "None",
+				"type": "Optional[int]"
+			},
+			{
+				"name": "all_varchar",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "normalize_names",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "null_padding",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "names",
+				"default": "None",
+				"type": "Optional[List[str]]"
+			},
+			{
+				"name": "lineterminator",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "columns",
+				"default": "None",
+				"type": "Optional[Dict[str, str]]"
+			},
+			{
+				"name": "auto_type_candidates",
+				"default": "None",
+				"type": "Optional[List[str]]"
+			},
+			{
+				"name": "max_line_size",
+				"default": "None",
+				"type": "Optional[int]"
+			},
+			{
+				"name": "ignore_errors",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "store_rejects",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "rejects_table",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "rejects_scan",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "rejects_limit",
+				"default": "None",
+				"type": "Optional[int]"
+			},
+			{
+				"name": "force_not_null",
+				"default": "None",
+				"type": "Optional[List[str]]"
+			},
+			{
+				"name": "buffer_size",
+				"default": "None",
+				"type": "Optional[int]"
+			},
+			{
+				"name": "decimal",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "allow_quoted_nulls",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "filename",
+				"default": "None",
+				"type": "Optional[bool | str]"
+			},
+			{
+				"name": "hive_partitioning",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "union_by_name",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "hive_types",
+				"default": "None",
+				"type": "Optional[Dict[str, str]]"
+			},
+			{
+				"name": "hive_types_autocast",
+				"default": "None",
+				"type": "Optional[bool]"
+			}
+		],
+		"return": "DuckDBPyRelation"
+	},
+	{
+		"name": "from_df",
+		"function": "FromDF",
+		"docs": "Create a relation object from the DataFrame in df",
+		"args": [
+			{
+				"name": "df",
+				"type": "pandas.DataFrame"
+			}
+		],
+		"return": "DuckDBPyRelation"
+	},
+	{
+		"name": "from_arrow",
+		"function": "FromArrow",
+		"docs": "Create a relation object from an Arrow object",
+		"args": [
+			{
+				"name": "arrow_object",
+				"type": "object"
+			}
+		],
+		"return": "DuckDBPyRelation"
+	},
+	{
+		"name": ["from_parquet", "read_parquet"],
+		"function": "FromParquet",
+		"docs": "Create a relation object from the Parquet files in file_glob",
+		"args": [
+			{
+				"name": "file_glob",
+				"type": "str"
+			},
+			{
+				"name": "binary_as_string",
+				"default": "False",
+				"type": "bool"
+			}
+		],
+		"kwargs": [
+			{
+				"name": "file_row_number",
+				"default": "False",
+				"type": "bool"
+			},
+			{
+				"name": "filename",
+				"default": "False",
+				"type": "bool"
+			},
+			{
+				"name": "hive_partitioning",
+				"default": "False",
+				"type": "bool"
+			},
+			{
+				"name": "union_by_name",
+				"default": "False",
+				"type": "bool"
+			},
+			{
+				"name": "compression",
+				"default": "None",
+				"type": "Optional[str]"
+			}
+		],
+		"return": "DuckDBPyRelation"
+	},
+	{
+		"name": ["from_parquet", "read_parquet"],
+		"function": "FromParquets",
+		"docs": "Create a relation object from the Parquet files in file_globs",
+		"args": [
+			{
+				"name": "file_globs",
+				"type": "str"
+			},
+			{
+				"name": "binary_as_string",
+				"default": "False",
+				"type": "bool"
+			}
+		],
+		"kwargs": [
+			{
+				"name": "file_row_number",
+				"default": "False",
+				"type": "bool"
+			},
+			{
+				"name": "filename",
+				"default": "False",
+				"type": "bool"
+			},
+			{
+				"name": "hive_partitioning",
+				"default": "False",
+				"type": "bool"
+			},
+			{
+				"name": "union_by_name",
+				"default": "False",
+				"type": "bool"
+			},
+			{
+				"name": "compression",
+				"default": "None",
+				"type": "str"
+			}
+		],
+		"return": "DuckDBPyRelation"
+	},
+	{
+		"name": "from_substrait",
+		"function": "FromSubstrait",
+		"docs": "Create a query object from protobuf plan",
+		"args": [
+			{
+				"name": "proto",
+				"type": "str"
+			}
+		],
+		"return": "DuckDBPyRelation"
+	},
+	{
+		"name": "get_substrait",
+		"function": "GetSubstrait",
+		"docs": "Serialize a query to protobuf",
+		"args": [
+			{
+				"name": "query",
+				"type": "str"
+			}
+		],
+		"kwargs": [
+			{
+				"name": "enable_optimizer",
+				"default": "True",
+				"type": "bool"
+			}
+		],
+		"return": "str"
+	},
+	{
+		"name": "get_substrait_json",
+		"function": "GetSubstraitJSON",
+		"docs": "Serialize a query to protobuf on the JSON format",
+		"args": [
+			{
+				"name": "query",
+				"type": "str"
+			}
+		],
+		"kwargs": [
+			{
+				"name": "enable_optimizer",
+				"default": "True",
+				"type": "bool"
+			}
+		],
+		"return": "str"
+	},
+	{
+		"name": "from_substrait_json",
+		"function": "FromSubstraitJSON",
+		"docs": "Create a query object from a JSON protobuf plan",
+		"args": [
+			{
+				"name": "json",
+				"type": "str"
+			}
+		],
+		"return": "DuckDBPyRelation"
+	},
+	{
+		"name": "get_table_names",
+		"function": "GetTableNames",
+		"docs": "Extract the required table names from a query",
+		"args": [
+			{
+				"name": "query",
+				"type": "str"
+			}
+		],
+		"return": "Set[str]"
+	},
+	{
+		"name": "install_extension",
+		"function": "InstallExtension",
+		"docs": "Install an extension by name, with an optional version and/or repository to get the extension from",
+		"args": [
+			{
+				"name": "extension",
+				"type": "str"
+			}
+		],
+		"kwargs": [
+			{
+				"name": "force_install",
+				"default": "False",
+				"type": "bool"
+			},
+			{
+				"name": "repository",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "repository_url",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "version",
+				"default": "None",
+				"type": "Optional[str]"
+			}
+		],
+		"return": "None"
+	},
+	{
+		"name": "load_extension",
+		"function": "LoadExtension",
+		"docs": "Load an installed extension",
+		"args": [
+			{
+				"name": "extension",
+				"type": "str"
+			}
+		],
+		"return": "None"
+	}
+]

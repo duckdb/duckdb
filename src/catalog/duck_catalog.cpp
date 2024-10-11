@@ -7,6 +7,7 @@
 #include "duckdb/catalog/default/default_schemas.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 #ifndef DISABLE_CORE_FUNCTIONS_EXTENSION
 #include "duckdb/core_functions/core_functions.hpp"
 #endif
@@ -54,7 +55,7 @@ bool DuckCatalog::IsDuckCatalog() {
 // Schema
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> DuckCatalog::CreateSchemaInternal(CatalogTransaction transaction, CreateSchemaInfo &info) {
-	DependencyList dependencies;
+	LogicalDependencyList dependencies;
 	auto entry = make_uniq<DuckSchemaEntry>(*this, info);
 	auto result = entry.get();
 	if (!schemas->CreateEntry(transaction, info.schema, std::move(entry), dependencies)) {
@@ -94,7 +95,6 @@ optional_ptr<CatalogEntry> DuckCatalog::CreateSchema(CatalogTransaction transact
 
 void DuckCatalog::DropSchema(CatalogTransaction transaction, DropInfo &info) {
 	D_ASSERT(!info.name.empty());
-	ModifyCatalog();
 	if (!schemas->DropEntry(transaction, info.name, info.cascade)) {
 		if (info.if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 			throw CatalogException::MissingEntry(CatalogType::SCHEMA_ENTRY, info.name, string());
@@ -129,10 +129,14 @@ optional_ptr<SchemaCatalogEntry> DuckCatalog::GetSchema(CatalogTransaction trans
 }
 
 DatabaseSize DuckCatalog::GetDatabaseSize(ClientContext &context) {
+	auto &transaction = DuckTransactionManager::Get(db);
+	auto lock = transaction.SharedCheckpointLock();
 	return db.GetStorageManager().GetDatabaseSize();
 }
 
 vector<MetadataBlockInfo> DuckCatalog::GetMetadataInfo(ClientContext &context) {
+	auto &transaction = DuckTransactionManager::Get(db);
+	auto lock = transaction.SharedCheckpointLock();
 	return db.GetStorageManager().GetMetadataInfo();
 }
 
@@ -149,6 +153,13 @@ void DuckCatalog::Verify() {
 	Catalog::Verify();
 	schemas->Verify(*this);
 #endif
+}
+
+optional_idx DuckCatalog::GetCatalogVersion(ClientContext &context) {
+	auto &transaction_manager = DuckTransactionManager::Get(db);
+	auto transaction = GetCatalogTransaction(context);
+	D_ASSERT(transaction.transaction);
+	return transaction_manager.GetCatalogVersion(*transaction.transaction);
 }
 
 } // namespace duckdb

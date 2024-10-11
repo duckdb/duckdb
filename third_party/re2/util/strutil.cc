@@ -146,19 +146,4 @@ std::string StringPrintf(const char* format, ...) {
   return result;
 }
 
-void SStringPrintf(std::string* dst, const char* format, ...) {
-  va_list ap;
-  va_start(ap, format);
-  dst->clear();
-  StringAppendV(dst, format, ap);
-  va_end(ap);
-}
-
-void StringAppendF(std::string* dst, const char* format, ...) {
-  va_list ap;
-  va_start(ap, format);
-  StringAppendV(dst, format, ap);
-  va_end(ap);
-}
-
-}  // namespace duckdb_re2
+}  // namespace re2

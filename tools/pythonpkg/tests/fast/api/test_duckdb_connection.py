@@ -2,11 +2,21 @@ import duckdb
 import pytest
 from conftest import NumpyPandas, ArrowPandas
 
+pa = pytest.importorskip("pyarrow")
+
 
 def is_dunder_method(method_name: str) -> bool:
     if len(method_name) < 4:
         return False
+    if method_name.startswith('_pybind11'):
+        return True
     return method_name[:2] == '__' and method_name[:-3:-1] == '__'
+
+
+@pytest.fixture(scope="session")
+def tmp_database(tmp_path_factory):
+    database = tmp_path_factory.mktemp("databases", numbered=True) / "tmp.duckdb"
+    return database
 
 
 # This file contains tests for DuckDBPyConnection methods,
@@ -69,6 +79,21 @@ class TestDuckDBConnection(object):
             # 'tbl' no longer exists
             duckdb.table("tbl")
 
+    def test_cursor_lifetime(self):
+        con = duckdb.connect()
+
+        def use_cursors():
+            cursors = []
+            for _ in range(10):
+                cursors.append(con.cursor())
+
+            for cursor in cursors:
+                print("closing cursor")
+                cursor.close()
+
+        use_cursors()
+        con.close()
+
     def test_df(self):
         ref = [([1, 2, 3],)]
         duckdb.execute("select [1,2,3]")
@@ -84,6 +109,13 @@ class TestDuckDBConnection(object):
         with pytest.raises(duckdb.CatalogException):
             dup_conn.table("tbl").fetchall()
 
+    def test_readonly_properties(self):
+        duckdb.execute("select 42")
+        description = duckdb.description()
+        rowcount = duckdb.rowcount()
+        assert description == [('42', 'NUMBER', None, None, None, None, None)]
+        assert rowcount == -1
+
     def test_execute(self):
         assert [([4, 2],)] == duckdb.execute("select [4,2]").fetchall()
 
@@ -94,6 +126,51 @@ class TestDuckDBConnection(object):
         duckdb.executemany("insert into tbl VALUES (?, ?)", [(5, 'test'), (2, 'duck'), (42, 'quack')])
         res = duckdb.table("tbl").fetchall()
         assert res == [(5, 'test'), (2, 'duck'), (42, 'quack')]
+        duckdb.execute("drop table tbl")
+
+    def test_pystatement(self):
+        with pytest.raises(duckdb.ParserException, match='seledct'):
+            statements = duckdb.extract_statements('seledct 42; select 21')
+
+        statements = duckdb.extract_statements('select $1; select 21')
+        assert len(statements) == 2
+        assert statements[0].query == 'select $1'
+        assert statements[0].type == duckdb.StatementType.SELECT
+        assert statements[0].named_parameters == set('1')
+        assert statements[0].expected_result_type == [duckdb.ExpectedResultType.QUERY_RESULT]
+
+        assert statements[1].query == ' select 21'
+        assert statements[1].type == duckdb.StatementType.SELECT
+        assert statements[1].named_parameters == set()
+
+        with pytest.raises(
+            duckdb.InvalidInputException,
+            match='Please provide either a DuckDBPyStatement or a string representing the query',
+        ):
+            rel = duckdb.query(statements)
+
+        with pytest.raises(duckdb.BinderException, match="This type of statement can't be prepared!"):
+            rel = duckdb.query(statements[0])
+
+        assert duckdb.query(statements[1]).fetchall() == [(21,)]
+        assert duckdb.execute(statements[1]).fetchall() == [(21,)]
+
+        with pytest.raises(duckdb.InvalidInputException, match='Expected 1 parameters, but none were supplied'):
+            duckdb.execute(statements[0])
+        assert duckdb.execute(statements[0], {'1': 42}).fetchall() == [(42,)]
+
+        duckdb.execute("create table tbl(a integer)")
+        statements = duckdb.extract_statements('insert into tbl select $1')
+        assert statements[0].expected_result_type == [
+            duckdb.ExpectedResultType.CHANGED_ROWS,
+            duckdb.ExpectedResultType.QUERY_RESULT,
+        ]
+        with pytest.raises(
+            duckdb.InvalidInputException, match='executemany requires a non-empty list of parameter sets to be provided'
+        ):
+            duckdb.executemany(statements[0])
+        duckdb.executemany(statements[0], [(21,), (22,), (23,)])
+        assert duckdb.table('tbl').fetchall() == [(21,), (22,), (23,)]
         duckdb.execute("drop table tbl")
 
     def test_fetch_arrow_table(self):
@@ -222,6 +299,25 @@ class TestDuckDBConnection(object):
         con.sql("create table tbl as select * from relation")
         assert con.table('tbl').fetchall() == [([5, 4, 3],)]
 
+    def test_unregister_problematic_behavior(self, duckdb_cursor):
+        # We have a VIEW called 'vw' in the Catalog
+        duckdb_cursor.execute("create temporary view vw as from range(100)")
+        assert duckdb_cursor.execute("select * from vw").fetchone() == (0,)
+
+        # Create a registered object called 'vw'
+        arrow_result = duckdb_cursor.execute("select 42").arrow()
+        with pytest.raises(duckdb.CatalogException, match='View with name "vw" already exists'):
+            duckdb_cursor.register('vw', arrow_result)
+
+        # Temporary views take precedence over registered objects
+        assert duckdb_cursor.execute("select * from vw").fetchone() == (0,)
+
+        # Decide that we're done with this registered object..
+        duckdb_cursor.unregister('vw')
+
+        # This should not have affected the existing view:
+        assert duckdb_cursor.execute("select * from vw").fetchone() == (0,)
+
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_relation_out_of_scope(self, pandas):
         def temporary_scope():
@@ -268,6 +364,14 @@ class TestDuckDBConnection(object):
     def test_interrupt(self):
         assert None != duckdb.interrupt
 
+    def test_wrap_shadowing(self):
+        pd = NumpyPandas()
+        import duckdb
+
+        df = pd.DataFrame({"a": [1, 2, 3]})
+        res = duckdb.sql("from df").fetchall()
+        assert res == [(1,), (2,), (3,)]
+
     def test_wrap_coverage(self):
         con = duckdb.default_connection
 
@@ -277,6 +381,18 @@ class TestDuckDBConnection(object):
         for method in filtered_methods:
             # Assert that every method of DuckDBPyConnection is wrapped by the 'duckdb' module
             assert method in dir(duckdb)
+
+    def test_connect_with_path(self, tmp_database):
+        import pathlib
+
+        assert isinstance(tmp_database, pathlib.Path)
+        con = duckdb.connect(tmp_database)
+        assert con.sql("select 42").fetchall() == [(42,)]
+
+        with pytest.raises(
+            duckdb.InvalidInputException, match="Please provide either a str or a pathlib.Path, not <class 'int'>"
+        ):
+            con = duckdb.connect(5)
 
     def test_set_pandas_analyze_sample_size(self):
         con = duckdb.connect(":memory:named", config={"pandas_analyze_sample": 0})

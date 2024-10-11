@@ -19,6 +19,8 @@ public:
 	}
 	explicit BoundParameterData(Value val) : value(std::move(val)), return_type(value.type()) {
 	}
+	BoundParameterData(Value val, LogicalType type_p) : value(std::move(val)), return_type(std::move(type_p)) {
+	}
 
 private:
 	Value value;

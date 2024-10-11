@@ -1,0 +1,47 @@
+# name: test/sql/parallelism/interquery/concurrent_reads_while_altering.test
+# description: Test concurrent reads while altering
+# group: [interquery]
+
+statement ok
+CREATE OR REPLACE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers SELECT * FROM range(10000);
+
+concurrentloop threadid 0 20
+
+loop i 0 20
+
+onlyif threadid=0
+statement ok
+BEGIN;
+
+onlyif threadid=0
+statement ok
+ALTER TABLE integers ADD COLUMN newcol_${i} INTEGER
+
+onlyif threadid=0
+statement ok
+INSERT INTO integers (i) SELECT * FROM range(10000 + ${i} * 100, 10100 + ${i} * 100);
+
+onlyif threadid=0
+statement ok
+COMMIT
+
+endloop
+
+loop i 0 20
+
+skipif threadid=0
+statement ok
+SELECT * FROM integers
+
+endloop
+
+endloop
+
+query II
+SELECT COUNT(*), SUM(i) FROM integers
+----
+12000	71994000
+

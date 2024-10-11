@@ -1,0 +1,65 @@
+# name: test/sql/storage/vacuum/repeated_deletes_and_checkpoints.test_slow
+# description: Test running repeated deletes and checkpoints
+# group: [vacuum]
+
+load __TEST_DIR__/repeated_deletes_and_checkpoints.db
+
+statement ok
+CREATE TABLE test (pk INT);
+
+statement ok
+INSERT INTO test SELECT * FROM generate_series(0, 1000000);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+DELETE FROM test WHERE pk > 738645 AND pk < 978908;
+----
+240262
+
+query II
+SELECT COUNT(*), SUM(pk) FROM test;
+----
+759739	293669140557
+
+restart
+
+query I
+DELETE FROM test WHERE pk > 282475 AND pk < 522738;
+----
+240262
+
+query II
+SELECT COUNT(*), SUM(pk) FROM test;
+----
+519477	196938097654
+
+restart
+
+query I
+INSERT INTO test SELECT * FROM generate_series(1201414, 1201514);
+----
+101
+
+query II
+SELECT COUNT(*), SUM(pk) FROM test;
+----
+519578	197059445518
+
+restart
+
+query II
+SELECT COUNT(*), SUM(pk) FROM test;
+----
+519578	197059445518
+
+statement ok
+CHECKPOINT;
+
+query II
+SELECT COUNT(*), SUM(pk) FROM test;
+----
+519578	197059445518

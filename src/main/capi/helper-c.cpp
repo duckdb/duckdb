@@ -4,6 +4,8 @@ namespace duckdb {
 
 LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type) {
 	switch (c_type) {
+	case DUCKDB_TYPE_INVALID:
+		return LogicalTypeId::INVALID;
 	case DUCKDB_TYPE_BOOLEAN:
 		return LogicalTypeId::BOOLEAN;
 	case DUCKDB_TYPE_TINYINT:
@@ -22,38 +24,58 @@ LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type) {
 		return LogicalTypeId::UINTEGER;
 	case DUCKDB_TYPE_UBIGINT:
 		return LogicalTypeId::UBIGINT;
-	case DUCKDB_TYPE_HUGEINT:
-		return LogicalTypeId::HUGEINT;
-	case DUCKDB_TYPE_UHUGEINT:
-		return LogicalTypeId::UHUGEINT;
 	case DUCKDB_TYPE_FLOAT:
 		return LogicalTypeId::FLOAT;
 	case DUCKDB_TYPE_DOUBLE:
 		return LogicalTypeId::DOUBLE;
 	case DUCKDB_TYPE_TIMESTAMP:
 		return LogicalTypeId::TIMESTAMP;
-	case DUCKDB_TYPE_TIMESTAMP_TZ:
-		return LogicalTypeId::TIMESTAMP_TZ;
 	case DUCKDB_TYPE_DATE:
 		return LogicalTypeId::DATE;
 	case DUCKDB_TYPE_TIME:
 		return LogicalTypeId::TIME;
-	case DUCKDB_TYPE_TIME_TZ:
-		return LogicalTypeId::TIME_TZ;
+	case DUCKDB_TYPE_INTERVAL:
+		return LogicalTypeId::INTERVAL;
+	case DUCKDB_TYPE_HUGEINT:
+		return LogicalTypeId::HUGEINT;
+	case DUCKDB_TYPE_UHUGEINT:
+		return LogicalTypeId::UHUGEINT;
 	case DUCKDB_TYPE_VARCHAR:
 		return LogicalTypeId::VARCHAR;
 	case DUCKDB_TYPE_BLOB:
 		return LogicalTypeId::BLOB;
-	case DUCKDB_TYPE_INTERVAL:
-		return LogicalTypeId::INTERVAL;
+	case DUCKDB_TYPE_DECIMAL:
+		return LogicalTypeId::DECIMAL;
 	case DUCKDB_TYPE_TIMESTAMP_S:
 		return LogicalTypeId::TIMESTAMP_SEC;
 	case DUCKDB_TYPE_TIMESTAMP_MS:
 		return LogicalTypeId::TIMESTAMP_MS;
 	case DUCKDB_TYPE_TIMESTAMP_NS:
 		return LogicalTypeId::TIMESTAMP_NS;
+	case DUCKDB_TYPE_ENUM:
+		return LogicalTypeId::ENUM;
+	case DUCKDB_TYPE_LIST:
+		return LogicalTypeId::LIST;
+	case DUCKDB_TYPE_STRUCT:
+		return LogicalTypeId::STRUCT;
+	case DUCKDB_TYPE_MAP:
+		return LogicalTypeId::MAP;
+	case DUCKDB_TYPE_ARRAY:
+		return LogicalTypeId::ARRAY;
 	case DUCKDB_TYPE_UUID:
 		return LogicalTypeId::UUID;
+	case DUCKDB_TYPE_UNION:
+		return LogicalTypeId::UNION;
+	case DUCKDB_TYPE_BIT:
+		return LogicalTypeId::BIT;
+	case DUCKDB_TYPE_TIME_TZ:
+		return LogicalTypeId::TIME_TZ;
+	case DUCKDB_TYPE_TIMESTAMP_TZ:
+		return LogicalTypeId::TIMESTAMP_TZ;
+	case DUCKDB_TYPE_ANY:
+		return LogicalTypeId::ANY;
+	case DUCKDB_TYPE_SQLNULL:
+		return LogicalTypeId::SQLNULL;
 	default: // LCOV_EXCL_START
 		D_ASSERT(0);
 		return LogicalTypeId::INVALID;
@@ -62,6 +84,8 @@ LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type) {
 
 duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 	switch (sql_type.id()) {
+	case LogicalTypeId::INVALID:
+		return DUCKDB_TYPE_INVALID;
 	case LogicalTypeId::BOOLEAN:
 		return DUCKDB_TYPE_BOOLEAN;
 	case LogicalTypeId::TINYINT:
@@ -110,6 +134,8 @@ duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 		return DUCKDB_TYPE_BLOB;
 	case LogicalTypeId::BIT:
 		return DUCKDB_TYPE_BIT;
+	case LogicalTypeId::VARINT:
+		return DUCKDB_TYPE_VARINT;
 	case LogicalTypeId::INTERVAL:
 		return DUCKDB_TYPE_INTERVAL;
 	case LogicalTypeId::DECIMAL:
@@ -126,6 +152,12 @@ duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 		return DUCKDB_TYPE_UNION;
 	case LogicalTypeId::UUID:
 		return DUCKDB_TYPE_UUID;
+	case LogicalTypeId::ARRAY:
+		return DUCKDB_TYPE_ARRAY;
+	case LogicalTypeId::ANY:
+		return DUCKDB_TYPE_ANY;
+	case LogicalTypeId::SQLNULL:
+		return DUCKDB_TYPE_SQLNULL;
 	default: // LCOV_EXCL_START
 		D_ASSERT(0);
 		return DUCKDB_TYPE_INVALID;
@@ -178,9 +210,9 @@ idx_t GetCTypeSize(duckdb_type type) {
 	case DUCKDB_TYPE_DECIMAL:
 		return sizeof(duckdb_hugeint);
 	default: // LCOV_EXCL_START
-		// unsupported type
-		D_ASSERT(0);
-		return sizeof(const char *);
+		// Unsupported nested or complex type. Internally, we set the null mask to NULL.
+		// This is a deprecated code path. Use the Vector Interface for nested and complex types.
+		return 0;
 	} // LCOV_EXCL_STOP
 }
 
@@ -264,6 +296,20 @@ idx_t duckdb_vector_size() {
 bool duckdb_string_is_inlined(duckdb_string_t string_p) {
 	static_assert(sizeof(duckdb_string_t) == sizeof(duckdb::string_t),
 	              "duckdb_string_t should have the same memory layout as duckdb::string_t");
-	auto &string = *(duckdb::string_t *)(&string_p);
+	auto &string = *reinterpret_cast<duckdb::string_t *>(&string_p);
 	return string.IsInlined();
+}
+
+uint32_t duckdb_string_t_length(duckdb_string_t string_p) {
+	static_assert(sizeof(duckdb_string_t) == sizeof(duckdb::string_t),
+	              "duckdb_string_t should have the same memory layout as duckdb::string_t");
+	auto &string = *reinterpret_cast<duckdb::string_t *>(&string_p);
+	return static_cast<uint32_t>(string.GetSize());
+}
+
+const char *duckdb_string_t_data(duckdb_string_t *string_p) {
+	static_assert(sizeof(duckdb_string_t) == sizeof(duckdb::string_t),
+	              "duckdb_string_t should have the same memory layout as duckdb::string_t");
+	auto &string = *reinterpret_cast<duckdb::string_t *>(string_p);
+	return string.GetData();
 }

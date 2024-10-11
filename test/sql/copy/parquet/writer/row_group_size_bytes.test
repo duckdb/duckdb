@@ -6,6 +6,9 @@ require parquet
 
 require vector_size 1024
 
+# different vector sizes result in different numbers of rows
+require no_vector_verification
+
 statement ok
 SET preserve_insertion_order=false
 

@@ -1,0 +1,32 @@
+# name: test/issues/general/test_9399.test_slow
+# description: Issue 9399: Incorrect query output from group by query (regression in 0.9.0)
+# group: [general]
+
+require skip_reload
+
+# happened with > 8 threads
+statement ok
+SET threads=10
+
+# seed so it's deterministic
+statement ok
+SELECT SETSEED(0.8765309);
+
+# create table that's has just one row group, and just a few duplicates
+statement ok
+CREATE TABLE test AS
+SELECT CASE WHEN random() < 0.002 THEN range ELSE 100000 - range END c0,
+    random() c1,
+    random() c2
+FROM range(100000)
+
+# should return 99815 rows (was 99870 before)
+query III
+WITH cte AS (SELECT c0,
+avg(c1) AS c1_avg,
+avg(c2) AS c2_avg
+FROM test GROUP BY c0)
+SELECT * FROM cte
+ORDER BY c0
+----
+299445 values hashing to 851e651ae21c938efff67bf148818639

@@ -20,9 +20,9 @@ typedef BoundCastInfo (*bind_cast_function_t)(BindCastInput &input, const Logica
 typedef int64_t (*implicit_cast_cost_t)(const LogicalType &from, const LogicalType &to);
 
 struct GetCastFunctionInput {
-	GetCastFunctionInput(optional_ptr<ClientContext> context = nullptr) : context(context) {
+	explicit GetCastFunctionInput(optional_ptr<ClientContext> context = nullptr) : context(context) {
 	}
-	GetCastFunctionInput(ClientContext &context) : context(&context) {
+	explicit GetCastFunctionInput(ClientContext &context) : context(&context) {
 	}
 
 	optional_ptr<ClientContext> context;
@@ -30,8 +30,8 @@ struct GetCastFunctionInput {
 };
 
 struct BindCastFunction {
-	BindCastFunction(bind_cast_function_t function,
-	                 unique_ptr<BindCastInfo> info = nullptr); // NOLINT: allow implicit cast
+	BindCastFunction(bind_cast_function_t function, // NOLINT: allow implicit cast
+	                 unique_ptr<BindCastInfo> info = nullptr);
 
 	bind_cast_function_t function;
 	unique_ptr<BindCastInfo> info;
@@ -40,7 +40,7 @@ struct BindCastFunction {
 class CastFunctionSet {
 public:
 	CastFunctionSet();
-	CastFunctionSet(DBConfig &config);
+	explicit CastFunctionSet(DBConfig &config);
 
 public:
 	DUCKDB_API static CastFunctionSet &Get(ClientContext &context);

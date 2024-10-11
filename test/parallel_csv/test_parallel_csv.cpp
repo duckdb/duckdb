@@ -131,102 +131,95 @@ void RunTestOnFolder(const string &path, std::set<std::string> *skip = nullptr, 
 }
 
 TEST_CASE("Test File Full", "[parallel-csv][.]") {
-	string path = "test/sql/copy/csv/data/auto/test_single_column_rn.csv";
+	string path = "data/csv/auto/test_single_column_rn.csv";
 	RunFull(path);
 }
 
-TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data", "[parallel-csv][.]") {
-	std::set<std::string> skip;
-	// This file requires additional parameters, we test it on the following test.
-	skip.insert("test/sql/copy/csv/data/no_quote.csv");
-	RunTestOnFolder("test/sql/copy/csv/data/", &skip);
-}
-
 //! Test case with specific parameters that allow us to run the no_quote.tsv we were skipping
-TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/no_quote.csv", "[parallel-csv][.]") {
-	string add_parameters = ",  header=1, quote=''";
-	string file = "test/sql/copy/csv/data/no_quote.csv";
+TEST_CASE("Test Parallel CSV All Files - data/csv/no_quote.csv", "[parallel-csv][.]") {
+	string add_parameters = ", quote=''";
+	string file = "data/csv/no_quote.csv";
 	REQUIRE(RunFull(file, nullptr, add_parameters));
 }
 
-TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/auto", "[parallel-csv][.]") {
+TEST_CASE("Test Parallel CSV All Files - data/csv/auto", "[parallel-csv][.]") {
 	std::set<std::string> skip;
 	// This file requires additional parameters, we test it on the following test.
-	skip.insert("test/sql/copy/csv/data/auto/titlebasicsdebug.tsv");
+	skip.insert("data/csv/auto/titlebasicsdebug.tsv");
 	// This file mixes newline separators
-	skip.insert("test/sql/copy/csv/data/auto/multi_column_string_mix.csv");
-	RunTestOnFolder("test/sql/copy/csv/data/auto/", &skip);
+	skip.insert("data/csv/auto/multi_column_string_mix.csv");
+	RunTestOnFolder("data/csv/auto/", &skip);
 }
 
 //! Test case with specific parameters that allow us to run the titlebasicsdebug.tsv we were skipping
-TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/auto/titlebasicsdebug.tsv", "[parallel-csv][.]") {
+TEST_CASE("Test Parallel CSV All Files - data/csv/auto/titlebasicsdebug.tsv", "[parallel-csv][.]") {
 	string add_parameters = ", nullstr=\'\\N\', sample_size = -1";
-	string file = "test/sql/copy/csv/data/auto/titlebasicsdebug.tsv";
+	string file = "data/csv/auto/titlebasicsdebug.tsv";
 	REQUIRE(RunFull(file, nullptr, add_parameters));
 }
 
-TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/auto/glob", "[parallel-csv][.]") {
-	RunTestOnFolder("test/sql/copy/csv/data/auto/glob/");
+TEST_CASE("Test Parallel CSV All Files - data/csv/auto/glob", "[parallel-csv][.]") {
+	RunTestOnFolder("data/csv/auto/glob/");
 }
 
-TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/error/date_multiple_file", "[parallel-csv][.]") {
-	RunTestOnFolder("test/sql/copy/csv/data/error/date_multiple_file/");
+TEST_CASE("Test Parallel CSV All Files - data/csv/error/date_multiple_file", "[parallel-csv][.]") {
+	RunTestOnFolder("data/csv/error/date_multiple_file/");
 }
 
-TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/glob/a1", "[parallel-csv][.]") {
-	RunTestOnFolder("test/sql/copy/csv/data/glob/a1/");
+TEST_CASE("Test Parallel CSV All Files - data/csv/glob/a1", "[parallel-csv][.]") {
+	RunTestOnFolder("data/csv/glob/a1/");
 }
 
-TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/glob/a2", "[parallel-csv][.]") {
-	RunTestOnFolder("test/sql/copy/csv/data/glob/a2/");
+TEST_CASE("Test Parallel CSV All Files - data/csv/glob/a2", "[parallel-csv][.]") {
+	RunTestOnFolder("data/csv/glob/a2/");
 }
 
-TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/glob/a3", "[parallel-csv][.]") {
-	RunTestOnFolder("test/sql/copy/csv/data/glob/a3/");
+TEST_CASE("Test Parallel CSV All Files - data/csv/glob/a3", "[parallel-csv][.]") {
+	RunTestOnFolder("data/csv/glob/a3/");
 }
 
-TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/glob/empty", "[parallel-csv][.]") {
-	RunTestOnFolder("test/sql/copy/csv/data/glob/empty/");
+TEST_CASE("Test Parallel CSV All Files - data/csv/glob/empty", "[parallel-csv][.]") {
+	RunTestOnFolder("data/csv/glob/empty/");
 }
 
-TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/glob/i1", "[parallel-csv][.]") {
-	RunTestOnFolder("test/sql/copy/csv/data/glob/i1/");
+TEST_CASE("Test Parallel CSV All Files - data/csv/glob/i1", "[parallel-csv][.]") {
+	RunTestOnFolder("data/csv/glob/i1/");
 }
 
-TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/real", "[parallel-csv][.]") {
+TEST_CASE("Test Parallel CSV All Files - data/csv/real", "[parallel-csv][.]") {
 	std::set<std::string> skip;
 	// This file requires a temp_dir for offloading
-	skip.insert("test/sql/copy/csv/data/real/tmp2013-06-15.csv.gz");
-	RunTestOnFolder("test/sql/copy/csv/data/real/", &skip);
+	skip.insert("data/csv/real/tmp2013-06-15.csv.gz");
+	RunTestOnFolder("data/csv/real/", &skip);
 }
 
-TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/test", "[parallel-csv][.]") {
+TEST_CASE("Test Parallel CSV All Files - data/csv/test", "[parallel-csv][.]") {
 	std::set<std::string> skip;
 	// This file requires additional parameters, we test it on the following test.
-	skip.insert("test/sql/copy/csv/data/test/5438.csv");
+	skip.insert("data/csv/test/5438.csv");
 	// This file requires additional parameters, we test it on the following test.
-	skip.insert("test/sql/copy/csv/data/test/windows_newline_empty.csv");
+	skip.insert("data/csv/test/windows_newline_empty.csv");
 	// This file mixes newline separators
-	skip.insert("test/sql/copy/csv/data/test/mixed_line_endings.csv");
-	RunTestOnFolder("test/sql/copy/csv/data/test/", &skip);
+	skip.insert("data/csv/test/mixed_line_endings.csv");
+	RunTestOnFolder("data/csv/test/", &skip);
 }
 
 //! Test case with specific parameters that allow us to run the titlebasicsdebug.tsv we were skipping
-TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/test/5438.csv", "[parallel-csv][.]") {
+TEST_CASE("Test Parallel CSV All Files - data/csv/test/5438.csv", "[parallel-csv][.]") {
 	string add_parameters = ", delim=\'\', columns={\'j\': \'JSON\'}";
-	string file = "test/sql/copy/csv/data/test/5438.csv";
+	string file = "data/csv/test/5438.csv";
 	REQUIRE(RunFull(file, nullptr, add_parameters));
 }
 
 //! Test case with specific parameters that allow us to run the titlebasicsdebug.tsv we were skipping
-TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/test/windows_newline_empty.csv", "[parallel-csv][.]") {
+TEST_CASE("Test Parallel CSV All Files - data/csv/test/windows_newline_empty.csv", "[parallel-csv][.]") {
 	string add_parameters = "HEADER 0";
-	string file = "test/sql/copy/csv/data/test/windows_newline_empty.csv";
+	string file = "data/csv/test/windows_newline_empty.csv";
 	REQUIRE(RunFull(file, nullptr, add_parameters));
 }
 
-TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/zstd", "[parallel-csv][.]") {
-	RunTestOnFolder("test/sql/copy/csv/data/zstd/");
+TEST_CASE("Test Parallel CSV All Files - data/csv/zstd", "[parallel-csv][.]") {
+	RunTestOnFolder("data/csv/zstd/");
 }
 
 TEST_CASE("Test Parallel CSV All Files - data/csv", "[parallel-csv][.]") {
@@ -237,12 +230,13 @@ TEST_CASE("Test Parallel CSV All Files - data/csv", "[parallel-csv][.]") {
 	skip.insert("data/csv/bug_7578.csv");
 	// This file requires a temp_dir for offloading
 	skip.insert("data/csv/hebere.csv.gz");
+	skip.insert("data/csv/no_quote.csv");
 	RunTestOnFolder("data/csv/", &skip);
 }
 
 //! Test case with specific parameters that allow us to run the bug_7578.csv we were skipping
 TEST_CASE("Test Parallel CSV All Files - data/csv/bug_7578.csv", "[parallel-csv][.]") {
-	string add_parameters = ", delim=\'\\t\', header=true, quote = \'`\', columns={ \'transaction_id\': \'VARCHAR\', "
+	string add_parameters = ", delim=\'\\t\', quote = \'`\', columns={ \'transaction_id\': \'VARCHAR\', "
 	                        "\'team_id\': \'INT\', \'direction\': \'INT\', \'amount\':\'DOUBLE\', "
 	                        "\'account_id\':\'INT\', \'transaction_date\':\'DATE\', \'recorded_date\':\'DATE\', "
 	                        "\'tags.transaction_id\':\'VARCHAR\', \'tags.team_id\':\'INT\', \'tags\':\'varchar\'}";
@@ -258,8 +252,8 @@ TEST_CASE("Test Parallel CSV All Files - data/csv/中文", "[parallel-csv][.]") 
 	RunTestOnFolder("data/csv/中文/");
 }
 
-TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/abac", "[parallel-csv][.]") {
-	RunTestOnFolder("test/sql/copy/csv/data/abac/");
+TEST_CASE("Test Parallel CSV All Files - data/csv/abac", "[parallel-csv][.]") {
+	RunTestOnFolder("data/csv/abac/");
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sqlserver/data", "[parallel-csv][.]") {
@@ -278,7 +272,7 @@ TEST_CASE("Test Parallel CSV All Files - test/sqlserver/data/Person.csv.gz", "[p
 
 //! Test case with specific files that require a temp_dir for offloading
 TEST_CASE("Test Parallel CSV All Files - Temp Dir for Offloading", "[parallel-csv][.]") {
-	string file = "test/sql/copy/csv/data/real/tmp2013-06-15.csv.gz";
+	string file = "data/csv/real/tmp2013-06-15.csv.gz";
 	REQUIRE(RunFull(file, nullptr, "", true));
 
 	file = "data/csv/hebere.csv.gz";

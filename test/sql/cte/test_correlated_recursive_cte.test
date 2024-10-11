@@ -95,7 +95,7 @@ ORDER BY x, y;
 4	4
 
 # Test correlation in SELECT clause
-query III
+query III rowsort
 SELECT x, y, (WITH RECURSIVE t(z) AS (
   SELECT x + y
     UNION ALL
@@ -103,7 +103,7 @@ SELECT x, y, (WITH RECURSIVE t(z) AS (
   FROM   t
   WHERE z < 3
 ) SELECT sum(z) FROM t) AS z
-FROM   generate_series(1,2) AS _(x), generate_series(1,2) AS __(y);
+FROM   generate_series(1,2) AS _(x), generate_series(1,2) AS __(y) order by all;
 ----
 1	1	5
 1	2	3
@@ -112,7 +112,7 @@ FROM   generate_series(1,2) AS _(x), generate_series(1,2) AS __(y);
 
 
 # Complex nested recursive query
-query III
+query III rowsort
 SELECT x, y, (WITH RECURSIVE t(z) AS (
   SELECT x + y
     UNION ALL
@@ -127,7 +127,7 @@ SELECT x, y, (WITH RECURSIVE t(z) AS (
           SELECT * FROM g) AS t(z)
   WHERE z < 5
 ) SELECT sum(z) FROM t) AS z
-FROM   generate_series(1,2) AS _(x), generate_series(1,2) AS __(y);
+FROM   generate_series(1,2) AS _(x), generate_series(1,2) AS __(y) order by all;
 ----
 1	1	23
 1	2	12
@@ -296,7 +296,7 @@ ORDER BY x, y;
 4	4
 
 # Test correlation in SELECT clause
-query III
+query III rowsort
 SELECT x, y, (WITH RECURSIVE t(z) AS (
   SELECT x + y
     UNION
@@ -304,7 +304,7 @@ SELECT x, y, (WITH RECURSIVE t(z) AS (
   FROM   t
   WHERE z < 3
 ) SELECT sum(z) FROM t) AS z
-FROM   generate_series(1,2) AS _(x), generate_series(1,2) AS __(y);
+FROM   generate_series(1,2) AS _(x), generate_series(1,2) AS __(y) order by all;
 ----
 1	1	5
 1	2	3
@@ -312,7 +312,7 @@ FROM   generate_series(1,2) AS _(x), generate_series(1,2) AS __(y);
 2	2	4
 
 # Complex nested recursive query
-query III
+query III rowsort
 SELECT x, y, (WITH RECURSIVE t(z) AS (
   SELECT x + y
     UNION
@@ -327,7 +327,7 @@ SELECT x, y, (WITH RECURSIVE t(z) AS (
           SELECT * FROM g) AS t(z)
   WHERE z < 5
 ) SELECT sum(z) FROM t) AS z
-FROM   generate_series(1,2) AS _(x), generate_series(1,2) AS __(y);
+FROM   generate_series(1,2) AS _(x), generate_series(1,2) AS __(y) order by all;
 ----
 1	1	14
 1	2	12

@@ -1,7 +1,9 @@
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
 
+#include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/types/row/tuple_data_segment.hpp"
 #include "duckdb/common/types/row/tuple_data_states.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -9,10 +11,11 @@ namespace duckdb {
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
 TupleDataBlock::TupleDataBlock(BufferManager &buffer_manager, idx_t capacity_p) : capacity(capacity_p), size(0) {
-	buffer_manager.Allocate(MemoryTag::HASH_TABLE, capacity, false, &handle);
+	auto buffer_handle = buffer_manager.Allocate(MemoryTag::HASH_TABLE, capacity, false);
+	handle = buffer_handle.GetBlockHandle();
 }
 
-TupleDataBlock::TupleDataBlock(TupleDataBlock &&other) noexcept {
+TupleDataBlock::TupleDataBlock(TupleDataBlock &&other) noexcept : capacity(0), size(0) {
 	std::swap(handle, other.handle);
 	std::swap(capacity, other.capacity);
 	std::swap(size, other.size);
@@ -31,6 +34,23 @@ TupleDataAllocator::TupleDataAllocator(BufferManager &buffer_manager, const Tupl
 
 TupleDataAllocator::TupleDataAllocator(TupleDataAllocator &allocator)
     : buffer_manager(allocator.buffer_manager), layout(allocator.layout.Copy()) {
+}
+
+void TupleDataAllocator::SetDestroyBufferUponUnpin() {
+	for (auto &block : row_blocks) {
+		if (block.handle) {
+			block.handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+		}
+	}
+	for (auto &block : heap_blocks) {
+		if (block.handle) {
+			block.handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+		}
+	}
+}
+
+TupleDataAllocator::~TupleDataAllocator() {
+	SetDestroyBufferUponUnpin();
 }
 
 BufferManager &TupleDataAllocator::GetBufferManager() {
@@ -82,6 +102,18 @@ void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin
 			segment.data_size += chunk_part.total_heap_size;
 		}
 
+		if (layout.HasDestructor()) {
+			const auto base_row_ptr = GetRowPointer(pin_state, chunk_part);
+			for (auto &aggr_idx : layout.GetAggregateDestructorIndices()) {
+				const auto aggr_offset = layout.GetOffsets()[layout.ColumnCount() + aggr_idx];
+				auto &aggr_fun = layout.GetAggregates()[aggr_idx];
+				for (idx_t i = 0; i < next; i++) {
+					duckdb::FastMemset(base_row_ptr + i * layout.GetRowWidth() + aggr_offset, '\0',
+					                   aggr_fun.payload_size);
+				}
+			}
+		}
+
 		offset += next;
 		chunk_part_indices.emplace_back(chunks.size() - 1, chunk.parts.size() - 1);
 	}
@@ -105,17 +137,18 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_sta
                                                       TupleDataChunk &chunk) {
 	D_ASSERT(append_count != 0);
 	TupleDataChunkPart result(*chunk.lock);
+	const auto block_size = buffer_manager.GetBlockSize();
 
 	// Allocate row block (if needed)
 	if (row_blocks.empty() || row_blocks.back().RemainingCapacity() < layout.GetRowWidth()) {
-		row_blocks.emplace_back(buffer_manager, (idx_t)Storage::BLOCK_SIZE);
+		row_blocks.emplace_back(buffer_manager, block_size);
 	}
-	result.row_block_index = row_blocks.size() - 1;
+	result.row_block_index = NumericCast<uint32_t>(row_blocks.size() - 1);
 	auto &row_block = row_blocks[result.row_block_index];
-	result.row_block_offset = row_block.size;
+	result.row_block_offset = NumericCast<uint32_t>(row_block.size);
 
 	// Set count (might be reduced later when checking heap space)
-	result.count = MinValue<idx_t>(row_block.RemainingCapacity(layout.GetRowWidth()), append_count);
+	result.count = NumericCast<uint32_t>(MinValue(row_block.RemainingCapacity(layout.GetRowWidth()), append_count));
 	if (!layout.AllConstant()) {
 		const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
 
@@ -127,41 +160,43 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_sta
 		}
 
 		if (total_heap_size == 0) {
-			// We don't need a heap at all
-			result.heap_block_index = TupleDataChunkPart::INVALID_INDEX;
-			result.heap_block_offset = TupleDataChunkPart::INVALID_INDEX;
-			result.total_heap_size = 0;
-			result.base_heap_ptr = nullptr;
+			result.SetHeapEmpty();
 		} else {
-			// Allocate heap block (if needed)
-			if (heap_blocks.empty() || heap_blocks.back().RemainingCapacity() < heap_sizes[append_offset]) {
-				const auto size = MaxValue<idx_t>((idx_t)Storage::BLOCK_SIZE, heap_sizes[append_offset]);
-				heap_blocks.emplace_back(buffer_manager, size);
-			}
-			result.heap_block_index = heap_blocks.size() - 1;
-			auto &heap_block = heap_blocks[result.heap_block_index];
-			result.heap_block_offset = heap_block.size;
+			const auto heap_remaining = MaxValue<idx_t>(
+			    heap_blocks.empty() ? block_size : heap_blocks.back().RemainingCapacity(), heap_sizes[append_offset]);
 
-			const auto heap_remaining = heap_block.RemainingCapacity();
 			if (total_heap_size <= heap_remaining) {
 				// Everything fits
-				result.total_heap_size = total_heap_size;
+				result.total_heap_size = NumericCast<uint32_t>(total_heap_size);
 			} else {
 				// Not everything fits - determine how many we can read next
 				result.total_heap_size = 0;
 				for (idx_t i = 0; i < result.count; i++) {
 					const auto &heap_size = heap_sizes[append_offset + i];
 					if (result.total_heap_size + heap_size > heap_remaining) {
-						result.count = i;
+						result.count = NumericCast<uint32_t>(i);
 						break;
 					}
 					result.total_heap_size += heap_size;
 				}
 			}
 
-			// Mark this portion of the heap block as filled and set the pointer
-			heap_block.size += result.total_heap_size;
-			result.base_heap_ptr = GetBaseHeapPointer(pin_state, result);
+			if (result.total_heap_size == 0) {
+				result.SetHeapEmpty();
+			} else {
+				// Allocate heap block (if needed)
+				if (heap_blocks.empty() || heap_blocks.back().RemainingCapacity() < heap_sizes[append_offset]) {
+					const auto size = MaxValue<idx_t>(block_size, heap_sizes[append_offset]);
+					heap_blocks.emplace_back(buffer_manager, size);
+				}
+				result.heap_block_index = NumericCast<uint32_t>(heap_blocks.size() - 1);
+				auto &heap_block = heap_blocks[result.heap_block_index];
+				result.heap_block_offset = NumericCast<uint32_t>(heap_block.size);
+
+				// Mark this portion of the heap block as filled and set the pointer
+				heap_block.size += result.total_heap_size;
+				result.base_heap_ptr = GetBaseHeapPointer(pin_state, result);
+			}
 		}
 	}
 	D_ASSERT(result.count != 0 && result.count <= STANDARD_VECTOR_SIZE);
@@ -424,7 +459,10 @@ void TupleDataAllocator::ReleaseOrStoreHandlesInternal(
 			case TupleDataPinProperties::ALREADY_PINNED:
 				break;
 			case TupleDataPinProperties::DESTROY_AFTER_DONE:
-				blocks[block_id].handle = nullptr;
+				// Prevent it from being added to the eviction queue
+				blocks[block_id].handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+				// Destroy
+				blocks[block_id].handle.reset();
 				break;
 			default:
 				D_ASSERT(properties == TupleDataPinProperties::INVALID);

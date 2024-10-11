@@ -2,9 +2,18 @@ name: DuckDB-Wasm extensions
 on:
   workflow_dispatch:
     inputs:
+      # Git ref of the duckdb-wasm repo
+      duckdb_wasm_ref:
+        required: true
+        type: string
       # Git ref of the duckdb repo
       duckdb_ref:
         required: true
+        type: string
+      # Git ref of the duckdb repo
+      platforms:
+        required: false
+        default: '["wasm_mvp", "wasm_eh", "wasm_threads"]'
         type: string
       # Publish extensions on extensions.duckdb.org?
       release_s3:
@@ -21,16 +30,18 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        duckdb_wasm_arch: [ 'mvp', 'eh', 'threads' ]
+        duckdb_wasm_arch: ${{ fromJSON(github.event.inputs.platforms) }}
     env:
       VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
-      DUCKDB_PLATFORM: "wasm_${{ matrix.duckdb_wasm_arch }}"
+      DUCKDB_PLATFORM: "${{ matrix.duckdb_wasm_arch }}"
 
     steps:
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v4
               with:
-                  ref: ${{ inputs.duckdb_ref }}
+                  ref: ${{ inputs.duckdb_wasm_ref }}
                   fetch-depth: 0
+                  submodules: true
+                  repository: duckdb/duckdb-wasm
 
             - uses: mymindstorm/setup-emsdk@v12
               with:
@@ -43,39 +54,41 @@ jobs:
             - name: Setup vcpkg
               uses: lukka/run-vcpkg@v11.1
               with:
-                  vcpkgGitCommitId: a42af01b72c28a8e1d7b48107b33e4f286a55ef6
+                  vcpkgGitCommitId: a1a1cbc975abf909a6c8985a6a2b8fe20bbd9bd6
 
             - name: Setup Ccache
               uses: hendrikmuhs/ccache-action@main
               with:
                   key: ${{ github.job }}-${{ matrix.duckdb_wasm_arch }}
 
-            - name: Build Wasm module MVP
-              if: ${{ matrix.duckdb_wasm_arch == 'mvp' }}
+            - name: PatchDuckDB
               run: |
-                mkdir -p ./build/wasm_mvp
-                emcmake cmake -G "Ninja" -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_mvp -DCMAKE_CXX_FLAGS="-DDUCKDB_CUSTOM_PLATFORM=wasm_mvp" -DDUCKDB_EXPLICIT_PLATFORM=wasm_mvp -DLOCAL_EXTENSION_REPO='build/to_be_deployed' -DDUCKDB_EXTENSION_CONFIGS=".github/config/in_tree_extensions.cmake" -DSKIP_EXTENSIONS="httpfs"
-                emmake ninja -j8 -Cbuild/wasm_mvp
+                 cd submodules/duckdb
+                 git checkout ${{ github.event.inputs.duckdb_ref }}
+                 cd ../..
+                 make apply_patches
+                 cp extension_config_wasm.cmake submodules/duckdb/extension/extension_config.cmake
+
+            - name: Build Wasm module MVP
+              if: ${{ matrix.duckdb_wasm_arch == 'wasm_mvp' }}
+              run: |
+                DUCKDB_PLATFORM=wasm_mvp DUCKDB_WASM_LOADABLE_EXTENSIONS="signed" GEN=ninja ./scripts/wasm_build_lib.sh relsize mvp
 
             - name: Build Wasm module EH
-              if: ${{ matrix.duckdb_wasm_arch == 'eh' }}
+              if: ${{ matrix.duckdb_wasm_arch == 'wasm_eh' }}
               run: |
-                mkdir -p ./build/wasm_eh
-                emcmake cmake -G "Ninja" -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_eh -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_eh" -DDUCKDB_EXPLICIT_PLATFORM=wasm_eh -DLOCAL_EXTENSION_REPO='build/to_be_deployed' -DDUCKDB_EXTENSION_CONFIGS=".github/config/in_tree_extensions.cmake" -DSKIP_EXTENSIONS="httpfs"
-                emmake ninja -j8 -Cbuild/wasm_eh
+                DUCKDB_PLATFORM=wasm_eh DUCKDB_WASM_LOADABLE_EXTENSIONS="signed" GEN=ninja ./scripts/wasm_build_lib.sh relsize eh
 
             - name: Build Wasm module THREADS
-              if: ${{ matrix.duckdb_wasm_arch == 'threads' }}
+              if: ${{ matrix.duckdb_wasm_arch == 'wasm_threads' }}
               run: |
-                mkdir -p ./build/wasm_threads
-                emcmake cmake -G "Ninja" -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_threads -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DWITH_WASM_THREADS=1 -DWITH_WASM_SIMD=1 -DWITH_WASM_BULK_MEMORY=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_threads" -DDUCKDB_EXPLICIT_PLATFORM=wasm_threads -DLOCAL_EXTENSION_REPO='build/to_be_deployed' -DDUCKDB_EXTENSION_CONFIGS=".github/config/in_tree_extensions.cmake" -DSKIP_EXTENSIONS="httpfs"
-                emmake ninja -j8 -Cbuild/wasm_threads
+                DUCKDB_PLATFORM=wasm_threads DUCKDB_WASM_LOADABLE_EXTENSIONS="signed" GEN=ninja ./scripts/wasm_build_lib.sh relsize coi
 
             - name: Upload artifact
-              uses: actions/upload-artifact@v3
+              uses: actions/upload-artifact@v4
               with:
                   name: duckdb_extensions_${{ env.DUCKDB_PLATFORM }}
-                  path: build/to_be_deployed/${{ inputs.duckdb_ref }}/${{ env.DUCKDB_PLATFORM }}
+                  path: build/extension_repository/${{ inputs.duckdb_ref }}/${{ env.DUCKDB_PLATFORM }}
                   retention-days: 1
 
   publish:
@@ -85,16 +98,16 @@ jobs:
     - build_wasm
     strategy:
       matrix:
-        duckdb_arch: [ 'wasm_mvp', 'wasm_eh', 'wasm_threads' ]
+        duckdb_arch: ${{ fromJSON(github.event.inputs.platforms) }}
     steps:
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v4
 
-            - uses: actions/download-artifact@v3
+            - uses: actions/download-artifact@v4
               with:
                 name: duckdb_extensions_${{ matrix.duckdb_arch }}
                 path: build/to_be_deployed/${{ inputs.duckdb_ref }}/${{ matrix.duckdb_arch }}
 
-            - uses: actions/setup-python@v4
+            - uses: actions/setup-python@v5
               with:
                 python-version: '3.12'
 

@@ -44,6 +44,10 @@ bool JSONFileHandle::RequestedReadsComplete() {
 	return requested_reads == actual_reads;
 }
 
+bool JSONFileHandle::LastReadRequested() const {
+	return last_read_requested;
+}
+
 idx_t JSONFileHandle::FileSize() const {
 	return file_size;
 }
@@ -54,6 +58,10 @@ idx_t JSONFileHandle::Remaining() const {
 
 bool JSONFileHandle::CanSeek() const {
 	return can_seek;
+}
+
+bool JSONFileHandle::IsPipe() const {
+	return file_handle->IsPipe();
 }
 
 FileHandle &JSONFileHandle::GetHandle() {
@@ -193,9 +201,8 @@ BufferedJSONReader::BufferedJSONReader(ClientContext &context, BufferedJSONReade
 void BufferedJSONReader::OpenJSONFile() {
 	lock_guard<mutex> guard(lock);
 	if (!IsOpen()) {
-		auto &file_system = FileSystem::GetFileSystem(context);
-		auto regular_file_handle = file_system.OpenFile(file_name.c_str(), FileFlags::FILE_FLAGS_READ,
-		                                                FileLockType::NO_LOCK, options.compression);
+		auto &fs = FileSystem::GetFileSystem(context);
+		auto regular_file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ | options.compression);
 		file_handle = make_uniq<JSONFileHandle>(std::move(regular_file_handle), BufferAllocator::Get(context));
 	}
 	Reset();
@@ -304,11 +311,11 @@ idx_t BufferedJSONReader::GetLineNumber(idx_t buf_index, idx_t line_or_object_in
 					line += buffer_line_or_object_counts[b_idx];
 				}
 			}
-		}
-		if (can_throw) {
-			thrown = true;
-			// SQL uses 1-based indexing so I guess we will do that in our exception here as well
-			return line + 1;
+			if (can_throw) {
+				thrown = true;
+				// SQL uses 1-based indexing so I guess we will do that in our exception here as well
+				return line + 1;
+			}
 		}
 		TaskScheduler::YieldThread();
 	}
@@ -331,6 +338,7 @@ void BufferedJSONReader::ThrowTransformError(idx_t buf_index, idx_t line_or_obje
 }
 
 double BufferedJSONReader::GetProgress() const {
+	lock_guard<mutex> guard(lock);
 	if (HasFileHandle()) {
 		return 100.0 - 100.0 * double(file_handle->Remaining()) / double(file_handle->FileSize());
 	} else {

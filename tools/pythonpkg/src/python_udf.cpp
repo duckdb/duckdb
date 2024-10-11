@@ -15,6 +15,7 @@
 #include "duckdb_python/numpy/numpy_scan.hpp"
 #include "duckdb_python/arrow/arrow_export_utils.hpp"
 #include "duckdb/common/types/arrow_aux_data.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 
 namespace duckdb {
 
@@ -42,10 +43,35 @@ static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const ClientP
 	return pyarrow::ToArrowTable(types, names, ConvertToSingleBatch(types, names, input, options), options);
 }
 
-static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, ClientContext &context, idx_t count) {
-
+// If these types are arrow canonical extensions, we must check if they are registered.
+// If not, we should error.
+void AreExtensionsRegistered(const LogicalType &arrow_type, const LogicalType &duckdb_type) {
+	if (arrow_type != duckdb_type) {
+		// Is it a UUID Registration?
+		if (arrow_type.id() == LogicalTypeId::BLOB && duckdb_type.id() == LogicalTypeId::UUID) {
+			throw InvalidConfigurationException(
+			    "Mismatch on return type from Arrow object (%s) and DuckDB (%s). It seems that you are using the UUID "
+			    "arrow canonical extension, but the same is not yet registered. Make sure to register it first with "
+			    "e.g., pa.register_extension_type(UUIDType()). ",
+			    arrow_type.ToString(), duckdb_type.ToString());
+		}
+		// Is it a JSON Registration
+		if (!arrow_type.IsJSONType() && duckdb_type.IsJSONType()) {
+			throw InvalidConfigurationException(
+			    "Mismatch on return type from Arrow object (%s) and DuckDB (%s). It seems that you are using the JSON "
+			    "arrow canonical extension, but the same is not yet registered. Make sure to register it first with "
+			    "e.g., pa.register_extension_type(JSONType()). ",
+			    arrow_type.ToString(), duckdb_type.ToString());
+		}
+	}
+}
+static void ConvertArrowTableToVector(const py::object &table, Vector &out, ClientContext &context, idx_t count) {
 	// Create the stream factory from the Table object
-	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(table.ptr(), context.GetClientProperties());
+	auto ptr = table.ptr();
+	D_ASSERT(py::gil_check());
+	py::gil_scoped_release gil;
+
+	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(ptr, context.GetClientProperties());
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 
@@ -65,7 +91,11 @@ static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, Clie
 	vector<LogicalType> input_types;
 	vector<string> input_names;
 
-	auto bind_input = TableFunctionBindInput(children, named_params, input_types, input_names, nullptr);
+	TableFunctionRef empty;
+	TableFunction dummy_table_function;
+	dummy_table_function.name = "ConvertArrowTableToVector";
+	TableFunctionBindInput bind_input(children, named_params, input_types, input_names, nullptr, nullptr,
+	                                  dummy_table_function, empty);
 	vector<LogicalType> return_types;
 	vector<string> return_names;
 
@@ -76,9 +106,8 @@ static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, Clie
 		    "The returned table from a pyarrow scalar udf should only contain one column, found %d",
 		    return_types.size());
 	}
-	// if (return_types[0] != out.GetType()) {
-	//	throw InvalidInputException("The type of the returned array (%s) does not match the expected type: '%s'", )
-	//}
+
+	AreExtensionsRegistered(return_types[0], out.GetType());
 
 	DataChunk result;
 	// Reserve for STANDARD_VECTOR_SIZE instead of count, in case the returned table contains too many tuples
@@ -96,13 +125,50 @@ static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, Clie
 	}
 
 	VectorOperations::Cast(context, result.data[0], out, count);
+	out.Flatten(count);
 }
 
-static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExceptionHandling exception_handling) {
+static string NullHandlingError() {
+	return R"(
+The returned result contained NULL values, but the 'null_handling' was set to DEFAULT.
+If you want more control over NULL values then 'null_handling' should be set to SPECIAL.
+
+With DEFAULT all rows containing NULL have been filtered from the UDFs input.
+Those rows are automatically set to NULL in the final result.
+The UDF is not expected to return NULL values.
+	)";
+}
+
+static ValidityMask &GetResultValidity(Vector &result) {
+	auto vector_type = result.GetVectorType();
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		return ConstantVector::Validity(result);
+	} else if (vector_type == VectorType::FLAT_VECTOR) {
+		return FlatVector::Validity(result);
+	} else {
+		throw InternalException("VectorType %s was not expected here (GetResultValidity)",
+		                        EnumUtil::ToString(vector_type));
+	}
+}
+
+static void VerifyVectorizedNullHandling(Vector &result, idx_t count) {
+	auto &validity = GetResultValidity(result);
+
+	if (validity.AllValid()) {
+		return;
+	}
+
+	throw InvalidInputException(NullHandlingError());
+}
+
+static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExceptionHandling exception_handling,
+                                                  FunctionNullHandling null_handling) {
 	// Through the capture of the lambda, we have access to the function pointer
 	// We just need to make sure that it doesn't get garbage collected
 	scalar_function_t func = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
 		py::gil_scoped_acquire gil;
+
+		const bool default_null_handling = null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING;
 
 		// owning references
 		py::object python_object;
@@ -114,6 +180,36 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 			options = context.GetClientProperties();
 		}
 
+		auto result_validity = FlatVector::Validity(result);
+		SelectionVector selvec(input.size());
+		idx_t input_size = input.size();
+		if (default_null_handling) {
+			vector<UnifiedVectorFormat> vec_data(input.ColumnCount());
+			for (idx_t i = 0; i < input.ColumnCount(); i++) {
+				input.data[i].ToUnifiedFormat(input.size(), vec_data[i]);
+			}
+
+			idx_t index = 0;
+			for (idx_t i = 0; i < input.size(); i++) {
+				bool any_null = false;
+				for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
+					auto &vec = vec_data[col_idx];
+					if (!vec.validity.RowIsValid(vec.sel->get_index(i))) {
+						any_null = true;
+						break;
+					}
+				}
+				if (any_null) {
+					result_validity.SetInvalid(i);
+					continue;
+				}
+				selvec.set_index(index++, i);
+			}
+			if (index != input.size()) {
+				input.Slice(selvec, index);
+			}
+		}
+
 		auto pyarrow_table = ConvertDataChunkToPyArrowTable(input, options);
 		py::tuple column_list = pyarrow_table.attr("columns");
 
@@ -121,7 +217,9 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 
 		// Call the function
 		auto ret = PyObject_CallObject(function, column_list.ptr());
+		bool exception_occurred = false;
 		if (ret == nullptr && PyErr_Occurred()) {
+			exception_occurred = true;
 			if (exception_handling == PythonExceptionHandling::FORWARD_ERROR) {
 				auto exception = py::error_already_set();
 				throw InvalidInputException("Python exception occurred while executing the UDF: %s", exception.what());
@@ -144,14 +242,48 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 			try {
 				python_object = py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(
 				    single_array, py::arg("names") = single_name);
-			} catch (py::error_already_set &ex) {
+			} catch (py::error_already_set &) {
 				throw InvalidInputException("Could not convert the result into an Arrow Table");
 			}
 		}
 		// Convert the pyarrow result back to a DuckDB datachunk
-		ConvertPyArrowToDataChunk(python_object, result, state.GetContext(), count);
+		if (count != input_size) {
+			D_ASSERT(default_null_handling);
+			// We filtered out some NULLs, now we need to reconstruct the final result by adding the nulls back
+			Vector temp(result.GetType(), count);
+			// Convert the table into a temporary Vector
+			ConvertArrowTableToVector(python_object, temp, state.GetContext(), count);
+			if (!exception_occurred) {
+				VerifyVectorizedNullHandling(temp, count);
+			}
+			if (count) {
+				SelectionVector inverted(input_size);
+				// Create a SelVec that inverts the filtering
+				// example: count: 6, null_indices: 1,3
+				// input selvec: [0, 2, 4, 5]
+				// inverted selvec: [0, 0, 1, 1, 2, 3]
+				idx_t src_index = 0;
+				for (idx_t i = 0; i < input_size; i++) {
+					// Fill the gaps with the previous index
+					inverted.set_index(i, src_index);
+					if (src_index + 1 < count && selvec.get_index(src_index) == i) {
+						src_index++;
+					}
+				}
+				VectorOperations::Copy(temp, result, inverted, count, 0, 0, input_size);
+			}
+			for (idx_t i = 0; i < input_size; i++) {
+				FlatVector::SetNull(result, i, !result_validity.RowIsValid(i));
+			}
+			result.Verify(input_size);
+		} else {
+			ConvertArrowTableToVector(python_object, result, state.GetContext(), count);
+			if (default_null_handling && !exception_occurred) {
+				VerifyVectorizedNullHandling(result, count);
+			}
+		}
 
-		if (input.size() == 1) {
+		if (input_size == 1) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
 	};
@@ -159,11 +291,14 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 }
 
 static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptionHandling exception_handling,
-                                              const ClientProperties &client_properties) {
+                                              const ClientProperties &client_properties,
+                                              FunctionNullHandling null_handling) {
 	// Through the capture of the lambda, we have access to the function pointer
 	// We just need to make sure that it doesn't get garbage collected
-	scalar_function_t func = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
+	scalar_function_t func = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void { // NOLINT
 		py::gil_scoped_acquire gil;
+
+		const bool default_null_handling = null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING;
 
 		// owning references
 		vector<py::object> python_objects;
@@ -172,11 +307,22 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 		for (idx_t row = 0; row < input.size(); row++) {
 
 			auto bundled_parameters = py::tuple((int)input.ColumnCount());
+			bool contains_null = false;
 			for (idx_t i = 0; i < input.ColumnCount(); i++) {
 				// Fill the tuple with the arguments for this row
 				auto &column = input.data[i];
 				auto value = column.GetValue(row);
+				if (value.IsNull() && default_null_handling) {
+					contains_null = true;
+					break;
+				}
 				bundled_parameters[i] = PythonObject::FromValue(value, column.GetType(), client_properties);
+			}
+			if (contains_null) {
+				// Immediately insert None, no need to call the function
+				python_objects.push_back(py::none());
+				python_results[row] = py::none().ptr();
+				continue;
 			}
 
 			// Call the function
@@ -192,6 +338,8 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 				} else {
 					throw NotImplementedException("Exception handling type not implemented");
 				}
+			} else if ((!ret || ret == Py_None) && default_null_handling) {
+				throw InvalidInputException(NullHandlingError());
 			}
 			python_objects.push_back(py::reinterpret_steal<py::object>(ret));
 			python_results[row] = ret;
@@ -299,7 +447,8 @@ public:
 		auto signature = GetSignature(udf);
 		auto sig_params = signature.attr("parameters");
 		auto return_annotation = signature.attr("return_annotation");
-		if (!py::none().is(return_annotation)) {
+		auto empty = py::module_::import("inspect").attr("Signature").attr("empty");
+		if (!py::none().is(return_annotation) && !empty.is(return_annotation)) {
 			shared_ptr<DuckDBPyType> pytype;
 			if (py::try_cast<shared_ptr<DuckDBPyType>>(return_annotation, pytype)) {
 				return_type = pytype->Type();
@@ -333,9 +482,9 @@ public:
 
 		scalar_function_t func;
 		if (vectorized) {
-			func = CreateVectorizedFunction(udf.ptr(), exception_handling);
+			func = CreateVectorizedFunction(udf.ptr(), exception_handling, null_handling);
 		} else {
-			func = CreateNativeFunction(udf.ptr(), exception_handling, client_properties);
+			func = CreateNativeFunction(udf.ptr(), exception_handling, client_properties, null_handling);
 		}
 		FunctionStability function_side_effects =
 		    side_effects ? FunctionStability::VOLATILE : FunctionStability::CONSISTENT;
@@ -353,12 +502,13 @@ ScalarFunction DuckDBPyConnection::CreateScalarUDF(const string &name, const py:
                                                    FunctionNullHandling null_handling,
                                                    PythonExceptionHandling exception_handling, bool side_effects) {
 	PythonUDFData data(name, vectorized, null_handling);
+	auto &connection = con.GetConnection();
 
 	data.AnalyzeSignature(udf);
 	data.OverrideParameters(parameters);
 	data.OverrideReturnType(return_type);
 	data.Verify();
-	return data.GetFunction(udf, exception_handling, side_effects, connection->context->GetClientProperties());
+	return data.GetFunction(udf, exception_handling, side_effects, connection.context->GetClientProperties());
 }
 
 } // namespace duckdb

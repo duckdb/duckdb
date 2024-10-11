@@ -198,7 +198,7 @@ SELECT SUM((SELECT l[1]+i1.l[1] FROM lists WHERE l[1]=1)) FROM lists i1;
 9.000000
 
 query IRR
-SELECT l, SUM(i1.l[1]), (SELECT SUM(i1.l[1]) FROM lists) AS k FROM lists i1 GROUP BY l ORDER BY l;
+SELECT l, SUM(i1.l[1]), (SELECT SUM(i1.l[1])) AS k FROM lists i1 GROUP BY l ORDER BY l;
 ----
 NULL	NULL	NULL
 [1]	1.000000	1.000000
@@ -228,7 +228,7 @@ NULL
 
 # ORDER BY correlated subquery
 query IR
-SELECT l, SUM(i1.l[1]) FROM lists i1 GROUP BY l ORDER BY (SELECT SUM(i1.l[1]) FROM lists);
+SELECT l, SUM(i1.l[1]) FROM lists i1 GROUP BY l ORDER BY (SELECT SUM(i1.l[1]));
 ----
 NULL	NULL
 [NULL]	NULL

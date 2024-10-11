@@ -25,7 +25,6 @@
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
-#include "duckdb/planner/operator/logical_limit_percent.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_pivot.hpp"
@@ -42,4 +41,5 @@
 #include "duckdb/planner/operator/logical_top_n.hpp"
 #include "duckdb/planner/operator/logical_unnest.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
+#include "duckdb/planner/operator/logical_vacuum.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"

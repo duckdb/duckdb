@@ -450,3 +450,65 @@ NULL
 24
 785
 
+statement error
+select asin(-2);
+----
+Invalid Input Error: ASIN is undefined outside [-1,1]
+
+statement error
+select acos(-2);
+----
+Invalid Input Error: ACOS is undefined outside [-1,1]
+
+
+# Hyperbolic trigo functions
+
+# ATANH
+foreach value 1.1 -1.1
+
+statement error
+select atanh(${value});
+----
+Invalid Input Error: ATANH is undefined outside [-1,1]
+
+endloop
+
+query II
+select atanh(1), atanh(-1);
+----
+inf	inf
+
+query III
+select atanh(-0.5), atanh(0), atanh(0.5);
+----
+-0.5493061443340549	0.0	0.5493061443340549
+
+# ACOSH
+query IIII
+select acosh(-1), acosh(0), acosh(1), acosh(2);
+----
+NaN	NaN	0.0	1.3169578969248166
+
+# ASINH
+query III
+select asinh(-1), asinh(0), asinh(2);
+----
+-0.881373587019543	0.0	1.4436354751788103
+
+# TANH
+query IIII
+select tanh(-0.5), tanh(0), tanh(0.5), tanh(1000);
+----
+-0.46211715726000974	0.0	0.46211715726000974	1.0
+
+# COSH
+query IIII
+select cosh(-1), cosh(0), cosh(1), cosh(1000);
+----
+1.5430806348152437	1.0	1.5430806348152437	inf
+
+# SINH
+query IIII
+select sinh(-1), sinh(0), sinh(1), sinh(1000);
+----
+-1.1752011936438014	0.0	1.1752011936438014	inf

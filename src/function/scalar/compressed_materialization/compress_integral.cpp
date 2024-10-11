@@ -1,7 +1,8 @@
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/scalar/compressed_materialization_functions.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -14,7 +15,7 @@ template <class INPUT_TYPE, class RESULT_TYPE>
 struct TemplatedIntegralCompress {
 	static inline RESULT_TYPE Operation(const INPUT_TYPE &input, const INPUT_TYPE &min_val) {
 		D_ASSERT(min_val <= input);
-		return input - min_val;
+		return UnsafeNumericCast<RESULT_TYPE>(input - min_val);
 	}
 };
 
@@ -22,7 +23,7 @@ template <class RESULT_TYPE>
 struct TemplatedIntegralCompress<hugeint_t, RESULT_TYPE> {
 	static inline RESULT_TYPE Operation(const hugeint_t &input, const hugeint_t &min_val) {
 		D_ASSERT(min_val <= input);
-		return (input - min_val).lower;
+		return UnsafeNumericCast<RESULT_TYPE>((input - min_val).lower);
 	}
 };
 
@@ -30,7 +31,7 @@ template <class RESULT_TYPE>
 struct TemplatedIntegralCompress<uhugeint_t, RESULT_TYPE> {
 	static inline RESULT_TYPE Operation(const uhugeint_t &input, const uhugeint_t &min_val) {
 		D_ASSERT(min_val <= input);
-		return (input - min_val).lower;
+		return UnsafeNumericCast<RESULT_TYPE>((input - min_val).lower);
 	}
 };
 
@@ -96,9 +97,25 @@ static string IntegralDecompressFunctionName(const LogicalType &result_type) {
 }
 
 template <class INPUT_TYPE, class RESULT_TYPE>
-static inline RESULT_TYPE TemplatedIntegralDecompress(const INPUT_TYPE &input, const RESULT_TYPE &min_val) {
-	return min_val + input;
-}
+struct TemplatedIntegralDecompress {
+	static inline RESULT_TYPE Operation(const INPUT_TYPE &input, const RESULT_TYPE &min_val) {
+		return min_val + UnsafeNumericCast<RESULT_TYPE, INPUT_TYPE>(input);
+	}
+};
+
+template <class INPUT_TYPE>
+struct TemplatedIntegralDecompress<INPUT_TYPE, hugeint_t> {
+	static inline hugeint_t Operation(const INPUT_TYPE &input, const hugeint_t &min_val) {
+		return min_val + hugeint_t(0, input);
+	}
+};
+
+template <class INPUT_TYPE>
+struct TemplatedIntegralDecompress<INPUT_TYPE, uhugeint_t> {
+	static inline uhugeint_t Operation(const INPUT_TYPE &input, const uhugeint_t &min_val) {
+		return min_val + uhugeint_t(0, input);
+	}
+};
 
 template <class INPUT_TYPE, class RESULT_TYPE>
 static void IntegralDecompressFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -107,7 +124,7 @@ static void IntegralDecompressFunction(DataChunk &args, ExpressionState &state, 
 	D_ASSERT(args.data[1].GetType() == result.GetType());
 	const auto min_val = ConstantVector::GetData<RESULT_TYPE>(args.data[1])[0];
 	UnaryExecutor::Execute<INPUT_TYPE, RESULT_TYPE>(args.data[0], result, args.size(), [&](const INPUT_TYPE &input) {
-		return TemplatedIntegralDecompress<INPUT_TYPE, RESULT_TYPE>(input, min_val);
+		return TemplatedIntegralDecompress<INPUT_TYPE, RESULT_TYPE>::Operation(input, min_val);
 	});
 }
 

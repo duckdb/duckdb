@@ -1,0 +1,100 @@
+{
+    "group": "replacement_scans",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_add_replacement_scan",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_database",
+                    "name": "db"
+                },
+                {
+                    "type": "duckdb_replacement_callback_t",
+                    "name": "replacement"
+                },
+                {
+                    "type": "void *",
+                    "name": "extra_data"
+                },
+                {
+                    "type": "duckdb_delete_callback_t",
+                    "name": "delete_callback"
+                }
+            ],
+            "comment": {
+                "description": "Add a replacement scan definition to the specified database.\n\n",
+                "param_comments": {
+                    "db": "The database object to add the replacement scan to",
+                    "replacement": "The replacement scan callback",
+                    "extra_data": "Extra data that is passed back into the specified callback",
+                    "delete_callback": "The delete callback to call on the extra data, if any"
+                }
+            }
+        },
+        {
+            "name": "duckdb_replacement_scan_set_function_name",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_replacement_scan_info",
+                    "name": "info"
+                },
+                {
+                    "type": "const char *",
+                    "name": "function_name"
+                }
+            ],
+            "comment": {
+                "description": "Sets the replacement function name. If this function is called in the replacement callback,\nthe replacement scan is performed. If it is not called, the replacement callback is not performed.\n\n",
+                "param_comments": {
+                    "info": "The info object",
+                    "function_name": "The function name to substitute."
+                }
+            }
+        },
+        {
+            "name": "duckdb_replacement_scan_add_parameter",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_replacement_scan_info",
+                    "name": "info"
+                },
+                {
+                    "type": "duckdb_value",
+                    "name": "parameter"
+                }
+            ],
+            "comment": {
+                "description": "Adds a parameter to the replacement scan function.\n\n",
+                "param_comments": {
+                    "info": "The info object",
+                    "parameter": "The parameter to add."
+                }
+            }
+        },
+        {
+            "name": "duckdb_replacement_scan_set_error",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_replacement_scan_info",
+                    "name": "info"
+                },
+                {
+                    "type": "const char *",
+                    "name": "error"
+                }
+            ],
+            "comment": {
+                "description": "Report that an error has occurred while executing the replacement scan.\n\n",
+                "param_comments": {
+                    "info": "The info object",
+                    "error": "The error message"
+                }
+            }
+        }
+    ]
+}

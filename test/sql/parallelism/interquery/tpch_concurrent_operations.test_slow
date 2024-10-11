@@ -1,0 +1,63 @@
+# name: test/sql/parallelism/interquery/tpch_concurrent_operations.test_slow
+# description: Run TPC-H queries while doing concurrent operations
+# group: [interquery]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=1);
+
+concurrentloop threadid 0 5
+
+loop i 0 20
+
+onlyif threadid=0
+query I
+INSERT INTO lineitem SELECT * REPLACE ('this is an extra row' AS l_comment) FROM lineitem USING SAMPLE (1000);
+----
+1000
+
+onlyif threadid=0
+query I
+UPDATE lineitem SET l_orderkey = l_orderkey + 100 WHERE l_comment = 'this is an extra row'
+----
+1000
+
+onlyif threadid=0
+query I
+DELETE FROM lineitem WHERE l_comment = 'this is an extra row'
+----
+1000
+
+endloop
+
+loop i 0 30
+
+skipif threadid=0
+statement ok
+PRAGMA tpch((${threadid} + ${i}) % 22 + 1)
+
+endloop
+
+endloop
+
+# verify that all TPC-H results are correct after this
+
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+
+endloop
+

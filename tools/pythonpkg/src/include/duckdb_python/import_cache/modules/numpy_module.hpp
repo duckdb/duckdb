@@ -13,6 +13,18 @@
 
 namespace duckdb {
 
+struct NumpyMaCacheItem : public PythonImportCacheItem {
+
+public:
+	NumpyMaCacheItem(optional_ptr<PythonImportCacheItem> parent)
+	    : PythonImportCacheItem("ma", parent), masked("masked", this) {
+	}
+	~NumpyMaCacheItem() override {
+	}
+
+	PythonImportCacheItem masked;
+};
+
 struct NumpyCoreCacheItem : public PythonImportCacheItem {
 
 public:
@@ -32,9 +44,9 @@ public:
 
 public:
 	NumpyCacheItem()
-	    : PythonImportCacheItem("numpy"), core(this), ndarray("ndarray", this), datetime64("datetime64", this),
-	      generic("generic", this), int64("int64", this), bool_("bool_", this), byte("byte", this),
-	      ubyte("ubyte", this), short_("short", this), ushort_("ushort", this), intc("intc", this),
+	    : PythonImportCacheItem("numpy"), core(this), ma(this), ndarray("ndarray", this),
+	      datetime64("datetime64", this), generic("generic", this), int64("int64", this), bool_("bool_", this),
+	      byte("byte", this), ubyte("ubyte", this), short_("short", this), ushort_("ushort", this), intc("intc", this),
 	      uintc("uintc", this), int_("int_", this), uint("uint", this), longlong("longlong", this),
 	      ulonglong("ulonglong", this), half("half", this), float16("float16", this), single("single", this),
 	      longdouble("longdouble", this), csingle("csingle", this), cdouble("cdouble", this),
@@ -44,6 +56,7 @@ public:
 	}
 
 	NumpyCoreCacheItem core;
+	NumpyMaCacheItem ma;
 	PythonImportCacheItem ndarray;
 	PythonImportCacheItem datetime64;
 	PythonImportCacheItem generic;
@@ -66,6 +79,11 @@ public:
 	PythonImportCacheItem csingle;
 	PythonImportCacheItem cdouble;
 	PythonImportCacheItem clongdouble;
+
+protected:
+	bool IsRequired() const override final {
+		return false;
+	}
 };
 
 } // namespace duckdb

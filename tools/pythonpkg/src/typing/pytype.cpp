@@ -56,20 +56,20 @@ shared_ptr<DuckDBPyType> DuckDBPyType::GetAttribute(const string &name) const {
 		for (idx_t i = 0; i < children.size(); i++) {
 			auto &child = children[i];
 			if (StringUtil::CIEquals(child.first, name)) {
-				return make_shared<DuckDBPyType>(StructType::GetChildType(type, i));
+				return make_shared_ptr<DuckDBPyType>(StructType::GetChildType(type, i));
 			}
 		}
 	}
 	if (type.id() == LogicalTypeId::LIST && StringUtil::CIEquals(name, "child")) {
-		return make_shared<DuckDBPyType>(ListType::GetChildType(type));
+		return make_shared_ptr<DuckDBPyType>(ListType::GetChildType(type));
 	}
 	if (type.id() == LogicalTypeId::MAP) {
 		auto is_key = StringUtil::CIEquals(name, "key");
 		auto is_value = StringUtil::CIEquals(name, "value");
 		if (is_key) {
-			return make_shared<DuckDBPyType>(MapType::KeyType(type));
+			return make_shared_ptr<DuckDBPyType>(MapType::KeyType(type));
 		} else if (is_value) {
-			return make_shared<DuckDBPyType>(MapType::ValueType(type));
+			return make_shared_ptr<DuckDBPyType>(MapType::ValueType(type));
 		} else {
 			throw py::attribute_error(StringUtil::Format("Tried to get a child from a map by the name of '%s', but "
 			                                             "this type only has 'key' and 'value' children",
@@ -114,11 +114,12 @@ static PythonTypeObject GetTypeObjectType(const py::handle &type_object) {
 	return PythonTypeObject::INVALID;
 }
 
-static LogicalType FromString(const string &type_str, shared_ptr<DuckDBPyConnection> connection) {
-	if (!connection) {
-		connection = DuckDBPyConnection::DefaultConnection();
+static LogicalType FromString(const string &type_str, shared_ptr<DuckDBPyConnection> pycon) {
+	if (!pycon) {
+		pycon = DuckDBPyConnection::DefaultConnection();
 	}
-	return TransformStringToLogicalType(type_str, *connection->connection->context);
+	auto &connection = pycon->con.GetConnection();
+	return TransformStringToLogicalType(type_str, *connection.context);
 }
 
 static bool FromNumpyType(const py::object &type, LogicalType &result) {
@@ -126,6 +127,9 @@ static bool FromNumpyType(const py::object &type, LogicalType &result) {
 	auto obj = type();
 	// We convert these to string because the underlying physical
 	// types of a numpy type aren't consistent on every platform
+	if (!py::hasattr(obj, "dtype")) {
+		return false;
+	}
 	string type_str = py::str(obj.attr("dtype"));
 	if (type_str == "bool") {
 		result = LogicalType::BOOLEAN;
@@ -184,7 +188,7 @@ static LogicalType FromType(const py::type &obj) {
 		return result;
 	}
 
-	throw py::type_error("Could not convert from unknown 'type' to DuckDBPyType");
+	throw py::cast_error("Could not convert from unknown 'type' to DuckDBPyType");
 }
 
 static bool IsMapType(const py::tuple &args) {
@@ -266,6 +270,9 @@ static LogicalType FromGenericAlias(const py::object &obj) {
 static LogicalType FromDictionary(const py::object &obj) {
 	auto dict = py::reinterpret_steal<py::dict>(obj);
 	child_list_t<LogicalType> children;
+	if (dict.size() == 0) {
+		throw InvalidInputException("Could not convert empty dictionary to a duckdb STRUCT type");
+	}
 	children.reserve(dict.size());
 	for (auto &item : dict) {
 		auto &name_p = item.first;
@@ -313,19 +320,19 @@ void DuckDBPyType::Initialize(py::handle &m) {
 	type_module.def_property_readonly("children", &DuckDBPyType::Children);
 	type_module.def(py::init<>([](const string &type_str, shared_ptr<DuckDBPyConnection> connection = nullptr) {
 		auto ltype = FromString(type_str, std::move(connection));
-		return make_shared<DuckDBPyType>(ltype);
+		return make_shared_ptr<DuckDBPyType>(ltype);
 	}));
 	type_module.def(py::init<>([](const PyGenericAlias &obj) {
 		auto ltype = FromGenericAlias(obj);
-		return make_shared<DuckDBPyType>(ltype);
+		return make_shared_ptr<DuckDBPyType>(ltype);
 	}));
 	type_module.def(py::init<>([](const PyUnionType &obj) {
 		auto ltype = FromUnionType(obj);
-		return make_shared<DuckDBPyType>(ltype);
+		return make_shared_ptr<DuckDBPyType>(ltype);
 	}));
 	type_module.def(py::init<>([](const py::object &obj) {
 		auto ltype = FromObject(obj);
-		return make_shared<DuckDBPyType>(ltype);
+		return make_shared_ptr<DuckDBPyType>(ltype);
 	}));
 	type_module.def("__getattr__", &DuckDBPyType::GetAttribute, "Get the child type by 'name'", py::arg("name"));
 	type_module.def("__getitem__", &DuckDBPyType::GetAttribute, "Get the child type by 'name'", py::arg("name"));
@@ -347,7 +354,8 @@ py::list DuckDBPyType::Children() const {
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::MAP:
-		break;
+	case LogicalTypeId::ARRAY:
+	case LogicalTypeId::ENUM:
 	case LogicalTypeId::DECIMAL:
 		break;
 	default:
@@ -357,20 +365,36 @@ py::list DuckDBPyType::Children() const {
 	py::list children;
 	auto id = type.id();
 	if (id == LogicalTypeId::LIST) {
-		children.append(py::make_tuple("child", make_shared<DuckDBPyType>(ListType::GetChildType(type))));
+		children.append(py::make_tuple("child", make_shared_ptr<DuckDBPyType>(ListType::GetChildType(type))));
+		return children;
+	}
+	if (id == LogicalTypeId::ARRAY) {
+		children.append(py::make_tuple("child", make_shared_ptr<DuckDBPyType>(ArrayType::GetChildType(type))));
+		children.append(py::make_tuple("size", ArrayType::GetSize(type)));
+		return children;
+	}
+	if (id == LogicalTypeId::ENUM) {
+		auto &values_insert_order = EnumType::GetValuesInsertOrder(type);
+		auto strings = FlatVector::GetData<string_t>(values_insert_order);
+		py::list strings_list;
+		for (size_t i = 0; i < EnumType::GetSize(type); i++) {
+			strings_list.append(py::str(strings[i].GetString()));
+		}
+		children.append(py::make_tuple("values", strings_list));
 		return children;
 	}
 	if (id == LogicalTypeId::STRUCT || id == LogicalTypeId::UNION) {
 		auto &struct_children = StructType::GetChildTypes(type);
 		for (idx_t i = 0; i < struct_children.size(); i++) {
 			auto &child = struct_children[i];
-			children.append(py::make_tuple(child.first, make_shared<DuckDBPyType>(StructType::GetChildType(type, i))));
+			children.append(
+			    py::make_tuple(child.first, make_shared_ptr<DuckDBPyType>(StructType::GetChildType(type, i))));
 		}
 		return children;
 	}
 	if (id == LogicalTypeId::MAP) {
-		children.append(py::make_tuple("key", make_shared<DuckDBPyType>(MapType::KeyType(type))));
-		children.append(py::make_tuple("value", make_shared<DuckDBPyType>(MapType::ValueType(type))));
+		children.append(py::make_tuple("key", make_shared_ptr<DuckDBPyType>(MapType::KeyType(type))));
+		children.append(py::make_tuple("value", make_shared_ptr<DuckDBPyType>(MapType::ValueType(type))));
 		return children;
 	}
 	if (id == LogicalTypeId::DECIMAL) {

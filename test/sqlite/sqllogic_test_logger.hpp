@@ -22,14 +22,15 @@ public:
 	SQLLogicTestLogger(ExecuteContext &context, const Command &command);
 	~SQLLogicTestLogger();
 
-	void Log(const string &str);
+	static void Log(const string &str);
 	void PrintExpectedResult(const vector<string> &values, idx_t columns, bool row_wise);
-	void PrintLineSep();
-	void PrintHeader(string header);
+	static void PrintLineSep();
+	static void PrintHeader(string header);
 	void PrintFileHeader();
 	void PrintSQL();
 	void PrintSQLFormatted();
 	void PrintErrorHeader(const string &description);
+	static void PrintErrorHeader(const string &file_name, idx_t query_line, const string &description);
 	void PrintResultError(const vector<string> &result_values, const vector<string> &values,
 	                      idx_t expected_column_count, bool row_wise);
 	void PrintResultError(MaterializedQueryResult &result, const vector<string> &values, idx_t expected_column_count,
@@ -48,6 +49,7 @@ public:
 	void WrongResultHash(QueryResult *expected_result, MaterializedQueryResult &result);
 	void UnexpectedStatement(bool expect_ok, MaterializedQueryResult &result);
 	void ExpectedErrorMismatch(const string &expected_error, MaterializedQueryResult &result);
+	static void LoadDatabaseFail(const string &dbpath, const string &message);
 
 private:
 	lock_guard<mutex> log_lock;

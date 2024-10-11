@@ -10,6 +10,10 @@ pragma enable_verification
 query T
 create table null_table (i "null")
 
+query I
+select typeof(i) from null_table;
+----
+
 statement ok
 insert into null_table values (null)
 

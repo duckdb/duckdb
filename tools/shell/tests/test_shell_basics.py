@@ -326,14 +326,6 @@ def test_show_basic(shell):
     result = test.run()
     result.check_stdout("rowseparator")
 
-def test_limit_error(shell):
-    test = (
-        ShellTest(shell)
-        .statement(".limit length 42")
-    )
-    result = test.run()
-    result.check_stderr("sqlite3_limit")
-
 def test_timeout(shell):
     test = (
         ShellTest(shell)
@@ -499,6 +491,15 @@ def test_jsonlines(shell):
     result = test.run()
     result.check_stdout('{"42":42,"43":43}')
 
+def test_nested_jsonlines(shell, json_extension):
+    test = (
+        ShellTest(shell)
+        .statement(".mode jsonlines")
+        .statement("SELECT [1,2,3]::JSON AS x;")
+    )
+    result = test.run()
+    result.check_stdout('{"x":[1,2,3]}')
+
 def test_separator(shell):
     test = (
         ShellTest(shell)
@@ -611,17 +612,23 @@ def test_mode_html(shell):
         .statement("SELECT NULL, 42, 'fourty-two', 42.0;")
     )
     result = test.run()
-    result.check_stdout('<TD>fourty-two</TD>')
+    result.check_stdout('<td>fourty-two</td>')
 
 # Original comment: FIXME sqlite3_column_blob
 def test_mode_insert(shell):
     test = (
         ShellTest(shell)
         .statement(".mode insert")
-        .statement("SELECT NULL, 42, 'fourty-two', 42.0;")
+        .statement("SELECT NULL, 42, 'fourty-two', 42.0, 3.14, 2.71;")
     )
     result = test.run()
     result.check_stdout('fourty-two')
+    result.check_stdout('3.14')
+    result.check_stdout('2.71')
+    result.check_not_exist('3.140000')
+    result.check_not_exist('2.709999')
+    result.check_not_exist('3.139999')
+    result.check_not_exist('2.710000')
 
 def test_mode_line(shell):
     test = (
@@ -1030,8 +1037,6 @@ def test_nullbyte_error_rendering(shell):
     result.check_stderr('INT32')
 
 @pytest.mark.parametrize("stmt", [
-	"select decimal_mul(NULL, NULL);",
-	"select decimal_mul(NULL, i) FROM range(3) t(i);",
 	"select sha3(NULL);"
 ])
 def test_sqlite_udf_null(shell, stmt):

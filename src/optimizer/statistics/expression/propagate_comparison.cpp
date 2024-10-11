@@ -92,7 +92,7 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(BaseStatistics &
 }
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundComparisonExpression &expr,
-                                                                     unique_ptr<Expression> *expr_ptr) {
+                                                                     unique_ptr<Expression> &expr_ptr) {
 	auto left_stats = PropagateExpression(expr.left);
 	auto right_stats = PropagateExpression(expr.right);
 	if (!left_stats || !right_stats) {
@@ -102,23 +102,23 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCompar
 	auto propagate_result = PropagateComparison(*left_stats, *right_stats, expr.type);
 	switch (propagate_result) {
 	case FilterPropagateResult::FILTER_ALWAYS_TRUE:
-		*expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
-		return PropagateExpression(*expr_ptr);
+		expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+		return PropagateExpression(expr_ptr);
 	case FilterPropagateResult::FILTER_ALWAYS_FALSE:
-		*expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
-		return PropagateExpression(*expr_ptr);
+		expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
+		return PropagateExpression(expr_ptr);
 	case FilterPropagateResult::FILTER_TRUE_OR_NULL: {
 		vector<unique_ptr<Expression>> children;
 		children.push_back(std::move(expr.left));
 		children.push_back(std::move(expr.right));
-		*expr_ptr = ExpressionRewriter::ConstantOrNull(std::move(children), Value::BOOLEAN(true));
+		expr_ptr = ExpressionRewriter::ConstantOrNull(std::move(children), Value::BOOLEAN(true));
 		return nullptr;
 	}
 	case FilterPropagateResult::FILTER_FALSE_OR_NULL: {
 		vector<unique_ptr<Expression>> children;
 		children.push_back(std::move(expr.left));
 		children.push_back(std::move(expr.right));
-		*expr_ptr = ExpressionRewriter::ConstantOrNull(std::move(children), Value::BOOLEAN(false));
+		expr_ptr = ExpressionRewriter::ConstantOrNull(std::move(children), Value::BOOLEAN(false));
 		return nullptr;
 	}
 	default:

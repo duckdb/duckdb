@@ -9,8 +9,8 @@ class QueryResult;
 
 class QueryResultChunkScanState : public ChunkScanState {
 public:
-	QueryResultChunkScanState(QueryResult &result);
-	~QueryResultChunkScanState();
+	explicit QueryResultChunkScanState(QueryResult &result);
+	~QueryResultChunkScanState() override;
 
 public:
 	bool LoadNextChunk(ErrorData &error) override;

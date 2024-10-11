@@ -20,6 +20,14 @@
 #include <sys/time.h>
 #endif
 
+#ifdef LINENOISE_EDITOR
+#if defined(WIN32) || defined(__CYGWIN__)
+#define DEFAULT_EDITOR "notepad.exe"
+#else
+#define DEFAULT_EDITOR "vi"
+#endif
+#endif
+
 namespace duckdb {
 
 static linenoiseCompletionCallback *completionCallback = NULL;
@@ -651,7 +659,7 @@ void Linenoise::EditBackspace() {
 	}
 }
 
-static bool IsSpace(char c) {
+bool Linenoise::IsSpace(char c) {
 	switch (c) {
 	case ' ':
 	case '\r':
@@ -1053,6 +1061,7 @@ Linenoise::Linenoise(int stdin_fd, int stdout_fd, char *buf, size_t buflen, cons
 	render = true;
 	continuation_markers = true;
 	insert = false;
+	search_index = 0;
 
 	/* Buffer starts empty. */
 	buf[0] = '\0';
@@ -1116,6 +1125,10 @@ int Linenoise::Edit() {
 		if (c == TAB && completionCallback != NULL) {
 			if (has_more_data) {
 				// if there is more data, this tab character was added as part of copy-pasting data
+				// instead insert some spaces
+				if (EditInsertMulti("    ")) {
+					return -1;
+				}
 				continue;
 			}
 			c = CompleteLine(current_sequence);
@@ -1132,7 +1145,36 @@ int Linenoise::Edit() {
 		Linenoise::Log("%d\n", (int)c);
 		switch (c) {
 		case CTRL_J:
-		case ENTER: /* enter */
+		case ENTER: { /* enter */
+#ifdef LINENOISE_EDITOR
+			if (len > 0) {
+				// check if this contains ".edit"
+
+				// scroll back to last newline
+				idx_t begin_pos;
+				for (begin_pos = len; begin_pos > 0 && buf[begin_pos - 1] != '\n'; begin_pos--) {
+				}
+				// check if line is ".edit"
+				bool open_editor = false;
+				if (begin_pos + 5 == len && memcmp(buf + begin_pos, ".edit", 5) == 0) {
+					open_editor = true;
+				}
+				// check if line is "\\e"
+				if (begin_pos + 2 == len && memcmp(buf + begin_pos, "\\e", 2) == 0) {
+					open_editor = true;
+				}
+				if (open_editor) {
+					// .edit
+					// clear the buffer and open the editor
+					pos = len = begin_pos;
+					if (!EditBufferWithEditor(nullptr)) {
+						// failed to edit - refresh the removal of ".edit" / "\e"
+						RefreshLine();
+						break;
+					}
+				}
+			}
+#endif
 			if (Terminal::IsMultiline() && len > 0) {
 				// check if this forms a complete SQL statement or not
 				buf[len] = '\0';
@@ -1165,7 +1207,17 @@ int Linenoise::Edit() {
 				RefreshLine();
 				hintsCallback = hc;
 			}
-			return (int)len;
+			// rewrite \r\n to \n
+			idx_t new_len = 0;
+			for (idx_t i = 0; i < len; i++) {
+				if (buf[i] == '\r' && buf[i + 1] == '\n') {
+					continue;
+				}
+				buf[new_len++] = buf[i];
+			}
+			buf[new_len] = '\0';
+			return (int)new_len;
+		}
 		case CTRL_O:
 		case CTRL_G:
 		case CTRL_C: /* ctrl-c */ {
@@ -1409,5 +1461,157 @@ void Linenoise::LogTokens(const vector<highlightToken> &tokens) {
 	}
 #endif
 }
+
+#ifdef LINENOISE_EDITOR
+// .edit functionality - code adopted from psql
+
+bool Linenoise::EditFileWithEditor(const string &file_name, const char *editor) {
+	/* Find an editor to use */
+	if (!editor) {
+		editor = getenv("DUCKDB_EDITOR");
+	}
+	if (!editor) {
+		editor = getenv("EDITOR");
+	}
+	if (!editor) {
+		editor = getenv("VISUAL");
+	}
+	if (!editor) {
+		editor = DEFAULT_EDITOR;
+	}
+
+	/*
+	 * On Unix the EDITOR value should *not* be quoted, since it might include
+	 * switches, eg, EDITOR="pico -t"; it's up to the user to put quotes in it
+	 * if necessary.  But this policy is not very workable on Windows, due to
+	 * severe brain damage in their command shell plus the fact that standard
+	 * program paths include spaces.
+	 */
+	string command;
+#ifndef WIN32
+	command = "exec " + string(editor) + " '" + file_name + "'";
+#else
+	command = "\"" + string(editor) + "\" \"" + file_name + "\"";
+#endif
+	int result = system(command.c_str());
+	if (result == -1) {
+		Log("could not start editor \"%s\"\n", editor);
+	} else if (result == 127) {
+		Log("could not start /bin/sh\n");
+	}
+	return result == 0;
+}
+
+bool Linenoise::EditBufferWithEditor(const char *editor) {
+	/* make a temp file to edit */
+#ifndef WIN32
+	const char *tmpdir = getenv("TMPDIR");
+	if (!tmpdir) {
+		tmpdir = "/tmp";
+	}
+#else
+	char tmpdir[MAX_PATH_LENGTH];
+	int ret;
+
+	ret = GetTempPath(MAX_PATH_LENGTH, tmpdir);
+	if (ret == 0 || ret > MAX_PATH_LENGTH) {
+		Log("cannot locate temporary directory: %s", !ret ? strerror(errno) : "");
+		return false;
+	}
+#endif
+	string temporary_file_name;
+#ifndef WIN32
+	temporary_file_name = string(tmpdir) + "/duckdb.edit." + std::to_string(getpid()) + ".sql";
+#else
+	temporary_file_name = string(tmpdir) + "duckdb.edit." + std::to_string(getpid()) + ".sql";
+#endif
+
+	FILE *f = fopen(temporary_file_name.c_str(), "w+");
+	if (!f) {
+		Log("could not open temporary file \"%s\": %s\n", temporary_file_name, strerror(errno));
+		Terminal::Beep();
+		return false;
+	}
+
+	// edit the current buffer by default
+	const char *write_buffer = buf;
+	idx_t write_len = len;
+	if (write_len == 0) {
+		// if the current buffer is empty we are typing ".edit" as the first command
+		// edit the previous history entry
+		auto edit_index = History::GetLength();
+		if (edit_index >= 2) {
+			auto history_entry = History::GetEntry(edit_index - 2);
+			if (history_entry) {
+				write_buffer = history_entry;
+				write_len = strlen(history_entry);
+			}
+		}
+	}
+
+	// write existing buffer to file
+	if (fwrite(write_buffer, 1, write_len, f) != write_len) {
+		Log("Failed to write data %s: %s\n", temporary_file_name, strerror(errno));
+		fclose(f);
+		remove(temporary_file_name.c_str());
+		Terminal::Beep();
+		return false;
+	}
+	fclose(f);
+
+	/* call editor */
+	if (!EditFileWithEditor(temporary_file_name, editor)) {
+		Terminal::Beep();
+		return false;
+	}
+
+	// read the file contents again
+	f = fopen(temporary_file_name.c_str(), "rb");
+	if (!f) {
+		Log("Failed to open file%s: %s\n", temporary_file_name, strerror(errno));
+		remove(temporary_file_name.c_str());
+		Terminal::Beep();
+		return false;
+	}
+
+	/* read file back into buffer */
+	string new_buffer;
+	char line[1024];
+	while (fgets(line, sizeof(line), f)) {
+		// strip the existing newline from the line obtained from fgets
+		// the reason for that is that we need the line endings to be "\r\n" for rendering purposes
+		idx_t line_len = strlen(line);
+		idx_t orig_len = line_len;
+		while (line_len > 0 && (line[line_len - 1] == '\r' || line[line_len - 1] == '\n')) {
+			line_len--;
+		}
+		new_buffer.append(line, line_len);
+		if (orig_len != line_len) {
+			// we stripped a newline - add a new newline (but this time always \r\n)
+			new_buffer += "\r\n";
+		}
+	}
+	if (ferror(f)) {
+		Log("Failed while reading back buffer %s: %s\n", temporary_file_name, strerror(errno));
+		Terminal::Beep();
+	}
+	fclose(f);
+
+	/* remove temp file */
+	if (remove(temporary_file_name.c_str()) == -1) {
+		Log("Failed to remove file \"%s\": %s\n", temporary_file_name, strerror(errno));
+		Terminal::Beep();
+		return false;
+	}
+
+	// copy back into buffer
+	memcpy(buf, new_buffer.c_str(), new_buffer.size());
+	len = new_buffer.size();
+	pos = len;
+	RefreshLine();
+
+	return true;
+}
+#endif
 
 } // namespace duckdb

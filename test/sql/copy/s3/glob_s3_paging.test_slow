@@ -70,3 +70,25 @@ select sum(column0) from 's3://test-bucket/parquet_glob_s3_paging/paging/t*-${ur
 endloop
 
 endloop
+
+# test with enable_object_cache = true
+statement ok
+SET enable_object_cache=true
+
+foreach urlstyle path vhost
+
+foreach format parquet
+
+loop i 0 2
+
+# Begin tests
+query I
+select sum(column0) from 's3://test-bucket/parquet_glob_s3_paging/paging/t*-${urlstyle}-urls.${format}'
+----
+1999000
+
+endloop
+
+endloop
+
+endloop

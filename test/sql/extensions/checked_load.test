@@ -1,0 +1,30 @@
+# name: test/sql/extensions/checked_load.test
+# description: Test metadata checks on load
+# group: [extensions]
+
+statement error
+LOAD 'README.md';
+----
+The file is not a DuckDB extension. The metadata at the end of the file is invalid
+
+statement ok
+SET allow_extensions_metadata_mismatch=true;
+
+# This is the error thrown by dlopen
+statement error
+LOAD 'README.md';
+----
+Error: Extension "README.md" could not be loaded
+
+statement error
+LOAD 'data/csv/no_opt.csv';
+----
+is not a DuckDB extension. Valid DuckDB extensions must be at least 512 bytes
+
+statement ok
+SET allow_unsigned_extensions=false;
+
+statement error
+LOAD 'README.md';
+----
+The file is not a DuckDB extension. The metadata at the end of the file is invalid

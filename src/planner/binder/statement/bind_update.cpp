@@ -96,7 +96,8 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 
 	if (!table.temporary) {
 		// update of persistent table: not read only!
-		properties.modified_databases.insert(table.catalog.GetName());
+		auto &properties = GetStatementProperties();
+		properties.RegisterDBModify(table.catalog, context);
 	}
 	auto update = make_uniq<LogicalUpdate>(table);
 
@@ -106,6 +107,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	}
 	// bind the default values
 	BindDefaultValues(table.GetColumns(), update->bound_defaults);
+	update->bound_constraints = BindConstraints(table);
 
 	// project any additional columns required for the condition/expressions
 	if (stmt.set_info->condition) {
@@ -126,12 +128,13 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	auto proj = unique_ptr_cast<LogicalOperator, LogicalProjection>(std::move(proj_tmp));
 
 	// bind any extra columns necessary for CHECK constraints or indexes
-	table.BindUpdateConstraints(*get, *proj, *update, context);
+	table.BindUpdateConstraints(*this, *get, *proj, *update, context);
 
 	// finally add the row id column to the projection list
-	proj->expressions.push_back(make_uniq<BoundColumnRefExpression>(
-	    LogicalType::ROW_TYPE, ColumnBinding(get->table_index, get->column_ids.size())));
-	get->column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+	auto &column_ids = get->GetColumnIds();
+	proj->expressions.push_back(
+	    make_uniq<BoundColumnRefExpression>(LogicalType::ROW_TYPE, ColumnBinding(get->table_index, column_ids.size())));
+	get->AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
 
 	// set the projection as child of the update node and finalize the result
 	update->AddChild(std::move(proj));
@@ -148,6 +151,8 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
 	result.plan = std::move(update);
+
+	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;

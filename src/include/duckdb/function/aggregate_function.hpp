@@ -42,9 +42,9 @@ struct WindowPartitionInput {
 };
 
 //! The type used for sizing hashed aggregate function states
-typedef idx_t (*aggregate_size_t)();
+typedef idx_t (*aggregate_size_t)(const AggregateFunction &function);
 //! The type used for initializing hashed aggregate function states
-typedef void (*aggregate_initialize_t)(data_ptr_t state);
+typedef void (*aggregate_initialize_t)(const AggregateFunction &function, data_ptr_t state);
 //! The type used for updating hashed aggregate functions
 typedef void (*aggregate_update_t)(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
                                    Vector &state, idx_t count);
@@ -79,7 +79,22 @@ typedef void (*aggregate_serialize_t)(Serializer &serializer, const optional_ptr
                                       const AggregateFunction &function);
 typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(Deserializer &deserializer, AggregateFunction &function);
 
-class AggregateFunction : public BaseScalarFunction {
+struct AggregateFunctionInfo {
+	DUCKDB_API virtual ~AggregateFunctionInfo();
+
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+};
+
+class AggregateFunction : public BaseScalarFunction { // NOLINT: work-around bug in clang-tidy
 public:
 	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
 	                  aggregate_size_t state_size, aggregate_initialize_t initialize, aggregate_update_t update,
@@ -162,6 +177,8 @@ public:
 	aggregate_deserialize_t deserialize;
 	//! Whether or not the aggregate is order dependent
 	AggregateOrderDependent order_dependent;
+	//! Additional function info, passed to the bind
+	shared_ptr<AggregateFunctionInfo> function_info;
 
 	bool operator==(const AggregateFunction &rhs) const {
 		return state_size == rhs.state_size && initialize == rhs.initialize && update == rhs.update &&
@@ -211,12 +228,12 @@ public:
 
 public:
 	template <class STATE>
-	static idx_t StateSize() {
+	static idx_t StateSize(const AggregateFunction &) {
 		return sizeof(STATE);
 	}
 
 	template <class STATE, class OP>
-	static void StateInitialize(data_ptr_t state) {
+	static void StateInitialize(const AggregateFunction &, data_ptr_t state) {
 		OP::Initialize(*reinterpret_cast<STATE *>(state));
 	}
 

@@ -2,6 +2,9 @@
 # description: Test reading database with views
 # group: [bc]
 
+# The database is written with a vector size of 2048.
+require vector_size 2048
+
 load data/storage/views_092.db readonly
 
 statement ok

@@ -20,7 +20,6 @@ namespace duckdb {
 
 //! CSV Global State is used in the CSV Reader Table Function, it controls what each thread
 struct CSVGlobalState : public GlobalTableFunctionState {
-public:
 	CSVGlobalState(ClientContext &context, const shared_ptr<CSVBufferManager> &buffer_manager_p,
 	               const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files,
 	               vector<column_t> column_ids_p, const ReadCSVData &bind_data);
@@ -30,7 +29,7 @@ public:
 
 	//! Generates a CSV Scanner, with information regarding the piece of buffer it should be read.
 	//! In case it returns a nullptr it means we are done reading these files.
-	unique_ptr<StringValueScanner> Next();
+	unique_ptr<StringValueScanner> Next(optional_ptr<StringValueScanner> previous_scanner);
 
 	void FillRejectsTable();
 
@@ -41,8 +40,8 @@ public:
 
 	//! Calculates the Max Threads that will be used by this CSV Reader
 	idx_t MaxThreads() const override;
-	//! We hold information on the current scanner boundary
-	CSVIterator current_boundary;
+
+	bool IsDone() const;
 
 private:
 	//! Reference to the client context that created this scan
@@ -51,7 +50,7 @@ private:
 	vector<shared_ptr<CSVFileScan>> file_scans;
 
 	//! Mutex to lock when getting next batch of bytes (Parallel Only)
-	mutex main_mutex;
+	mutable mutex main_mutex;
 
 	//! Basically max number of threads in DuckDB
 	idx_t system_threads;
@@ -67,7 +66,7 @@ private:
 
 	const ReadCSVData &bind_data;
 
-	vector<LogicalType> file_schema;
+	CSVSchema file_schema;
 
 	bool single_threaded = false;
 
@@ -75,6 +74,10 @@ private:
 
 	atomic<idx_t> last_file_idx;
 	shared_ptr<CSVBufferUsage> current_buffer_in_use;
+
+	unordered_map<idx_t, idx_t> threads_per_file;
+	//! We hold information on the current scanner boundary
+	CSVIterator current_boundary;
 };
 
 } // namespace duckdb

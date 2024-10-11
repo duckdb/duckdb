@@ -33,3 +33,8 @@ CHECKPOINT db1
 
 statement ok
 FROM pragma_metadata_info('db1');
+
+statement error
+FROM pragma_metadata_info(NULL)
+----
+cannot be NULL

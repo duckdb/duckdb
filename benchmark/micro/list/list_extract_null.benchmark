@@ -1,0 +1,16 @@
+# name: benchmark/micro/list/list_extract_null.benchmark
+# description: Benchmark for the list_extract function
+# group: [list]
+
+name list_extract micro
+group micro
+subgroup list
+
+load
+CREATE TABLE t1 as SELECT list_transform(range(0,1000), a -> if(e % a = 0, null, a)) as l FROM range(0,10000) as r(e);
+
+run
+SELECT count(list_extract(l, 5)) FROM t1;
+
+result I
+7500

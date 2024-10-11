@@ -56,6 +56,9 @@ bool BoundWindowExpression::Equals(const BaseExpression &other_p) const {
 	if (!Expression::ListEquals(children, other.children)) {
 		return false;
 	}
+	if (!Expression::ListEquals(partitions, other.partitions)) {
+		return false;
+	}
 	// check if the filter expressions are equivalent
 	if (!Expression::Equals(filter_expr, other.filter_expr)) {
 		return false;
@@ -117,7 +120,7 @@ bool BoundWindowExpression::KeysAreCompatible(const BoundWindowExpression &other
 	return true;
 }
 
-unique_ptr<Expression> BoundWindowExpression::Copy() {
+unique_ptr<Expression> BoundWindowExpression::Copy() const {
 	auto new_window = make_uniq<BoundWindowExpression>(type, return_type, nullptr, nullptr);
 	new_window->CopyProperties(*this);
 
@@ -205,14 +208,14 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 	result->children = std::move(children);
 	deserializer.ReadProperty(202, "partitions", result->partitions);
 	deserializer.ReadProperty(203, "orders", result->orders);
-	deserializer.ReadPropertyWithDefault(204, "filters", result->filter_expr, unique_ptr<Expression>());
+	deserializer.ReadPropertyWithExplicitDefault(204, "filters", result->filter_expr, unique_ptr<Expression>());
 	deserializer.ReadProperty(205, "ignore_nulls", result->ignore_nulls);
 	deserializer.ReadProperty(206, "start", result->start);
 	deserializer.ReadProperty(207, "end", result->end);
-	deserializer.ReadPropertyWithDefault(208, "start_expr", result->start_expr, unique_ptr<Expression>());
-	deserializer.ReadPropertyWithDefault(209, "end_expr", result->end_expr, unique_ptr<Expression>());
-	deserializer.ReadPropertyWithDefault(210, "offset_expr", result->offset_expr, unique_ptr<Expression>());
-	deserializer.ReadPropertyWithDefault(211, "default_expr", result->default_expr, unique_ptr<Expression>());
+	deserializer.ReadPropertyWithExplicitDefault(208, "start_expr", result->start_expr, unique_ptr<Expression>());
+	deserializer.ReadPropertyWithExplicitDefault(209, "end_expr", result->end_expr, unique_ptr<Expression>());
+	deserializer.ReadPropertyWithExplicitDefault(210, "offset_expr", result->offset_expr, unique_ptr<Expression>());
+	deserializer.ReadPropertyWithExplicitDefault(211, "default_expr", result->default_expr, unique_ptr<Expression>());
 	deserializer.ReadProperty(212, "exclude_clause", result->exclude_clause);
 	deserializer.ReadProperty(213, "distinct", result->distinct);
 	return std::move(result);

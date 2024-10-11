@@ -10,27 +10,33 @@ excluded_objects = ['utf8proc_data.cpp']
 
 def third_party_includes():
     includes = []
+    includes += [os.path.join('third_party', 'concurrentqueue')]
+    includes += [os.path.join('third_party', 'fast_float')]
+    includes += [os.path.join('third_party', 'fastpforlib')]
     includes += [os.path.join('third_party', 'fmt', 'include')]
     includes += [os.path.join('third_party', 'fsst')]
-    includes += [os.path.join('third_party', 're2')]
-    includes += [os.path.join('third_party', 'miniz')]
-    includes += [os.path.join('third_party', 'utf8proc', 'include')]
-    includes += [os.path.join('third_party', 'utf8proc')]
-    includes += [os.path.join('third_party', 'hyperloglog')]
-    includes += [os.path.join('third_party', 'skiplist')]
-    includes += [os.path.join('third_party', 'fastpforlib')]
-    includes += [os.path.join('third_party', 'tdigest')]
-    includes += [os.path.join('third_party', 'libpg_query', 'include')]
-    includes += [os.path.join('third_party', 'libpg_query')]
-    includes += [os.path.join('third_party', 'concurrentqueue')]
-    includes += [os.path.join('third_party', 'pcg')]
     includes += [os.path.join('third_party', 'httplib')]
-    includes += [os.path.join('third_party', 'fast_float')]
+    includes += [os.path.join('third_party', 'hyperloglog')]
+    includes += [os.path.join('third_party', 'jaro_winkler')]
+    includes += [os.path.join('third_party', 'jaro_winkler', 'details')]
+    includes += [os.path.join('third_party', 'libpg_query')]
+    includes += [os.path.join('third_party', 'libpg_query', 'include')]
+    includes += [os.path.join('third_party', 'lz4')]
+    includes += [os.path.join('third_party', 'brotli', 'include')]
+    includes += [os.path.join('third_party', 'brotli', 'common')]
+    includes += [os.path.join('third_party', 'brotli', 'dec')]
+    includes += [os.path.join('third_party', 'brotli', 'enc')]
     includes += [os.path.join('third_party', 'mbedtls')]
     includes += [os.path.join('third_party', 'mbedtls', 'include')]
     includes += [os.path.join('third_party', 'mbedtls', 'library')]
-    includes += [os.path.join('third_party', 'jaro_winkler')]
-    includes += [os.path.join('third_party', 'jaro_winkler', 'details')]
+    includes += [os.path.join('third_party', 'miniz')]
+    includes += [os.path.join('third_party', 'pcg')]
+    includes += [os.path.join('third_party', 're2')]
+    includes += [os.path.join('third_party', 'skiplist')]
+    includes += [os.path.join('third_party', 'tdigest')]
+    includes += [os.path.join('third_party', 'utf8proc')]
+    includes += [os.path.join('third_party', 'utf8proc', 'include')]
+    includes += [os.path.join('third_party', 'yyjson', 'include')]
     return includes
 
 
@@ -46,6 +52,7 @@ def third_party_sources():
     sources += [os.path.join('third_party', 'utf8proc')]
     sources += [os.path.join('third_party', 'libpg_query')]
     sources += [os.path.join('third_party', 'mbedtls')]
+    sources += [os.path.join('third_party', 'yyjson')]
     return sources
 
 
@@ -128,11 +135,37 @@ def get_relative_path(source_dir, target_file):
     return target_file
 
 
+def get_git_describe():
+    override_git_describe = os.getenv('OVERRIDE_GIT_DESCRIBE') or ''
+    # empty override_git_describe, either since env was empty string or not existing
+    # -> ask git (that can fail, so except in place)
+    if len(override_git_describe) == 0:
+        try:
+            return subprocess.check_output(['git', 'describe', '--tags', '--long']).strip().decode('utf8')
+        except subprocess.CalledProcessError:
+            return "v0.0.0-0-gdeadbeeff"
+    if len(override_git_describe.split('-')) == 3:
+        return override_git_describe
+    if len(override_git_describe.split('-')) == 1:
+        override_git_describe += "-0"
+    assert len(override_git_describe.split('-')) == 2
+    try:
+        return (
+            override_git_describe
+            + "-g"
+            + subprocess.check_output(['git', 'log', '-1', '--format=%h']).strip().decode('utf8')
+        )
+    except subprocess.CalledProcessError:
+        return override_git_describe + "-g" + "deadbeeff"
+
+
 def git_commit_hash():
     if 'SETUPTOOLS_SCM_PRETEND_HASH' in os.environ:
         return os.environ['SETUPTOOLS_SCM_PRETEND_HASH']
     try:
-        return subprocess.check_output(['git', 'log', '-1', '--format=%h']).strip().decode('utf8')
+        git_describe = get_git_describe()
+        hash = git_describe.split('-')[2].lstrip('g')
+        return hash
     except:
         return "deadbeeff"
 
@@ -148,9 +181,8 @@ def git_dev_version():
     if 'SETUPTOOLS_SCM_PRETEND_VERSION' in os.environ:
         return prefix_version(os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'])
     try:
-        version = subprocess.check_output(['git', 'describe', '--tags', '--abbrev=0']).strip().decode('utf8')
-        long_version = subprocess.check_output(['git', 'describe', '--tags', '--long']).strip().decode('utf8')
-        version_splits = version.lstrip('v').split('.')
+        long_version = get_git_describe()
+        version_splits = long_version.split('-')[0].lstrip('v').split('.')
         dev_version = long_version.split('-')[1]
         if int(dev_version) == 0:
             # directly on a tag: emit the regular version
@@ -181,7 +213,7 @@ def include_package(pkg_name, pkg_dir, include_files, include_list, source_list)
     sys.path = original_path
 
 
-def build_package(target_dir, extensions, linenumbers=False, unity_count=32, folder_name='duckdb'):
+def build_package(target_dir, extensions, linenumbers=False, unity_count=32, folder_name='duckdb', short_paths=False):
     if not os.path.isdir(target_dir):
         os.mkdir(target_dir)
 
@@ -227,6 +259,7 @@ def build_package(target_dir, extensions, linenumbers=False, unity_count=32, fol
     os.chdir(os.path.join(scripts_dir, '..'))
     githash = git_commit_hash()
     dev_version = git_dev_version()
+    dev_v_parts = dev_version.lstrip('v').split('.')
     os.chdir(curdir)
     # open the file and read the current contents
     fpath = os.path.join(target_dir, 'src', 'function', 'table', 'version', 'pragma_version.cpp')
@@ -235,20 +268,48 @@ def build_package(target_dir, extensions, linenumbers=False, unity_count=32, fol
     # now add the DUCKDB_SOURCE_ID define, if it is not there already
     found_hash = False
     found_dev = False
+    found_major = False
+    found_minor = False
+    found_patch = False
     lines = text.split('\n')
     for i in range(len(lines)):
         if '#define DUCKDB_SOURCE_ID ' in lines[i]:
             lines[i] = '#define DUCKDB_SOURCE_ID "{}"'.format(githash)
             found_hash = True
-            break
         if '#define DUCKDB_VERSION ' in lines[i]:
             lines[i] = '#define DUCKDB_VERSION "{}"'.format(dev_version)
             found_dev = True
-            break
+        if '#define DUCKDB_MAJOR_VERSION ' in lines[i]:
+            lines[i] = '#define DUCKDB_MAJOR_VERSION {}'.format(int(dev_v_parts[0]))
+            found_major = True
+        if '#define DUCKDB_MINOR_VERSION ' in lines[i]:
+            lines[i] = '#define DUCKDB_MINOR_VERSION {}'.format(int(dev_v_parts[1]))
+            found_minor = True
+        if '#define DUCKDB_PATCH_VERSION ' in lines[i]:
+            lines[i] = '#define DUCKDB_PATCH_VERSION "{}"'.format(dev_v_parts[2])
+            found_patch = True
     if not found_hash:
         lines = ['#ifndef DUCKDB_SOURCE_ID', '#define DUCKDB_SOURCE_ID "{}"'.format(githash), '#endif'] + lines
     if not found_dev:
         lines = ['#ifndef DUCKDB_VERSION', '#define DUCKDB_VERSION "{}"'.format(dev_version), '#endif'] + lines
+    if not found_major:
+        lines = [
+            '#ifndef DUCKDB_MAJOR_VERSION',
+            '#define DUCKDB_MAJOR_VERSION {}'.format(int(dev_v_parts[0])),
+            '#endif',
+        ] + lines
+    if not found_minor:
+        lines = [
+            '#ifndef DUCKDB_MINOR_VERSION',
+            '#define DUCKDB_MINOR_VERSION {}'.format(int(dev_v_parts[1])),
+            '#endif',
+        ] + lines
+    if not found_patch:
+        lines = [
+            '#ifndef DUCKDB_PATCH_VERSION',
+            '#define DUCKDB_PATCH_VERSION "{}"'.format(dev_v_parts[2]),
+            '#endif',
+        ] + lines
     text = '\n'.join(lines)
     with open_utf8(fpath, 'w+') as f:
         f.write(text)
@@ -260,7 +321,7 @@ def build_package(target_dir, extensions, linenumbers=False, unity_count=32, fol
         return False
 
     def generate_unity_build(entries, unity_name, linenumbers):
-        ub_file = os.path.join(target_dir, f'ub_{unity_name}.cpp')
+        ub_file = os.path.join(target_dir, unity_name)
         with open_utf8(ub_file, 'w+') as f:
             for entry in entries:
                 if linenumbers:
@@ -297,11 +358,18 @@ def build_package(target_dir, extensions, linenumbers=False, unity_count=32, fol
                             key=lambda x: scores[os.path.basename(x)] if os.path.basename(x) in scores else 99999
                         )
             if not unity_build:
-                new_source_files += [os.path.join(folder_name, file) for file in current_files]
+                if short_paths:
+                    # replace source files with "__"
+                    for file in current_files:
+                        unity_filename = os.path.basename(file)
+                        new_source_files.append(generate_unity_build([file], unity_filename, linenumbers))
+                else:
+                    # directly use the source files
+                    new_source_files += [os.path.join(folder_name, file) for file in current_files]
             else:
-                new_source_files.append(
-                    generate_unity_build(current_files, dirname.replace(os.path.sep, '_'), linenumbers)
-                )
+                unity_base = dirname.replace(os.path.sep, '_')
+                unity_name = f'ub_{unity_base}.cpp'
+                new_source_files.append(generate_unity_build(current_files, unity_name, linenumbers))
         return new_source_files
 
     original_sources = source_list

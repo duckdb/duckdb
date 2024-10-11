@@ -1,0 +1,40 @@
+# name: test/sql/delete/large_deletes_transactions.test
+# description: Test large deletions with transactions
+# group: [delete]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok con1
+CREATE TABLE a AS SELECT * FROM range(1000000) t1(i);
+
+statement ok con2
+BEGIN TRANSACTION
+
+query I con2
+SELECT COUNT(*) FROM a
+----
+1000000
+
+query I con1
+DELETE FROM a WHERE i%2=0
+----
+500000
+
+query I con1
+SELECT COUNT(*) FROM a
+----
+500000
+
+query I con2
+SELECT COUNT(*) FROM a
+----
+1000000
+
+statement ok con2
+COMMIT
+
+query I con2
+SELECT COUNT(*) FROM a
+----
+500000

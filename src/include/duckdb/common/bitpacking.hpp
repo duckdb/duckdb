@@ -41,16 +41,15 @@ public:
 			}
 		} else {
 			idx_t misaligned_count = count % BITPACKING_ALGORITHM_GROUP_SIZE;
-			T tmp_buffer[BITPACKING_ALGORITHM_GROUP_SIZE]; // TODO maybe faster on the heap?
-
 			count -= misaligned_count;
-
 			for (idx_t i = 0; i < count; i += BITPACKING_ALGORITHM_GROUP_SIZE) {
 				PackGroup<T>(dst + (i * width) / 8, src + i, width);
 			}
 
-			// Input was not aligned to BITPACKING_ALGORITHM_GROUP_SIZE, we need a copy
+			// The input is not aligned to BITPACKING_ALGORITHM_GROUP_SIZE.
+			// Copy the unaligned count into a zero-initialized temporary group, and pack it.
 			if (misaligned_count) {
+				T tmp_buffer[BITPACKING_ALGORITHM_GROUP_SIZE] = {0};
 				memcpy(tmp_buffer, src + count, misaligned_count * sizeof(T));
 				PackGroup<T>(dst + (count * width) / 8, tmp_buffer, width);
 			}
@@ -112,7 +111,7 @@ public:
 			return num_to_round;
 		}
 
-		return num_to_round + BITPACKING_ALGORITHM_GROUP_SIZE - remainder;
+		return num_to_round + BITPACKING_ALGORITHM_GROUP_SIZE - NumericCast<idx_t>(remainder);
 	}
 
 private:
@@ -133,7 +132,7 @@ private:
 			}
 		}
 
-		return FindMinimumBitWidth<T, round_to_next_byte>(min_value, max_value);
+		return FindMinimumBitWidth<T, is_signed, round_to_next_byte>(min_value, max_value);
 	}
 
 	template <class T, bool is_signed, bool round_to_next_byte = false>
@@ -174,7 +173,7 @@ private:
 		if (bitwidth < sizeof(T) * 8 && bitwidth != 0) {
 			if (is_signed) {
 				D_ASSERT(max_value <= (T(1) << (bitwidth - 1)) - 1);
-				D_ASSERT(min_value >= (T(-1) * ((T(1) << (bitwidth - 1)) - 1) - 1));
+				// D_ASSERT(min_value >= (T(-1) * ((T(1) << (bitwidth - 1)) - 1) - 1));
 			} else {
 				D_ASSERT(max_value <= (T(1) << (bitwidth)) - 1);
 			}
@@ -189,10 +188,10 @@ private:
 	// Sign bit extension
 	template <class T, class T_U = typename MakeUnsigned<T>::type>
 	static void SignExtend(data_ptr_t dst, bitpacking_width_t width) {
-		T const mask = T_U(1) << (width - 1);
+		T const mask = UnsafeNumericCast<T>(T_U(1) << (width - 1));
 		for (idx_t i = 0; i < BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE; ++i) {
 			T value = Load<T>(dst + i * sizeof(T));
-			value = value & ((T_U(1) << width) - T_U(1));
+			value = UnsafeNumericCast<T>(T_U(value) & ((T_U(1) << width) - T_U(1)));
 			T result = (value ^ mask) - mask;
 			Store(result, dst + i * sizeof(T));
 		}

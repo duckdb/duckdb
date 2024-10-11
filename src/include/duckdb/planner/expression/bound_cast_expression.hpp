@@ -29,7 +29,7 @@ public:
 	BoundCastInfo bound_cast;
 
 public:
-	LogicalType source_type() {
+	LogicalType source_type() { // NOLINT: allow casing for legacy reasons
 		D_ASSERT(child->return_type.IsValid());
 		return child->return_type;
 	}
@@ -52,7 +52,7 @@ public:
 
 	bool Equals(const BaseExpression &other) const override;
 
-	unique_ptr<Expression> Copy() override;
+	unique_ptr<Expression> Copy() const override;
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);

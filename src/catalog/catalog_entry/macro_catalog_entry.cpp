@@ -6,12 +6,14 @@ namespace duckdb {
 
 MacroCatalogEntry::MacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateMacroInfo &info)
     : FunctionEntry(
-          (info.function->type == MacroType::SCALAR_MACRO ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY),
+          (info.macros[0]->type == MacroType::SCALAR_MACRO ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY),
           catalog, schema, info),
-      function(std::move(info.function)) {
+      macros(std::move(info.macros)) {
 	this->temporary = info.temporary;
 	this->internal = info.internal;
+	this->dependencies = info.dependencies;
 	this->comment = info.comment;
+	this->tags = info.tags;
 }
 
 ScalarMacroCatalogEntry::ScalarMacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateMacroInfo &info)
@@ -41,9 +43,18 @@ unique_ptr<CreateInfo> MacroCatalogEntry::GetInfo() const {
 	info->catalog = catalog.GetName();
 	info->schema = schema.name;
 	info->name = name;
-	info->function = function->Copy();
+	for (auto &function : macros) {
+		info->macros.push_back(function->Copy());
+	}
+	info->dependencies = dependencies;
 	info->comment = comment;
+	info->tags = tags;
 	return std::move(info);
+}
+
+string MacroCatalogEntry::ToSQL() const {
+	auto create_info = GetInfo();
+	return create_info->ToString();
 }
 
 } // namespace duckdb

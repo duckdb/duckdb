@@ -53,7 +53,10 @@ template <class OP>
 static unique_ptr<FunctionData> ReadFileBind(ClientContext &context, TableFunctionBindInput &input,
                                              vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<ReadFileBindData>();
-	result->files = MultiFileReader::GetFileList(context, input.inputs[0], OP::FILE_TYPE, FileGlobOptions::ALLOW_EMPTY);
+
+	auto multi_file_reader = MultiFileReader::Create(input.table_function);
+	result->files =
+	    multi_file_reader->CreateFileList(context, input.inputs[0], FileGlobOptions::ALLOW_EMPTY)->GetAllFiles();
 
 	return_types.push_back(LogicalType::VARCHAR);
 	names.push_back("filename");
@@ -74,7 +77,7 @@ struct ReadFileGlobalState : public GlobalTableFunctionState {
 	ReadFileGlobalState() : current_file_idx(0) {
 	}
 
-	idx_t current_file_idx;
+	atomic<idx_t> current_file_idx;
 	vector<string> files;
 	vector<idx_t> column_ids;
 	bool requires_file_open = false;
@@ -160,7 +163,8 @@ static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, D
 				} break;
 				case ReadFileBindData::FILE_SIZE_COLUMN: {
 					auto &file_size_vector = output.data[col_idx];
-					FlatVector::GetData<int64_t>(file_size_vector)[out_idx] = file_handle->GetFileSize();
+					FlatVector::GetData<int64_t>(file_size_vector)[out_idx] =
+					    NumericCast<int64_t>(file_handle->GetFileSize());
 				} break;
 				case ReadFileBindData::FILE_LAST_MODIFIED_COLUMN: {
 					auto &last_modified_vector = output.data[col_idx];

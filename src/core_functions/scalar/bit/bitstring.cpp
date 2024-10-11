@@ -7,28 +7,46 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // BitStringFunction
 //===--------------------------------------------------------------------===//
+template <bool FROM_STRING>
 static void BitStringFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<string_t, int32_t, string_t>(
 	    args.data[0], args.data[1], result, args.size(), [&](string_t input, int32_t n) {
 		    if (n < 0) {
 			    throw InvalidInputException("The bitstring length cannot be negative");
 		    }
-		    if (idx_t(n) < input.GetSize()) {
+		    idx_t input_length;
+		    if (FROM_STRING) {
+			    input_length = input.GetSize();
+		    } else {
+			    input_length = Bit::BitLength(input);
+		    }
+		    if (idx_t(n) < input_length) {
 			    throw InvalidInputException("Length must be equal or larger than input string");
 		    }
 		    idx_t len;
-		    Bit::TryGetBitStringSize(input, len, nullptr); // string verification
+		    if (FROM_STRING) {
+			    Bit::TryGetBitStringSize(input, len, nullptr); // string verification
+		    }
 
-		    len = Bit::ComputeBitstringLen(n);
+		    len = Bit::ComputeBitstringLen(UnsafeNumericCast<idx_t>(n));
 		    string_t target = StringVector::EmptyString(result, len);
-		    Bit::BitString(input, n, target);
+		    if (FROM_STRING) {
+			    Bit::BitString(input, UnsafeNumericCast<idx_t>(n), target);
+		    } else {
+			    Bit::ExtendBitString(input, UnsafeNumericCast<idx_t>(n), target);
+		    }
 		    target.Finalize();
 		    return target;
 	    });
 }
 
-ScalarFunction BitStringFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR, LogicalType::INTEGER}, LogicalType::BIT, BitStringFunction);
+ScalarFunctionSet BitStringFun::GetFunctions() {
+	ScalarFunctionSet bitstring;
+	bitstring.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::INTEGER}, LogicalType::BIT, BitStringFunction<true>));
+	bitstring.AddFunction(
+	    ScalarFunction({LogicalType::BIT, LogicalType::INTEGER}, LogicalType::BIT, BitStringFunction<false>));
+	return bitstring;
 }
 
 //===--------------------------------------------------------------------===//
@@ -41,7 +59,7 @@ struct GetBitOperator {
 			throw OutOfRangeException("bit index %s out of valid range (0..%s)", NumericHelper::ToString(n),
 			                          NumericHelper::ToString(Bit::BitLength(input) - 1));
 		}
-		return Bit::GetBit(input, n);
+		return UnsafeNumericCast<TR>(Bit::GetBit(input, UnsafeNumericCast<idx_t>(n)));
 	}
 };
 
@@ -66,7 +84,7 @@ static void SetBitOperation(DataChunk &args, ExpressionState &state, Vector &res
 		    }
 		    string_t target = StringVector::EmptyString(result, input.GetSize());
 		    memcpy(target.GetDataWriteable(), input.GetData(), input.GetSize());
-		    Bit::SetBit(target, n, new_value);
+		    Bit::SetBit(target, UnsafeNumericCast<idx_t>(n), UnsafeNumericCast<idx_t>(new_value));
 		    return target;
 	    });
 }
@@ -85,7 +103,7 @@ struct BitPositionOperator {
 		if (substring.GetSize() > input.GetSize()) {
 			return 0;
 		}
-		return Bit::BitPosition(substring, input);
+		return UnsafeNumericCast<TR>(Bit::BitPosition(substring, input));
 	}
 };
 

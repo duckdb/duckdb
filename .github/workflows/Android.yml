@@ -1,0 +1,102 @@
+name: Android
+on:
+  workflow_call:
+    inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
+      skip_tests:
+        type: string
+  workflow_dispatch:
+    inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
+      skip_tests:
+        type: string
+  repository_dispatch:
+  push:
+    branches:
+      - '**'
+      - '!main'
+      - '!feature'
+    paths-ignore:
+      - '**'
+      - '!.github/workflows/Android.yml'
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+    paths-ignore:
+      - '**'
+      - '!.github/workflows/Android.yml'
+      - '!.github/patches/duckdb-wasm/**'
+
+
+concurrency:
+  group: android-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
+  cancel-in-progress: true
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
+
+jobs:
+  android:
+    name: Android
+    runs-on: ubuntu-latest
+    container: ubuntu:18.04
+
+    strategy:
+      matrix:
+        arch: [ armeabi-v7a, arm64-v8a ]
+
+    env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
+      GEN: ninja
+      EXTENSION_STATIC_BUILD: 1
+      DUCKDB_PLATFORM: android_${{ matrix.arch}}
+      DUCKDB_CUSTOM_PLATFORM: android_${{ matrix.arch}}
+      CMAKE_VARS_BUILD: -DBUILD_UNITTESTS=0 -DBUILD_SHELL=0 -DANDROID_ABI=${{ matrix.arch}} -DCMAKE_TOOLCHAIN_FILE=./android-ndk/build/cmake/android.toolchain.cmake
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
+
+    - uses: ./.github/actions/ubuntu_18_setup
+      with:
+        ccache: 1
+
+    - name: Checkout (again)
+      shell: bash
+      run: git checkout ${{ inputs.git_ref }}
+
+    - name: Install Android NDK
+      shell: bash
+      run: |
+        wget https://dl.google.com/android/repository/android-ndk-r26d-linux.zip
+        unzip android-ndk-r26d-linux.zip
+        mv android-ndk-r26d android-ndk
+
+    - name:  Build
+      shell: bash
+      run: make
+
+    - name: Deploy
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+      run: |
+        zip -j libduckdb-android_${{matrix.arch}}.zip build/release/src/libduckdb*.*  src/include/duckdb.h
+        ./scripts/upload-assets-to-staging.sh github_release libduckdb-android_${{matrix.arch}}.zip
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: duckdb-binaries-android-${{matrix.arch}}
+        path: |
+          libduckdb-android_${{matrix.arch}}.zip

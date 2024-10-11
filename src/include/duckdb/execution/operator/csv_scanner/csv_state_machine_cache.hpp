@@ -19,7 +19,7 @@ namespace duckdb {
 //! Class to wrap the state machine matrix
 class StateMachine {
 public:
-	static constexpr uint32_t NUM_STATES = 11;
+	static constexpr uint32_t NUM_STATES = 13;
 	static constexpr uint32_t NUM_TRANSITIONS = 256;
 	CSVState state_machine[NUM_TRANSITIONS][NUM_STATES];
 	//! Transitions where we might skip processing
@@ -27,6 +27,15 @@ public:
 	bool skip_standard[256];
 	//! For the Quoted State
 	bool skip_quoted[256];
+	//! For the Comment State
+	bool skip_comment[256];
+
+	uint64_t delimiter = 0;
+	uint64_t new_line = 0;
+	uint64_t carriage_return = 0;
+	uint64_t quote = 0;
+	uint64_t escape = 0;
+	uint64_t comment = 0;
 
 	const CSVState *operator[](idx_t i) const {
 		return state_machine[i];
@@ -43,8 +52,9 @@ struct HashCSVStateMachineConfig {
 		auto h_delimiter = Hash(config.delimiter.GetValue());
 		auto h_quote = Hash(config.quote.GetValue());
 		auto h_escape = Hash(config.escape.GetValue());
-		auto h_newline = Hash((uint8_t)config.new_line.GetValue());
-		return CombineHash(h_delimiter, CombineHash(h_quote, CombineHash(h_escape, h_newline)));
+		auto h_newline = Hash(static_cast<uint8_t>(config.new_line.GetValue()));
+		auto h_comment = Hash(static_cast<uint8_t>(config.comment.GetValue()));
+		return CombineHash(h_delimiter, CombineHash(h_quote, CombineHash(h_escape, CombineHash(h_newline, h_comment))));
 	}
 };
 
@@ -76,10 +86,7 @@ private:
 	//! Cache on delimiter|quote|escape|newline
 	unordered_map<CSVStateMachineOptions, StateMachine, HashCSVStateMachineConfig> state_machine_cache;
 	//! Default value for options used to intialize CSV State Machine Cache
-	const vector<char> default_delimiter = {',', '|', ';', '\t'};
-	const vector<vector<char>> default_quote = {{'\"'}, {'\"', '\''}, {'\0'}};
-	const vector<QuoteRule> default_quote_rule = {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER, QuoteRule::NO_QUOTES};
-	const vector<vector<char>> default_escape = {{'\0', '\"', '\''}, {'\\'}, {'\0'}};
+
 	//! Because the state machine cache can be accessed in Parallel we need a mutex.
 	mutex main_mutex;
 };

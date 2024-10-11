@@ -1,20 +1,24 @@
 #include "duckdb/execution/operator/csv_scanner/csv_file_handle.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/compressed_file_system.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
 CSVFileHandle::CSVFileHandle(FileSystem &fs, Allocator &allocator, unique_ptr<FileHandle> file_handle_p,
                              const string &path_p, FileCompressionType compression)
-    : file_handle(std::move(file_handle_p)), path(path_p) {
+    : compression_type(compression), file_handle(std::move(file_handle_p)), path(path_p) {
 	can_seek = file_handle->CanSeek();
 	on_disk_file = file_handle->OnDiskFile();
 	file_size = file_handle->GetFileSize();
-	uncompressed = compression == FileCompressionType::UNCOMPRESSED;
+	is_pipe = file_handle->IsPipe();
+	compression_type = file_handle->GetFileCompressionType();
 }
 
 unique_ptr<FileHandle> CSVFileHandle::OpenFileHandle(FileSystem &fs, Allocator &allocator, const string &path,
                                                      FileCompressionType compression) {
-	auto file_handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK, compression);
+	auto file_handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ | compression);
 	if (file_handle->CanSeek()) {
 		file_handle->Reset();
 	}
@@ -27,19 +31,36 @@ unique_ptr<CSVFileHandle> CSVFileHandle::OpenFile(FileSystem &fs, Allocator &all
 	return make_uniq<CSVFileHandle>(fs, allocator, std::move(file_handle), path, compression);
 }
 
+double CSVFileHandle::GetProgress() {
+	return static_cast<double>(file_handle->GetProgress());
+}
+
 bool CSVFileHandle::CanSeek() {
 	return can_seek;
 }
 
 void CSVFileHandle::Seek(idx_t position) {
 	if (!can_seek) {
-		throw InternalException("Cannot seek in this file");
+		if (is_pipe) {
+			throw InternalException("Trying to seek a piped CSV File.");
+		}
+		throw InternalException("Trying to seek a compressed CSV File.");
 	}
 	file_handle->Seek(position);
 }
 
 bool CSVFileHandle::OnDiskFile() {
 	return on_disk_file;
+}
+
+void CSVFileHandle::Reset() {
+	file_handle->Reset();
+	finished = false;
+	requested_bytes = 0;
+}
+
+bool CSVFileHandle::IsPipe() {
+	return is_pipe;
 }
 
 idx_t CSVFileHandle::FileSize() {
@@ -57,7 +78,8 @@ idx_t CSVFileHandle::Read(void *buffer, idx_t nr_bytes) {
 	if (!finished) {
 		finished = bytes_read == 0;
 	}
-	return bytes_read;
+	uncompressed_bytes_read += static_cast<idx_t>(bytes_read);
+	return UnsafeNumericCast<idx_t>(bytes_read);
 }
 
 string CSVFileHandle::ReadLine() {

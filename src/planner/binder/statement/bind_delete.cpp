@@ -29,7 +29,8 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 
 	if (!table.temporary) {
 		// delete from persistent table: not read only!
-		properties.modified_databases.insert(table.catalog.GetName());
+		auto &properties = GetStatementProperties();
+		properties.RegisterDBModify(table.catalog, context);
 	}
 
 	// Add CTEs as bindable
@@ -69,12 +70,14 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	}
 	// create the delete node
 	auto del = make_uniq<LogicalDelete>(table, GenerateTableIndex());
+	del->bound_constraints = BindConstraints(table);
 	del->AddChild(std::move(root));
 
 	// set up the delete expression
-	del->expressions.push_back(make_uniq<BoundColumnRefExpression>(
-	    LogicalType::ROW_TYPE, ColumnBinding(get.table_index, get.column_ids.size())));
-	get.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+	auto &column_ids = get.GetColumnIds();
+	del->expressions.push_back(
+	    make_uniq<BoundColumnRefExpression>(LogicalType::ROW_TYPE, ColumnBinding(get.table_index, column_ids.size())));
+	get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
 
 	if (!stmt.returning_list.empty()) {
 		del->return_chunk = true;
@@ -89,6 +92,8 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	result.plan = std::move(del);
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
+
+	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 

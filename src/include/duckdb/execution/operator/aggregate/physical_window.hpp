@@ -50,6 +50,8 @@ public:
 	bool SupportsBatchIndex() const override;
 	OrderPreservationType SourceOrder() const override;
 
+	double GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const override;
+
 public:
 	// Sink interface
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
@@ -75,7 +77,7 @@ public:
 public:
 	idx_t MaxThreads(ClientContext &context);
 
-	string ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 };
 
 } // namespace duckdb

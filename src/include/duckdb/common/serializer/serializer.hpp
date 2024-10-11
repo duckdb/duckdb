@@ -10,23 +10,39 @@
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
+#include "duckdb/common/serializer/serialization_data.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optionally_owned_ptr.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
 
 namespace duckdb {
 
-class Serializer {
-protected:
+class SerializationOptions {
+public:
 	bool serialize_enum_as_string = false;
 	bool serialize_default_values = false;
+	SerializationCompatibility serialization_compatibility = SerializationCompatibility::Default();
+};
+
+class Serializer {
+protected:
+	SerializationOptions options;
+	SerializationData data;
 
 public:
 	virtual ~Serializer() {
+	}
+
+	bool ShouldSerialize(idx_t version_added) {
+		return options.serialization_compatibility.Compare(version_added);
 	}
 
 	class List {
@@ -51,6 +67,14 @@ public:
 	};
 
 public:
+	SerializationData &GetSerializationData() {
+		return data;
+	}
+
+	void SetSerializationData(const SerializationData &other) {
+		data = other;
+	}
+
 	// Serialize a value
 	template <class T>
 	void WriteProperty(const field_id_t field_id, const char *tag, const T &value) {
@@ -63,7 +87,7 @@ public:
 	template <class T>
 	void WritePropertyWithDefault(const field_id_t field_id, const char *tag, const T &value) {
 		// If current value is default, don't write it
-		if (!serialize_default_values && SerializationDefaultValue::IsDefault<T>(value)) {
+		if (!options.serialize_default_values && SerializationDefaultValue::IsDefault<T>(value)) {
 			OnOptionalPropertyBegin(field_id, tag, false);
 			OnOptionalPropertyEnd(false);
 			return;
@@ -76,13 +100,28 @@ public:
 	template <class T>
 	void WritePropertyWithDefault(const field_id_t field_id, const char *tag, const T &value, const T &&default_value) {
 		// If current value is default, don't write it
-		if (!serialize_default_values && (value == default_value)) {
+		if (!options.serialize_default_values && (value == default_value)) {
 			OnOptionalPropertyBegin(field_id, tag, false);
 			OnOptionalPropertyEnd(false);
 			return;
 		}
 		OnOptionalPropertyBegin(field_id, tag, true);
 		WriteValue(value);
+		OnOptionalPropertyEnd(true);
+	}
+
+	// Specialization for Value (default Value comparison throws when comparing nulls)
+	template <class T>
+	void WritePropertyWithDefault(const field_id_t field_id, const char *tag, const CSVOption<T> &value,
+	                              const T &&default_value) {
+		// If current value is default, don't write it
+		if (!options.serialize_default_values && (value == default_value)) {
+			OnOptionalPropertyBegin(field_id, tag, false);
+			OnOptionalPropertyEnd(false);
+			return;
+		}
+		OnOptionalPropertyBegin(field_id, tag, true);
+		WriteValue(value.GetValue());
 		OnOptionalPropertyEnd(true);
 	}
 
@@ -118,7 +157,7 @@ public:
 protected:
 	template <typename T>
 	typename std::enable_if<std::is_enum<T>::value, void>::type WriteValue(const T value) {
-		if (serialize_enum_as_string) {
+		if (options.serialize_enum_as_string) {
 			// Use the enum serializer to lookup tostring function
 			auto str = EnumUtil::ToChars(value);
 			WriteValue(str);
@@ -126,6 +165,12 @@ protected:
 			// Use the underlying type
 			WriteValue(static_cast<typename std::underlying_type<T>::type>(value));
 		}
+	}
+
+	// Optionally Owned Pointer Ref
+	template <typename T>
+	void WriteValue(const optionally_owned_ptr<T> &ptr) {
+		WriteValue(ptr.get());
 	}
 
 	// Unique Pointer Ref
@@ -241,6 +286,33 @@ protected:
 			OnObjectEnd();
 		}
 		OnListEnd();
+	}
+
+	// Insertion Order Preserving Map
+	// serialized as a list of pairs
+	template <class V>
+	void WriteValue(const duckdb::InsertionOrderPreservingMap<V> &map) {
+		auto count = map.size();
+		OnListBegin(count);
+		for (auto &entry : map) {
+			OnObjectBegin();
+			WriteProperty(0, "key", entry.first);
+			WriteProperty(1, "value", entry.second);
+			OnObjectEnd();
+		}
+		OnListEnd();
+	}
+
+	// priority queue
+	template <typename T>
+	void WriteValue(const std::priority_queue<T> &queue) {
+		vector<T> placeholder;
+		auto queue_copy = std::priority_queue<T>(queue);
+		while (queue_copy.size() > 0) {
+			placeholder.emplace_back(queue_copy.top());
+			queue_copy.pop();
+		}
+		WriteValue(placeholder);
 	}
 
 	// class or struct implementing `Serialize(Serializer& Serializer)`;

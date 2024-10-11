@@ -29,10 +29,13 @@ struct NumericLimits {
 	static constexpr T Maximum() {
 		return std::numeric_limits<T>::max();
 	}
-	DUCKDB_API static constexpr bool IsSigned() {
+	static constexpr bool IsSigned() {
 		return std::is_signed<T>::value;
 	}
-	DUCKDB_API static constexpr idx_t Digits();
+	static constexpr bool IsIntegral() {
+		return std::is_integral<T>::value || std::is_enum<T>::value;
+	}
+	static constexpr idx_t Digits();
 };
 
 template <>
@@ -46,7 +49,9 @@ struct NumericLimits<hugeint_t> {
 	static constexpr bool IsSigned() {
 		return true;
 	}
-
+	static constexpr bool IsIntegral() {
+		return true;
+	}
 	static constexpr idx_t Digits() {
 		return 39;
 	}
@@ -63,7 +68,9 @@ struct NumericLimits<uhugeint_t> {
 	static constexpr bool IsSigned() {
 		return false;
 	}
-
+	static constexpr bool IsIntegral() {
+		return true;
+	}
 	static constexpr idx_t Digits() {
 		return 39;
 	}

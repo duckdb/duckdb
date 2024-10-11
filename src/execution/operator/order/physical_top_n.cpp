@@ -370,17 +370,12 @@ bool TopNHeap::CheckBoundaryValues(DataChunk &sort_chunk, DataChunk &payload) {
 			final_count += true_count;
 		}
 		idx_t false_count = remaining_count - true_count;
-		if (false_count > 0) {
+		if (!is_last && false_count > 0) {
 			// check what we should continue to check
 			compare_chunk.data[i].Slice(sort_chunk.data[i], false_sel, false_count);
 			remaining_count = VectorOperations::NotDistinctFrom(compare_chunk.data[i], boundary_values.data[i],
 			                                                    &false_sel, false_count, &new_remaining_sel, nullptr);
-			if (is_last) {
-				memcpy(final_sel.data() + final_count, new_remaining_sel.data(), remaining_count * sizeof(sel_t));
-				final_count += remaining_count;
-			} else {
-				remaining_sel.Initialize(new_remaining_sel);
-			}
+			remaining_sel.Initialize(new_remaining_sel);
 		} else {
 			break;
 		}
@@ -497,19 +492,22 @@ SourceResultType PhysicalTopN::GetData(ExecutionContext &context, DataChunk &chu
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
-string PhysicalTopN::ParamsToString() const {
-	string result;
-	result += "Top " + to_string(limit);
+InsertionOrderPreservingMap<string> PhysicalTopN::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	result["Top"] = to_string(limit);
 	if (offset > 0) {
-		result += "\n";
-		result += "Offset " + to_string(offset);
+		result["Offset"] = to_string(offset);
 	}
-	result += "\n[INFOSEPARATOR]";
+
+	string orders_info;
 	for (idx_t i = 0; i < orders.size(); i++) {
-		result += "\n";
-		result += orders[i].expression->ToString() + " ";
-		result += orders[i].type == OrderType::DESCENDING ? "DESC" : "ASC";
+		if (i > 0) {
+			orders_info += "\n";
+		}
+		orders_info += orders[i].expression->ToString() + " ";
+		orders_info += orders[i].type == OrderType::DESCENDING ? "DESC" : "ASC";
 	}
+	result["Order By"] = orders_info;
 	return result;
 }
 

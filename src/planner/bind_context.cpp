@@ -45,11 +45,11 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 }
 
 vector<string> BindContext::GetSimilarBindings(const string &column_name) {
-	vector<pair<string, idx_t>> scores;
+	vector<pair<string, double>> scores;
 	for (auto &kv : bindings) {
 		auto binding = kv.second.get();
 		for (auto &name : binding->names) {
-			idx_t distance = StringUtil::SimilarityScore(name, column_name);
+			double distance = StringUtil::SimilarityRating(name, column_name);
 			scores.emplace_back(binding->alias + "." + name, distance);
 		}
 	}
@@ -246,7 +246,7 @@ optional_ptr<Binding> BindContext::GetBinding(const string &name, ErrorData &out
 			candidates.push_back(kv.first);
 		}
 		string candidate_str =
-		    StringUtil::CandidatesMessage(StringUtil::TopNLevenshtein(candidates, name), "Candidate tables");
+		    StringUtil::CandidatesMessage(StringUtil::TopNJaroWinkler(candidates, name), "Candidate tables");
 		out_error = ErrorData(ExceptionType::BINDER,
 		                      StringUtil::Format("Referenced table \"%s\" not found!%s", name, candidate_str));
 		return nullptr;
@@ -514,13 +514,13 @@ void BindContext::AddGenericBinding(idx_t index, const string &alias, const vect
 
 void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<string> &names,
                                 const vector<LogicalType> &types) {
-	auto binding = make_shared<Binding>(BindingType::BASE, alias, types, names, index);
+	auto binding = make_shared_ptr<Binding>(BindingType::BASE, alias, types, names, index);
 
 	if (cte_bindings.find(alias) != cte_bindings.end()) {
 		throw BinderException("Duplicate alias \"%s\" in query!", alias);
 	}
 	cte_bindings[alias] = std::move(binding);
-	cte_references[alias] = std::make_shared<idx_t>(0);
+	cte_references[alias] = make_shared_ptr<idx_t>(0);
 }
 
 void BindContext::AddContext(BindContext other) {

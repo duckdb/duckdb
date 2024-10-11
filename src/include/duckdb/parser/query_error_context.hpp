@@ -17,7 +17,7 @@ namespace duckdb {
 
 class QueryErrorContext {
 public:
-	explicit QueryErrorContext(optional_idx query_location_ = optional_idx()) : query_location(query_location_) {
+	explicit QueryErrorContext(optional_idx query_location_p = optional_idx()) : query_location(query_location_p) {
 	}
 
 	//! The location in which the error should be thrown

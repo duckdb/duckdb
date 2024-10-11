@@ -15,7 +15,7 @@
 namespace duckdb {
 
 struct ListSegment {
-	constexpr const static idx_t INITIAL_CAPACITY = 4;
+	constexpr const static uint16_t INITIAL_CAPACITY = 4;
 
 	uint16_t count;
 	uint16_t capacity;
@@ -46,6 +46,7 @@ struct ListSegmentFunctions {
 	create_segment_t create_segment;
 	write_data_to_segment_t write_data;
 	read_data_from_segment_t read_data;
+	uint16_t initial_capacity = ListSegment::INITIAL_CAPACITY;
 
 	vector<ListSegmentFunctions> child_functions;
 

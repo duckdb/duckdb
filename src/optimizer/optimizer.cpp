@@ -4,25 +4,29 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/query_profiler.hpp"
-#include "duckdb/optimizer/column_lifetime_optimizer.hpp"
+#include "duckdb/optimizer/build_probe_side_optimizer.hpp"
+#include "duckdb/optimizer/column_lifetime_analyzer.hpp"
 #include "duckdb/optimizer/common_aggregate_optimizer.hpp"
-#include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/optimizer/cse_optimizer.hpp"
+#include "duckdb/optimizer/cte_filter_pusher.hpp"
 #include "duckdb/optimizer/deliminator.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pullup.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
+#include "duckdb/optimizer/limit_pushdown.hpp"
 #include "duckdb/optimizer/regex_range_filter.hpp"
 #include "duckdb/optimizer/remove_duplicate_groups.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/rule/equal_or_null_simplification.hpp"
 #include "duckdb/optimizer/rule/in_clause_simplification.hpp"
+#include "duckdb/optimizer/rule/join_dependent_filter.hpp"
 #include "duckdb/optimizer/rule/list.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/optimizer/unnest_rewriter.hpp"
+#include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 
@@ -44,6 +48,8 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<RegexOptimizationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<EmptyNeedleRemovalRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<EnumComparisonRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<JoinDependentFilterRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<TimeStampComparison>(context, rewriter));
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {
@@ -57,14 +63,18 @@ ClientContext &Optimizer::GetContext() {
 	return context;
 }
 
-void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &callback) {
+bool Optimizer::OptimizerDisabled(OptimizerType type) {
 	auto &config = DBConfig::GetConfig(context);
-	if (config.options.disabled_optimizers.find(type) != config.options.disabled_optimizers.end()) {
+	return config.options.disabled_optimizers.find(type) != config.options.disabled_optimizers.end();
+}
+
+void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &callback) {
+	if (OptimizerDisabled(type)) {
 		// optimizer is marked as disabled: skip
 		return;
 	}
 	auto &profiler = QueryProfiler::Get(context);
-	profiler.StartPhase(OptimizerTypeToString(type));
+	profiler.StartPhase(MetricsUtils::GetOptimizerMetricByType(type));
 	callback();
 	profiler.EndPhase();
 	if (plan) {
@@ -76,17 +86,22 @@ void Optimizer::Verify(LogicalOperator &op) {
 	ColumnBindingResolver::Verify(op);
 }
 
-unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan_p) {
-	Verify(*plan_p);
-
-	switch (plan_p->type) {
+void Optimizer::RunBuiltInOptimizers() {
+	switch (plan->type) {
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
-		return plan_p; // skip optimizing simple & often-occurring plans unaffected by rewrites
+	case LogicalOperatorType::LOGICAL_PRAGMA:
+	case LogicalOperatorType::LOGICAL_SET:
+	case LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS:
+	case LogicalOperatorType::LOGICAL_CREATE_SECRET:
+	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
+		// skip optimizing simple & often-occurring plans unaffected by rewrites
+		if (plan->children.empty()) {
+			return;
+		}
+		break;
 	default:
 		break;
 	}
-
-	this->plan = std::move(plan_p);
 	// first we perform expression rewrites using the ExpressionRewriter
 	// this does not change the logical plan structure, but only simplifies the expression trees
 	RunOptimizer(OptimizerType::EXPRESSION_REWRITER, [&]() { rewriter.VisitOperator(*plan); });
@@ -100,7 +115,15 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	// perform filter pushdown
 	RunOptimizer(OptimizerType::FILTER_PUSHDOWN, [&]() {
 		FilterPushdown filter_pushdown(*this);
+		unordered_set<idx_t> top_bindings;
+		filter_pushdown.CheckMarkToSemi(*plan, top_bindings);
 		plan = filter_pushdown.Rewrite(std::move(plan));
+	});
+
+	// derive and push filters into materialized CTEs
+	RunOptimizer(OptimizerType::CTE_FILTER_PUSHER, [&]() {
+		CTEFilterPusher cte_filter_pusher(*this);
+		plan = cte_filter_pusher.Optimize(std::move(plan));
 	});
 
 	RunOptimizer(OptimizerType::REGEX_RANGE, [&]() {
@@ -150,6 +173,25 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 		cse_optimizer.VisitOperator(*plan);
 	});
 
+	// Once we know the column lifetime, we have more information regarding
+	// what relations should be the build side/probe side.
+	RunOptimizer(OptimizerType::BUILD_SIDE_PROBE_SIDE, [&]() {
+		BuildProbeSideOptimizer build_probe_side_optimizer(context, *plan);
+		build_probe_side_optimizer.VisitOperator(*plan);
+	});
+
+	// pushes LIMIT below PROJECTION
+	RunOptimizer(OptimizerType::LIMIT_PUSHDOWN, [&]() {
+		LimitPushdown limit_pushdown;
+		plan = limit_pushdown.Optimize(std::move(plan));
+	});
+
+	// transform ORDER BY + LIMIT to TopN
+	RunOptimizer(OptimizerType::TOP_N, [&]() {
+		TopN topn;
+		plan = topn.Optimize(std::move(plan));
+	});
+
 	// creates projection maps so unused columns are projected out early
 	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
 		ColumnLifetimeAnalyzer column_lifetime(true);
@@ -159,7 +201,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	// perform statistics propagation
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
 	RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
-		StatisticsPropagator propagator(*this);
+		StatisticsPropagator propagator(*this, *plan);
 		propagator.PropagateStatistics(plan);
 		statistics_map = propagator.GetStatisticsMap();
 	});
@@ -176,27 +218,30 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 		column_lifetime.VisitOperator(*plan);
 	});
 
-	// compress data based on statistics for materializing operators
-	RunOptimizer(OptimizerType::COMPRESSED_MATERIALIZATION, [&]() {
-		CompressedMaterialization compressed_materialization(context, binder, std::move(statistics_map));
-		compressed_materialization.Compress(plan);
-	});
-
-	// transform ORDER BY + LIMIT to TopN
-	RunOptimizer(OptimizerType::TOP_N, [&]() {
-		TopN topn;
-		plan = topn.Optimize(std::move(plan));
-	});
-
 	// apply simple expression heuristics to get an initial reordering
 	RunOptimizer(OptimizerType::REORDER_FILTER, [&]() {
 		ExpressionHeuristics expression_heuristics(*this);
 		plan = expression_heuristics.Rewrite(std::move(plan));
 	});
 
+	// perform join filter pushdown after the dust has settled
+	RunOptimizer(OptimizerType::JOIN_FILTER_PUSHDOWN, [&]() {
+		JoinFilterPushdownOptimizer join_filter_pushdown(*this);
+		join_filter_pushdown.VisitOperator(*plan);
+	});
+}
+
+unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan_p) {
+	Verify(*plan_p);
+
+	this->plan = std::move(plan_p);
+
+	RunBuiltInOptimizers();
+
 	for (auto &optimizer_extension : DBConfig::GetConfig(context).optimizer_extensions) {
 		RunOptimizer(OptimizerType::EXTENSION, [&]() {
-			optimizer_extension.optimize_function(context, optimizer_extension.optimizer_info.get(), plan);
+			OptimizerExtensionInput input {GetContext(), *this, optimizer_extension.optimizer_info.get()};
+			optimizer_extension.optimize_function(input, plan);
 		});
 	}
 

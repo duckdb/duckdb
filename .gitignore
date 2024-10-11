@@ -290,6 +290,7 @@ cmake_build
 cmake-build-debug
 cmake-build-release
 cmake-build-relwithdebinfo
+CMakeUserPresets.json
 
 # Generated documentation
 docs
@@ -338,9 +339,17 @@ zig-cache/*
 
 # .db files
 *.db
+*.db.gz
 
 # local cmake extension config
 extension/extension_config_local.cmake
 
 # extension_external dir
 extension_external
+
+# pyodide (emscripten python) build and test environment
+.pyodide-xbuildenv
+.venv-pyodide
+
+test/sql/pragma/output.json
+tools/pythonpkg/duckdb_build/

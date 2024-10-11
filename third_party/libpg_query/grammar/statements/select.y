@@ -216,6 +216,7 @@ simple_select:
 					n->windowClause = $8;
 					n->qualifyClause = $9;
 					n->sampleOptions = $10;
+					n->from_first = true;
 					$$ = (PGNode *)n;
 				}
 			|
@@ -234,6 +235,7 @@ simple_select:
 					n->windowClause = $10;
 					n->qualifyClause = $11;
 					n->sampleOptions = $12;
+					n->from_first = true;
 					$$ = (PGNode *)n;
 				}
 			| values_clause_opt_comma							{ $$ = $1; }
@@ -575,9 +577,9 @@ opt_all_clause:
 		;
 
 opt_ignore_nulls:
-			IGNORE_P NULLS_P						{ $$ = true;}
-			| RESPECT_P NULLS_P						{ $$ = false;}
-			| /*EMPTY*/								{ $$ = false; }
+			IGNORE_P NULLS_P						{ $$ = PG_IGNORE_NULLS;}
+			| RESPECT_P NULLS_P						{ $$ = PG_RESPECT_NULLS;}
+			| /*EMPTY*/								{ $$ = PG_DEFAULT_NULLS; }
 		;
 
 opt_sort_clause:
@@ -1130,7 +1132,8 @@ single_pivot_value:
 	;
 
 pivot_header:
-	d_expr		                 			{ $$ = list_make1($1); }
+	| d_expr	                 			{ $$ = list_make1($1); }
+	| indirection_expr						{ $$ = list_make1($1); }
 	| '(' c_expr_list_opt_comma ')' 		{ $$ = $2; }
 
 pivot_value:
@@ -2039,6 +2042,9 @@ microsecond_keyword:
 week_keyword:
 	WEEK_P | WEEKS_P
 
+quarter_keyword:
+	QUARTER_P | QUARTERS_P
+
 decade_keyword:
 	DECADE_P | DECADES_P
 
@@ -2067,6 +2073,8 @@ opt_interval:
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(MICROSECOND), @1)); }
 			| week_keyword
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(WEEK), @1)); }
+			| quarter_keyword
+				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(QUARTER), @1)); }
 			| decade_keyword
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(DECADE), @1)); }
 			| century_keyword
@@ -2553,6 +2561,15 @@ a_expr:		c_expr									{ $$ = $1; }
 					n->location = @1;
 					$$ = (PGNode *)n;
 				}
+			| '*' COLUMNS '(' a_expr ')'
+				{
+					PGAStar *star = makeNode(PGAStar);
+					star->expr = $4;
+					star->columns = true;
+					star->unpacked = true;
+					star->location = @1;
+					$$ = (PGNode *) star;
+				}
 			| COLUMNS '(' a_expr ')'
 				{
 					PGAStar *star = makeNode(PGAStar);
@@ -2658,11 +2675,7 @@ b_expr:		c_expr
  * ambiguity to the b_expr syntax.
  */
 c_expr:		d_expr
-			| row {
-				PGFuncCall *n = makeFuncCall(SystemFuncName("row"), $1, @1);
-				$$ = (PGNode *) n;
-			}
-			| indirection_expr opt_extended_indirection
+			| indirection_expr_or_a_expr opt_extended_indirection
 				{
 					if ($2)
 					{
@@ -2676,44 +2689,8 @@ c_expr:		d_expr
 				}
 		;
 
-d_expr:		columnref								{ $$ = $1; }
+d_expr:		columnref_opt_indirection								{ $$ = $1; }
 			| AexprConst							{ $$ = $1; }
-			| '#' ICONST
-				{
-					PGPositionalReference *n = makeNode(PGPositionalReference);
-					n->position = $2;
-					n->location = @1;
-					$$ = (PGNode *) n;
-				}
-			| '$' ColLabel
-				{
-					$$ = makeNamedParamRef($2, @1);
-				}
-			| '[' opt_expr_list_opt_comma ']' {
-				PGFuncCall *n = makeFuncCall(SystemFuncName("list_value"), $2, @2);
-				$$ = (PGNode *) n;
-			}
-			| list_comprehension {
-				$$ = $1;
-			}
-			| ARRAY select_with_parens
-				{
-					PGSubLink *n = makeNode(PGSubLink);
-					n->subLinkType = PG_ARRAY_SUBLINK;
-					n->subLinkId = 0;
-					n->testexpr = NULL;
-					n->operName = NULL;
-					n->subselect = $2;
-					n->location = @2;
-					$$ = (PGNode *)n;
-				}
-			| ARRAY '[' opt_expr_list_opt_comma ']' {
-				PGList *func_name = list_make1(makeString("construct_array"));
-				PGFuncCall *n = makeFuncCall(func_name, $3, @1);
-				$$ = (PGNode *) n;
-			}
-			| case_expr
-				{ $$ = $1; }
 			| select_with_parens			%prec UMINUS
 				{
 					PGSubLink *n = makeNode(PGSubLink);
@@ -2769,9 +2746,23 @@ d_expr:		columnref								{ $$ = $1; }
 			  }
 		;
 
+indirection_expr_or_a_expr:
+			'(' a_expr ')'
+				{
+					$$ = $2;
+				}
+			| indirection_expr
+				{
+					$$ = $1;
+				}
+			| row {
+				PGFuncCall *n = makeFuncCall(SystemFuncName("row"), $1, @1);
+				$$ = (PGNode *) n;
+			}
+		;
 
-
-indirection_expr:		'?'
+indirection_expr:
+			'?'
 				{
 					$$ = makeParamRef(0, @1);
 				}
@@ -2782,38 +2773,60 @@ indirection_expr:		'?'
 					p->location = @1;
 					$$ = (PGNode *) p;
 				}
-			| '(' a_expr ')'
-				{
-					$$ = $2;
-				}
 			| struct_expr
 				{
 					$$ = $1;
 				}
-			| MAP '{' opt_map_arguments_opt_comma '}'
+			| map_expr
 				{
-					PGList *key_list = NULL;
-					PGList *value_list = NULL;
-					PGListCell *lc;
-					PGList *entry_list = $3;
-					foreach(lc, entry_list)
-					{
-						PGList *l = (PGList *) lc->data.ptr_value;
-						key_list = lappend(key_list, (PGNode *) l->head->data.ptr_value);
-						value_list = lappend(value_list, (PGNode *) l->tail->data.ptr_value);
-					}
-					PGNode *keys   = (PGNode *) makeFuncCall(SystemFuncName("list_value"), key_list, @3);
-					PGNode *values = (PGNode *) makeFuncCall(SystemFuncName("list_value"), value_list, @3);
-					PGFuncCall *f = makeFuncCall(SystemFuncName("map"), list_make2(keys, values), @3);
-					$$ = (PGNode *) f;
+					$$ = $1;
 				}
 			| func_expr
 				{
 					$$ = $1;
 				}
+			| case_expr
+				{ $$ = $1; }
+			 | list_expr {
+                $$ = $1;
+			}
+			| list_comprehension {
+				$$ = $1;
+			}
+			| ARRAY select_with_parens
+				{
+					PGSubLink *n = makeNode(PGSubLink);
+					n->subLinkType = PG_ARRAY_SUBLINK;
+					n->subLinkId = 0;
+					n->testexpr = NULL;
+					n->operName = NULL;
+					n->subselect = $2;
+					n->location = @2;
+					$$ = (PGNode *)n;
+				}
+			| ARRAY '[' opt_expr_list_opt_comma ']' {
+				PGList *func_name = list_make1(makeString("construct_array"));
+				PGFuncCall *n = makeFuncCall(func_name, $3, @1);
+				$$ = (PGNode *) n;
+			}
+			| '#' ICONST
+				{
+					PGPositionalReference *n = makeNode(PGPositionalReference);
+					n->position = $2;
+					n->location = @1;
+					$$ = (PGNode *) n;
+				}
+			| '$' ColLabel
+				{
+					$$ = makeNamedParamRef($2, @1);
+				}
 		;
 
-
+list_expr:  '[' opt_expr_list_opt_comma ']' {
+                PGFuncCall *n = makeFuncCall(SystemFuncName("list_value"), $2, @2);
+                $$ = (PGNode *) n;
+            }
+        ;
 
 struct_expr:		'{' dict_arguments_opt_comma '}'
 				{
@@ -2821,6 +2834,24 @@ struct_expr:		'{' dict_arguments_opt_comma '}'
 					$$ = (PGNode *) f;
 				}
 		;
+
+map_expr:  MAP '{' opt_map_arguments_opt_comma '}'
+                {
+                    PGList *key_list = NULL;
+                    PGList *value_list = NULL;
+                    PGListCell *lc;
+                    PGList *entry_list = $3;
+                    foreach(lc, entry_list)
+                    {
+                        PGList *l = (PGList *) lc->data.ptr_value;
+                        key_list = lappend(key_list, (PGNode *) l->head->data.ptr_value);
+                        value_list = lappend(value_list, (PGNode *) l->tail->data.ptr_value);
+                    }
+                    PGNode *keys   = (PGNode *) makeFuncCall(SystemFuncName("list_value"), key_list, @3);
+                    PGNode *values = (PGNode *) makeFuncCall(SystemFuncName("list_value"), value_list, @3);
+                    PGFuncCall *f = makeFuncCall(SystemFuncName("map"), list_make2(keys, values), @3);
+                    $$ = (PGNode *) f;
+                }
 
 
 
@@ -2962,8 +2993,8 @@ func_expr_common_subexpr:
 				}
 			| POSITION '(' position_list ')'
 				{
-					/* position(A in B) is converted to position(B, A) */
-					$$ = (PGNode *) makeFuncCall(SystemFuncName("position"), $3, @1);
+					/* position(A in B) is converted to position_inverse(A, B) */
+					$$ = (PGNode *) makeFuncCall(SystemFuncName("__internal_position_operator"), $3, @1);
 				}
 			| SUBSTRING '(' substr_list ')'
 				{
@@ -3019,25 +3050,33 @@ func_expr_common_subexpr:
 				}
 		;
 
+list_comprehension_lhs:
+		columnrefList
+		{
+			PGFuncCall *n = makeFuncCall(SystemFuncName("row"), $1, @1);
+			$$ = (PGNode *) n;
+		}
+	;
+
 list_comprehension:
-				'[' a_expr FOR ColId IN_P a_expr ']'
+				'[' a_expr FOR list_comprehension_lhs IN_P a_expr ']'
 				{
 					PGLambdaFunction *lambda = makeNode(PGLambdaFunction);
-					lambda->lhs = makeColumnRef($4, NIL, @4, yyscanner);
+					lambda->lhs = $4;
 					lambda->rhs = $2;
 					lambda->location = @1;
 					PGFuncCall *n = makeFuncCall(SystemFuncName("list_apply"), list_make2($6, lambda), @1);
 					$$ = (PGNode *) n;
 				}
-				| '[' a_expr FOR ColId IN_P c_expr IF_P a_expr']'
+				| '[' a_expr FOR list_comprehension_lhs IN_P c_expr IF_P a_expr']'
 				{
 					PGLambdaFunction *lambda = makeNode(PGLambdaFunction);
-					lambda->lhs = makeColumnRef($4, NIL, @4, yyscanner);
+					lambda->lhs = $4;
 					lambda->rhs = $2;
 					lambda->location = @1;
 
 					PGLambdaFunction *lambda_filter = makeNode(PGLambdaFunction);
-					lambda_filter->lhs = makeColumnRef($4, NIL, @4, yyscanner);
+					lambda_filter->lhs = $4;
 					lambda_filter->rhs = $8;
 					lambda_filter->location = @8;
 					PGFuncCall *filter = makeFuncCall(SystemFuncName("list_filter"), list_make2($6, lambda_filter), @1);
@@ -3557,6 +3596,7 @@ extract_arg:
 			| millisecond_keyword							{ $$ = (char*) "millisecond"; }
 			| microsecond_keyword							{ $$ = (char*) "microsecond"; }
 			| week_keyword									{ $$ = (char*) "week"; }
+			| quarter_keyword								{ $$ = (char*) "quarter"; }
 			| decade_keyword								{ $$ = (char*) "decade"; }
 			| century_keyword								{ $$ = (char*) "century"; }
 			| millennium_keyword							{ $$ = (char*) "millennium"; }
@@ -3588,7 +3628,7 @@ overlay_placing:
 /* position_list uses b_expr not a_expr to avoid conflict with general IN */
 
 position_list:
-			b_expr IN_P b_expr						{ $$ = list_make2($3, $1); }
+			b_expr IN_P b_expr						{ $$ = list_make2($1, $3); }
 			| /*EMPTY*/								{ $$ = NIL; }
 		;
 
@@ -3661,6 +3701,8 @@ in_expr:	select_with_parens
 					$$ = (PGNode *)n;
 				}
 			| '(' expr_list_opt_comma ')'						{ $$ = (PGNode *)$2; }
+			| columnref_opt_indirection
+			| indirection_expr { $$ = (PGNode *)$1; }
 		;
 
 /*
@@ -3708,7 +3750,18 @@ case_arg:	a_expr									{ $$ = $1; }
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
 
-columnref:	ColId
+columnrefList:
+			columnref								{ $$ = list_make1($1); }
+			| columnrefList ',' columnref				{ $$ = lappend($1, $3); }
+		;
+
+columnref: ColId
+		{
+			$$ = makeColumnRef($1, NIL, @1, yyscanner);
+		}
+	;
+
+columnref_opt_indirection:	ColId
 				{
 					$$ = makeColumnRef($1, NIL, @1, yyscanner);
 				}

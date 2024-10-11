@@ -61,7 +61,7 @@ int mbedtls_ct_memcmp( const void *a,
          * This avoids IAR compiler warning:
          * 'the order of volatile accesses is undefined ..' */
         unsigned char x = A[i], y = B[i];
-        diff |= x ^ y;
+        diff = (diff | (x ^ y));
     }
 
     return( (int)diff );

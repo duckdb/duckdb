@@ -1,4 +1,4 @@
-from typing import Optional, List, Tuple, Any, Union, Iterable, TYPE_CHECKING
+from typing import Optional, List, Any, Union, Iterable, TYPE_CHECKING
 import uuid
 
 if TYPE_CHECKING:
@@ -6,7 +6,6 @@ if TYPE_CHECKING:
     from pandas.core.frame import DataFrame as PandasDataFrame
 
 from ..exception import ContributionsAcceptedError
- 
 from .types import StructType, AtomicType, DataType
 from ..conf import SparkConf
 from .dataframe import DataFrame
@@ -54,9 +53,8 @@ class SparkSession:
     def _create_dataframe(self, data: Union[Iterable[Any], "PandasDataFrame"]) -> DataFrame:
         try:
             import pandas
-
             has_pandas = True
-        except:
+        except ImportError:
             has_pandas = False
         if has_pandas and isinstance(data, pandas.DataFrame):
             unique_name = f'pyspark_pandas_df_{uuid.uuid1()}'
@@ -155,7 +153,7 @@ class SparkSession:
             import pandas
 
             has_pandas = True
-        except:
+        except ImportError:
             has_pandas = False
         # Falsey check on pandas dataframe is not defined, so first check if it's not a pandas dataframe
         # Then check if 'data' is None or []
@@ -192,9 +190,20 @@ class SparkSession:
         return SparkSession(self._context)
 
     def range(
-        self, start: int, end: Optional[int] = None, step: int = 1, numPartitions: Optional[int] = None
+        self,
+        start: int,
+        end: Optional[int] = None,
+        step: int = 1,
+        numPartitions: Optional[int] = None,
     ) -> "DataFrame":
-        raise ContributionsAcceptedError
+        if numPartitions:
+            raise ContributionsAcceptedError
+
+        if end is None:
+            end = start
+            start = 0
+
+        return DataFrame(self.conn.table_function("range", parameters=[start, end, step]),self)
 
     def sql(self, sqlQuery: str, **kwargs: Any) -> DataFrame:
         if kwargs:
@@ -242,7 +251,7 @@ class SparkSession:
 
     @property
     def udf(self) -> UDFRegistration:
-        return UDFRegistration()
+        return UDFRegistration(self)
 
     @property
     def version(self) -> str:

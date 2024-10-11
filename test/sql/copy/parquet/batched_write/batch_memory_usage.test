@@ -1,0 +1,17 @@
+# name: test/sql/copy/parquet/batched_write/batch_memory_usage.test
+# description: Batched Parquet write memory usage
+# group: [batched_write]
+
+require parquet
+
+statement ok
+SELECT setseed(0.72)
+
+statement ok
+COPY (SELECT uuid()::VARCHAR as varchar, uuid() AS uuid FROM range(10000000) t(i)) TO '__TEST_DIR__/random_uuids.parquet'
+
+statement ok
+SET memory_limit='750MB'
+
+statement ok
+COPY '__TEST_DIR__/random_uuids.parquet' TO '__TEST_DIR__/random_uuids_copy.parquet';

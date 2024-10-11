@@ -23,11 +23,11 @@
 namespace duckdb_nanoarrow {
 
 void *ArrowMalloc(int64_t size) {
-	return malloc(size);
+	return malloc(size_t(size));
 }
 
 void *ArrowRealloc(void *ptr, int64_t size) {
-	return realloc(ptr, size);
+	return realloc(ptr, size_t(size));
 }
 
 void ArrowFree(void *ptr) {

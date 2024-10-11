@@ -18,6 +18,7 @@ CREATE TABLE fk_integers(j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i))
 statement error
 DROP TABLE pk_integers
 ----
+Could not drop the table because this table is main key table of the table "fk_integers"
 
 statement ok
 ROLLBACK

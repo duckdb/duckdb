@@ -1,35 +1,34 @@
 #ifdef USE_DUCKDB_SHELL_WRAPPER
 #include "duckdb_shell_wrapper.h"
 #endif
-#include "sqlite3.h"
-#include "udf_struct_sqlite3.h"
-#include "sqlite3_udf_wrapper.hpp"
 #include "cast_sqlite.hpp"
-
 #include "duckdb.hpp"
-#include "duckdb/parser/parser.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/common/types.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/common/error_data.hpp"
-#include "duckdb/main/error_manager.hpp"
-#include "utf8proc_wrapper.hpp"
 #include "duckdb/common/box_renderer.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/error_manager.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "sqlite3.h"
+#include "sqlite3_udf_wrapper.hpp"
+#include "udf_struct_sqlite3.h"
+#include "utf8proc_wrapper.hpp"
 #ifdef SHELL_INLINE_AUTOCOMPLETE
 #include "autocomplete_extension.hpp"
 #endif
 #include "shell_extension.hpp"
 
+#include <cassert>
+#include <chrono>
+#include <climits>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 #include <string>
-#include <chrono>
-#include <cassert>
-#include <climits>
 #include <thread>
+#include <time.h>
 
 using namespace duckdb;
 using namespace std;
@@ -123,9 +122,9 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		    "(e.g. duckdb -unsigned).");
 		pDb->db = make_uniq<DuckDB>(filename, &config);
 #ifdef SHELL_INLINE_AUTOCOMPLETE
-		pDb->db->LoadExtension<AutocompleteExtension>();
+		pDb->db->LoadStaticExtension<AutocompleteExtension>();
 #endif
-		pDb->db->LoadExtension<ShellExtension>();
+		pDb->db->LoadStaticExtension<ShellExtension>();
 		pDb->con = make_uniq<Connection>(*pDb->db);
 	} catch (const Exception &ex) {
 		if (pDb) {
@@ -215,7 +214,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		stmt->query_string = query;
 		stmt->prepared = std::move(prepared);
 		stmt->current_row = -1;
-		for (idx_t i = 0; i < stmt->prepared->n_param; i++) {
+		for (idx_t i = 0; i < stmt->prepared->named_param_map.size(); i++) {
 			stmt->bound_names.push_back("$" + to_string(i + 1));
 			stmt->bound_values.push_back(Value());
 		}
@@ -235,53 +234,58 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 }
 
 char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, char *null_value, int columnar) {
-	if (!pStmt) {
-		return nullptr;
-	}
-	if (!pStmt->prepared) {
-		pStmt->db->last_error = ErrorData("Attempting sqlite3_step() on a non-successfully prepared statement");
-		return nullptr;
-	}
-	if (pStmt->result) {
-		pStmt->db->last_error = ErrorData("Statement has already been executed");
-		return nullptr;
-	}
-	pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, false);
-	if (pStmt->result->HasError()) {
-		// error in execute: clear prepared statement
-		pStmt->db->last_error = pStmt->result->GetErrorObject();
-		pStmt->prepared = nullptr;
-		return nullptr;
-	}
-	auto &materialized = (MaterializedQueryResult &)*pStmt->result;
-	auto properties = pStmt->prepared->GetStatementProperties();
-	if (properties.return_type == StatementReturnType::CHANGED_ROWS && materialized.RowCount() > 0) {
-		// update total changes
-		auto row_changes = materialized.Collection().GetRows().GetValue(0, 0);
-		if (!row_changes.IsNull() && row_changes.DefaultTryCastAs(LogicalType::BIGINT)) {
-			pStmt->db->last_changes = row_changes.GetValue<int64_t>();
-			pStmt->db->total_changes += row_changes.GetValue<int64_t>();
+	try {
+		if (!pStmt) {
+			return nullptr;
 		}
+		if (!pStmt->prepared) {
+			pStmt->db->last_error = ErrorData("Attempting sqlite3_step() on a non-successfully prepared statement");
+			return nullptr;
+		}
+		if (pStmt->result) {
+			pStmt->db->last_error = ErrorData("Statement has already been executed");
+			return nullptr;
+		}
+		pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, false);
+		if (pStmt->result->HasError()) {
+			// error in execute: clear prepared statement
+			pStmt->db->last_error = pStmt->result->GetErrorObject();
+			pStmt->prepared = nullptr;
+			return nullptr;
+		}
+		auto &materialized = (MaterializedQueryResult &)*pStmt->result;
+		auto properties = pStmt->prepared->GetStatementProperties();
+		if (properties.return_type == StatementReturnType::CHANGED_ROWS && materialized.RowCount() > 0) {
+			// update total changes
+			auto row_changes = materialized.Collection().GetRows().GetValue(0, 0);
+			if (!row_changes.IsNull() && row_changes.DefaultTryCastAs(LogicalType::BIGINT)) {
+				pStmt->db->last_changes = row_changes.GetValue<int64_t>();
+				pStmt->db->total_changes += row_changes.GetValue<int64_t>();
+			}
+		}
+		if (properties.return_type != StatementReturnType::QUERY_RESULT) {
+			// only SELECT statements return results
+			return nullptr;
+		}
+		BoxRendererConfig config;
+		if (max_rows != 0) {
+			config.max_rows = max_rows;
+		}
+		if (null_value) {
+			config.null_value = null_value;
+		}
+		if (columnar) {
+			config.render_mode = RenderMode::COLUMNS;
+		}
+		config.max_width = max_width;
+		BoxRenderer renderer(config);
+		auto result_rendering =
+		    renderer.ToString(*pStmt->db->con->context, pStmt->result->names, materialized.Collection());
+		return sqlite3_strdup(result_rendering.c_str());
+	} catch (std::exception &ex) {
+		string error_str = ErrorData(ex).Message() + "\n";
+		return sqlite3_strdup(error_str.c_str());
 	}
-	if (properties.return_type != StatementReturnType::QUERY_RESULT) {
-		// only SELECT statements return results
-		return nullptr;
-	}
-	BoxRendererConfig config;
-	if (max_rows != 0) {
-		config.max_rows = max_rows;
-	}
-	if (null_value) {
-		config.null_value = null_value;
-	}
-	if (columnar) {
-		config.render_mode = RenderMode::COLUMNS;
-	}
-	config.max_width = max_width;
-	BoxRenderer renderer(config);
-	auto result_rendering =
-	    renderer.ToString(*pStmt->db->con->context, pStmt->result->names, materialized.Collection());
-	return sqlite3_strdup(result_rendering.c_str());
 }
 
 /* Prepare the next result to be retrieved */
@@ -475,6 +479,13 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 		return SQLITE_NULL;
 	}
 	auto column_type = pStmt->result->types[iCol];
+	if (column_type.IsJSONType()) {
+		return 0; // Does not need to be surrounded in quotes like VARCHAR
+	}
+	if (column_type.HasAlias()) {
+		// Use the text representation for aliased types
+		return SQLITE_TEXT;
+	}
 	switch (column_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 	case LogicalTypeId::TINYINT:
@@ -613,14 +624,14 @@ int sqlite3_bind_parameter_count(sqlite3_stmt *stmt) {
 	if (!stmt) {
 		return 0;
 	}
-	return stmt->prepared->n_param;
+	return stmt->prepared->named_param_map.size();
 }
 
 const char *sqlite3_bind_parameter_name(sqlite3_stmt *stmt, int idx) {
 	if (!stmt) {
 		return nullptr;
 	}
-	if (idx < 1 || idx > (int)stmt->prepared->n_param) {
+	if (idx < 1 || idx > (int)stmt->prepared->named_param_map.size()) {
 		return nullptr;
 	}
 	return stmt->bound_names[idx - 1].c_str();
@@ -642,7 +653,7 @@ int sqlite3_internal_bind_value(sqlite3_stmt *stmt, int idx, Value value) {
 	if (!stmt || !stmt->prepared || stmt->result) {
 		return SQLITE_MISUSE;
 	}
-	if (idx < 1 || idx > (int)stmt->prepared->n_param) {
+	if (idx < 1 || idx > (int)stmt->prepared->named_param_map.size()) {
 		return SQLITE_RANGE;
 	}
 	stmt->bound_values[idx - 1] = value;
@@ -890,7 +901,15 @@ int sqlite3_changes(sqlite3 *db) {
 	return db->last_changes;
 }
 
+sqlite3_int64 sqlite3_changes64(sqlite3 *db) {
+	return db->last_changes;
+}
+
 int sqlite3_total_changes(sqlite3 *db) {
+	return db->total_changes;
+}
+
+sqlite3_int64 sqlite3_total_changes64(sqlite3 *db) {
 	return db->total_changes;
 }
 
@@ -898,132 +917,131 @@ SQLITE_API sqlite3_int64 sqlite3_last_insert_rowid(sqlite3 *db) {
 	return SQLITE_ERROR;
 }
 
-// some code borrowed from sqlite
-// its probably best to match its behavior
+enum class SQLParseState { SEMICOLON, WHITESPACE, NORMAL };
 
-typedef uint8_t u8;
-
-/*
-** Token types used by the sqlite3_complete() routine.  See the header
-** comments on that procedure for additional information.
-*/
-#define tkSEMI  0
-#define tkWS    1
-#define tkOTHER 2
-
-const unsigned char sqlite3CtypeMap[256] = {
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 00..07    ........ */
-    0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, /* 08..0f    ........ */
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 10..17    ........ */
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 18..1f    ........ */
-    0x01, 0x00, 0x80, 0x00, 0x40, 0x00, 0x00, 0x80, /* 20..27     !"#$%&' */
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 28..2f    ()*+,-./ */
-    0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, /* 30..37    01234567 */
-    0x0c, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 38..3f    89:;<=>? */
-
-    0x00, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x02, /* 40..47    @ABCDEFG */
-    0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, /* 48..4f    HIJKLMNO */
-    0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, /* 50..57    PQRSTUVW */
-    0x02, 0x02, 0x02, 0x80, 0x00, 0x00, 0x00, 0x40, /* 58..5f    XYZ[\]^_ */
-    0x80, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x22, /* 60..67    `abcdefg */
-    0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, /* 68..6f    hijklmno */
-    0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, /* 70..77    pqrstuvw */
-    0x22, 0x22, 0x22, 0x00, 0x00, 0x00, 0x00, 0x00, /* 78..7f    xyz{|}~. */
-
-    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* 80..87    ........ */
-    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* 88..8f    ........ */
-    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* 90..97    ........ */
-    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* 98..9f    ........ */
-    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* a0..a7    ........ */
-    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* a8..af    ........ */
-    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* b0..b7    ........ */
-    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* b8..bf    ........ */
-
-    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* c0..c7    ........ */
-    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* c8..cf    ........ */
-    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* d0..d7    ........ */
-    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* d8..df    ........ */
-    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* e0..e7    ........ */
-    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* e8..ef    ........ */
-    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* f0..f7    ........ */
-    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40  /* f8..ff    ........ */
-};
-
-// TODO this can probably be simplified
-#define IdChar(C) ((sqlite3CtypeMap[(unsigned char)C] & 0x46) != 0)
+const char *skipDollarQuotedString(const char *zSql, const char *delimiterStart, idx_t delimiterLength) {
+	for (; *zSql; zSql++) {
+		if (*zSql == '$') {
+			// found a dollar
+			// move forward and find the next dollar
+			zSql++;
+			auto start = zSql;
+			while (*zSql && *zSql != '$') {
+				zSql++;
+			}
+			if (!zSql[0]) {
+				// reached end of string while looking for the dollar
+				return nullptr;
+			}
+			// check if the dollar quoted string name matches
+			if (delimiterLength == idx_t(zSql - start)) {
+				if (memcmp(start, delimiterStart, delimiterLength) == 0) {
+					return zSql;
+				}
+			}
+			// dollar does not match - reset position to start and keep looking
+			zSql = start - 1;
+		}
+	}
+	// unterminated
+	return nullptr;
+}
 
 int sqlite3_complete(const char *zSql) {
-	u8 state = 0; /* Current state, using numbers defined in header comment */
-	u8 token;     /* Value of the next token */
+	auto state = SQLParseState::NORMAL;
 
-	/* If triggers are not supported by this compile then the statement machine
-	 ** used to detect the end of a statement is much simpler
-	 */
-	static const u8 trans[3][3] = {
-	    /* Token:           */
-	    /* State:       **  SEMI  WS  OTHER */
-	    /* 0 INVALID: */ {
-	        1,
-	        0,
-	        2,
-	    },
-	    /* 1   START: */
-	    {
-	        1,
-	        1,
-	        2,
-	    },
-	    /* 2  NORMAL: */
-	    {
-	        1,
-	        2,
-	        2,
-	    },
-	};
-
-	while (*zSql) {
+	for (; *zSql; zSql++) {
+		SQLParseState next_state;
 		switch (*zSql) {
-		case ';': { /* A semicolon */
-			token = tkSEMI;
+		case ';':
+			next_state = SQLParseState::SEMICOLON;
 			break;
-		}
 		case ' ':
 		case '\r':
 		case '\t':
 		case '\n':
 		case '\f': { /* White space is ignored */
-			token = tkWS;
+			next_state = SQLParseState::WHITESPACE;
 			break;
 		}
 		case '/': { /* C-style comments */
 			if (zSql[1] != '*') {
-				token = tkOTHER;
+				next_state = SQLParseState::NORMAL;
 				break;
 			}
 			zSql += 2;
 			while (zSql[0] && (zSql[0] != '*' || zSql[1] != '/')) {
 				zSql++;
 			}
-			if (zSql[0] == 0)
+			if (zSql[0] == 0) {
+				// unterminated c-style string
 				return 0;
+			}
 			zSql++;
-			token = tkWS;
+			next_state = SQLParseState::WHITESPACE;
 			break;
 		}
 		case '-': { /* SQL-style comments from "--" to end of line */
 			if (zSql[1] != '-') {
-				token = tkOTHER;
+				next_state = SQLParseState::NORMAL;
 				break;
 			}
 			while (*zSql && *zSql != '\n') {
 				zSql++;
 			}
-			if (*zSql == 0)
-				return state == 1;
-			token = tkWS;
+			if (*zSql == 0) {
+				// unterminated SQL-style comment - return whether or not we had a semicolon right before it
+				return state == SQLParseState::SEMICOLON ? 1 : 0;
+			}
+			next_state = SQLParseState::WHITESPACE;
 			break;
 		}
-		case '`': /* Grave-accent quoted symbols used by MySQL */
+		case '$': { /* Dollar-quoted strings */
+			// check if this is a dollar-quoted string
+			idx_t next_dollar = 0;
+			for (idx_t idx = 1; zSql[idx]; idx++) {
+				if (zSql[idx] == '$') {
+					// found the next dollar
+					next_dollar = idx;
+					break;
+				}
+				// all characters can be between A-Z, a-z or \200 - \377
+				if (zSql[idx] >= 'A' && zSql[idx] <= 'Z') {
+					continue;
+				}
+				if (zSql[idx] >= 'a' && zSql[idx] <= 'z') {
+					continue;
+				}
+				if (zSql[idx] >= '\200' && zSql[idx] <= '\377') {
+					continue;
+				}
+				// the first character CANNOT be a numeric, only subsequent characters
+				if (idx > 1 && zSql[idx] >= '0' && zSql[idx] <= '9') {
+					continue;
+				}
+				// not a dollar quoted string
+				break;
+			}
+			if (next_dollar == 0) {
+				// not a dollar quoted string
+				next_state = SQLParseState::NORMAL;
+				break;
+			}
+			auto start = zSql + 1;
+			zSql += next_dollar;
+			const char *delimiterStart = start;
+			idx_t delimiterLength = zSql - start;
+			zSql++;
+			// skip the dollar quoted string
+			zSql = skipDollarQuotedString(zSql, delimiterStart, delimiterLength);
+			if (!zSql) {
+				// unterminated dollar string
+				return 0;
+			}
+			next_state = SQLParseState::WHITESPACE;
+			break;
+		}
+			//		case '`': /* Grave-accent quoted symbols used by MySQL */
 		case '"': /* single- and double-quoted strings */
 		case '\'': {
 			int c = *zSql;
@@ -1031,32 +1049,22 @@ int sqlite3_complete(const char *zSql) {
 			while (*zSql && *zSql != c) {
 				zSql++;
 			}
-			if (*zSql == 0)
+			if (*zSql == 0) {
+				// unterminated single or double quoted string
 				return 0;
-			token = tkOTHER;
-			break;
-		}
-		default: {
-
-			if (IdChar((u8)*zSql)) {
-				/* Keywords and unquoted identifiers */
-				int nId;
-				for (nId = 1; IdChar(zSql[nId]); nId++) {
-				}
-				token = tkOTHER;
-
-				zSql += nId - 1;
-			} else {
-				/* Operators and special symbols */
-				token = tkOTHER;
 			}
+			next_state = SQLParseState::WHITESPACE;
 			break;
 		}
+		default:
+			next_state = SQLParseState::NORMAL;
 		}
-		state = trans[state][token];
-		zSql++;
+		// white space is ignored (no change in state)
+		if (next_state != SQLParseState::WHITESPACE) {
+			state = next_state;
+		}
 	}
-	return state == 1;
+	return state == SQLParseState::SEMICOLON ? 1 : 0;
 }
 
 // length of varchar or blob value
@@ -1097,8 +1105,29 @@ int sqlite3_get_autocommit(sqlite3 *db) {
 }
 
 int sqlite3_limit(sqlite3 *, int id, int newVal) {
-	fprintf(stderr, "sqlite3_limit: unsupported.\n");
-	return -1;
+	if (newVal >= 0) {
+		// attempting to set limit value
+		return SQLITE_OK;
+	}
+	switch (id) {
+	case SQLITE_LIMIT_LENGTH:
+	case SQLITE_LIMIT_SQL_LENGTH:
+	case SQLITE_LIMIT_COLUMN:
+	case SQLITE_LIMIT_LIKE_PATTERN_LENGTH:
+		return std::numeric_limits<int>::max();
+	case SQLITE_LIMIT_EXPR_DEPTH:
+		return 1000;
+	case SQLITE_LIMIT_FUNCTION_ARG:
+	case SQLITE_LIMIT_VARIABLE_NUMBER:
+		return 256;
+	case SQLITE_LIMIT_ATTACHED:
+		return 1000;
+	case SQLITE_LIMIT_WORKER_THREADS:
+	case SQLITE_LIMIT_TRIGGER_DEPTH:
+		return 0;
+	default:
+		return SQLITE_ERROR;
+	}
 }
 
 int sqlite3_stmt_readonly(sqlite3_stmt *pStmt) {
@@ -1877,7 +1906,7 @@ SQLITE_API char *sqlite3_expanded_sql(sqlite3_stmt *pStmt) {
 }
 
 SQLITE_API int sqlite3_keyword_check(const char *str, int len) {
-	return Parser::IsKeyword(std::string(str, len));
+	return KeywordHelper::IsKeyword(std::string(str, len));
 }
 
 SQLITE_API int sqlite3_keyword_count(void) {

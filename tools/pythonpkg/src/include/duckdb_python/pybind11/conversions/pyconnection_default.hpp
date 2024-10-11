@@ -37,7 +37,7 @@ class type_caster<shared_ptr<DuckDBPyConnection>>
 };
 
 template <>
-struct is_holder_type<DuckDBPyConnection, std::shared_ptr<DuckDBPyConnection>> : std::true_type {};
+struct is_holder_type<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>> : std::true_type {};
 
 } // namespace detail
 } // namespace PYBIND11_NAMESPACE

@@ -1,0 +1,46 @@
+# name: test/sql/table_function/duckdb_constraints_issue11284.test
+# description: Issue #11284 - duckdb_constraints() column CONSTRAINT_TEXT contains bad definition for PRIMARY KEY if there are foreign keys referencing it
+# group: [table_function]
+
+statement ok
+pragma enable_verification
+
+statement ok
+create table t (i int primary key);
+
+query I
+select constraint_text from duckdb_constraints() where constraint_type = 'PRIMARY KEY';
+----
+PRIMARY KEY(i)
+
+statement ok
+create table u (i int references t);
+
+query I
+select constraint_text from duckdb_constraints() where constraint_type = 'PRIMARY KEY';
+----
+PRIMARY KEY(i)
+
+statement ok
+create table v (i int references t);
+
+query I
+select constraint_text from duckdb_constraints() where constraint_type = 'PRIMARY KEY';
+----
+PRIMARY KEY(i)
+
+statement ok
+drop table v;
+
+query I
+select constraint_text from duckdb_constraints() where constraint_type = 'PRIMARY KEY';
+----
+PRIMARY KEY(i)
+
+statement ok
+drop table u;
+
+query I
+select constraint_text from duckdb_constraints() where constraint_type = 'PRIMARY KEY';
+----
+PRIMARY KEY(i)

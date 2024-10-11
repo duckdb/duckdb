@@ -11,6 +11,7 @@
 #include "duckdb/common/row_operations/row_matcher.hpp"
 #include "duckdb/common/types/row/partitioned_tuple_data.hpp"
 #include "duckdb/execution/base_aggregate_hashtable.hpp"
+#include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 
@@ -28,53 +29,6 @@ struct FlushMoveState;
    as input the set of groups and the types of the aggregates to compute and
    stores them in the HT. It uses linear probing for collision resolution.
 */
-
-struct aggr_ht_entry_t {
-public:
-	explicit aggr_ht_entry_t(hash_t value_p) : value(value_p) {
-	}
-
-	inline bool IsOccupied() const {
-		return value != 0;
-	}
-
-	inline data_ptr_t GetPointer() const {
-		D_ASSERT(IsOccupied());
-		return reinterpret_cast<data_ptr_t>(value & POINTER_MASK);
-	}
-	inline void SetPointer(const data_ptr_t &pointer) {
-		// Pointer shouldn't use upper bits
-		D_ASSERT((reinterpret_cast<uint64_t>(pointer) & SALT_MASK) == 0);
-		// Value should have all 1's in the pointer area
-		D_ASSERT((value & POINTER_MASK) == POINTER_MASK);
-		// Set upper bits to 1 in pointer so the salt stays intact
-		value &= reinterpret_cast<uint64_t>(pointer) | SALT_MASK;
-	}
-
-	static inline hash_t ExtractSalt(const hash_t &hash) {
-		// Leaves upper bits intact, sets lower bits to all 1's
-		return hash | POINTER_MASK;
-	}
-	inline hash_t GetSalt() const {
-		return ExtractSalt(value);
-	}
-	inline void SetSalt(const hash_t &salt) {
-		// Shouldn't be occupied when we set this
-		D_ASSERT(!IsOccupied());
-		// Salt should have all 1's in the pointer field
-		D_ASSERT((salt & POINTER_MASK) == POINTER_MASK);
-		// No need to mask, just put the whole thing there
-		value = salt;
-	}
-
-private:
-	//! Upper 16 bits are salt
-	static constexpr const hash_t SALT_MASK = 0xFFFF000000000000;
-	//! Lower 48 bits are the pointer
-	static constexpr const hash_t POINTER_MASK = 0x0000FFFFFFFFFFFF;
-
-	hash_t value;
-};
 
 class GroupedAggregateHashTable : public BaseAggregateHashTable {
 public:
@@ -178,7 +132,7 @@ private:
 	idx_t capacity;
 	//! The hash map (pointer table) of the HT: allocated data and pointer into it
 	AllocatedData hash_map;
-	aggr_ht_entry_t *entries;
+	ht_entry_t *entries;
 	//! Offset of the hash column in the rows
 	idx_t hash_offset;
 	//! Bitmask for getting relevant bits from the hashes to determine the position

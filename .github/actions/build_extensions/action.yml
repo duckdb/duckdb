@@ -81,6 +81,9 @@ inputs:
   unittest_script:
     description: 'Script/program to execute the unittests'
     default: 'python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest'
+  cmake_flags:
+    description: 'Flags to be passed to cmake'
+    default: ''
 
 runs:
   using: "composite"
@@ -96,7 +99,7 @@ runs:
       if: inputs.vcpkg_build == 1
       uses: lukka/run-vcpkg@v11.1
       with:
-        vcpkgGitCommitId: a42af01b72c28a8e1d7b48107b33e4f286a55ef6
+        vcpkgGitCommitId: a1a1cbc975abf909a6c8985a6a2b8fe20bbd9bd6
 
     - name: Set vcpkg env variables
       if: inputs.vcpkg_build == 1
@@ -104,7 +107,7 @@ runs:
       run: |
         echo "VCPKG_TOOLCHAIN_PATH=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" >> $GITHUB_ENV
         echo "VCPKG_TARGET_TRIPLET=${{ inputs.vcpkg_target_triplet }}" >> $GITHUB_ENV
-        
+
     - name: workaround for https://github.com/duckdb/duckdb/issues/8360
       if: inputs.vcpkg_target_triplet == 'x64-windows-static-md'
       shell: bash
@@ -144,6 +147,8 @@ runs:
         GEN: ${{ inputs.ninja == 1 && 'ninja' || '' }}
         USE_MERGED_VCPKG_MANIFEST: 1
         DUCKDB_PLATFORM: ${{ inputs.duckdb_arch }}
+        CMAKE_VARS_BUILD: ${{ inputs.cmake_flags }}
+
       run: |
         ls
         mkdir -p ~/.ssh

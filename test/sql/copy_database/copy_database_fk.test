@@ -4,6 +4,9 @@
 
 require noforcestorage
 
+statement ok
+PRAGMA enable_verification
+
 # FIXME - this is not working right now - we need to correctly take dependencies into account for COPY FROM DATABASE
 mode skip
 

@@ -8,21 +8,19 @@
 
 #pragma once
 
-#include "duckdb/storage/compression/patas/patas.hpp"
-#include "duckdb/function/compression_function.hpp"
-#include "duckdb/storage/compression/alp/algorithm/alp.hpp"
-#include "duckdb/storage/compression/alp/alp_analyze.hpp"
-
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/function/compression/compression.hpp"
+#include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-
+#include "duckdb/storage/compression/alp/algorithm/alp.hpp"
+#include "duckdb/storage/compression/alp/alp_analyze.hpp"
+#include "duckdb/storage/compression/patas/patas.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/common/operator/subtract.hpp"
 
 #include <functional>
 
@@ -32,9 +30,11 @@ template <class T>
 struct AlpCompressionState : public CompressionState {
 
 public:
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
-	explicit AlpCompressionState(ColumnDataCheckpointer &checkpointer, AlpAnalyzeState<T> *analyze_state)
-	    : checkpointer(checkpointer), function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ALP)) {
+	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
+
+	AlpCompressionState(ColumnDataCheckpointer &checkpointer, AlpAnalyzeState<T> *analyze_state)
+	    : CompressionState(analyze_state->info), checkpointer(checkpointer),
+	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ALP)) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 
 		//! Combinations found on the analyze step are needed for compression
@@ -92,17 +92,19 @@ public:
 	void CreateEmptySegment(idx_t row_start) {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
+
+		auto compressed_segment =
+		    ColumnSegment::CreateTransientSegment(db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
 		current_segment = std::move(compressed_segment);
 		current_segment->function = function;
+
 		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
 		handle = buffer_manager.Pin(current_segment->block);
 
-		// Pointer to the start of the compressed data
+		// The pointer to the start of the compressed data.
 		data_ptr = handle.Ptr() + current_segment->GetBlockOffset() + AlpConstants::HEADER_SIZE;
-		// Pointer to the start of the Metadata
-		metadata_ptr = handle.Ptr() + current_segment->GetBlockOffset() + Storage::BLOCK_SIZE;
-
+		// The pointer to the start of the metadata.
+		metadata_ptr = handle.Ptr() + current_segment->GetBlockOffset() + info.GetBlockSize();
 		next_vector_byte_index_start = AlpConstants::HEADER_SIZE;
 	}
 
@@ -120,7 +122,7 @@ public:
 
 		if (vector_idx != nulls_idx) { //! At least there is one valid value in the vector
 			for (idx_t i = 0; i < vector_idx; i++) {
-				NumericStats::Update<T>(current_segment->stats.statistics, input_vector[i]);
+				current_segment->stats.statistics.UpdateNumericStats<T>(input_vector[i]);
 			}
 		}
 		current_segment->count += vector_idx;
@@ -141,7 +143,7 @@ public:
 		Store<uint64_t>(state.frame_of_reference, data_ptr);
 		data_ptr += AlpConstants::FOR_SIZE;
 
-		Store<uint8_t>(state.bit_width, data_ptr);
+		Store<uint8_t>(UnsafeNumericCast<uint8_t>(state.bit_width), data_ptr);
 		data_ptr += AlpConstants::BIT_WIDTH_SIZE;
 
 		memcpy((void *)data_ptr, (void *)state.values_encoded, state.bp_size);
@@ -166,7 +168,7 @@ public:
 		// Write pointer to the vector data (metadata)
 		metadata_ptr -= sizeof(uint32_t);
 		Store<uint32_t>(next_vector_byte_index_start, metadata_ptr);
-		next_vector_byte_index_start = UsedSpace();
+		next_vector_byte_index_start = NumericCast<uint32_t>(UsedSpace());
 
 		vectors_flushed++;
 		vector_idx = 0;
@@ -183,10 +185,10 @@ public:
 		// Verify that the metadata_ptr is not smaller than the space used by the data
 		D_ASSERT(dataptr + metadata_offset <= metadata_ptr);
 
-		idx_t bytes_used_by_metadata = dataptr + Storage::BLOCK_SIZE - metadata_ptr;
+		auto bytes_used_by_metadata = UnsafeNumericCast<idx_t>(dataptr + info.GetBlockSize() - metadata_ptr);
 
 		// Initially the total segment size is the size of the block
-		idx_t total_segment_size = Storage::BLOCK_SIZE;
+		auto total_segment_size = info.GetBlockSize();
 
 		//! We compact the block if the space used is less than a threshold
 		const auto used_space_percentage =
@@ -206,7 +208,7 @@ public:
 		}
 
 		// Store the offset to the end of metadata (to be used as a backwards pointer in decoding)
-		Store<uint32_t>(total_segment_size, dataptr);
+		Store<uint32_t>(NumericCast<uint32_t>(total_segment_size), dataptr);
 
 		handle.Destroy();
 		checkpoint_state.FlushSegment(std::move(current_segment), total_segment_size);
@@ -244,7 +246,7 @@ public:
 					T value = data[idx];
 					bool is_null = !vdata.validity.RowIsValid(idx);
 					//! We resolve null values with a predicated comparison
-					vector_null_positions[nulls_idx] = vector_idx + i;
+					vector_null_positions[nulls_idx] = UnsafeNumericCast<uint16_t>(vector_idx + i);
 					nulls_idx += is_null;
 					input_vector[vector_idx + i] = value;
 				}

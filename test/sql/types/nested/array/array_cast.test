@@ -161,3 +161,9 @@ query I
 SELECT '[1, 2, 3]'::INTEGER[3]
 ----
 [1, 2, 3]
+
+# Handle wonky try-casts
+query I
+SELECT TRY_CAST(l AS INTEGER[][3]) FROM VALUES (['foo']) as v(l);
+----
+NULL

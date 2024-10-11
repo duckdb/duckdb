@@ -1,0 +1,69 @@
+# name: test/sql/function/string/test_concat_binding.test
+# description: Test the binding of the concat function
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET default_null_order='nulls_first';
+
+query I
+select [1] || [2];
+----
+[1, 2]
+
+query I
+select [1] || NULL;
+----
+NULL
+
+query I
+select list_concat([1], NULL);
+----
+[1]
+
+query I
+SELECT CONCAT('hello')
+----
+hello
+
+query I
+select array[1] || array[2];
+----
+[1, 2]
+
+query I
+select array[1] || array[NULL];
+----
+[1, NULL]
+
+query I
+select list_concat(array[1], array[NULL]);
+----
+[1, NULL]
+
+query I
+select array[1] || cast(NULL as int array);
+----
+NULL
+
+statement error
+select concat([1], 'hello');
+----
+Binder Error: Cannot concatenate types INTEGER[] and VARCHAR
+
+query I
+select 'hi' || NULL;
+----
+NULL
+
+statement error
+select list_concat([1], [2], [3]);
+----
+Binder Error: No function matches the given name and argument types 'list_concat(INTEGER[], INTEGER[], INTEGER[])'.
+
+query I
+select [1] || [2] || [3];
+----
+[1, 2, 3]

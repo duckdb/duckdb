@@ -7,20 +7,21 @@
 
 namespace duckdb {
 
-unique_ptr<SelectStatement> Transformer::TransformShowSelect(duckdb_libpgquery::PGVariableShowSelectStmt &stmt) {
+unique_ptr<QueryNode> Transformer::TransformShowSelect(duckdb_libpgquery::PGVariableShowSelectStmt &stmt) {
 	// we capture the select statement of SHOW
-	auto select_stmt = PGPointerCast<duckdb_libpgquery::PGSelectStmt>(stmt.stmt);
-
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());
 
 	auto show_ref = make_uniq<ShowRef>();
 	show_ref->show_type = stmt.is_summary ? ShowType::SUMMARY : ShowType::DESCRIBE;
-	show_ref->query = TransformSelectNode(*select_stmt);
+	show_ref->query = TransformSelectNode(*stmt.stmt);
 	select_node->from_table = std::move(show_ref);
+	return std::move(select_node);
+}
 
+unique_ptr<SelectStatement> Transformer::TransformShowSelectStmt(duckdb_libpgquery::PGVariableShowSelectStmt &stmt) {
 	auto result = make_uniq<SelectStatement>();
-	result->node = std::move(select_node);
+	result->node = TransformShowSelect(stmt);
 	return result;
 }
 

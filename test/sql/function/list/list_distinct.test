@@ -45,14 +45,10 @@ No function matches
 
 # test incorrect parameter type
 
-foreach type boolean varchar tinyint smallint integer bigint hugeint uhugeint utinyint usmallint uinteger ubigint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval blob
-
 statement error
-SELECT list_distinct(NULL::${type})
+SELECT list_distinct(NULL::boolean)
 ----
 No function matches
-
-endloop
 
 # other tests
 
@@ -269,31 +265,6 @@ SELECT list_sort(list_distinct(['a', 'b、c', 'a']))
 statement ok
 CREATE TABLE all_types AS SELECT * FROM test_all_types();
 
-# unsupported histogram types
-foreach colname bool tinyint smallint int bigint utinyint usmallint uint ubigint date time timestamp timestamp_s timestamp_ms timestamp_ns time_tz timestamp_tz float double dec_4_1 dec_9_4 uuid interval varchar small_enum medium_enum large_enum
-
+# list distinct is supported for all types
 statement ok
-select list_distinct(["${colname}"]) FROM all_types;
-
-endloop
-
-# we support histogram for the min/max values of these types
-foreach colname hugeint dec_18_6 dec38_10
-
-statement ok
-select list_distinct(["${colname}"]) FROM all_types;
-
-endloop
-
-statement ok
-select list_distinct(["blob"]) FROM all_types;
-
-# we don't support histogram for nested types
-foreach colname int_array double_array date_array timestamp_array timestamptz_array varchar_array nested_int_array struct struct_of_arrays array_of_structs map
-
-statement error
-select list_distinct(["${colname}"]) FROM all_types;
-----
-Not implemented Error
-
-endloop
+SELECT list_distinct([COLUMNS(*)]) FROM all_types;

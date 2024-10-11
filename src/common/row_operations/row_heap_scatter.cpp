@@ -8,18 +8,22 @@ namespace duckdb {
 using ValidityBytes = TemplatedValidityMask<uint8_t>;
 
 NestedValidity::NestedValidity(data_ptr_t validitymask_location)
-    : list_validity_location(validitymask_location), struct_validity_locations(nullptr), entry_idx(0), idx_in_entry(0) {
+    : list_validity_location(validitymask_location), struct_validity_locations(nullptr), entry_idx(0), idx_in_entry(0),
+      list_validity_offset(0) {
 }
 
 NestedValidity::NestedValidity(data_ptr_t *validitymask_locations, idx_t child_vector_index)
-    : list_validity_location(nullptr), struct_validity_locations(validitymask_locations), entry_idx(0),
-      idx_in_entry(0) {
+    : list_validity_location(nullptr), struct_validity_locations(validitymask_locations), entry_idx(0), idx_in_entry(0),
+      list_validity_offset(0) {
 	ValidityBytes::GetEntryIndex(child_vector_index, entry_idx, idx_in_entry);
 }
 
 void NestedValidity::SetInvalid(idx_t idx) {
 	if (list_validity_location) {
 		// Is List
+
+		idx = idx + list_validity_offset;
+
 		idx_t list_entry_idx;
 		idx_t list_idx_in_entry;
 		ValidityBytes::GetEntryIndex(idx, list_entry_idx, list_idx_in_entry);
@@ -32,9 +36,16 @@ void NestedValidity::SetInvalid(idx_t idx) {
 	}
 }
 
+void NestedValidity::OffsetListBy(idx_t offset) {
+	list_validity_offset += offset;
+}
+
 bool NestedValidity::IsValid(idx_t idx) {
 	if (list_validity_location) {
 		// Is List
+
+		idx = idx + list_validity_offset;
+
 		idx_t list_entry_idx;
 		idx_t list_idx_in_entry;
 		ValidityBytes::GetEntryIndex(idx, list_entry_idx, list_idx_in_entry);
@@ -245,7 +256,7 @@ static void HeapScatterStringVector(Vector &v, idx_t vcount, const SelectionVect
 			if (vdata.validity.RowIsValid(source_idx)) {
 				auto &string_entry = strings[source_idx];
 				// store string size
-				Store<uint32_t>(string_entry.GetSize(), key_locations[i]);
+				Store<uint32_t>(NumericCast<uint32_t>(string_entry.GetSize()), key_locations[i]);
 				key_locations[i] += sizeof(uint32_t);
 				// store the string
 				memcpy(key_locations[i], string_entry.GetData(), string_entry.GetSize());
@@ -259,7 +270,7 @@ static void HeapScatterStringVector(Vector &v, idx_t vcount, const SelectionVect
 			if (vdata.validity.RowIsValid(source_idx)) {
 				auto &string_entry = strings[source_idx];
 				// store string size
-				Store<uint32_t>(string_entry.GetSize(), key_locations[i]);
+				Store<uint32_t>(NumericCast<uint32_t>(string_entry.GetSize()), key_locations[i]);
 				key_locations[i] += sizeof(uint32_t);
 				// store the string
 				memcpy(key_locations[i], string_entry.GetData(), string_entry.GetSize());
@@ -437,6 +448,8 @@ static void HeapScatterArrayVector(Vector &v, idx_t vcount, const SelectionVecto
 		memset(array_validitymask_location, -1, array_validitymask_size);
 		key_locations[i] += array_validitymask_size;
 
+		NestedValidity array_parent_validity(array_validitymask_location);
+
 		// If the array contains variable size entries, we reserve spaces for them here
 		data_ptr_t var_entry_size_ptr = nullptr;
 		if (child_type_is_var_size) {
@@ -474,7 +487,6 @@ static void HeapScatterArrayVector(Vector &v, idx_t vcount, const SelectionVecto
 				}
 			}
 
-			NestedValidity array_parent_validity(array_validitymask_location);
 			RowOperations::HeapScatter(child_vector, ArrayVector::GetTotalSize(v),
 			                           *FlatVector::IncrementalSelectionVector(), chunk_size, array_entry_locations,
 			                           &array_parent_validity, array_start);
@@ -482,6 +494,7 @@ static void HeapScatterArrayVector(Vector &v, idx_t vcount, const SelectionVecto
 			// update for next iteration
 			elem_remaining -= chunk_size;
 			array_start += chunk_size;
+			array_parent_validity.OffsetListBy(chunk_size);
 		}
 	}
 }

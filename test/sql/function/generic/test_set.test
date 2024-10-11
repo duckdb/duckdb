@@ -51,6 +51,10 @@ SELECT CURRENT_SETTING(NULL)
 ----
 
 statement error
+SELECT CURRENT_SETTING(CAST(NULL AS TEXT))
+----
+
+statement error
 SELECT CURRENT_SETTING('')
 ----
 

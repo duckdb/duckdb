@@ -46,8 +46,6 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "TOP_N";
 	case LogicalOperatorType::LOGICAL_SAMPLE:
 		return "SAMPLE";
-	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT:
-		return "LIMIT_PERCENT";
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 		return "COPY_TO_FILE";
 	case LogicalOperatorType::LOGICAL_COPY_DATABASE:
@@ -130,6 +128,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "CUSTOM_OP";
 	case LogicalOperatorType::LOGICAL_PIVOT:
 		return "PIVOT";
+	case LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS:
+		return "UPDATE_EXTENSIONS";
 	}
 	return "INVALID";
 }

@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 
@@ -39,6 +40,9 @@ static unique_ptr<FunctionData> DuckDBSequencesBind(ClientContext &context, Tabl
 
 	names.emplace_back("comment");
 	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("tags");
+	return_types.emplace_back(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
 
 	names.emplace_back("temporary");
 	return_types.emplace_back(LogicalType::BOOLEAN);
@@ -97,17 +101,19 @@ void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p,
 		// database_name, VARCHAR
 		output.SetValue(col++, count, seq.catalog.GetName());
 		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(seq.catalog.GetOid()));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(seq.catalog.GetOid())));
 		// schema_name, VARCHAR
 		output.SetValue(col++, count, Value(seq.schema.name));
 		// schema_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(seq.schema.oid));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(seq.schema.oid)));
 		// sequence_name, VARCHAR
 		output.SetValue(col++, count, Value(seq.name));
 		// sequence_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(seq.oid));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(seq.oid)));
 		// comment, VARCHAR
 		output.SetValue(col++, count, Value(seq.comment));
+		// tags, MAP(VARCHAR, VARCHAR)
+		output.SetValue(col++, count, Value::MAP(seq.tags));
 		// temporary, BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(seq.temporary));
 		// start_value, BIGINT
@@ -121,7 +127,7 @@ void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p,
 		// cycle, BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(seq_data.cycle));
 		// last_value, BIGINT
-		output.SetValue(col++, count, seq_data.usage_count == 0 ? Value() : Value::BOOLEAN(seq_data.last_value));
+		output.SetValue(col++, count, seq_data.usage_count == 0 ? Value() : Value::BIGINT(seq_data.last_value));
 		// sql, LogicalType::VARCHAR
 		output.SetValue(col++, count, Value(seq.ToSQL()));
 

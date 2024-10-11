@@ -23,31 +23,30 @@ class SimpleBufferedData : public BufferedData {
 public:
 	static constexpr const BufferedData::Type TYPE = BufferedData::Type::SIMPLE;
 
-private:
-	//! (roughly) The max amount of tuples we'll keep buffered at a time
-	static constexpr idx_t BUFFER_SIZE = 100000;
-
 public:
-	SimpleBufferedData(weak_ptr<ClientContext> context);
+	explicit SimpleBufferedData(weak_ptr<ClientContext> context);
 	~SimpleBufferedData() override;
 
 public:
-	void Append(unique_ptr<DataChunk> chunk);
-	void BlockSink(const BlockedSink &blocked_sink);
-	bool BufferIsFull() override;
-	PendingExecutionResult ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) override;
+	void Append(const DataChunk &chunk);
+	void BlockSink(const InterruptState &blocked_sink);
+	bool BufferIsFull();
+	void UnblockSinks() override;
+	StreamExecutionResult ExecuteTaskInternal(StreamQueryResult &result, ClientContextLock &context_lock) override;
 	unique_ptr<DataChunk> Scan() override;
-
-private:
-	void UnblockSinks();
+	inline idx_t BufferSize() const {
+		return buffer_size;
+	}
 
 private:
 	//! Our handles to reschedule the blocked sink tasks
-	queue<BlockedSink> blocked_sinks;
+	queue<InterruptState> blocked_sinks;
 	//! The queue of chunks
 	queue<unique_ptr<DataChunk>> buffered_chunks;
 	//! The current capacity of the buffer (tuples)
 	atomic<idx_t> buffered_count;
+	//! The amount of tuples we should buffer
+	idx_t buffer_size;
 };
 
 } // namespace duckdb

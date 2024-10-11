@@ -14,12 +14,12 @@
 namespace duckdb {
 
 void ChildFieldIDs::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<unique_ptr<case_insensitive_map_t<FieldID>>>(100, "ids", ids);
+	serializer.WritePropertyWithDefault<case_insensitive_map_t<FieldID>>(100, "ids", ids.operator*());
 }
 
 ChildFieldIDs ChildFieldIDs::Deserialize(Deserializer &deserializer) {
 	ChildFieldIDs result;
-	deserializer.ReadPropertyWithDefault<unique_ptr<case_insensitive_map_t<FieldID>>>(100, "ids", result.ids);
+	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<FieldID>>(100, "ids", result.ids.operator*());
 	return result;
 }
 
@@ -71,6 +71,7 @@ void ParquetOptions::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<MultiFileReaderOptions>(102, "file_options", file_options);
 	serializer.WritePropertyWithDefault<vector<ParquetColumnDefinition>>(103, "schema", schema);
 	serializer.WritePropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(104, "encryption_config", encryption_config, nullptr);
+	serializer.WritePropertyWithDefault<bool>(105, "debug_use_openssl", debug_use_openssl, true);
 }
 
 ParquetOptions ParquetOptions::Deserialize(Deserializer &deserializer) {
@@ -79,7 +80,8 @@ ParquetOptions ParquetOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<bool>(101, "file_row_number", result.file_row_number);
 	deserializer.ReadProperty<MultiFileReaderOptions>(102, "file_options", result.file_options);
 	deserializer.ReadPropertyWithDefault<vector<ParquetColumnDefinition>>(103, "schema", result.schema);
-	deserializer.ReadPropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(104, "encryption_config", result.encryption_config, nullptr);
+	deserializer.ReadPropertyWithExplicitDefault<shared_ptr<ParquetEncryptionConfig>>(104, "encryption_config", result.encryption_config, nullptr);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(105, "debug_use_openssl", result.debug_use_openssl, true);
 	return result;
 }
 

@@ -17,6 +17,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/datetime.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
 
@@ -32,12 +33,15 @@ class Value {
 	friend struct ListValue;
 	friend struct UnionValue;
 	friend struct ArrayValue;
+	friend struct MapValue;
 
 public:
 	//! Create an empty NULL value of the specified type
 	DUCKDB_API explicit Value(LogicalType type = LogicalType::SQLNULL);
 	//! Create an INTEGER value
 	DUCKDB_API Value(int32_t val); // NOLINT: Allow implicit conversion from `int32_t`
+	//! Create a BOOLEAN value
+	explicit DUCKDB_API Value(bool val);
 	//! Create a BIGINT value
 	DUCKDB_API Value(int64_t val); // NOLINT: Allow implicit conversion from `int64_t`
 	//! Create a FLOAT value
@@ -87,8 +91,8 @@ public:
 	DUCKDB_API static Value Numeric(const LogicalType &type, hugeint_t value);
 	DUCKDB_API static Value Numeric(const LogicalType &type, uhugeint_t value);
 
-	//! Create a tinyint Value from a specified value
-	DUCKDB_API static Value BOOLEAN(int8_t value);
+	//! Create a boolean Value from a specified value
+	DUCKDB_API static Value BOOLEAN(bool value);
 	//! Create a tinyint Value from a specified value
 	DUCKDB_API static Value TINYINT(int8_t value);
 	//! Create a smallint Value from a specified value
@@ -174,6 +178,9 @@ public:
 	//! Create a map value with the given entries
 	DUCKDB_API static Value MAP(const LogicalType &key_type, const LogicalType &value_type, vector<Value> keys,
 	                            vector<Value> values);
+	//! Create a map value from a set of key-value pairs
+	DUCKDB_API static Value MAP(const unordered_map<string, string> &kv_pairs);
+
 	//! Create a union value from a selected value and a tag from a set of alternatives.
 	DUCKDB_API static Value UNION(child_list_t<LogicalType> members, uint8_t tag, Value value);
 
@@ -187,12 +194,17 @@ public:
 	//! Creates a bitstring by casting a specified string to a bitstring
 	DUCKDB_API static Value BIT(const_data_ptr_t data, idx_t len);
 	DUCKDB_API static Value BIT(const string &data);
+	DUCKDB_API static Value VARINT(const_data_ptr_t data, idx_t len);
+	DUCKDB_API static Value VARINT(const string &data);
+
+	//! Creates an aggregate state
+	DUCKDB_API static Value AGGREGATE_STATE(const LogicalType &type, const_data_ptr_t data, idx_t len); // NOLINT
 
 	template <class T>
 	T GetValue() const;
 	template <class T>
 	static Value CreateValue(T value) {
-		static_assert(AlwaysFalse<T>::value, "No specialization exists for this type");
+		static_assert(AlwaysFalse<T>::VALUE, "No specialization exists for this type");
 		return Value(nullptr);
 	}
 	// Returns the internal value. Unlike GetValue(), this method does not perform casting, and assumes T matches the
@@ -298,7 +310,7 @@ private:
 
 	//! The value of the object, if it is of a constant size Type
 	union Val {
-		int8_t boolean;
+		bool boolean;
 		int8_t tinyint;
 		int16_t smallint;
 		int32_t integer;
@@ -408,6 +420,10 @@ struct StructValue {
 	DUCKDB_API static const vector<Value> &GetChildren(const Value &value);
 };
 
+struct MapValue {
+	DUCKDB_API static const vector<Value> &GetChildren(const Value &value);
+};
+
 struct ListValue {
 	DUCKDB_API static const vector<Value> &GetChildren(const Value &value);
 };
@@ -514,6 +530,8 @@ DUCKDB_API date_t Value::GetValue() const;
 template <>
 DUCKDB_API dtime_t Value::GetValue() const;
 template <>
+DUCKDB_API dtime_tz_t Value::GetValue() const;
+template <>
 DUCKDB_API timestamp_t Value::GetValue() const;
 template <>
 DUCKDB_API interval_t Value::GetValue() const;
@@ -554,6 +572,8 @@ template <>
 DUCKDB_API date_t Value::GetValueUnsafe() const;
 template <>
 DUCKDB_API dtime_t Value::GetValueUnsafe() const;
+template <>
+DUCKDB_API dtime_tz_t Value::GetValueUnsafe() const;
 template <>
 DUCKDB_API timestamp_t Value::GetValueUnsafe() const;
 template <>

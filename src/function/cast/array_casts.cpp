@@ -169,9 +169,7 @@ static bool ArrayToListCast(Vector &source, Vector &result, idx_t count, CastPar
 
 	// FIXME: dont flatten
 	source.Flatten(count);
-	if (count == 1) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
+
 	auto array_size = ArrayType::GetSize(source.GetType());
 	auto child_count = count * array_size;
 

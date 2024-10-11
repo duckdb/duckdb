@@ -9,6 +9,10 @@ string RelationTypeToString(RelationType type) {
 	switch (type) {
 	case RelationType::TABLE_RELATION:
 		return "TABLE_RELATION";
+	case RelationType::DELIM_GET_RELATION:
+		return "DELIM_GET_RELATION";
+	case RelationType::DELIM_JOIN_RELATION:
+		return "DELIM_JOIN_RELATION";
 	case RelationType::PROJECTION_RELATION:
 		return "PROJECTION_RELATION";
 	case RelationType::FILTER_RELATION:
@@ -37,6 +41,8 @@ string RelationTypeToString(RelationType type) {
 		return "INSERT_RELATION";
 	case RelationType::VALUE_LIST_RELATION:
 		return "VALUE_LIST_RELATION";
+	case RelationType::MATERIALIZED_RELATION:
+		return "MATERIALIZED_RELATION";
 	case RelationType::DELETE_RELATION:
 		return "DELETE_RELATION";
 	case RelationType::UPDATE_RELATION:

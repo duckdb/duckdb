@@ -17,11 +17,11 @@ namespace duckdb {
 
 struct ApproxCountDistinctFun {
 	static constexpr const char *Name = "approx_count_distinct";
-	static constexpr const char *Parameters = "x";
+	static constexpr const char *Parameters = "any";
 	static constexpr const char *Description = "Computes the approximate count of distinct elements using HyperLogLog.";
 	static constexpr const char *Example = "approx_count_distinct(A)";
 
-	static AggregateFunctionSet GetFunctions();
+	static AggregateFunction GetFunction();
 };
 
 struct ArgMinFun {
@@ -193,6 +193,7 @@ struct MinFun {
 	static constexpr const char *Example = "min(A)";
 
 	static AggregateFunctionSet GetFunctions();
+	static AggregateFunction GetFunction();
 };
 
 struct MaxFun {
@@ -202,6 +203,7 @@ struct MaxFun {
 	static constexpr const char *Example = "max(A)";
 
 	static AggregateFunctionSet GetFunctions();
+	static AggregateFunction GetFunction();
 };
 
 struct ProductFun {
@@ -255,7 +257,7 @@ struct SumFun {
 struct SumNoOverflowFun {
 	static constexpr const char *Name = "sum_no_overflow";
 	static constexpr const char *Parameters = "arg";
-	static constexpr const char *Description = "Calculates the sum value for all tuples in arg without overflow checks.";
+	static constexpr const char *Description = "Internal only. Calculates the sum value for all tuples in arg without overflow checks.";
 	static constexpr const char *Example = "sum_no_overflow(A)";
 
 	static AggregateFunctionSet GetFunctions();

@@ -47,15 +47,13 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 	auto stack_checker = StackCheck();
 
 	unique_ptr<QueryNode> node;
-	vector<unique_ptr<CTENode>> materialized_ctes;
 
 	switch (stmt.op) {
 	case duckdb_libpgquery::PG_SETOP_NONE: {
 		node = make_uniq<SelectNode>();
 		auto &result = node->Cast<SelectNode>();
 		if (stmt.withClause) {
-			TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), node->cte_map,
-			             materialized_ctes);
+			TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), node->cte_map);
 		}
 		if (stmt.windowClause) {
 			for (auto window_ele = stmt.windowClause->head; window_ele != nullptr; window_ele = window_ele->next) {
@@ -93,9 +91,14 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 			if (!stmt.targetList) {
 				throw ParserException("SELECT clause without selection list");
 			}
-			// select list
-			TransformExpressionList(*stmt.targetList, result.select_list);
-			result.from_table = TransformFrom(stmt.fromClause);
+			// transform in the specified order to ensure positional parameters are correctly set
+			if (stmt.from_first) {
+				result.from_table = TransformFrom(stmt.fromClause);
+				TransformExpressionList(*stmt.targetList, result.select_list);
+			} else {
+				TransformExpressionList(*stmt.targetList, result.select_list);
+				result.from_table = TransformFrom(stmt.fromClause);
+			}
 		}
 
 		// where
@@ -117,8 +120,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 		node = make_uniq<SetOperationNode>();
 		auto &result = node->Cast<SetOperationNode>();
 		if (stmt.withClause) {
-			TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), node->cte_map,
-			             materialized_ctes);
+			TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), node->cte_map);
 		}
 		result.left = TransformSelectNode(*stmt.larg);
 		result.right = TransformSelectNode(*stmt.rarg);
@@ -153,9 +155,6 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 	}
 
 	TransformModifiers(stmt, *node);
-
-	// Handle materialized CTEs
-	node = Transformer::TransformMaterializedCTE(std::move(node), materialized_ctes);
 
 	return node;
 }

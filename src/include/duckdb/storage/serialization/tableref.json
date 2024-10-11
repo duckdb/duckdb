@@ -91,6 +91,16 @@
         "id": 205,
         "name": "using_columns",
         "type": "vector<string>"
+      },
+      {
+        "id": 206,
+        "name": "delim_flipped",
+        "type": "bool"
+      },
+      {
+        "id": 207,
+        "name": "duplicate_eliminated_columns",
+        "type": "vector<unique_ptr<ParsedExpression>>"
       }
     ]
   },
@@ -156,6 +166,24 @@
         "type": "vector<vector<ParsedExpression*>>"
       }
     ]
+  },
+  {
+    "class": "ColumnDataRef",
+    "base": "TableRef",
+    "enum": "COLUMN_DATA",
+    "members": [
+      {
+        "id": 200,
+        "name": "expected_names",
+        "type": "vector<string>"
+      },
+      {
+        "id": 202,
+        "name": "collection",
+        "type": "shared_ptr<ColumnDataCollection>"
+      }
+    ],
+    "constructor": ["collection", "expected_names"]
   },
   {
     "class": "PivotRef",

@@ -13,9 +13,11 @@
 namespace duckdb {
 
 enum class NewLineIdentifier : uint8_t {
-	SINGLE = 1,   // Either \r or \n
+	SINGLE_N = 1, // \n
 	CARRY_ON = 2, // \r\n
-	NOT_SET = 3
+	NOT_SET = 3,
+	SINGLE_R = 4 // \r
+
 };
 
 class Serializer;
@@ -24,10 +26,12 @@ class Deserializer;
 //! Wrapper for CSV Options that can be manually set by the user
 //! It is important to make this difference for options that can be automatically sniffed AND manually set.
 template <typename T>
-struct CSVOption {
+struct CSVOption { // NOLINT: work-around bug in clang-tidy
 public:
-	CSVOption(T value_p) : value(value_p) {};
-	CSVOption(T value_p, bool set_by_user_p) : value(value_p), set_by_user(set_by_user_p) {};
+	CSVOption(T value_p) : value(value_p) { // NOLINT: allow implicit conversion from value
+	}
+	CSVOption(T value_p, bool set_by_user_p) : value(value_p), set_by_user(set_by_user_p) {
+	}
 	CSVOption() {};
 
 	//! Sets value.
@@ -73,7 +77,7 @@ public:
 		return value != other;
 	}
 	//! Returns CSV Option value
-	const T GetValue() const {
+	inline const T GetValue() const {
 		return value;
 	}
 	bool IsSetByUser() const {
@@ -129,8 +133,10 @@ private:
 
 	std::string FormatValueInternal(const NewLineIdentifier &val) const {
 		switch (val) {
-		case NewLineIdentifier::SINGLE:
+		case NewLineIdentifier::SINGLE_N:
 			return "\\n";
+		case NewLineIdentifier::SINGLE_R:
+			return "\\r";
 		case NewLineIdentifier::CARRY_ON:
 			return "\\r\\n";
 		case NewLineIdentifier::NOT_SET:

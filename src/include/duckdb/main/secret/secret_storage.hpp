@@ -26,7 +26,7 @@ class SecretStorage {
 	friend class SecretManager;
 
 public:
-	SecretStorage(const string &name) : storage_name(name), persistent(false) {};
+	explicit SecretStorage(const string &name) : storage_name(name), persistent(false) {};
 	virtual ~SecretStorage() = default;
 
 public:
@@ -103,8 +103,8 @@ public:
 		return storage_name;
 	};
 
-	virtual unique_ptr<SecretEntry> StoreSecret(unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
-	                                            optional_ptr<CatalogTransaction> transaction = nullptr) override;
+	unique_ptr<SecretEntry> StoreSecret(unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
+	                                    optional_ptr<CatalogTransaction> transaction = nullptr) override;
 	vector<SecretEntry> AllSecrets(optional_ptr<CatalogTransaction> transaction = nullptr) override;
 	void DropSecretByName(const string &name, OnEntryNotFound on_entry_not_found,
 	                      optional_ptr<CatalogTransaction> transaction = nullptr) override;
@@ -153,7 +153,7 @@ protected:
 	//! Implements the writes to disk
 	void WriteSecret(const BaseSecret &secret, OnCreateConflict on_conflict) override;
 	//! Implements the deletes from disk
-	virtual void RemoveSecret(const string &secret, OnEntryNotFound on_entry_not_found) override;
+	void RemoveSecret(const string &secret, OnEntryNotFound on_entry_not_found) override;
 
 	//! Set of persistent secrets that are lazily loaded
 	case_insensitive_set_t persistent_secrets;

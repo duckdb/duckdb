@@ -88,7 +88,8 @@ public:
 			result_validity = &FlatVector::Validity(result);
 
 			if (list_column.GetType().id() == LogicalTypeId::SQLNULL) {
-				result_validity->SetInvalid(0);
+				result.SetVectorType(VectorType::CONSTANT_VECTOR);
+				ConstantVector::SetNull(result, true);
 				result_is_null = true;
 				return;
 			}
@@ -103,7 +104,6 @@ public:
 			// get the list column entries
 			list_column.ToUnifiedFormat(row_count, list_column_format);
 			list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_column_format);
-
 			child_vector = &ListVector::GetEntry(list_column);
 
 			// get the lambda column data for all other input vectors
@@ -125,7 +125,7 @@ public:
 	};
 
 	static vector<ColumnInfo> GetColumnInfo(DataChunk &args, const idx_t row_count);
-	static vector<reference<ColumnInfo>> GetInconstantColumnInfo(vector<ColumnInfo> &data);
+	static vector<reference<ColumnInfo>> GetMutableColumnInfo(vector<ColumnInfo> &data);
 };
 
 } // namespace duckdb

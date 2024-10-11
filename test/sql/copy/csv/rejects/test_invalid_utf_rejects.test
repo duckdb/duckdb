@@ -1,0 +1,20 @@
+# name: test/sql/copy/csv/rejects/test_invalid_utf_rejects.test
+# description: Test that invalid unicodes return correct info as rejects tables
+# group: [rejects]
+
+require skip_reload
+
+# Test will fail on windows because byte_position is slightly different due to \r\n instead of \n
+require notwindows
+
+statement ok
+from read_csv('data/csv/test/invalid_utf_big.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'},
+ auto_detect=false, header = 0, delim = ',', store_rejects=true)
+
+query IIIIIIIII rowsort
+SELECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
+----
+0	3001	54001	54007	2	col2	INVALID UNICODE	valid,invalid_??_part,valid	Invalid unicode (byte sequence mismatch) detected.
+0	3012	54209	54221	3	col3	INVALID UNICODE	valid,valid,invalid_??_part	Invalid unicode (byte sequence mismatch) detected.
+0	3023	54417	54423	2	col2	INVALID UNICODE	valid,invalid_??_part,valid	Invalid unicode (byte sequence mismatch) detected.
+0	3034	54625	54637	3	col3	INVALID UNICODE	valid,valid,invalid_??_part	Invalid unicode (byte sequence mismatch) detected.

@@ -1,8 +1,11 @@
 # name: test/sql/index/art/types/test_art_union.test
-# description: Test the UNION type for ART keys
+# description: Test the UNION type for ART keys.
 # group: [types]
 
 load __TEST_DIR__/test_art_union.db
+
+statement ok
+PRAGMA enable_verification
 
 statement ok
 CREATE TABLE tbl (
@@ -18,7 +21,7 @@ INSERT INTO tbl VALUES
 	(true, NULL, 44, 45),
 	(false, 'wazzup', false, [1]);
 
-# we cannot create an index on union types
+# We cannot create an index on union types.
 
 statement error
 CREATE INDEX idx_u_2 ON tbl (u_2);
@@ -56,7 +59,7 @@ NULL	NULL	NULL	NULL
 
 restart
 
-# unique indexes out of union values
+# Unique indexes on a union member.
 
 statement ok
 CREATE UNIQUE INDEX idx_u_2_1 ON tbl ((u_2.string));
@@ -103,7 +106,7 @@ worldd
 
 restart
 
-# constraint violation
+# Test triggering a constraint violation.
 
 statement error
 INSERT INTO tbl VALUES ('helloo', 'nop', 7, true);
@@ -112,7 +115,7 @@ Constraint Error: Duplicate key "union_extract(u_2, 'string'): helloo" violates 
 
 restart
 
-# drop all indexes
+# Drop all indexes.
 
 statement ok
 DROP INDEX idx_u_2_1;
@@ -131,7 +134,7 @@ DROP INDEX idx_list_3;
 
 restart
 
-# unique compound keys out of union values
+# Unique indexes on compound union members.
 
 statement ok
 CREATE UNIQUE INDEX idx_c_1 ON tbl ((u_2.string), (u_1.string));
@@ -185,7 +188,7 @@ SELECT u_list.bool FROM tbl WHERE u_1.string = 'love';
 
 restart
 
-# constraint violations
+# Test triggering a constraint violation.
 
 statement error
 INSERT INTO tbl VALUES ('sunshine', 'love', 85, true);

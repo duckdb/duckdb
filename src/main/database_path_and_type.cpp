@@ -8,15 +8,15 @@ namespace duckdb {
 void DBPathAndType::ExtractExtensionPrefix(string &path, string &db_type) {
 	auto extension = ExtensionHelper::ExtractExtensionPrefixFromPath(path);
 	if (!extension.empty()) {
-		// path is prefixed with an extension - remove it
-		path = StringUtil::Replace(path, extension + ":", "");
+		// path is prefixed with an extension - remove the first occurence of it
+		path = path.substr(extension.length() + 1);
 		db_type = ExtensionHelper::ApplyExtensionAlias(extension);
 	}
 }
 
-void DBPathAndType::CheckMagicBytes(string &path, string &db_type, const DBConfig &config) {
+void DBPathAndType::CheckMagicBytes(FileSystem &fs, string &path, string &db_type) {
 	// if there isn't - check the magic bytes of the file (if any)
-	auto file_type = MagicBytes::CheckMagicBytes(config.file_system.get(), path);
+	auto file_type = MagicBytes::CheckMagicBytes(fs, path);
 	if (file_type == DataFileType::SQLITE_FILE) {
 		db_type = "sqlite";
 	} else {
@@ -24,7 +24,7 @@ void DBPathAndType::CheckMagicBytes(string &path, string &db_type, const DBConfi
 	}
 }
 
-void DBPathAndType::ResolveDatabaseType(string &path, string &db_type, const DBConfig &config) {
+void DBPathAndType::ResolveDatabaseType(FileSystem &fs, string &path, string &db_type) {
 	if (!db_type.empty()) {
 		// database type specified explicitly - no need to check
 		return;
@@ -36,7 +36,7 @@ void DBPathAndType::ResolveDatabaseType(string &path, string &db_type, const DBC
 		return;
 	}
 	// check database type by reading the magic bytes of a file
-	DBPathAndType::CheckMagicBytes(path, db_type, config);
+	DBPathAndType::CheckMagicBytes(fs, path, db_type);
 }
 
 } // namespace duckdb

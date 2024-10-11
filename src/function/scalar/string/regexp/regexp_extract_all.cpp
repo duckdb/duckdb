@@ -27,7 +27,7 @@ bool ExtractAll(duckdb_re2::StringPiece &input, duckdb_re2::RE2 &pattern, idx_t 
 	D_ASSERT(pattern.ok());
 	D_ASSERT(pattern.NumberOfCapturingGroups() == ngroups);
 
-	if (!pattern.Match(input, *startpos, input.size(), pattern.Anchored(), groups, ngroups + 1)) {
+	if (!pattern.Match(input, *startpos, input.size(), pattern.UNANCHORED, groups, ngroups + 1)) {
 		return false;
 	}
 	idx_t consumed = static_cast<size_t>(groups[0].end() - (input.begin() + *startpos));
@@ -68,7 +68,8 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
 	bool throw_on_group_found = (idx_t)group > args.size;
 
 	idx_t startpos = 0;
-	for (idx_t iteration = 0; ExtractAll(input, pattern, &startpos, args.group_buffer, args.size); iteration++) {
+	for (idx_t iteration = 0;
+	     ExtractAll(input, pattern, &startpos, args.group_buffer, UnsafeNumericCast<int>(args.size)); iteration++) {
 		if (!iteration && throw_on_group_found) {
 			throw InvalidInputException("Pattern has %d groups. Cannot access group %d", args.size, group);
 		}
@@ -95,8 +96,9 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
 			// Every group is a substring of the original, we can find out the offset using the pointer
 			// the 'match_group' address is guaranteed to be bigger than that of the source
 			D_ASSERT(const_char_ptr_cast(match_group.begin()) >= string.GetData());
-			idx_t offset = match_group.begin() - string.GetData();
-			list_content[child_idx] = string_t(string.GetData() + offset, match_group.size());
+			auto offset = UnsafeNumericCast<idx_t>(match_group.begin() - string.GetData());
+			list_content[child_idx] =
+			    string_t(string.GetData() + offset, UnsafeNumericCast<uint32_t>(match_group.size()));
 		}
 		current_list_size++;
 		if (startpos > input.size()) {
@@ -197,7 +199,7 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 				if (group_count_p == -1) {
 					throw InvalidInputException("Pattern failed to parse, error: '%s'", stored_re->error());
 				}
-				non_const_args->SetSize(group_count_p);
+				non_const_args->SetSize(UnsafeNumericCast<idx_t>(group_count_p));
 			}
 		}
 

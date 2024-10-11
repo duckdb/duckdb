@@ -14,22 +14,25 @@
 
 namespace duckdb {
 
-struct dtime_t;
-struct dtime_tz_t;
+struct dtime_t;    // NOLINT
+struct dtime_tz_t; // NOLINT
 
 //! The Time class is a static class that holds helper functions for the Time
 //! type.
 class Time {
 public:
 	//! Convert a string in the format "hh:mm:ss" to a time object
-	DUCKDB_API static dtime_t FromString(const string &str, bool strict = false);
-	DUCKDB_API static dtime_t FromCString(const char *buf, idx_t len, bool strict = false);
-	DUCKDB_API static bool TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict = false);
+	DUCKDB_API static dtime_t FromString(const string &str, bool strict = false, optional_ptr<int32_t> nanos = nullptr);
+	DUCKDB_API static dtime_t FromCString(const char *buf, idx_t len, bool strict = false,
+	                                      optional_ptr<int32_t> nanos = nullptr);
+	DUCKDB_API static bool TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict = false,
+	                                      optional_ptr<int32_t> nanos = nullptr);
 	DUCKDB_API static bool TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &result,
-	                                        bool strict = false);
+	                                        bool &has_offset, bool strict = false,
+	                                        optional_ptr<int32_t> nanos = nullptr);
 	// No hour limit
 	DUCKDB_API static bool TryConvertInterval(const char *buf, idx_t len, idx_t &pos, dtime_t &result,
-	                                          bool strict = false);
+	                                          bool strict = false, optional_ptr<int32_t> nanos = nullptr);
 
 	//! Convert a time object to a string in the format "hh:mm:ss"
 	DUCKDB_API static string ToString(dtime_t time);
@@ -37,6 +40,7 @@ public:
 	DUCKDB_API static string ToUTCOffset(int hour_offset, int minute_offset);
 
 	DUCKDB_API static dtime_t FromTime(int32_t hour, int32_t minute, int32_t second, int32_t microseconds = 0);
+	DUCKDB_API static int64_t ToNanoTime(int32_t hour, int32_t minute, int32_t second, int32_t nanoseconds = 0);
 
 	//! Normalize a TIME_TZ by adding the offset to the time part and returning the TIME
 	DUCKDB_API static dtime_t NormalizeTimeTZ(dtime_tz_t timetz);
@@ -54,7 +58,8 @@ public:
 	DUCKDB_API static bool IsValidTime(int32_t hour, int32_t minute, int32_t second, int32_t microseconds);
 
 private:
-	static bool TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict);
+	static bool TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict,
+	                               optional_ptr<int32_t> nanos = nullptr);
 };
 
 } // namespace duckdb

@@ -13,15 +13,6 @@ const arrow_column_map_t &ArrowTableType::GetColumns() const {
 	return arrow_convert_data;
 }
 
-void ArrowType::AddChild(unique_ptr<ArrowType> child) {
-	children.emplace_back(std::move(child));
-}
-
-void ArrowType::AssignChildren(vector<unique_ptr<ArrowType>> children) {
-	D_ASSERT(this->children.empty());
-	this->children = std::move(children);
-}
-
 void ArrowType::SetDictionary(unique_ptr<ArrowType> dictionary) {
 	D_ASSERT(!this->dictionary_type);
 	dictionary_type = std::move(dictionary);
@@ -37,8 +28,12 @@ const ArrowType &ArrowType::GetDictionary() const {
 }
 
 void ArrowType::SetRunEndEncoded() {
-	D_ASSERT(children.size() == 2);
-	auto actual_type = children[1]->GetDuckType();
+	D_ASSERT(type_info);
+	D_ASSERT(type_info->type == ArrowTypeInfoType::STRUCT);
+	auto &struct_info = type_info->Cast<ArrowStructInfo>();
+	D_ASSERT(struct_info.ChildCount() == 2);
+
+	auto actual_type = struct_info.GetChild(1).GetDuckType();
 	// Override the duckdb type to the actual type
 	type = actual_type;
 	run_end_encoded = true;
@@ -46,6 +41,15 @@ void ArrowType::SetRunEndEncoded() {
 
 bool ArrowType::RunEndEncoded() const {
 	return run_end_encoded;
+}
+
+void ArrowType::ThrowIfInvalid() const {
+	if (type.id() == LogicalTypeId::INVALID) {
+		if (not_implemented) {
+			throw NotImplementedException(error_message);
+		}
+		throw InvalidInputException(error_message);
+	}
 }
 
 LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
@@ -60,29 +64,33 @@ LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
 	auto id = type.id();
 	switch (id) {
 	case LogicalTypeId::STRUCT: {
+		auto &struct_info = type_info->Cast<ArrowStructInfo>();
 		child_list_t<LogicalType> new_children;
-		for (idx_t i = 0; i < children.size(); i++) {
-			auto &child = children[i];
+		for (idx_t i = 0; i < struct_info.ChildCount(); i++) {
+			auto &child = struct_info.GetChild(i);
 			auto &child_name = StructType::GetChildName(type, i);
-			new_children.emplace_back(std::make_pair(child_name, child->GetDuckType(true)));
+			new_children.emplace_back(std::make_pair(child_name, child.GetDuckType(true)));
 		}
 		return LogicalType::STRUCT(std::move(new_children));
 	}
 	case LogicalTypeId::LIST: {
-		auto &child = children[0];
-		return LogicalType::LIST(child->GetDuckType(true));
+		auto &list_info = type_info->Cast<ArrowListInfo>();
+		auto &child = list_info.GetChild();
+		return LogicalType::LIST(child.GetDuckType(true));
 	}
 	case LogicalTypeId::MAP: {
-		auto &struct_child = children[0];
-		auto struct_type = struct_child->GetDuckType(true);
+		auto &list_info = type_info->Cast<ArrowListInfo>();
+		auto &struct_child = list_info.GetChild();
+		auto struct_type = struct_child.GetDuckType(true);
 		return LogicalType::MAP(StructType::GetChildType(struct_type, 0), StructType::GetChildType(struct_type, 1));
 	}
 	case LogicalTypeId::UNION: {
+		auto &union_info = type_info->Cast<ArrowStructInfo>();
 		child_list_t<LogicalType> new_children;
-		for (idx_t i = 0; i < children.size(); i++) {
-			auto &child = children[i];
+		for (idx_t i = 0; i < union_info.ChildCount(); i++) {
+			auto &child = union_info.GetChild(i);
 			auto &child_name = UnionType::GetMemberName(type, i);
-			new_children.emplace_back(std::make_pair(child_name, child->GetDuckType(true)));
+			new_children.emplace_back(std::make_pair(child_name, child.GetDuckType(true)));
 		}
 		return LogicalType::UNION(std::move(new_children));
 	}
@@ -90,24 +98,6 @@ LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
 		return type;
 	}
 	}
-}
-
-ArrowVariableSizeType ArrowType::GetSizeType() const {
-	return size_type;
-}
-
-ArrowDateTimeType ArrowType::GetDateTimeType() const {
-	return date_time_precision;
-}
-
-const ArrowType &ArrowType::operator[](idx_t index) const {
-	D_ASSERT(index < children.size());
-	return *children[index];
-}
-
-idx_t ArrowType::FixedSize() const {
-	D_ASSERT(size_type == ArrowVariableSizeType::FIXED_SIZE);
-	return fixed_size;
 }
 
 } // namespace duckdb

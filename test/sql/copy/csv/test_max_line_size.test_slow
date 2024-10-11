@@ -2,6 +2,9 @@
 # description: Test lines that exceed the maximum line size
 # group: [csv]
 
+statement ok
+pragma enable_verification;
+
 # generate CSV file with some long strings some exceeding the maximum line size
 statement ok
 CREATE TABLE test_base (a INT, b VARCHAR, c INT);

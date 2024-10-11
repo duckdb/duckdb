@@ -4,6 +4,7 @@ import duckdb
 import numpy
 import pytest
 import re
+import os
 from conftest import NumpyPandas, ArrowPandas
 
 
@@ -45,6 +46,13 @@ class TestDBConfig(object):
             query_failed = True
         assert query_failed == True
 
+    def test_extension_setting(self):
+        repository = os.environ.get('LOCAL_EXTENSION_REPO')
+        if not repository:
+            return
+        con = duckdb.connect(config={"TimeZone": "UTC", 'autoinstall_extension_repository': repository})
+        assert 'UTC' == con.sql("select current_setting('TimeZone')").fetchone()[0]
+
     def test_unrecognized_option(self, duckdb_cursor):
         success = True
         try:
@@ -64,6 +72,7 @@ class TestDBConfig(object):
     def test_user_agent_default(self, duckdb_cursor):
         con_regular = duckdb.connect(':memory:')
         regex = re.compile("duckdb/.* python")
+        # Expands to: SELECT * FROM pragma_user_agent()
         assert regex.match(con_regular.sql("PRAGMA user_agent").fetchone()[0]) is not None
         custom_user_agent = con_regular.sql("SELECT current_setting('custom_user_agent')").fetchone()
         assert custom_user_agent[0] == ''

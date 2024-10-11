@@ -4,6 +4,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/executor.hpp"
+#include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
@@ -173,6 +174,16 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
+
+static void GatherColumnDataScans(const PhysicalOperator &op, vector<const_reference<PhysicalOperator>> &delim_scans) {
+	if (op.type == PhysicalOperatorType::DELIM_SCAN || op.type == PhysicalOperatorType::CTE_SCAN) {
+		delim_scans.push_back(op);
+	}
+	for (auto &child : op.children) {
+		GatherColumnDataScans(*child, delim_scans);
+	}
+}
+
 void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
 	op_state.reset();
 	sink_state.reset();
@@ -189,21 +200,33 @@ void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 	initial_state_pipeline.Build(*children[0]);
 
 	// the RHS is the recursive pipeline
-	recursive_meta_pipeline = make_shared<MetaPipeline>(executor, state, this);
+	recursive_meta_pipeline = make_shared_ptr<MetaPipeline>(executor, state, this);
 	recursive_meta_pipeline->SetRecursiveCTE();
 	recursive_meta_pipeline->Build(*children[1]);
+
+	vector<const_reference<PhysicalOperator>> ops;
+	GatherColumnDataScans(*children[1], ops);
+
+	for (auto op : ops) {
+		auto entry = state.cte_dependencies.find(op);
+		if (entry == state.cte_dependencies.end()) {
+			continue;
+		}
+		// this chunk scan introduces a dependency to the current pipeline
+		// namely a dependency on the CTE pipeline to finish
+		auto cte_dependency = entry->second.get().shared_from_this();
+		current.AddDependency(cte_dependency);
+	}
 }
 
 vector<const_reference<PhysicalOperator>> PhysicalRecursiveCTE::GetSources() const {
 	return {*this};
 }
 
-string PhysicalRecursiveCTE::ParamsToString() const {
-	string result = "";
-	result += "\n[INFOSEPARATOR]\n";
-	result += ctename;
-	result += "\n[INFOSEPARATOR]\n";
-	result += StringUtil::Format("idx: %llu", table_index);
+InsertionOrderPreservingMap<string> PhysicalRecursiveCTE::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	result["CTE Name"] = ctename;
+	result["Table Index"] = StringUtil::Format("%llu", table_index);
 	return result;
 }
 

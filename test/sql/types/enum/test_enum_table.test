@@ -78,7 +78,7 @@ Anne	happy
 Oogie Boogie	ok
 Mr. Fluffles McFluffingstein	NULL
 
-query TT
+query TT rowsort
 select person.name, pets.name from person inner join pets on  (person.current_mood = pets.current_mood)
 ----
 Moe	Anne

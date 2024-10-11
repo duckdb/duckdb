@@ -1,0 +1,14 @@
+# name: benchmark/csv/1_byte_values.benchmark
+# description: Run CSV scan on file with muiltiple values of 1 bytes
+# group: [csv]
+
+name CSV Read Benchmark with nullpadding
+group csv
+
+load
+CREATE TABLE t1 AS select 'a,a,a,a,a';
+insert into t1  select 'a,a,a,a,a' from range(0,10000000) tbl(i);
+COPY t1 TO '${BENCHMARK_DIR}/this_is_1byte.csv' (FORMAT CSV, HEADER 0);
+
+run
+SELECT * from read_csv('${BENCHMARK_DIR}/this_is_1byte.csv',delim= ',',  header = 0)

@@ -7,26 +7,31 @@
 #include "duckdb_python/numpy/numpy_bind.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb_python/pandas/column/pandas_numpy_column.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 
 #include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 
-struct PandasScanFunctionData : public PyTableFunctionData {
+struct PandasScanFunctionData : public TableFunctionData {
 	PandasScanFunctionData(py::handle df, idx_t row_count, vector<PandasColumnBindData> pandas_bind_data,
-	                       vector<LogicalType> sql_types)
+	                       vector<LogicalType> sql_types, shared_ptr<DependencyItem> dependency)
 	    : df(df), row_count(row_count), lines_read(0), pandas_bind_data(std::move(pandas_bind_data)),
-	      sql_types(std::move(sql_types)) {
+	      sql_types(std::move(sql_types)), copied_df(std::move(dependency)) {
 	}
 	py::handle df;
 	idx_t row_count;
 	atomic<idx_t> lines_read;
 	vector<PandasColumnBindData> pandas_bind_data;
 	vector<LogicalType> sql_types;
+	shared_ptr<DependencyItem> copied_df;
 
 	~PandasScanFunctionData() override {
-		py::gil_scoped_acquire acquire;
-		pandas_bind_data.clear();
+		try {
+			py::gil_scoped_acquire acquire;
+			pandas_bind_data.clear();
+		} catch (...) { // NOLINT
+		}
 	}
 };
 
@@ -86,9 +91,21 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
 	}
 	auto df_columns = py::list(df.attr("keys")());
 
+	auto &ref = input.ref;
+
+	shared_ptr<DependencyItem> dependency_item;
+	if (ref.external_dependency) {
+		// This was created during the replacement scan if this was a pandas DataFrame (see python_replacement_scan.cpp)
+		dependency_item = ref.external_dependency->GetDependency("copy");
+		if (!dependency_item) {
+			// This was created during the replacement if this was a numpy scan
+			dependency_item = ref.external_dependency->GetDependency("data");
+		}
+	}
+
 	auto get_fun = df.attr("__getitem__");
 	idx_t row_count = py::len(get_fun(df_columns[0]));
-	return make_uniq<PandasScanFunctionData>(df, row_count, std::move(pandas_bind_data), return_types);
+	return make_uniq<PandasScanFunctionData>(df, row_count, std::move(pandas_bind_data), return_types, dependency_item);
 }
 
 unique_ptr<GlobalTableFunctionState> PandasScanFunction::PandasScanInitGlobal(ClientContext &context,
@@ -194,7 +211,7 @@ unique_ptr<NodeStatistics> PandasScanFunction::PandasScanCardinality(ClientConte
 }
 
 py::object PandasScanFunction::PandasReplaceCopiedNames(const py::object &original_df) {
-	auto copy_df = original_df.attr("copy")(false);
+	py::object copy_df = original_df.attr("copy")(false);
 	auto df_columns = py::list(original_df.attr("columns"));
 	vector<string> columns;
 	for (const auto &str : df_columns) {
@@ -202,7 +219,12 @@ py::object PandasScanFunction::PandasReplaceCopiedNames(const py::object &origin
 	}
 	QueryResult::DeduplicateColumns(columns);
 
-	copy_df.attr("columns") = columns;
+	py::list new_columns(columns.size());
+	for (idx_t i = 0; i < columns.size(); i++) {
+		new_columns[i] = std::move(columns[i]);
+	}
+	copy_df.attr("columns") = std::move(new_columns);
+	columns.clear();
 	return copy_df;
 }
 

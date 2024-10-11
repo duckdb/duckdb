@@ -17,7 +17,7 @@ public:
 			}
 			sample = make_uniq<ReservoirSamplePercentage>(allocator, percentage, options.seed);
 		} else {
-			auto size = options.sample_size.GetValue<int64_t>();
+			auto size = NumericCast<idx_t>(options.sample_size.GetValue<int64_t>());
 			if (size == 0) {
 				return;
 			}
@@ -91,8 +91,10 @@ SourceResultType PhysicalReservoirSample::GetData(ExecutionContext &context, Dat
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
-string PhysicalReservoirSample::ParamsToString() const {
-	return options->sample_size.ToString() + (options->is_percentage ? "%" : " rows");
+InsertionOrderPreservingMap<string> PhysicalReservoirSample::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	result["Sample Size"] = options->sample_size.ToString() + (options->is_percentage ? "%" : " rows");
+	return result;
 }
 
 } // namespace duckdb

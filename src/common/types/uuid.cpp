@@ -3,16 +3,16 @@
 
 namespace duckdb {
 
-bool UUID::FromString(string str, hugeint_t &result) {
+bool UUID::FromString(const string &str, hugeint_t &result) {
 	auto hex2char = [](char ch) -> unsigned char {
 		if (ch >= '0' && ch <= '9') {
-			return ch - '0';
+			return UnsafeNumericCast<unsigned char>(ch - '0');
 		}
 		if (ch >= 'a' && ch <= 'f') {
-			return 10 + ch - 'a';
+			return UnsafeNumericCast<unsigned char>(10 + ch - 'a');
 		}
 		if (ch >= 'A' && ch <= 'F') {
-			return 10 + ch - 'A';
+			return UnsafeNumericCast<unsigned char>(10 + ch - 'A');
 		}
 		return 0;
 	};
@@ -23,7 +23,7 @@ bool UUID::FromString(string str, hugeint_t &result) {
 	if (str.empty()) {
 		return false;
 	}
-	int has_braces = 0;
+	idx_t has_braces = 0;
 	if (str.front() == '{') {
 		has_braces = 1;
 	}
@@ -49,19 +49,20 @@ bool UUID::FromString(string str, hugeint_t &result) {
 		count++;
 	}
 	// Flip the first bit to make `order by uuid` same as `order by uuid::varchar`
-	result.upper ^= (uint64_t(1) << 63);
+	result.upper ^= NumericLimits<int64_t>::Minimum();
 	return count == 32;
 }
 
 void UUID::ToString(hugeint_t input, char *buf) {
-	auto byte_to_hex = [](char byte_val, char *buf, idx_t &pos) {
+	auto byte_to_hex = [](uint64_t byte_val, char *buf, idx_t &pos) {
+		D_ASSERT(byte_val <= 0xFF);
 		static char const HEX_DIGITS[] = "0123456789abcdef";
 		buf[pos++] = HEX_DIGITS[(byte_val >> 4) & 0xf];
 		buf[pos++] = HEX_DIGITS[byte_val & 0xf];
 	};
 
 	// Flip back before convert to string
-	int64_t upper = input.upper ^ (uint64_t(1) << 63);
+	int64_t upper = int64_t(uint64_t(input.upper) ^ (uint64_t(1) << 63));
 	idx_t pos = 0;
 	byte_to_hex(upper >> 56 & 0xFF, buf, pos);
 	byte_to_hex(upper >> 48 & 0xFF, buf, pos);

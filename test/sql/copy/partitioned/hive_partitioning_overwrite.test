@@ -1,0 +1,47 @@
+# name: test/sql/copy/partitioned/hive_partitioning_overwrite.test
+# description: Test OVERWRITE option
+# group: [partitioned]
+
+require parquet
+
+# write a partition with value 42
+statement ok
+COPY (SELECT 42 AS part_col, 43 AS value_col) TO '__TEST_DIR__/overwrite_test' (FORMAT PARQUET, PARTITION_BY (part_col));
+
+# writing to the same directory fails now
+statement error
+COPY (SELECT 84 AS part_col, 85 AS value_col) TO '__TEST_DIR__/overwrite_test' (FORMAT PARQUET, PARTITION_BY (part_col));
+----
+Enable OVERWRITE option to overwrite files
+
+# test the overwrite setting
+statement ok
+COPY (SELECT 84 AS part_col, 85 AS value_col) TO '__TEST_DIR__/overwrite_test' (FORMAT PARQUET, PARTITION_BY (part_col), OVERWRITE 1);
+
+# the old file (with part_col=42) should now be removed
+query II
+SELECT * FROM '__TEST_DIR__/overwrite_test/**/*.parquet'
+----
+85	84
+
+# what if the file is a file?
+statement ok
+COPY (SELECT 42 AS part_col) TO '__TEST_DIR__/overwrite_test2' (FORMAT PARQUET);
+
+statement error
+COPY (SELECT 84 AS part_col, 85 AS value_col) TO '__TEST_DIR__/overwrite_test2' (FORMAT PARQUET, PARTITION_BY (part_col));
+----
+it exists and is a file
+
+statement ok
+COPY (SELECT 84 AS part_col, 85 AS value_col) TO '__TEST_DIR__/overwrite_test2' (FORMAT PARQUET, PARTITION_BY (part_col), OVERWRITE 1);
+
+query II
+SELECT * FROM '__TEST_DIR__/overwrite_test2/**/*.parquet'
+----
+85	84
+
+statement error
+COPY (SELECT 84 AS part_col) TO '__TEST_DIR__/overwrite_test' (FORMAT PARQUET, PARTITION_BY (part_col), OVERWRITE 1, OVERWRITE_OR_IGNORE 1);
+----
+OVERWRITE

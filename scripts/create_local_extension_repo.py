@@ -27,7 +27,8 @@ if os.name == 'nt':
     dst_path = dst_path.replace("/", "\\")
 
 with open(duckdb_platform_out, 'r') as f:
-    duckdb_platform = [line.split(None, 1)[0] for line in f][0]
+    lines = f.readlines()
+    duckdb_platform = lines[0]
 
 # Create destination path
 dest_path = os.path.join(dst_path, duckdb_version, duckdb_platform)

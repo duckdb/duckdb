@@ -1,0 +1,44 @@
+# name: test/sql/upsert/upsert_conflict_in_different_chunk.test
+# group: [upsert]
+
+# breaks with constant verification
+require no_vector_verification
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+SET threads=1;
+
+statement ok
+CREATE TABLE create_or_replace(i BIGINT PRIMARY KEY, s VARCHAR);
+
+statement ok
+CREATE TABLE inserts (i BIGINT, s VARCHAR);
+
+statement ok
+INSERT INTO inserts VALUES (1, 'hello'), (1, 'world');
+
+# We cannot perform on-conflict handling in the same chunk. This is a known limitation.
+statement maybe
+INSERT OR REPLACE INTO create_or_replace SELECT i, s FROM inserts;
+----
+PRIMARY KEY or UNIQUE constraint violated
+
+statement ok
+DELETE FROM inserts;
+
+statement ok
+INSERT INTO inserts (SELECT range, 'hello' FROM range(2050) UNION SELECT 1, 'world');
+
+# We can perform on-conflict handling in a different chunk. Appending duplicated values with INSERT OR REPLACE in the
+# same statement/transaction is currently not officially supported (known limitations).
+# We fix it for this case, as we introduced changes in https://github.com/duckdb/duckdb/pull/7407 that would
+# otherwise throw an InternalException in the segment tree: https://github.com/duckdb/duckdb/issues/11924.
+statement ok
+INSERT OR REPLACE INTO create_or_replace SELECT i, s FROM inserts;
+
+query II
+FROM create_or_replace WHERE s != 'hello';
+----
+1	world

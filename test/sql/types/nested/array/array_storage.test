@@ -52,14 +52,20 @@ SELECT * FROM t1 ORDER BY i;
 
 
 query IIII rowsort
-SELECT * FROM t1 as a JOIN t1 as b ON (a.a != b.a) ORDER BY a.i, b.i;
+SELECT * FROM t1 as a JOIN t1 as b ON (a.a IS DISTINCT FROM b.a) ORDER BY a.i, b.i;
 ----
-1	[1, 2, 3]		2	[4, NULL, 6]
-1	[1, 2, 3]		4	[7, 8, 9]
+1	[1, 2, 3]	2	[4, NULL, 6]
+1	[1, 2, 3]	3	NULL
+1	[1, 2, 3]	4	[7, 8, 9]
 2	[4, NULL, 6]	1	[1, 2, 3]
+2	[4, NULL, 6]	3	NULL
 2	[4, NULL, 6]	4	[7, 8, 9]
-4	[7, 8, 9]		1	[1, 2, 3]
-4	[7, 8, 9]		2	[4, NULL, 6]
+3	NULL	1	[1, 2, 3]
+3	NULL	2	[4, NULL, 6]
+3	NULL	4	[7, 8, 9]
+4	[7, 8, 9]	1	[1, 2, 3]
+4	[7, 8, 9]	2	[4, NULL, 6]
+4	[7, 8, 9]	3	NULL
 
 
 query II

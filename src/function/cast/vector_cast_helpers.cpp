@@ -4,7 +4,9 @@ namespace duckdb {
 
 // ------- Helper functions for splitting string nested types  -------
 static bool IsNull(const char *buf, idx_t start_pos, Vector &child, idx_t row_idx) {
-	if (buf[start_pos] == 'N' && buf[start_pos + 1] == 'U' && buf[start_pos + 2] == 'L' && buf[start_pos + 3] == 'L') {
+	if ((buf[start_pos] == 'N' || buf[start_pos] == 'n') && (buf[start_pos + 1] == 'U' || buf[start_pos + 1] == 'u') &&
+	    (buf[start_pos + 2] == 'L' || buf[start_pos + 2] == 'l') &&
+	    (buf[start_pos + 3] == 'L' || buf[start_pos + 3] == 'l')) {
 		FlatVector::SetNull(child, row_idx, true);
 		return true;
 	}
@@ -39,25 +41,26 @@ static bool SkipToCloseQuotes(idx_t &pos, const char *buf, idx_t &len) {
 static bool SkipToClose(idx_t &idx, const char *buf, idx_t &len, idx_t &lvl, char close_bracket) {
 	idx++;
 
+	vector<char> brackets;
+	brackets.push_back(close_bracket);
 	while (idx < len) {
 		if (buf[idx] == '"' || buf[idx] == '\'') {
 			if (!SkipToCloseQuotes(idx, buf, len)) {
 				return false;
 			}
 		} else if (buf[idx] == '{') {
-			if (!SkipToClose(idx, buf, len, lvl, '}')) {
-				return false;
-			}
+			brackets.push_back('}');
 		} else if (buf[idx] == '[') {
-			if (!SkipToClose(idx, buf, len, lvl, ']')) {
-				return false;
-			}
+			brackets.push_back(']');
 			lvl++;
-		} else if (buf[idx] == close_bracket) {
-			if (close_bracket == ']') {
+		} else if (buf[idx] == brackets.back()) {
+			if (buf[idx] == ']') {
 				lvl--;
 			}
-			return true;
+			brackets.pop_back();
+			if (brackets.empty()) {
+				return true;
+			}
 		}
 		idx++;
 	}
@@ -336,7 +339,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 				// empty key name unsupported
 				return false;
 			}
-			string_t found_key(buf + key_start, key_end - key_start);
+			string_t found_key(buf + key_start, UnsafeNumericCast<uint32_t>(key_end - key_start));
 
 			auto it = child_names.find(found_key);
 			if (it == child_names.end()) {

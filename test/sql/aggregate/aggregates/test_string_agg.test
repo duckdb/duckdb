@@ -169,16 +169,13 @@ ORDER BY 1
 /	i,a
 
 # ORDER + FILTER + DISTINCT
-query II
+statement error
 SELECT g, STRING_AGG(DISTINCT y, ',' ORDER BY x DESC) FILTER (WHERE g < 4)
 FROM strings
 GROUP BY g
 ORDER BY 1
 ----
-1	-,/
-2	-,+,/
-3	/
-4	NULL
+Binder Error: In a DISTINCT aggregate, ORDER BY expressions must appear in the argument list
 
 # ORDER BY on a correlated column
 statement ok
@@ -196,3 +193,41 @@ ORDER BY 1 NULLS LAST
 2	1,2
 3	1,2,3
 NULL	NULL
+
+# DISTINCT + ORDER BY on non-volatile functional dependencies
+query I
+SELECT string_agg(DISTINCT CellType, '&' ORDER BY list_position(['L900','L1800','L2100','L2600'], CellType))
+FROM (VALUES 
+	('L900'),
+	('L2600'),
+	('L2100'),
+	('L2100'),
+	('L1800')
+	) AS t(CellType);
+----
+L900&L1800&L2100&L2600
+
+# DISTINCT + ORDER BY on volatile functional dependencies
+statement error
+SELECT first(DISTINCT i ORDER BY random() * i)
+FROM (VALUES 
+	(900),
+	(2600),
+	(2100),
+	(2100),
+	(1800)
+	) AS t(i);
+----
+Binder Error: In a DISTINCT aggregate, ORDER BY expressions must appear in the argument list
+
+statement error
+SELECT first(DISTINCT random() * i ORDER BY i)
+FROM (VALUES 
+	(900),
+	(2600),
+	(2100),
+	(2100),
+	(1800)
+	) AS t(i);
+----
+Binder Error: In a DISTINCT aggregate, ORDER BY expressions must appear in the argument list

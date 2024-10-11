@@ -37,6 +37,15 @@ void DataChunk::Initialize(ClientContext &context, const vector<LogicalType> &ty
 	Initialize(Allocator::Get(context), types, capacity_p);
 }
 
+idx_t DataChunk::GetAllocationSize() const {
+	idx_t total_size = 0;
+	auto cardinality = size();
+	for (auto &vec : data) {
+		total_size += vec.GetAllocationSize(cardinality);
+	}
+	return total_size;
+}
+
 void DataChunk::Initialize(Allocator &allocator, vector<LogicalType>::const_iterator begin,
                            vector<LogicalType>::const_iterator end, idx_t capacity_p) {
 	D_ASSERT(data.empty());                   // can only be initialized once
@@ -134,7 +143,7 @@ void DataChunk::Copy(DataChunk &other, idx_t offset) const {
 void DataChunk::Copy(DataChunk &other, const SelectionVector &sel, const idx_t source_count, const idx_t offset) const {
 	D_ASSERT(ColumnCount() == other.ColumnCount());
 	D_ASSERT(other.size() == 0);
-	D_ASSERT((offset + source_count) <= size());
+	D_ASSERT(source_count <= size());
 
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		D_ASSERT(other.data[i].GetVectorType() == VectorType::FLAT_VECTOR);
@@ -218,7 +227,7 @@ void DataChunk::Flatten() {
 	}
 }
 
-vector<LogicalType> DataChunk::GetTypes() {
+vector<LogicalType> DataChunk::GetTypes() const {
 	vector<LogicalType> types;
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		types.push_back(data[i].GetType());
@@ -238,7 +247,7 @@ void DataChunk::Serialize(Serializer &serializer) const {
 
 	// write the count
 	auto row_count = size();
-	serializer.WriteProperty<sel_t>(100, "rows", row_count);
+	serializer.WriteProperty<sel_t>(100, "rows", NumericCast<sel_t>(row_count));
 
 	// we should never try to serialize empty data chunks
 	auto column_count = ColumnCount();
@@ -273,7 +282,7 @@ void DataChunk::Deserialize(Deserializer &deserializer) {
 
 	// initialize the data chunk
 	D_ASSERT(!types.empty());
-	Initialize(Allocator::DefaultAllocator(), types);
+	Initialize(Allocator::DefaultAllocator(), types, MaxValue<idx_t>(row_count, STANDARD_VECTOR_SIZE));
 	SetCardinality(row_count);
 
 	// read the data
@@ -290,7 +299,7 @@ void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count_p) {
 	}
 }
 
-void DataChunk::Slice(DataChunk &other, const SelectionVector &sel, idx_t count_p, idx_t col_offset) {
+void DataChunk::Slice(const DataChunk &other, const SelectionVector &sel, idx_t count_p, idx_t col_offset) {
 	D_ASSERT(other.ColumnCount() <= col_offset + ColumnCount());
 	this->count = count_p;
 	SelCache merge_cache;

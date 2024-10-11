@@ -9,8 +9,11 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
 
 namespace duckdb {
+
+enum class CatalogType : uint8_t;
 
 enum class ParseInfoType : uint8_t {
 	ALTER_INFO,
@@ -27,7 +30,9 @@ enum class ParseInfoType : uint8_t {
 	TRANSACTION_INFO,
 	VACUUM_INFO,
 	COMMENT_ON_INFO,
-	COMMENT_ON_COLUMN_INFO
+	COMMENT_ON_COLUMN_INFO,
+	COPY_DATABASE_INFO,
+	UPDATE_EXTENSIONS_INFO
 };
 
 struct ParseInfo {
@@ -41,18 +46,20 @@ struct ParseInfo {
 public:
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
+	static string QualifierToString(const string &catalog, const string &schema, const string &name);
+	static string TypeToString(CatalogType type);
 };
 
 } // namespace duckdb

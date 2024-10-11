@@ -28,3 +28,16 @@ a
 
 statement ok
 FROM (SHOW databases) t
+
+query I
+SELECT column_name FROM (DESCRIBE ( DESCRIBE SELECT * FROM (SELECT 32 as a)));
+----
+column_name
+column_type
+null
+key
+default
+extra
+
+statement ok
+(DESCRIBE (values(42))) UNION ALL (DESCRIBE (values(42)));

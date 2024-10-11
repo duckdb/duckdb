@@ -3,6 +3,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/function/cast_rules.hpp"
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
@@ -124,7 +125,7 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 		int32_t secs;
 		int32_t frac;
 		Time::Convert(local_time, hr, mn, secs, frac);
-		int32_t millis = frac / Interval::MICROS_PER_MSEC;
+		int32_t millis = frac / int32_t(Interval::MICROS_PER_MSEC);
 		uint64_t micros = frac % Interval::MICROS_PER_MSEC;
 
 		// Use them to set the time in the time zone
@@ -183,7 +184,8 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 		auto &config = DBConfig::GetConfig(db);
 		auto &casts = config.GetCastFunctions();
 
-		casts.RegisterCastFunction(LogicalType::TIMESTAMP, LogicalType::TIMESTAMP_TZ, BindCastFromNaive);
+		const auto implicit_cost = CastRules::ImplicitCast(LogicalType::TIMESTAMP, LogicalType::TIMESTAMP_TZ);
+		casts.RegisterCastFunction(LogicalType::TIMESTAMP, LogicalType::TIMESTAMP_TZ, BindCastFromNaive, implicit_cost);
 		casts.RegisterCastFunction(LogicalType::TIMESTAMP_MS, LogicalType::TIMESTAMP_TZ, BindCastFromNaive);
 		casts.RegisterCastFunction(LogicalType::TIMESTAMP_NS, LogicalType::TIMESTAMP_TZ, BindCastFromNaive);
 		casts.RegisterCastFunction(LogicalType::TIMESTAMP_S, LogicalType::TIMESTAMP_TZ, BindCastFromNaive);
@@ -197,7 +199,7 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 		}
 
 		// Extract the time zone parts
-		auto micros = SetTime(calendar, instant);
+		auto micros = int32_t(SetTime(calendar, instant));
 		const auto era = ExtractField(calendar, UCAL_ERA);
 		const auto year = ExtractField(calendar, UCAL_YEAR);
 		const auto mm = ExtractField(calendar, UCAL_MONTH) + 1;
@@ -214,7 +216,7 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 		const auto secs = ExtractField(calendar, UCAL_SECOND);
 		const auto millis = ExtractField(calendar, UCAL_MILLISECOND);
 
-		micros += millis * Interval::MICROS_PER_MSEC;
+		micros += millis * int32_t(Interval::MICROS_PER_MSEC);
 		dtime_t local_time = Time::FromTime(hr, mn, secs, micros);
 
 		timestamp_t naive;

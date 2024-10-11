@@ -1,0 +1,11 @@
+# name: test/sql/json/issues/internal_issue2732.test
+# description: Test internal issue 2732 - read_json('data.jsonl', map_inference_threshold=0) crashes
+# group: [issues]
+
+require json
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+select * from read_json('data/json/internal_2732.json', map_inference_threshold=0);

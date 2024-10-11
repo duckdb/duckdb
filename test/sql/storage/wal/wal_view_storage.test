@@ -4,24 +4,23 @@
 
 require skip_reload
 
-
 # load the DB from disk
 load __TEST_DIR__/view_storage.db
 
 statement ok
+set enable_view_dependencies=true
+
+statement ok
 PRAGMA disable_checkpoint_on_shutdown
 
+# Make sure the WAL doesn't get flushed by a checkpoint
 statement ok
 PRAGMA wal_autocheckpoint='1TB';
 
-# create a schema and view
+# Create a schema containing a table and a view
 statement ok
 CREATE SCHEMA test;
-
-statement ok
 CREATE TABLE test.t (a INTEGER, b INTEGER);
-
-statement ok
 CREATE VIEW test.v AS SELECT * FROM test.t;
 
 # read the info from the view
@@ -31,21 +30,20 @@ PRAGMA table_info('test.v')
 0	a	INTEGER	0	NULL	0
 1	b	INTEGER	0	NULL	0
 
-# drop the table the view is based on
-statement ok
-DROP TABLE test.t
+# Try to drop the table
+statement error
+drop table test.t;
+----
+view "v" depends on table "t".
 
-# we can still query the types and column names
-query IIIIII
+# Now with CASCADE
+statement ok
+drop table test.t cascade;
+
+statement error
 PRAGMA table_info('test.v')
 ----
-0	a	INTEGER	0	NULL	0
-1	b	INTEGER	0	NULL	0
-
-# but querying the view fails
-statement error
-SELECT * FROM test.v
-----
+Catalog Error: Table with name v does not exist!
 
 statement ok
 CREATE VIEW test.v2 AS SELECT 42
@@ -55,16 +53,14 @@ DROP VIEW test.v2
 
 loop i 0 2
 
-# restart the system
+# restart the system, causing the database to restore from the WAL
 restart
 
-# the view still exists, but the table does not
-# we can check the types, but not query it
-query IIIIII
+# the view no longer exists
+statement error
 PRAGMA table_info('test.v')
 ----
-0	a	INTEGER	0	NULL	0
-1	b	INTEGER	0	NULL	0
+Catalog Error: Table with name v does not exist!
 
 statement error
 SELECT * FROM test.v
@@ -77,8 +73,14 @@ CREATE TABLE test.t (a INTEGER, b INTEGER);
 statement ok
 SELECT * FROM test.t
 
-statement ok
+# We created the table, but the view still doesn't exist
+statement error
 SELECT * FROM test.v
+----
+Catalog Error: Table with name v does not exist!
+
+statement ok
+CREATE VIEW test.v AS SELECT * FROM test.t;
 
 query IIIIII
 PRAGMA table_info('test.v')
@@ -86,9 +88,15 @@ PRAGMA table_info('test.v')
 0	a	INTEGER	0	NULL	0
 1	b	INTEGER	0	NULL	0
 
-# drop the table again
+# Try to drop the table
+statement error
+drop table test.t;
+----
+view "v" depends on table "t".
+
+# Now with CASCADE
 statement ok
-DROP TABLE test.t
+drop table test.t cascade;
 
 statement error
 SELECT * FROM test.v2

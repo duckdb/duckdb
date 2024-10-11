@@ -1,0 +1,22 @@
+# name: test/sql/pg_catalog/pg_privilege.test
+# description: Test Postgres compatibility privilege functions
+# group: [pg_catalog]
+
+foreach function has_any_column_privilege has_database_privilege has_foreign_data_wrapper_privilege has_function_privilege has_language_privilege has_schema_privilege has_sequence_privilege has_server_privilege has_table_privilege has_tablespace_privilege
+
+query I
+SELECT ${function}('main', 'test')
+----
+true
+
+query I
+SELECT ${function}(current_user, 'main', 'test')
+----
+true
+
+endloop
+
+query II
+SELECT has_column_privilege('main', 'test', 'col'), has_column_privilege(current_user, 'main', 'test', 'col')
+----
+true	true

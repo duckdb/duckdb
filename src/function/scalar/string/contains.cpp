@@ -3,7 +3,8 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-
+#include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/core_functions/scalar/map_functions.hpp"
 namespace duckdb {
 
 template <class UNSIGNED, int NEEDLE_SIZE>
@@ -22,7 +23,7 @@ static idx_t ContainsUnaligned(const unsigned char *haystack, idx_t haystack_siz
 	UNSIGNED haystack_entry = 0;
 	const UNSIGNED start = (sizeof(UNSIGNED) * 8) - 8;
 	const UNSIGNED shift = (sizeof(UNSIGNED) - NEEDLE_SIZE) * 8;
-	for (int i = 0; i < NEEDLE_SIZE; i++) {
+	for (idx_t i = 0; i < NEEDLE_SIZE; i++) {
 		needle_entry |= UNSIGNED(needle[i]) << UNSIGNED(start - i * 8);
 		haystack_entry |= UNSIGNED(haystack[i]) << UNSIGNED(start - i * 8);
 	}
@@ -106,7 +107,7 @@ idx_t ContainsFun::Find(const unsigned char *haystack, idx_t haystack_size, cons
 	if (location == nullptr) {
 		return DConstants::INVALID_INDEX;
 	}
-	idx_t base_offset = const_uchar_ptr_cast(location) - haystack;
+	idx_t base_offset = UnsafeNumericCast<idx_t>(const_uchar_ptr_cast(location) - haystack);
 	haystack_size -= base_offset;
 	haystack = const_uchar_ptr_cast(location);
 	// switch algorithm depending on needle size
@@ -151,15 +152,25 @@ struct ContainsOperator {
 	}
 };
 
-ScalarFunction ContainsFun::GetFunction() {
-	return ScalarFunction("contains",                                   // name of the function
-	                      {LogicalType::VARCHAR, LogicalType::VARCHAR}, // argument list
-	                      LogicalType::BOOLEAN,                         // return type
-	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, ContainsOperator>);
+ScalarFunctionSet ContainsFun::GetFunctions() {
+	auto string_fun = GetStringContains();
+	auto list_fun = ListContainsFun::GetFunction();
+	auto map_fun = MapContainsFun::GetFunction();
+	ScalarFunctionSet set("contains");
+	set.AddFunction(string_fun);
+	set.AddFunction(list_fun);
+	set.AddFunction(map_fun);
+	return set;
+}
+
+ScalarFunction ContainsFun::GetStringContains() {
+	ScalarFunction string_fun("contains", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	                          ScalarFunction::BinaryFunction<string_t, string_t, bool, ContainsOperator>);
+	return string_fun;
 }
 
 void ContainsFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetFunction());
+	set.AddFunction(GetFunctions());
 }
 
 } // namespace duckdb

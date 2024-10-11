@@ -13,7 +13,9 @@ string ShowRef::ToString() const {
 		result += "DESCRIBE ";
 	}
 	if (query) {
+		result += "(";
 		result += query->ToString();
+		result += ")";
 	} else if (table_name != "__show_tables_expanded") {
 		result += table_name;
 	}

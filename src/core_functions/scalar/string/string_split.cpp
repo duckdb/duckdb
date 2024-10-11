@@ -24,7 +24,8 @@ struct StringSplitInput {
 			ListVector::SetListSize(result_list, offset + list_idx);
 			ListVector::Reserve(result_list, ListVector::GetListCapacity(result_list) * 2);
 		}
-		FlatVector::GetData<string_t>(result_child)[list_entry] = string_t(split_data, split_size);
+		FlatVector::GetData<string_t>(result_child)[list_entry] =
+		    string_t(split_data, UnsafeNumericCast<uint32_t>(split_size));
 	}
 };
 
@@ -50,7 +51,7 @@ struct ConstantRegexpStringSplit {
 			return DConstants::INVALID_INDEX;
 		}
 		match_size = match.size();
-		return match.data() - input_data;
+		return UnsafeNumericCast<idx_t>(match.data() - input_data);
 	}
 };
 

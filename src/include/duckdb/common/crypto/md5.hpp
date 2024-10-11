@@ -41,7 +41,6 @@ public:
 
 private:
 	void MD5Update(const_data_ptr_t data, idx_t len);
-	static void DigestToBase16(const_data_ptr_t digest, char *zBuf);
 
 	uint32_t buf[4];
 	uint32_t bits[2];

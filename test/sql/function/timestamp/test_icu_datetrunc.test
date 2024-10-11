@@ -238,3 +238,11 @@ select date_trunc('minute', '2022-10-30 02:17:00+02'::TIMESTAMPTZ);
 ----
 2022-10-30 02:17:00+02
 
+# Comparisons to DATE
+statement ok
+set time zone 'UTC';
+
+query I
+select date_trunc('day', '2024-05-06 16:09:28+05:00'::timestamptz) >= '2024-05-06 17:19:18+05:20'::date as r
+----
+True

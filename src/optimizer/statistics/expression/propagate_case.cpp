@@ -4,7 +4,7 @@
 namespace duckdb {
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCaseExpression &bound_case,
-                                                                     unique_ptr<Expression> *expr_ptr) {
+                                                                     unique_ptr<Expression> &expr_ptr) {
 	// propagate in all the children
 	auto result_stats = PropagateExpression(bound_case.else_expr);
 	for (auto &case_check : bound_case.case_checks) {

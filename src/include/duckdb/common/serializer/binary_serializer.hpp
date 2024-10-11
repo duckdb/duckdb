@@ -8,18 +8,21 @@
 
 #pragma once
 
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/serializer/encoding_util.hpp"
+#include "duckdb/common/serializer/serialization_data.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
 
 namespace duckdb {
 
 class BinarySerializer : public Serializer {
 public:
-	explicit BinarySerializer(WriteStream &stream, bool serialize_default_values_p = false) : stream(stream) {
-		serialize_default_values = serialize_default_values_p;
-		serialize_enum_as_string = false;
+	explicit BinarySerializer(WriteStream &stream, SerializationOptions options_p = SerializationOptions())
+	    : stream(stream) {
+		options = std::move(options_p);
+		// Override the value set by the passed in SerializationOptions
+		options.serialize_enum_as_string = false;
 	}
 
 private:
@@ -44,7 +47,7 @@ private:
 
 	template <class T>
 	void VarIntEncode(T value) {
-		uint8_t buffer[16];
+		uint8_t buffer[16] = {};
 		auto write_size = EncodingUtil::EncodeLEB128<T>(buffer, value);
 		D_ASSERT(write_size <= sizeof(buffer));
 		WriteData(buffer, write_size);
@@ -52,8 +55,8 @@ private:
 
 public:
 	template <class T>
-	static void Serialize(const T &value, WriteStream &stream, bool serialize_default_values = false) {
-		BinarySerializer serializer(stream, serialize_default_values);
+	static void Serialize(const T &value, WriteStream &stream, SerializationOptions options = SerializationOptions()) {
+		BinarySerializer serializer(stream, std::move(options));
 		serializer.OnObjectBegin();
 		value.Serialize(serializer);
 		serializer.OnObjectEnd();
@@ -108,6 +111,9 @@ protected:
 private:
 	vector<DebugState> debug_stack;
 	WriteStream &stream;
+
+protected:
+	duckdb::SerializationData data;
 };
 
 } // namespace duckdb

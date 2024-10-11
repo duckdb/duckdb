@@ -1,0 +1,29 @@
+# name: test/optimizer/joins/pushdown_semi_anti.test
+# description: Verify semi anti joins are pushed down
+# group: [joins]
+
+statement ok
+create table tbl1 as select range a from range(10000);
+
+statement ok
+create table tbl2 as select range b from range(1000);
+
+statement ok
+create table tbl3 as select range c from range(100);
+
+statement ok
+set disabled_optimizers='statistics_propagation';
+
+query II
+EXPLAIN select * from tbl1, tbl2 where b in (select * from tbl3) and tbl1.a = tbl2.b;
+----
+physical_plan	<REGEX>:.*INNER.*SEMI.*
+
+statement ok
+set disabled_optimizers='statistics_propagation,join_order';
+
+# make sure non-optimized plan has semi on top of the inner
+query II
+EXPLAIN select * from tbl1, tbl2 where b in (select * from tbl3) and tbl1.a = tbl2.b;
+----
+physical_plan	<REGEX>:.*SEMI.*INNER.*

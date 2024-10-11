@@ -65,11 +65,18 @@ void ExtractParameters(LambdaExpression &expr, vector<string> &column_names, vec
 BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth, const LogicalType &list_child_type,
                                             optional_ptr<bind_lambda_function_t> bind_lambda_function) {
 
-	// this is for binding JSON
+	// This is not a lambda expression, but the JSON arrow operator.
 	if (!bind_lambda_function) {
-		auto lhs_expr = expr.lhs->Copy();
-		OperatorExpression arrow_expr(ExpressionType::ARROW, std::move(lhs_expr), expr.expr->Copy());
-		return BindExpression(arrow_expr, depth);
+		OperatorExpression arrow_expr(ExpressionType::ARROW, std::move(expr.lhs), std::move(expr.expr));
+		auto bind_result = BindExpression(arrow_expr, depth);
+
+		// The arrow_expr now contains bound nodes. We move these into the original expression.
+		if (bind_result.HasError()) {
+			D_ASSERT(arrow_expr.children.size() == 2);
+			expr.lhs = std::move(arrow_expr.children[0]);
+			expr.expr = std::move(arrow_expr.children[1]);
+		}
+		return bind_result;
 	}
 
 	// extract and verify lambda parameters to create dummy columns
@@ -171,7 +178,7 @@ void ExpressionBinder::CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_
                                             const LogicalType &list_child_type) {
 
 	if (expr->expression_class == ExpressionClass::BOUND_SUBQUERY) {
-		throw InvalidInputException("Subqueries are not supported in lambda expressions!");
+		throw BinderException("subqueries in lambda expressions are not supported");
 	}
 
 	// these are bound depth-first
@@ -187,6 +194,12 @@ void ExpressionBinder::CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_
 	if (expr->expression_class == ExpressionClass::BOUND_COLUMN_REF ||
 	    expr->expression_class == ExpressionClass::BOUND_PARAMETER ||
 	    expr->expression_class == ExpressionClass::BOUND_LAMBDA_REF) {
+
+		if (expr->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+			// Search for UNNEST.
+			auto &column_binding = expr->Cast<BoundColumnRefExpression>().binding;
+			ThrowIfUnnestInLambda(column_binding);
+		}
 
 		// move the expr because we are going to replace it
 		auto original = std::move(expr);

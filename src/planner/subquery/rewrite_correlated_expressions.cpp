@@ -9,6 +9,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
+#include "duckdb/planner/tableref/bound_subqueryref.hpp"
 
 namespace duckdb {
 
@@ -69,6 +70,20 @@ unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundColumnRef
 	return nullptr;
 }
 
+//! Helper class used to recursively rewrite correlated expressions within nested subqueries.
+class RewriteCorrelatedRecursive : public BoundNodeVisitor {
+public:
+	RewriteCorrelatedRecursive(ColumnBinding base_binding, column_binding_map_t<idx_t> &correlated_map);
+
+	void VisitBoundTableRef(BoundTableRef &ref) override;
+	void VisitExpression(unique_ptr<Expression> &expression) override;
+
+	void RewriteCorrelatedSubquery(Binder &binder, BoundQueryNode &subquery);
+
+	ColumnBinding base_binding;
+	column_binding_map_t<idx_t> &correlated_map;
+};
+
 unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundSubqueryExpression &expr,
                                                                   unique_ptr<Expression> *expr_ptr) {
 	if (!expr.IsCorrelated()) {
@@ -76,19 +91,19 @@ unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundSubqueryE
 	}
 	// subquery detected within this subquery
 	// recursively rewrite it using the RewriteCorrelatedRecursive class
-	RewriteCorrelatedRecursive rewrite(expr, base_binding, correlated_map);
-	rewrite.RewriteCorrelatedSubquery(expr);
+	RewriteCorrelatedRecursive rewrite(base_binding, correlated_map);
+	rewrite.RewriteCorrelatedSubquery(*expr.binder, *expr.subquery);
 	return nullptr;
 }
 
-RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelatedRecursive(
-    BoundSubqueryExpression &parent, ColumnBinding base_binding, column_binding_map_t<idx_t> &correlated_map)
-    : parent(parent), base_binding(base_binding), correlated_map(correlated_map) {
+RewriteCorrelatedRecursive::RewriteCorrelatedRecursive(ColumnBinding base_binding,
+                                                       column_binding_map_t<idx_t> &correlated_map)
+    : base_binding(base_binding), correlated_map(correlated_map) {
 }
 
-void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteJoinRefRecursive(BoundTableRef &ref) {
-	// recursively rewrite bindings in the correlated columns for the table ref and all the children
+void RewriteCorrelatedRecursive::VisitBoundTableRef(BoundTableRef &ref) {
 	if (ref.type == TableReferenceType::JOIN) {
+		// rewrite correlated columns in child joins
 		auto &bound_join = ref.Cast<BoundJoinRef>();
 		for (auto &corr : bound_join.correlated_columns) {
 			auto entry = correlated_map.find(corr.binding);
@@ -96,39 +111,30 @@ void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteJoinRefRec
 				corr.binding = ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);
 			}
 		}
-		RewriteJoinRefRecursive(*bound_join.left);
-		RewriteJoinRefRecursive(*bound_join.right);
+	} else if (ref.type == TableReferenceType::SUBQUERY) {
+		auto &subquery = ref.Cast<BoundSubqueryRef>();
+		RewriteCorrelatedSubquery(*subquery.binder, *subquery.subquery);
+		return;
 	}
+	// visit the children of the table ref
+	BoundNodeVisitor::VisitBoundTableRef(ref);
 }
 
-void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelatedSubquery(
-    BoundSubqueryExpression &expr) {
+void RewriteCorrelatedRecursive::RewriteCorrelatedSubquery(Binder &binder, BoundQueryNode &subquery) {
 	// rewrite the binding in the correlated list of the subquery)
-	for (auto &corr : expr.binder->correlated_columns) {
+	for (auto &corr : binder.correlated_columns) {
 		auto entry = correlated_map.find(corr.binding);
 		if (entry != correlated_map.end()) {
 			corr.binding = ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);
 		}
 	}
-	// TODO: Cleanup and find a better way to do this
-	auto &node = *expr.subquery;
-	if (node.type == QueryNodeType::SELECT_NODE) {
-		// Found an unplanned select node, need to update column bindings correlated columns in the from tables
-		auto &bound_select = node.Cast<BoundSelectNode>();
-		if (bound_select.from_table) {
-			BoundTableRef &table_ref = *bound_select.from_table;
-			RewriteJoinRefRecursive(table_ref);
-		}
-	}
-	// now rewrite any correlated BoundColumnRef expressions inside the subquery
-	ExpressionIterator::EnumerateQueryNodeChildren(*expr.subquery,
-	                                               [&](Expression &child) { RewriteCorrelatedExpressions(child); });
+	VisitBoundQueryNode(subquery);
 }
 
-void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelatedExpressions(Expression &child) {
-	if (child.type == ExpressionType::BOUND_COLUMN_REF) {
+void RewriteCorrelatedRecursive::VisitExpression(unique_ptr<Expression> &expression) {
+	if (expression->type == ExpressionType::BOUND_COLUMN_REF) {
 		// bound column reference
-		auto &bound_colref = child.Cast<BoundColumnRefExpression>();
+		auto &bound_colref = expression->Cast<BoundColumnRefExpression>();
 		if (bound_colref.depth == 0) {
 			// not a correlated column, ignore
 			return;
@@ -142,13 +148,13 @@ void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelated
 			bound_colref.binding = ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);
 			bound_colref.depth--;
 		}
-	} else if (child.type == ExpressionType::SUBQUERY) {
+	} else if (expression->type == ExpressionType::SUBQUERY) {
 		// we encountered another subquery: rewrite recursively
-		D_ASSERT(child.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY);
-		auto &bound_subquery = child.Cast<BoundSubqueryExpression>();
-		RewriteCorrelatedRecursive rewrite(bound_subquery, base_binding, correlated_map);
-		rewrite.RewriteCorrelatedSubquery(bound_subquery);
+		auto &bound_subquery = expression->Cast<BoundSubqueryExpression>();
+		RewriteCorrelatedSubquery(*bound_subquery.binder, *bound_subquery.subquery);
 	}
+	// recurse into the children of this subquery
+	BoundNodeVisitor::VisitExpression(expression);
 }
 
 RewriteCountAggregates::RewriteCountAggregates(column_binding_map_t<idx_t> &replacement_map)

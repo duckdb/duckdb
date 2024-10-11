@@ -1,0 +1,17 @@
+# name: test/sql/catalog/sequence/test_duckdb_sequences.test
+# group: [sequence]
+
+require noforcestorage
+
+statement ok
+create sequence my_seq;
+
+query I
+select nextval('my_seq');
+----
+1
+
+query I
+select last_value from duckdb_sequences();
+----
+1

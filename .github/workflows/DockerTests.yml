@@ -1,0 +1,59 @@
+name: Docker tests
+on:
+  workflow_call:
+    inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
+      skip_tests:
+        type: string
+  workflow_dispatch:
+    inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
+      skip_tests:
+        type: string
+  repository_dispatch:
+  push:
+    branches:
+      - '**'
+      - '!main'
+      - '!feature'
+    paths-ignore:
+      - '**'
+      - '!.github/workflows/DockerTests.yml'
+      - '!scripts/test_docker_images.sh'
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+    paths-ignore:
+      - '**'
+      - '!.github/workflows/DockerTests.yml'
+      - '!scripts/test_docker_images.sh'
+
+concurrency:
+  group: docker-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
+  cancel-in-progress: true
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
+
+jobs:
+ linux-x64-docker:
+    # Builds binaries for linux_amd64_gcc4
+    name: Docker tests on Linux (x64)
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
+
+    - name: Build
+      shell: bash
+      run: |
+        ./scripts/test_docker_images.sh

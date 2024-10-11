@@ -31,9 +31,11 @@ struct ZSTDStorage {
 // Analyze
 //===--------------------------------------------------------------------===//
 struct ZSTDAnalyzeState : public AnalyzeState {
-	idx_t total_size = 0;
-	idx_t count = 0;
+public:
+	ZSTDAnalyzeState(CompressionInfo &info) : AnalyzeState(info) {
+	}
 
+public:
 	inline void AppendEmptyString() {
 		count++;
 	}
@@ -43,10 +45,15 @@ struct ZSTDAnalyzeState : public AnalyzeState {
 		total_size += string_size;
 		count++;
 	}
+
+public:
+	idx_t total_size = 0;
+	idx_t count = 0;
 };
 
 unique_ptr<AnalyzeState> ZSTDStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_uniq<ZSTDAnalyzeState>();
+	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
+	return make_uniq<ZSTDAnalyzeState>(info);
 }
 
 // Determines wether compression is possible and calculates sizes for the FinalAnalyze
@@ -84,7 +91,7 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	// we only use zstd if it is at least 1.3 times better than the alternative
 	auto zstd_penalty_factor = 1.3;
 
-	return (total_offset_size + string_data_size) * zstd_penalty_factor;
+	return LossyNumericCast<idx_t>((total_offset_size + string_data_size) * zstd_penalty_factor);
 }
 
 //===--------------------------------------------------------------------===//
@@ -102,11 +109,10 @@ class ZSTDCompressionState : public CompressionState {
 public:
 	static constexpr int COMPRESSION_LEVEL = 3;
 
-	explicit ZSTDCompressionState(ColumnDataCheckpointer &checkpointer)
-	    : checkpointer(checkpointer),
-		function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ZSTD)),
-		heap(BufferAllocator::Get(checkpointer.GetDatabase())),
-		zstd_cdict(nullptr) {
+	explicit ZSTDCompressionState(ColumnDataCheckpointer &checkpointer, const CompressionInfo &info)
+	    : CompressionState(info), checkpointer(checkpointer),
+	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ZSTD)), zstd_cdict(nullptr),
+	      heap(BufferAllocator::Get(checkpointer.GetDatabase())) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 		zstd_context = duckdb_zstd::ZSTD_createCCtx();
 	}
@@ -123,7 +129,6 @@ public:
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle current_handle;
 	// ZSTDDictionary current_dictionary
-
 
 	duckdb_zstd::ZSTD_CCtx *zstd_context;
 	duckdb_zstd::ZSTD_CDict *zstd_cdict;
@@ -148,9 +153,7 @@ public:
 
 		size_t dict_size = duckdb_zstd::ZSTD_sizeof_CDict(zstd_cdict);
 
-		dictionary_metadata_t meta {
-			.size = dict_size
-		};
+		dictionary_metadata_t meta {.size = dict_size};
 
 		// write meta & dictionary
 		current_data_ptr = data_ptr_cast(memcpy(current_data_ptr, &meta, sizeof(dictionary_metadata_t)));
@@ -160,7 +163,8 @@ public:
 	void CreateEmptySegment(idx_t row_start) {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
+		auto compressed_segment =
+		    ColumnSegment::CreateTransientSegment(db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
 		current_segment = std::move(compressed_segment);
 		current_segment->function = function;
 
@@ -176,7 +180,7 @@ public:
 	}
 
 	void FlushSegment(idx_t segment_size) {
-		auto& state = checkpointer.GetCheckpointState();
+		auto &state = checkpointer.GetCheckpointState();
 		state.FlushSegment(std::move(current_segment), segment_size);
 	}
 
@@ -215,17 +219,16 @@ public:
 		if (!zstd_cdict) {
 			CreateCompressionDictionary(str.GetData(), str.GetSize());
 		}
-		
+
 		// TODO: check space
 		size_t dst_capacity = SIZE_T_MAX;
 
 		auto data_dst = current_data_ptr + sizeof(string_metadata_t);
-		size_t compressed_size = duckdb_zstd::ZSTD_compress_usingCDict(zstd_context, data_dst, dst_capacity, str.GetData(), str.GetSize(), zstd_cdict);
-		
+		size_t compressed_size = duckdb_zstd::ZSTD_compress_usingCDict(zstd_context, data_dst, dst_capacity,
+		                                                               str.GetData(), str.GetSize(), zstd_cdict);
+
 		// Create metadata
-		string_metadata_t meta {
-			.size = compressed_size
-		};
+		string_metadata_t meta {.size = compressed_size};
 
 		// Write metadata
 		memcpy(current_data_ptr, &meta, sizeof(string_metadata_t));
@@ -233,13 +236,13 @@ public:
 		// move data ptr
 		current_data_ptr = data_dst + compressed_size;
 		total_data_size += sizeof(string_metadata_t) + compressed_size;
-
 	}
 };
 
 unique_ptr<CompressionState> ZSTDStorage::InitCompression(ColumnDataCheckpointer &checkpointer,
                                                           unique_ptr<AnalyzeState> analyze_state_p) {
-	return make_uniq<ZSTDCompressionState>(checkpointer);
+	auto &analyze_state = analyze_state_p->Cast<ZSTDAnalyzeState>();
+	return make_uniq<ZSTDCompressionState>(checkpointer, analyze_state.info);
 }
 
 void ZSTDStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
@@ -276,7 +279,6 @@ struct ZSTDScanState : public StringScanState {
 
 	data_ptr_t current_data_ptr;
 };
-
 
 unique_ptr<SegmentScanState> ZSTDStorage::StringInitScan(ColumnSegment &segment) {
 	auto result = make_uniq<ZSTDScanState>();
@@ -326,13 +328,14 @@ void ZSTDStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx
 	char buffer[1024];
 
 	for (idx_t i = 0; i < scan_count; i++) {
-		
+
 		// get metadata
-		string_metadata_t *meta = reinterpret_cast<string_metadata_t*>(src);
-		size_t uncompressed_size = duckdb_zstd::ZSTD_decompress_usingDDict(zstd_context, buffer, 1024, src + sizeof(string_metadata_t), meta->size, scan_state.zstd_ddict);
+		string_metadata_t *meta = reinterpret_cast<string_metadata_t *>(src);
+		size_t uncompressed_size = duckdb_zstd::ZSTD_decompress_usingDDict(
+		    zstd_context, buffer, 1024, src + sizeof(string_metadata_t), meta->size, scan_state.zstd_ddict);
 
 		// ALLOCATE STRING?
-		result_data[i] = string_t(buffer, uncompressed_size);
+		result_data[i] = string_t(buffer, UnsafeNumericCast<uint32_t>(uncompressed_size));
 	}
 
 	duckdb_zstd::ZSTD_freeDCtx(zstd_context);
@@ -351,11 +354,11 @@ void ZSTDStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 //===--------------------------------------------------------------------===//
 CompressionFunction ZSTDFun::GetFunction(PhysicalType data_type) {
 	D_ASSERT(data_type == PhysicalType::VARCHAR);
-	return CompressionFunction(
-	    CompressionType::COMPRESSION_ZSTD, data_type, ZSTDStorage::StringInitAnalyze, ZSTDStorage::StringAnalyze,
-	    ZSTDStorage::StringFinalAnalyze, ZSTDStorage::InitCompression, ZSTDStorage::Compress,
-	    ZSTDStorage::FinalizeCompress, ZSTDStorage::StringInitScan, ZSTDStorage::StringScan,
-	    ZSTDStorage::StringScanPartial, ZSTDStorage::StringFetchRow, UncompressedFunctions::EmptySkip);
+	return CompressionFunction(CompressionType::COMPRESSION_ZSTD, data_type, ZSTDStorage::StringInitAnalyze,
+	                           ZSTDStorage::StringAnalyze, ZSTDStorage::StringFinalAnalyze,
+	                           ZSTDStorage::InitCompression, ZSTDStorage::Compress, ZSTDStorage::FinalizeCompress,
+	                           ZSTDStorage::StringInitScan, ZSTDStorage::StringScan, ZSTDStorage::StringScanPartial,
+	                           ZSTDStorage::StringFetchRow, UncompressedFunctions::EmptySkip);
 }
 
 bool ZSTDFun::TypeIsSupported(PhysicalType type) {

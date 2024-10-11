@@ -18,11 +18,11 @@ require-env DUCKDB_S3_ENDPOINT
 
 require-env DUCKDB_S3_USE_SSL
 
-require-env S3_ATTACH_DB
+require-env S3_ATTACH_DB_PRESIGNED_URL
 
 # ATTACH a DuckDB database over HTTPFS
 statement ok
-ATTACH '${S3_ATTACH_DB}' AS db (READONLY 1);
+ATTACH '${S3_ATTACH_DB_PRESIGNED_URL}' AS db (READONLY 1);
 
 query IIIII
 SELECT * FROM db.integral_values
@@ -33,7 +33,7 @@ NULL	NULL	NULL	NULL	NULL
 statement error
 CREATE TABLE db.integers(i INTEGER);
 ----
-Writing to HTTP files not implemented
+read-only
 
 statement ok
 SELECT * FROM db.all_types

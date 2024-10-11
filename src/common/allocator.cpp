@@ -3,6 +3,9 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 #include <cstdint>
 
@@ -15,13 +18,18 @@
 #endif
 
 #ifndef USE_JEMALLOC
-#if defined(DUCKDB_EXTENSION_JEMALLOC_LINKED) && DUCKDB_EXTENSION_JEMALLOC_LINKED && !defined(WIN32)
+#if defined(DUCKDB_EXTENSION_JEMALLOC_LINKED) && DUCKDB_EXTENSION_JEMALLOC_LINKED && !defined(WIN32) &&                \
+    INTPTR_MAX == INT64_MAX
 #define USE_JEMALLOC
 #endif
 #endif
 
 #ifdef USE_JEMALLOC
 #include "jemalloc_extension.hpp"
+#endif
+
+#ifdef __GLIBC__
+#include <malloc.h>
 #endif
 
 namespace duckdb {
@@ -95,15 +103,9 @@ PrivateAllocatorData::~PrivateAllocatorData() {
 //===--------------------------------------------------------------------===//
 // Allocator
 //===--------------------------------------------------------------------===//
-#ifdef USE_JEMALLOC
-Allocator::Allocator()
-    : Allocator(JemallocExtension::Allocate, JemallocExtension::Free, JemallocExtension::Reallocate, nullptr) {
-}
-#else
 Allocator::Allocator()
     : Allocator(Allocator::DefaultAllocate, Allocator::DefaultFree, Allocator::DefaultReallocate, nullptr) {
 }
-#endif
 
 Allocator::Allocator(allocate_function_ptr_t allocate_function_p, free_function_ptr_t free_function_p,
                      reallocate_function_ptr_t reallocate_function_p, unique_ptr<PrivateAllocatorData> private_data_p)
@@ -133,10 +135,12 @@ data_ptr_t Allocator::AllocateData(idx_t size) {
 	auto result = allocate_function(private_data.get(), size);
 #ifdef DEBUG
 	D_ASSERT(private_data);
-	private_data->debug_info->AllocateData(result, size);
+	if (private_data->free_type != AllocatorFreeType::DOES_NOT_REQUIRE_FREE) {
+		private_data->debug_info->AllocateData(result, size);
+	}
 #endif
 	if (!result) {
-		throw OutOfMemoryException("Failed to allocate block of %llu bytes", size);
+		throw OutOfMemoryException("Failed to allocate block of %llu bytes (bad allocation)", size);
 	}
 	return result;
 }
@@ -148,7 +152,9 @@ void Allocator::FreeData(data_ptr_t pointer, idx_t size) {
 	D_ASSERT(size > 0);
 #ifdef DEBUG
 	D_ASSERT(private_data);
-	private_data->debug_info->FreeData(pointer, size);
+	if (private_data->free_type != AllocatorFreeType::DOES_NOT_REQUIRE_FREE) {
+		private_data->debug_info->FreeData(pointer, size);
+	}
 #endif
 	free_function(private_data.get(), pointer, size);
 }
@@ -166,16 +172,47 @@ data_ptr_t Allocator::ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t s
 	auto new_pointer = reallocate_function(private_data.get(), pointer, old_size, size);
 #ifdef DEBUG
 	D_ASSERT(private_data);
-	private_data->debug_info->ReallocateData(pointer, new_pointer, old_size, size);
+	if (private_data->free_type != AllocatorFreeType::DOES_NOT_REQUIRE_FREE) {
+		private_data->debug_info->ReallocateData(pointer, new_pointer, old_size, size);
+	}
 #endif
 	if (!new_pointer) {
-		throw OutOfMemoryException("Failed to re-allocate block of %llu bytes", size);
+		throw OutOfMemoryException("Failed to re-allocate block of %llu bytes (bad allocation)", size);
 	}
 	return new_pointer;
 }
 
+data_ptr_t Allocator::DefaultAllocate(PrivateAllocatorData *private_data, idx_t size) {
+#ifdef USE_JEMALLOC
+	return JemallocExtension::Allocate(private_data, size);
+#else
+	auto default_allocate_result = malloc(size);
+	if (!default_allocate_result) {
+		throw std::bad_alloc();
+	}
+	return data_ptr_cast(default_allocate_result);
+#endif
+}
+
+void Allocator::DefaultFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
+#ifdef USE_JEMALLOC
+	JemallocExtension::Free(private_data, pointer, size);
+#else
+	free(pointer);
+#endif
+}
+
+data_ptr_t Allocator::DefaultReallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
+                                        idx_t size) {
+#ifdef USE_JEMALLOC
+	return JemallocExtension::Reallocate(private_data, pointer, old_size, size);
+#else
+	return data_ptr_cast(realloc(pointer, size));
+#endif
+}
+
 shared_ptr<Allocator> &Allocator::DefaultAllocatorReference() {
-	static shared_ptr<Allocator> DEFAULT_ALLOCATOR = make_shared<Allocator>();
+	static shared_ptr<Allocator> DEFAULT_ALLOCATOR = make_shared_ptr<Allocator>();
 	return DEFAULT_ALLOCATOR;
 }
 
@@ -183,9 +220,67 @@ Allocator &Allocator::DefaultAllocator() {
 	return *DefaultAllocatorReference();
 }
 
-void Allocator::ThreadFlush(idx_t threshold) {
+optional_idx Allocator::DecayDelay() {
 #ifdef USE_JEMALLOC
-	JemallocExtension::ThreadFlush(threshold);
+	return NumericCast<idx_t>(JemallocExtension::DecayDelay());
+#else
+	return optional_idx();
+#endif
+}
+
+bool Allocator::SupportsFlush() {
+#if defined(USE_JEMALLOC) || defined(__GLIBC__)
+	return true;
+#else
+	return false;
+#endif
+}
+
+static void MallocTrim(idx_t pad) {
+#ifdef __GLIBC__
+	static constexpr int64_t TRIM_INTERVAL_MS = 100;
+	static atomic<int64_t> LAST_TRIM_TIMESTAMP_MS {0};
+
+	int64_t last_trim_timestamp_ms = LAST_TRIM_TIMESTAMP_MS.load();
+	const int64_t current_timestamp_ms = Timestamp::GetEpochMs(Timestamp::GetCurrentTimestamp());
+
+	if (current_timestamp_ms - last_trim_timestamp_ms < TRIM_INTERVAL_MS) {
+		return; // We trimmed less than TRIM_INTERVAL_MS ago
+	}
+	if (!std::atomic_compare_exchange_weak(&LAST_TRIM_TIMESTAMP_MS, &last_trim_timestamp_ms, current_timestamp_ms)) {
+		return; // Another thread has updated LAST_TRIM_TIMESTAMP_MS since we loaded it
+	}
+
+	// We succesfully updated LAST_TRIM_TIMESTAMP_MS, we can trim
+	malloc_trim(pad);
+#endif
+}
+
+void Allocator::ThreadFlush(bool allocator_background_threads, idx_t threshold, idx_t thread_count) {
+#ifdef USE_JEMALLOC
+	if (!allocator_background_threads) {
+		JemallocExtension::ThreadFlush(threshold);
+	}
+#endif
+	MallocTrim(thread_count * threshold);
+}
+
+void Allocator::ThreadIdle() {
+#ifdef USE_JEMALLOC
+	JemallocExtension::ThreadIdle();
+#endif
+}
+
+void Allocator::FlushAll() {
+#ifdef USE_JEMALLOC
+	JemallocExtension::FlushAll();
+#endif
+	MallocTrim(0);
+}
+
+void Allocator::SetBackgroundThreads(bool enable) {
+#ifdef USE_JEMALLOC
+	JemallocExtension::SetBackgroundThreads(enable);
 #endif
 }
 

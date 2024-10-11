@@ -15,6 +15,12 @@
         "id": 101,
         "name": "alias",
         "type": "string"
+      },
+      {
+        "id": 102,
+        "name": "modifiers",
+        "type": "vector<Value>",
+        "default": "vector<Value>()"
       }
     ],
     "pointer_type": "shared_ptr"
@@ -136,6 +142,12 @@
         "name": "schema",
         "type": "string",
         "default": "string()"
+      },
+      {
+        "id": 203,
+        "name": "user_type_modifiers",
+        "type": "vector<Value>",
+        "default": "vector<Value>()"
       }
     ]
   },
@@ -155,7 +167,7 @@
     "class": "GenericTypeInfo",
     "base": "ExtraTypeInfo",
     "enum": "GENERIC_TYPE_INFO",
-    "custom_switch_code": "result = make_shared<ExtraTypeInfo>(type);\nbreak;"
+    "custom_switch_code": "result = make_shared_ptr<ExtraTypeInfo>(type);\nbreak;"
   },
   {
     "class": "AnyTypeInfo",

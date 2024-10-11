@@ -1,0 +1,22 @@
+name: On Tag
+on:
+  workflow_dispatch:
+    inputs:
+      override_git_describe:
+        type: string
+  push:
+    tags:        
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+jobs:
+  twine_upload:
+    uses: ./.github/workflows/TwineUpload.yml
+    secrets: inherit
+    with:
+      override_git_describe: ${{ inputs.override_git_describe || github.ref_name }}
+
+  staged_upload:
+    uses: ./.github/workflows/StagedUpload.yml
+    secrets: inherit
+    with:
+      target_git_describe: ${{ inputs.override_git_describe || github.ref_name }}

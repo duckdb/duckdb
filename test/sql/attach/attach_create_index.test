@@ -1,0 +1,14 @@
+# name: test/sql/attach/attach_create_index.test
+# description: Test create index on an attached database with an alias
+# group: [attach]
+
+require skip_reload
+
+statement ok
+ATTACH '' AS tmp;
+
+statement ok
+CREATE TABLE tmp.t1(id int);
+
+statement ok
+CREATE INDEX idx ON tmp.t1(id);

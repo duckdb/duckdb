@@ -1,0 +1,12 @@
+# name: benchmark/cast/integer_varint.benchmark
+# description: Casting of a UBIGINT to Varint
+# group: [cast]
+
+name Casting of Double to Varint
+group csv
+
+load
+CREATE TABLE t1 AS select 18446744073709551615::UBIGINT as a from range(0,10000000) tbl(i);
+
+run
+create or replace table t2 as select a::varint from t1

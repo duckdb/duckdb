@@ -40,7 +40,6 @@ public:
 
 	GlobalSortStatePtr global_sort;
 	atomic<idx_t> count;
-	idx_t batch_base;
 
 	// Mask computation
 	SortLayout partition_layout;
@@ -62,6 +61,7 @@ public:
 	PartitionGlobalSinkState(ClientContext &context, const vector<unique_ptr<Expression>> &partition_bys,
 	                         const vector<BoundOrderByNode> &order_bys, const Types &payload_types,
 	                         const vector<unique_ptr<BaseStatistics>> &partitions_stats, idx_t estimated_cardinality);
+	virtual ~PartitionGlobalSinkState() = default;
 
 	bool HasMergeTasks() const;
 
@@ -70,6 +70,9 @@ public:
 
 	void UpdateLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
 	void CombineLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
+
+	virtual void OnBeginMerge() {};
+	virtual void OnSortedPartition(const idx_t hash_bin_p) {};
 
 	ClientContext &context;
 	BufferManager &buffer_manager;
@@ -142,7 +145,7 @@ public:
 	void Combine();
 };
 
-enum class PartitionSortStage : uint8_t { INIT, SCAN, PREPARE, MERGE, SORTED };
+enum class PartitionSortStage : uint8_t { INIT, SCAN, PREPARE, MERGE, SORTED, FINISHED };
 
 class PartitionLocalMergeState;
 
@@ -156,9 +159,9 @@ public:
 	//	OVER(ORDER BY...)
 	explicit PartitionGlobalMergeState(PartitionGlobalSinkState &sink);
 
-	bool IsSorted() const {
+	bool IsFinished() const {
 		lock_guard<mutex> guard(lock);
-		return stage == PartitionSortStage::SORTED;
+		return stage == PartitionSortStage::FINISHED;
 	}
 
 	bool AssignTask(PartitionLocalMergeState &local_state);
@@ -168,6 +171,7 @@ public:
 	PartitionGlobalSinkState &sink;
 	GroupDataPtr group_data;
 	PartitionGlobalHashGroup *hash_group;
+	const idx_t group_idx;
 	vector<column_t> column_ids;
 	TupleDataParallelScanState chunk_state;
 	GlobalSortState *global_sort;
@@ -193,6 +197,7 @@ public:
 	void Prepare();
 	void Scan();
 	void Merge();
+	void Sorted();
 
 	void ExecuteTask();
 
@@ -209,6 +214,8 @@ public:
 class PartitionGlobalMergeStates {
 public:
 	struct Callback {
+		virtual ~Callback() = default;
+
 		virtual bool HasError() const {
 			return false;
 		}
@@ -225,12 +232,13 @@ public:
 
 class PartitionMergeEvent : public BasePipelineEvent {
 public:
-	PartitionMergeEvent(PartitionGlobalSinkState &gstate_p, Pipeline &pipeline_p)
-	    : BasePipelineEvent(pipeline_p), gstate(gstate_p), merge_states(gstate_p) {
+	PartitionMergeEvent(PartitionGlobalSinkState &gstate_p, Pipeline &pipeline_p, const PhysicalOperator &op_p)
+	    : BasePipelineEvent(pipeline_p), gstate(gstate_p), merge_states(gstate_p), op(op_p) {
 	}
 
 	PartitionGlobalSinkState &gstate;
 	PartitionGlobalMergeStates merge_states;
+	const PhysicalOperator &op;
 
 public:
 	void Schedule() override;

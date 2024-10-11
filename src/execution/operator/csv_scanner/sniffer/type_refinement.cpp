@@ -2,13 +2,12 @@
 #include "duckdb/execution/operator/csv_scanner/csv_casting.hpp"
 
 namespace duckdb {
-
 bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type) {
 	auto &sniffing_state_machine = best_candidate->GetStateMachine();
 	// try vector-cast from string to sql_type
-	Vector dummy_result(sql_type);
+	Vector dummy_result(sql_type, size);
 	if (!sniffing_state_machine.dialect_options.date_format[LogicalTypeId::DATE].GetValue().Empty() &&
-	    sql_type == LogicalTypeId::DATE) {
+	    sql_type.id() == LogicalTypeId::DATE) {
 		// use the date format to cast the chunk
 		string error_message;
 		CastParameters parameters(false, &error_message);
@@ -17,12 +16,27 @@ bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const Logica
 		                                  dummy_result, size, parameters, line_error);
 	}
 	if (!sniffing_state_machine.dialect_options.date_format[LogicalTypeId::TIMESTAMP].GetValue().Empty() &&
-	    sql_type == LogicalTypeId::TIMESTAMP) {
+	    sql_type.id() == LogicalTypeId::TIMESTAMP) {
 		// use the timestamp format to cast the chunk
 		string error_message;
 		CastParameters parameters(false, &error_message);
 		return CSVCast::TryCastTimestampVector(sniffing_state_machine.dialect_options.date_format, parse_chunk_col,
 		                                       dummy_result, size, parameters);
+	}
+	if ((sql_type.id() == LogicalTypeId::DOUBLE || sql_type.id() == LogicalTypeId::FLOAT) &&
+	    options.decimal_separator == ",") {
+		string error_message;
+		CastParameters parameters(false, &error_message);
+		idx_t line_error;
+		return CSVCast::TryCastFloatingVectorCommaSeparated(options, parse_chunk_col, dummy_result, size, parameters,
+		                                                    sql_type, line_error);
+	}
+	if (sql_type.id() == LogicalTypeId::DECIMAL && options.decimal_separator == ",") {
+		string error_message;
+		CastParameters parameters(false, &error_message);
+		idx_t line_error;
+		return CSVCast::TryCastDecimalVectorCommaSeparated(options, parse_chunk_col, dummy_result, size, parameters,
+		                                                   sql_type, line_error);
 	}
 	// target type is not varchar: perform a cast
 	string error_message;
@@ -62,28 +76,29 @@ void CSVSniffer::RefineTypes() {
 				const auto &sql_type = col_type_candidates.back();
 				if (TryCastVector(parse_chunk.data[col], parse_chunk.size(), sql_type)) {
 					break;
-				} else {
-					if (col_type_candidates.back() == LogicalType::BOOLEAN && is_bool_type) {
-						// If we thought this was a boolean value (i.e., T,F, True, False) and it is not, we
-						// immediately pop to varchar.
-						while (col_type_candidates.back() != LogicalType::VARCHAR) {
-							col_type_candidates.pop_back();
-						}
-						break;
-					}
-					col_type_candidates.pop_back();
 				}
+				if (col_type_candidates.back() == LogicalType::BOOLEAN && is_bool_type) {
+					// If we thought this was a boolean value (i.e., T,F, True, False) and it is not, we
+					// immediately pop to varchar.
+					while (col_type_candidates.back() != LogicalType::VARCHAR) {
+						col_type_candidates.pop_back();
+					}
+					break;
+				}
+				col_type_candidates.pop_back();
 			}
 		}
 		// reset parse chunk for the next iteration
 		parse_chunk.Reset();
+		parse_chunk.SetCapacity(CSVReaderOptions::sniff_size);
 	}
 	detected_types.clear();
 	// set sql types
 	for (idx_t column_idx = 0; column_idx < best_sql_types_candidates_per_column_idx.size(); column_idx++) {
 		LogicalType d_type = best_sql_types_candidates_per_column_idx[column_idx].back();
 		if (best_sql_types_candidates_per_column_idx[column_idx].size() ==
-		    best_candidate->GetStateMachine().options.auto_type_candidates.size()) {
+		        best_candidate->GetStateMachine().options.auto_type_candidates.size() &&
+		    default_null_to_varchar) {
 			d_type = LogicalType::VARCHAR;
 		}
 		detected_types.push_back(d_type);

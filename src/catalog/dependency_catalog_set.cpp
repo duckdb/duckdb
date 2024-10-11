@@ -11,8 +11,7 @@ MangledDependencyName DependencyCatalogSet::ApplyPrefix(const MangledEntryName &
 bool DependencyCatalogSet::CreateEntry(CatalogTransaction transaction, const MangledEntryName &name,
                                        unique_ptr<CatalogEntry> value) {
 	auto new_name = ApplyPrefix(name);
-
-	static const DependencyList EMPTY_DEPENDENCIES;
+	const LogicalDependencyList EMPTY_DEPENDENCIES;
 	return set.CreateEntry(transaction, new_name.name, std::move(value), EMPTY_DEPENDENCIES);
 }
 

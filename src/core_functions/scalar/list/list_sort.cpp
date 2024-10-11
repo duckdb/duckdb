@@ -1,6 +1,6 @@
 #include "duckdb/core_functions/scalar/list_functions.hpp"
 #include "duckdb/common/enum_util.hpp"
-
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -52,8 +52,8 @@ ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_
 	payload_layout.Initialize(payload_types);
 
 	// get the BoundOrderByNode
-	auto idx_col_expr = make_uniq_base<Expression, BoundReferenceExpression>(LogicalType::USMALLINT, 0);
-	auto lists_col_expr = make_uniq_base<Expression, BoundReferenceExpression>(child_type, 1);
+	auto idx_col_expr = make_uniq_base<Expression, BoundReferenceExpression>(LogicalType::USMALLINT, 0U);
+	auto lists_col_expr = make_uniq_base<Expression, BoundReferenceExpression>(child_type, 1U);
 	orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT, std::move(idx_col_expr));
 	orders.emplace_back(order_type, null_order, std::move(lists_col_expr));
 }
@@ -130,8 +130,6 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	// get the child vector
 	auto lists_size = ListVector::GetListSize(sort_result_vec);
 	auto &child_vector = ListVector::GetEntry(sort_result_vec);
-	UnifiedVectorFormat child_data;
-	child_vector.ToUnifiedFormat(lists_size, child_data);
 
 	// get the lists data
 	UnifiedVectorFormat lists_data;
@@ -183,8 +181,8 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 			auto source_idx = list_entry.offset + child_idx;
 			sel.set_index(offset_lists_indices, source_idx);
-			lists_indices_data[offset_lists_indices] = (uint32_t)i;
-			payload_vector_data[offset_lists_indices] = source_idx;
+			lists_indices_data[offset_lists_indices] = UnsafeNumericCast<uint16_t>(i);
+			payload_vector_data[offset_lists_indices] = NumericCast<uint32_t>(source_idx);
 			offset_lists_indices++;
 			incr_payload_count++;
 		}
@@ -239,9 +237,12 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 			auto &result_entry = ListVector::GetEntry(result);
 			auto result_data = ListVector::GetData(result);
 			for (idx_t i = 0; i < count; i++) {
+				if (!result_validity.RowIsValid(i)) {
+					continue;
+				}
 				for (idx_t j = result_data[i].offset; j < result_data[i].offset + result_data[i].length; j++) {
 					auto b = sel_sorted.get_index(j) - result_data[i].offset;
-					result_entry.SetValue(j, Value::BIGINT(b + 1));
+					result_entry.SetValue(j, Value::BIGINT(UnsafeNumericCast<int64_t>(b + 1)));
 				}
 			}
 		} else {
@@ -304,6 +305,8 @@ static unique_ptr<FunctionData> ListGradeUpBind(ClientContext &context, ScalarFu
 	auto &config = DBConfig::GetConfig(context);
 	order = config.ResolveOrder(order);
 	null_order = config.ResolveNullOrder(order, null_order);
+
+	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
 	bound_function.arguments[0] = arguments[0]->return_type;
 	bound_function.return_type = LogicalType::LIST(LogicalTypeId::BIGINT);

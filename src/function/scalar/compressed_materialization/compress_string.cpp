@@ -11,13 +11,13 @@ static string StringCompressFunctionName(const LogicalType &result_type) {
 }
 
 template <idx_t LENGTH>
-static inline void TemplatedReverseMemCpy(const data_ptr_t __restrict &dest, const const_data_ptr_t __restrict &src) {
+static inline void TemplatedReverseMemCpy(const data_ptr_t &__restrict dest, const const_data_ptr_t &__restrict src) {
 	for (idx_t i = 0; i < LENGTH; i++) {
 		dest[i] = src[LENGTH - 1 - i];
 	}
 }
 
-static inline void ReverseMemCpy(const data_ptr_t __restrict &dest, const const_data_ptr_t __restrict &src,
+static inline void ReverseMemCpy(const data_ptr_t &__restrict dest, const const_data_ptr_t &__restrict src,
                                  const idx_t &length) {
 	for (idx_t i = 0; i < length; i++) {
 		dest[i] = src[length - 1 - i];
@@ -39,7 +39,7 @@ static inline RESULT_TYPE StringCompressInternal(const string_t &input) {
 		ReverseMemCpy(result_ptr + remainder, data_ptr_cast(input.GetPointer()), input.GetSize());
 		memset(result_ptr, '\0', remainder);
 	}
-	result_ptr[0] = input.GetSize();
+	result_ptr[0] = UnsafeNumericCast<data_t>(input.GetSize());
 	return result;
 }
 
@@ -52,11 +52,11 @@ static inline RESULT_TYPE StringCompress(const string_t &input) {
 template <class RESULT_TYPE>
 static inline RESULT_TYPE MiniStringCompress(const string_t &input) {
 	if (sizeof(RESULT_TYPE) <= string_t::INLINE_LENGTH) {
-		return input.GetSize() + *const_data_ptr_cast(input.GetPrefix());
+		return UnsafeNumericCast<RESULT_TYPE>(input.GetSize() + *const_data_ptr_cast(input.GetPrefix()));
 	} else if (input.GetSize() == 0) {
 		return 0;
 	} else {
-		return input.GetSize() + *const_data_ptr_cast(input.GetPointer());
+		return UnsafeNumericCast<RESULT_TYPE>(input.GetSize() + *const_data_ptr_cast(input.GetPointer()));
 	}
 }
 
@@ -223,6 +223,7 @@ static void CMStringDecompressSerialize(Serializer &serializer, const optional_p
 unique_ptr<FunctionData> CMStringDecompressDeserialize(Deserializer &deserializer, ScalarFunction &function) {
 	function.arguments = deserializer.ReadProperty<vector<LogicalType>>(100, "arguments");
 	function.function = GetStringDecompressFunctionSwitch(function.arguments[0]);
+	function.return_type = deserializer.Get<const LogicalType &>();
 	return nullptr;
 }
 

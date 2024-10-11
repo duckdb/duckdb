@@ -11,12 +11,20 @@ import shutil
 print = functools.partial(print, flush=True)
 
 
+def is_number(s):
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
+
+
 # Geometric mean of an array of numbers
 def geomean(xs):
     if len(xs) == 0:
         return 'EMPTY'
     for entry in xs:
-        if isinstance(entry, str):
+        if not is_number(entry):
             return entry
     return math.exp(math.fsum(math.log(float(x)) for x in xs) / len(xs))
 
@@ -34,6 +42,9 @@ benchmark_file = None
 verbose = False
 threads = None
 no_regression_fail = False
+disable_timeout = False
+max_timeout = 3600
+root_dir = ""
 for arg in sys.argv:
     if arg.startswith("--old="):
         old_runner = arg.replace("--old=", "")
@@ -47,6 +58,10 @@ for arg in sys.argv:
         threads = int(arg.replace("--threads=", ""))
     elif arg.startswith("--nofail"):
         no_regression_fail = True
+    elif arg == "--disable-timeout":
+        disable_timeout = True
+    elif arg.startswith("--root-dir="):
+        root_dir = arg.replace("--root-dir=", "")
 
 if old_runner is None or new_runner is None or benchmark_file is None:
     print(
@@ -67,9 +82,18 @@ complete_timings = {old_runner: [], new_runner: []}
 
 def run_benchmark(runner, benchmark):
     benchmark_args = [runner, benchmark]
+
+    if root_dir:
+        benchmark_args += [f"--root-dir"]
+        benchmark_args += [root_dir]
+
     if threads is not None:
         benchmark_args += ["--threads=%d" % (threads,)]
-    timeout_seconds = 600
+    if disable_timeout:
+        benchmark_args += ["--disable-timeout"]
+        timeout_seconds = max_timeout
+    else:
+        timeout_seconds = 600
     try:
         proc = subprocess.run(benchmark_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout_seconds)
         out = proc.stdout.decode('utf8')
@@ -95,6 +119,9 @@ def run_benchmark(runner, benchmark):
 '''
         )
         print(out)
+        if 'HTTP' in err:
+            print("Ignoring HTTP error and terminating the running of the regression tests")
+            exit(0)
         return 'Failed to run benchmark ' + benchmark
     if verbose:
         print(err)
@@ -217,5 +244,6 @@ else:
     print(f"New timing geometric mean: {time_b}")
 
 # nuke cached benchmark data between runs
-shutil.rmtree('duckdb_benchmark_data')
+if os.path.isdir("duckdb_benchmark_data"):
+    shutil.rmtree('duckdb_benchmark_data')
 exit(exit_code)

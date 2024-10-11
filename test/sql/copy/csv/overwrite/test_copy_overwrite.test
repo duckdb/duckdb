@@ -2,6 +2,9 @@
 # description: Test copy statement with file overwrite
 # group: [overwrite]
 
+statement ok
+PRAGMA enable_verification
+
 # create a table and insert some values
 statement ok
 CREATE TABLE test (a INTEGER, b VARCHAR(10));
@@ -33,7 +36,7 @@ statement ok
 DELETE FROM test;
 
 query I
-COPY test FROM '__TEST_DIR__/overwrite.csv' (HEADER 1);
+COPY test FROM '__TEST_DIR__/overwrite.csv';
 ----
 2
 
@@ -47,12 +50,13 @@ SELECT * FROM test ORDER BY 1;
 statement error
 COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i FROM range(1) tbl(i)) to '__TEST_DIR__/overwrite.csv';
 ----
+Could not convert string 'hello0' to INT32
 
 statement ok
 DELETE FROM test;
 
 query I
-COPY test FROM '__TEST_DIR__/overwrite.csv' (HEADER 1);
+COPY test FROM '__TEST_DIR__/overwrite.csv';
 ----
 2
 
@@ -67,6 +71,7 @@ SELECT * FROM test ORDER BY 1;
 statement error
 COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i FROM range(1) tbl(i)) to '__TEST_DIR__/overwrite.csv' (USE_TMP_FILE FALSE);
 ----
+Could not convert string 'hello0' to INT32
 
 query I
 SELECT * FROM '__TEST_DIR__/overwrite.csv';

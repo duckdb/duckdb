@@ -15,6 +15,7 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/parallel/executor_task.hpp"
 
 namespace duckdb {
 
@@ -31,7 +32,6 @@ public:
 	explicit PipelineTask(Pipeline &pipeline_p, shared_ptr<Event> event_p);
 
 	Pipeline &pipeline;
-	shared_ptr<Event> event;
 	unique_ptr<PipelineExecutor> pipeline_executor;
 
 public:
@@ -66,7 +66,7 @@ public:
 };
 
 //! The Pipeline class represents an execution pipeline starting at a
-class Pipeline : public std::enable_shared_from_this<Pipeline> {
+class Pipeline : public enable_shared_from_this<Pipeline> {
 	friend class Executor;
 	friend class PipelineExecutor;
 	friend class PipelineEvent;
@@ -90,6 +90,7 @@ public:
 	void ResetSource(bool force);
 	void ClearSource();
 	void Schedule(shared_ptr<Event> &event);
+	void PrepareFinalize();
 
 	string ToString() const;
 	void Print() const;

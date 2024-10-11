@@ -20,6 +20,7 @@ typedef uint64_t sqlite3_uint64;
 #ifdef USE_DUCKDB_SHELL_WRAPPER
 #include "duckdb_shell_wrapper.h"
 void *sqlite3_realloc64(void *ptr, sqlite3_uint64 n);
+void *sqlite3_free(void *ptr);
 #else
 #define sqlite3_realloc64 realloc
 #define sqlite3_free      free

@@ -39,6 +39,12 @@ select map_concat(NULL, NULL);
 ----
 NULL
 
+# issue 12009
+query I
+select map_concat(map([1], NULL), NULL)
+----
+NULL
+
 # Appending NULL to a non-empty map
 query I
 select map_concat(map([1], [1]), NULL);
@@ -90,6 +96,9 @@ insert into tbl values
 	map([5, 1337, 0], ['long', 'longer', 'longest']),
 	map([], []),
 	NULL
+),
+(
+	NULL, NULL, NULL
 );
 
 query I
@@ -98,14 +107,17 @@ select map_concat(x, y, z) from tbl;
 {3=1, 4=over_twelve_characters, 2=c, 1=a, 5=b, 7=NULL, 6=123}
 {42=small, 1=this is a long string, 0=tiny}
 {5=long, 1337=longer, 0=longest}
+NULL
 
 query I
 select map_concat(x, y, z) from tbl where rowid != 0;
 ----
 {42=small, 1=this is a long string, 0=tiny}
 {5=long, 1337=longer, 0=longest}
+NULL
 
-query I map_concat(x, y, z) from tbl where rowid == 1;
+query I
+select map_concat(x, y, z) from tbl where rowid == 1;
 ----
 {42=small, 1=this is a long string, 0=tiny}
 
