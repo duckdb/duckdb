@@ -155,9 +155,12 @@ public:
 
 		dictionary_metadata_t meta {.size = dict_size};
 
-		// write meta & dictionary
-		current_data_ptr = data_ptr_cast(memcpy(current_data_ptr, &meta, sizeof(dictionary_metadata_t)));
-		current_data_ptr = data_ptr_cast(memcpy(current_data_ptr, &zstd_cdict, dict_size));
+		// write dictionary size
+		memcpy(current_data_ptr, &meta, sizeof(dictionary_metadata_t));
+		current_data_ptr += sizeof(dictionary_metadata_t);
+
+		memcpy(current_data_ptr, zstd_cdict, dict_size);
+		current_data_ptr += dict_size;
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
