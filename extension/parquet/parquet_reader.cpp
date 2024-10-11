@@ -112,12 +112,14 @@ LoadMetadata(ClientContext &context, Allocator &allocator, FileHandle &file_hand
 
 	auto metadata_pos = file_size - (footer_len + 8);
 	transport.SetLocation(metadata_pos);
-	if (metadata_pos < file_size - requested_footer_size) {
+	if (prefetch_metadata_bytes_option > 0 && metadata_pos < file_size - requested_footer_size) {
 		// metadata exceed the prefetch_metadata_bytes_option value
 		// Another request is needed
 		transport.ClearPrefetch();
 		transport.Prefetch(metadata_pos, footer_len);
 		// Note that this is not super clean, since some bytes will be requested twice
+	} else {
+		transport.Prefetch(metadata_pos, footer_len);
 	}
 
 	auto metadata = make_uniq<FileMetaData>();
