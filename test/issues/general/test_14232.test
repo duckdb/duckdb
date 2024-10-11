@@ -3,17 +3,8 @@
 # group: [general]
 
 statement ok
-CREATE TABLE t1 (
-t1a TEXT,
-t1b SMALLINT,
-t1c INTEGER,
-t1d BIGINT,
-t1e REAL,
-t1f DOUBLE PRECISION,
-t1g NUMERIC(10,2),
-t1h TIMESTAMP,
-t1i DATE
-)
+CREATE TABLE t1 (t1a TEXT, t1b SMALLINT, t1c INTEGER, t1d BIGINT,
+	t1e REAL, t1f DOUBLE PRECISION, t1g NUMERIC(10, 2), t1h TIMESTAMP, t1i DATE)
 
 statement ok
 INSERT INTO t1 (t1a, t1b, t1c, t1d, t1e, t1f, t1g, t1h, t1i) VALUES
@@ -31,17 +22,8 @@ INSERT INTO t1 (t1a, t1b, t1c, t1d, t1e, t1f, t1g, t1h, t1i) VALUES
 ('t1e', 10, NULL, 19, 17.0, 25, 26.00, '2014-05-04 01:01:00', '2014-05-04')
 
 statement ok
-CREATE TABLE t2 (
-t2a TEXT,
-t2b SMALLINT,
-t2c INTEGER,
-t2d BIGINT,
-t2e REAL,
-t2f DOUBLE PRECISION,
-t2g NUMERIC(10,2),
-t2h TIMESTAMP,
-t2i DATE
-)
+CREATE TABLE t2 (t2a TEXT, t2b SMALLINT, t2c INTEGER, t2d BIGINT,
+	t2e REAL, t2f DOUBLE PRECISION, t2g NUMERIC(10, 2), t2h TIMESTAMP, t2i DATE)
 
 statement ok
 INSERT INTO t2 (t2a, t2b, t2c, t2d, t2e, t2f, t2g, t2h, t2i) VALUES
@@ -59,15 +41,10 @@ INSERT INTO t2 (t2a, t2b, t2c, t2d, t2e, t2f, t2g, t2h, t2i) VALUES
 ('t1f', 19, NULL, 19, 17.0, 25, 26.00, '2014-10-04 01:01:00', '2014-10-04'),
 ('t1b', NULL, 16, 19, 17.0, 25, 26.00, '2014-05-04 01:01:00', NULL)
 
-query II
-SELECT t1a,
-t1b
-FROM t1
-WHERE t1c IN (SELECT t2c
-FROM t2
-WHERE t1a = t2a)
-GROUP BY t1a,
-t1b
+query II rowsort
+SELECT t1a, t1b FROM t1 WHERE t1c IN (
+	SELECT t2c FROM t2 WHERE t1a = t2a)
+GROUP BY t1a, t1b;
 ----
 t1b	8
 t1c	8
