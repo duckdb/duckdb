@@ -1198,10 +1198,10 @@ string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char e
 	return removed_escapes;
 }
 
-void StringValueScanner::ProcessOverbufferValue() {
+void StringValueScanner::ProcessOverBufferValue() {
 	// Process first string
 	states.Initialize();
-	string overbuffer_string;
+	string over_buffer_string;
 	auto previous_buffer = previous_buffer_handle->Ptr();
 	if (result.last_position.buffer_pos == previous_buffer_handle->actual_size) {
 		state_machine->Transition(states, previous_buffer[result.last_position.buffer_pos - 1]);
@@ -1217,7 +1217,7 @@ void StringValueScanner::ProcessOverbufferValue() {
 			break;
 		} else {
 			if (!result.comment) {
-				overbuffer_string += previous_buffer[i];
+				over_buffer_string += previous_buffer[i];
 			}
 		}
 		if (states.IsQuoted()) {
@@ -1234,7 +1234,7 @@ void StringValueScanner::ProcessOverbufferValue() {
 		}
 		j++;
 	}
-	if (overbuffer_string.empty() &&
+	if (over_buffer_string.empty() &&
 	    state_machine->dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
 		if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n') {
 			iterator.pos.buffer_pos++;
@@ -1254,7 +1254,7 @@ void StringValueScanner::ProcessOverbufferValue() {
 			break;
 		} else {
 			if (!result.comment && !states.IsComment()) {
-				overbuffer_string += buffer_handle_ptr[iterator.pos.buffer_pos];
+				over_buffer_string += buffer_handle_ptr[iterator.pos.buffer_pos];
 			}
 		}
 		if (states.IsQuoted()) {
@@ -1281,16 +1281,16 @@ void StringValueScanner::ProcessOverbufferValue() {
 	if (!skip_value) {
 		string_t value;
 		if (result.quoted) {
-			value = string_t(overbuffer_string.c_str() + result.quoted_position,
-			                 UnsafeNumericCast<uint32_t>(overbuffer_string.size() - 1 - result.quoted_position));
+			value = string_t(over_buffer_string.c_str() + result.quoted_position,
+			                 UnsafeNumericCast<uint32_t>(over_buffer_string.size() - 1 - result.quoted_position));
 			if (result.escaped) {
-				const auto str_ptr = overbuffer_string.c_str() + result.quoted_position;
-				value = RemoveEscape(str_ptr, overbuffer_string.size() - 2,
+				const auto str_ptr = over_buffer_string.c_str() + result.quoted_position;
+				value = RemoveEscape(str_ptr, over_buffer_string.size() - 2,
 				                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
 				                     result.parse_chunk.data[result.chunk_col_id]);
 			}
 		} else {
-			value = string_t(overbuffer_string.c_str(), UnsafeNumericCast<uint32_t>(overbuffer_string.size()));
+			value = string_t(over_buffer_string.c_str(), UnsafeNumericCast<uint32_t>(over_buffer_string.size()));
 		}
 		if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
 			result.EmptyLine(result, iterator.pos.buffer_pos);
@@ -1376,7 +1376,7 @@ bool StringValueScanner::MoveToNextBuffer() {
 		iterator.pos.buffer_pos = 0;
 		buffer_handle_ptr = cur_buffer_handle->Ptr();
 		// Handle over-buffer value
-		ProcessOverbufferValue();
+		ProcessOverBufferValue();
 		result.buffer_ptr = buffer_handle_ptr;
 		result.buffer_size = cur_buffer_handle->actual_size;
 		return true;

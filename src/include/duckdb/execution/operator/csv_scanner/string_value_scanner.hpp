@@ -321,7 +321,7 @@ private:
 	void FinalizeChunkProcess() override;
 
 	//! Function used to process values that go over the first buffer, extra allocation might be necessary
-	void ProcessOverbufferValue();
+	void ProcessOverBufferValue();
 
 	void ProcessExtraRow();
 	//! Function used to move from one buffer to the other, if necessary
