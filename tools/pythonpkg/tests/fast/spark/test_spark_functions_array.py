@@ -4,6 +4,7 @@ _ = pytest.importorskip("duckdb.experimental.spark")
 from duckdb.experimental.spark.sql import functions as F
 from duckdb.experimental.spark.sql.types import Row
 
+
 class TestSparkFunctionsArray:
     def test_array_distinct(self, spark):
         data = [
@@ -25,7 +26,7 @@ class TestSparkFunctionsArray:
         df = spark.createDataFrame(data, ["c1", "c2"])
         df = df.withColumn("intersect_values", F.array_intersect(F.col("c1"), F.col("c2")))
         res = df.select("intersect_values").collect()
-        assert res ==  [
+        assert res == [
             Row(intersect_values=["c", "a"]),
         ]
 
@@ -52,7 +53,6 @@ class TestSparkFunctionsArray:
             Row(max_value=3),
             Row(max_value=5),
         ]
-
 
     def test_array_min(self, spark):
         data = [
