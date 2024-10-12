@@ -50,7 +50,7 @@ py::object PythonTableArrowArrayStreamFactory::ProduceScanner(py::object &arrow_
 
 	if (has_filter) {
 		for (auto it = filters->filters.begin(); it != filters->filters.end();) {
-			if (it->second->filter_type == TableFilterType::OPTIONAL) {
+			if (it->second->filter_type == TableFilterType::OPTIONAL_FILTER) {
 				it = filters->filters.erase(it);
 			} else {
 				++it;
