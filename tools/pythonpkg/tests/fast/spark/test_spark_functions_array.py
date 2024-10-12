@@ -14,8 +14,7 @@ class TestSparkFunctionsArray:
         df = spark.createDataFrame(data, ["firstColumn", "secondColumn"])
         df = df.withColumn("distinct_values", F.array_distinct(F.col("firstColumn")))
         res = df.select("distinct_values").collect()
-        # Output order of array_distinct can vary across platforms. Hence,
-        # we ttest it like this.
+        # Output order can vary across platforms which is why we sort it first
         assert len(res) == 2
         assert sorted(res[0].distinct_values) == [1, 2]
         assert sorted(res[1].distinct_values) == [2, 4, 5]
@@ -27,9 +26,9 @@ class TestSparkFunctionsArray:
         df = spark.createDataFrame(data, ["c1", "c2"])
         df = df.withColumn("intersect_values", F.array_intersect(F.col("c1"), F.col("c2")))
         res = df.select("intersect_values").collect()
-        assert res == [
-            Row(intersect_values=["c", "a"]),
-        ]
+        # Output order can vary across platforms which is why we sort it first
+        assert len(res) == 1
+        assert sorted(res[0].intersect_values) == ["a", "c"]
 
     def test_array_union(self, spark):
         data = [
@@ -38,9 +37,9 @@ class TestSparkFunctionsArray:
         df = spark.createDataFrame(data, ["c1", "c2"])
         df = df.withColumn("union_values", F.array_union(F.col("c1"), F.col("c2")))
         res = df.select("union_values").collect()
-        assert res == [
-            Row(union_values=["f", "d", "c", "a", "b"]),
-        ]
+        # Output order can vary across platforms which is why we sort it first
+        assert len(res) == 1
+        assert sorted(res[0].union_values) == ["a", "b", "c", "d", "f"]
 
     def test_array_max(self, spark):
         data = [
