@@ -28,3 +28,14 @@ class TestSparkFunctionsArray:
         assert res ==  [
             Row(intersect_values=["c", "a"]),
         ]
+
+    def test_array_union(self, spark):
+        data = [
+            (["b", "a", "c"], ["c", "d", "a", "f"]),
+        ]
+        df = spark.createDataFrame(data, ["c1", "c2"])
+        df = df.withColumn("union_values", F.array_union(F.col("c1"), F.col("c2")))
+        res = df.select("union_values").collect()
+        assert res == [
+            Row(union_values=["f", "d", "c", "a", "b"]),
+        ]
