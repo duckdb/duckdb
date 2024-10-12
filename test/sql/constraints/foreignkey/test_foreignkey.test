@@ -182,7 +182,11 @@ statement ok
 INSERT INTO pkt VALUES (1, 11), (2, 12), (3, 13)
 
 statement ok
-CREATE TABLE fkt(j INTEGER, l INTEGER UNIQUE, FOREIGN KEY (j) REFERENCES pkt(i))
+CREATE TABLE fkt(
+	j INTEGER,
+	l INTEGER UNIQUE,
+	FOREIGN KEY (j) REFERENCES pkt(i)
+)
 
 statement ok
 CREATE INDEX k_index ON pkt(k)

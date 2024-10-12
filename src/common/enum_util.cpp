@@ -4463,6 +4463,8 @@ const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
 		return "OPTIMIZER_EXTENSION";
 	case MetricsType::OPTIMIZER_MATERIALIZED_CTE:
 		return "OPTIMIZER_MATERIALIZED_CTE";
+	case MetricsType::OPTIMIZER_EMPTY_RESULT_PULLUP:
+		return "OPTIMIZER_EMPTY_RESULT_PULLUP";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<MetricsType>", value));
 	}
@@ -4595,6 +4597,9 @@ MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "OPTIMIZER_MATERIALIZED_CTE")) {
 		return MetricsType::OPTIMIZER_MATERIALIZED_CTE;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_EMPTY_RESULT_PULLUP")) {
+		return MetricsType::OPTIMIZER_EMPTY_RESULT_PULLUP;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<MetricsType>", value));
 }
@@ -4851,6 +4856,8 @@ const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
 		return "FILTER_PULLUP";
 	case OptimizerType::FILTER_PUSHDOWN:
 		return "FILTER_PUSHDOWN";
+	case OptimizerType::EMPTY_RESULT_PULLUP:
+		return "EMPTY_RESULT_PULLUP";
 	case OptimizerType::CTE_FILTER_PUSHER:
 		return "CTE_FILTER_PUSHER";
 	case OptimizerType::REGEX_RANGE:
@@ -4909,6 +4916,9 @@ OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "FILTER_PUSHDOWN")) {
 		return OptimizerType::FILTER_PUSHDOWN;
+	}
+	if (StringUtil::Equals(value, "EMPTY_RESULT_PULLUP")) {
+		return OptimizerType::EMPTY_RESULT_PULLUP;
 	}
 	if (StringUtil::Equals(value, "CTE_FILTER_PUSHER")) {
 		return OptimizerType::CTE_FILTER_PUSHER;
