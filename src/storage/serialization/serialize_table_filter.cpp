@@ -37,7 +37,7 @@ unique_ptr<TableFilter> TableFilter::Deserialize(Deserializer &deserializer) {
 	case TableFilterType::IS_NULL:
 		result = IsNullFilter::Deserialize(deserializer);
 		break;
-	case TableFilterType::OPTIONAL_FILTER:
+	case TableFilterType::OPTIONAL:
 		result = OptionalFilter::Deserialize(deserializer);
 		break;
 	case TableFilterType::STRUCT_EXTRACT:

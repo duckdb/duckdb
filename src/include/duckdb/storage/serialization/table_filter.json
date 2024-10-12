@@ -107,7 +107,7 @@
   {
     "class": "OptionalFilter",
     "base": "TableFilter",
-    "enum": "OPTIONAL",
+    "enum": "OPTIONAL_FILTER",
     "includes": [
       "duckdb/planner/filter/optional_filter.hpp"
     ],
