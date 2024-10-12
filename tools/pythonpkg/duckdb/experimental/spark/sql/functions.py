@@ -1,4 +1,4 @@
-from typing import Any, Callable, Union, overload
+from typing import Any, Callable, Union, overload, Optional
 
 from duckdb import (
     CaseExpression,
@@ -373,6 +373,44 @@ def count(col: "ColumnOrName") -> Column:
     +--------+----------------+
     """
     return _invoke_function_over_columns("count", col)
+
+
+def approx_count_distinct(col: "ColumnOrName", rsd: Optional[float] = None) -> Column:
+    """Aggregate function: returns a new :class:`~pyspark.sql.Column` for approximate distinct count
+    of column `col`.
+
+    .. versionadded:: 2.1.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+    rsd : float, optional
+        maximum relative standard deviation allowed (default = 0.05).
+        For rsd < 0.01, it is more efficient to use :func:`count_distinct`
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column of computed results.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([1,2,2,3], "INT")
+    >>> df.agg(approx_count_distinct("value").alias('distinct_values')).show()
+    +---------------+
+    |distinct_values|
+    +---------------+
+    |              3|
+    +---------------+
+    """
+    if rsd is not None:
+        raise ValueError("rsd is not supported by DuckDB")
+    return _invoke_function_over_columns("approx_count_distinct", col)
+
+
 
 
 @overload

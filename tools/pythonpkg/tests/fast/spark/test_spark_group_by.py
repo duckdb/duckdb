@@ -15,7 +15,7 @@ from duckdb.experimental.spark.sql.types import (
     MapType,
 )
 from duckdb.experimental.spark.sql.functions import col, struct, when, lit, array_contains
-from duckdb.experimental.spark.sql.functions import sum, avg, max, min, mean, count, any_value
+from duckdb.experimental.spark.sql.functions import sum, avg, max, min, mean, count, any_value, approx_count_distinct
 
 
 class TestDataFrameGroupBy(object):
@@ -90,13 +90,14 @@ class TestDataFrameGroupBy(object):
                 sum("bonus").alias("sum_bonus"),
                 max("bonus").alias("max_bonus"),
                 any_value("state").alias("any_state"),
+                approx_count_distinct("state").alias("distinct_state"),
             )
             .sort("department")
         )
         res = df2.collect()
         assert (
             str(res)
-            == "[Row(department='Finance', sum_salary=351000, avg_salary=87750.0, sum_bonus=81000, max_bonus=24000, any_state='CA'), Row(department='Marketing', sum_salary=171000, avg_salary=85500.0, sum_bonus=39000, max_bonus=21000, any_state='CA'), Row(department='Sales', sum_salary=257000, avg_salary=85666.66666666667, sum_bonus=53000, max_bonus=23000, any_state='NY')]"
+            == "[Row(department='Finance', sum_salary=351000, avg_salary=87750.0, sum_bonus=81000, max_bonus=24000, any_state='CA', distinct_state=2), Row(department='Marketing', sum_salary=171000, avg_salary=85500.0, sum_bonus=39000, max_bonus=21000, any_state='CA', distinct_state=2), Row(department='Sales', sum_salary=257000, avg_salary=85666.66666666667, sum_bonus=53000, max_bonus=23000, any_state='NY', distinct_state=2)]"
         )
 
         df2 = (
