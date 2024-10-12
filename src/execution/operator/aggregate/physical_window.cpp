@@ -145,6 +145,8 @@ public:
 	unique_ptr<WindowPartitionGlobalSinkState> global_partition;
 	//! The execution functions
 	Executors executors;
+	//! The shared expressions library
+	WindowSharedExpressions shared;
 };
 
 class WindowPartitionGlobalSinkState : public PartitionGlobalSinkState {
@@ -215,10 +217,10 @@ PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expr
 }
 
 static unique_ptr<WindowExecutor> WindowExecutorFactory(BoundWindowExpression &wexpr, ClientContext &context,
-                                                        WindowAggregationMode mode) {
+                                                        WindowSharedExpressions &shared, WindowAggregationMode mode) {
 	switch (wexpr.type) {
 	case ExpressionType::WINDOW_AGGREGATE:
-		return make_uniq<WindowAggregateExecutor>(wexpr, context, mode);
+		return make_uniq<WindowAggregateExecutor>(wexpr, context, shared, mode);
 	case ExpressionType::WINDOW_ROW_NUMBER:
 		return make_uniq<WindowRowNumberExecutor>(wexpr, context);
 	case ExpressionType::WINDOW_RANK_DENSE:
@@ -230,16 +232,16 @@ static unique_ptr<WindowExecutor> WindowExecutorFactory(BoundWindowExpression &w
 	case ExpressionType::WINDOW_CUME_DIST:
 		return make_uniq<WindowCumeDistExecutor>(wexpr, context);
 	case ExpressionType::WINDOW_NTILE:
-		return make_uniq<WindowNtileExecutor>(wexpr, context);
+		return make_uniq<WindowNtileExecutor>(wexpr, context, shared);
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
-		return make_uniq<WindowLeadLagExecutor>(wexpr, context);
+		return make_uniq<WindowLeadLagExecutor>(wexpr, context, shared);
 	case ExpressionType::WINDOW_FIRST_VALUE:
-		return make_uniq<WindowFirstValueExecutor>(wexpr, context);
+		return make_uniq<WindowFirstValueExecutor>(wexpr, context, shared);
 	case ExpressionType::WINDOW_LAST_VALUE:
-		return make_uniq<WindowLastValueExecutor>(wexpr, context);
+		return make_uniq<WindowLastValueExecutor>(wexpr, context, shared);
 	case ExpressionType::WINDOW_NTH_VALUE:
-		return make_uniq<WindowNthValueExecutor>(wexpr, context);
+		return make_uniq<WindowNthValueExecutor>(wexpr, context, shared);
 		break;
 	default:
 		throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr.type));
@@ -256,7 +258,7 @@ WindowGlobalSinkState::WindowGlobalSinkState(const PhysicalWindow &op, ClientCon
 	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
 		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto &wexpr = op.select_list[expr_idx]->Cast<BoundWindowExpression>();
-		auto wexec = WindowExecutorFactory(wexpr, context, mode);
+		auto wexec = WindowExecutorFactory(wexpr, context, shared, mode);
 		executors.emplace_back(std::move(wexec));
 	}
 

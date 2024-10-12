@@ -23,11 +23,11 @@ WindowAggregatorState::WindowAggregatorState() : allocator(Allocator::DefaultAll
 class WindowAggregatorGlobalState : public WindowAggregatorState {
 public:
 	WindowAggregatorGlobalState(ClientContext &context, const WindowAggregator &aggregator_p, idx_t group_count)
-	    : aggregator(aggregator_p),
+	    : aggregator(aggregator_p), aggr(aggregator.wexpr),
 	      winputs(BufferManager::GetBufferManager(context), group_count, aggregator.arg_types), all_valid(true),
 	      locals(0), finalized(0) {
 
-		if (aggregator.aggr.filter) {
+		if (aggr.filter) {
 			// 	Start with all invalid and set the ones that pass
 			filter_mask.Initialize(group_count, false);
 		}
@@ -35,6 +35,9 @@ public:
 
 	//! The aggregator data
 	const WindowAggregator &aggregator;
+
+	//! The aggregate function
+	const AggregateObject aggr;
 
 	//! Partition data chunk
 	WindowCollection winputs;
@@ -69,10 +72,21 @@ public:
 	unique_ptr<WindowCursor> cursor;
 };
 
-WindowAggregator::WindowAggregator(AggregateObject aggr_p, const vector<LogicalType> &arg_types_p,
-                                   const LogicalType &result_type_p, const WindowExcludeMode exclude_mode_p)
-    : aggr(std::move(aggr_p)), arg_types(arg_types_p), result_type(result_type_p),
-      state_size(aggr.function.state_size(aggr.function)), exclude_mode(exclude_mode_p) {
+WindowAggregator::WindowAggregator(const BoundWindowExpression &wexpr, const WindowExcludeMode exclude_mode_p)
+    : wexpr(wexpr), aggr(wexpr), result_type(wexpr.return_type), state_size(aggr.function.state_size(aggr.function)),
+      exclude_mode(exclude_mode_p) {
+
+	for (auto &child : wexpr.children) {
+		arg_types.emplace_back(child->return_type);
+	}
+}
+
+WindowAggregator::WindowAggregator(const BoundWindowExpression &wexpr, const WindowExcludeMode exclude_mode_p,
+                                   WindowSharedExpressions &shared)
+    : WindowAggregator(wexpr, exclude_mode_p) {
+	for (auto &child : wexpr.children) {
+		child_idx.emplace_back(shared.RegisterCollection(child, false));
+	}
 }
 
 WindowAggregator::~WindowAggregator() {
@@ -254,7 +268,7 @@ WindowConstantAggregatorGlobalState::WindowConstantAggregatorGlobalState(ClientC
                                                                          const WindowConstantAggregator &aggregator,
                                                                          idx_t group_count,
                                                                          const ValidityMask &partition_mask)
-    : WindowAggregatorGlobalState(context, aggregator, STANDARD_VECTOR_SIZE), statef(aggregator.aggr) {
+    : WindowAggregatorGlobalState(context, aggregator, STANDARD_VECTOR_SIZE), statef(aggr) {
 
 	// Locate the partition boundaries
 	if (partition_mask.AllValid()) {
@@ -308,10 +322,15 @@ WindowConstantAggregatorLocalState::WindowConstantAggregatorLocalState(
 	gstate.locals++;
 }
 
-WindowConstantAggregator::WindowConstantAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types,
-                                                   const LogicalType &result_type,
-                                                   const WindowExcludeMode exclude_mode_p)
-    : WindowAggregator(std::move(aggr), arg_types, result_type, exclude_mode_p) {
+WindowConstantAggregator::WindowConstantAggregator(const BoundWindowExpression &wexpr,
+                                                   const WindowExcludeMode exclude_mode_p,
+                                                   WindowSharedExpressions &shared)
+    : WindowAggregator(wexpr, exclude_mode_p) {
+
+	// We only need these values for Sink
+	for (auto &child : wexpr.children) {
+		child_idx.emplace_back(shared.RegisterSink(child));
+	}
 }
 
 unique_ptr<WindowAggregatorState> WindowConstantAggregator::GetGlobalState(ClientContext &context, idx_t group_count,
@@ -329,8 +348,7 @@ void WindowConstantAggregator::Sink(WindowAggregatorState &gsink, WindowAggregat
 void WindowConstantAggregatorLocalState::Sink(DataChunk &payload_chunk, idx_t row,
                                               optional_ptr<SelectionVector> filter_sel, idx_t filtered) {
 	auto &partition_offsets = gstate.partition_offsets;
-	auto &aggregator = gstate.aggregator;
-	const auto &aggr = aggregator.aggr;
+	const auto &aggr = gstate.aggr;
 	const auto chunk_begin = row;
 	const auto chunk_end = chunk_begin + payload_chunk.size();
 	idx_t partition =
@@ -469,9 +487,9 @@ void WindowConstantAggregator::Evaluate(const WindowAggregatorState &gsink, Wind
 //===--------------------------------------------------------------------===//
 // WindowCustomAggregator
 //===--------------------------------------------------------------------===//
-WindowCustomAggregator::WindowCustomAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types,
-                                               const LogicalType &result_type, const WindowExcludeMode exclude_mode)
-    : WindowAggregator(std::move(aggr), arg_types, result_type, exclude_mode) {
+WindowCustomAggregator::WindowCustomAggregator(const BoundWindowExpression &wexpr, const WindowExcludeMode exclude_mode,
+                                               WindowSharedExpressions &shared)
+    : WindowAggregator(wexpr, exclude_mode, shared) {
 }
 
 WindowCustomAggregator::~WindowCustomAggregator() {
@@ -516,7 +534,7 @@ public:
 	                                           idx_t group_count)
 	    : WindowAggregatorGlobalState(context, aggregator, group_count), context(context) {
 
-		gcstate = make_uniq<WindowCustomAggregatorState>(aggregator.aggr, aggregator.exclude_mode);
+		gcstate = make_uniq<WindowCustomAggregatorState>(aggr, aggregator.exclude_mode);
 	}
 
 	//! Buffer manager for paging custom accelerator data
@@ -664,9 +682,9 @@ void WindowCustomAggregator::Evaluate(const WindowAggregatorState &gsink, Window
 //===--------------------------------------------------------------------===//
 // WindowNaiveAggregator
 //===--------------------------------------------------------------------===//
-WindowNaiveAggregator::WindowNaiveAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types,
-                                             const LogicalType &result_type, const WindowExcludeMode exclude_mode)
-    : WindowAggregator(std::move(aggr), arg_types, result_type, exclude_mode) {
+WindowNaiveAggregator::WindowNaiveAggregator(const BoundWindowExpression &wexpr, const WindowExcludeMode exclude_mode,
+                                             WindowSharedExpressions &shared)
+    : WindowAggregator(wexpr, exclude_mode, shared) {
 }
 
 WindowNaiveAggregator::~WindowNaiveAggregator() {
@@ -774,7 +792,7 @@ void WindowNaiveState::FlushStates(const WindowAggregatorGlobalState &gsink) {
 	auto &scanned = cursor->chunk;
 	leaves.Slice(scanned, update_sel, flush_count);
 
-	auto &aggr = aggregator.aggr;
+	const auto &aggr = gsink.aggr;
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
 	aggr.function.update(leaves.data.data(), aggr_input_data, leaves.ColumnCount(), statep, flush_count);
 
@@ -831,7 +849,7 @@ bool WindowNaiveState::KeyEqual(const WindowCollection &winputs, const idx_t &li
 
 void WindowNaiveState::Evaluate(const WindowAggregatorGlobalState &gsink, const DataChunk &bounds, Vector &result,
                                 idx_t count, idx_t row_idx) {
-	auto &aggr = aggregator.aggr;
+	const auto &aggr = gsink.aggr;
 	auto &filter_mask = gsink.filter_mask;
 	auto &winputs = gsink.winputs;
 	auto &types = winputs.GetTypes();
@@ -940,10 +958,9 @@ public:
 	static constexpr idx_t TREE_FANOUT = 16;
 };
 
-WindowSegmentTree::WindowSegmentTree(AggregateObject aggr, const vector<LogicalType> &arg_types,
-                                     const LogicalType &result_type, WindowAggregationMode mode_p,
-                                     const WindowExcludeMode exclude_mode_p)
-    : WindowAggregator(std::move(aggr), arg_types, result_type, exclude_mode_p), mode(mode_p) {
+WindowSegmentTree::WindowSegmentTree(const BoundWindowExpression &wexpr, WindowAggregationMode mode_p,
+                                     const WindowExcludeMode exclude_mode_p, WindowSharedExpressions &shared)
+    : WindowAggregator(wexpr, exclude_mode_p, shared), mode(mode_p) {
 }
 
 class WindowSegmentTreePart {
@@ -1186,8 +1203,7 @@ void WindowSegmentTreePart::Finalize(Vector &result, idx_t count) {
 
 WindowSegmentTreeGlobalState::WindowSegmentTreeGlobalState(ClientContext &context, const WindowSegmentTree &aggregator,
                                                            idx_t group_count)
-    : WindowAggregatorGlobalState(context, aggregator, group_count), tree(aggregator),
-      levels_flat_native(aggregator.aggr) {
+    : WindowAggregatorGlobalState(context, aggregator, group_count), tree(aggregator), levels_flat_native(aggr) {
 
 	D_ASSERT(!winputs.GetTypes().empty());
 
@@ -1236,9 +1252,8 @@ void WindowSegmentTreeState::Finalize(WindowAggregatorGlobalState &gastate) {
 	//	Single part for constructing the tree
 	auto &gstate = gastate.Cast<WindowSegmentTreeGlobalState>();
 	auto &inputs = gstate.winputs;
-	auto &tree = gstate.tree;
 	auto &filter_mask = gstate.filter_mask;
-	WindowSegmentTreePart gtstate(gstate.CreateTreeAllocator(), tree.aggr, inputs, filter_mask);
+	WindowSegmentTreePart gtstate(gstate.CreateTreeAllocator(), gastate.aggr, inputs, filter_mask);
 
 	auto &levels_flat_native = gstate.levels_flat_native;
 	const auto &levels_flat_start = gstate.levels_flat_start;
@@ -1302,7 +1317,7 @@ void WindowSegmentTreeState::Evaluate(const WindowSegmentTreeGlobalState &gtstat
 
 	if (!part) {
 		auto &inputs = gtstate.winputs;
-		part = make_uniq<WindowSegmentTreePart>(allocator, gtstate.aggregator.aggr, inputs, gtstate.filter_mask);
+		part = make_uniq<WindowSegmentTreePart>(allocator, gtstate.aggr, inputs, gtstate.filter_mask);
 	}
 
 	if (gtstate.aggregator.exclude_mode != WindowExcludeMode::NO_OTHER) {
@@ -1500,10 +1515,10 @@ void WindowSegmentTreePart::EvaluateLeaves(const WindowSegmentTreeGlobalState &t
 //===--------------------------------------------------------------------===//
 // WindowDistinctAggregator
 //===--------------------------------------------------------------------===//
-WindowDistinctAggregator::WindowDistinctAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types,
-                                                   const LogicalType &result_type,
-                                                   const WindowExcludeMode exclude_mode_p, ClientContext &context)
-    : WindowAggregator(std::move(aggr), arg_types, result_type, exclude_mode_p), context(context) {
+WindowDistinctAggregator::WindowDistinctAggregator(const BoundWindowExpression &wexpr,
+                                                   const WindowExcludeMode exclude_mode_p,
+                                                   WindowSharedExpressions &shared, ClientContext &context)
+    : WindowAggregator(wexpr, exclude_mode_p, shared), context(context) {
 }
 
 class WindowDistinctAggregatorLocalState;
@@ -1592,7 +1607,7 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(ClientC
                                                                          idx_t group_count)
     : WindowAggregatorGlobalState(context, aggregator, group_count), context(aggregator.context),
       stage(PartitionSortStage::INIT), tasks_completed(0), merge_sort_tree(*this, group_count),
-      levels_flat_native(aggregator.aggr) {
+      levels_flat_native(aggr) {
 	payload_types.emplace_back(LogicalType::UBIGINT);
 
 	//	1:	functionComputePrevIdcs(𝑖𝑛)
@@ -1693,7 +1708,7 @@ protected:
 WindowDistinctAggregatorLocalState::WindowDistinctAggregatorLocalState(
     const WindowDistinctAggregatorGlobalState &gastate)
     : update_v(LogicalType::POINTER), source_v(LogicalType::POINTER), target_v(LogicalType::POINTER), gastate(gastate),
-      statef(gastate.aggregator.aggr), statep(LogicalType::POINTER), statel(LogicalType::POINTER), flush_count(0) {
+      statef(gastate.aggr), statep(LogicalType::POINTER), statel(LogicalType::POINTER), flush_count(0) {
 	InitSubFrames(frames, gastate.aggregator.exclude_mode);
 	payload_chunk.Initialize(Allocator::DefaultAllocator(), gastate.payload_types);
 
@@ -2031,7 +2046,7 @@ void WindowDistinctSortTree::Build(WindowDistinctAggregatorLocalState &ldastate)
 }
 
 void WindowDistinctSortTree::BuildRun(idx_t level_nr, idx_t run_idx, WindowDistinctAggregatorLocalState &ldastate) {
-	auto &aggr = gdastate.aggregator.aggr;
+	auto &aggr = gdastate.aggr;
 	auto &allocator = gdastate.allocator;
 	auto &inputs = ldastate.cursor->chunk;
 	auto &levels_flat_native = gdastate.levels_flat_native;
@@ -2136,7 +2151,7 @@ void WindowDistinctAggregatorLocalState::FlushStates() {
 		return;
 	}
 
-	const auto &aggr = gastate.aggregator.aggr;
+	const auto &aggr = gastate.aggr;
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
 	statel.Verify(flush_count);
 	aggr.function.combine(statel, statep, aggr_input_data, flush_count);

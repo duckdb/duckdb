@@ -199,6 +199,40 @@ struct WindowInputExpression {
 //	Column indexes of the bounds chunk
 enum WindowBounds : uint8_t { PARTITION_BEGIN, PARTITION_END, PEER_BEGIN, PEER_END, WINDOW_BEGIN, WINDOW_END };
 
+//! A shared set of expressions
+struct WindowSharedExpressions {
+	using Expressions = vector<const Expression *>;
+
+	//! Register a shared expression in a shared set
+	static column_t RegisterExpr(const unique_ptr<Expression> &expr, Expressions &shared);
+
+	//! Register a shared collection expression
+	column_t RegisterCollection(const unique_ptr<Expression> &expr, bool build_validity) {
+		auto result = RegisterExpr(expr, coll_exprs);
+		if (build_validity) {
+			coll_validity.insert(result);
+		}
+		return result;
+	}
+	//! Register a shared collection expression
+	inline column_t RegisterSink(const unique_ptr<Expression> &expr) {
+		return RegisterExpr(expr, sink_exprs);
+	}
+	//! Register a shared evaluation expression
+	inline column_t RegisterEvaluate(const unique_ptr<Expression> &expr) {
+		return RegisterExpr(expr, eval_exprs);
+	}
+
+	//! Fully materialised shared expressions
+	Expressions coll_exprs;
+	//! Sink shared expressions
+	Expressions sink_exprs;
+	//! Evaluate shared expressions
+	Expressions eval_exprs;
+	//! Requested collection validity masks
+	unordered_set<column_t> coll_validity;
+};
+
 class WindowExecutorState {
 public:
 	WindowExecutorState() {};
@@ -232,7 +266,6 @@ public:
 	vector<LogicalType> arg_types;
 
 	// evaluate RANGE expressions, if needed
-	optional_ptr<Expression> range_expr;
 	unique_ptr<WindowCollection> range;
 };
 
@@ -258,6 +291,7 @@ public:
 
 class WindowExecutor {
 public:
+	WindowExecutor(BoundWindowExpression &wexpr, ClientContext &context, WindowSharedExpressions &shared);
 	WindowExecutor(BoundWindowExpression &wexpr, ClientContext &context);
 	virtual ~WindowExecutor() {
 	}
@@ -278,6 +312,10 @@ public:
 	const BoundWindowExpression &wexpr;
 	ClientContext &context;
 
+	// evaluate RANGE expressions, if needed
+	optional_ptr<Expression> range_expr;
+	idx_t range_idx = DConstants::INVALID_INDEX;
+
 protected:
 	virtual void EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate, Vector &result,
 	                              idx_t count, idx_t row_idx) const = 0;
@@ -285,7 +323,12 @@ protected:
 
 class WindowAggregateExecutor : public WindowExecutor {
 public:
-	WindowAggregateExecutor(BoundWindowExpression &wexpr, ClientContext &context, WindowAggregationMode mode);
+	WindowAggregateExecutor(BoundWindowExpression &wexpr, ClientContext &context, WindowSharedExpressions &shared,
+	                        WindowAggregationMode mode);
+
+	bool IsConstantAggregate();
+	bool IsCustomAggregate();
+	bool IsDistinctAggregate();
 
 	void Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count, WindowExecutorGlobalState &gstate,
 	          WindowExecutorLocalState &lstate) const override;
@@ -296,6 +339,9 @@ public:
 	unique_ptr<WindowExecutorLocalState> GetLocalState(const WindowExecutorGlobalState &gstate) const override;
 
 	const WindowAggregationMode mode;
+
+	// aggregate computation algorithm
+	unique_ptr<WindowAggregator> aggregator;
 
 protected:
 	void EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate, Vector &result,
@@ -357,7 +403,7 @@ protected:
 // Base class for non-aggregate functions that have a payload
 class WindowValueExecutor : public WindowExecutor {
 public:
-	WindowValueExecutor(BoundWindowExpression &wexpr, ClientContext &context);
+	WindowValueExecutor(BoundWindowExpression &wexpr, ClientContext &context, WindowSharedExpressions &shared);
 
 	void Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count, WindowExecutorGlobalState &gstate,
 	          WindowExecutorLocalState &lstate) const override;
@@ -365,12 +411,21 @@ public:
 	unique_ptr<WindowExecutorGlobalState> GetGlobalState(const idx_t payload_count, const ValidityMask &partition_mask,
 	                                                     const ValidityMask &order_mask) const override;
 	unique_ptr<WindowExecutorLocalState> GetLocalState(const WindowExecutorGlobalState &gstate) const override;
+
+	//! The column index of the value column
+	column_t child_idx = DConstants::INVALID_INDEX;
+	//! The column index of the Nth column
+	column_t nth_idx = DConstants::INVALID_INDEX;
+	//! The column index of the offset column
+	column_t offset_idx = DConstants::INVALID_INDEX;
+	//! The column index of the default value column
+	column_t default_idx = DConstants::INVALID_INDEX;
 };
 
 //
 class WindowNtileExecutor : public WindowValueExecutor {
 public:
-	WindowNtileExecutor(BoundWindowExpression &wexpr, ClientContext &context);
+	WindowNtileExecutor(BoundWindowExpression &wexpr, ClientContext &context, WindowSharedExpressions &shared);
 
 protected:
 	void EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate, Vector &result,
@@ -378,7 +433,7 @@ protected:
 };
 class WindowLeadLagExecutor : public WindowValueExecutor {
 public:
-	WindowLeadLagExecutor(BoundWindowExpression &wexpr, ClientContext &context);
+	WindowLeadLagExecutor(BoundWindowExpression &wexpr, ClientContext &context, WindowSharedExpressions &shared);
 
 	unique_ptr<WindowExecutorLocalState> GetLocalState(const WindowExecutorGlobalState &gstate) const override;
 
@@ -389,7 +444,7 @@ protected:
 
 class WindowFirstValueExecutor : public WindowValueExecutor {
 public:
-	WindowFirstValueExecutor(BoundWindowExpression &wexpr, ClientContext &context);
+	WindowFirstValueExecutor(BoundWindowExpression &wexpr, ClientContext &context, WindowSharedExpressions &shared);
 
 protected:
 	void EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate, Vector &result,
@@ -398,7 +453,7 @@ protected:
 
 class WindowLastValueExecutor : public WindowValueExecutor {
 public:
-	WindowLastValueExecutor(BoundWindowExpression &wexpr, ClientContext &context);
+	WindowLastValueExecutor(BoundWindowExpression &wexpr, ClientContext &context, WindowSharedExpressions &shared);
 
 protected:
 	void EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate, Vector &result,
@@ -407,7 +462,7 @@ protected:
 
 class WindowNthValueExecutor : public WindowValueExecutor {
 public:
-	WindowNthValueExecutor(BoundWindowExpression &wexpr, ClientContext &context);
+	WindowNthValueExecutor(BoundWindowExpression &wexpr, ClientContext &context, WindowSharedExpressions &shared);
 
 protected:
 	void EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate, Vector &result,

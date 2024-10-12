@@ -824,6 +824,24 @@ void ExclusionFilter::ResetMask(idx_t row_idx, idx_t offset) {
 	}
 }
 
+column_t WindowSharedExpressions::RegisterExpr(const unique_ptr<Expression> &expr, Expressions &shared) {
+	auto pexpr = expr.get();
+	if (!pexpr) {
+		return DConstants::INVALID_INDEX;
+	}
+
+	column_t result = shared.size();
+	for (column_t i = 0; i < shared.size(); ++i) {
+		if (pexpr->Equals(*shared[i])) {
+			return i;
+		}
+	}
+
+	shared.emplace_back(pexpr);
+
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // WindowExecutor
 //===--------------------------------------------------------------------===//
@@ -845,22 +863,28 @@ static void PrepareInputExpressions(const vector<unique_ptr<Expression>> &exprs,
 	}
 }
 
-WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, ClientContext &context) : wexpr(wexpr), context(context) {
+WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, ClientContext &context)
+    : wexpr(wexpr), context(context),
+      range_expr((HasPrecedingRange(wexpr) || HasFollowingRange(wexpr)) ? wexpr.orders[0].expression.get() : nullptr) {
+}
+
+WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, ClientContext &context, WindowSharedExpressions &shared)
+    : WindowExecutor(wexpr, context) {
+	if (range_expr) {
+		range_idx = shared.RegisterCollection(wexpr.orders[0].expression, false);
+	}
 }
 
 WindowExecutorGlobalState::WindowExecutorGlobalState(const WindowExecutor &executor, const idx_t payload_count,
                                                      const ValidityMask &partition_mask, const ValidityMask &order_mask)
-    : executor(executor), payload_count(payload_count), partition_mask(partition_mask), order_mask(order_mask),
-      range_expr((HasPrecedingRange(executor.wexpr) || HasFollowingRange(executor.wexpr))
-                     ? executor.wexpr.orders[0].expression.get()
-                     : nullptr) {
+    : executor(executor), payload_count(payload_count), partition_mask(partition_mask), order_mask(order_mask) {
 	for (const auto &child : executor.wexpr.children) {
 		arg_types.emplace_back(child->return_type);
 	}
 
-	if (range_expr) {
+	if (executor.range_expr) {
 		vector<LogicalType> types;
-		types.emplace_back(range_expr->return_type);
+		types.emplace_back(executor.range_expr->return_type);
 		range = make_uniq<WindowCollection>(BufferManager::GetBufferManager(executor.context), payload_count, types);
 	}
 }
@@ -872,8 +896,8 @@ WindowExecutorLocalState::WindowExecutorLocalState(const WindowExecutorGlobalSta
 	// evaluate inner expressions of window functions, could be more complex
 	PrepareInputExpressions(gstate.executor.wexpr.children, payload_executor, payload_chunk);
 
-	if (gstate.range_expr) {
-		range_executor.AddExpression(*gstate.range_expr);
+	if (gstate.executor.range_expr) {
+		range_executor.AddExpression(*gstate.executor.range_expr);
 
 		D_ASSERT(gstate.range.get());
 		auto &allocator = range_executor.GetAllocator();
@@ -883,7 +907,7 @@ WindowExecutorLocalState::WindowExecutorLocalState(const WindowExecutorGlobalSta
 }
 
 void WindowExecutorLocalState::Sink(WindowExecutorGlobalState &gstate, DataChunk &input_chunk, idx_t input_idx) {
-	if (gstate.range_expr) {
+	if (gstate.executor.range_expr) {
 		range_executor.Execute(input_chunk, range_chunk);
 		range_builder->Sink(range_chunk, input_idx);
 	}
@@ -925,22 +949,14 @@ void WindowExecutor::Finalize(WindowExecutorGlobalState &gstate, WindowExecutorL
 //===--------------------------------------------------------------------===//
 class WindowAggregateExecutorGlobalState : public WindowExecutorGlobalState {
 public:
-	bool IsConstantAggregate();
-	bool IsCustomAggregate();
-	bool IsDistinctAggregate();
-
 	WindowAggregateExecutorGlobalState(const WindowAggregateExecutor &executor, const idx_t payload_count,
 	                                   const ValidityMask &partition_mask, const ValidityMask &order_mask);
 
-	// aggregate computation algorithm
-	unique_ptr<WindowAggregator> aggregator;
 	// aggregate global state
 	unique_ptr<WindowAggregatorState> gsink;
 };
 
-bool WindowAggregateExecutorGlobalState::IsConstantAggregate() {
-	const auto &wexpr = executor.wexpr;
-
+bool WindowAggregateExecutor::IsConstantAggregate() {
 	if (!wexpr.aggregate) {
 		return false;
 	}
@@ -998,9 +1014,7 @@ bool WindowAggregateExecutorGlobalState::IsConstantAggregate() {
 	return true;
 }
 
-bool WindowAggregateExecutorGlobalState::IsDistinctAggregate() {
-	const auto &wexpr = executor.wexpr;
-
+bool WindowAggregateExecutor::IsDistinctAggregate() {
 	if (!wexpr.aggregate) {
 		return false;
 	}
@@ -1008,10 +1022,7 @@ bool WindowAggregateExecutorGlobalState::IsDistinctAggregate() {
 	return wexpr.distinct;
 }
 
-bool WindowAggregateExecutorGlobalState::IsCustomAggregate() {
-	const auto &wexpr = executor.wexpr;
-	const auto &mode = reinterpret_cast<const WindowAggregateExecutor &>(executor).mode;
-
+bool WindowAggregateExecutor::IsCustomAggregate() {
 	if (!wexpr.aggregate) {
 		return false;
 	}
@@ -1035,8 +1046,28 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 }
 
 WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, ClientContext &context,
-                                                 WindowAggregationMode mode)
-    : WindowExecutor(wexpr, context), mode(mode) {
+                                                 WindowSharedExpressions &shared, WindowAggregationMode mode)
+    : WindowExecutor(wexpr, context, shared), mode(mode) {
+	auto return_type = wexpr.return_type;
+
+	// Force naive for SEPARATE mode or for (currently!) unsupported functionality
+	const auto force_naive =
+	    !ClientConfig::GetConfig(context).enable_optimizer || mode == WindowAggregationMode::SEPARATE;
+	if (force_naive || (wexpr.distinct && wexpr.exclude_clause != WindowExcludeMode::NO_OTHER)) {
+		aggregator = make_uniq<WindowNaiveAggregator>(wexpr, wexpr.exclude_clause, shared);
+	} else if (IsDistinctAggregate()) {
+		// build a merge sort tree
+		// see https://dl.acm.org/doi/pdf/10.1145/3514221.3526184
+		aggregator = make_uniq<WindowDistinctAggregator>(wexpr, wexpr.exclude_clause, shared, context);
+	} else if (IsConstantAggregate()) {
+		aggregator = make_uniq<WindowConstantAggregator>(wexpr, wexpr.exclude_clause, shared);
+	} else if (IsCustomAggregate()) {
+		aggregator = make_uniq<WindowCustomAggregator>(wexpr, wexpr.exclude_clause, shared);
+	} else {
+		// build a segment tree for frame-adhering aggregates
+		// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
+		aggregator = make_uniq<WindowSegmentTree>(wexpr, mode, wexpr.exclude_clause, shared);
+	}
 }
 
 WindowAggregateExecutorGlobalState::WindowAggregateExecutorGlobalState(const WindowAggregateExecutor &executor,
@@ -1044,32 +1075,7 @@ WindowAggregateExecutorGlobalState::WindowAggregateExecutorGlobalState(const Win
                                                                        const ValidityMask &partition_mask,
                                                                        const ValidityMask &order_mask)
     : WindowExecutorGlobalState(executor, group_count, partition_mask, order_mask) {
-	auto &wexpr = executor.wexpr;
-	auto &context = executor.context;
-	auto return_type = wexpr.return_type;
-	const auto &mode = reinterpret_cast<const WindowAggregateExecutor &>(executor).mode;
-
-	// Force naive for SEPARATE mode or for (currently!) unsupported functionality
-	const auto force_naive =
-	    !ClientConfig::GetConfig(context).enable_optimizer || mode == WindowAggregationMode::SEPARATE;
-	AggregateObject aggr(wexpr);
-	if (force_naive || (wexpr.distinct && wexpr.exclude_clause != WindowExcludeMode::NO_OTHER)) {
-		aggregator = make_uniq<WindowNaiveAggregator>(aggr, arg_types, return_type, wexpr.exclude_clause);
-	} else if (IsDistinctAggregate()) {
-		// build a merge sort tree
-		// see https://dl.acm.org/doi/pdf/10.1145/3514221.3526184
-		aggregator = make_uniq<WindowDistinctAggregator>(aggr, arg_types, return_type, wexpr.exclude_clause, context);
-	} else if (IsConstantAggregate()) {
-		aggregator = make_uniq<WindowConstantAggregator>(aggr, arg_types, return_type, wexpr.exclude_clause);
-	} else if (IsCustomAggregate()) {
-		aggregator = make_uniq<WindowCustomAggregator>(aggr, arg_types, return_type, wexpr.exclude_clause);
-	} else {
-		// build a segment tree for frame-adhering aggregates
-		// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
-		aggregator = make_uniq<WindowSegmentTree>(aggr, arg_types, return_type, mode, wexpr.exclude_clause);
-	}
-
-	gsink = aggregator->GetGlobalState(context, group_count, partition_mask);
+	gsink = executor.aggregator->GetGlobalState(executor.context, group_count, partition_mask);
 }
 
 unique_ptr<WindowExecutorGlobalState> WindowAggregateExecutor::GetGlobalState(const idx_t payload_count,
@@ -1105,9 +1111,7 @@ public:
 
 unique_ptr<WindowExecutorLocalState>
 WindowAggregateExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
-	auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
-	auto res = make_uniq<WindowAggregateExecutorLocalState>(gstate, *gastate.aggregator);
-	return std::move(res);
+	return make_uniq<WindowAggregateExecutorLocalState>(gstate, *aggregator);
 }
 
 void WindowAggregateExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count,
@@ -1118,7 +1122,6 @@ void WindowAggregateExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx
 	auto &filter_executor = lastate.filter_executor;
 	auto &payload_executor = lastate.payload_executor;
 	auto &payload_chunk = lastate.payload_chunk;
-	auto &aggregator = gastate.aggregator;
 
 	idx_t filtered = 0;
 	SelectionVector *filtering = nullptr;
@@ -1206,7 +1209,6 @@ void WindowAggregateExecutor::Finalize(WindowExecutorGlobalState &gstate, Window
 	WindowExecutor::Finalize(gstate, lstate);
 
 	auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
-	auto &aggregator = gastate.aggregator;
 	auto &gsink = gastate.gsink;
 	D_ASSERT(aggregator);
 
@@ -1233,7 +1235,6 @@ void WindowAggregateExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate
                                                Vector &result, idx_t count, idx_t row_idx) const {
 	auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
 	auto &lastate = lstate.Cast<WindowAggregateExecutorLocalState>();
-	auto &aggregator = gastate.aggregator;
 	auto &gsink = gastate.gsink;
 	D_ASSERT(aggregator);
 
@@ -1519,12 +1520,26 @@ void WindowValueLocalState::Finalize(WindowExecutorGlobalState &gstate) {
 //===--------------------------------------------------------------------===//
 // WindowValueExecutor
 //===--------------------------------------------------------------------===//
-WindowValueExecutor::WindowValueExecutor(BoundWindowExpression &wexpr, ClientContext &context)
-    : WindowExecutor(wexpr, context) {
+WindowValueExecutor::WindowValueExecutor(BoundWindowExpression &wexpr, ClientContext &context,
+                                         WindowSharedExpressions &shared)
+    : WindowExecutor(wexpr, context, shared) {
+
+	//	The children have to be handled separately because only the first one is global
+	if (wexpr.children.empty()) {
+		child_idx = shared.RegisterCollection(wexpr.children[0], wexpr.ignore_nulls);
+
+		if (wexpr.children.size() > 1) {
+			nth_idx = shared.RegisterEvaluate(wexpr.children[1]);
+		}
+	}
+
+	offset_idx = shared.RegisterEvaluate(wexpr.offset_expr);
+	default_idx = shared.RegisterEvaluate(wexpr.default_expr);
 }
 
-WindowNtileExecutor::WindowNtileExecutor(BoundWindowExpression &wexpr, ClientContext &context)
-    : WindowValueExecutor(wexpr, context) {
+WindowNtileExecutor::WindowNtileExecutor(BoundWindowExpression &wexpr, ClientContext &context,
+                                         WindowSharedExpressions &shared)
+    : WindowValueExecutor(wexpr, context, shared) {
 }
 
 unique_ptr<WindowExecutorGlobalState> WindowValueExecutor::GetGlobalState(const idx_t payload_count,
@@ -1621,8 +1636,9 @@ void WindowLeadLagLocalState::UpdateBounds(idx_t row_idx, DataChunk &input_chunk
 	WindowExecutorBoundsState::UpdateBounds(row_idx, input_chunk, range);
 }
 
-WindowLeadLagExecutor::WindowLeadLagExecutor(BoundWindowExpression &wexpr, ClientContext &context)
-    : WindowValueExecutor(wexpr, context) {
+WindowLeadLagExecutor::WindowLeadLagExecutor(BoundWindowExpression &wexpr, ClientContext &context,
+                                             WindowSharedExpressions &shared)
+    : WindowValueExecutor(wexpr, context, shared) {
 }
 
 unique_ptr<WindowExecutorLocalState>
@@ -1715,8 +1731,9 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, 
 	}
 }
 
-WindowFirstValueExecutor::WindowFirstValueExecutor(BoundWindowExpression &wexpr, ClientContext &context)
-    : WindowValueExecutor(wexpr, context) {
+WindowFirstValueExecutor::WindowFirstValueExecutor(BoundWindowExpression &wexpr, ClientContext &context,
+                                                   WindowSharedExpressions &shared)
+    : WindowValueExecutor(wexpr, context, shared) {
 }
 
 void WindowFirstValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
@@ -1750,8 +1767,9 @@ void WindowFirstValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstat
 	}
 }
 
-WindowLastValueExecutor::WindowLastValueExecutor(BoundWindowExpression &wexpr, ClientContext &context)
-    : WindowValueExecutor(wexpr, context) {
+WindowLastValueExecutor::WindowLastValueExecutor(BoundWindowExpression &wexpr, ClientContext &context,
+                                                 WindowSharedExpressions &shared)
+    : WindowValueExecutor(wexpr, context, shared) {
 }
 
 void WindowLastValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
@@ -1784,8 +1802,9 @@ void WindowLastValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate
 	}
 }
 
-WindowNthValueExecutor::WindowNthValueExecutor(BoundWindowExpression &wexpr, ClientContext &context)
-    : WindowValueExecutor(wexpr, context) {
+WindowNthValueExecutor::WindowNthValueExecutor(BoundWindowExpression &wexpr, ClientContext &context,
+                                               WindowSharedExpressions &shared)
+    : WindowValueExecutor(wexpr, context, shared) {
 }
 
 void WindowNthValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
