@@ -4,6 +4,7 @@ from typing import (
     Any,
     Callable,
     List,
+    Dict,
     Optional,
     Tuple,
     Union,
@@ -110,6 +111,80 @@ class DataFrame:
         else:
             cols = [ColumnExpression(x) for x in self.relation.columns]
             cols.append(col.expr.alias(columnName))
+        rel = self.relation.select(*cols)
+        return DataFrame(rel, self.session)
+
+    def withColumns(self, *colsMap: Dict[str, Column]) -> "DataFrame":
+        """
+        Returns a new :class:`DataFrame` by adding multiple columns or replacing the
+        existing columns that have the same names.
+
+        The colsMap is a map of column name and column, the column must only refer to attributes
+        supplied by this Dataset. It is an error to add columns that refer to some other Dataset.
+
+        .. versionadded:: 3.3.0
+           Added support for multiple columns adding
+
+        .. versionchanged:: 3.4.0
+            Supports Spark Connect.
+
+        Parameters
+        ----------
+        colsMap : dict
+            a dict of column name and :class:`Column`. Currently, only a single map is supported.
+
+        Returns
+        -------
+        :class:`DataFrame`
+            DataFrame with new or replaced columns.
+
+        Examples
+        --------
+        >>> df = spark.createDataFrame([(2, "Alice"), (5, "Bob")], schema=["age", "name"])
+        >>> df.withColumns({'age2': df.age + 2, 'age3': df.age + 3}).show()
+        +---+-----+----+----+
+        |age| name|age2|age3|
+        +---+-----+----+----+
+        |  2|Alice|   4|   5|
+        |  5|  Bob|   7|   8|
+        +---+-----+----+----+
+        """
+        # Below code is to help enable kwargs in future.
+        assert len(colsMap) == 1
+        colsMap = colsMap[0]  # type: ignore[assignment]
+
+        if not isinstance(colsMap, dict):
+            raise PySparkTypeError(
+                error_class="NOT_DICT",
+                message_parameters={
+                    "arg_name": "colsMap",
+                    "arg_type": type(colsMap).__name__,
+                },
+            )
+
+        column_names = list(colsMap.keys())
+        columns = list(colsMap.values())
+
+        column_names_for_comparison = [x.casefold() for x in column_names]
+
+        cols = []
+        for x in self.relation.columns:
+            if x.casefold() in column_names_for_comparison:
+                idx = column_names_for_comparison.index(x)
+                # We extract the column name from the originally passed
+                # in ones, as the casing might be different than the one
+                # in the relation
+                col_name = column_names.pop(idx)
+                col = columns.pop(idx)
+                cols.append(col.expr.alias(col_name))
+            else:
+                cols.append(ColumnExpression(x))
+
+        # In case anything is remaining, these are new columns
+        # that we need to add to the DataFrame
+        for col_name, col in zip(column_names, columns):
+            cols.append(col.expr.alias(col_name))
+
         rel = self.relation.select(*cols)
         return DataFrame(rel, self.session)
 
@@ -302,7 +377,7 @@ class DataFrame:
                 error_class="NOT_BOOL_OR_LIST",
                 message_parameters={"arg_name": "ascending", "arg_type": type(ascending).__name__},
             )
-       
+
         columns = [_to_column_expr(c) for c in columns]
         rel = self.relation.sort(*columns)
         return DataFrame(rel, self.session)
