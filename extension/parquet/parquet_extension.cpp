@@ -383,6 +383,11 @@ static bool GetBooleanArgument(const pair<string, vector<Value>> &option) {
 	return BooleanValue::Get(boolean_value);
 }
 
+TablePartitionInfo ParquetGetPartitionInfo(ClientContext &context, TableFunctionPartitionInput &input) {
+	auto &parquet_bind = input.bind_data->Cast<ParquetReadBindData>();
+	return parquet_bind.multi_file_reader->GetPartitionInfo(context, parquet_bind.reader_bind, input);
+}
+
 class ParquetScanFunction {
 public:
 	static TableFunctionSet GetFunctionSet() {
@@ -400,7 +405,7 @@ public:
 		                                                                 {"type", LogicalType::VARCHAR},
 		                                                                 {"default_value", LogicalType::VARCHAR}}}));
 		table_function.named_parameters["encryption_config"] = LogicalTypeId::ANY;
-		table_function.get_batch_index = ParquetScanGetBatchIndex;
+		table_function.get_partition_data = ParquetScanGetPartitionData;
 		table_function.serialize = ParquetScanSerialize;
 		table_function.deserialize = ParquetScanDeserialize;
 		table_function.get_bind_info = ParquetGetBindInfo;
@@ -408,6 +413,7 @@ public:
 		table_function.filter_pushdown = true;
 		table_function.filter_prune = true;
 		table_function.pushdown_complex_filter = ParquetComplexFilterPushdown;
+		table_function.get_partition_info = ParquetGetPartitionInfo;
 
 		MultiFileReader::AddParameters(table_function);
 
@@ -771,11 +777,16 @@ public:
 		return std::move(result);
 	}
 
-	static idx_t ParquetScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-	                                      LocalTableFunctionState *local_state,
-	                                      GlobalTableFunctionState *global_state) {
-		auto &data = local_state->Cast<ParquetReadLocalState>();
-		return data.batch_index;
+	static OperatorPartitionData ParquetScanGetPartitionData(ClientContext &context,
+	                                                         TableFunctionGetPartitionInput &input) {
+		auto &bind_data = input.bind_data->CastNoConst<ParquetReadBindData>();
+		auto &data = input.local_state->Cast<ParquetReadLocalState>();
+		auto &gstate = input.global_state->Cast<ParquetReadGlobalState>();
+		OperatorPartitionData partition_data(data.batch_index);
+		bind_data.multi_file_reader->GetPartitionData(context, bind_data.reader_bind, data.reader->reader_data,
+		                                              gstate.multi_file_reader_state, input.partition_info,
+		                                              partition_data);
+		return partition_data;
 	}
 
 	static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,

@@ -20,6 +20,7 @@
 #include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/execution/partition_info.hpp"
 
 namespace duckdb {
 class Event;
@@ -113,8 +114,9 @@ public:
 	virtual unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
 	virtual SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const;
 
-	virtual idx_t GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-	                            LocalSourceState &lstate) const;
+	virtual OperatorPartitionData GetPartitionData(ExecutionContext &context, DataChunk &chunk,
+	                                               GlobalSourceState &gstate, LocalSourceState &lstate,
+	                                               const OperatorPartitionInfo &partition_info) const;
 
 	virtual bool IsSource() const {
 		return false;
@@ -124,8 +126,11 @@ public:
 		return false;
 	}
 
-	virtual bool SupportsBatchIndex() const {
-		return false;
+	virtual bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const {
+		if (partition_info.AnyRequired()) {
+			return false;
+		}
+		return true;
 	}
 
 	//! The type of order emitted by the operator (as a source)
@@ -181,8 +186,8 @@ public:
 		return false;
 	}
 
-	virtual bool RequiresBatchIndex() const {
-		return false;
+	virtual OperatorPartitionInfo RequiredPartitionInfo() const {
+		return OperatorPartitionInfo::NoPartitionInfo();
 	}
 
 	//! Whether or not the sink operator depends on the order of the input chunks
