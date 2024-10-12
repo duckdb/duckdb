@@ -115,10 +115,10 @@ public:
 	duckdb::unique_ptr<data_t[]> read_buffer;
 	constexpr static idx_t READ_BUFFER_LEN = 1000000;
 
-	//duckdb::unique_ptr<data_t[]> write_buffer;
+	// duckdb::unique_ptr<data_t[]> write_buffer;
 	constexpr static idx_t WRITE_BUFFER_LEN = 1000000;
 	std::vector<data_t> write_buffer; // Use a vector instead of a fixed-size array
- 	idx_t write_buffer_idx = 0;       // Tracks the current index in the buffer
+	idx_t write_buffer_idx = 0;       // Tracks the current index in the buffer
 	idx_t current_buffer_len;
 
 	shared_ptr<HTTPState> state;
