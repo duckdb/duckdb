@@ -165,6 +165,7 @@ class DataFrame:
         column_names = list(colsMap.keys())
         columns = list(colsMap.values())
 
+        # Compute this only once
         column_names_for_comparison = [x.casefold() for x in column_names]
 
         cols = []
@@ -187,6 +188,79 @@ class DataFrame:
 
         rel = self.relation.select(*cols)
         return DataFrame(rel, self.session)
+
+    def withColumnsRenamed(self, colsMap: Dict[str, str]) -> "DataFrame":
+        """
+        Returns a new :class:`DataFrame` by renaming multiple columns.
+        This is a no-op if the schema doesn't contain the given column names.
+
+        .. versionadded:: 3.4.0
+           Added support for multiple columns renaming
+
+        Parameters
+        ----------
+        colsMap : dict
+            a dict of existing column names and corresponding desired column names.
+            Currently, only a single map is supported.
+
+        Returns
+        -------
+        :class:`DataFrame`
+            DataFrame with renamed columns.
+
+        See Also
+        --------
+        :meth:`withColumnRenamed`
+
+        Notes
+        -----
+        Support Spark Connect
+
+        Examples
+        --------
+        >>> df = spark.createDataFrame([(2, "Alice"), (5, "Bob")], schema=["age", "name"])
+        >>> df = df.withColumns({'age2': df.age + 2, 'age3': df.age + 3})
+        >>> df.withColumnsRenamed({'age2': 'age4', 'age3': 'age5'}).show()
+        +---+-----+----+----+
+        |age| name|age4|age5|
+        +---+-----+----+----+
+        |  2|Alice|   4|   5|
+        |  5|  Bob|   7|   8|
+        +---+-----+----+----+
+        """
+        if not isinstance(colsMap, dict):
+            raise PySparkTypeError(
+                error_class="NOT_DICT",
+                message_parameters={"arg_name": "colsMap", "arg_type": type(colsMap).__name__},
+            )
+
+        unknown_columns = set(colsMap.keys()) - set(self.relation.columns)
+        if unknown_columns:
+            raise ValueError(
+                f"DataFrame does not contain column(s): {', '.join(unknown_columns)}"
+            )
+
+        # Compute this only once
+        old_column_names = list(colsMap.keys())
+        old_column_names_for_comparison = [x.casefold() for x in old_column_names]
+
+        cols = []
+        for x in self.relation.columns:
+            col = ColumnExpression(x)
+            if x.casefold() in old_column_names_for_comparison:
+                idx = old_column_names.index(x)
+                # We extract the column name from the originally passed
+                # in ones, as the casing might be different than the one
+                # in the relation
+                col_name = old_column_names.pop(idx)
+                new_col_name = colsMap[col_name]
+                col = col.alias(new_col_name)
+            cols.append(col)
+
+        rel = self.relation.select(*cols)
+        return DataFrame(rel, self.session)
+
+
 
     def transform(
         self, func: Callable[..., "DataFrame"], *args: Any, **kwargs: Any
