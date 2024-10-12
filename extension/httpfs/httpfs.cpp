@@ -12,6 +12,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "http_state.hpp"
 
 #include <chrono>
@@ -575,57 +576,108 @@ int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes)
 }
 
 void HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	auto &hfh = handle.Cast<HTTPFileHandle>(); // Get HTTP file handle
+    auto &hfh = handle.Cast<HTTPFileHandle>();
 
-	if (!hfh.http_params.enable_http_write) {
-		throw NotImplementedException("Writing to HTTP files not implemented");
-	}
+    // Check if HTTP write is enabled
+    if (!hfh.http_params.enable_http_write) {
+        throw NotImplementedException("Writing to HTTP files not implemented");
+    }
 
-	// BUG: empty requests get fired after a successful post. Ensure the buffer is non-empty and larger than 1
-	if (!buffer || nr_bytes <= 1) {
-		return;
-	}
+    // Initialize the write buffer if it is not already done
+    if (hfh.write_buffer.empty()) {
+        hfh.write_buffer.resize(hfh.WRITE_BUFFER_LEN);
+        hfh.write_buffer_idx = 0;
+    }
 
-	// Prepare the URL and headers for the HTTP POST request
-	string path, proto_host_port;
-	ParseUrl(hfh.path, path, proto_host_port); // Parse URL to get path and host
+    idx_t bytes_to_copy = nr_bytes;
+    idx_t buffer_offset = 0;
 
-	// Create an empty HeaderMap and pass it to InitializeHeaders
-	HeaderMap header_map;                                          // Local HeaderMap instance
-	auto headers = InitializeHeaders(header_map, hfh.http_params); // Initialize headers
+    // Accumulate data into the write buffer
+    while (bytes_to_copy > 0) {
+        idx_t space_in_buffer = hfh.WRITE_BUFFER_LEN - hfh.write_buffer_idx;
+        idx_t copy_amount = MinValue<idx_t>(space_in_buffer, bytes_to_copy);
 
-	// Define the request lambda
-	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
-		auto client = GetClient(hfh.http_params, proto_host_port.c_str(), &hfh); // Get the HTTP client
+        // Copy data to the write buffer
+        memcpy(hfh.write_buffer.data() + hfh.write_buffer_idx, (char *)buffer + buffer_offset, copy_amount);
+        hfh.write_buffer_idx += copy_amount;
+        bytes_to_copy -= copy_amount;
+        buffer_offset += copy_amount;
 
-		// Update internal state for tracking POST requests
-		if (hfh.state) {
-			hfh.state->post_count++;
-			hfh.state->total_bytes_sent += nr_bytes;
-		}
+        // Log current buffer index
+        std::cout << "Write buffer idx after write: " << hfh.write_buffer_idx << std::endl;
 
-		// Create the HTTP POST request
-		duckdb_httplib_openssl::Request req;
-		req.method = "POST";
-		req.path = path;
-		req.headers = *headers;
-		req.headers.emplace("Content-Type", "application/octet-stream"); // Set content type as binary
+        // If the buffer is full, send the data
+        if (hfh.write_buffer_idx == hfh.WRITE_BUFFER_LEN) {
+            // Perform the HTTP POST request
+            FlushBuffer(hfh);
+        }
+    }
 
-		// Set the body using the buffer content
-		req.body = std::string(static_cast<const char *>(buffer), nr_bytes);
+    // Update the file offset
+    hfh.file_offset += nr_bytes;
 
-		return client->send(req); // Send the request
-	});
-
-	// Perform the HTTP POST request and handle retries
-	auto response = RunRequestWithRetry(request, hfh.path, "POST", hfh.http_params);
-
-	// Check if the response was successful (HTTP 200-299 status code)
-	if (response->code < 200 || response->code >= 300) {
-		throw HTTPException(*response, "HTTP POST request failed to '%s' with status code: %d", hfh.path.c_str(),
-		                    response->code);
-	}
+    // Log completion of write operation
+    std::cout << "Completed Write operation. Total bytes written: " << nr_bytes << std::endl;
 }
+
+void HTTPFileSystem::FlushBuffer(HTTPFileHandle &hfh) {
+    // If no data in buffer, return
+    if (hfh.write_buffer_idx <= 1) {
+        std::cout << "Buffer is too small (<= 1 byte). No request will be made." << std::endl;
+        return;
+    }
+
+    // Prepare the URL and headers for the HTTP POST request
+    string path, proto_host_port;
+    ParseUrl(hfh.path, path, proto_host_port);
+
+    HeaderMap header_map;
+    auto headers = InitializeHeaders(header_map, hfh.http_params);
+
+    // Define the request lambda
+    std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
+        auto client = GetClient(hfh.http_params, proto_host_port.c_str(), &hfh);
+        duckdb_httplib_openssl::Request req;
+        req.method = "POST";
+        req.path = path;
+        req.headers = *headers;
+        req.headers.emplace("Content-Type", "application/octet-stream");
+
+        // Prepare the request body from the write buffer
+        req.body = std::string(reinterpret_cast<const char *>(hfh.write_buffer.data()), hfh.write_buffer_idx);
+
+        std::cout << "Sending request with " << hfh.write_buffer_idx << " bytes of data" << std::endl;
+
+        return client->send(req);
+    });
+
+    // Perform the HTTP POST request and handle retries
+    auto response = RunRequestWithRetry(request, hfh.path, "POST", hfh.http_params);
+
+    // Check if the response was successful (HTTP 200-299 status code)
+    if (response->code < 200 || response->code >= 300) {
+        throw HTTPException(*response, "HTTP POST request failed to '%s' with status code: %d", hfh.path.c_str(),
+                            response->code);
+    }
+
+    // Reset the write buffer index after sending data
+    hfh.write_buffer_idx = 0;
+
+    std::cout << "Buffer flushed successfully." << std::endl;
+}
+
+void HTTPFileSystem::Close(FileHandle &handle) {
+    auto &hfh = handle.Cast<HTTPFileHandle>();
+
+    std::cout << "Entering Close method. Buffer size: " << hfh.write_buffer_idx << std::endl;
+
+    // Flush any remaining data in the buffer
+    FlushBuffer(hfh);
+
+    // Log the completion of the Close operation
+    std::cout << "Close operation completed." << std::endl;
+}
+
 
 int64_t HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	auto &hfh = handle.Cast<HTTPFileHandle>();        // Get HTTP file handle
@@ -875,5 +927,18 @@ ResponseWrapper::ResponseWrapper(duckdb_httplib_openssl::Response &res, string &
 	body = res.body;
 }
 
-HTTPFileHandle::~HTTPFileHandle() = default;
+// HTTPFileHandle::~HTTPFileHandle() = default;
+HTTPFileHandle::~HTTPFileHandle() {
+	if (Exception::UncaughtException()) {
+		// We are in an exception, don't do anything
+		return;
+	}
+
+	try {
+		Close();
+	} catch (...) { // NOLINT
+	}
+}
+
+
 } // namespace duckdb
