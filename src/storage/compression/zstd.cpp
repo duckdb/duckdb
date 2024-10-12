@@ -128,7 +128,6 @@ public:
 	// current segment state
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle current_handle;
-	// ZSTDDictionary current_dictionary
 
 	duckdb_zstd::ZSTD_CCtx *zstd_context;
 	duckdb_zstd::ZSTD_CDict *zstd_cdict;
@@ -178,9 +177,6 @@ public:
 		current_segment->function = function;
 
 		total_data_size = 0;
-
-		// reset buffer
-		// index_buffer.clear();
 
 		// reset pointers
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
