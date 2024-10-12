@@ -417,7 +417,7 @@ static idx_t GetFilterScanCount(ColumnScanState &state, TableFilter &filter) {
 		}
 		return max_count;
 	}
-	case TableFilterType::OPTIONAL: {
+	case TableFilterType::OPTIONAL_FILTER: {
 		auto &zone_filter = filter.Cast<OptionalFilter>();
 		return GetFilterScanCount(state, *zone_filter.child_filter);
 	}

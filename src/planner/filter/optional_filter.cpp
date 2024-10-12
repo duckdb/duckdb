@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-OptionalFilter::OptionalFilter() : TableFilter(TableFilterType::OPTIONAL) {
+OptionalFilter::OptionalFilter() : TableFilter(TableFilterType::OPTIONAL_FILTER) {
 }
 
 FilterPropagateResult OptionalFilter::CheckStatistics(BaseStatistics &stats) {

@@ -15,7 +15,7 @@ namespace duckdb {
 
 class OptionalFilter : public TableFilter {
 public:
-	static constexpr const TableFilterType TYPE = TableFilterType::OPTIONAL;
+	static constexpr const TableFilterType TYPE = TableFilterType::OPTIONAL_FILTER;
 
 public:
 	OptionalFilter();
