@@ -1,0 +1,27 @@
+# name: test/sql/types/list/list_null_members_small.test
+# description: LIST comparison semantics with NULLs
+# group: [list]
+
+statement ok
+SET default_null_order='nulls_first';
+
+statement ok
+PRAGMA enable_verification
+
+# Integer lists with NULLs in various positions
+statement ok
+CREATE VIEW list_int AS
+SELECT * FROM VALUES (
+	([1]),
+	([NULL])
+) tbl(a, b);
+
+query IITTTTTTTT
+SELECT tbl.a, tbl.b,
+	tbl.a < tbl.b, tbl.a <= tbl.b,
+	tbl.a = tbl.b, tbl.a <> tbl.b,
+	tbl.a > tbl.b, tbl.a >= tbl.b,
+	tbl.a IS NOT DISTINCT FROM tbl.b, tbl.a IS DISTINCT FROM tbl.b
+FROM list_int tbl
+----
+[1]	[NULL]	1	1	0	1	0	0	0	1

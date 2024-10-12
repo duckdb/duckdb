@@ -410,6 +410,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"binary_as_string", "parquet"},
     {"ca_cert_file", "httpfs"},
     {"calendar", "icu"},
+    {"enable_geoparquet_conversion", "parquet"},
     {"enable_server_cert_verification", "httpfs"},
     {"enable_http_write", "httpfs"},
     {"force_download", "httpfs"},

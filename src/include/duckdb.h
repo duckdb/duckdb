@@ -631,7 +631,7 @@ struct duckdb_extension_access {
 	//! Fetch the database from duckdb to register extensions to
 	duckdb_database *(*get_database)(duckdb_extension_info info);
 	//! Fetch the API
-	void *(*get_api)(duckdb_extension_info info, const char *version);
+	const void *(*get_api)(duckdb_extension_info info, const char *version);
 };
 
 //===--------------------------------------------------------------------===//
