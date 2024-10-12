@@ -953,7 +953,7 @@ def ifnull(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     """
     return coalesce(col1, col2)
 
- 
+
 def md5(col: "ColumnOrName") -> Column:
     """Calculates the MD5 digest and returns the value as a 32 character hex string.
 
@@ -1552,3 +1552,32 @@ def weekofyear(col: "ColumnOrName") -> Column:
     [Row(week=15)]
     """
     return _invoke_function_over_columns("weekofyear", col)
+
+
+def cos(col: "ColumnOrName") -> Column:
+    """
+    Computes cosine of the input column.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        angle in radians
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        cosine of the angle, as if computed by `java.lang.Math.cos()`.
+
+    Examples
+    --------
+    >>> import math
+    >>> df = spark.range(1)
+    >>> df.select(cos(lit(math.pi))).first()
+    Row(COS(3.14159...)=-1.0)
+    """
+    return _invoke_function_over_columns("cos", col)

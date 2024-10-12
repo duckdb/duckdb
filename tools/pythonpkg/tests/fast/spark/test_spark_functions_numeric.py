@@ -83,3 +83,16 @@ class TestSparkFunctionsNumeric(object):
             Row(sqrt_value=2.0),
             Row(sqrt_value=3.0),
         ]
+
+    def test_cos(self, spark):
+        data = [
+            (0,),
+            (3.14159,),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("cos_value", F.cos(F.col("firstColumn")))
+        res = df.select("cos_value").collect()
+        assert res == [
+            Row(cos_value=1.0),
+            Row(cos_value=-1.0),
+        ]
