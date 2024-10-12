@@ -14,10 +14,11 @@ class TestSparkFunctionsArray:
         df = spark.createDataFrame(data, ["firstColumn", "secondColumn"])
         df = df.withColumn("distinct_values", F.array_distinct(F.col("firstColumn")))
         res = df.select("distinct_values").collect()
-        assert res == [
-            Row(distinct_values=[2, 1]),
-            Row(distinct_values=[5, 4, 2]),
-        ]
+        # Output order of array_distinct can vary across platforms. Hence,
+        # we ttest it like this.
+        assert len(res) == 2
+        assert sorted(res[0].distinct_values) == [1, 2]
+        assert sorted(res[1].distinct_values) == [2, 4, 5]
 
     def test_array_intersect(self, spark):
         data = [
