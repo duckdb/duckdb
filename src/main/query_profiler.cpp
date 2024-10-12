@@ -291,7 +291,7 @@ string QueryProfiler::ToString(ProfilerPrintFormat format) const {
 		auto renderer = TreeRenderer::CreateRenderer(GetExplainFormat(format));
 		std::stringstream str;
 		auto &info = root->GetProfilingInfo();
-		if (info.Enabled(MetricsType::OPERATOR_TIMING)) {
+		if (info.Enabled(info.expanded_settings, MetricsType::OPERATOR_TIMING)) {
 			info.metrics[MetricsType::OPERATOR_TIMING] = main_query.Elapsed();
 		}
 		renderer->Render(*root, str);
