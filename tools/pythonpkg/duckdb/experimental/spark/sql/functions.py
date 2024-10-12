@@ -1581,3 +1581,64 @@ def cos(col: "ColumnOrName") -> Column:
     Row(COS(3.14159...)=-1.0)
     """
     return _invoke_function_over_columns("cos", col)
+
+
+def cos(col: "ColumnOrName") -> Column:
+    """
+    Computes cosine of the input column.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        angle in radians
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        cosine of the angle, as if computed by `java.lang.Math.cos()`.
+
+    Examples
+    --------
+    >>> import math
+    >>> df = spark.range(1)
+    >>> df.select(cos(lit(math.pi))).first()
+    Row(COS(3.14159...)=-1.0)
+    """
+    return _invoke_function_over_columns("cos", col)
+
+def acos(col: "ColumnOrName") -> Column:
+    """
+    Computes inverse cosine of the input column.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        inverse cosine of `col`, as if computed by `java.lang.Math.acos()`
+
+    Examples
+    --------
+    >>> df = spark.range(1, 3)
+    >>> df.select(acos(df.id)).show()
+    +--------+
+    |ACOS(id)|
+    +--------+
+    |     0.0|
+    |     NaN|
+    +--------+
+    """
+    return _invoke_function_over_columns("acos", col)

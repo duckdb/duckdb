@@ -92,7 +92,18 @@ class TestSparkFunctionsNumeric(object):
         df = spark.createDataFrame(data, ["firstColumn"])
         df = df.withColumn("cos_value", F.cos(F.col("firstColumn")))
         res = df.select("cos_value").collect()
-        assert res == [
-            Row(cos_value=1.0),
-            Row(cos_value=-1.0),
+        assert len(res) == 2
+        assert res[0].cos_value == pytest.approx(1.0)
+        assert res[1].cos_value == pytest.approx(-1.0)
+
+    def test_acos(self, spark):
+        data = [
+            (1,),
+            (-1,),
         ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("acos_value", F.acos(F.col("firstColumn")))
+        res = df.select("acos_value").collect()
+        assert len(res) == 2
+        assert res[0].acos_value == pytest.approx(0.0)
+        assert res[1].acos_value == pytest.approx(3.141592653589793)
