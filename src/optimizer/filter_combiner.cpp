@@ -656,7 +656,6 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 				auto optional_filter = make_uniq<OptionalFilter>();
 				auto conj_filter = make_uniq<ConjunctionOrFilter>();
 				for (auto &child : conj.children) {
-					unique_ptr<OptionalFilter> zone_filter;
 					if (child->GetExpressionClass() != ExpressionClass::BOUND_COMPARISON) {
 						column_id.SetInvalid();
 						break;
