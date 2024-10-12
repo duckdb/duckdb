@@ -937,6 +937,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"ca_cert_file", "httpfs"},
     {"calendar", "icu"},
     {"disable_parquet_prefetching", "parquet"},
+    {"enable_geoparquet_conversion", "parquet"},
     {"enable_server_cert_verification", "httpfs"},
     {"force_download", "httpfs"},
     {"hf_max_per_page", "httpfs"},

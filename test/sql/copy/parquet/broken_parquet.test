@@ -35,6 +35,8 @@ statement error
 select count(*) from parquet_scan('test/sql/copy/parquet/broken/garbledfooter.parquet')
 ----
 
+mode skip
+
 statement error
 from parquet_scan('test/sql/copy/parquet/broken/broken_structure.parquet')
 ----

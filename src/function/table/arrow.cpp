@@ -99,6 +99,19 @@ static unique_ptr<ArrowType> GetArrowExtensionType(const ArrowSchemaMetadata &ex
 		auto type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE);
 		return make_uniq<ArrowType>(LogicalType::BIT, std::move(type_info));
 
+	} else if (arrow_extension == "duckdb.varint") {
+		if (format != "z" && format != "Z") {
+			std::ostringstream error;
+			error << "duckdb.bit must be a blob (i.e., \'z\'). It is incorrectly defined as:" << format;
+			return make_uniq<ArrowType>(error.str());
+		}
+		unique_ptr<ArrowStringInfo> type_info;
+		if (format == "z") {
+			type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL);
+		} else {
+			type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE);
+		}
+		return make_uniq<ArrowType>(LogicalType::VARINT, std::move(type_info));
 	} else {
 		std::ostringstream error;
 		error << "Arrow Type with extension name: " << arrow_extension << " and format: " << format

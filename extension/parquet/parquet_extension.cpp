@@ -70,8 +70,8 @@ struct ParquetReadBindData : public TableFunctionData {
 	// These come from the initial_reader, but need to be stored in case the initial_reader is removed by a filter
 	idx_t initial_file_cardinality;
 	idx_t initial_file_row_groups;
+	idx_t explicit_cardinality = 0; // can be set to inject exterior cardinality knowledge (e.g. from a data lake)
 	ParquetOptions parquet_options;
-
 	MultiFileReaderBindData reader_bind;
 
 	void Initialize(shared_ptr<ParquetReader> reader) {
@@ -400,6 +400,7 @@ public:
 		table_function.named_parameters["file_row_number"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["debug_use_openssl"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["compression"] = LogicalType::VARCHAR;
+		table_function.named_parameters["explicit_cardinality"] = LogicalType::UBIGINT;
 		table_function.named_parameters["schema"] =
 		    LogicalType::MAP(LogicalType::INTEGER, LogicalType::STRUCT({{{"name", LogicalType::VARCHAR},
 		                                                                 {"type", LogicalType::VARCHAR},
@@ -551,7 +552,11 @@ public:
 			result->reader_bind = result->multi_file_reader->BindReader<ParquetReader>(
 			    context, result->types, result->names, *result->file_list, *result, parquet_options);
 		}
-
+		if (parquet_options.explicit_cardinality) {
+			auto file_count = result->file_list->GetTotalFileCount();
+			result->explicit_cardinality = parquet_options.explicit_cardinality;
+			result->initial_file_cardinality = result->explicit_cardinality / (file_count ? file_count : 1);
+		}
 		if (return_types.empty()) {
 			// no expected types - just copy the types
 			return_types = result->types;
@@ -624,6 +629,8 @@ public:
 
 				// cannot be combined with hive_partitioning=true, so we disable auto-detection
 				parquet_options.file_options.auto_detect_hive_partitioning = false;
+			} else if (loption == "explicit_cardinality") {
+				parquet_options.explicit_cardinality = UBigIntValue::Get(kv.second);
 			} else if (loption == "encryption_config") {
 				parquet_options.encryption_config = ParquetEncryptionConfig::Create(context, kv.second);
 			}
@@ -858,12 +865,13 @@ public:
 
 	static unique_ptr<NodeStatistics> ParquetCardinality(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = bind_data->Cast<ParquetReadBindData>();
-
+		if (data.explicit_cardinality) {
+			return make_uniq<NodeStatistics>(data.explicit_cardinality);
+		}
 		auto file_list_cardinality_estimate = data.file_list->GetCardinality(context);
 		if (file_list_cardinality_estimate) {
 			return file_list_cardinality_estimate;
 		}
-
 		return make_uniq<NodeStatistics>(MaxValue(data.initial_file_cardinality, (idx_t)1) *
 		                                 data.file_list->GetTotalFileCount());
 	}
@@ -1585,7 +1593,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 		// Spatial types need to be encoded into WKB when writing GeoParquet.
 		// But dont perform this conversion if this is a EXPORT DATABASE statement
 		if (input.copy_to_type == CopyToType::COPY_TO_FILE && type.id() == LogicalTypeId::BLOB && type.HasAlias() &&
-		    type.GetAlias() == "GEOMETRY") {
+		    type.GetAlias() == "GEOMETRY" && GeoParquetFileMetadata::IsGeoParquetConversionEnabled(context)) {
 
 			LogicalType wkb_blob_type(LogicalTypeId::BLOB);
 			wkb_blob_type.SetAlias("WKB_BLOB");
@@ -1697,6 +1705,10 @@ void ParquetExtension::Load(DuckDB &db) {
 	config.AddExtensionOption("prefetch_all_parquet_files",
 	                          "Use the prefetching mechanism for all types of parquet files", LogicalType::BOOLEAN,
 	                          Value(false));
+	config.AddExtensionOption(
+	    "enable_geoparquet_conversion",
+	    "Attempt to decode/encode geometry data in/as GeoParquet files if the spatial extension is present.",
+	    LogicalType::BOOLEAN, Value::BOOLEAN(true));
 }
 
 std::string ParquetExtension::Name() {

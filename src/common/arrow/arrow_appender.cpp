@@ -225,6 +225,7 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		break;
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
+	case LogicalTypeId::VARINT:
 		if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			InitializeAppenderForType<ArrowVarcharData<>>(append_data);
 		} else {
