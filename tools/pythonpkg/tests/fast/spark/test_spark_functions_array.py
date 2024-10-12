@@ -39,3 +39,30 @@ class TestSparkFunctionsArray:
         assert res == [
             Row(union_values=["f", "d", "c", "a", "b"]),
         ]
+
+    def test_array_max(self, spark):
+        data = [
+            ([1, 2, 3], 3),
+            ([4, 2, 5], 5),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn", "secondColumn"])
+        df = df.withColumn("max_value", F.array_max(F.col("firstColumn")))
+        res = df.select("max_value").collect()
+        assert res == [
+            Row(max_value=3),
+            Row(max_value=5),
+        ]
+
+
+    def test_array_min(self, spark):
+        data = [
+            ([2, 1, 3], 3),
+            ([2, 4, 5], 5),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn", "secondColumn"])
+        df = df.withColumn("min_value", F.array_min(F.col("firstColumn")))
+        res = df.select("min_value").collect()
+        assert res == [
+            Row(max_value=1),
+            Row(max_value=2),
+        ]

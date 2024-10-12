@@ -240,6 +240,61 @@ def array_union(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     return _invoke_function_over_columns("array_distinct", _invoke_function_over_columns("array_concat", col1, col2))
 
 
+def array_max(col: "ColumnOrName") -> Column:
+    """
+    Collection function: returns the maximum value of the array.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        name of column or expression
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        maximum value of an array.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([([2, 1, 3],), ([None, 10, -1],)], ['data'])
+    >>> df.select(array_max(df.data).alias('max')).collect()
+    [Row(max=3), Row(max=10)]
+    """
+    return _invoke_function("array_extract", _to_column_expr(_invoke_function_over_columns("array_sort", col)), _get_expr(-1))
+
+
+def array_min(col: "ColumnOrName") -> Column:
+    """
+    Collection function: returns the minimum value of the array.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        name of column or expression
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        minimum value of array.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([([2, 1, 3],), ([None, 10, -1],)], ['data'])
+    >>> df.select(array_min(df.data).alias('min')).collect()
+    [Row(min=1), Row(min=-1)]
+    """
+    return _invoke_function("array_extract", _to_column_expr(_invoke_function_over_columns("array_sort", col)), _get_expr(1))
+
 
 def avg(col: "ColumnOrName") -> Column:
     """
