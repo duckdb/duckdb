@@ -309,6 +309,38 @@ def min(col: "ColumnOrName") -> Column:
     return _invoke_function_over_columns("min", col)
 
 
+def any_value(col: "ColumnOrName") -> Column:
+    """Returns some value of `col` for a group of rows.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+    ignorenulls : :class:`~pyspark.sql.Column` or bool
+        if first value is null then look for first non-null value.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        some value of `col` for a group of rows.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(None, 1),
+    ...                             ("a", 2),
+    ...                             ("a", 3),
+    ...                             ("b", 8),
+    ...                             ("b", 2)], ["c1", "c2"])
+    >>> df.select(any_value('c1'), any_value('c2')).collect()
+    [Row(any_value(c1)=None, any_value(c2)=1)]
+    >>> df.select(any_value('c1', True), any_value('c2', True)).collect()
+    [Row(any_value(c1)='a', any_value(c2)=1)]
+    """
+    return _invoke_function_over_columns("any_value", col)
+
+
 def count(col: "ColumnOrName") -> Column:
     """
     Aggregate function: returns the number of items in a group.
