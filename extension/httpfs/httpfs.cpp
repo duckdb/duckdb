@@ -929,6 +929,15 @@ ResponseWrapper::ResponseWrapper(duckdb_httplib_openssl::Response &res, string &
 	body = res.body;
 }
 
-HTTPFileHandle::~HTTPFileHandle() = default;
+HTTPFileHandle::~HTTPFileHandle() {
+        if (Exception::UncaughtException()) {
+                return;
+        }
+
+        try {
+                Close();
+        } catch (...) { // NOLINT
+        }
+}
 
 } // namespace duckdb
