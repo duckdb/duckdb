@@ -131,8 +131,7 @@ public:
 	void StoreClient(unique_ptr<duckdb_httplib_openssl::Client> client);
 
 public:
-	void Close() override {
-	}
+	void Close() override;
 
 protected:
 	//! Create a new Client
@@ -140,6 +139,7 @@ protected:
 };
 
 class HTTPFileSystem : public FileSystem {
+	friend HTTPFileHandle;
 public:
 	static duckdb::unique_ptr<duckdb_httplib_openssl::Client>
 	GetClient(const HTTPParams &http_params, const char *proto_host_port, optional_ptr<HTTPFileHandle> hfs);
@@ -152,9 +152,6 @@ public:
 	vector<string> Glob(const string &path, FileOpener *opener = nullptr) override {
 		return {path}; // FIXME
 	}
-
-	// CLOSE handler
-	void Close(FileHandle &handle);
 
 	// HTTP Requests
 	virtual duckdb::unique_ptr<ResponseWrapper> HeadRequest(FileHandle &handle, string url, HeaderMap header_map);

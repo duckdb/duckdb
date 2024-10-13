@@ -614,12 +614,6 @@ void HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 			// Perform the HTTP POST request
 			FlushBuffer(hfh);
 		}
-
-		if (nr_bytes < 4000) {
-			// Perform Flush
-			// std::cout << "Flushing data < 4000 buffer: " << nr_bytes << std::endl;
-			FlushBuffer(hfh);
-		}
 	}
 
 	// Update the file offset
@@ -671,14 +665,11 @@ void HTTPFileSystem::FlushBuffer(HTTPFileHandle &hfh) {
 	hfh.write_buffer_idx = 0;
 }
 
-void HTTPFileSystem::Close(FileHandle &handle) {
-	auto &hfh = handle.Cast<HTTPFileHandle>();
-
-	// TODO: Never gets called. Currently using buffer size for flush.
-	// std::cout << "Entering Close method. Buffer size: " << hfh.write_buffer_idx << std::endl;
-
-	// Flush any remaining data in the buffer
-	FlushBuffer(hfh);
+void HTTPFileHandle::Close() {
+        auto &fs = (HTTPFileSystem &)file_system;
+        if (flags.OpenForWriting()) {
+		fs.FlushBuffer(*this);
+        }
 }
 
 int64_t HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
