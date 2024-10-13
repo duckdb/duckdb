@@ -2,7 +2,6 @@
 # description: Test or filter pushdown into zone maps
 # group: [filter]
 
-
 # no force storage otherwise test to check scanned tupls fails
 require noforcestorage
 
