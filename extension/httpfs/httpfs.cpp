@@ -930,14 +930,14 @@ ResponseWrapper::ResponseWrapper(duckdb_httplib_openssl::Response &res, string &
 }
 
 HTTPFileHandle::~HTTPFileHandle() {
-        if (Exception::UncaughtException()) {
-                return;
-        }
+	if (Exception::UncaughtException()) {
+		return;
+	}
 
-        try {
-                Close();
-        } catch (...) { // NOLINT
-        }
+	try {
+		Close();
+	} catch (...) { // NOLINT
+	}
 }
 
 } // namespace duckdb
