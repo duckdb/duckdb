@@ -38,7 +38,7 @@ if (NOT MINGW)
     duckdb_extension_load(azure
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_azure
-            GIT_TAG b0ffe7ada20cdbd0bee2bbe5461ecd22fb468062
+            GIT_TAG a40ecb7bc9036eb8ecc5bf30db935a31b78011f5
             )
 endif()
 
@@ -49,7 +49,7 @@ if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux")
     duckdb_extension_load(delta
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_delta
-            GIT_TAG 3933ebd800ad06a64656c9aef6ca7d62897fa4db
+            GIT_TAG 811db25f5bd405dea186d6c461a642a387502ad8
     )
 endif()
 
