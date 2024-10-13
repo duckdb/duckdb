@@ -101,7 +101,7 @@ endif()
 duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb_spatial.git
-    GIT_TAG bb9c829693965f029eb5a312aefed4c538fad781
+    GIT_TAG 3f94d52aa9f7d67b1a30e6cea642bbb790c04aa2
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
     )
