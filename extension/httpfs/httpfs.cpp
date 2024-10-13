@@ -666,10 +666,10 @@ void HTTPFileSystem::FlushBuffer(HTTPFileHandle &hfh) {
 }
 
 void HTTPFileHandle::Close() {
-        auto &fs = (HTTPFileSystem &)file_system;
-        if (flags.OpenForWriting()) {
+	auto &fs = (HTTPFileSystem &)file_system;
+	if (flags.OpenForWriting()) {
 		fs.FlushBuffer(*this);
-        }
+	}
 }
 
 int64_t HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {

@@ -140,6 +140,7 @@ protected:
 
 class HTTPFileSystem : public FileSystem {
 	friend HTTPFileHandle;
+
 public:
 	static duckdb::unique_ptr<duckdb_httplib_openssl::Client>
 	GetClient(const HTTPParams &http_params, const char *proto_host_port, optional_ptr<HTTPFileHandle> hfs);
