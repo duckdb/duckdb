@@ -98,7 +98,7 @@ struct ExtensionAccess {
 	}
 
 	//! Called by the extension get a pointer the correctly versioned extension C API struct.
-	static void *GetAPI(duckdb_extension_info info, const char *version) {
+	static const void *GetAPI(duckdb_extension_info info, const char *version) {
 
 		string version_string = version;
 		idx_t major, minor, patch;
@@ -113,7 +113,8 @@ struct ExtensionAccess {
 			              "Unsupported C CAPI version detected during extension initialization: " + string(version));
 			return nullptr;
 		}
-		load_state.api_struct = CreateAPIv0();
+
+		load_state.api_struct = load_state.db.GetExtensionAPIV0();
 		return &load_state.api_struct;
 	}
 };
