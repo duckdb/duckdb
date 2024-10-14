@@ -13,7 +13,7 @@
 
 // #include "ssbgen/include/ssbgen.hpp"
 extern "C" {
-#include "ssbgen/driver.c"
+#include "ssbgen/include/driver.h"
 }
 
 namespace duckdb {
@@ -60,7 +60,7 @@ static void SsbgenFunction(ClientContext &context, TableFunctionInput &data_p, D
 	}
 	// ssb::SSBGenWrapper::CreateSSBSchema(context, data.catalog, data.schema);
 	// ssb::SSBGenWrapper::LoadSSBData(context, data.sf, data.catalog, data.schema);
-	gen_main(data.sf);
+	gen_main(data.sf, nullptr);
 
 	data.finished = true;
 }
