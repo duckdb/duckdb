@@ -2244,7 +2244,8 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 	schemas.push_back(std::move(schema_element));
 	schema_path.push_back(name);
 
-	if (type.id() == LogicalTypeId::BLOB && type.GetAlias() == "WKB_BLOB") {
+	if (type.id() == LogicalTypeId::BLOB && type.GetAlias() == "WKB_BLOB" &&
+	    GeoParquetFileMetadata::IsGeoParquetConversionEnabled(context)) {
 		return make_uniq<WKBColumnWriter>(context, writer, schema_idx, std::move(schema_path), max_repeat, max_define,
 		                                  can_have_nulls, name);
 	}
