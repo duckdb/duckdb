@@ -7,7 +7,7 @@ typedef int (*part_appender)(part_t *, int);
 typedef int (*customer_appender)(customer_t *, int);
 typedef int (*order_appender)(order_t *, int);
 typedef int (*supplier_appender)(supplier_t *, int);
-typedef int (*date_appender)(date_t *, int);
+typedef int (*date_appender)(ssb_date_t *, int);
 
 typedef struct {
 	part_appender pr_part;

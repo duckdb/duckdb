@@ -15,34 +15,28 @@
 #include <unistd.h>
 #endif
 
-#include <math.h>
-
+#include "include/bcd2.h"
 #include "include/dss.h"
 #include "include/dsstypes.h"
-#include "include/bcd2.h"
+
+#include <math.h>
 #ifdef ADHOC
 #include "adhoc.h"
 extern adhoc_t adhocs[];
 #endif /* ADHOC */
 
-#define LEAP_ADJ(yr, mnth) \
-	((LEAP(yr) && (mnth) >= 2) ? 1 : 0)
-#define JDAY_BASE 8035		  /* start from 1/1/70 a la unix */
-#define JMNTH_BASE (-70 * 12) /* start from 1/1/70 a la unix */
-#define JDAY(date) ((date) - STARTDATE + JDAY_BASE + 1)
-#define PART_SUPP_BRIDGE(tgt, p, s)                    \
-	{                                                  \
-		long tot_scnt = tdefs[SUPP].base * scale;      \
-		tgt = (p + s * (tot_scnt / SUPP_PER_PART +     \
-						(long)((p - 1) / tot_scnt))) % \
-				  tot_scnt +                           \
-			  1;                                       \
+#define LEAP_ADJ(yr, mnth) ((LEAP(yr) && (mnth) >= 2) ? 1 : 0)
+#define JDAY_BASE          8035       /* start from 1/1/70 a la unix */
+#define JMNTH_BASE         (-70 * 12) /* start from 1/1/70 a la unix */
+#define JDAY(date)         ((date) - STARTDATE + JDAY_BASE + 1)
+#define PART_SUPP_BRIDGE(tgt, p, s)                                                                                    \
+	{                                                                                                                  \
+		long tot_scnt = tdefs[SUPP].base * scale;                                                                      \
+		tgt = (p + s * (tot_scnt / SUPP_PER_PART + (long)((p - 1) / tot_scnt))) % tot_scnt + 1;                        \
 	}
 #define RPRICE_BRIDGE(tgt, p) tgt = rpb_routine(p)
-#define V_STR(avg, sd, tgt) a_rnd((int)(avg * V_STR_LOW), \
-								  (int)(avg * V_STR_HGH), sd, tgt)
-#define TEXT(avg, sd, tgt) \
-	dbg_text(tgt, (int)(avg * V_STR_LOW), (int)(avg * V_STR_HGH), sd)
+#define V_STR(avg, sd, tgt)   a_rnd((int)(avg * V_STR_LOW), (int)(avg * V_STR_HGH), sd, tgt)
+#define TEXT(avg, sd, tgt)    dbg_text(tgt, (int)(avg * V_STR_LOW), (int)(avg * V_STR_HGH), sd)
 static void gen_phone PROTO((long ind, char *target, long seed));
 
 static void gen_category PROTO((char *target, long seed));
@@ -53,8 +47,7 @@ int gen_holiday_fl PROTO((char *dest, int month, int day));
 int gen_city PROTO((char *cityName, char *nationName));
 int gen_color PROTO((char *source, char *dest));
 
-long rpb_routine(long p)
-{
+long rpb_routine(long p) {
 	long price;
 	price = 90000;
 	price += (p / 10) % 20001; /* limit contribution to $200 */
@@ -63,12 +56,8 @@ long rpb_routine(long p)
 	return (price);
 }
 
-static void
-gen_phone(long ind, char *target, long seed)
-{
-	long acode,
-		exchg,
-		number;
+static void gen_phone(long ind, char *target, long seed) {
+	long acode, exchg, number;
 
 	RANDOM(acode, 100, 999, seed);
 	RANDOM(exchg, 100, 999, seed);
@@ -81,9 +70,7 @@ gen_phone(long ind, char *target, long seed)
 	return;
 }
 
-static void
-gen_category(char *target, long seed)
-{
+static void gen_category(char *target, long seed) {
 	long num1, num2;
 	RANDOM(num1, 1, 5, seed);
 	RANDOM(num2, 1, 5, seed);
@@ -93,8 +80,7 @@ gen_category(char *target, long seed)
 	return;
 }
 
-long mk_cust(long n_cust, customer_t *c)
-{
+long mk_cust(long n_cust, customer_t *c) {
 	long i;
 	c->custkey = n_cust;
 	sprintf(c->name, C_NAME_FMT, C_NAME_TAG, n_cust);
@@ -111,8 +97,7 @@ long mk_cust(long n_cust, customer_t *c)
 /*
  * generate the numbered order and its associated lineitems
  */
-void mk_sparse(long i, DSS_HUGE *ok, long seq)
-{
+void mk_sparse(long i, DSS_HUGE *ok, long seq) {
 #ifndef SUPPORT_64BITS
 	if (scale < MAX_32B_SCALE)
 #endif
@@ -128,8 +113,7 @@ void mk_sparse(long i, DSS_HUGE *ok, long seq)
  * the "simple" version of mk_sparse, used on systems with 64b support
  * and on all systems at SF <= 300G where 32b support is sufficient
  */
-void ez_sparse(long i, DSS_HUGE *ok, long seq)
-{
+void ez_sparse(long i, DSS_HUGE *ok, long seq) {
 	long low_bits;
 
 	LONG2HUGE(i, ok);
@@ -144,14 +128,12 @@ void ez_sparse(long i, DSS_HUGE *ok, long seq)
 }
 
 #ifndef SUPPORT_64BITS
-void hd_sparse(long i, DSS_HUGE *ok, long seq)
-{
+void hd_sparse(long i, DSS_HUGE *ok, long seq) {
 	long low_mask, seq_mask;
 	static int init = 0;
 	static DSS_HUGE *base, *res;
 
-	if (init == 0)
-	{
+	if (init == 0) {
 		INIT_HUGE(base);
 		INIT_HUGE(res);
 		init = 1;
@@ -174,8 +156,7 @@ void hd_sparse(long i, DSS_HUGE *ok, long seq)
 }
 #endif
 
-long mk_order(long index, order_t *o, long upd_num)
-{
+long mk_order(long index, order_t *o, long upd_num) {
 	long lcnt;
 	long rprice;
 	long ocnt;
@@ -194,11 +175,9 @@ long mk_order(long index, order_t *o, long upd_num)
 	RANDOM(tmp_date, O_ODATE_MIN, O_ODATE_MAX, O_ODATE_SD);
 	strcpy(o->odate, asc_date[tmp_date - STARTDATE]);
 
-	mk_sparse(index, o->okey,
-			  (upd_num == 0) ? 0 : 1 + upd_num / (10000 / refresh));
+	mk_sparse(index, o->okey, (upd_num == 0) ? 0 : 1 + upd_num / (10000 / refresh));
 	RANDOM(o->custkey, O_CKEY_MIN, O_CKEY_MAX, O_CKEY_SD);
-	while (o->custkey % CUST_MORTALITY == 0)
-	{
+	while (o->custkey % CUST_MORTALITY == 0) {
 		o->custkey += delta;
 		o->custkey = MIN(o->custkey, O_CKEY_MAX);
 		delta *= -1;
@@ -211,8 +190,7 @@ long mk_order(long index, order_t *o, long upd_num)
 	ocnt = 0;
 
 	RANDOM(o->lines, O_LCNT_MIN, O_LCNT_MAX, O_LCNT_SD);
-	for (lcnt = 0; lcnt < o->lines; lcnt++)
-	{
+	for (lcnt = 0; lcnt < o->lines; lcnt++) {
 
 		HUGE_SET(o->okey, o->lineorders[lcnt].okey);
 		o->lineorders[lcnt].linenumber = lcnt + 1;
@@ -237,27 +215,24 @@ long mk_order(long index, order_t *o, long upd_num)
 
 		RPRICE_BRIDGE(rprice, o->lineorders[lcnt].partkey);
 		o->lineorders[lcnt].extended_price = rprice * o->lineorders[lcnt].quantity;
-		o->lineorders[lcnt].revenue = o->lineorders[lcnt].extended_price * ((long)100 - o->lineorders[lcnt].discount) / (long)PENNIES;
+		o->lineorders[lcnt].revenue =
+		    o->lineorders[lcnt].extended_price * ((long)100 - o->lineorders[lcnt].discount) / (long)PENNIES;
 
 		// round off problem with linux if use 0.6
 		o->lineorders[lcnt].supp_cost = 6 * rprice / 10;
 
 		o->totalprice +=
-			((o->lineorders[lcnt].extended_price *
-			  ((long)100 - o->lineorders[lcnt].discount)) /
-			 (long)PENNIES) *
-			((long)100 + o->lineorders[lcnt].tax) / (long)PENNIES;
+		    ((o->lineorders[lcnt].extended_price * ((long)100 - o->lineorders[lcnt].discount)) / (long)PENNIES) *
+		    ((long)100 + o->lineorders[lcnt].tax) / (long)PENNIES;
 	}
 
-	for (lcnt = 0; lcnt < o->lines; lcnt++)
-	{
+	for (lcnt = 0; lcnt < o->lines; lcnt++) {
 		o->lineorders[lcnt].order_totalprice = o->totalprice;
 	}
 	return (0);
 }
 
-long mk_part(long index, part_t *p)
-{
+long mk_part(long index, part_t *p) {
 	long mfgr, cat, brnd;
 
 	p->partkey = index;
@@ -285,13 +260,8 @@ long mk_part(long index, part_t *p)
 	return (0);
 }
 
-long mk_supp(long index, supplier_t *s)
-{
-	long i,
-		bad_press,
-		noise,
-		offset,
-		type;
+long mk_supp(long index, supplier_t *s) {
+	long i, bad_press, noise, offset, type;
 	s->suppkey = index;
 	sprintf(s->name, S_NAME_FMT, S_NAME_TAG, index);
 	s->alen = V_STR(S_ADDR_LEN, S_ADDR_SD, s->address);
@@ -303,30 +273,17 @@ long mk_supp(long index, supplier_t *s)
 	return (0);
 }
 
-struct
-{
+struct {
 	char *mdes;
 	long days;
 	long dcnt;
 } months[] =
 
-	{
-		{NULL, 0, 0},
-		{"JAN", 31, 31},
-		{"FEB", 28, 59},
-		{"MAR", 31, 90},
-		{"APR", 30, 120},
-		{"MAY", 31, 151},
-		{"JUN", 30, 181},
-		{"JUL", 31, 212},
-		{"AUG", 31, 243},
-		{"SEP", 30, 273},
-		{"OCT", 31, 304},
-		{"NOV", 30, 334},
-		{"DEC", 31, 365}};
+    {{NULL, 0, 0},     {"JAN", 31, 31},  {"FEB", 28, 59},  {"MAR", 31, 90},  {"APR", 30, 120},
+     {"MAY", 31, 151}, {"JUN", 30, 181}, {"JUL", 31, 212}, {"AUG", 31, 243}, {"SEP", 30, 273},
+     {"OCT", 31, 304}, {"NOV", 30, 334}, {"DEC", 31, 365}};
 
-long mk_time(long index, dss_time_t *t)
-{
+long mk_time(long index, dss_time_t *t) {
 	long m = 0;
 	long y;
 	long d;
@@ -336,8 +293,7 @@ long mk_time(long index, dss_time_t *t)
 	d = julian(index + STARTDATE - 1) % 1000;
 	while (d > months[m].dcnt + LEAP_ADJ(y, m))
 		m++;
-	PR_DATE(t->alpha, y, m,
-			d - months[m - 1].dcnt - ((LEAP(y) && m > 2) ? 1 : 0));
+	PR_DATE(t->alpha, y, m, d - months[m - 1].dcnt - ((LEAP(y) && m > 2) ? 1 : 0));
 	t->year = 1900 + y;
 	t->month = m + 12 * y + JMNTH_BASE;
 	t->week = (d + T_START_DAY - 1) / 7 + 1;
@@ -346,8 +302,7 @@ long mk_time(long index, dss_time_t *t)
 	return (0);
 }
 
-int mk_nation(long index, code_t *c)
-{
+int mk_nation(long index, code_t *c) {
 	c->code = index - 1;
 	c->text = nations.list[index - 1].text;
 	c->join = nations.list[index - 1].weight;
@@ -355,8 +310,7 @@ int mk_nation(long index, code_t *c)
 	return (0);
 }
 
-int mk_region(long index, code_t *c)
-{
+int mk_region(long index, code_t *c) {
 
 	c->code = index - 1;
 	c->text = regions.list[index - 1].text;
@@ -366,8 +320,7 @@ int mk_region(long index, code_t *c)
 }
 
 /*bug!*/
-int gen_city(char *cityName, char *nationName)
-{
+int gen_city(char *cityName, char *nationName) {
 	int i = 0;
 	long randomPick;
 	int clen = strlen(cityName);
@@ -375,8 +328,7 @@ int gen_city(char *cityName, char *nationName)
 
 	strncpy(cityName, nationName, CITY_FIX - 1);
 
-	if (nlen < CITY_FIX - 1)
-	{
+	if (nlen < CITY_FIX - 1) {
 		for (i = nlen; i < CITY_FIX - 1; i++)
 			cityName[i] = ' ';
 	}
@@ -393,21 +345,18 @@ We reduce it to 22 by limiting to a concatena�tion of two colors (see [TPC-H],
 We also add a new column named P_COLOR that could be used in queries where currently a
 color must be chosen by substring from P_NAME.
 */
-int gen_color(char *source, char *dest)
-{
+int gen_color(char *source, char *dest) {
 	int i = 0, j = 0;
 	int clen = 0;
 
-	while (source[i] != ' ')
-	{
+	while (source[i] != ' ') {
 		dest[i] = source[i];
 		i++;
 	}
 	dest[i] = '\0';
 
 	i++;
-	while (source[i] != '\0')
-	{
+	while (source[i] != '\0') {
 		source[j] = source[i];
 		j++;
 		i++;
@@ -422,27 +371,17 @@ int gen_color(char *source, char *dest)
 /*Following functions are related to date table generation*/
 int days_in_a_month[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 int days_in_a_month_l[12] = {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-season seasons[] = {
-	{"Christmas", 1, 11, 31, 12},
-	{"Summer", 1, 5, 31, 8},
-	{"Winter", 1, 1, 31, 3},
-	{"Spring", 1, 4, 30, 4},
-	{"Fall", 1, 9, 31, 10}};
-holiday holidays[] = {
-	{"Christmas", 12, 24},
-	{"New Years Day", 1, 1},
-	{"holiday1", 2, 20},
-	{"Easter Day", 4, 20},
-	{"holiday2", 5, 20},
-	{"holiday3", 7, 20},
-	{"holiday4", 8, 20},
-	{"holiday5", 9, 20},
-	{"holiday6", 10, 20},
-	{"holiday7", 11, 20}};
+season seasons[] = {{"Christmas", 1, 11, 31, 12},
+                    {"Summer", 1, 5, 31, 8},
+                    {"Winter", 1, 1, 31, 3},
+                    {"Spring", 1, 4, 30, 4},
+                    {"Fall", 1, 9, 31, 10}};
+holiday holidays[] = {{"Christmas", 12, 24}, {"New Years Day", 1, 1}, {"holiday1", 2, 20}, {"Easter Day", 4, 20},
+                      {"holiday2", 5, 20},   {"holiday3", 7, 20},     {"holiday4", 8, 20}, {"holiday5", 9, 20},
+                      {"holiday6", 10, 20},  {"holiday7", 11, 20}};
 
-char *month_names[] = {"January", "February", "March", "April",
-					   "May", "June", "July", "Augest",
-					   "September", "Octorber", "November", "December"};
+char *month_names[] = {"January", "February", "March",     "April",    "May",      "June",
+                       "July",    "Augest",   "September", "Octorber", "November", "December"};
 
 char *weekday_names[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
@@ -450,8 +389,7 @@ char *weekday_names[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday",
  *numeric representation 1/1/1992 01:01:01,
  *then convert the final numeric date time to tm structure, and thus extract other field
  *for date_t structure */
-long mk_date(long index, date_t *d)
-{
+long mk_date(long index, ssb_date_t *d) {
 	long espan = (index - 1) * 60 * 60 * 24;
 
 	time_t numDateTime = D_STARTDATE + espan;
@@ -470,52 +408,36 @@ long mk_date(long index, date_t *d)
 	sprintf(d->yearmonth, "%.3s%d", d->month, d->year);
 	sprintf(d->date, "%s %d, %d", d->month, d->daynuminmonth, d->year);
 
-	if (d->monthnuminyear > 9 && d->daynuminmonth > 9)
-	{
+	if (d->monthnuminyear > 9 && d->daynuminmonth > 9) {
 		sprintf(d->datekey, "%d-%d-%d", d->year, d->monthnuminyear, d->daynuminmonth);
-	}
-	else if (d->monthnuminyear > 9)
-	{
+	} else if (d->monthnuminyear > 9) {
 		sprintf(d->datekey, "%d-%d-0%d", d->year, d->monthnuminyear, d->daynuminmonth);
-	}
-	else if (d->daynuminmonth > 9)
-	{
+	} else if (d->daynuminmonth > 9) {
 		sprintf(d->datekey, "%d-0%d-%d", d->year, d->monthnuminyear, d->daynuminmonth);
-	}
-	else
-	{
+	} else {
 		sprintf(d->datekey, "%d-0%d-0%d", d->year, d->monthnuminyear, d->daynuminmonth);
 	}
 
 	d->daynuminyear = (int)localTime->tm_yday + 1;
 	d->weeknuminyear = d->daynuminyear / 7 + 1;
 
-	if (d->daynuminweek == 7)
-	{
+	if (d->daynuminweek == 7) {
 		d->lastdayinweekfl[0] = '1';
-	}
-	else
-	{
+	} else {
 		d->lastdayinweekfl[0] = '0';
 	}
 	d->lastdayinweekfl[1] = '\0';
 
-	if (is_last_day_in_month(d->year, d->monthnuminyear, d->daynuminmonth) == 1)
-	{
+	if (is_last_day_in_month(d->year, d->monthnuminyear, d->daynuminmonth) == 1) {
 		d->lastdayinmonthfl[0] = '0';
-	}
-	else
-	{
+	} else {
 		d->lastdayinmonthfl[0] = '1';
 	}
 	d->lastdayinmonthfl[1] = '\0';
 
-	if (d->daynuminweek != 1 && d->daynuminweek != 7)
-	{
+	if (d->daynuminweek != 1 && d->daynuminweek != 7) {
 		d->weekdayfl[0] = '1';
-	}
-	else
-	{
+	} else {
 		d->weekdayfl[0] = '0';
 	}
 
@@ -527,13 +449,10 @@ long mk_date(long index, date_t *d)
 	return (0);
 }
 
-int gen_holiday_fl(char *dest, int month, int day)
-{
+int gen_holiday_fl(char *dest, int month, int day) {
 	int i;
-	for (i = 0; i < NUM_HOLIDAYS; i++)
-	{
-		if (holidays[i].month == month && holidays[i].day == day)
-		{
+	for (i = 0; i < NUM_HOLIDAYS; i++) {
+		if (holidays[i].month == month && holidays[i].day == day) {
 			strcpy(dest, "1");
 			return 0;
 		}
@@ -542,8 +461,7 @@ int gen_holiday_fl(char *dest, int month, int day)
 	return 0;
 }
 
-int is_last_day_in_month(int year, int month, int day)
-{
+int is_last_day_in_month(int year, int month, int day) {
 	int *days;
 	if (LEAP(year))
 		days = days_in_a_month_l;
@@ -554,17 +472,13 @@ int is_last_day_in_month(int year, int month, int day)
 	return 0;
 }
 
-int gen_season(char *dest, int month, int day)
-{
+int gen_season(char *dest, int month, int day) {
 	int i;
-	for (i = 0; i < NUM_SEASONS; i++)
-	{
+	for (i = 0; i < NUM_SEASONS; i++) {
 		season *seas;
 		seas = &seasons[i];
 
-		if (month >= seas->start_month && month <= seas->end_month &&
-			day >= seas->start_day && day <= seas->end_day)
-		{
+		if (month >= seas->start_month && month <= seas->end_month && day >= seas->start_day && day <= seas->end_day) {
 			strcpy(dest, seas->name);
 			return 0;
 		}

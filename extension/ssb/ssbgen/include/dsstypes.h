@@ -131,13 +131,13 @@ typedef struct {
 	char lastdayinmonthfl[2];
 	char holidayfl[2];
 	char weekdayfl[2];
-} date_t;
+} ssb_date_t;
 
 /* date.c */
 
-long mk_date PROTO((long index, date_t *d));
-int pr_date PROTO((date_t * date, int mode));
-int ld_date PROTO((date_t * date, int mode));
+long mk_date PROTO((long index, ssb_date_t *d));
+int pr_date PROTO((ssb_date_t * date, int mode));
+int ld_date PROTO((ssb_date_t * date, int mode));
 
 typedef struct {
 	long timekey;

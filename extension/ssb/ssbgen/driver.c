@@ -152,7 +152,7 @@ int vrf_part(part_t *p, int mode);
 int vrf_supp(supplier_t *s, int mode);
 int vrf_line(order_t *o, int mode);
 int vrf_order(order_t *o, int mode);
-int vrf_date(date_t, int mode);
+int vrf_date(ssb_date_t, int mode);
 
 typedef int (*func_ptr)();
 
@@ -290,7 +290,7 @@ void gen_tbl(int tnum, long start, long count, long upd_num, ssb_appender *appen
 	supplier_t supp;
 	customer_t cust;
 	part_t part;
-	date_t dt;
+	ssb_date_t dt;
 	static int completed = 0;
 	static int init = 0;
 	long i;
@@ -366,7 +366,7 @@ void gen_tbl(int tnum, long start, long count, long upd_num, ssb_appender *appen
 			mk_date(i, &dt);
 			if (set_seeds == 0)
 				if (validate)
-					((int (*)(date_t *, int))tdefs[tnum].verify)(&dt, 0);
+					((int (*)(ssb_date_t *, int))tdefs[tnum].verify)(&dt, 0);
 				else
 					appender->pr_date(&dt, 0);
 			break;

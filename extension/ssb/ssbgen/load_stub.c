@@ -168,7 +168,7 @@ int hd_nation(FILE *f)
     return (0);
 }
 
-int ld_date(date_t *d, int mode)
+int ld_date(ssb_date_t *d, int mode)
 {
     /*do nothing for now*/
     return (0);

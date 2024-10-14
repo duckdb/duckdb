@@ -377,7 +377,7 @@ int pr_drange(int tbl, long min, long cnt, long num)
     return (0);
 }
 
-int pr_date(date_t *d, int mode)
+int pr_date(ssb_date_t *d, int mode)
 {
     static FILE *d_fp = NULL;
 
@@ -499,7 +499,7 @@ int vrf_supp(supplier_t *supp, int mode)
     return (0);
 }
 
-int vrf_date(date_t *d, int mode)
+int vrf_date(ssb_date_t *d, int mode)
 {
     VRF_STRT(DATE);
     VRF_STR(DATE, d->datekey);

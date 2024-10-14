@@ -2,6 +2,8 @@
 
 #include "ssb_extension.hpp"
 
+#include "ssb_dbgen.hpp"
+
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/extension_util.hpp"
@@ -54,9 +56,9 @@ static void SsbgenFunction(ClientContext &context, TableFunctionInput &data_p, D
 	if (data.finished) {
 		return;
 	}
-	// ssb::SSBGenWrapper::CreateSSBSchema(context, data.catalog, data.schema);
+	ssb::SSBGenWrapper::CreateSSBSchema(context, data.catalog, data.schema);
 	// ssb::SSBGenWrapper::LoadSSBData(context, data.sf, data.catalog, data.schema);
-	gen_main(data.sf, nullptr);
+	// gen_main(data.sf, nullptr);
 
 	data.finished = true;
 }
