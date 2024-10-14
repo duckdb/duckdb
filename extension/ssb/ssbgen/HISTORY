@@ -1,0 +1,535 @@
+# @(#)HISTORY	2.1.8.3
+Changes as of 10/11/99
+   -- versions: TPCH 1.2.0a, TPCR 1.1.0a
+   -- Correction to segmented updates that was causing extra file to be 
+	  generated
+   -- Porting changes for DigUnix
+Changes as of 08/28/99
+   -- versions: TPCH 1.2.0, TPCR 1.1.0
+   -- reduced parameter substitution range for Q18
+   -- added new option to specify location of dists file (-b)
+   -- added DBGEN option to suppress all output (-q)
+Changes as of 08/16/99
+   -- versions: TPCH 1.1.0a, TPCR 1.0.1e
+   -- prevent "reuse" of original data in update files
+   -- correction to lint target in makefile.suite
+   -- removal of vestigal l_partkey predicate from 21.sql
+   -- reorder lineitem/order join in q5
+   -- removal of table aliases from 2.sql
+   -- randomize seeding of qgen RNG to close bug 52
+   -- correct possible round off error in segmented update files
+   -- corrected soft copy answer set for Q22
+   -- corrected percision of answer set for Q19
+Changes as of 07/08/99
+   -- versions: TPCH 1.1.0, TPCR 1.0.1
+   -- WORKLOAD must be set to either TPCH or TPCR in the makefile
+   -- unneeded reference to part table removed from q21 template
+Changes as of 06/04/99
+   -- version 1.0.1d
+   -- Restarted version numbering to match specification revisions for
+	  TPC-H and TPC-R
+   -- Corrected answer set for for Q13
+   -- Corrected parameter substitutions for Q16, Q17, Q19, Q20, Q21, Q22
+   -- Corrected RNG initialization in qgen.c
+   -- added adhoc.c adhoc.h to code base to support randomized data sets;
+	  currently disabled
+   -- replaced calls to UnifInt() row_stop with call to NthElement()
+   -- Corrected a problem that caused small negative money values to print as 
+      a positive value
+   -- Simplication of PR_xxx macros
+   -- QGEN building correct parameter logs again
+
+******************
+* NOTE NOTE NOTE *
+******************
+Below this line the file refers to TPC-D which was retired in favor of 
+TPC-H and TPC-R. Since the new speicifications are numbered  from 1.0.0
+the program version was reset.
+******************
+* NOTE NOTE NOTE *
+******************
+
+Changes as of 01/05/99
+   -- version 2.0.1
+   -- added 1999 to the copyright notice
+   -- corrected C++ compilation problem
+   -- sub-select phrasing corrected in Q4, Q21, Q22
+   -- added support for segmenting update files (contributed by Larry Kemp, HP)
+Changes as of 12/08/98
+   -- version 2.0.0
+   -- removed permute.h from clean target in makefile
+Changes as of 11/17/98
+   -- version 2.0.0 Alpha 8
+   -- corrected o_custkey overrun bug
+   -- removed upper bound on -C command option
+   -- added static permute.h to distribution to match the specification
+Changes as of 10/23/98
+   -- version 2.0.0 Alpha 7
+   -- removed references to DSS_SEED and SEED_TAG
+   -- minor query template cleanup
+   -- V2 answer sets added
+   -- correction to hd_sparse for SF > 300
+   -- added static declaration to row types in gen_tbl to fix update problem
+   -- permuted params to Q22
+Changes as of 5/19/98
+   -- version 2.0.0 Alpha6b
+   -- removed trailing apostrophe from dists.dss nouns for Tandem loader
+   -- corrected mk_sparse() problem with alpha6
+   -- added 64b support for NCR/Metaware
+   -- corrected revision problem with 2.0.0.6
+Changes as of 5/7/98
+   -- version 2.0.0 Alpha6
+   -- corrected generation of parent/child tables in parallel
+   -- renamed ORDER table to ORDERS table
+   -- revision of DBGEN synced with revision of 2.0 specification
+   -- portability changes to process termination provided by John Matzka
+   -- portability changes for Watcom C provided by Andrew Eisenberg
+   -- indentation of specifications/templates now matches
+   -- queries now include a consistant header format
+Changes as of 4/28/98
+   -- version 2.0.0 Alpha5
+   -- NO RELEASE OF ALPHA 5 ; skipped to sync spec/DBGEN revision levels
+Changes as of 4/6/98
+   -- version 2.0.0 Alpha4
+   -- corrected parallel table generation
+   -- minor corrections to query templates
+   -- portability changes for HP
+Changes as of 3/24/98
+   -- version 2.0.0 Alpha3
+   -- include substitution parameters for Q22
+   -- correct substitution parameters for Q16 under AIX
+   -- include permute.h until unix/NT makefile fix
+   -- correct orderkey generation
+Changes as of 3/20/98
+   -- version 2.0.0 Alpha2
+   -- correct runtime malloc error from bad INIT_HUGE macro
+   -- improve pseudo text distribution in comments
+   -- fix problem with parallelism of data gen
+   -- re-enable generation of parent/child tables
+   -- remove recombinaton code for parallel flat files
+Changes as of 3/11/98
+   -- version 2.0.0 Alpha1
+   -- removed the TIME table
+   -- removed the need for seed files
+   -- made 1GB the validation database size
+   -- add pseudo text support in comments
+   -- correct character selection in a_rnd()
+   -- correct population of P_NAME
+   -- removed unclaimed variants
+   -- added new queries 18-22, replaced Q13
+Changes as of 2/6/98
+   -- version 1.3.1
+   -- Revised 64 bit support to clean up bcd2_bin()and mk_sparse()
+   -- Add 64b support for NT
+Changes as of 12/31/97
+   -- version 1.3.0
+   -- support for seed generation > 1TB (data gen still to be tested)
+   -- rework of 64b support
+   -- added bcd support for subtraction, comparison, modulo
+   -- added 1998 to the copyright notice
+   -- clarified comments in dists.dss
+   -- corrected substitution problem in Q11
+   -- standardized fopen() error messages with OPEN_CHECK()
+   -- introduced PATH_SEP in config.h to allow changes in path separators
+Changes as of 12/15/96
+   -- version 1.2.0
+   -- corrected typos in queries 8a, 8c, 8d, 11a, 12F and 14F, 17a
+   -- added variant 15c
+   -- defined MAX_SCALE and MIN_SCALE; issued error messages for SF > 1000
+         since implementation is incomplete
+   -- seed file generation can now be resumed with dbgen -R <n> ...
+   -- corrected slight compile bug under Solaris 2.5.1
+   -- documented compile problems under SunOS
+Changes as of 8/1/96
+   -- version 1.1.0D
+   -- included new variants for queries 8 and 15
+   -- re-introduced answer sets in the source tree
+Changes as of 5/1/96
+   -- version 1.1.0C
+   -- unified version numbering of DBGEN and QGEN
+   -- updated BUGS list
+   -- removed FAQ from soft appendix; web site will keep the current 
+           version of the FAQ
+   -- added 1996 to the copyright notice
+   -- corrected bug in PR_DATE macro; NO CHANGE TO DATA SET
+   -- properly initialize param values for cleaner logging
+   -- adjusted output format of Q11 partam to allow scaling to 1TB
+   -- corrected typos in variant 14c
+   -- corrected data type for YEAR in variant 8c
+   -- corrected typos in variant 10a
+   -- added variant 8d
+Changes as of 1/23/96
+   -- qgen version 1.1.0B
+   -- include support for ANSI semantics
+   -- improved patch for seed sensetivity
+Changes as of 1/23/96
+   -- updated BUGS list
+   -- dbgen version 1.1.0A
+   -- patch to limit BCD2 fields to 12 characters for columnar output
+   -- qgen version 1.1.0A
+   -- patch to fix the "unknown flag" problem
+   -- patch to fix the seed sensetivity problem
+Changes as of 12/19/95
+   -- updated BUGS list
+   -- dbgen version 1.1.0
+   -- upped default value of MAX_CHILDREN to 1000
+   -- corrected naming of detail tables in incremental load
+   -- corrected range delete output
+   -- forced delete files to truncate existing files
+   -- removed fixed size tables from seed generation
+   -- corrected overflow problem with large scale seed generation
+   -- allow date generation as MM-DD-YY based on config.h #define
+   -- correct truncation problem with columnar output in PR_VSTR()
+   -- added support for Windows NT
+   -- added PLATFORM macro to makefile, removed platform defines from
+           config.h
+   -- removed MAX_CHILDREN define from config.h (set to 1000 in dss.h)
+   -- qgen version 1.1.0
+   -- correct SET_OUTPUT macro to TDAT
+   -- use %ld in output for q17; portability
+   -- add support for SQLSERVER database dialect
+   -- add support for SYBASE database dialect
+   -- adjust parameter ranges for Q1, Q3, Q6
+   -- add -T/-t option to usage summary
+   -- added support for Windows NT
+Changes as of 09/01/95
+   -- qgen version 1.0.1
+   -- formalized version numbering 
+   -- -p now generates correct query permutations
+   -- added separate verion number for qgen
+   -- corrected Q3 substitution problem
+   -- updated permissible range for Q10 
+   -- corrected rowcount_dflt and the MAX row indicator (-1)
+   -- expanded param logging to include all possible parameters
+   -- allowed qgen's -d option to be used at all scale factors
+   -- made parameter substitution permutation-independent
+   -- added qgen suppport for END_TRAN (-E) and DFLT_NUM (-N)
+   -- correct handling of :n directive
+   -- added more complete explanation of QGEN to README
+   -- rename of random to rndm, for portability
+   -- dbgen version 1.0.1
+   -- formalized version numbering 
+   -- inclusion of SF=1 seed file
+   -- correct typo in usage() update example
+   -- patch to driver.c to allow correct updates
+   -- documentation change to README to clarify seed/stage/update
+           intereaction
+   -- corrected minor glitch in "open failed" error msg in print.c
+   -- added missing line continuation to makefile.suite
+   -- seed files are now based on scale factor and number of generators
+   -- seed files now hold seeds for one "step" of a given build
+   -- clean up of parallel load routines
+   -- inclusion of faster seed generation routines from Susanne Englert
+   -- removed the -E(xisting) option
+   -- assure proper scaling of O_CUSTKEY
+   -- corrected default update percentage
+   -- proper handling of child tables with '-O f'
+   -- removed seed files from the distribution
+   -- modified rpb_routine() to limit contribution of partkey in 
+           retailprice
+   -- added '-S(tep)' option to allow multi-stage loads
+   -- roll in of 32 bit speed_seed routines from Dick Shelton
+   -- miscelaneous typo corrections in the documentation
+   -- cleanup of usage output
+Changes as of 05/08/95
+   -- version 1.0
+   -- add Teradata defines to tpcd.h for QGEN
+   -- add :c to query templates for database CONNECT syntax
+   -- add examples of DBGEN and QGEN usage to README
+   -- add -T option to qgen to allow time able usage
+   -- query template names only requre .sql suffix, rest is arbitrary
+Changes as of 03/13/95
+   -- version 9.1
+   -- surround DBNAME with ifndef in config.h
+   -- remove -DDBNAME from makefile.suite
+   -- sync varchar handling with 9.1 draft
+Changes as of 02/21/95
+   -- version 9.0a
+   -- fixed bug in qgen that incorrectly included rnd.h
+   -- included revised DDL with changes for char/varchar and l_quantity
+   -- updated DBGEN help message to include new single table options for
+           order/lineitem and part/partsupp
+   -- included handling for multi-set seed files TPCDSEED.xxx
+   -- generated seeds up through 400GB; headed to 1TB!
+   -- ANSI lint cleanup; more needed
+   -- UF2 now defaults to key lists; use "-O r" to generate key ranges
+           also note, this routine this routine does NOT use the BCD2_* 
+           routines. As a result, it WILL fail if the keys being deleted 
+           exceed 32 bits. Since this would require ~660 update iterations, 
+           this seems an acceptable oversight
+Changes as of 01/19/95
+   -- version 9.0
+   -- allowed command line seeding of RNG for QGEN
+   -- order and number of params in QGEN now matches 
+         presentation in spec
+   -- fixed bug in time table format of O_ORDERDATE
+   -- changed l_QUANTITY to FLOAT in dss.ddl
+   -- reworked QGEN options to be more useful
+   -- allowed creation of sparse keys beyond 32 bits (for 1TB)
+   -- removed unused '#ifdef' and associated code
+   -- allowed independent generation of master/detail tables 
+           (eg, order/lineitem)
+Changes as of 12/06/94
+   -- version 8.6
+   -- fixed renaming of flat files for child tables
+   -- various documentation fixes
+   -- added naming convention section to Porting.Notes
+   -- added -DIBM flag to config.h
+   -- synced up QGEN with draft 8.1
+Changes as of 10/25/94
+   -- version 8.5a
+   -- corrected bug in columnar output of pr_supp
+   -- added pr_drange to generate a list of order keys to be 
+           deleted instead of generating SQL
+   -- added '-O d' to generate range delete as SQL
+   -- updated default values for QGEN to sync with spec 8.1
+   -- corrected MK_SPARSE to reflect groups of 8
+   -- corrected a bug in o_orderstatus
+   -- regenerated seed files for SF in [1,10]
+   -- ANSI cleanup (primarily function declarations)
+Changes as of 10/11/94
+   -- version 8.5
+   -- remove deletes/inserts to other than order/lineitem
+   -- increased cardinality for part.type part.container
+   -- '-r' argument is now integer; percentage in basis points
+   -- initial roll-in of new update scheme
+   -- added BBB comments to supplier table
+Changes as of 9/27/94
+   -- version 8.4
+   -- all money calculations now use integer math. This should 
+           bring everyone's data sets into exact aggreement.
+Changes as of 9/21/94
+   -- version 8.3b
+   -- fixed handling of MAX_STREAM
+   -- added floor function to RPRICE bridge
+   -- misc lint cleanup (type fixes, new prototypes, etc.)
+   -- MONEY format becomes lf for DOS
+   -- further cleanup of PR_VSTR and its length argument
+   -- change to parameter generation for Q6 to allow for float 
+           discount
+Changes as of 9/15/94
+   -- version 8.3a
+   -- isolated MONEY format for Unisys (Lf) using DOS
+   -- make sure all arguments to MAKE_MONEY were double's
+   -- rolled in NEW_PTEXT to allow Berni to experiment
+Changes as of 9/12/94
+   -- version 8.3
+   -- added -T n and -T r to usage to match getopt() and README
+   -- changed PR_MONEY to remove leading blanks
+   -- included revised DDL from Berni
+   -- included some MVS portability fixes in re malloc.h
+   -- cleaned up error messages in qgen and made #define ofp usage
+           universal
+   -- additional DOS portability changes
+   -- added {c,a}len to provide specific length for columnar 
+           output of varchar
+   -- added PR_VSTR to handle varchar printing under MVS
+   -- fixed bit masking in a_rnd and cleaned up prototype match 
+           with V_STR
+   -- PR_MONEY now used %Lf
+   -- added revised pseudo text under NEW_PTEXT ifdef for 
+           experiments
+Changes as of 9/09/94
+   -- version 8.2
+   -- l_discount and l_tax are now fractional (per teleconference)
+   -- money calculations moved to scaled integer math to clean up 
+           answer sets
+   -- changed PR_FLT() to PR_MONEY to clarify usage
+   -- portability changes for SYBASE: dbname --> db_name
+           STATUS --> DBGEN_STATUS
+   -- added nations2 to dists.dss to handle qgen needs for now
+   -- reintroduced #ifndef DOS
+   -- reintroduced U2200 define to control kill_load()
+   -- broke out nation and region separately in -T option
+   -- updated dss.ddl based on mail from Berni
+Changes as of 8/31/94
+   -- version 8.1
+   -- scaling for clerks needed to be 1000 (was 100)
+   -- added qgen parameter for scale
+   -- changed qgen parameter from s)tream to p)ermutation
+   -- synced qgen paramter values with 8.0 spec
+   -- corrected duplications in dists.dss
+Changes as of 8/24/94
+   -- version 8.0
+   -- added sparse keys to lineitem/order
+   -- added varchar generation for comments/addresses
+   -- added variable lineitems/orders
+   -- removed ifdef for normalized code_tables
+   -- included code for parameter generation and template->EQT 
+           routines
+   -- updated README and Porting.Notes to reflect QGEN
+   -- included DDL and RI examples from Berni
+Changes as of 6/15/94
+   -- version 7.0b (numbers now match spec revsion)
+   -- rework of code tables to properly map nation/region; when 
+           compiled with -DCODE_TABLES distributions are taken from 
+           code.dss and two additional fields are generated for 
+           customers and suppliers, [cs]_ncode and [cs]_rcode, 
+           immediately following [cs]_region
+   -- replaced ifdef's around DEAD_DATA with opposites. DEAD_DATA 
+           is now the default
+   -- worked through code to see that it conformed to 7.0 
+           specification
+   -- adjusted scale factors/rowcounts for 1 GB == sf1
+   -- brought help message in line with current code
+   -- fixed order per customer at 10
+   -- make suppkey scalable in lineitem/partsupp
+Changes as of 4/25/94
+   -- version 1.5
+   -- added the customers with no orders; Compile with -DDEAD_DATA 
+           to activate the change.
+   -- added the code table for nation and region; 
+           Compile with -DCODE_TABLES to activate the change.
+Changes as of 3/17/94
+   -- version 1.41
+   -- completed implementation of JULIAN_DAY after talks with Berni
+   -- misc cleanup in usage/README files
+   -- removed all tabs and capped line length at 75
+   -- added -n option to allowing naming of inline-loaded database
+Changes as of 3/16/94
+   -- version 1.4
+   -- prottyped julian day/month for query re-write work. Compile 
+           with -DJULIAN_DAY to enable
+   -- removed gen_times() from driver.c
+   -- added VMS ifdef to config.h to clean up fork/signal issues
+   -- added ICL ifdef to config.h to clean up getopt() issues
+   -- changed header file references to config.h from machine.h
+Changes as of 3/2/94
+   -- version 1.31
+   -- corrected format of C_NAME to match S_NAME and O_CLERK
+   -- re-allowed fractional scale factors < 1 (updates not 
+           contiguous)
+   -- added DSS_CONFIG environemnt variable
+   -- reworked read_dist() to look for DSS_DIST in DSS_CONFIG
+   -- updated the README file
+Changes as of 2/16/94
+   -- version 1.3
+   -- added command line options for parallel load and data set 
+           expansion
+   -- changed dists.dss delimiter to | for portability
+   -- limited scale factors to integer values
+   -- added command line option for seed file generation
+   -- added all seed files to distribution for SFs 1 - 10
+   -- moved machine.h to config.h and added MAX_CHILDREN define
+   -- added 'f' flag to options to allow renaming of output files
+   -- added generation of SQL delete statements to match updates
+           (Note: updates are still single-threaded; -C is cleared 
+           by -U)
+   -- corrected field sizing in dsstypes.h typedefs to match v 6.4
+   -- update percentage default set to 1%
+Changes as of 12/3/93
+   -- version 1.2
+   -- added command line option to adjust update percentage
+   -- fixed update gneration for proper primary key ordering
+   -- renamed UUSR/PRC to RUSSIA/CHINA in dists.dss
+   -- cleaned up phone number generation to be consistant regard-
+           less of order of evaluation
+   -- adjusted size of lineitem comment to bring data in line with 
+           100 MB == SF=1
+Changes as of 10/15/93
+   -- added command line option for update data creation
+   -- miscelaneous porting and cleanup changes
+   -- reworked table generation to allow reuse for updates
+   -- added comment field to tdefs structure
+   -- added load_state and store_state to sync data gen and 
+           update gen
+Changes as of 7/26/93
+   -- combined loader and header stubs in load_stubs.c
+   -- separated Revision History (this file) from README
+   -- simplified makefile
+   -- removed redundancies from colors distribution
+   -- added getopt() for portability
+   -- created Porting.Notes
+   -- adjusted scaling rules
+   -- added help option to the command line
+Changes as of 2/26/93
+   -- combined all typedefs in one header: dsstypes.h
+   -- combined flat file generation in print.ec
+   -- combined typedef population in build.ec
+   -- added -P to control rowcnt scaling (P for percentage)
+   -- added -D option for Direct data generation and added 
+           appropriate hooks in tdefs[] structure
+   -- added -F option for flat file generation
+   -- reused -T option (use -P 0.1 to build test size database)
+           now accepts suboptions c,o,p,s for single table builds.
+   -- dropped -M option (scaling is now by rowcount)
+   -- added -O option for optional controls. Currently defined:
+           -O t -- generate optional time table a join fields in 
+                   order/lineitem
+           -O h -- generate headers for flat file output
+           -O m -- generate fixed column-length output
+   -- removed dynamic memory allocation, redundant calls to 
+           UnifInt, etc to improve performance
+Changes as of 1/12/92
+   -- julian() changed to handle orders->orderdate correctly
+   -- rflag distributions corrected in dists.dss
+   -- sea, gold removed from color distribution to clean up substring 
+      problems
+   -- part->number and supplier-> adjusted for 1-based indexing
+   -- time->day changed to be day of month, not day of year
+   -- t.week changed to be week in year, not day of week
+Changes as of 11/18/92
+   -- checked line length and tab for transmission
+   -- another chapter in the portability wars. added #include 
+      "machine.h" to dss.h (which is included by everyone else). Any 
+      machine particular porting changes should go here.
+   -- fixed fixed-field formats to prevent double printing
+   -- expanded PR_FLT formats to %010.2
+Changes as of 10/21/92
+   -- added fixed format and column header handling; users of headers 
+      will have to define the header functions to be called in 
+      int (*tdefs.header)()
+Changes as of 10/09/92:
+   -- added ansi prototypes and recompiled with gcc -ansi. users may 
+      need to change the CC definition in the makefile and the contents 
+      of CFLAGS to reflect their particular ansi compiler.
+   -- replaced all int references with long
+   -- replaced all float references with double
+   -- found and fixed odate/julian problem TS mentioned in 10/09 phone 
+      call
+
+Changes as of 9/09/92:
+   -- Park/Miller random number generator included
+   -- clerk scaling changed to 100 * scale
+   -- parts.name always built from 5 selections from colors set
+   -- test scaling changed to ~60MB (TEST_SCALING == 10)
+   -- logarithmic scaling removed
+   -- mfgcost removed and retail/supplier cost bounds adjusted
+   -- agg_str memory leak fixed
+   -- independent RNG streams on a per column basis
+
+This is the revised data generator for DSS. 
+
+The rewrite tried to accomplish three things: (1) identify and isolate 
+all the implicit assumptions about limits, bounds, ranges, distribu-
+tions, etc.; (2) standardize the way any given table was generated/
+printed to ease understanding and maintenance; (3) bring the generator 
+in line with the current work of the committee and the excellent spec 
+the Indira put together; (4) provide an easy way to adjust distribu-
+tions, string contents and to facilitate experimentation to get a 
+better idea of the impact of data population changes.
+
+The files included are:
+
+driver.c       ------- main and the calling routines for the generators
+dist.c         ------- should really be named dss_util.c; misc routines
+customer.c     ------- generation and print routines for customer table
+orders.c       -------            ""             ""      order table
+parts.c        -------            ""             ""      parts/partsupp 
+suppliers.c    -------            ""             ""      suppliers table
+time.c         -------            ""             ""      time table
+customer.h     ------- associate header files; contain structure 
+                       definitions
+dss.h                  dss.h holds the large number of assumptions and
+orders.h               values that have been used as IFDEFs.
+parts.h  
+suppliers.h
+time.h   
+dists.dss   ------- string selections and weights; used to build 
+                    distributions
+
+Running make will create an executable (using the compiler flags in 
+CFLAGS, the ld flags in LDFLAGS and the libraries in LIBS [-O, -s, 
+and -lm by default]) which will create flat files suitable for dbload.
+t
+

@@ -1,0 +1,220 @@
+# @(#)PORTING.NOTES	2.1.8.1
+
+Table of Contents
+==================
+1. General Program Structure
+2. Naming Conventions and Variable Usage
+3. Porting Procedures
+4. Compilation Options
+5. Customizing QGEN
+6. Further Enhancements
+7. Known Porting Problems
+8. Reporting Problems
+
+1. General Program Structure
+
+The code provided with TPC-H and TPC-R benchmarks includes a database 
+population generator (DBGEN) and a query template translator(QGEN).  It 
+is written in ANSI-C, and is meant to be easily portable to a broad variety 
+of platforms. The program is composed of five source files and some 
+support and header files.  The main modules are:
+
+        build.c: each table in the database schema is represented by a 
+                 routine mk_XXXX, which populates a structure 
+                 representing one row in table XXXX.
+                 See Also: dss_types.h, bm_utils.c, rnd.*
+        print.c: each table in the database schema is represented by a 
+                 routine pr_XXXX, which prints the contents of a 
+                 structure representing one row in table XXX.
+                 See Also: dss_types.h, dss.h
+        driver.c: this module contains the main control functions for 
+                 DBGEN, including command line parsing, distribution 
+                 management, database scaling and the calls to mk_XXXX 
+                 and pr_XXXX for each table generated.
+        qgen.c:  this module contains the main control functions for 
+                 QGEN, including query template parsing.
+        varsub.c: each query template includes one or more parameter
+                  substitution points; this routine handles the 
+                  parameter generation for the TPC-H/TPC-R benchmark.
+
+The support utilities provide a generalized set of functions for data 
+generation and include:
+
+        bm_utils.c: data type generators, string management and 
+                 portability routines.
+
+        rnd.*:  a general purpose random number generator used 
+                throughout the code.
+
+        dss.h:
+        shared.h: a set of '#defines' for limits, formats and fixed 
+                values 
+        dsstypes.h: structure definitions for each table definition
+
+2. Naming Conventions and Variable Usage
+
+Since DBGEN will be maintained by a large number of people, it is 
+particularly important to observe the coding, variable naming and usage
+conventions detailed here.
+
+  #define
+  --------
+  All #define directives are found in header files (*.h).  In general,
+  the header files segregate variables and macros as follows:
+	rnd.h -- anything exclusively referenced by rnd.c
+	dss.h -- general defines for the benchmark, including *all*
+	    extern declarations (see below).
+	shared.h -- defines related to the tuple definitions in
+	    dsstypes.h. Isolated to ease automatic processing needed by many
+	    direct load routines (see below).
+	dsstypes.h -- structure definitons and typedef directives to
+	    detail the contents of each table's tuples.
+	config.h -- any porting and configuration related defines should
+	    go here, to localize the changes necessary to move the suite
+	    from one machine to another.
+	tpcd.h -- defines related to QGEN, rather than DBGEN
+
+    extern
+    ------
+    DBGEN and QGEN make extensive use of extern declarations. This could
+    probably stand to be changed at some point, but has made the rapid
+    turnaround of prototypes easier. In order to be sure that each
+    declaration was matched by exactly one definition per executatble,
+    they are all declared as EXTERN, a macro dependent on DECLARER. In
+    any module that defines DECLARER, all variables declared EXTERN will
+    be defined as globals. DECLARER should be declared only in modules
+    containing a main() routine.
+
+    Naming Conventions
+    ------------------
+    defines
+	o All defines use upper case
+	o All defines use a table prefix, if appropriate:
+		O_*	relates to orders table
+		L_*	realtes to lineitem table
+		P_*	realtes to part table
+		PS_*	relates to partsupplier table
+		C_*	realtes to customer table
+		S_*	relates to supplier table
+		N_*	relates to nation table
+		R_*	realtes to region table
+		T_*	relates to time table
+	o All defines have a usage prefix, if appropriate:
+		*_TAG	environment variable name
+		*_DFLT	environment variable default
+		*_MAX	upper bound
+		*_MIN	lower bound
+		*_LEN	average length
+		*_SD	random number seed (see rnd.*)
+		*_FMT	printf format string
+		*_SCL	divisor (for scaled arithmetic)
+		*_SIZE	tuple length
+
+3. Porting Procedures
+
+The code provided should be easily portable to any machine providing an 
+ANSI C compiler. 
+        -- Copy makefile.suite to makefile
+        -- Edit the makefile to match the name of your C compiler
+           and to include appropriate compilation options in the CFLAGS
+           definition
+        -- make. 
+
+Special care should be taken in modifying any of the monetary calcu-
+lations in DBGEN. These have proven to be particularly sensitive to 
+portability problems. If you decide to create the routines for inline 
+data load (see below), be sure to compare the resulting data to that 
+generated by a flat file data generation to be sure that all numeric 
+conversions have been correct.
+
+If the compile generates errors, refer to "Compilation Options", below.
+The problem you are encountering may already have been addressed in the
+code.
+
+If the compile is successful, but QGEN is not generating the appropriate
+query syntax for your environment, refer to "Customizing QGEN", below.
+
+For other problems, refer to "Reporting Problems" at the end of this
+document.
+
+4. Compilation Options
+
+config.h and makefile.suite contain a number of compile time options intended 
+to make the process of porting the code provided with TPC-H/TPC-R as easy as 
+possible  on a broad range of platforms. Most ports should consist of reviewing 
+the possible settings described in config.h and modifying the makefile
+to employ them appropriately.
+
+5. Customizing QGEN
+
+QGEN relies on a number of vendor-specific conventions to generate
+appropriate query syntax. These are controlled by #defines in tpcd.h,
+and enabled by a #define in config.h. If you find that the syntax
+generated by QGEN is not sufficient for your environment you will need
+to modify these to files. It is strongly recomended that you not change
+the general organization of the files. 
+
+Currently defined options are:
+
+VTAG            -- marks a variable substitution point [:]
+QDIR_TAG        -- environent variable which points to query templates
+                   [DSS_QUERY]
+GEN_QUERY_PLAN  -- syntax to generate a query plan ["Set Explain On;"]
+START_TRAN      -- syntax to begin a transaction ["Begin Work;"]
+END_TRAN        -- syntax to end a transaction ["Commit Work;"]
+SET_OUTPUT      -- syntax to redirect query output ["Output to"]
+SET_ROWCOUNT    -- syntax to set the number of rows returned 
+                   ["{return %d rows}"]
+SET_DBASE       -- syntax to connect to a database
+
+6. Further Enhancements
+
+load_stub.c provides entry points for two likely enhancements.
+
+The ld_XXXX routines make it possible to load the
+database directly from DBGEN without first writing the database
+population out to the filesystem.  This may prove particularly useful
+when loading larger database populations. Be particularly careful about
+monetary amounts. To assure portability, all monetary calcualtion are
+done using long integers (which hold money amounts as a number of
+pennies). These will need to be scaled to dollars and cents (by dividing
+by 100), before the values are presented to the DBMS.
+
+The hd_XXXX routines allow header information to be written before the
+creation of the flat files. This should allow system which require 
+formatting information in database load files to use DBGEN with only
+a small amount of custom code.
+
+qgen.c defines the translation table for query templates in the
+routine qsub().
+
+varsub.c defines the parameter substitutions in the routine varsub().
+
+If you are porting DBGEN to a machine that is not supports a native word
+size larger that 32 bits, you may wish to modify the default values for
+BITS_PER_LONG and MAX_LONG. These values are used in the generation of
+the sparse primary keys in the order and lineitem tables. The code has
+been structured to run on any machine supporting a 32 bit long, but
+may be slightly more efficient on machines that are able to make use of
+a larger native type.
+
+7. Known Porting Problems
+
+The current codeline will not compile under SunOS 4.1. Solaris 2.4 and later 
+are supported, and anyone wishing to use DBGEN on a Sun platform is 
+encouraged to use one of these OS releases.
+
+
+8. Reporting Problems
+
+The code provided with TPC-H/TPC-R has been written to be easily portable, 
+and has been tested on a wide variety of platforms, If you have any 
+trouble porting the code to your platform, please help us to correct 
+the problem in a later release by sending the following information 
+to the TPC D subcommittee:
+        
+        Computer Make and Model
+        Compiler Type and Revision Number
+        Brief Description of the problem
+        Suggested modification to correct the problem
+
