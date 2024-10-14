@@ -37,10 +37,6 @@ static duckdb::unique_ptr<FunctionData> SsbgenBind(ClientContext &context, Table
 		}
 		if (kv.first == "sf") {
 			result->sf = DoubleValue::Get(kv.second);
-		} else if (kv.first == "catalog") {
-			result->catalog = StringValue::Get(kv.second);
-		} else if (kv.first == "schema") {
-			result->schema = StringValue::Get(kv.second);
 		}
 	}
 	if (input.binder) {
@@ -158,8 +154,6 @@ static void LoadInternal(DuckDB &db) {
 
 	TableFunction ssbgen_func("ssbgen", {}, SsbgenFunction, SsbgenBind);
 	ssbgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
-	ssbgen_func.named_parameters["catalog"] = LogicalType::VARCHAR;
-	ssbgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
 	ExtensionUtil::RegisterFunction(db_instance, ssbgen_func);
 
 	// create the TPCH pragma that allows us to run the query
