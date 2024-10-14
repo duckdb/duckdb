@@ -47,7 +47,7 @@ public:
 
 	virtual bool HasStats();
 	virtual bool HasBloomFilter();
-	virtual const ResizeableBuffer* GetBloomFilter();
+	virtual const ResizeableBuffer *GetBloomFilter();
 	virtual string GetMin();
 	virtual string GetMax();
 	virtual string GetMinValue();

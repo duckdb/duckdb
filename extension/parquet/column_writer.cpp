@@ -73,10 +73,9 @@ bool ColumnWriterStatistics::HasStats() {
 	return false;
 }
 
-const ResizeableBuffer* ColumnWriterStatistics::GetBloomFilter() {
+const ResizeableBuffer *ColumnWriterStatistics::GetBloomFilter() {
 	return nullptr;
 }
-
 
 bool ColumnWriterStatistics::HasBloomFilter() {
 	return false;
@@ -695,6 +694,15 @@ void BasicColumnWriter::SetParquetStatistics(BasicColumnWriterState &state, duck
 	}
 }
 
+// compiler optimizes this into a single instruction (popcnt)
+static uint8_t PopCnt64(uint64_t n) {
+	uint8_t c = 0;
+	for (; n; ++c) {
+		n &= n - 1;
+	}
+	return c;
+}
+
 void BasicColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	auto &state = state_p.Cast<BasicColumnWriterState>();
 	auto &column_chunk = state.row_group.columns[state.col_idx];
@@ -738,30 +746,41 @@ void BasicColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	    UnsafeNumericCast<int64_t>(column_writer.GetTotalWritten() - start_offset);
 	column_chunk.meta_data.total_uncompressed_size = UnsafeNumericCast<int64_t>(total_uncompressed_size);
 
-
-	// FIXME elsewhere
+	// FIXME elsewhere?
+	// FIXME now this written directly after column, should be clustered at end of file before metadata
 	if (state.stats_state->HasBloomFilter()) {
 		auto bloom = state.stats_state->GetBloomFilter();
 		D_ASSERT(bloom);
 
-		column_chunk.meta_data.__isset.bloom_filter_offset = true;
-		column_chunk.meta_data.bloom_filter_offset = writer.GetWriter().GetTotalWritten();
+		// compute ratio of ones
+		auto bloom_ptr = (uint64_t *)bloom->ptr;
+		idx_t one_count = 0;
+		for (idx_t b_idx = 0; b_idx < bloom->len / sizeof(uint64_t); ++b_idx) {
+			one_count += PopCnt64(bloom_ptr[b_idx]);
+		}
+		auto one_ratio = one_count / (bloom->len * 8.0);
+		//		printf("one_ratio=%f\n", one_ratio);
+		// TODO abandonment ratio should be configurable
+		// only write the bloom filter if there is a reasonable chance it will actually be able to exclude something. If
+		// only less than 10% of bits are set the chances seem reasonable
+		if (one_ratio < 0.1) {
+			column_chunk.meta_data.__isset.bloom_filter_offset = true;
+			column_chunk.meta_data.bloom_filter_offset = writer.GetWriter().GetTotalWritten();
 
-		// write nonsense
-		duckdb_parquet::BloomFilterHeader filter_header;
-		filter_header.numBytes = bloom->len;
-		filter_header.algorithm.__set_BLOCK(SplitBlockAlgorithm());
-		filter_header.compression.__set_UNCOMPRESSED(Uncompressed());
-		filter_header.hash.__set_XXHASH(XxHash());
-		auto bloom_filter_header_size = writer.Write(filter_header);
-		// write actual data
-		writer.WriteData(bloom->ptr, bloom->len);
+			// write nonsense
+			duckdb_parquet::BloomFilterHeader filter_header;
+			filter_header.numBytes = bloom->len;
+			filter_header.algorithm.__set_BLOCK(SplitBlockAlgorithm());
+			filter_header.compression.__set_UNCOMPRESSED(Uncompressed());
+			filter_header.hash.__set_XXHASH(XxHash());
+			auto bloom_filter_header_size = writer.Write(filter_header);
+			// write actual data
+			writer.WriteData(bloom->ptr, bloom->len);
 
-		column_chunk.meta_data.__isset.bloom_filter_length = true;
-		column_chunk.meta_data.bloom_filter_length = bloom->len + bloom_filter_header_size;
+			column_chunk.meta_data.__isset.bloom_filter_length = true;
+			column_chunk.meta_data.bloom_filter_length = bloom->len + bloom_filter_header_size;
+		}
 	}
-
-
 }
 
 void BasicColumnWriter::FlushDictionary(BasicColumnWriterState &state, ColumnWriterStatistics *stats) {
@@ -802,9 +821,7 @@ void BasicColumnWriter::WriteDictionary(BasicColumnWriterState &state, unique_pt
 	state.write_info.insert(state.write_info.begin(), std::move(write_info));
 }
 
-
 // FIXME FIXME FIXME
-
 
 // bloom filter stuff
 // see https://github.com/apache/parquet-format/blob/master/BloomFilter.md
@@ -838,31 +855,28 @@ struct ParquetBloomBlock {
 		return result;
 	}
 
-
-	static void BlockInsert(ParquetBloomBlock& b, uint32_t x) {
-	    auto masked = Mask(x);
+	static void BlockInsert(ParquetBloomBlock &b, uint32_t x) {
+		auto masked = Mask(x);
 		for (idx_t i = 0; i < 8; i++) {
 			set_bit(b.block[i], masked.bit_set[i]);
 			D_ASSERT(check_bit(b.block[i], masked.bit_set[i]));
 		}
 	}
-
 };
 
 struct ParquetBloomFilter {
 
 	void Initialize(idx_t num_blocks) {
-		data = make_uniq<ResizeableBuffer>();
-		data->resize(Allocator::DefaultAllocator(), sizeof(ParquetBloomBlock)*num_blocks);
+		data = make_uniq<ResizeableBuffer>(Allocator::DefaultAllocator(), sizeof(ParquetBloomBlock) * num_blocks);
 		data->zero();
 	}
 
 	void FilterInsert(uint64_t x) {
-	    auto blocks = (ParquetBloomBlock*)(data->ptr);
-	    auto block_count = data->len/sizeof(ParquetBloomBlock);
-	    uint64_t i = ((x >> 32) * block_count) >> 32;
-	    auto& b = blocks[i];
-	    ParquetBloomBlock::BlockInsert(b, x);
+		auto blocks = (ParquetBloomBlock *)(data->ptr);
+		auto block_count = data->len / sizeof(ParquetBloomBlock);
+		uint64_t i = ((x >> 32) * block_count) >> 32;
+		auto &b = blocks[i];
+		ParquetBloomBlock::BlockInsert(b, x);
 	}
 	//
 	// bool FilterCheck(uint64_t x) {
@@ -886,7 +900,8 @@ class NumericStatisticsState : public ColumnWriterStatistics {
 public:
 	NumericStatisticsState() : min(NumericLimits<T>::Maximum()), max(NumericLimits<T>::Minimum()) {
 		// TODO how many blocks?
-		filter.Initialize(10);
+		// default to 4k bloom filter
+		filter.Initialize(128);
 	}
 
 	T min;
@@ -904,13 +919,12 @@ public:
 		return true;
 	}
 
-	const ResizeableBuffer* GetBloomFilter() override {
+	const ResizeableBuffer *GetBloomFilter() override {
 		return filter.data.get();
 	}
 
 	void AddBloomFilter(T val) {
-		uint64_t hash = duckdb_zstd::XXH64(&val, sizeof(val), 0);
-		filter.FilterInsert(hash);
+		filter.FilterInsert(duckdb_zstd::XXH64(&val, sizeof(val), 0));
 	}
 
 	string GetMin() override {
