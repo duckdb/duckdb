@@ -42,10 +42,8 @@ SELECT stats(i) FROM test LIMIT 1
 ----
 <REGEX>:.*1.*2.*
 
-# TODO: not yet working with enable_verification...
-
-#statement ok
-#PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
 # Fail on non-existent column.
 statement error

@@ -644,7 +644,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 	auto bound_expression = expr_binder.Bind(expression);
 
 	// Infer the target_type from the USING expression, if not set explicitly.
-	if (info.target_type == LogicalType::INVALID) {
+	if (info.target_type == LogicalType::UNKNOWN) {
 		info.target_type = bound_expression->return_type;
 	}
 
