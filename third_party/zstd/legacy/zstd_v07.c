@@ -17,7 +17,7 @@
 #ifndef XXH_STATIC_LINKING_ONLY
 #  define XXH_STATIC_LINKING_ONLY    /* XXH64_state_t */
 #endif
-#include "../common/xxhash.h"                  /* XXH64_* */
+#include "zstd/common/xxhash.h"                  /* XXH64_* */
 #include "zstd_v07.h"
 
 #define FSEv07_STATIC_LINKING_ONLY   /* FSEv07_MIN_TABLELOG */

@@ -18,16 +18,14 @@
 /*-*************************************
 *  Dependencies
 ***************************************/
-#include "../common/zstd_internal.h"
-#include "zstd_cwksp.h"
+#include "zstd/common/zstd_internal.h"
+#include "zstd/compress/zstd_cwksp.h"
 #ifdef ZSTD_MULTITHREAD
-#  include "zstdmt_compress.h"
+#  include "zstd/compress/zstdmt_compress.h"
 #endif
-#include "../common/bits.h" /* ZSTD_highbit32, ZSTD_NbCommonBytes */
+#include "zstd/common/bits.h" /* ZSTD_highbit32, ZSTD_NbCommonBytes */
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
+namespace duckdb_zstd {
 
 /*-*************************************
 *  Constants
@@ -1385,10 +1383,6 @@ MEM_STATIC int ZSTD_comparePackedTags(size_t packedTag1, size_t packedTag2) {
     return tag1 == tag2;
 }
 
-#if defined (__cplusplus)
-}
-#endif
-
 /* ===============================================================
  * Shared internal declarations
  * These prototypes may be called from sources not in lib/compress
@@ -1530,5 +1524,6 @@ size_t ZSTD_compressEnd_public(ZSTD_CCtx* cctx,
 
 size_t ZSTD_compressBlock_deprecated(ZSTD_CCtx* cctx, void* dst, size_t dstCapacity, const void* src, size_t srcSize);
 
+} // namespace duckdb_zstd
 
 #endif /* ZSTD_COMPRESS_H */

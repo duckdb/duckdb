@@ -15,9 +15,10 @@
 /*-*******************************************************
  *  Dependencies
  *********************************************************/
-#include "../common/zstd_deps.h"   /* size_t */
-#include "../zstd.h"     /* ZSTD_DDict, and several public functions */
+#include "zstd/common/zstd_deps.h"   /* size_t */
+#include "zstd.h"     /* ZSTD_DDict, and several public functions */
 
+namespace duckdb_zstd {
 
 /*-*******************************************************
  *  Interface
@@ -39,6 +40,6 @@ size_t ZSTD_DDict_dictSize(const ZSTD_DDict* ddict);
 
 void ZSTD_copyDDictParameters(ZSTD_DCtx* dctx, const ZSTD_DDict* ddict);
 
-
+} // namespace duckdb_zstd
 
 #endif /* ZSTD_DDICT_H */

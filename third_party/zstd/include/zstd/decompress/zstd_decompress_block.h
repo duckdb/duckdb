@@ -15,11 +15,12 @@
 /*-*******************************************************
  *  Dependencies
  *********************************************************/
-#include "../common/zstd_deps.h"   /* size_t */
-#include "../zstd.h"    /* DCtx, and some public functions */
-#include "../common/zstd_internal.h"  /* blockProperties_t, and some public functions */
-#include "zstd_decompress_internal.h"  /* ZSTD_seqSymbol */
+#include "zstd/common/zstd_deps.h"   /* size_t */
+#include "zstd.h"    /* DCtx, and some public functions */
+#include "zstd/common/zstd_internal.h"  /* blockProperties_t, and some public functions */
+#include "zstd/decompress/zstd_decompress_internal.h"  /* ZSTD_seqSymbol */
 
+namespace duckdb_zstd {
 
 /* ===   Prototypes   === */
 
@@ -69,5 +70,6 @@ size_t ZSTD_decompressBlock_deprecated(ZSTD_DCtx* dctx,
                             void* dst, size_t dstCapacity,
                       const void* src, size_t srcSize);
 
+} // namespace duckdb_zstd
 
 #endif /* ZSTD_DEC_BLOCK_H */

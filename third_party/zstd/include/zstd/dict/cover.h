@@ -12,9 +12,11 @@
 #  define ZDICT_STATIC_LINKING_ONLY
 #endif
 
-#include "../common/threading.h" /* ZSTD_pthread_mutex_t */
-#include "../common/mem.h"   /* U32, BYTE */
-#include "../zdict.h"
+#include "zstd/common/threading.h" /* ZSTD_pthread_mutex_t */
+#include "zstd/common/mem.h"   /* U32, BYTE */
+#include "zdict.h"
+
+namespace duckdb_zstd {
 
 /**
  * COVER_best_t is used for two purposes:
@@ -150,3 +152,5 @@ void COVER_dictSelectionFree(COVER_dictSelection_t selection);
  COVER_dictSelection_t COVER_selectDict(BYTE* customDictContent, size_t dictBufferCapacity,
                        size_t dictContentSize, const BYTE* samplesBuffer, const size_t* samplesSizes, unsigned nbFinalizeSamples,
                        size_t nbCheckSamples, size_t nbSamples, ZDICT_cover_params_t params, size_t* offsets, size_t totalCompressedSize);
+
+} // namespace duckdb_zstd

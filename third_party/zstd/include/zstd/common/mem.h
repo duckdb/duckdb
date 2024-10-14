@@ -11,8 +11,6 @@
 #ifndef MEM_H_MODULE
 #define MEM_H_MODULE
 
-namespace duckdb_zstd {
-
 /*-****************************************
 *  Dependencies
 ******************************************/
@@ -29,6 +27,8 @@ namespace duckdb_zstd {
 #   include <stdlib.h>  /* _byteswap_ulong */
 #   include <intrin.h>  /* _byteswap_* */
 #endif
+
+namespace duckdb_zstd {
 
 /*-**************************************************************
 *  Basic Types
@@ -415,7 +415,6 @@ MEM_STATIC void MEM_writeBEST(void* memPtr, size_t val)
 
 /* code only tested on 32 and 64 bits systems */
 MEM_STATIC void MEM_check(void) { DEBUG_STATIC_ASSERT((sizeof(size_t)==4) || (sizeof(size_t)==8)); }
-
 
 } // namespace duckdb_zstd
 

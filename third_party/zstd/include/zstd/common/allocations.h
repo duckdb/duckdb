@@ -12,11 +12,11 @@
  */
 
 #define ZSTD_DEPS_NEED_MALLOC
-#include "zstd/zstd_deps.h"   /* ZSTD_malloc, ZSTD_calloc, ZSTD_free, ZSTD_memset */
+#include "zstd/common/zstd_deps.h"   /* ZSTD_malloc, ZSTD_calloc, ZSTD_free, ZSTD_memset */
 
 #include "zstd/common/compiler.h" /* MEM_STATIC */
 #define ZSTD_STATIC_LINKING_ONLY
-#include "zstd/zstd.h" /* ZSTD_customMem */
+#include "zstd.h" /* ZSTD_customMem */
 
 #ifndef ZSTD_ALLOCATIONS_H
 #define ZSTD_ALLOCATIONS_H

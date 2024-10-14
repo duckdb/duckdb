@@ -11,8 +11,9 @@
 #ifndef ZSTD_COMPRESS_LITERALS_H
 #define ZSTD_COMPRESS_LITERALS_H
 
-#include "zstd_compress_internal.h" /* ZSTD_hufCTables_t, ZSTD_minGain() */
+#include "zstd/compress/zstd_compress_internal.h" /* ZSTD_hufCTables_t, ZSTD_minGain() */
 
+namespace duckdb_zstd {
 
 size_t ZSTD_noCompressLiterals (void* dst, size_t dstCapacity, const void* src, size_t srcSize);
 
@@ -35,5 +36,7 @@ size_t ZSTD_compressLiterals (void* dst, size_t dstCapacity,
                               ZSTD_strategy strategy, int disableLiteralCompression,
                               int suspectUncompressible,
                               int bmi2);
+
+} // namespace duckdb_zstd
 
 #endif /* ZSTD_COMPRESS_LITERALS_H */

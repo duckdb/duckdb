@@ -227,7 +227,9 @@
  * xxHash prototypes and implementation
  */
 
-namespace duckdb_zstd {
+#if defined (__cplusplus)
+extern "C" {
+#endif
 
 /* ****************************
  *  INLINE mode
@@ -7013,4 +7015,6 @@ XXH3_generateSecret_fromSeed(XXH_NOESCAPE void* secretBuffer, XXH64_hash_t seed)
 #endif  /* XXH_IMPLEMENTATION */
 
 
-} // namespace duckdb_zstd
+#if defined (__cplusplus)
+} /* extern "C" */
+#endif

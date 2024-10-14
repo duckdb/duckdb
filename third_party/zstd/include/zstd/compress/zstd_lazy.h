@@ -11,11 +11,9 @@
 #ifndef ZSTD_LAZY_H
 #define ZSTD_LAZY_H
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
+namespace duckdb_zstd {
 
-#include "zstd_compress_internal.h"
+#include "zstd/compress/zstd_compress_internal.h"
 
 /**
  * Dedicated Dictionary Search Structure bucket log. In the
@@ -194,9 +192,6 @@ size_t ZSTD_compressBlock_btlazy2_extDict(
 #define ZSTD_COMPRESSBLOCK_BTLAZY2_EXTDICT NULL
 #endif
 
-
-#if defined (__cplusplus)
-}
-#endif
+} // namespace duckdb_zstd
 
 #endif /* ZSTD_LAZY_H */

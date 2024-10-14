@@ -14,13 +14,11 @@
 /*-*************************************
 *  Dependencies
 ***************************************/
-#include "../common/allocations.h"  /* ZSTD_customMalloc, ZSTD_customFree */
-#include "../common/zstd_internal.h"
-#include "../common/portability_macros.h"
+#include "zstd/common/allocations.h"  /* ZSTD_customMalloc, ZSTD_customFree */
+#include "zstd/common/zstd_internal.h"
+#include "zstd/common/portability_macros.h"
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
+namespace duckdb_zstd {
 
 /*-*************************************
 *  Constants
@@ -741,8 +739,6 @@ MEM_STATIC void ZSTD_cwksp_bump_oversized_duration(
     }
 }
 
-#if defined (__cplusplus)
-}
-#endif
+} // namespace duckdb_zstd
 
 #endif /* ZSTD_CWKSP_H */

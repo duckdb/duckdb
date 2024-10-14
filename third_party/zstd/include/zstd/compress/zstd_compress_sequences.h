@@ -11,8 +11,10 @@
 #ifndef ZSTD_COMPRESS_SEQUENCES_H
 #define ZSTD_COMPRESS_SEQUENCES_H
 
-#include "../common/fse.h" /* FSE_repeat, FSE_CTable */
-#include "../common/zstd_internal.h" /* symbolEncodingType_e, ZSTD_strategy */
+#include "zstd/common/fse.h" /* FSE_repeat, FSE_CTable */
+#include "zstd/common/zstd_internal.h" /* symbolEncodingType_e, ZSTD_strategy */
+
+namespace duckdb_zstd {
 
 typedef enum {
     ZSTD_defaultDisallowed = 0,
@@ -51,4 +53,7 @@ size_t ZSTD_fseBitCost(
 
 size_t ZSTD_crossEntropyCost(short const* norm, unsigned accuracyLog,
                              unsigned const* count, unsigned const max);
+
+} // namespace duckdb_zstd
+
 #endif /* ZSTD_COMPRESS_SEQUENCES_H */

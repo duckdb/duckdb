@@ -19,10 +19,10 @@
 /*-*******************************************************
  *  Dependencies
  *********************************************************/
-#include "../common/mem.h"             /* BYTE, U16, U32 */
-#include "../common/zstd_internal.h"   /* constants : MaxLL, MaxML, MaxOff, LLFSELog, etc. */
+#include "zstd/common/mem.h"             /* BYTE, U16, U32 */
+#include "zstd/common/zstd_internal.h"   /* constants : MaxLL, MaxML, MaxOff, LLFSELog, etc. */
 
-
+namespace duckdb_zstd {
 
 /*-*******************************************************
  *  Constants
@@ -236,5 +236,6 @@ size_t ZSTD_loadDEntropy(ZSTD_entropyDTables_t* entropy,
  *  This function cannot fail. */
 void ZSTD_checkContinuity(ZSTD_DCtx* dctx, const void* dst, size_t dstSize);
 
+} // namespace duckdb_zstd
 
 #endif /* ZSTD_DECOMPRESS_INTERNAL_H */

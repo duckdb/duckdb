@@ -11,11 +11,9 @@
 #ifndef ZSTD_OPT_H
 #define ZSTD_OPT_H
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
+namespace duckdb_zstd {
 
-#include "zstd_compress_internal.h"
+#include "zstd/compress/zstd_compress_internal.h"
 
 #if !defined(ZSTD_EXCLUDE_BTLAZY2_BLOCK_COMPRESSOR) \
  || !defined(ZSTD_EXCLUDE_BTOPT_BLOCK_COMPRESSOR) \
@@ -73,8 +71,6 @@ size_t ZSTD_compressBlock_btultra2(
 #define ZSTD_COMPRESSBLOCK_BTULTRA2 NULL
 #endif
 
-#if defined (__cplusplus)
-}
-#endif
+} // namespace duckdb_zstd
 
 #endif /* ZSTD_OPT_H */

@@ -11,12 +11,10 @@
 #ifndef ZSTD_DOUBLE_FAST_H
 #define ZSTD_DOUBLE_FAST_H
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
+namespace duckdb_zstd {
 
-#include "../common/mem.h"      /* U32 */
-#include "zstd_compress_internal.h"     /* ZSTD_CCtx, size_t */
+#include "zstd/common/mem.h"      /* U32 */
+#include "zstd/compress/zstd_compress_internal.h"     /* ZSTD_CCtx, size_t */
 
 #ifndef ZSTD_EXCLUDE_DFAST_BLOCK_COMPRESSOR
 
@@ -43,8 +41,6 @@ size_t ZSTD_compressBlock_doubleFast_extDict(
 #define ZSTD_COMPRESSBLOCK_DOUBLEFAST_EXTDICT NULL
 #endif /* ZSTD_EXCLUDE_DFAST_BLOCK_COMPRESSOR */
 
-#if defined (__cplusplus)
-}
-#endif
+} // namespace duckdb_zstd
 
 #endif /* ZSTD_DOUBLE_FAST_H */

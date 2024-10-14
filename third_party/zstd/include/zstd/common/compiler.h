@@ -15,8 +15,6 @@
 
 #include "zstd/common/portability_macros.h"
 
-namespace duckdb_zstd {
-
 /*-*******************************************************
 *  Compiler specifics
 *********************************************************/
@@ -325,6 +323,8 @@ namespace duckdb_zstd {
 #  endif
 #endif
 
+namespace duckdb_zstd {
+
 /**
  * Helper function to perform a wrapped pointer difference without trigging
  * UBSAN.
@@ -375,15 +375,17 @@ unsigned char* ZSTD_maybeNullPtrAdd(unsigned char* ptr, ptrdiff_t add)
     return add > 0 ? ptr + add : ptr;
 }
 
+} // namespace duckdb_zstd
+
 /* Issue #3240 reports an ASAN failure on an llvm-mingw build. Out of an
  * abundance of caution, disable our custom poisoning on mingw. */
 #ifdef __MINGW32__
-#ifndef ZSTD_ASAN_DONT_POISON_WORKSPACE
-#define ZSTD_ASAN_DONT_POISON_WORKSPACE 1
-#endif
-#ifndef ZSTD_MSAN_DONT_POISON_WORKSPACE
-#define ZSTD_MSAN_DONT_POISON_WORKSPACE 1
-#endif
+# ifndef ZSTD_ASAN_DONT_POISON_WORKSPACE
+#  define ZSTD_ASAN_DONT_POISON_WORKSPACE 1
+# endif
+# ifndef ZSTD_MSAN_DONT_POISON_WORKSPACE
+#  define ZSTD_MSAN_DONT_POISON_WORKSPACE 1
+# endif
 #endif
 
 #if ZSTD_MEMORY_SANITIZER && !defined(ZSTD_MSAN_DONT_POISON_WORKSPACE)
@@ -393,6 +395,8 @@ unsigned char* ZSTD_maybeNullPtrAdd(unsigned char* ptr, ptrdiff_t add)
 #include <stddef.h>  /* size_t */
 #define ZSTD_DEPS_NEED_STDINT
 #include "zstd_deps.h"  /* intptr_t */
+
+namespace duckdb_zstd {
 
 /* Make memory region fully initialized (without changing its contents). */
 void __msan_unpoison(const volatile void *a, size_t size);
@@ -409,6 +413,9 @@ intptr_t __msan_test_shadow(const volatile void *x, size_t size);
 /* Print shadow and origin for the memory range to stderr in a human-readable
    format. */
 void __msan_print_shadow(const volatile void *x, size_t size);
+
+} // namespace duckdb_zstd
+
 #endif
 
 #if ZSTD_ADDRESS_SANITIZER && !defined(ZSTD_ASAN_DONT_POISON_WORKSPACE)
@@ -416,6 +423,8 @@ void __msan_print_shadow(const volatile void *x, size_t size);
  * We therefore declare the functions we need ourselves, rather than trying to
  * include the header file... */
 #include <stddef.h>  /* size_t */
+
+namespace duckdb_zstd {
 
 /**
  * Marks a memory region (<c>[addr, addr+size)</c>) as unaddressable.
@@ -447,8 +456,9 @@ void __asan_poison_memory_region(void const volatile *addr, size_t size);
  * \param addr Start of memory region.
  * \param size Size of memory region. */
 void __asan_unpoison_memory_region(void const volatile *addr, size_t size);
-#endif
 
 } // namespace duckdb_zstd
+
+#endif
 
 #endif /* ZSTD_COMPILER_H */

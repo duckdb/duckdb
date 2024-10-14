@@ -11,9 +11,7 @@
  #ifndef ZSTDMT_COMPRESS_H
  #define ZSTDMT_COMPRESS_H
 
- #if defined (__cplusplus)
- extern "C" {
- #endif
+namespace duckdb_zstd {
 
 
 /* Note : This is an internal API.
@@ -26,9 +24,9 @@
  */
 
 /* ===   Dependencies   === */
-#include "../common/zstd_deps.h"   /* size_t */
+#include "zstd/common/zstd_deps.h"   /* size_t */
 #define ZSTD_STATIC_LINKING_ONLY   /* ZSTD_parameters */
-#include "../zstd.h"            /* ZSTD_inBuffer, ZSTD_outBuffer, ZSTDLIB_API */
+#include "zstd.h"            /* ZSTD_inBuffer, ZSTD_outBuffer, ZSTDLIB_API */
 
 
 /* ===   Constants   === */
@@ -106,8 +104,6 @@ void ZSTDMT_updateCParams_whileCompressing(ZSTDMT_CCtx* mtctx, const ZSTD_CCtx_p
 ZSTD_frameProgression ZSTDMT_getFrameProgression(ZSTDMT_CCtx* mtctx);
 
 
-#if defined (__cplusplus)
-}
-#endif
+} // namespace duckdb_zstd
 
 #endif   /* ZSTDMT_COMPRESS_H */

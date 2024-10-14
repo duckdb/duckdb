@@ -13,16 +13,15 @@
 #ifndef ERROR_H_MODULE
 #define ERROR_H_MODULE
 
-namespace duckdb_zstd {
-
 /* ****************************************
 *  Dependencies
 ******************************************/
-#include "zstd/zstd_errors.h"  /* enum list */
+#include "zstd_errors.h"  /* enum list */
 #include "zstd/common/compiler.h"
 #include "zstd/common/debug.h"
 #include "zstd/common/zstd_deps.h"       /* size_t */
 
+namespace duckdb_zstd {
 
 /* ****************************************
 *  Compiler-specific
@@ -157,8 +156,6 @@ void _force_has_format_string(const char *format, ...) {
         }                                                                          \
     } while(0)
 
-#if defined (__cplusplus)
-}
-#endif
+} // namespace duckdb_zstd
 
 #endif /* ERROR_H_MODULE */

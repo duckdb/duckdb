@@ -12,7 +12,9 @@
 #define ZSTD_CLEVELS_H
 
 #define ZSTD_STATIC_LINKING_ONLY  /* ZSTD_compressionParameters  */
-#include "../zstd.h"
+#include "zstd.h"
+
+namespace duckdb_zstd {
 
 /*-=====  Pre-defined compression levels  =====-*/
 
@@ -129,6 +131,6 @@ static const ZSTD_compressionParameters ZSTD_defaultCParameters[4][ZSTD_MAX_CLEV
 },
 };
 
-
+} // namespace duckdb_zstd
 
 #endif  /* ZSTD_CLEVELS_H */

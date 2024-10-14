@@ -14,8 +14,9 @@
 ****************************************************************** */
 
 /* --- dependencies --- */
-#include "../common/zstd_deps.h"   /* size_t */
+#include "zstd/common/zstd_deps.h"   /* size_t */
 
+namespace duckdb_zstd {
 
 /* --- simple histogram functions --- */
 
@@ -73,3 +74,5 @@ size_t HIST_countFast_wksp(unsigned* count, unsigned* maxSymbolValuePtr,
  */
 unsigned HIST_count_simple(unsigned* count, unsigned* maxSymbolValuePtr,
                            const void* src, size_t srcSize);
+
+} // namespace duckdb_zstd

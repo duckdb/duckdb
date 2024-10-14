@@ -16,10 +16,7 @@
  * See 'lib/README.md'.
  *****************************************************************/
 
-
-#if defined (__cplusplus)
-extern "C" {
-#endif
+namespace duckdb_zstd {
 
 #ifndef ZSTD_BUFFERED_H_23987
 #define ZSTD_BUFFERED_H_23987
@@ -28,7 +25,7 @@ extern "C" {
 *  Dependencies
 ***************************************/
 #include <stddef.h>      /* size_t */
-#include "../zstd.h"        /* ZSTD_CStream, ZSTD_DStream, ZSTDLIB_API */
+#include "zstd.h"        /* ZSTD_CStream, ZSTD_DStream, ZSTDLIB_API */
 
 
 /* ***************************************************************
@@ -209,6 +206,4 @@ ZBUFF_DEPRECATED("use ZSTD_initDStream_usingDict") size_t ZBUFF_compressInit_adv
 #endif    /* ZBUFF_STATIC_LINKING_ONLY */
 
 
-#if defined (__cplusplus)
-}
-#endif
+} // namespace duckdb_zstd

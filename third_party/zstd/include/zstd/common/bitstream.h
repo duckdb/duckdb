@@ -14,7 +14,6 @@
 #ifndef BITSTREAM_H_MODULE
 #define BITSTREAM_H_MODULE
 
-namespace duckdb_zstd {
 /*
 *  This API consists of small unitary functions, which must be inlined for best performance.
 *  Since link-time-optimization is not available for all compilers,
@@ -29,6 +28,8 @@ namespace duckdb_zstd {
 #include "zstd/common/debug.h"          /* assert(), DEBUGLOG(), RAWLOG() */
 #include "zstd/common/error_private.h"  /* error codes and messages */
 #include "zstd/common/bits.h"           /* ZSTD_highbit32 */
+
+namespace duckdb_zstd {
 
 /*=========================================
 *  Target specific
