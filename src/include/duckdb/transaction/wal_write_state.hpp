@@ -23,7 +23,8 @@ struct UpdateInfo;
 
 class WALWriteState {
 public:
-	explicit WALWriteState(WriteAheadLog &log, optional_ptr<StorageCommitState> commit_state);
+	explicit WALWriteState(DuckTransaction &transaction, WriteAheadLog &log,
+	                       optional_ptr<StorageCommitState> commit_state);
 
 public:
 	void CommitEntry(UndoFlags type, data_ptr_t data);
@@ -36,6 +37,7 @@ private:
 	void WriteUpdate(UpdateInfo &info);
 
 private:
+	DuckTransaction &transaction;
 	WriteAheadLog &log;
 	optional_ptr<StorageCommitState> commit_state;
 

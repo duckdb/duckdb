@@ -17,11 +17,13 @@ class WriteAheadLog;
 
 class RollbackState {
 public:
-	RollbackState() {
-	}
+	explicit RollbackState(DuckTransaction &transaction);
 
 public:
 	void RollbackEntry(UndoFlags type, data_ptr_t data);
+
+private:
+	DuckTransaction &transaction;
 };
 
 } // namespace duckdb

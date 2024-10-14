@@ -23,7 +23,7 @@ struct UpdateInfo;
 
 class CommitState {
 public:
-	explicit CommitState(transaction_t commit_id);
+	explicit CommitState(DuckTransaction &transaction, transaction_t commit_id);
 
 public:
 	void CommitEntry(UndoFlags type, data_ptr_t data);
@@ -33,6 +33,7 @@ private:
 	void CommitEntryDrop(CatalogEntry &entry, data_ptr_t extra_data);
 
 private:
+	DuckTransaction &transaction;
 	transaction_t commit_id;
 };
 

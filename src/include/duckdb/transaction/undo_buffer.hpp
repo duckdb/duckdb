@@ -36,7 +36,7 @@ public:
 	};
 
 public:
-	explicit UndoBuffer(ClientContext &context);
+	explicit UndoBuffer(DuckTransaction &transaction, ClientContext &context);
 
 	//! Reserve space for an entry of the specified type and length in the undo
 	//! buffer
@@ -58,6 +58,7 @@ public:
 	void Rollback() noexcept;
 
 private:
+	DuckTransaction &transaction;
 	ArenaAllocator allocator;
 
 private:
