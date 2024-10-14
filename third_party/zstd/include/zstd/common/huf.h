@@ -12,18 +12,16 @@
  * You may select, at your option, one of the above-listed licenses.
 ****************************************************************** */
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
+namespace duckdb_zstd {
 
 #ifndef HUF_H_298734234
 #define HUF_H_298734234
 
 /* *** Dependencies *** */
-#include "zstd_deps.h"    /* size_t */
-#include "mem.h"          /* U32 */
+#include "zstd/common/zstd_deps.h"    /* size_t */
+#include "zstd/common/mem.h"          /* U32 */
 #define FSE_STATIC_LINKING_ONLY
-#include "fse.h"
+#include "zstd/common/fse.h"
 
 
 /* ***   Tool functions *** */
@@ -281,6 +279,4 @@ size_t HUF_readDTableX2_wksp(HUF_DTable* DTable, const void* src, size_t srcSize
 
 #endif   /* HUF_H_298734234 */
 
-#if defined (__cplusplus)
-}
-#endif
+} // namespace duckdb_zstd

@@ -11,23 +11,23 @@
 /*-*************************************
 *  Dependencies
 ***************************************/
-#include "../common/allocations.h"  /* ZSTD_customMalloc, ZSTD_customCalloc, ZSTD_customFree */
-#include "../common/zstd_deps.h"  /* INT_MAX, ZSTD_memset, ZSTD_memcpy */
-#include "../common/mem.h"
-#include "hist.h"           /* HIST_countFast_wksp */
+#include "zstd/common/allocations.h"  /* ZSTD_customMalloc, ZSTD_customCalloc, ZSTD_customFree */
+#include "zstd/common/zstd_deps.h"  /* INT_MAX, ZSTD_memset, ZSTD_memcpy */
+#include "zstd/common/mem.h"
+#include "zstd/compress/hist.h"           /* HIST_countFast_wksp */
 #define FSE_STATIC_LINKING_ONLY   /* FSE_encodeSymbol */
-#include "../common/fse.h"
-#include "../common/huf.h"
-#include "zstd_compress_internal.h"
-#include "zstd_compress_sequences.h"
-#include "zstd_compress_literals.h"
-#include "zstd_fast.h"
-#include "zstd_double_fast.h"
-#include "zstd_lazy.h"
-#include "zstd_opt.h"
-#include "zstd_ldm.h"
-#include "zstd_compress_superblock.h"
-#include  "../common/bits.h"      /* ZSTD_highbit32, ZSTD_rotateRight_U64 */
+#include "zstd/common/fse.h"
+#include "zstd/common/huf.h"
+#include "zstd/compress/zstd_compress_internal.h"
+#include "zstd/compress/zstd_compress_sequences.h"
+#include "zstd/compress/zstd_compress_literals.h"
+#include "zstd/compress/zstd_fast.h"
+#include "zstd/compress/zstd_double_fast.h"
+#include "zstd/compress/zstd_lazy.h"
+#include "zstd/compress/zstd_opt.h"
+#include "zstd/compress/zstd_ldm.h"
+#include "zstd/compress/zstd_compress_superblock.h"
+#include "zstd/common/bits.h"      /* ZSTD_highbit32, ZSTD_rotateRight_U64 */
 
 /* ***************************************************************
 *  Tuning parameters
@@ -54,6 +54,8 @@
 #ifndef ZSTD_HASHLOG3_MAX
 #  define ZSTD_HASHLOG3_MAX 17
 #endif
+
+namespace duckdb_zstd {
 
 /*-*************************************
 *  Helper functions
@@ -7151,3 +7153,5 @@ void ZSTD_CCtxParams_registerSequenceProducer(
         params->extSeqProdState = NULL;
     }
 }
+
+} // namespace duckdb_zstd

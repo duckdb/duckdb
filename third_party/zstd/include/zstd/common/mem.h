@@ -11,17 +11,15 @@
 #ifndef MEM_H_MODULE
 #define MEM_H_MODULE
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
+namespace duckdb_zstd {
 
 /*-****************************************
 *  Dependencies
 ******************************************/
 #include <stddef.h>  /* size_t, ptrdiff_t */
-#include "compiler.h"  /* __has_builtin */
-#include "debug.h"  /* DEBUG_STATIC_ASSERT */
-#include "zstd_deps.h"  /* ZSTD_memcpy */
+#include "zstd/common/compiler.h"  /* __has_builtin */
+#include "zstd/common/debug.h"  /* DEBUG_STATIC_ASSERT */
+#include "zstd/common/zstd_deps.h"  /* ZSTD_memcpy */
 
 
 /*-****************************************
@@ -419,8 +417,6 @@ MEM_STATIC void MEM_writeBEST(void* memPtr, size_t val)
 MEM_STATIC void MEM_check(void) { DEBUG_STATIC_ASSERT((sizeof(size_t)==4) || (sizeof(size_t)==8)); }
 
 
-#if defined (__cplusplus)
-}
-#endif
+} // namespace duckdb_zstd
 
 #endif /* MEM_H_MODULE */

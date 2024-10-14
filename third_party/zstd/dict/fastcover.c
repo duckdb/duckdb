@@ -20,13 +20,13 @@
 #  define ZDICT_STATIC_LINKING_ONLY
 #endif
 
-#include "../common/mem.h" /* read */
-#include "../common/pool.h"
-#include "../common/threading.h"
-#include "../common/zstd_internal.h" /* includes zstd.h */
-#include "../compress/zstd_compress_internal.h" /* ZSTD_hash*() */
-#include "../zdict.h"
-#include "cover.h"
+#include "zstd/common/mem.h" /* read */
+#include "zstd/common/pool.h"
+#include "zstd/common/threading.h"
+#include "zstd/common/zstd_internal.h" /* includes zstd.h */
+#include "zstd/compress/zstd_compress_internal.h" /* ZSTD_hash*() */
+#include "zstd/zdict.h"
+#include "zstd/dict/cover.h"
 
 
 /*-*************************************
@@ -46,6 +46,7 @@
 #define DEFAULT_F 20
 #define DEFAULT_ACCEL 1
 
+namespace duckdb_zstd {
 
 /*-*************************************
 *  Console display
@@ -764,3 +765,5 @@ ZDICT_optimizeTrainFromBuffer_fastCover(
     }
 
 }
+
+} // namespace duckdb_zstd

@@ -8,9 +8,11 @@
  * You may select, at your option, one of the above-listed licenses.
  */
 
-#include "zstd_compress_internal.h"
-#include "hist.h"
-#include "zstd_opt.h"
+#include "zstd/compress/zstd_compress_internal.h"
+#include "zstd/compress/hist.h"
+#include "zstd/compress/zstd_opt.h"
+
+namespace duckdb_zstd {
 
 #if !defined(ZSTD_EXCLUDE_BTLAZY2_BLOCK_COMPRESSOR) \
  || !defined(ZSTD_EXCLUDE_BTOPT_BLOCK_COMPRESSOR) \
@@ -1574,3 +1576,5 @@ size_t ZSTD_compressBlock_btultra_extDict(
 /* note : no btultra2 variant for extDict nor dictMatchState,
  * because btultra2 is not meant to work with dictionaries
  * and is only specific for the first block (no prefix) */
+
+} // namespace duckdb_zstd

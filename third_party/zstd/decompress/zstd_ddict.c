@@ -14,21 +14,21 @@
 /*-*******************************************************
 *  Dependencies
 *********************************************************/
-#include "../common/allocations.h"  /* ZSTD_customMalloc, ZSTD_customFree */
-#include "../common/zstd_deps.h"   /* ZSTD_memcpy, ZSTD_memmove, ZSTD_memset */
-#include "../common/cpu.h"         /* bmi2 */
-#include "../common/mem.h"         /* low level memory routines */
+#include "zstd/common/allocations.h"  /* ZSTD_customMalloc, ZSTD_customFree */
+#include "zstd/common/zstd_deps.h"   /* ZSTD_memcpy, ZSTD_memmove, ZSTD_memset */
+#include "zstd/common/cpu.h"         /* bmi2 */
+#include "zstd/common/mem.h"         /* low level memory routines */
 #define FSE_STATIC_LINKING_ONLY
-#include "../common/fse.h"
-#include "../common/huf.h"
-#include "zstd_decompress_internal.h"
-#include "zstd_ddict.h"
+#include "zstd/common/fse.h"
+#include "zstd/common/huf.h"
+#include "zstd/decompress/zstd_decompress_internal.h"
+#include "zstd/decompress/zstd_ddict.h"
 
 #if defined(ZSTD_LEGACY_SUPPORT) && (ZSTD_LEGACY_SUPPORT>=1)
-#  include "../legacy/zstd_legacy.h"
+#  include "zstd/legacy/zstd_legacy.h"
 #endif
 
-
+namespace duckdb_zstd {
 
 /*-*******************************************************
 *  Types
@@ -242,3 +242,5 @@ unsigned ZSTD_getDictID_fromDDict(const ZSTD_DDict* ddict)
     if (ddict==NULL) return 0;
     return ddict->dictID;
 }
+
+} // namespace duckdb_zstd

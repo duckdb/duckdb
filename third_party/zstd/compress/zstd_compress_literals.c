@@ -11,8 +11,9 @@
  /*-*************************************
  *  Dependencies
  ***************************************/
-#include "zstd_compress_literals.h"
+#include "zstd/compress/zstd_compress_literals.h"
 
+namespace duckdb_zstd {
 
 /* **************************************************************
 *  Debug Traces
@@ -233,3 +234,5 @@ size_t ZSTD_compressLiterals (
     DEBUGLOG(5, "Compressed literals: %u -> %u", (U32)srcSize, (U32)(lhSize+cLitSize));
     return lhSize+cLitSize;
 }
+
+} // namespace duckdb_zstd

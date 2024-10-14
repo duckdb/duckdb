@@ -15,7 +15,9 @@
  * This file will hold wrapper for systems, which do not support pthreads
  */
 
-#include "threading.h"
+#include "zstd/common/threading.h"
+
+namespace duckdb_zstd {
 
 /* create fake symbol to avoid empty translation unit warning */
 int g_ZSTD_threading_useless_symbol;
@@ -180,3 +182,5 @@ int ZSTD_pthread_cond_destroy(ZSTD_pthread_cond_t* cond)
 }
 
 #endif
+
+} // namespace duckdb_zstd

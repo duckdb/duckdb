@@ -11,9 +11,7 @@
 #ifndef ZSTD_TRACE_H
 #define ZSTD_TRACE_H
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
+namespace duckdb_zstd {
 
 #include <stddef.h>
 
@@ -156,8 +154,6 @@ ZSTD_WEAK_ATTR void ZSTD_trace_decompress_end(
 
 #endif /* ZSTD_TRACE */
 
-#if defined (__cplusplus)
-}
-#endif
+} // namespace duckdb_zstd
 
 #endif /* ZSTD_TRACE_H */

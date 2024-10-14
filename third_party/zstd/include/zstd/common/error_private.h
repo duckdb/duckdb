@@ -13,18 +13,15 @@
 #ifndef ERROR_H_MODULE
 #define ERROR_H_MODULE
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
-
+namespace duckdb_zstd {
 
 /* ****************************************
 *  Dependencies
 ******************************************/
-#include "../zstd_errors.h"  /* enum list */
-#include "compiler.h"
-#include "debug.h"
-#include "zstd_deps.h"       /* size_t */
+#include "zstd/zstd_errors.h"  /* enum list */
+#include "zstd/common/compiler.h"
+#include "zstd/common/debug.h"
+#include "zstd/common/zstd_deps.h"       /* size_t */
 
 
 /* ****************************************
@@ -39,7 +36,6 @@ extern "C" {
 #else
 #  define ERR_STATIC static  /* this version may generate warnings for unused static functions; disable the relevant warning */
 #endif
-
 
 /*-****************************************
 *  Customization (error_public.h)

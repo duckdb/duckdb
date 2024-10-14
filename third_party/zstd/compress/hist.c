@@ -14,11 +14,12 @@
 ****************************************************************** */
 
 /* --- dependencies --- */
-#include "../common/mem.h"             /* U32, BYTE, etc. */
-#include "../common/debug.h"           /* assert, DEBUGLOG */
-#include "../common/error_private.h"   /* ERROR */
-#include "hist.h"
+#include "zstd/common/mem.h"             /* U32, BYTE, etc. */
+#include "zstd/common/debug.h"           /* assert, DEBUGLOG */
+#include "zstd/common/error_private.h"   /* ERROR */
+#include "zstd/compress/hist.h"
 
+namespace duckdb_zstd {
 
 /* --- Error management --- */
 unsigned HIST_isError(size_t code) { return ERR_isError(code); }
@@ -179,3 +180,5 @@ size_t HIST_count(unsigned* count, unsigned* maxSymbolValuePtr,
     return HIST_count_wksp(count, maxSymbolValuePtr, src, srcSize, tmpCounters, sizeof(tmpCounters));
 }
 #endif
+
+} // namespace duckdb_zstd

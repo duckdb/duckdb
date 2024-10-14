@@ -16,11 +16,13 @@
  * https://github.com/facebook/folly/blob/master/folly/CpuId.h
  */
 
-#include "mem.h"
+#include "zstd/common/mem.h"
 
 #ifdef _MSC_VER
 #include <intrin.h>
 #endif
+
+namespace duckdb_zstd {
 
 typedef struct {
     U32 f1c;
@@ -245,5 +247,7 @@ MEM_STATIC ZSTD_cpuid_t ZSTD_cpuid(void) {
 #undef C
 
 #undef X
+
+} // namespace duckdb_zstd
 
 #endif /* ZSTD_COMMON_CPU_H */

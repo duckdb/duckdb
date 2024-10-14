@@ -23,16 +23,17 @@
 /* **************************************************************
 *  Includes
 ****************************************************************/
-#include "../common/zstd_deps.h"     /* ZSTD_memcpy, ZSTD_memset */
-#include "../common/compiler.h"
-#include "../common/bitstream.h"
-#include "hist.h"
+#include "zstd/common/zstd_deps.h"     /* ZSTD_memcpy, ZSTD_memset */
+#include "zstd/common/compiler.h"
+#include "zstd/common/bitstream.h"
+#include "zstd/compress/hist.h"
 #define FSE_STATIC_LINKING_ONLY   /* FSE_optimalTableLog_internal */
-#include "../common/fse.h"        /* header compression */
-#include "../common/huf.h"
-#include "../common/error_private.h"
-#include "../common/bits.h"       /* ZSTD_highbit32 */
+#include "zstd/common/fse.h"        /* header compression */
+#include "zstd/common/huf.h"
+#include "zstd/common/error_private.h"
+#include "zstd/common/bits.h"       /* ZSTD_highbit32 */
 
+namespace duckdb_zstd {
 
 /* **************************************************************
 *  Error Management
@@ -1462,3 +1463,5 @@ size_t HUF_compress4X_repeat (void* dst, size_t dstSize,
                                  workSpace, wkspSize,
                                  hufTable, repeat, flags);
 }
+
+} // namespace duckdb_zstd

@@ -19,29 +19,27 @@
 /*-*************************************
 *  Dependencies
 ***************************************/
-#include "compiler.h"
-#include "cpu.h"
-#include "mem.h"
-#include "debug.h"                 /* assert, DEBUGLOG, RAWLOG, g_debuglevel */
-#include "error_private.h"
+#include "zstd/common/compiler.h"
+#include "zstd/common/cpu.h"
+#include "zstd/common/mem.h"
+#include "zstd/common/debug.h"                 /* assert, DEBUGLOG, RAWLOG, g_debuglevel */
+#include "zstd/common/error_private.h"
 #define ZSTD_STATIC_LINKING_ONLY
-#include "../zstd.h"
+#include "zstd/zstd.h"
 #define FSE_STATIC_LINKING_ONLY
-#include "fse.h"
-#include "huf.h"
+#include "zstd/common/fse.h"
+#include "zstd/common/huf.h"
 #ifndef XXH_STATIC_LINKING_ONLY
 #  define XXH_STATIC_LINKING_ONLY  /* XXH64_state_t */
 #endif
-#include "xxhash.h"                /* XXH_reset, update, digest */
+#include "zstd/common/xxhash.h"                /* XXH_reset, update, digest */
 #ifndef ZSTD_NO_TRACE
-#  include "zstd_trace.h"
+#  include "zstd/common/zstd_trace.h"
 #else
 #  define ZSTD_TRACE 0
 #endif
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
+namespace duckdb_zstd {
 
 /* ---- static assert (debug) --- */
 #define ZSTD_STATIC_ASSERT(c) DEBUG_STATIC_ASSERT(c)
@@ -385,8 +383,6 @@ MEM_STATIC int ZSTD_cpuSupportsBmi2(void)
     return ZSTD_cpuid_bmi1(cpuid) && ZSTD_cpuid_bmi2(cpuid);
 }
 
-#if defined (__cplusplus)
-}
-#endif
+} // namespace duckdb_zstd
 
 #endif   /* ZSTD_CCOMMON_H_MODULE */

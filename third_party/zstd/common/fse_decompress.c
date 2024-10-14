@@ -16,15 +16,16 @@
 /* **************************************************************
 *  Includes
 ****************************************************************/
-#include "debug.h"      /* assert */
-#include "bitstream.h"
-#include "compiler.h"
+#include "zstd/common/debug.h"      /* assert */
+#include "zstd/common/bitstream.h"
+#include "zstd/common/compiler.h"
 #define FSE_STATIC_LINKING_ONLY
-#include "fse.h"
-#include "error_private.h"
-#include "zstd_deps.h"  /* ZSTD_memcpy */
-#include "bits.h"       /* ZSTD_highbit32 */
+#include "zstd/common/fse.h"
+#include "zstd/common/error_private.h"
+#include "zstd/common/zstd_deps.h"  /* ZSTD_memcpy */
+#include "zstd/common/bits.h"       /* ZSTD_highbit32 */
 
+namespace duckdb_zstd {
 
 /* **************************************************************
 *  Error Management
@@ -311,3 +312,5 @@ size_t FSE_decompress_wksp_bmi2(void* dst, size_t dstCapacity, const void* cSrc,
 }
 
 #endif   /* FSE_COMMONDEFS_ONLY */
+
+} // namespace duckdb_zstd

@@ -12,9 +12,7 @@
  * You may select, at your option, one of the above-listed licenses.
 ****************************************************************** */
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
+namespace duckdb_zstd {
 
 #ifndef FSE_H
 #define FSE_H
@@ -23,7 +21,7 @@ extern "C" {
 /*-*****************************************
 *  Dependencies
 ******************************************/
-#include "zstd_deps.h"    /* size_t, ptrdiff_t */
+#include "zstd/zstd_deps.h"    /* size_t, ptrdiff_t */
 
 
 /*-*****************************************
@@ -634,7 +632,4 @@ MEM_STATIC unsigned FSE_endOfDState(const FSE_DState_t* DStatePtr)
 
 #endif /* FSE_STATIC_LINKING_ONLY */
 
-
-#if defined (__cplusplus)
-}
-#endif
+} // namespace duckdb_zstd

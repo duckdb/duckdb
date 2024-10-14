@@ -11,7 +11,9 @@
 #ifndef ZSTD_BITS_H
 #define ZSTD_BITS_H
 
-#include "mem.h"
+#include "zstd/common/mem.h"
+
+namespace duckdb_zstd {
 
 MEM_STATIC unsigned ZSTD_countTrailingZeros32_fallback(U32 val)
 {
@@ -196,5 +198,7 @@ U16 ZSTD_rotateRight_U16(U16 const value, U32 count) {
     count &= 0x0F; /* for fickle pattern recognition */
     return (value >> count) | (U16)(value << ((0U - count) & 0x0F));
 }
+
+} // namespace duckdb_zstd
 
 #endif /* ZSTD_BITS_H */

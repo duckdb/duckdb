@@ -14,9 +14,7 @@
 #ifndef BITSTREAM_H_MODULE
 #define BITSTREAM_H_MODULE
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
+namespace duckdb_zstd {
 /*
 *  This API consists of small unitary functions, which must be inlined for best performance.
 *  Since link-time-optimization is not available for all compilers,
@@ -26,12 +24,11 @@ extern "C" {
 /*-****************************************
 *  Dependencies
 ******************************************/
-#include "mem.h"            /* unaligned access routines */
-#include "compiler.h"       /* UNLIKELY() */
-#include "debug.h"          /* assert(), DEBUGLOG(), RAWLOG() */
-#include "error_private.h"  /* error codes and messages */
-#include "bits.h"           /* ZSTD_highbit32 */
-
+#include "zstd/common/mem.h"            /* unaligned access routines */
+#include "zstd/common/compiler.h"       /* UNLIKELY() */
+#include "zstd/common/debug.h"          /* assert(), DEBUGLOG(), RAWLOG() */
+#include "zstd/common/error_private.h"  /* error codes and messages */
+#include "zstd/common/bits.h"           /* ZSTD_highbit32 */
 
 /*=========================================
 *  Target specific
@@ -450,8 +447,6 @@ MEM_STATIC unsigned BIT_endOfDStream(const BIT_DStream_t* DStream)
     return ((DStream->ptr == DStream->start) && (DStream->bitsConsumed == sizeof(DStream->bitContainer)*8));
 }
 
-#if defined (__cplusplus)
-}
-#endif
+} // namespace duckdb_zstd
 
 #endif /* BITSTREAM_H_MODULE */

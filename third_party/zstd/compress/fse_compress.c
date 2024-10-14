@@ -15,19 +15,20 @@
 /* **************************************************************
 *  Includes
 ****************************************************************/
-#include "../common/compiler.h"
-#include "../common/mem.h"        /* U32, U16, etc. */
-#include "../common/debug.h"      /* assert, DEBUGLOG */
-#include "hist.h"       /* HIST_count_wksp */
-#include "../common/bitstream.h"
+#include "zstd/common/compiler.h"
+#include "zstd/common/mem.h"        /* U32, U16, etc. */
+#include "zstd/common/debug.h"      /* assert, DEBUGLOG */
+#include "zstd/compress/hist.h"       /* HIST_count_wksp */
+#include "zstd/common/bitstream.h"
 #define FSE_STATIC_LINKING_ONLY
-#include "../common/fse.h"
-#include "../common/error_private.h"
+#include "zstd/common/fse.h"
+#include "zstd/common/error_private.h"
 #define ZSTD_DEPS_NEED_MALLOC
 #define ZSTD_DEPS_NEED_MATH64
-#include "../common/zstd_deps.h"  /* ZSTD_memset */
-#include "../common/bits.h" /* ZSTD_highbit32 */
+#include "zstd/common/zstd_deps.h"  /* ZSTD_memset */
+#include "zstd/common/bits.h" /* ZSTD_highbit32 */
 
+namespace duckdb_zstd {
 
 /* **************************************************************
 *  Error Management
@@ -623,3 +624,5 @@ size_t FSE_compress_usingCTable (void* dst, size_t dstSize,
 size_t FSE_compressBound(size_t size) { return FSE_COMPRESSBOUND(size); }
 
 #endif   /* FSE_COMMONDEFS_ONLY */
+
+} // namespace duckdb_zstd

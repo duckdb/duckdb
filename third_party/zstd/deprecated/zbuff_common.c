@@ -11,8 +11,10 @@
 /*-*************************************
 *  Dependencies
 ***************************************/
-#include "../common/error_private.h"
-#include "zbuff.h"
+#include "zstd/common/error_private.h"
+#include "zstd/deprecated/zbuff.h"
+
+namespace duckdb_zstd {
 
 /*-****************************************
 *  ZBUFF Error Management  (deprecated)
@@ -24,3 +26,5 @@ unsigned ZBUFF_isError(size_t errorCode) { return ERR_isError(errorCode); }
 /*! ZBUFF_getErrorName() :
 *   provides error code string from function result (useful for debugging) */
 const char* ZBUFF_getErrorName(size_t errorCode) { return ERR_getErrorName(errorCode); }
+
+} // namespace duckdb_zstd

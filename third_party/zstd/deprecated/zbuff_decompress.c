@@ -14,10 +14,11 @@
 *  Dependencies
 ***************************************/
 #define ZSTD_DISABLE_DEPRECATE_WARNINGS  /* suppress warning on ZSTD_initDStream_usingDict */
-#include "../zstd.h"        /* ZSTD_CStream, ZSTD_DStream, ZSTDLIB_API */
+#include "zstd/zstd.h"        /* ZSTD_CStream, ZSTD_DStream, ZSTDLIB_API */
 #define ZBUFF_STATIC_LINKING_ONLY
-#include "zbuff.h"
+#include "zstd/deprecated/zbuff.h"
 
+namespace duckdb_zstd {
 
 ZBUFF_DCtx* ZBUFF_createDCtx(void)
 {
@@ -75,3 +76,5 @@ size_t ZBUFF_decompressContinue(ZBUFF_DCtx* zbd,
 ***************************************/
 size_t ZBUFF_recommendedDInSize(void)  { return ZSTD_DStreamInSize(); }
 size_t ZBUFF_recommendedDOutSize(void) { return ZSTD_DStreamOutSize(); }
+
+} // namespace duckdb_zstd

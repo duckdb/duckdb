@@ -14,11 +14,9 @@
 #ifndef THREADING_H_938743
 #define THREADING_H_938743
 
-#include "debug.h"
+#include "zstd/common/debug.h"
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
+namespace duckdb_zstd {
 
 #if defined(ZSTD_MULTITHREAD) && defined(_WIN32)
 
@@ -143,8 +141,6 @@ typedef int ZSTD_pthread_cond_t;
 
 #endif /* ZSTD_MULTITHREAD */
 
-#if defined (__cplusplus)
-}
-#endif
+} // namespace duckdb_zstd
 
 #endif /* THREADING_H_938743 */

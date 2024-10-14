@@ -11,14 +11,11 @@
 #ifndef POOL_H
 #define POOL_H
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
+namespace duckdb_zstd {
 
-
-#include "zstd_deps.h"
+#include "zstd/common/zstd_deps.h"
 #define ZSTD_STATIC_LINKING_ONLY   /* ZSTD_customMem */
-#include "../zstd.h"
+#include "zstd/zstd.h"
 
 typedef struct POOL_ctx_s POOL_ctx;
 
@@ -82,9 +79,6 @@ void POOL_add(POOL_ctx* ctx, POOL_function function, void* opaque);
  */
 int POOL_tryAdd(POOL_ctx* ctx, POOL_function function, void* opaque);
 
-
-#if defined (__cplusplus)
-}
-#endif
+} // namespace duckdb_zstd
 
 #endif

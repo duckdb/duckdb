@@ -8,9 +8,11 @@
  * You may select, at your option, one of the above-listed licenses.
  */
 
-#include "zstd_compress_internal.h"
-#include "zstd_lazy.h"
-#include "../common/bits.h" /* ZSTD_countTrailingZeros64 */
+#include "zstd/compress/zstd_compress_internal.h"
+#include "zstd/compress/zstd_lazy.h"
+#include "zstd/common/bits.h" /* ZSTD_countTrailingZeros64 */
+
+namespace duckdb_zstd {
 
 #if !defined(ZSTD_EXCLUDE_GREEDY_BLOCK_COMPRESSOR) \
  || !defined(ZSTD_EXCLUDE_LAZY_BLOCK_COMPRESSOR) \
@@ -2197,3 +2199,5 @@ size_t ZSTD_compressBlock_btlazy2_extDict(
     return ZSTD_compressBlock_lazy_extDict_generic(ms, seqStore, rep, src, srcSize, search_binaryTree, 2);
 }
 #endif
+
+} // namespace duckdb_zstd

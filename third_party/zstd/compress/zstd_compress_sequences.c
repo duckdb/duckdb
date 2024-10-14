@@ -11,7 +11,9 @@
  /*-*************************************
  *  Dependencies
  ***************************************/
-#include "zstd_compress_sequences.h"
+#include "zstd/compress/zstd_compress_sequences.h"
+
+namespace duckdb_zstd {
 
 /**
  * -log2(x / 256) lookup table for x in [0, 256).
@@ -440,3 +442,5 @@ size_t ZSTD_encodeSequences(
                                         CTable_LitLength, llCodeTable,
                                         sequences, nbSeq, longOffsets);
 }
+
+} // namespace duckdb_zstd

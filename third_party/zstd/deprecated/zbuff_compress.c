@@ -14,8 +14,8 @@
 *  Dependencies
 ***************************************/
 #define ZBUFF_STATIC_LINKING_ONLY
-#include "zbuff.h"
-#include "../common/error_private.h"
+#include "zstd/deprecated/zbuff.h"
+#include "zstd/common/error_private.h"
 
 
 /*-***********************************************************
@@ -50,6 +50,8 @@
 *  input : ZSTD_BLOCKSIZE_MAX (128 KB), internal unit size, it improves latency to use this value.
 *  output : ZSTD_compressBound(ZSTD_BLOCKSIZE_MAX) + ZSTD_blockHeaderSize + ZBUFF_endFrameSize : ensures it's always possible to write/flush/end a full block at best speed.
 * ***********************************************************/
+
+namespace duckdb_zstd {
 
 ZBUFF_CCtx* ZBUFF_createCCtx(void)
 {
@@ -165,3 +167,5 @@ size_t ZBUFF_compressEnd(ZBUFF_CCtx* zbc, void* dst, size_t* dstCapacityPtr)
 ***************************************/
 size_t ZBUFF_recommendedCInSize(void)  { return ZSTD_CStreamInSize(); }
 size_t ZBUFF_recommendedCOutSize(void) { return ZSTD_CStreamOutSize(); }
+
+} // namespace duckdb_zstd

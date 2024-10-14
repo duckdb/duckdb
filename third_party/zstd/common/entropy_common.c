@@ -15,13 +15,14 @@
 /* *************************************
 *  Dependencies
 ***************************************/
-#include "mem.h"
-#include "error_private.h"       /* ERR_*, ERROR */
+#include "zstd/common/mem.h"
+#include "zstd/common/error_private.h"       /* ERR_*, ERROR */
 #define FSE_STATIC_LINKING_ONLY  /* FSE_MIN_TABLELOG */
-#include "fse.h"
-#include "huf.h"
-#include "bits.h"                /* ZSDT_highbit32, ZSTD_countTrailingZeros32 */
+#include "ztd/common/fse.h"
+#include "ztd/common/huf.h"
+#include "ztd/common/bits.h"                /* ZSDT_highbit32, ZSTD_countTrailingZeros32 */
 
+namespace duckdb_zstd {
 
 /*===   Version   ===*/
 unsigned FSE_versionNumber(void) { return FSE_VERSION_NUMBER; }
@@ -338,3 +339,5 @@ size_t HUF_readStats_wksp(BYTE* huffWeight, size_t hwSize, U32* rankStats,
     (void)flags;
     return HUF_readStats_body_default(huffWeight, hwSize, rankStats, nbSymbolsPtr, tableLogPtr, src, srcSize, workSpace, wkspSize);
 }
+
+} // namespace duckdb_zstd

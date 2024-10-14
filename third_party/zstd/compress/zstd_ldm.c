@@ -8,17 +8,19 @@
  * You may select, at your option, one of the above-listed licenses.
  */
 
-#include "zstd_ldm.h"
+#include "zstd/compress/zstd_ldm.h"
 
-#include "../common/debug.h"
-#include "../common/xxhash.h"
-#include "zstd_fast.h"          /* ZSTD_fillHashTable() */
-#include "zstd_double_fast.h"   /* ZSTD_fillDoubleHashTable() */
-#include "zstd_ldm_geartab.h"
+#include "zstd/common/debug.h"
+#include "zstd/common/xxhash.h"
+#include "zstd/compress/zstd_fast.h"          /* ZSTD_fillHashTable() */
+#include "zstd/compress/zstd_double_fast.h"   /* ZSTD_fillDoubleHashTable() */
+#include "zstd/compress/zstd_ldm_geartab.h"
 
 #define LDM_BUCKET_SIZE_LOG 3
 #define LDM_MIN_MATCH_LENGTH 64
 #define LDM_HASH_RLOG 7
+
+namespace duckdb_zstd {
 
 typedef struct {
     U64 rolling;
@@ -728,3 +730,5 @@ size_t ZSTD_ldm_blockCompress(rawSeqStore_t* rawSeqStore,
     /* Compress the last literals */
     return blockCompressor(ms, seqStore, rep, ip, iend - ip);
 }
+
+} // namespace duckdb_zstd

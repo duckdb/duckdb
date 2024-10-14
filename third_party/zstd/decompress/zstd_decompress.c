@@ -55,22 +55,22 @@
 /*-*******************************************************
 *  Dependencies
 *********************************************************/
-#include "../common/zstd_deps.h"   /* ZSTD_memcpy, ZSTD_memmove, ZSTD_memset */
-#include "../common/allocations.h"  /* ZSTD_customMalloc, ZSTD_customCalloc, ZSTD_customFree */
-#include "../common/error_private.h"
-#include "../common/zstd_internal.h"  /* blockProperties_t */
-#include "../common/mem.h"         /* low level memory routines */
-#include "../common/bits.h"  /* ZSTD_highbit32 */
+#include "zstd/common/zstd_deps.h"   /* ZSTD_memcpy, ZSTD_memmove, ZSTD_memset */
+#include "zstd/common/allocations.h"  /* ZSTD_customMalloc, ZSTD_customCalloc, ZSTD_customFree */
+#include "zstd/common/error_private.h"
+#include "zstd/common/zstd_internal.h"  /* blockProperties_t */
+#include "zstd/common/mem.h"         /* low level memory routines */
+#include "zstd/common/bits.h"  /* ZSTD_highbit32 */
 #define FSE_STATIC_LINKING_ONLY
-#include "../common/fse.h"
-#include "../common/huf.h"
-#include "../common/xxhash.h" /* XXH64_reset, XXH64_update, XXH64_digest, XXH64 */
-#include "zstd_decompress_internal.h"   /* ZSTD_DCtx */
-#include "zstd_ddict.h"  /* ZSTD_DDictDictContent */
-#include "zstd_decompress_block.h"   /* ZSTD_decompressBlock_internal */
+#include "zstd/common/fse.h"
+#include "zstd/common/huf.h"
+#include "zstd/common/xxhash.h" /* XXH64_reset, XXH64_update, XXH64_digest, XXH64 */
+#include "zstd/decompress/zstd_decompress_internal.h"   /* ZSTD_DCtx */
+#include "zstd/decompress/zstd_ddict.h"  /* ZSTD_DDictDictContent */
+#include "zstd/decompress/zstd_decompress_block.h"   /* ZSTD_decompressBlock_internal */
 
 #if defined(ZSTD_LEGACY_SUPPORT) && (ZSTD_LEGACY_SUPPORT>=1)
-#  include "../legacy/zstd_legacy.h"
+#  include "zstd/legacy/zstd_legacy.h"
 #endif
 
 
@@ -88,6 +88,8 @@
 
 #define DDICT_HASHSET_TABLE_BASE_SIZE 64
 #define DDICT_HASHSET_RESIZE_FACTOR 2
+
+namespace duckdb_zstd {
 
 /* Hash function to determine starting position of dict insertion within the table
  * Returns an index between [0, hashSet->ddictPtrTableSize]
@@ -2405,3 +2407,5 @@ size_t ZSTD_decompressStream_simpleArgs (
         return cErr;
     }
 }
+
+} // namespace duckdb_zstd

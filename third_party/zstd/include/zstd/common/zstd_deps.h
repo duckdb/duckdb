@@ -28,6 +28,8 @@
 #include <stddef.h>
 #include <string.h>
 
+namespace duckdb_zstd {
+
 #if defined(__GNUC__) && __GNUC__ >= 4
 # define ZSTD_memcpy(d,s,l) __builtin_memcpy((d),(s),(l))
 # define ZSTD_memmove(d,s,l) __builtin_memmove((d),(s),(l))
@@ -106,6 +108,8 @@
 #define ZSTD_DEPS_STDINT
 
 #include <stdint.h>
+
+} // namespace duckdb_zstd
 
 #endif /* ZSTD_DEPS_STDINT */
 #endif /* ZSTD_DEPS_NEED_STDINT */

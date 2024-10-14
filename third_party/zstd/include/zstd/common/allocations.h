@@ -12,14 +12,16 @@
  */
 
 #define ZSTD_DEPS_NEED_MALLOC
-#include "zstd_deps.h"   /* ZSTD_malloc, ZSTD_calloc, ZSTD_free, ZSTD_memset */
+#include "zstd/zstd_deps.h"   /* ZSTD_malloc, ZSTD_calloc, ZSTD_free, ZSTD_memset */
 
-#include "compiler.h" /* MEM_STATIC */
+#include "zstd/common/compiler.h" /* MEM_STATIC */
 #define ZSTD_STATIC_LINKING_ONLY
-#include "../zstd.h" /* ZSTD_customMem */
+#include "zstd/zstd.h" /* ZSTD_customMem */
 
 #ifndef ZSTD_ALLOCATIONS_H
 #define ZSTD_ALLOCATIONS_H
+
+namespace duckdb_zstd {
 
 /* custom memory allocation functions */
 
@@ -51,5 +53,7 @@ MEM_STATIC void ZSTD_customFree(void* ptr, ZSTD_customMem customMem)
             ZSTD_free(ptr);
     }
 }
+
+} // namespace duckdb_zstd
 
 #endif /* ZSTD_ALLOCATIONS_H */

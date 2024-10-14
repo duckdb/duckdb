@@ -16,20 +16,22 @@
 
 
 /* ======   Dependencies   ====== */
-#include "../common/allocations.h" /* ZSTD_customMalloc, ZSTD_customCalloc, ZSTD_customFree */
-#include "../common/zstd_deps.h"   /* ZSTD_memcpy, ZSTD_memset, INT_MAX, UINT_MAX */
-#include "../common/mem.h"         /* MEM_STATIC */
-#include "../common/pool.h"        /* threadpool */
-#include "../common/threading.h"   /* mutex */
-#include "zstd_compress_internal.h" /* MIN, ERROR, ZSTD_*, ZSTD_highbit32 */
-#include "zstd_ldm.h"
-#include "zstdmt_compress.h"
+#include "zstd/common/allocations.h" /* ZSTD_customMalloc, ZSTD_customCalloc, ZSTD_customFree */
+#include "zstd/common/zstd_deps.h"   /* ZSTD_memcpy, ZSTD_memset, INT_MAX, UINT_MAX */
+#include "zstd/common/mem.h"         /* MEM_STATIC */
+#include "zstd/common/pool.h"        /* threadpool */
+#include "zstd/common/threading.h"   /* mutex */
+#include "zstd/compress/zstd_compress_internal.h" /* MIN, ERROR, ZSTD_*, ZSTD_highbit32 */
+#include "zstd/compress/zstd_ldm.h"
+#include "zstd/compress/zstdmt_compress.h"
 
 /* Guards code to support resizing the SeqPool.
  * We will want to resize the SeqPool to save memory in the future.
  * Until then, comment the code out since it is unused.
  */
 #define ZSTD_RESIZE_SEQPOOL 0
+
+namespace duckdb_zstd {
 
 /* ======   Debug   ====== */
 #if defined(DEBUGLEVEL) && (DEBUGLEVEL>=2) \
@@ -1880,3 +1882,5 @@ size_t ZSTDMT_compressStream_generic(ZSTDMT_CCtx* mtctx,
         return remainingToFlush;
     }
 }
+
+} // namespace duckdb_zstd

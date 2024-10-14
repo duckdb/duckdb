@@ -14,18 +14,18 @@
 /*-*******************************************************
 *  Dependencies
 *********************************************************/
-#include "../common/zstd_deps.h"   /* ZSTD_memcpy, ZSTD_memmove, ZSTD_memset */
-#include "../common/compiler.h"    /* prefetch */
-#include "../common/cpu.h"         /* bmi2 */
-#include "../common/mem.h"         /* low level memory routines */
+#include "zstd/common/zstd_deps.h"   /* ZSTD_memcpy, ZSTD_memmove, ZSTD_memset */
+#include "zstd/common/compiler.h"    /* prefetch */
+#include "zstd/common/cpu.h"         /* bmi2 */
+#include "zstd/common/mem.h"         /* low level memory routines */
 #define FSE_STATIC_LINKING_ONLY
-#include "../common/fse.h"
-#include "../common/huf.h"
-#include "../common/zstd_internal.h"
-#include "zstd_decompress_internal.h"   /* ZSTD_DCtx */
-#include "zstd_ddict.h"  /* ZSTD_DDictDictContent */
-#include "zstd_decompress_block.h"
-#include "../common/bits.h"  /* ZSTD_highbit32 */
+#include "zstd/common/fse.h"
+#include "zstd/common/huf.h"
+#include "zstd/common/zstd_internal.h"
+#include "zstd/decompress/zstd_decompress_internal.h"   /* ZSTD_DCtx */
+#include "zstd/decompress/zstd_ddict.h"  /* ZSTD_DDictDictContent */
+#include "zstd/decompress/zstd_decompress_block.h"
+#include "zstd/common/bits.h"  /* ZSTD_highbit32 */
 
 /*_*******************************************************
 *  Macros
@@ -40,6 +40,7 @@
 #error "Cannot force the use of the short and the long ZSTD_decompressSequences variants!"
 #endif
 
+namespace duckdb_zstd {
 
 /*_*******************************************************
 *  Memory operations
@@ -2213,3 +2214,5 @@ size_t ZSTD_decompressBlock(ZSTD_DCtx* dctx,
 {
     return ZSTD_decompressBlock_deprecated(dctx, dst, dstCapacity, src, srcSize);
 }
+
+} // namespace duckdb_zstd

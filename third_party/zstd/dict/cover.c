@@ -30,13 +30,13 @@
 #  define ZDICT_STATIC_LINKING_ONLY
 #endif
 
-#include "../common/mem.h" /* read */
-#include "../common/pool.h" /* POOL_ctx */
-#include "../common/threading.h" /* ZSTD_pthread_mutex_t */
-#include "../common/zstd_internal.h" /* includes zstd.h */
-#include "../common/bits.h" /* ZSTD_highbit32 */
-#include "../zdict.h"
-#include "cover.h"
+#include "zstd/common/mem.h" /* read */
+#include "zstd/common/pool.h" /* POOL_ctx */
+#include "zstd/common/threading.h" /* ZSTD_pthread_mutex_t */
+#include "zstd/common/zstd_internal.h" /* includes zstd.h */
+#include "zstd/common/bits.h" /* ZSTD_highbit32 */
+#include "zstd/zdict.h"
+#include "zstd/dict/cover.h"
 
 /*-*************************************
 *  Constants
@@ -85,6 +85,8 @@ static clock_t g_time = 0;
   }
 #undef  DISPLAYUPDATE
 #define DISPLAYUPDATE(l, ...) LOCALDISPLAYUPDATE(g_displayLevel, l, __VA_ARGS__)
+
+namespace duckdb_zstd {
 
 /*-*************************************
 * Hash table
@@ -1259,3 +1261,5 @@ ZDICTLIB_STATIC_API size_t ZDICT_optimizeTrainFromBuffer_cover(
     return dictSize;
   }
 }
+
+} // namespace duckdb_zstd

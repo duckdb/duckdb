@@ -10,7 +10,9 @@
 
 /* The purpose of this file is to have a single list of error strings embedded in binary */
 
-#include "error_private.h"
+#include "zstd/common/error_private.h"
+
+namespace duckdb_zstd {
 
 const char* ERR_getErrorString(ERR_enum code)
 {
@@ -61,3 +63,5 @@ const char* ERR_getErrorString(ERR_enum code)
     }
 #endif
 }
+
+} // namespace duckdb_zstd

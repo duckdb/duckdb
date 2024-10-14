@@ -21,13 +21,13 @@ set(ZSTD_FILES
 	decompress/zstd_decompress.c
 	decompress/huf_decompress_amd64.S
 	decompress/zstd_decompress_block.c
-	legacy/zstd_v05.c
-	legacy/zstd_v01.c
-	legacy/zstd_v06.c
-	legacy/zstd_v02.c
-	legacy/zstd_v07.c
-	legacy/zstd_v03.c
-	legacy/zstd_v04.c
+	#legacy/zstd_v05.c
+	#legacy/zstd_v01.c
+	#legacy/zstd_v06.c
+	#legacy/zstd_v02.c
+	#legacy/zstd_v07.c
+	#legacy/zstd_v03.c
+	#legacy/zstd_v04.c
 	common/entropy_common.c
 	common/fse_decompress.c
 	common/debug.c

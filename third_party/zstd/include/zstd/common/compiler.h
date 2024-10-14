@@ -13,7 +13,9 @@
 
 #include <stddef.h>
 
-#include "portability_macros.h"
+#include "zstd/common/portability_macros.h"
+
+namespace duckdb_zstd {
 
 /*-*******************************************************
 *  Compiler specifics
@@ -446,5 +448,7 @@ void __asan_poison_memory_region(void const volatile *addr, size_t size);
  * \param size Size of memory region. */
 void __asan_unpoison_memory_region(void const volatile *addr, size_t size);
 #endif
+
+} // namespace duckdb_zstd
 
 #endif /* ZSTD_COMPILER_H */

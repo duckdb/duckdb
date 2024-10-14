@@ -8,8 +8,10 @@
  * You may select, at your option, one of the above-listed licenses.
  */
 
-#include "zstd_compress_internal.h"  /* ZSTD_hashPtr, ZSTD_count, ZSTD_storeSeq */
-#include "zstd_fast.h"
+#include "zstd/compress/zstd_compress_internal.h"  /* ZSTD_hashPtr, ZSTD_count, ZSTD_storeSeq */
+#include "zstd/compress/zstd_fast.h"
+
+namespace duckdb_zstd {
 
 static
 ZSTD_ALLOW_POINTER_OVERFLOW_ATTR
@@ -966,3 +968,5 @@ size_t ZSTD_compressBlock_fast_extDict(
         return ZSTD_compressBlock_fast_extDict_7_0(ms, seqStore, rep, src, srcSize);
     }
 }
+
+} // namespace duckdb_zstd

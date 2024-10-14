@@ -10,10 +10,10 @@
 
 
 /* ======   Dependencies   ======= */
-#include "../common/allocations.h"  /* ZSTD_customCalloc, ZSTD_customFree */
-#include "zstd_deps.h" /* size_t */
-#include "debug.h"     /* assert */
-#include "pool.h"
+#include "zstd/common/allocations.h"  /* ZSTD_customCalloc, ZSTD_customFree */
+#include "zstd/common/zstd_deps.h" /* size_t */
+#include "zstd/common/debug.h"     /* assert */
+#include "zstd/common/pool.h"
 
 /* ======   Compiler specifics   ====== */
 #if defined(_MSC_VER)
@@ -22,8 +22,12 @@
 
 
 #ifdef ZSTD_MULTITHREAD
+#include "zstd/common/threading.h"   /* pthread adaptation */
+#endif
 
-#include "threading.h"   /* pthread adaptation */
+namespace duckdb_zstd {
+
+#ifdef ZSTD_MULTITHREAD
 
 /* A job is a function and an opaque argument */
 typedef struct POOL_job_s {
@@ -309,7 +313,6 @@ int POOL_tryAdd(POOL_ctx* ctx, POOL_function function, void* opaque)
     return 1;
 }
 
-
 #else  /* ZSTD_MULTITHREAD  not defined */
 
 /* ========================== */
@@ -369,3 +372,5 @@ size_t POOL_sizeof(const POOL_ctx* ctx) {
 }
 
 #endif  /* ZSTD_MULTITHREAD */
+
+} // namespace duckdb_zstd

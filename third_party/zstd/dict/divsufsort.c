@@ -40,7 +40,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "divsufsort.h"
+#include "zstd/dict/divsufsort.h"
 
 /*- Constants -*/
 #if defined(INLINE)
@@ -134,6 +134,7 @@
 #define BUCKET_BSTAR(_c0, _c1) (bucket_B[(_c0) * ALPHABET_SIZE + (_c1)])
 #endif
 
+namespace duckdb_zstd {
 
 /*- Private Functions -*/
 
@@ -1911,3 +1912,5 @@ divbwt(const unsigned char *T, unsigned char *U, int *A, int n, unsigned char * 
 
   return pidx;
 }
+
+} // namespace duckdb_zstd

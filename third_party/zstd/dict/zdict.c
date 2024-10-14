@@ -45,16 +45,17 @@
 #  define ZDICT_STATIC_LINKING_ONLY
 #endif
 
-#include "../common/mem.h"           /* read */
-#include "../common/fse.h"           /* FSE_normalizeCount, FSE_writeNCount */
-#include "../common/huf.h"           /* HUF_buildCTable, HUF_writeCTable */
-#include "../common/zstd_internal.h" /* includes zstd.h */
-#include "../common/xxhash.h"        /* XXH64 */
-#include "../compress/zstd_compress_internal.h" /* ZSTD_loadCEntropy() */
-#include "../zdict.h"
-#include "divsufsort.h"
-#include "../common/bits.h"          /* ZSTD_NbCommonBytes */
+#include "zstd/common/mem.h"           /* read */
+#include "zstd/common/fse.h"           /* FSE_normalizeCount, FSE_writeNCount */
+#include "zstd/common/huf.h"           /* HUF_buildCTable, HUF_writeCTable */
+#include "zstd/common/zstd_internal.h" /* includes zstd.h */
+#include "zstd/common/xxhash.h"        /* XXH64 */
+#include "zstd/compress/zstd_compress_internal.h" /* ZSTD_loadCEntropy() */
+#include "zstd/dict/zdict.h"
+#include "zstd/dict/divsufsort.h"
+#include "zstd/common/bits.h"          /* ZSTD_NbCommonBytes */
 
+namespace duckdb_zstd {
 
 /*-*************************************
 *  Constants
@@ -1131,3 +1132,5 @@ size_t ZDICT_addEntropyTablesFromBuffer(void* dictBuffer, size_t dictContentSize
                                                      samplesBuffer, samplesSizes, nbSamples,
                                                      params);
 }
+
+} // namespace duckdb_zstd

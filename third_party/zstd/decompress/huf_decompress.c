@@ -15,14 +15,14 @@
 /* **************************************************************
 *  Dependencies
 ****************************************************************/
-#include "../common/zstd_deps.h"  /* ZSTD_memcpy, ZSTD_memset */
-#include "../common/compiler.h"
-#include "../common/bitstream.h"  /* BIT_* */
-#include "../common/fse.h"        /* to compress headers */
-#include "../common/huf.h"
-#include "../common/error_private.h"
-#include "../common/zstd_internal.h"
-#include "../common/bits.h"       /* ZSTD_highbit32, ZSTD_countTrailingZeros64 */
+#include "zstd/common/zstd_deps.h"  /* ZSTD_memcpy, ZSTD_memset */
+#include "zstd/common/compiler.h"
+#include "zstd/common/bitstream.h"  /* BIT_* */
+#include "zstd/common/fse.h"        /* to compress headers */
+#include "zstd/common/huf.h"
+#include "zstd/common/error_private.h"
+#include "zstd/common/zstd_internal.h"
+#include "zstd/common/bits.h"       /* ZSTD_highbit32, ZSTD_countTrailingZeros64 */
 
 /* **************************************************************
 *  Constants
@@ -84,6 +84,7 @@
 #define HUF_ALIGN(x, a)         HUF_ALIGN_MASK((x), (a) - 1)
 #define HUF_ALIGN_MASK(x, mask) (((x) + (mask)) & ~(mask))
 
+namespace duckdb_zstd {
 
 /* **************************************************************
 *  BMI2 Variant Wrappers
@@ -1942,3 +1943,5 @@ size_t HUF_decompress4X_hufOnly_wksp(HUF_DTable* dctx, void* dst, size_t dstSize
 #endif
     }
 }
+
+} // namespace duckdb_zstd
