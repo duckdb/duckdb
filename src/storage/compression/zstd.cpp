@@ -5,7 +5,9 @@
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/constants.hpp"
+#include "duckdb/storage/compression/utils.hpp"
 #include "zstd_wrapper.hpp"
+#include "zstd/dict/zdict.h"
 
 namespace duckdb {
 
@@ -33,20 +35,52 @@ struct ZSTDStorage {
 struct ZSTDAnalyzeState : public AnalyzeState {
 public:
 	ZSTDAnalyzeState(CompressionInfo &info) : AnalyzeState(info) {
+		context = duckdb_zstd::ZSTD_createCCtx();
+		auto &to_sample_vectors = this->to_sample_vectors;
+		auto &vector_sizes = this->vector_sizes;
+		auto &total_sample_size = this->total_sample_size;
+
+		sampling_state.SetSampler([&to_sample_vectors, &vector_sizes, &total_sample_size](Vector &vec, idx_t count) {
+			UnifiedVectorFormat vdata;
+			vec.ToUnifiedFormat(count, vdata);
+
+			auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
+			for (idx_t i = 0; i < count; i++) {
+				auto idx = vdata.sel->get_index(i);
+				if (!vdata.validity.RowIsValid(idx)) {
+					continue;
+				}
+				auto &str = data[idx];
+				auto string_size = str.GetSize();
+				total_sample_size += string_size;
+			}
+
+			to_sample_vectors.emplace_back(std::move(vec));
+			vector_sizes.push_back(count);
+		});
+	}
+	~ZSTDAnalyzeState() {
+		duckdb_zstd::ZSTD_freeCCtx(context);
+		free(dict);
 	}
 
 public:
-	inline void AppendEmptyString() {
-		count++;
-	}
-
 	inline void AppendString(const string_t &str) {
 		auto string_size = str.GetSize();
 		total_size += string_size;
-		count++;
 	}
 
 public:
+	//! The vectors we will sample in FinalAnalyze
+	vector<Vector> to_sample_vectors;
+	vector<idx_t> vector_sizes;
+	idx_t total_sample_size = 0;
+	AnalyzeSamplingState sampling_state;
+
+	//! The trained 'dictBuffer' (populated in FinalAnalyze)
+	void *dict = nullptr;
+
+	duckdb_zstd::ZSTD_CCtx *context;
 	idx_t total_size = 0;
 	idx_t count = 0;
 };
@@ -66,12 +100,64 @@ bool ZSTDStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t coun
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		if (!vdata.validity.RowIsValid(idx)) {
-			state.AppendEmptyString();
 			continue;
 		}
-		state.AppendString(data[idx]);
+		auto &str = data[idx];
+		auto string_size = str.GetSize();
+		state.total_size += string_size;
 	}
+	state.sampling_state.Sample(input, count);
+	state.count += count;
 	return true;
+}
+
+void *CreateDictFromSamples(ZSTDAnalyzeState &state) {
+	void *concatenated_samples = malloc(state.total_sample_size);
+	vector<idx_t> sample_sizes;
+	if (!concatenated_samples) {
+		return nullptr;
+	}
+	idx_t offset = 0;
+	auto &vector_sizes = state.vector_sizes;
+
+	sample_sizes.reserve(vector_sizes.size() * STANDARD_VECTOR_SIZE);
+	for (idx_t i = 0; i < vector_sizes.size(); i++) {
+		auto &count = vector_sizes[i];
+		auto &vec = state.to_sample_vectors[i];
+
+		UnifiedVectorFormat vdata;
+		vec.ToUnifiedFormat(count, vdata);
+
+		auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
+		for (idx_t i = 0; i < count; i++) {
+			auto idx = vdata.sel->get_index(i);
+			if (!vdata.validity.RowIsValid(idx)) {
+				continue;
+			}
+			auto &str = data[idx];
+			auto string_size = str.GetSize();
+			memcpy((char *)concatenated_samples + offset, str.GetData(), string_size);
+			offset += string_size;
+			sample_sizes.push_back(string_size);
+		}
+	}
+
+	idx_t dict_buffer_size = MinValue<idx_t>(state.total_sample_size / 100, 1024);
+	void *dict_buffer = malloc(dict_buffer_size);
+	if (!dict_buffer) {
+		free(concatenated_samples);
+		return nullptr;
+	}
+
+	auto res = duckdb_zstd::ZDICT_trainFromBuffer((void *)dict_buffer, dict_buffer_size, concatenated_samples,
+	                                              (size_t *)sample_sizes.data(),
+	                                              UnsafeNumericCast<uint32_t>(sample_sizes.size()));
+	free(concatenated_samples);
+	if (duckdb_zstd::ZDICT_isError(res)) {
+		free(dict_buffer);
+		dict_buffer = nullptr;
+	}
+	return dict_buffer;
 }
 
 // Compression score to determine which compression to use
@@ -81,6 +167,12 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	if (state.count == 0) {
 		return DConstants::INVALID_INDEX;
 	}
+
+	state.dict = CreateDictFromSamples(state);
+	if (!state.dict) {
+		return NumericLimits<idx_t>::Maximum();
+	}
+
 	// get the size of the offsets into the buffer
 	auto bits_per_value = BitpackingPrimitives::MinimumBitWidth(state.total_size);
 	auto total_offset_size = (bits_per_value * state.count) / 8;
