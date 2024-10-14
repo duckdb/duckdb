@@ -15,8 +15,8 @@ namespace duckdb {
 
 class DeleteRelation : public Relation {
 public:
-	DeleteRelation(ClientContextWrapper &context, unique_ptr<ParsedExpression> condition, string schema_name,
-	               string table_name);
+	DeleteRelation(shared_ptr<ClientContextWrapper> &context, unique_ptr<ParsedExpression> condition,
+	               string schema_name, string table_name);
 
 	vector<ColumnDefinition> columns;
 	unique_ptr<ParsedExpression> condition;

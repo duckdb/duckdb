@@ -1152,22 +1152,24 @@ void ClientContext::Append(TableDescription &description, ColumnDataCollection &
 	});
 }
 
+void ClientContext::InternalTryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns) {
+	// bind the expressions
+	auto binder = Binder::CreateBinder(*this);
+	auto result = relation.Bind(*binder);
+	D_ASSERT(result.names.size() == result.types.size());
+
+	result_columns.reserve(result_columns.size() + result.names.size());
+	for (idx_t i = 0; i < result.names.size(); i++) {
+		result_columns.emplace_back(result.names[i], result.types[i]);
+	}
+}
+
 void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns) {
 #ifdef DEBUG
 	D_ASSERT(!relation.GetAlias().empty());
 	D_ASSERT(!relation.ToString().empty());
 #endif
-	RunFunctionInTransaction([&]() {
-		// bind the expressions
-		auto binder = Binder::CreateBinder(*this);
-		auto result = relation.Bind(*binder);
-		D_ASSERT(result.names.size() == result.types.size());
-
-		result_columns.reserve(result_columns.size() + result.names.size());
-		for (idx_t i = 0; i < result.names.size(); i++) {
-			result_columns.emplace_back(result.names[i], result.types[i]);
-		}
-	});
+	RunFunctionInTransaction([&]() { InternalTryBindRelation(relation, result_columns); });
 }
 
 unordered_set<string> ClientContext::GetTableNames(const string &query) {

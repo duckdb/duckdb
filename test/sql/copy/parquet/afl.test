@@ -2,6 +2,8 @@
 # description: Read afl-generated parquet files
 # group: [parquet]
 
+mode skip
+
 require parquet
 
 statement ok

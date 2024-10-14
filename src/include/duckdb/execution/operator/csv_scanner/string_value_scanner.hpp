@@ -314,10 +314,15 @@ private:
 	//! Function used to move from one buffer to the other, if necessary
 	bool MoveToNextBuffer();
 
-	void SkipUntilNewLine();
-
+	//! -------- Functions used to figure out where lines start ---------!//
+	//! Main function, sets the correct start
 	void SetStart();
-
+	//! From a given initial state, it skips until we reach the until_state
+	bool SkipUntilState(CSVState initial_state, CSVState until_state);
+	//! If the current row we found is valid
+	bool IsRowValid();
+	void TryRow(CSVState state, idx_t &start_pos, idx_t &end_pos, bool &valid);
+	idx_t FindNextNewLine() const;
 	StringValueResult result;
 	vector<LogicalType> types;
 

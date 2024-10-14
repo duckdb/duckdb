@@ -119,8 +119,9 @@ class GeoParquetFileMetadata {
 public:
 	// Try to read GeoParquet metadata. Returns nullptr if not found, invalid or the required spatial extension is not
 	// available.
+
 	static unique_ptr<GeoParquetFileMetadata> TryRead(const duckdb_parquet::FileMetaData &file_meta_data,
-	                                                  ClientContext &context);
+	                                                  const ClientContext &context);
 	void Write(duckdb_parquet::FileMetaData &file_meta_data) const;
 
 	void FlushColumnMeta(const string &column_name, const GeoParquetColumnMetadata &meta);
@@ -132,6 +133,8 @@ public:
 
 	bool IsGeometryColumn(const string &column_name) const;
 	void RegisterGeometryColumn(const string &column_name);
+
+	static bool IsGeoParquetConversionEnabled(const ClientContext &context);
 
 private:
 	mutex write_lock;

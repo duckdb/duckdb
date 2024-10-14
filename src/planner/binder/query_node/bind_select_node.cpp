@@ -140,6 +140,7 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 					    make_uniq<ConstantExpression>(Value::INTEGER(UnsafeNumericCast<int32_t>(1 + i))));
 				}
 			}
+			order_binder.SetQueryComponent("DISTINCT ON");
 			for (auto &distinct_on_target : distinct.distinct_on_targets) {
 				auto expr = BindOrderExpression(order_binder, std::move(distinct_on_target));
 				if (!expr) {
@@ -147,10 +148,13 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 				}
 				bound_distinct->target_distincts.push_back(std::move(expr));
 			}
+			order_binder.SetQueryComponent();
+
 			bound_modifier = std::move(bound_distinct);
 			break;
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
+
 			auto &order = mod->Cast<OrderModifier>();
 			auto bound_order = make_uniq<BoundOrderModifier>();
 			auto &config = DBConfig::GetConfig(context);
