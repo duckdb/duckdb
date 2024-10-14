@@ -21,13 +21,6 @@ set(ZSTD_FILES
 	decompress/zstd_decompress.cpp
 	decompress/huf_decompress_amd64.Spp
 	decompress/zstd_decompress_block.cpp
-	legacy/zstd_v05.cpp
-	legacy/zstd_v01.cpp
-	legacy/zstd_v06.cpp
-	legacy/zstd_v02.cpp
-	legacy/zstd_v07.cpp
-	legacy/zstd_v03.cpp
-	legacy/zstd_v04.cpp
 	common/entropy_common.cpp
 	common/fse_decompress.cpp
 	common/debug.cpp
