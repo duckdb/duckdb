@@ -56,25 +56,11 @@ ColumnDefinition Transformer::TransformColumnDefinition(duckdb_libpgquery::PGCol
 	LogicalType target_type;
 	if (optional_type && !cdef.typeName) {
 		target_type = LogicalType::ANY;
-
 	} else if (!cdef.typeName) {
 		// ALTER TABLE tbl ALTER TYPE USING ...
 		target_type = LogicalType::UNKNOWN;
-
 	} else {
-		if (cdef.typeName->names->length == 1) {
-			auto value = cdef.typeName->names->tail->data.ptr_value;
-			auto type_name = PGPointerCast<duckdb_libpgquery::PGValue>(value)->val.str;
-			if (string(type_name).compare(EnumUtil::ToString(LogicalType::UNKNOWN)) == 0) {
-				// ALTER TABLE tbl ALTER TYPE USING ...
-				target_type = LogicalType::UNKNOWN;
-
-			} else {
-				target_type = TransformTypeName(*cdef.typeName);
-			}
-		} else {
-			target_type = TransformTypeName(*cdef.typeName);
-		}
+		target_type = TransformTypeName(*cdef.typeName);
 	}
 
 	if (cdef.collClause) {
