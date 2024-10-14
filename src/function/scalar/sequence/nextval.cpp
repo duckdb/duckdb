@@ -133,6 +133,7 @@ void NextvalFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction next_val("nextval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                        NextValFunction<NextSequenceValueOperator>, NextValBind, NextValDependency);
 	next_val.stability = FunctionStability::VOLATILE;
+	next_val.errors = FunctionErrors::CAN_THROW_ERROR;
 	next_val.serialize = Serialize;
 	next_val.deserialize = Deserialize;
 	next_val.get_modified_databases = NextValModifiedDatabases;
@@ -144,6 +145,7 @@ void CurrvalFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction curr_val("currval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                        NextValFunction<CurrentSequenceValueOperator>, NextValBind, NextValDependency);
 	curr_val.stability = FunctionStability::VOLATILE;
+	curr_val.errors = FunctionErrors::CAN_THROW_ERROR;
 	curr_val.serialize = Serialize;
 	curr_val.deserialize = Deserialize;
 	curr_val.init_local_state = NextValLocalFunction;

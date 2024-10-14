@@ -408,7 +408,9 @@ ScalarFunctionSet HexFun::GetFunctions() {
 }
 
 ScalarFunction UnhexFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::BLOB, FromHexFunction);
+	ScalarFunction function({LogicalType::VARCHAR}, LogicalType::BLOB, FromHexFunction);
+	function.errors = FunctionErrors::CAN_THROW_ERROR;
+	return function;
 }
 
 ScalarFunctionSet BinFun::GetFunctions() {
@@ -430,7 +432,9 @@ ScalarFunctionSet BinFun::GetFunctions() {
 }
 
 ScalarFunction UnbinFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::BLOB, FromBinaryFunction);
+	ScalarFunction function({LogicalType::VARCHAR}, LogicalType::BLOB, FromBinaryFunction);
+	function.errors = FunctionErrors::CAN_THROW_ERROR;
+	return function;
 }
 
 } // namespace duckdb

@@ -205,13 +205,17 @@ ScalarFunction ToDaysFun::GetFunction() {
 }
 
 ScalarFunction ToHoursFun::GetFunction() {
-	return ScalarFunction({LogicalType::BIGINT}, LogicalType::INTERVAL,
+	ScalarFunction function({LogicalType::BIGINT}, LogicalType::INTERVAL,
 	                      ScalarFunction::UnaryFunction<int64_t, interval_t, ToHoursOperator>);
+	function.errors = FunctionErrors::CAN_THROW_ERROR;
+	return function;
 }
 
 ScalarFunction ToMinutesFun::GetFunction() {
-	return ScalarFunction({LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                      ScalarFunction::UnaryFunction<int64_t, interval_t, ToMinutesOperator>);
+	ScalarFunction function({LogicalType::BIGINT}, LogicalType::INTERVAL,
+	ScalarFunction::UnaryFunction<int64_t, interval_t, ToMinutesOperator>);
+	function.errors = FunctionErrors::CAN_THROW_ERROR;
+	return function;
 }
 
 ScalarFunction ToSecondsFun::GetFunction() {
@@ -220,8 +224,10 @@ ScalarFunction ToSecondsFun::GetFunction() {
 }
 
 ScalarFunction ToMillisecondsFun::GetFunction() {
-	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::INTERVAL,
-	                      ScalarFunction::UnaryFunction<double, interval_t, ToMilliSecondsOperator>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::INTERVAL,
+	ScalarFunction::UnaryFunction<double, interval_t, ToMilliSecondsOperator>);
+	function.errors = FunctionErrors::CAN_THROW_ERROR;
+	return function;
 }
 
 ScalarFunction ToMicrosecondsFun::GetFunction() {

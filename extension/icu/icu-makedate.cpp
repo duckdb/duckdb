@@ -137,14 +137,16 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 
 	template <typename TA>
 	static ScalarFunction GetSenaryFunction(const LogicalTypeId &type) {
-		return ScalarFunction({type, type, type, type, type, LogicalType::DOUBLE}, LogicalType::TIMESTAMP_TZ,
-		                      Execute<TA>, Bind);
+		ScalarFunction function({type, type, type, type, type, LogicalType::DOUBLE}, LogicalType::TIMESTAMP_TZ, Execute<TA>, Bind);
+		function.errors = FunctionErrors::CAN_THROW_ERROR;
+		return function;
 	}
 
 	template <typename TA>
 	static ScalarFunction GetSeptenaryFunction(const LogicalTypeId &type) {
-		return ScalarFunction({type, type, type, type, type, LogicalType::DOUBLE, LogicalType::VARCHAR},
-		                      LogicalType::TIMESTAMP_TZ, Execute<TA>, Bind);
+		ScalarFunction function({type, type, type, type, type, LogicalType::DOUBLE, LogicalType::VARCHAR}, LogicalType::TIMESTAMP_TZ, Execute<TA>, Bind);
+		function.errors = FunctionErrors::CAN_THROW_ERROR;
+		return function;
 	}
 
 	static void AddFunction(const string &name, DatabaseInstance &db) {

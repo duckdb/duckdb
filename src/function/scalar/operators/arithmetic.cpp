@@ -310,15 +310,18 @@ ScalarFunction AddFun::GetFunction(const LogicalType &type) {
 ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalType &right_type) {
 	if (left_type.IsNumeric() && left_type.id() == right_type.id()) {
 		if (left_type.id() == LogicalTypeId::DECIMAL) {
-			auto function = ScalarFunction("+", {left_type, right_type}, left_type, nullptr,
+			ScalarFunction function("+", {left_type, right_type}, left_type, nullptr,
 			                               BindDecimalAddSubtract<AddOperator, DecimalAddOverflowCheck>);
 			function.serialize = SerializeDecimalArithmetic;
 			function.deserialize = DeserializeDecimalArithmetic<AddOperator, DecimalAddOverflowCheck>;
+			function.errors = FunctionErrors::CAN_THROW_ERROR;
 			return function;
 		} else if (left_type.IsIntegral()) {
-			return ScalarFunction("+", {left_type, right_type}, left_type,
+			ScalarFunction function("+", {left_type, right_type}, left_type,
 			                      GetScalarIntegerFunction<AddOperatorOverflowCheck>(left_type.InternalType()), nullptr,
 			                      nullptr, PropagateNumericStats<TryAddOperator, AddPropagateStatistics, AddOperator>);
+			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			return function;
 		} else {
 			return ScalarFunction("+", {left_type, right_type}, left_type,
 			                      GetScalarBinaryFunction<AddOperator>(left_type.InternalType()));
@@ -593,18 +596,19 @@ ScalarFunction SubtractFun::GetFunction(const LogicalType &type) {
 ScalarFunction SubtractFun::GetFunction(const LogicalType &left_type, const LogicalType &right_type) {
 	if (left_type.IsNumeric() && left_type.id() == right_type.id()) {
 		if (left_type.id() == LogicalTypeId::DECIMAL) {
-			auto function =
-			    ScalarFunction("-", {left_type, right_type}, left_type, nullptr,
+			ScalarFunction function("-", {left_type, right_type}, left_type, nullptr,
 			                   BindDecimalAddSubtract<SubtractOperator, DecimalSubtractOverflowCheck, true>);
 			function.serialize = SerializeDecimalArithmetic;
 			function.deserialize = DeserializeDecimalArithmetic<SubtractOperator, DecimalSubtractOverflowCheck>;
+			function.errors = FunctionErrors::CAN_THROW_ERROR;
 			return function;
 		} else if (left_type.IsIntegral()) {
-			return ScalarFunction(
+			ScalarFunction function(
 			    "-", {left_type, right_type}, left_type,
 			    GetScalarIntegerFunction<SubtractOperatorOverflowCheck>(left_type.InternalType()), nullptr, nullptr,
 			    PropagateNumericStats<TrySubtractOperator, SubtractPropagateStatistics, SubtractOperator>);
-
+			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			return function;
 		} else {
 			return ScalarFunction("-", {left_type, right_type}, left_type,
 			                      GetScalarBinaryFunction<SubtractOperator>(left_type.InternalType()));
@@ -638,8 +642,10 @@ ScalarFunction SubtractFun::GetFunction(const LogicalType &left_type, const Logi
 		break;
 	case LogicalTypeId::INTERVAL:
 		if (right_type.id() == LogicalTypeId::INTERVAL) {
-			return ScalarFunction("-", {left_type, right_type}, LogicalType::INTERVAL,
-			                      ScalarFunction::BinaryFunction<interval_t, interval_t, interval_t, SubtractOperator>);
+			ScalarFunction function("-", {left_type, right_type}, LogicalType::INTERVAL,
+			ScalarFunction::BinaryFunction<interval_t, interval_t, interval_t, SubtractOperator>);
+			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			return function;
 		}
 		break;
 	case LogicalTypeId::TIME:
@@ -810,23 +816,26 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 			ScalarFunction function({type, type}, type, nullptr, BindDecimalMultiply);
 			function.serialize = SerializeDecimalArithmetic;
 			function.deserialize = DeserializeDecimalArithmetic<MultiplyOperator, DecimalMultiplyOverflowCheck>;
+			function.errors = FunctionErrors::CAN_THROW_ERROR;
 			functions.AddFunction(function);
 		} else if (TypeIsIntegral(type.InternalType())) {
-			functions.AddFunction(ScalarFunction(
-			    {type, type}, type, GetScalarIntegerFunction<MultiplyOperatorOverflowCheck>(type.InternalType()),
-			    nullptr, nullptr,
-			    PropagateNumericStats<TryMultiplyOperator, MultiplyPropagateStatistics, MultiplyOperator>));
+			ScalarFunction function(
+				{type, type}, type, GetScalarIntegerFunction<MultiplyOperatorOverflowCheck>(type.InternalType()),
+				nullptr, nullptr,
+				PropagateNumericStats<TryMultiplyOperator, MultiplyPropagateStatistics, MultiplyOperator>);
+			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			functions.AddFunction(function);
 		} else {
 			functions.AddFunction(
 			    ScalarFunction({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type.InternalType())));
 		}
 	}
 	functions.AddFunction(
-	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                   ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>));
+	    ScalarFunction::SetReturnsError(ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
+	                   ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>)));
 	functions.AddFunction(
-	    ScalarFunction({LogicalType::BIGINT, LogicalType::INTERVAL}, LogicalType::INTERVAL,
-	                   ScalarFunction::BinaryFunction<int64_t, interval_t, interval_t, MultiplyOperator>));
+	    ScalarFunction::SetReturnsError(ScalarFunction({LogicalType::BIGINT, LogicalType::INTERVAL}, LogicalType::INTERVAL,
+	                   ScalarFunction::BinaryFunction<int64_t, interval_t, interval_t, MultiplyOperator>)));
 	set.AddFunction(functions);
 
 	functions.name = "multiply";

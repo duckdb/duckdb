@@ -43,6 +43,8 @@ enum class FunctionNullHandling : uint8_t { DEFAULT_NULL_HANDLING = 0, SPECIAL_H
 //!                            but the result might change across queries (e.g. NOW(), CURRENT_TIME)
 //! VOLATILE                -> the result of this function might change per row (e.g. RANDOM())
 enum class FunctionStability : uint8_t { CONSISTENT = 0, VOLATILE = 1, CONSISTENT_WITHIN_QUERY = 2 };
+//! Whether or not a function can throw an error or not
+enum class FunctionErrors : uint8_t { CANNOT_ERROR = 0, CAN_THROW_ERROR = 1 };
 
 struct FunctionData {
 	DUCKDB_API virtual ~FunctionData();
@@ -150,7 +152,8 @@ public:
 	DUCKDB_API BaseScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
 	                              FunctionStability stability,
 	                              LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
-	                              FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING);
+	                              FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	                              FunctionErrors errors = FunctionErrors::CANNOT_ERROR);
 	DUCKDB_API ~BaseScalarFunction() override;
 
 	//! Return type of the function
@@ -159,6 +162,8 @@ public:
 	FunctionStability stability;
 	//! How this function handles NULL values
 	FunctionNullHandling null_handling;
+	//! Whether or not this function can throw an error
+	FunctionErrors errors;
 
 public:
 	DUCKDB_API hash_t Hash() const;
