@@ -51,8 +51,17 @@ ColumnDefinition Transformer::TransformColumnDefinition(duckdb_libpgquery::PGCol
 	if (cdef.colname) {
 		colname = cdef.colname;
 	}
-	bool optional_type = cdef.category == duckdb_libpgquery::COL_GENERATED;
-	LogicalType target_type = (optional_type && !cdef.typeName) ? LogicalType::ANY : TransformTypeName(*cdef.typeName);
+
+	auto optional_type = cdef.category == duckdb_libpgquery::COL_GENERATED;
+	LogicalType target_type;
+	if (optional_type && !cdef.typeName) {
+		target_type = LogicalType::ANY;
+	} else if (!cdef.typeName) {
+		target_type = LogicalType::INVALID;
+	} else {
+		target_type = TransformTypeName(*cdef.typeName);
+	}
+
 	if (cdef.collClause) {
 		if (cdef.category == duckdb_libpgquery::COL_GENERATED) {
 			throw ParserException("Collations are not supported on generated columns");
