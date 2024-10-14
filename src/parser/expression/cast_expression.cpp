@@ -21,11 +21,6 @@ string CastExpression::ToString() const {
 	return ToString<CastExpression, ParsedExpression>(*this);
 }
 
-bool CastExpression::CanThrow() const {
-	// Cast('a' to INT) can throw
-	return true;
-}
-
 bool CastExpression::Equal(const CastExpression &a, const CastExpression &b) {
 	if (!a.child->Equals(*b.child)) {
 		return false;

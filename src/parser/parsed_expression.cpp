@@ -48,13 +48,6 @@ bool ParsedExpression::HasSubquery() const {
 	return has_subquery;
 }
 
-bool ParsedExpression::CanThrow() const {
-	bool can_throw = false;
-	ParsedExpressionIterator::EnumerateChildren(*this,
-	                                            [&](const ParsedExpression &child) { can_throw |= child.CanThrow(); });
-	return can_throw;
-}
-
 bool ParsedExpression::Equals(const BaseExpression &other) const {
 	if (!BaseExpression::Equals(other)) {
 		return false;
