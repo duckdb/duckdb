@@ -637,11 +637,13 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 	create_info->comment = comment;
 	create_info->tags = tags;
 
-	// bind the specified expression
+	// Bind the USING expression.
 	vector<LogicalIndex> bound_columns;
 	AlterBinder expr_binder(*binder, context, *this, bound_columns, info.target_type);
 	auto expression = info.expression->Copy();
 	auto bound_expression = expr_binder.Bind(expression);
+
+	// Infer the target_type from the USING expression, if not set explicitly.
 	if (info.target_type == LogicalType::INVALID) {
 		info.target_type = bound_expression->return_type;
 	}

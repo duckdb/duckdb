@@ -47,9 +47,9 @@ unique_ptr<ParsedExpression> Transformer::TransformCollateExpr(duckdb_libpgquery
 }
 
 ColumnDefinition Transformer::TransformColumnDefinition(duckdb_libpgquery::PGColumnDef &cdef) {
-	string colname;
+	string name;
 	if (cdef.colname) {
-		colname = cdef.colname;
+		name = cdef.colname;
 	}
 
 	auto optional_type = cdef.category == duckdb_libpgquery::COL_GENERATED;
@@ -72,7 +72,7 @@ ColumnDefinition Transformer::TransformColumnDefinition(duckdb_libpgquery::PGCol
 		target_type = LogicalType::VARCHAR_COLLATION(TransformCollation(cdef.collClause));
 	}
 
-	return ColumnDefinition(colname, target_type);
+	return ColumnDefinition(name, target_type);
 }
 
 unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery::PGCreateStmt &stmt) {
