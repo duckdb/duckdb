@@ -59,18 +59,25 @@ static idx_t CalculateSliceLength(idx_t begin, idx_t end, INDEX_TYPE step, bool 
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
-INDEX_TYPE ValueLength(const INPUT_TYPE &value) {
+INDEX_TYPE ValueLength(const INPUT_TYPE &value, const LogicalTypeId &) {
 	return 0;
 }
 
 template <>
-int64_t ValueLength(const list_entry_t &value) {
+int64_t ValueLength(const list_entry_t &value, const LogicalTypeId &) {
 	return UnsafeNumericCast<int64_t>(value.length);
 }
 
 template <>
-int64_t ValueLength(const string_t &value) {
-	return LengthFun::Length<string_t, int64_t>(value);
+int64_t ValueLength(const string_t &value, const LogicalTypeId &type) {
+	switch (type) {
+	case LogicalTypeId::BLOB:
+		return value.GetSize();
+	case LogicalTypeId::VARCHAR:
+		return LengthFun::Length<string_t, int64_t>(value);
+	default:
+		throw NotImplementedException(LogicalTypeIdToString(type));
+	}
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
@@ -86,7 +93,7 @@ static void ClampIndex(INDEX_TYPE &index, const INPUT_TYPE &value, const INDEX_T
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
-static bool ClampSlice(const INPUT_TYPE &value, INDEX_TYPE &begin, INDEX_TYPE &end) {
+static bool ClampSlice(const INPUT_TYPE &value, INDEX_TYPE &begin, INDEX_TYPE &end, const LogicalTypeId &type) {
 	// Clamp offsets
 	begin = (begin != 0 && begin != (INDEX_TYPE)NumericLimits<int64_t>::Minimum()) ? begin - 1 : begin;
 
@@ -96,7 +103,7 @@ static bool ClampSlice(const INPUT_TYPE &value, INDEX_TYPE &begin, INDEX_TYPE &e
 		is_min = true;
 	}
 
-	const auto length = ValueLength<INPUT_TYPE, INDEX_TYPE>(value);
+	const auto length = ValueLength<INPUT_TYPE, INDEX_TYPE>(value, type);
 	if (begin < 0 && -begin > length && end < 0 && end < -length) {
 		begin = 0;
 		end = 0;
@@ -127,7 +134,14 @@ list_entry_t SliceValue(Vector &result, list_entry_t input, int64_t begin, int64
 template <>
 string_t SliceValue(Vector &result, string_t input, int64_t begin, int64_t end) {
 	// one-based - zero has strange semantics
-	return SubstringFun::SubstringUnicode(result, input, begin + 1, end - begin);
+	switch (result.GetType().id()) {
+	case LogicalTypeId::BLOB:
+		return SubstringFun::SubstringASCII(result, input, begin + 1, end - begin);
+	case LogicalTypeId::VARCHAR:
+		return SubstringFun::SubstringUnicode(result, input, begin + 1, end - begin);
+	default:
+		throw NotImplementedException(result.GetType().ToString());
+	}
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
@@ -183,19 +197,19 @@ static void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &beg
 
 	auto str = str_data[0];
 	auto begin = begin_is_empty ? 0 : begin_data[0];
-	auto end = end_is_empty ? ValueLength<INPUT_TYPE, INDEX_TYPE>(str) : end_data[0];
+	auto end = end_is_empty ? ValueLength<INPUT_TYPE, INDEX_TYPE>(str, str_vector.GetType().id()) : end_data[0];
 	auto step = step_data ? step_data[0] : 1;
 
 	if (step < 0) {
 		swap(begin, end);
 		begin = end_is_empty ? 0 : begin;
-		end = begin_is_empty ? ValueLength<INPUT_TYPE, INDEX_TYPE>(str) : end;
+		end = begin_is_empty ? ValueLength<INPUT_TYPE, INDEX_TYPE>(str, str_vector.GetType().id()) : end;
 	}
 
 	// Clamp offsets
 	bool clamp_result = false;
 	if (step_valid || step == 1) {
-		clamp_result = ClampSlice(str, begin, end);
+		clamp_result = ClampSlice(str, begin, end, str_vector.GetType().id());
 	}
 
 	idx_t sel_length = 0;
@@ -259,19 +273,19 @@ static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_
 
 		auto sliced = reinterpret_cast<INPUT_TYPE *>(list_data.data)[list_idx];
 		auto begin = begin_is_empty ? 0 : reinterpret_cast<INDEX_TYPE *>(begin_data.data)[begin_idx];
-		auto end = end_is_empty ? ValueLength<INPUT_TYPE, INDEX_TYPE>(sliced)
+		auto end = end_is_empty ? ValueLength<INPUT_TYPE, INDEX_TYPE>(sliced, list_vector.GetType().id())
 		                        : reinterpret_cast<INDEX_TYPE *>(end_data.data)[end_idx];
 		auto step = step_vector ? reinterpret_cast<INDEX_TYPE *>(step_data.data)[step_idx] : 1;
 
 		if (step < 0) {
 			swap(begin, end);
 			begin = end_is_empty ? 0 : begin;
-			end = begin_is_empty ? ValueLength<INPUT_TYPE, INDEX_TYPE>(sliced) : end;
+			end = begin_is_empty ? ValueLength<INPUT_TYPE, INDEX_TYPE>(sliced, list_vector.GetType().id()) : end;
 		}
 
 		bool clamp_result = false;
 		if (step_valid || step == 1) {
-			clamp_result = ClampSlice(sliced, begin, end);
+			clamp_result = ClampSlice(sliced, begin, end, list_vector.GetType().id());
 		}
 
 		idx_t length = 0;
@@ -364,6 +378,7 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 		                                    begin_is_empty, end_is_empty);
 		break;
 	}
+	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR: {
 		ExecuteSlice<string_t, int64_t>(result, list_or_str_vector, begin_vector, end_vector, step_vector, count,
 		                                begin_is_empty, end_is_empty);
@@ -400,6 +415,7 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 		arguments[0] = BoundCastExpression::AddCastToType(context, std::move(arguments[0]), target_type);
 		bound_function.return_type = arguments[0]->return_type;
 	} break;
+	case LogicalTypeId::BLOB:
 	case LogicalTypeId::LIST:
 		// The result is the same type
 		bound_function.return_type = arguments[0]->return_type;
