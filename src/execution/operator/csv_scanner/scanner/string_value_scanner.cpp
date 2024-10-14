@@ -1413,12 +1413,16 @@ bool StringValueScanner::SkipUntilState(CSVState initial_state, CSVState until_s
                                         bool &quoted) const {
 	CSVStates current_state;
 	current_state.Initialize(initial_state);
+	bool first_column = true;
 	while (current_iterator.pos.buffer_pos < current_iterator.GetEndPos()) {
 		state_machine->Transition(current_state, buffer_handle_ptr[current_iterator.pos.buffer_pos++]);
+		if (current_state.WasState(CSVState::DELIMITER)) {
+			first_column = false;
+		}
+		if (first_column && current_state.WasState(CSVState::QUOTED)) {
+			quoted = true;
+		}
 		if (current_state.IsState(until_state)) {
-			if (current_state.WasState(CSVState::QUOTED)) {
-				quoted = true;
-			}
 			return true;
 		}
 		if (current_state.IsState(CSVState::INVALID)) {
