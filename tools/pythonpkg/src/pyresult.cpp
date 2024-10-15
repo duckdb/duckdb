@@ -341,8 +341,7 @@ static py::object ConvertNumpyDtype(py::handle numpy_array) {
 PandasDataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::handle &o) {
 	D_ASSERT(py::gil_check());
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-
-	vector<py::object> dtypes;
+	auto pandas = import_cache.pandas();
 
 	py::object items = o.attr("items")();
 	for (const py::handle &item : items) {
@@ -351,22 +350,24 @@ PandasDataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::ha
 		py::handle key = key_value[0];   // Access the first element (key)
 		py::handle value = key_value[1]; // Access the second element (value)
 
-		dtypes.push_back(ConvertNumpyDtype(value));
+		auto dtype = ConvertNumpyDtype(value);
+		if (py::isinstance(value, import_cache.numpy.ma.masked_array())) {
+			// o[key] = pd.Series(value.filled(pd.NA), dtype=dtype)
+			o.attr("__setitem__")(key, pandas.attr("Series")(value, py::arg("dtype") = dtype));
+		}
 	}
 
-	PandasDataFrame df = py::cast<PandasDataFrame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
+	PandasDataFrame df = py::cast<PandasDataFrame>(pandas.attr("DataFrame").attr("from_dict")(o));
 	// Unfortunately we have to do a type change here for timezones since these types are not supported by numpy
 	ChangeToTZType(df);
 
 	auto names = df.attr("columns").cast<vector<string>>();
-	D_ASSERT(dtypes.size() == result->ColumnCount());
-	D_ASSERT(dtypes.size() == names.size());
-	for (idx_t i = 0; i < result->ColumnCount(); i++) {
-		if (date_as_object && result->types[i] == LogicalType::DATE) {
-			df.attr("__setitem__")(names[i].c_str(), df[names[i].c_str()].attr("dt").attr("date"));
-		} else {
-			auto &dtype = dtypes[i];
-			df.attr("__setitem__")(names[i].c_str(), df[names[i].c_str()].attr("astype")(dtype));
+	D_ASSERT(result->ColumnCount() == names.size());
+	if (date_as_object) {
+		for (idx_t i = 0; i < result->ColumnCount(); i++) {
+			if (result->types[i] == LogicalType::DATE) {
+				df.attr("__setitem__")(names[i].c_str(), df[names[i].c_str()].attr("dt").attr("date"));
+			}
 		}
 	}
 	return df;

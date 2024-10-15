@@ -164,3 +164,62 @@ class TestNumpyNullableTypes(object):
         df_in = pd.DataFrame({'object': pd.Series(data, dtype='object')})
         result = duckdb.query_df(df_in, "data", "SELECT * FROM data").fetchone()[0]
         assert result == expected_result
+
+    @pytest.mark.parametrize(
+        'dtype',
+        [
+            'bool',
+            'utinyint',
+            'usmallint',
+            'uinteger',
+            'ubigint',
+            'tinyint',
+            'smallint',
+            'integer',
+            'bigint',
+            'float',
+            'double',
+        ],
+    )
+    def test_producing_nullable_dtypes(self, duckdb_cursor, dtype):
+        class Input:
+            def __init__(self, value, expected_dtype):
+                self.value = value
+                self.expected_dtype = expected_dtype
+
+        inputs = {
+            'bool': Input('true', 'BooleanDtype'),
+            'utinyint': Input('255', 'UInt8Dtype'),
+            'usmallint': Input('65535', 'UInt16Dtype'),
+            'uinteger': Input('4294967295', 'UInt32Dtype'),
+            'ubigint': Input('18446744073709551615', 'UInt64Dtype'),
+            'tinyint': Input('-128', 'Int8Dtype'),
+            'smallint': Input('-32768', 'Int16Dtype'),
+            'integer': Input('-2147483648', 'Int32Dtype'),
+            'bigint': Input('-9223372036854775808', 'Int64Dtype'),
+            'float': Input('268043421344044473239570760152672894976.0000000000', 'Float32Dtype'),
+            'double': Input(
+                '14303088389124869511075243108389716684037132417196499782261853698893384831666205572097390431189931733040903060865714975797777061496396865611606109149583360363636503436181348332896211726552694379264498632046075093077887837955077425420408952536212326792778411457460885268567735875437456412217418386401944141824.0000000000',
+                'Float64Dtype',
+            ),
+        }
+
+        input = inputs[dtype]
+        if not hasattr(pd, input.expected_dtype):
+            pytest.skip("Could not test this nullable type, the version of pandas does not provide it")
+
+        query = f"""
+            select
+                a::{dtype} a
+            from (VALUES
+                (NULL),
+                ({input.value}),
+                (NULL)
+            ) t(a)
+        """
+
+        rel = duckdb_cursor.sql(query)
+        df = rel.df()
+
+        nullable_dtype = getattr(pd, input.expected_dtype)
+        assert isinstance(df['a'].dtype, nullable_dtype)
