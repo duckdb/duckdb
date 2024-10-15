@@ -64,3 +64,8 @@ query I
 select array_slice(NULL::BLOB, 4, 6)
 ----
 NULL
+
+statement error
+select array_slice('hello world', 1, 8, 2);
+----
+Slice with steps has not been implemented for string types
