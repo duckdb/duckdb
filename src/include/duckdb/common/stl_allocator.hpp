@@ -106,7 +106,7 @@ public:
 	using propagate_on_container_copy_assignment = std::true_type;
 	using propagate_on_container_move_assignment = std::true_type;
 	using propagate_on_container_swap = std::true_type;
-	using is_always_equal = std::false_type; // because allocator is stateful
+	using is_always_equal = std::false_type; // because stl_allocator is stateful
 	template <class U>
 	struct rebind {
 		typedef stl_allocator<U> other;
