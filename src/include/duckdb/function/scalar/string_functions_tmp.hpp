@@ -78,25 +78,6 @@ struct SubstringFun {
 	static string_t SubstringGrapheme(Vector &result, string_t input, int64_t offset, int64_t length);
 };
 
-struct PrefixFun {
-	static ScalarFunction GetFunction();
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct SuffixFun {
-	static ScalarFunction GetFunction();
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct ContainsFun {
-	static ScalarFunctionSet GetFunctions();
-	static ScalarFunction GetStringContains();
-	static void RegisterFunction(BuiltinFunctions &set);
-	static idx_t Find(const string_t &haystack, const string_t &needle);
-	static idx_t Find(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle,
-	                  idx_t needle_size);
-};
-
 struct RegexpFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

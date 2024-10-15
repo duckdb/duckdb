@@ -3,7 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/function/scalar/string_functions_tmp.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
 #include "utf8proc.hpp"
 
 namespace duckdb {
@@ -13,7 +13,7 @@ struct InstrOperator {
 	static inline TR Operation(TA haystack, TB needle) {
 		int64_t string_position = 0;
 
-		auto location = ContainsFun::Find(haystack, needle);
+		auto location = FindStrInStr(haystack, needle);
 		if (location != DConstants::INVALID_INDEX) {
 			auto len = (utf8proc_ssize_t)location;
 			auto str = reinterpret_cast<const utf8proc_uint8_t *>(haystack.GetData());
@@ -32,7 +32,7 @@ struct InstrOperator {
 struct InstrAsciiOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA haystack, TB needle) {
-		auto location = ContainsFun::Find(haystack, needle);
+		auto location = FindStrInStr(haystack, needle);
 		return UnsafeNumericCast<TR>(location == DConstants::INVALID_INDEX ? 0U : location + 1U);
 	}
 };

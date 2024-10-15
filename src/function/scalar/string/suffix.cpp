@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/string_functions_tmp.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/common/types/string_type.hpp"
 
 #include "duckdb/common/exception.hpp"
@@ -38,10 +38,6 @@ ScalarFunction SuffixFun::GetFunction() {
 	                      {LogicalType::VARCHAR, LogicalType::VARCHAR}, // argument list
 	                      LogicalType::BOOLEAN,                         // return type
 	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, SuffixOperator>);
-}
-
-void SuffixFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"suffix", "ends_with"}, GetFunction());
 }
 
 } // namespace duckdb

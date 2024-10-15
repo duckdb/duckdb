@@ -99,4 +99,31 @@ struct ConcatOperatorFun {
 	static ScalarFunction GetFunction();
 };
 
+struct PrefixFun {
+	static constexpr const char *Name = "prefix";
+	static constexpr const char *Parameters = "";
+	static constexpr const char *Description = "";
+	static constexpr const char *Example = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct SuffixFun {
+	static constexpr const char *Name = "suffix";
+	static constexpr const char *Parameters = "";
+	static constexpr const char *Description = "";
+	static constexpr const char *Example = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ContainsFun {
+	static constexpr const char *Name = "contains";
+	static constexpr const char *Parameters = "string,search_string";
+	static constexpr const char *Description = "Return true if search_string is found within string.";
+	static constexpr const char *Example = "contains('abc', 'a')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 } // namespace duckdb

@@ -1,4 +1,5 @@
 #include "duckdb/function/scalar/string_functions_tmp.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -35,8 +36,7 @@ struct RegularStringSplit {
 		if (delim_size == 0) {
 			return 0;
 		}
-		return ContainsFun::Find(const_uchar_ptr_cast(input_data), input_size, const_uchar_ptr_cast(delim_data),
-		                         delim_size);
+		return FindStrInStr(const_uchar_ptr_cast(input_data), input_size, const_uchar_ptr_cast(delim_data), delim_size);
 	}
 };
 
