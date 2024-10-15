@@ -48,7 +48,7 @@ struct BitStringFun {
 	static constexpr const char *Description = "Pads the bitstring until the specified length";
 	static constexpr const char *Example = "bitstring('1010'::BIT, 7)";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 } // namespace duckdb

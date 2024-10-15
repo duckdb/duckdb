@@ -242,7 +242,7 @@ public:
 	//! The returned FunctionData object should be constant and should not be changed during execution.
 	table_function_bind_t bind;
 	//! (Optional) Bind replace function
-	//! This function is called before the regular bind function. It allows returning a TableRef will be used to
+	//! This function is called before the regular bind function. It allows returning a TableRef that will be used to
 	//! to generate a logical plan that replaces the LogicalGet of a regularly bound TableFunction. The BindReplace can
 	//! also return a nullptr to indicate a regular bind needs to be performed instead.
 	table_function_bind_replace_t bind_replace;

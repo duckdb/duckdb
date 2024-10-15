@@ -93,6 +93,7 @@ struct ParquetOptions {
 
 	MultiFileReaderOptions file_options;
 	vector<ParquetColumnDefinition> schema;
+	idx_t explicit_cardinality = 0;
 
 public:
 	void Serialize(Serializer &serializer) const;

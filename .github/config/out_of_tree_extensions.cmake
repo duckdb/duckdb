@@ -38,7 +38,7 @@ if (NOT MINGW)
     duckdb_extension_load(azure
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_azure
-            GIT_TAG b0ffe7ada20cdbd0bee2bbe5461ecd22fb468062
+            GIT_TAG a40ecb7bc9036eb8ecc5bf30db935a31b78011f5
             )
 endif()
 
@@ -49,7 +49,7 @@ if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux")
     duckdb_extension_load(delta
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_delta
-            GIT_TAG 3933ebd800ad06a64656c9aef6ca7d62897fa4db
+            GIT_TAG 811db25f5bd405dea186d6c461a642a387502ad8
     )
 endif()
 
@@ -73,7 +73,7 @@ if (NOT MINGW)
     duckdb_extension_load(iceberg
             ${LOAD_ICEBERG_TESTS}
             GIT_URL https://github.com/duckdb/duckdb_iceberg
-            GIT_TAG 3f6d753787252e3da1d12157910b62edf729fc6e
+            GIT_TAG 8b48d1261564613274ac8e9fae01e572d965c99d
             )
 endif()
 
@@ -101,7 +101,7 @@ endif()
 duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb_spatial.git
-    GIT_TAG bb9c829693965f029eb5a312aefed4c538fad781
+    GIT_TAG 3f94d52aa9f7d67b1a30e6cea642bbb790c04aa2
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
     )
@@ -117,13 +117,13 @@ endif()
 duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/sqlite_scanner
-        GIT_TAG 315861963c8106397af36cbda10faebc8dae485a
+        GIT_TAG d5d62657702d33cb44a46cddc7ffc4b67bf7e961
         )
 
 duckdb_extension_load(sqlsmith
         DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb_sqlsmith
-        GIT_TAG f24be8b5b0cd0eeed7541e10cff42d7050771afc
+        GIT_TAG d6d62c1cba6b1369ba79db4bff3c67f24aaa95c2
         )
 
 ################# SUBSTRAIT
@@ -141,7 +141,7 @@ duckdb_extension_load(vss
         LOAD_TESTS
         DONT_LINK
         GIT_URL https://github.com/duckdb/duckdb_vss
-        GIT_TAG 77739ea5382cce3220af83803ac0b1e98b3ab7d8
+        GIT_TAG dd880d6121c0f3dff27131e54e057c9db0f1c710
         TEST_DIR test/sql
     )
 

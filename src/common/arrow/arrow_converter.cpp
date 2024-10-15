@@ -142,6 +142,17 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.metadata = root_holder.metadata_info.back().get();
 		break;
 	}
+	case LogicalTypeId::VARINT: {
+		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+			child.format = "Z";
+		} else {
+			child.format = "z";
+		}
+		auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("duckdb.varint");
+		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+		child.metadata = root_holder.metadata_info.back().get();
+		break;
+	}
 	case LogicalTypeId::DOUBLE:
 		child.format = "g";
 		break;

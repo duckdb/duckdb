@@ -37,7 +37,8 @@ struct CreateSecretInput {
 	case_insensitive_map_t<Value> options;
 };
 
-typedef unique_ptr<BaseSecret> (*secret_deserializer_t)(Deserializer &deserializer, BaseSecret base_secret);
+typedef unique_ptr<BaseSecret> (*secret_deserializer_t)(Deserializer &deserializer, BaseSecret base_secret,
+                                                        const named_parameter_type_map_t &options);
 typedef unique_ptr<BaseSecret> (*create_secret_function_t)(ClientContext &context, CreateSecretInput &input);
 
 //! A CreateSecretFunction is a function adds a provider for a secret type.
@@ -180,14 +181,30 @@ public:
 
 	// FIXME: use serialization scripts
 	template <class TYPE>
-	static unique_ptr<BaseSecret> Deserialize(Deserializer &deserializer, BaseSecret base_secret) {
+	static unique_ptr<BaseSecret> Deserialize(Deserializer &deserializer, BaseSecret base_secret,
+	                                          const named_parameter_type_map_t &options) {
 		auto result = make_uniq<TYPE>(base_secret);
 		Value secret_map_value;
 		deserializer.ReadProperty(201, "secret_map", secret_map_value);
 
 		for (const auto &entry : ListValue::GetChildren(secret_map_value)) {
 			auto kv_struct = StructValue::GetChildren(entry);
-			result->secret_map[kv_struct[0].ToString()] = kv_struct[1].ToString();
+			auto key = kv_struct[0].ToString();
+			auto raw_value = kv_struct[1].ToString();
+
+			auto it = options.find(key);
+			if (it == options.end()) {
+				throw IOException("Failed to deserialize secret '%s', it contains an unexpected key: '%s'",
+				                  base_secret.GetName(), key);
+			}
+			auto &logical_type = it->second;
+			Value value;
+			if (logical_type.id() == LogicalTypeId::VARCHAR) {
+				value = Value(raw_value);
+			} else {
+				value = Value(raw_value).DefaultCastAs(logical_type);
+			}
+			result->secret_map[key] = value;
 		}
 
 		Value redact_set_value;
