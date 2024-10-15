@@ -14,6 +14,7 @@
 namespace duckdb {
 class CatalogEntry;
 class DataChunk;
+class DuckTransaction;
 class WriteAheadLog;
 class ClientContext;
 

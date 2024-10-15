@@ -13,6 +13,7 @@
 namespace duckdb {
 class DataChunk;
 class DataTable;
+class DuckTransaction;
 class WriteAheadLog;
 
 class RollbackState {
