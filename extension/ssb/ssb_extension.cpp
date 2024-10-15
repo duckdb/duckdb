@@ -14,9 +14,7 @@
 #endif
 
 // #include "ssbgen/include/ssbgen.hpp"
-extern "C" {
-#include "ssbgen/include/driver.h"
-}
+#include "ssbgen/include/driver.hpp"
 
 namespace duckdb {
 

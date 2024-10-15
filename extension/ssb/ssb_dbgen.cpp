@@ -16,9 +16,7 @@
 #endif
 #endif
 
-extern "C" {
-#include "ssbgen/include/driver.h"
-}
+#include "ssbgen/include/driver.hpp"
 
 namespace ssb {
 
