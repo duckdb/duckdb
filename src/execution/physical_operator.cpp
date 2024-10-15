@@ -50,7 +50,7 @@ idx_t PhysicalOperator::EstimatedThreadCount() const {
 	idx_t result = 0;
 	if (children.empty()) {
 		// Terminal operator, e.g., base table, these decide the degree of parallelism of pipelines
-		result = MaxValue<idx_t>(estimated_cardinality / (Storage::ROW_GROUP_SIZE * 2), 1);
+		result = MaxValue<idx_t>(estimated_cardinality / (Storage::DEFAULT_ROW_GROUP_SIZE * 2), 1);
 	} else if (type == PhysicalOperatorType::UNION) {
 		// We can run union pipelines in parallel, so we sum up the thread count of the children
 		for (auto &child : children) {

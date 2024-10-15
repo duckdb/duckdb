@@ -133,12 +133,18 @@ public:
 		return allocation_size;
 	}
 
+	idx_t GetRowGroupSize() const {
+		return row_group_size;
+	}
+
 private:
 	bool IsEmpty(SegmentLock &) const;
 
 private:
 	//! BlockManager
 	BlockManager &block_manager;
+	//! The row group size of the row group collection
+	const idx_t row_group_size = Storage::DEFAULT_ROW_GROUP_SIZE;
 	//! The number of rows in the table
 	atomic<idx_t> total_rows;
 	//! The data table info

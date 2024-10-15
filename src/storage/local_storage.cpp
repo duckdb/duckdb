@@ -110,7 +110,8 @@ void LocalTableStorage::WriteNewRowGroup() {
 }
 
 void LocalTableStorage::FlushBlocks() {
-	if (!merged_storage && row_groups->GetTotalRows() > Storage::ROW_GROUP_SIZE) {
+	const idx_t row_group_size = row_groups->GetRowGroupSize();
+	if (!merged_storage && row_groups->GetTotalRows() > row_group_size) {
 		optimistic_writer.WriteLastRowGroup(*row_groups);
 	}
 	optimistic_writer.FinalFlush();
@@ -449,10 +450,12 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 
 	table.InitializeIndexes(context);
 
+	const idx_t row_group_size = storage.row_groups->GetRowGroupSize();
+
 	TableAppendState append_state;
 	table.AppendLock(append_state);
 	transaction.PushAppend(table, NumericCast<idx_t>(append_state.row_start), append_count);
-	if ((append_state.row_start == 0 || storage.row_groups->GetTotalRows() >= MERGE_THRESHOLD) &&
+	if ((append_state.row_start == 0 || storage.row_groups->GetTotalRows() >= row_group_size) &&
 	    storage.deleted_rows == 0) {
 		// table is currently empty OR we are bulk appending: move over the storage directly
 		// first flush any outstanding blocks

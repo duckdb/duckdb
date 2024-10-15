@@ -345,6 +345,7 @@ void RowGroupCollection::InitializeAppend(TableAppendState &state) {
 }
 
 bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
+	const idx_t row_group_size = GetRowGroupSize();
 	D_ASSERT(chunk.ColumnCount() == types.size());
 	chunk.Verify();
 
@@ -356,7 +357,7 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 		auto current_row_group = state.row_group_append_state.row_group;
 		// check how much we can fit into the current row_group
 		idx_t append_count =
-		    MinValue<idx_t>(remaining, Storage::ROW_GROUP_SIZE - state.row_group_append_state.offset_in_row_group);
+		    MinValue<idx_t>(remaining, row_group_size - state.row_group_append_state.offset_in_row_group);
 		if (append_count > 0) {
 			auto previous_allocation_size = current_row_group->GetAllocationSize();
 			current_row_group->Append(state.row_group_append_state, chunk, append_count);
@@ -396,10 +397,12 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 }
 
 void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppendState &state) {
+	const idx_t row_group_size = GetRowGroupSize();
+
 	auto remaining = state.total_append_count;
 	auto row_group = state.start_row_group;
 	while (remaining > 0) {
-		auto append_count = MinValue<idx_t>(remaining, Storage::ROW_GROUP_SIZE - row_group->count);
+		auto append_count = MinValue<idx_t>(remaining, row_group_size - row_group->count);
 		row_group->AppendVersionInfo(transaction, append_count);
 		remaining -= append_count;
 		row_group = row_groups->GetNextSegment(row_group);
@@ -758,6 +761,7 @@ public:
 
 	void ExecuteTask() override {
 		auto &collection = checkpoint_state.collection;
+		const idx_t row_group_size = collection.GetRowGroupSize();
 		auto &types = collection.GetTypes();
 		// create the new set of target row groups (initially empty)
 		vector<unique_ptr<RowGroup>> new_row_groups;
@@ -765,7 +769,7 @@ public:
 		idx_t row_group_rows = merge_rows;
 		idx_t start = row_start;
 		for (idx_t target_idx = 0; target_idx < target_count; target_idx++) {
-			idx_t current_row_group_rows = MinValue<idx_t>(row_group_rows, Storage::ROW_GROUP_SIZE);
+			idx_t current_row_group_rows = MinValue<idx_t>(row_group_rows, row_group_size);
 			auto new_row_group = make_uniq<RowGroup>(collection, start, current_row_group_rows);
 			new_row_group->InitializeEmpty(types);
 			new_row_groups.push_back(std::move(new_row_group));
@@ -816,12 +820,12 @@ public:
 				idx_t remaining = scan_chunk.size();
 				while (remaining > 0) {
 					idx_t append_count =
-					    MinValue<idx_t>(remaining, Storage::ROW_GROUP_SIZE - append_counts[current_append_idx]);
+					    MinValue<idx_t>(remaining, row_group_size - append_counts[current_append_idx]);
 					new_row_groups[current_append_idx]->Append(append_state.row_group_append_state, scan_chunk,
 					                                           append_count);
 					append_counts[current_append_idx] += append_count;
 					remaining -= append_count;
-					const bool row_group_full = append_counts[current_append_idx] == Storage::ROW_GROUP_SIZE;
+					const bool row_group_full = append_counts[current_append_idx] == row_group_size;
 					const bool last_row_group = current_append_idx + 1 >= new_row_groups.size();
 					if (remaining > 0 || (row_group_full && !last_row_group)) {
 						// move to the next row group
@@ -917,8 +921,9 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 	// hence we target_count should be less than merge_count for a marge to be worth it
 	// we greedily prefer to merge to the lowest target_count
 	// i.e. we prefer to merge 2 row groups into 1, than 3 row groups into 2
+	const idx_t row_group_size = GetRowGroupSize();
 	for (target_count = 1; target_count <= MAX_MERGE_COUNT; target_count++) {
-		auto total_target_size = target_count * Storage::ROW_GROUP_SIZE;
+		auto total_target_size = target_count * row_group_size;
 		merge_count = 0;
 		merge_rows = 0;
 		for (next_idx = segment_idx; next_idx < checkpoint_state.segments.size(); next_idx++) {

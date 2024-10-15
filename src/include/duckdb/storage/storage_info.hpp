@@ -39,9 +39,9 @@ struct Storage {
 	//! to the page size, which is 4KB. (1 << 12)
 	constexpr static idx_t FILE_HEADER_SIZE = 4096U;
 	//! The number of rows per row group (must be a multiple of the vector size)
-	constexpr static const idx_t ROW_GROUP_SIZE = STANDARD_ROW_GROUPS_SIZE;
+	constexpr static const idx_t DEFAULT_ROW_GROUP_SIZE = STANDARD_ROW_GROUPS_SIZE;
 	//! The number of vectors per row group
-	constexpr static const idx_t ROW_GROUP_VECTOR_COUNT = ROW_GROUP_SIZE / STANDARD_VECTOR_SIZE;
+	constexpr static const idx_t DEFAULT_ROW_GROUP_VECTOR_COUNT = DEFAULT_ROW_GROUP_SIZE / STANDARD_VECTOR_SIZE;
 
 	//! The minimum block allocation size. This is the minimum size we test in our nightly tests.
 	constexpr static idx_t MIN_BLOCK_ALLOC_SIZE = 16384ULL;

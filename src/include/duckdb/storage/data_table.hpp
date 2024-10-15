@@ -226,6 +226,10 @@ public:
 
 	TableStorageInfo GetStorageInfo();
 
+	idx_t GetRowGroupSize() const {
+		return row_groups->GetRowGroupSize();
+	}
+
 public:
 	static void VerifyUniqueIndexes(TableIndexList &indexes, ClientContext &context, DataChunk &chunk,
 	                                optional_ptr<ConflictManager> conflict_manager);

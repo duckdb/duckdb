@@ -49,7 +49,7 @@ public:
 private:
 	mutex version_lock;
 	idx_t start;
-	unique_ptr<ChunkInfo> vector_info[Storage::ROW_GROUP_VECTOR_COUNT];
+	unique_ptr<ChunkInfo> vector_info[Storage::DEFAULT_ROW_GROUP_VECTOR_COUNT];
 	bool has_changes;
 	vector<MetaBlockPointer> storage_pointers;
 

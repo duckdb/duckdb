@@ -503,6 +503,10 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 		return SinkCombineResultType::FINISHED;
 	}
 
+	auto &table = gstate.table;
+	auto &storage = table.GetStorage();
+	const idx_t row_group_size = storage.GetRowGroupSize();
+
 	// parallel append: finalize the append
 	TransactionData tdata(0, 0);
 	lstate.local_collection->FinalizeAppend(tdata, lstate.local_append_state);
@@ -511,10 +515,8 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 
 	lock_guard<mutex> lock(gstate.lock);
 	gstate.insert_count += append_count;
-	if (append_count < Storage::ROW_GROUP_SIZE) {
+	if (append_count < row_group_size) {
 		// we have few rows - append to the local storage directly
-		auto &table = gstate.table;
-		auto &storage = table.GetStorage();
 		storage.InitializeLocalAppend(gstate.append_state, table, context.client, bound_constraints);
 		auto &transaction = DuckTransaction::Get(context.client, table.catalog);
 		lstate.local_collection->Scan(transaction, [&](DataChunk &insert_chunk) {

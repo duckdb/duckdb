@@ -95,6 +95,10 @@ idx_t RowGroup::GetColumnCount() const {
 	return columns.size();
 }
 
+idx_t RowGroup::GetRowGroupSize() const {
+	return collection.get().GetRowGroupSize();
+}
+
 ColumnData &RowGroup::GetColumn(storage_t c) {
 	D_ASSERT(c < columns.size());
 	if (!is_loaded) {
@@ -776,10 +780,11 @@ void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, co
 }
 
 void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t count) {
+	const idx_t row_group_size = GetRowGroupSize();
 	idx_t row_group_start = this->count.load();
 	idx_t row_group_end = row_group_start + count;
-	if (row_group_end > Storage::ROW_GROUP_SIZE) {
-		row_group_end = Storage::ROW_GROUP_SIZE;
+	if (row_group_end > row_group_size) {
+		row_group_end = row_group_size;
 	}
 	// create the version_info if it doesn't exist yet
 	auto &vinfo = GetOrCreateVersionInfo();

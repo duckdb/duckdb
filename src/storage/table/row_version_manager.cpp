@@ -14,7 +14,7 @@ void RowVersionManager::SetStart(idx_t new_start) {
 	lock_guard<mutex> l(version_lock);
 	this->start = new_start;
 	idx_t current_start = start;
-	for (idx_t i = 0; i < Storage::ROW_GROUP_VECTOR_COUNT; i++) {
+	for (idx_t i = 0; i < Storage::DEFAULT_ROW_GROUP_VECTOR_COUNT; i++) {
 		if (vector_info[i]) {
 			vector_info[i]->start = current_start;
 		}
@@ -160,7 +160,7 @@ void RowVersionManager::CleanupAppend(transaction_t lowest_active_transaction, i
 void RowVersionManager::RevertAppend(idx_t start_row) {
 	lock_guard<mutex> lock(version_lock);
 	idx_t start_vector_idx = (start_row + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
-	for (idx_t vector_idx = start_vector_idx; vector_idx < Storage::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
+	for (idx_t vector_idx = start_vector_idx; vector_idx < Storage::DEFAULT_ROW_GROUP_VECTOR_COUNT; vector_idx++) {
 		vector_info[vector_idx].reset();
 	}
 }
@@ -206,7 +206,7 @@ vector<MetaBlockPointer> RowVersionManager::Checkpoint(MetadataManager &manager)
 	}
 	// first count how many ChunkInfo's we need to deserialize
 	vector<pair<idx_t, reference<ChunkInfo>>> to_serialize;
-	for (idx_t vector_idx = 0; vector_idx < Storage::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
+	for (idx_t vector_idx = 0; vector_idx < Storage::DEFAULT_ROW_GROUP_VECTOR_COUNT; vector_idx++) {
 		auto chunk_info = vector_info[vector_idx].get();
 		if (!chunk_info) {
 			continue;
@@ -248,7 +248,7 @@ shared_ptr<RowVersionManager> RowVersionManager::Deserialize(MetaBlockPointer de
 	D_ASSERT(chunk_count > 0);
 	for (idx_t i = 0; i < chunk_count; i++) {
 		idx_t vector_index = source.Read<idx_t>();
-		if (vector_index >= Storage::ROW_GROUP_VECTOR_COUNT) {
+		if (vector_index >= Storage::DEFAULT_ROW_GROUP_VECTOR_COUNT) {
 			throw InternalException(
 			    "In DeserializeDeletes, vector_index is out of range for the row group. Corrupted file?");
 		}

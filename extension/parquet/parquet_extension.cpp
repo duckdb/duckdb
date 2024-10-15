@@ -182,7 +182,7 @@ struct ParquetWriteBindData : public TableFunctionData {
 	vector<string> column_names;
 	duckdb_parquet::format::CompressionCodec::type codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
 	vector<pair<string, string>> kv_metadata;
-	idx_t row_group_size = Storage::ROW_GROUP_SIZE;
+	idx_t row_group_size = Storage::DEFAULT_ROW_GROUP_SIZE;
 
 	//! If row_group_size_bytes is not set, we default to row_group_size * BYTES_PER_ROW
 	static constexpr const idx_t BYTES_PER_ROW = 1024;
