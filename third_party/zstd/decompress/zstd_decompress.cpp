@@ -80,11 +80,10 @@
  *************************************/
 
 #define DDICT_HASHSET_MAX_LOAD_FACTOR_COUNT_MULT 4
-#define DDICT_HASHSET_MAX_LOAD_FACTOR_SIZE_MULT 3  /* These two constants represent SIZE_MULT/COUNT_MULT load factor without using a float.
-                                                    * Currently, that means a 0.75 load factor.
-                                                    * So, if count * COUNT_MULT / size * SIZE_MULT != 0, then we've exceeded
-                                                    * the load factor of the ddict hash set.
-                                                    */
+#define DDICT_HASHSET_MAX_LOAD_FACTOR_SIZE_MULT 3  /* These two constants represent SIZE_MULT/COUNT_MULT load factor without using a float. */
+                                                   /* Currently, that means a 0.75 load factor. */
+                                                   /* So, if count * COUNT_MULT / size * SIZE_MULT != 0, then we've exceeded *.
+                                                   /* the load factor of the ddict hash set. */
 
 #define DDICT_HASHSET_TABLE_BASE_SIZE 64
 #define DDICT_HASHSET_RESIZE_FACTOR 2
