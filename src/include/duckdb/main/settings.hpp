@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -333,7 +334,7 @@ struct DebugSkipCheckpointOnCommitSetting {
 };
 
 struct DebugWindowModeSetting {
-	using RETURN_TYPE = string;
+	using RETURN_TYPE = WindowAggregationMode;
 	static constexpr const char *Name = "debug_window_mode";
 	static constexpr const char *Description = "DEBUG SETTING: switch window mode to use";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
@@ -366,7 +367,7 @@ struct DefaultCollationSetting {
 };
 
 struct DefaultNullOrderSetting {
-	using RETURN_TYPE = string;
+	using RETURN_TYPE = DefaultOrderByNullType;
 	static constexpr const char *Name = "default_null_order";
 	static constexpr const char *Description = "Null ordering used when none is specified (NULLS_FIRST or NULLS_LAST)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
@@ -548,7 +549,7 @@ struct ErrorsAsJSONSetting {
 };
 
 struct ExplainOutputSetting {
-	using RETURN_TYPE = string;
+	using RETURN_TYPE = ExplainOutputType;
 	static constexpr const char *Name = "explain_output";
 	static constexpr const char *Description = "Output of EXPLAIN statements (ALL, OPTIMIZED_ONLY, PHYSICAL_ONLY)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;

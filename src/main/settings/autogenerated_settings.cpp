@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "duckdb/main/settings.hpp"
-
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 
@@ -272,7 +272,8 @@ void DebugAsofIejoinSetting::ResetLocal(ClientContext &context) {
 }
 
 Value DebugAsofIejoinSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).force_asof_iejoin);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::CreateValue(config.force_asof_iejoin);
 }
 
 //===----------------------------------------------------------------------===//
@@ -288,7 +289,8 @@ void DebugForceExternalSetting::ResetLocal(ClientContext &context) {
 }
 
 Value DebugForceExternalSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).force_external);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::CreateValue(config.force_external);
 }
 
 //===----------------------------------------------------------------------===//
@@ -304,7 +306,8 @@ void DebugForceNoCrossProductSetting::ResetLocal(ClientContext &context) {
 }
 
 Value DebugForceNoCrossProductSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).force_no_cross_product);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::CreateValue(config.force_no_cross_product);
 }
 
 //===----------------------------------------------------------------------===//
@@ -324,10 +327,32 @@ Value DebugSkipCheckpointOnCommitSetting::GetSetting(const ClientContext &contex
 }
 
 //===----------------------------------------------------------------------===//
+// Debug Window Mode
+//===----------------------------------------------------------------------===//
+void DebugWindowModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto str_input = StringUtil::Upper(input.GetValue<string>());
+	config.options.window_mode = EnumUtil::FromString<WindowAggregationMode>(str_input);
+}
+
+void DebugWindowModeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.window_mode = DBConfig().options.window_mode;
+}
+
+Value DebugWindowModeSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::CreateValue(StringUtil::Lower(EnumUtil::ToString(config.options.window_mode)));
+}
+
+//===----------------------------------------------------------------------===//
 // Default Null Order
 //===----------------------------------------------------------------------===//
 void DefaultNullOrderSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.default_null_order = DBConfig().options.default_null_order;
+}
+
+Value DefaultNullOrderSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::CreateValue(StringUtil::Lower(EnumUtil::ToString(config.options.default_null_order)));
 }
 
 //===----------------------------------------------------------------------===//
@@ -388,7 +413,8 @@ void EnableHTTPLoggingSetting::ResetLocal(ClientContext &context) {
 }
 
 Value EnableHTTPLoggingSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).enable_http_logging);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::CreateValue(config.enable_http_logging);
 }
 
 //===----------------------------------------------------------------------===//
@@ -458,7 +484,8 @@ void EnableProgressBarSetting::ResetLocal(ClientContext &context) {
 }
 
 Value EnableProgressBarSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).enable_progress_bar);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::CreateValue(config.enable_progress_bar);
 }
 
 //===----------------------------------------------------------------------===//
@@ -490,14 +517,26 @@ void ErrorsAsJSONSetting::ResetLocal(ClientContext &context) {
 }
 
 Value ErrorsAsJSONSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).errors_as_json);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::CreateValue(config.errors_as_json);
 }
 
 //===----------------------------------------------------------------------===//
 // Explain Output
 //===----------------------------------------------------------------------===//
+void ExplainOutputSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	auto str_input = StringUtil::Upper(input.GetValue<string>());
+	config.explain_output_type = EnumUtil::FromString<ExplainOutputType>(str_input);
+}
+
 void ExplainOutputSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).explain_output_type = ClientConfig().explain_output_type;
+}
+
+Value ExplainOutputSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::CreateValue(StringUtil::Lower(EnumUtil::ToString(config.explain_output_type)));
 }
 
 //===----------------------------------------------------------------------===//
@@ -546,7 +585,8 @@ void HomeDirectorySetting::ResetLocal(ClientContext &context) {
 }
 
 Value HomeDirectorySetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).home_directory);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::CreateValue(config.home_directory);
 }
 
 //===----------------------------------------------------------------------===//
@@ -562,7 +602,8 @@ void HTTPLoggingOutputSetting::ResetLocal(ClientContext &context) {
 }
 
 Value HTTPLoggingOutputSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).http_logging_output);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::CreateValue(config.http_logging_output);
 }
 
 //===----------------------------------------------------------------------===//
@@ -626,7 +667,8 @@ void IEEEFloatingPointOpsSetting::ResetLocal(ClientContext &context) {
 }
 
 Value IEEEFloatingPointOpsSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).ieee_floating_point_ops);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::CreateValue(config.ieee_floating_point_ops);
 }
 
 //===----------------------------------------------------------------------===//
@@ -693,7 +735,8 @@ void IntegerDivisionSetting::ResetLocal(ClientContext &context) {
 }
 
 Value IntegerDivisionSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).integer_division);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::CreateValue(config.integer_division);
 }
 
 //===----------------------------------------------------------------------===//
@@ -725,7 +768,8 @@ void MaxExpressionDepthSetting::ResetLocal(ClientContext &context) {
 }
 
 Value MaxExpressionDepthSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).max_expression_depth);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::CreateValue(config.max_expression_depth);
 }
 
 //===----------------------------------------------------------------------===//
@@ -757,7 +801,8 @@ void MergeJoinThresholdSetting::ResetLocal(ClientContext &context) {
 }
 
 Value MergeJoinThresholdSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).merge_join_threshold);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::CreateValue(config.merge_join_threshold);
 }
 
 //===----------------------------------------------------------------------===//
@@ -773,7 +818,8 @@ void NestedLoopJoinThresholdSetting::ResetLocal(ClientContext &context) {
 }
 
 Value NestedLoopJoinThresholdSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).nested_loop_join_threshold);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::CreateValue(config.nested_loop_join_threshold);
 }
 
 //===----------------------------------------------------------------------===//
@@ -805,7 +851,8 @@ void OrderByNonIntegerLiteralSetting::ResetLocal(ClientContext &context) {
 }
 
 Value OrderByNonIntegerLiteralSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).order_by_non_integer_literal);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::CreateValue(config.order_by_non_integer_literal);
 }
 
 //===----------------------------------------------------------------------===//
@@ -824,7 +871,8 @@ void OrderedAggregateThresholdSetting::ResetLocal(ClientContext &context) {
 }
 
 Value OrderedAggregateThresholdSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).ordered_aggregate_threshold);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::CreateValue(config.ordered_aggregate_threshold);
 }
 
 //===----------------------------------------------------------------------===//
@@ -841,7 +889,8 @@ void PartitionedWriteFlushThresholdSetting::ResetLocal(ClientContext &context) {
 }
 
 Value PartitionedWriteFlushThresholdSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).partitioned_write_flush_threshold);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::CreateValue(config.partitioned_write_flush_threshold);
 }
 
 //===----------------------------------------------------------------------===//
@@ -857,7 +906,8 @@ void PartitionedWriteMaxOpenFilesSetting::ResetLocal(ClientContext &context) {
 }
 
 Value PartitionedWriteMaxOpenFilesSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).partitioned_write_max_open_files);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::CreateValue(config.partitioned_write_max_open_files);
 }
 
 //===----------------------------------------------------------------------===//
@@ -880,7 +930,8 @@ void PivotFilterThresholdSetting::ResetLocal(ClientContext &context) {
 }
 
 Value PivotFilterThresholdSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).pivot_filter_threshold);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::CreateValue(config.pivot_filter_threshold);
 }
 
 //===----------------------------------------------------------------------===//
@@ -896,7 +947,8 @@ void PivotLimitSetting::ResetLocal(ClientContext &context) {
 }
 
 Value PivotLimitSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).pivot_limit);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::CreateValue(config.pivot_limit);
 }
 
 //===----------------------------------------------------------------------===//
@@ -912,7 +964,8 @@ void PreferRangeJoinsSetting::ResetLocal(ClientContext &context) {
 }
 
 Value PreferRangeJoinsSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).prefer_range_joins);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::CreateValue(config.prefer_range_joins);
 }
 
 //===----------------------------------------------------------------------===//
@@ -928,7 +981,8 @@ void PreserveIdentifierCaseSetting::ResetLocal(ClientContext &context) {
 }
 
 Value PreserveIdentifierCaseSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).preserve_identifier_case);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::CreateValue(config.preserve_identifier_case);
 }
 
 //===----------------------------------------------------------------------===//
@@ -977,7 +1031,8 @@ void ScalarSubqueryErrorOnMultipleRowsSetting::ResetLocal(ClientContext &context
 }
 
 Value ScalarSubqueryErrorOnMultipleRowsSetting::GetSetting(const ClientContext &context) {
-	return Value::CreateValue(ClientConfig::GetConfig(context).scalar_subquery_error_on_multiple_rows);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::CreateValue(config.scalar_subquery_error_on_multiple_rows);
 }
 
 } // namespace duckdb

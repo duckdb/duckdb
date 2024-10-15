@@ -201,8 +201,9 @@
         "name": "debug_window_mode",
         "description": "DEBUG SETTING: switch window mode to use",
         "type": "VARCHAR",
+        "return_type": "WindowAggregationMode",
         "scope": "global",
-        "custom_implementation": true
+        "internal_setting": "window_mode"
     },
     {
         "name": "default_block_size",
@@ -222,10 +223,10 @@
         "name": "default_null_order",
         "description": "Null ordering used when none is specified (NULLS_FIRST or NULLS_LAST)",
         "type": "VARCHAR",
+        "return_type": "DefaultOrderByNullType",
         "scope": "global",
         "custom_implementation": [
-            "set",
-            "get"
+            "set"
         ],
         "aliases": [
             "null_order"
@@ -357,12 +358,9 @@
         "name": "explain_output",
         "description": "Output of EXPLAIN statements (ALL, OPTIMIZED_ONLY, PHYSICAL_ONLY)",
         "type": "VARCHAR",
+        "return_type": "ExplainOutputType",
         "scope": "local",
-        "internal_setting": "explain_output_type",
-        "custom_implementation": [
-            "set",
-            "get"
-        ]
+        "internal_setting": "explain_output_type"
     },
     {
         "name": "extension_directory",

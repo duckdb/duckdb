@@ -389,30 +389,6 @@ Value DebugCheckpointAbortSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Debug Window Mode
-//===----------------------------------------------------------------------===//
-void DebugWindowModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto param = StringUtil::Lower(input.ToString());
-	if (param == "window") {
-		config.options.window_mode = WindowAggregationMode::WINDOW;
-	} else if (param == "combine") {
-		config.options.window_mode = WindowAggregationMode::COMBINE;
-	} else if (param == "separate") {
-		config.options.window_mode = WindowAggregationMode::SEPARATE;
-	} else {
-		throw ParserException("Unrecognized option for PRAGMA debug_window_mode, expected window, combine or separate");
-	}
-}
-
-void DebugWindowModeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.window_mode = DBConfig().options.window_mode;
-}
-
-Value DebugWindowModeSetting::GetSetting(const ClientContext &context) {
-	return Value();
-}
-
-//===----------------------------------------------------------------------===//
 // Default Block Size
 //===----------------------------------------------------------------------===//
 void DefaultBlockSizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -479,22 +455,6 @@ void DefaultNullOrderSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, 
 		throw ParserException("Unrecognized parameter for option NULL_ORDER \"%s\", expected either NULLS FIRST, NULLS "
 		                      "LAST, SQLite, MySQL or Postgres",
 		                      parameter);
-	}
-}
-
-Value DefaultNullOrderSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	switch (config.options.default_null_order) {
-	case DefaultOrderByNullType::NULLS_FIRST:
-		return "nulls_first";
-	case DefaultOrderByNullType::NULLS_LAST:
-		return "nulls_last";
-	case DefaultOrderByNullType::NULLS_FIRST_ON_ASC_LAST_ON_DESC:
-		return "nulls_first_on_asc_last_on_desc";
-	case DefaultOrderByNullType::NULLS_LAST_ON_ASC_FIRST_ON_DESC:
-		return "nulls_last_on_asc_first_on_desc";
-	default:
-		throw InternalException("Unknown null order setting");
 	}
 }
 
@@ -744,36 +704,6 @@ bool EnableProgressBarSetting::OnLocalReset(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	ProgressBar::SystemOverrideCheck(config);
 	return true;
-}
-
-//===----------------------------------------------------------------------===//
-// Explain Output
-//===----------------------------------------------------------------------===//
-void ExplainOutputSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto parameter = StringUtil::Lower(input.ToString());
-	if (parameter == "all") {
-		ClientConfig::GetConfig(context).explain_output_type = ExplainOutputType::ALL;
-	} else if (parameter == "optimized_only") {
-		ClientConfig::GetConfig(context).explain_output_type = ExplainOutputType::OPTIMIZED_ONLY;
-	} else if (parameter == "physical_only") {
-		ClientConfig::GetConfig(context).explain_output_type = ExplainOutputType::PHYSICAL_ONLY;
-	} else {
-		throw ParserException("Unrecognized output type \"%s\", expected either ALL, OPTIMIZED_ONLY or PHYSICAL_ONLY",
-		                      parameter);
-	}
-}
-
-Value ExplainOutputSetting::GetSetting(const ClientContext &context) {
-	switch (ClientConfig::GetConfig(context).explain_output_type) {
-	case ExplainOutputType::ALL:
-		return "all";
-	case ExplainOutputType::OPTIMIZED_ONLY:
-		return "optimized_only";
-	case ExplainOutputType::PHYSICAL_ONLY:
-		return "physical_only";
-	default:
-		throw InternalException("Unrecognized explain output type");
-	}
 }
 
 //===----------------------------------------------------------------------===//
