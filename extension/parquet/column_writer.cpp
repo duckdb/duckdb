@@ -867,6 +867,7 @@ struct ParquetBloomBlock {
 struct ParquetBloomFilter {
 
 	void Initialize(idx_t num_blocks) {
+		D_ASSERT(NextPowerOfTwo(num_blocks) == num_blocks);
 		data = make_uniq<ResizeableBuffer>(Allocator::DefaultAllocator(), sizeof(ParquetBloomBlock) * num_blocks);
 		data->zero();
 	}
@@ -877,6 +878,37 @@ struct ParquetBloomFilter {
 		uint64_t i = ((x >> 32) * block_count) >> 32;
 		auto &b = blocks[i];
 		ParquetBloomBlock::BlockInsert(b, x);
+	}
+
+	void Resize(idx_t new_num_blocks) {
+		auto block_count = data->len / sizeof(ParquetBloomBlock);
+		D_ASSERT(new_num_blocks <= block_count);
+		D_ASSERT(NextPowerOfTwo(block_count) == block_count);
+		D_ASSERT(NextPowerOfTwo(new_num_blocks) == new_num_blocks);
+
+		ParquetBloomFilter new_bloom_filter;
+		new_bloom_filter.Initialize(new_num_blocks);
+
+		// TODO find a closed form expression to compute shift
+		uint8_t shift = 0;
+		auto temp_num_blocks = block_count;
+		while (temp_num_blocks > new_num_blocks) {
+			shift++;
+			temp_num_blocks >>= 1;
+		}
+		auto old_blocks = (ParquetBloomBlock *)(data->ptr);
+		auto new_blocks = (ParquetBloomBlock *)(new_bloom_filter.data->ptr);
+
+		for (idx_t block_idx = 0;block_idx < block_count; block_idx++) {
+			auto new_idx = block_idx >> shift;
+			auto& old_block = old_blocks[block_idx];
+			auto& new_block = new_blocks[new_idx];
+			for (idx_t word_idx = 0; word_idx < 8; word_idx++) {
+				new_block.block[word_idx] |= old_block.block[word_idx];
+			}
+		}
+
+		data = std::move(new_bloom_filter.data);
 	}
 	//
 	// bool FilterCheck(uint64_t x) {
@@ -920,6 +952,8 @@ public:
 	}
 
 	const ResizeableBuffer *GetBloomFilter() override {
+		// TODO not here but for testing purposes
+		filter.Resize(32);
 		return filter.data.get();
 	}
 
