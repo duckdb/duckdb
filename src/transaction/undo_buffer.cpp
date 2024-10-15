@@ -17,7 +17,8 @@
 namespace duckdb {
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
 
-UndoBuffer::UndoBuffer(ClientContext &context_p) : allocator(BufferAllocator::Get(context_p)) {
+UndoBuffer::UndoBuffer(DuckTransaction &transaction_p, ClientContext &context_p)
+    : transaction(transaction_p), allocator(BufferAllocator::Get(context_p)) {
 }
 
 data_ptr_t UndoBuffer::CreateEntry(UndoFlags type, idx_t len) {
@@ -178,25 +179,25 @@ void UndoBuffer::Cleanup(transaction_t lowest_active_transaction) {
 }
 
 void UndoBuffer::WriteToWAL(WriteAheadLog &wal, optional_ptr<StorageCommitState> commit_state) {
-	WALWriteState state(wal, commit_state);
+	WALWriteState state(transaction, wal, commit_state);
 	UndoBuffer::IteratorState iterator_state;
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
 }
 
 void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, transaction_t commit_id) {
-	CommitState state(commit_id);
+	CommitState state(transaction, commit_id);
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
 }
 
 void UndoBuffer::RevertCommit(UndoBuffer::IteratorState &end_state, transaction_t transaction_id) {
-	CommitState state(transaction_id);
+	CommitState state(transaction, transaction_id);
 	UndoBuffer::IteratorState start_state;
 	IterateEntries(start_state, end_state, [&](UndoFlags type, data_ptr_t data) { state.RevertCommit(type, data); });
 }
 
 void UndoBuffer::Rollback() noexcept {
 	// rollback needs to be performed in reverse
-	RollbackState state;
+	RollbackState state(transaction);
 	ReverseIterateEntries([&](UndoFlags type, data_ptr_t data) { state.RollbackEntry(type, data); });
 }
 } // namespace duckdb

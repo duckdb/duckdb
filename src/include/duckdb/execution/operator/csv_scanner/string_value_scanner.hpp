@@ -132,6 +132,10 @@ public:
 
 	bool HandleErrors(StringValueResult &result);
 
+	bool HasError() const {
+		return !current_errors.empty();
+	}
+
 private:
 	vector<CurrentError> current_errors;
 	bool is_error_in_line;
