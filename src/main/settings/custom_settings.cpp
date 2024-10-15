@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 // This file will not be overwritten. To implement a custom function for
-// a new setting, enable 'custom_conversion_and_validation' in 'settings.json'
+// a new setting, enable 'custom_implementation' in 'settings.json'
 // for this setting. The 'update_settings_definitions.py' may include new
 // setting methods' signatures that need to be implemented in this file. You
 // can check the functions declaration in 'settings.hpp' and what is

@@ -151,7 +151,6 @@ def find_start_end_indexes(source_code, start_marker, end_marker, file_path):
 SEPARATOR = "//===----------------------------------------------------------------------===//\n"
 SRC_CODE_START_MARKER = "namespace duckdb {"
 SRC_CODE_END_MARKER = "} // namespace duckdb"
-SRC_CODE_IMPLEMENTATION_COMMENT = f"\t// Add implementation for this function\n"
 
 
 # global method
