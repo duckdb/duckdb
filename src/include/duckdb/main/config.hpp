@@ -373,6 +373,18 @@ public:
 	OrderByNullType ResolveNullOrder(OrderType order_type, OrderByNullType null_type) const;
 	const string UserAgent() const;
 
+	template <class OP>
+	typename OP::RETURN_TYPE GetSetting(const ClientContext &context) {
+		std::lock_guard<mutex> lock(config_lock);
+		return OP::GetSetting(context).template GetValue<typename OP::RETURN_TYPE>();
+	}
+
+	template <class OP>
+	Value GetSettingValue(const ClientContext &context) {
+		std::lock_guard<mutex> lock(config_lock);
+		return OP::GetSetting(context);
+	}
+
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;
 	unique_ptr<CastFunctionSet> cast_functions;
