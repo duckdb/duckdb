@@ -547,11 +547,11 @@ XXH_PUBLIC_API XXH_CONSTF unsigned XXH_versionNumber (void);
 /* ****************************
 *  Common basic types
 ******************************/
-#include <cstddef>   /* size_t */
+#include <stddef.h>   /* size_t */
 //! (duckdb) Manually added to fix compilation error on linux for missing 'uint32_t'
 //! 'stdint.h' is mentioned later on in the file so this might have been explicitly left out?
 //! Leaving this comment here for potential future debugging
-#include <cstdint>  /* uint32_t */
+#include <stdint.h>  /* uint32_t */
 /*!
  * @brief Exit code for the streaming API.
  */
@@ -2289,7 +2289,7 @@ static void XXH_free(void* p) { (void)p; }
  * Modify the local functions below should you wish to use
  * different memory routines for malloc() and free()
  */
-#include <cstdlib>
+#include <stdlib.h>
 
 /*!
  * @internal
@@ -2305,7 +2305,7 @@ static void XXH_free(void* p) { free(p); }
 
 #endif  /* XXH_NO_STDLIB */
 
-#include <cstring>
+#include <string.h>
 
 /*!
  * @internal
@@ -2316,7 +2316,7 @@ static void* XXH_memcpy(void* dest, const void* src, size_t size)
     return memcpy(dest,src,size);
 }
 
-#include <climits>   /* ULLONG_MAX */
+#include <limits.h>   /* ULLONG_MAX */
 
 
 /* *************************************
@@ -6877,7 +6877,7 @@ XXH_PUBLIC_API XXH128_hash_t XXH3_128bits_digest (XXH_NOESCAPE const XXH3_state_
 #endif /* !XXH_NO_STREAM */
 /* 128-bit utility functions */
 
-#include <cstring>   /* memcmp, memcpy */
+#include <string.h>   /* memcmp, memcpy */
 
 /* return : 1 is equal, 0 if different */
 /*! @ingroup XXH3_family */
