@@ -40,6 +40,8 @@ set(ZSTD_FILES
 
 add_library(duckdb_zstd STATIC ${ZSTD_FILES})
 
+target_compile_definitions(duckdb_zstd PRIVATE ZSTD_ASAN_DONT_POISON_WORKSPACE)
+
 target_include_directories(
   duckdb_zstd
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
