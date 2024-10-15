@@ -957,10 +957,12 @@ double JSONScan::ScanProgress(ClientContext &, const FunctionData *, const Globa
 	return progress / double(gstate.json_readers.size());
 }
 
-idx_t JSONScan::GetBatchIndex(ClientContext &, const FunctionData *, LocalTableFunctionState *local_state,
-                              GlobalTableFunctionState *) {
-	auto &lstate = local_state->Cast<JSONLocalTableFunctionState>();
-	return lstate.GetBatchIndex();
+OperatorPartitionData JSONScan::GetPartitionData(ClientContext &, TableFunctionGetPartitionInput &input) {
+	if (input.partition_info.RequiresPartitionColumns()) {
+		throw InternalException("JSONScan::GetPartitionData: partition columns not supported");
+	}
+	auto &lstate = input.local_state->Cast<JSONLocalTableFunctionState>();
+	return OperatorPartitionData(lstate.GetBatchIndex());
 }
 
 unique_ptr<NodeStatistics> JSONScan::Cardinality(ClientContext &, const FunctionData *bind_data) {
@@ -1014,7 +1016,7 @@ void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
 	table_function.named_parameters["compression"] = LogicalType::VARCHAR;
 
 	table_function.table_scan_progress = ScanProgress;
-	table_function.get_batch_index = GetBatchIndex;
+	table_function.get_partition_data = GetPartitionData;
 	table_function.cardinality = Cardinality;
 
 	table_function.serialize = Serialize;

@@ -1,5 +1,5 @@
 #include "duckdb/common/types/cast_helpers.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 
 #include "utf8proc.hpp"
@@ -114,9 +114,9 @@ bool CSVSniffer::DetectHeaderWithSetColumn(ClientContext &context, vector<Header
 			return false;
 		}
 		if (best_header_row[i].value != (*set_columns.names)[i]) {
-			error << "Header Mismatch at position:" << i << "\n";
-			error << "Expected Name: \"" << (*set_columns.names)[i] << "\".";
-			error << "Actual Name: \"" << best_header_row[i].value << "\"."
+			error << "Header mismatch at position: " << i << "\n";
+			error << "Expected name: \"" << (*set_columns.names)[i] << "\", ";
+			error << "Actual name: \"" << best_header_row[i].value << "\"."
 			      << "\n";
 			has_header = false;
 			break;

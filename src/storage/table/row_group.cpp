@@ -21,6 +21,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
+#include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 
 namespace duckdb {
@@ -416,6 +417,10 @@ static idx_t GetFilterScanCount(ColumnScanState &state, TableFilter &filter) {
 		}
 		return max_count;
 	}
+	case TableFilterType::OPTIONAL_FILTER: {
+		auto &zone_filter = filter.Cast<OptionalFilter>();
+		return GetFilterScanCount(state, *zone_filter.child_filter);
+	}
 	case TableFilterType::IS_NULL:
 	case TableFilterType::IS_NOT_NULL:
 	case TableFilterType::CONSTANT_COMPARISON:
@@ -441,6 +446,8 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 		if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			continue;
 		}
+
+		// check zone map segment.
 		idx_t target_row = GetFilterScanCount(state.column_scans[column_idx], filter);
 		if (target_row >= state.max_row) {
 			target_row = state.max_row;
