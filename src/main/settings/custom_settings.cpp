@@ -56,10 +56,6 @@ void AccessModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const 
 	}
 }
 
-void AccessModeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.access_mode = DBConfig().options.access_mode;
-}
-
 Value AccessModeSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	switch (config.options.access_mode) {
@@ -223,68 +219,10 @@ void ArrowLargeBufferSizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &conf
 	config.options.arrow_offset_size = export_large_buffers_arrow ? ArrowOffsetSize::LARGE : ArrowOffsetSize::REGULAR;
 }
 
-void ArrowLargeBufferSizeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.arrow_offset_size = DBConfig().options.arrow_offset_size;
-}
-
 Value ArrowLargeBufferSizeSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	bool export_large_buffers_arrow = config.options.arrow_offset_size == ArrowOffsetSize::LARGE;
 	return Value::BOOLEAN(export_large_buffers_arrow);
-}
-
-//===----------------------------------------------------------------------===//
-// Arrow Lossless Conversion
-//===----------------------------------------------------------------------===//
-void ArrowLosslessConversionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto arrow_arrow_lossless_conversion = input.GetValue<bool>();
-
-	config.options.arrow_arrow_lossless_conversion = arrow_arrow_lossless_conversion;
-}
-
-void ArrowLosslessConversionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.arrow_arrow_lossless_conversion = DBConfig().options.arrow_arrow_lossless_conversion;
-}
-
-Value ArrowLosslessConversionSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	bool arrow_arrow_lossless_conversion = config.options.arrow_arrow_lossless_conversion;
-	return Value::BOOLEAN(arrow_arrow_lossless_conversion);
-}
-
-//===----------------------------------------------------------------------===//
-// Arrow Output List View
-//===----------------------------------------------------------------------===//
-void ArrowOutputListViewSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto arrow_output_list_view = input.GetValue<bool>();
-
-	config.options.arrow_use_list_view = arrow_output_list_view;
-}
-
-void ArrowOutputListViewSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.arrow_use_list_view = DBConfig().options.arrow_use_list_view;
-}
-
-Value ArrowOutputListViewSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	bool arrow_output_list_view = config.options.arrow_use_list_view;
-	return Value::BOOLEAN(arrow_output_list_view);
-}
-
-//===----------------------------------------------------------------------===//
-// Autoinstall Extension Repository
-//===----------------------------------------------------------------------===//
-void AutoinstallExtensionRepositorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.autoinstall_extension_repo = input.ToString();
-}
-
-void AutoinstallExtensionRepositorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.autoinstall_extension_repo = DBConfig().options.autoinstall_extension_repo;
-}
-
-Value AutoinstallExtensionRepositorySetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.autoinstall_extension_repo);
 }
 
 //===----------------------------------------------------------------------===//
@@ -295,29 +233,9 @@ void CheckpointThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &confi
 	config.options.checkpoint_wal_size = new_limit;
 }
 
-void CheckpointThresholdSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.checkpoint_wal_size = DBConfig().options.checkpoint_wal_size;
-}
-
 Value CheckpointThresholdSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value(StringUtil::BytesToHumanReadableString(config.options.checkpoint_wal_size));
-}
-
-//===----------------------------------------------------------------------===//
-// Custom Extension Repository
-//===----------------------------------------------------------------------===//
-void CustomExtensionRepositorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.custom_extension_repo = input.ToString();
-}
-
-void CustomExtensionRepositorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.custom_extension_repo = DBConfig().options.custom_extension_repo;
-}
-
-Value CustomExtensionRepositorySetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.custom_extension_repo);
 }
 
 //===----------------------------------------------------------------------===//
@@ -431,26 +349,6 @@ void CustomUserAgentSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config)
 	config.options.custom_user_agent = DBConfig().options.custom_user_agent;
 }
 
-Value CustomUserAgentSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.custom_user_agent);
-}
-
-//===----------------------------------------------------------------------===//
-// Debug Asof Iejoin
-//===----------------------------------------------------------------------===//
-void DebugAsofIejoinSetting::SetLocal(ClientContext &context, const Value &input) {
-	ClientConfig::GetConfig(context).force_asof_iejoin = input.GetValue<bool>();
-}
-
-void DebugAsofIejoinSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).force_asof_iejoin = ClientConfig().force_asof_iejoin;
-}
-
-Value DebugAsofIejoinSetting::GetSetting(const ClientContext &context) {
-	return Value::BOOLEAN(ClientConfig::GetConfig(context).force_asof_iejoin);
-}
-
 //===----------------------------------------------------------------------===//
 // Debug Checkpoint Abort
 //===----------------------------------------------------------------------===//
@@ -489,36 +387,6 @@ Value DebugCheckpointAbortSetting::GetSetting(const ClientContext &context) {
 	default:
 		throw InternalException("Type not implemented for CheckpointAbort");
 	}
-}
-
-//===----------------------------------------------------------------------===//
-// Debug Force External
-//===----------------------------------------------------------------------===//
-void DebugForceExternalSetting::SetLocal(ClientContext &context, const Value &input) {
-	ClientConfig::GetConfig(context).force_external = input.GetValue<bool>();
-}
-
-void DebugForceExternalSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).force_external = ClientConfig().force_external;
-}
-
-Value DebugForceExternalSetting::GetSetting(const ClientContext &context) {
-	return Value::BOOLEAN(ClientConfig::GetConfig(context).force_external);
-}
-
-//===----------------------------------------------------------------------===//
-// Debug Force No Cross Product
-//===----------------------------------------------------------------------===//
-void DebugForceNoCrossProductSetting::SetLocal(ClientContext &context, const Value &input) {
-	ClientConfig::GetConfig(context).force_no_cross_product = input.GetValue<bool>();
-}
-
-void DebugForceNoCrossProductSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).force_no_cross_product = ClientConfig().force_no_cross_product;
-}
-
-Value DebugForceNoCrossProductSetting::GetSetting(const ClientContext &context) {
-	return Value::BOOLEAN(ClientConfig::GetConfig(context).force_no_cross_product);
 }
 
 //===----------------------------------------------------------------------===//
@@ -615,10 +483,6 @@ void DefaultNullOrderSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, 
 	}
 }
 
-void DefaultNullOrderSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.default_null_order = DBConfig().options.default_null_order;
-}
-
 Value DefaultNullOrderSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	switch (config.options.default_null_order) {
@@ -648,10 +512,6 @@ void DefaultOrderSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, cons
 		throw InvalidInputException("Unrecognized parameter for option DEFAULT_ORDER \"%s\". Expected ASC or DESC.",
 		                            parameter);
 	}
-}
-
-void DefaultOrderSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.default_order_type = DBConfig().options.default_order_type;
 }
 
 Value DefaultOrderSetting::GetSetting(const ClientContext &context) {
@@ -780,38 +640,6 @@ bool EnableExternalAccessSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &
 }
 
 //===----------------------------------------------------------------------===//
-// Enable Http Metadata Cache
-//===----------------------------------------------------------------------===//
-void EnableHttpMetadataCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.http_metadata_cache_enable = input.GetValue<bool>();
-}
-
-void EnableHttpMetadataCacheSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.http_metadata_cache_enable = DBConfig().options.http_metadata_cache_enable;
-}
-
-Value EnableHttpMetadataCacheSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.http_metadata_cache_enable);
-}
-
-//===----------------------------------------------------------------------===//
-// Enable Object Cache
-//===----------------------------------------------------------------------===//
-void EnableObjectCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.object_cache_enable = input.GetValue<bool>();
-}
-
-void EnableObjectCacheSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.object_cache_enable = DBConfig().options.object_cache_enable;
-}
-
-Value EnableObjectCacheSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.object_cache_enable);
-}
-
-//===----------------------------------------------------------------------===//
 // Enable Profiling
 //===----------------------------------------------------------------------===//
 void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -936,10 +764,6 @@ void ExplainOutputSetting::SetLocal(ClientContext &context, const Value &input) 
 	}
 }
 
-void ExplainOutputSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).explain_output_type = ClientConfig().explain_output_type;
-}
-
 Value ExplainOutputSetting::GetSetting(const ClientContext &context) {
 	switch (ClientConfig::GetConfig(context).explain_output_type) {
 	case ExplainOutputType::ALL:
@@ -951,21 +775,6 @@ Value ExplainOutputSetting::GetSetting(const ClientContext &context) {
 	default:
 		throw InternalException("Unrecognized explain output type");
 	}
-}
-
-//===----------------------------------------------------------------------===//
-// Extension Directory
-//===----------------------------------------------------------------------===//
-void ExtensionDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.extension_directory = input.ToString();
-}
-
-void ExtensionDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.extension_directory = DBConfig().options.extension_directory;
-}
-
-Value ExtensionDirectorySetting::GetSetting(const ClientContext &context) {
-	return Value(DBConfig::GetConfig(context).options.extension_directory);
 }
 
 //===----------------------------------------------------------------------===//
@@ -1212,32 +1021,6 @@ void PerfectHtThresholdSetting::SetLocal(ClientContext &context, const Value &in
 
 Value PerfectHtThresholdSetting::GetSetting(const ClientContext &context) {
 	return Value::BIGINT(NumericCast<int64_t>(ClientConfig::GetConfig(context).perfect_ht_threshold));
-}
-
-//===----------------------------------------------------------------------===//
-// Pivot Filter Threshold
-//===----------------------------------------------------------------------===//
-void PivotFilterThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
-	ClientConfig::GetConfig(context).pivot_filter_threshold = input.GetValue<uint64_t>();
-}
-
-Value PivotFilterThresholdSetting::GetSetting(const ClientContext &context) {
-	return Value::BIGINT(NumericCast<int64_t>(ClientConfig::GetConfig(context).pivot_filter_threshold));
-}
-
-//===----------------------------------------------------------------------===//
-// Produce Arrow String View
-//===----------------------------------------------------------------------===//
-void ProduceArrowStringViewSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.produce_arrow_string_views = input.GetValue<bool>();
-}
-
-void ProduceArrowStringViewSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.produce_arrow_string_views = DBConfig().options.produce_arrow_string_views;
-}
-
-Value ProduceArrowStringViewSetting::GetSetting(const ClientContext &context) {
-	return Value::BOOLEAN(DBConfig::GetConfig(context).options.produce_arrow_string_views);
 }
 
 //===----------------------------------------------------------------------===//

@@ -4,7 +4,10 @@
         "description": "Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)",
         "type": "VARCHAR",
         "scope": "global",
-        "custom_implementation": true
+        "custom_implementation": [
+            "set",
+            "get"
+        ]
     },
     {
         "name": "allocator_background_threads",
@@ -78,28 +81,31 @@
         "description": "If arrow buffers for strings, blobs, uuids and bits should be exported using large buffers",
         "type": "BOOLEAN",
         "scope": "global",
-        "custom_implementation": true
+        "internal_setting": "arrow_offset_size",
+        "custom_implementation": [
+            "set",
+            "get"
+        ]
     },
     {
         "name": "arrow_lossless_conversion",
         "description": "Whenever a DuckDB type does not have a clear native or canonical extension match in Arrow, export the types with a duckdb.type_name extension name.",
         "type": "BOOLEAN",
-        "scope": "global",
-        "custom_implementation": true
+        "scope": "global"
     },
     {
         "name": "arrow_output_list_view",
         "description": "If export to arrow format should use ListView as the physical layout for LIST columns",
         "type": "BOOLEAN",
-        "scope": "global",
-        "custom_implementation": true
+        "internal_setting": "arrow_use_list_view",
+        "scope": "global"
     },
     {
         "name": "autoinstall_extension_repository",
         "description": "Overrides the custom endpoint for extension installation on autoloading",
         "type": "VARCHAR",
-        "scope": "global",
-        "custom_implementation": true
+        "internal_setting": "autoinstall_extension_repo",
+        "scope": "global"
     },
     {
         "name": "autoinstall_known_extensions",
@@ -124,7 +130,11 @@
         "description": "The WAL size threshold at which to automatically trigger a checkpoint (e.g. 1GB)",
         "type": "VARCHAR",
         "scope": "global",
-        "custom_implementation": true,
+        "internal_setting": "checkpoint_wal_size",
+        "custom_implementation": [
+            "set",
+            "get"
+        ],
         "aliases": [
             "wal_autocheckpoint"
         ]
@@ -133,8 +143,8 @@
         "name": "custom_extension_repository",
         "description": "Overrides the custom endpoint for remote extension installation",
         "type": "VARCHAR",
-        "scope": "global",
-        "custom_implementation": true
+        "internal_setting": "custom_extension_repo",
+        "scope": "global"
     },
     {
         "name": "custom_profiling_settings",
@@ -148,14 +158,17 @@
         "description": "Metadata from DuckDB callers",
         "type": "VARCHAR",
         "scope": "global",
-        "custom_implementation": true
+        "custom_implementation": [
+            "set",
+            "reset"
+        ]
     },
     {
         "name": "debug_asof_iejoin",
         "description": "DEBUG SETTING: force use of IEJoin to implement AsOf joins",
         "type": "BOOLEAN",
         "scope": "local",
-        "custom_implementation": true
+        "internal_setting": "force_asof_iejoin"
     },
     {
         "name": "debug_checkpoint_abort",
@@ -169,14 +182,14 @@
         "description": "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing",
         "type": "BOOLEAN",
         "scope": "local",
-        "custom_implementation": true
+        "internal_setting": "force_external"
     },
     {
         "name": "debug_force_no_cross_product",
         "description": "DEBUG SETTING: Force disable cross product generation when hyper graph isn't connected, used for testing",
         "type": "BOOLEAN",
         "scope": "local",
-        "custom_implementation": true
+        "internal_setting": "force_no_cross_product"
     },
     {
         "name": "debug_skip_checkpoint_on_commit",
@@ -210,7 +223,10 @@
         "description": "Null ordering used when none is specified (NULLS_FIRST or NULLS_LAST)",
         "type": "VARCHAR",
         "scope": "global",
-        "custom_implementation": true,
+        "custom_implementation": [
+            "set",
+            "get"
+        ],
         "aliases": [
             "null_order"
         ]
@@ -220,7 +236,11 @@
         "description": "The order type used when none is specified (ASC or DESC)",
         "type": "VARCHAR",
         "scope": "global",
-        "custom_implementation": true
+        "internal_setting": "default_order_type",
+        "custom_implementation": [
+            "set",
+            "get"
+        ]
     },
     {
         "name": "default_secret_storage",
@@ -277,7 +297,7 @@
         "description": "Whether or not the global http metadata is used to cache HTTP metadata",
         "type": "BOOLEAN",
         "scope": "global",
-        "custom_implementation": true
+        "internal_setting": "http_metadata_cache_enable"
     },
     {
         "name": "enable_macro_dependencies",
@@ -290,7 +310,7 @@
         "description": "Whether or not object cache is used to cache e.g. Parquet metadata",
         "type": "BOOLEAN",
         "scope": "global",
-        "custom_implementation": true
+        "internal_setting": "object_cache_enable"
     },
     {
         "name": "enable_profiling",
@@ -333,14 +353,17 @@
         "description": "Output of EXPLAIN statements (ALL, OPTIMIZED_ONLY, PHYSICAL_ONLY)",
         "type": "VARCHAR",
         "scope": "local",
-        "custom_implementation": true
+        "internal_setting": "explain_output_type",
+        "custom_implementation": [
+            "set",
+            "get"
+        ]
     },
     {
         "name": "extension_directory",
         "description": "Set the directory to store extensions in",
         "type": "VARCHAR",
-        "scope": "global",
-        "custom_implementation": true
+        "scope": "global"
     },
     {
         "name": "external_threads",
@@ -547,11 +570,7 @@
         "name": "pivot_filter_threshold",
         "description": "The threshold to switch from using filtered aggregates to LIST with a dedicated pivot operator",
         "type": "UBIGINT",
-        "scope": "local",
-        "custom_implementation": [
-            "set",
-            "get"
-        ]
+        "scope": "local"
     },
     {
         "name": "pivot_limit",
@@ -582,7 +601,7 @@
         "description": "If strings should be produced by DuckDB in Utf8View format instead of Utf8",
         "type": "BOOLEAN",
         "scope": "global",
-        "custom_implementation": true
+        "internal_setting": "produce_arrow_string_views"
     },
     {
         "name": "profile_output",

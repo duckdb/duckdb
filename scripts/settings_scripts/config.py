@@ -38,6 +38,7 @@ class Setting:
         return_type: str,
         sql_type: str,
         scope: str,
+        internal_setting: str,
         on_callbacks: List[str],
         custom_implementation: bool | List[str],
         aliases: List[str],
@@ -49,6 +50,7 @@ class Setting:
             self.return_type = self._get_setting_type(sql_type)
         else:
             self.return_type = return_type
+        self.internal_setting = internal_setting
         self.scope = self._get_valid_scope(scope)
         self.on_set, self.on_reset = self._get_on_callbacks(on_callbacks)
         custom_callbacks = ['set', 'reset', 'get']
