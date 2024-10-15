@@ -19,7 +19,6 @@ set(ZSTD_FILES
 	decompress/zstd_ddict.cpp
 	decompress/huf_decompress.cpp
 	decompress/zstd_decompress.cpp
-	decompress/huf_decompress_amd64.S
 	decompress/zstd_decompress_block.cpp
 	common/entropy_common.cpp
 	common/fse_decompress.cpp
