@@ -61,12 +61,13 @@ private:
 //===----------------------------------------------------------------------===//
 
 struct AccessModeSetting {
-	using RETURN_TYPE = string;
+	using RETURN_TYPE = AccessMode;
 	static constexpr const char *Name = "access_mode";
 	static constexpr const char *Description = "Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -291,7 +292,7 @@ struct DebugAsofIejoinSetting {
 };
 
 struct DebugCheckpointAbortSetting {
-	using RETURN_TYPE = string;
+	using RETURN_TYPE = CheckpointAbort;
 	static constexpr const char *Name = "debug_checkpoint_abort";
 	static constexpr const char *Description =
 	    "DEBUG SETTING: trigger an abort while checkpointing for testing purposes";

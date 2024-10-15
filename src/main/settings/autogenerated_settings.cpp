@@ -17,8 +17,21 @@ namespace duckdb {
 //===----------------------------------------------------------------------===//
 // Access Mode
 //===----------------------------------------------------------------------===//
+void AccessModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (!OnGlobalSet(db, config, input)) {
+		return;
+	}
+	auto str_input = StringUtil::Upper(input.GetValue<string>());
+	config.options.access_mode = EnumUtil::FromString<AccessMode>(str_input);
+}
+
 void AccessModeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.access_mode = DBConfig().options.access_mode;
+}
+
+Value AccessModeSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::CreateValue(StringUtil::Lower(EnumUtil::ToString(config.options.access_mode)));
 }
 
 //===----------------------------------------------------------------------===//
@@ -274,6 +287,23 @@ void DebugAsofIejoinSetting::ResetLocal(ClientContext &context) {
 Value DebugAsofIejoinSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value::CreateValue(config.force_asof_iejoin);
+}
+
+//===----------------------------------------------------------------------===//
+// Debug Checkpoint Abort
+//===----------------------------------------------------------------------===//
+void DebugCheckpointAbortSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto str_input = StringUtil::Upper(input.GetValue<string>());
+	config.options.checkpoint_abort = EnumUtil::FromString<CheckpointAbort>(str_input);
+}
+
+void DebugCheckpointAbortSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.checkpoint_abort = DBConfig().options.checkpoint_abort;
+}
+
+Value DebugCheckpointAbortSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::CreateValue(StringUtil::Lower(EnumUtil::ToString(config.options.checkpoint_abort)));
 }
 
 //===----------------------------------------------------------------------===//

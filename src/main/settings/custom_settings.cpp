@@ -38,36 +38,12 @@ const string GetDefaultUserAgent() {
 //===----------------------------------------------------------------------===//
 // Access Mode
 //===----------------------------------------------------------------------===//
-void AccessModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+bool AccessModeSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	if (db) {
 		throw InvalidInputException("Cannot change access_mode setting while database is running - it must be set when "
 		                            "opening or attaching the database");
 	}
-	auto parameter = StringUtil::Lower(input.ToString());
-	if (parameter == "automatic") {
-		config.options.access_mode = AccessMode::AUTOMATIC;
-	} else if (parameter == "read_only") {
-		config.options.access_mode = AccessMode::READ_ONLY;
-	} else if (parameter == "read_write") {
-		config.options.access_mode = AccessMode::READ_WRITE;
-	} else {
-		throw InvalidInputException(
-		    "Unrecognized parameter for option ACCESS_MODE \"%s\". Expected READ_ONLY or READ_WRITE.", parameter);
-	}
-}
-
-Value AccessModeSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	switch (config.options.access_mode) {
-	case AccessMode::AUTOMATIC:
-		return "automatic";
-	case AccessMode::READ_ONLY:
-		return "read_only";
-	case AccessMode::READ_WRITE:
-		return "read_write";
-	default:
-		throw InternalException("Unknown access mode setting");
-	}
+	return true;
 }
 
 //===----------------------------------------------------------------------===//
@@ -346,46 +322,6 @@ void CustomUserAgentSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config)
 		throw InvalidInputException("Cannot change custom_user_agent setting while database is running");
 	}
 	config.options.custom_user_agent = DBConfig().options.custom_user_agent;
-}
-
-//===----------------------------------------------------------------------===//
-// Debug Checkpoint Abort
-//===----------------------------------------------------------------------===//
-void DebugCheckpointAbortSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto checkpoint_abort = StringUtil::Lower(input.ToString());
-	if (checkpoint_abort == "none") {
-		config.options.checkpoint_abort = CheckpointAbort::NO_ABORT;
-	} else if (checkpoint_abort == "before_truncate") {
-		config.options.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE;
-	} else if (checkpoint_abort == "before_header") {
-		config.options.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER;
-	} else if (checkpoint_abort == "after_free_list_write") {
-		config.options.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE;
-	} else {
-		throw ParserException(
-		    "Unrecognized option for PRAGMA debug_checkpoint_abort, expected none, before_truncate or before_header");
-	}
-}
-
-void DebugCheckpointAbortSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.checkpoint_abort = DBConfig().options.checkpoint_abort;
-}
-
-Value DebugCheckpointAbortSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(*context.db);
-	auto setting = config.options.checkpoint_abort;
-	switch (setting) {
-	case CheckpointAbort::NO_ABORT:
-		return "none";
-	case CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE:
-		return "before_truncate";
-	case CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER:
-		return "before_header";
-	case CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE:
-		return "after_free_list_write";
-	default:
-		throw InternalException("Type not implemented for CheckpointAbort");
-	}
 }
 
 //===----------------------------------------------------------------------===//

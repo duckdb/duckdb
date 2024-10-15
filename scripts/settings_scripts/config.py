@@ -46,7 +46,9 @@ class Setting:
             self.is_enum = False
         else:
             if sql_type != 'VARCHAR':
-                raise ValueError(f'Setting {self.name} - could not set return type to {return_type} - enum types require the setting type to be VARCHAR')
+                raise ValueError(
+                    f'Setting {self.name} - could not set return type to {return_type} - enum types require the setting type to be VARCHAR'
+                )
             self.return_type = return_type
             self.is_enum = True
         self.internal_setting = internal_setting
@@ -59,7 +61,9 @@ class Setting:
         else:
             for entry in custom_implementation:
                 if entry not in custom_callbacks:
-                    raise ValueError(f"Setting {self.name} - incorrect input for custom_implementation - expected set/reset/get, got {entry}")
+                    raise ValueError(
+                        f"Setting {self.name} - incorrect input for custom_implementation - expected set/reset/get, got {entry}"
+                    )
             self.all_custom = len(set(custom_implementation)) == 3
             self.custom_implementation = custom_implementation
         self.aliases = self._get_aliases(aliases)

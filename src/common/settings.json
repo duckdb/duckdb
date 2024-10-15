@@ -3,10 +3,10 @@
         "name": "access_mode",
         "description": "Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)",
         "type": "VARCHAR",
+        "return_type": "AccessMode",
         "scope": "global",
-        "custom_implementation": [
-            "set",
-            "get"
+        "on_callbacks": [
+            "set"
         ]
     },
     {
@@ -174,8 +174,9 @@
         "name": "debug_checkpoint_abort",
         "description": "DEBUG SETTING: trigger an abort while checkpointing for testing purposes",
         "type": "VARCHAR",
-        "scope": "global",
-        "custom_implementation": true
+        "return_type": "CheckpointAbort",
+        "internal_setting": "checkpoint_abort",
+        "scope": "global"
     },
     {
         "name": "debug_force_external",
