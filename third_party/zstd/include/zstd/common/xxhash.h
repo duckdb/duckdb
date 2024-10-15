@@ -552,6 +552,9 @@ XXH_PUBLIC_API XXH_CONSTF unsigned XXH_versionNumber (void);
 *  Common basic types
 ******************************/
 #include <stddef.h>   /* size_t */
+//! (duckdb) Manually added to fix compilation error on linux for missing 'uint32_t'
+//! 'stdint.h' is mentioned later on in the file so this might have been explicitly left out?
+//! Leaving this comment here for potential future debugging
 #include <cstdint>  /* uint32_t */
 /*!
  * @brief Exit code for the streaming API.
