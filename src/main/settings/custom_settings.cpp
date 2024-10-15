@@ -77,7 +77,7 @@ Value AccessModeSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Allocator Background Threads
 //===----------------------------------------------------------------------===//
-bool AllocatorBackgroundThreadsSetting::VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config,
+bool AllocatorBackgroundThreadsSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config,
                                                             const Value &input) {
 	if (db) {
 		TaskScheduler::GetScheduler(*db).SetAllocatorBackgroundThreads(input.GetValue<bool>());
@@ -85,7 +85,7 @@ bool AllocatorBackgroundThreadsSetting::VerifyDBInstanceSET(DatabaseInstance *db
 	return true;
 }
 
-bool AllocatorBackgroundThreadsSetting::VerifyDBInstanceRESET(DatabaseInstance *db, DBConfig &config) {
+bool AllocatorBackgroundThreadsSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
 	if (db) {
 		TaskScheduler::GetScheduler(*db).SetAllocatorBackgroundThreads(DBConfig().options.allocator_background_threads);
 	}
@@ -143,7 +143,7 @@ Value AllocatorFlushThresholdSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Allow Community Extensions
 //===----------------------------------------------------------------------===//
-bool AllowCommunityExtensionsSetting::VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config, const Value &input) {
+bool AllowCommunityExtensionsSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	if (db && !config.options.allow_community_extensions) {
 		auto new_value = input.GetValue<bool>();
 		if (new_value) {
@@ -154,7 +154,7 @@ bool AllowCommunityExtensionsSetting::VerifyDBInstanceSET(DatabaseInstance *db, 
 	return true;
 }
 
-bool AllowCommunityExtensionsSetting::VerifyDBInstanceRESET(DatabaseInstance *db, DBConfig &config) {
+bool AllowCommunityExtensionsSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
 	if (db && !config.options.allow_community_extensions) {
 		if (DBConfig().options.allow_community_extensions) {
 			throw InvalidInputException("Cannot upgrade allow_community_extensions setting while database is running");
@@ -184,14 +184,14 @@ Value AllowPersistentSecretsSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Allow Unredacted Secrets
 //===----------------------------------------------------------------------===//
-bool AllowUnredactedSecretsSetting::VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config, const Value &input) {
+bool AllowUnredactedSecretsSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	if (db && input.GetValue<bool>()) {
 		throw InvalidInputException("Cannot change allow_unredacted_secrets setting while database is running");
 	}
 	return true;
 }
 
-bool AllowUnredactedSecretsSetting::VerifyDBInstanceRESET(DatabaseInstance *db, DBConfig &config) {
+bool AllowUnredactedSecretsSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
 	if (db) {
 		throw InvalidInputException("Cannot change allow_unredacted_secrets setting while database is running");
 	}
@@ -201,14 +201,14 @@ bool AllowUnredactedSecretsSetting::VerifyDBInstanceRESET(DatabaseInstance *db, 
 //===----------------------------------------------------------------------===//
 // Allow Unsigned Extensions
 //===----------------------------------------------------------------------===//
-bool AllowUnsignedExtensionsSetting::VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config, const Value &input) {
+bool AllowUnsignedExtensionsSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	if (db && input.GetValue<bool>()) {
 		throw InvalidInputException("Cannot change allow_unsigned_extensions setting while database is running");
 	}
 	return true;
 }
 
-bool AllowUnsignedExtensionsSetting::VerifyDBInstanceRESET(DatabaseInstance *db, DBConfig &config) {
+bool AllowUnsignedExtensionsSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
 	if (db) {
 		throw InvalidInputException("Cannot change allow_unsigned_extensions setting while database is running");
 	}
@@ -765,14 +765,14 @@ Value DuckdbApiSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Enable External Access
 //===----------------------------------------------------------------------===//
-bool EnableExternalAccessSetting::VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config, const Value &input) {
+bool EnableExternalAccessSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	if (db && input.GetValue<bool>()) {
 		throw InvalidInputException("Cannot change enable_external_access setting while database is running");
 	}
 	return true;
 }
 
-bool EnableExternalAccessSetting::VerifyDBInstanceRESET(DatabaseInstance *db, DBConfig &config) {
+bool EnableExternalAccessSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
 	if (db) {
 		throw InvalidInputException("Cannot change enable_external_access setting while database is running");
 	}
@@ -907,13 +907,13 @@ Value EnableProgressBarPrintSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Enable Progress Bar
 //===----------------------------------------------------------------------===//
-bool EnableProgressBarSetting::VerifyDBInstanceSET(ClientContext &context, const Value &input) {
+bool EnableProgressBarSetting::OnLocalSet(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 	ProgressBar::SystemOverrideCheck(config);
 	return true;
 }
 
-bool EnableProgressBarSetting::VerifyDBInstanceRESET(ClientContext &context) {
+bool EnableProgressBarSetting::OnLocalReset(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	ProgressBar::SystemOverrideCheck(config);
 	return true;
@@ -971,7 +971,7 @@ Value ExtensionDirectorySetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // External Threads
 //===----------------------------------------------------------------------===//
-bool ExternalThreadsSetting::VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config, const Value &input) {
+bool ExternalThreadsSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto new_val = input.GetValue<int64_t>();
 	if (new_val < 0) {
 		throw SyntaxException("Must have a non-negative number of external threads!");
@@ -983,7 +983,7 @@ bool ExternalThreadsSetting::VerifyDBInstanceSET(DatabaseInstance *db, DBConfig 
 	return true;
 }
 
-bool ExternalThreadsSetting::VerifyDBInstanceRESET(DatabaseInstance *db, DBConfig &config) {
+bool ExternalThreadsSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
 	idx_t new_external_threads = DBConfig().options.external_threads;
 	if (db) {
 		TaskScheduler::GetScheduler(*db).SetThreads(config.options.maximum_threads, new_external_threads);
@@ -1084,7 +1084,7 @@ Value HomeDirectorySetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Index Scan Percentage
 //===----------------------------------------------------------------------===//
-bool IndexScanPercentageSetting::VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config, const Value &input) {
+bool IndexScanPercentageSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto index_scan_percentage = input.GetValue<double>();
 	if (index_scan_percentage < 0 || index_scan_percentage > 1.0) {
 		throw InvalidInputException("the index scan percentage must be within [0, 1]");
@@ -1185,7 +1185,7 @@ Value MaxTempDirectorySizeSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Ordered Aggregate Threshold
 //===----------------------------------------------------------------------===//
-bool OrderedAggregateThresholdSetting::VerifyDBInstanceSET(ClientContext &context, const Value &input) {
+bool OrderedAggregateThresholdSetting::OnLocalSet(ClientContext &context, const Value &input) {
 	const auto param = input.GetValue<uint64_t>();
 	if (param <= 0) {
 		throw ParserException("Invalid option for PRAGMA ordered_aggregate_threshold, value must be positive");

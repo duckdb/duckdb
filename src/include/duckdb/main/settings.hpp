@@ -76,8 +76,8 @@ struct AllocatorBackgroundThreadsSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static bool VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config, const Value &input);
-	static bool VerifyDBInstanceRESET(DatabaseInstance *db, DBConfig &config);
+	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
+	static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -110,8 +110,8 @@ struct AllowCommunityExtensionsSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static bool VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config, const Value &input);
-	static bool VerifyDBInstanceRESET(DatabaseInstance *db, DBConfig &config);
+	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
+	static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -143,8 +143,8 @@ struct AllowUnredactedSecretsSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static bool VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config, const Value &input);
-	static bool VerifyDBInstanceRESET(DatabaseInstance *db, DBConfig &config);
+	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
+	static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -155,8 +155,8 @@ struct AllowUnsignedExtensionsSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static bool VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config, const Value &input);
-	static bool VerifyDBInstanceRESET(DatabaseInstance *db, DBConfig &config);
+	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
+	static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -434,8 +434,8 @@ struct EnableExternalAccessSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static bool VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config, const Value &input);
-	static bool VerifyDBInstanceRESET(DatabaseInstance *db, DBConfig &config);
+	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
+	static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -510,8 +510,8 @@ struct EnableProgressBarSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static bool VerifyDBInstanceSET(ClientContext &context, const Value &input);
-	static bool VerifyDBInstanceRESET(ClientContext &context);
+	static bool OnLocalSet(ClientContext &context, const Value &input);
+	static bool OnLocalReset(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -574,8 +574,8 @@ struct ExternalThreadsSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static bool VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config, const Value &input);
-	static bool VerifyDBInstanceRESET(DatabaseInstance *db, DBConfig &config);
+	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
+	static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -703,7 +703,7 @@ struct IndexScanPercentageSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::DOUBLE;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static bool VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config, const Value &input);
+	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -831,7 +831,7 @@ struct OrderedAggregateThresholdSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static bool VerifyDBInstanceSET(ClientContext &context, const Value &input);
+	static bool OnLocalSet(ClientContext &context, const Value &input);
 	static Value GetSetting(const ClientContext &context);
 };
 

@@ -31,14 +31,14 @@ namespace duckdb {
 // Allocator Background Threads
 //===----------------------------------------------------------------------===//
 void AllocatorBackgroundThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!VerifyDBInstanceSET(db, config, input)) {
+	if (!OnGlobalSet(db, config, input)) {
 		return;
 	}
 	config.options.allocator_background_threads = input.GetValue<bool>();
 }
 
 void AllocatorBackgroundThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!VerifyDBInstanceRESET(db, config)) {
+	if (!OnGlobalReset(db, config)) {
 		return;
 	}
 	config.options.allocator_background_threads = DBConfig().options.allocator_background_threads;
@@ -53,14 +53,14 @@ Value AllocatorBackgroundThreadsSetting::GetSetting(const ClientContext &context
 // Allow Community Extensions
 //===----------------------------------------------------------------------===//
 void AllowCommunityExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!VerifyDBInstanceSET(db, config, input)) {
+	if (!OnGlobalSet(db, config, input)) {
 		return;
 	}
 	config.options.allow_community_extensions = input.GetValue<bool>();
 }
 
 void AllowCommunityExtensionsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!VerifyDBInstanceRESET(db, config)) {
+	if (!OnGlobalReset(db, config)) {
 		return;
 	}
 	config.options.allow_community_extensions = DBConfig().options.allow_community_extensions;
@@ -91,14 +91,14 @@ Value AllowExtensionsMetadataMismatchSetting::GetSetting(const ClientContext &co
 // Allow Unredacted Secrets
 //===----------------------------------------------------------------------===//
 void AllowUnredactedSecretsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!VerifyDBInstanceSET(db, config, input)) {
+	if (!OnGlobalSet(db, config, input)) {
 		return;
 	}
 	config.options.allow_unredacted_secrets = input.GetValue<bool>();
 }
 
 void AllowUnredactedSecretsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!VerifyDBInstanceRESET(db, config)) {
+	if (!OnGlobalReset(db, config)) {
 		return;
 	}
 	config.options.allow_unredacted_secrets = DBConfig().options.allow_unredacted_secrets;
@@ -113,14 +113,14 @@ Value AllowUnredactedSecretsSetting::GetSetting(const ClientContext &context) {
 // Allow Unsigned Extensions
 //===----------------------------------------------------------------------===//
 void AllowUnsignedExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!VerifyDBInstanceSET(db, config, input)) {
+	if (!OnGlobalSet(db, config, input)) {
 		return;
 	}
 	config.options.allow_unsigned_extensions = input.GetValue<bool>();
 }
 
 void AllowUnsignedExtensionsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!VerifyDBInstanceRESET(db, config)) {
+	if (!OnGlobalReset(db, config)) {
 		return;
 	}
 	config.options.allow_unsigned_extensions = DBConfig().options.allow_unsigned_extensions;
@@ -199,14 +199,14 @@ Value DebugSkipCheckpointOnCommitSetting::GetSetting(const ClientContext &contex
 // Enable External Access
 //===----------------------------------------------------------------------===//
 void EnableExternalAccessSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!VerifyDBInstanceSET(db, config, input)) {
+	if (!OnGlobalSet(db, config, input)) {
 		return;
 	}
 	config.options.enable_external_access = input.GetValue<bool>();
 }
 
 void EnableExternalAccessSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!VerifyDBInstanceRESET(db, config)) {
+	if (!OnGlobalReset(db, config)) {
 		return;
 	}
 	config.options.enable_external_access = DBConfig().options.enable_external_access;
@@ -269,7 +269,7 @@ Value EnableMacroDependenciesSetting::GetSetting(const ClientContext &context) {
 // Enable Progress Bar
 //===----------------------------------------------------------------------===//
 void EnableProgressBarSetting::SetLocal(ClientContext &context, const Value &input) {
-	if (!VerifyDBInstanceSET(context, input)) {
+	if (!OnLocalSet(context, input)) {
 		return;
 	}
 	auto &config = ClientConfig::GetConfig(context);
@@ -277,7 +277,7 @@ void EnableProgressBarSetting::SetLocal(ClientContext &context, const Value &inp
 }
 
 void EnableProgressBarSetting::ResetLocal(ClientContext &context) {
-	if (!VerifyDBInstanceRESET(context)) {
+	if (!OnLocalReset(context)) {
 		return;
 	}
 	ClientConfig::GetConfig(context).enable_progress_bar = ClientConfig().enable_progress_bar;
@@ -323,14 +323,14 @@ Value ErrorsAsJsonSetting::GetSetting(const ClientContext &context) {
 // External Threads
 //===----------------------------------------------------------------------===//
 void ExternalThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!VerifyDBInstanceSET(db, config, input)) {
+	if (!OnGlobalSet(db, config, input)) {
 		return;
 	}
 	config.options.external_threads = input.GetValue<idx_t>();
 }
 
 void ExternalThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!VerifyDBInstanceRESET(db, config)) {
+	if (!OnGlobalReset(db, config)) {
 		return;
 	}
 	config.options.external_threads = DBConfig().options.external_threads;
@@ -457,7 +457,7 @@ Value IndexScanMaxCountSetting::GetSetting(const ClientContext &context) {
 // Index Scan Percentage
 //===----------------------------------------------------------------------===//
 void IndexScanPercentageSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!VerifyDBInstanceSET(db, config, input)) {
+	if (!OnGlobalSet(db, config, input)) {
 		return;
 	}
 	config.options.index_scan_percentage = input.GetValue<double>();
@@ -604,7 +604,7 @@ Value OrderByNonIntegerLiteralSetting::GetSetting(const ClientContext &context) 
 // Ordered Aggregate Threshold
 //===----------------------------------------------------------------------===//
 void OrderedAggregateThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
-	if (!VerifyDBInstanceSET(context, input)) {
+	if (!OnLocalSet(context, input)) {
 		return;
 	}
 	auto &config = ClientConfig::GetConfig(context);

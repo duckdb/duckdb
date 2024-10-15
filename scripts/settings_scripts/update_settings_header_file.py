@@ -24,17 +24,17 @@ def extract_declarations(setting) -> str:
         definition += f"    static void ResetGlobal(DatabaseInstance *db, DBConfig &config);\n"
         if setting.add_verification_in_SET:
             definition += (
-                f"static bool VerifyDBInstanceSET(DatabaseInstance *db, DBConfig &config, const Value &input);\n"
+                f"static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);\n"
             )
         if setting.add_verification_in_RESET:
-            definition += f"static bool VerifyDBInstanceRESET(DatabaseInstance *db, DBConfig &config);\n"
+            definition += f"static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);\n"
     if setting.scope == "LOCAL" or setting.scope == "GLOBAL_LOCAL":
         definition += f"    static void SetLocal(ClientContext &context, const Value &parameter);\n"
         definition += f"    static void ResetLocal(ClientContext &context);\n"
         if setting.add_verification_in_SET:
-            definition += f"static bool VerifyDBInstanceSET(ClientContext &context, const Value &input);\n"
+            definition += f"static bool OnLocalSet(ClientContext &context, const Value &input);\n"
         if setting.add_verification_in_RESET:
-            definition += f"static bool VerifyDBInstanceRESET(ClientContext &context);\n"
+            definition += f"static bool OnLocalReset(ClientContext &context);\n"
 
     definition += f"    static Value GetSetting(const ClientContext &context);\n"
     definition += f"}};\n\n"
