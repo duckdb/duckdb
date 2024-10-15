@@ -158,19 +158,25 @@ static UpdateSegment::fetch_update_function_t GetFetchUpdateFunction(PhysicalTyp
 	}
 }
 
+optional_ptr<UpdateNodeData> UpdateSegment::GetUpdateNode(idx_t vector_idx) const {
+	if (!root) {
+		return nullptr;
+	}
+	if (vector_idx >= root->info.size()) {
+		return nullptr;
+	}
+	return root->info[vector_idx].get();
+
+}
 void UpdateSegment::FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result) {
 	auto lock_handle = lock.GetSharedLock();
-	if (!root) {
-		return;
-	}
-	if (!root->info[vector_index]) {
+	auto node = GetUpdateNode(vector_index);
+	if (!node) {
 		return;
 	}
 	// FIXME: normalify if this is not the case... need to pass in count?
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-
-	fetch_update_function(transaction.start_time, transaction.transaction_id, root->info[vector_index]->info.get(),
-	                      result);
+	fetch_update_function(transaction.start_time, transaction.transaction_id, node->info.get(), result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -227,17 +233,13 @@ static UpdateSegment::fetch_committed_function_t GetFetchCommittedFunction(Physi
 
 void UpdateSegment::FetchCommitted(idx_t vector_index, Vector &result) {
 	auto lock_handle = lock.GetSharedLock();
-
-	if (!root) {
-		return;
-	}
-	if (!root->info[vector_index]) {
+	auto node = GetUpdateNode(vector_index);
+	if (!node) {
 		return;
 	}
 	// FIXME: normalify if this is not the case... need to pass in count?
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-
-	fetch_committed_function(root->info[vector_index]->info.get(), result);
+	fetch_committed_function(node->info.get(), result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -334,10 +336,10 @@ void UpdateSegment::FetchCommittedRange(idx_t start_row, idx_t count, Vector &re
 	idx_t start_vector = start_row / STANDARD_VECTOR_SIZE;
 	idx_t end_vector = (end_row - 1) / STANDARD_VECTOR_SIZE;
 	D_ASSERT(start_vector <= end_vector);
-	D_ASSERT(end_vector < Storage::DEFAULT_ROW_GROUP_VECTOR_COUNT);
 
 	for (idx_t vector_idx = start_vector; vector_idx <= end_vector; vector_idx++) {
-		if (!root->info[vector_idx]) {
+		auto entry = GetUpdateNode(vector_idx);
+		if (!entry) {
 			continue;
 		}
 		idx_t start_in_vector = vector_idx == start_vector ? start_row - start_vector * STANDARD_VECTOR_SIZE : 0;
@@ -346,8 +348,7 @@ void UpdateSegment::FetchCommittedRange(idx_t start_row, idx_t count, Vector &re
 		D_ASSERT(start_in_vector < end_in_vector);
 		D_ASSERT(end_in_vector > 0 && end_in_vector <= STANDARD_VECTOR_SIZE);
 		idx_t result_offset = ((vector_idx * STANDARD_VECTOR_SIZE) + start_in_vector) - start_row;
-		fetch_committed_range(root->info[vector_idx]->info.get(), start_in_vector, end_in_vector, result_offset,
-		                      result);
+		fetch_committed_range(entry->info.get(), start_in_vector, end_in_vector, result_offset, result);
 	}
 }
 
@@ -428,15 +429,13 @@ static UpdateSegment::fetch_row_function_t GetFetchRowFunction(PhysicalType type
 }
 
 void UpdateSegment::FetchRow(TransactionData transaction, idx_t row_id, Vector &result, idx_t result_idx) {
-	if (!root) {
-		return;
-	}
 	idx_t vector_index = (row_id - column_data.start) / STANDARD_VECTOR_SIZE;
-	if (!root->info[vector_index]) {
+	auto entry = GetUpdateNode(vector_index);
+	if (!entry) {
 		return;
 	}
 	idx_t row_in_vector = (row_id - column_data.start) - vector_index * STANDARD_VECTOR_SIZE;
-	fetch_row_function(transaction.start_time, transaction.transaction_id, root->info[vector_index]->info.get(),
+	fetch_row_function(transaction.start_time, transaction.transaction_id, entry->info.get(),
 	                   row_in_vector, result, result_idx);
 }
 
@@ -501,10 +500,11 @@ void UpdateSegment::RollbackUpdate(UpdateInfo &info) {
 	auto lock_handle = lock.GetExclusiveLock();
 
 	// move the data from the UpdateInfo back into the base info
-	if (!root->info[info.vector_index]) {
+	auto entry = GetUpdateNode(info.vector_index);
+	if (!entry) {
 		return;
 	}
-	rollback_update_function(*root->info[info.vector_index]->info, info);
+	rollback_update_function(*entry->info, info);
 
 	// clean up the update chain
 	CleanupUpdateInternal(*lock_handle, info);
@@ -1072,6 +1072,21 @@ UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, idx_t type_size, 
 	return update_info;
 }
 
+void UpdateSegment::InitializeUpdateInfo(idx_t vector_idx) {
+	// create the versions for this segment, if there are none yet
+	if (!root) {
+		root = make_uniq<UpdateNode>();
+	}
+	if (vector_idx < root->info.size()) {
+		return;
+	}
+	root->info.reserve(vector_idx + 1);
+	for(idx_t i = root->info.size(); i <= vector_idx; i++) {
+		root->info.emplace_back();
+	}
+}
+
+
 void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vector &update, row_t *ids, idx_t count,
                            Vector &base_data) {
 	// obtain an exclusive lock
@@ -1096,19 +1111,14 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 	count = SortSelectionVector(sel, count, ids);
 	D_ASSERT(count > 0);
 
-	// create the versions for this segment, if there are none yet
-	if (!root) {
-		root = make_uniq<UpdateNode>();
-	}
-
 	// get the vector index based on the first id
 	// we assert that all updates must be part of the same vector
 	auto first_id = ids[sel.get_index(0)];
 	idx_t vector_index = (UnsafeNumericCast<idx_t>(first_id) - column_data.start) / STANDARD_VECTOR_SIZE;
 	idx_t vector_offset = column_data.start + vector_index * STANDARD_VECTOR_SIZE;
+	InitializeUpdateInfo(vector_index);
 
 	D_ASSERT(idx_t(first_id) >= column_data.start);
-	D_ASSERT(vector_index < Storage::DEFAULT_ROW_GROUP_VECTOR_COUNT);
 
 	// first check the version chain
 	UpdateInfo *node = nullptr;
@@ -1204,18 +1214,16 @@ bool UpdateSegment::HasUpdates() const {
 }
 
 bool UpdateSegment::HasUpdates(idx_t vector_index) const {
-	if (!HasUpdates()) {
-		return false;
-	}
-	return root->info[vector_index].get();
+	auto read_lock = lock.GetSharedLock();
+	return GetUpdateNode(vector_index);
 }
 
 bool UpdateSegment::HasUncommittedUpdates(idx_t vector_index) {
-	if (!HasUpdates(vector_index)) {
+	auto read_lock = lock.GetSharedLock();
+	auto entry = GetUpdateNode(vector_index);
+	if (!entry) {
 		return false;
 	}
-	auto read_lock = lock.GetSharedLock();
-	auto entry = root->info[vector_index].get();
 	if (entry->info->next) {
 		return true;
 	}
@@ -1223,14 +1231,15 @@ bool UpdateSegment::HasUncommittedUpdates(idx_t vector_index) {
 }
 
 bool UpdateSegment::HasUpdates(idx_t start_row_index, idx_t end_row_index) {
-	if (!HasUpdates()) {
+	auto read_lock = lock.GetSharedLock();
+	if (!root) {
 		return false;
 	}
-	auto read_lock = lock.GetSharedLock();
 	idx_t base_vector_index = start_row_index / STANDARD_VECTOR_SIZE;
 	idx_t end_vector_index = end_row_index / STANDARD_VECTOR_SIZE;
 	for (idx_t i = base_vector_index; i <= end_vector_index; i++) {
-		if (root->info[i]) {
+		auto entry = GetUpdateNode(i);
+		if (entry) {
 			return true;
 		}
 	}
