@@ -2,6 +2,7 @@
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/python_objects.hpp"
+#include "duckdb_python/numpy/numpy_type.hpp"
 
 #include "duckdb_python/arrow/arrow_array_stream.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
@@ -287,23 +288,86 @@ void DuckDBPyResult::ChangeToTZType(PandasDataFrame &df) {
 	}
 }
 
-// TODO: unify these with an enum/flag to indicate which conversions to perform
-void DuckDBPyResult::ChangeDateToDatetime(PandasDataFrame &df) {
-	auto names = df.attr("columns").cast<vector<string>>();
+static py::object ConvertNumpyDtype(py::handle numpy_array) {
+	D_ASSERT(py::gil_check());
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
 
-	for (idx_t i = 0; i < result->ColumnCount(); i++) {
-		if (result->types[i] == LogicalType::DATE) {
-			df.attr("__setitem__")(names[i].c_str(), df[names[i].c_str()].attr("dt").attr("date"));
-		}
+	auto dtype = numpy_array.attr("dtype");
+	if (!py::isinstance(numpy_array, import_cache.numpy.ma.masked_array())) {
+		return dtype;
+	}
+
+	auto numpy_type = ConvertNumpyType(dtype);
+	switch (numpy_type.type) {
+	case NumpyNullableType::BOOL: {
+		return import_cache.pandas.BooleanDtype()();
+	}
+	case NumpyNullableType::UINT_8: {
+		return import_cache.pandas.UInt8Dtype()();
+	}
+	case NumpyNullableType::UINT_16: {
+		return import_cache.pandas.UInt16Dtype()();
+	}
+	case NumpyNullableType::UINT_32: {
+		return import_cache.pandas.UInt32Dtype()();
+	}
+	case NumpyNullableType::UINT_64: {
+		return import_cache.pandas.UInt64Dtype()();
+	}
+	case NumpyNullableType::INT_8: {
+		return import_cache.pandas.Int8Dtype()();
+	}
+	case NumpyNullableType::INT_16: {
+		return import_cache.pandas.Int16Dtype()();
+	}
+	case NumpyNullableType::INT_32: {
+		return import_cache.pandas.Int32Dtype()();
+	}
+	case NumpyNullableType::INT_64: {
+		return import_cache.pandas.Int64Dtype()();
+	}
+	case NumpyNullableType::FLOAT_32: {
+		return import_cache.pandas.Float32Dtype()();
+	}
+	case NumpyNullableType::FLOAT_64: {
+		return import_cache.pandas.Float64Dtype()();
+	}
+	case NumpyNullableType::FLOAT_16: // there is no pandas.Float16Dtype
+	default:
+		return dtype;
 	}
 }
 
 PandasDataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::handle &o) {
+	D_ASSERT(py::gil_check());
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+
+	vector<py::object> dtypes;
+
+	py::object items = o.attr("items")();
+	for (const py::handle &item : items) {
+		// Each item is a tuple of (key, value)
+		auto key_value = py::cast<py::tuple>(item);
+		py::handle key = key_value[0];   // Access the first element (key)
+		py::handle value = key_value[1]; // Access the second element (value)
+
+		dtypes.push_back(ConvertNumpyDtype(value));
+	}
+
 	PandasDataFrame df = py::cast<PandasDataFrame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
 	// Unfortunately we have to do a type change here for timezones since these types are not supported by numpy
 	ChangeToTZType(df);
-	if (date_as_object) {
-		ChangeDateToDatetime(df);
+
+	auto names = df.attr("columns").cast<vector<string>>();
+	D_ASSERT(dtypes.size() == result->ColumnCount());
+	D_ASSERT(dtypes.size() == names.size());
+	for (idx_t i = 0; i < result->ColumnCount(); i++) {
+		if (date_as_object && result->types[i] == LogicalType::DATE) {
+			df.attr("__setitem__")(names[i].c_str(), df[names[i].c_str()].attr("dt").attr("date"));
+		} else {
+			auto &dtype = dtypes[i];
+			df.attr("__setitem__")(names[i].c_str(), df[names[i].c_str()].attr("astype")(dtype));
+		}
 	}
 	return df;
 }

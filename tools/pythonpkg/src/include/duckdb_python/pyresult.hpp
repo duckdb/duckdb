@@ -69,7 +69,6 @@ private:
 	PandasDataFrame FrameFromNumpy(bool date_as_object, const py::handle &o);
 
 	void ChangeToTZType(PandasDataFrame &df);
-	void ChangeDateToDatetime(PandasDataFrame &df);
 	unique_ptr<DataChunk> FetchNext(QueryResult &result);
 	unique_ptr<DataChunk> FetchNextRaw(QueryResult &result);
 	unique_ptr<NumpyResultConversion> InitializeNumpyConversion(bool pandas = false);
