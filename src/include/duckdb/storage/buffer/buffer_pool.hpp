@@ -93,7 +93,7 @@ protected:
 
 	//! How many eviction queues we have for the different FileBufferTypes
 	static constexpr idx_t BLOCK_QUEUE_SIZE = 1;
-	static constexpr idx_t MANAGED_BUFFER_QUEUE_SIZE = 1;
+	static constexpr idx_t MANAGED_BUFFER_QUEUE_SIZE = 6;
 	static constexpr idx_t TINY_BUFFER_QUEUE_SIZE = 1;
 	//! Mapping and priority order for the eviction queues
 	const array<idx_t, FILE_BUFFER_TYPE_COUNT> eviction_queue_sizes;

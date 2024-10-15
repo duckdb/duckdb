@@ -38,7 +38,7 @@ public:
 	//! Inverse of NumberOfPartitions, given a number of partitions, get the number of radix bits
 	static inline idx_t RadixBitsOfPowerOfTwo(idx_t n_partitions) {
 		D_ASSERT(IsPowerOfTwo(n_partitions));
-		return RadixBits(n_partitions);
+		return RadixBits(n_partitions) - 1;
 	}
 
 	//! Radix bits begin after uint16_t because these bits are used as salt in the aggregate HT
