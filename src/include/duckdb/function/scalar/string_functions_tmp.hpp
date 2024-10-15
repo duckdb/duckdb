@@ -18,24 +18,6 @@ class RE2;
 
 namespace duckdb {
 
-struct LowerFun {
-	static const uint8_t ASCII_TO_LOWER_MAP[];
-
-	//! Returns the length of the result string obtained from lowercasing the given input (in bytes)
-	static idx_t LowerLength(const char *input_data, idx_t input_length);
-	//! Lowercases the string to the target output location, result_data must have space for at least LowerLength bytes
-	static void LowerCase(const char *input_data, idx_t input_length, char *result_data);
-
-	static ScalarFunction GetFunction();
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct UpperFun {
-	static const uint8_t ASCII_TO_UPPER_MAP[];
-
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct StripAccentsFun {
 	static bool IsAscii(const char *input, idx_t n);
 	static ScalarFunction GetFunction();

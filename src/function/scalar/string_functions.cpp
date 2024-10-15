@@ -3,8 +3,6 @@
 namespace duckdb {
 
 void BuiltinFunctions::RegisterStringFunctions() {
-	Register<LowerFun>();
-	Register<UpperFun>();
 	Register<StripAccentsFun>();
 	Register<ConcatFun>();
 	Register<ConcatWSFun>();

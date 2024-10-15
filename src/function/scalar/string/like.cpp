@@ -1,5 +1,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/function/scalar/string_functions_tmp.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
@@ -26,7 +28,7 @@ struct ASCIILCaseReader {
 	}
 
 	static char Operation(const char *data, idx_t pos) {
-		return (char)LowerFun::ASCII_TO_LOWER_MAP[(uint8_t)data[pos]];
+		return (char)StringUtil::ASCII_TO_LOWER_MAP[(uint8_t)data[pos]];
 	}
 };
 
@@ -402,13 +404,13 @@ bool ILikeOperatorFunction(string_t &str, string_t &pattern, char escape = '\0')
 	auto pat_size = pattern.GetSize();
 
 	// lowercase both the str and the pattern
-	idx_t str_llength = LowerFun::LowerLength(str_data, str_size);
+	idx_t str_llength = LowerLength(str_data, str_size);
 	auto str_ldata = make_unsafe_uniq_array_uninitialized<char>(str_llength);
-	LowerFun::LowerCase(str_data, str_size, str_ldata.get());
+	LowerCase(str_data, str_size, str_ldata.get());
 
-	idx_t pat_llength = LowerFun::LowerLength(pat_data, pat_size);
+	idx_t pat_llength = LowerLength(pat_data, pat_size);
 	auto pat_ldata = make_unsafe_uniq_array_uninitialized<char>(pat_llength);
-	LowerFun::LowerCase(pat_data, pat_size, pat_ldata.get());
+	LowerCase(pat_data, pat_size, pat_ldata.get());
 	string_t str_lcase(str_ldata.get(), UnsafeNumericCast<uint32_t>(str_llength));
 	string_t pat_lcase(pat_ldata.get(), UnsafeNumericCast<uint32_t>(pat_llength));
 	return LikeOperatorFunction(str_lcase, pat_lcase, escape);

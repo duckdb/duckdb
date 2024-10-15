@@ -2,6 +2,7 @@
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/string_functions_tmp.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/parser/parsed_data/pragma_info.hpp"

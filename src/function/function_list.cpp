@@ -1,5 +1,6 @@
 #include "duckdb/function/function_list.hpp"
 #include "duckdb/function/scalar/string_functions_tmp.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/list_functions.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
@@ -40,6 +41,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArraySelectFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayWhereFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayZipFun),
+	DUCKDB_SCALAR_FUNCTION_ALIAS(LcaseFun),
 	DUCKDB_SCALAR_FUNCTION(ListContainsFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ListElementFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ListExtractFun),
@@ -50,7 +52,10 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION(ListSelectFun),
 	DUCKDB_SCALAR_FUNCTION(ListWhereFun),
 	DUCKDB_SCALAR_FUNCTION(ListZipFun),
+	DUCKDB_SCALAR_FUNCTION(LowerFun),
 	DUCKDB_SCALAR_FUNCTION_SET(StructExtractFun),
+	DUCKDB_SCALAR_FUNCTION_ALIAS(UcaseFun),
+	DUCKDB_SCALAR_FUNCTION(UpperFun),
 	FINAL_FUNCTION
 };
 
