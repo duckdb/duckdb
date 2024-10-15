@@ -29,8 +29,11 @@ bool SampleOptions::Equals(SampleOptions *a, SampleOptions *b) {
 	if (!a || !b) {
 		return false;
 	}
+	if (!a->seed.IsValid() || !b->seed.IsValid()) {
+		return false;
+	}
 	if (a->sample_size != b->sample_size || a->is_percentage != b->is_percentage || a->method != b->method ||
-	    a->seed != b->seed) {
+	    a->seed.GetIndex() != b->seed.GetIndex()) {
 		return false;
 	}
 	return true;

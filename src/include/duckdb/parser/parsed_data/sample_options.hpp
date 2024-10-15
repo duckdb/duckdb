@@ -24,7 +24,7 @@ struct SampleOptions {
 	Value sample_size;
 	bool is_percentage;
 	SampleMethod method;
-	int64_t seed = -1;
+	optional_idx seed = optional_idx::Invalid();
 
 	unique_ptr<SampleOptions> Copy();
 	void SetSeed(idx_t new_seed);

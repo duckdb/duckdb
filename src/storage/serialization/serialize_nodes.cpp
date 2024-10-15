@@ -532,7 +532,7 @@ void SampleOptions::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<Value>(100, "sample_size", sample_size);
 	serializer.WritePropertyWithDefault<bool>(101, "is_percentage", is_percentage);
 	serializer.WriteProperty<SampleMethod>(102, "method", method);
-	serializer.WritePropertyWithDefault<int64_t>(103, "seed", seed);
+	serializer.WriteProperty<optional_idx>(103, "seed", seed);
 }
 
 unique_ptr<SampleOptions> SampleOptions::Deserialize(Deserializer &deserializer) {
@@ -540,7 +540,7 @@ unique_ptr<SampleOptions> SampleOptions::Deserialize(Deserializer &deserializer)
 	deserializer.ReadProperty<Value>(100, "sample_size", result->sample_size);
 	deserializer.ReadPropertyWithDefault<bool>(101, "is_percentage", result->is_percentage);
 	deserializer.ReadProperty<SampleMethod>(102, "method", result->method);
-	deserializer.ReadPropertyWithDefault<int64_t>(103, "seed", result->seed);
+	deserializer.ReadProperty<optional_idx>(103, "seed", result->seed);
 	return result;
 }
 

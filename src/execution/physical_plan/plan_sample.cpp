@@ -12,7 +12,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSample &op
 	auto plan = CreatePlan(*op.children[0]);
 
 	unique_ptr<PhysicalOperator> sample;
-	if (op.sample_options->seed == -1) {
+	if (!op.sample_options->seed.IsValid()) {
 		auto &random_engine = RandomEngine::Get(context);
 		op.sample_options->SetSeed(random_engine.NextRandomInteger());
 	}
@@ -29,7 +29,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSample &op
 		}
 		sample = make_uniq<PhysicalStreamingSample>(op.types, op.sample_options->method,
 		                                            op.sample_options->sample_size.GetValue<double>(),
-		                                            op.sample_options->seed, op.estimated_cardinality);
+		                                            static_cast<int64_t>(op.sample_options->seed.GetIndex()), op.estimated_cardinality);
 		break;
 	default:
 		throw InternalException("Unimplemented sample method");

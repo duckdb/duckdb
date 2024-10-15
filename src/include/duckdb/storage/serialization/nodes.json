@@ -198,7 +198,7 @@
       {
         "id": 103,
         "name": "seed",
-        "type": "int64_t"
+        "type": "optional_idx"
       }
     ]
   },
