@@ -33,8 +33,7 @@ class Setting:
         type: str,
         sql_type: str,
         scope: str,
-        add_verification_in_SET: bool,
-        add_verification_in_RESET: bool,
+        on_callbacks: List[str],
         custom_value_conversion: bool,
         aliases: List[str],
     ):
@@ -45,8 +44,8 @@ class Setting:
         self.type = self._get_setting_type(type)
         self.sql_type = self._get_sql_type(sql_type)
         self.scope = self._get_valid_scope(scope)
-        self.add_verification_in_SET = add_verification_in_SET
-        self.add_verification_in_RESET = add_verification_in_RESET
+        self.on_set, self.on_reset = self._get_on_callbacks(on_callbacks)
+        print(self.on_set, self.on_reset, on_callbacks)
         self.custom_value_conversion = custom_value_conversion
         self.aliases = self._get_aliases(aliases)
         self.struct_name = self._get_struct_name()
@@ -90,6 +89,19 @@ class Setting:
     def _get_setting_type(self, type) -> str:
         # TODO: check if it is a cpp valid type
         return type
+
+    # validate and return the correct type format
+    def _get_on_callbacks(self, callbacks) -> (bool, bool):
+        set = False
+        reset = False
+        for entry in callbacks:
+            if entry == 'set':
+                set = True
+            elif entry == 'reset':
+                reset = True
+            else:
+                raise ValueError(f"Invalid entry in on_callbacks list: {entry} (expected set or reset)")
+        return (set, reset)
 
     # validate and return the set of the aliases
     def _get_aliases(self, aliases: List[str]) -> List[str]:

@@ -86,12 +86,12 @@ def get_new_setting_def(setting):
     if setting.scope == "GLOBAL" or setting.scope == "GLOBAL_LOCAL":
         new_setting += get_set_custom_funcs("Global", setting)
     if setting.scope == "LOCAL" or setting.scope == "GLOBAL_LOCAL":
-        if setting.add_verification_in_SET:
+        if setting.on_set:
             new_setting += (
                 f"bool {setting.struct_name}::OnLocalSet(ClientContext &context, const Value &input) {{\n"
             )
             new_setting += SRC_CODE_IMPLEMENTATION_COMMENT + "}\n\n"
-        if setting.add_verification_in_RESET:
+        if setting.on_reset:
             new_setting += f"bool {setting.struct_name}::OnLocalReset(ClientContext &context) {{\n"
             new_setting += SRC_CODE_IMPLEMENTATION_COMMENT + "}\n\n"
         new_setting += get_set_custom_funcs("Local", setting)
@@ -125,17 +125,17 @@ def create_content_for_custom_funcs(custom_settings_path, existing_settings, mis
         if struct_name in missing_settings:
             setting = missing_settings[struct_name]
             # add the setting in the new content
-            if setting.add_verification_in_SET or setting.add_verification_in_RESET or setting.custom_value_conversion:
+            if setting.on_set or setting.on_reset or setting.custom_value_conversion:
                 new_content += get_setting_heading(setting.struct_name)
                 new += 1
-            if setting.add_verification_in_SET:
+            if setting.on_set:
                 if setting.scope == "GLOBAL":
                     new_content += f"bool {setting.struct_name}::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {{\n"
                     new_content += SRC_CODE_IMPLEMENTATION_COMMENT + "}\n\n"
                 if setting.scope == "LOCAL":
                     new_content += f"bool {setting.struct_name}::OnLocalSet(ClientContext &context, const Value &input) {{\n"
                     new_content += SRC_CODE_IMPLEMENTATION_COMMENT + "}\n\n"
-            if setting.add_verification_in_RESET:
+            if setting.on_reset:
                 if setting.scope == "GLOBAL":
                     new_content += f"bool {setting.struct_name}::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {{\n"
                     new_content += SRC_CODE_IMPLEMENTATION_COMMENT + "}\n\n"

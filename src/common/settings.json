@@ -13,7 +13,7 @@
         "return_type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "global",
-        "verification": [
+        "on_callbacks": [
             "set",
             "reset"
         ]
@@ -40,7 +40,7 @@
         "return_type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "global",
-        "verification": [
+        "on_callbacks": [
             "set",
             "reset"
         ]
@@ -66,7 +66,7 @@
         "return_type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "global",
-        "verification": [
+        "on_callbacks": [
             "set",
             "reset"
         ]
@@ -77,7 +77,7 @@
         "return_type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "global",
-        "verification": [
+        "on_callbacks": [
             "set",
             "reset"
         ]
@@ -290,7 +290,7 @@
         "return_type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "global",
-        "verification": [
+        "on_callbacks": [
             "set",
             "reset"
         ]
@@ -346,7 +346,7 @@
         "return_type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "local",
-        "verification": [
+        "on_callbacks": [
             "set",
             "reset"
         ]
@@ -395,7 +395,7 @@
         "return_type": "idx_t",
         "sql_type": "BIGINT",
         "scope": "global",
-        "verification": [
+        "on_callbacks": [
             "set",
             "reset"
         ]
@@ -487,7 +487,7 @@
         "return_type": "double",
         "sql_type": "DOUBLE",
         "scope": "global",
-        "verification": [
+        "on_callbacks": [
             "set"
         ]
     },
@@ -580,7 +580,7 @@
         "return_type": "uint64_t",
         "sql_type": "UBIGINT",
         "scope": "local",
-        "verification": [
+        "on_callbacks": [
             "set"
         ]
     },
