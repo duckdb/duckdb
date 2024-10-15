@@ -4,6 +4,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/common/operator/numeric_binary_operators.hpp"
 
 namespace duckdb {
 
@@ -36,6 +37,21 @@ struct KahanAvgState {
 		this->count += other.count;
 		KahanAddInternal(other.value, this->value, this->err);
 		KahanAddInternal(other.err, this->value, this->err);
+	}
+};
+
+struct IntervalAvgState {
+	int64_t count;
+	interval_t value;
+
+	void Initialize() {
+		this->count = 0;
+		this->value = interval_t();
+	}
+
+	void Combine(const IntervalAvgState &other) {
+		this->count += other.count;
+		this->value = AddOperator::Operation<interval_t, interval_t, interval_t>(this->value, other.value);
 	}
 };
 
@@ -139,6 +155,23 @@ struct KahanAverageOperation : public BaseSumOperation<AverageSetOperation, Kaha
 	}
 };
 
+struct IntervalAverageOperation : public BaseSumOperation<AverageSetOperation, IntervalAdd> {
+	// Override BaseSumOperation::Initialize because
+	// IntervalAvgState does not have an assignment constructor from 0
+	static void Initialize(IntervalAvgState &state) {
+		AverageSetOperation::Initialize<IntervalAvgState>(state);
+	}
+
+	template <class RESULT_TYPE, class STATE>
+	static void Finalize(STATE &state, RESULT_TYPE &target, AggregateFinalizeData &finalize_data) {
+		if (state.count == 0) {
+			finalize_data.ReturnNull();
+		} else {
+			target = DivideOperator::Operation<interval_t, int64_t, interval_t>(state.value, state.count);
+		}
+	}
+};
+
 AggregateFunction GetAverageAggregate(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::INT16: {
@@ -156,6 +189,10 @@ AggregateFunction GetAverageAggregate(PhysicalType type) {
 	case PhysicalType::INT128: {
 		return AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, hugeint_t, double, HugeintAverageOperation>(
 		    LogicalType::HUGEINT, LogicalType::DOUBLE);
+	}
+	case PhysicalType::INTERVAL: {
+		return AggregateFunction::UnaryAggregate<IntervalAvgState, interval_t, interval_t, IntervalAverageOperation>(
+		    LogicalType::INTERVAL, LogicalType::INTERVAL);
 	}
 	default:
 		throw InternalException("Unimplemented average aggregate");
@@ -183,6 +220,7 @@ AggregateFunctionSet AvgFun::GetFunctions() {
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT32));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT64));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT128));
+	avg.AddFunction(GetAverageAggregate(PhysicalType::INTERVAL));
 	avg.AddFunction(AggregateFunction::UnaryAggregate<AvgState<double>, double, double, NumericAverageOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	return avg;
