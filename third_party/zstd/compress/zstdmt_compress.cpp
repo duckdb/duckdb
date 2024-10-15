@@ -31,8 +31,6 @@
  */
 #define ZSTD_RESIZE_SEQPOOL 0
 
-namespace duckdb_zstd {
-
 /* ======   Debug   ====== */
 #if defined(DEBUGLEVEL) && (DEBUGLEVEL>=2) \
     && !defined(_MSC_VER) \
@@ -85,6 +83,7 @@ static unsigned long long GetCurrentClockTimeMicroseconds(void)
 
 #endif
 
+namespace duckdb_zstd {
 
 /* =====   Buffer Pool   ===== */
 /* a single Buffer Pool can be invoked from multiple threads in parallel */
