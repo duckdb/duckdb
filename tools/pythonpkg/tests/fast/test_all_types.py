@@ -7,6 +7,7 @@ from decimal import Decimal
 from uuid import UUID
 import pytz
 import pytest
+import warnings
 
 
 def replace_with_ndarray(obj):
@@ -588,10 +589,13 @@ class TestAllTypes(object):
         elif cur_type in adjusted_values:
             dataframe = conn.execute(f'select {adjusted_values[cur_type]} from test_all_types()').df()
         else:
+            # Pandas <= 2.2.3 does not convert without throwing a warning
+            warnings.simplefilter(action='ignore', category=RuntimeWarning)
             dataframe = conn.execute(f'select "{cur_type}" from test_all_types()').df()
         print(cur_type)
         round_trip_dataframe = conn.execute("select * from dataframe").df()
         result_dataframe = conn.execute("select * from dataframe").fetchall()
         print(round_trip_dataframe)
         result_roundtrip = conn.execute("select * from round_trip_dataframe").fetchall()
+        warnings.resetwarnings()
         assert recursive_equality(result_dataframe, result_roundtrip)

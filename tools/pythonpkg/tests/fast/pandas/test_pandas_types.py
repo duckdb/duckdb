@@ -4,6 +4,7 @@ import pandas as pd
 import numpy
 import string
 from packaging import version
+import warnings
 
 
 def round_trip(data, pandas_type):
@@ -106,9 +107,9 @@ class TestNumpyNullableTypes(object):
 
         df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
         assert df_out['object'][0] == df_in['object'][0]
-        assert numpy.isnan(df_out['object'][1])
-        assert numpy.isnan(df_out['object'][2])
-        assert numpy.isnan(df_out['object'][3])
+        assert pd.isna(df_out['object'][1])
+        assert pd.isna(df_out['object'][2])
+        assert pd.isna(df_out['object'][3])
         assert df_out['object'][4] == df_in['object'][4]
 
     def test_pandas_float32(self, duckdb_cursor):
@@ -124,7 +125,7 @@ class TestNumpyNullableTypes(object):
         assert df_out['object'][0] == df_in['object'][0]
         assert df_out['object'][1] == df_in['object'][1]
         assert df_out['object'][2] == df_in['object'][2]
-        assert numpy.isnan(df_out['object'][3])
+        assert pd.isna(df_out['object'][3])
 
     def test_pandas_float64(self):
         data = numpy.array([0.233, numpy.nan, 3456.2341231, float('-inf'), -23424.45345, float('+inf'), 0.0000000001])
@@ -136,7 +137,7 @@ class TestNumpyNullableTypes(object):
         df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
 
         for i in range(len(data)):
-            if numpy.isnan(df_out['object'][i]):
+            if pd.isna(df_out['object'][i]):
                 assert i == 1
                 continue
             assert df_out['object'][i] == df_in['object'][i]
@@ -219,7 +220,10 @@ class TestNumpyNullableTypes(object):
         """
 
         rel = duckdb_cursor.sql(query)
+        # Pandas <= 2.2.3 does not convert without throwing a warning
+        warnings.simplefilter(action='ignore', category=RuntimeWarning)
         df = rel.df()
+        warnings.resetwarnings()
 
         nullable_dtype = getattr(pd, input.expected_dtype)
         assert isinstance(df['a'].dtype, nullable_dtype)
