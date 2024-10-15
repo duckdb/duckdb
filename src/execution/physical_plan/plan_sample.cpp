@@ -3,6 +3,7 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/random_engine.hpp"
 
 namespace duckdb {
 
