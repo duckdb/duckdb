@@ -415,11 +415,11 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 		arguments[0] = BoundCastExpression::AddCastToType(context, std::move(arguments[0]), target_type);
 		bound_function.return_type = arguments[0]->return_type;
 	} break;
-	case LogicalTypeId::BLOB:
 	case LogicalTypeId::LIST:
 		// The result is the same type
 		bound_function.return_type = arguments[0]->return_type;
 		break;
+	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
 		// string slice returns a string
 		if (bound_function.arguments.size() == 4) {
