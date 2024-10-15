@@ -23,9 +23,7 @@ def extract_declarations(setting) -> str:
         definition += f"    static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);\n"
         definition += f"    static void ResetGlobal(DatabaseInstance *db, DBConfig &config);\n"
         if setting.on_set:
-            definition += (
-                f"static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);\n"
-            )
+            definition += f"static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);\n"
         if setting.on_reset:
             definition += f"static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);\n"
     if setting.scope == "LOCAL" or setting.scope == "GLOBAL_LOCAL":

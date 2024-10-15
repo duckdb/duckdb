@@ -14,7 +14,18 @@ def sort_json_data(path):
 
 # parse json data and stores each entry as a settings object in the global list SettingsList
 def add_all_settings_to_global_list():
-    valid_entries = ['name', 'description', 'return_type', 'type', 'scope', 'internal_setting', 'on_callbacks', 'custom_implementation', 'struct', 'aliases']
+    valid_entries = [
+        'name',
+        'description',
+        'return_type',
+        'type',
+        'scope',
+        'internal_setting',
+        'on_callbacks',
+        'custom_implementation',
+        'struct',
+        'aliases',
+    ]
 
     print(f"Parsing and sorting the settings data in {JSON_PATH}")
     clear_global_settings_list()
@@ -23,7 +34,9 @@ def add_all_settings_to_global_list():
     for entry in json_data:
         for field_entry in entry:
             if field_entry not in valid_entries:
-                raise ValueError(f"Found entry unexpected entry \"{field_entry}\" in setting, expected entry to be in {', '.join(valid_entries)}")
+                raise ValueError(
+                    f"Found entry unexpected entry \"{field_entry}\" in setting, expected entry to be in {', '.join(valid_entries)}"
+                )
         setting = Setting(
             name=entry['name'],
             description=entry['description'],
