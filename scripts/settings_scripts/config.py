@@ -35,6 +35,7 @@ class Setting:
         self,
         name: str,
         description: str,
+        return_type: str,
         sql_type: str,
         scope: str,
         on_callbacks: List[str],
@@ -44,7 +45,10 @@ class Setting:
         self.name = self._get_valid_name(name)
         self.description = description
         self.sql_type = self._get_sql_type(sql_type)
-        self.return_type = self._get_setting_type(sql_type)
+        if return_type == '':
+            self.return_type = self._get_setting_type(sql_type)
+        else:
+            self.return_type = return_type
         self.scope = self._get_valid_scope(scope)
         self.on_set, self.on_reset = self._get_on_callbacks(on_callbacks)
         custom_callbacks = ['set', 'reset', 'get']

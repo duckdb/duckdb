@@ -14,7 +14,7 @@ def sort_json_data(path):
 
 # parse json data and stores each entry as a settings object in the global list SettingsList
 def add_all_settings_to_global_list():
-    valid_entries = ['name', 'description', 'type', 'scope', 'on_callbacks', 'custom_implementation', 'aliases']
+    valid_entries = ['name', 'description', 'return_type', 'type', 'scope', 'on_callbacks', 'custom_implementation', 'aliases']
 
     print(f"Parsing and sorting the settings data in {JSON_PATH}")
     clear_global_settings_list()
@@ -27,6 +27,7 @@ def add_all_settings_to_global_list():
         setting = Setting(
             name=entry['name'],
             description=entry['description'],
+            return_type=entry.get('return_type', ''),
             sql_type=entry['type'],
             scope=entry['scope'],
             on_callbacks=entry.get('on_callbacks', []),
