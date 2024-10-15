@@ -73,6 +73,9 @@
 #if (DEBUGLEVEL>=2)
 #  define ZSTD_DEPS_NEED_IO
 #  include "zstd/common/zstd_deps.h"
+
+namespace duckdb_zstd {
+
 extern int g_debuglevel; /* the variable is only declared,
                             it actually lives in debug.c,
                             and is shared by the whole process.
@@ -98,6 +101,9 @@ extern int g_debuglevel; /* the variable is only declared,
             ZSTD_DEBUG_PRINT(" \n");                     \
         }                                                \
     } while (0)
+
+} // namespace duckdb_zstd
+
 #else
 #  define RAWLOG(l, ...)   do { } while (0)    /* disabled */
 #  define DEBUGLOG(l, ...) do { } while (0)    /* disabled */

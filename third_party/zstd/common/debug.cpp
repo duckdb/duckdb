@@ -22,9 +22,15 @@
 #include "debug.h"
 
 #if !defined(ZSTD_LINUX_KERNEL) || (DEBUGLEVEL>=2)
+
+namespace duckdb_zstd {
+
 /* We only use this when DEBUGLEVEL>=2, but we get -Werror=pedantic errors if a
  * translation unit is empty. So remove this from Linux kernel builds, but
  * otherwise just leave it in.
  */
 int g_debuglevel = DEBUGLEVEL;
+
+} // namespace duckdb_zstd
+
 #endif
