@@ -3,13 +3,17 @@ import json
 from pathlib import Path
 
 
-function_groups = {'function': ['scalar']}
+function_groups = {
+    ('src', 'include/duckdb', 'function'): ['scalar'],
+    ('extension', 'core_functions/include', 'core_functions'): ['scalar', 'aggregate'],
+}
 
 
-header = '''//===----------------------------------------------------------------------===//
+def get_header():
+    return '''//===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/{HEADER}_functions.hpp
+// {HEADER}_functions.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -25,24 +29,26 @@ namespace duckdb {
 
 '''
 
-footer = '''} // namespace duckdb
+
+def get_footer():
+    return '''} // namespace duckdb
 '''
 
 
 def main():
     function_type_set = {}
-    for group, function_types in sorted(function_groups.items()):
+    for (root, include_dir, group), function_types in sorted(function_groups.items()):
         all_functions_group = []
         group_dir = Path(group)
         for function_type in function_types:
-            type_dir = Path('src').joinpath(group_dir.joinpath(function_type))
+            type_dir = Path(root).joinpath(group_dir.joinpath(function_type))
             relative_function_paths = sorted(
                 [f'{group}/{function_type}/{f.name}' for f in type_dir.iterdir() if f.is_dir()]
             )
             for function_path in relative_function_paths:
-                if Path(normalize_path_separators(f'src/{function_path}/functions.json')).exists():
-                    create_header_file(function_path, all_functions_group, function_type_set)
-        create_function_list_file(group, all_functions_group)
+                if Path(normalize_path_separators(f'{root}/{function_path}/functions.json')).exists():
+                    create_header_file(root, include_dir, function_path, all_functions_group, function_type_set)
+        create_function_list_file(root, group, all_functions_group)
 
 
 def normalize_path_separators(x):
@@ -61,12 +67,12 @@ def sanitize_string(text):
     return text.replace('\\', '\\\\').replace('"', '\\"')
 
 
-def create_header_file(path, all_function_list, function_type_set):
-    header_path = normalize_path_separators(f'src/include/duckdb/{path}_functions.hpp')
-    json_path = normalize_path_separators(f'src/{path}/functions.json')
+def create_header_file(root, include_dir, path, all_function_list, function_type_set):
+    header_path = normalize_path_separators(f'{root}/{include_dir}/{path}_functions.hpp')
+    json_path = normalize_path_separators(f'{root}/{path}/functions.json')
     with open(json_path, 'r') as f:
         parsed_json = json.load(f)
-    new_text = header.replace('{HEADER}', path)
+    new_text = get_header().replace('{HEADER}', path)
     for entry in parsed_json:
         function_text = ''
         if 'struct' in entry:
@@ -152,13 +158,13 @@ def create_header_file(path, all_function_list, function_type_set):
                     .replace('{NAME}', alias)
                     .replace('{ALIAS}', struct_name)
                 )
-    new_text += footer
+    new_text += get_footer()
     with open(header_path, 'w+') as f:
         f.write(new_text)
 
 
-def create_function_list_file(group, all_function_list):
-    function_list_file = normalize_path_separators(f'src/{group}/function_list.cpp')
+def create_function_list_file(root, group, all_function_list):
+    function_list_file = normalize_path_separators(f'{root}/{group}/function_list.cpp')
     with open(function_list_file, 'r') as f:
         text = f.read()
 
