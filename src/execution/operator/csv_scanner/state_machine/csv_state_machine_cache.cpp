@@ -26,6 +26,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		switch (cur_state) {
 		case CSVState::QUOTED:
 		case CSVState::QUOTED_NEW_LINE:
+		case CSVState::ESCAPE:
 			InitializeTransitionArray(transition_array, cur_state, CSVState::QUOTED);
 			break;
 		case CSVState::UNQUOTED:
@@ -143,9 +144,6 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	if (comment != '\0') {
 		transition_array[comment][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::COMMENT;
 	}
-	// 7) Escaped State
-	transition_array[quote][static_cast<uint8_t>(CSVState::ESCAPE)] = CSVState::QUOTED;
-	transition_array[escape][static_cast<uint8_t>(CSVState::ESCAPE)] = CSVState::QUOTED;
 
 	// 8) Not Set
 	transition_array[delimiter][static_cast<uint8_t>(CSVState::NOT_SET)] = CSVState::DELIMITER;
