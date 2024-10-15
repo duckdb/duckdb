@@ -5,7 +5,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "allocator_background_threads",
@@ -24,7 +24,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "allocator_flush_threshold",
@@ -32,7 +32,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "allow_community_extensions",
@@ -58,7 +58,7 @@
         "return_type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "allow_unredacted_secrets",
@@ -88,7 +88,7 @@
         "return_type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "arrow_lossless_conversion",
@@ -96,7 +96,7 @@
         "return_type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "arrow_output_list_view",
@@ -104,7 +104,7 @@
         "return_type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "autoinstall_extension_repository",
@@ -112,7 +112,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "autoinstall_known_extensions",
@@ -141,7 +141,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true,
+        "custom_implementation": true,
         "aliases": [
             "wal_autocheckpoint"
         ]
@@ -152,7 +152,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "custom_profiling_settings",
@@ -160,7 +160,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "local",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "custom_user_agent",
@@ -168,7 +168,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "debug_asof_iejoin",
@@ -176,7 +176,7 @@
         "return_type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "local",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "debug_checkpoint_abort",
@@ -184,7 +184,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "debug_force_external",
@@ -192,7 +192,7 @@
         "return_type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "local",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "debug_force_no_cross_product",
@@ -200,7 +200,7 @@
         "return_type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "local",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "debug_skip_checkpoint_on_commit",
@@ -215,7 +215,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "default_block_size",
@@ -223,7 +223,7 @@
         "return_type": "uint64_t",
         "sql_type": "UBIGINT",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "default_collation",
@@ -231,7 +231,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "global_local",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "default_null_order",
@@ -239,7 +239,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true,
+        "custom_implementation": true,
         "aliases": [
             "null_order"
         ]
@@ -250,7 +250,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "default_secret_storage",
@@ -258,7 +258,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "disabled_filesystems",
@@ -266,7 +266,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "disabled_optimizers",
@@ -274,7 +274,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "duckdb_api",
@@ -282,7 +282,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "enable_external_access",
@@ -315,7 +315,7 @@
         "return_type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "enable_macro_dependencies",
@@ -330,7 +330,7 @@
         "return_type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "enable_profiling",
@@ -338,7 +338,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "local",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "enable_progress_bar",
@@ -357,7 +357,7 @@
         "return_type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "local",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "enable_view_dependencies",
@@ -379,7 +379,7 @@
         "return_type": "uint64_t",
         "sql_type": "VARCHAR",
         "scope": "local",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "extension_directory",
@@ -387,7 +387,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "external_threads",
@@ -406,7 +406,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "local",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "force_bitpacking_mode",
@@ -414,7 +414,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "force_compression",
@@ -422,7 +422,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "home_directory",
@@ -430,7 +430,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "local",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "http_logging_output",
@@ -511,7 +511,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "local",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "max_expression_depth",
@@ -526,7 +526,7 @@
         "return_type": "idx_t",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true,
+        "custom_implementation": true,
         "aliases": [
             "memory_limit"
         ]
@@ -537,7 +537,7 @@
         "return_type": "idx_t",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "max_vacuum_tasks",
@@ -604,7 +604,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "perfect_ht_threshold",
@@ -612,7 +612,7 @@
         "return_type": "idx_t",
         "sql_type": "BIGINT",
         "scope": "local",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "pivot_filter_threshold",
@@ -620,7 +620,7 @@
         "return_type": "uint64_t",
         "sql_type": "BIGINT",
         "scope": "local",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "pivot_limit",
@@ -628,7 +628,7 @@
         "return_type": "uint64_t",
         "sql_type": "BIGINT",
         "scope": "local",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "prefer_range_joins",
@@ -657,7 +657,7 @@
         "return_type": "bool",
         "sql_type": "BOOLEAN",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "profile_output",
@@ -665,7 +665,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "local",
-        "custom_conversion_and_validation": true,
+        "custom_implementation": true,
         "aliases": [
             "profiling_output"
         ]
@@ -676,7 +676,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "local",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "progress_bar_time",
@@ -684,7 +684,7 @@
         "return_type": "int32_t",
         "sql_type": "BIGINT",
         "scope": "local",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "scalar_subquery_error_on_multiple_rows",
@@ -699,7 +699,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "local",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "search_path",
@@ -707,7 +707,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "local",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "secret_directory",
@@ -715,7 +715,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "storage_compatibility_version",
@@ -723,7 +723,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "streaming_buffer_size",
@@ -731,7 +731,7 @@
         "return_type": "idx_t",
         "sql_type": "VARCHAR",
         "scope": "local",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "temp_directory",
@@ -739,7 +739,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true
+        "custom_implementation": true
     },
     {
         "name": "threads",
@@ -747,7 +747,7 @@
         "return_type": "idx_t",
         "sql_type": "BIGINT",
         "scope": "global",
-        "custom_conversion_and_validation": true,
+        "custom_implementation": true,
         "aliases": [
             "worker_threads"
         ]
@@ -758,7 +758,7 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "global",
-        "custom_conversion_and_validation": true,
+        "custom_implementation": true,
         "aliases": [
             "user"
         ]

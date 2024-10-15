@@ -38,7 +38,7 @@ def add_all_settings_to_global_list():
             scope=entry['scope'],
             add_verification_in_SET=add_verif_SET,
             add_verification_in_RESET=add_verif_RESET,
-            custom_value_conversion=entry.get('custom_conversion_and_validation', False),
+            custom_value_conversion=entry.get('custom_implementation', False),
             aliases=entry.get('aliases', []),
         )
         SettingsList.append(setting)
