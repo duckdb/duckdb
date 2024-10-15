@@ -1210,10 +1210,6 @@ void PerfectHtThresholdSetting::SetLocal(ClientContext &context, const Value &in
 	ClientConfig::GetConfig(context).perfect_ht_threshold = NumericCast<idx_t>(bits);
 }
 
-void PerfectHtThresholdSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).perfect_ht_threshold = ClientConfig().perfect_ht_threshold;
-}
-
 Value PerfectHtThresholdSetting::GetSetting(const ClientContext &context) {
 	return Value::BIGINT(NumericCast<int64_t>(ClientConfig::GetConfig(context).perfect_ht_threshold));
 }
@@ -1225,27 +1221,8 @@ void PivotFilterThresholdSetting::SetLocal(ClientContext &context, const Value &
 	ClientConfig::GetConfig(context).pivot_filter_threshold = input.GetValue<uint64_t>();
 }
 
-void PivotFilterThresholdSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).pivot_filter_threshold = ClientConfig().pivot_filter_threshold;
-}
-
 Value PivotFilterThresholdSetting::GetSetting(const ClientContext &context) {
 	return Value::BIGINT(NumericCast<int64_t>(ClientConfig::GetConfig(context).pivot_filter_threshold));
-}
-
-//===----------------------------------------------------------------------===//
-// Pivot Limit
-//===----------------------------------------------------------------------===//
-void PivotLimitSetting::SetLocal(ClientContext &context, const Value &input) {
-	ClientConfig::GetConfig(context).pivot_limit = input.GetValue<uint64_t>();
-}
-
-void PivotLimitSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).pivot_limit = ClientConfig().pivot_limit;
-}
-
-Value PivotLimitSetting::GetSetting(const ClientContext &context) {
-	return Value::BIGINT(NumericCast<int64_t>(ClientConfig::GetConfig(context).pivot_limit));
 }
 
 //===----------------------------------------------------------------------===//

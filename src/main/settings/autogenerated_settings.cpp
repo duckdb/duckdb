@@ -167,7 +167,7 @@ Value AutoloadKnownExtensionsSetting::GetSetting(const ClientContext &context) {
 // Catalog Error Max Schemas
 //===----------------------------------------------------------------------===//
 void CatalogErrorMaxSchemasSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.catalog_error_max_schemas = input.GetValue<uint64_t>();
+	config.options.catalog_error_max_schemas = input.GetValue<idx_t>();
 }
 
 void CatalogErrorMaxSchemasSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
@@ -452,7 +452,7 @@ Value ImmediateTransactionModeSetting::GetSetting(const ClientContext &context) 
 // Index Scan Max Count
 //===----------------------------------------------------------------------===//
 void IndexScanMaxCountSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.index_scan_max_count = input.GetValue<uint64_t>();
+	config.options.index_scan_max_count = input.GetValue<idx_t>();
 }
 
 void IndexScanMaxCountSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
@@ -520,7 +520,7 @@ Value LockConfigurationSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 void MaxExpressionDepthSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.max_expression_depth = input.GetValue<uint64_t>();
+	config.max_expression_depth = input.GetValue<idx_t>();
 }
 
 void MaxExpressionDepthSetting::ResetLocal(ClientContext &context) {
@@ -535,7 +535,7 @@ Value MaxExpressionDepthSetting::GetSetting(const ClientContext &context) {
 // Max Vacuum Tasks
 //===----------------------------------------------------------------------===//
 void MaxVacuumTasksSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.max_vacuum_tasks = input.GetValue<uint64_t>();
+	config.options.max_vacuum_tasks = input.GetValue<idx_t>();
 }
 
 void MaxVacuumTasksSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
@@ -619,7 +619,7 @@ void OrderedAggregateThresholdSetting::SetLocal(ClientContext &context, const Va
 		return;
 	}
 	auto &config = ClientConfig::GetConfig(context);
-	config.ordered_aggregate_threshold = input.GetValue<uint64_t>();
+	config.ordered_aggregate_threshold = input.GetValue<idx_t>();
 }
 
 void OrderedAggregateThresholdSetting::ResetLocal(ClientContext &context) {
@@ -661,6 +661,36 @@ void PartitionedWriteMaxOpenFilesSetting::ResetLocal(ClientContext &context) {
 
 Value PartitionedWriteMaxOpenFilesSetting::GetSetting(const ClientContext &context) {
 	return Value::CreateValue(ClientConfig::GetConfig(context).partitioned_write_max_open_files);
+}
+
+//===----------------------------------------------------------------------===//
+// Perfect Ht Threshold
+//===----------------------------------------------------------------------===//
+void PerfectHtThresholdSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).perfect_ht_threshold = ClientConfig().perfect_ht_threshold;
+}
+
+//===----------------------------------------------------------------------===//
+// Pivot Filter Threshold
+//===----------------------------------------------------------------------===//
+void PivotFilterThresholdSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).pivot_filter_threshold = ClientConfig().pivot_filter_threshold;
+}
+
+//===----------------------------------------------------------------------===//
+// Pivot Limit
+//===----------------------------------------------------------------------===//
+void PivotLimitSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.pivot_limit = input.GetValue<idx_t>();
+}
+
+void PivotLimitSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).pivot_limit = ClientConfig().pivot_limit;
+}
+
+Value PivotLimitSetting::GetSetting(const ClientContext &context) {
+	return Value::CreateValue(ClientConfig::GetConfig(context).pivot_limit);
 }
 
 //===----------------------------------------------------------------------===//

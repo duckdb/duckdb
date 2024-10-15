@@ -228,7 +228,7 @@ struct AutoloadKnownExtensionsSetting {
 };
 
 struct CatalogErrorMaxSchemasSetting {
-	using RETURN_TYPE = uint64_t;
+	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "catalog_error_max_schemas";
 	static constexpr const char *Description =
 	    "The maximum number of schemas the system will scan for \"did you mean...\" style errors in the catalog";
@@ -343,7 +343,7 @@ struct DebugWindowModeSetting {
 };
 
 struct DefaultBlockSizeSetting {
-	using RETURN_TYPE = uint64_t;
+	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "default_block_size";
 	static constexpr const char *Description =
 	    "The default block size for new duckdb database files (new as-in, they do not yet exist).";
@@ -548,7 +548,7 @@ struct ErrorsAsJsonSetting {
 };
 
 struct ExplainOutputSetting {
-	using RETURN_TYPE = uint64_t;
+	using RETURN_TYPE = string;
 	static constexpr const char *Name = "explain_output";
 	static constexpr const char *Description = "Output of EXPLAIN statements (ALL, OPTIMIZED_ONLY, PHYSICAL_ONLY)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
@@ -571,7 +571,7 @@ struct ExternalThreadsSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "external_threads";
 	static constexpr const char *Description = "The number of external threads that work on DuckDB tasks.";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
@@ -683,7 +683,7 @@ struct ImmediateTransactionModeSetting {
 };
 
 struct IndexScanMaxCountSetting {
-	using RETURN_TYPE = uint64_t;
+	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "index_scan_max_count";
 	static constexpr const char *Description =
 	    "The maximum index scan count sets a threshold for index scans. If fewer than MAX(index_scan_max_count, "
@@ -740,7 +740,7 @@ struct LogQueryPathSetting {
 };
 
 struct MaxExpressionDepthSetting {
-	using RETURN_TYPE = uint64_t;
+	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "max_expression_depth";
 	static constexpr const char *Description =
 	    "The maximum expression depth limit in the parser. WARNING: increasing this setting and using very deep "
@@ -752,7 +752,7 @@ struct MaxExpressionDepthSetting {
 };
 
 struct MaxMemorySetting {
-	using RETURN_TYPE = idx_t;
+	using RETURN_TYPE = string;
 	static constexpr const char *Name = "max_memory";
 	static constexpr const char *Description = "The maximum memory of the system (e.g. 1GB)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
@@ -762,7 +762,7 @@ struct MaxMemorySetting {
 };
 
 struct MaxTempDirectorySizeSetting {
-	using RETURN_TYPE = idx_t;
+	using RETURN_TYPE = string;
 	static constexpr const char *Name = "max_temp_directory_size";
 	static constexpr const char *Description =
 	    "The maximum amount of data stored inside the 'temp_directory' (when set) (e.g. 1GB)";
@@ -773,7 +773,7 @@ struct MaxTempDirectorySizeSetting {
 };
 
 struct MaxVacuumTasksSetting {
-	using RETURN_TYPE = uint64_t;
+	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "max_vacuum_tasks";
 	static constexpr const char *Description = "The maximum vacuum tasks to schedule during a checkpoint.";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
@@ -825,7 +825,7 @@ struct OrderByNonIntegerLiteralSetting {
 };
 
 struct OrderedAggregateThresholdSetting {
-	using RETURN_TYPE = uint64_t;
+	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "ordered_aggregate_threshold";
 	static constexpr const char *Description = "The number of rows to accumulate before sorting, used for tuning";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
@@ -871,28 +871,28 @@ struct PerfectHtThresholdSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "perfect_ht_threshold";
 	static constexpr const char *Description = "Threshold in bytes for when to use a perfect hash table";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
 };
 
 struct PivotFilterThresholdSetting {
-	using RETURN_TYPE = uint64_t;
+	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "pivot_filter_threshold";
 	static constexpr const char *Description =
 	    "The threshold to switch from using filtered aggregates to LIST with a dedicated pivot operator";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
 };
 
 struct PivotLimitSetting {
-	using RETURN_TYPE = uint64_t;
+	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "pivot_limit";
 	static constexpr const char *Description = "The maximum number of pivot columns in a pivot statement";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
@@ -964,7 +964,7 @@ struct ProfilingModeSetting {
 };
 
 struct ProgressBarTimeSetting {
-	using RETURN_TYPE = int32_t;
+	using RETURN_TYPE = int64_t;
 	static constexpr const char *Name = "progress_bar_time";
 	static constexpr const char *Description =
 	    "Sets the time (in milliseconds) how long a query needs to take before we start printing a progress bar";
@@ -1028,7 +1028,7 @@ struct StorageCompatibilityVersionSetting {
 };
 
 struct StreamingBufferSizeSetting {
-	using RETURN_TYPE = idx_t;
+	using RETURN_TYPE = string;
 	static constexpr const char *Name = "streaming_buffer_size";
 	static constexpr const char *Description =
 	    "The maximum memory to buffer between fetching from a streaming result (e.g. 1GB)";
@@ -1049,7 +1049,7 @@ struct TempDirectorySetting {
 };
 
 struct ThreadsSetting {
-	using RETURN_TYPE = idx_t;
+	using RETURN_TYPE = int64_t;
 	static constexpr const char *Name = "threads";
 	static constexpr const char *Description = "The number of total threads used by the system.";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
