@@ -767,7 +767,7 @@ void BasicColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 			column_chunk.meta_data.__isset.bloom_filter_offset = true;
 			column_chunk.meta_data.bloom_filter_offset = writer.GetWriter().GetTotalWritten();
 
-			// write nonsense
+			// write nonsense header
 			duckdb_parquet::BloomFilterHeader filter_header;
 			filter_header.numBytes = bloom->len;
 			filter_header.algorithm.__set_BLOCK(SplitBlockAlgorithm());
@@ -867,7 +867,7 @@ struct ParquetBloomBlock {
 struct ParquetBloomFilter {
 
 	void Initialize(idx_t num_blocks) {
-		D_ASSERT(NextPowerOfTwo(num_blocks) == num_blocks);
+		D_ASSERT(IsPowerOfTwo(num_blocks));
 		data = make_uniq<ResizeableBuffer>(Allocator::DefaultAllocator(), sizeof(ParquetBloomBlock) * num_blocks);
 		data->zero();
 	}
@@ -880,29 +880,23 @@ struct ParquetBloomFilter {
 		ParquetBloomBlock::BlockInsert(b, x);
 	}
 
-	void Resize(idx_t new_num_blocks) {
+	void Shrink(idx_t new_block_count) {
 		auto block_count = data->len / sizeof(ParquetBloomBlock);
-		D_ASSERT(new_num_blocks <= block_count);
-		D_ASSERT(NextPowerOfTwo(block_count) == block_count);
-		D_ASSERT(NextPowerOfTwo(new_num_blocks) == new_num_blocks);
+		D_ASSERT(block_count >= new_block_count);
+		D_ASSERT(IsPowerOfTwo(block_count));
+		D_ASSERT(IsPowerOfTwo(new_block_count));
 
 		ParquetBloomFilter new_bloom_filter;
-		new_bloom_filter.Initialize(new_num_blocks);
+		new_bloom_filter.Initialize(new_block_count);
 
-		// TODO find a closed form expression to compute shift
-		uint8_t shift = 0;
-		auto temp_num_blocks = block_count;
-		while (temp_num_blocks > new_num_blocks) {
-			shift++;
-			temp_num_blocks >>= 1;
-		}
+		uint8_t shift = log2(block_count) - log2(new_block_count);
 		auto old_blocks = (ParquetBloomBlock *)(data->ptr);
 		auto new_blocks = (ParquetBloomBlock *)(new_bloom_filter.data->ptr);
 
-		for (idx_t block_idx = 0;block_idx < block_count; block_idx++) {
+		for (idx_t block_idx = 0; block_idx < block_count; block_idx++) {
 			auto new_idx = block_idx >> shift;
-			auto& old_block = old_blocks[block_idx];
-			auto& new_block = new_blocks[new_idx];
+			auto &old_block = old_blocks[block_idx];
+			auto &new_block = new_blocks[new_idx];
 			for (idx_t word_idx = 0; word_idx < 8; word_idx++) {
 				new_block.block[word_idx] |= old_block.block[word_idx];
 			}
@@ -953,7 +947,7 @@ public:
 
 	const ResizeableBuffer *GetBloomFilter() override {
 		// TODO not here but for testing purposes
-		filter.Resize(32);
+		filter.Shrink(32);
 		return filter.data.get();
 	}
 
