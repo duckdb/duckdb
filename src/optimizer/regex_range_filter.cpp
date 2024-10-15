@@ -2,7 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/string_functions_tmp.hpp"
 
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"

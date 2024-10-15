@@ -8,7 +8,7 @@
 #include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
 #include "duckdb/common/string_util.hpp"
 
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/string_functions_tmp.hpp"
 
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/planner/collation_binding.hpp"

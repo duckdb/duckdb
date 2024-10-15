@@ -4,7 +4,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/string_functions_tmp.hpp"
 #include "jaro_winkler.hpp"
 
 #include <algorithm>

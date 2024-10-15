@@ -1,5 +1,5 @@
 #include "core_functions/scalar/string_functions.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/string_functions_tmp.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include <iostream>
 
