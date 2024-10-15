@@ -33,6 +33,8 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalReservoirSample::GetGlobalSinkState(ClientContext &context) const {
+	auto &random_engine = RandomEngine::Get(context);
+	options->SetSeed(random_engine.NextRandomInteger());
 	return make_uniq<SampleGlobalSinkState>(Allocator::Get(context), *options);
 }
 

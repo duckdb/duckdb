@@ -18,6 +18,10 @@ unique_ptr<SampleOptions> SampleOptions::Copy() {
 	return result;
 }
 
+void SampleOptions::SetSeed(idx_t new_seed) {
+	seed = new_seed;
+}
+
 bool SampleOptions::Equals(SampleOptions *a, SampleOptions *b) {
 	if (a == b) {
 		return true;
