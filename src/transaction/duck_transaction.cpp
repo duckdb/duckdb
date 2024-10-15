@@ -272,7 +272,11 @@ unique_ptr<StorageLockKey> DuckTransaction::TryGetCheckpointLock() {
 
 shared_ptr<CheckpointLock> DuckTransaction::SharedLockTable(DataTableInfo &info) {
 	unique_lock<mutex> transaction_lock(active_locks_lock);
-	auto &active_table_lock = active_locks[info];
+	auto entry = active_locks.find(info);
+	if (entry == active_locks.end()) {
+		entry = active_locks.insert(entry, make_pair(std::ref(info), make_uniq<ActiveTableLock>()));
+	}
+	auto &active_table_lock = *entry->second;
 	transaction_lock.unlock(); // release transaction-level lock before acquiring table-level lock
 	lock_guard<mutex> table_lock(active_table_lock.checkpoint_lock_mutex);
 	auto checkpoint_lock = active_table_lock.checkpoint_lock.lock();

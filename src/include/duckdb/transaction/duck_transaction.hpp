@@ -107,7 +107,7 @@ private:
 		weak_ptr<CheckpointLock> checkpoint_lock;
 	};
 	//! Active locks on tables
-	reference_map_t<DataTableInfo, ActiveTableLock> active_locks;
+	reference_map_t<DataTableInfo, unique_ptr<ActiveTableLock>> active_locks;
 };
 
 } // namespace duckdb
