@@ -1,0 +1,18 @@
+[
+    {
+        "name": "list_select",
+        "parameters": "value_list,index_list",
+        "description": "Returns a list based on the elements selected by the index_list.",
+        "example": "list_select([10, 20, 30, 40], [1, 4])",
+        "type": "scalar_function",
+        "aliases": ["array_select"]
+    },
+    {
+        "name": "list_where",
+        "parameters": "value_list,mask_list",
+        "description": "Returns a list with the BOOLEANs in mask_list applied as a mask to the value_list.",
+        "example": "list_where([10, 20, 30, 40], [true, false, false, true])",
+        "type": "scalar_function",
+        "aliases": ["array_where"]
+    }
+]
