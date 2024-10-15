@@ -41,6 +41,7 @@ class Setting:
         internal_setting: str,
         on_callbacks: List[str],
         custom_implementation: bool | List[str],
+        struct_name: str,
         aliases: List[str],
     ):
         self.name = self._get_valid_name(name)
@@ -64,7 +65,7 @@ class Setting:
             self.all_custom = len(set(custom_implementation)) == 3
             self.custom_implementation = custom_implementation
         self.aliases = self._get_aliases(aliases)
-        self.struct_name = self._get_struct_name()
+        self.struct_name = self._get_struct_name() if len(struct_name) == 0 else struct_name
 
     # define all comparisons to be based on the setting's name attribute
     def __eq__(self, other) -> bool:

@@ -415,7 +415,7 @@ struct DisabledOptimizersSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct DuckdbApiSetting {
+struct DuckDBAPISetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "duckdb_api";
 	static constexpr const char *Description = "DuckDB API surface";
@@ -439,7 +439,7 @@ struct EnableExternalAccessSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct EnableFsstVectorsSetting {
+struct EnableFSSTVectorsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "enable_fsst_vectors";
 	static constexpr const char *Description =
@@ -450,7 +450,7 @@ struct EnableFsstVectorsSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct EnableHttpLoggingSetting {
+struct EnableHTTPLoggingSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "enable_http_logging";
 	static constexpr const char *Description = "Enables HTTP logging";
@@ -460,7 +460,7 @@ struct EnableHttpLoggingSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct EnableHttpMetadataCacheSetting {
+struct EnableHTTPMetadataCacheSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "enable_http_metadata_cache";
 	static constexpr const char *Description = "Whether or not the global http metadata is used to cache HTTP metadata";
@@ -537,7 +537,7 @@ struct EnableViewDependenciesSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct ErrorsAsJsonSetting {
+struct ErrorsAsJSONSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "errors_as_json";
 	static constexpr const char *Description = "Output error messages as structured JSON instead of as a raw string";
@@ -619,7 +619,7 @@ struct HomeDirectorySetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct HttpLoggingOutputSetting {
+struct HTTPLoggingOutputSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "http_logging_output";
 	static constexpr const char *Description =
@@ -630,7 +630,7 @@ struct HttpLoggingOutputSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct HttpProxySetting {
+struct HTTPProxySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "http_proxy";
 	static constexpr const char *Description = "HTTP proxy host";
@@ -640,7 +640,7 @@ struct HttpProxySetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct HttpProxyPasswordSetting {
+struct HTTPProxyPasswordSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "http_proxy_password";
 	static constexpr const char *Description = "Password for HTTP proxy";
@@ -650,7 +650,7 @@ struct HttpProxyPasswordSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct HttpProxyUsernameSetting {
+struct HTTPProxyUsernameSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "http_proxy_username";
 	static constexpr const char *Description = "Username for HTTP proxy";
@@ -660,7 +660,7 @@ struct HttpProxyUsernameSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct IeeeFloatingPointOpsSetting {
+struct IEEEFloatingPointOpsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "ieee_floating_point_ops";
 	static constexpr const char *Description =

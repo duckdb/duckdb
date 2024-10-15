@@ -268,7 +268,8 @@
         "description": "DuckDB API surface",
         "type": "VARCHAR",
         "scope": "global",
-        "custom_implementation": true
+        "custom_implementation": true,
+        "struct": "DuckDBAPISetting"
     },
     {
         "name": "enable_external_access",
@@ -284,20 +285,23 @@
         "name": "enable_fsst_vectors",
         "description": "Allow scans on FSST compressed segments to emit compressed vectors to utilize late decompression",
         "type": "BOOLEAN",
-        "scope": "global"
+        "scope": "global",
+        "struct": "EnableFSSTVectorsSetting"
     },
     {
         "name": "enable_http_logging",
         "description": "Enables HTTP logging",
         "type": "BOOLEAN",
-        "scope": "local"
+        "scope": "local",
+        "struct": "EnableHTTPLoggingSetting"
     },
     {
         "name": "enable_http_metadata_cache",
         "description": "Whether or not the global http metadata is used to cache HTTP metadata",
         "type": "BOOLEAN",
         "scope": "global",
-        "internal_setting": "http_metadata_cache_enable"
+        "internal_setting": "http_metadata_cache_enable",
+        "struct": "EnableHTTPMetadataCacheSetting"
     },
     {
         "name": "enable_macro_dependencies",
@@ -346,7 +350,8 @@
         "name": "errors_as_json",
         "description": "Output error messages as structured JSON instead of as a raw string",
         "type": "BOOLEAN",
-        "scope": "local"
+        "scope": "local",
+        "struct": "ErrorsAsJSONSetting"
     },
     {
         "name": "explain_output",
@@ -409,31 +414,36 @@
         "name": "http_logging_output",
         "description": "The file to which HTTP logging output should be saved, or empty to print to the terminal",
         "type": "VARCHAR",
-        "scope": "local"
+        "scope": "local",
+        "struct": "HTTPLoggingOutputSetting"
     },
     {
         "name": "http_proxy",
         "description": "HTTP proxy host",
         "type": "VARCHAR",
-        "scope": "global"
+        "scope": "global",
+        "struct": "HTTPProxySetting"
     },
     {
         "name": "http_proxy_password",
         "description": "Password for HTTP proxy",
         "type": "VARCHAR",
-        "scope": "global"
+        "scope": "global",
+        "struct": "HTTPProxyPasswordSetting"
     },
     {
         "name": "http_proxy_username",
         "description": "Username for HTTP proxy",
         "type": "VARCHAR",
-        "scope": "global"
+        "scope": "global",
+        "struct": "HTTPProxyUsernameSetting"
     },
     {
         "name": "ieee_floating_point_ops",
         "description": "Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL).",
         "type": "BOOLEAN",
-        "scope": "local"
+        "scope": "local",
+        "struct": "IEEEFloatingPointOpsSetting"
     },
     {
         "name": "immediate_transaction_mode",

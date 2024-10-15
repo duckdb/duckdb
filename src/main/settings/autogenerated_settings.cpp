@@ -373,49 +373,49 @@ Value EnableExternalAccessSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Enable Fsst Vectors
+// Enable F S S T Vectors
 //===----------------------------------------------------------------------===//
-void EnableFsstVectorsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void EnableFSSTVectorsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.enable_fsst_vectors = input.GetValue<bool>();
 }
 
-void EnableFsstVectorsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+void EnableFSSTVectorsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.enable_fsst_vectors = DBConfig().options.enable_fsst_vectors;
 }
 
-Value EnableFsstVectorsSetting::GetSetting(const ClientContext &context) {
+Value EnableFSSTVectorsSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::CreateValue(config.options.enable_fsst_vectors);
 }
 
 //===----------------------------------------------------------------------===//
-// Enable Http Logging
+// Enable H T T P Logging
 //===----------------------------------------------------------------------===//
-void EnableHttpLoggingSetting::SetLocal(ClientContext &context, const Value &input) {
+void EnableHTTPLoggingSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.enable_http_logging = input.GetValue<bool>();
 }
 
-void EnableHttpLoggingSetting::ResetLocal(ClientContext &context) {
+void EnableHTTPLoggingSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).enable_http_logging = ClientConfig().enable_http_logging;
 }
 
-Value EnableHttpLoggingSetting::GetSetting(const ClientContext &context) {
+Value EnableHTTPLoggingSetting::GetSetting(const ClientContext &context) {
 	return Value::CreateValue(ClientConfig::GetConfig(context).enable_http_logging);
 }
 
 //===----------------------------------------------------------------------===//
-// Enable Http Metadata Cache
+// Enable H T T P Metadata Cache
 //===----------------------------------------------------------------------===//
-void EnableHttpMetadataCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void EnableHTTPMetadataCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.http_metadata_cache_enable = input.GetValue<bool>();
 }
 
-void EnableHttpMetadataCacheSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+void EnableHTTPMetadataCacheSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.http_metadata_cache_enable = DBConfig().options.http_metadata_cache_enable;
 }
 
-Value EnableHttpMetadataCacheSetting::GetSetting(const ClientContext &context) {
+Value EnableHTTPMetadataCacheSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::CreateValue(config.options.http_metadata_cache_enable);
 }
@@ -491,18 +491,18 @@ Value EnableViewDependenciesSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Errors As Json
+// Errors As J S O N
 //===----------------------------------------------------------------------===//
-void ErrorsAsJsonSetting::SetLocal(ClientContext &context, const Value &input) {
+void ErrorsAsJSONSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.errors_as_json = input.GetValue<bool>();
 }
 
-void ErrorsAsJsonSetting::ResetLocal(ClientContext &context) {
+void ErrorsAsJSONSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).errors_as_json = ClientConfig().errors_as_json;
 }
 
-Value ErrorsAsJsonSetting::GetSetting(const ClientContext &context) {
+Value ErrorsAsJSONSetting::GetSetting(const ClientContext &context) {
 	return Value::CreateValue(ClientConfig::GetConfig(context).errors_as_json);
 }
 
@@ -563,82 +563,82 @@ Value HomeDirectorySetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Http Logging Output
+// H T T P Logging Output
 //===----------------------------------------------------------------------===//
-void HttpLoggingOutputSetting::SetLocal(ClientContext &context, const Value &input) {
+void HTTPLoggingOutputSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.http_logging_output = input.GetValue<string>();
 }
 
-void HttpLoggingOutputSetting::ResetLocal(ClientContext &context) {
+void HTTPLoggingOutputSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).http_logging_output = ClientConfig().http_logging_output;
 }
 
-Value HttpLoggingOutputSetting::GetSetting(const ClientContext &context) {
+Value HTTPLoggingOutputSetting::GetSetting(const ClientContext &context) {
 	return Value::CreateValue(ClientConfig::GetConfig(context).http_logging_output);
 }
 
 //===----------------------------------------------------------------------===//
-// Http Proxy
+// H T T P Proxy
 //===----------------------------------------------------------------------===//
-void HttpProxySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void HTTPProxySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.http_proxy = input.GetValue<string>();
 }
 
-void HttpProxySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+void HTTPProxySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.http_proxy = DBConfig().options.http_proxy;
 }
 
-Value HttpProxySetting::GetSetting(const ClientContext &context) {
+Value HTTPProxySetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::CreateValue(config.options.http_proxy);
 }
 
 //===----------------------------------------------------------------------===//
-// Http Proxy Password
+// H T T P Proxy Password
 //===----------------------------------------------------------------------===//
-void HttpProxyPasswordSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void HTTPProxyPasswordSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.http_proxy_password = input.GetValue<string>();
 }
 
-void HttpProxyPasswordSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+void HTTPProxyPasswordSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.http_proxy_password = DBConfig().options.http_proxy_password;
 }
 
-Value HttpProxyPasswordSetting::GetSetting(const ClientContext &context) {
+Value HTTPProxyPasswordSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::CreateValue(config.options.http_proxy_password);
 }
 
 //===----------------------------------------------------------------------===//
-// Http Proxy Username
+// H T T P Proxy Username
 //===----------------------------------------------------------------------===//
-void HttpProxyUsernameSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void HTTPProxyUsernameSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.http_proxy_username = input.GetValue<string>();
 }
 
-void HttpProxyUsernameSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+void HTTPProxyUsernameSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.http_proxy_username = DBConfig().options.http_proxy_username;
 }
 
-Value HttpProxyUsernameSetting::GetSetting(const ClientContext &context) {
+Value HTTPProxyUsernameSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::CreateValue(config.options.http_proxy_username);
 }
 
 //===----------------------------------------------------------------------===//
-// Ieee Floating Point Ops
+// I E E E Floating Point Ops
 //===----------------------------------------------------------------------===//
-void IeeeFloatingPointOpsSetting::SetLocal(ClientContext &context, const Value &input) {
+void IEEEFloatingPointOpsSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.ieee_floating_point_ops = input.GetValue<bool>();
 }
 
-void IeeeFloatingPointOpsSetting::ResetLocal(ClientContext &context) {
+void IEEEFloatingPointOpsSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).ieee_floating_point_ops = ClientConfig().ieee_floating_point_ops;
 }
 
-Value IeeeFloatingPointOpsSetting::GetSetting(const ClientContext &context) {
+Value IEEEFloatingPointOpsSetting::GetSetting(const ClientContext &context) {
 	return Value::CreateValue(ClientConfig::GetConfig(context).ieee_floating_point_ops);
 }
 

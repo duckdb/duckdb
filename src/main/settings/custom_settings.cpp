@@ -602,7 +602,7 @@ Value DisabledOptimizersSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Duckdb Api
 //===----------------------------------------------------------------------===//
-void DuckdbApiSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void DuckDBAPISetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto new_value = input.GetValue<string>();
 	if (db) {
 		throw InvalidInputException("Cannot change duckdb_api setting while database is running");
@@ -610,14 +610,14 @@ void DuckdbApiSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const V
 	config.options.duckdb_api = new_value;
 }
 
-void DuckdbApiSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+void DuckDBAPISetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	if (db) {
 		throw InvalidInputException("Cannot change duckdb_api setting while database is running");
 	}
 	config.options.duckdb_api = GetDefaultUserAgent();
 }
 
-Value DuckdbApiSetting::GetSetting(const ClientContext &context) {
+Value DuckDBAPISetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value(config.options.duckdb_api);
 }
