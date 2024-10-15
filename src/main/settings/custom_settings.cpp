@@ -1072,15 +1072,6 @@ void HomeDirectorySetting::SetLocal(ClientContext &context, const Value &input) 
 	config.home_directory = input.IsNull() ? string() : input.ToString();
 }
 
-void HomeDirectorySetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).home_directory = ClientConfig().home_directory;
-}
-
-Value HomeDirectorySetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value(config.home_directory);
-}
-
 //===----------------------------------------------------------------------===//
 // Index Scan Percentage
 //===----------------------------------------------------------------------===//

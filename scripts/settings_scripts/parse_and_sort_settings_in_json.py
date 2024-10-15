@@ -27,11 +27,11 @@ def add_all_settings_to_global_list():
         setting = Setting(
             name=entry['name'],
             description=entry['description'],
-            type=entry.get('return_type', ""),
+            setting_type=entry.get('return_type', ""),
             sql_type=entry['sql_type'],
             scope=entry['scope'],
             on_callbacks=entry.get('on_callbacks', []),
-            custom_value_conversion=entry.get('custom_implementation', False),
+            custom_implementation=entry.get('custom_implementation', False),
             aliases=entry.get('aliases', []),
         )
         SettingsList.append(setting)

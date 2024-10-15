@@ -430,7 +430,9 @@
         "return_type": "string",
         "sql_type": "VARCHAR",
         "scope": "local",
-        "custom_implementation": true
+        "custom_implementation": [
+            "set"
+        ]
     },
     {
         "name": "http_logging_output",

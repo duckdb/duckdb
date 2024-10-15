@@ -30,23 +30,31 @@ class Setting:
         self,
         name: str,
         description: str,
-        type: str,
+        setting_type: str,
         sql_type: str,
         scope: str,
         on_callbacks: List[str],
-        custom_value_conversion: bool,
+        custom_implementation: bool | List[str],
         aliases: List[str],
     ):
         self.__valid_sql_types_list = self.__extract_valid_sql_types(DUCKDB_SETTINGS_TYPES_FILE)
 
         self.name = self._get_valid_name(name)
         self.description = description
-        self.type = self._get_setting_type(type)
+        self.type = self._get_setting_type(setting_type)
         self.sql_type = self._get_sql_type(sql_type)
         self.scope = self._get_valid_scope(scope)
         self.on_set, self.on_reset = self._get_on_callbacks(on_callbacks)
-        print(self.on_set, self.on_reset, on_callbacks)
-        self.custom_value_conversion = custom_value_conversion
+        custom_callbacks = ['set', 'reset', 'get']
+        if type(custom_implementation) is bool:
+            self.all_custom = custom_implementation
+            self.custom_implementation = custom_callbacks if custom_implementation else []
+        else:
+            for entry in custom_implementation:
+                if entry not in custom_callbacks:
+                    raise ValueError(f"Incorrect input for custom_implementation - expected set/reset/get, got {entry}")
+            self.all_custom = len(set(custom_implementation)) == 3
+            self.custom_implementation = custom_implementation
         self.aliases = self._get_aliases(aliases)
         self.struct_name = self._get_struct_name()
 

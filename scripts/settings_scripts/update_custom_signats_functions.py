@@ -125,7 +125,7 @@ def create_content_for_custom_funcs(custom_settings_path, existing_settings, mis
         if struct_name in missing_settings:
             setting = missing_settings[struct_name]
             # add the setting in the new content
-            if setting.on_set or setting.on_reset or setting.custom_value_conversion:
+            if setting.on_set or setting.on_reset or setting.all_custom:
                 new_content += get_setting_heading(setting.struct_name)
                 new += 1
             if setting.on_set:
@@ -142,7 +142,7 @@ def create_content_for_custom_funcs(custom_settings_path, existing_settings, mis
                 if setting.scope == "LOCAL":
                     new_content += f"bool {setting.struct_name}::OnLocalReset(ClientContext &context) {{\n"
                     new_content += SRC_CODE_IMPLEMENTATION_COMMENT + "}\n\n"
-            if setting.custom_value_conversion:
+            if setting.all_custom:
                 new_content += get_new_setting_def(setting)
         else:
             start_line = existing_settings[struct_name]['start_line']

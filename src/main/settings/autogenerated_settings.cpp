@@ -342,6 +342,17 @@ Value ExternalThreadsSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Home Directory
+//===----------------------------------------------------------------------===//
+void HomeDirectorySetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).home_directory = ClientConfig().home_directory;
+}
+
+Value HomeDirectorySetting::GetSetting(const ClientContext &context) {
+	return Value::CreateValue(ClientConfig::GetConfig(context).home_directory);
+}
+
+//===----------------------------------------------------------------------===//
 // Http Logging Output
 //===----------------------------------------------------------------------===//
 void HttpLoggingOutputSetting::SetLocal(ClientContext &context, const Value &input) {
