@@ -552,6 +552,7 @@ XXH_PUBLIC_API XXH_CONSTF unsigned XXH_versionNumber (void);
 *  Common basic types
 ******************************/
 #include <stddef.h>   /* size_t */
+#include <stdint.h>  /* uint32_t */
 /*!
  * @brief Exit code for the streaming API.
  */
@@ -800,9 +801,9 @@ XXH_PUBLIC_API XXH_PUREF XXH32_hash_t XXH32_hashFromCanonical(const XXH32_canoni
  * C23   : https://en.cppreference.com/w/c/language/attributes/fallthrough
  */
 #if XXH_HAS_C_ATTRIBUTE(fallthrough) || XXH_HAS_CPP_ATTRIBUTE(fallthrough)
-# define XXH_FALLTHROUGH [[fallthrough]]
+# define XXH_FALLTHROUGH /* fallthrough */
 #elif XXH_HAS_ATTRIBUTE(__fallthrough__)
-# define XXH_FALLTHROUGH __attribute__ ((__fallthrough__))
+# define XXH_FALLTHROUGH /* fallthrough */
 #else
 # define XXH_FALLTHROUGH /* fallthrough */
 #endif
