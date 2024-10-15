@@ -44,6 +44,7 @@ if(NOT CLANG_TIDY)
       ../../third_party/lz4/lz4.cpp
       ../../third_party/zstd/decompress/zstd_ddict.cpp
       ../../third_party/zstd/decompress/huf_decompress.cpp
+      ../../third_party/zstd/decompress/huf_decompress_amd64.S
       ../../third_party/zstd/decompress/zstd_decompress.cpp
       ../../third_party/zstd/decompress/zstd_decompress_block.cpp
       ../../third_party/zstd/common/entropy_common.cpp
