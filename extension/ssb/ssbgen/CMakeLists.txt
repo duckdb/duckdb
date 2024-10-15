@@ -4,7 +4,7 @@ add_library(ssbgen OBJECT
     bcd2.c
     bm_utils.c
     build.c
-    driver.c
+    driver.cpp
     load_stub.c
     permute.c
     print.c

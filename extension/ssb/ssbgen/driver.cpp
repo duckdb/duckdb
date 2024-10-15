@@ -5,7 +5,7 @@
 #define NO_FUNC  (int (*)()) NULL  /* to clean up tdefs */
 #define NO_LFUNC (long (*)()) NULL /* to clean up tdefs */
 
-#include "include/driver.h"
+#include "include/driver.hpp"
 
 #include "include/config.h"
 
