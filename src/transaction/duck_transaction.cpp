@@ -271,23 +271,20 @@ unique_ptr<StorageLockKey> DuckTransaction::TryGetCheckpointLock() {
 }
 
 shared_ptr<CheckpointLock> DuckTransaction::SharedLockTable(DataTableInfo &info) {
-	lock_guard<mutex> l(active_locks_lock);
-	auto entry = active_locks.find(info);
-	if (entry != active_locks.end()) {
-		// found an existing lock
-		auto lock_weak_ptr = entry->second;
-		// check if it is expired
-		auto lock = lock_weak_ptr.lock();
-		if (lock) {
-			// not expired - return it
-			return lock;
-		}
+	unique_lock<mutex> transaction_lock(active_locks_lock);
+	auto &active_table_lock = active_locks[info];
+	transaction_lock.unlock(); // release transaction-level lock before acquiring table-level lock
+	lock_guard<mutex> table_lock(active_table_lock.checkpoint_lock_mutex);
+	auto checkpoint_lock = active_table_lock.checkpoint_lock.lock();
+	// check if it is expired (or has never been acquired yet)
+	if (checkpoint_lock) {
+		// not expired - return it
+		return checkpoint_lock;
 	}
 	// no existing lock - obtain it
-	auto table_lock = info.GetSharedLock();
-	auto checkpoint_lock = make_shared_ptr<CheckpointLock>(std::move(table_lock));
-	// insert it into the active locks and return it
-	active_locks.insert(make_pair(std::ref(info), checkpoint_lock));
+	checkpoint_lock = make_shared_ptr<CheckpointLock>(info.GetSharedLock());
+	// store it for future reference
+	active_table_lock.checkpoint_lock = checkpoint_lock;
 	return checkpoint_lock;
 }
 
