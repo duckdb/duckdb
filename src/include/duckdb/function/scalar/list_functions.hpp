@@ -45,4 +45,73 @@ struct ArrayWhereFun {
 	static constexpr const char *Name = "array_where";
 };
 
+struct ListContainsFun {
+	static constexpr const char *Name = "list_contains";
+	static constexpr const char *Parameters = "list,element";
+	static constexpr const char *Description = "Returns true if the list contains the element.";
+	static constexpr const char *Example = "list_contains([1, 2, NULL], 1)";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ArrayContainsFun {
+	using ALIAS = ListContainsFun;
+
+	static constexpr const char *Name = "array_contains";
+};
+
+struct ListHasFun {
+	using ALIAS = ListContainsFun;
+
+	static constexpr const char *Name = "list_has";
+};
+
+struct ArrayHasFun {
+	using ALIAS = ListContainsFun;
+
+	static constexpr const char *Name = "array_has";
+};
+
+struct ListPositionFun {
+	static constexpr const char *Name = "list_position";
+	static constexpr const char *Parameters = "list,element";
+	static constexpr const char *Description = "Returns the index of the element if the list contains the element. If the element is not found, it returns NULL.";
+	static constexpr const char *Example = "list_position([1, 2, NULL], 2)";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ListIndexofFun {
+	using ALIAS = ListPositionFun;
+
+	static constexpr const char *Name = "list_indexof";
+};
+
+struct ArrayPositionFun {
+	using ALIAS = ListPositionFun;
+
+	static constexpr const char *Name = "array_position";
+};
+
+struct ArrayIndexofFun {
+	using ALIAS = ListPositionFun;
+
+	static constexpr const char *Name = "array_indexof";
+};
+
+struct ListZipFun {
+	static constexpr const char *Name = "list_zip";
+	static constexpr const char *Parameters = "list1,list2,...";
+	static constexpr const char *Description = "Zips k LISTs to a new LIST whose length will be that of the longest list. Its elements are structs of k elements from each list list_1, …, list_k, missing elements are replaced with NULL. If truncate is set, all lists are truncated to the smallest list length.";
+	static constexpr const char *Example = "list_zip([1, 2], [3, 4], [5, 6])";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ArrayZipFun {
+	using ALIAS = ListZipFun;
+
+	static constexpr const char *Name = "array_zip";
+};
+
 } // namespace duckdb
