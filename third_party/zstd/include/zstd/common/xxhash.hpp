@@ -303,7 +303,7 @@
  */
 #  define XXH_NAMESPACE /* YOUR NAME HERE */
 #  undef XXH_NAMESPACE
-#endif
+#endif /* XXH_DOXYGEN */
 
 #if (defined(XXH_INLINE_ALL) || defined(XXH_PRIVATE_API)) \
     && !defined(XXH_INLINE_ALL_31684351384)
@@ -591,7 +591,7 @@ typedef uint32_t XXH32_hash_t;
 #   else
 #     error "unsupported platform: need a 32-bit type"
 #   endif
-#endif
+#endif /* XXH_DOXYGEN */
 
 /*!
  * @}
@@ -857,7 +857,7 @@ typedef uint64_t XXH64_hash_t;
      /* the following type must have a width of 64-bit */
      typedef unsigned long long XXH64_hash_t;
 #  endif
-#endif
+#endif /* XXH_DOXYGEN */
 
 /*!
  * @}
@@ -3810,7 +3810,7 @@ enum XXH_VECTOR_TYPE /* fake enum */ {
  * Default: Auto detected.
  */
 #  define XXH_ACC_ALIGN 8
-#endif
+#endif /* XXH_DOXYGEN */
 
 /* Actual definition */
 #ifndef XXH_DOXYGEN
@@ -3821,7 +3821,7 @@ enum XXH_VECTOR_TYPE /* fake enum */ {
 #  define XXH_NEON   4
 #  define XXH_VSX    5
 #  define XXH_SVE    6
-#endif
+#endif /* XXH_DOXYGEN */
 
 #ifndef XXH_VECTOR    /* can be defined on command line */
 #  if defined(__ARM_FEATURE_SVE)
@@ -4209,7 +4209,7 @@ do { \
 
 #if (XXH_SECRET_DEFAULT_SIZE < XXH3_SECRET_SIZE_MIN)
 #  error "default keyset is not large enough"
-#endif
+#endif /* XXH_SECRET_DEFAULT_SIZE */
 
 /*! Pseudorandom secret taken directly from FARSH. */
 XXH_ALIGN(64) static const xxh_u8 XXH3_kSecret[XXH_SECRET_DEFAULT_SIZE] = {
@@ -4267,7 +4267,7 @@ XXH_mult32to64(xxh_u64 x, xxh_u64 y)
  * and perform a full 64x64 multiply -- entirely redundant on 32-bit.
  */
 #    define XXH_mult32to64(x, y) ((xxh_u64)(xxh_u32)(x) * (xxh_u64)(xxh_u32)(y))
-#endif
+#endif /* #XXH_DOXYGEN */
 
 /*!
  * @brief Calculates a 64->128-bit long multiply.

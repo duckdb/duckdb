@@ -11,9 +11,9 @@
 #ifndef ZSTD_OPT_H
 #define ZSTD_OPT_H
 
-namespace duckdb_zstd {
-
 #include "zstd/compress/zstd_compress_internal.h"
+
+namespace duckdb_zstd {
 
 #if !defined(ZSTD_EXCLUDE_BTLAZY2_BLOCK_COMPRESSOR) \
  || !defined(ZSTD_EXCLUDE_BTOPT_BLOCK_COMPRESSOR) \

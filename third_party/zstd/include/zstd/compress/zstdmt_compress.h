@@ -11,9 +11,6 @@
  #ifndef ZSTDMT_COMPRESS_H
  #define ZSTDMT_COMPRESS_H
 
-namespace duckdb_zstd {
-
-
 /* Note : This is an internal API.
  *        These APIs used to be exposed with ZSTDLIB_API,
  *        because it used to be the only way to invoke MT compression.
@@ -28,6 +25,7 @@ namespace duckdb_zstd {
 #define ZSTD_STATIC_LINKING_ONLY   /* ZSTD_parameters */
 #include "zstd.h"            /* ZSTD_inBuffer, ZSTD_outBuffer, ZSTDLIB_API */
 
+namespace duckdb_zstd {
 
 /* ===   Constants   === */
 #ifndef ZSTDMT_NBWORKERS_MAX /* a different value can be selected at compile time */

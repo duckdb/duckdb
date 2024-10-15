@@ -11,9 +11,9 @@
 #ifndef ZSTD_LAZY_H
 #define ZSTD_LAZY_H
 
-namespace duckdb_zstd {
-
 #include "zstd/compress/zstd_compress_internal.h"
+
+namespace duckdb_zstd {
 
 /**
  * Dedicated Dictionary Search Structure bucket log. In the

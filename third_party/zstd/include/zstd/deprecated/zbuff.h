@@ -16,8 +16,6 @@
  * See 'lib/README.md'.
  *****************************************************************/
 
-namespace duckdb_zstd {
-
 #ifndef ZSTD_BUFFERED_H_23987
 #define ZSTD_BUFFERED_H_23987
 
@@ -27,6 +25,7 @@ namespace duckdb_zstd {
 #include <stddef.h>      /* size_t */
 #include "zstd.h"        /* ZSTD_CStream, ZSTD_DStream, ZSTDLIB_API */
 
+namespace duckdb_zstd {
 
 /* ***************************************************************
 *  Compiler specifics
@@ -181,10 +180,13 @@ ZBUFF_DEPRECATED("use ZSTD_DStreamOutSize") size_t ZBUFF_recommendedDOutSize(voi
  * Use them only in association with static linking.
  * ==================================================================================== */
 
+} // namespace duckdb_zstd
+
 /*--- Dependency ---*/
 #define ZSTD_STATIC_LINKING_ONLY   /* ZSTD_parameters, ZSTD_customMem */
-#include "../zstd.h"
+#include "zstd.h"
 
+namespace duckdb_zstd {
 
 /*--- Custom memory allocator ---*/
 /*! ZBUFF_createCCtx_advanced() :
@@ -201,9 +203,8 @@ ZBUFF_DEPRECATED("use ZSTD_initDStream_usingDict") size_t ZBUFF_compressInit_adv
                                                const void* dict, size_t dictSize,
                                                ZSTD_parameters params, unsigned long long pledgedSrcSize);
 
+} // namespace duckdb_zstd
 
 #endif    /* ZBUFF_STATIC_H_30298098432 */
 #endif    /* ZBUFF_STATIC_LINKING_ONLY */
 
-
-} // namespace duckdb_zstd

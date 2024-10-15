@@ -11,10 +11,10 @@
 #ifndef ZSTD_FAST_H
 #define ZSTD_FAST_H
 
-namespace duckdb_zstd {
-
 #include "zstd/common/mem.h"      /* U32 */
 #include "zstd/compress/zstd_compress_internal.h"
+
+namespace duckdb_zstd {
 
 void ZSTD_fillHashTable(ZSTD_matchState_t* ms,
                         void const* end, ZSTD_dictTableLoadMethod_e dtlm,
