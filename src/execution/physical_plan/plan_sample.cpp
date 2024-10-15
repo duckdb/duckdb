@@ -12,6 +12,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSample &op
 	auto plan = CreatePlan(*op.children[0]);
 
 	unique_ptr<PhysicalOperator> sample;
+	if (op.sample_options->seed == -1) {
+		auto &random_engine = RandomEngine::Get(context);
+		op.sample_options->SetSeed(random_engine.NextRandomInteger());
+	}
 	switch (op.sample_options->method) {
 	case SampleMethod::RESERVOIR_SAMPLE:
 		sample = make_uniq<PhysicalReservoirSample>(op.types, std::move(op.sample_options), op.estimated_cardinality);
