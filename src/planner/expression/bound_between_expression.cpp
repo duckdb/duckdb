@@ -15,6 +15,10 @@ BoundBetweenExpression::BoundBetweenExpression(unique_ptr<Expression> input, uni
 }
 
 string BoundBetweenExpression::ToString() const {
+	if (input->return_type.id() == LogicalTypeId::INET) {
+		return input->ToString() + " BETWEEN " + lower->ToString() + (lower_inclusive ? " (inclusive)" : " (exclusive)") +
+		       " AND " + upper->ToString() + (upper_inclusive ? " (inclusive)" : " (exclusive)");
+	}
 	return BetweenExpression::ToString<BoundBetweenExpression, Expression>(*this);
 }
 

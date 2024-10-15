@@ -81,6 +81,9 @@ static idx_t BetweenLoopTypeSwitch(Vector &input, Vector &lower, Vector &upper, 
 	case PhysicalType::INTERVAL:
 		return TernaryExecutor::Select<interval_t, interval_t, interval_t, OP>(input, lower, upper, sel, count,
 		                                                                       true_sel, false_sel);
+	case PhysicalType::INET:
+		return TernaryExecutor::Select<string_t, string_t, string_t, OP>(input, lower, upper, sel, count, true_sel,
+		                                                                 false_sel);
 	default:
 		throw InvalidTypeException(input.GetType(), "Invalid type for BETWEEN");
 	}

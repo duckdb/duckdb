@@ -1,0 +1,22 @@
+# Test for BETWEEN operation with INET type
+
+# Create a table with INET type column
+CREATE TABLE test (ip INET);
+
+# Insert values into the table
+INSERT INTO test VALUES ('10.10.10.1'), ('10.10.10.2'), ('10.10.10.3');
+
+# Select all rows
+SELECT * FROM test;
+
+# Test BETWEEN operation with INET type
+SELECT * FROM test WHERE ip BETWEEN '10.10.10.1'::INET AND '10.10.10.3'::INET;
+
+# Test BETWEEN operation with INET type (exclusive)
+SELECT * FROM test WHERE ip > '10.10.10.1'::INET AND ip < '10.10.10.3'::INET;
+
+# Test BETWEEN operation with INET type (lower inclusive, upper exclusive)
+SELECT * FROM test WHERE ip >= '10.10.10.1'::INET AND ip < '10.10.10.3'::INET;
+
+# Test BETWEEN operation with INET type (lower exclusive, upper inclusive)
+SELECT * FROM test WHERE ip > '10.10.10.1'::INET AND ip <= '10.10.10.3'::INET;
