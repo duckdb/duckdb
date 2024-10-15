@@ -60,13 +60,13 @@ unique_ptr<BaseSecret> CreateS3SecretFunctions::CreateSecretFunctionInternal(Cli
 				throw InvalidInputException("Invalid type past to secret option: '%s', found '%s', expected: 'BOOLEAN'",
 				                            lower_name, named_param.second.type().ToString());
 			}
-			secret->secret_map["use_ssl"] = named_param.second.GetValue<bool>();
+			secret->secret_map["use_ssl"] = Value::BOOLEAN(named_param.second.GetValue<bool>());
 		} else if (lower_name == "url_compatibility_mode") {
 			if (named_param.second.type() != LogicalType::BOOLEAN) {
 				throw InvalidInputException("Invalid type past to secret option: '%s', found '%s', expected: 'BOOLEAN'",
 				                            lower_name, named_param.second.type().ToString());
 			}
-			secret->secret_map["url_compatibility_mode"] = named_param.second.GetValue<bool>();
+			secret->secret_map["url_compatibility_mode"] = Value::BOOLEAN(named_param.second.GetValue<bool>());
 		} else if (lower_name == "account_id") {
 			continue; // handled already
 		} else {

@@ -116,9 +116,10 @@ SourceResultType PhysicalOperator::GetData(ExecutionContext &context, DataChunk 
 	throw InternalException("Calling GetData on a node that is not a source!");
 }
 
-idx_t PhysicalOperator::GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                                      LocalSourceState &lstate) const {
-	throw InternalException("Calling GetBatchIndex on a node that does not support it");
+OperatorPartitionData PhysicalOperator::GetPartitionData(ExecutionContext &context, DataChunk &chunk,
+                                                         GlobalSourceState &gstate, LocalSourceState &lstate,
+                                                         const OperatorPartitionInfo &partition_info) const {
+	throw InternalException("Calling GetPartitionData on a node that does not support it");
 }
 
 double PhysicalOperator::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
@@ -175,10 +176,13 @@ bool PhysicalOperator::OperatorCachingAllowed(ExecutionContext &context) {
 		return false;
 	} else if (!context.pipeline->GetSink()) {
 		return false;
-	} else if (context.pipeline->GetSink()->RequiresBatchIndex()) {
-		return false;
 	} else if (context.pipeline->IsOrderDependent()) {
 		return false;
+	} else {
+		auto partition_info = context.pipeline->GetSink()->RequiredPartitionInfo();
+		if (partition_info.AnyRequired()) {
+			return false;
+		}
 	}
 
 	return true;
@@ -240,7 +244,7 @@ vector<const_reference<PhysicalOperator>> PhysicalOperator::GetSources() const {
 bool PhysicalOperator::AllSourcesSupportBatchIndex() const {
 	auto sources = GetSources();
 	for (auto &source : sources) {
-		if (!source.get().SupportsBatchIndex()) {
+		if (!source.get().SupportsPartitioning(OperatorPartitionInfo::BatchIndex())) {
 			return false;
 		}
 	}

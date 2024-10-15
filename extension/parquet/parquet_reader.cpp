@@ -29,6 +29,7 @@
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
+#include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #endif
@@ -1001,7 +1002,12 @@ static void ApplyFilter(Vector &v, TableFilter &filter, parquet_filter_t &filter
 		auto &struct_filter = filter.Cast<StructFilter>();
 		auto &child = StructVector::GetEntries(v)[struct_filter.child_idx];
 		ApplyFilter(*child, *struct_filter.child_filter, filter_mask, count);
-	} break;
+	}
+	case TableFilterType::OPTIONAL_FILTER: {
+		// we don't execute zone map filters here - we only consider them for zone map pruning
+		// do nothing to the mask.
+		break;
+	}
 	default:
 		D_ASSERT(0);
 		break;
@@ -1048,7 +1054,6 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 
 		auto &group = GetGroup(state);
 		if (state.prefetch_mode && state.group_offset != (idx_t)group.num_rows) {
-
 			uint64_t total_row_group_span = GetGroupSpan(state);
 
 			double scan_percentage = (double)(to_scan_compressed_bytes) / static_cast<double>(total_row_group_span);

@@ -222,14 +222,58 @@ jobs:
             echo "Storage bump detected, all good!"
           fi
 
-  regression-test-python:
-    name: Regression Test (Python Client)
+  regression-test-binary-size:
+    name: Regression test binary size
     runs-on: ubuntu-20.04
     env:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_JSON: 1
+      BUILD_PARQUET: 1
+      EXTENSION_STATIC_BUILD: 1
+  steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Build
+      shell: bash
+      run: |
+        make
+        git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
+        cd duckdb
+        make
+        cd ..
+
+  regression-test-binary-size:
+    name: Regression test binary size
+    runs-on: ubuntu-20.04
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_JSON: 1
+      BUILD_PARQUET: 1
+      EXTENSION_STATIC_BUILD: 1
     steps:
       - uses: actions/checkout@v4
         with:
@@ -241,9 +285,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: |
-          sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-          pip install numpy pytest pandas mypy psutil pyarrow
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
@@ -251,43 +293,19 @@ jobs:
           key: ${{ github.job }}
           save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
-      - name: Build Current Version
+      - name: Build
         shell: bash
         run: |
-          cd tools/pythonpkg
-          pip install --use-pep517 . --user
-          cd ../..
-
-      - name: Run New Version
-        shell: bash
-        run: |
-          python scripts/regression_test_python.py --threads=2 --out-file=new.csv
-
-      - name: Cleanup New Version
-        shell: bash
-        run: |
-          cd tools/pythonpkg
-          ./clean.sh
-          cd ../..
-
-      - name: Build Current
-        shell: bash
-        run: |
+          make
           git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
-          cd duckdb/tools/pythonpkg
-          pip install --use-pep517 . --user
-          cd ../../..
+          cd duckdb
+          make
+          cd ..
 
-      - name: Run Current Version
+      - name: Regression Test Extension binary size
         shell: bash
         run: |
-          python scripts/regression_test_python.py --threads=2 --out-file=current.csv
-
-      - name: Regression Test
-        shell: bash
-        run: |
-          cp -r benchmark duckdb/
-          python scripts/regression_check.py --old=current.csv --new=new.csv
+          python scripts/regression_test_extension_size.py --old 'duckdb/build/release/extension' --new build/release/extension --expect json,parquet,tpch,tpcds
 
   regression-test-plan-cost:
     name: Regression Test Join Order Plan Cost
@@ -343,3 +361,5 @@ jobs:
         shell: bash
         run: |
           python scripts/plan_cost_runner.py --old=duckdb/build/release/duckdb --new=build/release/duckdb --dir=benchmark/tpch_plan_cost
+
+

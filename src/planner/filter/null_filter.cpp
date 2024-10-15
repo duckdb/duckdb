@@ -1,5 +1,4 @@
 #include "duckdb/planner/filter/null_filter.hpp"
-
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 

@@ -1,0 +1,22 @@
+diff --git a/src/to_substrait.cpp b/src/to_substrait.cpp
+index a466fb2..44a9923 100644
+--- a/src/to_substrait.cpp
++++ b/src/to_substrait.cpp
+@@ -1296,6 +1296,17 @@ substrait::Rel *DuckDBToSubstrait::TransformGet(LogicalOperator &dop) {
+ 	auto bind_info = dget.function.get_bind_info(dget.bind_data.get());
+ 	auto sget = get_rel->mutable_read();
+ 
++	if (!dget.table_filters.filters.empty()) {
++
++		for (auto it = dget.table_filters.filters.begin(); it != dget.table_filters.filters.end();) {
++			if (it->second->filter_type == TableFilterType::OPTIONAL_FILTER) {
++				it = dget.table_filters.filters.erase(it);
++			} else {
++				++it;
++			}
++		}
++	}
++
+ 	if (!dget.table_filters.filters.empty()) {
+ 		// Pushdown filter
+ 		auto filter = CreateConjunction(dget.table_filters.filters,
