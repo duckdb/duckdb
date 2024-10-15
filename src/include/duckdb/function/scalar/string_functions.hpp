@@ -45,4 +45,58 @@ struct LcaseFun {
 	static constexpr const char *Name = "lcase";
 };
 
+struct ConcatWsFun {
+	static constexpr const char *Name = "concat_ws";
+	static constexpr const char *Parameters = "separator,string,...";
+	static constexpr const char *Description = "Concatenate strings together separated by the specified separator.";
+	static constexpr const char *Example = "concat_ws(', ', 'Banana', 'Apple', 'Melon')";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ConcatFun {
+	static constexpr const char *Name = "concat";
+	static constexpr const char *Parameters = "string,...";
+	static constexpr const char *Description = "Concatenate many strings together.";
+	static constexpr const char *Example = "concat('Hello', ' ', 'World')";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ListConcatFun {
+	static constexpr const char *Name = "list_concat";
+	static constexpr const char *Parameters = "list1,list2";
+	static constexpr const char *Description = "Concatenates two lists.";
+	static constexpr const char *Example = "list_concat([2, 3], [4, 5, 6])";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ListCatFun {
+	using ALIAS = ListConcatFun;
+
+	static constexpr const char *Name = "list_cat";
+};
+
+struct ArrayConcatFun {
+	using ALIAS = ListConcatFun;
+
+	static constexpr const char *Name = "array_concat";
+};
+
+struct ArrayCatFun {
+	using ALIAS = ListConcatFun;
+
+	static constexpr const char *Name = "array_cat";
+};
+
+struct ConcatOperatorFun {
+	static constexpr const char *Name = "||";
+	static constexpr const char *Parameters = "list1,list2";
+	static constexpr const char *Description = "Concatenates two lists.";
+	static constexpr const char *Example = "list_concat([2, 3], [4, 5, 6])";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb

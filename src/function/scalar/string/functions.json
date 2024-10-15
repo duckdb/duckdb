@@ -16,5 +16,35 @@
         "type": "scalar_function",
         "struct": "LowerFun",
         "aliases": ["lcase"]
+    },
+    {
+        "name": "concat_ws",
+        "parameters": "separator,string,...",
+        "description": "Concatenate strings together separated by the specified separator.",
+        "example": "concat_ws(', ', 'Banana', 'Apple', 'Melon')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "concat",
+        "parameters": "string,...",
+        "description": "Concatenate many strings together.",
+        "example": "concat('Hello', ' ', 'World')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "list_concat",
+        "parameters": "list1,list2",
+        "description": "Concatenates two lists.",
+        "example": "list_concat([2, 3], [4, 5, 6])",
+        "type": "scalar_function",
+        "aliases": ["list_cat","array_concat","array_cat"]
+    },
+    {
+        "name": "||",
+        "parameters": "list1,list2",
+        "description": "Concatenates two lists.",
+        "example": "list_concat([2, 3], [4, 5, 6])",
+        "type": "scalar_function",
+        "struct": "ConcatOperatorFun"
     }
 ]

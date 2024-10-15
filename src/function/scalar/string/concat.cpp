@@ -3,7 +3,8 @@
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
-#include "duckdb/function/scalar/string_functions_tmp.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
+
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
@@ -369,30 +370,26 @@ ScalarFunction ListConcatFun::GetFunction() {
 	return fun;
 }
 
-void ListConcatFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"list_concat", "list_cat", "array_concat", "array_cat"}, GetFunction());
-}
+// the concat operator and concat function have different behavior regarding NULLs
+// this is strange but seems consistent with postgresql and mysql
+// (sqlite does not support the concat function, only the concat operator)
 
-void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
-	// the concat operator and concat function have different behavior regarding NULLs
-	// this is strange but seems consistent with postgresql and mysql
-	// (sqlite does not support the concat function, only the concat operator)
-
-	// the concat operator behaves as one would expect: any NULL value present results in a NULL
-	// i.e. NULL || 'hello' = NULL
-	// the concat function, however, treats NULL values as an empty string
-	// i.e. concat(NULL, 'hello') = 'hello'
-
+// the concat operator behaves as one would expect: any NULL value present results in a NULL
+// i.e. NULL || 'hello' = NULL
+// the concat function, however, treats NULL values as an empty string
+// i.e. concat(NULL, 'hello') = 'hello'
+ScalarFunction ConcatFun::GetFunction() {
 	ScalarFunction concat =
 	    ScalarFunction("concat", {LogicalType::ANY}, LogicalType::ANY, ConcatFunction, BindConcatFunction);
 	concat.varargs = LogicalType::ANY;
 	concat.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	set.AddFunction(concat);
+	return concat;
+}
 
+ScalarFunction ConcatOperatorFun::GetFunction() {
 	ScalarFunction concat_op = ScalarFunction("||", {LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY,
 	                                          ConcatFunction, BindConcatOperator);
-	concat.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	set.AddFunction(concat_op);
+	return concat_op;
 }
 
 } // namespace duckdb
