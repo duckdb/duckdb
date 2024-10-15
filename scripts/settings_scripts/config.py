@@ -34,7 +34,7 @@ class Setting:
         scope: str,
         internal_setting: str,
         on_callbacks: List[str],
-        custom_implementation: bool | List[str],
+        custom_implementation,
         struct_name: str,
         aliases: List[str],
     ):
