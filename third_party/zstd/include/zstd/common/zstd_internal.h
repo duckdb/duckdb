@@ -32,7 +32,7 @@
 #ifndef XXH_STATIC_LINKING_ONLY
 #  define XXH_STATIC_LINKING_ONLY  /* XXH64_state_t */
 #endif
-#include "zstd/common/xxhash.h"                /* XXH_reset, update, digest */
+#include "zstd/common/xxhash.hpp"                /* XXH_reset, update, digest */
 #ifndef ZSTD_NO_TRACE
 #  include "zstd/common/zstd_trace.h"
 #else

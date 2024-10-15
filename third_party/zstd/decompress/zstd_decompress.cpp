@@ -64,7 +64,7 @@
 #define FSE_STATIC_LINKING_ONLY
 #include "zstd/common/fse.h"
 #include "zstd/common/huf.h"
-#include "zstd/common/xxhash.h" /* XXH64_reset, XXH64_update, XXH64_digest, XXH64 */
+#include "zstd/common/xxhash.hpp" /* XXH64_reset, XXH64_update, XXH64_digest, XXH64 */
 #include "zstd/decompress/zstd_decompress_internal.h"   /* ZSTD_DCtx */
 #include "zstd/decompress/zstd_ddict.h"  /* ZSTD_DDictDictContent */
 #include "zstd/decompress/zstd_decompress_block.h"   /* ZSTD_decompressBlock_internal */

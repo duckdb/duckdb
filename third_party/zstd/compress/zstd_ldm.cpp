@@ -11,7 +11,7 @@
 #include "zstd/compress/zstd_ldm.h"
 
 #include "zstd/common/debug.h"
-#include "zstd/common/xxhash.h"
+#include "zstd/common/xxhash.hpp"
 #include "zstd/compress/zstd_fast.h"          /* ZSTD_fillHashTable() */
 #include "zstd/compress/zstd_double_fast.h"   /* ZSTD_fillDoubleHashTable() */
 #include "zstd/compress/zstd_ldm_geartab.h"

@@ -227,10 +227,6 @@
  * xxHash prototypes and implementation
  */
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
-
 /* ****************************
  *  INLINE mode
  ******************************/
@@ -551,11 +547,11 @@ XXH_PUBLIC_API XXH_CONSTF unsigned XXH_versionNumber (void);
 /* ****************************
 *  Common basic types
 ******************************/
-#include <stddef.h>   /* size_t */
+#include <cstddef>   /* size_t */
 //! (duckdb) Manually added to fix compilation error on linux for missing 'uint32_t'
 //! 'stdint.h' is mentioned later on in the file so this might have been explicitly left out?
 //! Leaving this comment here for potential future debugging
-#include <stdint.h>  /* uint32_t */
+#include <cstdint>  /* uint32_t */
 /*!
  * @brief Exit code for the streaming API.
  */
@@ -2293,7 +2289,7 @@ static void XXH_free(void* p) { (void)p; }
  * Modify the local functions below should you wish to use
  * different memory routines for malloc() and free()
  */
-#include <stdlib.h>
+#include <cstdlib>
 
 /*!
  * @internal
@@ -2309,7 +2305,7 @@ static void XXH_free(void* p) { free(p); }
 
 #endif  /* XXH_NO_STDLIB */
 
-#include <string.h>
+#include <cstring>
 
 /*!
  * @internal
@@ -2320,7 +2316,7 @@ static void* XXH_memcpy(void* dest, const void* src, size_t size)
     return memcpy(dest,src,size);
 }
 
-#include <limits.h>   /* ULLONG_MAX */
+#include <climits>   /* ULLONG_MAX */
 
 
 /* *************************************
@@ -6881,7 +6877,7 @@ XXH_PUBLIC_API XXH128_hash_t XXH3_128bits_digest (XXH_NOESCAPE const XXH3_state_
 #endif /* !XXH_NO_STREAM */
 /* 128-bit utility functions */
 
-#include <string.h>   /* memcmp, memcpy */
+#include <cstring>   /* memcmp, memcpy */
 
 /* return : 1 is equal, 0 if different */
 /*! @ingroup XXH3_family */
@@ -7017,8 +7013,3 @@ XXH3_generateSecret_fromSeed(XXH_NOESCAPE void* secretBuffer, XXH64_hash_t seed)
  * @}
  */
 #endif  /* XXH_IMPLEMENTATION */
-
-
-#if defined (__cplusplus)
-} /* extern "C" */
-#endif
