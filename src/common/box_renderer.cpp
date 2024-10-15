@@ -139,7 +139,7 @@ list<ColumnDataCollection> BoxRenderer::FetchRenderCollections(ClientContext &co
 	for (idx_t c = 0; c < column_count; c++) {
 		varchar_types.emplace_back(LogicalType::VARCHAR);
 	}
-	std::list<ColumnDataCollection> collections;
+	list<ColumnDataCollection> collections;
 	collections.emplace_back(context, varchar_types);
 	collections.emplace_back(context, varchar_types);
 
@@ -229,7 +229,7 @@ list<ColumnDataCollection> BoxRenderer::PivotCollections(ClientContext &context,
 	//
 	DataChunk row_chunk;
 	row_chunk.Initialize(Allocator::DefaultAllocator(), varchar_types);
-	std::list<ColumnDataCollection> result;
+	list<ColumnDataCollection> result;
 	result.emplace_back(context, varchar_types);
 	result.emplace_back(context, varchar_types);
 	auto &res_coll = result.front();

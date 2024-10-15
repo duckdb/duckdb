@@ -29,6 +29,7 @@ extern void (*JET_MUTABLE invalid_conf_abort)(void);
 extern bool opt_utrace;
 extern bool opt_xmalloc;
 extern bool opt_experimental_infallible_new;
+extern bool opt_experimental_tcache_gc;
 extern bool opt_zero;
 extern unsigned opt_narenas;
 extern zero_realloc_action_t opt_zero_realloc_action;

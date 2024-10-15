@@ -321,6 +321,8 @@ public:
 	vector<unique_ptr<ExtensionCallback>> extension_callbacks;
 	//! Encryption Util for OpenSSL
 	shared_ptr<EncryptionUtil> encryption_util;
+	//! The default allocation functions (malloc, realloc, free) - stored here to not mix up different allocators
+	const AllocationFunctions allocation_functions;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);

@@ -63,7 +63,8 @@ void arena_do_deferred_work(tsdn_t *tsdn, arena_t *arena);
 void arena_reset(tsd_t *tsd, arena_t *arena);
 void arena_destroy(tsd_t *tsd, arena_t *arena);
 void arena_cache_bin_fill_small(tsdn_t *tsdn, arena_t *arena,
-    cache_bin_t *cache_bin, szind_t binind, const cache_bin_sz_t nfill);
+    cache_bin_t *cache_bin, szind_t binind, const cache_bin_sz_t nfill_min,
+    const cache_bin_sz_t nfill_max);
 
 void *arena_malloc_hard(tsdn_t *tsdn, arena_t *arena, size_t size,
     szind_t ind, bool zero, bool slab);

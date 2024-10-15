@@ -59,18 +59,20 @@
 #define JEMALLOC_C11_ATOMICS
 
 /* Defined if GCC __atomic atomics are available. */
-#ifndef _MSC_VER
+#ifdef __GNUC__
 #define JEMALLOC_GCC_ATOMIC_ATOMICS
 #endif
 /* and the 8-bit variant support. */
+#ifdef __GNUC__
 #define JEMALLOC_GCC_U8_ATOMIC_ATOMICS
+#endif
 
 /* Defined if GCC __sync atomics are available. */
-#ifndef _MSC_VER
+#ifdef __GNUC__
 #define JEMALLOC_GCC_SYNC_ATOMICS
 #endif
 /* and the 8-bit variant support. */
-#ifndef _MSC_VER
+#ifdef __GNUC__
 #define JEMALLOC_GCC_U8_SYNC_ATOMICS
 #endif
 
@@ -297,7 +299,6 @@
  */
 // ----- DuckDB comment -----
 // This makes it feasible to run the larger page size (https://github.com/duckdb/duckdb/discussions/11455),
-// but it causes DuckDB to retain RSS even after closing the connection, so we have to disable it
 #if INTPTR_MAX == INT64_MAX && !defined(__APPLE__)
 #define JEMALLOC_RETAIN
 #endif
@@ -387,7 +388,9 @@
 #endif
 
 /* Defined if madvise(2) is available. */
+#ifndef _MSC_VER
 #define JEMALLOC_HAVE_MADVISE
+#endif
 
 /*
  * Defined if transparent huge pages are supported via the MADV_[NO]HUGEPAGE
@@ -434,7 +437,9 @@
 /* #undef JEMALLOC_MADVISE_NOCORE */
 
 /* Defined if mprotect(2) is available. */
+#ifndef _MSC_VER
 #define JEMALLOC_HAVE_MPROTECT
+#endif
 
 /*
  * Defined if transparent huge pages (THPs) are supported via the
@@ -525,7 +530,9 @@
 /*
  * If defined, all the features necessary for background threads are present.
  */
+#ifndef __APPLE__
 #define JEMALLOC_BACKGROUND_THREAD
+#endif
 
 /*
  * If defined, jemalloc symbols are not exported (doesn't work when

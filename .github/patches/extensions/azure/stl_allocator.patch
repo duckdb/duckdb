@@ -1,0 +1,22 @@
+diff --git a/src/azure_dfs_filesystem.cpp b/src/azure_dfs_filesystem.cpp
+index 27966e3..3d47c60 100644
+--- a/src/azure_dfs_filesystem.cpp
++++ b/src/azure_dfs_filesystem.cpp
+@@ -28,7 +28,7 @@ inline static bool IsDfsScheme(const string &fpath) {
+ }
+ 
+ static void Walk(const Azure::Storage::Files::DataLake::DataLakeFileSystemClient &fs, const std::string &path,
+-                 const string &path_pattern, std::size_t end_match, std::vector<std::string> *out_result) {
++                 const string &path_pattern, std::size_t end_match, vector<std::string> *out_result) {
+ 	auto directory_client = fs.GetDirectoryClient(path);
+ 
+ 	bool recursive = false;
+@@ -139,7 +139,7 @@ vector<string> AzureDfsStorageFileSystem::Glob(const string &path, FileOpener *o
+ 	}
+ 	auto shared_path = azure_url.path.substr(0, index_root_dir);
+ 
+-	std::vector<std::string> result;
++	vector<std::string> result;
+ 	Walk(dfs_filesystem_client, shared_path,
+ 	     // pattern to match
+ 	     azure_url.path, std::min(azure_url.path.length(), azure_url.path.find('/', index_root_dir + 1)),

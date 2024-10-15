@@ -18,6 +18,7 @@ void FillExtraInfo(const StaticFunctionDefinition &function, T &info) {
 }
 
 void LoadInternal(DuckDB &db) {
+	ExtensionUtil::InitializeExtension(*db.instance);
 	auto functions = StaticFunctionDefinition::GetFunctionList();
 	for (idx_t i = 0; functions[i].name; i++) {
 		auto &function = functions[i];

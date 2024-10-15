@@ -69,7 +69,7 @@ private:
 
 private:
 	bool is_loaded = false;
-	std::unordered_map<string, string> replacement_mapping;
+	unordered_map<string, string> replacement_mapping;
 
 	std::unordered_map<string, string> queries;
 	string run_query;

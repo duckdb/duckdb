@@ -114,7 +114,7 @@ JoinRelationSet &JoinRelationSetManager::Union(JoinRelationSet &left, JoinRelati
 }
 
 // JoinRelationSet *JoinRelationSetManager::Difference(JoinRelationSet *left, JoinRelationSet *right) {
-// 	auto relations = unsafe_unique_array<idx_t>(new idx_t[left->count]);
+// 	auto relations = make_unsafe_uniq_array<idx_t>(left->count);
 // 	idx_t count = 0;
 // 	// move through the left and right relations
 // 	idx_t i = 0, j = 0;

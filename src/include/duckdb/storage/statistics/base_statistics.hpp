@@ -43,6 +43,7 @@ class BaseStatistics {
 	friend struct ArrayStats;
 
 public:
+	BaseStatistics();
 	DUCKDB_API ~BaseStatistics();
 	// disable copy constructors
 	BaseStatistics(const BaseStatistics &other) = delete;
@@ -119,7 +120,6 @@ public:
 	}
 
 private:
-	BaseStatistics();
 	explicit BaseStatistics(LogicalType type);
 
 	static void Construct(BaseStatistics &stats, LogicalType type);

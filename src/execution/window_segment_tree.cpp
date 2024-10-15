@@ -258,7 +258,7 @@ WindowConstantAggregatorGlobalState::WindowConstantAggregatorGlobalState(ClientC
 
 	// Locate the partition boundaries
 	if (partition_mask.AllValid()) {
-		partition_offsets.emplace_back(0);
+		partition_offsets.emplace_back(0ULL);
 	} else {
 		idx_t entry_idx;
 		idx_t shift;

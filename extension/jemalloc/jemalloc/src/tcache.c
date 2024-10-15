@@ -121,6 +121,85 @@ tcache_gc_dalloc_postponed_event_wait(tsd_t *tsd) {
 	return TE_MIN_START_WAIT;
 }
 
+static inline void
+tcache_bin_fill_ctl_init(tcache_slow_t *tcache_slow, szind_t szind) {
+	assert(szind < SC_NBINS);
+	cache_bin_fill_ctl_t *ctl =
+	    &tcache_slow->bin_fill_ctl_do_not_access_directly[szind];
+	ctl->base = 1;
+	ctl->offset = 0;
+}
+
+static inline cache_bin_fill_ctl_t *
+tcache_bin_fill_ctl_get(tcache_slow_t *tcache_slow, szind_t szind) {
+	assert(szind < SC_NBINS);
+	cache_bin_fill_ctl_t *ctl =
+	    &tcache_slow->bin_fill_ctl_do_not_access_directly[szind];
+	assert(ctl->base > ctl->offset);
+	return ctl;
+}
+
+/*
+ * The number of items to be filled at a time for a given small bin is
+ * calculated by (ncached_max >> lg_fill_div).
+ * The actual ctl struct consists of two fields, i.e. base and offset,
+ * and the difference between the two(base - offset) is the final lg_fill_div.
+ * The base is adjusted during GC based on the traffic within a period of time,
+ * while the offset is updated in real time to handle the immediate traffic.
+ */
+static inline uint8_t
+tcache_nfill_small_lg_div_get(tcache_slow_t *tcache_slow, szind_t szind) {
+	cache_bin_fill_ctl_t *ctl = tcache_bin_fill_ctl_get(tcache_slow, szind);
+	return (ctl->base - (opt_experimental_tcache_gc ? ctl->offset : 0));
+}
+
+/*
+ * When we want to fill more items to respond to burst load,
+ * offset is increased so that (base - offset) is decreased,
+ * which in return increases the number of items to be filled.
+ */
+static inline void
+tcache_nfill_small_burst_prepare(tcache_slow_t *tcache_slow, szind_t szind) {
+	cache_bin_fill_ctl_t *ctl = tcache_bin_fill_ctl_get(tcache_slow, szind);
+	if (ctl->offset + 1 < ctl->base) {
+		ctl->offset++;
+	}
+}
+
+static inline void
+tcache_nfill_small_burst_reset(tcache_slow_t *tcache_slow, szind_t szind) {
+	cache_bin_fill_ctl_t *ctl = tcache_bin_fill_ctl_get(tcache_slow, szind);
+	ctl->offset = 0;
+}
+
+/*
+ * limit == 0: indicating that the fill count should be increased,
+ * i.e. lg_div(base) should be decreased.
+ *
+ * limit != 0: limit is set to ncached_max, indicating that the fill
+ * count should be decreased, i.e. lg_div(base) should be increased.
+ */
+static inline void
+tcache_nfill_small_gc_update(tcache_slow_t *tcache_slow, szind_t szind,
+    cache_bin_sz_t limit) {
+	cache_bin_fill_ctl_t *ctl = tcache_bin_fill_ctl_get(tcache_slow, szind);
+	if (!limit && ctl->base > 1) {
+		/*
+		 * Increase fill count by 2X for small bins.  Make sure
+		 * lg_fill_div stays greater than 1.
+		 */
+		ctl->base--;
+	} else if (limit && (limit >> ctl->base) > 1) {
+		/*
+		 * Reduce fill count by 2X.  Limit lg_fill_div such that
+		 * the fill count is always at least 1.
+		 */
+		ctl->base++;
+	}
+	/* Reset the offset for the next GC period. */
+	ctl->offset = 0;
+}
+
 static uint8_t
 tcache_gc_item_delay_compute(szind_t szind) {
 	assert(szind < SC_NBINS);
@@ -134,54 +213,301 @@ tcache_gc_item_delay_compute(szind_t szind) {
 	return (uint8_t)item_delay;
 }
 
-static void
+static inline void *
+tcache_gc_small_heuristic_addr_get(tsd_t *tsd, tcache_slow_t *tcache_slow,
+    szind_t szind) {
+	assert(szind < SC_NBINS);
+	tsdn_t *tsdn = tsd_tsdn(tsd);
+	bin_t *bin = arena_bin_choose(tsdn, tcache_slow->arena, szind, NULL);
+	assert(bin != NULL);
+
+	malloc_mutex_lock(tsdn, &bin->lock);
+	edata_t *slab = (bin->slabcur == NULL) ?
+	    edata_heap_first(&bin->slabs_nonfull) : bin->slabcur;
+	assert(slab != NULL || edata_heap_empty(&bin->slabs_nonfull));
+	void *ret = (slab != NULL) ? edata_addr_get(slab) : NULL;
+	assert(ret != NULL || slab == NULL);
+	malloc_mutex_unlock(tsdn, &bin->lock);
+
+	return ret;
+}
+
+static inline bool
+tcache_gc_is_addr_remote(void *addr, uintptr_t min, uintptr_t max) {
+	assert(addr != NULL);
+	return ((uintptr_t)addr < min || (uintptr_t)addr >= max);
+}
+
+static inline cache_bin_sz_t
+tcache_gc_small_nremote_get(cache_bin_t *cache_bin, void *addr,
+    uintptr_t *addr_min, uintptr_t *addr_max, szind_t szind, size_t nflush) {
+	assert(addr != NULL && addr_min != NULL && addr_max != NULL);
+	/* The slab address range that the provided addr belongs to. */
+	uintptr_t slab_min = (uintptr_t)addr;
+	uintptr_t slab_max = slab_min + bin_infos[szind].slab_size;
+	/*
+	 * When growing retained virtual memory, it's increased exponentially,
+	 * starting from 2M, so that the total number of disjoint virtual
+	 * memory ranges retained by each shard is limited.
+	 */
+	uintptr_t neighbor_min = ((uintptr_t)addr > TCACHE_GC_NEIGHBOR_LIMIT) ?
+	    ((uintptr_t)addr - TCACHE_GC_NEIGHBOR_LIMIT) : 0;
+	uintptr_t neighbor_max = ((uintptr_t)addr < (UINTPTR_MAX -
+	    TCACHE_GC_NEIGHBOR_LIMIT)) ? ((uintptr_t)addr +
+	    TCACHE_GC_NEIGHBOR_LIMIT) : UINTPTR_MAX;
+
+	/* Scan the entire bin to count the number of remote pointers. */
+	void **head = cache_bin->stack_head;
+	cache_bin_sz_t n_remote_slab = 0, n_remote_neighbor = 0;
+	cache_bin_sz_t ncached = cache_bin_ncached_get_local(cache_bin);
+	for (void **cur = head; cur < head + ncached; cur++) {
+		n_remote_slab += (cache_bin_sz_t)tcache_gc_is_addr_remote(*cur,
+		    slab_min, slab_max);
+		n_remote_neighbor += (cache_bin_sz_t)tcache_gc_is_addr_remote(*cur,
+		    neighbor_min, neighbor_max);
+	}
+	/*
+	 * Note: since slab size is dynamic and can be larger than 2M, i.e.
+	 * TCACHE_GC_NEIGHBOR_LIMIT, there is no guarantee as to which of
+	 * n_remote_slab and n_remote_neighbor is greater.
+	 */
+	assert(n_remote_slab <= ncached && n_remote_neighbor <= ncached);
+	/*
+	 * We first consider keeping ptrs from the neighboring addr range,
+	 * since in most cases the range is greater than the slab range.
+	 * So if the number of non-neighbor ptrs is more than the intended
+	 * flush amount, we use it as the anchor for flushing.
+	 */
+	if (n_remote_neighbor >= nflush) {
+		*addr_min = neighbor_min;
+		*addr_max = neighbor_max;
+		return n_remote_neighbor;
+	}
+	/*
+	 * We then consider only keeping ptrs from the local slab, and in most
+	 * cases this is stricter, assuming that slab < 2M is the common case.
+	 */
+	*addr_min = slab_min;
+	*addr_max = slab_max;
+	return n_remote_slab;
+}
+
+/* Shuffle the ptrs in the bin to put the remote pointers at the bottom. */
+static inline void
+tcache_gc_small_bin_shuffle(cache_bin_t *cache_bin, cache_bin_sz_t nremote,
+   uintptr_t addr_min, uintptr_t addr_max) {
+	void **swap = NULL;
+	cache_bin_sz_t ncached = cache_bin_ncached_get_local(cache_bin);
+	cache_bin_sz_t ntop = ncached - nremote, cnt = 0;
+	assert(ntop > 0 && ntop < ncached);
+	/*
+	 * Scan the [head, head + ntop) part of the cache bin, during which
+	 * bubbling the non-remote ptrs to the top of the bin.
+	 * After this, the [head, head + cnt) part of the bin contains only
+	 * non-remote ptrs, and they're in the same relative order as before.
+	 * While the [head + cnt, head + ntop) part contains only remote ptrs.
+	 */
+	void **head = cache_bin->stack_head;
+	for (void **cur = head; cur < head + ntop; cur++) {
+		if (!tcache_gc_is_addr_remote(*cur, addr_min, addr_max)) {
+			/* Tracks the number of non-remote ptrs seen so far. */
+			cnt++;
+			/*
+			 * There is remote ptr before the current non-remote ptr,
+			 * swap the current non-remote ptr with the remote ptr,
+			 * and increment the swap pointer so that it's still
+			 * pointing to the top remote ptr in the bin.
+			 */
+			if (swap != NULL) {
+				assert(swap < cur);
+				assert(tcache_gc_is_addr_remote(*swap, addr_min, addr_max));
+				void *tmp = *cur;
+				*cur = *swap;
+				*swap = tmp;
+				swap++;
+				assert(swap <= cur);
+				assert(tcache_gc_is_addr_remote(*swap, addr_min, addr_max));
+			}
+			continue;
+		} else if (swap == NULL) {
+			/* Swap always points to the top remote ptr in the bin. */
+			swap = cur;
+		}
+	}
+	/*
+	 * Scan the [head + ntop, head + ncached) part of the cache bin,
+	 * after which it should only contain remote ptrs.
+	 */
+	for (void **cur = head + ntop; cur < head + ncached; cur++) {
+		/* Early break if all non-remote ptrs have been moved. */
+		if (cnt == ntop) {
+			break;
+		}
+		if (!tcache_gc_is_addr_remote(*cur, addr_min, addr_max)) {
+			assert(tcache_gc_is_addr_remote(*(head + cnt), addr_min,
+			    addr_max));
+			void *tmp = *cur;
+			*cur = *(head + cnt);
+			*(head + cnt) = tmp;
+			cnt++;
+		}
+	}
+	assert(cnt == ntop);
+	/* Sanity check to make sure the shuffle is done correctly. */
+	for (void **cur = head; cur < head + ncached; cur++) {
+		assert(*cur != NULL);
+		assert(((cur < head + ntop) && !tcache_gc_is_addr_remote(
+		    *cur, addr_min, addr_max)) || ((cur >= head + ntop) &&
+		    tcache_gc_is_addr_remote(*cur, addr_min, addr_max)));
+	}
+}
+
+static bool
 tcache_gc_small(tsd_t *tsd, tcache_slow_t *tcache_slow, tcache_t *tcache,
     szind_t szind) {
-	/* Aim to flush 3/4 of items below low-water. */
+	/*
+	 * Aim to flush 3/4 of items below low-water, with remote pointers being
+	 * prioritized for flushing.
+	 */
 	assert(szind < SC_NBINS);
 
 	cache_bin_t *cache_bin = &tcache->bins[szind];
 	assert(!tcache_bin_disabled(szind, cache_bin, tcache->tcache_slow));
 	cache_bin_sz_t ncached = cache_bin_ncached_get_local(cache_bin);
 	cache_bin_sz_t low_water = cache_bin_low_water_get(cache_bin);
+	if (low_water > 0) {
+		/*
+		 * There is unused items within the GC period => reduce fill count.
+		 * limit field != 0 is borrowed to indicate that the fill count
+		 * should be reduced.
+		 */
+		tcache_nfill_small_gc_update(tcache_slow, szind,
+		    /* limit */ cache_bin_ncached_max_get(cache_bin));
+	} else if (tcache_slow->bin_refilled[szind]) {
+		/*
+		 * There has been refills within the GC period => increase fill count.
+		 * limit field set to 0 is borrowed to indicate that the fill count
+		 * should be increased.
+		 */
+		tcache_nfill_small_gc_update(tcache_slow, szind, /* limit */ 0);
+		tcache_slow->bin_refilled[szind] = false;
+	}
 	assert(!tcache_slow->bin_refilled[szind]);
 
-	size_t nflush = low_water - (low_water >> 2);
-	if (nflush < tcache_slow->bin_flush_delay_items[szind]) {
-		/* Workaround for a conversion warning. */
-		uint8_t nflush_uint8 = (uint8_t)nflush;
-		assert(sizeof(tcache_slow->bin_flush_delay_items[0]) ==
-		    sizeof(nflush_uint8));
-		tcache_slow->bin_flush_delay_items[szind] -= nflush_uint8;
-		return;
+	cache_bin_sz_t nflush = low_water - (low_water >> 2);
+	/*
+	 * When the new tcache gc is not enabled, keep the flush delay logic,
+	 * and directly flush the bottom nflush items if needed.
+	 */
+	if (!opt_experimental_tcache_gc) {
+		if (nflush < tcache_slow->bin_flush_delay_items[szind]) {
+			/* Workaround for a conversion warning. */
+			uint8_t nflush_uint8 = (uint8_t)nflush;
+			assert(sizeof(tcache_slow->bin_flush_delay_items[0]) ==
+			    sizeof(nflush_uint8));
+			tcache_slow->bin_flush_delay_items[szind] -= nflush_uint8;
+			return false;
+		}
+
+		tcache_slow->bin_flush_delay_items[szind]
+		    = tcache_gc_item_delay_compute(szind);
+		goto label_flush;
 	}
 
-	tcache_slow->bin_flush_delay_items[szind]
-	    = tcache_gc_item_delay_compute(szind);
-	tcache_bin_flush_small(tsd, tcache, cache_bin, szind,
-	    (unsigned)(ncached - nflush));
+	/* Directly goto the flush path when the entire bin needs to be flushed. */
+	if ( nflush == ncached) {
+		goto label_flush;
+	}
+
+	/* Query arena binshard to get heuristic locality info. */
+	void *addr = tcache_gc_small_heuristic_addr_get(tsd, tcache_slow, szind);
+	if (addr == NULL) {
+		goto label_flush;
+	}
 
 	/*
-	 * Reduce fill count by 2X.  Limit lg_fill_div such that
-	 * the fill count is always at least 1.
+	 * Use the queried addr above to get the number of remote ptrs in the
+	 * bin, and the min/max of the local addr range.
 	 */
-	if ((cache_bin_ncached_max_get(cache_bin) >>
-	     tcache_slow->lg_fill_div[szind]) > 1) {
-		tcache_slow->lg_fill_div[szind]++;
+	uintptr_t addr_min, addr_max;
+	cache_bin_sz_t nremote = tcache_gc_small_nremote_get(cache_bin, addr,
+	    &addr_min, &addr_max, szind, nflush);
+
+	/*
+	 * Update the nflush to the larger value between the intended flush count
+	 * and the number of remote ptrs.
+	 */
+	if (nremote > nflush) {
+		nflush = nremote;
 	}
+	/*
+	 * When entering the locality check, nflush should be less than ncached,
+	 * otherwise the entire bin should be flushed regardless. The only case
+	 * when nflush gets updated to ncached after locality check is, when all
+	 * the items in the bin are remote, in which case the entire bin should
+	 * also be flushed.
+	 */
+	assert(nflush < ncached || nremote == ncached);
+	if (nremote == 0 || nremote == ncached)	{
+		goto label_flush;
+	}
+
+	/*
+	 * Move the remote points to the bottom of the bin for flushing.
+	 * As long as moved to the bottom, the order of these nremote ptrs
+	 * does not matter, since they are going to be flushed anyway.
+	 * The rest of the ptrs are moved to the top of the bin, and their
+	 * relative order is maintained.
+	 */
+	tcache_gc_small_bin_shuffle(cache_bin, nremote, addr_min, addr_max);
+
+label_flush:
+	if (nflush == 0) {
+		assert(low_water == 0);
+		return false;
+	}
+	assert(nflush <= ncached);
+	tcache_bin_flush_small(tsd, tcache, cache_bin, szind,
+	    (unsigned)(ncached - nflush));
+	return true;
 }
 
-static void
+static bool
 tcache_gc_large(tsd_t *tsd, tcache_slow_t *tcache_slow, tcache_t *tcache,
     szind_t szind) {
-	/* Like the small GC; flush 3/4 of untouched items. */
+	/*
+	 * Like the small GC, flush 3/4 of untouched items. However, simply flush
+	 * the bottom nflush items, without any locality check.
+	 */
 	assert(szind >= SC_NBINS);
 	cache_bin_t *cache_bin = &tcache->bins[szind];
 	assert(!tcache_bin_disabled(szind, cache_bin, tcache->tcache_slow));
-	cache_bin_sz_t ncached = cache_bin_ncached_get_local(cache_bin);
 	cache_bin_sz_t low_water = cache_bin_low_water_get(cache_bin);
-	tcache_bin_flush_large(tsd, tcache, cache_bin, szind,
-	    (unsigned)(ncached - low_water + (low_water >> 2)));
+	if (low_water == 0) {
+		return false;
+	}
+	unsigned nrem = (unsigned)(cache_bin_ncached_get_local(cache_bin) -
+	    low_water + (low_water >> 2));
+	tcache_bin_flush_large(tsd, tcache, cache_bin, szind, nrem);
+	return true;
+}
+
+/* Try to gc one bin by szind, return true if there is item flushed. */
+static bool
+tcache_try_gc_bin(tsd_t *tsd, tcache_slow_t *tcache_slow, tcache_t *tcache,
+    szind_t szind) {
+	assert(tcache != NULL);
+	cache_bin_t *cache_bin = &tcache->bins[szind];
+	if (tcache_bin_disabled(szind, cache_bin, tcache_slow)) {
+		return false;
+	}
+
+	bool is_small = (szind < SC_NBINS);
+	tcache_bin_flush_stashed(tsd, tcache, cache_bin, szind, is_small);
+	bool ret = is_small ? tcache_gc_small(tsd, tcache_slow, tcache, szind) :
+	    tcache_gc_large(tsd, tcache_slow, tcache, szind);
+	cache_bin_low_water_set(cache_bin);
+	return ret;
 }
 
 static void
@@ -192,40 +518,67 @@ tcache_event(tsd_t *tsd) {
 	}
 
 	tcache_slow_t *tcache_slow = tsd_tcache_slowp_get(tsd);
-	szind_t szind = tcache_slow->next_gc_bin;
-	bool is_small = (szind < SC_NBINS);
-	cache_bin_t *cache_bin = &tcache->bins[szind];
+	assert(tcache_slow != NULL);
 
-	if (tcache_bin_disabled(szind, cache_bin, tcache_slow)) {
-		goto label_done;
-	}
-
-	tcache_bin_flush_stashed(tsd, tcache, cache_bin, szind, is_small);
-	cache_bin_sz_t low_water = cache_bin_low_water_get(cache_bin);
-	if (low_water > 0) {
-		if (is_small) {
-			tcache_gc_small(tsd, tcache_slow, tcache, szind);
-		} else {
-			tcache_gc_large(tsd, tcache_slow, tcache, szind);
+	/* When the new tcache gc is not enabled, GC one bin at a time. */
+	if (!opt_experimental_tcache_gc) {
+		szind_t szind = tcache_slow->next_gc_bin;
+		tcache_try_gc_bin(tsd, tcache_slow, tcache, szind);
+		tcache_slow->next_gc_bin++;
+		if (tcache_slow->next_gc_bin == tcache_nbins_get(tcache_slow)) {
+			tcache_slow->next_gc_bin = 0;
 		}
-	} else if (is_small && tcache_slow->bin_refilled[szind]) {
-		assert(low_water == 0);
-		/*
-		 * Increase fill count by 2X for small bins.  Make sure
-		 * lg_fill_div stays greater than 0.
-		 */
-		if (tcache_slow->lg_fill_div[szind] > 1) {
-			tcache_slow->lg_fill_div[szind]--;
-		}
-		tcache_slow->bin_refilled[szind] = false;
+		return;
 	}
-	cache_bin_low_water_set(cache_bin);
 
-label_done:
-	tcache_slow->next_gc_bin++;
-	if (tcache_slow->next_gc_bin == tcache_nbins_get(tcache_slow)) {
-		tcache_slow->next_gc_bin = 0;
+	nstime_t now;
+	nstime_copy(&now, &tcache_slow->last_gc_time);
+	nstime_update(&now);
+	assert(nstime_compare(&now, &tcache_slow->last_gc_time) >= 0);
+
+	if (nstime_ns(&now) - nstime_ns(&tcache_slow->last_gc_time) <
+	    TCACHE_GC_INTERVAL_NS) {
+		// time interval is too short, skip this event.
+		return;
 	}
+	/* Update last_gc_time to now. */
+	nstime_copy(&tcache_slow->last_gc_time, &now);
+
+	unsigned gc_small_nbins = 0, gc_large_nbins = 0;
+	unsigned tcache_nbins = tcache_nbins_get(tcache_slow);
+	unsigned small_nbins = tcache_nbins > SC_NBINS ? SC_NBINS : tcache_nbins;
+	szind_t szind_small = tcache_slow->next_gc_bin_small;
+	szind_t szind_large = tcache_slow->next_gc_bin_large;
+
+	/* Flush at most TCACHE_GC_SMALL_NBINS_MAX small bins at a time. */
+	for (unsigned i = 0; i < small_nbins && gc_small_nbins <
+	    TCACHE_GC_SMALL_NBINS_MAX; i++) {
+		assert(szind_small < SC_NBINS);
+		if (tcache_try_gc_bin(tsd, tcache_slow, tcache, szind_small)) {
+			gc_small_nbins++;
+		}
+		if (++szind_small == small_nbins) {
+			szind_small = 0;
+		}
+	}
+	tcache_slow->next_gc_bin_small = szind_small;
+
+	if (tcache_nbins <= SC_NBINS) {
+		return;
+	}
+
+	/* Flush at most TCACHE_GC_LARGE_NBINS_MAX large bins at a time. */
+	for (unsigned i = SC_NBINS; i < tcache_nbins && gc_large_nbins <
+	    TCACHE_GC_LARGE_NBINS_MAX; i++) {
+		assert(szind_large >= SC_NBINS && szind_large < tcache_nbins);
+		if (tcache_try_gc_bin(tsd, tcache_slow, tcache, szind_large)) {
+			gc_large_nbins++;
+		}
+		if (++szind_large == tcache_nbins) {
+			szind_large = SC_NBINS;
+		}
+	}
+	tcache_slow->next_gc_bin_large = szind_large;
 }
 
 void
@@ -250,12 +603,15 @@ tcache_alloc_small_hard(tsdn_t *tsdn, arena_t *arena,
 	assert(tcache_slow->arena != NULL);
 	assert(!tcache_bin_disabled(binind, cache_bin, tcache_slow));
 	cache_bin_sz_t nfill = cache_bin_ncached_max_get(cache_bin)
-	    >> tcache_slow->lg_fill_div[binind];
+	    >> tcache_nfill_small_lg_div_get(tcache_slow, binind);
 	if (nfill == 0) {
 		nfill = 1;
 	}
-	arena_cache_bin_fill_small(tsdn, arena, cache_bin, binind, nfill);
+	arena_cache_bin_fill_small(tsdn, arena, cache_bin, binind,
+	    /* nfill_min */ opt_experimental_tcache_gc ?
+	    ((nfill >> 1) + 1) : nfill, /* nfill_max */ nfill);
 	tcache_slow->bin_refilled[binind] = true;
+	tcache_nfill_small_burst_prepare(tcache_slow, binind);
 	ret = cache_bin_alloc(cache_bin, tcache_success);
 
 	return ret;
@@ -781,6 +1137,7 @@ tcache_bin_flush_bottom(tsd_t *tsd, tcache_t *tcache, cache_bin_t *cache_bin,
 void
 tcache_bin_flush_small(tsd_t *tsd, tcache_t *tcache, cache_bin_t *cache_bin,
     szind_t binind, unsigned rem) {
+	tcache_nfill_small_burst_reset(tcache->tcache_slow, binind);
 	tcache_bin_flush_bottom(tsd, tcache, cache_bin, binind, rem,
 	    /* small */ true);
 }
@@ -936,7 +1293,10 @@ tcache_init(tsd_t *tsd, tcache_slow_t *tcache_slow, tcache_t *tcache,
 	tcache_slow->tcache = tcache;
 
 	memset(&tcache_slow->link, 0, sizeof(ql_elm(tcache_t)));
+	nstime_init_zero(&tcache_slow->last_gc_time);
 	tcache_slow->next_gc_bin = 0;
+	tcache_slow->next_gc_bin_small = 0;
+	tcache_slow->next_gc_bin_large = SC_NBINS;
 	tcache_slow->arena = NULL;
 	tcache_slow->dyn_alloc = mem;
 
@@ -952,7 +1312,7 @@ tcache_init(tsd_t *tsd, tcache_slow_t *tcache_slow, tcache_t *tcache,
 	    &cur_offset);
 	for (unsigned i = 0; i < tcache_nbins; i++) {
 		if (i < SC_NBINS) {
-			tcache_slow->lg_fill_div[i] = 1;
+			tcache_bin_fill_ctl_init(tcache_slow, i);
 			tcache_slow->bin_refilled[i] = false;
 			tcache_slow->bin_flush_delay_items[i]
 			    = tcache_gc_item_delay_compute(i);
@@ -1208,7 +1568,7 @@ thread_tcache_max_set(tsd_t *tsd, size_t tcache_max) {
 	assert(tcache != NULL && tcache_slow != NULL);
 
 	bool enabled = tcache_available(tsd);
-	arena_t *assigned_arena;
+	arena_t *assigned_arena JEMALLOC_CLANG_ANALYZER_SILENCE_INIT(NULL);
 	if (enabled) {
 		assigned_arena = tcache_slow->arena;
 		/* Carry over the bin settings during the reboot. */

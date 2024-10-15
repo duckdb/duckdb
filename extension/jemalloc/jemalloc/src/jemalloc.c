@@ -31,7 +31,6 @@
 /* Runtime configuration options. */
 #define JE_MALLOC_CONF_BUFFER_SIZE 200
 char JE_MALLOC_CONF_BUFFER[JE_MALLOC_CONF_BUFFER_SIZE];
-
 const char	*je_malloc_conf
 #ifndef _WIN32
     JEMALLOC_ATTR(weak)
@@ -154,6 +153,7 @@ void (*JET_MUTABLE invalid_conf_abort)(void) = &abort;
 bool	opt_utrace = false;
 bool	opt_xmalloc = false;
 bool	opt_experimental_infallible_new = false;
+bool	opt_experimental_tcache_gc = false;
 bool	opt_zero = false;
 unsigned	opt_narenas = 0;
 static fxp_t		opt_narenas_ratio = FXP_INIT_INT(4);
@@ -1043,18 +1043,14 @@ obtain_malloc_conf(unsigned which_source, char readlink_buf[PATH_MAX + 1]) {
 	return ret;
 }
 
-static void
-validate_hpa_settings(void) {
-	if (!hpa_supported() || !opt_hpa || opt_hpa_opts.dirty_mult == (fxp_t)-1) {
-		return;
-	}
+static bool
+validate_hpa_ratios(void) {
 	size_t hpa_threshold = fxp_mul_frac(HUGEPAGE, opt_hpa_opts.dirty_mult) +
 	    opt_hpa_opts.hugification_threshold;
 	if (hpa_threshold > HUGEPAGE) {
-		return;
+		return false;
 	}
 
-	had_conf_error = true;
 	char hpa_dirty_mult[FXP_BUF_SIZE];
 	char hugification_threshold[FXP_BUF_SIZE];
 	char normalization_message[256] = {0};
@@ -1081,6 +1077,24 @@ validate_hpa_settings(void) {
 	    "hpa_hugification_threshold_ratio: %s and hpa_dirty_mult: %s. "
 	    "These values should sum to > 1.0.\n%s", hugification_threshold,
 	    hpa_dirty_mult, normalization_message);
+
+	return true;
+}
+
+static void
+validate_hpa_settings(void) {
+	if (!hpa_supported() || !opt_hpa) {
+		return;
+	}
+	if (HUGEPAGE > HUGEPAGE_MAX_EXPECTED_SIZE) {
+		had_conf_error = true;
+		malloc_printf(
+		    "<jemalloc>: huge page size (%zu) greater than expected."
+		    "May not be supported or behave as expected.", HUGEPAGE);
+	}
+	if (opt_hpa_opts.dirty_mult != (fxp_t)-1 && validate_hpa_ratios()) {
+		had_conf_error = true;
+	}
 }
 
 static void
@@ -1417,6 +1431,8 @@ malloc_conf_init_helper(sc_data_t *sc_data, unsigned bin_shard_sizes[SC_NBINS],
 				    "experimental_infallible_new")
 			}
 
+			CONF_HANDLE_BOOL(opt_experimental_tcache_gc,
+			    "experimental_tcache_gc")
 			CONF_HANDLE_BOOL(opt_tcache, "tcache")
 			CONF_HANDLE_SIZE_T(opt_tcache_max, "tcache_max",
 			    0, TCACHE_MAXCLASS_LIMIT, CONF_DONT_CHECK_MIN,
@@ -1558,8 +1574,12 @@ malloc_conf_init_helper(sc_data_t *sc_data, unsigned bin_shard_sizes[SC_NBINS],
 			    CONF_DONT_CHECK_MIN, CONF_DONT_CHECK_MAX, false);
 
 			CONF_HANDLE_BOOL(
-			    opt_hpa_opts.strict_min_purge_interval,
-			    "hpa_strict_min_purge_interval");
+			    opt_hpa_opts.experimental_strict_min_purge_interval,
+			    "experimental_hpa_strict_min_purge_interval");
+
+			CONF_HANDLE_SSIZE_T(
+			    opt_hpa_opts.experimental_max_purge_nhp,
+			    "experimental_hpa_max_purge_nhp", -1, SSIZE_MAX);
 
 			if (CONF_MATCH("hpa_dirty_mult")) {
 				if (CONF_MATCH_VALUE("-1")) {

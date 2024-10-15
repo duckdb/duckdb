@@ -110,7 +110,7 @@ public:
 
 protected:
     /// Stack of NodeRef node references.
-    std::vector<struct NodeRef<T, _Compare> > _nodes;
+    duckdb::vector<struct NodeRef<T, _Compare> > _nodes;
     /// The current swap level.
     size_t _swapLevel;
 

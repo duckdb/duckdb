@@ -9,7 +9,7 @@ namespace duckdb {
 
 void StructStats::Construct(BaseStatistics &stats) {
 	auto &child_types = StructType::GetChildTypes(stats.GetType());
-	stats.child_stats = unsafe_unique_array<BaseStatistics>(new BaseStatistics[child_types.size()]);
+	stats.child_stats = make_unsafe_uniq_array_uninitialized<BaseStatistics>(child_types.size());
 	for (idx_t i = 0; i < child_types.size(); i++) {
 		BaseStatistics::Construct(stats.child_stats[i], child_types[i].second);
 	}
