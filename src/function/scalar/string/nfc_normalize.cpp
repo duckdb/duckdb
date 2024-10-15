@@ -1,5 +1,5 @@
-#include "duckdb/function/scalar/string_functions_tmp.hpp"
-
+#include "duckdb/function/scalar/string_common.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 #include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
@@ -9,7 +9,7 @@ struct NFCNormalizeOperator {
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 		auto input_data = input.GetData();
 		auto input_length = input.GetSize();
-		if (StripAccentsFun::IsAscii(input_data, input_length)) {
+		if (IsAscii(input_data, input_length)) {
 			return input;
 		}
 		auto normalized_str = Utf8Proc::Normalize(input_data, input_length);
@@ -29,10 +29,6 @@ static void NFCNormalizeFunction(DataChunk &args, ExpressionState &state, Vector
 
 ScalarFunction NFCNormalizeFun::GetFunction() {
 	return ScalarFunction("nfc_normalize", {LogicalType::VARCHAR}, LogicalType::VARCHAR, NFCNormalizeFunction);
-}
-
-void NFCNormalizeFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(NFCNormalizeFun::GetFunction());
 }
 
 } // namespace duckdb

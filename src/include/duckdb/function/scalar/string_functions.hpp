@@ -126,4 +126,82 @@ struct ContainsFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct StripAccentsFun {
+	static constexpr const char *Name = "strip_accents";
+	static constexpr const char *Parameters = "string";
+	static constexpr const char *Description = "Strips accents from string.";
+	static constexpr const char *Example = "strip_accents('mühleisen')";
+
+	static ScalarFunction GetFunction();
+};
+
+struct NFCNormalizeFun {
+	static constexpr const char *Name = "nfc_normalize";
+	static constexpr const char *Parameters = "string";
+	static constexpr const char *Description = "Convert string to Unicode NFC normalized string. Useful for comparisons and ordering if text data is mixed between NFC normalized and not.";
+	static constexpr const char *Example = "nfc_normalize('ardèch')";
+
+	static ScalarFunction GetFunction();
+};
+
+struct LengthFun {
+	static constexpr const char *Name = "length";
+	static constexpr const char *Parameters = "string";
+	static constexpr const char *Description = "Number of characters in string.";
+	static constexpr const char *Example = "length('Hello🦆')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct LenFun {
+	using ALIAS = LengthFun;
+
+	static constexpr const char *Name = "len";
+};
+
+struct StrlenFun {
+	static constexpr const char *Name = "strlen";
+	static constexpr const char *Parameters = "string";
+	static constexpr const char *Description = "Number of bytes in string.";
+	static constexpr const char *Example = "strlen('🦆')";
+
+	static ScalarFunction GetFunction();
+};
+
+struct BitLengthFun {
+	static constexpr const char *Name = "bit_length";
+	static constexpr const char *Parameters = "";
+	static constexpr const char *Description = "";
+	static constexpr const char *Example = "";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct OctetLengthFun {
+	static constexpr const char *Name = "octet_length";
+	static constexpr const char *Parameters = "blob";
+	static constexpr const char *Description = "Number of bytes in blob.";
+	static constexpr const char *Example = "octet_length('\\xAA\\xBB'::BLOB)";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct LengthGraphemeFun {
+	static constexpr const char *Name = "length_grapheme";
+	static constexpr const char *Parameters = "string";
+	static constexpr const char *Description = "Number of grapheme clusters in string.";
+	static constexpr const char *Example = "length_grapheme('🤦🏼‍♂️🤦🏽‍♀️')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ArrayLengthFun {
+	static constexpr const char *Name = "array_length";
+	static constexpr const char *Parameters = "list";
+	static constexpr const char *Description = "Returns the length of the list.";
+	static constexpr const char *Example = "array_length([1,2,3])";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 } // namespace duckdb

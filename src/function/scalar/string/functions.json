@@ -67,5 +67,63 @@
         "description": "Return true if search_string is found within string.",
         "example": "contains('abc', 'a')",
         "type": "scalar_function_set"
+    },
+    {
+        "name": "strip_accents",
+        "parameters": "string",
+        "description": "Strips accents from string.",
+        "example": "strip_accents('mühleisen')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "nfc_normalize",
+        "parameters": "string",
+        "description": "Convert string to Unicode NFC normalized string. Useful for comparisons and ordering if text data is mixed between NFC normalized and not.",
+        "example": "nfc_normalize('ardèch')",
+        "type": "scalar_function",
+        "struct": "NFCNormalizeFun"
+    },
+    {
+        "name": "length",
+        "parameters": "string",
+        "description": "Number of characters in string.",
+        "example": "length('Hello🦆')",
+        "type": "scalar_function_set",
+        "aliases": ["len"]
+    },
+    {
+        "name": "strlen",
+        "parameters": "string",
+        "description": "Number of bytes in string.",
+        "example": "strlen('🦆')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "bit_length",
+        "parameters": "",
+        "description": "",
+        "example": "",
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "octet_length",
+        "parameters": "blob",
+        "description": "Number of bytes in blob.",
+        "example": "octet_length('\\xAA\\xBB'::BLOB)",
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "length_grapheme",
+        "parameters": "string",
+        "description": "Number of grapheme clusters in string.",
+        "example": "length_grapheme('🤦🏼‍♂️🤦🏽‍♀️')",
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "array_length",
+        "parameters": "list",
+        "description": "Returns the length of the list.",
+        "example": "array_length([1,2,3])",
+        "type": "scalar_function_set"
     }
 ]

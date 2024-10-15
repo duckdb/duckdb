@@ -1,10 +1,9 @@
-#include "duckdb/function/scalar/string_functions_tmp.hpp"
-#include "duckdb/common/types/bit.hpp"
-
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "utf8proc.hpp"
 
@@ -14,14 +13,14 @@ namespace duckdb {
 struct StringLengthOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
-		return LengthFun::Length<TA, TR>(input);
+		return Length<TA, TR>(input);
 	}
 };
 
 struct GraphemeCountOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
-		return LengthFun::GraphemeCount<TA, TR>(input);
+		return GraphemeCount<TA, TR>(input);
 	}
 };
 
@@ -216,47 +215,57 @@ static unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(ClientContext &conte
 	}
 }
 
-void LengthFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunction array_length_unary =
-	    ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::BIGINT, nullptr, ArrayOrListLengthBind);
+ScalarFunctionSet LengthFun::GetFunctions() {
 	ScalarFunctionSet length("length");
 	length.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                                  ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator>, nullptr,
 	                                  nullptr, LengthPropagateStats));
 	length.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
 	                                  ScalarFunction::UnaryFunction<string_t, int64_t, BitStringLenOperator>));
-	length.AddFunction(array_length_unary);
-	set.AddFunction(length);
-	length.name = "len";
-	set.AddFunction(length);
+	length.AddFunction(
+	    ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::BIGINT, nullptr, ArrayOrListLengthBind));
+	return (length);
+}
 
+ScalarFunctionSet LengthGraphemeFun::GetFunctions() {
 	ScalarFunctionSet length_grapheme("length_grapheme");
 	length_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                                           ScalarFunction::UnaryFunction<string_t, int64_t, GraphemeCountOperator>,
 	                                           nullptr, nullptr, LengthPropagateStats));
-	set.AddFunction(length_grapheme);
+	return (length_grapheme);
+}
 
+ScalarFunctionSet ArrayLengthFun::GetFunctions() {
 	ScalarFunctionSet array_length("array_length");
-	array_length.AddFunction(array_length_unary);
+	array_length.AddFunction(
+	    ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::BIGINT, nullptr, ArrayOrListLengthBind));
 	array_length.AddFunction(ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT},
 	                                        LogicalType::BIGINT, nullptr, ArrayOrListLengthBinaryBind));
-	set.AddFunction(array_length);
+	return (array_length);
+}
 
-	set.AddFunction(ScalarFunction("strlen", {LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                               ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>));
+ScalarFunction StrlenFun::GetFunction() {
+	return ScalarFunction("strlen", {LogicalType::VARCHAR}, LogicalType::BIGINT,
+	                      ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>);
+}
+
+ScalarFunctionSet BitLengthFun::GetFunctions() {
 	ScalarFunctionSet bit_length("bit_length");
 	bit_length.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                                      ScalarFunction::UnaryFunction<string_t, int64_t, BitLenOperator>));
 	bit_length.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
 	                                      ScalarFunction::UnaryFunction<string_t, int64_t, BitStringLenOperator>));
-	set.AddFunction(bit_length);
+	return (bit_length);
+}
+
+ScalarFunctionSet OctetLengthFun::GetFunctions() {
 	// length for BLOB type
 	ScalarFunctionSet octet_length("octet_length");
 	octet_length.AddFunction(ScalarFunction({LogicalType::BLOB}, LogicalType::BIGINT,
 	                                        ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>));
 	octet_length.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
 	                                        ScalarFunction::UnaryFunction<string_t, int64_t, OctetLenOperator>));
-	set.AddFunction(octet_length);
+	return (octet_length);
 }
 
 } // namespace duckdb

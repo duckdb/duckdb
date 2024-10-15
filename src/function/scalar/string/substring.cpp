@@ -1,3 +1,4 @@
+#include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/function/scalar/string_functions_tmp.hpp"
 
 #include "duckdb/common/algorithm.hpp"
@@ -129,7 +130,7 @@ string_t SubstringFun::SubstringUnicode(Vector &result, string_t input, int64_t 
 		}
 		int64_t current_character = 0;
 		for (idx_t i = input_size; i > 0; i--) {
-			if (LengthFun::IsCharacter(input_data[i - 1])) {
+			if (IsCharacter(input_data[i - 1])) {
 				current_character++;
 				if (current_character == start) {
 					start_pos = i;
@@ -139,10 +140,10 @@ string_t SubstringFun::SubstringUnicode(Vector &result, string_t input, int64_t 
 				}
 			}
 		}
-		while (!LengthFun::IsCharacter(input_data[start_pos])) {
+		while (!IsCharacter(input_data[start_pos])) {
 			start_pos++;
 		}
-		while (end_pos < input_size && !LengthFun::IsCharacter(input_data[end_pos])) {
+		while (end_pos < input_size && !IsCharacter(input_data[end_pos])) {
 			end_pos++;
 		}
 
@@ -170,7 +171,7 @@ string_t SubstringFun::SubstringUnicode(Vector &result, string_t input, int64_t 
 
 		int64_t current_character = 0;
 		for (idx_t i = 0; i < input_size; i++) {
-			if (LengthFun::IsCharacter(input_data[i])) {
+			if (IsCharacter(input_data[i])) {
 				if (current_character == start) {
 					start_pos = i;
 				} else if (current_character == end) {

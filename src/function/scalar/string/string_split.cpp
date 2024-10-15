@@ -83,7 +83,7 @@ struct StringSplitter {
 				// special case: 0 length match and pos is 0
 				// move to the next character
 				for (pos++; pos < input_size; pos++) {
-					if (LengthFun::IsCharacter(input_data[pos])) {
+					if (IsCharacter(input_data[pos])) {
 						break;
 					}
 				}
