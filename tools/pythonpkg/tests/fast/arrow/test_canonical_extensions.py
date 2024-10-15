@@ -7,7 +7,7 @@ import datetime
 
 pa = pytest.importorskip('pyarrow')
 
-from arrow_canonical_extensions import UuidType, JSONType, UHugeIntType, HugeIntType
+from arrow_canonical_extensions import UuidType, JSONType, UHugeIntType, HugeIntType, VarIntType
 
 
 class UuidTypeWrong(pa.ExtensionType):
@@ -83,6 +83,13 @@ def arrow_uuid():
     pa.register_extension_type(UuidType())
     yield
     pa.unregister_extension_type("arrow.uuid")
+
+
+@pytest.fixture(scope='function')
+def arrow_duckdb_varint():
+    pa.register_extension_type(VarIntType())
+    yield
+    pa.unregister_extension_type("duckdb.varint")
 
 
 @pytest.fixture(scope='function')
@@ -330,4 +337,18 @@ class TestCanonicalExtensionTypes(object):
         assert con.execute("FROM res_time").fetchall() == [(datetime.time(2, 30),)]
         assert con.execute("FROM res_tz").fetchall() == [
             (datetime.time(2, 30, tzinfo=datetime.timezone(datetime.timedelta(seconds=14400))),)
+        ]
+
+    def test_varint(self, arrow_duckdb_varint):
+        con = duckdb.connect()
+        res_varint = con.execute(
+            "SELECT '179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368'::varint a FROM range(1) tbl(i)"
+        ).arrow()
+
+        assert res_varint.column("a").type == VarIntType()
+
+        assert con.execute("FROM res_varint").fetchall() == [
+            (
+                '179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368',
+            )
         ]

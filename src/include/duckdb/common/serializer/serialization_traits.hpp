@@ -32,6 +32,7 @@ using void_t = void;
 // Check for anything implementing a `void Serialize(Serializer &Serializer)` method
 template <typename T, typename = T>
 struct has_serialize : std::false_type {};
+
 template <typename T>
 struct has_serialize<
     T, typename std::enable_if<

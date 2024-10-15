@@ -21,6 +21,7 @@ if (NOT MINGW)
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/arrow
             GIT_TAG c50862c82c065096722745631f4230832a3a04e8
+            APPLY_PATCHES
             )
 endif()
 
@@ -96,6 +97,7 @@ if (NOT MINGW)
             DONT_LINK
             GIT_URL https://github.com/duckdb/postgres_scanner
             GIT_TAG 03eaed75f0ec5500609b7a97aa05468493b229d1
+            APPLY_PATCHES
             )
 endif()
 
@@ -127,8 +129,7 @@ duckdb_extension_load(sqlite_scanner
 duckdb_extension_load(sqlsmith
         DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb_sqlsmith
-        GIT_TAG f24be8b5b0cd0eeed7541e10cff42d7050771afc
-        APPLY_PATCHES
+        GIT_TAG d6d62c1cba6b1369ba79db4bff3c67f24aaa95c2
         )
 
 ################# SUBSTRAIT
@@ -148,6 +149,7 @@ duckdb_extension_load(vss
         GIT_URL https://github.com/duckdb/duckdb_vss
         GIT_TAG 77739ea5382cce3220af83803ac0b1e98b3ab7d8
         TEST_DIR test/sql
+        APPLY_PATCHES
     )
 
 ################# MYSQL
