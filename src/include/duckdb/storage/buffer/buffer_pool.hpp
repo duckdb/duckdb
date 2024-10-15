@@ -92,12 +92,11 @@ protected:
 	void IncrementDeadNodes(const BlockHandle &handle);
 
 	//! How many eviction queues we have for the different FileBufferTypes
-	static constexpr idx_t BLOCK_EVICTION_QUEUES = 1;
-	static constexpr idx_t MANAGED_BUFFER_EVICTION_QUEUES = 1;
-	static constexpr idx_t TINY_BUFFER_EVICTION_QUEUES = 1;
-	//! Total eviction queue count (TINY_BUFFER + MANAGED_BUFFER + BLOCK)
-	static constexpr idx_t EVICTION_QUEUES =
-	    BLOCK_EVICTION_QUEUES + MANAGED_BUFFER_EVICTION_QUEUES + TINY_BUFFER_EVICTION_QUEUES;
+	static constexpr idx_t BLOCK_QUEUE_SIZE = 1;
+	static constexpr idx_t MANAGED_BUFFER_QUEUE_SIZE = 1;
+	static constexpr idx_t TINY_BUFFER_QUEUE_SIZE = 1;
+	//! Mapping and priority order for the eviction queues
+	const array<idx_t, FILE_BUFFER_TYPE_COUNT> eviction_queue_sizes;
 
 protected:
 	enum class MemoryUsageCaches {

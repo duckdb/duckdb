@@ -41,7 +41,8 @@ typedef duckdb_moodycamel::ConcurrentQueue<BufferEvictionNode> eviction_queue_t;
 
 struct EvictionQueue {
 public:
-	EvictionQueue() : evict_queue_insertions(0), total_dead_nodes(0) {
+	EvictionQueue(const FileBufferType file_buffer_type_p)
+	    : file_buffer_type(file_buffer_type_p), evict_queue_insertions(0), total_dead_nodes(0) {
 	}
 
 public:
@@ -69,6 +70,8 @@ private:
 	void PurgeIteration(const idx_t purge_size);
 
 public:
+	//! The type of the buffers in this queue
+	const FileBufferType file_buffer_type;
 	//! The concurrent queue
 	eviction_queue_t q;
 
@@ -196,13 +199,17 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 
 BufferPool::BufferPool(idx_t maximum_memory, bool track_eviction_timestamps,
                        idx_t allocator_bulk_deallocation_flush_threshold)
-    : maximum_memory(maximum_memory),
+    : eviction_queue_sizes({BLOCK_QUEUE_SIZE, MANAGED_BUFFER_QUEUE_SIZE, TINY_BUFFER_QUEUE_SIZE}),
+      maximum_memory(maximum_memory),
       allocator_bulk_deallocation_flush_threshold(allocator_bulk_deallocation_flush_threshold),
       track_eviction_timestamps(track_eviction_timestamps),
       temporary_memory_manager(make_uniq<TemporaryMemoryManager>()) {
-	queues.reserve(EVICTION_QUEUES);
-	for (idx_t i = 0; i < EVICTION_QUEUES; i++) {
-		queues.push_back(make_uniq<EvictionQueue>());
+	for (uint8_t type_idx = 0; type_idx < FILE_BUFFER_TYPE_COUNT; type_idx++) {
+		const auto type = static_cast<FileBufferType>(type_idx + 1);
+		const auto &type_queue_size = eviction_queue_sizes[type_idx];
+		for (idx_t queue_idx = 0; queue_idx < type_queue_size; queue_idx++) {
+			queues.push_back(make_uniq<EvictionQueue>(type));
+		}
 	}
 }
 BufferPool::~BufferPool() {
@@ -227,43 +234,32 @@ bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 		queue.IncrementDeadNodes();
 	}
 
-	// Get the eviction queue for the buffer type and add it
+	// Get the eviction queue for the block and add it
 	return queue.AddToEvictionQueue(BufferEvictionNode(weak_ptr<BlockHandle>(handle), ts));
 }
 
 EvictionQueue &BufferPool::GetEvictionQueueForBlockHandle(const BlockHandle &handle) {
-	// Obtain offset and number of queues for the FileBufferType
-	idx_t offset;
-	idx_t size;
-	switch (handle.buffer->type) {
-	case FileBufferType::BLOCK:
-		// TINY_BUFFER starts at offset 0 (evicted first)
-		offset = 0;
-		size = BLOCK_EVICTION_QUEUES;
-		break;
-	case FileBufferType::MANAGED_BUFFER:
-		// Followed by MANAGED_BUFFER
-		offset = BLOCK_EVICTION_QUEUES;
-		size = MANAGED_BUFFER_EVICTION_QUEUES;
-		break;
-	case FileBufferType::TINY_BUFFER:
-		// Followed by TINY_BUFFER (evicted last)
-		offset = BLOCK_EVICTION_QUEUES + MANAGED_BUFFER_EVICTION_QUEUES;
-		size = TINY_BUFFER_EVICTION_QUEUES;
-		break;
-	default:
-		throw InternalException("Invalid FileBufferType in BufferPool::GetEvictionQueueForBlockHandle");
+	const auto &handle_buffer_type = handle.buffer->type;
+
+	// Get offset into eviction queues for this FileBufferType
+	idx_t queue_index = 0;
+	for (uint8_t type_idx = 0; type_idx < FILE_BUFFER_TYPE_COUNT; type_idx++) {
+		const auto queue_buffer_type = static_cast<FileBufferType>(type_idx + 1);
+		if (handle_buffer_type == queue_buffer_type) {
+			break;
+		}
+		const auto &type_queue_size = eviction_queue_sizes[type_idx];
+		queue_index += type_queue_size;
 	}
 
-	idx_t index;
-	if (handle.eviction_queue_idx.IsValid() && handle.eviction_queue_idx.GetIndex() < size) {
-		index = size - handle.eviction_queue_idx.GetIndex() - 1;
-	} else { // Index was not set or is greater than queue size, assume low priority (front of queue)
-		index = 0;
+	const auto &queue_size = eviction_queue_sizes[static_cast<uint8_t>(handle_buffer_type) - 1];
+	// Adjust if eviction_queue_idx is set (idx == 0 -> add at back, idx >= queue_size -> add at front)
+	if (handle.eviction_queue_idx.IsValid() && handle.eviction_queue_idx.GetIndex() < queue_size) {
+		queue_index += queue_size - handle.eviction_queue_idx.GetIndex() - 1;
 	}
-	D_ASSERT(index < size);
 
-	return *queues[offset + index];
+	D_ASSERT(queues[queue_index]->file_buffer_type == handle_buffer_type);
+	return *queues[queue_index];
 }
 
 void BufferPool::IncrementDeadNodes(const BlockHandle &handle) {
