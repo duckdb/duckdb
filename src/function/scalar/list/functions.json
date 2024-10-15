@@ -38,5 +38,37 @@
         "example": "list_zip([1, 2], [3, 4], [5, 6])",
         "type": "scalar_function",
         "aliases": ["array_zip"]
+    },
+    {
+        "name": "list_extract",
+        "parameters": "list,index",
+        "description": "Extract the indexth (1-based) value from the list.",
+        "example": "list_extract([4, 5, 6], 3)",
+        "type": "scalar_function_set",
+        "aliases": ["list_element"]
+    },
+    {
+        "name": "list_resize",
+        "parameters": "list,size[,value]",
+        "description": "Resizes the list to contain size elements. Initializes new elements with value or NULL if value is not set.",
+        "example": "list_resize([1, 2, 3], 5, 0)",
+        "type": "scalar_function_set",
+        "aliases": ["array_resize"]
+    },
+    {
+        "name": "array_extract",
+        "parameters": "array_extract(list,index)",
+        "description": "Extract the indexth (1-based) value from the array.",
+        "example": "array_extract('DuckDB', 2)",
+        "type": "scalar_function_set",
+        "aliases": []
+    },
+    {
+        "name": "struct_extract",
+        "parameters": "struct_extract(list,'entry')",
+        "description": "Extract the named entry from the STRUCT.",
+        "example": "struct_extract({'i': 3, 'v2': 3, 'v3': 0}, 'i')",
+        "type": "scalar_function_set",
+        "aliases": []
     }
 ]

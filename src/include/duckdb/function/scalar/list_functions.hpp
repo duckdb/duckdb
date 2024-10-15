@@ -114,4 +114,52 @@ struct ArrayZipFun {
 	static constexpr const char *Name = "array_zip";
 };
 
+struct ListExtractFun {
+	static constexpr const char *Name = "list_extract";
+	static constexpr const char *Parameters = "list,index";
+	static constexpr const char *Description = "Extract the indexth (1-based) value from the list.";
+	static constexpr const char *Example = "list_extract([4, 5, 6], 3)";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ListElementFun {
+	using ALIAS = ListExtractFun;
+
+	static constexpr const char *Name = "list_element";
+};
+
+struct ListResizeFun {
+	static constexpr const char *Name = "list_resize";
+	static constexpr const char *Parameters = "list,size[,value]";
+	static constexpr const char *Description = "Resizes the list to contain size elements. Initializes new elements with value or NULL if value is not set.";
+	static constexpr const char *Example = "list_resize([1, 2, 3], 5, 0)";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ArrayResizeFun {
+	using ALIAS = ListResizeFun;
+
+	static constexpr const char *Name = "array_resize";
+};
+
+struct ArrayExtractFun {
+	static constexpr const char *Name = "array_extract";
+	static constexpr const char *Parameters = "array_extract(list,index)";
+	static constexpr const char *Description = "Extract the indexth (1-based) value from the array.";
+	static constexpr const char *Example = "array_extract('DuckDB', 2)";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct StructExtractFun {
+	static constexpr const char *Name = "struct_extract";
+	static constexpr const char *Parameters = "struct_extract(list,'entry')";
+	static constexpr const char *Description = "Extract the named entry from the STRUCT.";
+	static constexpr const char *Example = "struct_extract({'i': 3, 'v2': 3, 'v3': 0}, 'i')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 } // namespace duckdb
