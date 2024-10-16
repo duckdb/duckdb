@@ -72,6 +72,17 @@ class LogicalUpdate;
 class CreateStatement;
 class CatalogEntryRetriever;
 
+//! Return value of Catalog::LookupEntry
+struct CatalogEntryLookup {
+	optional_ptr<SchemaCatalogEntry> schema;
+	optional_ptr<CatalogEntry> entry;
+	ErrorData error;
+
+	DUCKDB_API bool Found() const {
+		return entry;
+	}
+};
+
 //! The Catalog object represents the catalog of the database.
 class Catalog {
 public:
@@ -343,6 +354,11 @@ protected:
 	AttachedDatabase &db;
 
 public:
+	//! Lookup an entry using TryLookupEntry, throws if entry not found and if_not_found == THROW_EXCEPTION
+	CatalogEntryLookup LookupEntry(CatalogEntryRetriever &retriever, CatalogType type, const string &schema,
+	                               const string &name, OnEntryNotFound if_not_found,
+	                               QueryErrorContext error_context = QueryErrorContext());
+
 private:
 	//! Lookup an entry in the schema, returning a lookup with the entry and schema if they exist
 	CatalogEntryLookup TryLookupEntryInternal(CatalogTransaction transaction, CatalogType type, const string &schema,
@@ -352,10 +368,6 @@ private:
 	CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, CatalogType type, const string &schema,
 	                                  const string &name, OnEntryNotFound if_not_found,
 	                                  QueryErrorContext error_context = QueryErrorContext());
-	//! Lookup an entry using TryLookupEntry, throws if entry not found and if_not_found == THROW_EXCEPTION
-	CatalogEntryLookup LookupEntry(CatalogEntryRetriever &retriever, CatalogType type, const string &schema,
-	                               const string &name, OnEntryNotFound if_not_found,
-	                               QueryErrorContext error_context = QueryErrorContext());
 	static CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, vector<CatalogLookup> &lookups,
 	                                         CatalogType type, const string &name, OnEntryNotFound if_not_found,
 	                                         QueryErrorContext error_context = QueryErrorContext());
@@ -370,8 +382,9 @@ private:
 	                                                    QueryErrorContext error_context);
 
 	//! Return the close entry name, the distance and the belonging schema.
-	static SimilarCatalogEntry SimilarEntryInSchemas(ClientContext &context, const string &entry_name, CatalogType type,
-	                                                 const reference_set_t<SchemaCatalogEntry> &schemas);
+	static vector<SimilarCatalogEntry> SimilarEntriesInSchemas(ClientContext &context, const string &entry_name,
+	                                                           CatalogType type,
+	                                                           const reference_set_t<SchemaCatalogEntry> &schemas);
 
 	virtual void DropSchema(ClientContext &context, DropInfo &info) = 0;
 

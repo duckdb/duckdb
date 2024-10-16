@@ -1137,13 +1137,19 @@ void ClientContext::Append(TableDescription &description, ColumnDataCollection &
 		auto &table_entry =
 		    Catalog::GetEntry<TableCatalogEntry>(*this, description.database, description.schema, description.table);
 		// verify that the table columns and types match up
-		if (description.columns.size() != table_entry.GetColumns().PhysicalColumnCount()) {
+		if (description.PhysicalColumnCount() != table_entry.GetColumns().PhysicalColumnCount()) {
 			throw InvalidInputException("Failed to append: table entry has different number of columns!");
 		}
+		idx_t table_entry_col_idx = 0;
 		for (idx_t i = 0; i < description.columns.size(); i++) {
-			if (description.columns[i].Type() != table_entry.GetColumns().GetColumn(PhysicalIndex(i)).Type()) {
+			auto &column = description.columns[i];
+			if (column.Generated()) {
+				continue;
+			}
+			if (column.Type() != table_entry.GetColumns().GetColumn(PhysicalIndex(table_entry_col_idx)).Type()) {
 				throw InvalidInputException("Failed to append: table entry has different number of columns!");
 			}
+			table_entry_col_idx++;
 		}
 		auto binder = Binder::CreateBinder(*this);
 		auto bound_constraints = binder->BindConstraints(table_entry);
@@ -1152,22 +1158,24 @@ void ClientContext::Append(TableDescription &description, ColumnDataCollection &
 	});
 }
 
+void ClientContext::InternalTryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns) {
+	// bind the expressions
+	auto binder = Binder::CreateBinder(*this);
+	auto result = relation.Bind(*binder);
+	D_ASSERT(result.names.size() == result.types.size());
+
+	result_columns.reserve(result_columns.size() + result.names.size());
+	for (idx_t i = 0; i < result.names.size(); i++) {
+		result_columns.emplace_back(result.names[i], result.types[i]);
+	}
+}
+
 void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns) {
 #ifdef DEBUG
 	D_ASSERT(!relation.GetAlias().empty());
 	D_ASSERT(!relation.ToString().empty());
 #endif
-	RunFunctionInTransaction([&]() {
-		// bind the expressions
-		auto binder = Binder::CreateBinder(*this);
-		auto result = relation.Bind(*binder);
-		D_ASSERT(result.names.size() == result.types.size());
-
-		result_columns.reserve(result_columns.size() + result.names.size());
-		for (idx_t i = 0; i < result.names.size(); i++) {
-			result_columns.emplace_back(result.names[i], result.types[i]);
-		}
-	});
+	RunFunctionInTransaction([&]() { InternalTryBindRelation(relation, result_columns); });
 }
 
 unordered_set<string> ClientContext::GetTableNames(const string &query) {
@@ -1303,7 +1311,7 @@ ClientProperties ClientContext::GetClientProperties() const {
 		timezone = result.ToString();
 	}
 	return {timezone, db->config.options.arrow_offset_size, db->config.options.arrow_use_list_view,
-	        db->config.options.produce_arrow_string_views, db->config.options.arrow_arrow_lossless_conversion};
+	        db->config.options.produce_arrow_string_views, db->config.options.arrow_lossless_conversion};
 }
 
 bool ClientContext::ExecutionIsFinished() {

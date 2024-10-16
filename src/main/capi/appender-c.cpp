@@ -15,18 +15,27 @@ using duckdb::uhugeint_t;
 
 duckdb_state duckdb_appender_create(duckdb_connection connection, const char *schema, const char *table,
                                     duckdb_appender *out_appender) {
+	return duckdb_appender_create_ext(connection, INVALID_CATALOG, schema, table, out_appender);
+}
+
+duckdb_state duckdb_appender_create_ext(duckdb_connection connection, const char *catalog, const char *schema,
+                                        const char *table, duckdb_appender *out_appender) {
 	Connection *conn = reinterpret_cast<Connection *>(connection);
 
 	if (!connection || !table || !out_appender) {
 		return DuckDBError;
 	}
+	if (catalog == nullptr) {
+		catalog = INVALID_CATALOG;
+	}
 	if (schema == nullptr) {
 		schema = DEFAULT_SCHEMA;
 	}
+
 	auto wrapper = new AppenderWrapper();
 	*out_appender = (duckdb_appender)wrapper;
 	try {
-		wrapper->appender = duckdb::make_uniq<Appender>(*conn, schema, table);
+		wrapper->appender = duckdb::make_uniq<Appender>(*conn, catalog, schema, table);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		wrapper->error = error.RawMessage();

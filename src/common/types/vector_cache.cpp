@@ -118,19 +118,25 @@ private:
 	idx_t capacity;
 };
 
-VectorCache::VectorCache(Allocator &allocator, const LogicalType &type_p, idx_t capacity_p) {
+VectorCache::VectorCache() : buffer(nullptr) {
+}
+
+VectorCache::VectorCache(Allocator &allocator, const LogicalType &type_p, const idx_t capacity_p) {
 	buffer = make_buffer<VectorCacheBuffer>(allocator, type_p, capacity_p);
 }
 
 void VectorCache::ResetFromCache(Vector &result) const {
-	D_ASSERT(buffer);
-	auto &vcache = buffer->Cast<VectorCacheBuffer>();
-	vcache.ResetFromCache(result, buffer);
+	if (!buffer) {
+		return;
+	}
+	auto &vector_cache = buffer->Cast<VectorCacheBuffer>();
+	vector_cache.ResetFromCache(result, buffer);
 }
 
 const LogicalType &VectorCache::GetType() const {
-	auto &vcache = buffer->Cast<VectorCacheBuffer>();
-	return vcache.GetType();
+	D_ASSERT(buffer);
+	auto &vector_cache = buffer->Cast<VectorCacheBuffer>();
+	return vector_cache.GetType();
 }
 
 } // namespace duckdb

@@ -1,5 +1,5 @@
 #include "duckdb/common/shared_ptr.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 
@@ -341,7 +341,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	    (single_column_before || (more_values && !require_more_padding) ||
 	     (more_than_one_column && require_less_padding)) &&
 	    !invalid_padding && comments_are_acceptable) {
-		if (!candidates.empty() && set_columns.IsSet() && max_columns_found == candidates.size()) {
+		if (!candidates.empty() && set_columns.IsSet() && max_columns_found == set_columns.Size()) {
 			// We have a candidate that fits our requirements better
 			return;
 		}

@@ -175,16 +175,19 @@ double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p
 	return percentage;
 }
 
-idx_t TableScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-                             LocalTableFunctionState *local_state, GlobalTableFunctionState *gstate_p) {
-	auto &state = local_state->Cast<TableScanLocalState>();
+OperatorPartitionData TableScanGetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input) {
+	if (input.partition_info.RequiresPartitionColumns()) {
+		throw InternalException("TableScan::GetPartitionData: partition columns not supported");
+	}
+	auto &state = input.local_state->Cast<TableScanLocalState>();
 	if (state.scan_state.table_state.row_group) {
-		return state.scan_state.table_state.batch_index;
+		return OperatorPartitionData(state.scan_state.table_state.batch_index);
 	}
 	if (state.scan_state.local_state.row_group) {
-		return state.scan_state.table_state.batch_index + state.scan_state.local_state.batch_index;
+		return OperatorPartitionData(state.scan_state.table_state.batch_index +
+		                             state.scan_state.local_state.batch_index);
 	}
-	return 0;
+	return OperatorPartitionData(0);
 }
 
 BindInfo TableScanGetBindInfo(const optional_ptr<FunctionData> bind_data_p) {
@@ -346,8 +349,8 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 			if (index_state != nullptr) {
 
 				auto &db_config = DBConfig::GetConfig(context);
-				auto index_scan_percentage = db_config.options.index_scan_percentage;
-				auto index_scan_max_count = db_config.options.index_scan_max_count;
+				auto index_scan_percentage = db_config.GetSetting<IndexScanPercentageSetting>(context);
+				auto index_scan_max_count = db_config.GetSetting<IndexScanMaxCountSetting>(context);
 
 				auto total_rows = storage.GetTotalRows();
 				auto total_rows_from_percentage = LossyNumericCast<idx_t>(double(total_rows) * index_scan_percentage);
@@ -412,7 +415,7 @@ TableFunction TableScanFunction::GetIndexScanFunction() {
 	scan_function.pushdown_complex_filter = nullptr;
 	scan_function.to_string = TableScanToString;
 	scan_function.table_scan_progress = nullptr;
-	scan_function.get_batch_index = nullptr;
+	scan_function.get_partition_data = nullptr;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = false;
 	scan_function.get_bind_info = TableScanGetBindInfo;
@@ -431,7 +434,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.pushdown_complex_filter = TableScanPushdownComplexFilter;
 	scan_function.to_string = TableScanToString;
 	scan_function.table_scan_progress = TableScanProgress;
-	scan_function.get_batch_index = TableScanGetBatchIndex;
+	scan_function.get_partition_data = TableScanGetPartitionData;
 	scan_function.get_bind_info = TableScanGetBindInfo;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;
