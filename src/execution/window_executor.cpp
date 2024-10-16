@@ -1671,23 +1671,23 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, 
 		// else offset is zero, so don't move.
 
 		if (can_shift) {
+			const auto target_limit = MinValue(partition_end[i], row_end) - row_idx;
 			if (!delta) {
 				//	Copy source[index:index+width] => result[i:]
 				const auto index = NumericCast<idx_t>(val_idx);
 				const auto source_limit = partition_end[i] - index;
-				const auto target_limit = MinValue(partition_end[i], row_end) - row_idx;
 				const auto width = MinValue(source_limit, target_limit);
 				auto &source = payload_collection.data[0];
 				VectorOperations::Copy(source, result, index + width, index, i);
 				i += width;
 				row_idx += width;
 			} else if (wexpr.default_expr) {
-				const auto width = MinValue(delta, count - i);
+				const auto width = MinValue(delta, target_limit);
 				llstate.leadlag_default.CopyCell(result, i, width);
 				i += width;
 				row_idx += width;
 			} else {
-				for (idx_t nulls = MinValue(delta, count - i); nulls--; ++i, ++row_idx) {
+				for (idx_t nulls = MinValue(delta, target_limit); nulls--; ++i, ++row_idx) {
 					FlatVector::SetNull(result, i, true);
 				}
 			}
