@@ -354,7 +354,7 @@ struct AddConstraintInfo : public AlterTableInfo {
 	AddConstraintInfo(AlterEntryData data, unique_ptr<Constraint> constraint);
 	~AddConstraintInfo() override;
 
-	//! The constraint to add
+	//! The constraint to add.
 	unique_ptr<Constraint> constraint;
 
 public:

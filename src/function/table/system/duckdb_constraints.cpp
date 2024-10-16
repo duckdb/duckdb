@@ -323,14 +323,14 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			// referenced_column_names, LIST
 			output.SetValue(col++, count, Value::LIST(LogicalType::VARCHAR, std::move(referenced_column_name_list)));
 			count++;
-
-			if (data.constraint_offset >= constraints.size()) {
-				data.constraint_offset = 0;
-				data.offset++;
-			}
 		}
-		output.SetCardinality(count);
+
+		if (data.constraint_offset >= constraints.size()) {
+			data.constraint_offset = 0;
+			data.offset++;
+		}
 	}
+	output.SetCardinality(count);
 }
 
 void DuckDBConstraintsFun::RegisterFunction(BuiltinFunctions &set) {
