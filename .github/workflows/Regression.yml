@@ -234,38 +234,38 @@ jobs:
       BUILD_JSON: 1
       BUILD_PARQUET: 1
       EXTENSION_STATIC_BUILD: 1
-  steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-    - name: Install
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
-    - name: Build
-      shell: bash
-      run: |
-        make
-        git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
-        cd duckdb
-        make
-        cd ..
+      - name: Build
+        shell: bash
+        run: |
+          make
+          git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
+          cd duckdb
+          make
+          cd ..
 
-    - name: Regression Test Extension binary size
-      shell: bash
-      run: |
-        python scripts/regression_test_extension_size.py --old 'duckdb/build/release/extension' --new build/release/extension --expect json,parquet,tpch,tpcds
+      - name: Regression Test Extension binary size
+        shell: bash
+        run: |
+          python scripts/regression_test_extension_size.py --old 'duckdb/build/release/extension' --new build/release/extension --expect json,parquet,tpch,tpcds
 
   regression-test-plan-cost:
     name: Regression Test Join Order Plan Cost
