@@ -92,13 +92,13 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 		for (auto &struct_child : struct_children) {
 			candidates.push_back(struct_child.first);
 		}
-		auto closest_settings = StringUtil::TopNLevenshtein(candidates, key);
+		auto closest_settings = StringUtil::TopNJaroWinkler(candidates, key);
 		auto message = StringUtil::CandidatesMessage(closest_settings, "Candidate Entries");
 		throw BinderException("Could not find key \"%s\" in struct\n%s", key, message);
 	}
 
 	bound_function.return_type = std::move(return_type);
-	return make_uniq<StructExtractBindData>(key_index);
+	return StructExtractFun::GetBindData(key_index);
 }
 
 static unique_ptr<FunctionData> StructExtractBindIndex(ClientContext &context, ScalarFunction &bound_function,
@@ -134,7 +134,7 @@ static unique_ptr<FunctionData> StructExtractBindIndex(ClientContext &context, S
 		                      index, struct_children.size());
 	}
 	bound_function.return_type = struct_children[NumericCast<idx_t>(index - 1)].second;
-	return make_uniq<StructExtractBindData>(NumericCast<idx_t>(index - 1));
+	return StructExtractFun::GetBindData(NumericCast<idx_t>(index - 1));
 }
 
 static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &context, FunctionStatisticsInput &input) {
@@ -144,6 +144,10 @@ static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &con
 	auto &info = bind_data->Cast<StructExtractBindData>();
 	auto struct_child_stats = StructStats::GetChildStats(child_stats[0]);
 	return struct_child_stats[info.index].ToUnique();
+}
+
+unique_ptr<FunctionData> StructExtractFun::GetBindData(idx_t index) {
+	return make_uniq<StructExtractBindData>(index);
 }
 
 ScalarFunction StructExtractFun::KeyExtractFunction() {

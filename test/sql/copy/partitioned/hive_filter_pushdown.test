@@ -42,12 +42,12 @@ physical_plan	<!REGEX>:.*PARQUET_SCAN.*File Filters:.*
 query II
 explain SELECT * FROM parquet_scan('__TEST_DIR__/hive_pushdown_bug/*/*.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=1) where c=500;
 ----
-physical_plan	<REGEX>:.*PARQUET_SCAN.*File Filters: \(c = 500\).*Scanning: 1\/10 files.*
+physical_plan	<REGEX>:.*PARQUET_SCAN.*File Filters:.*\(c = 500\).*Scanning Files:.*1\/10.*
 
 query II
 explain SELECT * FROM parquet_scan('__TEST_DIR__/hive_pushdown_bug/*/*.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=1) where c=500 and b='20';
 ----
-physical_plan	<REGEX>:.*PARQUET_SCAN.*File Filters: \(c = 500\).*Scanning: 1\/10 files.*
+physical_plan	<REGEX>:.*PARQUET_SCAN.*File Filters:.*\(c = 500\).*Scanning Files:.*1\/10.*
 
 # File Filters show up in read csv auto for hive partitioned csv files. 
 statement ok
@@ -56,7 +56,7 @@ COPY (SELECT i::VARCHAR as a, (i*10)::VARCHAR as b, (i*100)::VARCHAR as c from r
 query II
 explain SELECT * FROM read_csv_auto('__TEST_DIR__/hive_pushdown_bug_csv/*/*.csv', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=1, names=['a','b','c']) where c=500;
 ----
-physical_plan	<REGEX>:.*READ_CSV_AUTO.*File Filters: \(c = 500\).*Scanning: 1\/10 files.*
+physical_plan	<REGEX>:.*READ_CSV_AUTO.*File Filters:.*\(c = 500\).*Scanning Files:.*1\/10.*
 
 # same for json paritioned files
 #statement ok

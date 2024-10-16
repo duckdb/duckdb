@@ -144,6 +144,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 					}
 					auto new_projection =
 					    make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
+					if (child->has_estimated_cardinality) {
+						new_projection->SetEstimatedCardinality(child->estimated_cardinality);
+					}
 					new_projection->children.push_back(std::move(child));
 					op.children[child_idx] = std::move(new_projection);
 
@@ -206,9 +209,11 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				return;
 			}
 
+			auto &final_column_ids = get.GetColumnIds();
+
 			// Create "selection vector" of all column ids
 			vector<idx_t> proj_sel;
-			for (idx_t col_idx = 0; col_idx < get.column_ids.size(); col_idx++) {
+			for (idx_t col_idx = 0; col_idx < final_column_ids.size(); col_idx++) {
 				proj_sel.push_back(col_idx);
 			}
 			// Create a copy that we can use to match ids later
@@ -220,8 +225,8 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			// being projected out
 			for (auto &filter : get.table_filters.filters) {
 				optional_idx index;
-				for (idx_t i = 0; i < get.column_ids.size(); i++) {
-					if (get.column_ids[i] == filter.first) {
+				for (idx_t i = 0; i < final_column_ids.size(); i++) {
+					if (final_column_ids[i] == filter.first) {
 						index = i;
 						break;
 					}
@@ -242,9 +247,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			vector<column_t> column_ids;
 			column_ids.reserve(col_sel.size());
 			for (auto col_sel_idx : col_sel) {
-				column_ids.push_back(get.column_ids[col_sel_idx]);
+				column_ids.push_back(final_column_ids[col_sel_idx]);
 			}
-			get.column_ids = std::move(column_ids);
+			get.SetColumnIds(std::move(column_ids));
 
 			if (get.function.filter_prune) {
 				// Now set the projection cols by matching the "selection vector" that excludes filter columns
@@ -260,11 +265,11 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				}
 			}
 
-			if (get.column_ids.empty()) {
+			if (final_column_ids.empty()) {
 				// this generally means we are only interested in whether or not anything exists in the table (e.g.
 				// EXISTS(SELECT * FROM tbl)) in this case, we just scan the row identifier column as it means we do not
 				// need to read any of the columns
-				get.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+				get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
 			}
 		}
 		return;

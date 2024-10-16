@@ -3,13 +3,13 @@
 
 namespace duckdb {
 
-SetStatement::SetStatement(std::string name_p, SetScope scope_p, SetType type_p)
+SetStatement::SetStatement(string name_p, SetScope scope_p, SetType type_p)
     : SQLStatement(StatementType::SET_STATEMENT), name(std::move(name_p)), scope(scope_p), set_type(type_p) {
 }
 
 // Set Variable
 
-SetVariableStatement::SetVariableStatement(std::string name_p, unique_ptr<ParsedExpression> value_p, SetScope scope_p)
+SetVariableStatement::SetVariableStatement(string name_p, unique_ptr<ParsedExpression> value_p, SetScope scope_p)
     : SetStatement(std::move(name_p), scope_p, SetType::SET), value(std::move(value_p)) {
 }
 
@@ -31,6 +31,8 @@ static string ScopeToString(SetScope scope) {
 		return "SESSION";
 	case SetScope::GLOBAL:
 		return "GLOBAL";
+	case SetScope::VARIABLE:
+		return "VARIABLE";
 	default:
 		throw InternalException("ToString not implemented for SetScope of type: %s", EnumUtil::ToString(scope));
 	}

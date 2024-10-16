@@ -1,0 +1,17 @@
+# name: test/sql/collate/collate_ordered_aggregate.test
+# description: Test collation for ordered aggregates
+# group: [collate]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table tbl(id int, val varchar);
+
+statement ok
+insert into tbl values (0, 'a'), (1, 'B');
+
+query I
+select list(id order by val collate nocase) from tbl;
+----
+[0, 1]

@@ -492,19 +492,22 @@ SourceResultType PhysicalTopN::GetData(ExecutionContext &context, DataChunk &chu
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
-string PhysicalTopN::ParamsToString() const {
-	string result;
-	result += "Top " + to_string(limit);
+InsertionOrderPreservingMap<string> PhysicalTopN::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	result["Top"] = to_string(limit);
 	if (offset > 0) {
-		result += "\n";
-		result += "Offset " + to_string(offset);
+		result["Offset"] = to_string(offset);
 	}
-	result += "\n[INFOSEPARATOR]";
+
+	string orders_info;
 	for (idx_t i = 0; i < orders.size(); i++) {
-		result += "\n";
-		result += orders[i].expression->ToString() + " ";
-		result += orders[i].type == OrderType::DESCENDING ? "DESC" : "ASC";
+		if (i > 0) {
+			orders_info += "\n";
+		}
+		orders_info += orders[i].expression->ToString() + " ";
+		orders_info += orders[i].type == OrderType::DESCENDING ? "DESC" : "ASC";
 	}
+	result["Order By"] = orders_info;
 	return result;
 }
 

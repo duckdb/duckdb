@@ -19,7 +19,7 @@ public:
 	                   ColumnData &parent);
 
 public:
-	bool CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
+	FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
 	void AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) override;
 };
 

@@ -76,9 +76,7 @@ void LogicalComparisonJoin::ExtractJoinConditions(
 		auto total_side = JoinSide::GetJoinSide(*expr, left_bindings, right_bindings);
 		if (total_side != JoinSide::BOTH) {
 			// join condition does not reference both sides, add it as filter under the join
-			// BUT don't push right side filters into AsOf because it is really a table lookup
-			// and we shouldn't remove anything from the table.
-			if (type == JoinType::LEFT && total_side == JoinSide::RIGHT && ref_type != JoinRefType::ASOF) {
+			if ((type == JoinType::LEFT || ref_type == JoinRefType::ASOF) && total_side == JoinSide::RIGHT) {
 				// filter is on RHS and the join is a LEFT OUTER join, we can push it in the right child
 				if (right_child->type != LogicalOperatorType::LOGICAL_FILTER) {
 					// not a filter yet, push a new empty filter
@@ -387,6 +385,14 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 	default:
 		break;
+	}
+	if (!ref.duplicate_eliminated_columns.empty()) {
+		auto &comp_join = join->Cast<LogicalComparisonJoin>();
+		comp_join.type = LogicalOperatorType::LOGICAL_DELIM_JOIN;
+		comp_join.delim_flipped = ref.delim_flipped;
+		for (auto &col : ref.duplicate_eliminated_columns) {
+			comp_join.duplicate_eliminated_columns.emplace_back(col->Copy());
+		}
 	}
 	return result;
 }

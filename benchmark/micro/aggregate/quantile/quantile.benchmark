@@ -10,4 +10,3 @@ create table quantile as select range r, random() from range(10000000) union all
 
 run
 SELECT quantile(r, 0.5) FROM quantile
-

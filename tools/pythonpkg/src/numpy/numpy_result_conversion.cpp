@@ -5,7 +5,7 @@ namespace duckdb {
 
 NumpyResultConversion::NumpyResultConversion(const vector<LogicalType> &types, idx_t initial_capacity,
                                              const ClientProperties &client_properties, bool pandas)
-    : count(0), capacity(0) {
+    : count(0), capacity(0), pandas(pandas) {
 	owned_data.reserve(types.size());
 	for (auto &type : types) {
 		owned_data.emplace_back(type, client_properties, pandas);

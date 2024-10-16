@@ -263,11 +263,14 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function,
                                            idx_t depth) {
-	return BindResult(BinderException(expr, UnsupportedAggregateMessage()));
+	return BindUnsupportedExpression(expr, depth, UnsupportedAggregateMessage());
 }
 
 BindResult ExpressionBinder::BindUnnest(FunctionExpression &expr, idx_t depth, bool root_expression) {
-	return BindResult(BinderException(expr, UnsupportedUnnestMessage()));
+	return BindUnsupportedExpression(expr, depth, UnsupportedUnnestMessage());
+}
+
+void ExpressionBinder::ThrowIfUnnestInLambda(const ColumnBinding &column_binding) {
 }
 
 string ExpressionBinder::UnsupportedAggregateMessage() {

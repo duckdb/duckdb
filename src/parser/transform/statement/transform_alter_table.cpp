@@ -75,6 +75,11 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlte
 			if (stmt.relkind != duckdb_libpgquery::PG_OBJECT_TABLE) {
 				throw ParserException("Alter column's type is only supported for tables");
 			}
+
+			if (column_entry.GetType() == LogicalType::UNKNOWN && !column_def->raw_default) {
+				throw ParserException("Omitting the type is only possible in combination with USING");
+			}
+
 			if (column_def->raw_default) {
 				expr = TransformExpression(column_def->raw_default);
 			} else {

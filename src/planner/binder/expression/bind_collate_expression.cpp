@@ -1,4 +1,5 @@
 #include "duckdb/parser/expression/collate_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
@@ -18,9 +19,9 @@ BindResult ExpressionBinder::BindExpression(CollateExpression &expr, idx_t depth
 		throw BinderException("collations are only supported for type varchar");
 	}
 	// Validate the collation, but don't use it
-	auto child_copy = child->Copy();
+	auto collation_test = make_uniq_base<Expression, BoundConstantExpression>(Value(child->return_type));
 	auto collation_type = LogicalType::VARCHAR_COLLATION(expr.collation);
-	PushCollation(context, child_copy, collation_type);
+	PushCollation(context, collation_test, collation_type);
 	child->return_type = collation_type;
 	return BindResult(std::move(child));
 }

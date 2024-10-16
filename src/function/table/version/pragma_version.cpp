@@ -1,7 +1,7 @@
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/platform.h"
+#include "duckdb/common/platform.hpp"
 
 #include <cstdint>
 

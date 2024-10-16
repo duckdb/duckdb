@@ -103,6 +103,10 @@
                 "name": "partition_by",
                 "type": "Optional[List[str]]",
                 "default": "None"
+            }, {
+                "name": "write_partition_columns",
+                "type": "Optional[bool]",
+                "default": "None"
             }
         ],
         "docs": "Write the relation object to a CSV file in 'file_name'",
@@ -114,7 +118,7 @@
         "args": [
             {
                 "name": "aggr_expr",
-                "type": "str"
+                "type": "str | List[Expression]"
             },
             {
                 "name": "group_expr",

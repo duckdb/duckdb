@@ -11,12 +11,12 @@ statement ok
 CREATE TABLE db1.test(a INTEGER, b INTEGER, c VARCHAR(10));
 
 query I
-COPY db1.test FROM 'test/sql/copy/csv/data/test/test.csv';
+COPY db1.test FROM 'data/csv/test/test.csv';
 ----
 5000
 
 query I
-COPY db1.main.test FROM 'test/sql/copy/csv/data/test/test.csv';
+COPY db1.main.test FROM 'data/csv/test/test.csv';
 ----
 5000
 
@@ -27,6 +27,6 @@ statement ok
 USE db1
 
 query I
-COPY test FROM 'test/sql/copy/csv/data/test/test.csv';
+COPY test FROM 'data/csv/test/test.csv';
 ----
 5000

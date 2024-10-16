@@ -57,11 +57,14 @@ public:
 			} else {
 				// the values are different
 				// issue the callback on the last value
-				Flush<OP>();
+				// edge case: if a value has exactly 2^16 repeated values, we can end up here with last_seen_count = 0
+				if (last_seen_count > 0) {
+					Flush<OP>();
+					seen_count++;
+				}
 
 				// increment the seen_count and put the new value into the RLE slot
 				last_value = data[idx];
-				seen_count++;
 				last_seen_count = 1;
 			}
 		} else {
@@ -88,7 +91,7 @@ struct RLEAnalyzeState : public AnalyzeState {
 
 template <class T>
 unique_ptr<AnalyzeState> RLEInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(Storage::BLOCK_SIZE, type);
+	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
 	return make_uniq<RLEAnalyzeState<T>>(info);
 }
 
@@ -147,7 +150,8 @@ struct RLECompressState : public CompressionState {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
 
-		auto column_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
+		auto column_segment =
+		    ColumnSegment::CreateTransientSegment(db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
 		column_segment->function = function;
 		current_segment = std::move(column_segment);
 
@@ -174,7 +178,7 @@ struct RLECompressState : public CompressionState {
 
 		// update meta data
 		if (WRITE_STATISTICS && !is_null) {
-			NumericStats::Update<T>(current_segment->stats.statistics, value);
+			current_segment->stats.statistics.UpdateNumericStats<T>(value);
 		}
 		current_segment->count += count;
 
@@ -252,7 +256,7 @@ struct RLEScanState : public SegmentScanState {
 		entry_pos = 0;
 		position_in_entry = 0;
 		rle_count_offset = UnsafeNumericCast<uint32_t>(Load<uint64_t>(handle.Ptr() + segment.GetBlockOffset()));
-		D_ASSERT(rle_count_offset <= Storage::BLOCK_SIZE);
+		D_ASSERT(rle_count_offset <= segment.GetBlockManager().GetBlockSize());
 	}
 
 	void Skip(ColumnSegment &segment, idx_t skip_count) {
@@ -432,8 +436,8 @@ CompressionFunction RLEFun::GetFunction(PhysicalType type) {
 	}
 }
 
-bool RLEFun::TypeIsSupported(const CompressionInfo &info) {
-	switch (info.GetPhysicalType()) {
+bool RLEFun::TypeIsSupported(const PhysicalType physical_type) {
+	switch (physical_type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:

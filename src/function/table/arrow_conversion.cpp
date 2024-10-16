@@ -1,11 +1,13 @@
-#include "duckdb/function/table/arrow.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/multiply.hpp"
-#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/arrow_aux_data.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
-#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/types/arrow_string_view_type.hpp"
+#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/function/table/arrow.hpp"
+
+#include "duckdb/common/bswap.hpp"
 
 namespace duckdb {
 
@@ -36,7 +38,7 @@ static void ShiftRight(unsigned char *ar, int size, int shift) {
 	}
 }
 
-idx_t GetEffectiveOffset(ArrowArray &array, int64_t parent_offset, const ArrowScanLocalState &state,
+idx_t GetEffectiveOffset(const ArrowArray &array, int64_t parent_offset, const ArrowScanLocalState &state,
                          int64_t nested_offset = -1) {
 	if (nested_offset != -1) {
 		// The parent of this array is a list
@@ -75,7 +77,7 @@ static void GetValidityMask(ValidityMask &mask, ArrowArray &array, const ArrowSc
 			vector<uint8_t> temp_nullmask(n_bitmask_bytes + 1);
 			memcpy(temp_nullmask.data(), ArrowBufferData<uint8_t>(array, 0) + bit_offset / 8, n_bitmask_bytes + 1);
 			ShiftRight(temp_nullmask.data(), NumericCast<int>(n_bitmask_bytes + 1),
-			           bit_offset % 8); //! why this has to be a right shift is a mystery to me
+			           NumericCast<int>(bit_offset % 8ull)); //! why this has to be a right shift is a mystery to me
 			memcpy((void *)mask.GetData(), data_ptr_cast(temp_nullmask.data()), n_bitmask_bytes);
 		}
 #else
@@ -108,7 +110,7 @@ static void SetValidityMask(Vector &vector, ArrowArray &array, const ArrowScanLo
 	GetValidityMask(mask, array, scan_state, size, parent_offset, nested_offset, add_null);
 }
 
-static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state,
+static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, const ArrowArray &array, ArrowArrayScanState &array_state,
                                              idx_t size, const ArrowType &arrow_type, int64_t nested_offset = -1,
                                              ValidityMask *parent_mask = nullptr, uint64_t parent_offset = 0);
 
@@ -118,7 +120,7 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 
 static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state,
                                           idx_t size, const ArrowType &arrow_type, int64_t nested_offset = -1,
-                                          ValidityMask *parent_mask = nullptr, uint64_t parent_offset = 0);
+                                          const ValidityMask *parent_mask = nullptr, uint64_t parent_offset = 0);
 
 namespace {
 
@@ -211,7 +213,7 @@ static ArrowListOffsetData ConvertArrowListOffsets(Vector &vector, ArrowArray &a
 }
 
 static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
-                              const ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask,
+                              const ArrowType &arrow_type, int64_t nested_offset, const ValidityMask *parent_mask,
                               int64_t parent_offset) {
 	auto &scan_state = array_state.state;
 
@@ -270,7 +272,7 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowArrayScanS
 }
 
 static void ArrowToDuckDBArray(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
-                               const ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask,
+                               const ArrowType &arrow_type, int64_t nested_offset, const ValidityMask *parent_mask,
                                int64_t parent_offset) {
 
 	auto &array_info = arrow_type.GetTypeInfo<ArrowArrayInfo>();
@@ -452,14 +454,32 @@ static void TimeConversion(Vector &vector, ArrowArray &array, const ArrowScanLoc
                            int64_t nested_offset, int64_t parent_offset, idx_t size, int64_t conversion) {
 	auto tgt_ptr = FlatVector::GetData<dtime_t>(vector);
 	auto &validity_mask = FlatVector::Validity(vector);
-	auto src_ptr = (T *)array.buffers[1] + GetEffectiveOffset(array, parent_offset, scan_state, nested_offset);
+	auto src_ptr =
+	    static_cast<const T *>(array.buffers[1]) + GetEffectiveOffset(array, parent_offset, scan_state, nested_offset);
 	for (idx_t row = 0; row < size; row++) {
 		if (!validity_mask.RowIsValid(row)) {
 			continue;
 		}
-		if (!TryMultiplyOperator::Operation((int64_t)src_ptr[row], conversion, tgt_ptr[row].micros)) {
+		if (!TryMultiplyOperator::Operation(static_cast<int64_t>(src_ptr[row]), conversion, tgt_ptr[row].micros)) {
 			throw ConversionException("Could not convert Time to Microsecond");
 		}
+	}
+}
+
+static void UUIDConversion(Vector &vector, const ArrowArray &array, const ArrowScanLocalState &scan_state,
+                           int64_t nested_offset, int64_t parent_offset, idx_t size) {
+	auto tgt_ptr = FlatVector::GetData<hugeint_t>(vector);
+	auto &validity_mask = FlatVector::Validity(vector);
+	auto src_ptr = static_cast<const hugeint_t *>(array.buffers[1]) +
+	               GetEffectiveOffset(array, parent_offset, scan_state, nested_offset);
+	for (idx_t row = 0; row < size; row++) {
+		if (!validity_mask.RowIsValid(row)) {
+			continue;
+		}
+		tgt_ptr[row].lower = static_cast<uint64_t>(BSwap(src_ptr[row].upper));
+		// flip Upper MSD
+		tgt_ptr[row].upper =
+		    static_cast<int64_t>(static_cast<uint64_t>(BSwap(src_ptr[row].lower)) ^ (static_cast<uint64_t>(1) << 63));
 	}
 }
 
@@ -569,7 +589,7 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 	idx_t index = 0;
 	if (value_format.validity.AllValid()) {
 		// None of the compressed values are NULL
-		for (; run < compressed_size; run++) {
+		for (; run < compressed_size; ++run) {
 			auto run_end_index = run_end_format.sel->get_index(run);
 			auto value_index = value_format.sel->get_index(run);
 			auto &value = values_data[value_index];
@@ -587,13 +607,13 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 			if (index >= count) {
 				if (logical_index + index >= run_end) {
 					// The last run was completed, forward the run index
-					run++;
+					++run;
 				}
 				break;
 			}
 		}
 	} else {
-		for (; run < compressed_size; run++) {
+		for (; run < compressed_size; ++run) {
 			auto run_end_index = run_end_format.sel->get_index(run);
 			auto value_index = value_format.sel->get_index(run);
 			auto run_end = static_cast<idx_t>(run_ends_data[run_end_index]);
@@ -618,7 +638,7 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 			if (index >= count) {
 				if (logical_index + index >= run_end) {
 					// The last run was completed, forward the run index
-					run++;
+					++run;
 				}
 				break;
 			}
@@ -683,7 +703,7 @@ static void FlattenRunEndsSwitch(Vector &result, ArrowRunEndEncodingState &run_e
 	}
 }
 
-static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state,
+static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, const ArrowArray &array, ArrowArrayScanState &array_state,
                                              idx_t size, const ArrowType &arrow_type, int64_t nested_offset,
                                              ValidityMask *parent_mask, uint64_t parent_offset) {
 	// Scan the 'run_ends' array
@@ -782,10 +802,14 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
-	case LogicalTypeId::TIMESTAMP_NS: {
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIME_TZ: {
 		DirectConversion(vector, array, scan_state, nested_offset, parent_offset);
 		break;
 	}
+	case LogicalTypeId::UUID:
+		UUIDConversion(vector, array, scan_state, nested_offset, NumericCast<int64_t>(parent_offset), size);
+		break;
 	case LogicalTypeId::VARCHAR: {
 		auto &string_info = arrow_type.GetTypeInfo<ArrowStringInfo>();
 		auto size_type = string_info.GetSizeType();
@@ -828,8 +852,8 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 			               GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), scan_state, nested_offset);
 			auto tgt_ptr = FlatVector::GetData<date_t>(vector);
 			for (idx_t row = 0; row < size; row++) {
-				tgt_ptr[row] = date_t(
-				    UnsafeNumericCast<int32_t>(int64_t(src_ptr[row]) / static_cast<int64_t>(1000 * 60 * 60 * 24)));
+				tgt_ptr[row] = date_t(UnsafeNumericCast<int32_t>(static_cast<int64_t>(src_ptr[row]) /
+				                                                 static_cast<int64_t>(1000 * 60 * 60 * 24)));
 			}
 			break;
 		}
@@ -1001,7 +1025,9 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 		}
 		break;
 	}
-	case LogicalTypeId::BLOB: {
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::BIT:
+	case LogicalTypeId::VARINT: {
 		ArrowToDuckDBBlob(vector, array, scan_state, size, arrow_type, nested_offset,
 		                  NumericCast<int64_t>(parent_offset));
 		break;
@@ -1150,7 +1176,7 @@ static void SetMaskedSelectionVectorLoop(SelectionVector &sel, data_ptr_t indice
 	}
 }
 
-static void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, LogicalType &logical_type, idx_t size,
+static void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, const LogicalType &logical_type, idx_t size,
                                ValidityMask *mask = nullptr, idx_t last_element_pos = 0) {
 	sel.Initialize(size);
 
@@ -1239,7 +1265,7 @@ static void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, Logic
 	}
 }
 
-static bool CanContainNull(ArrowArray &array, ValidityMask *parent_mask) {
+static bool CanContainNull(const ArrowArray &array, const ValidityMask *parent_mask) {
 	if (array.null_count > 0) {
 		return true;
 	}
@@ -1251,7 +1277,7 @@ static bool CanContainNull(ArrowArray &array, ValidityMask *parent_mask) {
 
 static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state,
                                           idx_t size, const ArrowType &arrow_type, int64_t nested_offset,
-                                          ValidityMask *parent_mask, uint64_t parent_offset) {
+                                          const ValidityMask *parent_mask, uint64_t parent_offset) {
 	D_ASSERT(arrow_type.HasDictionary());
 	auto &scan_state = array_state.state;
 	const bool has_nulls = CanContainNull(array, parent_mask);

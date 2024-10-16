@@ -217,7 +217,7 @@ public:
 
 	template <class T_INNER>
 	void SubtractFrameOfReference(T_INNER *buffer, T_INNER frame_of_reference) {
-		static_assert(IsIntegral<T_INNER>::value, "Integral type required.");
+		static_assert(NumericLimits<T_INNER>::IsIntegral(), "Integral type required.");
 
 		using T_U = typename MakeUnsigned<T_INNER>::type;
 
@@ -264,10 +264,14 @@ public:
 				                  delta_required_bitwidth, static_cast<T>(minimum_delta), delta_offset,
 				                  compression_buffer, compression_buffer_idx, data_ptr);
 
+				// FOR (frame of reference).
+				total_size += sizeof(T);
+				// Aligned bitpacking width.
+				total_size += AlignValue(sizeof(bitpacking_width_t));
+				// Delta offset.
+				total_size += sizeof(T);
+				// Compressed data size.
 				total_size += BitpackingPrimitives::GetRequiredSize(compression_buffer_idx, delta_required_bitwidth);
-				total_size += sizeof(T);                              // FOR value
-				total_size += sizeof(T);                              // Delta offset value
-				total_size += AlignValue(sizeof(bitpacking_width_t)); // FOR value
 
 				return true;
 			}
@@ -325,7 +329,7 @@ template <class T>
 unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	auto &config = DBConfig::GetConfig(col_data.GetDatabase());
 
-	CompressionInfo info(Storage::BLOCK_SIZE, type);
+	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
 	auto state = make_uniq<BitpackingAnalyzeState<T>>(info);
 	state->state.mode = config.options.force_bitpacking_mode;
 
@@ -335,6 +339,15 @@ unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalTyp
 template <class T>
 bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	auto &analyze_state = state.Cast<BitpackingAnalyzeState<T>>();
+
+	// We use BITPACKING_METADATA_GROUP_SIZE tuples, which can exceed the block size.
+	// In that case, we disable bitpacking.
+	// we are conservative here by multiplying by 2
+	auto type_size = GetTypeIdSize(input.GetType().InternalType());
+	if (type_size * BITPACKING_METADATA_GROUP_SIZE * 2 > state.info.GetBlockSize()) {
+		return false;
+	}
+
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(count, vdata);
 
@@ -467,8 +480,8 @@ public:
 			state->current_segment->count += count;
 
 			if (WRITE_STATISTICS && !state->state.all_invalid) {
-				NumericStats::Update<T>(state->current_segment->stats.statistics, state->state.minimum);
-				NumericStats::Update<T>(state->current_segment->stats.statistics, state->state.maximum);
+				state->current_segment->stats.statistics.template UpdateNumericStats<T>(state->state.maximum);
+				state->current_segment->stats.statistics.template UpdateNumericStats<T>(state->state.minimum);
 			}
 		}
 	};
@@ -485,7 +498,8 @@ public:
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
 
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
+		auto compressed_segment =
+		    ColumnSegment::CreateTransientSegment(db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
 		compressed_segment->function = function;
 		current_segment = std::move(compressed_segment);
 
@@ -617,12 +631,12 @@ public:
 	explicit BitpackingScanState(ColumnSegment &segment) : current_segment(segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		handle = buffer_manager.Pin(segment.block);
-		auto dataptr = handle.Ptr();
+		auto data_ptr = handle.Ptr();
 
 		// load offset to bitpacking widths pointer
-		auto bitpacking_metadata_offset = Load<idx_t>(dataptr + segment.GetBlockOffset());
+		auto bitpacking_metadata_offset = Load<idx_t>(data_ptr + segment.GetBlockOffset());
 		bitpacking_metadata_ptr =
-		    dataptr + segment.GetBlockOffset() + bitpacking_metadata_offset - sizeof(bitpacking_metadata_encoded_t);
+		    data_ptr + segment.GetBlockOffset() + bitpacking_metadata_offset - sizeof(bitpacking_metadata_encoded_t);
 
 		// load the first group
 		LoadNextGroup();
@@ -634,7 +648,6 @@ public:
 	T decompression_buffer[BITPACKING_METADATA_GROUP_SIZE];
 
 	bitpacking_metadata_t current_group;
-
 	bitpacking_width_t current_width;
 	T current_frame_of_reference;
 	T current_constant;
@@ -646,11 +659,11 @@ public:
 
 public:
 	//! Loads the metadata for the current metadata group. This will set bitpacking_metadata_ptr to the next group.
-	//! this will also load any metadata that is at the start of a compressed buffer (e.g. the width, for, or constant
-	//! value) depending on the bitpacking mode for that group
+	//! It also loads any metadata at the start of a compressed buffer (e.g. the width, for, or constant value)
+	//! depending on the bitpacking mode of that group.
 	void LoadNextGroup() {
 		D_ASSERT(bitpacking_metadata_ptr > handle.Ptr() &&
-		         bitpacking_metadata_ptr < handle.Ptr() + Storage::BLOCK_SIZE);
+		         bitpacking_metadata_ptr < handle.Ptr() + current_segment.GetBlockManager().GetBlockSize());
 		current_group_offset = 0;
 		current_group = DecodeMeta(reinterpret_cast<bitpacking_metadata_encoded_t *>(bitpacking_metadata_ptr));
 
@@ -980,17 +993,8 @@ CompressionFunction BitpackingFun::GetFunction(PhysicalType type) {
 	}
 }
 
-bool BitpackingFun::TypeIsSupported(const CompressionInfo &info) {
-
-	// we calculate on BITPACKING_METADATA_GROUP_SIZE tuples, but they can exceed the block size,
-	// in which case we have to disable bitpacking for that data type
-	// we are conservative here by multiplying by 2
-	auto type_size = GetTypeIdSize(info.GetPhysicalType());
-	if (type_size * BITPACKING_METADATA_GROUP_SIZE * 2 > info.GetBlockSize()) {
-		return false;
-	}
-
-	switch (info.GetPhysicalType()) {
+bool BitpackingFun::TypeIsSupported(const PhysicalType physical_type) {
+	switch (physical_type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:

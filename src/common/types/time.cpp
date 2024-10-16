@@ -14,7 +14,6 @@
 #include <sstream>
 
 namespace duckdb {
-
 static_assert(sizeof(dtime_t) == sizeof(int64_t), "dtime_t was padded");
 
 // string format is hh:mm:ss.microsecondsZ
@@ -65,27 +64,38 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 		// invalid separator
 		return false;
 	}
-
-	if (!Date::ParseDoubleDigit(buf, len, pos, min)) {
-		return false;
-	}
-	if (min < 0 || min >= 60) {
-		return false;
-	}
-
-	if (pos >= len) {
-		return false;
-	}
-
-	if (buf[pos++] != sep) {
-		return false;
+	idx_t sep_pos = pos;
+	if (pos == len && !strict) {
+		min = 0;
+	} else {
+		if (!Date::ParseDoubleDigit(buf, len, pos, min)) {
+			return false;
+		}
+		if (min < 0 || min >= 60) {
+			return false;
+		}
 	}
 
-	if (!Date::ParseDoubleDigit(buf, len, pos, sec)) {
+	if (pos > len) {
 		return false;
 	}
-	if (sec < 0 || sec >= 60) {
-		return false;
+	if (pos == len && (!strict || sep_pos + 2 == pos)) {
+		sec = 0;
+	} else {
+		if (buf[pos++] != sep) {
+			return false;
+		}
+
+		if (pos == len && !strict) {
+			sec = 0;
+		} else {
+			if (!Date::ParseDoubleDigit(buf, len, pos, sec)) {
+				return false;
+			}
+			if (sec < 0 || sec >= 60) {
+				return false;
+			}
+		}
 	}
 
 	micros = 0;
@@ -103,7 +113,7 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 			}
 		}
 		if (nanos) {
-			*nanos = micros % Interval::NANOS_PER_MICRO;
+			*nanos = UnsafeNumericCast<int32_t>(micros % Interval::NANOS_PER_MICRO);
 			micros /= Interval::NANOS_PER_MICRO;
 		}
 	}
@@ -249,7 +259,7 @@ string Time::ToString(dtime_t time) {
 
 	char micro_buffer[6];
 	auto length = TimeToStringCast::Length(time_units, micro_buffer);
-	auto buffer = make_unsafe_uniq_array<char>(length);
+	auto buffer = make_unsafe_uniq_array_uninitialized<char>(length);
 	TimeToStringCast::Format(buffer.get(), length, time_units, micro_buffer);
 	return string(buffer.get(), length);
 }
@@ -283,6 +293,15 @@ dtime_t Time::FromTime(int32_t hour, int32_t minute, int32_t second, int32_t mic
 	result = result * Interval::SECS_PER_MINUTE + second;      // minutes -> seconds
 	result = result * Interval::MICROS_PER_SEC + microseconds; // seconds -> microseconds
 	return dtime_t(result);
+}
+
+int64_t Time::ToNanoTime(int32_t hour, int32_t minute, int32_t second, int32_t nanoseconds) {
+	int64_t result;
+	result = hour;                                           // hours
+	result = result * Interval::MINS_PER_HOUR + minute;      // hours -> minutes
+	result = result * Interval::SECS_PER_MINUTE + second;    // minutes -> seconds
+	result = result * Interval::NANOS_PER_SEC + nanoseconds; // seconds -> nanoseconds
+	return result;
 }
 
 bool Time::IsValidTime(int32_t hour, int32_t minute, int32_t second, int32_t microseconds) {

@@ -111,6 +111,9 @@ public:
 	inline sel_t &operator[](idx_t index) const {
 		return sel_vector[index];
 	}
+	inline bool IsSet() const {
+		return sel_vector;
+	}
 	void Verify(idx_t count, idx_t vector_size) const;
 
 private:

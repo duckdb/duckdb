@@ -41,6 +41,7 @@ public:
 	CopyFunctionReturnType return_type;
 
 	bool partition_output;
+	bool write_partition_columns;
 	vector<idx_t> partition_columns;
 	vector<string> names;
 	vector<LogicalType> expected_types;
@@ -50,6 +51,10 @@ public:
 	idx_t EstimateCardinality(ClientContext &context) override;
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
+	static vector<LogicalType> GetTypesWithoutPartitions(const vector<LogicalType> &col_types,
+	                                                     const vector<idx_t> &part_cols, bool write_part_cols);
+	static vector<string> GetNamesWithoutPartitions(const vector<string> &col_names, const vector<column_t> &part_cols,
+	                                                bool write_part_cols);
 
 protected:
 	void ResolveTypes() override {

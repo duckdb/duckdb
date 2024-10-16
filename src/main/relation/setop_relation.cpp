@@ -9,15 +9,15 @@ SetOpRelation::SetOpRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> r
                              bool setop_all)
     : Relation(left_p->context, RelationType::SET_OPERATION_RELATION), left(std::move(left_p)),
       right(std::move(right_p)), setop_type(setop_type_p), setop_all(setop_all) {
-	if (left->context.GetContext() != right->context.GetContext()) {
+	if (left->context->GetContext() != right->context->GetContext()) {
 		throw InvalidInputException("Cannot combine LEFT and RIGHT relations of different connections!");
 	}
-	context.GetContext()->TryBindRelation(*this, this->columns);
+	TryBindRelation(columns);
 }
 
 unique_ptr<QueryNode> SetOpRelation::GetQueryNode() {
 	auto result = make_uniq<SetOperationNode>();
-	if (setop_type == SetOperationType::EXCEPT || setop_type == SetOperationType::INTERSECT) {
+	if (!setop_all) {
 		result->modifiers.push_back(make_uniq<DistinctModifier>());
 	}
 	result->left = left->GetQueryNode();

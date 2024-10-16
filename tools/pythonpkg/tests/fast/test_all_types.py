@@ -223,8 +223,8 @@ class TestAllTypes(object):
             ],
             'array_of_structs': [([],), ([{'a': None, 'b': None}, {'a': 42, 'b': '🦆🦆🦆🦆🦆🦆'}, None],), (None,)],
             'map': [
-                ({'key': [], 'value': []},),
-                ({'key': ['key1', 'key2'], 'value': ['🦆🦆🦆🦆🦆🦆', 'goose']},),
+                ({},),
+                ({'key1': '🦆🦆🦆🦆🦆🦆', 'key2': 'goose'},),
                 (None,),
             ],
             'time_tz': [(datetime.time(0, 0),), (datetime.time(23, 59, 59, 999999),), (None,)],
@@ -396,15 +396,15 @@ class TestAllTypes(object):
             ),
             # Enums don't have a numpy equivalent and yield pandas Categorical.
             'small_enum': pd.Categorical(
-                ['DUCK_DUCK_ENUM', 'GOOSE', np.NaN],
+                ['DUCK_DUCK_ENUM', 'GOOSE', np.nan],
                 ordered=True,
             ),
             'medium_enum': pd.Categorical(
-                ['enum_0', 'enum_299', np.NaN],
+                ['enum_0', 'enum_299', np.nan],
                 ordered=True,
             ),
             'large_enum': pd.Categorical(
-                ['enum_0', 'enum_69999', np.NaN],
+                ['enum_0', 'enum_69999', np.nan],
                 ordered=True,
             ),
             # The following types don't have a numpy equivalent and yield
@@ -474,8 +474,8 @@ class TestAllTypes(object):
             ),
             'map': np.ma.array(
                 [
-                    {'key': [], 'value': []},
-                    {'key': ['key1', 'key2'], 'value': ['🦆🦆🦆🦆🦆🦆', 'goose']},
+                    {},
+                    {'key1': '🦆🦆🦆🦆🦆🦆', 'key2': 'goose'},
                     None,
                 ],
                 mask=[0, 0, 1],

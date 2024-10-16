@@ -26,6 +26,7 @@ struct ArenaChunk {
 
 class ArenaAllocator {
 	static constexpr const idx_t ARENA_ALLOCATOR_INITIAL_CAPACITY = 2048;
+	static constexpr const idx_t ARENA_ALLOCATOR_MAX_CAPACITY = 1ULL << 24ULL; // 16MB
 
 public:
 	DUCKDB_API explicit ArenaAllocator(Allocator &allocator, idx_t initial_capacity = ARENA_ALLOCATOR_INITIAL_CAPACITY);
@@ -62,7 +63,7 @@ public:
 private:
 	//! Internal allocator that is used by the arena allocator
 	Allocator &allocator;
-	idx_t current_capacity;
+	idx_t initial_capacity;
 	unsafe_unique_ptr<ArenaChunk> head;
 	ArenaChunk *tail;
 	//! An allocator wrapper using this arena allocator

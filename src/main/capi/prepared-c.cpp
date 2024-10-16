@@ -90,7 +90,7 @@ idx_t duckdb_nparams(duckdb_prepared_statement prepared_statement) {
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return 0;
 	}
-	return wrapper->statement->n_param;
+	return wrapper->statement->named_param_map.size();
 }
 
 static duckdb::string duckdb_parameter_name_internal(duckdb_prepared_statement prepared_statement, idx_t index) {
@@ -98,7 +98,7 @@ static duckdb::string duckdb_parameter_name_internal(duckdb_prepared_statement p
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return duckdb::string();
 	}
-	if (index > wrapper->statement->n_param) {
+	if (index > wrapper->statement->named_param_map.size()) {
 		return duckdb::string();
 	}
 	for (auto &item : wrapper->statement->named_param_map) {
@@ -135,7 +135,7 @@ duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_statement, idx_
 	// See if this is the case and we still have a value registered for it
 	auto it = wrapper->values.find(identifier);
 	if (it != wrapper->values.end()) {
-		return ConvertCPPTypeToC(it->second.type());
+		return ConvertCPPTypeToC(it->second.return_type.id());
 	}
 	return DUCKDB_TYPE_INVALID;
 }
@@ -155,14 +155,14 @@ duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_statement, idx
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return DuckDBError;
 	}
-	if (param_idx <= 0 || param_idx > wrapper->statement->n_param) {
+	if (param_idx <= 0 || param_idx > wrapper->statement->named_param_map.size()) {
 		wrapper->statement->error =
 		    duckdb::InvalidInputException("Can not bind to parameter number %d, statement only has %d parameter(s)",
-		                                  param_idx, wrapper->statement->n_param);
+		                                  param_idx, wrapper->statement->named_param_map.size());
 		return DuckDBError;
 	}
 	auto identifier = duckdb_parameter_name_internal(prepared_statement, param_idx);
-	wrapper->values[identifier] = *value;
+	wrapper->values[identifier] = duckdb::BoundParameterData(*value);
 	return DuckDBSuccess;
 }
 

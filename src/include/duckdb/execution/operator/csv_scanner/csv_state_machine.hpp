@@ -17,55 +17,67 @@ namespace duckdb {
 //! State of necessary CSV States to parse file
 //! Current, previous, and state before the previous
 struct CSVStates {
-	void Initialize() {
-		states[0] = CSVState::NOT_SET;
-		states[1] = CSVState::NOT_SET;
+	void Initialize(CSVState initial_state = CSVState::NOT_SET) {
+		states[0] = initial_state;
+		states[1] = initial_state;
 	}
-	inline bool NewValue() {
+	inline bool NewValue() const {
 		return states[1] == CSVState::DELIMITER;
 	}
 
-	inline bool NewRow() {
+	inline bool NewRow() const {
 		// It is a new row, if the previous state is not a record separator, and the current one is
 		return states[0] != CSVState::RECORD_SEPARATOR && states[0] != CSVState::CARRIAGE_RETURN &&
 		       (states[1] == CSVState::RECORD_SEPARATOR || states[1] == CSVState::CARRIAGE_RETURN);
 	}
 
-	inline bool EmptyLastValue() {
-		// It is a new row, if the previous state is not a record separator, and the current one is
-		return states[0] == CSVState::DELIMITER &&
-		       (states[1] == CSVState::RECORD_SEPARATOR || states[1] == CSVState::CARRIAGE_RETURN);
+	inline bool WasStandard() const {
+		return states[0] == CSVState::STANDARD;
 	}
 
-	inline bool EmptyLine() {
+	inline bool EmptyLastValue() const {
+		// It is a new row, if the previous state is not a record separator, and the current one is
+		return states[0] == CSVState::DELIMITER &&
+		       (states[1] == CSVState::RECORD_SEPARATOR || states[1] == CSVState::CARRIAGE_RETURN ||
+		        states[1] == CSVState::DELIMITER);
+	}
+
+	inline bool EmptyLine() const {
 		return (states[1] == CSVState::CARRIAGE_RETURN || states[1] == CSVState::RECORD_SEPARATOR) &&
 		       (states[0] == CSVState::RECORD_SEPARATOR || states[0] == CSVState::NOT_SET);
 	}
 
-	inline bool IsNotSet() {
+	inline bool IsNotSet() const {
 		return states[1] == CSVState::NOT_SET;
 	}
 
-	inline bool IsCurrentNewRow() {
+	inline bool IsComment() const {
+		return states[1] == CSVState::COMMENT;
+	}
+
+	inline bool IsCurrentNewRow() const {
 		return states[1] == CSVState::RECORD_SEPARATOR || states[1] == CSVState::CARRIAGE_RETURN;
 	}
 
-	inline bool IsCarriageReturn() {
+	inline bool IsCarriageReturn() const {
 		return states[1] == CSVState::CARRIAGE_RETURN;
 	}
 
-	inline bool IsInvalid() {
+	inline bool IsInvalid() const {
 		return states[1] == CSVState::INVALID;
 	}
 
-	inline bool IsQuoted() {
+	inline bool IsQuoted() const {
 		return states[0] == CSVState::QUOTED;
 	}
-	inline bool IsEscaped() {
+	inline bool IsEscaped() const {
 		return states[1] == CSVState::ESCAPE || (states[0] == CSVState::UNQUOTED && states[1] == CSVState::QUOTED);
 	}
-	inline bool IsQuotedCurrent() {
+	inline bool IsQuotedCurrent() const {
 		return states[1] == CSVState::QUOTED || states[1] == CSVState::QUOTED_NEW_LINE;
+	}
+	inline bool IsState(const CSVState state) const {
+		return states[1] == state;
 	}
 	CSVState states[2];
 };
@@ -89,6 +101,14 @@ public:
 		states.states[1] = transition_array[static_cast<uint8_t>(current_char)][static_cast<uint8_t>(states.states[1])];
 	}
 
+	void Print() const {
+		std::cout << "State Machine Options" << '\n';
+		std::cout << "Delim: " << state_machine_options.delimiter.GetValue() << '\n';
+		std::cout << "Quote: " << state_machine_options.quote.GetValue() << '\n';
+		std::cout << "Escape: " << state_machine_options.escape.GetValue() << '\n';
+		std::cout << "Comment: " << state_machine_options.comment.GetValue() << '\n';
+		std::cout << "---------------------" << '\n';
+	}
 	//! The Transition Array is a Finite State Machine
 	//! It holds the transitions of all states, on all 256 possible different characters
 	const StateMachine &transition_array;

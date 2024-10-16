@@ -1,6 +1,9 @@
 name: CodeQuality
 on:
   workflow_dispatch:
+    inputs:
+      explicit_checks:
+        type: string
   repository_dispatch:
   push:
     branches:
@@ -41,13 +44,17 @@ jobs:
       GEN: ninja
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format-11 && sudo pip3 install cmake-format black libclang==16.0.6
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format-11 && sudo pip3 install cmake-format black cxxheaderparser pcpp
+
+      - name: List Installed Packages
+        shell: bash
+        run: pip3 freeze
 
       - name: Format Check
         shell: bash
@@ -74,19 +81,14 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
     - name: Install python dependencies
       if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
       shell: bash
-      run: python -m pip install libclang
-
-    - name: Install libclang
-      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-      shell: bash
-      run: sudo apt-get update && sudo apt install llvm-dev && sudo apt install libclang-dev
+      run: python -m pip install cxxheaderparser pcpp
 
     - name: Verify C enum integrity
       if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
@@ -95,30 +97,34 @@ jobs:
 
   tidy-check:
     name: Tidy Check
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: format-check
 
     env:
-      CC: gcc-10
-      CXX: g++-10
+      CC: gcc
+      CXX: g++
       GEN: ninja
       TIDY_THREADS: 4
+      TIDY_CHECKS: ${{ inputs.explicit_checks && inputs.explicit_checks || '' }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-tidy && sudo pip3 install pybind11[global]
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-tidy && sudo pip3 install pybind11[global] --break-system-packages
 
       - name: Setup Ccache
+        if: ${{ github.ref == 'refs/heads/main' }}
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
           save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
       - name: Download clang-tidy-cache
+        if: ${{ github.ref == 'refs/heads/main' }}
         shell: bash
         run: |
           set -e
@@ -128,4 +134,10 @@ jobs:
 
       - name: Tidy Check
         shell: bash
+        if: ${{ github.ref == 'refs/heads/main' }}
         run: make tidy-check TIDY_BINARY=/tmp/clang-tidy-cache
+
+      - name: Tidy Check Diff
+        shell: bash
+        if: ${{ github.ref != 'refs/heads/main' }}
+        run: make tidy-check-diff

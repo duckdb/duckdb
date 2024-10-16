@@ -222,7 +222,7 @@ struct AggregateFunctionExtractor {
 
 struct MacroExtractor {
 	static idx_t FunctionCount(ScalarMacroCatalogEntry &entry) {
-		return 1;
+		return entry.macros.size();
 	}
 
 	static Value GetFunctionType() {
@@ -235,12 +235,13 @@ struct MacroExtractor {
 
 	static vector<Value> GetParameters(ScalarMacroCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		for (auto &param : entry.function->parameters) {
+		auto &macro_entry = *entry.macros[offset];
+		for (auto &param : macro_entry.parameters) {
 			D_ASSERT(param->type == ExpressionType::COLUMN_REF);
 			auto &colref = param->Cast<ColumnRefExpression>();
 			results.emplace_back(colref.GetColumnName());
 		}
-		for (auto &param_entry : entry.function->default_parameters) {
+		for (auto &param_entry : macro_entry.default_parameters) {
 			results.emplace_back(param_entry.first);
 		}
 		return results;
@@ -248,10 +249,11 @@ struct MacroExtractor {
 
 	static Value GetParameterTypes(ScalarMacroCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		for (idx_t i = 0; i < entry.function->parameters.size(); i++) {
+		auto &macro_entry = *entry.macros[offset];
+		for (idx_t i = 0; i < macro_entry.parameters.size(); i++) {
 			results.emplace_back(LogicalType::VARCHAR);
 		}
-		for (idx_t i = 0; i < entry.function->default_parameters.size(); i++) {
+		for (idx_t i = 0; i < macro_entry.default_parameters.size(); i++) {
 			results.emplace_back(LogicalType::VARCHAR);
 		}
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
@@ -262,8 +264,9 @@ struct MacroExtractor {
 	}
 
 	static Value GetMacroDefinition(ScalarMacroCatalogEntry &entry, idx_t offset) {
-		D_ASSERT(entry.function->type == MacroType::SCALAR_MACRO);
-		auto &func = entry.function->Cast<ScalarMacroFunction>();
+		auto &macro_entry = *entry.macros[offset];
+		D_ASSERT(macro_entry.type == MacroType::SCALAR_MACRO);
+		auto &func = macro_entry.Cast<ScalarMacroFunction>();
 		return func.expression->ToString();
 	}
 
@@ -278,7 +281,7 @@ struct MacroExtractor {
 
 struct TableMacroExtractor {
 	static idx_t FunctionCount(TableMacroCatalogEntry &entry) {
-		return 1;
+		return entry.macros.size();
 	}
 
 	static Value GetFunctionType() {
@@ -291,12 +294,13 @@ struct TableMacroExtractor {
 
 	static vector<Value> GetParameters(TableMacroCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		for (auto &param : entry.function->parameters) {
+		auto &macro_entry = *entry.macros[offset];
+		for (auto &param : macro_entry.parameters) {
 			D_ASSERT(param->type == ExpressionType::COLUMN_REF);
 			auto &colref = param->Cast<ColumnRefExpression>();
 			results.emplace_back(colref.GetColumnName());
 		}
-		for (auto &param_entry : entry.function->default_parameters) {
+		for (auto &param_entry : macro_entry.default_parameters) {
 			results.emplace_back(param_entry.first);
 		}
 		return results;
@@ -304,10 +308,11 @@ struct TableMacroExtractor {
 
 	static Value GetParameterTypes(TableMacroCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		for (idx_t i = 0; i < entry.function->parameters.size(); i++) {
+		auto &macro_entry = *entry.macros[offset];
+		for (idx_t i = 0; i < macro_entry.parameters.size(); i++) {
 			results.emplace_back(LogicalType::VARCHAR);
 		}
-		for (idx_t i = 0; i < entry.function->default_parameters.size(); i++) {
+		for (idx_t i = 0; i < macro_entry.default_parameters.size(); i++) {
 			results.emplace_back(LogicalType::VARCHAR);
 		}
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
@@ -318,8 +323,9 @@ struct TableMacroExtractor {
 	}
 
 	static Value GetMacroDefinition(TableMacroCatalogEntry &entry, idx_t offset) {
-		if (entry.function->type == MacroType::TABLE_MACRO) {
-			auto &func = entry.function->Cast<TableMacroFunction>();
+		auto &macro_entry = *entry.macros[offset];
+		if (macro_entry.type == MacroType::TABLE_MACRO) {
+			auto &func = macro_entry.Cast<TableMacroFunction>();
 			return func.query_node->ToString();
 		}
 		return Value();

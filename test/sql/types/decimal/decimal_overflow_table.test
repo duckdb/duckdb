@@ -20,6 +20,7 @@ SELECT d+1 FROM decimals
 statement error
 SELECT d+1000000000000000.0 FROM decimals
 ----
+<REGEX>:Out of Range Error.*Overflow in addition of DECIMAL.*
 
 # subtraction
 query I
@@ -30,6 +31,7 @@ SELECT -1-d FROM decimals
 statement error
 SELECT -1000000000000000.0-d FROM decimals
 ----
+<REGEX>:Out of Range Error.*Overflow in subtract of DECIMAL.*
 
 # multiplication
 query I
@@ -40,3 +42,4 @@ SELECT 1*d FROM decimals
 statement error
 SELECT 2*d FROM decimals
 ----
+<REGEX>:Out of Range Error.*Overflow in multiplication of DECIMAL.*

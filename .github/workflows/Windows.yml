@@ -25,7 +25,6 @@ on:
     paths-ignore:
       - '**.md'
       - 'tools/**'
-      - '!tools/odbc/**'
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
@@ -36,7 +35,6 @@ on:
     paths-ignore:
       - '**.md'
       - 'tools/**'
-      - '!tools/odbc/**'
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
@@ -55,9 +53,9 @@ jobs:
  win-release-64:
     # Builds binaries for windows_amd64
     name: Windows (64 Bit)
-    runs-on: windows-latest
+    runs-on: windows-2019
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
@@ -72,16 +70,12 @@ jobs:
         key: ${{ github.job }}
         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
-    - name: Install pytest
-      run: |
-        python -m pip install pytest
-
     - name: Build
       shell: bash
       run: |
         python scripts/windows_ci.py
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
-        cmake --build . --config Release
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
+        cmake --build . --config Release --parallel
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: pwsh
@@ -101,6 +95,7 @@ jobs:
       shell: bash
       if: ${{ inputs.skip_tests != 'true' }}
       run: |
+        python -m pip install pytest
         python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
         tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
 
@@ -114,71 +109,19 @@ jobs:
         choco install zip -y --force
         zip -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
         zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
-        zip -j duckdb_odbc-windows-amd64.zip tools/odbc/bin/Release/*
-        ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_odbc-windows-amd64.zip
+        ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
-        name: duckdb-binaries-windows
+        name: duckdb-binaries-windows-amd64
         path: |
           libduckdb-windows-amd64.zip
           duckdb_cli-windows-amd64.zip
-          duckdb_odbc-windows-amd64.zip
 
     - uses: ilammy/msvc-dev-cmd@v1
     - name: Duckdb.dll export symbols with C++ on Windows
       shell: bash
       run: cl -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/Release/duckdb.lib
-
-    - name: Install ODBC Driver
-      shell: bash
-      run: |
-        tools/odbc/bin/Release/odbc_install.exe //CI //Install
-        Reg Query "HKLM\SOFTWARE\ODBC\ODBC.INI\ODBC Data Sources"
-        Reg Query "HKLM\SOFTWARE\ODBC\ODBC.INI\DuckDB"
-        Reg Query "HKLM\SOFTWARE\ODBC\ODBCINST.INI\DuckDB Driver"
-
-    - name: Enable ODBC Trace HKCU
-      shell: bash
-      run: |
-        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //f
-        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v Trace //t REG_SZ //d 1
-        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v TraceDll //t REG_SZ //d "C:\Windows\system32\odbctrac.dll"
-        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v TraceFile //t REG_SZ //d "D:\a\duckdb\duckdb\ODBC_TRACE.log"
-        echo "----------------------------------------------------------------"
-        Reg Query "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC"
-
-    - name: Test Standard ODBC tests
-      if: ${{ inputs.skip_tests != 'true' }}
-      shell: bash
-      run: |
-        tools/odbc/bin/Release/test_odbc.exe
-
-    - name: Setup Register For Connection Tests
-      shell: bash
-      run: |
-        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\DuckDB" //v database //t REG_SZ //d "/d/a/duckdb/duckdb/test/sql/storage_version/storage_version.db"
-        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\DuckDB" //v access_mode //t REG_SZ //d "READ_ONLY"
-        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\DuckDB" //v allow_unsigned_extensions //t REG_SZ //d "true"
-        echo "----------------------------------------------------------------"
-        Reg Query "HKCU\SOFTWARE\ODBC\ODBC.INI\DuckDB"
-
-    - name: Test Connection ODBC tests
-      if: ${{ inputs.skip_tests != 'true' }}
-      shell: bash
-      run: |
-        tools/odbc/bin/Release/test_connection_odbc.exe
-
-    - name: Print ODBC trace on failure
-      if: ${{ failure() }}
-      shell: bash
-      run: cat ODBC_TRACE.log
-      
-    - name: System.Data.ODBC tests
-      shell: bash
-      run: |
-        tools/odbc/bin/Release/SystemDataODBC_tests.exe
-
 
  win-release-32:
     name: Windows (32 Bit)
@@ -187,7 +130,7 @@ jobs:
     needs: win-release-64
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
@@ -202,15 +145,11 @@ jobs:
         key: ${{ github.job }}
         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
-    - name: Install pytest
-      run: |
-        python -m pip install pytest
-
     - name: Build
       shell: bash
       run: |
         cmake -DCMAKE_BUILD_TYPE=Release  -DCMAKE_GENERATOR_PLATFORM=Win32 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
-        cmake --build . --config Release
+        cmake --build . --config Release --parallel
 
     - name: Test
       shell: bash
@@ -219,23 +158,72 @@ jobs:
     - name: Tools Test
       shell: bash
       run: |
+        python -m pip install pytest
         python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
         tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
 
+
+ win-release-arm64:
+   name: Windows (ARM64)
+   if: github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb'
+   runs-on: windows-2019
+   needs: win-release-64
+
+   steps:
+     - uses: actions/checkout@v4
+       with:
+         fetch-depth: 0
+         ref: ${{ inputs.git_ref }}
+
+     - uses: actions/setup-python@v5
+       with:
+         python-version: '3.12'
+
+     - name: Setup Ccache
+       uses: hendrikmuhs/ccache-action@main
+       with:
+         key: ${{ github.job }}
+         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+     - name: Build
+       shell: bash
+       run: |
+         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=ARM64 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE" -DDUCKDB_EXPLICIT_PLATFORM=windows_arm64 -DDUCKDB_CUSTOM_PLATFORM=windows_arm64 -DBUILD_UNITTESTS=FALSE
+         cmake --build . --config Release --parallel
+
+     - name: Deploy
+       shell: bash
+       env:
+         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+       run: |
+         python scripts/amalgamation.py
+         choco install zip -y --force
+         zip -j duckdb_cli-windows-arm64.zip Release/duckdb.exe
+         zip -j libduckdb-windows-arm64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
+         ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-arm64.zip duckdb_cli-windows-arm64.zip
+
+     - uses: actions/upload-artifact@v4
+       with:
+         name: duckdb-binaries-windows-arm64
+         path: |
+           libduckdb-windows-arm64.zip
+           duckdb_cli-windows-arm64.zip
+
  mingw:
-     name: MingW (64 Bit)
-     runs-on: windows-latest
+     name: MinGW (64 Bit)
+     runs-on: windows-2019
      if: ${{ inputs.skip_tests != 'true' }}
      needs: win-release-64
      steps:
-       - uses: actions/checkout@v3
+       - uses: actions/checkout@v4
          with:
            ref: ${{ inputs.git_ref }}
        - uses: msys2/setup-msys2@v2
          with:
            msystem: MINGW64
            update: true
-           install: git mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja git
+           install: git mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
        # see here: https://gist.github.com/scivision/1de4fd6abea9ba6b2d87dc1e86b5d2ce
        - name: Put MSYS2_MinGW64 on PATH
          # there is not yet an environment variable for this path from msys2/setup-msys2
@@ -252,7 +240,7 @@ jobs:
          shell: msys2 {0}
          run: |
            cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSIONS=parquet -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
-           cmake --build . --config Release
+           cmake --build . --config Release 
 
        - name: Test
          shell: msys2 {0}
@@ -264,36 +252,62 @@ jobs:
          shell: msys2 {0}
          run: |
            tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper.exe
-#
-# win-extensions-64:
-#   # Builds extensions for windows_amd64
-#   name: Windows Extensions (64-bit)
-#   runs-on: windows-latest
-#   needs: win-release-64
-#   steps:
-#     - name: Keep \n line endings
-#       shell: bash
-#       run: |
-#         git config --global core.autocrlf false
-#         git config --global core.eol lf
-#
-#     - uses: actions/checkout@v3
-#       with:
-#         fetch-depth: 0
-#         ref: ${{ inputs.git_ref }}
-#
-#     - uses: actions/setup-python@v5
-#       with:
-#         python-version: '3.12'
-#
-#     - uses: ./.github/actions/build_extensions
-#       with:
-#         vcpkg_target_triplet: x64-windows-static-md
-#         deploy_as: windows_amd64
-#         treat_warn_as_error: 0
-#         s3_id: ${{ secrets.S3_ID }}
-#         s3_key: ${{ secrets.S3_KEY }}
-#         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-#         run_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
-#         run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
-#         unittest_script: python3 scripts/run_tests_one_by_one.py ./build/release/test/Release/unittest.exe
+
+ win-extensions-64:
+   # Builds extensions for windows_amd64
+   name: Windows Extensions (64-bit)
+   runs-on: windows-2019
+   needs: win-release-64
+   steps:
+     - name: Keep \n line endings
+       shell: bash
+       run: |
+         git config --global core.autocrlf false
+         git config --global core.eol lf
+
+     - uses: actions/checkout@v4
+       with:
+         fetch-depth: 0
+         ref: ${{ inputs.git_ref }}
+
+     - uses: actions/setup-python@v5
+       with:
+         python-version: '3.12'
+
+     - name: Setup Rust
+       uses: dtolnay/rust-toolchain@stable
+
+     - uses: ./.github/actions/build_extensions
+       with:
+         vcpkg_target_triplet: x64-windows-static-md
+         deploy_as: windows_amd64
+         treat_warn_as_error: 0
+         s3_id: ${{ secrets.S3_ID }}
+         s3_key: ${{ secrets.S3_KEY }}
+         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
+         run_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
+         run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
+         unittest_script: python3 scripts/run_tests_one_by_one.py ./build/release/test/Release/unittest.exe
+
+ win-packaged-upload:
+   runs-on: windows-2019
+   needs:
+     - win-release-64
+     - win-release-arm64
+   steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: duckdb-binaries-windows-arm64
+
+    - uses: actions/download-artifact@v4
+      with:
+        name: duckdb-binaries-windows-amd64
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: duckdb-binaries-windows
+        path: |
+          libduckdb-windows-amd64.zip
+          duckdb_cli-windows-amd64.zip
+          libduckdb-windows-arm64.zip
+          duckdb_cli-windows-arm64.zip

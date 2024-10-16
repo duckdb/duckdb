@@ -15,7 +15,7 @@
 
 namespace duckdb {
 
-class BatchMemoryManager {
+class BatchMemoryManager : public StateWithBlockableTasks {
 public:
 	BatchMemoryManager(ClientContext &context, idx_t initial_memory_request)
 	    : context(context), unflushed_memory_usage(0), min_batch_index(0), available_memory(0),
@@ -34,10 +34,6 @@ private:
 	atomic<idx_t> min_batch_index;
 	//! The available memory for unflushed rows
 	atomic<idx_t> available_memory;
-	//! Blocked task lock
-	mutex blocked_task_lock;
-	//! The set of blocked tasks
-	vector<InterruptState> blocked_tasks;
 	//! Whether or not we can request additional memory
 	bool can_increase_memory;
 
@@ -52,7 +48,7 @@ public:
 			return;
 		}
 
-		memory_state->SetRemainingSize(context, size);
+		memory_state->SetRemainingSizeAndUpdateReservation(context, size);
 		auto next_reservation = memory_state->GetReservation();
 		if (available_memory >= next_reservation) {
 			// we tried to ask for more memory but were declined
@@ -75,7 +71,7 @@ public:
 		return true;
 #else
 		if (unflushed_memory_usage >= available_memory) {
-			lock_guard<mutex> l(blocked_task_lock);
+			auto guard = Lock();
 			if (batch_index > min_batch_index) {
 				// exceeded available memory and we are not the minimum batch index- try to increase it
 				IncreaseMemory();
@@ -89,45 +85,21 @@ public:
 #endif
 	}
 
-	void BlockTask(InterruptState &state) {
-		blocked_tasks.push_back(state);
-	}
-
-	bool UnblockTasks() {
-		lock_guard<mutex> l(blocked_task_lock);
-		return UnblockTasksInternal();
-	}
-
-	bool UnblockTasksInternal() {
-		if (blocked_tasks.empty()) {
-			return false;
-		}
-		for (auto &entry : blocked_tasks) {
-			entry.Callback();
-		}
-		blocked_tasks.clear();
-		return true;
-	}
-
 	void UpdateMinBatchIndex(idx_t current_min_batch_index) {
 		if (min_batch_index >= current_min_batch_index) {
 			return;
 		}
-		lock_guard<mutex> l(blocked_task_lock);
+		auto guard = Lock();
 		auto new_batch_index = MaxValue<idx_t>(min_batch_index, current_min_batch_index);
 		if (new_batch_index != min_batch_index) {
 			// new batch index! unblock all tasks
 			min_batch_index = new_batch_index;
-			UnblockTasksInternal();
+			UnblockTasks(guard);
 		}
 	}
 
 	idx_t AvailableMemory() const {
 		return available_memory;
-	}
-
-	mutex &GetBlockedTaskLock() {
-		return blocked_task_lock;
 	}
 
 	idx_t GetUnflushedMemory() {

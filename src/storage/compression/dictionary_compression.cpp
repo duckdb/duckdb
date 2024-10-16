@@ -31,7 +31,7 @@ public:
 
 			if (row_is_valid) {
 				string_size = data[idx].GetSize();
-				if (string_size >= StringUncompressed::STRING_BLOCK_LIMIT) {
+				if (string_size >= StringUncompressed::GetStringBlockLimit(info.GetBlockSize())) {
 					// Big strings not implemented for dictionary compression
 					return false;
 				}
@@ -165,7 +165,8 @@ public:
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
 
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
+		auto compressed_segment =
+		    ColumnSegment::CreateTransientSegment(db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
 		current_segment = std::move(compressed_segment);
 		current_segment->function = function;
 
@@ -188,7 +189,7 @@ public:
 	}
 
 	void Verify() override {
-		current_dictionary.Verify();
+		current_dictionary.Verify(info.GetBlockSize());
 		D_ASSERT(current_segment->count == selection_buffer.size());
 		D_ASSERT(DictionaryCompressionStorage::HasEnoughSpace(current_segment->count.load(), index_buffer.size(),
 		                                                      current_dictionary.size, current_width,
@@ -214,7 +215,7 @@ public:
 		current_dictionary.size += str.GetSize();
 		auto dict_pos = current_end_ptr - current_dictionary.size;
 		memcpy(dict_pos, str.GetData(), str.GetSize());
-		current_dictionary.Verify();
+		current_dictionary.Verify(info.GetBlockSize());
 		D_ASSERT(current_dictionary.end == info.GetBlockSize());
 
 		// Update buffers and map
@@ -395,7 +396,7 @@ struct DictionaryCompressionAnalyzeState : public AnalyzeState {
 };
 
 unique_ptr<AnalyzeState> DictionaryCompressionStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(Storage::BLOCK_SIZE, type);
+	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
 	return make_uniq<DictionaryCompressionAnalyzeState>(info);
 }
 
@@ -413,7 +414,7 @@ idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	    RequiredSpace(state.current_tuple_count, state.current_unique_count, state.current_dict_size, width);
 
 	const auto total_space = state.segment_count * state.info.GetBlockSize() + req_space;
-	return NumericCast<idx_t>(MINIMUM_COMPRESSION_RATIO * float(total_space));
+	return LossyNumericCast<idx_t>(MINIMUM_COMPRESSION_RATIO * float(total_space));
 }
 
 //===--------------------------------------------------------------------===//
@@ -625,7 +626,7 @@ string_t DictionaryCompressionStorage::FetchStringFromDict(ColumnSegment &segmen
                                                            data_ptr_t baseptr, int32_t dict_offset,
                                                            uint16_t string_len) {
 
-	D_ASSERT(dict_offset >= 0 && dict_offset <= NumericCast<int32_t>(Storage::BLOCK_SIZE));
+	D_ASSERT(dict_offset >= 0 && dict_offset <= NumericCast<int32_t>(segment.GetBlockManager().GetBlockSize()));
 	if (dict_offset == 0) {
 		return string_t(nullptr, 0);
 	}
@@ -659,7 +660,7 @@ CompressionFunction DictionaryCompressionFun::GetFunction(PhysicalType data_type
 	    DictionaryCompressionStorage::StringFetchRow, UncompressedFunctions::EmptySkip);
 }
 
-bool DictionaryCompressionFun::TypeIsSupported(const CompressionInfo &info) {
-	return info.GetPhysicalType() == PhysicalType::VARCHAR;
+bool DictionaryCompressionFun::TypeIsSupported(const PhysicalType physical_type) {
+	return physical_type == PhysicalType::VARCHAR;
 }
 } // namespace duckdb

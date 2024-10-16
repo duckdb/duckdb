@@ -6,6 +6,9 @@
 statement ok
 PRAGMA verify_parallelism
 
+statement ok
+PRAGMA enable_verification
+
 query IIIIIIIIII
 select *
 from  read_csv('data/csv/bug_7578.csv', delim='\t', quote = '`', columns={

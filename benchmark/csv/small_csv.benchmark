@@ -1,0 +1,14 @@
+# name: benchmark/csv/small_csv.benchmark
+# description: Run CSV reader on small file
+# group: [csv]
+
+name CSV Small Reader Benchmark
+group csv
+
+load
+CREATE TABLE TEST (a integer, b varchar);
+INSERT INTO TEST VALUES (1, 'Pedro'), (2, 'Mark'), (3 , 'Thijs');
+COPY TEST TO '${BENCHMARK_DIR}/test.csv' (FORMAT CSV, DELIMITER '|', HEADER);
+
+run
+SELECT * FROM '${BENCHMARK_DIR}/test.csv'

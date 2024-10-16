@@ -99,21 +99,18 @@ void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { ReplaceMacroParameters(child, lambda_params); });
 }
 
-BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func, idx_t depth,
-                                       unique_ptr<ParsedExpression> &expr) {
-
-	// recast function so we can access the scalar member function->expression
-	auto &macro_def = macro_func.function->Cast<ScalarMacroFunction>();
-
+void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func,
+                                             unique_ptr<ParsedExpression> &expr) {
 	// validate the arguments and separate positional and default arguments
 	vector<unique_ptr<ParsedExpression>> positionals;
 	unordered_map<string, unique_ptr<ParsedExpression>> defaults;
 
-	string error =
-	    MacroFunction::ValidateArguments(*macro_func.function, macro_func.name, function, positionals, defaults);
-	if (!error.empty()) {
-		throw BinderException(*expr, error);
+	auto bind_result =
+	    MacroFunction::BindMacroFunction(macro_func.macros, macro_func.name, function, positionals, defaults);
+	if (!bind_result.error.empty()) {
+		throw BinderException(*expr, bind_result.error);
 	}
+	auto &macro_def = macro_func.macros[bind_result.function_idx.GetIndex()]->Cast<ScalarMacroFunction>();
 
 	// create a MacroBinding to bind this macro's parameters to its arguments
 	vector<LogicalType> types;
@@ -146,6 +143,14 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 	// now replace the parameters
 	vector<unordered_set<string>> lambda_params;
 	ReplaceMacroParameters(expr, lambda_params);
+}
+
+BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func, idx_t depth,
+                                       unique_ptr<ParsedExpression> &expr) {
+	auto stack_checker = StackCheck(*expr, 3);
+
+	// unfold the macro expression
+	UnfoldMacroExpression(function, macro_func, expr);
 
 	// bind the unfolded macro
 	return BindExpression(expr, depth);

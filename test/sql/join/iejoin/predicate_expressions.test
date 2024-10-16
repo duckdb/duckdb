@@ -5,6 +5,9 @@
 statement ok
 PRAGMA enable_verification
 
+statement ok
+SET merge_join_threshold=0
+
 # Create a range of dates
 statement ok
 create table calendar as SELECT *

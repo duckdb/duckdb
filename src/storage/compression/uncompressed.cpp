@@ -30,7 +30,7 @@ CompressionFunction UncompressedFun::GetFunction(PhysicalType type) {
 	}
 }
 
-bool UncompressedFun::TypeIsSupported(const CompressionInfo &) {
+bool UncompressedFun::TypeIsSupported(const PhysicalType) {
 	return true;
 }
 

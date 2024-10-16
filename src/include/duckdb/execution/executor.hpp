@@ -13,6 +13,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/main/query_result.hpp"
 #include "duckdb/execution/task_error_manager.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
@@ -36,6 +37,9 @@ class Executor {
 	friend class Pipeline;
 	friend class PipelineTask;
 	friend class PipelineBuildState;
+
+public:
+	static constexpr idx_t WAIT_TIME = 20;
 
 public:
 	explicit Executor(ClientContext &context);
@@ -97,6 +101,8 @@ public:
 
 	//! Whether or not the root of the pipeline is a result collector object
 	bool HasResultCollector();
+	//! Whether or not the root of the pipeline is a streaming result collector object
+	bool HasStreamingResultCollector();
 	//! Returns the query result - can only be used if `HasResultCollector` returns true
 	unique_ptr<QueryResult> GetResult();
 
@@ -110,19 +116,27 @@ public:
 		executor_tasks--;
 	}
 
+	idx_t GetTotalPipelines() const {
+		return total_pipelines;
+	}
+
+	idx_t GetCompletedPipelines() const {
+		return completed_pipelines.load();
+	}
+
 private:
 	//! Check if the streaming query result is waiting to be fetched from, must hold the 'executor_lock'
 	bool ResultCollectorIsBlocked();
 	void InitializeInternal(PhysicalOperator &physical_plan);
 
 	void ScheduleEvents(const vector<shared_ptr<MetaPipeline>> &meta_pipelines);
-	static void ScheduleEventsInternal(ScheduleEventData &event_data);
+	void ScheduleEventsInternal(ScheduleEventData &event_data);
 
 	static void VerifyScheduledEvents(const ScheduleEventData &event_data);
 	static void VerifyScheduledEventsInternal(const idx_t i, const vector<reference<Event>> &vertices,
 	                                          vector<bool> &visited, vector<bool> &recursion_stack);
 
-	static void SchedulePipeline(const shared_ptr<MetaPipeline> &pipeline, ScheduleEventData &event_data);
+	void SchedulePipeline(const shared_ptr<MetaPipeline> &pipeline, ScheduleEventData &event_data);
 
 	bool NextExecutor();
 
@@ -174,5 +188,8 @@ private:
 
 	//! Currently alive executor tasks
 	atomic<idx_t> executor_tasks;
+
+	//! Total time blocked while waiting on tasks. In ticks. One tick corresponds to WAIT_TIME.
+	atomic<idx_t> blocked_thread_time;
 };
 } // namespace duckdb

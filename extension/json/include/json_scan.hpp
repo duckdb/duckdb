@@ -240,7 +240,8 @@ private:
 
 	void SkipOverArrayStart();
 
-	void ReadAndAutoDetect(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index);
+	void ReadAndAutoDetect(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index,
+	                       bool &file_done);
 	bool ReconstructFirstObject(JSONScanGlobalState &gstate);
 	void ParseNextChunk(JSONScanGlobalState &gstate);
 
@@ -308,8 +309,7 @@ public:
 
 	static double ScanProgress(ClientContext &context, const FunctionData *bind_data_p,
 	                           const GlobalTableFunctionState *global_state);
-	static idx_t GetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-	                           LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state);
+	static OperatorPartitionData GetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input);
 	static unique_ptr<NodeStatistics> Cardinality(ClientContext &context, const FunctionData *bind_data);
 	static void ComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
 	                                  vector<unique_ptr<Expression>> &filters);

@@ -3,9 +3,10 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
-#include "duckdb/parallel/task_scheduler.hpp"
 
 namespace duckdb {
 
@@ -30,7 +31,11 @@ void TableDataWriter::AddRowGroup(RowGroupPointer &&row_group_pointer, unique_pt
 }
 
 TaskScheduler &TableDataWriter::GetScheduler() {
-	return TaskScheduler::GetScheduler(table.ParentCatalog().GetDatabase());
+	return TaskScheduler::GetScheduler(GetDatabase());
+}
+
+DatabaseInstance &TableDataWriter::GetDatabase() {
+	return table.ParentCatalog().GetDatabase();
 }
 
 SingleFileTableDataWriter::SingleFileTableDataWriter(SingleFileCheckpointWriter &checkpoint_manager,
@@ -49,6 +54,7 @@ CheckpointType SingleFileTableDataWriter::GetCheckpointType() const {
 
 void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo *info,
                                               Serializer &serializer) {
+
 	// store the current position in the metadata writer
 	// this is where the row groups for this table start
 	auto pointer = table_data_writer.GetMetaBlockPointer();
@@ -80,7 +86,24 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	serializer.WriteProperty(101, "table_pointer", pointer);
 	serializer.WriteProperty(102, "total_rows", total_rows);
 
-	auto index_storage_infos = info->GetIndexes().GetStorageInfos();
+	auto db_options = checkpoint_manager.db.GetDatabase().config.options;
+	auto v1_0_0_storage = db_options.serialization_compatibility.serialization_version < 3;
+	case_insensitive_map_t<Value> options;
+	if (!v1_0_0_storage) {
+		options.emplace("v1_0_0_storage", v1_0_0_storage);
+	}
+	auto index_storage_infos = info->GetIndexes().GetStorageInfos(options);
+
+#ifdef DUCKDB_BLOCK_VERIFICATION
+	for (auto &entry : index_storage_infos) {
+		for (auto &allocator : entry.allocator_infos) {
+			for (auto &block : allocator.block_pointers) {
+				checkpoint_manager.verify_block_usage_count[block.block_id]++;
+			}
+		}
+	}
+#endif
+
 	// write empty block pointers for forwards compatibility
 	vector<BlockPointer> compat_block_pointers;
 	serializer.WriteProperty(103, "index_pointers", compat_block_pointers);

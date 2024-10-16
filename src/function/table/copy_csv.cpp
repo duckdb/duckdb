@@ -7,7 +7,7 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/table/read_csv.hpp"
@@ -67,6 +67,14 @@ void BaseCSVData::Finalize() {
 		AreOptionsEqual(options.dialect_options.state_machine_options.quote.GetValue(),
 		                options.dialect_options.state_machine_options.escape.GetValue(), "QUOTE", "ESCAPE");
 	}
+
+	// delimiter and quote must not be substrings of each other
+	AreOptionsEqual(options.dialect_options.state_machine_options.comment.GetValue(),
+	                options.dialect_options.state_machine_options.quote.GetValue(), "COMMENT", "QUOTE");
+
+	// delimiter and quote must not be substrings of each other
+	AreOptionsEqual(options.dialect_options.state_machine_options.comment.GetValue(),
+	                options.dialect_options.state_machine_options.delimiter.GetValue(), "COMMENT", "DELIMITER");
 
 	// null string and delimiter must not be substrings of each other
 	for (auto &null_str : options.null_str) {
@@ -172,6 +180,21 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 	}
 	bind_data->Finalize();
 
+	switch (bind_data->options.compression) {
+	case FileCompressionType::GZIP:
+		if (!IsFileCompressed(input.file_extension, FileCompressionType::GZIP)) {
+			input.file_extension += CompressionExtensionFromType(FileCompressionType::GZIP);
+		}
+		break;
+	case FileCompressionType::ZSTD:
+		if (!IsFileCompressed(input.file_extension, FileCompressionType::ZSTD)) {
+			input.file_extension += CompressionExtensionFromType(FileCompressionType::ZSTD);
+		}
+		break;
+	default:
+		break;
+	}
+
 	auto expressions = CreateCastExpressions(*bind_data, context, names, sql_types);
 	bind_data->cast_expressions = std::move(expressions);
 
@@ -223,14 +246,14 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	options.file_path = bind_data->files[0];
 	options.name_list = expected_names;
 	options.sql_type_list = expected_types;
+	options.columns_set = true;
 	for (idx_t i = 0; i < expected_types.size(); i++) {
 		options.sql_types_per_column[expected_names[i]] = i;
 	}
 
 	if (options.auto_detect) {
 		auto buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, bind_data->files[0], 0);
-		CSVSniffer sniffer(options, buffer_manager, CSVStateMachineCache::Get(context),
-		                   {&expected_types, &expected_names});
+		CSVSniffer sniffer(options, buffer_manager, CSVStateMachineCache::Get(context));
 		sniffer.SniffCSV();
 	}
 	bind_data->FinalizeRead(context);

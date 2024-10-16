@@ -19,7 +19,7 @@ class Deserializer;
 
 class Block : public FileBuffer {
 public:
-	Block(Allocator &allocator, const block_id_t id);
+	Block(Allocator &allocator, const block_id_t id, const idx_t block_size);
 	Block(Allocator &allocator, block_id_t id, uint32_t internal_size);
 	Block(FileBuffer &source, block_id_t id);
 
@@ -34,6 +34,7 @@ struct BlockPointer {
 
 	block_id_t block_id;
 	uint32_t offset;
+	uint32_t unused_padding {0};
 
 	bool IsValid() const {
 		return block_id != INVALID_BLOCK;
@@ -51,6 +52,7 @@ struct MetaBlockPointer {
 
 	idx_t block_pointer;
 	uint32_t offset;
+	uint32_t unused_padding {0};
 
 	bool IsValid() const {
 		return block_pointer != DConstants::INVALID_INDEX;

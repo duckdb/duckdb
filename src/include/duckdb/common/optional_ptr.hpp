@@ -14,10 +14,10 @@
 
 namespace duckdb {
 
-template <class T>
+template <class T, bool SAFE = true>
 class optional_ptr { // NOLINT: mimic std casing
 public:
-	optional_ptr() : ptr(nullptr) {
+	optional_ptr() noexcept : ptr(nullptr) {
 	}
 	optional_ptr(T *ptr_p) : ptr(ptr_p) { // NOLINT: allow implicit creation from pointer
 	}
@@ -29,8 +29,10 @@ public:
 	}
 
 	void CheckValid() const {
-		if (!ptr) {
-			throw InternalException("Attempting to dereference an optional pointer that is not set");
+		if (MemorySafety<SAFE>::ENABLED) {
+			if (!ptr) {
+				throw InternalException("Attempting to dereference an optional pointer that is not set");
+			}
 		}
 	}
 
@@ -78,5 +80,8 @@ public:
 private:
 	T *ptr;
 };
+
+template <typename T>
+using unsafe_optional_ptr = optional_ptr<T, false>;
 
 } // namespace duckdb

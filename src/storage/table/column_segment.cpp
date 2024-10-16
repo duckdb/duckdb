@@ -32,13 +32,10 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 	optional_ptr<CompressionFunction> function;
 	shared_ptr<BlockHandle> block;
 
-	CompressionInfo info(Storage::BLOCK_SIZE, type.InternalType());
-
 	if (block_id == INVALID_BLOCK) {
-		// constant segment, no need to allocate an actual block
-		function = config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, info);
+		function = config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, type.InternalType());
 	} else {
-		function = config.GetCompressionFunction(compression_type, info);
+		function = config.GetCompressionFunction(compression_type, type.InternalType());
 		block = block_manager.RegisterBlock(block_id);
 	}
 
@@ -48,16 +45,16 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 }
 
 unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance &db, const LogicalType &type,
-                                                                const idx_t start, const idx_t segment_size) {
+                                                                const idx_t start, const idx_t segment_size,
+                                                                const idx_t block_size) {
 
 	// Allocate a buffer for the uncompressed segment.
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
-	auto block = buffer_manager.RegisterTransientMemory(segment_size);
+	auto block = buffer_manager.RegisterTransientMemory(segment_size, block_size);
 
 	// Get the segment compression function.
 	auto &config = DBConfig::GetConfig(db);
-	CompressionInfo info(Storage::BLOCK_SIZE, type.InternalType());
-	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, info);
+	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
 
 	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::TRANSIENT, start, 0U, *function,
 	                                BaseStatistics::CreateEmpty(type), INVALID_BLOCK, 0U, segment_size);
@@ -164,8 +161,8 @@ void ColumnSegment::Resize(idx_t new_size) {
 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto old_handle = buffer_manager.Pin(block);
-	shared_ptr<BlockHandle> new_block;
-	auto new_handle = buffer_manager.Allocate(MemoryTag::IN_MEMORY_TABLE, new_size, false, &new_block);
+	auto new_handle = buffer_manager.Allocate(MemoryTag::IN_MEMORY_TABLE, new_size);
+	auto new_block = new_handle.GetBlockHandle();
 	memcpy(new_handle.Ptr(), old_handle.Ptr(), segment_size);
 
 	this->block_id = new_block->BlockId();
@@ -239,6 +236,23 @@ void ColumnSegment::MarkAsPersistent(shared_ptr<BlockHandle> block_p, uint32_t o
 	block = std::move(block_p);
 }
 
+DataPointer ColumnSegment::GetDataPointer() {
+	if (segment_type != ColumnSegmentType::PERSISTENT) {
+		throw InternalException("Attempting to call ColumnSegment::GetDataPointer on a transient segment");
+	}
+	// set up the data pointer directly using the data from the persistent segment
+	DataPointer pointer(stats.statistics.Copy());
+	pointer.block_pointer.block_id = GetBlockId();
+	pointer.block_pointer.offset = NumericCast<uint32_t>(GetBlockOffset());
+	pointer.row_start = start;
+	pointer.tuple_count = count;
+	pointer.compression_type = function.get().type;
+	if (function.get().serialize_state) {
+		pointer.segment_state = function.get().serialize_state(*this);
+	}
+	return pointer;
+}
+
 //===--------------------------------------------------------------------===//
 // Drop Segment
 //===--------------------------------------------------------------------===//
@@ -267,9 +281,10 @@ static idx_t TemplatedFilterSelection(UnifiedVectorFormat &vdata, T predicate, S
 	for (idx_t i = 0; i < approved_tuple_count; i++) {
 		auto idx = sel.get_index(i);
 		auto vector_idx = vdata.sel->get_index(idx);
-		if ((!HAS_NULL || mask.RowIsValid(vector_idx)) && OP::Operation(vec[vector_idx], predicate)) {
-			result_sel.set_index(result_count++, idx);
-		}
+		bool comparison_result =
+		    (!HAS_NULL || mask.RowIsValid(vector_idx)) && OP::Operation(vec[vector_idx], predicate);
+		result_sel.set_index(result_count, idx);
+		result_count += comparison_result;
 	}
 	return result_count;
 }
@@ -377,6 +392,9 @@ static idx_t TemplatedNullSelection(UnifiedVectorFormat &vdata, SelectionVector 
 idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
                                      const TableFilter &filter, idx_t scan_count, idx_t &approved_tuple_count) {
 	switch (filter.filter_type) {
+	case TableFilterType::OPTIONAL_FILTER: {
+		return scan_count;
+	}
 	case TableFilterType::CONJUNCTION_OR: {
 		// similar to the CONJUNCTION_AND, but we need to take care of the SelectionVectors (OR all of them)
 		idx_t count_total = 0;

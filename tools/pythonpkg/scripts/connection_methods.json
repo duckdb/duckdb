@@ -542,8 +542,8 @@
 		"docs": "Create a relation object from the JSON file in 'name'",
 		"args": [
 			{
-				"name": "name",
-				"type": "str"
+				"name": "path_or_buffer",
+				"type": "Union[str, StringIO, TextIOBase]"
 			}
 		],
 		"kwargs": [
@@ -571,6 +571,76 @@
 				"name": "format",
 				"default": "None",
 				"type": "Optional[str]"
+			},
+			{
+				"name": "date_format",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "timestamp_format",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "compression",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "maximum_object_size",
+				"default": "None",
+				"type": "Optional[int]"
+			},
+			{
+				"name": "ignore_errors",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "convert_strings_to_integers",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "field_appearance_threshold",
+				"default": "None",
+				"type": "Optional[float]"
+			},
+			{
+				"name": "map_inference_threshold",
+				"default": "None",
+				"type": "Optional[int]"
+			},
+			{
+				"name": "maximum_sample_files",
+				"default": "None",
+				"type": "Optional[int]"
+			},
+			{
+				"name": "filename",
+				"default": "None",
+				"type": "Optional[bool | str]"
+			},
+			{
+				"name": "hive_partitioning",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "union_by_name",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "hive_types",
+				"default": "None",
+				"type": "Optional[Dict[str, str]]"
+			},
+			{
+				"name": "hive_types_autocast",
+				"default": "None",
+				"type": "Optional[bool]"
 			}
 		],
 		"return": "DuckDBPyRelation"
@@ -621,6 +691,7 @@
 				"type": "Union[str, StringIO, TextIOBase]"
 			}
 		],
+		"kwargs_as_dict": true,
 		"kwargs": [
 			{
 				"name": "header",
@@ -703,11 +774,6 @@
 				"type": "Optional[bool]"
 			},
 			{
-				"name": "filename",
-				"default": "None",
-				"type": "Optional[bool]"
-			},
-			{
 				"name": "null_padding",
 				"default": "None",
 				"type": "Optional[bool]"
@@ -716,6 +782,96 @@
 				"name": "names",
 				"default": "None",
 				"type": "Optional[List[str]]"
+			},
+			{
+				"name": "lineterminator",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "columns",
+				"default": "None",
+				"type": "Optional[Dict[str, str]]"
+			},
+			{
+				"name": "auto_type_candidates",
+				"default": "None",
+				"type": "Optional[List[str]]"
+			},
+			{
+				"name": "max_line_size",
+				"default": "None",
+				"type": "Optional[int]"
+			},
+			{
+				"name": "ignore_errors",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "store_rejects",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "rejects_table",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "rejects_scan",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "rejects_limit",
+				"default": "None",
+				"type": "Optional[int]"
+			},
+			{
+				"name": "force_not_null",
+				"default": "None",
+				"type": "Optional[List[str]]"
+			},
+			{
+				"name": "buffer_size",
+				"default": "None",
+				"type": "Optional[int]"
+			},
+			{
+				"name": "decimal",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "allow_quoted_nulls",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "filename",
+				"default": "None",
+				"type": "Optional[bool | str]"
+			},
+			{
+				"name": "hive_partitioning",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "union_by_name",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "hive_types",
+				"default": "None",
+				"type": "Optional[Dict[str, str]]"
+			},
+			{
+				"name": "hive_types_autocast",
+				"default": "None",
+				"type": "Optional[bool]"
 			}
 		],
 		"return": "DuckDBPyRelation"
@@ -904,12 +1060,12 @@
 				"type": "str"
 			}
 		],
-		"return": "List[str]"
+		"return": "Set[str]"
 	},
 	{
 		"name": "install_extension",
 		"function": "InstallExtension",
-		"docs": "Install an extension by name",
+		"docs": "Install an extension by name, with an optional version and/or repository to get the extension from",
 		"args": [
 			{
 				"name": "extension",
@@ -921,6 +1077,21 @@
 				"name": "force_install",
 				"default": "False",
 				"type": "bool"
+			},
+			{
+				"name": "repository",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "repository_url",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "version",
+				"default": "None",
+				"type": "Optional[str]"
 			}
 		],
 		"return": "None"

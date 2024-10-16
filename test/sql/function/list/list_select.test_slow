@@ -1,0 +1,332 @@
+# name: test/sql/function/list/list_select.test_slow
+# description: Test list_select function
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers (i int[])
+
+statement ok
+INSERT INTO integers VALUES  ([1,2,3]), ([4,5,6]), (NULL), ([]), ([NULL]), ([4])
+
+statement ok
+CREATE TABLE selections (j int[])
+
+statement ok
+INSERT INTO selections VALUES  ([2,1]), ([3,1,3]), ([]), (NULL)
+
+# standard test
+
+query I
+SELECT list_select([], [])
+----
+[]
+
+query I
+SELECT list_select(NULL, [])
+----
+NULL
+
+query I
+SELECT list_select([], NULL)
+----
+NULL
+
+query I
+SELECT list_select([1,2,3], [1,2,3])
+----
+[1, 2, 3]
+
+query I
+SELECT list_select([1,2,3], [3,2,3,3])
+----
+[3, 2, 3, 3]
+
+query I
+SELECT list_select([1,2,3], [1,2])
+----
+[1, 2]
+
+# selections out of bounds
+
+query I
+SELECT list_select([1,2,3], [3,2,1,4])
+----
+[3, 2, 1, NULL]
+
+query I
+SELECT list_select([1,2,3], [3,2,3,-1])
+----
+[3, 2, 3, NULL]
+
+# queries with multiple rows
+
+query I
+SELECT list_select(i, [1,2]) FROM integers
+----
+[1, 2]
+[4, 5]
+NULL
+[NULL, NULL]
+[NULL, NULL]
+[4, NULL]
+
+query I
+SELECT list_select(i, j) FROM integers, selections ORDER BY i, j;
+----
+[]
+[NULL, NULL]
+[NULL, NULL, NULL]
+NULL
+[]
+[2, 1]
+[3, 1, 3]
+NULL
+[]
+[NULL, 4]
+[NULL, 4, NULL]
+NULL
+[]
+[5, 4]
+[6, 4, 6]
+NULL
+[]
+[NULL, NULL]
+[NULL, NULL, NULL]
+NULL
+NULL
+NULL
+NULL
+NULL
+
+statement error
+SELECT list_select([1,2,3], [NULL])
+----
+NULLs are not allowed as list elements in the second input parameter.
+
+query I
+SELECT list_select(i, [2,3,4]) FROM integers
+----
+[2, 3, NULL]
+[5, 6, NULL]
+NULL
+[NULL, NULL, NULL]
+[NULL, NULL, NULL]
+[NULL, NULL, NULL]
+
+# test all types
+
+# BOOLEAN
+query I
+SELECT list_select([True, False, NULL, True, True, NULL], [1,3,2])
+----
+[true, NULL, false]
+
+query I
+SELECT list_select([NULL::BOOLEAN], [1])
+----
+[NULL]
+
+# VARCHAR
+query I
+SELECT list_select(['aa', 'a', 'cd', NULL, '42'], [4,5,2,1,3])
+----
+[NULL, 42, a, aa, cd]
+
+query I
+SELECT list_select([NULL::VARCHAR], [1])
+----
+[NULL]
+
+# INTEGER types
+foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint
+
+query I
+SELECT list_select([1::${type}, NULL, 2::${type}], [2,1,3])
+----
+[NULL, 1, 2]
+
+query I
+SELECT list_select([NULL::${type}], [1])
+----
+[NULL]
+
+endloop
+
+# FLOAT, DOUBLE and DECIMAL types
+
+foreach type float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10)
+
+statement ok
+SELECT list_select([1::${type}], [2,1])
+
+query I
+SELECT list_select([NULL::${type}], [1])
+----
+[NULL]
+
+endloop
+
+# TEMPORAL types
+
+# date
+query I
+SELECT list_select(['2021-08-20'::DATE], [1])
+----
+[2021-08-20]
+
+# time
+query I
+SELECT list_select(['14:59:37'::TIME], [1])
+----
+[14:59:37]
+
+# timestamp
+query I
+SELECT list_select(['2021-08-20'::TIMESTAMP], [1])
+----
+[2021-08-20 00:00:00]
+
+# timestamp s
+query I
+SELECT list_select(['2021-08-20'::TIMESTAMP_S], [1])
+----
+[2021-08-20 00:00:00]
+
+# timestamp ms
+query I
+SELECT list_select(['2021-08-20 00:00:00.123'::TIMESTAMP_MS], [1])
+----
+[2021-08-20 00:00:00.123]
+
+# timestamp ns
+query I
+SELECT list_select(['2021-08-20 00:00:00.123456'::TIMESTAMP_NS], [1])
+----
+[2021-08-20 00:00:00.123456]
+
+# time with time zone
+query I
+SELECT list_select(['14:59:37'::TIMETZ], [1])
+----
+[14:59:37+00]
+
+# timestamp with time zone
+query I
+SELECT list_select(['2021-08-20'::TIMESTAMPTZ], [1])
+----
+[2021-08-20 00:00:00+00]
+
+# interval
+query I
+SELECT list_select([INTERVAL 1 YEAR], [1])
+----
+[1 year]
+
+foreach type date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval
+
+query I
+SELECT list_select([NULL::${type}], [1])
+----
+[NULL]
+
+endloop
+
+# BLOB
+
+query I
+SELECT list_select(['{a: 1}'::BLOB, '{a: 3}'::BLOB], [1,2])
+----
+[{a: 1}, {a: 3}]
+
+query I
+SELECT list_select([NULL::BLOB], [1])
+----
+[NULL]
+
+# ENUMS
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy')
+
+statement ok
+CREATE TABLE enums (e mood[])
+
+statement ok
+INSERT INTO enums VALUES (['happy', 'sad'])
+
+query I
+SELECT list_select(e, [2,1]) FROM enums
+----
+[sad, happy]
+
+# NESTED types
+
+query I
+SELECT list_select([[1], [1, 2], NULL, [NULL], [], [1, 2, 3]], [3,5,1,2,6,4])
+----
+[NULL, [], [1], [1, 2], [1, 2, 3], [NULL]]
+
+query I
+SELECT list_select([{'a': 1}, {'a': 5}, {'a': 3}], [1,3,2])
+----
+[{'a': 1}, {'a': 3}, {'a': 5}]
+
+# very large lists
+
+statement ok
+CREATE TABLE lists AS SELECT range % 4 g, list(range) l FROM range(6000) GROUP BY range % 4;
+
+query T
+with cte0 as (
+  select g, list_select(l, range(5)) l from lists
+), cte1 as (
+  select g, unnest(l) i from cte0
+)
+select count(*)
+from cte1
+----
+20
+
+statement ok
+SELECT list_select(range(6000), range(6000))
+
+query I
+SELECT i FROM integers WHERE [4] = list_select(i, [1])
+----
+[4, 5, 6]
+[4]
+
+query I
+SELECT (list_select([1,2,3], [2,3]))[1]
+----
+2
+
+# errors
+
+statement error
+SELECT list_select([1, 2], 'hello');
+----
+Conversion Error
+
+statement error
+SELECT list_select([1, 2], ['hello']);
+----
+No function matches
+
+statement ok
+CREATE TABLE all_types AS SELECT * exclude(small_enum, medium_enum, large_enum) FROM test_all_types();
+
+statement error
+SELECT list_select(c34, 'enum_0')
+FROM all_types AS t43(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31, c32, c33, c34, c35, c36, c37, c38, c39, c40, c41, c42),
+	all_types AS t86(c44, c45, c46, c47, c48, c49, c50, c51, c52, c53, c54, c55, c56, c57, c58, c59, c60, c61, c62, c63, c64, c65, c66, c67, c68, c69, c70, c71, c72, c73, c74, c75, c76, c77, c78, c79, c80, c81, c82, c83, c84, c85);
+----
+Conversion Error
+
+query I
+SELECT LIST_SELECT(ARRAY_VALUE('1', NULL), [1, 2, 3]);
+----
+[1, NULL, NULL]

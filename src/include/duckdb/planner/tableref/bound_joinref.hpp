@@ -36,6 +36,10 @@ public:
 	unique_ptr<BoundTableRef> right;
 	//! The join condition
 	unique_ptr<Expression> condition;
+	//! Duplicate Eliminated Columns (if any)
+	vector<unique_ptr<Expression>> duplicate_eliminated_columns;
+	//! If the delim is flipped
+	bool delim_flipped;
 	//! The join type
 	JoinType type;
 	//! Join condition type

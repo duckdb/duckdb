@@ -97,7 +97,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	if (!table.temporary) {
 		// update of persistent table: not read only!
 		auto &properties = GetStatementProperties();
-		properties.modified_databases.insert(table.catalog.GetName());
+		properties.RegisterDBModify(table.catalog, context);
 	}
 	auto update = make_uniq<LogicalUpdate>(table);
 
@@ -131,9 +131,10 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	table.BindUpdateConstraints(*this, *get, *proj, *update, context);
 
 	// finally add the row id column to the projection list
-	proj->expressions.push_back(make_uniq<BoundColumnRefExpression>(
-	    LogicalType::ROW_TYPE, ColumnBinding(get->table_index, get->column_ids.size())));
-	get->column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+	auto &column_ids = get->GetColumnIds();
+	proj->expressions.push_back(
+	    make_uniq<BoundColumnRefExpression>(LogicalType::ROW_TYPE, ColumnBinding(get->table_index, column_ids.size())));
+	get->AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
 
 	// set the projection as child of the update node and finalize the result
 	update->AddChild(std::move(proj));

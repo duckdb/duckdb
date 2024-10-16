@@ -7,6 +7,7 @@
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/planner/operator/logical_copy_to_file.hpp"
 
 #include <algorithm>
 
@@ -14,6 +15,7 @@ namespace duckdb {
 
 struct PartitionWriteInfo {
 	unique_ptr<GlobalFunctionData> global_state;
+	idx_t active_writes = 0;
 };
 
 struct VectorOfValuesHashFunction {
@@ -45,8 +47,9 @@ using vector_of_value_map_t = unordered_map<vector<Value>, T, VectorOfValuesHash
 
 class CopyToFunctionGlobalState : public GlobalSinkState {
 public:
-	explicit CopyToFunctionGlobalState(unique_ptr<GlobalFunctionData> global_state)
+	explicit CopyToFunctionGlobalState(ClientContext &context, unique_ptr<GlobalFunctionData> global_state)
 	    : rows_copied(0), last_file_offset(0), global_state(std::move(global_state)) {
+		max_open_files = ClientConfig::GetConfig(context).partitioned_write_max_open_files;
 	}
 	StorageLock lock;
 	atomic<idx_t> rows_copied;
@@ -58,6 +61,8 @@ public:
 	shared_ptr<GlobalHivePartitionState> partition_state;
 	//! File names
 	vector<Value> file_names;
+	//! Max open files
+	idx_t max_open_files;
 
 	void CreateDir(const string &dir_path, FileSystem &fs) {
 		if (created_directories.find(dir_path) != created_directories.end()) {
@@ -76,7 +81,10 @@ public:
 		for (idx_t i = 0; i < cols.size(); i++) {
 			const auto &partition_col_name = names[cols[i]];
 			const auto &partition_value = values[i];
-			string p_dir = partition_col_name + "=" + partition_value.ToString();
+			string p_dir;
+			p_dir += HivePartitioning::Escape(partition_col_name);
+			p_dir += "=";
+			p_dir += HivePartitioning::Escape(partition_value.ToString());
 			path = fs.JoinPath(path, p_dir);
 			CreateDir(path, fs);
 		}
@@ -109,16 +117,35 @@ public:
 	                                          const vector<Value> &values) {
 		auto global_lock = lock.GetExclusiveLock();
 		// check if we have already started writing this partition
-		auto entry = active_partitioned_writes.find(values);
-		if (entry != active_partitioned_writes.end()) {
+		auto active_write_entry = active_partitioned_writes.find(values);
+		if (active_write_entry != active_partitioned_writes.end()) {
 			// we have - continue writing in this partition
-			return *entry->second;
+			active_write_entry->second->active_writes++;
+			return *active_write_entry->second;
+		}
+		// check if we need to close any writers before we can continue
+		if (active_partitioned_writes.size() >= max_open_files) {
+			// we need to! try to close writers
+			for (auto &entry : active_partitioned_writes) {
+				if (entry.second->active_writes == 0) {
+					// we can evict this entry - evict the partition
+					FinalizePartition(context.client, op, *entry.second);
+					++previous_partitions[entry.first];
+					active_partitioned_writes.erase(entry.first);
+					break;
+				}
+			}
+		}
+		idx_t offset = 0;
+		auto prev_offset = previous_partitions.find(values);
+		if (prev_offset != previous_partitions.end()) {
+			offset = prev_offset->second;
 		}
 		auto &fs = FileSystem::GetFileSystem(context.client);
 		// Create a writer for the current file
 		auto trimmed_path = op.GetTrimmedPath(context.client);
 		string hive_path = GetOrCreateDirectory(op.partition_columns, op.names, values, trimmed_path, fs);
-		string full_path(op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, 0));
+		string full_path(op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, offset));
 		if (op.overwrite_mode == CopyOverwriteMode::COPY_APPEND) {
 			// when appending, we first check if the file exists
 			while (fs.FileExists(full_path)) {
@@ -126,7 +153,7 @@ public:
 				if (!op.filename_pattern.HasUUID()) {
 					throw InternalException("CopyOverwriteMode::COPY_APPEND without {uuid} - and file exists");
 				}
-				full_path = op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, 0);
+				full_path = op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, offset);
 			}
 		}
 		if (op.return_type == CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST) {
@@ -136,14 +163,21 @@ public:
 		auto info = make_uniq<PartitionWriteInfo>();
 		info->global_state = op.function.copy_to_initialize_global(context.client, *op.bind_data, full_path);
 		auto &result = *info;
+		info->active_writes = 1;
 		// store in active write map
 		active_partitioned_writes.insert(make_pair(values, std::move(info)));
 		return result;
 	}
 
+	void FinishPartitionWrite(PartitionWriteInfo &info) {
+		auto global_lock = lock.GetExclusiveLock();
+		info.active_writes--;
+	}
+
 private:
 	//! The active writes per partition (for partitioned write)
 	vector_of_value_map_t<unique_ptr<PartitionWriteInfo>> active_partitioned_writes;
+	vector_of_value_map_t<idx_t> previous_partitions;
 };
 
 string PhysicalCopyToFile::GetTrimmedPath(ClientContext &context) const {
@@ -195,6 +229,22 @@ public:
 		append_count = 0;
 	}
 
+	void SetDataWithoutPartitions(DataChunk &chunk, const DataChunk &source, const vector<LogicalType> &col_types,
+	                              const vector<idx_t> &part_cols) {
+		D_ASSERT(source.ColumnCount() == col_types.size());
+		auto types = LogicalCopyToFile::GetTypesWithoutPartitions(col_types, part_cols, false);
+		chunk.InitializeEmpty(types);
+		set<idx_t> part_col_set(part_cols.begin(), part_cols.end());
+		idx_t new_col_id = 0;
+		for (idx_t col_idx = 0; col_idx < source.ColumnCount(); col_idx++) {
+			if (part_col_set.find(col_idx) == part_col_set.end()) {
+				chunk.data[new_col_id].Reference(source.data[col_idx]);
+				new_col_id++;
+			}
+		}
+		chunk.SetCardinality(source.size());
+	}
+
 	void FlushPartitions(ExecutionContext &context, const PhysicalCopyToFile &op, CopyToFunctionGlobalState &g) {
 		if (!part_buffer) {
 			return;
@@ -214,11 +264,19 @@ public:
 			auto local_copy_state = op.function.copy_to_initialize_local(context, *op.bind_data);
 			// push the chunks into the write state
 			for (auto &chunk : partitions[i]->Chunks()) {
-				op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *local_copy_state, chunk);
+				if (op.write_partition_columns) {
+					op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *local_copy_state, chunk);
+				} else {
+					DataChunk filtered_chunk;
+					SetDataWithoutPartitions(filtered_chunk, chunk, op.expected_types, op.partition_columns);
+					op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *local_copy_state,
+					                         filtered_chunk);
+				}
 			}
 			op.function.copy_to_combine(context, *op.bind_data, *info.global_state, *local_copy_state);
 			local_copy_state.reset();
 			partitions[i].reset();
+			g.FinishPartitionWrite(info);
 		}
 		ResetAppendState();
 	}
@@ -311,7 +369,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 			CheckDirectory(fs, file_path, overwrite_mode);
 		}
 
-		auto state = make_uniq<CopyToFunctionGlobalState>(nullptr);
+		auto state = make_uniq<CopyToFunctionGlobalState>(context, nullptr);
 		if (!per_thread_output && rotate) {
 			auto global_lock = state->lock.GetExclusiveLock();
 			state->global_state = CreateFileState(context, *state, *global_lock);
@@ -324,8 +382,8 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 		return std::move(state);
 	}
 
-	auto state =
-	    make_uniq<CopyToFunctionGlobalState>(function.copy_to_initialize_global(context, *bind_data, file_path));
+	auto state = make_uniq<CopyToFunctionGlobalState>(
+	    context, function.copy_to_initialize_global(context, *bind_data, file_path));
 	if (use_tmp_file) {
 		auto global_lock = state->lock.GetExclusiveLock();
 		state->AddFileName(*global_lock, file_path);

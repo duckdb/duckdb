@@ -1,0 +1,13 @@
+# name: test/sql/copy/csv/test_ignore_mid_null_line.test
+# description: Problematic line to be skipped is all null
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query III
+FROM read_csv('data/csv/error/mid_null.csv', delim = ';',
+     columns = {'a':'integer','b':'integer','c':'integer'}, auto_detect = false, header = true, ignore_errors = true)
+----
+1	2	3
+1	2	3

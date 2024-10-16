@@ -1,0 +1,57 @@
+# name: test/sql/join/pushdown/pushdown_join_subquery.test
+# description: Test join filter pushdown with subqueries
+# group: [pushdown]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers AS SELECT CASE WHEN i%2=0 THEN NULL ELSE i END i FROM range(1000) t(i)
+
+# expression on LHS
+query II
+SELECT * FROM integers JOIN (SELECT MAX(i) AS max_i FROM integers) ON i+2=max_i
+----
+997	999
+
+# expression on RHS
+query II
+SELECT * FROM integers JOIN (SELECT MAX(i) AS max_i FROM integers) ON i=max_i-2
+----
+997	999
+
+# filter
+query II
+SELECT * FROM (FROM integers WHERE i%2 = 1) JOIN (SELECT MAX(i) AS max_i FROM integers) ON i=max_i
+----
+999	999
+
+# filter that can be pushed down
+query II
+SELECT * FROM (FROM integers WHERE i>500) JOIN (SELECT MAX(i) AS max_i FROM integers) ON i=max_i
+----
+999	999
+
+# limit
+query II
+SELECT * FROM (FROM integers LIMIT 10000) JOIN (SELECT MAX(i) AS max_i FROM integers) ON i=max_i
+----
+999	999
+
+# order by
+query II
+SELECT * FROM (FROM integers ORDER BY i) JOIN (SELECT MAX(i) AS max_i FROM integers) ON i=max_i
+----
+999	999
+
+# top-n
+query II
+SELECT * FROM (FROM integers ORDER BY i DESC LIMIT 10) JOIN (SELECT MAX(i) AS max_i FROM integers) ON i=max_i
+----
+999	999
+
+# projection
+query III
+SELECT * FROM (SELECT i + 2 AS i, i AS k FROM integers) JOIN (SELECT MAX(i) AS max_i FROM integers) ON i=max_i
+----
+999	997	999

@@ -129,7 +129,7 @@ i32		1		NULL	NULL
 str		NULL	two		NULL
 str		NULL	three	NULL
 
-# Allow explict casts
+# Allow explicit casts
 statement ok
 CREATE TABLE tbl3 (u UNION(i INT));
 
@@ -205,3 +205,68 @@ select [
 [true]
 [true]
 
+
+# Struct member cast resolution
+statement ok
+CREATE TABLE t3 (id integer, u union(s1 struct(f1 varchar, f2 int), s2 struct(b1 varchar)));
+
+statement ok
+INSERT INTO t3 VALUES (1, {b1: 'a'});
+
+statement ok
+INSERT INTO t3 VALUES (2, row('s1', 2));
+
+statement ok
+INSERT INTO t3 VALUES (3, {f1: 'c', f2: 3});
+
+statement ok
+INSERT INTO t3 VALUES (4, row('s2'));
+
+query II rowsort
+SELECT * FROM t3
+----
+1	{'b1': a}
+2	{'f1': s1, 'f2': 2}
+3	{'f1': c, 'f2': 3}
+4	{'b1': s2}
+
+
+# More union cast resolution checks
+# Select the member with the lowest implicit cast cost
+query I
+SELECT union_tag(1::INTEGER::UNION(f1 VARCHAR, t DOUBLE, f2 BOOLEAN))
+----
+t
+
+query I
+SELECT union_tag(1::INTEGER::UNION(t BIGINT, f1 STRUCT(i INTEGER), f2 BOOLEAN))
+----
+t
+
+query I
+SELECT union_tag(1::FLOAT::UNION(f1 VARCHAR, f2 DOUBLE, t FLOAT))
+----
+t
+
+# This also works with nested unions, the value will slot into the union with the lowest cost
+query I
+SELECT union_tag(1::INTEGER::UNION(lu UNION(f1 VARCHAR, f2 BOOL), ru UNION(t BIGINT, f3 TINYINT)))
+----
+ru
+
+query I
+SELECT union_tag((1::INTEGER::UNION(lu UNION(f1 VARCHAR, f2 BOOL), ru UNION(t BIGINT, f3 TINYINT))).ru);
+----
+t
+
+# Of course, this can also become ambiguos if there are multiple leaf types with the same cost
+statement error
+SELECT union_tag(1::INTEGER::UNION(lu UNION(f1 VARCHAR, t2 BIGINT), ru UNION(t2 BIGINT, f3 TINYINT)));
+----
+Conversion Error: Type INTEGER can't be cast as UNION(lu UNION(f1 VARCHAR, t2 BIGINT), ru UNION(t2 BIGINT, f3 TINYINT)). The cast is ambiguous
+
+# For union -> union casts, the name of the members are case insensitive when resolving the cast
+query I
+SELECT union_tag(1::INTEGER::UNION(f1 VARCHAR, t2 BIGINT)::UNION(F1 VARCHAR, T2 BIGINT, F3 TINYINT))
+----
+T2

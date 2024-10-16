@@ -40,7 +40,7 @@ A connection can only run a single query concurrently.
 It is possible to open multiple connections to a single DuckDB database instance.
 Multiple connections can run multiple queries concurrently.
 """
-mutable struct Connection
+mutable struct Connection <: DBInterface.Connection
     db::DuckDBHandle
     handle::duckdb_connection
 
@@ -108,7 +108,9 @@ DBInterface.connect(db::DB) = Connection(db.handle)
 DBInterface.close!(db::DB) = close_database(db)
 DBInterface.close!(con::Connection) = _close_connection(con)
 Base.close(db::DB) = close_database(db)
-Base.isopen(db::DB) = db.handle != C_NULL
+Base.close(con::Connection) = _close_connection(con)
+Base.isopen(db::DB) = db.handle.handle != C_NULL
+Base.isopen(con::Connection) = con.handle != C_NULL
 
 Base.show(io::IO, db::DuckDB.DB) = print(io, string("DuckDB.DB(", "\"$(db.handle.file)\"", ")"))
 Base.show(io::IO, con::DuckDB.Connection) = print(io, string("DuckDB.Connection(", "\"$(con.db.file)\"", ")"))

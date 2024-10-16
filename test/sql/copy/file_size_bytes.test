@@ -130,12 +130,11 @@ SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv5/*.csv')
 
 # should yield multiple files, can be less than 4 because we create files lazily
 query I
-SELECT count(*) > 2 FROM glob('__TEST_DIR__/file_size_bytes_csv5/*.csv')
+SELECT count(*) > 1 FROM glob('__TEST_DIR__/file_size_bytes_csv5/*.csv')
 ----
 true
 
 # each thread sees ~240kb if it's balanced, what about a 190kb limit
-# even in the case of extreme thread imbalance, this always yield around 8 files
 statement ok
 COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv6' (FORMAT CSV, FILE_SIZE_BYTES '190kb', PER_THREAD_OUTPUT TRUE);
 
@@ -144,9 +143,9 @@ SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv6/*.csv')
 ----
 100000
 
-# ~2 files per thread, around 8 in total
+# ~2 files per thread, around 8 in total (5 output files in case of extreme thread imbalance and only 1 thread runs)
 query I
-SELECT count(*) BETWEEN 6 AND 10 FROM glob('__TEST_DIR__/file_size_bytes_csv6/*.csv')
+SELECT count(*) BETWEEN 5 AND 10 FROM glob('__TEST_DIR__/file_size_bytes_csv6/*.csv')
 ----
 1
 

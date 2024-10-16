@@ -26,6 +26,8 @@ public:
 	static constexpr idx_t FILE_FLAGS_PRIVATE = idx_t(1 << 6);
 	static constexpr idx_t FILE_FLAGS_NULL_IF_NOT_EXISTS = idx_t(1 << 7);
 	static constexpr idx_t FILE_FLAGS_PARALLEL_ACCESS = idx_t(1 << 8);
+	static constexpr idx_t FILE_FLAGS_EXCLUSIVE_CREATE = idx_t(1 << 9);
+	static constexpr idx_t FILE_FLAGS_NULL_IF_EXISTS = idx_t(1 << 10);
 
 public:
 	FileOpenFlags() = default;
@@ -99,6 +101,15 @@ public:
 	inline bool RequireParallelAccess() const {
 		return flags & FILE_FLAGS_PARALLEL_ACCESS;
 	}
+	inline bool ExclusiveCreate() const {
+		return flags & FILE_FLAGS_EXCLUSIVE_CREATE;
+	}
+	inline bool ReturnNullIfExists() const {
+		return flags & FILE_FLAGS_NULL_IF_EXISTS;
+	}
+	inline idx_t GetFlagsInternal() const {
+		return flags;
+	}
 
 private:
 	idx_t flags = 0;
@@ -129,6 +140,11 @@ public:
 	//! Multiple threads may perform reads and writes in parallel
 	static constexpr FileOpenFlags FILE_FLAGS_PARALLEL_ACCESS =
 	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_PARALLEL_ACCESS);
+	//! Ensure that this call creates the file, throw is file exists
+	static constexpr FileOpenFlags FILE_FLAGS_EXCLUSIVE_CREATE =
+	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_EXCLUSIVE_CREATE);
+	//!  Return NULL if the file exist instead of throwing an error
+	static constexpr FileOpenFlags FILE_FLAGS_NULL_IF_EXISTS = FileOpenFlags(FileOpenFlags::FILE_FLAGS_NULL_IF_EXISTS);
 };
 
 } // namespace duckdb

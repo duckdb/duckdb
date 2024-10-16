@@ -13,25 +13,26 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 
 namespace duckdb {
+
 //! Represents a TableReference to a materialized result
 class ColumnDataRef : public TableRef {
 public:
 	static constexpr const TableReferenceType TYPE = TableReferenceType::COLUMN_DATA;
 
 public:
-	explicit ColumnDataRef(ColumnDataCollection &collection)
-	    : TableRef(TableReferenceType::COLUMN_DATA), collection(collection) {
+	explicit ColumnDataRef(shared_ptr<ColumnDataCollection> collection)
+	    : TableRef(TableReferenceType::COLUMN_DATA), collection(std::move(collection)) {
 	}
-	ColumnDataRef(vector<string> expected_names, optionally_owned_ptr<ColumnDataCollection> collection_p)
-	    : TableRef(TableReferenceType::COLUMN_DATA), collection(std::move(collection_p)),
-	      expected_names(std::move(expected_names)) {
+	ColumnDataRef(shared_ptr<ColumnDataCollection> collection, vector<string> expected_names)
+	    : TableRef(TableReferenceType::COLUMN_DATA), expected_names(std::move(expected_names)),
+	      collection(std::move(collection)) {
 	}
 
 public:
-	//! (optionally owned) materialized column data
-	optionally_owned_ptr<ColumnDataCollection> collection;
 	//! The set of expected names
 	vector<string> expected_names;
+	//! The collection to scan
+	shared_ptr<ColumnDataCollection> collection;
 
 public:
 	string ToString() const override;
@@ -43,4 +44,5 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<TableRef> Deserialize(Deserializer &source);
 };
+
 } // namespace duckdb

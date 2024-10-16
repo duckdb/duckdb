@@ -28,10 +28,11 @@ struct ExpressionState {
 	vector<unique_ptr<ExpressionState>> child_states;
 	vector<LogicalType> types;
 	DataChunk intermediate_chunk;
+	vector<bool> initialize;
 
 public:
-	void AddChild(Expression *expr);
-	void Finalize(bool empty = false);
+	void AddChild(Expression &child_expr);
+	void Finalize();
 	Allocator &GetAllocator();
 	bool HasContext();
 	DUCKDB_API ClientContext &GetContext();

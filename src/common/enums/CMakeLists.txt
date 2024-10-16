@@ -8,6 +8,7 @@ add_library_unity(
   file_compression_type.cpp
   join_type.cpp
   logical_operator_type.cpp
+  metric_type.cpp
   optimizer_type.cpp
   physical_operator_type.cpp
   statement_type.cpp

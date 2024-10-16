@@ -8,11 +8,11 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parallel/task.hpp"
-#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 
@@ -78,6 +78,11 @@ public:
 	void SetAllocatorFlushTreshold(idx_t threshold);
 	//! Sets the allocator background thread
 	void SetAllocatorBackgroundThreads(bool enable);
+
+	//! Get the number of the CPU on which the calling thread is currently executing.
+	//! Fallback to calling thread id if CPU number is not available.
+	//! Result do not need to be exact 'return 0' is a valid fallback strategy
+	static idx_t GetEstimatedCPUId();
 
 private:
 	void RelaunchThreadsInternal(int32_t n);

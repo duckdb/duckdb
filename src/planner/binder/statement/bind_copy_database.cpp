@@ -54,9 +54,9 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(Catalog &source_catalog
 	ExportEntries entries;
 	PhysicalExport::ExtractEntries(context, source_schemas, entries);
 
-	unique_ptr<LogicalOperator> result;
+	vector<unique_ptr<LogicalOperator>> insert_nodes;
 	for (auto &table_ref : entries.tables) {
-		auto &table = table_ref.get();
+		auto &table = table_ref.get().Cast<TableCatalogEntry>();
 		// generate the insert statement
 		InsertStatement insert_stmt;
 		insert_stmt.catalog = target_database_name;
@@ -69,7 +69,11 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(Catalog &source_catalog
 		from_tbl->table_name = table.name;
 
 		auto select_node = make_uniq<SelectNode>();
-		select_node->select_list.push_back(make_uniq<StarExpression>());
+		auto &select_list = select_node->select_list;
+		for (auto &col : table.GetColumns().Physical()) {
+			select_list.push_back(make_uniq<ColumnRefExpression>(col.Name(), table.name));
+		}
+
 		select_node->from_table = std::move(from_tbl);
 
 		auto select_stmt = make_uniq<SelectStatement>();
@@ -78,17 +82,10 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(Catalog &source_catalog
 		insert_stmt.select_statement = std::move(select_stmt);
 		auto bound_insert = Bind(insert_stmt);
 		auto insert_plan = std::move(bound_insert.plan);
-		if (result) {
-			// use UNION ALL to combine the individual copy statements into a single node
-			auto copy_union =
-			    make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1U, std::move(insert_plan), std::move(result),
-			                                   LogicalOperatorType::LOGICAL_UNION, true, false);
-			result = std::move(copy_union);
-		} else {
-			result = std::move(insert_plan);
-		}
+		insert_nodes.push_back(std::move(insert_plan));
 	}
-	if (!result) {
+	unique_ptr<LogicalOperator> result;
+	if (insert_nodes.empty()) {
 		vector<LogicalType> result_types;
 		result_types.push_back(LogicalType::BIGINT);
 		vector<unique_ptr<Expression>> expression_list;
@@ -97,6 +94,9 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(Catalog &source_catalog
 		expressions.push_back(std::move(expression_list));
 		result = make_uniq<LogicalExpressionGet>(GenerateTableIndex(), std::move(result_types), std::move(expressions));
 		result->children.push_back(make_uniq<LogicalDummyScan>(GenerateTableIndex()));
+	} else {
+		// use UNION ALL to combine the individual copy statements into a single node
+		result = UnionOperators(std::move(insert_nodes));
 	}
 	return result;
 }
@@ -128,7 +128,7 @@ BoundStatement Binder::Bind(CopyDatabaseStatement &stmt) {
 	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::NOTHING;
-	properties.modified_databases.insert(target_catalog.GetName());
+	properties.RegisterDBModify(target_catalog, context);
 	return result;
 }
 

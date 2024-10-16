@@ -36,6 +36,7 @@ struct CommonTableExpressionInfo;
 struct GroupingExpressionMap;
 class OnConflictInfo;
 class UpdateSetInfo;
+class MacroFunction;
 struct ParserOptions;
 struct PivotColumn;
 struct PivotColumnEntry;
@@ -89,6 +90,7 @@ private:
 	Transformer &RootTransformer();
 	const Transformer &RootTransformer() const;
 	void SetParamCount(idx_t new_count);
+	void ClearParameters();
 	void SetParam(const string &name, idx_t index, PreparedParamType type);
 	bool GetParam(const string &name, idx_t &index, PreparedParamType type);
 
@@ -110,9 +112,8 @@ private:
 	// Statement transformation
 	//===--------------------------------------------------------------------===//
 	//! Transform a Postgres duckdb_libpgquery::T_PGSelectStmt node into a SelectStatement
-	unique_ptr<SelectStatement> TransformSelect(optional_ptr<duckdb_libpgquery::PGNode> node, bool is_select = true);
-	//! Transform a Postgres duckdb_libpgquery::T_PGSelectStmt node into a SelectStatement
-	unique_ptr<SelectStatement> TransformSelect(duckdb_libpgquery::PGSelectStmt &select, bool is_select = true);
+	unique_ptr<SelectStatement> TransformSelectStmt(duckdb_libpgquery::PGSelectStmt &select, bool is_select = true);
+	unique_ptr<SelectStatement> TransformSelectStmt(duckdb_libpgquery::PGNode &node, bool is_select = true);
 	//! Transform a Postgres T_AlterStmt node into a AlterStatement
 	unique_ptr<AlterStatement> TransformAlter(duckdb_libpgquery::PGAlterTableStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGRenameStmt node into a RenameStatement
@@ -168,8 +169,10 @@ private:
 	unique_ptr<PragmaStatement> TransformImport(duckdb_libpgquery::PGImportStmt &stmt);
 	unique_ptr<ExplainStatement> TransformExplain(duckdb_libpgquery::PGExplainStmt &stmt);
 	unique_ptr<SQLStatement> TransformVacuum(duckdb_libpgquery::PGVacuumStmt &stmt);
-	unique_ptr<SelectStatement> TransformShow(duckdb_libpgquery::PGVariableShowStmt &stmt);
-	unique_ptr<SelectStatement> TransformShowSelect(duckdb_libpgquery::PGVariableShowSelectStmt &stmt);
+	unique_ptr<QueryNode> TransformShow(duckdb_libpgquery::PGVariableShowStmt &stmt);
+	unique_ptr<SelectStatement> TransformShowStmt(duckdb_libpgquery::PGVariableShowStmt &stmt);
+	unique_ptr<QueryNode> TransformShowSelect(duckdb_libpgquery::PGVariableShowSelectStmt &stmt);
+	unique_ptr<SelectStatement> TransformShowSelectStmt(duckdb_libpgquery::PGVariableShowSelectStmt &stmt);
 	unique_ptr<AttachStatement> TransformAttach(duckdb_libpgquery::PGAttachStmt &stmt);
 	unique_ptr<DetachStatement> TransformDetach(duckdb_libpgquery::PGDetachStmt &stmt);
 	unique_ptr<SetStatement> TransformUse(duckdb_libpgquery::PGUseStmt &stmt);
@@ -202,7 +205,8 @@ private:
 	// Query Node Transform
 	//===--------------------------------------------------------------------===//
 	//! Transform a Postgres duckdb_libpgquery::T_PGSelectStmt node into a QueryNode
-	unique_ptr<QueryNode> TransformSelectNode(duckdb_libpgquery::PGSelectStmt &select);
+	unique_ptr<QueryNode> TransformSelectNode(duckdb_libpgquery::PGNode &select, bool is_select = true);
+	unique_ptr<QueryNode> TransformSelectNodeInternal(duckdb_libpgquery::PGSelectStmt &select, bool is_select = true);
 	unique_ptr<QueryNode> TransformSelectInternal(duckdb_libpgquery::PGSelectStmt &select);
 	void TransformModifiers(duckdb_libpgquery::PGSelectStmt &stmt, QueryNode &node);
 
@@ -320,6 +324,8 @@ private:
 	//! Transform a range var into a (schema) qualified name
 	QualifiedName TransformQualifiedName(duckdb_libpgquery::PGRangeVar &root);
 
+	//! Transform a Postgres TypeName string into a LogicalType (non-LIST types)
+	LogicalType TransformTypeNameInternal(duckdb_libpgquery::PGTypeName &name);
 	//! Transform a Postgres TypeName string into a LogicalType
 	LogicalType TransformTypeName(duckdb_libpgquery::PGTypeName &name);
 
@@ -336,6 +342,9 @@ private:
 	                                vector<idx_t> &result_set);
 	//! Transform a Postgres ORDER BY expression into an OrderByDescription
 	bool TransformOrderBy(duckdb_libpgquery::PGList *order, vector<OrderByNode> &result);
+
+	//! Transform to a IN or NOT IN expression
+	unique_ptr<ParsedExpression> TransformInExpression(const string &name, duckdb_libpgquery::PGAExpr &root);
 
 	//! Transform a Postgres SELECT clause into a list of Expressions
 	void TransformExpressionList(duckdb_libpgquery::PGList &list, vector<unique_ptr<ParsedExpression>> &result);
@@ -354,6 +363,8 @@ private:
 
 	Vector PGListToVector(optional_ptr<duckdb_libpgquery::PGList> column_list, idx_t &size);
 	vector<string> TransformConflictTarget(duckdb_libpgquery::PGList &list);
+
+	unique_ptr<MacroFunction> TransformMacroFunction(duckdb_libpgquery::PGFunctionDefinition &function);
 
 	void ParseGenericOptionListEntry(case_insensitive_map_t<vector<Value>> &result_options, string &name,
 	                                 duckdb_libpgquery::PGNode *arg);

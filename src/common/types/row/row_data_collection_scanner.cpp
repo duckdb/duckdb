@@ -101,7 +101,7 @@ void RowDataCollectionScanner::AlignHeapBlocks(RowDataCollection &swizzled_block
 
 			// Finally, we allocate a new heap block and copy data to it
 			swizzled_string_heap.blocks.emplace_back(make_uniq<RowDataBlock>(
-			    MemoryTag::ORDER_BY, buffer_manager, MaxValue<idx_t>(total_size, (idx_t)Storage::BLOCK_SIZE), 1U));
+			    MemoryTag::ORDER_BY, buffer_manager, MaxValue<idx_t>(total_size, buffer_manager.GetBlockSize()), 1U));
 			auto new_heap_handle = buffer_manager.Pin(swizzled_string_heap.blocks.back()->block);
 			auto new_heap_ptr = new_heap_handle.Ptr();
 			for (auto &ptr_and_size : ptrs_and_sizes) {
@@ -183,7 +183,7 @@ RowDataCollectionScanner::RowDataCollectionScanner(RowDataCollection &rows_p, Ro
 	ValidateUnscannedBlock();
 }
 
-void RowDataCollectionScanner::SwizzleBlock(RowDataBlock &data_block, RowDataBlock &heap_block) {
+void RowDataCollectionScanner::SwizzleBlockInternal(RowDataBlock &data_block, RowDataBlock &heap_block) {
 	// Pin the data block and swizzle the pointers within the rows
 	D_ASSERT(!data_block.block->IsSwizzled());
 	auto data_handle = rows.buffer_manager.Pin(data_block.block);
@@ -196,6 +196,22 @@ void RowDataCollectionScanner::SwizzleBlock(RowDataBlock &data_block, RowDataBlo
 	auto heap_ptr = Load<data_ptr_t>(data_ptr + layout.GetHeapOffset());
 	auto heap_offset = heap_ptr - heap_handle.Ptr();
 	RowOperations::SwizzleHeapPointer(layout, data_ptr, heap_ptr, data_block.count, NumericCast<idx_t>(heap_offset));
+}
+
+void RowDataCollectionScanner::SwizzleBlock(idx_t block_idx) {
+	if (rows.count == 0) {
+		return;
+	}
+
+	if (!unswizzling) {
+		// No swizzled blocks!
+		return;
+	}
+
+	auto &data_block = rows.blocks[block_idx];
+	if (data_block->block && !data_block->block->IsSwizzled()) {
+		SwizzleBlockInternal(*data_block, *heap.blocks[block_idx]);
+	}
 }
 
 void RowDataCollectionScanner::ReSwizzle() {
@@ -212,7 +228,7 @@ void RowDataCollectionScanner::ReSwizzle() {
 	for (idx_t i = 0; i < rows.blocks.size(); ++i) {
 		auto &data_block = rows.blocks[i];
 		if (data_block->block && !data_block->block->IsSwizzled()) {
-			SwizzleBlock(*data_block, *heap.blocks[i]);
+			SwizzleBlockInternal(*data_block, *heap.blocks[i]);
 		}
 	}
 }
@@ -297,7 +313,7 @@ void RowDataCollectionScanner::Scan(DataChunk &chunk) {
 		for (idx_t i = flush_block_idx; i < read_state.block_idx; ++i) {
 			auto &data_block = rows.blocks[i];
 			if (data_block->block && !data_block->block->IsSwizzled()) {
-				SwizzleBlock(*data_block, *heap.blocks[i]);
+				SwizzleBlockInternal(*data_block, *heap.blocks[i]);
 			}
 		}
 	}

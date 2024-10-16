@@ -18,6 +18,7 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb_python/pybind11/conversions/exception_handling_enum.hpp"
 #include "duckdb_python/pybind11/conversions/python_udf_type_enum.hpp"
+#include "duckdb_python/pybind11/conversions/python_csv_line_terminator_enum.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 
 #include "duckdb.hpp"
@@ -122,10 +123,11 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("connection") = py::none());
 	m.def(
 	    "create_function",
-	    [](const string &name, const py::function &udf, const py::object &arguments,
-	       const shared_ptr<DuckDBPyType> &return_type, PythonUDFType type, FunctionNullHandling null_handling,
-	       PythonExceptionHandling exception_handling, bool side_effects = false,
-	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](const string &name, const py::function &udf, const py::object &arguments = py::none(),
+	       const shared_ptr<DuckDBPyType> &return_type = nullptr, PythonUDFType type = PythonUDFType::NATIVE,
+	       FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	       PythonExceptionHandling exception_handling = PythonExceptionHandling::FORWARD_ERROR,
+	       bool side_effects = false, shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
@@ -279,7 +281,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    "Create a duplicate of the current connection", py::kw_only(), py::arg("connection") = py::none());
 	m.def(
 	    "execute",
-	    [](const py::object &query, py::object params, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](const py::object &query, py::object params = py::list(), shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
@@ -289,7 +291,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("parameters") = py::none(), py::kw_only(), py::arg("connection") = py::none());
 	m.def(
 	    "executemany",
-	    [](const py::object &query, py::object params, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](const py::object &query, py::object params = py::list(), shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
@@ -542,7 +544,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("connection") = py::none());
 	m.def(
 	    "values",
-	    [](py::object params, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](py::object params = py::none(), shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
@@ -552,7 +554,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("connection") = py::none());
 	m.def(
 	    "table_function",
-	    [](const string &fname, py::object params, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](const string &fname, py::object params = py::list(), shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
@@ -562,17 +564,42 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("parameters") = py::none(), py::kw_only(), py::arg("connection") = py::none());
 	m.def(
 	    "read_json",
-	    [](const string &filename, const Optional<py::object> &columns, const Optional<py::object> &sample_size,
-	       const Optional<py::object> &maximum_depth, const Optional<py::str> &records, const Optional<py::str> &format,
+	    [](const py::object &name, const Optional<py::object> &columns = py::none(),
+	       const Optional<py::object> &sample_size = py::none(), const Optional<py::object> &maximum_depth = py::none(),
+	       const Optional<py::str> &records = py::none(), const Optional<py::str> &format = py::none(),
+	       const Optional<py::object> &date_format = py::none(),
+	       const Optional<py::object> &timestamp_format = py::none(),
+	       const Optional<py::object> &compression = py::none(),
+	       const Optional<py::object> &maximum_object_size = py::none(),
+	       const Optional<py::object> &ignore_errors = py::none(),
+	       const Optional<py::object> &convert_strings_to_integers = py::none(),
+	       const Optional<py::object> &field_appearance_threshold = py::none(),
+	       const Optional<py::object> &map_inference_threshold = py::none(),
+	       const Optional<py::object> &maximum_sample_files = py::none(),
+	       const Optional<py::object> &filename = py::none(),
+	       const Optional<py::object> &hive_partitioning = py::none(),
+	       const Optional<py::object> &union_by_name = py::none(), const Optional<py::object> &hive_types = py::none(),
+	       const Optional<py::object> &hive_types_autocast = py::none(),
 	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
-		    return conn->ReadJSON(filename, columns, sample_size, maximum_depth, records, format);
+		    return conn->ReadJSON(name, columns, sample_size, maximum_depth, records, format, date_format,
+		                          timestamp_format, compression, maximum_object_size, ignore_errors,
+		                          convert_strings_to_integers, field_appearance_threshold, map_inference_threshold,
+		                          maximum_sample_files, filename, hive_partitioning, union_by_name, hive_types,
+		                          hive_types_autocast);
 	    },
-	    "Create a relation object from the JSON file in 'name'", py::arg("name"), py::kw_only(),
+	    "Create a relation object from the JSON file in 'name'", py::arg("path_or_buffer"), py::kw_only(),
 	    py::arg("columns") = py::none(), py::arg("sample_size") = py::none(), py::arg("maximum_depth") = py::none(),
-	    py::arg("records") = py::none(), py::arg("format") = py::none(), py::arg("connection") = py::none());
+	    py::arg("records") = py::none(), py::arg("format") = py::none(), py::arg("date_format") = py::none(),
+	    py::arg("timestamp_format") = py::none(), py::arg("compression") = py::none(),
+	    py::arg("maximum_object_size") = py::none(), py::arg("ignore_errors") = py::none(),
+	    py::arg("convert_strings_to_integers") = py::none(), py::arg("field_appearance_threshold") = py::none(),
+	    py::arg("map_inference_threshold") = py::none(), py::arg("maximum_sample_files") = py::none(),
+	    py::arg("filename") = py::none(), py::arg("hive_partitioning") = py::none(),
+	    py::arg("union_by_name") = py::none(), py::arg("hive_types") = py::none(),
+	    py::arg("hive_types_autocast") = py::none(), py::arg("connection") = py::none());
 	m.def(
 	    "extract_statements",
 	    [](const string &query, shared_ptr<DuckDBPyConnection> conn = nullptr) {
@@ -585,7 +612,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("connection") = py::none());
 	m.def(
 	    "sql",
-	    [](const py::object &query, string alias, py::object params, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](const py::object &query, string alias = "", py::object params = py::list(),
+	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
@@ -597,7 +625,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("connection") = py::none());
 	m.def(
 	    "query",
-	    [](const py::object &query, string alias, py::object params, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](const py::object &query, string alias = "", py::object params = py::list(),
+	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
@@ -609,7 +638,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("connection") = py::none());
 	m.def(
 	    "from_query",
-	    [](const py::object &query, string alias, py::object params, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](const py::object &query, string alias = "", py::object params = py::list(),
+	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
@@ -621,52 +651,28 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("connection") = py::none());
 	m.def(
 	    "read_csv",
-	    [](const py::object &name, const py::object &header, const py::object &compression, const py::object &sep,
-	       const py::object &delimiter, const py::object &dtype, const py::object &na_values,
-	       const py::object &skiprows, const py::object &quotechar, const py::object &escapechar,
-	       const py::object &encoding, const py::object &parallel, const py::object &date_format,
-	       const py::object &timestamp_format, const py::object &sample_size, const py::object &all_varchar,
-	       const py::object &normalize_names, const py::object &filename, const py::object &null_padding,
-	       const py::object &names, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](const py::object &name, py::kwargs &kwargs) {
+		    auto connection_arg = kwargs.contains("conn") ? kwargs["conn"] : py::none();
+		    auto conn = py::cast<shared_ptr<DuckDBPyConnection>>(connection_arg);
+
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
-		    return conn->ReadCSV(name, header, compression, sep, delimiter, dtype, na_values, skiprows, quotechar,
-		                         escapechar, encoding, parallel, date_format, timestamp_format, sample_size,
-		                         all_varchar, normalize_names, filename, null_padding, names);
+		    return conn->ReadCSV(name, kwargs);
 	    },
-	    "Create a relation object from the CSV file in 'name'", py::arg("path_or_buffer"), py::kw_only(),
-	    py::arg("header") = py::none(), py::arg("compression") = py::none(), py::arg("sep") = py::none(),
-	    py::arg("delimiter") = py::none(), py::arg("dtype") = py::none(), py::arg("na_values") = py::none(),
-	    py::arg("skiprows") = py::none(), py::arg("quotechar") = py::none(), py::arg("escapechar") = py::none(),
-	    py::arg("encoding") = py::none(), py::arg("parallel") = py::none(), py::arg("date_format") = py::none(),
-	    py::arg("timestamp_format") = py::none(), py::arg("sample_size") = py::none(),
-	    py::arg("all_varchar") = py::none(), py::arg("normalize_names") = py::none(), py::arg("filename") = py::none(),
-	    py::arg("null_padding") = py::none(), py::arg("names") = py::none(), py::arg("connection") = py::none());
+	    "Create a relation object from the CSV file in 'name'", py::arg("path_or_buffer"), py::kw_only());
 	m.def(
 	    "from_csv_auto",
-	    [](const py::object &name, const py::object &header, const py::object &compression, const py::object &sep,
-	       const py::object &delimiter, const py::object &dtype, const py::object &na_values,
-	       const py::object &skiprows, const py::object &quotechar, const py::object &escapechar,
-	       const py::object &encoding, const py::object &parallel, const py::object &date_format,
-	       const py::object &timestamp_format, const py::object &sample_size, const py::object &all_varchar,
-	       const py::object &normalize_names, const py::object &filename, const py::object &null_padding,
-	       const py::object &names, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](const py::object &name, py::kwargs &kwargs) {
+		    auto connection_arg = kwargs.contains("conn") ? kwargs["conn"] : py::none();
+		    auto conn = py::cast<shared_ptr<DuckDBPyConnection>>(connection_arg);
+
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
-		    return conn->ReadCSV(name, header, compression, sep, delimiter, dtype, na_values, skiprows, quotechar,
-		                         escapechar, encoding, parallel, date_format, timestamp_format, sample_size,
-		                         all_varchar, normalize_names, filename, null_padding, names);
+		    return conn->ReadCSV(name, kwargs);
 	    },
-	    "Create a relation object from the CSV file in 'name'", py::arg("path_or_buffer"), py::kw_only(),
-	    py::arg("header") = py::none(), py::arg("compression") = py::none(), py::arg("sep") = py::none(),
-	    py::arg("delimiter") = py::none(), py::arg("dtype") = py::none(), py::arg("na_values") = py::none(),
-	    py::arg("skiprows") = py::none(), py::arg("quotechar") = py::none(), py::arg("escapechar") = py::none(),
-	    py::arg("encoding") = py::none(), py::arg("parallel") = py::none(), py::arg("date_format") = py::none(),
-	    py::arg("timestamp_format") = py::none(), py::arg("sample_size") = py::none(),
-	    py::arg("all_varchar") = py::none(), py::arg("normalize_names") = py::none(), py::arg("filename") = py::none(),
-	    py::arg("null_padding") = py::none(), py::arg("names") = py::none(), py::arg("connection") = py::none());
+	    "Create a relation object from the CSV file in 'name'", py::arg("path_or_buffer"), py::kw_only());
 	m.def(
 	    "from_df",
 	    [](const PandasDataFrame &value, shared_ptr<DuckDBPyConnection> conn = nullptr) {
@@ -690,7 +696,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	m.def(
 	    "from_parquet",
 	    [](const string &file_glob, bool binary_as_string, bool file_row_number, bool filename, bool hive_partitioning,
-	       bool union_by_name, const py::object &compression, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	       bool union_by_name, const py::object &compression = py::none(),
+	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
@@ -704,7 +711,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	m.def(
 	    "read_parquet",
 	    [](const string &file_glob, bool binary_as_string, bool file_row_number, bool filename, bool hive_partitioning,
-	       bool union_by_name, const py::object &compression, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	       bool union_by_name, const py::object &compression = py::none(),
+	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
@@ -718,7 +726,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	m.def(
 	    "from_parquet",
 	    [](const vector<string> &file_globs, bool binary_as_string, bool file_row_number, bool filename,
-	       bool hive_partitioning, bool union_by_name, const py::object &compression,
+	       bool hive_partitioning, bool union_by_name, const py::object &compression = py::none(),
 	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
@@ -733,7 +741,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	m.def(
 	    "read_parquet",
 	    [](const vector<string> &file_globs, bool binary_as_string, bool file_row_number, bool filename,
-	       bool hive_partitioning, bool union_by_name, const py::object &compression,
+	       bool hive_partitioning, bool union_by_name, const py::object &compression = py::none(),
 	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
@@ -797,14 +805,17 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("connection") = py::none());
 	m.def(
 	    "install_extension",
-	    [](const string &extension, bool force_install = false, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](const string &extension, bool force_install = false, const py::object &repository = py::none(),
+	       const py::object &repository_url = py::none(), const py::object &version = py::none(),
+	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
-		    conn->InstallExtension(extension, force_install);
+		    conn->InstallExtension(extension, force_install, repository, repository_url, version);
 	    },
-	    "Install an extension by name", py::arg("extension"), py::kw_only(), py::arg("force_install") = false,
-	    py::arg("connection") = py::none());
+	    "Install an extension by name, with an optional version and/or repository to get the extension from",
+	    py::arg("extension"), py::kw_only(), py::arg("force_install") = false, py::arg("repository") = py::none(),
+	    py::arg("repository_url") = py::none(), py::arg("version") = py::none(), py::arg("connection") = py::none());
 	m.def(
 	    "load_extension",
 	    [](const string &extension, shared_ptr<DuckDBPyConnection> conn = nullptr) {
@@ -816,7 +827,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    "Load an installed extension", py::arg("extension"), py::kw_only(), py::arg("connection") = py::none());
 	m.def(
 	    "project",
-	    [](const PandasDataFrame &df, const py::args &args, const string &groups,
+	    [](const PandasDataFrame &df, const py::args &args, const string &groups = "",
 	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
@@ -837,18 +848,21 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("connection") = py::none());
 	m.def(
 	    "write_csv",
-	    [](const PandasDataFrame &df, const string &filename, const py::object &sep, const py::object &na_rep,
-	       const py::object &header, const py::object &quotechar, const py::object &escapechar,
-	       const py::object &date_format, const py::object &timestamp_format, const py::object &quoting,
-	       const py::object &encoding, const py::object &compression, const py::object &overwrite,
-	       const py::object &per_thread_output, const py::object &use_tmp_file, const py::object &partition_by,
+	    [](const PandasDataFrame &df, const string &filename, const py::object &sep = py::none(),
+	       const py::object &na_rep = py::none(), const py::object &header = py::none(),
+	       const py::object &quotechar = py::none(), const py::object &escapechar = py::none(),
+	       const py::object &date_format = py::none(), const py::object &timestamp_format = py::none(),
+	       const py::object &quoting = py::none(), const py::object &encoding = py::none(),
+	       const py::object &compression = py::none(), const py::object &overwrite = py::none(),
+	       const py::object &per_thread_output = py::none(), const py::object &use_tmp_file = py::none(),
+	       const py::object &partition_by = py::none(), const py::object &write_partition_columns = py::none(),
 	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
 		    conn->FromDF(df)->ToCSV(filename, sep, na_rep, header, quotechar, escapechar, date_format, timestamp_format,
 		                            quoting, encoding, compression, overwrite, per_thread_output, use_tmp_file,
-		                            partition_by);
+		                            partition_by, write_partition_columns);
 	    },
 	    "Write the relation object to a CSV file in 'file_name'", py::arg("df"), py::arg("filename"), py::kw_only(),
 	    py::arg("sep") = py::none(), py::arg("na_rep") = py::none(), py::arg("header") = py::none(),
@@ -856,10 +870,11 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("timestamp_format") = py::none(), py::arg("quoting") = py::none(), py::arg("encoding") = py::none(),
 	    py::arg("compression") = py::none(), py::arg("overwrite") = py::none(),
 	    py::arg("per_thread_output") = py::none(), py::arg("use_tmp_file") = py::none(),
-	    py::arg("partition_by") = py::none(), py::arg("connection") = py::none());
+	    py::arg("partition_by") = py::none(), py::arg("write_partition_columns") = py::none(),
+	    py::arg("connection") = py::none());
 	m.def(
 	    "aggregate",
-	    [](const PandasDataFrame &df, const string &expr, const string &groups,
+	    [](const PandasDataFrame &df, const py::object &expr, const string &groups = "",
 	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
@@ -1029,8 +1044,12 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	    .export_values();
 
 	RegisterStatementType(m);
-
 	RegisterExpectedResultType(m);
+
+	py::enum_<duckdb::PythonCSVLineTerminator::Type>(m, "CSVLineTerminator")
+	    .value("LINE_FEED", duckdb::PythonCSVLineTerminator::Type::LINE_FEED)
+	    .value("CARRIAGE_RETURN_LINE_FEED", duckdb::PythonCSVLineTerminator::Type::CARRIAGE_RETURN_LINE_FEED)
+	    .export_values();
 
 	py::enum_<duckdb::PythonExceptionHandling>(m, "PythonExceptionHandling")
 	    .value("DEFAULT", duckdb::PythonExceptionHandling::FORWARD_ERROR)
@@ -1059,7 +1078,11 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	m.attr("__git_revision__") = DuckDB::SourceID();
 	m.attr("__interactive__") = DuckDBPyConnection::DetectAndGetEnvironment();
 	m.attr("__jupyter__") = DuckDBPyConnection::IsJupyter();
-	m.attr("default_connection") = DuckDBPyConnection::DefaultConnection();
+	m.def("default_connection", &DuckDBPyConnection::DefaultConnection,
+	      "Retrieve the connection currently registered as the default to be used by the module");
+	m.def("set_default_connection", &DuckDBPyConnection::SetDefaultConnection,
+	      "Register the provided connection as the default to be used by the module",
+	      py::arg("connection").none(false));
 	m.attr("apilevel") = "2.0";
 	m.attr("threadsafety") = 1;
 	m.attr("paramstyle") = "qmark";
@@ -1074,7 +1097,7 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	      py::arg("database") = ":memory:", py::arg("read_only") = false, py::arg_v("config", py::dict(), "None"));
 	m.def("tokenize", PyTokenize,
 	      "Tokenizes a SQL string, returning a list of (position, type) tuples that can be "
-	      "used for e.g. syntax highlighting",
+	      "used for e.g., syntax highlighting",
 	      py::arg("query"));
 	py::enum_<PySQLTokenType>(m, "token_type", py::module_local())
 	    .value("identifier", PySQLTokenType::PY_SQL_TOKEN_IDENTIFIER)

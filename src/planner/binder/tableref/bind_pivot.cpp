@@ -290,6 +290,9 @@ void ExtractPivotAggregates(BoundTableRef &node, vector<unique_ptr<Expression>> 
 	}
 	auto &select2 = subq2.subquery->Cast<BoundSelectNode>();
 	for (auto &aggr : select2.aggregates) {
+		if (aggr->alias == "__collated_group") {
+			continue;
+		}
 		aggregates.push_back(aggr->Copy());
 	}
 }
@@ -537,6 +540,9 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 	vector<UnpivotEntry> unpivot_entries;
 	for (auto &entry : unpivot.entries) {
 		ExtractUnpivotEntries(child_binder, entry, unpivot_entries);
+	}
+	if (unpivot_entries.empty()) {
+		throw BinderException(ref, "UNPIVOT clause must unpivot on at least one column - zero were provided");
 	}
 
 	case_insensitive_set_t handled_columns;

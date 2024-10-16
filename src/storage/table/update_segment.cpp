@@ -1,12 +1,12 @@
 #include "duckdb/storage/table/update_segment.hpp"
 
+#include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/common/printer.hpp"
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
-
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/update_info.hpp"
-#include "duckdb/common/printer.hpp"
-#include "duckdb/common/exception/transaction_exception.hpp"
+
 #include <algorithm>
 
 namespace duckdb {
@@ -928,7 +928,7 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 
 	if (mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			NumericStats::Update<T>(stats.statistics, update_data[i]);
+			stats.statistics.UpdateNumericStats<T>(update_data[i]);
 		}
 		sel.Initialize(nullptr);
 		return count;
@@ -938,7 +938,7 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 		for (idx_t i = 0; i < count; i++) {
 			if (mask.RowIsValid(i)) {
 				sel.set_index(not_null_count++, i);
-				NumericStats::Update<T>(stats.statistics, update_data[i]);
+				stats.statistics.UpdateNumericStats<T>(update_data[i]);
 			}
 		}
 		return not_null_count;
@@ -1062,7 +1062,8 @@ static idx_t SortSelectionVector(SelectionVector &sel, idx_t count, row_t *ids) 
 
 UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, idx_t type_size, idx_t count,
                                   unsafe_unique_array<char> &data) {
-	data = make_unsafe_uniq_array<char>(sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
+	data = make_unsafe_uniq_array_uninitialized<char>(sizeof(UpdateInfo) +
+	                                                  (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
 	auto update_info = reinterpret_cast<UpdateInfo *>(data.get());
 	update_info->max = STANDARD_VECTOR_SIZE;
 	update_info->tuples = reinterpret_cast<sel_t *>((data_ptr_cast(update_info)) + sizeof(UpdateInfo));
@@ -1163,8 +1164,8 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		auto result = make_uniq<UpdateNodeData>();
 
 		result->info = make_uniq<UpdateInfo>();
-		result->tuples = make_unsafe_uniq_array<sel_t>(STANDARD_VECTOR_SIZE);
-		result->tuple_data = make_unsafe_uniq_array<data_t>(STANDARD_VECTOR_SIZE * type_size);
+		result->tuples = make_unsafe_uniq_array_uninitialized<sel_t>(STANDARD_VECTOR_SIZE);
+		result->tuple_data = make_unsafe_uniq_array_uninitialized<data_t>(STANDARD_VECTOR_SIZE * type_size);
 		result->info->tuples = result->tuples.get();
 		result->info->tuple_data = result->tuple_data.get();
 		result->info->version_number = TRANSACTION_ID_START - 1;

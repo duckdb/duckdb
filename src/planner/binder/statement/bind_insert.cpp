@@ -201,7 +201,8 @@ void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert
 	for (idx_t i = 0; i < logical_column_ids.size(); i++) {
 		auto &column = logical_column_ids[i];
 		if (indexed_columns.count(column)) {
-			throw BinderException("Can not assign to column '%s' because it has a UNIQUE/PRIMARY KEY constraint",
+			throw BinderException("Can not assign to column '%s' because it has a UNIQUE/PRIMARY KEY constraint or is "
+			                      "referenced by an INDEX",
 			                      column_names[i]);
 		}
 	}
@@ -294,7 +295,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 			auto entry = specified_columns.find(col.Name());
 			if (entry != specified_columns.end()) {
 				// column was specified, set to the index
-				insert.on_conflict_filter.insert(col.Oid());
+				insert.on_conflict_filter.insert(col.Physical().index);
 			}
 		}
 		bool index_references_columns = false;
@@ -311,8 +312,8 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 		if (!index_references_columns) {
 			// Same as before, this is essentially a no-op, turning this into a DO THROW instead
 			// But since this makes no logical sense, it's probably better to throw an error
-			throw BinderException(
-			    "The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY CONSTRAINT");
+			throw BinderException("The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY "
+			                      "CONSTRAINT or INDEX");
 		}
 	} else {
 		// When omitting the conflict target, the ON CONFLICT applies to every UNIQUE/PRIMARY KEY on the table
@@ -352,8 +353,12 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 	// add a bind context entry for it
 	auto excluded_index = GenerateTableIndex();
 	insert.excluded_table_index = excluded_index;
-	auto table_column_names = columns.GetColumnNames();
-	auto table_column_types = columns.GetColumnTypes();
+	vector<string> table_column_names;
+	vector<LogicalType> table_column_types;
+	for (auto &col : columns.Physical()) {
+		table_column_names.push_back(col.Name());
+		table_column_types.push_back(col.Type());
+	}
 	bind_context.AddGenericBinding(excluded_index, "excluded", table_column_names, table_column_types);
 
 	if (on_conflict.condition) {
@@ -466,7 +471,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	if (!table.temporary) {
 		// inserting into a non-temporary table: alters underlying database
 		auto &properties = GetStatementProperties();
-		properties.modified_databases.insert(table.catalog.GetName());
+		properties.RegisterDBModify(table.catalog, context);
 	}
 
 	auto insert = make_uniq<LogicalInsert>(table, GenerateTableIndex());

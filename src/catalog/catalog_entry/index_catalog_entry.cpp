@@ -9,6 +9,14 @@ IndexCatalogEntry::IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
 	this->temporary = info.temporary;
 	this->dependencies = info.dependencies;
 	this->comment = info.comment;
+	for (auto &expr : expressions) {
+		D_ASSERT(expr);
+		expressions.push_back(expr->Copy());
+	}
+	for (auto &parsed_expr : info.parsed_expressions) {
+		D_ASSERT(parsed_expr);
+		parsed_expressions.push_back(parsed_expr->Copy());
+	}
 }
 
 unique_ptr<CreateInfo> IndexCatalogEntry::GetInfo() const {
@@ -42,12 +50,12 @@ string IndexCatalogEntry::ToSQL() const {
 	return info->ToString();
 }
 
-bool IndexCatalogEntry::IsUnique() {
+bool IndexCatalogEntry::IsUnique() const {
 	return (index_constraint_type == IndexConstraintType::UNIQUE ||
 	        index_constraint_type == IndexConstraintType::PRIMARY);
 }
 
-bool IndexCatalogEntry::IsPrimary() {
+bool IndexCatalogEntry::IsPrimary() const {
 	return (index_constraint_type == IndexConstraintType::PRIMARY);
 }
 

@@ -101,6 +101,7 @@ struct NFCNormalizeFun {
 
 struct SubstringFun {
 	static void RegisterFunction(BuiltinFunctions &set);
+	static string_t SubstringASCII(Vector &result, string_t input, int64_t offset, int64_t length);
 	static string_t SubstringUnicode(Vector &result, string_t input, int64_t offset, int64_t length);
 	static string_t SubstringGrapheme(Vector &result, string_t input, int64_t offset, int64_t length);
 };
@@ -116,7 +117,8 @@ struct SuffixFun {
 };
 
 struct ContainsFun {
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
+	static ScalarFunction GetStringContains();
 	static void RegisterFunction(BuiltinFunctions &set);
 	static idx_t Find(const string_t &haystack, const string_t &needle);
 	static idx_t Find(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle,
@@ -124,6 +126,48 @@ struct ContainsFun {
 };
 
 struct RegexpFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct StringSplitFun {
+	static ScalarFunction GetFunction();
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct RegexpEscapeFun {
+	static ScalarFunction GetFunction();
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct StringSplitRegexFun {
+	static ScalarFunctionSet GetFunctions();
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct MD5Fun {
+	static ScalarFunctionSet GetFunctions();
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct MD5NumberFun {
+	static ScalarFunctionSet GetFunctions();
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct SHA1Fun {
+	static ScalarFunctionSet GetFunctions();
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct SHA256Fun {
+	static ScalarFunctionSet GetFunctions();
+
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

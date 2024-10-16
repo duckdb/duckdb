@@ -110,8 +110,8 @@ void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_dat
 }
 
 unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction &) {
-	auto create_info = deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(100, "sequence_create_info",
-	                                                                                unique_ptr<CreateInfo>());
+	auto create_info = deserializer.ReadPropertyWithExplicitDefault<unique_ptr<CreateInfo>>(100, "sequence_create_info",
+	                                                                                        unique_ptr<CreateInfo>());
 	if (!create_info) {
 		return nullptr;
 	}
@@ -121,12 +121,12 @@ unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction 
 	return make_uniq<NextvalBindData>(sequence);
 }
 
-void NextValModifiedDatabases(FunctionModifiedDatabasesInput &input) {
+void NextValModifiedDatabases(ClientContext &context, FunctionModifiedDatabasesInput &input) {
 	if (!input.bind_data) {
 		return;
 	}
 	auto &seq = input.bind_data->Cast<NextvalBindData>();
-	input.modified_databases.insert(seq.sequence.ParentCatalog().GetName());
+	input.properties.RegisterDBModify(seq.sequence.ParentCatalog(), context);
 }
 
 void NextvalFun::RegisterFunction(BuiltinFunctions &set) {

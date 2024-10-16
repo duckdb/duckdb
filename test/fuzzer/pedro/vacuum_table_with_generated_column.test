@@ -13,11 +13,10 @@ require no_vector_verification
 statement ok
 CREATE TABLE test (x INT, y AS (x + 100));
 
-# We cannot vacuum duplicate columns.
 statement error
 ANALYZE test(x, x);
 ----
-cannot vacuum or analyze the same column twice
+<REGEX>:Binder Error.*cannot vacuum.*the same column twice.*
 
 statement ok
 ANALYZE test(y, x);
@@ -29,7 +28,7 @@ INSERT INTO test SELECT range % 5000 FROM range(10000);
 query T
 SELECT stats(x) FROM test LIMIT 1;
 ----
-[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 9435]
+[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 10000]
 
 query T
 SELECT stats(y) FROM test LIMIT 1;
@@ -49,7 +48,7 @@ PRAGMA disable_verify_parallelism;
 query T
 SELECT stats(x) FROM test LIMIT 1;
 ----
-[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 5080]
+[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 5661]
 
 query T
 SELECT stats(y) FROM test LIMIT 1;

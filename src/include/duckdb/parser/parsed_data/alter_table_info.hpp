@@ -36,6 +36,11 @@ public:
 	CatalogType GetCatalogType() const override;
 	unique_ptr<AlterInfo> Copy() const override;
 	string ToString() const override;
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterInfo> Deserialize(Deserializer &deserializer);
+
+	explicit ChangeOwnershipInfo();
 };
 
 //===--------------------------------------------------------------------===//

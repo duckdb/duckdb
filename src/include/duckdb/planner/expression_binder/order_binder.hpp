@@ -22,8 +22,8 @@ struct SelectBindState;
 //! The ORDER binder is responsible for binding an expression within the ORDER BY clause of a SQL statement
 class OrderBinder {
 public:
-	OrderBinder(vector<Binder *> binders, SelectBindState &bind_state);
-	OrderBinder(vector<Binder *> binders, SelectNode &node, SelectBindState &bind_state);
+	OrderBinder(vector<reference<Binder>> binders, SelectBindState &bind_state);
+	OrderBinder(vector<reference<Binder>> binders, SelectNode &node, SelectBindState &bind_state);
 
 public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> expr);
@@ -31,20 +31,25 @@ public:
 	bool HasExtraList() const {
 		return extra_list;
 	}
-	const vector<Binder *> &GetBinders() const {
+	const vector<reference<Binder>> &GetBinders() const {
 		return binders;
 	}
 
 	unique_ptr<Expression> CreateExtraReference(unique_ptr<ParsedExpression> expr);
 
-private:
-	unique_ptr<Expression> CreateProjectionReference(ParsedExpression &expr, const idx_t index);
-	unique_ptr<Expression> BindConstant(ParsedExpression &expr, const Value &val);
+	//! Sets the query component, for error messages
+	void SetQueryComponent(string component = string());
 
 private:
-	vector<Binder *> binders;
+	unique_ptr<Expression> CreateProjectionReference(ParsedExpression &expr, const idx_t index);
+	unique_ptr<Expression> BindConstant(ParsedExpression &expr);
+	optional_idx TryGetProjectionReference(ParsedExpression &expr) const;
+
+private:
+	vector<reference<Binder>> binders;
 	optional_ptr<vector<unique_ptr<ParsedExpression>>> extra_list;
 	SelectBindState &bind_state;
+	string query_component = "ORDER BY";
 };
 
 } // namespace duckdb

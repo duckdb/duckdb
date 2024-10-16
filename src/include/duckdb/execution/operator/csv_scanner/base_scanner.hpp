@@ -19,7 +19,7 @@ namespace duckdb {
 class CSVFileScan;
 class ScannerResult {
 public:
-	ScannerResult(CSVStates &states, CSVStateMachine &state_machine);
+	ScannerResult(CSVStates &states, CSVStateMachine &state_machine, idx_t result_size);
 
 	//! Adds a Value to the result
 	static inline void SetQuoted(ScannerResult &result, idx_t quoted_position) {
@@ -28,16 +28,35 @@ public:
 		}
 		result.quoted = true;
 	}
-	//! Adds a Row to the result
 	static inline void SetEscaped(ScannerResult &result) {
 		result.escaped = true;
 	}
-	// Variable to keep information regarding quoted and escaped values
+	static inline void SetComment(ScannerResult &result, idx_t buffer_pos) {
+		result.comment = true;
+	}
+	static inline bool UnsetComment(ScannerResult &result, idx_t buffer_pos) {
+		result.comment = false;
+		return false;
+	}
+	static inline bool IsCommentSet(const ScannerResult &result) {
+		return result.comment == true;
+	}
+
+	//! Variable to keep information regarding quoted and escaped values
 	bool quoted = false;
 	bool escaped = false;
+	//! Variable to keep track if we are in a comment row. Hence won't add it
+	bool comment = false;
 	idx_t quoted_position = 0;
 
+	//! Size of the result
+	const idx_t result_size;
+
 	CSVStateMachine &state_machine;
+
+	void Print() const {
+		state_machine.Print();
+	}
 
 protected:
 	CSVStates &states;
@@ -54,7 +73,7 @@ public:
 	virtual ~BaseScanner() = default;
 
 	//! Returns true if the scanner is finished
-	bool FinishedFile();
+	bool FinishedFile() const;
 
 	//! Parses data into a output_chunk
 	virtual ScannerResult &ParseChunk();
@@ -66,19 +85,19 @@ public:
 
 	void SetIterator(const CSVIterator &it);
 
-	idx_t GetBoundaryIndex() {
+	idx_t GetBoundaryIndex() const {
 		return iterator.GetBoundaryIdx();
 	}
 
-	idx_t GetLinesRead() {
+	idx_t GetLinesRead() const {
 		return lines_read;
 	}
 
-	CSVPosition GetIteratorPosition() {
+	CSVPosition GetIteratorPosition() const {
 		return iterator.pos;
 	}
 
-	CSVStateMachine &GetStateMachine();
+	CSVStateMachine &GetStateMachine() const;
 
 	shared_ptr<CSVFileScan> csv_file_scan;
 
@@ -123,7 +142,7 @@ protected:
 	//! Initializes the scanner
 	virtual void Initialize();
 
-	inline bool ContainsZeroByte(uint64_t v) {
+	inline static bool ContainsZeroByte(uint64_t v) {
 		return (v - UINT64_C(0x0101010101010101)) & ~(v)&UINT64_C(0x8080808080808080);
 	}
 
@@ -159,11 +178,20 @@ protected:
 					lines_read++;
 
 				} else if (states.states[0] != CSVState::CARRIAGE_RETURN) {
-					if (T::AddRow(result, iterator.pos.buffer_pos)) {
-						iterator.pos.buffer_pos++;
-						bytes_read = iterator.pos.buffer_pos - start_pos;
-						lines_read++;
-						return;
+					if (T::IsCommentSet(result)) {
+						if (T::UnsetComment(result, iterator.pos.buffer_pos)) {
+							iterator.pos.buffer_pos++;
+							bytes_read = iterator.pos.buffer_pos - start_pos;
+							lines_read++;
+							return;
+						}
+					} else {
+						if (T::AddRow(result, iterator.pos.buffer_pos)) {
+							iterator.pos.buffer_pos++;
+							bytes_read = iterator.pos.buffer_pos - start_pos;
+							lines_read++;
+							return;
+						}
 					}
 					lines_read++;
 				}
@@ -178,11 +206,20 @@ protected:
 						return;
 					}
 				} else if (states.states[0] != CSVState::CARRIAGE_RETURN) {
-					if (T::AddRow(result, iterator.pos.buffer_pos)) {
-						iterator.pos.buffer_pos++;
-						bytes_read = iterator.pos.buffer_pos - start_pos;
-						lines_read++;
-						return;
+					if (T::IsCommentSet(result)) {
+						if (T::UnsetComment(result, iterator.pos.buffer_pos)) {
+							iterator.pos.buffer_pos++;
+							bytes_read = iterator.pos.buffer_pos - start_pos;
+							lines_read++;
+							return;
+						}
+					} else {
+						if (T::AddRow(result, iterator.pos.buffer_pos)) {
+							iterator.pos.buffer_pos++;
+							bytes_read = iterator.pos.buffer_pos - start_pos;
+							lines_read++;
+							return;
+						}
 					}
 				}
 				iterator.pos.buffer_pos++;
@@ -226,7 +263,8 @@ protected:
 					    Load<uint64_t>(reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[iterator.pos.buffer_pos]));
 					if (ContainsZeroByte((value ^ state_machine->transition_array.delimiter) &
 					                     (value ^ state_machine->transition_array.new_line) &
-					                     (value ^ state_machine->transition_array.carriage_return))) {
+					                     (value ^ state_machine->transition_array.carriage_return) &
+					                     (value ^ state_machine->transition_array.comment))) {
 						break;
 					}
 					iterator.pos.buffer_pos += 8;
@@ -242,6 +280,25 @@ protected:
 				T::QuotedNewLine(result);
 				iterator.pos.buffer_pos++;
 				break;
+			case CSVState::COMMENT: {
+				T::SetComment(result, iterator.pos.buffer_pos);
+				iterator.pos.buffer_pos++;
+				while (iterator.pos.buffer_pos + 8 < to_pos) {
+					uint64_t value =
+					    Load<uint64_t>(reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[iterator.pos.buffer_pos]));
+					if (ContainsZeroByte((value ^ state_machine->transition_array.new_line) &
+					                     (value ^ state_machine->transition_array.carriage_return))) {
+						break;
+					}
+					iterator.pos.buffer_pos += 8;
+				}
+				while (state_machine->transition_array
+				           .skip_comment[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
+				       iterator.pos.buffer_pos < to_pos - 1) {
+					iterator.pos.buffer_pos++;
+				}
+				break;
+			}
 			default:
 				iterator.pos.buffer_pos++;
 				break;
@@ -256,6 +313,9 @@ protected:
 	//! Internal function for parse chunk
 	template <class T>
 	void ParseChunkInternal(T &result) {
+		if (iterator.done) {
+			return;
+		}
 		if (!initialized) {
 			Initialize();
 			initialized = true;

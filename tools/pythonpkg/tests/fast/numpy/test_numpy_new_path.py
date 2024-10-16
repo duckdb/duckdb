@@ -41,9 +41,9 @@ class TestScanNumpy(object):
         z = np.array(z)
         res = duckdb_cursor.sql("select * from z").fetchall()
         assert res == [
-            ({'key': ['3'], 'value': [0]},),
-            ({'key': ['2'], 'value': [1]},),
-            ({'key': ['1'], 'value': [2]},),
+            ({'3': 0},),
+            ({'2': 1},),
+            ({'1': 2},),
         ]
 
         # test timedelta

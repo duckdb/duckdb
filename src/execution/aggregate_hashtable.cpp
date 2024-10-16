@@ -123,7 +123,7 @@ idx_t GroupedAggregateHashTable::InitialCapacity() {
 
 idx_t GroupedAggregateHashTable::GetCapacityForCount(idx_t count) {
 	count = MaxValue<idx_t>(InitialCapacity(), count);
-	return NextPowerOfTwo(NumericCast<uint64_t>(static_cast<double>(count) * LOAD_FACTOR));
+	return NextPowerOfTwo(LossyNumericCast<uint64_t>(static_cast<double>(count) * LOAD_FACTOR));
 }
 
 idx_t GroupedAggregateHashTable::Capacity() const {
@@ -131,7 +131,7 @@ idx_t GroupedAggregateHashTable::Capacity() const {
 }
 
 idx_t GroupedAggregateHashTable::ResizeThreshold() const {
-	return NumericCast<idx_t>(static_cast<double>(Capacity()) / LOAD_FACTOR);
+	return LossyNumericCast<idx_t>(static_cast<double>(Capacity()) / LOAD_FACTOR);
 }
 
 idx_t GroupedAggregateHashTable::ApplyBitMask(hash_t hash) const {
@@ -355,7 +355,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	auto &chunk_state = state.append_state.chunk_state;
 	TupleDataCollection::ToUnifiedFormat(chunk_state, state.group_chunk);
 	if (!state.group_data) {
-		state.group_data = make_unsafe_uniq_array<UnifiedVectorFormat>(state.group_chunk.ColumnCount());
+		state.group_data = make_unsafe_uniq_array_uninitialized<UnifiedVectorFormat>(state.group_chunk.ColumnCount());
 	}
 	TupleDataCollection::GetVectorData(chunk_state, state.group_data.get());
 
@@ -381,13 +381,9 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 						// Same salt, compare group keys
 						state.group_compare_vector.set_index(need_compare_count++, index);
 						break;
-					} else {
-						// Different salts, move to next entry (linear probing)
-						if (++ht_offset >= capacity) {
-							ht_offset = 0;
-						}
-						continue;
 					}
+					// Different salts, move to next entry (linear probing)
+					IncrementAndWrap(ht_offset, bitmask);
 				} else { // Cell is unoccupied, let's claim it
 					// Set salt (also marks as occupied)
 					entry.SetSalt(salt);
@@ -440,9 +436,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		for (idx_t i = 0; i < no_match_count; i++) {
 			const auto index = state.no_match_vector.get_index(i);
 			auto &ht_offset = ht_offsets[index];
-			if (++ht_offset >= capacity) {
-				ht_offset = 0;
-			}
+			IncrementAndWrap(ht_offset, bitmask);
 		}
 		sel_vector = &state.no_match_vector;
 		remaining_entries = no_match_count;

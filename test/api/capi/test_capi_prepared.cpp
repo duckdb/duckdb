@@ -385,6 +385,30 @@ TEST_CASE("Test prepared statements with named parameters in C API", "[capi]") {
 	duckdb_destroy_prepare(&stmt);
 }
 
+TEST_CASE("Maintain prepared statement types", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+	duckdb_result res;
+	duckdb_prepared_statement stmt = nullptr;
+	duckdb_state status;
+
+	// open the database in in-memory mode
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	status = duckdb_prepare(tester.connection, "select cast(111 as short) * $1", &stmt);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(stmt != nullptr);
+
+	status = duckdb_bind_int64(stmt, 1, 1665);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_value_int64(&res, 0, 0) == 184815);
+	duckdb_destroy_result(&res);
+	duckdb_destroy_prepare(&stmt);
+}
+
 TEST_CASE("Prepared streaming result", "[capi]") {
 	CAPITester tester;
 

@@ -16,6 +16,8 @@
 
 namespace duckdb {
 
+class BufferManager;
+
 //! A half-open range of frame boundary values _relative to the current row_
 //! This is why they are signed values.
 struct FrameDelta {
@@ -29,22 +31,26 @@ struct FrameDelta {
 using FrameStats = array<FrameDelta, 2>;
 
 //! The partition data for custom window functions
+//! Note that if the inputs is nullptr then the column count is 0,
+//! but the row count will still be valid
+class ColumnDataCollection;
 struct WindowPartitionInput {
-	WindowPartitionInput(const Vector inputs[], idx_t input_count, idx_t count, const ValidityMask &filter_mask,
-	                     const FrameStats &stats)
-	    : inputs(inputs), input_count(input_count), count(count), filter_mask(filter_mask), stats(stats) {
+	WindowPartitionInput(ClientContext &context, const ColumnDataCollection *inputs, idx_t count, bool all_valid,
+	                     const ValidityMask &filter_mask, const FrameStats &stats)
+	    : context(context), inputs(inputs), count(count), all_valid(all_valid), filter_mask(filter_mask), stats(stats) {
 	}
-	const Vector *inputs;
-	idx_t input_count;
+	ClientContext &context;
+	const ColumnDataCollection *inputs;
 	idx_t count;
+	bool all_valid;
 	const ValidityMask &filter_mask;
 	const FrameStats stats;
 };
 
 //! The type used for sizing hashed aggregate function states
-typedef idx_t (*aggregate_size_t)();
+typedef idx_t (*aggregate_size_t)(const AggregateFunction &function);
 //! The type used for initializing hashed aggregate function states
-typedef void (*aggregate_initialize_t)(data_ptr_t state);
+typedef void (*aggregate_initialize_t)(const AggregateFunction &function, data_ptr_t state);
 //! The type used for updating hashed aggregate functions
 typedef void (*aggregate_update_t)(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
                                    Vector &state, idx_t count);
@@ -78,6 +84,21 @@ typedef void (*aggregate_wininit_t)(AggregateInputData &aggr_input_data, const W
 typedef void (*aggregate_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                       const AggregateFunction &function);
 typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(Deserializer &deserializer, AggregateFunction &function);
+
+struct AggregateFunctionInfo {
+	DUCKDB_API virtual ~AggregateFunctionInfo();
+
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+};
 
 class AggregateFunction : public BaseScalarFunction { // NOLINT: work-around bug in clang-tidy
 public:
@@ -162,6 +183,8 @@ public:
 	aggregate_deserialize_t deserialize;
 	//! Whether or not the aggregate is order dependent
 	AggregateOrderDependent order_dependent;
+	//! Additional function info, passed to the bind
+	shared_ptr<AggregateFunctionInfo> function_info;
 
 	bool operator==(const AggregateFunction &rhs) const {
 		return state_size == rhs.state_size && initialize == rhs.initialize && update == rhs.update &&
@@ -211,12 +234,12 @@ public:
 
 public:
 	template <class STATE>
-	static idx_t StateSize() {
+	static idx_t StateSize(const AggregateFunction &) {
 		return sizeof(STATE);
 	}
 
 	template <class STATE, class OP>
-	static void StateInitialize(data_ptr_t state) {
+	static void StateInitialize(const AggregateFunction &, data_ptr_t state) {
 		OP::Initialize(*reinterpret_cast<STATE *>(state));
 	}
 
@@ -246,16 +269,6 @@ public:
 	                        idx_t count) {
 		D_ASSERT(input_count == 1);
 		AggregateExecutor::UnaryUpdate<STATE, INPUT_TYPE, OP>(inputs[0], aggr_input_data, state, count);
-	}
-
-	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static void UnaryWindow(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
-	                        const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames &subframes, Vector &result,
-	                        idx_t rid) {
-
-		D_ASSERT(partition.input_count == 1);
-		AggregateExecutor::UnaryWindow<STATE, INPUT_TYPE, RESULT_TYPE, OP>(
-		    partition.inputs[0], partition.filter_mask, aggr_input_data, l_state, subframes, result, rid, g_state);
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>

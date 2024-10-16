@@ -920,49 +920,12 @@ bool TryCast::Operation(double input, double &result, bool strict) {
 //===--------------------------------------------------------------------===//
 // Cast String -> Numeric
 //===--------------------------------------------------------------------===//
+
 template <>
 bool TryCast::Operation(string_t input, bool &result, bool strict) {
-	auto input_data = input.GetData();
+	auto input_data = reinterpret_cast<const char *>(input.GetData());
 	auto input_size = input.GetSize();
-
-	switch (input_size) {
-	case 1: {
-		char c = UnsafeNumericCast<char>(std::tolower(*input_data));
-		if (c == 't' || (!strict && c == '1')) {
-			result = true;
-			return true;
-		} else if (c == 'f' || (!strict && c == '0')) {
-			result = false;
-			return true;
-		}
-		return false;
-	}
-	case 4: {
-		char t = UnsafeNumericCast<char>(std::tolower(input_data[0]));
-		char r = UnsafeNumericCast<char>(std::tolower(input_data[1]));
-		char u = UnsafeNumericCast<char>(std::tolower(input_data[2]));
-		char e = UnsafeNumericCast<char>(std::tolower(input_data[3]));
-		if (t == 't' && r == 'r' && u == 'u' && e == 'e') {
-			result = true;
-			return true;
-		}
-		return false;
-	}
-	case 5: {
-		char f = UnsafeNumericCast<char>(std::tolower(input_data[0]));
-		char a = UnsafeNumericCast<char>(std::tolower(input_data[1]));
-		char l = UnsafeNumericCast<char>(std::tolower(input_data[2]));
-		char s = UnsafeNumericCast<char>(std::tolower(input_data[3]));
-		char e = UnsafeNumericCast<char>(std::tolower(input_data[4]));
-		if (f == 'f' && a == 'a' && l == 'l' && s == 's' && e == 'e') {
-			result = false;
-			return true;
-		}
-		return false;
-	}
-	default:
-		return false;
-	}
+	return TryCastStringBool(input_data, input_size, result, strict);
 }
 template <>
 bool TryCast::Operation(string_t input, int8_t &result, bool strict) {
@@ -2279,10 +2242,9 @@ bool TryCastToDecimal::Operation(uhugeint_t input, hugeint_t &result, CastParame
 template <class SRC, class DST>
 bool DoubleToDecimalCast(SRC input, DST &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
 	double value = input * NumericHelper::DOUBLE_POWERS_OF_TEN[scale];
-	// Add the sign (-1, 0, 1) times a tiny value to fix floating point issues (issue 3091)
-	double sign = (double(0) < value) - (value < double(0));
-	value += 1e-9 * sign;
-	if (value <= -NumericHelper::DOUBLE_POWERS_OF_TEN[width] || value >= NumericHelper::DOUBLE_POWERS_OF_TEN[width]) {
+	double roundedValue = round(value);
+	if (roundedValue <= -NumericHelper::DOUBLE_POWERS_OF_TEN[width] ||
+	    roundedValue >= NumericHelper::DOUBLE_POWERS_OF_TEN[width]) {
 		string error = StringUtil::Format("Could not cast value %f to DECIMAL(%d,%d)", value, width, scale);
 		HandleCastError::AssignError(error, parameters);
 		return false;
@@ -2616,8 +2578,87 @@ bool TryCastFromDecimal::Operation(hugeint_t input, uhugeint_t &result, CastPara
 // Decimal -> Float/Double Cast
 //===--------------------------------------------------------------------===//
 template <class SRC, class DST>
+static bool IsRepresentableExactly(SRC input, DST);
+
+template <>
+bool IsRepresentableExactly(int16_t input, float dst) {
+	return true;
+}
+
+const int64_t MAX_INT_REPRESENTABLE_IN_FLOAT = 0x001000000LL;
+const int64_t MAX_INT_REPRESENTABLE_IN_DOUBLE = 0x0020000000000000LL;
+
+template <>
+bool IsRepresentableExactly(int32_t input, float dst) {
+	return (input <= MAX_INT_REPRESENTABLE_IN_FLOAT && input >= -MAX_INT_REPRESENTABLE_IN_FLOAT);
+}
+
+template <>
+bool IsRepresentableExactly(int64_t input, float dst) {
+	return (input <= MAX_INT_REPRESENTABLE_IN_FLOAT && input >= -MAX_INT_REPRESENTABLE_IN_FLOAT);
+}
+
+template <>
+bool IsRepresentableExactly(hugeint_t input, float dst) {
+	return (input <= MAX_INT_REPRESENTABLE_IN_FLOAT && input >= -MAX_INT_REPRESENTABLE_IN_FLOAT);
+}
+
+template <>
+bool IsRepresentableExactly(int16_t input, double dst) {
+	return true;
+}
+
+template <>
+bool IsRepresentableExactly(int32_t input, double dst) {
+	return true;
+}
+
+template <>
+bool IsRepresentableExactly(int64_t input, double dst) {
+	return (input <= MAX_INT_REPRESENTABLE_IN_DOUBLE && input >= -MAX_INT_REPRESENTABLE_IN_DOUBLE);
+}
+
+template <>
+bool IsRepresentableExactly(hugeint_t input, double dst) {
+	return (input <= MAX_INT_REPRESENTABLE_IN_DOUBLE && input >= -MAX_INT_REPRESENTABLE_IN_DOUBLE);
+}
+
+template <class SRC>
+static SRC GetPowerOfTen(SRC input, uint8_t scale) {
+	return static_cast<SRC>(NumericHelper::POWERS_OF_TEN[scale]);
+}
+
+template <>
+hugeint_t GetPowerOfTen(hugeint_t input, uint8_t scale) {
+	return Hugeint::POWERS_OF_TEN[scale];
+}
+
+template <class SRC>
+static void GetDivMod(SRC lhs, SRC rhs, SRC &div, SRC &mod) {
+	div = lhs / rhs;
+	mod = lhs % rhs;
+}
+
+template <>
+void GetDivMod(hugeint_t lhs, hugeint_t rhs, hugeint_t &div, hugeint_t &mod) {
+	div = Hugeint::DivMod(lhs, rhs, mod);
+}
+
+template <class SRC, class DST>
 bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint8_t scale) {
-	result = Cast::Operation<SRC, DST>(input) / DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
+	if (IsRepresentableExactly<SRC, DST>(input, DST(0.0)) || scale == 0) {
+		// Fast path, integer is representable exaclty as a float/double
+		result = Cast::Operation<SRC, DST>(input) / DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
+		return true;
+	}
+	auto power_of_ten = GetPowerOfTen(input, scale);
+
+	SRC div = 0;
+	SRC mod = 0;
+	GetDivMod(input, power_of_ten, div, mod);
+
+	result = Cast::Operation<SRC, DST>(div) +
+	         Cast::Operation<SRC, DST>(mod) / DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
 	return true;
 }
 

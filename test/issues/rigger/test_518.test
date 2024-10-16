@@ -21,9 +21,9 @@ INSERT INTO t1(c0) VALUES (0), (0), (1), (-1);
 statement error
 SELECT LN(t1.c0) FROM t0, t1 WHERE LN(t1.c0) < t0.c0;
 ----
+<REGEX>:Out of Range Error.*logarithm of zero.*
 
 statement error
 SELECT t1.c0, LN(t1.c0) FROM t1 ORDER BY t1.c0;
 ----
-
-
+<REGEX>:Out of Range Error.*logarithm of zero.*

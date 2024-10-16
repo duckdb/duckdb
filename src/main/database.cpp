@@ -2,28 +2,30 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
+#include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/execution/operator/helper/physical_set.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection_manager.hpp"
+#include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/database_path_and_type.hpp"
+#include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
+#include "duckdb/planner/collation_binding.hpp"
 #include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/storage/standard_buffer_manager.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/execution/index/index_type_set.hpp"
-#include "duckdb/main/database_file_opener.hpp"
-#include "duckdb/planner/collation_binding.hpp"
+#include "duckdb/main/capi/extension_api.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -54,6 +56,8 @@ DBConfig::~DBConfig() {
 }
 
 DatabaseInstance::DatabaseInstance() {
+	config.is_user_config = false;
+	create_api_v0 = nullptr;
 }
 
 DatabaseInstance::~DatabaseInstance() {
@@ -65,11 +69,13 @@ DatabaseInstance::~DatabaseInstance() {
 	scheduler.reset();
 	db_manager.reset();
 	buffer_manager.reset();
-	// finally, flush allocations and disable the background thread
+	// flush allocations and disable the background thread
 	if (Allocator::SupportsFlush()) {
 		Allocator::FlushAll();
 	}
 	Allocator::SetBackgroundThreads(false);
+	// after all destruction is complete clear the cache entry
+	db_cache_entry.reset();
 }
 
 BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
@@ -90,6 +96,10 @@ DatabaseInstance &DatabaseInstance::GetDatabase(ClientContext &context) {
 
 const DatabaseInstance &DatabaseInstance::GetDatabase(const ClientContext &context) {
 	return *context.db;
+}
+
+void DatabaseInstance::SetDatabaseCacheEntry(shared_ptr<DatabaseCacheEntry> entry) {
+	db_cache_entry = std::move(entry);
 }
 
 DatabaseManager &DatabaseInstance::GetDatabaseManager() {
@@ -191,16 +201,67 @@ void DatabaseInstance::CreateMainDatabase() {
 	}
 
 	initial_database->SetInitialDatabase();
-	initial_database->Initialize(config.options.default_block_alloc_size);
+	initial_database->Initialize();
 }
 
-void ThrowExtensionSetUnrecognizedOptions(const unordered_map<string, Value> &unrecognized_options) {
-	auto unrecognized_options_iter = unrecognized_options.begin();
-	string unrecognized_option_keys = unrecognized_options_iter->first;
-	while (++unrecognized_options_iter != unrecognized_options.end()) {
-		unrecognized_option_keys = "," + unrecognized_options_iter->first;
+static void ThrowExtensionSetUnrecognizedOptions(const case_insensitive_map_t<Value> &unrecognized_options) {
+	D_ASSERT(!unrecognized_options.empty());
+
+	vector<string> options;
+	for (auto &kv : unrecognized_options) {
+		options.push_back(kv.first);
 	}
-	throw InvalidInputException("Unrecognized configuration property \"%s\"", unrecognized_option_keys);
+	auto concatenated = StringUtil::Join(options, ", ");
+	throw InvalidInputException("The following options were not recognized: " + concatenated);
+}
+
+void DatabaseInstance::LoadExtensionSettings() {
+	auto &unrecognized_options = config.options.unrecognized_options;
+
+	if (config.options.autoload_known_extensions) {
+		if (unrecognized_options.empty()) {
+			// Nothing to do
+			return;
+		}
+
+		Connection con(*this);
+		con.BeginTransaction();
+
+		vector<string> extension_options;
+		for (auto &option : unrecognized_options) {
+			auto &name = option.first;
+			auto &value = option.second;
+
+			auto extension_name = ExtensionHelper::FindExtensionInEntries(name, EXTENSION_SETTINGS);
+			if (extension_name.empty()) {
+				continue;
+			}
+			if (!ExtensionHelper::TryAutoLoadExtension(*this, extension_name)) {
+				throw InvalidInputException(
+				    "To set the %s setting, the %s extension needs to be loaded. But it could not be autoloaded.", name,
+				    extension_name);
+			}
+			auto it = config.extension_parameters.find(name);
+			if (it == config.extension_parameters.end()) {
+				throw InternalException("Extension %s did not provide the '%s' config setting", extension_name, name);
+			}
+			auto &context = *con.context;
+			PhysicalSet::SetExtensionVariable(context, it->second, name, SetScope::GLOBAL, value);
+			extension_options.push_back(name);
+		}
+
+		for (auto &option : extension_options) {
+			unrecognized_options.erase(option);
+		}
+		con.Commit();
+	}
+	if (!unrecognized_options.empty()) {
+		ThrowExtensionSetUnrecognizedOptions(unrecognized_options);
+	}
+}
+
+static duckdb_ext_api_v0 CreateAPIv0Wrapper() {
+	return CreateAPIv0();
 }
 
 void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_config) {
@@ -211,6 +272,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	}
 
 	Configure(*config_ptr, database_path);
+
+	create_api_v0 = CreateAPIv0Wrapper;
 
 	if (user_config && !user_config->options.use_temporary_directory) {
 		// temporary directories explicitly disabled
@@ -246,9 +309,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.database_type);
 	}
 
-	if (!config.options.unrecognized_options.empty()) {
-		ThrowExtensionSetUnrecognizedOptions(config.options.unrecognized_options);
-	}
+	LoadExtensionSettings();
 
 	if (!db_manager->HasDefaultDatabase()) {
 		CreateMainDatabase();
@@ -334,7 +395,7 @@ Allocator &Allocator::Get(AttachedDatabase &db) {
 void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path) {
 	config.options = new_config.options;
 
-	if (new_config.options.duckdb_api.empty()) {
+	if (config.options.duckdb_api.empty()) {
 		config.SetOptionByName("duckdb_api", "cpp");
 	}
 
@@ -383,7 +444,8 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		config.buffer_pool = std::move(new_config.buffer_pool);
 	} else {
 		config.buffer_pool = make_shared_ptr<BufferPool>(config.options.maximum_memory,
-		                                                 config.options.buffer_manager_track_eviction_timestamps);
+		                                                 config.options.buffer_manager_track_eviction_timestamps,
+		                                                 config.options.allocator_bulk_deallocation_flush_threshold);
 	}
 }
 
@@ -399,12 +461,12 @@ idx_t DatabaseInstance::NumberOfThreads() {
 	return NumericCast<idx_t>(scheduler->NumberOfThreads());
 }
 
-const unordered_set<std::string> &DatabaseInstance::LoadedExtensions() {
-	return loaded_extensions;
+const unordered_map<string, ExtensionInfo> &DatabaseInstance::GetExtensions() {
+	return loaded_extensions_info;
 }
 
-const unordered_map<std::string, ExtensionInstallInfo> &DatabaseInstance::LoadedExtensionsData() {
-	return loaded_extensions_data;
+void DatabaseInstance::AddExtensionInfo(const string &name, const ExtensionLoadedInfo &info) {
+	loaded_extensions_info[name].load_info = make_uniq<ExtensionLoadedInfo>(info);
 }
 
 idx_t DuckDB::NumberOfThreads() {
@@ -413,7 +475,8 @@ idx_t DuckDB::NumberOfThreads() {
 
 bool DatabaseInstance::ExtensionIsLoaded(const std::string &name) {
 	auto extension_name = ExtensionHelper::GetExtensionName(name);
-	return loaded_extensions.find(extension_name) != loaded_extensions.end();
+	auto it = loaded_extensions_info.find(extension_name);
+	return it != loaded_extensions_info.end() && it->second.is_loaded;
 }
 
 bool DuckDB::ExtensionIsLoaded(const std::string &name) {
@@ -422,8 +485,8 @@ bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 
 void DatabaseInstance::SetExtensionLoaded(const string &name, ExtensionInstallInfo &install_info) {
 	auto extension_name = ExtensionHelper::GetExtensionName(name);
-	loaded_extensions.insert(extension_name);
-	loaded_extensions_data.insert({extension_name, install_info});
+	loaded_extensions_info[extension_name].is_loaded = true;
+	loaded_extensions_info[extension_name].install_info = make_uniq<ExtensionInstallInfo>(install_info);
 
 	auto &callbacks = DBConfig::GetConfig(*this).extension_callbacks;
 	for (auto &callback : callbacks) {
@@ -447,6 +510,11 @@ SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &ke
 
 ValidChecker &DatabaseInstance::GetValidChecker() {
 	return db_validity;
+}
+
+const duckdb_ext_api_v0 DatabaseInstance::GetExtensionAPIV0() {
+	D_ASSERT(create_api_v0);
+	return create_api_v0();
 }
 
 ValidChecker &ValidChecker::Get(DatabaseInstance &db) {

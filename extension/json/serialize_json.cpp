@@ -72,10 +72,10 @@ unique_ptr<JSONScanData> JSONScanData::Deserialize(Deserializer &deserializer) {
 	result->max_depth = max_depth;
 	result->transform_options = transform_options;
 	result->names = std::move(names);
-	deserializer.ReadPropertyWithDefault<double>(113, "field_appearance_threshold", result->field_appearance_threshold, 0.1);
-	deserializer.ReadPropertyWithDefault<idx_t>(114, "maximum_sample_files", result->maximum_sample_files, 32);
-	deserializer.ReadPropertyWithDefault<bool>(115, "convert_strings_to_integers", result->convert_strings_to_integers, false);
-	deserializer.ReadPropertyWithDefault<idx_t>(116, "map_inference_threshold", result->map_inference_threshold, 25);
+	deserializer.ReadPropertyWithExplicitDefault<double>(113, "field_appearance_threshold", result->field_appearance_threshold, 0.1);
+	deserializer.ReadPropertyWithExplicitDefault<idx_t>(114, "maximum_sample_files", result->maximum_sample_files, 32);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(115, "convert_strings_to_integers", result->convert_strings_to_integers, false);
+	deserializer.ReadPropertyWithExplicitDefault<idx_t>(116, "map_inference_threshold", result->map_inference_threshold, 25);
 	return result;
 }
 

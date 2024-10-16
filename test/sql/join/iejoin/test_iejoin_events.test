@@ -10,6 +10,9 @@ require vector_size 1024
 statement ok
 PRAGMA enable_verification
 
+statement ok
+SET merge_join_threshold=0
+
 # Use small 1K table to test Q2 because it melts down the other operators at larger scales
 statement ok
 SELECT SETSEED(0.8675309);
@@ -40,4 +43,4 @@ SELECT COUNT(*) FROM (
 	  AND r.id <> s.id
 ) q2;
 ----
-6
+4

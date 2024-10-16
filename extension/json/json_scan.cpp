@@ -29,6 +29,9 @@ void JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
 	auto_detect = info.auto_detect;
 
 	for (auto &kv : input.named_parameters) {
+		if (kv.second.IsNull()) {
+			throw BinderException("Cannot use NULL as function argument");
+		}
 		if (MultiFileReader().ParseOption(kv.first, kv.second, options.file_options, context)) {
 			continue;
 		}
@@ -600,20 +603,18 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 		// Open the file if it is not yet open
 		if (!current_reader->IsOpen()) {
 			current_reader->OpenJSONFile();
-			if (current_reader->GetFileHandle().FileSize() == 0 && !current_reader->GetFileHandle().IsPipe()) {
-				current_reader->GetFileHandle().Close();
-				// Skip over empty files
-				if (gstate.enable_parallel_scans) {
-					TryIncrementFileIndex(gstate);
-				}
-				continue;
-			}
 		}
 
 		// Auto-detect if we haven't yet done this during the bind
 		if (gstate.bind_data.options.record_type == JSONRecordType::AUTO_DETECT ||
 		    current_reader->GetFormat() == JSONFormat::AUTO_DETECT) {
-			ReadAndAutoDetect(gstate, buffer, buffer_index);
+			bool file_done = false;
+			ReadAndAutoDetect(gstate, buffer, buffer_index, file_done);
+			if (file_done) {
+				TryIncrementFileIndex(gstate);
+				lock_guard<mutex> reader_guard(current_reader->lock);
+				current_reader->GetFileHandle().Close();
+			}
 		}
 
 		if (gstate.enable_parallel_scans) {
@@ -653,9 +654,8 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 }
 
 void JSONScanLocalState::ReadAndAutoDetect(JSONScanGlobalState &gstate, AllocatedData &buffer,
-                                           optional_idx &buffer_index) {
+                                           optional_idx &buffer_index, bool &file_done) {
 	// We have to detect the JSON format - hold the gstate lock while we do this
-	bool file_done = false;
 	if (!ReadNextBufferInternal(gstate, buffer, buffer_index, file_done)) {
 		return;
 	}
@@ -957,10 +957,12 @@ double JSONScan::ScanProgress(ClientContext &, const FunctionData *, const Globa
 	return progress / double(gstate.json_readers.size());
 }
 
-idx_t JSONScan::GetBatchIndex(ClientContext &, const FunctionData *, LocalTableFunctionState *local_state,
-                              GlobalTableFunctionState *) {
-	auto &lstate = local_state->Cast<JSONLocalTableFunctionState>();
-	return lstate.GetBatchIndex();
+OperatorPartitionData JSONScan::GetPartitionData(ClientContext &, TableFunctionGetPartitionInput &input) {
+	if (input.partition_info.RequiresPartitionColumns()) {
+		throw InternalException("JSONScan::GetPartitionData: partition columns not supported");
+	}
+	auto &lstate = input.local_state->Cast<JSONLocalTableFunctionState>();
+	return OperatorPartitionData(lstate.GetBatchIndex());
 }
 
 unique_ptr<NodeStatistics> JSONScan::Cardinality(ClientContext &, const FunctionData *bind_data) {
@@ -980,8 +982,9 @@ void JSONScan::ComplexFilterPushdown(ClientContext &context, LogicalGet &get, Fu
 
 	SimpleMultiFileList file_list(std::move(data.files));
 
+	MultiFilePushdownInfo info(get);
 	auto filtered_list =
-	    MultiFileReader().ComplexFilterPushdown(context, file_list, data.options.file_options, get, filters);
+	    MultiFileReader().ComplexFilterPushdown(context, file_list, data.options.file_options, info, filters);
 	if (filtered_list) {
 		MultiFileReader().PruneReaders(data, *filtered_list);
 		data.files = filtered_list->GetAllFiles();
@@ -1013,7 +1016,7 @@ void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
 	table_function.named_parameters["compression"] = LogicalType::VARCHAR;
 
 	table_function.table_scan_progress = ScanProgress;
-	table_function.get_batch_index = GetBatchIndex;
+	table_function.get_partition_data = GetPartitionData;
 	table_function.cardinality = Cardinality;
 
 	table_function.serialize = Serialize;

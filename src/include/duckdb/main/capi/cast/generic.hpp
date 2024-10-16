@@ -23,7 +23,7 @@ RESULT_TYPE GetInternalCValue(duckdb_result *result, idx_t col, idx_t row) {
 	if (!CanFetchValue(result, col, row)) {
 		return FetchDefaultValue::Operation<RESULT_TYPE>();
 	}
-	switch (result->__deprecated_columns[col].__deprecated_type) {
+	switch (result->deprecated_columns[col].deprecated_type) {
 	case DUCKDB_TYPE_BOOLEAN:
 		return TryCastCInternal<bool, RESULT_TYPE, OP>(result, col, row);
 	case DUCKDB_TYPE_TINYINT:

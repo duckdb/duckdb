@@ -1,0 +1,110 @@
+# name: test/sql/copy/csv/auto/test_normalize_names.test
+# description: Test csv header normalization
+# group: [auto]
+
+statement ok
+PRAGMA enable_verification
+
+
+# CSV file with uppercase header
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/normalize_names_1.csv', normalize_names=TRUE);
+
+query ITT
+SELECT a, b, c FROM test ORDER BY a;
+----
+123	TEST1	text1
+345	TEST1	text2
+
+statement ok
+DROP TABLE test;
+
+# CSV file with uppercase header and normalize names off
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/normalize_names_1.csv');
+
+query ITT
+SELECT A, B, C FROM test ORDER BY a;
+----
+123	TEST1	text1
+345	TEST1	text2
+
+statement ok
+DROP TABLE test;
+
+
+query I
+select columns from sniff_csv('data/csv/auto/normalize_names_2.csv', normalize_names = true)
+----
+[{'name': _select, 'type': BIGINT}, {'name': insert, 'type': VARCHAR}, {'name': _join, 'type': VARCHAR}]
+
+
+# CSV file with keywords in header
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/normalize_names_2.csv', normalize_names=TRUE);
+
+query ITT
+SELECT _select, insert, _join FROM test ORDER BY _select;
+----
+123	TEST1	text1
+345	TEST1	text2
+
+statement ok
+DROP TABLE test;
+
+# CSV file with names starting with numerics
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/normalize_names_3.csv', normalize_names=TRUE);
+
+query ITT
+SELECT _0_a, _1_b, _9_c FROM test ORDER BY _0_a;
+----
+123	TEST1	text1
+345	TEST1	text2
+
+statement ok
+DROP TABLE test;
+
+# CSV file with accents and UTF8 characters
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/normalize_names_4.csv', normalize_names=TRUE);
+
+query ITT
+SELECT allo, teost, _ FROM test ORDER BY allo;
+----
+123	TEST1	text1
+345	TEST1	text2
+
+statement ok
+DROP TABLE test;
+
+# CSV file with accents and UTF8 characters
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/normalize_names_5.csv', normalize_names=TRUE);
+
+query ITT
+SELECT a, b, c FROM test ORDER BY a;
+----
+123	TEST1	text1
+345	TEST1	text2
+
+statement ok
+DROP TABLE test;
+
+# CSV file with superscripts and UTF8 characters
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/normalize_names_6.csv', normalize_names=TRUE);
+
+query ITT
+SELECT aax, hello_world, qty_m2 FROM test ORDER BY aax;
+----
+123	TEST1	text1
+345	TEST1	text2
+
+statement ok
+DROP TABLE test;
+
+query I
+select columns from sniff_csv('data/csv/normalize.csv', normalize_names = true)
+----
+[{'name': name, 'type': VARCHAR}, {'name': text, 'type': VARCHAR}]

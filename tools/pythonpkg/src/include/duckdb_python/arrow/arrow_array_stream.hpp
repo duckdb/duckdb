@@ -36,6 +36,7 @@ public:
 		return !py::none().is(object);
 	}
 };
+
 class Table : public py::object {
 public:
 	Table(const py::object &o) : py::object(o, borrowed_t {}) {
@@ -50,7 +51,7 @@ public:
 
 } // namespace pyarrow
 
-enum class PyArrowObjectType { Invalid, Table, RecordBatchReader, Scanner, Dataset };
+enum class PyArrowObjectType { Invalid, Table, RecordBatchReader, Scanner, Dataset, PyCapsule, PyCapsuleInterface };
 
 void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, ArrowArray &data, py::list &batches);
 

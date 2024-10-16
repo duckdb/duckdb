@@ -1,0 +1,53 @@
+[
+    {
+        "name": "array_value",
+        "parameters": "any,...",
+        "description": "Create an ARRAY containing the argument values.",
+        "example": "array_value(4, 5, 6)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "array_cross_product",
+        "parameters": "array, array",
+        "description": "Compute the cross product of two arrays of size 3. The array elements can not be NULL.",
+        "example": "array_cross_product([1, 2, 3], [1, 2, 3])",
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "array_cosine_similarity",
+        "parameters": "array1,array2",
+        "description": "Compute the cosine similarity between two arrays of the same size. The array elements can not be NULL. The arrays can have any size as long as the size is the same for both arguments.",
+        "example": "array_cosine_similarity([1, 2, 3], [1, 2, 3])",
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "array_cosine_distance",
+        "parameters": "array1,array2",
+        "description": "Compute the cosine distance between two arrays of the same size. The array elements can not be NULL. The arrays can have any size as long as the size is the same for both arguments.",
+        "example": "array_cosine_distance([1, 2, 3], [1, 2, 3])",
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "array_distance",
+        "parameters": "array1,array2",
+        "description": "Compute the distance between two arrays of the same size. The array elements can not be NULL. The arrays can have any size as long as the size is the same for both arguments.",
+        "example": "array_distance([1, 2, 3], [1, 2, 3])",
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "array_inner_product",
+        "parameters": "array1,array2",
+        "description": "Compute the inner product between two arrays of the same size. The array elements can not be NULL. The arrays can have any size as long as the size is the same for both arguments.",
+        "example": "array_inner_product([1, 2, 3], [1, 2, 3])",
+        "type": "scalar_function_set",
+        "aliases": ["array_dot_product"]
+    },
+    {
+        "name": "array_negative_inner_product",
+        "parameters": "array1,array2",
+        "description": "Compute the negative inner product between two arrays of the same size. The array elements can not be NULL. The arrays can have any size as long as the size is the same for both arguments.",
+        "example": "array_negative_inner_product([1, 2, 3], [1, 2, 3])",
+        "type": "scalar_function_set",
+        "aliases": ["array_negative_dot_product"]
+    }
+]

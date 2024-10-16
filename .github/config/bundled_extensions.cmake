@@ -15,7 +15,6 @@
 ## Extensions that are linked
 #
 duckdb_extension_load(icu)
-duckdb_extension_load(inet)
 duckdb_extension_load(tpch)
 duckdb_extension_load(json)
 duckdb_extension_load(fts)

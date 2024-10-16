@@ -32,3 +32,5 @@ function isvalid(mask::ValidityMask, index)::Bool
     index_in_entry = get_index_in_entry(index)
     return (mask.data[entry_idx] & (1 << index_in_entry)) != 0
 end
+
+all_valid(mask::ValidityMask) = all(==(typemax(eltype(mask.data))), mask.data)

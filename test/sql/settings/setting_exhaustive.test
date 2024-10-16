@@ -6,6 +6,7 @@
 statement error
 SET debug_window_mode='unknown';
 ----
+<REGEX>:.*not implemented in.*
 
 # default_order
 foreach default_order ASC DESC
@@ -21,11 +22,13 @@ endloop
 statement error
 SET default_order='unknown';
 ----
+<REGEX>:Invalid Input Error.*Expected ASC or DESC.*
 
 # enable_external_access
 statement error
 SET enable_external_access=true
 ----
+<REGEX>:Invalid Input Error.*Cannot change enable_external_access setting.*
 
 # enable_profiling
 statement ok
@@ -44,6 +47,7 @@ endloop
 statement error
 SET enable_profiling='unknown';
 ----
+<REGEX>:Parser Error.*Unrecognized print format.*
 
 # enable_progress_bar
 statement ok
@@ -55,6 +59,7 @@ SET enable_progress_bar=true;
 statement error
 SET GLOBAL enable_progress_bar=true;
 ----
+<REGEX>:Catalog Error.*cannot be set globally.*
 
 # explain_output
 foreach explain_output all optimized_only physical_only
@@ -70,3 +75,4 @@ endloop
 statement error
 SET explain_output='unknown';
 ----
+<REGEX>:.*not implemented in.*

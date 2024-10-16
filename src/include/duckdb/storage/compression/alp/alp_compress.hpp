@@ -93,7 +93,8 @@ public:
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
 
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
+		auto compressed_segment =
+		    ColumnSegment::CreateTransientSegment(db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
 		current_segment = std::move(compressed_segment);
 		current_segment->function = function;
 
@@ -121,7 +122,7 @@ public:
 
 		if (vector_idx != nulls_idx) { //! At least there is one valid value in the vector
 			for (idx_t i = 0; i < vector_idx; i++) {
-				NumericStats::Update<T>(current_segment->stats.statistics, input_vector[i]);
+				current_segment->stats.statistics.UpdateNumericStats<T>(input_vector[i]);
 			}
 		}
 		current_segment->count += vector_idx;

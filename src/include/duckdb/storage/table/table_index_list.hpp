@@ -74,8 +74,8 @@ public:
 	Index *FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, ForeignKeyType fk_type);
 	void VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, DataChunk &chunk, ConflictManager &conflict_manager);
 
-	//! Serialize all indexes of this table
-	vector<IndexStorageInfo> GetStorageInfos();
+	//! Serialize all indexes of this table.
+	vector<IndexStorageInfo> GetStorageInfos(const case_insensitive_map_t<Value> &options);
 
 	vector<column_t> GetRequiredColumns();
 

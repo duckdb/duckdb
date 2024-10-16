@@ -21,43 +21,16 @@ void StandardColumnData::SetStart(idx_t new_start) {
 	validity.SetStart(new_start);
 }
 
-ScanVectorType StandardColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_count) {
+ScanVectorType StandardColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) {
 	// if either the current column data, or the validity column data requires flat vectors, we scan flat vectors
-	auto scan_type = ColumnData::GetVectorScanType(state, scan_count);
+	auto scan_type = ColumnData::GetVectorScanType(state, scan_count, result);
 	if (scan_type == ScanVectorType::SCAN_FLAT_VECTOR) {
 		return ScanVectorType::SCAN_FLAT_VECTOR;
 	}
 	if (state.child_states.empty()) {
 		return scan_type;
 	}
-	return validity.GetVectorScanType(state.child_states[0], scan_count);
-}
-
-bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
-	if (!state.segment_checked) {
-		if (!state.current) {
-			return true;
-		}
-		state.segment_checked = true;
-		FilterPropagateResult prune_result;
-		{
-			lock_guard<mutex> l(stats_lock);
-			prune_result = filter.CheckStatistics(state.current->stats.statistics);
-			if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-				return true;
-			}
-		}
-		lock_guard<mutex> l(update_lock);
-		if (updates) {
-			auto update_stats = updates->GetStatistics();
-			prune_result = filter.CheckStatistics(*update_stats);
-			return prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE;
-		} else {
-			return false;
-		}
-	} else {
-		return true;
-	}
+	return validity.GetVectorScanType(state.child_states[0], scan_count, result);
 }
 
 void StandardColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
@@ -196,10 +169,10 @@ public:
 		return std::move(global_stats);
 	}
 
-	void WriteDataPointers(RowGroupWriter &writer, Serializer &serializer) override {
-		ColumnCheckpointState::WriteDataPointers(writer, serializer);
-		serializer.WriteObject(101, "validity",
-		                       [&](Serializer &serializer) { validity_state->WriteDataPointers(writer, serializer); });
+	PersistentColumnData ToPersistentData() override {
+		auto data = ColumnCheckpointState::ToPersistentData();
+		data.child_columns.push_back(validity_state->ToPersistentData());
+		return data;
 	}
 };
 
@@ -230,10 +203,19 @@ void StandardColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState 
 	validity.ScanCommittedRange(row_group_start, offset_in_row_group, count, scan_vector);
 }
 
-void StandardColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) {
-	ColumnData::DeserializeColumn(deserializer, target_stats);
-	deserializer.ReadObject(
-	    101, "validity", [&](Deserializer &deserializer) { validity.DeserializeColumn(deserializer, target_stats); });
+bool StandardColumnData::IsPersistent() {
+	return ColumnData::IsPersistent() && validity.IsPersistent();
+}
+
+PersistentColumnData StandardColumnData::Serialize() {
+	auto persistent_data = ColumnData::Serialize();
+	persistent_data.child_columns.push_back(validity.Serialize());
+	return persistent_data;
+}
+
+void StandardColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
+	ColumnData::InitializeColumn(column_data, target_stats);
+	validity.InitializeColumn(column_data.child_columns[0], target_stats);
 }
 
 void StandardColumnData::GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,
