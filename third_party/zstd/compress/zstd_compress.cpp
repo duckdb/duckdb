@@ -2610,19 +2610,6 @@ ZSTD_reduceTable_internal (U32* const table, U32 const size, U32 const reducerVa
     assert((size & (ZSTD_ROWSIZE-1)) == 0);  /* multiple of ZSTD_ROWSIZE */
     assert(size < (1U<<31));   /* can be casted to int */
 
-#if ZSTD_MEMORY_SANITIZER && !defined (ZSTD_MSAN_DONT_POISON_WORKSPACE)
-    /* To validate that the table reuse logic is sound, and that we don't
-     * access table space that we haven't cleaned, we re-"poison" the table
-     * space every time we mark it dirty.
-     *
-     * This function however is intended to operate on those dirty tables and
-     * re-clean them. So when this function is used correctly, we can unpoison
-     * the memory it operated on. This introduces a blind spot though, since
-     * if we now try to operate on __actually__ poisoned memory, we will not
-     * detect that. */
-    __msan_unpoison(table, size * sizeof(U32));
-#endif
-
     for (rowNb=0 ; rowNb < nbRows ; rowNb++) {
         int column;
         for (column=0; column<ZSTD_ROWSIZE; column++) {
