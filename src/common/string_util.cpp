@@ -713,24 +713,27 @@ string StringUtil::URLDecode(const string &input, bool plus_to_space) {
 	return string(result_data.get(), result_size);
 }
 
-uint32_t StringUtil::StringToEnum(const EnumStringLiteral enum_list[], idx_t enum_count, const char *enum_name, const char *str_value) {
-	for(idx_t i = 0; i < enum_count; i++) {
+uint32_t StringUtil::StringToEnum(const EnumStringLiteral enum_list[], idx_t enum_count, const char *enum_name,
+                                  const char *str_value) {
+	for (idx_t i = 0; i < enum_count; i++) {
 		if (CIEquals(enum_list[i].string, str_value)) {
 			return enum_list[i].number;
 		}
 	}
 	// string to enum conversion failed - generate candidates
 	vector<string> candidates;
-	for(idx_t i = 0; i < enum_count; i++) {
+	for (idx_t i = 0; i < enum_count; i++) {
 		candidates.push_back(enum_list[i].string);
 	}
 	auto closest_values = TopNJaroWinkler(candidates, str_value);
 	auto message = CandidatesMessage(closest_values, "Candidates");
-	throw NotImplementedException("Enum value: unrecognized value \"%s\" for enum \"%s\"\n%s", str_value, enum_name, message);
+	throw NotImplementedException("Enum value: unrecognized value \"%s\" for enum \"%s\"\n%s", str_value, enum_name,
+	                              message);
 }
 
-const char *StringUtil::EnumToString(const EnumStringLiteral enum_list[], idx_t enum_count, const char *enum_name, uint32_t enum_value) {
-	for(idx_t i = 0; i < enum_count; i++) {
+const char *StringUtil::EnumToString(const EnumStringLiteral enum_list[], idx_t enum_count, const char *enum_name,
+                                     uint32_t enum_value) {
+	for (idx_t i = 0; i < enum_count; i++) {
 		if (enum_list[i].number == enum_value) {
 			return enum_list[i].string;
 		}

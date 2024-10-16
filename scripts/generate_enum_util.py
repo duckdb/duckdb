@@ -203,16 +203,20 @@ with open(enum_util_source_file, "w") as f:
                     f.write(",\n")
                 f.write(f"\t\t{{ static_cast<uint32_t>({enum_name}::{key}), \"{str_val}\" }}")
                 member_count += 1
-        f.write("\n\t};");
+        f.write("\n\t};")
         f.write("\n\treturn values;")
         f.write("\n}\n\n")
         f.write(f"template<>\nconst char* EnumUtil::ToChars<{enum_name}>({enum_name} value) {{\n")
-        f.write(f"\treturn StringUtil::EnumToString({enum_string_array}, {member_count}, \"{enum_name}\", static_cast<uint32_t>(value));\n");
+        f.write(
+            f"\treturn StringUtil::EnumToString({enum_string_array}, {member_count}, \"{enum_name}\", static_cast<uint32_t>(value));\n"
+        )
         f.write("}\n\n")
 
         # Write the string to enum
         f.write(f"template<>\n{enum_name} EnumUtil::FromString<{enum_name}>(const char *value) {{\n")
-        f.write(f"\treturn static_cast<{enum_name}>(StringUtil::StringToEnum({enum_string_array}, {member_count}, \"{enum_name}\", value));")
+        f.write(
+            f"\treturn static_cast<{enum_name}>(StringUtil::StringToEnum({enum_string_array}, {member_count}, \"{enum_name}\", value));"
+        )
         f.write("\n}\n\n")
 
     f.write("}\n\n")
