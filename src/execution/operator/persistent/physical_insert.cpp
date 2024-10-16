@@ -474,8 +474,8 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 		if (!lstate.local_collection) {
 			lock_guard<mutex> l(gstate.lock);
 			auto table_info = storage.GetDataTableInfo();
-			auto &block_manager = TableIOManager::Get(storage).GetBlockManagerForRowData();
-			lstate.local_collection = make_uniq<RowGroupCollection>(std::move(table_info), block_manager, insert_types,
+			auto &io_manager = TableIOManager::Get(table.GetStorage());
+			lstate.local_collection = make_uniq<RowGroupCollection>(std::move(table_info), io_manager, insert_types,
 			                                                        NumericCast<idx_t>(MAX_ROW_ID));
 			lstate.local_collection->InitializeEmpty();
 			lstate.local_collection->InitializeAppend(lstate.local_append_state);

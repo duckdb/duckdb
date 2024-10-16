@@ -166,7 +166,6 @@ optional_ptr<UpdateNodeData> UpdateSegment::GetUpdateNode(idx_t vector_idx) cons
 		return nullptr;
 	}
 	return root->info[vector_idx].get();
-
 }
 void UpdateSegment::FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result) {
 	auto lock_handle = lock.GetSharedLock();
@@ -435,8 +434,8 @@ void UpdateSegment::FetchRow(TransactionData transaction, idx_t row_id, Vector &
 		return;
 	}
 	idx_t row_in_vector = (row_id - column_data.start) - vector_index * STANDARD_VECTOR_SIZE;
-	fetch_row_function(transaction.start_time, transaction.transaction_id, entry->info.get(),
-	                   row_in_vector, result, result_idx);
+	fetch_row_function(transaction.start_time, transaction.transaction_id, entry->info.get(), row_in_vector, result,
+	                   result_idx);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1081,11 +1080,10 @@ void UpdateSegment::InitializeUpdateInfo(idx_t vector_idx) {
 		return;
 	}
 	root->info.reserve(vector_idx + 1);
-	for(idx_t i = root->info.size(); i <= vector_idx; i++) {
+	for (idx_t i = root->info.size(); i <= vector_idx; i++) {
 		root->info.emplace_back();
 	}
 }
-
 
 void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vector &update, row_t *ids, idx_t count,
                            Vector &base_data) {

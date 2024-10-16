@@ -14,7 +14,7 @@ void RowVersionManager::SetStart(idx_t new_start) {
 	lock_guard<mutex> l(version_lock);
 	this->start = new_start;
 	idx_t current_start = start;
-	for(auto &info : vector_info) {
+	for (auto &info : vector_info) {
 		if (info) {
 			info->start = current_start;
 		}
@@ -80,7 +80,7 @@ void RowVersionManager::FillVectorInfo(idx_t vector_idx) {
 		return;
 	}
 	vector_info.reserve(vector_idx + 1);
-	for(idx_t i = vector_info.size(); i <= vector_idx; i++) {
+	for (idx_t i = vector_info.size(); i <= vector_idx; i++) {
 		vector_info.emplace_back();
 	}
 }
@@ -269,8 +269,9 @@ shared_ptr<RowVersionManager> RowVersionManager::Deserialize(MetaBlockPointer de
 	for (idx_t i = 0; i < chunk_count; i++) {
 		idx_t vector_index = source.Read<idx_t>();
 		if (vector_index * STANDARD_VECTOR_SIZE >= Storage::MAX_ROW_GROUP_SIZE) {
-			throw IOException(
-				"In DeserializeDeletes, vector_index %llu is out of range for the max row group size of %llu. Corrupted file?", vector_index, Storage::MAX_ROW_GROUP_SIZE);
+			throw IOException("In DeserializeDeletes, vector_index %llu is out of range for the max row group size of "
+			                  "%llu. Corrupted file?",
+			                  vector_index, Storage::MAX_ROW_GROUP_SIZE);
 		}
 
 		version_info->FillVectorInfo(vector_index);

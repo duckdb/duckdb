@@ -180,8 +180,8 @@ public:
 
 	void CreateNewCollection(DuckTableEntry &table, const vector<LogicalType> &insert_types) {
 		auto table_info = table.GetStorage().GetDataTableInfo();
-		auto &block_manager = TableIOManager::Get(table.GetStorage()).GetBlockManagerForRowData();
-		current_collection = make_uniq<RowGroupCollection>(std::move(table_info), block_manager, insert_types,
+		auto &io_manager = TableIOManager::Get(table.GetStorage());
+		current_collection = make_uniq<RowGroupCollection>(std::move(table_info), io_manager, insert_types,
 		                                                   NumericCast<idx_t>(MAX_ROW_ID));
 		current_collection->InitializeEmpty();
 		current_collection->InitializeAppend(current_append_state);

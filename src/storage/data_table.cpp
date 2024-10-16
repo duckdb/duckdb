@@ -50,8 +50,8 @@ DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_m
       column_definitions(std::move(column_definitions_p)), is_root(true) {
 	// initialize the table with the existing data from disk, if any
 	auto types = GetTypes();
-	this->row_groups =
-	    make_shared_ptr<RowGroupCollection>(info, TableIOManager::Get(*this).GetBlockManagerForRowData(), types, 0);
+	auto &io_manager = TableIOManager::Get(*this);
+	this->row_groups = make_shared_ptr<RowGroupCollection>(info, io_manager, types, 0);
 	if (data && data->row_group_count > 0) {
 		this->row_groups->Initialize(*data);
 	} else {
@@ -239,7 +239,11 @@ void DataTable::InitializeScanWithOffset(DuckTransaction &transaction, TableScan
 	row_groups->InitializeScanWithOffset(state.table_state, column_ids, start_row, end_row);
 }
 
-idx_t DataTable::MaxThreads(ClientContext &context) {
+idx_t DataTable::GetRowGroupSize() const {
+	return row_groups->GetRowGroupSize();
+}
+
+idx_t DataTable::MaxThreads(ClientContext &context) const {
 	idx_t row_group_size = GetRowGroupSize();
 	idx_t parallel_scan_vector_count = row_group_size / STANDARD_VECTOR_SIZE;
 	if (ClientConfig::GetConfig(context).verify_parallelism) {

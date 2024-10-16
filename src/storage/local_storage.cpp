@@ -19,8 +19,8 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
       merged_storage(false) {
 	auto types = table.GetTypes();
 	auto data_table_info = table.GetDataTableInfo();
-	row_groups = make_shared_ptr<RowGroupCollection>(
-	    data_table_info, TableIOManager::Get(table).GetBlockManagerForRowData(), types, MAX_ROW_ID, 0);
+	auto &io_manager = TableIOManager::Get(table);
+	row_groups = make_shared_ptr<RowGroupCollection>(data_table_info, io_manager, types, MAX_ROW_ID, 0);
 	row_groups->InitializeEmpty();
 
 	data_table_info->GetIndexes().BindAndScan<ART>(context, *data_table_info, [&](ART &art) {
