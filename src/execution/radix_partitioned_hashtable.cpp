@@ -119,8 +119,6 @@ private:
 	static constexpr const idx_t MAXIMUM_INITIAL_SINK_RADIX_BITS = 3;
 	//! Maximum Sink radix bits (independent of threads)
 	static constexpr const idx_t MAXIMUM_FINAL_SINK_RADIX_BITS = 7;
-	//! By how many radix bits to increment if we go external
-	static constexpr const idx_t EXTERNAL_RADIX_BITS_INCREMENT = 3;
 
 	//! The global sink state
 	RadixHTGlobalSinkState &sink;
@@ -128,8 +126,6 @@ private:
 	atomic<idx_t> sink_radix_bits;
 	//! Maximum Sink radix bits (set based on number of threads)
 	const idx_t maximum_sink_radix_bits;
-	//! Radix bits if we go external
-	const idx_t external_radix_bits;
 
 public:
 	//! Capacity of HTs during the Sink
@@ -256,8 +252,7 @@ void RadixHTGlobalSinkState::Destroy() {
 
 RadixHTConfig::RadixHTConfig(ClientContext &context, RadixHTGlobalSinkState &sink_p)
     : sink(sink_p), sink_radix_bits(InitialSinkRadixBits(context)),
-      maximum_sink_radix_bits(MaximumSinkRadixBits(context)),
-      external_radix_bits(ExternalRadixBits(maximum_sink_radix_bits)), sink_capacity(SinkCapacity(context)) {
+      maximum_sink_radix_bits(MaximumSinkRadixBits(context)), sink_capacity(SinkCapacity(context)) {
 }
 
 void RadixHTConfig::SetRadixBits(idx_t radix_bits_p) {
@@ -265,7 +260,7 @@ void RadixHTConfig::SetRadixBits(idx_t radix_bits_p) {
 }
 
 bool RadixHTConfig::SetRadixBitsToExternal() {
-	SetRadixBitsInternal(external_radix_bits, true);
+	SetRadixBitsInternal(MAXIMUM_FINAL_SINK_RADIX_BITS, true);
 	return sink.external;
 }
 
@@ -299,10 +294,6 @@ idx_t RadixHTConfig::MaximumSinkRadixBits(ClientContext &context) {
 	const auto active_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
 	return MinValue(RadixPartitioning::RadixBitsOfPowerOfTwo(NextPowerOfTwo(active_threads)),
 	                MAXIMUM_FINAL_SINK_RADIX_BITS);
-}
-
-idx_t RadixHTConfig::ExternalRadixBits(const idx_t &maximum_sink_radix_bits_p) {
-	return MinValue(maximum_sink_radix_bits_p + EXTERNAL_RADIX_BITS_INCREMENT, MAXIMUM_FINAL_SINK_RADIX_BITS);
 }
 
 idx_t RadixHTConfig::SinkCapacity(ClientContext &context) {
@@ -464,7 +455,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 		return; // We can fit another chunk
 	}
 
-	if (gstate.number_of_threads > 2) {
+	if (gstate.number_of_threads > 2 || gstate.external) {
 		// 'Reset' the HT without taking its data, we can just keep appending to the same collection
 		// This only works because we never resize the HT
 		ht.ClearPointerTable();
@@ -479,6 +470,9 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 		// We repartitioned, but we didn't clear the pointer table / reset the count because we're on 1 or 2 threads
 		ht.ClearPointerTable();
 		ht.ResetCount();
+		if (gstate.external) {
+			ht.Resize(gstate.config.sink_capacity);
+		}
 	}
 
 	// TODO: combine early and often

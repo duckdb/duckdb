@@ -174,8 +174,8 @@ void GroupedAggregateHashTable::SetRadixBits(idx_t radix_bits_p) {
 void GroupedAggregateHashTable::Resize(idx_t size) {
 	D_ASSERT(size >= STANDARD_VECTOR_SIZE);
 	D_ASSERT(IsPowerOfTwo(size));
-	if (size < capacity) {
-		throw InternalException("Cannot downsize a hash table!");
+	if (Count() != 0 && size < capacity) {
+		throw InternalException("Cannot downsize a non-empty hash table!");
 	}
 
 	capacity = size;
