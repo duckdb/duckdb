@@ -1,5 +1,4 @@
 #include "duckdb/function/function_list.hpp"
-#include "duckdb/function/scalar/string_functions_tmp.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/list_functions.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
@@ -69,6 +68,8 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION(ListWhereFun),
 	DUCKDB_SCALAR_FUNCTION(ListZipFun),
 	DUCKDB_SCALAR_FUNCTION(LowerFun),
+	DUCKDB_SCALAR_FUNCTION_SET(MD5Fun),
+	DUCKDB_SCALAR_FUNCTION_SET(MD5NumberFun),
 	DUCKDB_SCALAR_FUNCTION(NFCNormalizeFun),
 	DUCKDB_SCALAR_FUNCTION(NotIlikeEscapeFun),
 	DUCKDB_SCALAR_FUNCTION(NotLikeEscapeFun),
@@ -81,6 +82,8 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(RegexpMatchesFun),
 	DUCKDB_SCALAR_FUNCTION_SET(RegexpReplaceFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(RegexpSplitToArrayFun),
+	DUCKDB_SCALAR_FUNCTION_SET(SHA1Fun),
+	DUCKDB_SCALAR_FUNCTION_SET(SHA256Fun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(SplitFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(StrSplitFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(StrSplitRegexFun),

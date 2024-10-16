@@ -2,7 +2,7 @@
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/function/scalar/string_functions_tmp.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 #include "re2/re2.h"
 
 namespace duckdb {

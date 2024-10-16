@@ -1,6 +1,6 @@
 #include "duckdb/common/crypto/md5.hpp"
 
-#include "duckdb/function/scalar/string_functions_tmp.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 
@@ -49,19 +49,11 @@ ScalarFunctionSet MD5Fun::GetFunctions() {
 	return set;
 }
 
-void MD5Fun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetFunctions());
-}
-
 ScalarFunctionSet MD5NumberFun::GetFunctions() {
 	ScalarFunctionSet set("md5_number");
 	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::HUGEINT, MD5NumberFunction));
 	set.AddFunction(ScalarFunction({LogicalType::BLOB}, LogicalType::HUGEINT, MD5NumberFunction));
 	return set;
-}
-
-void MD5NumberFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetFunctions());
 }
 
 } // namespace duckdb

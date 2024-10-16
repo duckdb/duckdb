@@ -411,4 +411,40 @@ struct NotIlikeEscapeFun {
 	static ScalarFunction GetFunction();
 };
 
+struct MD5Fun {
+	static constexpr const char *Name = "md5";
+	static constexpr const char *Parameters = "value";
+	static constexpr const char *Description = "Returns the MD5 hash of the value as a string";
+	static constexpr const char *Example = "md5('123')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct MD5NumberFun {
+	static constexpr const char *Name = "md5_number";
+	static constexpr const char *Parameters = "value";
+	static constexpr const char *Description = "Returns the MD5 hash of the value as an INT128";
+	static constexpr const char *Example = "md5_number('123')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct SHA1Fun {
+	static constexpr const char *Name = "sha1";
+	static constexpr const char *Parameters = "value";
+	static constexpr const char *Description = "Returns the SHA1 hash of the value";
+	static constexpr const char *Example = "sha1('hello')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct SHA256Fun {
+	static constexpr const char *Name = "sha256";
+	static constexpr const char *Parameters = "value";
+	static constexpr const char *Description = "Returns the SHA256 hash of the value";
+	static constexpr const char *Example = "sha256('hello')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 } // namespace duckdb

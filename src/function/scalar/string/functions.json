@@ -268,5 +268,37 @@
         "description": "Returns false if the string matches the like_specifier (see Pattern Matching) using case-insensitive matching. escape_character is used to search for wildcard characters in the string.",
         "example": "not_ilike_escape('A%c', 'a$%C', '$')",
         "type": "scalar_function"
+    },
+    {
+        "name": "md5",
+        "parameters": "value",
+        "description": "Returns the MD5 hash of the value as a string",
+        "example": "md5('123')",
+        "type": "scalar_function_set",
+        "struct": "MD5Fun"
+    },
+    {
+        "name": "md5_number",
+        "parameters": "value",
+        "description": "Returns the MD5 hash of the value as an INT128",
+        "example": "md5_number('123')",
+        "type": "scalar_function_set",
+        "struct": "MD5NumberFun"
+    },
+    {
+        "name": "sha1",
+        "parameters": "value",
+        "description": "Returns the SHA1 hash of the value",
+        "example": "sha1('hello')",
+        "type": "scalar_function_set",
+        "struct": "SHA1Fun"
+    },
+    {
+        "name": "sha256",
+        "parameters": "value",
+        "description": "Returns the SHA256 hash of the value",
+        "example": "sha256('hello')",
+        "type": "scalar_function_set",
+        "struct": "SHA256Fun"
     }
 ]
