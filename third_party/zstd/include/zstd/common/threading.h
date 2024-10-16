@@ -76,7 +76,7 @@ int ZSTD_pthread_join(ZSTD_pthread_t thread);
 /* ===   POSIX Systems   === */
 #  include <pthread.h>
 
-#if DEBUGLEVEL < 1
+# if DEBUGLEVEL < 1
 
 #define ZSTD_pthread_mutex_t            pthread_mutex_t
 #define ZSTD_pthread_mutex_init(a, b)   pthread_mutex_init((a), (b))
@@ -95,7 +95,7 @@ int ZSTD_pthread_join(ZSTD_pthread_t thread);
 #define ZSTD_pthread_create(a, b, c, d) pthread_create((a), (b), (c), (d))
 #define ZSTD_pthread_join(a)         pthread_join((a),NULL)
 
-#else /* DEBUGLEVEL >= 1 */
+# else /* DEBUGLEVEL >= 1 */
 
 /* Debug implementation of threading.
  * In this implementation we use pointers for mutexes and condition variables.
@@ -122,10 +122,14 @@ int ZSTD_pthread_cond_destroy(ZSTD_pthread_cond_t* cond);
 #define ZSTD_pthread_create(a, b, c, d) pthread_create((a), (b), (c), (d))
 #define ZSTD_pthread_join(a)         pthread_join((a),NULL)
 
-#endif
+} // namespace duckdb_zstd
+
+# endif
 
 #else  /* ZSTD_MULTITHREAD not defined */
 /* No multithreading support */
+
+namespace duckdb_zstd {
 
 typedef int ZSTD_pthread_mutex_t;
 #define ZSTD_pthread_mutex_init(a, b)   ((void)(a), (void)(b), 0)
@@ -142,8 +146,7 @@ typedef int ZSTD_pthread_cond_t;
 
 /* do not use ZSTD_pthread_t */
 
-#endif /* ZSTD_MULTITHREAD */
-
 } // namespace duckdb_zstd
 
+#endif /* ZSTD_MULTITHREAD */
 #endif /* THREADING_H_938743 */

@@ -19,7 +19,7 @@
  * such as DEBUGLOG and RAWLOG
  */
 
-#include "debug.h"
+#include "zstd/common/debug.h"
 
 #if !defined(ZSTD_LINUX_KERNEL) || (DEBUGLEVEL>=2)
 

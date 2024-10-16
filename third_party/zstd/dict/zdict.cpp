@@ -51,7 +51,7 @@
 #include "zstd/common/zstd_internal.h" /* includes zstd.h */
 #include "zstd/common/xxhash.h"        /* XXH64 */
 #include "zstd/compress/zstd_compress_internal.h" /* ZSTD_loadCEntropy() */
-#include "zstd/dict/zdict.h"
+#include "zdict.h"
 #include "zstd/dict/divsufsort.h"
 #include "zstd/common/bits.h"          /* ZSTD_NbCommonBytes */
 

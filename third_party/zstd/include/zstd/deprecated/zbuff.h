@@ -166,12 +166,13 @@ ZBUFF_DEPRECATED("use ZSTD_CStreamOutSize") size_t ZBUFF_recommendedCOutSize(voi
 ZBUFF_DEPRECATED("use ZSTD_DStreamInSize")  size_t ZBUFF_recommendedDInSize(void);
 ZBUFF_DEPRECATED("use ZSTD_DStreamOutSize") size_t ZBUFF_recommendedDOutSize(void);
 
+} // namespace duckdb_zstd
+
 #endif  /* ZSTD_BUFFERED_H_23987 */
 
-
 #ifdef ZBUFF_STATIC_LINKING_ONLY
-#ifndef ZBUFF_STATIC_H_30298098432
-#define ZBUFF_STATIC_H_30298098432
+# ifndef ZBUFF_STATIC_H_30298098432
+#  define ZBUFF_STATIC_H_30298098432
 
 /* ====================================================================================
  * The definitions in this section are considered experimental.
@@ -180,10 +181,9 @@ ZBUFF_DEPRECATED("use ZSTD_DStreamOutSize") size_t ZBUFF_recommendedDOutSize(voi
  * Use them only in association with static linking.
  * ==================================================================================== */
 
-} // namespace duckdb_zstd
 
 /*--- Dependency ---*/
-#define ZSTD_STATIC_LINKING_ONLY   /* ZSTD_parameters, ZSTD_customMem */
+#  define ZSTD_STATIC_LINKING_ONLY   /* ZSTD_parameters, ZSTD_customMem */
 #include "zstd.h"
 
 namespace duckdb_zstd {
@@ -205,6 +205,6 @@ ZBUFF_DEPRECATED("use ZSTD_initDStream_usingDict") size_t ZBUFF_compressInit_adv
 
 } // namespace duckdb_zstd
 
-#endif    /* ZBUFF_STATIC_H_30298098432 */
+# endif    /* ZBUFF_STATIC_H_30298098432 */
 #endif    /* ZBUFF_STATIC_LINKING_ONLY */
 
