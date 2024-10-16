@@ -93,6 +93,15 @@ SELECT * FROM tbl5;
 ----
 3	database
 
+# define a column name need quote
+statement ok
+CREATE OR REPLACE TABLE tbl5(col1, "col need ' quote") AS SELECT 3.5, 'quote';
+
+query II
+SELECT * FROM tbl5;
+----
+3.5	quote
+
 #colname and query mismatch
 statement ok
 CREATE TABLE tbl6(col1) AS SELECT 4 ,'mismatch';

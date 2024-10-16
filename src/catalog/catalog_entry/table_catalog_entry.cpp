@@ -188,7 +188,7 @@ string TableCatalogEntry::ColumnNamesToSQL(const ColumnList &columns) {
 		if (column.Oid() > 0) {
 			ss << ", ";
 		}
-		ss << column.Name();
+		ss << KeywordHelper::WriteOptionallyQuoted(column.Name()) << " ";
 	}
 	ss << ")";
 	return ss.str();
