@@ -26,7 +26,7 @@ struct ValidatorLine {
 struct ThreadLines {
 	ThreadLines() {};
 	//! Validate everything is as it should be, returns true if it's all good, false o.w.
-	bool Validate() const;
+	void Verify() const;
 
 	void Insert(idx_t thread, ValidatorLine line_info);
 
@@ -43,7 +43,7 @@ struct CSVValidator {
 	CSVValidator() {
 	}
 	//! Validate that all files are good
-	bool Validate() const;
+	void Verify() const;
 
 	//! Inserts line_info to a given thread index of a given file.
 	void Insert(idx_t file_idx, idx_t thread, ValidatorLine line_info);

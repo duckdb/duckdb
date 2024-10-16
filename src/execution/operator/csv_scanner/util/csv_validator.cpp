@@ -17,7 +17,7 @@ string ThreadLines::Print() const {
 	return result;
 }
 
-bool ThreadLines::Validate() const {
+void ThreadLines::Verify() const {
 	bool initialized = false;
 	idx_t last_end_pos = 0;
 	for (auto &line_info : thread_lines) {
@@ -36,13 +36,11 @@ bool ThreadLines::Validate() const {
 				error << "To correctly parse this file, please run with the single threaded error (i.e., parallel = "
 				         "false)"
 				      << '\n';
-				throw NotImplementedException(error.str());
+				// throw NotImplementedException(error.str());
 			}
 		}
 		last_end_pos = line_info.second.end_pos;
 	}
-	// It's all good man.
-	return true;
 }
 
 void CSVValidator::Insert(idx_t file_idx, idx_t thread_idx, ValidatorLine line_info) {
@@ -52,13 +50,10 @@ void CSVValidator::Insert(idx_t file_idx, idx_t thread_idx, ValidatorLine line_i
 	per_file_thread_lines[file_idx].Insert(thread_idx, line_info);
 }
 
-bool CSVValidator::Validate() const {
+void CSVValidator::Verify() const {
 	for (auto &file : per_file_thread_lines) {
-		if (!file.Validate()) {
-			return false;
-		}
+		file.Verify();
 	}
-	return true;
 }
 
 string CSVValidator::Print(idx_t file_idx) const {

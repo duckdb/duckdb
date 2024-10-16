@@ -189,12 +189,11 @@ void CSVGlobalState::DecrementThread() {
 	D_ASSERT(running_threads > 0);
 	running_threads--;
 	if (running_threads == 0) {
-		bool ignore_or_store_errors = bind_data.options.ignore_errors.GetValue()  || bind_data.options.store_rejects.GetValue();
+		bool ignore_or_store_errors =
+		    bind_data.options.ignore_errors.GetValue() || bind_data.options.store_rejects.GetValue();
 		if (!single_threaded && !ignore_or_store_errors) {
 			// If we are running multithreaded and not ignoring errors, we must run the validator
-			if (!validator.Validate()) {
-				throw InternalException(validator.Print(0));
-			}
+			validator.Verify();
 		}
 		for (const auto &file : file_scans) {
 			file->error_handler->ErrorIfNeeded();
