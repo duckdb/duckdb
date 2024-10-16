@@ -13,3 +13,58 @@ index 007d386..8754619 100644
  
  		state.current_idx++;
  	}
+diff --git a/spatial/src/spatial/core/index/rtree/rtree_index_scan.cpp b/spatial/src/spatial/core/index/rtree/rtree_index_scan.cpp
+index 9168790..7fd53a2 100644
+--- a/spatial/src/spatial/core/index/rtree/rtree_index_scan.cpp
++++ b/spatial/src/spatial/core/index/rtree/rtree_index_scan.cpp
+@@ -208,7 +208,6 @@ TableFunction RTreeIndexScanFunction::GetFunction() {
+ 	func.pushdown_complex_filter = nullptr;
+ 	func.to_string = RTreeIndexScanToString;
+ 	func.table_scan_progress = nullptr;
+-	func.get_batch_index = nullptr;
+ 	func.projection_pushdown = true;
+ 	func.filter_pushdown = false;
+ 	func.get_bind_info = RTreeIndexScanBindInfo;
+diff --git a/spatial/src/spatial/core/io/osm/st_read_osm.cpp b/spatial/src/spatial/core/io/osm/st_read_osm.cpp
+index 465cb87..5aa49dd 100644
+--- a/spatial/src/spatial/core/io/osm/st_read_osm.cpp
++++ b/spatial/src/spatial/core/io/osm/st_read_osm.cpp
+@@ -836,10 +836,12 @@ static double Progress(ClientContext &context, const FunctionData *bind_data,
+ 	return state.GetProgress();
+ }
+ 
+-static idx_t GetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
+-                           LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
+-	auto &state = (LocalState &)*local_state;
+-	return state.block->block_idx;
++static OperatorPartitionData GetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input) {
++	if (input.partition_info.RequiresPartitionColumns()) {
++		throw InternalException("ST_ReadOSM::GetPartitionData: partition columns not supported");
++	}
++	auto &state = input.local_state->Cast<LocalState>();
++	return OperatorPartitionData(state.block->block_idx);
+ }
+ 
+ static unique_ptr<TableRef> ReadOsmPBFReplacementScan(ClientContext &context, ReplacementScanInput &input,
+@@ -898,7 +900,7 @@ static constexpr const char *DOC_EXAMPLE = R"(
+ void CoreTableFunctions::RegisterOsmTableFunction(DatabaseInstance &db) {
+ 	TableFunction read("ST_ReadOSM", {LogicalType::VARCHAR}, Execute, Bind, InitGlobal, InitLocal);
+ 
+-	read.get_batch_index = GetBatchIndex;
++	read.get_partition_data = GetPartitionData;
+ 	read.table_scan_progress = Progress;
+ 
+ 	ExtensionUtil::RegisterFunction(db, read);
+diff --git a/spatial/src/spatial/gdal/functions/st_read.cpp b/spatial/src/spatial/gdal/functions/st_read.cpp
+index 177548c..42d2df7 100644
+--- a/spatial/src/spatial/gdal/functions/st_read.cpp
++++ b/spatial/src/spatial/gdal/functions/st_read.cpp
+@@ -675,7 +675,7 @@ void GdalTableFunction::Register(DatabaseInstance &db) {
+ 	                   GdalTableFunction::InitGlobal, GdalTableFunction::InitLocal);
+ 
+ 	scan.cardinality = GdalTableFunction::Cardinality;
+-	scan.get_batch_index = ArrowTableFunction::ArrowGetBatchIndex;
++	scan.get_partition_data = ArrowTableFunction::ArrowGetPartitionData;
+ 
+ 	scan.projection_pushdown = true;
+ 	scan.filter_pushdown = true;

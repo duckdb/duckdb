@@ -81,7 +81,7 @@ bool SubstringStartEnd(int64_t input_size, int64_t offset, int64_t length, int64
 	return true;
 }
 
-string_t SubstringASCII(Vector &result, string_t input, int64_t offset, int64_t length) {
+string_t SubstringFun::SubstringASCII(Vector &result, string_t input, int64_t offset, int64_t length) {
 	auto input_data = input.GetData();
 	auto input_size = input.GetSize();
 
@@ -290,12 +290,12 @@ static void SubstringFunctionASCII(DataChunk &args, ExpressionState &state, Vect
 		TernaryExecutor::Execute<string_t, int64_t, int64_t, string_t>(
 		    input_vector, offset_vector, length_vector, result, args.size(),
 		    [&](string_t input_string, int64_t offset, int64_t length) {
-			    return SubstringASCII(result, input_string, offset, length);
+			    return SubstringFun::SubstringASCII(result, input_string, offset, length);
 		    });
 	} else {
 		BinaryExecutor::Execute<string_t, int64_t, string_t>(
 		    input_vector, offset_vector, result, args.size(), [&](string_t input_string, int64_t offset) {
-			    return SubstringASCII(result, input_string, offset, NumericLimits<uint32_t>::Maximum());
+			    return SubstringFun::SubstringASCII(result, input_string, offset, NumericLimits<uint32_t>::Maximum());
 		    });
 	}
 }

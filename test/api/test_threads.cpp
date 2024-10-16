@@ -99,7 +99,7 @@ TEST_CASE("Test external threads", "[api]") {
 
 	auto res = con.Query("SET external_threads=-1");
 	REQUIRE(res->HasError());
-	REQUIRE(res->GetError() == "Syntax Error: Must have a non-negative number of external threads!");
+	REQUIRE(StringUtil::Contains(res->GetError(), "out of range"));
 
 	res = con.Query("SET external_threads=14");
 	REQUIRE(res->HasError());

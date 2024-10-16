@@ -76,8 +76,6 @@ public:
 	vector<LogicalType> GetTypes();
 	const vector<ColumnDefinition> &Columns() const;
 
-	void InitializeScan(TableScanState &state, const vector<column_t> &column_ids,
-	                    TableFilterSet *table_filter = nullptr);
 	void InitializeScan(DuckTransaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
 	                    TableFilterSet *table_filters = nullptr);
 
@@ -149,13 +147,15 @@ public:
 	//! Commit the append
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
 	//! Write a segment of the table to the WAL
-	void WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count, optional_ptr<StorageCommitState> commit_state);
+	void WriteToLog(DuckTransaction &transaction, WriteAheadLog &log, idx_t row_start, idx_t count,
+	                optional_ptr<StorageCommitState> commit_state);
 	//! Revert a set of appends made by the given AppendState, used to revert appends in the event of an error during
 	//! commit (e.g. because of an I/O exception)
-	void RevertAppend(idx_t start_row, idx_t count);
+	void RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_t count);
 	void RevertAppendInternal(idx_t start_row);
 
-	void ScanTableSegment(idx_t start_row, idx_t count, const std::function<void(DataChunk &chunk)> &function);
+	void ScanTableSegment(DuckTransaction &transaction, idx_t start_row, idx_t count,
+	                      const std::function<void(DataChunk &chunk)> &function);
 
 	//! Merge a row group collection directly into this table - appending it to the end of the table without copying
 	void MergeStorage(RowGroupCollection &data, TableIndexList &indexes, optional_ptr<StorageCommitState> commit_state);
@@ -239,8 +239,8 @@ private:
 	//! Verify constraints with a chunk from the Delete containing all columns of the table
 	void VerifyDeleteConstraints(TableDeleteState &state, ClientContext &context, DataChunk &chunk);
 
-	void InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids, idx_t start_row,
-	                              idx_t end_row);
+	void InitializeScanWithOffset(DuckTransaction &transaction, TableScanState &state,
+	                              const vector<column_t> &column_ids, idx_t start_row, idx_t end_row);
 
 	void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context, DataChunk &chunk,
 	                                VerifyExistenceType verify_type);
