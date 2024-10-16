@@ -353,7 +353,9 @@ PandasDataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::ha
 		auto dtype = ConvertNumpyDtype(value);
 		if (py::isinstance(value, import_cache.numpy.ma.masked_array())) {
 			// o[key] = pd.Series(value.filled(pd.NA), dtype=dtype)
-			o.attr("__setitem__")(key, pandas.attr("Series")(value, py::arg("dtype") = dtype));
+			auto series = pandas.attr("Series")(value.attr("data"), py::arg("dtype") = dtype);
+			series.attr("__setitem__")(value.attr("mask"), import_cache.pandas.NA());
+			o.attr("__setitem__")(key, series);
 		}
 	}
 
