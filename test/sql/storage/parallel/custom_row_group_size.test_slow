@@ -44,7 +44,7 @@ SELECT MAX(count) FROM pragma_storage_info('integers')
 ----
 204800
 
-# we have a total of 1.1M values - this should not be more than 10 row groups (ideally it is 5)
+# we have a total of 1M values - this should not be more than 10 row groups (ideally it is 5)
 query I
 select count(distinct row_group_id) < 10 from pragma_storage_info('integers');
 ----

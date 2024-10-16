@@ -172,10 +172,13 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 	if (storage_options.row_group_size.IsValid()) {
 		row_group_size = storage_options.row_group_size.GetIndex();
 		if (row_group_size == 0) {
-			throw NotImplementedException("Invalid row group size: %llu - row group size must be bigger than 0", row_group_size);
+			throw NotImplementedException("Invalid row group size: %llu - row group size must be bigger than 0",
+			                              row_group_size);
 		}
 		if (row_group_size % STANDARD_VECTOR_SIZE != 0) {
-			throw NotImplementedException("Invalid row group size: %llu - row group size must be divisible by the vector size (%llu)", row_group_size, STANDARD_VECTOR_SIZE);
+			throw NotImplementedException(
+			    "Invalid row group size: %llu - row group size must be divisible by the vector size (%llu)",
+			    row_group_size, STANDARD_VECTOR_SIZE);
 		}
 	}
 	// Check if the database file already exists.
