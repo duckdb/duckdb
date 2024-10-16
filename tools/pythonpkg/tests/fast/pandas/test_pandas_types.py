@@ -225,7 +225,7 @@ class TestNumpyNullableTypes(object):
         warnings.simplefilter(action='ignore', category=RuntimeWarning)
         with suppress(TypeError):
             df = rel.df()
-        warnings.resetwarnings()
+            warnings.resetwarnings()
 
-        nullable_dtype = getattr(pd, input.expected_dtype)
-        assert isinstance(df['a'].dtype, nullable_dtype)
+            nullable_dtype = getattr(pd, input.expected_dtype)
+            assert isinstance(df['a'].dtype, nullable_dtype)

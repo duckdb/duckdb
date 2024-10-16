@@ -56,7 +56,7 @@ class TestPandasObjectInteger(object):
                     ),
                 }
             )
-        df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
+            df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
         warnings.resetwarnings()
         pd.testing.assert_frame_equal(df_expected_res, df_out)
 
