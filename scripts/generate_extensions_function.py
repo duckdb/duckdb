@@ -683,7 +683,9 @@ static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {{"s3", "httpfs"},
                                                             {"gcs", "httpfs"},
                                                             {"azure", "azure"},
                                                             {"huggingface", "httpfs"},
-                                                            {"bearer", "httpfs"}
+                                                            {"bearer", "httpfs"},
+                                                            {"mysql", "mysql_scanner"},
+                                                            {"postgres", "postgres_scanner"}
 }; // EXTENSION_SECRET_TYPES
 
 
@@ -701,7 +703,9 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {{"s3/config", "h
                                                                 {"azure/service_principal", "azure"},
                                                                 {"huggingface/config", "httfps"},
                                                                 {"huggingface/credential_chain", "httpfs"},
-                                                                {"bearer/config", "httpfs"}
+                                                                {"bearer/config", "httpfs"},
+                                                                {"mysql/config", "mysql_scanner"},
+                                                                {"postgres/config", "postgres_scanner"}
 }; // EXTENSION_SECRET_PROVIDERS
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
@@ -716,6 +720,7 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "inet",
     "icu",
     "json",
+    "mysql_scanner",
     "parquet",
     "sqlite_scanner",
     "sqlsmith",

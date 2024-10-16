@@ -19,6 +19,7 @@
 #include "duckdb/main/relation/value_relation.hpp"
 #include "duckdb/main/relation/filter_relation.hpp"
 #include "duckdb_python/expression/pyexpression.hpp"
+#include "duckdb/common/arrow/physical_arrow_collector.hpp"
 
 namespace duckdb {
 
@@ -934,6 +935,15 @@ duckdb::pyarrow::Table DuckDBPyRelation::ToArrowTableInternal(idx_t batch_size, 
 		if (!rel) {
 			return py::none();
 		}
+		auto &config = ClientConfig::GetConfig(*rel->context.GetContext());
+		ScopedConfigSetting scoped_setting(
+		    config,
+		    [&batch_size](ClientConfig &config) {
+			    config.result_collector = [&batch_size](ClientContext &context, PreparedStatementData &data) {
+				    return PhysicalArrowCollector::Create(context, data, batch_size);
+			    };
+		    },
+		    [](ClientConfig &config) { config.result_collector = nullptr; });
 		ExecuteOrThrow();
 	}
 	AssertResultOpen();
