@@ -34,6 +34,7 @@ struct VacuumState;
 struct CollectionCheckpointState;
 struct PersistentCollectionData;
 class CheckpointTask;
+class TableIOManager;
 
 class RowGroupCollection {
 public:
