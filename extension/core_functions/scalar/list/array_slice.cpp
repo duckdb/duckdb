@@ -60,7 +60,7 @@ static idx_t CalculateSliceLength(idx_t begin, idx_t end, INDEX_TYPE step, bool 
 
 struct BlobSliceOperations {
 	static int64_t ValueLength(const string_t &value) {
-		return value.GetSize();
+		return UnsafeNumericCast<int64_t>(value.GetSize());
 	}
 
 	static string_t SliceValue(Vector &result, string_t input, int64_t begin, int64_t end) {
