@@ -282,55 +282,6 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(data.unique_constraint_offset++)));
 
 			// constraint_type, VARCHAR
-			UniqueKeyInfo uk_info;
-
-			if (is_duck_table) {
-				auto &bound_constraint = *entry.bound_constraints[data.constraint_offset];
-				switch (bound_constraint.type) {
-				case ConstraintType::UNIQUE: {
-					auto &bound_unique = bound_constraint.Cast<BoundUniqueConstraint>();
-					vector<LogicalIndex> index;
-					for (auto &key : bound_unique.keys) {
-						index.push_back(table.GetColumns().PhysicalToLogical(key));
-					}
-					uk_info = {table.schema.name, table.name, index};
-					break;
-				}
-				case ConstraintType::FOREIGN_KEY: {
-					const auto &bound_foreign_key = bound_constraint.Cast<BoundForeignKeyConstraint>();
-					const auto &info = bound_foreign_key.info;
-					// find the other table
-					auto table_entry = Catalog::GetEntry<TableCatalogEntry>(
-					    context, table.catalog.GetName(), info.schema, info.table, OnEntryNotFound::RETURN_NULL);
-					if (!table_entry) {
-						throw InternalException("dukdb_constraints: entry %s.%s referenced in foreign key not found",
-						                        info.schema, info.table);
-					}
-					vector<LogicalIndex> index;
-					for (auto &key : info.pk_keys) {
-						index.push_back(table_entry->GetColumns().PhysicalToLogical(key));
-					}
-					uk_info = {table_entry->schema.name, table_entry->name, index};
-					break;
-				}
-				default:
-					break;
-				}
-			}
-
-			if (uk_info.columns.empty()) {
-				output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(data.unique_constraint_offset++)));
-			} else {
-				auto known_unique_constraint_offset = data.known_fk_unique_constraint_offsets.find(uk_info);
-				if (known_unique_constraint_offset == data.known_fk_unique_constraint_offsets.end()) {
-					data.known_fk_unique_constraint_offsets.insert(make_pair(uk_info, data.unique_constraint_offset));
-					output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(data.unique_constraint_offset)));
-					data.unique_constraint_offset++;
-				} else {
-					output.SetValue(col++, count,
-					                Value::BIGINT(NumericCast<int64_t>(known_unique_constraint_offset->second)));
-				}
-			}
 			output.SetValue(col++, count, Value(constraint_type));
 
 			// constraint_text, VARCHAR
@@ -345,14 +296,6 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			output.SetValue(col++, count, expression_text);
 
 			vector<Value> column_index_list;
-			vector<PhysicalIndex> column_index_list;
-			if (is_duck_table) {
-				auto &bound_constraint = *entry.bound_constraints[data.constraint_offset];
-				auto indexes = bound_constraint.GetColumnIndices();
-				column_index_list.insert(column_index_list.end(), indexes.begin(), indexes.end());
-			}
-
-			vector<Value> index_list;
 			vector<Value> column_name_list;
 			vector<Value> referenced_column_name_list;
 			for (auto &col_index : info.column_indexes) {
@@ -363,30 +306,24 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			}
 			for (auto &name : info.referenced_columns) {
 				referenced_column_name_list.push_back(Value(std::move(name)));
-				for (auto column_index : column_index_list) {
-					auto logical_index = table.GetColumns().PhysicalToLogical(column_index);
-					index_list.push_back(Value::BIGINT(NumericCast<int64_t>(logical_index.index)));
-					column_name_list.emplace_back(table.GetColumn(logical_index).Name());
-				}
-
-				// constraint_column_indexes, LIST
-				output.SetValue(col++, count, Value::LIST(LogicalType::BIGINT, std::move(column_index_list)));
-
-				// constraint_column_names, LIST
-				output.SetValue(col++, count, Value::LIST(LogicalType::VARCHAR, std::move(column_name_list)));
-
-				// constraint_name, VARCHAR
-				output.SetValue(col++, count, Value(std::move(constraint_name)));
-
-				// referenced_table, VARCHAR
-				output.SetValue(col++, count,
-				                info.referenced_table.empty() ? Value() : Value(std::move(info.referenced_table)));
-
-				// referenced_column_names, LIST
-				output.SetValue(col++, count,
-				                Value::LIST(LogicalType::VARCHAR, std::move(referenced_column_name_list)));
-				count++;
 			}
+			// constraint_column_indexes, LIST
+			output.SetValue(col++, count, Value::LIST(LogicalType::BIGINT, std::move(column_index_list)));
+
+			// constraint_column_names, LIST
+			output.SetValue(col++, count, Value::LIST(LogicalType::VARCHAR, std::move(column_name_list)));
+
+			// constraint_name, VARCHAR
+			output.SetValue(col++, count, Value(std::move(constraint_name)));
+
+			// referenced_table, VARCHAR
+			output.SetValue(col++, count,
+			                info.referenced_table.empty() ? Value() : Value(std::move(info.referenced_table)));
+
+			// referenced_column_names, LIST
+			output.SetValue(col++, count, Value::LIST(LogicalType::VARCHAR, std::move(referenced_column_name_list)));
+			count++;
+
 			if (data.constraint_offset >= constraints.size()) {
 				data.constraint_offset = 0;
 				data.offset++;
@@ -394,10 +331,11 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 		}
 		output.SetCardinality(count);
 	}
+}
 
-	void DuckDBConstraintsFun::RegisterFunction(BuiltinFunctions & set) {
-		set.AddFunction(TableFunction("duckdb_constraints", {}, DuckDBConstraintsFunction, DuckDBConstraintsBind,
-		                              DuckDBConstraintsInit));
-	}
+void DuckDBConstraintsFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(TableFunction("duckdb_constraints", {}, DuckDBConstraintsFunction, DuckDBConstraintsBind,
+	                              DuckDBConstraintsInit));
+}
 
 } // namespace duckdb

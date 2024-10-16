@@ -58,7 +58,7 @@ public:
 	DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
 	          const vector<column_t> &bound_columns, Expression &cast_expr);
 	//! Constructs a DataTable as a delta on an existing data table but with one column added new constraint
-	explicit DataTable(ClientContext &context, DataTable &parent, BoundConstraint &constraint);
+	DataTable(ClientContext &context, DataTable &parent, BoundConstraint &constraint);
 
 	//! A reference to the database instance
 	AttachedDatabase &db;
@@ -229,7 +229,6 @@ public:
 
 	//! Verify the new added constraints against current persistent&local data
 	void VerifyNewConstraint(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint);
-	void VerifyNewConstraint(ClientContext &context, DataTable &parent, const BoundConstraint &constraint);
 
 	Index &AddConstraintIndex(const vector<reference<const ColumnDefinition>> &columns,
 	                          IndexConstraintType constraint_type,

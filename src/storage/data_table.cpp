@@ -1555,7 +1555,7 @@ void DataTable::AddIndexStorage(ClientContext &context, Index &index) {
 
 	auto &transaction = DuckTransaction::Get(context, db);
 	TableScanState state;
-	InitializeScan(state, column_ids, nullptr);
+	InitializeScan(transaction, state, column_ids, nullptr);
 	while (true) {
 		chunk.Reset();
 		Scan(transaction, chunk, state);
