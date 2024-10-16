@@ -49,7 +49,7 @@
 #include "zstd/common/fse.h"           /* FSE_normalizeCount, FSE_writeNCount */
 #include "zstd/common/huf.h"           /* HUF_buildCTable, HUF_writeCTable */
 #include "zstd/common/zstd_internal.h" /* includes zstd.h */
-#include "zstd/common/xxhash.h"        /* XXH64 */
+#include "zstd/common/xxhash.hpp"      /* XXH64 */
 #include "zstd/compress/zstd_compress_internal.h" /* ZSTD_loadCEntropy() */
 #include "zdict.h"
 #include "zstd/dict/divsufsort.h"
