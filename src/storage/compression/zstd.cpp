@@ -9,7 +9,63 @@
 #include "zstd_wrapper.hpp"
 #include "zdict.h"
 
+#define ZSTD_STATIC_LINKING_ONLY /* for ZSTD_createCDict_byReference */
+#include "zstd.h"
+
 namespace duckdb {
+
+class DictBuffer {
+public:
+	DictBuffer() : dict_buffer(nullptr), capacity(0), size(0) {
+	}
+	DictBuffer(idx_t capacity) : dict_buffer(nullptr), capacity(capacity), size(capacity) {
+		dict_buffer = malloc(capacity);
+	}
+	DictBuffer(void *buffer, idx_t size) : dict_buffer(buffer), capacity(size), size(size) {
+		D_ASSERT(dict_buffer);
+	}
+	~DictBuffer() {
+		free(dict_buffer);
+	}
+	DictBuffer(const DictBuffer &other) = delete;
+	DictBuffer(DictBuffer &&other) : dict_buffer(other.dict_buffer), capacity(other.capacity), size(other.size) {
+		other.dict_buffer = nullptr;
+		other.size = 0;
+		other.capacity = 0;
+	}
+	DictBuffer &operator=(DictBuffer &other) = delete;
+	DictBuffer &operator=(DictBuffer &&other) {
+		free(dict_buffer);
+		dict_buffer = other.dict_buffer;
+		other.dict_buffer = nullptr;
+		capacity = other.capacity;
+		size = other.size;
+		return *this;
+	}
+
+public:
+	operator bool() {
+		return dict_buffer != nullptr;
+	}
+	void SetSize(idx_t size_p) {
+		D_ASSERT(size_p <= capacity);
+		size = size_p;
+	}
+	idx_t Size() const {
+		return size;
+	}
+	idx_t Capacity() const {
+		return capacity;
+	}
+	void *Buffer() const {
+		return dict_buffer;
+	}
+
+private:
+	void *dict_buffer;
+	idx_t capacity = 0;
+	idx_t size = 0;
+};
 
 struct ZSTDStorage {
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
@@ -34,7 +90,7 @@ struct ZSTDStorage {
 //===--------------------------------------------------------------------===//
 struct ZSTDAnalyzeState : public AnalyzeState {
 public:
-	ZSTDAnalyzeState(CompressionInfo &info) : AnalyzeState(info) {
+	ZSTDAnalyzeState(CompressionInfo &info) : AnalyzeState(info), compression_dict(nullptr), context(nullptr) {
 		context = duckdb_zstd::ZSTD_createCCtx();
 		auto &to_sample_vectors = this->to_sample_vectors;
 		auto &vector_sizes = this->vector_sizes;
@@ -61,7 +117,7 @@ public:
 	}
 	~ZSTDAnalyzeState() {
 		duckdb_zstd::ZSTD_freeCCtx(context);
-		free(dict);
+		duckdb_zstd::ZSTD_freeCDict(compression_dict);
 	}
 
 public:
@@ -78,7 +134,8 @@ public:
 	AnalyzeSamplingState sampling_state;
 
 	//! The trained 'dictBuffer' (populated in FinalAnalyze)
-	void *dict = nullptr;
+	DictBuffer dict;
+	duckdb_zstd::ZSTD_CDict *compression_dict;
 
 	duckdb_zstd::ZSTD_CCtx *context;
 	idx_t total_size = 0;
@@ -111,11 +168,11 @@ bool ZSTDStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t coun
 	return true;
 }
 
-void *CreateDictFromSamples(ZSTDAnalyzeState &state) {
+DictBuffer CreateDictFromSamples(ZSTDAnalyzeState &state) {
 	void *concatenated_samples = malloc(state.total_sample_size);
 	vector<idx_t> sample_sizes;
 	if (!concatenated_samples) {
-		return nullptr;
+		return DictBuffer();
 	}
 	idx_t offset = 0;
 	auto &vector_sizes = state.vector_sizes;
@@ -142,35 +199,65 @@ void *CreateDictFromSamples(ZSTDAnalyzeState &state) {
 		}
 	}
 
-	idx_t dict_buffer_size = MinValue<idx_t>(state.total_sample_size / 100, 1024);
-	void *dict_buffer = malloc(dict_buffer_size);
-	if (!dict_buffer) {
+	// 256 is the minimum size, see `ZDICT_DICTSIZE_MIN`
+	idx_t dict_buffer_size = MaxValue<idx_t>(state.total_sample_size / 100, 256);
+	DictBuffer buffer(dict_buffer_size);
+	if (!buffer.Buffer()) {
 		free(concatenated_samples);
-		return nullptr;
+		return DictBuffer();
 	}
 
-	auto res = duckdb_zstd::ZDICT_trainFromBuffer((void *)dict_buffer, dict_buffer_size, concatenated_samples,
+	auto res = duckdb_zstd::ZDICT_trainFromBuffer(buffer.Buffer(), buffer.Capacity(), concatenated_samples,
 	                                              (size_t *)sample_sizes.data(),
 	                                              UnsafeNumericCast<uint32_t>(sample_sizes.size()));
 	free(concatenated_samples);
-	if (duckdb_zstd::ZDICT_isError(res)) {
-		free(dict_buffer);
-		dict_buffer = nullptr;
+	if (duckdb_zstd::ZSTD_isError(res)) {
+		return DictBuffer();
 	}
-	return dict_buffer;
+	buffer.SetSize(res);
+	return buffer;
 }
 
 // Compression score to determine which compression to use
 idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	auto &state = state_p.Cast<ZSTDAnalyzeState>();
 
-	if (state.count == 0) {
+	if (state.count < 10) {
 		return DConstants::INVALID_INDEX;
 	}
 
 	state.dict = CreateDictFromSamples(state);
 	if (!state.dict) {
 		return NumericLimits<idx_t>::Maximum();
+	}
+
+	state.compression_dict = duckdb_zstd::ZSTD_createCDict_byReference(state.dict.Buffer(), state.dict.Size(),
+	                                                                   duckdb_zstd::ZSTD_defaultCLevel());
+	idx_t compressed_size = 0;
+	for (idx_t i = 0; i < state.vector_sizes.size(); i++) {
+		auto &count = state.vector_sizes[i];
+		auto &vec = state.to_sample_vectors[i];
+
+		UnifiedVectorFormat vdata;
+		vec.ToUnifiedFormat(count, vdata);
+
+		auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
+		for (idx_t i = 0; i < count; i++) {
+			auto idx = vdata.sel->get_index(i);
+			if (!vdata.validity.RowIsValid(idx)) {
+				continue;
+			}
+			auto str = data[idx];
+			auto required_space = duckdb_zstd::ZSTD_compressBound(str.GetSize());
+			auto dst = malloc(required_space);
+			auto res = duckdb_zstd::ZSTD_compress_usingCDict(state.context, dst, required_space, str.GetData(),
+			                                                 str.GetSize(), state.compression_dict);
+			free(dst);
+			if (duckdb_zstd::ZSTD_isError(res)) {
+				break;
+			}
+			compressed_size += res;
+		}
 	}
 
 	// get the size of the offsets into the buffer
@@ -203,15 +290,9 @@ public:
 
 	explicit ZSTDCompressionState(ColumnDataCheckpointer &checkpointer, const CompressionInfo &info)
 	    : CompressionState(info), checkpointer(checkpointer),
-	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ZSTD)), zstd_cdict(nullptr),
+	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ZSTD)),
 	      heap(BufferAllocator::Get(checkpointer.GetDatabase())) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
-		zstd_context = duckdb_zstd::ZSTD_createCCtx();
-	}
-
-	~ZSTDCompressionState() override {
-		duckdb_zstd::ZSTD_freeCCtx(zstd_context);
-		duckdb_zstd::ZSTD_freeCDict(zstd_cdict);
 	}
 
 	ColumnDataCheckpointer &checkpointer;
@@ -220,9 +301,6 @@ public:
 	// current segment state
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle current_handle;
-
-	duckdb_zstd::ZSTD_CCtx *zstd_context;
-	duckdb_zstd::ZSTD_CDict *zstd_cdict;
 
 	// buffer for current segment
 	idx_t total_data_size;
@@ -245,19 +323,18 @@ public:
 	}
 
 	void CreateCompressionDictionary(const char *str, size_t size) {
+		// zstd_cdict = duckdb_zstd::ZSTD_createCDict(str, size, COMPRESSION_LEVEL);
 
-		zstd_cdict = duckdb_zstd::ZSTD_createCDict(str, size, COMPRESSION_LEVEL);
+		// size_t dict_size = duckdb_zstd::ZSTD_sizeof_CDict(zstd_cdict);
 
-		size_t dict_size = duckdb_zstd::ZSTD_sizeof_CDict(zstd_cdict);
+		// dictionary_metadata_t meta {.size = dict_size};
 
-		dictionary_metadata_t meta {.size = dict_size};
+		//// write dictionary size
+		// memcpy(current_data_ptr, &meta, sizeof(dictionary_metadata_t));
+		// current_data_ptr += sizeof(dictionary_metadata_t);
 
-		// write dictionary size
-		memcpy(current_data_ptr, &meta, sizeof(dictionary_metadata_t));
-		current_data_ptr += sizeof(dictionary_metadata_t);
-
-		memcpy(current_data_ptr, zstd_cdict, dict_size);
-		current_data_ptr += dict_size;
+		// memcpy(current_data_ptr, zstd_cdict, dict_size);
+		// current_data_ptr += dict_size;
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
@@ -316,25 +393,26 @@ public:
 		// FIXME: I don't think the ZSTD API has a better way of doing this
 		// there is no method to incrementally build a dictionary
 		// we would have to hold all (or a sample of) strings and build the dictionary at the end
-		if (!zstd_cdict) {
-			CreateCompressionDictionary(str.GetData(), str.GetSize());
-		}
 
-		auto data_dst = current_data_ptr + sizeof(string_metadata_t);
-		size_t dst_capacity = info.GetBlockSize() - GetCurrentMetadataOffset();
-		// TODO: move to new segment if `dst_capacity` will be too small
-		size_t compressed_size = duckdb_zstd::ZSTD_compress_usingCDict(zstd_context, data_dst, dst_capacity,
-		                                                               str.GetData(), str.GetSize(), zstd_cdict);
+		// if (!zstd_cdict) {
+		//	CreateCompressionDictionary(str.GetData(), str.GetSize());
+		//}
 
-		// Create metadata
-		string_metadata_t meta {.size = compressed_size};
+		// auto data_dst = current_data_ptr + sizeof(string_metadata_t);
+		// size_t dst_capacity = info.GetBlockSize() - GetCurrentMetadataOffset();
+		//// TODO: move to new segment if `dst_capacity` will be too small
+		// size_t compressed_size = duckdb_zstd::ZSTD_compress_usingCDict(zstd_context, data_dst, dst_capacity,
+		//                                                               str.GetData(), str.GetSize(), zstd_cdict);
 
-		// Write metadata
-		memcpy(current_data_ptr, &meta, sizeof(string_metadata_t));
+		//// Create metadata
+		// string_metadata_t meta {.size = compressed_size};
 
-		// move data ptr
-		current_data_ptr = data_dst + compressed_size;
-		total_data_size += sizeof(string_metadata_t) + compressed_size;
+		//// Write metadata
+		// memcpy(current_data_ptr, &meta, sizeof(string_metadata_t));
+
+		//// move data ptr
+		// current_data_ptr = data_dst + compressed_size;
+		// total_data_size += sizeof(string_metadata_t) + compressed_size;
 	}
 };
 
