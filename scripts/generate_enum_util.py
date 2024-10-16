@@ -31,6 +31,12 @@ overrides = {
         "NULLS_FIRST": ["NULLS_FIRST", "NULLS FIRST"],
         "NULLS_LAST": ["NULLS_LAST", "NULLS LAST"],
     },
+    "CheckpointAbort": {
+        "NO_ABORT": "NONE",
+        "DEBUG_ABORT_BEFORE_TRUNCATE": "BEFORE_TRUNCATE",
+        "DEBUG_ABORT_BEFORE_HEADER": "BEFORE_HEADER",
+        "DEBUG_ABORT_AFTER_FREE_LIST_WRITE": "AFTER_FREE_LIST_WRITE",
+    },
     "SampleMethod": {"SYSTEM_SAMPLE": "System", "BERNOULLI_SAMPLE": "Bernoulli", "RESERVOIR_SAMPLE": "Reservoir"},
     "TableReferenceType": {"EMPTY_FROM": "EMPTY"},
 }
@@ -187,25 +193,26 @@ with open(enum_util_source_file, "w") as f:
 
     for enum_name, enum_type, enum_members in enums:
         enum_string_array = "Get" + enum_name + "Values()"
-        enum_count = str(len(enum_members))
         # Write the enum from string
         f.write(f"const StringUtil::EnumStringLiteral *{enum_string_array} {{\n")
         f.write(f"\tstatic constexpr StringUtil::EnumStringLiteral values[] {{\n")
-        for count, (key, strings) in enumerate(enum_members):
-            if count > 0:
-                f.write(",\n")
-            f.write(f"\t\t{{ static_cast<uint32_t>({enum_name}::{key}), \"{strings[0]}\" }}")
+        member_count = 0
+        for key, strings in enum_members:
+            for str_val in strings:
+                if member_count != 0:
+                    f.write(",\n")
+                f.write(f"\t\t{{ static_cast<uint32_t>({enum_name}::{key}), \"{str_val}\" }}")
+                member_count += 1
         f.write("\n\t};");
         f.write("\n\treturn values;")
         f.write("\n}\n\n")
         f.write(f"template<>\nconst char* EnumUtil::ToChars<{enum_name}>({enum_name} value) {{\n")
-        f.write(f"\treturn StringUtil::EnumToString({enum_string_array}, {enum_count}, static_cast<uint32_t>(value));\n");
+        f.write(f"\treturn StringUtil::EnumToString({enum_string_array}, {member_count}, \"{enum_name}\", static_cast<uint32_t>(value));\n");
         f.write("}\n\n")
 
         # Write the string to enum
         f.write(f"template<>\n{enum_name} EnumUtil::FromString<{enum_name}>(const char *value) {{\n")
-        enum_count = str(len(enum_members))
-        f.write(f"\treturn static_cast<{enum_name}>(StringUtil::StringToEnum({enum_string_array}, {enum_count}, value));")
+        f.write(f"\treturn static_cast<{enum_name}>(StringUtil::StringToEnum({enum_string_array}, {member_count}, \"{enum_name}\", value));")
         f.write("\n}\n\n")
 
     f.write("}\n\n")

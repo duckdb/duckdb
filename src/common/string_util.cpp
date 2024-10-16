@@ -713,22 +713,29 @@ string StringUtil::URLDecode(const string &input, bool plus_to_space) {
 	return string(result_data.get(), result_size);
 }
 
-uint32_t StringUtil::StringToEnum(const EnumStringLiteral enum_list[], idx_t enum_count, const char *str_value) {
+uint32_t StringUtil::StringToEnum(const EnumStringLiteral enum_list[], idx_t enum_count, const char *enum_name, const char *str_value) {
 	for(idx_t i = 0; i < enum_count; i++) {
 		if (CIEquals(enum_list[i].string, str_value)) {
 			return enum_list[i].number;
 		}
 	}
-	throw NotImplementedException("Enum value: unrecognized string value %s for this enum type", str_value);
+	// string to enum conversion failed - generate candidates
+	vector<string> candidates;
+	for(idx_t i = 0; i < enum_count; i++) {
+		candidates.push_back(enum_list[i].string);
+	}
+	auto closest_values = TopNJaroWinkler(candidates, str_value);
+	auto message = CandidatesMessage(closest_values, "Candidates");
+	throw NotImplementedException("Enum value: unrecognized value \"%s\" for enum \"%s\"\n%s", str_value, enum_name, message);
 }
 
-const char *StringUtil::EnumToString(const EnumStringLiteral enum_list[], idx_t enum_count, uint32_t enum_value) {
+const char *StringUtil::EnumToString(const EnumStringLiteral enum_list[], idx_t enum_count, const char *enum_name, uint32_t enum_value) {
 	for(idx_t i = 0; i < enum_count; i++) {
 		if (enum_list[i].number == enum_value) {
 			return enum_list[i].string;
 		}
 	}
-	throw NotImplementedException("Enum value: unrecognized enum value %s for this enum type", enum_value);
+	throw NotImplementedException("Enum value: unrecognized enum value \"%d\" for enum \"%s\"", enum_value, enum_name);
 }
 
 } // namespace duckdb

@@ -27,6 +27,9 @@ static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatisti
 	case LogicalTypeId::TIME: {
 		switch (input.GetType().id()) {
 		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_SEC:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_NS:
 		case LogicalTypeId::TIMESTAMP_TZ:
 			return nullptr;
 		default:

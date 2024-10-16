@@ -160,6 +160,16 @@ SELECT s1.t1.t FROM s1.t1, s2.t1
 42
 
 query I
+SELECT * EXCLUDE (s1.t1.t) FROM s1.t1, s2.t1
+----
+84
+
+query I
+SELECT * EXCLUDE (S1.T1.T) FROM s1.t1, s2.t1
+----
+84
+
+query I
 SELECT s2.t1.t FROM s1.t1, s2.t1
 ----
 84

@@ -12,7 +12,7 @@ namespace duckdb {
 static const DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "current_role", {nullptr}, {{nullptr, nullptr}}, "'duckdb'"},                       // user name of current execution context
 	{DEFAULT_SCHEMA, "current_user", {nullptr}, {{nullptr, nullptr}}, "'duckdb'"},                       // user name of current execution context
-	{DEFAULT_SCHEMA, "current_catalog", {nullptr}, {{nullptr, nullptr}}, "current_database()"},          // name of current database (called "catalog" in the SQL standard)
+	{DEFAULT_SCHEMA, "current_catalog", {nullptr}, {{nullptr, nullptr}}, "main.current_database()"},          // name of current database (called "catalog" in the SQL standard)
 	{DEFAULT_SCHEMA, "user", {nullptr}, {{nullptr, nullptr}}, "current_user"},                           // equivalent to current_user
 	{DEFAULT_SCHEMA, "session_user", {nullptr}, {{nullptr, nullptr}}, "'duckdb'"},                       // session user name
 	{"pg_catalog", "inet_client_addr", {nullptr}, {{nullptr, nullptr}}, "NULL"},                       // address of the remote connection
@@ -27,10 +27,10 @@ static const DefaultMacro internal_macros[] = {
 
 	{"pg_catalog", "pg_typeof", {"expression", nullptr}, {{nullptr, nullptr}}, "lower(typeof(expression))"},  // get the data type of any value
 
-	{"pg_catalog", "current_database", {nullptr}, {{nullptr, nullptr}}, "current_database()"},  	    // name of current database (called "catalog" in the SQL standard)
-	{"pg_catalog", "current_query", {nullptr}, {{nullptr, nullptr}}, "current_query()"},  	        // the currently executing query (NULL if not inside a plpgsql function)
-	{"pg_catalog", "current_schema", {nullptr}, {{nullptr, nullptr}}, "current_schema()"},  	        // name of current schema
-	{"pg_catalog", "current_schemas", {"include_implicit"}, {{nullptr, nullptr}}, "current_schemas(include_implicit)"},  	// names of schemas in search path
+	{"pg_catalog", "current_database", {nullptr}, {{nullptr, nullptr}}, "system.main.current_database()"},  	    // name of current database (called "catalog" in the SQL standard)
+	{"pg_catalog", "current_query", {nullptr}, {{nullptr, nullptr}}, "system.main.current_query()"},  	        // the currently executing query (NULL if not inside a plpgsql function)
+	{"pg_catalog", "current_schema", {nullptr}, {{nullptr, nullptr}}, "system.main.current_schema()"},  	        // name of current schema
+	{"pg_catalog", "current_schemas", {"include_implicit"}, {{nullptr, nullptr}}, "system.main.current_schemas(include_implicit)"},  	// names of schemas in search path
 
 	// privilege functions
 	{"pg_catalog", "has_any_column_privilege", {"table", "privilege", nullptr}, {{nullptr, nullptr}}, "true"},  //boolean  //does current user have privilege for any column of table

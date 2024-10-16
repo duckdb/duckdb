@@ -23,7 +23,7 @@ MultiFileReader::~MultiFileReader() {
 unique_ptr<MultiFileReader> MultiFileReader::Create(const TableFunction &table_function) {
 	unique_ptr<MultiFileReader> res;
 	if (table_function.get_multi_file_reader) {
-		res = table_function.get_multi_file_reader();
+		res = table_function.get_multi_file_reader(table_function);
 		res->function_name = table_function.name;
 	} else {
 		res = make_uniq<MultiFileReader>();
@@ -78,7 +78,7 @@ vector<string> MultiFileReader::ParsePaths(const Value &input) {
 	}
 }
 
-unique_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
+shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
                                                           FileGlobOptions options) {
 	auto &config = DBConfig::GetConfig(context);
 	if (!config.options.enable_external_access) {
@@ -93,7 +93,7 @@ unique_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context
 	return std::move(res);
 }
 
-unique_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const Value &input,
+shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const Value &input,
                                                           FileGlobOptions options) {
 	auto paths = ParsePaths(input);
 	return CreateFileList(context, paths, options);
@@ -408,6 +408,49 @@ void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReade
 		chunk.data[entry.column_id].Reference(entry.value);
 	}
 	chunk.Verify();
+}
+
+void MultiFileReader::GetPartitionData(ClientContext &context, const MultiFileReaderBindData &bind_data,
+                                       const MultiFileReaderData &reader_data,
+                                       optional_ptr<MultiFileReaderGlobalState> global_state,
+                                       const OperatorPartitionInfo &partition_info,
+                                       OperatorPartitionData &partition_data) {
+	for (auto &col : partition_info.partition_columns) {
+		bool found_constant = false;
+		for (auto &constant : reader_data.constant_map) {
+			if (constant.column_id == col) {
+				found_constant = true;
+				partition_data.partition_data.emplace_back(constant.value);
+				break;
+			}
+		}
+		if (!found_constant) {
+			throw InternalException(
+			    "MultiFileReader::GetPartitionData - did not find constant for the given partition");
+		}
+	}
+}
+
+TablePartitionInfo MultiFileReader::GetPartitionInfo(ClientContext &context, const MultiFileReaderBindData &bind_data,
+                                                     TableFunctionPartitionInput &input) {
+	// check if all of the columns are in the hive partition set
+	for (auto &partition_col : input.partition_ids) {
+		// check if this column is in the hive partitioned set
+		bool found = false;
+		for (auto &partition : bind_data.hive_partitioning_indexes) {
+			if (partition.index == partition_col) {
+				found = true;
+				break;
+			}
+		}
+		if (!found) {
+			// the column is not partitioned - hive partitioning alone can't guarantee the groups are partitioned
+			return TablePartitionInfo::NOT_PARTITIONED;
+		}
+	}
+	// if all columns are in the hive partitioning set, we know that each partition will only have a single value
+	// i.e. if the hive partitioning is by (YEAR, MONTH), each partition will have a single unique (YEAR, MONTH)
+	return TablePartitionInfo::SINGLE_VALUE_PARTITIONS;
 }
 
 TableFunctionSet MultiFileReader::CreateFunctionSet(TableFunction table_function) {

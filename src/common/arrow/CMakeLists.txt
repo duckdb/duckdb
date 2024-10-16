@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   arrow_appender.cpp
   arrow_converter.cpp
+  arrow_util.cpp
   arrow_merge_event.cpp
   arrow_query_result.cpp
   arrow_wrapper.cpp

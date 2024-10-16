@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/common/virtual_file_system.hpp"
 
 #include <thread>
 
@@ -60,7 +61,8 @@ TEST_CASE("Test database maximum_threads argument", "[api]") {
 	// FIXME: not yet
 	{
 		DuckDB db(nullptr);
-		REQUIRE(db.NumberOfThreads() == std::thread::hardware_concurrency());
+		auto file_system = make_uniq<VirtualFileSystem>();
+		REQUIRE(db.NumberOfThreads() == DBConfig().GetSystemMaxThreads(*file_system));
 	}
 	// but we can set another value
 	{
@@ -97,7 +99,7 @@ TEST_CASE("Test external threads", "[api]") {
 
 	auto res = con.Query("SET external_threads=-1");
 	REQUIRE(res->HasError());
-	REQUIRE(res->GetError() == "Syntax Error: Must have a non-negative number of external threads!");
+	REQUIRE(StringUtil::Contains(res->GetError(), "out of range"));
 
 	res = con.Query("SET external_threads=14");
 	REQUIRE(res->HasError());
@@ -112,8 +114,9 @@ TEST_CASE("Test external threads", "[api]") {
 	REQUIRE(db.NumberOfThreads() == 13);
 
 	con.Query("RESET threads");
-	REQUIRE(config.options.maximum_threads == std::thread::hardware_concurrency());
-	REQUIRE(db.NumberOfThreads() == std::thread::hardware_concurrency());
+	auto file_system = make_uniq<VirtualFileSystem>();
+	REQUIRE(config.options.maximum_threads == DBConfig().GetSystemMaxThreads(*file_system));
+	REQUIRE(db.NumberOfThreads() == DBConfig().GetSystemMaxThreads(*file_system));
 }
 
 #ifdef DUCKDB_NO_THREADS

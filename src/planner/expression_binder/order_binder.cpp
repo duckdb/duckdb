@@ -61,8 +61,10 @@ optional_idx OrderBinder::TryGetProjectionReference(ParsedExpression &expr) cons
 			// this is disabled by default (matching Postgres) - but we can control this with a setting
 			auto &config = ClientConfig::GetConfig(binders[0].get().context);
 			if (!config.order_by_non_integer_literal) {
-				throw BinderException(expr, "ORDER BY non-integer literal has no effect.\n* SET "
-				                            "order_by_non_integer_literal=true to allow this behavior.");
+				throw BinderException(expr,
+				                      "%s non-integer literal has no effect.\n* SET "
+				                      "order_by_non_integer_literal=true to allow this behavior.",
+				                      query_component);
 			}
 			break;
 		}
@@ -92,6 +94,14 @@ optional_idx OrderBinder::TryGetProjectionReference(ParsedExpression &expr) cons
 		break;
 	}
 	return optional_idx();
+}
+
+void OrderBinder::SetQueryComponent(string component) {
+	if (component.empty()) {
+		query_component = "ORDER BY";
+	} else {
+		query_component = std::move(component);
+	}
 }
 
 unique_ptr<Expression> OrderBinder::BindConstant(ParsedExpression &expr) {
@@ -130,7 +140,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		break;
 	}
 	case ExpressionClass::PARAMETER: {
-		throw ParameterNotAllowedException("Parameter not supported in ORDER BY clause");
+		throw ParameterNotAllowedException("Parameter not supported in %s clause", query_component);
 	}
 	case ExpressionClass::COLLATE: {
 		auto &collation = expr->Cast<CollateExpression>();
