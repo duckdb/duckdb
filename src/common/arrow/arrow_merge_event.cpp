@@ -87,7 +87,7 @@ void ArrowMergeEvent::Schedule() {
 		idx_t tuples_for_task = 0;
 		idx_t start_index = transformer.GetIndex();
 		idx_t end_index = start_index;
-		while (tuples_for_task < Storage::DEFAULT_ROW_GROUP_SIZE) {
+		while (tuples_for_task < DEFAULT_ROW_GROUP_SIZE) {
 			idx_t batch_size;
 			if (!transformer.TryGetNextBatchSize(batch_size)) {
 				finished = true;

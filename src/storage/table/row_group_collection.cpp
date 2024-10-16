@@ -62,8 +62,8 @@ RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, TableIO
 RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, BlockManager &block_manager,
                                        vector<LogicalType> types_p, idx_t row_start_p, idx_t total_rows_p,
                                        idx_t row_group_size_p)
-    : block_manager(block_manager), total_rows(total_rows_p), info(std::move(info_p)), types(std::move(types_p)),
-      row_start(row_start_p), allocation_size(0), row_group_size(row_group_size_p) {
+    : block_manager(block_manager), row_group_size(row_group_size_p), total_rows(total_rows_p), info(std::move(info_p)),
+      types(std::move(types_p)), row_start(row_start_p), allocation_size(0) {
 	row_groups = make_shared_ptr<RowGroupSegmentTree>(*this);
 }
 

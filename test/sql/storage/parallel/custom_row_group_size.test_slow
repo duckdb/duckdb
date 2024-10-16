@@ -110,6 +110,18 @@ SELECT SUM(i), MIN(i), MAX(i), COUNT(i), COUNT(*) FROM integers3
 ----
 348499650000	0	989999	700000	700000
 
+# non-batch insert
+statement ok
+SET preserve_insertion_order = false
+
+statement ok
+CREATE TABLE integers4 AS FROM integers
+
+query IIIII
+SELECT SUM(i), MIN(i), MAX(i), COUNT(i), COUNT(*) FROM integers4
+----
+247500000000	1	989999	500000	500000
+
 # re-attach without the parameter
 statement ok
 ATTACH ':memory:' AS mem

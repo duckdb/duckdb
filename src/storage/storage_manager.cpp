@@ -151,7 +151,7 @@ SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string 
 void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 	if (InMemory()) {
 		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE);
-		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, Storage::DEFAULT_ROW_GROUP_SIZE);
+		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, DEFAULT_ROW_GROUP_SIZE);
 		return;
 	}
 
@@ -168,7 +168,7 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 	options.use_direct_io = config.options.use_direct_io;
 	options.debug_initialize = config.options.debug_initialize;
 
-	idx_t row_group_size = Storage::DEFAULT_ROW_GROUP_SIZE;
+	idx_t row_group_size = DEFAULT_ROW_GROUP_SIZE;
 	if (storage_options.row_group_size.IsValid()) {
 		row_group_size = storage_options.row_group_size.GetIndex();
 		if (row_group_size == 0) {
