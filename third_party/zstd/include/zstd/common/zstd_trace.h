@@ -11,9 +11,9 @@
 #ifndef ZSTD_TRACE_H
 #define ZSTD_TRACE_H
 
-namespace duckdb_zstd {
-
 #include <stddef.h>
+
+namespace duckdb_zstd {
 
 /* weak symbol support
  * For now, enable conservatively:

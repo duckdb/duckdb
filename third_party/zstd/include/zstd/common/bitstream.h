@@ -29,8 +29,6 @@
 #include "zstd/common/error_private.h"  /* error codes and messages */
 #include "zstd/common/bits.h"           /* ZSTD_highbit32 */
 
-namespace duckdb_zstd {
-
 /*=========================================
 *  Target specific
 =========================================*/
@@ -46,6 +44,7 @@ namespace duckdb_zstd {
 #define STREAM_ACCUMULATOR_MIN_64  57
 #define STREAM_ACCUMULATOR_MIN    ((U32)(MEM_32bits() ? STREAM_ACCUMULATOR_MIN_32 : STREAM_ACCUMULATOR_MIN_64))
 
+namespace duckdb_zstd {
 
 /*-******************************************
 *  bitStream encoding API (write forward)

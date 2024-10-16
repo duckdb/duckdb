@@ -28,8 +28,6 @@
 #   include <intrin.h>  /* _byteswap_* */
 #endif
 
-namespace duckdb_zstd {
-
 /*-**************************************************************
 *  Basic Types
 *****************************************************************/
@@ -72,6 +70,7 @@ namespace duckdb_zstd {
   typedef   signed long long  S64;
 #endif
 
+namespace duckdb_zstd {
 
 /*-**************************************************************
 *  Memory I/O API

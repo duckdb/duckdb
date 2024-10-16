@@ -16,8 +16,6 @@
 
 #include "zstd/common/debug.h"
 
-namespace duckdb_zstd {
-
 #if defined(ZSTD_MULTITHREAD) && defined(_WIN32)
 
 /**
@@ -42,7 +40,6 @@ namespace duckdb_zstd {
 #undef ERROR
 #define ERROR(name) ZSTD_ERROR(name)
 
-
 /* mutex */
 #define ZSTD_pthread_mutex_t           CRITICAL_SECTION
 #define ZSTD_pthread_mutex_init(a, b)  ((void)(b), InitializeCriticalSection((a)), 0)
@@ -58,6 +55,8 @@ namespace duckdb_zstd {
 #define ZSTD_pthread_cond_signal(a)     WakeConditionVariable((a))
 #define ZSTD_pthread_cond_broadcast(a)  WakeAllConditionVariable((a))
 
+namespace duckdb_zstd {
+
 /* ZSTD_pthread_create() and ZSTD_pthread_join() */
 typedef HANDLE ZSTD_pthread_t;
 
@@ -65,6 +64,8 @@ int ZSTD_pthread_create(ZSTD_pthread_t* thread, const void* unused,
                    void* (*start_routine) (void*), void* arg);
 
 int ZSTD_pthread_join(ZSTD_pthread_t thread);
+
+} // namespace duckdb_zstd
 
 /**
  * add here more wrappers as required
@@ -101,6 +102,8 @@ int ZSTD_pthread_join(ZSTD_pthread_t thread);
  * This way, if we forget to init/destroy them the program will crash or ASAN
  * will report leaks.
  */
+
+namespace duckdb_zstd {
 
 #define ZSTD_pthread_mutex_t            pthread_mutex_t*
 int ZSTD_pthread_mutex_init(ZSTD_pthread_mutex_t* mutex, pthread_mutexattr_t const* attr);

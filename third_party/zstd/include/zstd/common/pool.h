@@ -11,11 +11,11 @@
 #ifndef POOL_H
 #define POOL_H
 
-namespace duckdb_zstd {
-
 #include "zstd/common/zstd_deps.h"
 #define ZSTD_STATIC_LINKING_ONLY   /* ZSTD_customMem */
 #include "zstd.h"
+
+namespace duckdb_zstd {
 
 typedef struct POOL_ctx_s POOL_ctx;
 
