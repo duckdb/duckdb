@@ -275,12 +275,21 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	create_api_v0 = CreateAPIv0Wrapper;
 
-	if (user_config && !user_config->options.use_temporary_directory) {
+	db_file_system = make_uniq<DatabaseFileSystem>(*this);
+
+	// resolve the type of the database we are opening
+	auto &fs = FileSystem::GetFileSystem(*this);
+	DBPathAndType::ResolveDatabaseType(fs, config.options.database_path, config.options.database_type);
+
+	if (config.options.temporary_directory.empty()) {
+		config.SetDefaultTempDirectory();
+	}
+
+	if (!config.options.use_temporary_directory) {
 		// temporary directories explicitly disabled
 		config.options.temporary_directory = string();
 	}
 
-	db_file_system = make_uniq<DatabaseFileSystem>(*this);
 	db_manager = make_uniq<DatabaseManager>(*this);
 	if (config.buffer_manager) {
 		buffer_manager = config.buffer_manager;
@@ -293,10 +302,6 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	// initialize the secret manager
 	config.secret_manager->Initialize(*this);
-
-	// resolve the type of teh database we are opening
-	auto &fs = FileSystem::GetFileSystem(*this);
-	DBPathAndType::ResolveDatabaseType(fs, config.options.database_path, config.options.database_type);
 
 	// initialize the system catalog
 	db_manager->InitializeSystemCatalog();
@@ -403,10 +408,6 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		config.options.database_path = database_path;
 	} else {
 		config.options.database_path.clear();
-	}
-
-	if (new_config.options.temporary_directory.empty()) {
-		config.SetDefaultTempDirectory();
 	}
 
 	if (config.options.access_mode == AccessMode::UNDEFINED) {
