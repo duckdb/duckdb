@@ -204,4 +204,211 @@ struct ArrayLengthFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct SubstringFun {
+	static constexpr const char *Name = "substring";
+	static constexpr const char *Parameters = "string,start,length";
+	static constexpr const char *Description = "Extract substring of length characters starting from character start. Note that a start value of 1 refers to the first character of the string.";
+	static constexpr const char *Example = "substring('Hello', 2, 2)";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct SubstrFun {
+	using ALIAS = SubstringFun;
+
+	static constexpr const char *Name = "substr";
+};
+
+struct SubstringGraphemeFun {
+	static constexpr const char *Name = "substring_grapheme";
+	static constexpr const char *Parameters = "string,start,length";
+	static constexpr const char *Description = "Extract substring of length grapheme clusters starting from character start. Note that a start value of 1 refers to the first character of the string.";
+	static constexpr const char *Example = "substring_grapheme('🦆🤦🏼‍♂️🤦🏽‍♀️🦆', 3, 2)";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct StringSplitFun {
+	static constexpr const char *Name = "string_split";
+	static constexpr const char *Parameters = "string,separator";
+	static constexpr const char *Description = "Splits the string along the separator";
+	static constexpr const char *Example = "string_split('hello-world', '-')";
+
+	static ScalarFunction GetFunction();
+};
+
+struct StrSplitFun {
+	using ALIAS = StringSplitFun;
+
+	static constexpr const char *Name = "str_split";
+};
+
+struct StringToArrayFun {
+	using ALIAS = StringSplitFun;
+
+	static constexpr const char *Name = "string_to_array";
+};
+
+struct SplitFun {
+	using ALIAS = StringSplitFun;
+
+	static constexpr const char *Name = "split";
+};
+
+struct StringSplitRegexFun {
+	static constexpr const char *Name = "string_split_regex";
+	static constexpr const char *Parameters = "string,separator";
+	static constexpr const char *Description = "Splits the string along the regex";
+	static constexpr const char *Example = "string_split_regex('hello␣world; 42', ';?␣')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct StrSplitRegexFun {
+	using ALIAS = StringSplitRegexFun;
+
+	static constexpr const char *Name = "str_split_regex";
+};
+
+struct RegexpSplitToArrayFun {
+	using ALIAS = StringSplitRegexFun;
+
+	static constexpr const char *Name = "regexp_split_to_array";
+};
+
+struct RegexpFun {
+	static constexpr const char *Name = "regexp_full_match";
+	static constexpr const char *Parameters = "string,regex[,options]";
+	static constexpr const char *Description = "Returns true if the entire string matches the regex. A set of optional options can be set.";
+	static constexpr const char *Example = "regexp_full_match('anabanana', '(an)*')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct RegexpMatchesFun {
+	static constexpr const char *Name = "regexp_matches";
+	static constexpr const char *Parameters = "string,pattern[,options]";
+	static constexpr const char *Description = "Returns true if string contains the regexp pattern, false otherwise. A set of optional options can be set.";
+	static constexpr const char *Example = "regexp_matches('anabanana', '(an)*')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct RegexpReplaceFun {
+	static constexpr const char *Name = "regexp_replace";
+	static constexpr const char *Parameters = "string,pattern,replacement[,options]";
+	static constexpr const char *Description = "If string contains the regexp pattern, replaces the matching part with replacement. A set of optional options can be set.";
+	static constexpr const char *Example = "regexp_replace('hello', '[lo]', '-')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct RegexpExtractFun {
+	static constexpr const char *Name = "regexp_extract";
+	static constexpr const char *Parameters = "string,pattern[,group = 0][,options]";
+	static constexpr const char *Description = "If string contains the regexp pattern, returns the capturing group specified by optional parameter group. The group must be a constant value. If no group is given, it defaults to 0. A set of optional options can be set.";
+	static constexpr const char *Example = "regexp_extract('abc', '([a-z])(b)', 1)";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct RegexpExtractAllFun {
+	static constexpr const char *Name = "regexp_extract_all";
+	static constexpr const char *Parameters = "string, regex[, group = 0][, options]";
+	static constexpr const char *Description = "Split the string along the regex and extract all occurrences of group. A set of optional options can be set.";
+	static constexpr const char *Example = "regexp_extract_all('hello_world', '([a-z ]+)_?', 1)";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct RegexpEscapeFun {
+	static constexpr const char *Name = "regexp_escape";
+	static constexpr const char *Parameters = "string";
+	static constexpr const char *Description = "Escapes all potentially meaningful regexp characters in the input string";
+	static constexpr const char *Example = "regexp_escape('https://duckdb.org')";
+
+	static ScalarFunction GetFunction();
+};
+
+struct LikeFun {
+	static constexpr const char *Name = "~~";
+	static constexpr const char *Parameters = "";
+	static constexpr const char *Description = "";
+	static constexpr const char *Example = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct NotLikeFun {
+	static constexpr const char *Name = "!~~";
+	static constexpr const char *Parameters = "";
+	static constexpr const char *Description = "";
+	static constexpr const char *Example = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct GlobPatternFun {
+	static constexpr const char *Name = "~~~";
+	static constexpr const char *Parameters = "";
+	static constexpr const char *Description = "";
+	static constexpr const char *Example = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ILikeFun {
+	static constexpr const char *Name = "~~*";
+	static constexpr const char *Parameters = "";
+	static constexpr const char *Description = "";
+	static constexpr const char *Example = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct NotILikeFun {
+	static constexpr const char *Name = "!~~*";
+	static constexpr const char *Parameters = "";
+	static constexpr const char *Description = "";
+	static constexpr const char *Example = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct LikeEscapeFun {
+	static constexpr const char *Name = "like_escape";
+	static constexpr const char *Parameters = "string,like_specifier,escape_character";
+	static constexpr const char *Description = "Returns true if the string matches the like_specifier (see Pattern Matching) using case-sensitive matching. escape_character is used to search for wildcard characters in the string.";
+	static constexpr const char *Example = "like_escape('a%c', 'a$%c', '$')";
+
+	static ScalarFunction GetFunction();
+};
+
+struct NotLikeEscapeFun {
+	static constexpr const char *Name = "not_like_escape";
+	static constexpr const char *Parameters = "string,like_specifier,escape_character";
+	static constexpr const char *Description = "Returns false if the string matches the like_specifier (see Pattern Matching) using case-sensitive matching. escape_character is used to search for wildcard characters in the string.";
+	static constexpr const char *Example = "not_like_escape('a%c', 'a$%c', '$')";
+
+	static ScalarFunction GetFunction();
+};
+
+struct IlikeEscapeFun {
+	static constexpr const char *Name = "ilike_escape";
+	static constexpr const char *Parameters = "string,like_specifier,escape_character";
+	static constexpr const char *Description = "Returns true if the string matches the like_specifier (see Pattern Matching) using case-insensitive matching. escape_character is used to search for wildcard characters in the string.";
+	static constexpr const char *Example = "ilike_escape('A%c', 'a$%C', '$')";
+
+	static ScalarFunction GetFunction();
+};
+
+struct NotIlikeEscapeFun {
+	static constexpr const char *Name = "not_ilike_escape";
+	static constexpr const char *Parameters = "string,like_specifier,escape_character";
+	static constexpr const char *Description = "Returns false if the string matches the like_specifier (see Pattern Matching) using case-insensitive matching. escape_character is used to search for wildcard characters in the string.";
+	static constexpr const char *Example = "not_ilike_escape('A%c', 'a$%C', '$')";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb

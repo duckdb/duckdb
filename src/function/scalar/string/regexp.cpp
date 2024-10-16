@@ -6,7 +6,7 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/function/scalar/string_functions_tmp.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "utf8proc_wrapper.hpp"
 
@@ -382,7 +382,7 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 	                                        std::move(group_string));
 }
 
-void RegexpFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunctionSet RegexpFun::GetFunctions() {
 	ScalarFunctionSet regexp_full_match("regexp_full_match");
 	regexp_full_match.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
@@ -392,7 +392,10 @@ void RegexpFun::RegisterFunction(BuiltinFunctions &set) {
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                   RegexpMatchesFunction<RegexFullMatch>, RegexpMatchesBind, nullptr, nullptr, RegexInitLocalState,
 	                   LogicalType::INVALID, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING));
+	return (regexp_full_match);
+}
 
+ScalarFunctionSet RegexpMatchesFun::GetFunctions() {
 	ScalarFunctionSet regexp_partial_match("regexp_matches");
 	regexp_partial_match.AddFunction(ScalarFunction(
 	    {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN, RegexpMatchesFunction<RegexPartialMatch>,
@@ -402,7 +405,10 @@ void RegexpFun::RegisterFunction(BuiltinFunctions &set) {
 	    {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	    RegexpMatchesFunction<RegexPartialMatch>, RegexpMatchesBind, nullptr, nullptr, RegexInitLocalState,
 	    LogicalType::INVALID, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING));
+	return (regexp_partial_match);
+}
 
+ScalarFunctionSet RegexpReplaceFun::GetFunctions() {
 	ScalarFunctionSet regexp_replace("regexp_replace");
 	regexp_replace.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                                          LogicalType::VARCHAR, RegexReplaceFunction, RegexReplaceBind, nullptr,
@@ -410,7 +416,10 @@ void RegexpFun::RegisterFunction(BuiltinFunctions &set) {
 	regexp_replace.AddFunction(ScalarFunction(
 	    {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	    RegexReplaceFunction, RegexReplaceBind, nullptr, nullptr, RegexInitLocalState));
+	return (regexp_replace);
+}
 
+ScalarFunctionSet RegexpExtractFun::GetFunctions() {
 	ScalarFunctionSet regexp_extract("regexp_extract");
 	regexp_extract.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                                          RegexExtractFunction, RegexExtractBind, nullptr, nullptr,
@@ -434,7 +443,10 @@ void RegexpFun::RegisterFunction(BuiltinFunctions &set) {
 	    {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::LIST(LogicalType::VARCHAR), LogicalType::VARCHAR},
 	    LogicalType::VARCHAR, RegexExtractStructFunction, RegexExtractBind, nullptr, nullptr, RegexInitLocalState,
 	    LogicalType::INVALID, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING));
+	return (regexp_extract);
+}
 
+ScalarFunctionSet RegexpExtractAllFun::GetFunctions() {
 	ScalarFunctionSet regexp_extract_all("regexp_extract_all");
 	regexp_extract_all.AddFunction(ScalarFunction(
 	    {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::LIST(LogicalType::VARCHAR),
@@ -449,12 +461,7 @@ void RegexpFun::RegisterFunction(BuiltinFunctions &set) {
 	                   LogicalType::LIST(LogicalType::VARCHAR), RegexpExtractAll::Execute, RegexpExtractAll::Bind,
 	                   nullptr, nullptr, RegexpExtractAll::InitLocalState, LogicalType::INVALID,
 	                   FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING));
-
-	set.AddFunction(regexp_full_match);
-	set.AddFunction(regexp_partial_match);
-	set.AddFunction(regexp_replace);
-	set.AddFunction(regexp_extract);
-	set.AddFunction(regexp_extract_all);
+	return (regexp_extract_all);
 }
 
 } // namespace duckdb

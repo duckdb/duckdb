@@ -2,7 +2,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
-#include "duckdb/function/scalar/string_functions_tmp.hpp"
 
 #include <ctype.h>
 #include <algorithm>
@@ -16,7 +15,7 @@ struct LeftRightUnicode {
 	}
 
 	static string_t Substring(Vector &result, string_t input, int64_t offset, int64_t length) {
-		return SubstringFun::SubstringUnicode(result, input, offset, length);
+		return SubstringUnicode(result, input, offset, length);
 	}
 };
 
@@ -27,7 +26,7 @@ struct LeftRightGrapheme {
 	}
 
 	static string_t Substring(Vector &result, string_t input, int64_t offset, int64_t length) {
-		return SubstringFun::SubstringGrapheme(result, input, offset, length);
+		return SubstringGrapheme(result, input, offset, length);
 	}
 };
 

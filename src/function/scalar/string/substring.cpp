@@ -1,5 +1,5 @@
 #include "duckdb/function/scalar/string_common.hpp"
-#include "duckdb/function/scalar/string_functions_tmp.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
@@ -95,7 +95,7 @@ string_t SubstringASCII(Vector &result, string_t input, int64_t offset, int64_t 
 	return SubstringSlice(result, input_data, start, UnsafeNumericCast<int64_t>(end - start));
 }
 
-string_t SubstringFun::SubstringUnicode(Vector &result, string_t input, int64_t offset, int64_t length) {
+string_t SubstringUnicode(Vector &result, string_t input, int64_t offset, int64_t length) {
 	auto input_data = input.GetData();
 	auto input_size = input.GetSize();
 
@@ -191,7 +191,7 @@ string_t SubstringFun::SubstringUnicode(Vector &result, string_t input, int64_t 
 	                      UnsafeNumericCast<int64_t>(end_pos - start_pos));
 }
 
-string_t SubstringFun::SubstringGrapheme(Vector &result, string_t input, int64_t offset, int64_t length) {
+string_t SubstringGrapheme(Vector &result, string_t input, int64_t offset, int64_t length) {
 	auto input_data = input.GetData();
 	auto input_size = input.GetSize();
 
@@ -252,13 +252,13 @@ string_t SubstringFun::SubstringGrapheme(Vector &result, string_t input, int64_t
 
 struct SubstringUnicodeOp {
 	static string_t Substring(Vector &result, string_t input, int64_t offset, int64_t length) {
-		return SubstringFun::SubstringUnicode(result, input, offset, length);
+		return SubstringUnicode(result, input, offset, length);
 	}
 };
 
 struct SubstringGraphemeOp {
 	static string_t Substring(Vector &result, string_t input, int64_t offset, int64_t length) {
-		return SubstringFun::SubstringGrapheme(result, input, offset, length);
+		return SubstringGrapheme(result, input, offset, length);
 	}
 };
 
@@ -312,7 +312,7 @@ static unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context
 	return nullptr;
 }
 
-void SubstringFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunctionSet SubstringFun::GetFunctions() {
 	ScalarFunctionSet substr("substring");
 	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT},
 	                                  LogicalType::VARCHAR, SubstringFunction<SubstringUnicodeOp>, nullptr, nullptr,
@@ -320,10 +320,10 @@ void SubstringFun::RegisterFunction(BuiltinFunctions &set) {
 	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
 	                                  SubstringFunction<SubstringUnicodeOp>, nullptr, nullptr,
 	                                  SubstringPropagateStats));
-	set.AddFunction(substr);
-	substr.name = "substr";
-	set.AddFunction(substr);
+	return (substr);
+}
 
+ScalarFunctionSet SubstringGraphemeFun::GetFunctions() {
 	ScalarFunctionSet substr_grapheme("substring_grapheme");
 	substr_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT},
 	                                           LogicalType::VARCHAR, SubstringFunction<SubstringGraphemeOp>, nullptr,
@@ -331,7 +331,7 @@ void SubstringFun::RegisterFunction(BuiltinFunctions &set) {
 	substr_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
 	                                           SubstringFunction<SubstringGraphemeOp>, nullptr, nullptr,
 	                                           SubstringPropagateStats));
-	set.AddFunction(substr_grapheme);
+	return (substr_grapheme);
 }
 
 } // namespace duckdb

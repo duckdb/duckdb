@@ -125,5 +125,148 @@
         "description": "Returns the length of the list.",
         "example": "array_length([1,2,3])",
         "type": "scalar_function_set"
+    },
+    {
+        "name": "substring",
+        "parameters": "string,start,length",
+        "description": "Extract substring of length characters starting from character start. Note that a start value of 1 refers to the first character of the string.",
+        "example": "substring('Hello', 2, 2)",
+        "type": "scalar_function_set",
+        "aliases": ["substr"]
+    },
+    {
+        "name": "substring_grapheme",
+        "parameters": "string,start,length",
+        "description": "Extract substring of length grapheme clusters starting from character start. Note that a start value of 1 refers to the first character of the string.",
+        "example": "substring_grapheme('🦆🤦🏼‍♂️🤦🏽‍♀️🦆', 3, 2)",
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "string_split",
+        "parameters": "string,separator",
+        "description": "Splits the string along the separator",
+        "example": "string_split('hello-world', '-')",
+        "type": "scalar_function",
+        "aliases": ["str_split", "string_to_array", "split"]
+    },
+    {
+        "name": "string_split_regex",
+        "parameters": "string,separator",
+        "description": "Splits the string along the regex",
+        "example": "string_split_regex('hello␣world; 42', ';?␣')",
+        "type": "scalar_function_set",
+        "aliases": ["str_split_regex", "regexp_split_to_array"]
+    },
+    {
+        "name": "regexp_full_match",
+        "parameters": "string,regex[,options]",
+        "description": "Returns true if the entire string matches the regex. A set of optional options can be set.",
+        "example": "regexp_full_match('anabanana', '(an)*')",
+        "type": "scalar_function_set",
+        "struct": "RegexpFun"
+    },
+    {
+        "name": "regexp_matches",
+        "parameters": "string,pattern[,options]",
+        "description": "Returns true if string contains the regexp pattern, false otherwise. A set of optional options can be set.",
+        "example": "regexp_matches('anabanana', '(an)*')",
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "regexp_replace",
+        "parameters": "string,pattern,replacement[,options]",
+        "description": "If string contains the regexp pattern, replaces the matching part with replacement. A set of optional options can be set.",
+        "example": "regexp_replace('hello', '[lo]', '-')",
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "regexp_extract",
+        "parameters": "string,pattern[,group = 0][,options]",
+        "description": "If string contains the regexp pattern, returns the capturing group specified by optional parameter group. The group must be a constant value. If no group is given, it defaults to 0. A set of optional options can be set.",
+        "example": "regexp_extract('abc', '([a-z])(b)', 1)",
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "regexp_extract_all",
+        "parameters": "string, regex[, group = 0][, options]",
+        "description": "Split the string along the regex and extract all occurrences of group. A set of optional options can be set.",
+        "example": "regexp_extract_all('hello_world', '([a-z ]+)_?', 1)",
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "regexp_escape",
+        "parameters": "string",
+        "description": "Escapes all potentially meaningful regexp characters in the input string",
+        "example": "regexp_escape('https://duckdb.org')",
+        "type": "scalar_function",
+        "struct": "RegexpEscapeFun"
+    },
+    {
+        "name": "~~",
+        "parameters": "",
+        "description": "",
+        "example": "",
+        "type": "scalar_function",
+        "struct": "LikeFun"
+    },
+    {
+        "name": "!~~",
+        "parameters": "",
+        "description": "",
+        "example": "",
+        "type": "scalar_function",
+        "struct": "NotLikeFun"
+    },
+    {
+        "name": "~~~",
+        "parameters": "",
+        "description": "",
+        "example": "",
+        "type": "scalar_function",
+        "struct": "GlobPatternFun"
+    },
+    {
+        "name": "~~*",
+        "parameters": "",
+        "description": "",
+        "example": "",
+        "type": "scalar_function",
+        "struct": "ILikeFun"
+    },
+    {
+        "name": "!~~*",
+        "parameters": "",
+        "description": "",
+        "example": "",
+        "type": "scalar_function",
+        "struct": "NotILikeFun"
+    },
+    {
+        "name": "like_escape",
+        "parameters": "string,like_specifier,escape_character",
+        "description": "Returns true if the string matches the like_specifier (see Pattern Matching) using case-sensitive matching. escape_character is used to search for wildcard characters in the string.",
+        "example": "like_escape('a%c', 'a$%c', '$')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "not_like_escape",
+        "parameters": "string,like_specifier,escape_character",
+        "description": "Returns false if the string matches the like_specifier (see Pattern Matching) using case-sensitive matching. escape_character is used to search for wildcard characters in the string.",
+        "example": "not_like_escape('a%c', 'a$%c', '$')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "ilike_escape",
+        "parameters": "string,like_specifier,escape_character",
+        "description": "Returns true if the string matches the like_specifier (see Pattern Matching) using case-insensitive matching. escape_character is used to search for wildcard characters in the string.",
+        "example": "ilike_escape('A%c', 'a$%C', '$')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "not_ilike_escape",
+        "parameters": "string,like_specifier,escape_character",
+        "description": "Returns false if the string matches the like_specifier (see Pattern Matching) using case-insensitive matching. escape_character is used to search for wildcard characters in the string.",
+        "example": "not_ilike_escape('A%c', 'a$%C', '$')",
+        "type": "scalar_function"
     }
 ]

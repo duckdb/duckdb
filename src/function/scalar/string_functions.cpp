@@ -3,13 +3,6 @@
 namespace duckdb {
 
 void BuiltinFunctions::RegisterStringFunctions() {
-	Register<LikeFun>();
-	Register<LikeEscapeFun>();
-	Register<RegexpFun>();
-	Register<SubstringFun>();
-	Register<StringSplitFun>();
-	Register<StringSplitRegexFun>();
-	Register<RegexpEscapeFun>();
 	Register<SHA1Fun>();
 	Register<SHA256Fun>();
 	Register<MD5Fun>();
