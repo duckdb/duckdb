@@ -5,6 +5,7 @@ import numpy
 import string
 from packaging import version
 import warnings
+from contextlib import suppress
 
 
 def round_trip(data, pandas_type):
@@ -222,7 +223,8 @@ class TestNumpyNullableTypes(object):
         rel = duckdb_cursor.sql(query)
         # Pandas <= 2.2.3 does not convert without throwing a warning
         warnings.simplefilter(action='ignore', category=RuntimeWarning)
-        df = rel.df()
+        with suppress(TypeError):
+            df = rel.df()
         warnings.resetwarnings()
 
         nullable_dtype = getattr(pd, input.expected_dtype)

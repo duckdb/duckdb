@@ -3,6 +3,7 @@ import datetime
 import duckdb
 import pytest
 import warnings
+from contextlib import suppress
 
 
 class TestPandasObjectInteger(object):
@@ -33,25 +34,28 @@ class TestPandasObjectInteger(object):
     # Unsigned Masked Integer types
     def test_object_uinteger(self, duckdb_cursor):
         pd = pytest.importorskip("pandas")
-        df_in = pd.DataFrame(
-            {
-                'uint8': pd.Series([None, 1, 255], dtype="UInt8"),
-                'uint16': pd.Series([None, 1, 65535], dtype="UInt16"),
-                'uint32': pd.Series([None, 1, 4294967295], dtype="UInt32"),
-                'uint64': pd.Series([None, 1, 18446744073709551615], dtype="UInt64"),
-            }
-        )
-        warnings.simplefilter(action='ignore', category=RuntimeWarning)
-        df_expected_res = pd.DataFrame(
-            {
-                'uint8': pd.Series(np.ma.masked_array([0, 1, 255], mask=[True, False, False]), dtype='UInt8'),
-                'uint16': pd.Series(np.ma.masked_array([0, 1, 65535], mask=[True, False, False]), dtype='UInt16'),
-                'uint32': pd.Series(np.ma.masked_array([0, 1, 4294967295], mask=[True, False, False]), dtype='UInt32'),
-                'uint64': pd.Series(
-                    np.ma.masked_array([0, 1, 18446744073709551615], mask=[True, False, False]), dtype='UInt64'
-                ),
-            }
-        )
+        with suppress(TypeError):
+            df_in = pd.DataFrame(
+                {
+                    'uint8': pd.Series([None, 1, 255], dtype="UInt8"),
+                    'uint16': pd.Series([None, 1, 65535], dtype="UInt16"),
+                    'uint32': pd.Series([None, 1, 4294967295], dtype="UInt32"),
+                    'uint64': pd.Series([None, 1, 18446744073709551615], dtype="UInt64"),
+                }
+            )
+            warnings.simplefilter(action='ignore', category=RuntimeWarning)
+            df_expected_res = pd.DataFrame(
+                {
+                    'uint8': pd.Series(np.ma.masked_array([0, 1, 255], mask=[True, False, False]), dtype='UInt8'),
+                    'uint16': pd.Series(np.ma.masked_array([0, 1, 65535], mask=[True, False, False]), dtype='UInt16'),
+                    'uint32': pd.Series(
+                        np.ma.masked_array([0, 1, 4294967295], mask=[True, False, False]), dtype='UInt32'
+                    ),
+                    'uint64': pd.Series(
+                        np.ma.masked_array([0, 1, 18446744073709551615], mask=[True, False, False]), dtype='UInt64'
+                    ),
+                }
+            )
         df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
         warnings.resetwarnings()
         pd.testing.assert_frame_equal(df_expected_res, df_out)

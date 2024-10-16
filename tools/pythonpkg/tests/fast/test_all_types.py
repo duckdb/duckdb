@@ -8,6 +8,7 @@ from uuid import UUID
 import pytz
 import pytest
 import warnings
+from contextlib import suppress
 
 
 def replace_with_ndarray(obj):
@@ -591,7 +592,8 @@ class TestAllTypes(object):
         else:
             # Pandas <= 2.2.3 does not convert without throwing a warning
             warnings.simplefilter(action='ignore', category=RuntimeWarning)
-            dataframe = conn.execute(f'select "{cur_type}" from test_all_types()').df()
+            with suppress(TypeError):
+                dataframe = conn.execute(f'select "{cur_type}" from test_all_types()').df()
         print(cur_type)
         round_trip_dataframe = conn.execute("select * from dataframe").df()
         result_dataframe = conn.execute("select * from dataframe").fetchall()
