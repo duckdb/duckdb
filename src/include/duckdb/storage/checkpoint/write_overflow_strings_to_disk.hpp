@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/storage/checkpoint/string_checkpoint_state.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 

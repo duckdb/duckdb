@@ -7,7 +7,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/storage/compression/utils.hpp"
 #include "zstd_wrapper.hpp"
-#include "zstd/dict/zdict.h"
+#include "zdict.h"
 
 namespace duckdb {
 
