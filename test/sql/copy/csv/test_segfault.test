@@ -10,10 +10,9 @@ from 'data/csv/fuzzing/0.csv'
 ----
 It was not possible to automatically detect the CSV Parsing
 
-statement error
+statement ok
 from 'data/csv/fuzzing/1.csv'
-----
-It was not possible to automatically detect the CSV Parsing dialect/types
+
 
 statement error
 from 'data/csv/fuzzing/2.csv'
@@ -167,23 +166,18 @@ from 'data/csv/fuzzing/34.csv'
 ----
 It was not possible to automatically detect the CSV Parsing dialect/types
 
-statement error
+statement ok
 from 'data/csv/fuzzing/35.csv'
-----
-It was not possible to automatically detect the CSV Parsing dialect/types
 
 statement error
 from 'data/csv/fuzzing/36.csv'
 ----
 It was not possible to automatically detect the CSV Parsing dialect/types
 
-statement error
+statement ok
 from 'data/csv/fuzzing/37.csv'
-----
-It was not possible to automatically detect the CSV Parsing dialect/types
 
-statement error
+statement ok
 from 'data/csv/fuzzing/38.csv'
-----
-It was not possible to automatically detect the CSV Parsing dialect/types
+
 
