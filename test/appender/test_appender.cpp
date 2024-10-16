@@ -169,6 +169,69 @@ TEST_CASE("Test AppendRow", "[appender]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {Value::TIMESTAMP(1992, 1, 1, 1, 1, 1, 0)}));
 }
 
+TEST_CASE("Test appender with generated column", "[appender]") {
+	DuckDB db(nullptr); // Create an in-memory DuckDB database
+	Connection con(db); // Create a connection to the database
+
+	SECTION("Insert into table with generated column first") {
+		// Try to create a table with a generated column
+		REQUIRE_NOTHROW(con.Query(R"(
+			CREATE TABLE tbl (
+				b VARCHAR GENERATED ALWAYS AS (a),
+				a VARCHAR
+			)
+		)"));
+
+		Appender appender(con, "tbl");
+		REQUIRE_NOTHROW(appender.BeginRow());
+		REQUIRE_NOTHROW(appender.Append("a"));
+
+		// Column 'b' is generated from 'a', so it does not need to be explicitly appended
+		// End the row
+		REQUIRE_NOTHROW(appender.EndRow());
+
+		// Close the appender
+		REQUIRE_NOTHROW(appender.Close());
+
+		// Query the table to verify that the row was inserted correctly
+		auto result = con.Query("SELECT * FROM tbl");
+		REQUIRE_NO_FAIL(*result);
+
+		// Check that the column 'a' contains "a" and 'b' contains the generated value "a"
+		REQUIRE(CHECK_COLUMN(result, 0, {Value("a")}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value("a")}));
+	}
+
+	SECTION("Insert into table with generated column second") {
+		// Try to create a table with a generated column
+		REQUIRE_NOTHROW(con.Query(R"(
+			CREATE TABLE tbl (
+				a VARCHAR,
+				b VARCHAR GENERATED ALWAYS AS (a)
+			)
+		)"));
+
+		Appender appender(con, "tbl");
+		REQUIRE_NOTHROW(appender.BeginRow());
+		REQUIRE_NOTHROW(appender.Append("a"));
+
+		// Column 'b' is generated from 'a', so it does not need to be explicitly appended
+		// End the row
+		REQUIRE_NOTHROW(appender.EndRow());
+
+		// Close the appender
+		REQUIRE_NOTHROW(appender.Close());
+
+		// Query the table to verify that the row was inserted correctly
+		auto result = con.Query("SELECT * FROM tbl");
+		REQUIRE_NO_FAIL(*result);
+
+		// Check that the column 'a' contains "a" and 'b' contains the generated value "a"
+		REQUIRE(CHECK_COLUMN(result, 0, {Value("a")}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value("a")}));
+	}
+}
+
 TEST_CASE("Test default value appender", "[appender]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

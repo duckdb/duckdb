@@ -42,7 +42,6 @@
 
 #include "zstd/dict/divsufsort.h"
 
-namespace duckdb_zstd {
 /*- Constants -*/
 #if defined(INLINE)
 # undef INLINE
@@ -135,6 +134,7 @@ namespace duckdb_zstd {
 #define BUCKET_BSTAR(_c0, _c1) (bucket_B[(_c0) * ALPHABET_SIZE + (_c1)])
 #endif
 
+namespace duckdb_zstd {
 
 /*- Private Functions -*/
 
@@ -1577,7 +1577,7 @@ note:
     /* Construct the inverse suffix array of type B* suffixes using trsort. */
     trsort(ISAb, SA, m, 1);
 
-    /* Set the sorted order of tyoe B* suffixes. */
+    /* Set the sorted order of type B* suffixes. */
     for(i = n - 1, j = m, c0 = T[n - 1]; 0 <= i;) {
       for(--i, c1 = c0; (0 <= i) && ((c0 = T[i]) >= c1); --i, c1 = c0) { }
       if(0 <= i) {
@@ -1913,4 +1913,4 @@ divbwt(const unsigned char *T, unsigned char *U, int *A, int n, unsigned char * 
   return pidx;
 }
 
-}
+} // namespace duckdb_zstd

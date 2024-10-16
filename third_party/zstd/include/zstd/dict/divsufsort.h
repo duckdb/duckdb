@@ -56,6 +56,7 @@ divsufsort(const unsigned char *T, int *SA, int n, int openMP);
 int
 divbwt(const unsigned char *T, unsigned char *U, int *A, int n, unsigned char * num_indexes, int * indexes, int openMP);
 
-}
+
+} // namespace duckdb_zstd
 
 #endif /* _DIVSUFSORT_H */

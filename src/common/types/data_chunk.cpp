@@ -26,15 +26,44 @@ DataChunk::~DataChunk() {
 }
 
 void DataChunk::InitializeEmpty(const vector<LogicalType> &types) {
-	InitializeEmpty(types.begin(), types.end());
-}
-
-void DataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &types, idx_t capacity_p) {
-	Initialize(allocator, types.begin(), types.end(), capacity_p);
+	D_ASSERT(data.empty());
+	capacity = STANDARD_VECTOR_SIZE;
+	for (idx_t i = 0; i < types.size(); i++) {
+		data.emplace_back(types[i], nullptr);
+	}
 }
 
 void DataChunk::Initialize(ClientContext &context, const vector<LogicalType> &types, idx_t capacity_p) {
 	Initialize(Allocator::Get(context), types, capacity_p);
+}
+
+void DataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &types, idx_t capacity_p) {
+	auto initialize = vector<bool>(types.size(), true);
+	Initialize(allocator, types, initialize, capacity_p);
+}
+
+void DataChunk::Initialize(ClientContext &context, const vector<LogicalType> &types, const vector<bool> &initialize,
+                           idx_t capacity_p) {
+	Initialize(Allocator::Get(context), types, initialize, capacity_p);
+}
+
+void DataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &types, const vector<bool> &initialize,
+                           idx_t capacity_p) {
+	D_ASSERT(types.size() == initialize.size());
+	D_ASSERT(data.empty());
+
+	capacity = capacity_p;
+	for (idx_t i = 0; i < types.size(); i++) {
+		if (!initialize[i]) {
+			data.emplace_back(types[i], nullptr);
+			vector_caches.emplace_back();
+			continue;
+		}
+
+		VectorCache cache(allocator, types[i], capacity);
+		data.emplace_back(cache);
+		vector_caches.push_back(std::move(cache));
+	}
 }
 
 idx_t DataChunk::GetAllocationSize() const {
@@ -44,32 +73,6 @@ idx_t DataChunk::GetAllocationSize() const {
 		total_size += vec.GetAllocationSize(cardinality);
 	}
 	return total_size;
-}
-
-void DataChunk::Initialize(Allocator &allocator, vector<LogicalType>::const_iterator begin,
-                           vector<LogicalType>::const_iterator end, idx_t capacity_p) {
-	D_ASSERT(data.empty());                   // can only be initialized once
-	D_ASSERT(std::distance(begin, end) != 0); // empty chunk not allowed
-	capacity = capacity_p;
-	for (; begin != end; begin++) {
-		VectorCache cache(allocator, *begin, capacity);
-		data.emplace_back(cache);
-		vector_caches.push_back(std::move(cache));
-	}
-}
-
-void DataChunk::Initialize(ClientContext &context, vector<LogicalType>::const_iterator begin,
-                           vector<LogicalType>::const_iterator end, idx_t capacity_p) {
-	Initialize(Allocator::Get(context), begin, end, capacity_p);
-}
-
-void DataChunk::InitializeEmpty(vector<LogicalType>::const_iterator begin, vector<LogicalType>::const_iterator end) {
-	capacity = STANDARD_VECTOR_SIZE;
-	D_ASSERT(data.empty());                   // can only be initialized once
-	D_ASSERT(std::distance(begin, end) != 0); // empty chunk not allowed
-	for (; begin != end; begin++) {
-		data.emplace_back(*begin, nullptr);
-	}
 }
 
 void DataChunk::Reset() {
