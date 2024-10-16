@@ -4,6 +4,7 @@
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_rle_bp_encoder.hpp"
 #include "parquet_writer.hpp"
+#include "parquet_statistics.hpp"
 #include "geo_parquet.hpp"
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/exception.hpp"
@@ -821,103 +822,6 @@ void BasicColumnWriter::WriteDictionary(BasicColumnWriterState &state, unique_pt
 	state.write_info.insert(state.write_info.begin(), std::move(write_info));
 }
 
-// FIXME FIXME FIXME
-
-// bloom filter stuff
-// see https://github.com/apache/parquet-format/blob/master/BloomFilter.md
-
-static uint32_t parquet_bloom_salt[8] = {0x47b6137bU, 0x44974d91U, 0x8824ad5bU, 0xa2b7289dU,
-                                         0x705495c7U, 0x2df1424bU, 0x9efc4947U, 0x5c6bfb31U};
-
-struct ParquetBloomMaskResult {
-	uint8_t bit_set[8] = {0};
-};
-
-struct ParquetBloomBlock {
-	uint32_t block[8] = {0};
-
-	static bool check_bit(uint32_t &x, const uint8_t i) {
-		D_ASSERT(i < 32);
-		return (x >> i) & (uint32_t)1;
-	}
-
-	static void set_bit(uint32_t &x, const uint8_t i) {
-		D_ASSERT(i < 32);
-		x |= (uint32_t)1 << i;
-		D_ASSERT(check_bit(x, i));
-	}
-
-	static ParquetBloomMaskResult Mask(uint32_t x) {
-		ParquetBloomMaskResult result;
-		for (idx_t i = 0; i < 8; i++) {
-			result.bit_set[i] = (x * parquet_bloom_salt[i]) >> 27;
-		}
-		return result;
-	}
-
-	static void BlockInsert(ParquetBloomBlock &b, uint32_t x) {
-		auto masked = Mask(x);
-		for (idx_t i = 0; i < 8; i++) {
-			set_bit(b.block[i], masked.bit_set[i]);
-			D_ASSERT(check_bit(b.block[i], masked.bit_set[i]));
-		}
-	}
-};
-
-struct ParquetBloomFilter {
-
-	void Initialize(idx_t num_blocks) {
-		D_ASSERT(IsPowerOfTwo(num_blocks));
-		data = make_uniq<ResizeableBuffer>(Allocator::DefaultAllocator(), sizeof(ParquetBloomBlock) * num_blocks);
-		data->zero();
-	}
-
-	void FilterInsert(uint64_t x) {
-		auto blocks = (ParquetBloomBlock *)(data->ptr);
-		auto block_count = data->len / sizeof(ParquetBloomBlock);
-		uint64_t i = ((x >> 32) * block_count) >> 32;
-		auto &b = blocks[i];
-		ParquetBloomBlock::BlockInsert(b, x);
-	}
-
-	void Shrink(idx_t new_block_count) {
-		auto block_count = data->len / sizeof(ParquetBloomBlock);
-		D_ASSERT(block_count >= new_block_count);
-		D_ASSERT(IsPowerOfTwo(block_count));
-		D_ASSERT(IsPowerOfTwo(new_block_count));
-
-		ParquetBloomFilter new_bloom_filter;
-		new_bloom_filter.Initialize(new_block_count);
-
-		uint8_t shift = log2(block_count) - log2(new_block_count);
-		auto old_blocks = (ParquetBloomBlock *)(data->ptr);
-		auto new_blocks = (ParquetBloomBlock *)(new_bloom_filter.data->ptr);
-
-		for (idx_t block_idx = 0; block_idx < block_count; block_idx++) {
-			auto new_idx = block_idx >> shift;
-			auto &old_block = old_blocks[block_idx];
-			auto &new_block = new_blocks[new_idx];
-			for (idx_t word_idx = 0; word_idx < 8; word_idx++) {
-				new_block.block[word_idx] |= old_block.block[word_idx];
-			}
-		}
-
-		data = std::move(new_bloom_filter.data);
-	}
-	//
-	// bool FilterCheck(uint64_t x) {
-	// 	auto blocks = (ParquetBloomBlock *)(data->ptr);
-	// 	// TODO this can be cached!
-	// 	auto block_count = data->len / sizeof(ParquetBloomBlock);
-	// 	D_ASSERT(data->len % sizeof(ParquetBloomBlock) == 0);
-	// 	auto i = ((x >> 32) * block_count) >> 32;
-	// 	return ParquetBloomBlock::BlockCheck(blocks[i], x);
-	// }
-
-	unique_ptr<ResizeableBuffer> data;
-};
-// FIXME FIXME FIXME
-
 //===--------------------------------------------------------------------===//
 // Standard Column Writer
 //===--------------------------------------------------------------------===//
@@ -948,7 +852,7 @@ public:
 	const ResizeableBuffer *GetBloomFilter() override {
 		// TODO not here but for testing purposes
 		filter.Shrink(32);
-		return filter.data.get();
+		return filter.Get();
 	}
 
 	void AddBloomFilter(T val) {

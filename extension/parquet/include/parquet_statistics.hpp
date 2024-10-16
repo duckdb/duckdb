@@ -13,6 +13,7 @@ using duckdb_parquet::SchemaElement;
 
 struct LogicalType;
 class ColumnReader;
+class ResizeableBuffer;
 
 struct ParquetStatisticsUtils {
 
@@ -24,6 +25,70 @@ struct ParquetStatisticsUtils {
 
 	static bool BloomFilterExcludes(const TableFilter &filter, const duckdb_parquet::ColumnMetaData &column_meta_data,
 	                                duckdb_apache::thrift::protocol::TProtocol &file_proto, Allocator &allocator);
+};
+
+class ParquetBloomFilter {
+public:
+	void Initialize(idx_t num_blocks);
+	void Initialize(unique_ptr<ResizeableBuffer> data_p);
+	void FilterInsert(uint64_t x);
+	bool FilterCheck(uint64_t x);
+	void Shrink(idx_t new_block_count);
+	ResizeableBuffer *Get();
+
+private:
+	unique_ptr<ResizeableBuffer> data;
+	idx_t block_count;
+};
+
+// see https://github.com/apache/parquet-format/blob/master/BloomFilter.md
+
+struct ParquetBloomBlock {
+	struct ParquetBloomMaskResult {
+		uint8_t bit_set[8] = {0};
+	};
+
+	static constexpr uint32_t parquet_bloom_salt[8] = {0x47b6137bU, 0x44974d91U, 0x8824ad5bU, 0xa2b7289dU,
+	                                                   0x705495c7U, 0x2df1424bU, 0x9efc4947U, 0x5c6bfb31U};
+
+	uint32_t block[8] = {0};
+
+	static bool check_bit(uint32_t &x, const uint8_t i) {
+		D_ASSERT(i < 32);
+		return (x >> i) & (uint32_t)1;
+	}
+
+	static void set_bit(uint32_t &x, const uint8_t i) {
+		D_ASSERT(i < 32);
+		x |= (uint32_t)1 << i;
+		D_ASSERT(check_bit(x, i));
+	}
+
+	static ParquetBloomMaskResult Mask(uint32_t x) {
+		ParquetBloomMaskResult result;
+		for (idx_t i = 0; i < 8; i++) {
+			result.bit_set[i] = (x * parquet_bloom_salt[i]) >> 27;
+		}
+		return result;
+	}
+
+	static void BlockInsert(ParquetBloomBlock &b, uint32_t x) {
+		auto masked = Mask(x);
+		for (idx_t i = 0; i < 8; i++) {
+			set_bit(b.block[i], masked.bit_set[i]);
+			D_ASSERT(check_bit(b.block[i], masked.bit_set[i]));
+		}
+	}
+
+	static bool BlockCheck(ParquetBloomBlock &b, uint32_t x) {
+		auto masked = Mask(x);
+		for (idx_t i = 0; i < 8; i++) {
+			if (!check_bit(b.block[i], masked.bit_set[i])) {
+				return false;
+			}
+		}
+		return true;
+	}
 };
 
 } // namespace duckdb
