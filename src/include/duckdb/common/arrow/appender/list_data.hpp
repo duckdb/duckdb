@@ -74,7 +74,8 @@ public:
 			    (uint64_t)last_offset + list_length > NumericLimits<int32_t>::Maximum()) {
 				throw InvalidInputException(
 				    "Arrow Appender: The maximum combined list offset for regular list buffers is "
-				    "%u but the offset of %lu exceeds this.",
+				    "%u but the offset of %lu exceeds this.\n* SET arrow_large_buffer_size=true to use large list "
+				    "buffers",
 				    NumericLimits<int32_t>::Maximum(), last_offset);
 			}
 			last_offset += list_length;
