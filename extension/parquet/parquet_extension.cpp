@@ -1648,6 +1648,10 @@ void ParquetExtension::Load(DuckDB &db) {
 	ParquetFileMetadataFunction file_meta_fun;
 	ExtensionUtil::RegisterFunction(db_instance, MultiFileReader::CreateFunctionSet(file_meta_fun));
 
+	// parquet_bloom_probe
+	ParquetBloomProbeFunction bloom_probe_fun;
+	ExtensionUtil::RegisterFunction(db_instance, MultiFileReader::CreateFunctionSet(bloom_probe_fun));
+
 	CopyFunction function("parquet");
 	function.copy_to_select = ParquetWriteSelect;
 	function.copy_to_bind = ParquetWriteBind;
