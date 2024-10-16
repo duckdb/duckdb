@@ -367,6 +367,8 @@ const char* EnumUtil::ToChars<AlterTableType>(AlterTableType value) {
 		return "DROP_NOT_NULL";
 	case AlterTableType::SET_COLUMN_COMMENT:
 		return "SET_COLUMN_COMMENT";
+	case AlterTableType::ADD_CONSTRAINT:
+		return "ADD_CONSTRAINT";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<AlterTableType>", value));
 	}
@@ -406,6 +408,9 @@ AlterTableType EnumUtil::FromString<AlterTableType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "SET_COLUMN_COMMENT")) {
 		return AlterTableType::SET_COLUMN_COMMENT;
+	}
+	if (StringUtil::Equals(value, "ADD_CONSTRAINT")) {
+		return AlterTableType::ADD_CONSTRAINT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<AlterTableType>", value));
 }

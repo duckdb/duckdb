@@ -363,40 +363,41 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			}
 			for (auto &name : info.referenced_columns) {
 				referenced_column_name_list.push_back(Value(std::move(name)));
-			for (auto column_index : column_index_list) {
-				auto logical_index = table.GetColumns().PhysicalToLogical(column_index);
-				index_list.push_back(Value::BIGINT(NumericCast<int64_t>(logical_index.index)));
-				column_name_list.emplace_back(table.GetColumn(logical_index).Name());
+				for (auto column_index : column_index_list) {
+					auto logical_index = table.GetColumns().PhysicalToLogical(column_index);
+					index_list.push_back(Value::BIGINT(NumericCast<int64_t>(logical_index.index)));
+					column_name_list.emplace_back(table.GetColumn(logical_index).Name());
+				}
+
+				// constraint_column_indexes, LIST
+				output.SetValue(col++, count, Value::LIST(LogicalType::BIGINT, std::move(column_index_list)));
+
+				// constraint_column_names, LIST
+				output.SetValue(col++, count, Value::LIST(LogicalType::VARCHAR, std::move(column_name_list)));
+
+				// constraint_name, VARCHAR
+				output.SetValue(col++, count, Value(std::move(constraint_name)));
+
+				// referenced_table, VARCHAR
+				output.SetValue(col++, count,
+				                info.referenced_table.empty() ? Value() : Value(std::move(info.referenced_table)));
+
+				// referenced_column_names, LIST
+				output.SetValue(col++, count,
+				                Value::LIST(LogicalType::VARCHAR, std::move(referenced_column_name_list)));
+				count++;
 			}
-
-			// constraint_column_indexes, LIST
-			output.SetValue(col++, count, Value::LIST(LogicalType::BIGINT, std::move(column_index_list)));
-
-			// constraint_column_names, LIST
-			output.SetValue(col++, count, Value::LIST(LogicalType::VARCHAR, std::move(column_name_list)));
-
-			// constraint_name, VARCHAR
-			output.SetValue(col++, count, Value(std::move(constraint_name)));
-
-			// referenced_table, VARCHAR
-			output.SetValue(col++, count,
-			                info.referenced_table.empty() ? Value() : Value(std::move(info.referenced_table)));
-
-			// referenced_column_names, LIST
-			output.SetValue(col++, count, Value::LIST(LogicalType::VARCHAR, std::move(referenced_column_name_list)));
-			count++;
+			if (data.constraint_offset >= constraints.size()) {
+				data.constraint_offset = 0;
+				data.offset++;
+			}
 		}
-		if (data.constraint_offset >= constraints.size()) {
-			data.constraint_offset = 0;
-			data.offset++;
-		}
+		output.SetCardinality(count);
 	}
-	output.SetCardinality(count);
-}
 
-void DuckDBConstraintsFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("duckdb_constraints", {}, DuckDBConstraintsFunction, DuckDBConstraintsBind,
-	                              DuckDBConstraintsInit));
-}
+	void DuckDBConstraintsFun::RegisterFunction(BuiltinFunctions & set) {
+		set.AddFunction(TableFunction("duckdb_constraints", {}, DuckDBConstraintsFunction, DuckDBConstraintsBind,
+		                              DuckDBConstraintsInit));
+	}
 
 } // namespace duckdb
