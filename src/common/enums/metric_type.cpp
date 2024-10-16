@@ -86,6 +86,8 @@ MetricsType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {
             return MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE;
         case OptimizerType::LIMIT_PUSHDOWN:
             return MetricsType::OPTIMIZER_LIMIT_PUSHDOWN;
+        case OptimizerType::SAMPLING_PUSHDOWN:
+            return MetricsType::OPTIMIZER_SAMPLING_PUSHDOWN;
         case OptimizerType::TOP_N:
             return MetricsType::OPTIMIZER_TOP_N;
         case OptimizerType::COMPRESSED_MATERIALIZATION:
@@ -180,6 +182,7 @@ bool MetricsUtils::IsOptimizerMetric(MetricsType type) {
         case MetricsType::OPTIMIZER_COLUMN_LIFETIME:
         case MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE:
         case MetricsType::OPTIMIZER_LIMIT_PUSHDOWN:
+        case MetricsType::OPTIMIZER_SAMPLING_PUSHDOWN:
         case MetricsType::OPTIMIZER_TOP_N:
         case MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION:
         case MetricsType::OPTIMIZER_DUPLICATE_GROUPS:
