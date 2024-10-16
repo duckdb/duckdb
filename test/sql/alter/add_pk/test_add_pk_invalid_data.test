@@ -1,0 +1,32 @@
+# name: test/sql/alter/add_pk/test_add_pk_invalid_data.test
+# description: Test adding a PRIMARY KEY to a table with invalid data.
+# group: [add_pk]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE duplicates (i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO duplicates VALUES (1, 10), (2, 20), (3, 30), (1, 100)
+
+statement error
+ALTER TABLE duplicates ADD PRIMARY KEY (i)
+----
+<REGEX>:Constraint Error.*PRIMARY KEY or UNIQUE constraint violated: duplicate key "1".*
+
+# Now test with NULLs.
+
+statement ok
+CREATE TABLE nulls (i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO nulls VALUES (1, 10), (2, 20), (NULL, 30), (3, 100)
+
+# TODO
+
+statement error
+ALTER TABLE nulls ADD PRIMARY KEY (i)
+----
+<REGEX>:Constraint Error.*NOT NULL constraint failed.*

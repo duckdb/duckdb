@@ -1,0 +1,11 @@
+# name: test/sql/alter/add_pk/test_add_pk_wal.test
+# description: Test persisting the ALTER TABLE ... ADD PRIMARY KEY statement to the WAL.
+# group: [add_pk]
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+# TODO

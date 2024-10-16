@@ -141,14 +141,12 @@ unique_ptr<BoundConstraint> Binder::BindConstraint(Constraint &constraint, const
 		// have to resolve names
 		for (auto &keyname : unique.GetColumnNames()) {
 			if (!columns.ColumnExists(keyname)) {
-				throw ParserException("Table \"%s\" does not have a column named \"%s\"", table_name, keyname);
+				throw CatalogException("table \"%s\" does not have a column named \"%s\"", table_name, keyname);
 			}
 			auto &column = columns.GetColumn(keyname);
 			auto column_index = column.Physical();
 			if (key_set.find(column_index) != key_set.end()) {
-				throw ParserException("column \"%s\" appears twice in "
-				                      "primary key constraint",
-				                      keyname);
+				throw ParserException("column \"%s\" appears twice in primary key constraint", keyname);
 			}
 			keys.push_back(column_index);
 			key_set.insert(column_index);
