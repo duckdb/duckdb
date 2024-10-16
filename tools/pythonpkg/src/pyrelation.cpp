@@ -935,7 +935,7 @@ duckdb::pyarrow::Table DuckDBPyRelation::ToArrowTableInternal(idx_t batch_size, 
 		if (!rel) {
 			return py::none();
 		}
-		auto &config = ClientConfig::GetConfig(*rel->context.GetContext());
+		auto &config = ClientConfig::GetConfig(*rel->context->GetContext());
 		ScopedConfigSetting scoped_setting(
 		    config,
 		    [&batch_size](ClientConfig &config) {
