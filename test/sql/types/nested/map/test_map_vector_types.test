@@ -54,7 +54,7 @@ select
 	map(keys, vals)[key] as first_map_entry,
 		from tbl
 	where
-		not_filtered and first_map_entry[1] != val;
+		not_filtered and first_map_entry != val;
 ----
 
 statement ok
