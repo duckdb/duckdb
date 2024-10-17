@@ -79,6 +79,13 @@ void TupleDataCollection::Unpin() {
 	}
 }
 
+void TupleDataCollection::SetPartitionIndex(const idx_t index) {
+	D_ASSERT(!partition_index.IsValid());
+	D_ASSERT(Count() == 0);
+	partition_index = index;
+	allocator->SetPartitionIndex(index);
+}
+
 // LCOV_EXCL_START
 void VerifyAppendColumns(const TupleDataLayout &layout, const vector<column_t> &column_ids) {
 #ifdef DEBUG

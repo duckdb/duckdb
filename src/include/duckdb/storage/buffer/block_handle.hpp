@@ -15,6 +15,7 @@
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
@@ -116,8 +117,15 @@ public:
 	inline const idx_t &GetMemoryUsage() const {
 		return memory_usage;
 	}
+
 	bool IsUnloaded() {
 		return state == BlockState::BLOCK_UNLOADED;
+	}
+
+	void SetEvictionQueueIndex(const idx_t index) {
+		D_ASSERT(!eviction_queue_idx.IsValid());                  // Cannot overwrite
+		D_ASSERT(buffer->type == FileBufferType::MANAGED_BUFFER); // MANAGED_BUFFER only (at least, for now)
+		eviction_queue_idx = index;
 	}
 
 private:
@@ -152,6 +160,8 @@ private:
 	BufferPoolReservation memory_charge;
 	//! Does the block contain any memory pointers?
 	const char *unswizzled;
+	//! Index for eviction queue (FileBufferType::MANAGED_BUFFER only, for now)
+	optional_idx eviction_queue_idx;
 };
 
 } // namespace duckdb

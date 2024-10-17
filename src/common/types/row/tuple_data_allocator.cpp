@@ -1,6 +1,7 @@
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
 
 #include "duckdb/common/fast_mem.hpp"
+#include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types/row/tuple_data_segment.hpp"
 #include "duckdb/common/types/row/tuple_data_states.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
@@ -73,6 +74,12 @@ idx_t TupleDataAllocator::HeapBlockCount() const {
 	return heap_blocks.size();
 }
 
+void TupleDataAllocator::SetPartitionIndex(const idx_t index) {
+	D_ASSERT(!partition_index.IsValid());
+	D_ASSERT(row_blocks.empty() && heap_blocks.empty());
+	partition_index = index;
+}
+
 void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin_state,
                                TupleDataChunkState &chunk_state, const idx_t append_offset, const idx_t append_count) {
 	D_ASSERT(this == segment.allocator.get());
@@ -142,6 +149,9 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_sta
 	// Allocate row block (if needed)
 	if (row_blocks.empty() || row_blocks.back().RemainingCapacity() < layout.GetRowWidth()) {
 		row_blocks.emplace_back(buffer_manager, block_size);
+		if (partition_index.IsValid()) { // Set the eviction queue index logarithmically using RadixBits
+			row_blocks.back().handle->SetEvictionQueueIndex(RadixPartitioning::RadixBits(partition_index.GetIndex()));
+		}
 	}
 	result.row_block_index = NumericCast<uint32_t>(row_blocks.size() - 1);
 	auto &row_block = row_blocks[result.row_block_index];
@@ -188,6 +198,10 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_sta
 				if (heap_blocks.empty() || heap_blocks.back().RemainingCapacity() < heap_sizes[append_offset]) {
 					const auto size = MaxValue<idx_t>(block_size, heap_sizes[append_offset]);
 					heap_blocks.emplace_back(buffer_manager, size);
+					if (partition_index.IsValid()) { // Set the eviction queue index logarithmically using RadixBits
+						heap_blocks.back().handle->SetEvictionQueueIndex(
+						    RadixPartitioning::RadixBits(partition_index.GetIndex()));
+					}
 				}
 				result.heap_block_index = NumericCast<uint32_t>(heap_blocks.size() - 1);
 				auto &heap_block = heap_blocks[result.heap_block_index];

@@ -119,6 +119,13 @@ idx_t ColumnDataCollection::AllocationSize() const {
 	return total_size;
 }
 
+void ColumnDataCollection::SetPartitionIndex(const idx_t index) {
+	D_ASSERT(!partition_index.IsValid());
+	D_ASSERT(Count() == 0);
+	partition_index = index;
+	allocator->SetPartitionIndex(index);
+}
+
 //===--------------------------------------------------------------------===//
 // ColumnDataRow
 //===--------------------------------------------------------------------===//

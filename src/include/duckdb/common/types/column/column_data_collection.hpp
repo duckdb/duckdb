@@ -65,6 +65,8 @@ public:
 	idx_t SizeInBytes() const;
 	//! The allocation size (in bytes) of this ColumnDataCollection - this property is cached
 	idx_t AllocationSize() const;
+	//! Sets the partition index of this ColumnDataCollection
+	void SetPartitionIndex(idx_t index);
 
 	//! Get the allocator
 	DUCKDB_API Allocator &GetAllocator() const;
@@ -185,6 +187,8 @@ private:
 	vector<ColumnDataCopyFunction> copy_functions;
 	//! When the column data collection is marked as finished - new tuples can no longer be appended to it
 	bool finished_append;
+	//! Partition index (optional, if partitioned)
+	optional_idx partition_index;
 };
 
 //! The ColumnDataRowCollection represents a set of materialized rows, as obtained from the ColumnDataCollection
