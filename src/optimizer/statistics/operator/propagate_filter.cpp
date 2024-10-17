@@ -1,5 +1,5 @@
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/function/scalar/generic_functions.hpp"
+#include "duckdb/function/scalar/generic_common.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"

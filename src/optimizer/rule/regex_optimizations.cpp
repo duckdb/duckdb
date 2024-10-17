@@ -3,6 +3,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
 #include "utf8proc_wrapper.hpp"
@@ -184,7 +185,7 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 			return nullptr;
 		}
 		auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(escaped_like_string.like_string)));
-		auto contains = make_uniq<BoundFunctionExpression>(root.return_type, ContainsFun::GetStringContains(),
+		auto contains = make_uniq<BoundFunctionExpression>(root.return_type, GetStringContains(),
 		                                                   std::move(root.children), nullptr);
 		contains->children[1] = std::move(parameter);
 
@@ -205,8 +206,8 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		D_ASSERT(root.children.size() == 2);
 	}
 
-	auto like_expression = make_uniq<BoundFunctionExpression>(root.return_type, LikeFun::GetLikeFunction(),
-	                                                          std::move(root.children), nullptr);
+	auto like_expression =
+	    make_uniq<BoundFunctionExpression>(root.return_type, LikeFun::GetFunction(), std::move(root.children), nullptr);
 	auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(like_string.like_string)));
 	like_expression->children[1] = std::move(parameter);
 	return std::move(like_expression);

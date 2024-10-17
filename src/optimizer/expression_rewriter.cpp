@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
+#include "duckdb/function/scalar/generic_common.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
@@ -48,9 +49,11 @@ unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(unique_ptr<Expression>
 
 unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(vector<unique_ptr<Expression>> children, Value value) {
 	auto type = value.type();
+	auto func = ConstantOrNullFun::GetFunction();
+	func.arguments[0] = type;
+	func.return_type = type;
 	children.insert(children.begin(), make_uniq<BoundConstantExpression>(value));
-	return make_uniq<BoundFunctionExpression>(type, ConstantOrNull::GetFunction(type), std::move(children),
-	                                          ConstantOrNull::Bind(std::move(value)));
+	return make_uniq<BoundFunctionExpression>(type, func, std::move(children), ConstantOrNull::Bind(std::move(value)));
 }
 
 void ExpressionRewriter::VisitOperator(LogicalOperator &op) {
