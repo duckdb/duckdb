@@ -13,6 +13,7 @@
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pullup.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/optimizer/empty_result_pullup.hpp"
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/limit_pushdown.hpp"
@@ -95,7 +96,10 @@ void Optimizer::RunBuiltInOptimizers() {
 	case LogicalOperatorType::LOGICAL_CREATE_SECRET:
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
 		// skip optimizing simple & often-occurring plans unaffected by rewrites
-		return;
+		if (plan->children.empty()) {
+			return;
+		}
+		break;
 	default:
 		break;
 	}
@@ -137,6 +141,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::DELIMINATOR, [&]() {
 		Deliminator deliminator;
 		plan = deliminator.Optimize(std::move(plan));
+	});
+
+	// Pulls up empty results
+	RunOptimizer(OptimizerType::EMPTY_RESULT_PULLUP, [&]() {
+		EmptyResultPullup empty_result_pullup;
+		plan = empty_result_pullup.Optimize(std::move(plan));
 	});
 
 	// then we perform the join ordering optimization

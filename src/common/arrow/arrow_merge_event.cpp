@@ -1,4 +1,5 @@
 #include "duckdb/common/arrow/arrow_merge_event.hpp"
+#include "duckdb/common/arrow/arrow_util.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {

@@ -4,15 +4,13 @@
 
 require icu
 
-#FIXME: There are currently some problems with this test due to differences East cost / West cost
-mode skip
-
 statement ok
 SET Calendar = 'gregorian';
 
 statement error
 SET TimeZone = 'Europe/Duck';
 ----
+Unknown TimeZone
 
 statement ok
 SET TimeZone = 'America/Los_Angeles';
@@ -38,16 +36,15 @@ SELECT '2001-02-16 20:38:40-05'::TIMESTAMPTZ AT TIME ZONE 'America/Denver';
 2001-02-16 18:38:40
 
 # Invalid time zone
-# (ICU treats thesed as UTC.)
-query I
+statement error
 SELECT  '2001-02-16 20:38:40'::TIMESTAMP AT TIME ZONE 'Europe/Duck';
 ----
-2001-02-16 12:38:40-08
+Unknown TimeZone
 
-query I
+statement error
 SELECT '2001-02-16 20:38:40-05'::TIMESTAMPTZ AT TIME ZONE 'Europe/Duck';
 ----
-2001-02-17 01:38:40
+Unknown TimeZone
 
 # Infinities
 foreach datatype TIMESTAMP TIMESTAMPTZ
@@ -62,15 +59,15 @@ SELECT '-infinity'::${datatype} AT TIME ZONE 'America/Denver';
 ----
 -infinity
 
-query I
+statement error
 SELECT 'infinity'::${datatype} AT TIME ZONE 'Europe/Duck';
 ----
-infinity
+Unknown TimeZone
 
-query I
+statement error
 SELECT '-infinity'::${datatype} AT TIME ZONE 'Europe/Duck';
 ----
--infinity
+Unknown TimeZone
 
 endloop
 
@@ -117,11 +114,11 @@ INSERT INTO attimezone (VALUES
 	('infinity', 'infinity', '19:38:40-08', 'America/Phoenix'),
 	('-infinity', '-infinity', '20:38:40-05', 'America/Phoenix'),
 	(NULL, NULL, NULL, 'America/Phoenix'),
-	('2001-02-16 20:38:40', '2001-02-16 19:38:40-08', '19:38:40+08', 'Europe/Duck'),
-	('2001-02-16 18:38:40', '2001-02-16 20:38:40-05', '20:38:40+15:59', 'Europe/Duck'),
-	('infinity', 'infinity', '12:15:37.123456-08', 'Europe/Duck'),
-	('-infinity', '-infinity', '20:38:40-15:59', 'Europe/Duck'),
-	(NULL, NULL, NULL, 'Europe/Duck'),
+	('2001-02-16 20:38:40', '2001-02-16 19:38:40-08', '19:38:40+08', 'UTC'),
+	('2001-02-16 18:38:40', '2001-02-16 20:38:40-05', '20:38:40+15:59', 'UTC'),
+	('infinity', 'infinity', '12:15:37.123456-08', 'UTC'),
+	('-infinity', '-infinity', '20:38:40-15:59', 'UTC'),
+	(NULL, NULL, NULL, 'UTC'),
 	('2001-02-16 20:38:40', '2001-02-16 19:38:40-08', '19:38:40-08', NULL),
 	('2001-02-16 18:38:40', '2001-02-16 20:38:40-05', '20:38:40-05', NULL),
 	('infinity', 'infinity', '12:15:37.123456-08', NULL),
@@ -261,7 +258,7 @@ America/Argentina/Tucuman	America/Argentina/Tucuman
 America/Argentina/Ushuaia	America/Argentina/Ushuaia
 America/Aruba	PRT
 America/Asuncion	America/Asuncion
-America/Atikokan	America/Atikokan
+America/Atikokan	EST
 America/Atka	America/Atka
 America/Bahia	America/Bahia
 America/Bahia_Banderas	America/Bahia_Banderas
@@ -279,14 +276,14 @@ America/Cancun	America/Cancun
 America/Caracas	America/Caracas
 America/Catamarca	America/Catamarca
 America/Cayenne	America/Cayenne
-America/Cayman	America/Cayman
+America/Cayman	EST
 America/Chicago	CST
 America/Chihuahua	America/Chihuahua
 America/Ciudad_Juarez	America/Ciudad_Juarez
-America/Coral_Harbour	America/Coral_Harbour
+America/Coral_Harbour	EST
 America/Cordoba	America/Cordoba
 America/Costa_Rica	America/Costa_Rica
-America/Creston	PNT
+America/Creston	MST
 America/Cuiaba	America/Cuiaba
 America/Curacao	PRT
 America/Danmarkshavn	America/Danmarkshavn
@@ -356,7 +353,7 @@ America/Montevideo	America/Montevideo
 America/Montreal	America/Montreal
 America/Montserrat	PRT
 America/Nassau	America/Nassau
-America/New_York	America/New_York
+America/New_York	EST5EDT
 America/Nipigon	America/Nipigon
 America/Nome	America/Nome
 America/Noronha	America/Noronha
@@ -365,10 +362,10 @@ America/North_Dakota/Center	America/North_Dakota/Center
 America/North_Dakota/New_Salem	America/North_Dakota/New_Salem
 America/Nuuk	America/Nuuk
 America/Ojinaga	America/Ojinaga
-America/Panama	America/Panama
+America/Panama	EST
 America/Pangnirtung	America/Pangnirtung
 America/Paramaribo	America/Paramaribo
-America/Phoenix	PNT
+America/Phoenix	MST
 America/Port-au-Prince	America/Port-au-Prince
 America/Port_of_Spain	PRT
 America/Porto_Acre	America/Porto_Acre
@@ -566,7 +563,7 @@ CAT	CAT
 CET	CET
 CNT	CNT
 CST	CST
-CST6CDT	CST6CDT
+CST6CDT	CST
 CTT	CTT
 Canada/Atlantic	Canada/Atlantic
 Canada/Central	Canada/Central
@@ -622,15 +619,15 @@ Etc/UCT	UCT
 Etc/UTC	UCT
 Etc/Universal	UCT
 Etc/Zulu	UCT
-Europe/Amsterdam	Europe/Amsterdam
+Europe/Amsterdam	CET
 Europe/Andorra	Europe/Andorra
 Europe/Astrakhan	Europe/Astrakhan
-Europe/Athens	Europe/Athens
+Europe/Athens	EET
 Europe/Belfast	GB
 Europe/Belgrade	Europe/Belgrade
 Europe/Berlin	Europe/Berlin
 Europe/Bratislava	Europe/Bratislava
-Europe/Brussels	Europe/Brussels
+Europe/Brussels	CET
 Europe/Bucharest	Europe/Bucharest
 Europe/Budapest	Europe/Budapest
 Europe/Busingen	Europe/Busingen
@@ -647,10 +644,10 @@ Europe/Kaliningrad	Europe/Kaliningrad
 Europe/Kiev	Europe/Kiev
 Europe/Kirov	Europe/Kirov
 Europe/Kyiv	Europe/Kyiv
-Europe/Lisbon	Portugal
+Europe/Lisbon	WET
 Europe/Ljubljana	Europe/Ljubljana
 Europe/London	GB
-Europe/Luxembourg	Europe/Luxembourg
+Europe/Luxembourg	CET
 Europe/Madrid	Europe/Madrid
 Europe/Malta	Europe/Malta
 Europe/Mariehamn	Europe/Mariehamn
@@ -717,10 +714,10 @@ Jamaica	Jamaica
 Japan	JST
 Kwajalein	Kwajalein
 Libya	Libya
-MET	MET
+MET	CET
 MIT	MIT
 MST	MST
-MST7MDT	MST7MDT
+MST7MDT	Navajo
 Mexico/BajaNorte	Mexico/BajaNorte
 Mexico/BajaSur	Mexico/BajaSur
 Mexico/General	Mexico/General
@@ -730,11 +727,11 @@ NZ	NZ
 NZ-CHAT	NZ-CHAT
 Navajo	Navajo
 PLT	PLT
-PNT	PNT
+PNT	MST
 PRC	CTT
 PRT	PRT
 PST	PST
-PST8PDT	PST8PDT
+PST8PDT	PST
 Pacific/Apia	MIT
 Pacific/Auckland	NZ
 Pacific/Bougainville	Pacific/Bougainville
@@ -750,8 +747,8 @@ Pacific/Galapagos	Pacific/Galapagos
 Pacific/Gambier	Pacific/Gambier
 Pacific/Guadalcanal	SST
 Pacific/Guam	Pacific/Guam
-Pacific/Honolulu	Pacific/Honolulu
-Pacific/Johnston	Pacific/Johnston
+Pacific/Honolulu	HST
+Pacific/Johnston	HST
 Pacific/Kanton	Pacific/Kanton
 Pacific/Kiritimati	Pacific/Kiritimati
 Pacific/Kosrae	Pacific/Kosrae
@@ -780,7 +777,7 @@ Pacific/Wake	Pacific/Wake
 Pacific/Wallis	Pacific/Wallis
 Pacific/Yap	Pacific/Yap
 Poland	Poland
-Portugal	Portugal
+Portugal	WET
 ROC	ROC
 ROK	ROK
 SST	SST
@@ -802,11 +799,11 @@ Turkey	Turkey
 UCT	UCT
 US/Alaska	AST
 US/Aleutian	US/Aleutian
-US/Arizona	PNT
+US/Arizona	MST
 US/Central	CST
 US/East-Indiana	IET
-US/Eastern	US/Eastern
-US/Hawaii	US/Hawaii
+US/Eastern	EST5EDT
+US/Hawaii	HST
 US/Indiana-Starke	US/Indiana-Starke
 US/Michigan	US/Michigan
 US/Mountain	Navajo
@@ -915,3 +912,14 @@ query II
 select '2024-02-29 00:00:00+06'::TIMESTAMPTZ, '2024-03-01 01:00:00+06'::TIMESTAMPTZ;
 ----
 2024-02-29 00:00:00+06	2024-03-01 00:00:00+05
+
+# 2024b
+# In particular, the Azores and Madeira did not observe DST from 1977 to 1981.
+statement ok
+SET TimeZone = 'Atlantic/Azores';
+
+# Last DST error
+query I
+select '1981-09-27 01:00:00+00'::TIMESTAMPTZ;
+----
+1981-09-27 00:00:00-01

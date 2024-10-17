@@ -57,6 +57,8 @@ private:
 	unique_ptr<LogicalOperator> PushdownJoin(unique_ptr<LogicalOperator> op);
 	//! Push down a LogicalProjection op
 	unique_ptr<LogicalOperator> PushdownProjection(unique_ptr<LogicalOperator> op);
+	//! Push down a LogicalProjection op
+	unique_ptr<LogicalOperator> PushdownUnnest(unique_ptr<LogicalOperator> op);
 	//! Push down a LogicalSetOperation op
 	unique_ptr<LogicalOperator> PushdownSetOperation(unique_ptr<LogicalOperator> op);
 	//! Push down a LogicalGet op

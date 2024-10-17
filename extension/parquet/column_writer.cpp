@@ -1210,47 +1210,6 @@ public:
 };
 
 //===--------------------------------------------------------------------===//
-// Geometry Column Writer
-//===--------------------------------------------------------------------===//
-// This class just wraps another column writer, but also calculates the extent
-// of the geometry column by updating the geodata object with every written
-// vector.
-template <class WRITER_IMPL>
-class GeometryColumnWriter : public WRITER_IMPL {
-	GeoParquetColumnMetadata geo_data;
-	GeoParquetColumnMetadataWriter geo_data_writer;
-	string column_name;
-
-public:
-	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override {
-		// Just write normally
-		WRITER_IMPL::Write(state, vector, count);
-
-		// And update the geodata object
-		geo_data_writer.Update(geo_data, vector, count);
-	}
-	void FinalizeWrite(ColumnWriterState &state) override {
-		WRITER_IMPL::FinalizeWrite(state);
-
-		// Add the geodata object to the writer
-		this->writer.GetGeoParquetData().geometry_columns[column_name] = geo_data;
-	}
-
-public:
-	GeometryColumnWriter(ClientContext &context, ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p,
-	                     idx_t max_repeat, idx_t max_define, bool can_have_nulls, string name)
-	    : WRITER_IMPL(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define, can_have_nulls),
-	      geo_data_writer(context), column_name(std::move(name)) {
-
-		auto &geo_data = writer.GetGeoParquetData();
-		if (geo_data.primary_geometry_column.empty()) {
-			// Set the first column to the primary column
-			geo_data.primary_geometry_column = column_name;
-		}
-	}
-};
-
-//===--------------------------------------------------------------------===//
 // String Column Writer
 //===--------------------------------------------------------------------===//
 class StringStatisticsState : public ColumnWriterStatistics {
@@ -1561,6 +1520,58 @@ private:
 		return double(state.estimated_plain_size) /
 		       double(state.estimated_rle_pages_size + state.estimated_dict_page_size);
 	}
+};
+
+//===--------------------------------------------------------------------===//
+// WKB Column Writer
+//===--------------------------------------------------------------------===//
+// Used to store the metadata for a WKB-encoded geometry column when writing
+// GeoParquet files.
+class WKBColumnWriterState final : public StringColumnWriterState {
+public:
+	WKBColumnWriterState(ClientContext &context, duckdb_parquet::format::RowGroup &row_group, idx_t col_idx)
+	    : StringColumnWriterState(row_group, col_idx), geo_data(), geo_data_writer(context) {
+	}
+
+	GeoParquetColumnMetadata geo_data;
+	GeoParquetColumnMetadataWriter geo_data_writer;
+};
+
+class WKBColumnWriter final : public StringColumnWriter {
+public:
+	WKBColumnWriter(ClientContext &context_p, ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p,
+	                idx_t max_repeat, idx_t max_define, bool can_have_nulls, string name)
+	    : StringColumnWriter(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define, can_have_nulls),
+	      column_name(std::move(name)), context(context_p) {
+
+		this->writer.GetGeoParquetData().RegisterGeometryColumn(column_name);
+	}
+
+	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) override {
+		auto result = make_uniq<WKBColumnWriterState>(context, row_group, row_group.columns.size());
+		RegisterToRowGroup(row_group);
+		return std::move(result);
+	}
+	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override {
+		StringColumnWriter::Write(state, vector, count);
+
+		auto &geo_state = state.Cast<WKBColumnWriterState>();
+		geo_state.geo_data_writer.Update(geo_state.geo_data, vector, count);
+	}
+
+	void FinalizeWrite(ColumnWriterState &state) override {
+		StringColumnWriter::FinalizeWrite(state);
+
+		// Add the geodata object to the writer
+		const auto &geo_state = state.Cast<WKBColumnWriterState>();
+
+		// Merge this state's geo column data with the writer's geo column data
+		writer.GetGeoParquetData().FlushColumnMeta(column_name, geo_state.geo_data);
+	}
+
+private:
+	string column_name;
+	ClientContext &context;
 };
 
 //===--------------------------------------------------------------------===//
@@ -2233,9 +2244,10 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 	schemas.push_back(std::move(schema_element));
 	schema_path.push_back(name);
 
-	if (type.id() == LogicalTypeId::BLOB && type.GetAlias() == "WKB_BLOB") {
-		return make_uniq<GeometryColumnWriter<StringColumnWriter>>(context, writer, schema_idx, std::move(schema_path),
-		                                                           max_repeat, max_define, can_have_nulls, name);
+	if (type.id() == LogicalTypeId::BLOB && type.GetAlias() == "WKB_BLOB" &&
+	    GeoParquetFileMetadata::IsGeoParquetConversionEnabled(context)) {
+		return make_uniq<WKBColumnWriter>(context, writer, schema_idx, std::move(schema_path), max_repeat, max_define,
+		                                  can_have_nulls, name);
 	}
 
 	switch (type.id()) {

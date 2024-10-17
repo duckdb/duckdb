@@ -16,18 +16,42 @@ string BuildSettingsString(const duckdb::vector<string> &settings) {
 }
 
 void RetrieveMetrics(duckdb_profiling_info info, duckdb::map<string, double> &cumulative_counter,
-                     duckdb::map<string, double> &cumulative_result) {
+                     duckdb::map<string, double> &cumulative_result, const idx_t depth) {
 	auto map = duckdb_profiling_info_get_metrics(info);
+	REQUIRE(map);
 	auto count = duckdb_get_map_size(map);
+	REQUIRE(count != 0);
+
+	// Test index out of bounds for MAP value.
+	if (depth == 0) {
+		auto invalid_key = duckdb_get_map_key(map, 10000000);
+		REQUIRE(!invalid_key);
+		auto invalid_value = duckdb_get_map_value(map, 10000000);
+		REQUIRE(!invalid_value);
+	}
+
 	for (idx_t i = 0; i < count; i++) {
 		auto key = duckdb_get_map_key(map, i);
+		REQUIRE(key);
 		auto value = duckdb_get_map_value(map, i);
+		REQUIRE(value);
 
 		auto key_c_str = duckdb_get_varchar(key);
 		auto value_c_str = duckdb_get_varchar(value);
-
 		auto key_str = duckdb::string(key_c_str);
 		auto value_str = duckdb::string(value_c_str);
+
+		if (depth == 0) {
+			REQUIRE(key_str != EnumUtil::ToString(MetricsType::OPERATOR_CARDINALITY));
+			REQUIRE(key_str != EnumUtil::ToString(MetricsType::OPERATOR_ROWS_SCANNED));
+			REQUIRE(key_str != EnumUtil::ToString(MetricsType::OPERATOR_TIMING));
+			REQUIRE(key_str != EnumUtil::ToString(MetricsType::OPERATOR_TYPE));
+		} else {
+			REQUIRE(key_str != EnumUtil::ToString(MetricsType::QUERY_NAME));
+			REQUIRE(key_str != EnumUtil::ToString(MetricsType::BLOCKED_THREAD_TIME));
+			REQUIRE(key_str != EnumUtil::ToString(MetricsType::LATENCY));
+			REQUIRE(key_str != EnumUtil::ToString(MetricsType::ROWS_RETURNED));
+		}
 
 		if (key_str == EnumUtil::ToString(MetricsType::QUERY_NAME) ||
 		    key_str == EnumUtil::ToString(MetricsType::OPERATOR_TYPE) ||
@@ -59,15 +83,19 @@ void RetrieveMetrics(duckdb_profiling_info info, duckdb::map<string, double> &cu
 }
 
 void TraverseTree(duckdb_profiling_info profiling_info, duckdb::map<string, double> &cumulative_counter,
-                  duckdb::map<string, double> &cumulative_result) {
+                  duckdb::map<string, double> &cumulative_result, const idx_t depth) {
 
-	RetrieveMetrics(profiling_info, cumulative_counter, cumulative_result);
+	RetrieveMetrics(profiling_info, cumulative_counter, cumulative_result, depth);
 
 	// Recurse into the child node.
 	auto child_count = duckdb_profiling_info_get_child_count(profiling_info);
+	if (depth == 0) {
+		REQUIRE(child_count != 0);
+	}
+
 	for (idx_t i = 0; i < child_count; i++) {
 		auto child = duckdb_profiling_info_get_child(profiling_info, i);
-		TraverseTree(child, cumulative_counter, cumulative_result);
+		TraverseTree(child, cumulative_counter, cumulative_result, depth + 1);
 	}
 }
 
@@ -95,7 +123,7 @@ TEST_CASE("Test profiling with a single metric and get_value", "[capi]") {
 	duckdb::map<string, double> cumulative_counter;
 	duckdb::map<string, double> cumulative_result;
 
-	TraverseTree(info, cumulative_counter, cumulative_result);
+	TraverseTree(info, cumulative_counter, cumulative_result, 0);
 	tester.Cleanup();
 }
 
@@ -121,7 +149,7 @@ TEST_CASE("Test profiling with cumulative metrics", "[capi]") {
 	    {"CUMULATIVE_CARDINALITY", 0},
 	};
 
-	TraverseTree(info, cumulative_counter, cumulative_result);
+	TraverseTree(info, cumulative_counter, cumulative_result, 0);
 
 	REQUIRE(ConvertToInt(cumulative_result["CPU_TIME"]) == ConvertToInt(cumulative_counter["OPERATOR_TIMING"]));
 	REQUIRE(ConvertToInt(cumulative_result["CUMULATIVE_CARDINALITY"]) ==
@@ -154,7 +182,7 @@ TEST_CASE("Test profiling with detailed profiling mode enabled", "[capi]") {
 
 	duckdb::map<string, double> cumulative_counter;
 	duckdb::map<string, double> cumulative_result;
-	TraverseTree(info, cumulative_counter, cumulative_result);
+	TraverseTree(info, cumulative_counter, cumulative_result, 0);
 	tester.Cleanup();
 }
 

@@ -35,9 +35,11 @@ static unique_ptr<ArrowType> GetArrowExtensionType(const ArrowSchemaMetadata &ex
 	// Check for arrow canonical extensions
 	if (arrow_extension == "arrow.uuid") {
 		if (format != "w:16") {
-			throw InvalidInputException(
-			    "arrow.uuid must be a fixed-size binary of 16 bytes (i.e., \'w:16\'). It is incorrectly defined as: %s",
-			    format);
+			std::ostringstream error;
+			error
+			    << "arrow.uuid must be a fixed-size binary of 16 bytes (i.e., \'w:16\'). It is incorrectly defined as:"
+			    << format;
+			return make_uniq<ArrowType>(error.str());
 		}
 		return make_uniq<ArrowType>(LogicalType::UUID);
 	} else if (arrow_extension == "arrow.json") {
@@ -49,40 +51,47 @@ static unique_ptr<ArrowType> GetArrowExtensionType(const ArrowSchemaMetadata &ex
 		} else if (format == "vu") {
 			return make_uniq<ArrowType>(LogicalType::JSON(), make_uniq<ArrowStringInfo>(ArrowVariableSizeType::VIEW));
 		} else {
-			throw InvalidInputException("arrow.json must be of a varchar format (i.e., \'u\',\'U\' or \'vu\'). It is "
-			                            "incorrectly defined as: %s",
-			                            format);
+			std::ostringstream error;
+			error
+			    << "arrow.json must be of a varchar format (i.e., \'u\',\'U\' or \'vu\'). It is incorrectly defined as:"
+			    << format;
+			return make_uniq<ArrowType>(error.str());
 		}
 	}
 	// Check for DuckDB canonical extensions
 	else if (arrow_extension == "duckdb.hugeint") {
 		if (format != "w:16") {
-			throw InvalidInputException("duckdb.hugeint must be a fixed-size binary of 16 bytes (i.e., \'w:16\'). It "
-			                            "is incorrectly defined as: %s",
-			                            format);
+			std::ostringstream error;
+			error << "duckdb.hugeint must be a fixed-size binary of 16 bytes (i.e., \'w:16\'). It is incorrectly "
+			         "defined as:"
+			      << format;
+			return make_uniq<ArrowType>(error.str());
 		}
 		return make_uniq<ArrowType>(LogicalType::HUGEINT);
-
 	} else if (arrow_extension == "duckdb.uhugeint") {
 		if (format != "w:16") {
-			throw InvalidInputException("duckdb.hugeint must be a fixed-size binary of 16 bytes (i.e., \'w:16\'). It "
-			                            "is incorrectly defined as: %s",
-			                            format);
+			std::ostringstream error;
+			error << "duckdb.uhugeint must be a fixed-size binary of 16 bytes (i.e., \'w:16\'). It is incorrectly "
+			         "defined as:"
+			      << format;
+			return make_uniq<ArrowType>(error.str());
 		}
 		return make_uniq<ArrowType>(LogicalType::UHUGEINT);
 	} else if (arrow_extension == "duckdb.time_tz") {
 		if (format != "w:8") {
-			throw InvalidInputException("duckdb.time_tz must be a fixed-size binary of 8 bytes (i.e., \'w:8\'). It "
-			                            "is incorrectly defined as: %s",
-			                            format);
+			std::ostringstream error;
+			error << "duckdb.time_tz must be a fixed-size binary of 8 bytes (i.e., \'w:8\'). It is incorrectly defined "
+			         "as:"
+			      << format;
+			return make_uniq<ArrowType>(error.str());
 		}
 		return make_uniq<ArrowType>(LogicalType::TIME_TZ,
 		                            make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MICROSECONDS));
 	} else if (arrow_extension == "duckdb.bit") {
 		if (format != "z" && format != "Z") {
-			throw InvalidInputException("duckdb.bit must be a blob (i.e., \'z\' or \'Z\'). It "
-			                            "is incorrectly defined as: %s",
-			                            format);
+			std::ostringstream error;
+			error << "duckdb.bit must be a blob (i.e., \'z\' or \'Z\'). It is incorrectly defined as:" << format;
+			return make_uniq<ArrowType>(error.str());
 		} else if (format == "z") {
 			auto type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL);
 			return make_uniq<ArrowType>(LogicalType::BIT, std::move(type_info));
@@ -90,10 +99,24 @@ static unique_ptr<ArrowType> GetArrowExtensionType(const ArrowSchemaMetadata &ex
 		auto type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE);
 		return make_uniq<ArrowType>(LogicalType::BIT, std::move(type_info));
 
+	} else if (arrow_extension == "duckdb.varint") {
+		if (format != "z" && format != "Z") {
+			std::ostringstream error;
+			error << "duckdb.bit must be a blob (i.e., \'z\'). It is incorrectly defined as:" << format;
+			return make_uniq<ArrowType>(error.str());
+		}
+		unique_ptr<ArrowStringInfo> type_info;
+		if (format == "z") {
+			type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL);
+		} else {
+			type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE);
+		}
+		return make_uniq<ArrowType>(LogicalType::VARINT, std::move(type_info));
 	} else {
-		throw NotImplementedException(
-		    "Arrow Type with extension name: %s and format: %s, is not currently supported in DuckDB ", arrow_extension,
-		    format);
+		std::ostringstream error;
+		error << "Arrow Type with extension name: " << arrow_extension << " and format: " << format
+		      << ", is not currently supported in DuckDB.";
+		return make_uniq<ArrowType>(error.str(), true);
 	}
 }
 static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema) {
@@ -384,10 +407,12 @@ unique_ptr<ArrowArrayStreamWrapper> ProduceArrowScan(const ArrowScanFunctionData
 	//! Generate Projection Pushdown Vector
 	ArrowStreamParameters parameters;
 	D_ASSERT(!column_ids.empty());
+	auto &arrow_types = function.arrow_table.GetColumns();
 	for (idx_t idx = 0; idx < column_ids.size(); idx++) {
 		auto col_idx = column_ids[idx];
 		if (col_idx != COLUMN_IDENTIFIER_ROW_ID) {
 			auto &schema = *function.schema_root.arrow_schema.children[col_idx];
+			arrow_types.at(col_idx)->ThrowIfInvalid();
 			parameters.projected_columns.projection_map[idx] = schema.name;
 			parameters.projected_columns.columns.emplace_back(schema.name);
 			parameters.projected_columns.filter_to_col[idx] = col_idx;
@@ -501,11 +526,13 @@ unique_ptr<NodeStatistics> ArrowTableFunction::ArrowScanCardinality(ClientContex
 	return make_uniq<NodeStatistics>();
 }
 
-idx_t ArrowTableFunction::ArrowGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-                                             LocalTableFunctionState *local_state,
-                                             GlobalTableFunctionState *global_state) {
-	auto &state = local_state->Cast<ArrowScanLocalState>();
-	return state.batch_index;
+OperatorPartitionData ArrowTableFunction::ArrowGetPartitionData(ClientContext &context,
+                                                                TableFunctionGetPartitionInput &input) {
+	if (input.partition_info.RequiresPartitionColumns()) {
+		throw InternalException("ArrowTableFunction::GetPartitionData: partition columns not supported");
+	}
+	auto &state = input.local_state->Cast<ArrowScanLocalState>();
+	return OperatorPartitionData(state.batch_index);
 }
 
 bool ArrowTableFunction::ArrowPushdownType(const LogicalType &type) {
@@ -559,7 +586,7 @@ void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction arrow("arrow_scan", {LogicalType::POINTER, LogicalType::POINTER, LogicalType::POINTER},
 	                    ArrowScanFunction, ArrowScanBind, ArrowScanInitGlobal, ArrowScanInitLocal);
 	arrow.cardinality = ArrowScanCardinality;
-	arrow.get_batch_index = ArrowGetBatchIndex;
+	arrow.get_partition_data = ArrowGetPartitionData;
 	arrow.projection_pushdown = true;
 	arrow.filter_pushdown = true;
 	arrow.filter_prune = true;
@@ -569,7 +596,7 @@ void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction arrow_dumb("arrow_scan_dumb", {LogicalType::POINTER, LogicalType::POINTER, LogicalType::POINTER},
 	                         ArrowScanFunction, ArrowScanBind, ArrowScanInitGlobal, ArrowScanInitLocal);
 	arrow_dumb.cardinality = ArrowScanCardinality;
-	arrow_dumb.get_batch_index = ArrowGetBatchIndex;
+	arrow_dumb.get_partition_data = ArrowGetPartitionData;
 	arrow_dumb.projection_pushdown = false;
 	arrow_dumb.filter_pushdown = false;
 	arrow_dumb.filter_prune = false;

@@ -13,6 +13,7 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
@@ -702,6 +703,10 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 	} else if (parameter == "no_output") {
 		config.profiler_print_format = ProfilerPrintFormat::NO_OUTPUT;
 		config.emit_profiler_output = false;
+	} else if (parameter == "html") {
+		config.profiler_print_format = ProfilerPrintFormat::HTML;
+	} else if (parameter == "graphviz") {
+		config.profiler_print_format = ProfilerPrintFormat::GRAPHVIZ;
 	} else {
 		throw ParserException(
 		    "Unrecognized print format %s, supported formats: [json, query_tree, query_tree_optimizer, no_output]",
@@ -723,6 +728,10 @@ Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
 		return Value("query_tree_optimizer");
 	case ProfilerPrintFormat::NO_OUTPUT:
 		return Value("no_output");
+	case ProfilerPrintFormat::HTML:
+		return Value("html");
+	case ProfilerPrintFormat::GRAPHVIZ:
+		return Value("graphviz");
 	default:
 		throw InternalException("Unsupported profiler print format");
 	}
@@ -1344,6 +1353,22 @@ Value MaximumTempDirectorySize::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Maximum Vacuum Size
+//===--------------------------------------------------------------------===//
+void MaximumVacuumTasks::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.max_vacuum_tasks = input.GetValue<uint64_t>();
+}
+
+void MaximumVacuumTasks::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.max_vacuum_tasks = DBConfig().options.max_vacuum_tasks;
+}
+
+Value MaximumVacuumTasks::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::UBIGINT(config.options.max_vacuum_tasks);
+}
+
+//===--------------------------------------------------------------------===//
 // Merge Join Threshold
 //===--------------------------------------------------------------------===//
 void MergeJoinThreshold::SetLocal(ClientContext &context, const Value &input) {
@@ -1891,27 +1916,52 @@ Value UsernameSetting::GetSetting(const ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Allocator Flush Threshold
 //===--------------------------------------------------------------------===//
-void FlushAllocatorSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void AllocatorFlushThreshold::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.allocator_flush_threshold = DBConfig::ParseMemoryLimit(input.ToString());
 	if (db) {
 		TaskScheduler::GetScheduler(*db).SetAllocatorFlushTreshold(config.options.allocator_flush_threshold);
 	}
 }
 
-void FlushAllocatorSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+void AllocatorFlushThreshold::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.allocator_flush_threshold = DBConfig().options.allocator_flush_threshold;
 	if (db) {
 		TaskScheduler::GetScheduler(*db).SetAllocatorFlushTreshold(config.options.allocator_flush_threshold);
 	}
 }
 
-Value FlushAllocatorSetting::GetSetting(const ClientContext &context) {
+Value AllocatorFlushThreshold::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value(StringUtil::BytesToHumanReadableString(config.options.allocator_flush_threshold));
 }
 
 //===--------------------------------------------------------------------===//
-// Allocator Background Thread
+// Allocator Bulk Deallocation Flush Threshold
+//===--------------------------------------------------------------------===//
+void AllocatorBulkDeallocationFlushThreshold::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.allocator_bulk_deallocation_flush_threshold = DBConfig::ParseMemoryLimit(input.ToString());
+	if (db) {
+		BufferManager::GetBufferManager(*db).GetBufferPool().SetAllocatorBulkDeallocationFlushThreshold(
+		    config.options.allocator_bulk_deallocation_flush_threshold);
+	}
+}
+
+void AllocatorBulkDeallocationFlushThreshold::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.allocator_bulk_deallocation_flush_threshold =
+	    DBConfig().options.allocator_bulk_deallocation_flush_threshold;
+	if (db) {
+		BufferManager::GetBufferManager(*db).GetBufferPool().SetAllocatorBulkDeallocationFlushThreshold(
+		    config.options.allocator_bulk_deallocation_flush_threshold);
+	}
+}
+
+Value AllocatorBulkDeallocationFlushThreshold::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(StringUtil::BytesToHumanReadableString(config.options.allocator_bulk_deallocation_flush_threshold));
+}
+
+//===--------------------------------------------------------------------===//
+// Allocator Background Threads
 //===--------------------------------------------------------------------===//
 void AllocatorBackgroundThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.allocator_background_threads = input.GetValue<bool>();

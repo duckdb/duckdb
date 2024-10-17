@@ -8,7 +8,8 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb/common/operator/add.hpp"
-#include "duckdb/core_functions/to_interval.hpp"
+#include "duckdb/common/types/varint.hpp"
+#include "duckdb/function/to_interval.hpp"
 
 #include "datetime.h" // Python datetime initialize #1
 
@@ -677,6 +678,10 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 	case LogicalTypeId::UUID: {
 		auto uuid_value = val.GetValueUnsafe<hugeint_t>();
 		return import_cache.uuid.UUID()(UUID::ToString(uuid_value));
+	}
+	case LogicalTypeId::VARINT: {
+		auto varint_value = val.GetValueUnsafe<string_t>();
+		return py::str(Varint::VarIntToVarchar(varint_value));
 	}
 	case LogicalTypeId::INTERVAL: {
 		auto interval_value = val.GetValueUnsafe<interval_t>();

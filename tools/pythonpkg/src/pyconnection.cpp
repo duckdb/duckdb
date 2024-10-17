@@ -58,6 +58,7 @@
 #include "duckdb/main/relation/materialized_relation.hpp"
 #include "duckdb/main/relation/query_relation.hpp"
 #include "duckdb/main/extension_util.hpp"
+#include "duckdb/parser/statement/load_statement.hpp"
 
 #include <random>
 
@@ -65,7 +66,7 @@
 
 namespace duckdb {
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;       // NOLINT: allow global
+DefaultConnectionHolder DuckDBPyConnection::default_connection;                        // NOLINT: allow global
 DBInstanceCache instance_cache;                                                        // NOLINT: allow global
 shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;              // NOLINT: allow global
 PythonEnvironmentType DuckDBPyConnection::environment = PythonEnvironmentType::NORMAL; // NOLINT: allow global
@@ -275,8 +276,10 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      "Create a query object from a JSON protobuf plan", py::arg("json"));
 	m.def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
 	      py::arg("query"));
-	m.def("install_extension", &DuckDBPyConnection::InstallExtension, "Install an extension by name",
-	      py::arg("extension"), py::kw_only(), py::arg("force_install") = false);
+	m.def("install_extension", &DuckDBPyConnection::InstallExtension,
+	      "Install an extension by name, with an optional version and/or repository to get the extension from",
+	      py::arg("extension"), py::kw_only(), py::arg("force_install") = false, py::arg("repository") = py::none(),
+	      py::arg("repository_url") = py::none(), py::arg("version") = py::none());
 	m.def("load_extension", &DuckDBPyConnection::LoadExtension, "Load an installed extension", py::arg("extension"));
 } // END_OF_CONNECTION_METHODS
 
@@ -413,6 +416,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const py::object &query, py::object params_p) {
+	py::gil_scoped_acquire gil;
 	con.SetResult(nullptr);
 	if (params_p.is_none()) {
 		params_p = py::list();
@@ -538,6 +542,7 @@ unique_ptr<PreparedStatement> DuckDBPyConnection::PrepareQuery(unique_ptr<SQLSta
 	auto &connection = con.GetConnection();
 	unique_ptr<PreparedStatement> prep;
 	{
+		D_ASSERT(py::gil_check());
 		py::gil_scoped_release release;
 		unique_lock<mutex> lock(py_connection_lock);
 
@@ -558,6 +563,7 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(PreparedStatement &p
 	auto named_values = TransformPreparedParameters(prep, params);
 	unique_ptr<QueryResult> res;
 	{
+		D_ASSERT(py::gil_check());
 		py::gil_scoped_release release;
 		unique_lock<std::mutex> lock(py_connection_lock);
 
@@ -595,6 +601,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteFromString(const strin
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const py::object &query, py::object params) {
+	py::gil_scoped_acquire gil;
 	con.SetResult(nullptr);
 
 	auto statements = GetStatements(query);
@@ -874,6 +881,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(
 		auto_detect = true;
 	}
 
+	D_ASSERT(py::gil_check());
+	py::gil_scoped_release gil;
 	auto read_json_relation =
 	    make_shared_ptr<ReadJSONRelation>(connection.context, name, std::move(options), auto_detect);
 	if (read_json_relation == nullptr) {
@@ -1383,6 +1392,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 
 	// Create the ReadCSV Relation using the 'options'
 
+	D_ASSERT(py::gil_check());
+	py::gil_scoped_release gil;
 	auto read_csv_p = connection.ReadCSV(name, std::move(bind_parameters));
 	auto &read_csv = read_csv_p->Cast<ReadCSVRelation>();
 	if (file_like_object_wrapper) {
@@ -1394,6 +1405,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 
 void DuckDBPyConnection::ExecuteImmediately(vector<unique_ptr<SQLStatement>> statements) {
 	auto &connection = con.GetConnection();
+	D_ASSERT(py::gil_check());
+	py::gil_scoped_release release;
 	if (statements.empty()) {
 		return;
 	}
@@ -1436,15 +1449,19 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const py::object &quer
 	shared_ptr<Relation> relation;
 	if (py::none().is(params)) {
 		// FIXME: currently we can't create relations with prepared parameters
-		auto statement_type = last_statement->type;
-		switch (statement_type) {
-		case StatementType::SELECT_STATEMENT: {
-			auto select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(last_statement));
-			relation = connection.RelationFromQuery(std::move(select_statement), alias);
-			break;
-		}
-		default:
-			break;
+		{
+			D_ASSERT(py::gil_check());
+			py::gil_scoped_release gil;
+			auto statement_type = last_statement->type;
+			switch (statement_type) {
+			case StatementType::SELECT_STATEMENT: {
+				auto select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(last_statement));
+				relation = connection.RelationFromQuery(std::move(select_statement), alias);
+				break;
+			}
+			default:
+				break;
+			}
 		}
 	}
 
@@ -1548,6 +1565,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &file_
 		}
 		named_parameters["compression"] = Value(py::str(compression));
 	}
+	D_ASSERT(py::gil_check());
+	py::gil_scoped_release gil;
 	return make_uniq<DuckDBPyRelation>(connection.TableFunction("parquet_scan", params, named_parameters)->Alias(name));
 }
 
@@ -1636,6 +1655,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterPythonObject(const 
 	if (!registered_objects.count(name)) {
 		return shared_from_this();
 	}
+	D_ASSERT(py::gil_check());
 	py::gil_scoped_release release;
 	// FIXME: DROP TEMPORARY VIEW? doesn't exist?
 	connection.Query("DROP VIEW \"" + name + "\"");
@@ -1681,6 +1701,8 @@ int DuckDBPyConnection::GetRowcount() {
 
 void DuckDBPyConnection::Close() {
 	con.SetResult(nullptr);
+	D_ASSERT(py::gil_check());
+	py::gil_scoped_release release;
 	con.SetConnection(nullptr);
 	con.SetDatabase(nullptr);
 	// https://peps.python.org/pep-0249/#Connection.close
@@ -1693,17 +1715,68 @@ void DuckDBPyConnection::Interrupt() {
 	connection.Interrupt();
 }
 
-void DuckDBPyConnection::InstallExtension(const string &extension, bool force_install) {
+void DuckDBPyConnection::InstallExtension(const string &extension, bool force_install, const py::object &repository,
+                                          const py::object &repository_url, const py::object &version) {
 	auto &connection = con.GetConnection();
 
-	ExtensionInstallOptions options;
-	options.force_install = force_install;
-	ExtensionHelper::InstallExtension(*connection.context, extension, options);
+	auto install_statement = make_uniq<LoadStatement>();
+	install_statement->info = make_uniq<LoadInfo>();
+	auto &info = *install_statement->info;
+
+	info.filename = extension;
+
+	const bool has_repository = !py::none().is(repository);
+	const bool has_repository_url = !py::none().is(repository_url);
+	if (has_repository && has_repository_url) {
+		throw InvalidInputException(
+		    "Both 'repository' and 'repository_url' are set which is not allowed, please pick one or the other");
+	}
+	string repository_string;
+	if (has_repository) {
+		repository_string = py::str(repository);
+	} else if (has_repository_url) {
+		repository_string = py::str(repository_url);
+	}
+
+	if ((has_repository || has_repository_url) && repository_string.empty()) {
+		throw InvalidInputException("The provided 'repository' or 'repository_url' can not be empty!");
+	}
+
+	string version_string;
+	if (!py::none().is(version)) {
+		version_string = py::str(version);
+		if (version_string.empty()) {
+			throw InvalidInputException("The provided 'version' can not be empty!");
+		}
+	}
+
+	info.repository = repository_string;
+	info.repo_is_alias = repository_string.empty() ? false : has_repository;
+	info.version = version_string;
+	info.load_type = force_install ? LoadType::FORCE_INSTALL : LoadType::INSTALL;
+	auto res = connection.Query(std::move(install_statement));
+	if (res->HasError()) {
+		res->ThrowError();
+	}
 }
 
 void DuckDBPyConnection::LoadExtension(const string &extension) {
 	auto &connection = con.GetConnection();
 	ExtensionHelper::LoadExternalExtension(*connection.context, extension);
+}
+
+shared_ptr<DuckDBPyConnection> DefaultConnectionHolder::Get() {
+	lock_guard<mutex> guard(l);
+	if (!connection) {
+		py::dict config_dict;
+		connection = DuckDBPyConnection::Connect(py::str(":memory:"), false, config_dict);
+	}
+	return connection;
+}
+
+void DefaultConnectionHolder::Set(shared_ptr<DuckDBPyConnection> conn) {
+	lock_guard<mutex> guard(l);
+	connection = conn;
 }
 
 void DuckDBPyConnection::Cursors::AddCursor(shared_ptr<DuckDBPyConnection> conn) {
@@ -1736,6 +1809,9 @@ void DuckDBPyConnection::Cursors::ClearCursors() {
 			// The cursor has already been closed
 			continue;
 		}
+		// This is *only* needed because we have a py::gil_scoped_release in Close, so it *needs* the GIL in order to
+		// release it don't ask me why it can't just realize there is no GIL and move on
+		py::gil_scoped_acquire gil;
 		cursor->Close();
 	}
 
@@ -1892,6 +1968,7 @@ static shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &databa
 	bool cache_instance = database_path != ":memory:" && !database_path.empty();
 	config.replacement_scans.emplace_back(PythonReplacementScan::Replace);
 	{
+		D_ASSERT(py::gil_check());
 		py::gil_scoped_release release;
 		unique_lock<mutex> lock(res->py_connection_lock);
 		auto database =
@@ -1939,6 +2016,10 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const py::object &dat
 	config.AddExtensionOption("python_enable_replacements",
 	                          "Whether variables visible to the current stack should be used for replacement scans.",
 	                          LogicalType::BOOLEAN, Value::BOOLEAN(true));
+	config.AddExtensionOption(
+	    "python_scan_all_frames",
+	    "If set, restores the old behavior of scanning all preceding frames to locate the referenced variable.",
+	    LogicalType::BOOLEAN, Value::BOOLEAN(false));
 	if (!DuckDBPyConnection::IsJupyter()) {
 		config_dict["duckdb_api"] = Value("python");
 	} else {
@@ -1974,11 +2055,11 @@ case_insensitive_map_t<BoundParameterData> DuckDBPyConnection::TransformPythonPa
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::DefaultConnection() {
-	if (!default_connection) {
-		py::dict config_dict;
-		default_connection = DuckDBPyConnection::Connect(py::str(":memory:"), false, config_dict);
-	}
-	return default_connection;
+	return default_connection.Get();
+}
+
+void DuckDBPyConnection::SetDefaultConnection(shared_ptr<DuckDBPyConnection> connection) {
+	return default_connection.Set(std::move(connection));
 }
 
 PythonImportCache *DuckDBPyConnection::ImportCache() {
@@ -2023,7 +2104,7 @@ void DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_ty
 }
 
 void DuckDBPyConnection::Cleanup() {
-	default_connection.reset();
+	default_connection.Set(nullptr);
 	import_cache.reset();
 }
 
@@ -2142,16 +2223,6 @@ PyArrowObjectType DuckDBPyConnection::GetArrowType(const py::handle &obj) {
 
 bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
 	return DuckDBPyConnection::GetArrowType(object) != PyArrowObjectType::Invalid;
-}
-
-unique_lock<std::mutex> DuckDBPyConnection::AcquireConnectionLock() {
-	// we first release the gil and then acquire the connection lock
-	unique_lock<std::mutex> lock(py_connection_lock, std::defer_lock);
-	{
-		py::gil_scoped_release release;
-		lock.lock();
-	}
-	return lock;
 }
 
 } // namespace duckdb

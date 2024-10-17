@@ -30,6 +30,7 @@
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 
 namespace duckdb {
 
@@ -149,6 +150,15 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// we scan the set of committed schemas
 	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
 	catalog.ScanSchemas([&](SchemaCatalogEntry &entry) { schemas.push_back(entry); });
+
+	catalog_entry_vector_t catalog_entries;
+	D_ASSERT(catalog.IsDuckCatalog());
+
+	auto &duck_catalog = catalog.Cast<DuckCatalog>();
+	auto &dependency_manager = duck_catalog.GetDependencyManager();
+	catalog_entries = GetCatalogEntries(schemas);
+	dependency_manager.ReorderEntries(catalog_entries);
+
 	// write the actual data into the database
 
 	// Create a serializer to write the checkpoint data
@@ -169,7 +179,6 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	        ]
 	    }
 	 */
-	auto catalog_entries = GetCatalogEntries(schemas);
 	SerializationOptions serialization_options;
 
 	serialization_options.serialization_compatibility = config.options.serialization_compatibility;
@@ -537,6 +546,10 @@ void CheckpointReader::ReadTable(CatalogTransaction transaction, Deserializer &d
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "table");
 	auto &schema = catalog.GetSchema(transaction, info->schema);
 	auto bound_info = Binder::BindCreateTableCheckpoint(std::move(info), schema);
+
+	for (auto &dep : bound_info->Base().dependencies.Set()) {
+		bound_info->dependencies.AddDependency(dep);
+	}
 
 	// now read the actual table data and place it into the CreateTableInfo
 	ReadTableData(transaction, deserializer, *bound_info);

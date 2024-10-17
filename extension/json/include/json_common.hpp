@@ -241,11 +241,15 @@ public:
 	};
 
 	//! Get JSON value using JSON path query (safe, checks the path query)
-	static inline yyjson_val *Get(yyjson_val *val, const string_t &path_str) {
+	static inline yyjson_val *Get(yyjson_val *val, const string_t &path_str, bool integral_argument) {
 		auto ptr = path_str.GetData();
 		auto len = path_str.GetSize();
 		if (len == 0) {
 			return GetUnsafe(val, ptr, len);
+		}
+		if (integral_argument) {
+			auto str = "$[" + path_str.GetString() + "]";
+			return GetUnsafe(val, str.c_str(), str.length());
 		}
 		switch (*ptr) {
 		case '/': {
@@ -260,9 +264,15 @@ public:
 			}
 			return GetUnsafe(val, ptr, len);
 		}
-		default:
-			auto str = "/" + string(ptr, len);
-			return GetUnsafe(val, str.c_str(), len + 1);
+		default: {
+			string path;
+			if (memchr(ptr, '"', len)) {
+				path = "/" + string(ptr, len);
+			} else {
+				path = "$.\"" + path_str.GetString() + "\"";
+			}
+			return GetUnsafe(val, path.c_str(), path.length());
+		}
 		}
 	}
 
@@ -291,7 +301,7 @@ private:
 	//! Get JSON pointer (/field/index/... syntax)
 	static inline yyjson_val *GetPointer(yyjson_val *val, const char *ptr, const idx_t &len) {
 		yyjson_ptr_err err;
-		return len == 1 ? val : unsafe_yyjson_ptr_getx(val, ptr, len, &err);
+		return unsafe_yyjson_ptr_getx(val, ptr, len, &err);
 	}
 	//! Get JSON path ($.field[index]... syntax)
 	static yyjson_val *GetPath(yyjson_val *val, const char *ptr, const idx_t &len);

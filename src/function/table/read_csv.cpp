@@ -288,10 +288,12 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	} while (true);
 }
 
-static idx_t CSVReaderGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-                                    LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
-	auto &data = local_state->Cast<CSVLocalState>();
-	return data.csv_reader->scanner_idx;
+static OperatorPartitionData CSVReaderGetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input) {
+	if (input.partition_info.RequiresPartitionColumns()) {
+		throw InternalException("CSVReader::GetPartitionData: partition columns not supported");
+	}
+	auto &data = input.local_state->Cast<CSVLocalState>();
+	return OperatorPartitionData(data.csv_reader->scanner_idx);
 }
 
 void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_function) {
@@ -330,7 +332,6 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["types"] = LogicalType::ANY;
 	table_function.named_parameters["names"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["column_names"] = LogicalType::LIST(LogicalType::VARCHAR);
-	table_function.named_parameters["parallel"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["comment"] = LogicalType::VARCHAR;
 
 	MultiFileReader::AddParameters(table_function);
@@ -402,7 +403,7 @@ TableFunction ReadCSVTableFunction::GetFunction() {
 	read_csv.pushdown_complex_filter = CSVComplexFilterPushdown;
 	read_csv.serialize = CSVReaderSerialize;
 	read_csv.deserialize = CSVReaderDeserialize;
-	read_csv.get_batch_index = CSVReaderGetBatchIndex;
+	read_csv.get_partition_data = CSVReaderGetPartitionData;
 	read_csv.cardinality = CSVReaderCardinality;
 	read_csv.projection_pushdown = true;
 	read_csv.type_pushdown = PushdownTypeToCSVScanner;

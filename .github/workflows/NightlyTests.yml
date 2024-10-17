@@ -106,6 +106,47 @@ jobs:
       run: |
           python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200
 
+  smaller-binary:
+    name: Smaller Binary
+    runs-on: ubuntu-20.04
+    needs: linux-memory-leaks
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_ICU: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_JSON: 1
+      SMALLER_BINARY: 1
+      BUILD_JEMALLOC: 1
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ env.CCACHE_SAVE }}
+
+    - name: Build
+      shell: bash
+      run: make
+
+    - name: Measure Size
+      shell: bash
+      run: ls -trlah build/release/src/libduckdb*
+
+    - name: Test
+      shell: bash
+      run: |
+          build/release/test/unittest "*"
 
   linux-clang:
     name: Clang 14
@@ -470,6 +511,7 @@ jobs:
       DISABLE_STRING_INLINE: 1
       DESTROY_UNPINNED_BLOCKS: 1
       ALTERNATIVE_VERIFY: 1
+      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
 
     steps:
       - uses: actions/checkout@v3
@@ -758,6 +800,7 @@ jobs:
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]" --no-exit --timeout 600
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow --no-exit --timeout 600
 
+
   vector-sizes:
     name: Vector Sizes
     runs-on: ubuntu-20.04
@@ -765,43 +808,17 @@ jobs:
     env:
       CC: gcc-10
       CXX: g++-10
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ env.CCACHE_SAVE }}
-
-    - name: Test
-      shell: bash
-      run: python scripts/test_vector_sizes.py
-
-  block-sizes:
-    name: Block Sizes
-    runs-on: ubuntu-20.04
-    needs: linux-memory-leaks
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      BLOCK_ALLOC_SIZE: 16384
+      GEN: ninja
+      STANDARD_VECTOR_SIZE: 2
 
     steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
@@ -816,12 +833,54 @@ jobs:
       - name: Test
         shell: bash
         run: |
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --no-exit --time_execution
+
+  block-sizes:
+    name: Block Sizes
+    runs-on: ubuntu-20.04
+    needs: linux-memory-leaks
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BLOCK_ALLOC_SIZE: 16384
+      BUILD_JSON: 1
+      BUILD_PARQUET: 1
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ env.CCACHE_SAVE }}
+
+      - name: Build with standard vector size
+        shell: bash
+        run: make relassert
+
+      - name: Fast and storage tests
+        shell: bash
+        run: |
           python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest --no-exit --time_execution
           python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest "test/sql/storage/*" --no-exit --time_execution
 
-      - name: Test
+      - name: Build with vector size of 512
         shell: bash
-        run: python scripts/test_block_sizes.py
+        run: rm -rf ./build && rm -rf ./duckdb_unittest_tempdir && make clean && STANDARD_VECTOR_SIZE=512 make relassert
+
+      - name: Fast and storage tests
+        shell: bash
+        run: |
+          python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest --no-exit --time_execution
+          python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest "test/sql/storage/*" --no-exit --time_execution
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds

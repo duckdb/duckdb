@@ -476,7 +476,7 @@ static void UUIDConversion(Vector &vector, const ArrowArray &array, const ArrowS
 		if (!validity_mask.RowIsValid(row)) {
 			continue;
 		}
-		tgt_ptr[row].lower = BSwap(src_ptr[row].upper);
+		tgt_ptr[row].lower = static_cast<uint64_t>(BSwap(src_ptr[row].upper));
 		// flip Upper MSD
 		tgt_ptr[row].upper =
 		    static_cast<int64_t>(static_cast<uint64_t>(BSwap(src_ptr[row].lower)) ^ (static_cast<uint64_t>(1) << 63));
@@ -1026,7 +1026,8 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 		break;
 	}
 	case LogicalTypeId::BLOB:
-	case LogicalTypeId::BIT: {
+	case LogicalTypeId::BIT:
+	case LogicalTypeId::VARINT: {
 		ArrowToDuckDBBlob(vector, array, scan_state, size, arrow_type, nested_offset,
 		                  NumericCast<int64_t>(parent_offset));
 		break;

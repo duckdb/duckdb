@@ -41,7 +41,7 @@ void MatchAndReplace(CSVOption<T> &original, CSVOption<T> &sniffed, const string
 		// We verify that the user input matches the sniffed value
 		if (original != sniffed) {
 			error += "CSV Sniffer: Sniffer detected value different than the user input for the " + name;
-			error += " options \n Set: " + original.FormatValue() + " Sniffed: " + sniffed.FormatValue() + "\n";
+			error += " options \n Set: " + original.FormatValue() + ", Sniffed: " + sniffed.FormatValue() + "\n";
 		}
 	} else {
 		// We replace the value of original with the sniffed value
@@ -130,11 +130,15 @@ SnifferResult CSVSniffer::MinimalSniff() {
 
 	// Possibly Gather Header
 	vector<HeaderValue> potential_header;
-	for (idx_t col_idx = 0; col_idx < data_chunk.ColumnCount(); col_idx++) {
-		auto &cur_vector = data_chunk.data[col_idx];
-		auto vector_data = FlatVector::GetData<string_t>(cur_vector);
-		HeaderValue val(vector_data[0]);
-		potential_header.emplace_back(val);
+		for (idx_t col_idx = 0; col_idx < data_chunk.ColumnCount(); col_idx++) {
+			auto &cur_vector = data_chunk.data[col_idx];
+			auto vector_data = FlatVector::GetData<string_t>(cur_vector);
+			auto &validity = FlatVector::Validity(cur_vector);
+			HeaderValue val;
+			if (validity.RowIsValid(0)) {
+				val = HeaderValue(vector_data[0]);
+			}
+			potential_header.emplace_back(val);
 	}
 
 	names = DetectHeaderInternal(buffer_manager->context, potential_header, *state_machine, set_columns,
@@ -225,13 +229,16 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 			// If the header exists it should match
 			string header_error = "The Column names set by the user do not match the ones found by the sniffer. \n";
 			auto &set_names = *set_columns.names;
-			for (idx_t i = 0; i < set_columns.Size(); i++) {
-				if (set_names[i] != names[i]) {
-					header_error += "Column at position: " + to_string(i) + " Set name: " + set_names[i] +
-					                " Sniffed Name: " + names[i] + "\n";
-					match = false;
+			if (set_names.size() == names.size()) {
+				for (idx_t i = 0; i < set_columns.Size(); i++) {
+					if (set_names[i] != names[i]) {
+						header_error += "Column at position: " + to_string(i) + ", Set name: " + set_names[i] +
+						                ", Sniffed Name: " + names[i] + "\n";
+						match = false;
+					}
 				}
 			}
+
 			if (!match) {
 				error += header_error;
 			}
@@ -239,15 +246,18 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 		match = true;
 		string type_error = "The Column types set by the user do not match the ones found by the sniffer. \n";
 		auto &set_types = *set_columns.types;
-		for (idx_t i = 0; i < set_columns.Size(); i++) {
-			if (set_types[i] != detected_types[i]) {
-				type_error += "Column at position: " + to_string(i) + " Set type: " + set_types[i].ToString() +
-				              " Sniffed type: " + detected_types[i].ToString() + "\n";
-				detected_types[i] = set_types[i];
-				manually_set[i] = true;
-				match = false;
+		if (detected_types.size() == set_columns.Size()) {
+			for (idx_t i = 0; i < set_columns.Size(); i++) {
+				if (set_types[i] != detected_types[i]) {
+					type_error += "Column at position: " + to_string(i) + " Set type: " + set_types[i].ToString() +
+					              " Sniffed type: " + detected_types[i].ToString() + "\n";
+					detected_types[i] = set_types[i];
+					manually_set[i] = true;
+					match = false;
+				}
 			}
 		}
+
 		if (!match) {
 			error += type_error;
 		}

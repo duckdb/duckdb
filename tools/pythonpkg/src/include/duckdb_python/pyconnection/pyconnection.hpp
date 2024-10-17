@@ -41,6 +41,28 @@ public:
 	unique_ptr<PythonTableArrowArrayStreamFactory> arrow_factory;
 };
 
+struct DefaultConnectionHolder {
+public:
+	DefaultConnectionHolder() {
+	}
+	~DefaultConnectionHolder() {
+	}
+
+public:
+	DefaultConnectionHolder(const DefaultConnectionHolder &other) = delete;
+	DefaultConnectionHolder(DefaultConnectionHolder &&other) = delete;
+	DefaultConnectionHolder &operator=(const DefaultConnectionHolder &other) = delete;
+	DefaultConnectionHolder &operator=(DefaultConnectionHolder &&other) = delete;
+
+public:
+	shared_ptr<DuckDBPyConnection> Get();
+	void Set(shared_ptr<DuckDBPyConnection> conn);
+
+private:
+	shared_ptr<DuckDBPyConnection> connection;
+	mutex l;
+};
+
 struct ConnectionGuard {
 public:
 	ConnectionGuard() {
@@ -161,6 +183,7 @@ public:
 	static bool DetectAndGetEnvironment();
 	static bool IsJupyter();
 	static shared_ptr<DuckDBPyConnection> DefaultConnection();
+	static void SetDefaultConnection(shared_ptr<DuckDBPyConnection> conn);
 	static PythonImportCache *ImportCache();
 	static bool IsInteractive();
 
@@ -218,7 +241,9 @@ public:
 
 	shared_ptr<DuckDBPyConnection> RegisterPythonObject(const string &name, const py::object &python_object);
 
-	void InstallExtension(const string &extension, bool force_install = false);
+	void InstallExtension(const string &extension, bool force_install = false,
+	                      const py::object &repository = py::none(), const py::object &repository_url = py::none(),
+	                      const py::object &version = py::none());
 
 	void LoadExtension(const string &extension);
 
@@ -308,7 +333,7 @@ public:
 	bool FileSystemIsRegistered(const string &name);
 
 	//! Default connection to an in-memory database
-	static shared_ptr<DuckDBPyConnection> default_connection;
+	static DefaultConnectionHolder default_connection;
 	//! Caches and provides an interface to get frequently used modules+subtypes
 	static shared_ptr<PythonImportCache> import_cache;
 
@@ -322,7 +347,6 @@ public:
 
 private:
 	PathLike GetPathLike(const py::object &object);
-	unique_lock<std::mutex> AcquireConnectionLock();
 	ScalarFunction CreateScalarUDF(const string &name, const py::function &udf, const py::object &parameters,
 	                               const shared_ptr<DuckDBPyType> &return_type, bool vectorized,
 	                               FunctionNullHandling null_handling, PythonExceptionHandling exception_handling,

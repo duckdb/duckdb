@@ -115,25 +115,31 @@ public:
 	void Update(GeoParquetColumnMetadata &meta, Vector &vector, idx_t count);
 };
 
-struct GeoParquetFileMetadata {
+class GeoParquetFileMetadata {
 public:
 	// Try to read GeoParquet metadata. Returns nullptr if not found, invalid or the required spatial extension is not
 	// available.
 	static unique_ptr<GeoParquetFileMetadata> TryRead(const duckdb_parquet::format::FileMetaData &file_meta_data,
-	                                                  ClientContext &context);
+	                                                  const ClientContext &context);
 	void Write(duckdb_parquet::format::FileMetaData &file_meta_data) const;
 
-public:
-	// Default to 1.1.0 for now
-	string version = "1.1.0";
-	string primary_geometry_column;
-	unordered_map<string, GeoParquetColumnMetadata> geometry_columns;
+	void FlushColumnMeta(const string &column_name, const GeoParquetColumnMetadata &meta);
+	const unordered_map<string, GeoParquetColumnMetadata> &GetColumnMeta() const;
 
 	unique_ptr<ColumnReader> CreateColumnReader(ParquetReader &reader, const LogicalType &logical_type,
 	                                            const duckdb_parquet::format::SchemaElement &s_ele, idx_t schema_idx_p,
 	                                            idx_t max_define_p, idx_t max_repeat_p, ClientContext &context);
 
 	bool IsGeometryColumn(const string &column_name) const;
+	void RegisterGeometryColumn(const string &column_name);
+
+	static bool IsGeoParquetConversionEnabled(const ClientContext &context);
+
+private:
+	mutex write_lock;
+	string version = "1.1.0";
+	string primary_geometry_column;
+	unordered_map<string, GeoParquetColumnMetadata> geometry_columns;
 };
 
 } // namespace duckdb
