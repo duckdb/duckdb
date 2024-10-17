@@ -13,7 +13,6 @@
 #include "duckdb/parser/constraint.hpp"
 
 namespace duckdb {
-
 class ConflictManager;
 struct IndexStorageInfo;
 struct DataTableInfo;

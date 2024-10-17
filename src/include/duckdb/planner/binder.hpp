@@ -24,6 +24,7 @@
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/joinside.hpp"
+#include "duckdb/planner/bound_constraint.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/tableref/bound_delimgetref.hpp"
 
@@ -49,7 +50,6 @@ class BoundConstraint;
 
 struct CreateInfo;
 struct BoundCreateTableInfo;
-struct BoundCreateFunctionInfo;
 struct CommonTableExpressionInfo;
 struct BoundParameterMap;
 struct BoundPragmaInfo;
@@ -133,6 +133,9 @@ public:
 	vector<unique_ptr<BoundConstraint>> BindConstraints(const TableCatalogEntry &table);
 	vector<unique_ptr<BoundConstraint>> BindNewConstraints(vector<unique_ptr<Constraint>> &constraints,
 	                                                       const string &table_name, const ColumnList &columns);
+
+	unique_ptr<BoundConstraint> BindConstraint(Constraint &constraint, const string &table_name,
+	                                           const ColumnList &columns);
 
 	void SetCatalogLookupCallback(catalog_entry_callback_t callback);
 	void BindCreateViewInfo(CreateViewInfo &base);
