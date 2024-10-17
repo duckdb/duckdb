@@ -55,7 +55,7 @@ struct PartInfo {
 	static const char *Columns[];
 	static const LogicalType Types[];
 };
-const char *PartInfo::Columns[] = {"p_partkey", "p_name", "p_mfgr", "p_category", "p_brand",
+const char *PartInfo::Columns[] = {"p_partkey", "p_name", "p_mfgr", "p_category", "p_brand1",
                                    "p_color",   "p_type", "p_size", "p_container"};
 const LogicalType PartInfo::Types[] = {
     LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR),
