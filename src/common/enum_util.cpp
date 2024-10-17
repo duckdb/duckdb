@@ -45,6 +45,7 @@
 #include "duckdb/common/enums/physical_operator_type.hpp"
 #include "duckdb/common/enums/prepared_statement_mode.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
+#include "duckdb/common/enums/quantile_enum.hpp"
 #include "duckdb/common/enums/relation_type.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/common/enums/set_operation_type.hpp"
@@ -77,7 +78,6 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
-#include "duckdb/core_functions/aggregate/quantile_enum.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
@@ -833,6 +833,8 @@ const char* EnumUtil::ToChars<CSVState>(CSVState value) {
 		return "EMPTY_SPACE";
 	case CSVState::COMMENT:
 		return "COMMENT";
+	case CSVState::STANDARD_NEWLINE:
+		return "STANDARD_NEWLINE";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<CSVState>", value));
 	}
@@ -875,6 +877,9 @@ CSVState EnumUtil::FromString<CSVState>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "COMMENT")) {
 		return CSVState::COMMENT;
+	}
+	if (StringUtil::Equals(value, "STANDARD_NEWLINE")) {
+		return CSVState::STANDARD_NEWLINE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<CSVState>", value));
 }
@@ -1067,13 +1072,13 @@ template<>
 const char* EnumUtil::ToChars<CheckpointAbort>(CheckpointAbort value) {
 	switch(value) {
 	case CheckpointAbort::NO_ABORT:
-		return "NO_ABORT";
+		return "NONE";
 	case CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE:
-		return "DEBUG_ABORT_BEFORE_TRUNCATE";
+		return "BEFORE_TRUNCATE";
 	case CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER:
-		return "DEBUG_ABORT_BEFORE_HEADER";
+		return "BEFORE_HEADER";
 	case CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE:
-		return "DEBUG_ABORT_AFTER_FREE_LIST_WRITE";
+		return "AFTER_FREE_LIST_WRITE";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<CheckpointAbort>", value));
 	}
@@ -1081,16 +1086,16 @@ const char* EnumUtil::ToChars<CheckpointAbort>(CheckpointAbort value) {
 
 template<>
 CheckpointAbort EnumUtil::FromString<CheckpointAbort>(const char *value) {
-	if (StringUtil::Equals(value, "NO_ABORT")) {
+	if (StringUtil::Equals(value, "NONE")) {
 		return CheckpointAbort::NO_ABORT;
 	}
-	if (StringUtil::Equals(value, "DEBUG_ABORT_BEFORE_TRUNCATE")) {
+	if (StringUtil::Equals(value, "BEFORE_TRUNCATE")) {
 		return CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE;
 	}
-	if (StringUtil::Equals(value, "DEBUG_ABORT_BEFORE_HEADER")) {
+	if (StringUtil::Equals(value, "BEFORE_HEADER")) {
 		return CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER;
 	}
-	if (StringUtil::Equals(value, "DEBUG_ABORT_AFTER_FREE_LIST_WRITE")) {
+	if (StringUtil::Equals(value, "AFTER_FREE_LIST_WRITE")) {
 		return CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<CheckpointAbort>", value));
@@ -4448,6 +4453,8 @@ const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
 		return "OPTIMIZER_BUILD_SIDE_PROBE_SIDE";
 	case MetricsType::OPTIMIZER_LIMIT_PUSHDOWN:
 		return "OPTIMIZER_LIMIT_PUSHDOWN";
+	case MetricsType::OPTIMIZER_SAMPLING_PUSHDOWN:
+		return "OPTIMIZER_SAMPLING_PUSHDOWN";
 	case MetricsType::OPTIMIZER_TOP_N:
 		return "OPTIMIZER_TOP_N";
 	case MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION:
@@ -4462,6 +4469,8 @@ const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
 		return "OPTIMIZER_EXTENSION";
 	case MetricsType::OPTIMIZER_MATERIALIZED_CTE:
 		return "OPTIMIZER_MATERIALIZED_CTE";
+	case MetricsType::OPTIMIZER_EMPTY_RESULT_PULLUP:
+		return "OPTIMIZER_EMPTY_RESULT_PULLUP";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<MetricsType>", value));
 	}
@@ -4580,6 +4589,9 @@ MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
 	if (StringUtil::Equals(value, "OPTIMIZER_LIMIT_PUSHDOWN")) {
 		return MetricsType::OPTIMIZER_LIMIT_PUSHDOWN;
 	}
+	if (StringUtil::Equals(value, "OPTIMIZER_SAMPLING_PUSHDOWN")) {
+		return MetricsType::OPTIMIZER_SAMPLING_PUSHDOWN;
+	}
 	if (StringUtil::Equals(value, "OPTIMIZER_TOP_N")) {
 		return MetricsType::OPTIMIZER_TOP_N;
 	}
@@ -4600,6 +4612,9 @@ MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "OPTIMIZER_MATERIALIZED_CTE")) {
 		return MetricsType::OPTIMIZER_MATERIALIZED_CTE;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_EMPTY_RESULT_PULLUP")) {
+		return MetricsType::OPTIMIZER_EMPTY_RESULT_PULLUP;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<MetricsType>", value));
 }
@@ -4856,6 +4871,8 @@ const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
 		return "FILTER_PULLUP";
 	case OptimizerType::FILTER_PUSHDOWN:
 		return "FILTER_PUSHDOWN";
+	case OptimizerType::EMPTY_RESULT_PULLUP:
+		return "EMPTY_RESULT_PULLUP";
 	case OptimizerType::CTE_FILTER_PUSHER:
 		return "CTE_FILTER_PUSHER";
 	case OptimizerType::REGEX_RANGE:
@@ -4890,6 +4907,8 @@ const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
 		return "DUPLICATE_GROUPS";
 	case OptimizerType::REORDER_FILTER:
 		return "REORDER_FILTER";
+	case OptimizerType::SAMPLING_PUSHDOWN:
+		return "SAMPLING_PUSHDOWN";
 	case OptimizerType::JOIN_FILTER_PUSHDOWN:
 		return "JOIN_FILTER_PUSHDOWN";
 	case OptimizerType::EXTENSION:
@@ -4914,6 +4933,9 @@ OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "FILTER_PUSHDOWN")) {
 		return OptimizerType::FILTER_PUSHDOWN;
+	}
+	if (StringUtil::Equals(value, "EMPTY_RESULT_PULLUP")) {
+		return OptimizerType::EMPTY_RESULT_PULLUP;
 	}
 	if (StringUtil::Equals(value, "CTE_FILTER_PUSHER")) {
 		return OptimizerType::CTE_FILTER_PUSHER;
@@ -4965,6 +4987,9 @@ OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "REORDER_FILTER")) {
 		return OptimizerType::REORDER_FILTER;
+	}
+	if (StringUtil::Equals(value, "SAMPLING_PUSHDOWN")) {
+		return OptimizerType::SAMPLING_PUSHDOWN;
 	}
 	if (StringUtil::Equals(value, "JOIN_FILTER_PUSHDOWN")) {
 		return OptimizerType::JOIN_FILTER_PUSHDOWN;
@@ -5383,6 +5408,8 @@ const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) 
 		return "HASH_GROUP_BY";
 	case PhysicalOperatorType::PERFECT_HASH_GROUP_BY:
 		return "PERFECT_HASH_GROUP_BY";
+	case PhysicalOperatorType::PARTITIONED_AGGREGATE:
+		return "PARTITIONED_AGGREGATE";
 	case PhysicalOperatorType::FILTER:
 		return "FILTER";
 	case PhysicalOperatorType::PROJECTION:
@@ -5556,6 +5583,9 @@ PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *valu
 	}
 	if (StringUtil::Equals(value, "PERFECT_HASH_GROUP_BY")) {
 		return PhysicalOperatorType::PERFECT_HASH_GROUP_BY;
+	}
+	if (StringUtil::Equals(value, "PARTITIONED_AGGREGATE")) {
+		return PhysicalOperatorType::PARTITIONED_AGGREGATE;
 	}
 	if (StringUtil::Equals(value, "FILTER")) {
 		return PhysicalOperatorType::FILTER;
@@ -5969,6 +5999,10 @@ const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value) {
 		return "QUERY_TREE_OPTIMIZER";
 	case ProfilerPrintFormat::NO_OUTPUT:
 		return "NO_OUTPUT";
+	case ProfilerPrintFormat::HTML:
+		return "HTML";
+	case ProfilerPrintFormat::GRAPHVIZ:
+		return "GRAPHVIZ";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ProfilerPrintFormat>", value));
 	}
@@ -5987,6 +6021,12 @@ ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value)
 	}
 	if (StringUtil::Equals(value, "NO_OUTPUT")) {
 		return ProfilerPrintFormat::NO_OUTPUT;
+	}
+	if (StringUtil::Equals(value, "HTML")) {
+		return ProfilerPrintFormat::HTML;
+	}
+	if (StringUtil::Equals(value, "GRAPHVIZ")) {
+		return ProfilerPrintFormat::GRAPHVIZ;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ProfilerPrintFormat>", value));
 }
@@ -6400,6 +6440,8 @@ const char* EnumUtil::ToChars<ScanType>(ScanType value) {
 		return "TABLE";
 	case ScanType::PARQUET:
 		return "PARQUET";
+	case ScanType::EXTERNAL:
+		return "EXTERNAL";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<ScanType>", value));
 	}
@@ -6412,6 +6454,9 @@ ScanType EnumUtil::FromString<ScanType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "PARQUET")) {
 		return ScanType::PARQUET;
+	}
+	if (StringUtil::Equals(value, "EXTERNAL")) {
+		return ScanType::EXTERNAL;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<ScanType>", value));
 }
@@ -7427,6 +7472,8 @@ const char* EnumUtil::ToChars<TableFilterType>(TableFilterType value) {
 		return "CONJUNCTION_AND";
 	case TableFilterType::STRUCT_EXTRACT:
 		return "STRUCT_EXTRACT";
+	case TableFilterType::OPTIONAL_FILTER:
+		return "OPTIONAL_FILTER";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<TableFilterType>", value));
 	}
@@ -7452,7 +7499,43 @@ TableFilterType EnumUtil::FromString<TableFilterType>(const char *value) {
 	if (StringUtil::Equals(value, "STRUCT_EXTRACT")) {
 		return TableFilterType::STRUCT_EXTRACT;
 	}
+	if (StringUtil::Equals(value, "OPTIONAL_FILTER")) {
+		return TableFilterType::OPTIONAL_FILTER;
+	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<TableFilterType>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<TablePartitionInfo>(TablePartitionInfo value) {
+	switch(value) {
+	case TablePartitionInfo::NOT_PARTITIONED:
+		return "NOT_PARTITIONED";
+	case TablePartitionInfo::SINGLE_VALUE_PARTITIONS:
+		return "SINGLE_VALUE_PARTITIONS";
+	case TablePartitionInfo::OVERLAPPING_PARTITIONS:
+		return "OVERLAPPING_PARTITIONS";
+	case TablePartitionInfo::DISJOINT_PARTITIONS:
+		return "DISJOINT_PARTITIONS";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<TablePartitionInfo>", value));
+	}
+}
+
+template<>
+TablePartitionInfo EnumUtil::FromString<TablePartitionInfo>(const char *value) {
+	if (StringUtil::Equals(value, "NOT_PARTITIONED")) {
+		return TablePartitionInfo::NOT_PARTITIONED;
+	}
+	if (StringUtil::Equals(value, "SINGLE_VALUE_PARTITIONS")) {
+		return TablePartitionInfo::SINGLE_VALUE_PARTITIONS;
+	}
+	if (StringUtil::Equals(value, "OVERLAPPING_PARTITIONS")) {
+		return TablePartitionInfo::OVERLAPPING_PARTITIONS;
+	}
+	if (StringUtil::Equals(value, "DISJOINT_PARTITIONS")) {
+		return TablePartitionInfo::DISJOINT_PARTITIONS;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<TablePartitionInfo>", value));
 }
 
 template<>

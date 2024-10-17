@@ -180,7 +180,7 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 struct ParquetWriteBindData : public TableFunctionData {
 	vector<LogicalType> sql_types;
 	vector<string> column_names;
-	duckdb_parquet::format::CompressionCodec::type codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
+	duckdb_parquet::CompressionCodec::type codec = duckdb_parquet::CompressionCodec::SNAPPY;
 	vector<pair<string, string>> kv_metadata;
 	idx_t row_group_size = Storage::ROW_GROUP_SIZE;
 
@@ -383,6 +383,11 @@ static bool GetBooleanArgument(const pair<string, vector<Value>> &option) {
 	return BooleanValue::Get(boolean_value);
 }
 
+TablePartitionInfo ParquetGetPartitionInfo(ClientContext &context, TableFunctionPartitionInput &input) {
+	auto &parquet_bind = input.bind_data->Cast<ParquetReadBindData>();
+	return parquet_bind.multi_file_reader->GetPartitionInfo(context, parquet_bind.reader_bind, input);
+}
+
 class ParquetScanFunction {
 public:
 	static TableFunctionSet GetFunctionSet() {
@@ -401,7 +406,7 @@ public:
 		                                                                 {"type", LogicalType::VARCHAR},
 		                                                                 {"default_value", LogicalType::VARCHAR}}}));
 		table_function.named_parameters["encryption_config"] = LogicalTypeId::ANY;
-		table_function.get_batch_index = ParquetScanGetBatchIndex;
+		table_function.get_partition_data = ParquetScanGetPartitionData;
 		table_function.serialize = ParquetScanSerialize;
 		table_function.deserialize = ParquetScanDeserialize;
 		table_function.get_bind_info = ParquetGetBindInfo;
@@ -409,6 +414,7 @@ public:
 		table_function.filter_pushdown = true;
 		table_function.filter_prune = true;
 		table_function.pushdown_complex_filter = ParquetComplexFilterPushdown;
+		table_function.get_partition_info = ParquetGetPartitionInfo;
 
 		MultiFileReader::AddParameters(table_function);
 
@@ -520,7 +526,7 @@ public:
 
 	static unique_ptr<FunctionData> ParquetScanBindInternal(ClientContext &context,
 	                                                        unique_ptr<MultiFileReader> multi_file_reader,
-	                                                        unique_ptr<MultiFileList> file_list,
+	                                                        shared_ptr<MultiFileList> file_list,
 	                                                        vector<LogicalType> &return_types, vector<string> &names,
 	                                                        ParquetOptions parquet_options) {
 		auto result = make_uniq<ParquetReadBindData>();
@@ -778,11 +784,16 @@ public:
 		return std::move(result);
 	}
 
-	static idx_t ParquetScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-	                                      LocalTableFunctionState *local_state,
-	                                      GlobalTableFunctionState *global_state) {
-		auto &data = local_state->Cast<ParquetReadLocalState>();
-		return data.batch_index;
+	static OperatorPartitionData ParquetScanGetPartitionData(ClientContext &context,
+	                                                         TableFunctionGetPartitionInput &input) {
+		auto &bind_data = input.bind_data->CastNoConst<ParquetReadBindData>();
+		auto &data = input.local_state->Cast<ParquetReadLocalState>();
+		auto &gstate = input.global_state->Cast<ParquetReadGlobalState>();
+		OperatorPartitionData partition_data(data.batch_index);
+		bind_data.multi_file_reader->GetPartitionData(context, bind_data.reader_bind, data.reader->reader_data,
+		                                              gstate.multi_file_reader_state, input.partition_info,
+		                                              partition_data);
+		return partition_data;
 	}
 
 	static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
@@ -1211,19 +1222,19 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 		} else if (loption == "compression" || loption == "codec") {
 			const auto roption = StringUtil::Lower(option.second[0].ToString());
 			if (roption == "uncompressed") {
-				bind_data->codec = duckdb_parquet::format::CompressionCodec::UNCOMPRESSED;
+				bind_data->codec = duckdb_parquet::CompressionCodec::UNCOMPRESSED;
 			} else if (roption == "snappy") {
-				bind_data->codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
+				bind_data->codec = duckdb_parquet::CompressionCodec::SNAPPY;
 			} else if (roption == "gzip") {
-				bind_data->codec = duckdb_parquet::format::CompressionCodec::GZIP;
+				bind_data->codec = duckdb_parquet::CompressionCodec::GZIP;
 			} else if (roption == "zstd") {
-				bind_data->codec = duckdb_parquet::format::CompressionCodec::ZSTD;
+				bind_data->codec = duckdb_parquet::CompressionCodec::ZSTD;
 			} else if (roption == "brotli") {
-				bind_data->codec = duckdb_parquet::format::CompressionCodec::BROTLI;
+				bind_data->codec = duckdb_parquet::CompressionCodec::BROTLI;
 			} else if (roption == "lz4" || roption == "lz4_raw") {
 				/* LZ4 is technically another compression scheme, but deprecated and arrow also uses them
 				 * interchangeably */
-				bind_data->codec = duckdb_parquet::format::CompressionCodec::LZ4_RAW;
+				bind_data->codec = duckdb_parquet::CompressionCodec::LZ4_RAW;
 			} else {
 				throw BinderException("Expected %s argument to be either [uncompressed, brotli, gzip, snappy, or zstd]",
 				                      loption);
@@ -1359,8 +1370,7 @@ unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ExecutionContext &cont
 
 // FIXME: Have these be generated instead
 template <>
-const char *EnumUtil::ToChars<duckdb_parquet::format::CompressionCodec::type>(
-    duckdb_parquet::format::CompressionCodec::type value) {
+const char *EnumUtil::ToChars<duckdb_parquet::CompressionCodec::type>(duckdb_parquet::CompressionCodec::type value) {
 	switch (value) {
 	case CompressionCodec::UNCOMPRESSED:
 		return "UNCOMPRESSED";
@@ -1392,8 +1402,7 @@ const char *EnumUtil::ToChars<duckdb_parquet::format::CompressionCodec::type>(
 }
 
 template <>
-duckdb_parquet::format::CompressionCodec::type
-EnumUtil::FromString<duckdb_parquet::format::CompressionCodec::type>(const char *value) {
+duckdb_parquet::CompressionCodec::type EnumUtil::FromString<duckdb_parquet::CompressionCodec::type>(const char *value) {
 	if (StringUtil::Equals(value, "UNCOMPRESSED")) {
 		return CompressionCodec::UNCOMPRESSED;
 	}
@@ -1444,7 +1453,7 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	auto data = make_uniq<ParquetWriteBindData>();
 	data->sql_types = deserializer.ReadProperty<vector<LogicalType>>(100, "sql_types");
 	data->column_names = deserializer.ReadProperty<vector<string>>(101, "column_names");
-	data->codec = deserializer.ReadProperty<duckdb_parquet::format::CompressionCodec::type>(102, "codec");
+	data->codec = deserializer.ReadProperty<duckdb_parquet::CompressionCodec::type>(102, "codec");
 	data->row_group_size = deserializer.ReadProperty<idx_t>(103, "row_group_size");
 	data->row_group_size_bytes = deserializer.ReadProperty<idx_t>(104, "row_group_size_bytes");
 	data->kv_metadata = deserializer.ReadProperty<vector<pair<string, string>>>(105, "kv_metadata");
@@ -1689,7 +1698,11 @@ void ParquetExtension::Load(DuckDB &db) {
 	config.replacement_scans.emplace_back(ParquetScanReplacement);
 	config.AddExtensionOption("binary_as_string", "In Parquet files, interpret binary data as a string.",
 	                          LogicalType::BOOLEAN);
-
+	config.AddExtensionOption("disable_parquet_prefetching", "Disable the prefetching mechanism in Parquet",
+	                          LogicalType::BOOLEAN, Value(false));
+	config.AddExtensionOption("prefetch_all_parquet_files",
+	                          "Use the prefetching mechanism for all types of parquet files", LogicalType::BOOLEAN,
+	                          Value(false));
 	config.AddExtensionOption(
 	    "enable_geoparquet_conversion",
 	    "Attempt to decode/encode geometry data in/as GeoParquet files if the spatial extension is present.",

@@ -82,50 +82,29 @@ struct HistogramAggState {
 	MAP_TYPE *hist;
 };
 
-struct ListExtractFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct ListConcatFun {
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct ListContainsFun {
+struct MapContainsFun {
+	static ScalarFunction GetFunction();
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct StructPackFun {
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct ListPositionFun {
+struct RowFun {
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct ListResizeFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct ListZipFun {
-	static ScalarFunction GetFunction();
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct ListSelectFun {
-	static ScalarFunction GetFunction();
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct ListWhereFun {
-	static ScalarFunction GetFunction();
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct StructExtractFun {
-	static ScalarFunction KeyExtractFunction();
-	static ScalarFunction IndexExtractFunction();
-	static ScalarFunctionSet GetFunctions();
-	static unique_ptr<FunctionData> GetBindData(idx_t index);
-	static void RegisterFunction(BuiltinFunctions &set);
-};
+unique_ptr<FunctionData> GetBindData(idx_t index);
+ScalarFunction GetKeyExtractFunction();
+ScalarFunction GetIndexExtractFunction();
 
 } // namespace duckdb

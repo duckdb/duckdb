@@ -684,33 +684,37 @@ offset_clause:
 				{ $$ = $2; }
 		;
 
+sample_value:
+    FCONST
+        {
+            $$ = makeFloatConst($1, @1);
+        }
+    | ICONST
+        {
+            $$ = makeIntConst($1, @1);
+        }
+    | param_expr
+    ;
+
 /*
  * SAMPLE clause
  */
 sample_count:
-	FCONST '%'
+	sample_value '%'
 		{
-			$$ = makeSampleSize(makeFloat($1), true);
+			$$ = makeSampleSize($1, true);
 		}
-	| ICONST '%'
+	| sample_value PERCENT
 		{
-			$$ = makeSampleSize(makeInteger($1), true);
+			$$ = makeSampleSize($1, true);
 		}
-	| FCONST PERCENT
+	| sample_value
 		{
-			$$ = makeSampleSize(makeFloat($1), true);
+			$$ = makeSampleSize($1, false);
 		}
-	| ICONST PERCENT
+	| sample_value ROWS
 		{
-			$$ = makeSampleSize(makeInteger($1), true);
-		}
-	| ICONST
-		{
-			$$ = makeSampleSize(makeInteger($1), false);
-		}
-	| ICONST ROWS
-		{
-			$$ = makeSampleSize(makeInteger($1), false);
+			$$ = makeSampleSize($1, false);
 		}
 	;
 
@@ -1584,6 +1588,7 @@ opt_collate_clause:
 				}
 			| /* EMPTY */				{ $$ = NULL; }
 		;
+
 /*****************************************************************************
  *
  *	Type syntax
@@ -2761,7 +2766,7 @@ indirection_expr_or_a_expr:
 			}
 		;
 
-indirection_expr:
+param_expr:
 			'?'
 				{
 					$$ = makeParamRef(0, @1);
@@ -2773,26 +2778,20 @@ indirection_expr:
 					p->location = @1;
 					$$ = (PGNode *) p;
 				}
+			| '$' ColLabel
+				{
+					$$ = makeNamedParamRef($2, @1);
+				}
+			;
+
+indirection_expr:
+            param_expr
 			| struct_expr
-				{
-					$$ = $1;
-				}
 			| map_expr
-				{
-					$$ = $1;
-				}
 			| func_expr
-				{
-					$$ = $1;
-				}
 			| case_expr
-				{ $$ = $1; }
-			 | list_expr {
-                $$ = $1;
-			}
-			| list_comprehension {
-				$$ = $1;
-			}
+			| list_expr
+			| list_comprehension
 			| ARRAY select_with_parens
 				{
 					PGSubLink *n = makeNode(PGSubLink);
@@ -2815,10 +2814,6 @@ indirection_expr:
 					n->position = $2;
 					n->location = @1;
 					$$ = (PGNode *) n;
-				}
-			| '$' ColLabel
-				{
-					$$ = makeNamedParamRef($2, @1);
 				}
 		;
 
@@ -3937,9 +3932,32 @@ target_el:	a_expr AS ColLabelOrString
 				}
 		;
 
-except_list: EXCLUDE '(' name_list_opt_comma ')'					{ $$ = $3; }
-			| EXCLUDE ColId								{ $$ = list_make1(makeString($2)); }
+except_list: EXCLUDE '(' except_name_list_opt_comma ')'					{ $$ = $3; }
+			| EXCLUDE except_name										{ $$ = list_make1($2); }
 		;
+
+except_name:
+		ColIdOrString
+			{
+				$$ = list_make1($1);
+			}
+		| except_name '.' ColIdOrString
+			{
+				$$ = lappend($1, $3);
+			}
+		;
+
+except_name_list:	except_name
+					{ $$ = list_make1($1); }
+			| except_name_list ',' except_name
+					{ $$ = lappend($1, $3); }
+		;
+
+except_name_list_opt_comma:
+			except_name_list								{ $$ = $1; }
+			| except_name_list ','							{ $$ = $1; }
+		;
+
 
 opt_except_list: except_list						{ $$ = $1; }
 			| /*EMPTY*/								{ $$ = NULL; }

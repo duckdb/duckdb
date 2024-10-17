@@ -15,30 +15,128 @@
 
 namespace duckdb {
 
-// A wrapper for building DataChunks in parallel
-class WindowDataChunk {
+// A wrapper for building ColumnDataCollections in parallel
+class WindowCollection {
 public:
-	// True if the vector data can just be copied to
-	static bool IsSimple(const Vector &v);
+	using ColumnDataCollectionPtr = unique_ptr<ColumnDataCollection>;
+	using ColumnDataCollectionSpec = pair<idx_t, optional_ptr<ColumnDataCollection>>;
 
-	static inline bool IsMaskAligned(idx_t begin, idx_t end, idx_t count) {
-		return ValidityMask::IsAligned(begin) && (ValidityMask::IsAligned(end) || (end == count));
+	WindowCollection(BufferManager &buffer_manager, idx_t count, const vector<LogicalType> &types);
+
+	idx_t ColumnCount() const {
+		return types.size();
 	}
 
-	explicit WindowDataChunk(DataChunk &chunk);
+	idx_t size() const { // NOLINT
+		return count;
+	}
 
-	void Initialize(Allocator &allocator, const vector<LogicalType> &types, idx_t capacity);
+	const vector<LogicalType> &GetTypes() const {
+		return types;
+	}
 
-	void Copy(DataChunk &src, idx_t begin);
+	//! Update a thread-local collection for appending data to a given row
+	void GetCollection(idx_t row_idx, ColumnDataCollectionSpec &spec);
+	//! Single-threaded, idempotent ordered combining of all the appended data.
+	void Combine(bool build_validity);
 
-	//! The wrapped chunk
-	DataChunk &chunk;
+	//! The collection data. May be null if the column count is 0.
+	ColumnDataCollectionPtr inputs;
+	//! Global validity mask
+	atomic<bool> all_valid;
+	//! Optional validity mask for the entire collection
+	ValidityMask validity;
+
+	//! The collection columns
+	const vector<LogicalType> types;
+	//! The collection rows
+	const idx_t count;
 
 private:
-	//! True if the column is a scalar only value
-	vector<bool> is_simple;
-	//! Exclusive lock for each column
-	vector<mutex> locks;
+	//! Guard for range updates
+	mutex lock;
+	//! The paging buffer manager to use
+	BufferManager &buffer_manager;
+	//! The component column data collections
+	vector<ColumnDataCollectionPtr> collections;
+	//! The (sorted) collection ranges
+	using Range = pair<idx_t, idx_t>;
+	vector<Range> ranges;
+};
+
+class WindowBuilder {
+public:
+	explicit WindowBuilder(WindowCollection &collection);
+
+	//! Add a new chunk at the given index
+	void Sink(DataChunk &chunk, idx_t input_idx);
+
+	//! The collection we are helping to build
+	WindowCollection &collection;
+	//! The thread's current input collection
+	using ColumnDataCollectionSpec = WindowCollection::ColumnDataCollectionSpec;
+	ColumnDataCollectionSpec sink;
+	//! The state used for appending to the collection
+	ColumnDataAppendState appender;
+	//! Are all the sunk rows valid?
+	bool all_valid = true;
+};
+
+class WindowCursor {
+public:
+	explicit WindowCursor(const WindowCollection &paged);
+
+	//! Is the scan in range?
+	inline bool RowIsVisible(idx_t row_idx) const {
+		return (row_idx < state.next_row_index && state.current_row_index <= row_idx);
+	}
+	//! The offset of the row in the given state
+	inline sel_t RowOffset(idx_t row_idx) const {
+		D_ASSERT(RowIsVisible(row_idx));
+		return UnsafeNumericCast<sel_t>(row_idx - state.current_row_index);
+	}
+	//! Scan the next chunk
+	inline bool Scan() {
+		return paged.inputs->Scan(state, chunk);
+	}
+	//! Seek to the given row
+	inline idx_t Seek(idx_t row_idx) {
+		if (!RowIsVisible(row_idx)) {
+			D_ASSERT(paged.inputs.get());
+			paged.inputs->Seek(row_idx, state, chunk);
+		}
+		return RowOffset(row_idx);
+	}
+	//! Check a collection cell for nullity
+	bool CellIsNull(idx_t col_idx, idx_t row_idx) {
+		D_ASSERT(chunk.ColumnCount() > col_idx);
+		auto index = Seek(row_idx);
+		auto &source = chunk.data[col_idx];
+		return FlatVector::IsNull(source, index);
+	}
+	//! Read a typed cell
+	template <typename T>
+	T GetCell(idx_t col_idx, idx_t row_idx) {
+		D_ASSERT(chunk.ColumnCount() > col_idx);
+		auto index = Seek(row_idx);
+		auto &source = chunk.data[col_idx];
+		const auto data = FlatVector::GetData<T>(source);
+		return data[index];
+	}
+	//! Copy a single value
+	void CopyCell(idx_t col_idx, idx_t row_idx, Vector &target, idx_t target_offset) {
+		D_ASSERT(chunk.ColumnCount() > col_idx);
+		auto index = Seek(row_idx);
+		auto &source = chunk.data[col_idx];
+		VectorOperations::Copy(source, target, index + 1, index, target_offset);
+	}
+
+	//! The pageable data
+	const WindowCollection &paged;
+	//! The state used for reading the collection
+	ColumnDataScanState state;
+	//! The data chunk read into
+	DataChunk chunk;
 };
 
 struct WindowInputExpression {
@@ -98,35 +196,6 @@ struct WindowInputExpression {
 	DataChunk chunk;
 };
 
-struct WindowInputColumn {
-	WindowInputColumn(optional_ptr<Expression> expr_p, ClientContext &context, idx_t count);
-
-	void Copy(DataChunk &input_chunk, idx_t input_idx);
-
-	inline bool CellIsNull(idx_t i) const {
-		D_ASSERT(!target.data.empty());
-		D_ASSERT(i < count);
-		return FlatVector::IsNull((target.data[0]), scalar ? 0 : i);
-	}
-
-	template <typename T>
-	inline T GetCell(idx_t i) const {
-		D_ASSERT(!target.data.empty());
-		D_ASSERT(i < count);
-		const auto data = FlatVector::GetData<T>(target.data[0]);
-		return data[scalar ? 0 : i];
-	}
-
-	optional_ptr<Expression> expr;
-	PhysicalType ptype;
-	const bool scalar;
-	const idx_t count;
-
-private:
-	DataChunk target;
-	WindowDataChunk wtarget;
-};
-
 //	Column indexes of the bounds chunk
 enum WindowBounds : uint8_t { PARTITION_BEGIN, PARTITION_END, PEER_BEGIN, PEER_END, WINDOW_BEGIN, WINDOW_END };
 
@@ -163,7 +232,8 @@ public:
 	vector<LogicalType> arg_types;
 
 	// evaluate RANGE expressions, if needed
-	WindowInputColumn range;
+	optional_ptr<Expression> range_expr;
+	unique_ptr<WindowCollection> range;
 };
 
 class WindowExecutorLocalState : public WindowExecutorState {
@@ -171,6 +241,7 @@ public:
 	explicit WindowExecutorLocalState(const WindowExecutorGlobalState &gstate);
 
 	void Sink(WindowExecutorGlobalState &gstate, DataChunk &input_chunk, idx_t input_idx);
+	virtual void Finalize(WindowExecutorGlobalState &gstate);
 
 	// Argument evaluation
 	ExpressionExecutor payload_executor;
@@ -179,6 +250,10 @@ public:
 	//! Range evaluation
 	ExpressionExecutor range_executor;
 	DataChunk range_chunk;
+	//! The state used for building the range collection
+	unique_ptr<WindowBuilder> range_builder;
+	//! The state used for reading the range collection
+	unique_ptr<WindowCursor> range_cursor;
 };
 
 class WindowExecutor {
@@ -194,8 +269,7 @@ public:
 	virtual void Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count,
 	                  WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate) const;
 
-	virtual void Finalize(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate) const {
-	}
+	virtual void Finalize(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate) const;
 
 	void Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &result, WindowExecutorLocalState &lstate,
 	              WindowExecutorGlobalState &gstate) const;

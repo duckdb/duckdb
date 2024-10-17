@@ -38,7 +38,19 @@ struct ExportAggregateFunction {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct ErrorFun {
+	static ScalarFunction GetFunction();
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct GetVariableFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct CreateSortKeyFun {
+	static ScalarFunction GetFunction();
+
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

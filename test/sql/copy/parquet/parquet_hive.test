@@ -158,8 +158,8 @@ SELECT a, b, replace(filename, '\', '/') filename FROM parquet_scan('data/parque
 
 # Test handling missing files
 query IIII
-select id, value, part, date 
-from parquet_scan('data/parquet-testing/hive-partitioning/missing/*/*/test.parquet', HIVE_PARTITIONING=1) 
+select id, value, part, date
+from parquet_scan('data/parquet-testing/hive-partitioning/missing/*/*/test.parquet', HIVE_PARTITIONING=1)
 order by id
 ----
 3	value3	c	2014-01-01
