@@ -26,6 +26,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		switch (cur_state) {
 		case CSVState::QUOTED:
 		case CSVState::QUOTED_NEW_LINE:
+		case CSVState::ESCAPE:
 			InitializeTransitionArray(transition_array, cur_state, CSVState::QUOTED);
 			break;
 		case CSVState::UNQUOTED:
