@@ -130,7 +130,6 @@ AdaptiveSnifferResult CSVSniffer::MinimalSniff() {
 
 	// Possibly Gather Header
 	vector<HeaderValue> potential_header;
-
 	for (idx_t col_idx = 0; col_idx < data_chunk.ColumnCount(); col_idx++) {
 		auto &cur_vector = data_chunk.data[col_idx];
 		auto vector_data = FlatVector::GetData<string_t>(cur_vector);
@@ -142,8 +141,8 @@ AdaptiveSnifferResult CSVSniffer::MinimalSniff() {
 		potential_header.emplace_back(val);
 	}
 
-	vector<string> names = DetectHeaderInternal(buffer_manager->context, potential_header, *state_machine, set_columns,
-	                                            best_sql_types_candidates_per_column_idx, options, *error_handler);
+	auto names = DetectHeaderInternal(buffer_manager->context, potential_header, *state_machine, set_columns,
+	                                  best_sql_types_candidates_per_column_idx, options, *error_handler);
 
 	for (idx_t column_idx = 0; column_idx < best_sql_types_candidates_per_column_idx.size(); column_idx++) {
 		LogicalType d_type = best_sql_types_candidates_per_column_idx[column_idx].back();
@@ -152,7 +151,6 @@ AdaptiveSnifferResult CSVSniffer::MinimalSniff() {
 		}
 		detected_types.push_back(d_type);
 	}
-
 	return {detected_types, names, sniffed_column_counts.result_position > 1};
 }
 
