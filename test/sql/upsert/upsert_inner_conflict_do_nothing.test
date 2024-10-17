@@ -1,0 +1,20 @@
+# name: test/sql/upsert/upsert_inner_conflict_do_nothing.test
+# group: [upsert]
+
+statement ok
+create table tbl(
+	i int primary key
+);
+
+statement ok
+insert into tbl values (1);
+
+# The inserted data has a conflict within the to-be-inserted-data (inner conflict)
+# As well as a conflict with the existing data
+statement ok
+insert into tbl select 1 from range(2) on conflict do nothing;
+
+query I
+select * from tbl;
+----
+1
