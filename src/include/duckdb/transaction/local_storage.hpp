@@ -162,6 +162,7 @@ public:
 	TableIndexList &GetIndexes(DataTable &table);
 
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
+	void AppendToIndex(DataTable &parent, Index &index);
 
 private:
 	ClientContext &context;

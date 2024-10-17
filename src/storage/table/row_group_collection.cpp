@@ -1134,33 +1134,79 @@ void RowGroupCollection::VerifyNewConstraint(DataTable &parent, const BoundConst
 	if (total_rows == 0) {
 		return;
 	}
-	// scan the original table, check if there's any null value
+
+	// Scan the original table for NULL values.
 	auto &not_null_constraint = constraint.Cast<BoundNotNullConstraint>();
 	vector<LogicalType> scan_types;
 	auto physical_index = not_null_constraint.index.index;
 	D_ASSERT(physical_index < types.size());
+
 	scan_types.push_back(types[physical_index]);
 	DataChunk scan_chunk;
 	scan_chunk.Initialize(GetAllocator(), scan_types);
 
+	vector<column_t> column_ids;
+	column_ids.push_back(physical_index);
+
+	// Use SCAN_COMMITTED to scan the latest data.
 	CreateIndexScanState state;
-	vector<column_t> cids;
-	cids.push_back(physical_index);
-	// Use ScanCommitted to scan the latest committed data
-	state.Initialize(cids, nullptr);
-	InitializeScan(state.table_state, cids, nullptr);
+	auto scan_type = TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED;
+	state.Initialize(column_ids, nullptr);
+	InitializeScan(state.table_state, column_ids, nullptr);
 	InitializeCreateIndexScan(state);
+
 	while (true) {
 		scan_chunk.Reset();
-		state.table_state.ScanCommitted(scan_chunk, state.segment_lock,
-		                                TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
+		state.table_state.ScanCommitted(scan_chunk, state.segment_lock, scan_type);
 		if (scan_chunk.size() == 0) {
 			break;
 		}
-		// Check constraint
+
+		// Verify the NOT NULL constraint.
 		if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
-			throw ConstraintException("NOT NULL constraint failed: %s.%s", info->GetTableName(),
-			                          parent.Columns()[physical_index].GetName());
+			auto name = parent.Columns()[physical_index].GetName();
+			throw ConstraintException("NOT NULL constraint failed: %s.%s", info->GetTableName(), name);
+		}
+	}
+}
+
+void RowGroupCollection::AppendToIndex(DataTable &parent, Index &index) {
+	if (total_rows == 0) {
+		return;
+	}
+
+	vector<column_t> column_ids;
+	auto scan_types = types;
+	for (idx_t i = 0; i < scan_types.size(); i++) {
+		column_ids.emplace_back(i);
+	}
+	column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+	scan_types.push_back(LogicalType::ROW_TYPE);
+
+	DataChunk scan_chunk;
+	scan_chunk.Initialize(GetAllocator(), scan_types);
+	DataChunk row_id_chunk;
+
+	// Use SCAN_COMMITTED to scan the latest data.
+	CreateIndexScanState state;
+	auto scan_type = TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED;
+	state.Initialize(column_ids, nullptr);
+	InitializeScan(state.table_state, column_ids, nullptr);
+	InitializeCreateIndexScan(state);
+
+	auto &bound_index = index.Cast<BoundIndex>();
+	while (true) {
+		scan_chunk.Reset();
+		state.table_state.ScanCommitted(scan_chunk, state.segment_lock, scan_type);
+		if (scan_chunk.size() == 0) {
+			break;
+		}
+
+		scan_chunk.Split(row_id_chunk, scan_chunk.ColumnCount() - 1);
+		auto &row_ids = row_id_chunk.data[0];
+		auto error = bound_index.Append(scan_chunk, row_ids);
+		if (error.HasError()) {
+			error.Throw();
 		}
 	}
 }

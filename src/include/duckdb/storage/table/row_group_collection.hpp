@@ -115,6 +115,7 @@ public:
 	shared_ptr<RowGroupCollection> AlterType(ClientContext &context, idx_t changed_idx, const LogicalType &target_type,
 	                                         vector<column_t> bound_columns, Expression &cast_expr);
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
+	void AppendToIndex(DataTable &parent, Index &index);
 
 	void CopyStats(TableStatistics &stats);
 	unique_ptr<BaseStatistics> CopyStats(column_t column_id);

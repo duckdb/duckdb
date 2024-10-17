@@ -54,6 +54,10 @@ bool DataTableInfo::IsTemporary() const {
 	return db.IsTemporary();
 }
 
+unique_ptr<DataTableInfo> DataTableInfo::Copy() {
+	return make_uniq<DataTableInfo>(db, table_io_manager, schema, table);
+}
+
 DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, const string &schema,
                      const string &table, vector<ColumnDefinition> column_definitions_p,
                      unique_ptr<PersistentTableData> data)
@@ -145,22 +149,20 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	parent.is_root = false;
 }
 
-// Alter column to add new constraint
 DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint &constraint)
     : db(parent.db), row_groups(parent.row_groups), is_root(true) {
 
-	// Clone data table info and index storage info. If we are adding a
-	// UNIQUE constraint, we would be otherwise modifying the previous instance
-	// persisting changes even when the current transaction is rolled back.
-	info = make_uniq<DataTableInfo>(parent.info->db, parent.info->table_io_manager, parent.info->schema,
-	                                parent.info->table);
+	// ALTER COLUMN to add a new constraint.
 
-	// Also clone vector we are going to modify
-	vector<IndexStorageInfo> local_index_storage_infos;
+	// Clone data table info and index storage info.
+	// Otherwise, when adding a UNIQUE constraint, we modify the previous instance,
+	// causing changes to persist even when rolling back.
+	info = parent.info->Copy();
+
+	// Clone the storage info vector or the table.
 	for (const auto &index_info : parent.info->index_storage_infos) {
-		local_index_storage_infos.push_back(IndexStorageInfo(index_info.name));
+		info->index_storage_infos.push_back(IndexStorageInfo(index_info.name));
 	}
-	info->index_storage_infos = std::move(local_index_storage_infos);
 	info->InitializeIndexes(context);
 
 	auto &local_storage = LocalStorage::Get(context, db);
@@ -169,34 +171,12 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 		column_definitions.emplace_back(column_def.Copy());
 	}
 
-	// unique constraints require unique indexes
-	if (constraint.type == ConstraintType::UNIQUE) {
-		auto &unique = constraint.Cast<BoundUniqueConstraint>();
-		IndexConstraintType constraint_type = IndexConstraintType::UNIQUE;
-		if (unique.is_primary_key) {
-			constraint_type = IndexConstraintType::PRIMARY;
-		}
-
-		vector<reference<const ColumnDefinition>> index_columns;
-		index_columns.reserve(unique.keys.size());
-		for (const auto &key : unique.keys) {
-			index_columns.push_back(column_definitions[key.index]);
-		}
-
-		auto index_info = GetIndexInfo(constraint_type, info->table, index_columns);
-		auto &index = AddConstraintIndex(index_columns, constraint_type, index_info);
-
-		// If there is already data in the table, index it before continuing
-		// otherwise uniqueness checks will fail.
-		AddIndexStorage(context, index);
-	} else {
-		// Verify the new constraint against current persistent/local data
+	if (constraint.type != ConstraintType::UNIQUE) {
 		VerifyNewConstraint(local_storage, parent, constraint);
+	} else {
+		AddNewIndex(local_storage, parent, constraint);
 	}
-
-	// Get the local data ownership from old dt
 	local_storage.MoveStorage(parent, *this);
-	// this table replaces the previous table, hence the parent is no longer the root DataTable
 	parent.is_root = false;
 }
 
@@ -691,6 +671,44 @@ void DataTable::VerifyNewConstraint(LocalStorage &local_storage, DataTable &pare
 
 	parent.row_groups->VerifyNewConstraint(parent, constraint);
 	local_storage.VerifyNewConstraint(parent, constraint);
+}
+
+void DataTable::AddNewIndex(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint) {
+	if (!IsRoot()) {
+		throw TransactionException("cannot add an index to a table that has been altered");
+	}
+
+	auto &unique = constraint.Cast<BoundUniqueConstraint>();
+	auto constraint_type = unique.is_primary_key ? IndexConstraintType::PRIMARY : IndexConstraintType::UNIQUE;
+
+	vector<reference<const ColumnDefinition>> columns;
+	columns.reserve(unique.keys.size());
+	for (const auto &key : unique.keys) {
+		columns.push_back(column_definitions[key.index]);
+	}
+
+	auto index_info = GetIndexInfo(constraint_type, info->table, columns);
+
+	// Fetch the column types and create bound column reference expressions.
+	vector<column_t> column_ids;
+	vector<unique_ptr<Expression>> expressions;
+	column_ids.reserve(columns.size());
+	expressions.reserve(columns.size());
+
+	for (const auto &column_p : columns) {
+		auto &column = column_p.get();
+		auto binding = ColumnBinding(0, column_ids.size());
+		auto column_ref = make_uniq<BoundColumnRefExpression>(column.Name(), column.Type(), binding);
+		expressions.push_back(std::move(column_ref));
+		column_ids.push_back(column.StorageOid());
+	}
+
+	// Create an ART around the expressions.
+	auto art = make_uniq<ART>(index_info.name, constraint_type, column_ids, TableIOManager::Get(*this),
+	                          std::move(expressions), db, nullptr, index_info);
+	parent.row_groups->AppendToIndex(parent, *art);
+	local_storage.AppendToIndex(parent, *art);
+	AddIndex(std::move(art));
 }
 
 bool HasUniqueIndexes(TableIndexList &list) {
@@ -1496,81 +1514,41 @@ void DataTable::CommitDropTable() {
 }
 
 //===--------------------------------------------------------------------===//
-// GetColumnSegmentInfo
+// Column Segment Info
 //===--------------------------------------------------------------------===//
 vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo() {
 	auto lock = GetSharedCheckpointLock();
 	return row_groups->GetColumnSegmentInfo();
 }
 
-Index &DataTable::AddConstraintIndex(const vector<reference<const ColumnDefinition>> &columns,
-                                     IndexConstraintType constraint_type, const IndexStorageInfo &index_info) {
-	// fetch types and create expressions for the index from the columns
+//===--------------------------------------------------------------------===//
+// Index Constraint Creation
+//===--------------------------------------------------------------------===//
+void DataTable::AddConstraintIndex(const vector<reference<const ColumnDefinition>> &columns,
+                                   IndexConstraintType constraint_type, const IndexStorageInfo &index_info) {
+	if (!IsRoot()) {
+		throw TransactionException("cannot add an index to a table that has been altered!");
+	}
+
+	// TODO: duplicate code (AddNewIndex), unify?
+	// Fetch the column types and create bound column reference expressions.
 	vector<column_t> column_ids;
-	vector<unique_ptr<Expression>> unbound_expressions;
+	vector<unique_ptr<Expression>> expressions;
 	column_ids.reserve(columns.size());
-	unbound_expressions.reserve(columns.size());
+	expressions.reserve(columns.size());
+
 	for (const auto &column_p : columns) {
 		auto &column = column_p.get();
-		D_ASSERT(!column.Generated());
-		unbound_expressions.push_back(
-		    make_uniq<BoundColumnRefExpression>(column.Name(), column.Type(), ColumnBinding(0, column_ids.size())));
+		auto binding = ColumnBinding(0, column_ids.size());
+		auto column_ref = make_uniq<BoundColumnRefExpression>(column.Name(), column.Type(), binding);
+		expressions.push_back(std::move(column_ref));
 		column_ids.push_back(column.StorageOid());
 	}
-	// create an adaptive radix tree around the expressions
+
+	// Create an ART around the expressions.
 	auto art = make_uniq<ART>(index_info.name, constraint_type, column_ids, TableIOManager::Get(*this),
-	                          std::move(unbound_expressions), db, nullptr, index_info);
-	if (!index_info.IsValid() && !index_info.name.empty() && !IsRoot()) {
-		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
-	}
-	return info->indexes.AddIndex(std::move(art));
-}
-
-void DataTable::AddIndexStorage(ClientContext &context, Index &index) {
-	// If the table is empty, there's nothing to do
-	if (row_groups->GetTotalRows() == 0 || column_definitions.empty()) {
-		return;
-	}
-
-	if (!index.IsBound()) {
-		throw InternalException("Unbound index found in DataTable::IndexExistingData");
-	}
-	auto &bound_index = index.Cast<BoundIndex>();
-
-	DataChunk chunk, rest;
-	vector<column_t> column_ids;
-	vector<LogicalType> scan_types;
-	vector<column_t> column_map;
-	for (column_t i = 0; i < column_definitions.size(); i++) {
-		const auto &col = column_definitions[i];
-		column_ids.push_back(col.StorageOid());
-		scan_types.push_back(col.GetType());
-		column_map.push_back(i + 1);
-	}
-	rest.Initialize(context, scan_types);
-
-	column_ids.insert(column_ids.begin(), COLUMN_IDENTIFIER_ROW_ID);
-	scan_types.insert(scan_types.begin(), LogicalType::ROW_TYPE);
-	chunk.Initialize(context, scan_types);
-
-	auto &transaction = DuckTransaction::Get(context, db);
-	TableScanState state;
-	InitializeScan(transaction, state, column_ids, nullptr);
-	while (true) {
-		chunk.Reset();
-		Scan(transaction, chunk, state);
-
-		if (chunk.size() == 0) {
-			break;
-		}
-
-		auto &row_ids = chunk.data[0];
-		rest.ReferenceColumns(chunk, column_map);
-		auto error = bound_index.Append(rest, row_ids);
-		if (error.HasError()) {
-			error.Throw();
-		}
-	}
+	                          std::move(expressions), db, nullptr, index_info);
+	info->indexes.AddIndex(std::move(art));
 }
 
 } // namespace duckdb

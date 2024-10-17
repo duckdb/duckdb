@@ -22,7 +22,7 @@ ALTER TABLE test ADD PRIMARY KEY (j)
 statement error
 INSERT INTO test VALUES (2, 1)
 ----
-TODO
+<REGEX>:Constraint Error.*violates primary key constraint.*
 
 statement ok
 ROLLBACK
@@ -46,4 +46,4 @@ INSERT INTO other VALUES (1, 1), (2, 1)
 statement error
 ALTER TABLE other ADD PRIMARY KEY (j)
 ----
-TODO
+<REGEX>:Constraint Error.*PRIMARY KEY or UNIQUE constraint violated.*

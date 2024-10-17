@@ -229,10 +229,11 @@ public:
 
 	//! Verify the new added constraints against current persistent&local data
 	void VerifyNewConstraint(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint);
+	//! Add a new index to the data table storage.
+	void AddNewIndex(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint);
 
-	Index &AddConstraintIndex(const vector<reference<const ColumnDefinition>> &columns,
-	                          IndexConstraintType constraint_type,
-	                          const IndexStorageInfo &index_info = IndexStorageInfo());
+	void AddConstraintIndex(const vector<reference<const ColumnDefinition>> &columns,
+	                        IndexConstraintType constraint_type, const IndexStorageInfo &index_info);
 
 private:
 	//! Verify constraints with a chunk from the Update containing only the specified column_ids
@@ -250,9 +251,6 @@ private:
 	                                      DataChunk &chunk);
 	void VerifyDeleteForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context,
 	                                      DataChunk &chunk);
-
-	// Indexes existing data in the table into the index.
-	void AddIndexStorage(ClientContext &context, Index &index);
 
 private:
 	//! The table info
