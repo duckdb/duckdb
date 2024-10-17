@@ -1,14 +1,33 @@
 #include "ssb_appender.hpp"
 
 #include "../ssbgen/include/driver.hpp"
+#include "duckdb.hpp"
+#ifndef DUCKDB_AMALGAMATION
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/main/appender.hpp"
+#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/constraints/not_null_constraint.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
+#ifndef DUCKDB_NO_THREADS
+#include "duckdb/common/thread.hpp"
+#endif
+#endif
+
 namespace ssb {
 SSBTableDataGenerator::SSBTableDataGenerator(duckdb::ClientContext &context, SSBGenParameters &parameters)
     : context {context}, parameters {parameters},
       append_containers {duckdb::unique_ptr<ssb_append_container[]>(new ssb_append_container[NUMBER_OF_TABLES])} {
+
 	uint64_t flush_count = duckdb::BaseAppender::DEFAULT_FLUSH_COUNT;
 	memset(append_containers.get(), 0, sizeof(ssb_append_container) * NUMBER_OF_TABLES);
+
 	for (size_t i = 0; i < NUMBER_OF_TABLES; i++) {
+
 		if (parameters.tables[i]) {
+
 			auto &tbl_catalog = *parameters.tables[i];
 			append_containers[i].appender =
 			    duckdb::make_uniq<duckdb::InternalAppender>(context, tbl_catalog, flush_count);
@@ -25,7 +44,7 @@ ssb_appender *SSBTableDataGenerator::GetAppender() {
 		return 0;
 	};
 
-	auto date_appender = &append_containers[DATE];
+	auto date_appender = &append_containers[SSB_DATE];
 	append_container.pr_date = [date_appender](ssb_date_t *record, int mode) -> int {
 		append_date(record, date_appender);
 		return 0;

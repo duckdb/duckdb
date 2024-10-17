@@ -1,6 +1,7 @@
 #include "ssb_dbgen.hpp"
 
 #include "duckdb.hpp"
+#include "ssb_appender.hpp"
 #include "ssb_tables.hpp"
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/catalog/catalog.hpp"
@@ -43,5 +44,15 @@ void SSBGenWrapper::CreateSSBSchema(duckdb::ClientContext &context, std::string 
 	CreateSSBTable<SupplierInfo>(context, catalog, schema);
 	CreateSSBTable<CustomerInfo>(context, catalog, schema);
 	CreateSSBTable<PartInfo>(context, catalog, schema);
+}
+
+void SSBGenWrapper::LoadSSBData(duckdb::ClientContext &context, double sf, std::string catalog_name,
+                                std::string schema) {
+
+	auto &catalog = duckdb::Catalog::GetCatalog(context, catalog_name);
+	SSBGenParameters generator_arameters(context, catalog, schema, sf);
+
+	SSBTableDataGenerator generator(context, generator_arameters);
+	generator.GenerateData();
 }
 } // namespace ssb

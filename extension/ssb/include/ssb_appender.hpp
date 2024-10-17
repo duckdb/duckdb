@@ -1,3 +1,8 @@
+#pragma once
+
+#ifndef SSB_APPENDER_H
+#define SSB_APPENDER_H
+
 #include "../ssbgen/include/driver.hpp"
 #include "../ssbgen/include/dss.h"
 #include "../ssbgen/include/dsstypes.h"
@@ -23,27 +28,27 @@ struct ssb_append_container {
 	duckdb::unique_ptr<duckdb::InternalAppender> appender;
 };
 
-void append_int32(ssb_append_container *info, int32_t value) {
+static void append_int32(ssb_append_container *info, int32_t value) {
 	info->appender->Append<int32_t>(value);
 }
 
-void append_int64(ssb_append_container *info, int64_t value) {
+static void append_int64(ssb_append_container *info, int64_t value) {
 	info->appender->Append<int64_t>(value);
 }
 
-void append_string(ssb_append_container *info, const char *value) {
+static void append_string(ssb_append_container *info, const char *value) {
 	info->appender->Append<const char *>(value);
 }
 
-void append_decimal(ssb_append_container *info, int64_t value) {
+static void append_decimal(ssb_append_container *info, int64_t value) {
 	info->appender->Append<int64_t>(value);
 }
 
-void append_date(ssb_append_container *info, std::string value) {
+static void append_date(ssb_append_container *info, std::string value) {
 	info->appender->Append<duckdb::date_t>(duckdb::Date::FromString(value));
 }
 
-void append_char(ssb_append_container *info, char value) {
+static void append_char(ssb_append_container *info, char value) {
 	char val[2];
 	val[0] = value;
 	val[1] = '\0';
@@ -209,7 +214,7 @@ static std::string get_table_name(int table_index) {
 		return "supplier";
 	case CUST:
 		return "customer";
-	case DATE:
+	case SSB_DATE:
 		return "date";
 	case LINE:
 		return "lineorder";
@@ -226,7 +231,7 @@ static int translate_dbgen_table_index(int dbgen_table_index) {
 		return 1;
 	case CUST:
 		return 2;
-	case DATE:
+	case SSB_DATE:
 		return 3;
 	case LINE:
 		return 4;
@@ -275,3 +280,5 @@ private:
 };
 
 } // namespace ssb
+
+#endif

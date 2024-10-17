@@ -5,11 +5,11 @@ add_library(ssbgen OBJECT
     bm_utils.c
     build.c
     driver.cpp
-    load_stub.c
+    load_stub.cpp
     permute.c
-    print.c
-    rnd.c
-    speed_seed.c
+    rnd.cpp
+    print.cpp
+    speed_seed.cpp
     text.c
     varsub.c
 )

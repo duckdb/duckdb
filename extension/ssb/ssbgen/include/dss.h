@@ -17,7 +17,7 @@
 
 /*global variables*/
 /*SSBM added DATE table*/
-#define DATE 4
+#define SSB_DATE 4
 
 /*SSBM use the lineorder without partsupp and order table*/
 #define L_SKEY_MIN 1
@@ -36,7 +36,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define NONE       -1
+#define SSB_NONE   -1
 #define PART       0
 #define PSUPP      1
 #define SUPP       2
@@ -47,7 +47,7 @@
 #define PART_PSUPP 7
 #define NATION     8
 #define REGION     9
-#define UPDATE     10
+#define SSB_UPDATE 10
 #define MAX_TABLE  11
 #define ONE_STREAM 1
 #define ADD_AT_END 2

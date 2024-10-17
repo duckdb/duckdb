@@ -6,8 +6,10 @@
 #define NO_LFUNC (long (*)()) NULL /* to clean up tdefs */
 
 #include "include/driver.hpp"
+extern "C" {
 
 #include "include/config.h"
+}
 
 #include <stdlib.h>
 #if (defined(_POSIX_) || !defined(WIN32)) /* Change for Windows NT */
@@ -59,9 +61,11 @@
 #pragma warning(default : 4214)
 #endif
 
+extern "C" {
 #include "include/bcd2.h"
 #include "include/dss.h"
 #include "include/dsstypes.h"
+}
 
 /*
  * Function prototypes
@@ -152,7 +156,7 @@ int vrf_part(part_t *p, int mode);
 int vrf_supp(supplier_t *s, int mode);
 int vrf_line(order_t *o, int mode);
 int vrf_order(order_t *o, int mode);
-int vrf_date(ssb_date_t, int mode);
+int vrf_date(ssb_date_t *o, int mode);
 
 typedef int (*func_ptr)();
 
@@ -175,7 +179,7 @@ tdef tdefs[] = {
      {(func_ptr)pr_supp, (func_ptr)ld_supp},
      sd_supp,
      (func_ptr)vrf_supp,
-     NONE,
+     SSB_NONE,
      0},
 
     {"customer.tbl",
@@ -185,9 +189,9 @@ tdef tdefs[] = {
      {(func_ptr)pr_cust, (func_ptr)ld_cust},
      sd_cust,
      (func_ptr)vrf_cust,
-     NONE,
+     SSB_NONE,
      0},
-    {"date.tbl", "date table", 2556, 0, {(func_ptr)pr_date, (func_ptr)ld_date}, 0, (func_ptr)vrf_date, NONE, 0},
+    {"date.tbl", "date table", 2556, 0, {(func_ptr)pr_date, (func_ptr)ld_date}, 0, (func_ptr)vrf_date, SSB_NONE, 0},
     /*line order is SF*1,500,000, however due to the implementation
       the base here is 150,000 instead if 1500,000*/
     {"lineorder.tbl",
@@ -197,7 +201,7 @@ tdef tdefs[] = {
      {(func_ptr)pr_line, (func_ptr)ld_line},
      sd_line,
      (func_ptr)vrf_line,
-     NONE,
+     SSB_NONE,
      0},
     {0, 0, 0, 0, {0, 0}, 0, 0, 0, 0},
     {0, 0, 0, 0, {0, 0}, 0, 0, 0, 0},
@@ -242,9 +246,9 @@ int set_files(int i, int pload) {
 		MALLOC_CHECK(new_name);
 		strcpy(new_name, line);
 		tdefs[i].name = new_name;
-		if (tdefs[i].child != NONE) {
+		if (tdefs[i].child != SSB_NONE) {
 			i = tdefs[i].child;
-			tdefs[i].child = NONE;
+			tdefs[i].child = SSB_NONE;
 			goto child_table;
 		}
 	}
@@ -362,7 +366,7 @@ void gen_tbl(int tnum, long start, long count, long upd_num, ssb_appender *appen
 				else
 					appender->pr_part(&part, upd_num);
 			break;
-		case DATE:
+		case SSB_DATE:
 			mk_date(i, &dt);
 			if (set_seeds == 0)
 				if (validate)
@@ -512,7 +516,7 @@ void process_options(double scale_f) {
 	table = 1 << CUST;
 	table |= 1 << PART;
 	table |= 1 << SUPP;
-	table |= 1 << DATE;
+	table |= 1 << SSB_DATE;
 	table |= 1 << LINE;
 
 	flt_scale = scale_f;
@@ -638,7 +642,7 @@ int gen_main(double scale_f, ssb_appender *appender) {
 				if (i == PART) {
 					rowcnt = tdefs[i].base * (floor(1 + log((double)(scale)) / (log(2))));
 				}
-				if (i == DATE) {
+				if (i == SSB_DATE) {
 					rowcnt = tdefs[i].base;
 				}
 				if (verbose > 0)
