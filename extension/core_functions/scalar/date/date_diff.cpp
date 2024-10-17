@@ -28,6 +28,14 @@ struct DateDiff {
 		    });
 	}
 
+	//	We need to truncate down, not towards 0
+	static inline int64_t Truncate(int64_t value, int64_t units) {
+		return (value + (value < 0)) / units - (value < 0);
+	}
+	static inline int64_t Diff(int64_t start, int64_t end, int64_t units) {
+		return Truncate(end, units) - Truncate(start, units);
+	}
+
 	struct YearOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
@@ -204,30 +212,28 @@ template <>
 int64_t DateDiff::MillisecondsOperator::Operation(timestamp_t startdate, timestamp_t enddate) {
 	D_ASSERT(Timestamp::IsFinite(startdate));
 	D_ASSERT(Timestamp::IsFinite(enddate));
-	return Timestamp::GetEpochMs(enddate) - Timestamp::GetEpochMs(startdate);
+	return Diff(startdate.value, enddate.value, Interval::MICROS_PER_MSEC);
 }
 
 template <>
 int64_t DateDiff::SecondsOperator::Operation(timestamp_t startdate, timestamp_t enddate) {
 	D_ASSERT(Timestamp::IsFinite(startdate));
 	D_ASSERT(Timestamp::IsFinite(enddate));
-	return Timestamp::GetEpochSeconds(enddate) - Timestamp::GetEpochSeconds(startdate);
+	return Diff(startdate.value, enddate.value, Interval::MICROS_PER_SEC);
 }
 
 template <>
 int64_t DateDiff::MinutesOperator::Operation(timestamp_t startdate, timestamp_t enddate) {
 	D_ASSERT(Timestamp::IsFinite(startdate));
 	D_ASSERT(Timestamp::IsFinite(enddate));
-	return Timestamp::GetEpochSeconds(enddate) / Interval::SECS_PER_MINUTE -
-	       Timestamp::GetEpochSeconds(startdate) / Interval::SECS_PER_MINUTE;
+	return Diff(startdate.value, enddate.value, Interval::MICROS_PER_MINUTE);
 }
 
 template <>
 int64_t DateDiff::HoursOperator::Operation(timestamp_t startdate, timestamp_t enddate) {
 	D_ASSERT(Timestamp::IsFinite(startdate));
 	D_ASSERT(Timestamp::IsFinite(enddate));
-	return Timestamp::GetEpochSeconds(enddate) / Interval::SECS_PER_HOUR -
-	       Timestamp::GetEpochSeconds(startdate) / Interval::SECS_PER_HOUR;
+	return Diff(startdate.value, enddate.value, Interval::MICROS_PER_HOUR);
 }
 
 // TIME specialisations
