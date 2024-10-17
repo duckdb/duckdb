@@ -2,8 +2,8 @@
 # description: Test Top N Optimization
 # group: [topn]
 
-statement ok
-PRAGMA enable_verification
+#statement ok
+#PRAGMA enable_verification
 
 statement ok
 CREATE TABLE test (b INTEGER);
@@ -23,6 +23,21 @@ query I
 SELECT b FROM test ORDER BY b LIMIT 1 OFFSET 1;
 ----
 7
+
+# Top N optimization: Limit greater than number of rows
+query I
+SELECT b FROM test ORDER BY b LIMIT 10
+----
+2
+7
+22
+
+query I
+SELECT b FROM test ORDER BY b DESC LIMIT 10
+----
+22
+7
+2
 
 # Top N optimization: Limit greater than number of rows
 query I

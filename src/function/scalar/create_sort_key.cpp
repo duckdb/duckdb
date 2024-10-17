@@ -730,6 +730,15 @@ void CreateSortKeyHelpers::CreateSortKey(Vector &input, idx_t input_count, Order
 	CreateSortKeyInternal(sort_key_data, modifiers, result, input_count);
 }
 
+void CreateSortKeyHelpers::CreateSortKey(DataChunk &input, const vector<OrderModifiers> &modifiers, Vector &result) {
+	vector<unique_ptr<SortKeyVectorData>> sort_key_data;
+	D_ASSERT(modifiers.size() == input.ColumnCount());
+	for(idx_t r = 0; r < modifiers.size(); r++) {
+		sort_key_data.push_back(make_uniq<SortKeyVectorData>(input.data[r], input.size(), modifiers[r]));
+	}
+	CreateSortKeyInternal(sort_key_data, modifiers, result, input.size());
+}
+
 void CreateSortKeyHelpers::CreateSortKeyWithValidity(Vector &input, Vector &result, const OrderModifiers &modifiers,
                                                      const idx_t count) {
 	CreateSortKey(input, count, modifiers, result);
