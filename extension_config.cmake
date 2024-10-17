@@ -1,0 +1,3 @@
+duckdb_extension_load(autocomplete)
+duckdb_extension_load(parquet)
+duckdb_extension_load(ssb)

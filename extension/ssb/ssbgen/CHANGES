@@ -1,0 +1,33 @@
+# @(#)CHANGES	2.1.8.18
+08 Dec 1998	Release 2.0.0 
+15 Mar 1998	Release 2.0.0 pre-release
+06 Feb 1998	Release 1.3.1
+15 Dec 1996	Release 1.2.0
+08 Aug 1996	Release 1.1.0D
+01 May 1996	Release 1.1.0C
+29 Jan 1996	Release 1.1.0B
+23 Jan 1996	Release 1.1.0A
+19 Dec 1995	Release 1.1.0
+11 Sep 1995	Release 1.0.1
+13 Mar 1995	Release 1.0
+
+
+Changes between 990830 and 991011
+File    Bug ID
+----	------
+s.2.sql			00059	Removing extra comma
+s.dss.h			00061
+s.config.h		00061
+s.driver.c		00060	adding missed change from Larry
+s.makefile		00058
+s.rnd.c			00061
+s.HISTORY		00061
+s.history.html	00061
+s.mr.sh			00058	miscelaneous corrections
+s.bug.template	00058	removing extraneous spaces
+s.bug.template			changed titles
+
+
+Changes between 199910 and 000511
+File     Bug ID
+----     ------

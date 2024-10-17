@@ -1,0 +1,85 @@
+VC="c:/Program Files/Microsoft Visual Studio 9.0/VC"
+WIN_INC="C:\Program Files\Microsoft SDKs\Windows\v6.0A\Include"
+WIN_LIB="C:\Program Files\Microsoft SDKs\Windows\v6.0A\Lib"
+#VC = "C:\Program Files\Microsoft Visual Studio .NET 2003\Vc7"
+VCLIB = $(VC)\LIB
+# @(#)makefile.suite	2.1.8.1
+################
+## CHANGE NAME OF ANSI COMPILER HERE
+################
+CC      =cl.exe
+# Current values for DATABASE are: INFORMIX, DB2, TDAT (Teradata)
+#                                  SQLSERVER, SYBASE
+# Current values for MACHINE are:  ATT, DOS, WIN32 HP, IBM, ICL, MVS, 
+#                                  SGI, SUN, U2200, VMS, LINUX
+# Current values for WORKLOAD are:  SSBM, TPCH, TPCR
+DATABASE=DB2 
+MACHINE =WIN32 
+WORKLOAD =SSBM 
+#
+# add -EDTERABYTE if orderkey will execeed 32 bits (SF >= 300)
+# and make the appropriate change in gen_schema() of runit.sh
+CFLAGS	= -DDBNAME=\"dss\" -D$(MACHINE) -D$(DATABASE) -D$(WORKLOAD) /I$(VC)\include /I$(WIN_INC)
+
+#LDFLAGS = -O
+# The OBJ,EXE and LIB macros will need to be changed for compilation under
+#  Windows NT
+OBJ     = .obj
+EXE     = .exe
+LIBS    =$(VCLIB)\libcmt.lib $(VCLIB)\oldnames.lib $(VCLIB)\oldnames.lib $(WIN_LIB)\kernel32.lib
+#
+# NO CHANGES SHOULD BE NECESSARY BELOW THIS LINE
+###############
+#
+PROG1 = dbgen$(EXE)
+PROG2 = qgen$(EXE)
+PROGS = $(PROG1) $(PROG2)
+#
+HDR1 = dss.h rnd.h config.h dsstypes.h shared.h bcd2.h
+HDR2 = tpcd.h permute.h
+HDR  = $(HDR1) $(HDR2)
+#
+SRC1 = build.c driver.c bm_utils.c rnd.c print.c load_stub.c bcd2.c \
+	speed_seed.c text.c permute.c
+SRC2 = qgen.c varsub.c 
+SRC  = $(SRC1) $(SRC2)
+#
+OBJ1 = build$(OBJ) driver$(OBJ) bm_utils$(OBJ) rnd$(OBJ) print$(OBJ) \
+	load_stub$(OBJ) bcd2$(OBJ) speed_seed$(OBJ) text$(OBJ) permute$(OBJ)
+OBJ2 = build$(OBJ) bm_utils$(OBJ) qgen$(OBJ) rnd$(OBJ) varsub$(OBJ) \
+	text$(OBJ) bcd2$(OBJ) permute$(OBJ) speed_seed$(OBJ)
+OBJS = $(OBJ1) $(OBJ2)
+#
+SETS = dists.dss 
+DOC=README HISTORY PORTING.NOTES BUGS
+DDL  = dss.ddl dss.ri
+OTHER=makefile.suite $(SETS) $(DDL) 
+# case is *important* in TEST_RES
+TEST_RES = O.res L.res c.res s.res P.res S.res n.res r.res
+#
+DBGENSRC=$(SRC1) $(HDR1) $(OTHER) $(DOC) $(SRC2) $(HDR2) $(SRC3)
+QD=1.sql 2.sql 3.sql 4.sql 5.sql 6.sql 7.sql 8.sql 9.sql 10.sql \
+	11.sql 12.sql 13.sql 14.sql 15.sql 16.sql 17.sql 18.sql \
+	19.sql 20.sql 21.sql 22.sql
+VARIANTS= 8a.sql 12a.sql 13a.sql 14a.sql 15a.sql 
+ANS   = 1.ans 2.ans 3.ans 4.ans 5.ans 6.ans 7.ans 8.ans 9.ans 10.ans 11.ans \
+	12.ans 13.ans 14.ans 15.ans 16.ans 17.ans 18.ans 19.ans 20.ans \
+	21.ans 22.ans
+QSRC  = $(FQD) $(VARIANTS)
+ALLSRC=$(DBGENSRC) 
+TREE_DOC=tree.readme tree.changes appendix.readme appendix.version answers.readme queries.readme variants.readme
+JUNK  = 
+#
+all: $(PROGS)
+
+$(PROG1): $(OBJ1) $(SETS) 
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJ1) $(LIBS)
+
+$(PROG2): permute.h $(OBJ2) 
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJ2) $(LIBS)
+
+clean:
+	del /F $(PROGS) $(OBJS) $(JUNK)
+
+$(OBJ1): $(HDR1)
+$(OBJ2): dss.h tpcd.h config.h
