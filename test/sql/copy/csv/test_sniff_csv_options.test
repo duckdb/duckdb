@@ -155,26 +155,26 @@ FROM sniff_csv('data/csv/real/lineitem_sample.csv', names=['c01','c02','c03','c0
 # Test that rejects returs correct values
 
 query I
-SELECT delimiter FROM sniff_csv('data/csv/rejects_sniffer.csv');
+SELECT delimiter FROM sniff_csv('data/csv/ignore_errors.csv');
 ----
 ;
 
 query I
-SELECT delimiter FROM sniff_csv('data/csv/rejects_sniffer.csv', ignore_errors=true);
+SELECT delimiter FROM sniff_csv('data/csv/ignore_errors.csv', ignore_errors=true);
 ----
 ,
 
 query I
-SELECT delimiter FROM sniff_csv('data/csv/rejects_sniffer.csv', store_rejects=true);
+SELECT delimiter FROM sniff_csv('data/csv/ignore_errors.csv', store_rejects=true);
 ----
 ,
 
 query I
-SELECT delimiter FROM sniff_csv('data/csv/rejects_sniffer.csv', rejects_scan='a_1');
+SELECT delimiter FROM sniff_csv('data/csv/ignore_errors.csv', rejects_scan='a_1');
 ----
 ,
 
 query I
-SELECT delimiter FROM sniff_csv('data/csv/rejects_sniffer.csv', rejects_table='a_2');
+SELECT delimiter FROM sniff_csv('data/csv/ignore_errors.csv', rejects_table='a_2');
 ----
 ,
