@@ -239,6 +239,25 @@ static int translate_dbgen_table_index(int dbgen_table_index) {
 		throw duckdb::InternalException("Invalid table index");
 	}
 }
+
+static int translate_ssbgen_to_dbgen_index(int ssbgen_table_index) {
+	// NOTE: Is this a good way of solving an issue... no. Does it get it fixed? Yes.
+	switch (ssbgen_table_index) {
+	case 0:
+		return PART;
+	case 1:
+		return SUPP;
+	case 2:
+		return CUST;
+	case 3:
+		return SSB_DATE;
+	case 4:
+		return LINE;
+	default:
+		throw duckdb::InternalException("Invalid table index");
+	}
+}
+
 #define NUMBER_OF_TABLES 5
 
 struct SSBGenParameters {
@@ -249,7 +268,8 @@ struct SSBGenParameters {
 
 		tables.resize(NUMBER_OF_TABLES);
 		for (size_t i = 0; i < NUMBER_OF_TABLES; i++) {
-			auto tname = get_table_name(i);
+			int table_index = translate_ssbgen_to_dbgen_index(i);
+			auto tname = get_table_name(table_index);
 			if (!tname.empty()) {
 				std::string full_tname = std::string(tname);
 				auto &tbl_catalog = catalog.GetEntry<duckdb::TableCatalogEntry>(context, schema, full_tname);

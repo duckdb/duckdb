@@ -36,39 +36,39 @@ SSBTableDataGenerator::SSBTableDataGenerator(duckdb::ClientContext &context, SSB
 }
 
 ssb_appender *SSBTableDataGenerator::GetAppender() {
-	ssb_appender append_container;
+	ssb_appender *append_container = new ssb_appender();
 
-	auto customer_appender = &append_containers[CUST];
-	append_container.pr_cust = [customer_appender](customer_t *record, int mode) -> int {
+	auto customer_appender = &append_containers[translate_dbgen_table_index(CUST)];
+	append_container->pr_cust = [customer_appender](customer_t *record, int mode) -> int {
 		append_customer(record, customer_appender);
 		return 0;
 	};
 
-	auto date_appender = &append_containers[SSB_DATE];
-	append_container.pr_date = [date_appender](ssb_date_t *record, int mode) -> int {
+	auto date_appender = &append_containers[translate_dbgen_table_index(SSB_DATE)];
+	append_container->pr_date = [date_appender](ssb_date_t *record, int mode) -> int {
 		append_date(record, date_appender);
 		return 0;
 	};
 
-	auto lineorder_appender = &append_containers[LINE];
-	append_container.pr_line = [lineorder_appender](order_t *record, int mode) -> int {
+	auto lineorder_appender = &append_containers[translate_dbgen_table_index(LINE)];
+	append_container->pr_line = [lineorder_appender](order_t *record, int mode) -> int {
 		append_line_order(record, lineorder_appender);
 		return 0;
 	};
 
-	auto part_appender = &append_containers[PART];
-	append_container.pr_part = [part_appender](part_t *record, int mode) -> int {
+	auto part_appender = &append_containers[translate_dbgen_table_index(PART)];
+	append_container->pr_part = [part_appender](part_t *record, int mode) -> int {
 		append_part(record, part_appender);
 		return 0;
 	};
 
-	auto supplier_appender = &append_containers[SUPP];
-	append_container.pr_supp = [supplier_appender](supplier_t *record, int mode) -> int {
+	auto supplier_appender = &append_containers[translate_dbgen_table_index(SUPP)];
+	append_container->pr_supp = [supplier_appender](supplier_t *record, int mode) -> int {
 		append_supplier(record, supplier_appender);
 		return 0;
 	};
 
-	return &append_container;
+	return append_container;
 }
 
 // Generates and loads data into the tables
@@ -77,6 +77,7 @@ void SSBTableDataGenerator::GenerateData() {
 
 	// Generate the data
 	int status = gen_main(parameters.scale_factor, appender);
+	delete appender; // delete the appender to free up memory
 
 	if (status != 0) {
 		throw duckdb::InternalException("Failed to generate data for SSB tables");

@@ -55,8 +55,7 @@ static void SsbgenFunction(ClientContext &context, TableFunctionInput &data_p, D
 		return;
 	}
 	ssb::SSBGenWrapper::CreateSSBSchema(context, data.catalog, data.schema);
-	// ssb::SSBGenWrapper::LoadSSBData(context, data.sf, data.catalog, data.schema);
-	// gen_main(data.sf, nullptr);
+	ssb::SSBGenWrapper::LoadSSBData(context, data.sf, data.catalog, data.schema);
 
 	data.finished = true;
 }
