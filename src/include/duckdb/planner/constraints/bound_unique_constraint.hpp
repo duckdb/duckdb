@@ -30,10 +30,6 @@ public:
 #endif
 	}
 
-	vector<PhysicalIndex> GetColumnIndices() const final {
-		return keys;
-	}
-
 	//! The keys that define the unique constraint
 	vector<PhysicalIndex> keys;
 	//! The same keys but stored as an unordered set

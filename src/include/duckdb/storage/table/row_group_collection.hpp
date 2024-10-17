@@ -35,6 +35,7 @@ struct CollectionCheckpointState;
 struct PersistentCollectionData;
 class CheckpointTask;
 class TableIOManager;
+class Index;
 
 class RowGroupCollection {
 public:

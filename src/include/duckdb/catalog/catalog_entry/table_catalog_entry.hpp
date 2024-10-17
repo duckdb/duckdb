@@ -111,7 +111,9 @@ public:
 	virtual void BindUpdateConstraints(Binder &binder, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
 	                                   ClientContext &context);
 
-	Constraint *GetPrimaryKey() const;
+	//! Returns a pointer to the table's primary key, if exists, else nullptr.
+	optional_ptr<Constraint> GetPrimaryKey() const;
+	//! Returns true, if the table has a primary key, else false.
 	bool HasPrimaryKey() const;
 
 protected:

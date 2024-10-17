@@ -334,7 +334,7 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 	}
 }
 
-Constraint *TableCatalogEntry::GetPrimaryKey() const {
+optional_ptr<Constraint> TableCatalogEntry::GetPrimaryKey() const {
 	for (const auto &constraint : GetConstraints()) {
 		if (constraint->type == ConstraintType::UNIQUE) {
 			auto &unique = constraint->Cast<UniqueConstraint>();

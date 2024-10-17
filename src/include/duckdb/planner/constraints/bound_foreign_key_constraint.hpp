@@ -35,11 +35,6 @@ public:
 #endif
 	}
 
-	vector<PhysicalIndex> GetColumnIndices() const final {
-		// Use the vector as it is ordered
-		return info.fk_keys;
-	}
-
 	ForeignKeyInfo info;
 	//! The same keys but stored as an unordered set
 	physical_index_set_t pk_key_set;

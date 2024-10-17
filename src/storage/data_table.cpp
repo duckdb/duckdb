@@ -30,15 +30,14 @@
 
 namespace duckdb {
 
-IndexStorageInfo GetIndexInfo(const IndexConstraintType &constraint_type, string &table_name,
-                              const vector<reference<const ColumnDefinition>> &columns) {
-	auto constraint_name = EnumUtil::ToString(constraint_type);
-	string concat_columns;
+IndexStorageInfo GetIndexInfo(const IndexConstraintType &type, const string &table_name, const column_defs_t &columns) {
+	auto name = EnumUtil::ToString(type);
+	string column_names;
 	for (const auto &col : columns) {
-		concat_columns += "_";
-		concat_columns += col.get().Name();
+		column_names += "_";
+		column_names += col.get().Name();
 	}
-	return IndexStorageInfo(constraint_name + "_" + table_name + concat_columns);
+	return IndexStorageInfo(name + "_" + table_name + column_names);
 }
 
 DataTableInfo::DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, string schema,
@@ -1537,13 +1536,12 @@ vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo() {
 //===--------------------------------------------------------------------===//
 // Index Constraint Creation
 //===--------------------------------------------------------------------===//
-void DataTable::AddIndex(const vector<reference<const ColumnDefinition>> &columns, const IndexConstraintType type,
+void DataTable::AddIndex(const column_defs_t &columns, const IndexConstraintType type,
                          const IndexStorageInfo &index_info) {
 	if (!IsRoot()) {
 		throw TransactionException("cannot add an index to a table that has been altered!");
 	}
 
-	// TODO: duplicate code (AddNewIndex), unify?
 	// Fetch the column types and create bound column reference expressions.
 	vector<column_t> column_ids;
 	vector<unique_ptr<Expression>> expressions;

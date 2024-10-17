@@ -57,7 +57,7 @@ public:
 		return indexes;
 	}
 	//! Adds an index to the list of indexes of this table
-	Index &AddIndex(unique_ptr<Index> index);
+	void AddIndex(unique_ptr<Index> index);
 	//! Removes an index from the list of indexes of this table
 	void RemoveIndex(const string &name);
 	//! Completely removes all remaining memory of an index after dropping the catalog entry
