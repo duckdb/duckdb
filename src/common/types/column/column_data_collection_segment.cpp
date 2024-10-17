@@ -14,8 +14,29 @@ idx_t ColumnDataCollectionSegment::GetDataSize(idx_t type_size) {
 	return AlignValue(type_size * STANDARD_VECTOR_SIZE);
 }
 
-validity_t *ColumnDataCollectionSegment::GetValidityPointer(data_ptr_t base_ptr, idx_t type_size) {
+validity_t *ColumnDataCollectionSegment::GetValidityPointerForWriting(data_ptr_t base_ptr, idx_t type_size) {
 	return reinterpret_cast<validity_t *>(base_ptr + GetDataSize(type_size));
+}
+
+validity_t *ColumnDataCollectionSegment::GetValidityPointer(data_ptr_t base_ptr, idx_t type_size, idx_t count) {
+	auto validity_mask = reinterpret_cast<validity_t *>(base_ptr + GetDataSize(type_size));
+
+	// Optimized check to see if all entries are valid
+	for (idx_t i = 0; i < (count / ValidityMask::BITS_PER_VALUE); i++) {
+		if (!ValidityMask::AllValid(validity_mask[i])) {
+			return validity_mask;
+		}
+	}
+	if ((count % ValidityMask::BITS_PER_VALUE) != 0) {
+		auto entry = validity_mask[(count / ValidityMask::BITS_PER_VALUE)];
+		for (idx_t i = 0; i < (count % ValidityMask::BITS_PER_VALUE); i++) {
+			if (!ValidityMask::RowIsValid(entry, i)) {
+				return validity_mask;
+			}
+		}
+	}
+	// All entries are valid, no need to initialize the validity mask
+	return nullptr;
 }
 
 VectorDataIndex ColumnDataCollectionSegment::AllocateVectorInternal(const LogicalType &type, ChunkMetaData &chunk_meta,
@@ -141,7 +162,7 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 	auto &vdata = GetVectorData(vector_index);
 
 	auto base_ptr = allocator->GetDataPointer(state, vdata.block_id, vdata.offset);
-	auto validity_data = GetValidityPointer(base_ptr, type_size);
+	auto validity_data = GetValidityPointer(base_ptr, type_size, vdata.count);
 	if (!vdata.next_data.IsValid() && state.properties != ColumnDataScanProperties::DISALLOW_ZERO_COPY) {
 		// no next data, we can do a zero-copy read of this vector
 		FlatVector::SetData(result, base_ptr);
@@ -169,7 +190,7 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 	while (next_index.IsValid()) {
 		auto &current_vdata = GetVectorData(next_index);
 		base_ptr = allocator->GetDataPointer(state, current_vdata.block_id, current_vdata.offset);
-		validity_data = GetValidityPointer(base_ptr, type_size);
+		validity_data = GetValidityPointer(base_ptr, type_size, current_vdata.count);
 		if (type_size > 0) {
 			memcpy(target_data + current_offset * type_size, base_ptr, current_vdata.count * type_size);
 		}
