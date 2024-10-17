@@ -12,6 +12,27 @@ FROM read_csv('data/csv/bad_escape.csv')
 123	foo ("foo")
 
 query I
+FROM read_csv('data/csv/quoted_values_delimited.csv')
+----
+value1;value2;value3
+value1;value2;value3
+value1;value2;value3
+
+query I
+FROM read_csv('data/csv/quoted_values_delimited.csv', ignore_errors = true)
+----
+value1;value2;value3
+value1;value2;value3
+value1;value2;value3
+
+query III
+FROM read_csv('data/csv/quoted_values_delimited.csv', quote = '')
+----
+"value1	value2	value3"
+"value1	value2	value3"
+"value1	value2	value3"
+
+query I
 FROM read_csv_auto('data/csv/test/dateformat.csv')
 ----
 2019-06-05

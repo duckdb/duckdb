@@ -50,6 +50,7 @@ static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFuncti
 		input.named_parameters.erase("auto_detect");
 	}
 	result->options.FromNamedParameters(input.named_parameters, context);
+	result->options.Verify();
 	// We want to return the whole CSV Configuration
 	// 1. Delimiter
 	return_types.emplace_back(LogicalType::VARCHAR);

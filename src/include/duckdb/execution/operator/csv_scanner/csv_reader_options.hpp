@@ -168,8 +168,10 @@ struct CSVReaderOptions {
 	void SetReadOption(const string &loption, const Value &value, vector<string> &expected_names);
 	void SetWriteOption(const string &loption, const Value &value);
 	void SetDateFormat(LogicalTypeId type, const string &format, bool read_format);
-	void ToNamedParameters(named_parameter_map_t &out);
-	void FromNamedParameters(named_parameter_map_t &in, ClientContext &context);
+	void ToNamedParameters(named_parameter_map_t &out) const;
+	void FromNamedParameters(const named_parameter_map_t &in, ClientContext &context);
+	//! Verify options are not conflicting
+	void Verify();
 
 	string ToString(const string &current_file_path) const;
 	//! If the type for column with idx i was manually set
