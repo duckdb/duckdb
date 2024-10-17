@@ -733,7 +733,7 @@ void CreateSortKeyHelpers::CreateSortKey(Vector &input, idx_t input_count, Order
 void CreateSortKeyHelpers::CreateSortKey(DataChunk &input, const vector<OrderModifiers> &modifiers, Vector &result) {
 	vector<unique_ptr<SortKeyVectorData>> sort_key_data;
 	D_ASSERT(modifiers.size() == input.ColumnCount());
-	for(idx_t r = 0; r < modifiers.size(); r++) {
+	for (idx_t r = 0; r < modifiers.size(); r++) {
 		sort_key_data.push_back(make_uniq<SortKeyVectorData>(input.data[r], input.size(), modifiers[r]));
 	}
 	CreateSortKeyInternal(sort_key_data, modifiers, result, input.size());

@@ -106,7 +106,7 @@ public:
 	//! Destroy all data and columns owned by this DataChunk
 	DUCKDB_API void Destroy();
 
-	//! Copies the data from this vector to another vector.
+	//! Copies the data from this chunk to another chunk.
 	DUCKDB_API void Copy(DataChunk &other, idx_t offset = 0) const;
 	DUCKDB_API void Copy(DataChunk &other, const SelectionVector &sel, const idx_t source_count,
 	                     const idx_t offset = 0) const;
