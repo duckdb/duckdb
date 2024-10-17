@@ -19,15 +19,15 @@ vector<char> DialectCandidates::GetDefaultDelimiter() {
 }
 
 vector<vector<char>> DialectCandidates::GetDefaultQuote() {
-	return {{'\"'}, {'\"', '\''}, {'\0'}};
+	return {{'\0'}, {'\"', '\''},{'\"'} };
 }
 
 vector<QuoteRule> DialectCandidates::GetDefaultQuoteRule() {
-	return {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER, QuoteRule::NO_QUOTES};
+	return {QuoteRule::NO_QUOTES, QuoteRule::QUOTES_OTHER, QuoteRule::QUOTES_RFC};
 }
 
 vector<vector<char>> DialectCandidates::GetDefaultEscape() {
-	return {{'\"', '\0', '\''}, {'\\'}, {'\0'}};
+	return {{'\0'}, {'\\'}, {'\"', '\0', '\''}};
 }
 
 vector<char> DialectCandidates::GetDefaultComment() {
@@ -332,6 +332,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	bool comments_are_acceptable = AreCommentsAcceptable(
 	    sniffed_column_counts, num_cols, options.dialect_options.state_machine_options.comment.IsSetByUser());
 
+	bool quoted = scanner->ever_quoted && sniffed_column_counts.state_machine.dialect_options.state_machine_options.quote.GetValue() != '\0';
 	// If rows are consistent and no invalid padding happens, this is the best suitable candidate if one of the
 	// following is valid:
 	// - There's a single column before.
@@ -339,11 +340,13 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	// - There's more than one column and less padding is required.
 	if (rows_consistent &&
 	    (single_column_before || (more_values && !require_more_padding) ||
-	     (more_than_one_column && require_less_padding)) &&
+	     (more_than_one_column && require_less_padding) || quoted) &&
 	    !invalid_padding && comments_are_acceptable) {
 		if (!candidates.empty() && set_columns.IsSet() && max_columns_found == set_columns.Size()) {
 			// We have a candidate that fits our requirements better
-			return;
+			if (candidates.front()->ever_quoted || !scanner->ever_quoted) {
+				return;
+			}
 		}
 		auto &sniffing_state_machine = scanner->GetStateMachine();
 

@@ -8,6 +8,14 @@ PRAGMA enable_verification
 # We need to do some precise byte math here
 require notwindows
 
+statement error
+FROM read_csv('data/csv/evil_nullpadding.csv', buffer_size=20, quote = '"')
+----
+piaje
+
+statement ok
+FROM read_csv('data/csv/evil_nullpadding.csv', buffer_size=20)
+
 query I
 FROM read_csv('data/csv/validator/single_column.csv', header = 0)
 ----
