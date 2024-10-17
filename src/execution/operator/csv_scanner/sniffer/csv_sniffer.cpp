@@ -142,7 +142,7 @@ AdaptiveSnifferResult CSVSniffer::MinimalSniff() {
 	}
 
 	auto names = DetectHeaderInternal(buffer_manager->context, potential_header, *state_machine, set_columns,
-	                                            best_sql_types_candidates_per_column_idx, options, *error_handler);
+	                                  best_sql_types_candidates_per_column_idx, options, *error_handler);
 
 	for (idx_t column_idx = 0; column_idx < best_sql_types_candidates_per_column_idx.size(); column_idx++) {
 		LogicalType d_type = best_sql_types_candidates_per_column_idx[column_idx].back();
@@ -151,13 +151,6 @@ AdaptiveSnifferResult CSVSniffer::MinimalSniff() {
 		}
 		detected_types.push_back(d_type);
 	}
-	//bool only_header = data_chunk.size() == 1;
-	//for (auto &type : detected_types) {
-	//	if (type.id() != LogicalTypeId::VARCHAR) {
-	//		only_header = false;
-	//	}
-	//}
-	//return {detected_types, names, only_header};
 	return {detected_types, names, sniffed_column_counts.result_position > 1};
 }
 
@@ -167,7 +160,7 @@ SnifferResult CSVSniffer::AdaptiveSniff(const CSVSchema &file_schema) {
 	// Check if we are happy with the result or if we need to do more sniffing
 	if (!error_handler->AnyErrors() && !detection_error_handler->AnyErrors()) {
 		// If we got no errors, we also run full if schemas do not match.
-		if (!set_columns.IsSet() && !options.file_options.AnySet() && !min_sniff_res.only_header) {
+		if (!set_columns.IsSet() && !options.file_options.AnySet()) {
 			string error;
 			run_full = !file_schema.SchemasMatch(error, min_sniff_res, options.file_path, true);
 		}
