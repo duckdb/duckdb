@@ -1470,7 +1470,9 @@ bool StringValueScanner::IsRowValid(CSVIterator &current_iterator) const {
 	                                  csv_file_scan, false, current_iterator, result_size);
 	auto &tuples = scan_finder->ParseChunk();
 	current_iterator.pos = scan_finder->GetIteratorPosition();
-	return (tuples.number_of_rows == 1 || tuples.first_line_is_comment) && tuples.borked_rows.empty() && !tuples.current_errors.HasError();;
+	return (tuples.number_of_rows == 1 || tuples.first_line_is_comment) && tuples.borked_rows.empty() &&
+	       !tuples.current_errors.HasError();
+	;
 }
 
 ValidRowInfo StringValueScanner::TryRow(CSVState state, idx_t start_pos, idx_t end_pos) const {
@@ -1536,7 +1538,8 @@ void StringValueScanner::SetStart() {
 		}
 	}
 	// 3. We are in an escaped value
-	if (!best_row.is_valid && state_machine->dialect_options.state_machine_options.escape.GetValue() != '\0'&& state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0') {
+	if (!best_row.is_valid && state_machine->dialect_options.state_machine_options.escape.GetValue() != '\0' &&
+	    state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0') {
 		auto escape_row = TryRow(CSVState::ESCAPE, iterator.pos.buffer_pos, iterator.GetEndPos());
 		if (escape_row.is_valid) {
 			best_row = escape_row;
