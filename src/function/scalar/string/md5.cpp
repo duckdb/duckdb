@@ -49,19 +49,11 @@ ScalarFunctionSet MD5Fun::GetFunctions() {
 	return set;
 }
 
-void MD5Fun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetFunctions());
-}
-
 ScalarFunctionSet MD5NumberFun::GetFunctions() {
 	ScalarFunctionSet set("md5_number");
 	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::HUGEINT, MD5NumberFunction));
 	set.AddFunction(ScalarFunction({LogicalType::BLOB}, LogicalType::HUGEINT, MD5NumberFunction));
 	return set;
-}
-
-void MD5NumberFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetFunctions());
 }
 
 } // namespace duckdb
