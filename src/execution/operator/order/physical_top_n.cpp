@@ -95,8 +95,8 @@ public:
 		return MaxValue<idx_t>(STANDARD_VECTOR_SIZE * 5ULL, 2ULL * heap_size);
 	}
 
-	idx_t MaxHeapSize() const {
-		return ReduceThreshold() + STANDARD_VECTOR_SIZE;
+	idx_t HeapAllocSize() const {
+		return MinValue<idx_t>(STANDARD_VECTOR_SIZE * 100ULL, ReduceThreshold()) + STANDARD_VECTOR_SIZE;
 	}
 };
 
@@ -117,7 +117,7 @@ TopNHeap::TopNHeap(ClientContext &context, Allocator &allocator, const vector<Lo
 	}
 	vector<LogicalType> sort_keys_type {LogicalType::BLOB};
 	sort_keys.Initialize(allocator, sort_keys_type);
-	heap_data.Initialize(allocator, payload_types, MaxHeapSize());
+	heap_data.Initialize(allocator, payload_types, HeapAllocSize());
 	payload_chunk.Initialize(allocator, payload_types);
 	sort_chunk.Initialize(allocator, sort_types);
 }
@@ -243,7 +243,7 @@ void TopNHeap::Reduce() {
 	// we have too many values in the heap - reduce them
 	StringHeap new_sort_heap;
 	DataChunk new_payload_chunk;
-	new_payload_chunk.Initialize(allocator, payload_types, MaxHeapSize());
+	new_payload_chunk.Initialize(allocator, payload_types, HeapAllocSize());
 
 	SelectionVector new_payload_sel(heap.size());
 	for (idx_t i = 0; i < heap.size(); i++) {
