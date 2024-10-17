@@ -163,6 +163,7 @@ public:
 
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
 	void AppendToIndex(DataTable &parent, Index &index);
+	void AddIndex(DataTable &parent, unique_ptr<Index> index);
 
 private:
 	ClientContext &context;

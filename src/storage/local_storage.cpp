@@ -446,14 +446,14 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		return;
 	}
 	idx_t append_count = storage.row_groups->GetTotalRows() - storage.deleted_rows;
-
 	table.InitializeIndexes(context);
 
 	TableAppendState append_state;
 	table.AppendLock(append_state);
 	transaction.PushAppend(table, NumericCast<idx_t>(append_state.row_start), append_count);
-	if ((append_state.row_start == 0 || storage.row_groups->GetTotalRows() >= MERGE_THRESHOLD) &&
-	    storage.deleted_rows == 0) {
+
+	auto bulk_appending = append_state.row_start == 0 || storage.row_groups->GetTotalRows() >= MERGE_THRESHOLD;
+	if (bulk_appending && storage.deleted_rows == 0) {
 		// table is currently empty OR we are bulk appending: move over the storage directly
 		// first flush any outstanding blocks
 		storage.FlushBlocks();
@@ -598,6 +598,14 @@ void LocalStorage::AppendToIndex(DataTable &parent, Index &index) {
 		return;
 	}
 	storage->row_groups->AppendToIndex(parent, index);
+}
+
+void LocalStorage::AddIndex(DataTable &parent, unique_ptr<Index> index) {
+	auto storage = table_manager.GetStorage(parent);
+	if (!storage) {
+		return;
+	}
+	storage->indexes.AddIndex(std::move(index));
 }
 
 } // namespace duckdb

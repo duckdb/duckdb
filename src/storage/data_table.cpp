@@ -691,24 +691,32 @@ void DataTable::AddNewIndex(LocalStorage &local_storage, DataTable &parent, cons
 
 	// Fetch the column types and create bound column reference expressions.
 	vector<column_t> column_ids;
-	vector<unique_ptr<Expression>> expressions;
+	vector<unique_ptr<Expression>> global_expressions;
+	vector<unique_ptr<Expression>> local_expressions;
 	column_ids.reserve(columns.size());
-	expressions.reserve(columns.size());
+	global_expressions.reserve(columns.size());
+	local_expressions.reserve(columns.size());
 
 	for (const auto &column_p : columns) {
 		auto &column = column_p.get();
 		auto binding = ColumnBinding(0, column_ids.size());
 		auto column_ref = make_uniq<BoundColumnRefExpression>(column.Name(), column.Type(), binding);
-		expressions.push_back(std::move(column_ref));
-		column_ids.push_back(column.StorageOid());
+		global_expressions.push_back(column_ref->Copy());
+		local_expressions.push_back(std::move(column_ref));
+		column_ids.push_back(column.Physical().index);
 	}
 
-	// Create an ART around the expressions.
-	auto art = make_uniq<ART>(index_info.name, constraint_type, column_ids, TableIOManager::Get(*this),
-	                          std::move(expressions), db, nullptr, index_info);
-	parent.row_groups->AppendToIndex(parent, *art);
-	local_storage.AppendToIndex(parent, *art);
-	AddIndex(std::move(art));
+	// Create a global ART.
+	auto global_art = make_uniq<ART>(index_info.name, constraint_type, column_ids, TableIOManager::Get(*this),
+	                                 std::move(global_expressions), db, nullptr, index_info);
+	parent.row_groups->AppendToIndex(parent, *global_art);
+	AddIndex(std::move(global_art));
+
+	// Create a local ART.
+	auto local_art = make_uniq<ART>(index_info.name, constraint_type, column_ids, TableIOManager::Get(*this),
+	                                std::move(local_expressions), db, nullptr, index_info);
+	local_storage.AppendToIndex(parent, *local_art);
+	local_storage.AddIndex(parent, std::move(local_art));
 }
 
 bool HasUniqueIndexes(TableIndexList &list) {
@@ -1542,7 +1550,7 @@ void DataTable::AddConstraintIndex(const vector<reference<const ColumnDefinition
 		auto binding = ColumnBinding(0, column_ids.size());
 		auto column_ref = make_uniq<BoundColumnRefExpression>(column.Name(), column.Type(), binding);
 		expressions.push_back(std::move(column_ref));
-		column_ids.push_back(column.StorageOid());
+		column_ids.push_back(column.Physical().index);
 	}
 
 	// Create an ART around the expressions.

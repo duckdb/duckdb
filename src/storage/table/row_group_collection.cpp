@@ -1195,19 +1195,30 @@ void RowGroupCollection::AppendToIndex(DataTable &parent, Index &index) {
 	InitializeCreateIndexScan(state);
 
 	auto &bound_index = index.Cast<BoundIndex>();
+	auto &index_columns = bound_index.GetColumnIds();
+
+	auto row_id_idx = scan_chunk.ColumnCount() - 1;
 	while (true) {
-		scan_chunk.Reset();
 		state.table_state.ScanCommitted(scan_chunk, state.segment_lock, scan_type);
 		if (scan_chunk.size() == 0) {
 			break;
 		}
 
-		scan_chunk.Split(row_id_chunk, scan_chunk.ColumnCount() - 1);
-		auto &row_ids = row_id_chunk.data[0];
+		// Verify NOT NULL.
+		for (const auto &col_idx : index_columns) {
+			if (VectorOperations::HasNull(scan_chunk.data[col_idx], scan_chunk.size())) {
+				auto name = parent.Columns()[col_idx].GetName();
+				throw ConstraintException("NOT NULL constraint failed on PRIMARY KEY: %s.%s", info->GetTableName(),
+				                          name);
+			}
+		}
+
+		auto &row_ids = scan_chunk.data[row_id_idx];
 		auto error = bound_index.Append(scan_chunk, row_ids);
 		if (error.HasError()) {
 			error.Throw();
 		}
+		scan_chunk.Reset();
 	}
 }
 

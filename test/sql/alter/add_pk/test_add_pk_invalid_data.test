@@ -24,9 +24,20 @@ CREATE TABLE nulls (i INTEGER, j INTEGER)
 statement ok
 INSERT INTO nulls VALUES (1, 10), (2, 20), (NULL, 30), (3, 100)
 
-# TODO
-
 statement error
 ALTER TABLE nulls ADD PRIMARY KEY (i)
+----
+<REGEX>:Constraint Error.*NOT NULL constraint failed.*
+
+# Validate NULL on a compound index.
+
+statement ok
+CREATE TABLE nulls_compound (i INTEGER, j INTEGER, k VARCHAR)
+
+statement ok
+INSERT INTO nulls_compound VALUES (1, 10, 'hello'), (2, 20, 'world'), (NULL, NULL, NULL), (3, 100, 'yay');
+
+statement error
+ALTER TABLE nulls_compound ADD PRIMARY KEY (k, i)
 ----
 <REGEX>:Constraint Error.*NOT NULL constraint failed.*
