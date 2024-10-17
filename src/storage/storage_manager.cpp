@@ -109,23 +109,25 @@ bool StorageManager::InMemory() {
 	return path == IN_MEMORY_PATH;
 }
 
-void StorageManager::Initialize(const optional_idx block_alloc_size) {
+void StorageManager::Initialize(StorageOptions options) {
 	bool in_memory = InMemory();
 	if (in_memory && read_only) {
 		throw CatalogException("Cannot launch in-memory database in read-only mode!");
 	}
 
 	// Create or load the database from disk, if not in-memory mode.
-	LoadDatabase(block_alloc_size);
+	LoadDatabase(options);
 }
 
 ///////////////////////////////////////////////////////////////////////////
 class SingleFileTableIOManager : public TableIOManager {
 public:
-	explicit SingleFileTableIOManager(BlockManager &block_manager) : block_manager(block_manager) {
+	explicit SingleFileTableIOManager(BlockManager &block_manager, idx_t row_group_size)
+	    : block_manager(block_manager), row_group_size(row_group_size) {
 	}
 
 	BlockManager &block_manager;
+	idx_t row_group_size;
 
 public:
 	BlockManager &GetIndexBlockManager() override {
@@ -137,16 +139,19 @@ public:
 	MetadataManager &GetMetadataManager() override {
 		return block_manager.GetMetadataManager();
 	}
+	idx_t GetRowGroupSize() const override {
+		return row_group_size;
+	}
 };
 
 SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string path, bool read_only)
     : StorageManager(db, std::move(path), read_only) {
 }
 
-void SingleFileStorageManager::LoadDatabase(const optional_idx block_alloc_size) {
+void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 	if (InMemory()) {
 		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE);
-		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
+		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, DEFAULT_ROW_GROUP_SIZE);
 		return;
 	}
 
@@ -163,6 +168,19 @@ void SingleFileStorageManager::LoadDatabase(const optional_idx block_alloc_size)
 	options.use_direct_io = config.options.use_direct_io;
 	options.debug_initialize = config.options.debug_initialize;
 
+	idx_t row_group_size = DEFAULT_ROW_GROUP_SIZE;
+	if (storage_options.row_group_size.IsValid()) {
+		row_group_size = storage_options.row_group_size.GetIndex();
+		if (row_group_size == 0) {
+			throw NotImplementedException("Invalid row group size: %llu - row group size must be bigger than 0",
+			                              row_group_size);
+		}
+		if (row_group_size % STANDARD_VECTOR_SIZE != 0) {
+			throw NotImplementedException(
+			    "Invalid row group size: %llu - row group size must be divisible by the vector size (%llu)",
+			    row_group_size, STANDARD_VECTOR_SIZE);
+		}
+	}
 	// Check if the database file already exists.
 	// Note: a file can also exist if there was a ROLLBACK on a previous transaction creating that file.
 	if (!read_only && !fs.FileExists(path)) {
@@ -178,9 +196,10 @@ void SingleFileStorageManager::LoadDatabase(const optional_idx block_alloc_size)
 		}
 
 		// Set the block allocation size for the new database file.
-		if (block_alloc_size.IsValid()) {
+		if (storage_options.block_alloc_size.IsValid()) {
 			// Use the option provided by the user.
-			options.block_alloc_size = block_alloc_size;
+			Storage::VerifyBlockAllocSize(storage_options.block_alloc_size.GetIndex());
+			options.block_alloc_size = storage_options.block_alloc_size;
 		} else {
 			// No explicit option provided: use the default option.
 			options.block_alloc_size = config.options.default_block_alloc_size;
@@ -190,7 +209,7 @@ void SingleFileStorageManager::LoadDatabase(const optional_idx block_alloc_size)
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
 		sf_block_manager->CreateNewDatabase();
 		block_manager = std::move(sf_block_manager);
-		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
+		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
 
 	} else {
 		// Either the file exists, or we are in read-only mode, so we
@@ -202,12 +221,16 @@ void SingleFileStorageManager::LoadDatabase(const optional_idx block_alloc_size)
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
 		sf_block_manager->LoadExistingDatabase();
 		block_manager = std::move(sf_block_manager);
-		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
+		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
 
-		if (block_alloc_size.IsValid() && block_alloc_size.GetIndex() != block_manager->GetBlockAllocSize()) {
-			throw InvalidInputException(
-			    "block size parameter does not match the file's block size, got %llu, expected %llu",
-			    block_alloc_size.GetIndex(), block_manager->GetBlockAllocSize());
+		if (storage_options.block_alloc_size.IsValid()) {
+			// user-provided block alloc size
+			idx_t block_alloc_size = storage_options.block_alloc_size.GetIndex();
+			if (block_alloc_size != block_manager->GetBlockAllocSize()) {
+				throw InvalidInputException(
+				    "block size parameter does not match the file's block size, got %llu, expected %llu",
+				    storage_options.block_alloc_size.GetIndex(), block_manager->GetBlockAllocSize());
+			}
 		}
 
 		// load the db from storage

@@ -77,7 +77,7 @@ public:
 	                    TableFilterSet *table_filters = nullptr);
 
 	//! Returns the maximum amount of threads that should be assigned to scan this data table
-	idx_t MaxThreads(ClientContext &context);
+	idx_t MaxThreads(ClientContext &context) const;
 	void InitializeParallelScan(ClientContext &context, ParallelTableScanState &state);
 	bool NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state);
 
@@ -224,6 +224,9 @@ public:
 
 	TableStorageInfo GetStorageInfo();
 
+	idx_t GetRowGroupSize() const;
+
+public:
 	static void VerifyUniqueIndexes(TableIndexList &indexes, ClientContext &context, DataChunk &chunk,
 	                                optional_ptr<ConflictManager> conflict_manager);
 

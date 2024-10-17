@@ -19,8 +19,8 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
       merged_storage(false) {
 	auto types = table.GetTypes();
 	auto data_table_info = table.GetDataTableInfo();
-	row_groups = make_shared_ptr<RowGroupCollection>(
-	    data_table_info, TableIOManager::Get(table).GetBlockManagerForRowData(), types, MAX_ROW_ID, 0);
+	auto &io_manager = TableIOManager::Get(table);
+	row_groups = make_shared_ptr<RowGroupCollection>(data_table_info, io_manager, types, MAX_ROW_ID, 0);
 	row_groups->InitializeEmpty();
 
 	data_table_info->GetIndexes().BindAndScan<ART>(context, *data_table_info, [&](ART &art) {
@@ -110,7 +110,8 @@ void LocalTableStorage::WriteNewRowGroup() {
 }
 
 void LocalTableStorage::FlushBlocks() {
-	if (!merged_storage && row_groups->GetTotalRows() > Storage::ROW_GROUP_SIZE) {
+	const idx_t row_group_size = row_groups->GetRowGroupSize();
+	if (!merged_storage && row_groups->GetTotalRows() > row_group_size) {
 		optimistic_writer.WriteLastRowGroup(*row_groups);
 	}
 	optimistic_writer.FinalFlush();
@@ -448,12 +449,13 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 	idx_t append_count = storage.row_groups->GetTotalRows() - storage.deleted_rows;
 	table.InitializeIndexes(context);
 
+	const idx_t row_group_size = storage.row_groups->GetRowGroupSize();
+
 	TableAppendState append_state;
 	table.AppendLock(append_state);
 	transaction.PushAppend(table, NumericCast<idx_t>(append_state.row_start), append_count);
-
-	auto bulk_appending = append_state.row_start == 0 || storage.row_groups->GetTotalRows() >= MERGE_THRESHOLD;
-	if (bulk_appending && storage.deleted_rows == 0) {
+	if ((append_state.row_start == 0 || storage.row_groups->GetTotalRows() >= row_group_size) &&
+	    storage.deleted_rows == 0) {
 		// table is currently empty OR we are bulk appending: move over the storage directly
 		// first flush any outstanding blocks
 		storage.FlushBlocks();
