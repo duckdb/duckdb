@@ -8,9 +8,10 @@
 #include "duckdb/storage/compression/utils.hpp"
 #include "zstd_wrapper.hpp"
 #include "duckdb/storage/compression/zstd.hpp"
-#include "zdict.h"
 
-#define ZSTD_STATIC_LINKING_ONLY /* for ZSTD_createCDict_byReference */
+#define ZDICT_STATIC_LINKING_ONLY /* for ZDICT_DICTSIZE_MIN */
+#include "zdict.h"
+#define ZSTD_STATIC_LINKING_ONLY /* for ZSTD_createCDict_byReference*/
 #include "zstd.h"
 
 namespace duckdb {
@@ -147,8 +148,7 @@ DictBuffer CreateDictFromSamples(ZSTDAnalyzeState &state) {
 		}
 	}
 
-	// 256 is the minimum size, see `ZDICT_DICTSIZE_MIN`
-	idx_t dict_buffer_size = MaxValue<idx_t>(state.total_sample_size / 100, 256);
+	idx_t dict_buffer_size = MaxValue<idx_t>(state.total_sample_size / 100, ZDICT_DICTSIZE_MIN);
 	DictBuffer buffer(dict_buffer_size);
 	if (!buffer.Buffer()) {
 		free(concatenated_samples);
@@ -401,11 +401,18 @@ void ZSTDStorage::FinalizeCompress(CompressionState &state_p) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-struct ZSTDScanState : public StringScanState {
+struct ZSTDScanState : public SegmentScanState {
+public:
+	ZSTDScanState() : decompression_dict(nullptr) {
+	}
+	~ZSTDScanState() {
+		duckdb_zstd::ZSTD_freeDDict(decompression_dict);
+	}
+
+public:
 	BufferHandle handle;
-
-	duckdb_zstd::ZSTD_DDict *zstd_ddict;
-
+	duckdb_zstd::ZSTD_DCtx *decompression_context;
+	duckdb_zstd::ZSTD_DDict *decompression_dict;
 	data_ptr_t current_data_ptr;
 };
 
@@ -418,7 +425,7 @@ unique_ptr<SegmentScanState> ZSTDStorage::StringInitScan(ColumnSegment &segment)
 	auto data = result->handle.Ptr() + segment.GetBlockOffset();
 	dictionary_metadata_t *dict_meta = reinterpret_cast<dictionary_metadata_t *>(data);
 
-	result->zstd_ddict = duckdb_zstd::ZSTD_createDDict(data + sizeof(dictionary_metadata_t), dict_meta->size);
+	result->decompression_dict = duckdb_zstd::ZSTD_createDDict(data + sizeof(dictionary_metadata_t), dict_meta->size);
 	result->current_data_ptr = data + dict_meta->size;
 
 	return std::move(result);
@@ -461,7 +468,7 @@ void ZSTDStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx
 		// get metadata
 		string_metadata_t *meta = reinterpret_cast<string_metadata_t *>(src);
 		size_t uncompressed_size = duckdb_zstd::ZSTD_decompress_usingDDict(
-		    zstd_context, buffer, 1024, src + sizeof(string_metadata_t), meta->size, scan_state.zstd_ddict);
+		    zstd_context, buffer, 1024, src + sizeof(string_metadata_t), meta->size, scan_state.decompression_dict);
 
 		// ALLOCATE STRING?
 		result_data[i] = string_t(buffer, UnsafeNumericCast<uint32_t>(uncompressed_size));
