@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include <algorithm>
 
 namespace duckdb {
 
@@ -26,26 +27,27 @@ BindResult SelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, i
 	// binding failed
 	// check in the alias map
 	auto &colref = (expr_ptr.get())->Cast<ColumnRefExpression>();
-	if (!colref.IsQualified()) {
-		auto &bind_state = node.bind_state;
-		auto alias_entry = node.bind_state.alias_map.find(colref.column_names[0]);
-		if (alias_entry != node.bind_state.alias_map.end()) {
-			// found entry!
-			auto index = alias_entry->second;
-			if (index >= node.bound_column_count) {
-				throw BinderException("Column \"%s\" referenced that exists in the SELECT clause - but this column "
-				                      "cannot be referenced before it is defined",
-				                      colref.column_names[0]);
-			}
-			if (bind_state.AliasHasSubquery(index)) {
-				throw BinderException("Alias \"%s\" referenced in a SELECT clause - but the expression has a subquery."
-				                      " This is not yet supported.",
-				                      colref.column_names[0]);
-			}
-			auto copied_expression = node.bind_state.BindAlias(index);
-			result = BindExpression(copied_expression, depth, false);
-			return result;
+	auto &bind_state = node.bind_state;
+	auto alias_entry = node.bind_state.alias_map.find(colref.column_names[0]);
+	if (alias_entry != node.bind_state.alias_map.end()) {
+		// found entry!
+		auto index = alias_entry->second;
+		if (index >= node.bound_column_count) {
+			throw BinderException("Column \"%s\" referenced that exists in the SELECT clause - but this column "
+			                      "cannot be referenced before it is defined",
+			                      colref.column_names[0]);
 		}
+		if (bind_state.AliasHasSubquery(index)) {
+			throw BinderException("Alias \"%s\" referenced in a SELECT clause - but the expression has a subquery."
+			                      " This is not yet supported.",
+			                      colref.column_names[0]);
+		}
+		auto copied_expression = node.bind_state.BindAlias(index);
+		for (idx_t i = 1; i < colref.column_names.size(); i++) {
+			copied_expression = CreateStructExtract(std::move(copied_expression), colref.column_names[i]);
+		}
+		result = BindExpression(copied_expression, depth, false);
+		return result;
 	}
 	// entry was not found in the alias map: return the original error
 	return result;
