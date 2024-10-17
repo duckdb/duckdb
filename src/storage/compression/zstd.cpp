@@ -8,6 +8,7 @@
 #include "duckdb/storage/compression/utils.hpp"
 #include "zstd_wrapper.hpp"
 #include "duckdb/storage/compression/zstd.hpp"
+#include "duckdb/common/allocator.hpp"
 
 #define ZDICT_STATIC_LINKING_ONLY /* for ZDICT_DICTSIZE_MIN */
 #include "zdict.h"
@@ -220,25 +221,26 @@ public:
 	}
 
 public:
+	duckdb_zstd::ZSTD_CCtx *GetCompressionContext() {
+		return analyze_state->context;
+	}
+
+	duckdb_zstd::ZSTD_CDict *GetCompressionDictionary() {
+		return analyze_state->compression_dict;
+	}
+
+	data_ptr_t GetCompressionBuffer() {
+		if (!compression_buffer) {
+			auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
+			compression_buffer = buffer_manager.GetBufferAllocator().Allocate(info.GetBlockSize() * 2);
+		}
+		return compression_buffer.get();
+	}
+
 	idx_t GetCurrentMetadataOffset() {
 		auto start_of_segment = current_handle.Ptr();
 		D_ASSERT(current_data_ptr >= start_of_segment);
 		return (idx_t)(current_data_ptr - start_of_segment);
-	}
-
-	void CreateCompressionDictionary(const char *str, size_t size) {
-		// zstd_cdict = duckdb_zstd::ZSTD_createCDict(str, size, COMPRESSION_LEVEL);
-
-		// size_t dict_size = duckdb_zstd::ZSTD_sizeof_CDict(zstd_cdict);
-
-		// dictionary_metadata_t meta {.size = dict_size};
-
-		//// write dictionary size
-		// memcpy(current_data_ptr, &meta, sizeof(dictionary_metadata_t));
-		// current_data_ptr += sizeof(dictionary_metadata_t);
-
-		// memcpy(current_data_ptr, zstd_cdict, dict_size);
-		// current_data_ptr += dict_size;
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
@@ -298,25 +300,21 @@ public:
 		// there is no method to incrementally build a dictionary
 		// we would have to hold all (or a sample of) strings and build the dictionary at the end
 
-		// if (!zstd_cdict) {
-		//	CreateCompressionDictionary(str.GetData(), str.GetSize());
-		//}
+		auto data_dst = current_data_ptr + sizeof(string_metadata_t);
+		size_t dst_capacity = info.GetBlockSize() - GetCurrentMetadataOffset();
+		// TODO: move to new segment if `dst_capacity` will be too small
+		size_t compressed_size = duckdb_zstd::ZSTD_compress_usingCDict(
+		    GetCompressionContext(), data_dst, dst_capacity, str.GetData(), str.GetSize(), GetCompressionDictionary());
 
-		// auto data_dst = current_data_ptr + sizeof(string_metadata_t);
-		// size_t dst_capacity = info.GetBlockSize() - GetCurrentMetadataOffset();
-		//// TODO: move to new segment if `dst_capacity` will be too small
-		// size_t compressed_size = duckdb_zstd::ZSTD_compress_usingCDict(zstd_context, data_dst, dst_capacity,
-		//                                                               str.GetData(), str.GetSize(), zstd_cdict);
+		// Create metadata
+		string_metadata_t meta {.size = compressed_size};
 
-		//// Create metadata
-		// string_metadata_t meta {.size = compressed_size};
+		// Write metadata
+		memcpy(current_data_ptr, &meta, sizeof(string_metadata_t));
 
-		//// Write metadata
-		// memcpy(current_data_ptr, &meta, sizeof(string_metadata_t));
-
-		//// move data ptr
-		// current_data_ptr = data_dst + compressed_size;
-		// total_data_size += sizeof(string_metadata_t) + compressed_size;
+		// move data ptr
+		current_data_ptr = data_dst + compressed_size;
+		total_data_size += sizeof(string_metadata_t) + compressed_size;
 	}
 
 public:
@@ -335,12 +333,12 @@ public:
 
 	data_ptr_t current_data_ptr;
 
-	//! Temporary buffer
-	// BufferHandle handle;
-	//! The block on-disk to which we are writing
-	// block_id_t block_id;
-	//! The offset within the current block
-	// idx_t offset;
+	//! The temporary buffer to store the lengths before compressing+serializing them
+	uint32_t string_lengths[STANDARD_VECTOR_SIZE];
+
+	//! Temporary buffer to store the compressed data before writing
+	//! This is necessary when we will cross block boundaries
+	AllocatedData compression_buffer;
 };
 
 unique_ptr<CompressionState> ZSTDStorage::InitCompression(ColumnDataCheckpointer &checkpointer,
