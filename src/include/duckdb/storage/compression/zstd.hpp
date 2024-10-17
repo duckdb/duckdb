@@ -8,9 +8,59 @@
 
 #pragma once
 
-#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/storage/compression/utils.hpp"
 
 namespace duckdb {
+
+class ZSTDSamplingState {
+public:
+	ZSTDSamplingState() : concatenated_samples(nullptr) {
+		auto &to_sample_vectors = this->to_sample_vectors;
+		auto &vector_sizes = this->vector_sizes;
+		auto &total_sample_size = this->total_sample_size;
+
+		sampling_state.SetSampler([&to_sample_vectors, &vector_sizes, &total_sample_size](Vector &vec, idx_t count) {
+			UnifiedVectorFormat vdata;
+			vec.ToUnifiedFormat(count, vdata);
+
+			auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
+			for (idx_t i = 0; i < count; i++) {
+				auto idx = vdata.sel->get_index(i);
+				if (!vdata.validity.RowIsValid(idx)) {
+					continue;
+				}
+				auto &str = data[idx];
+				auto string_size = str.GetSize();
+				total_sample_size += string_size;
+			}
+
+			to_sample_vectors.emplace_back(std::move(vec));
+			vector_sizes.push_back(count);
+		});
+	}
+	~ZSTDSamplingState() {
+		free(concatenated_samples);
+	}
+
+public:
+	void Sample(Vector &vec, idx_t count) {
+		sampling_state.Sample(vec, count);
+	}
+	bool Finalize();
+	void Reset();
+
+public:
+	bool finalized = false;
+	vector<Vector> to_sample_vectors;
+	vector<idx_t> vector_sizes;
+	idx_t total_sample_size = 0;
+	AnalyzeSamplingState sampling_state;
+	//! Populated by Finalize
+	void *concatenated_samples;
+	vector<idx_t> sample_sizes;
+};
 
 class DictBuffer {
 public:
