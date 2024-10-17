@@ -1,10 +1,10 @@
-#include "duckdb/function/scalar/string_functions.hpp"
-
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/list_functions.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
@@ -100,8 +100,7 @@ idx_t ContainsGeneric(const unsigned char *haystack, idx_t haystack_size, const 
 	}
 }
 
-idx_t ContainsFun::Find(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle,
-                        idx_t needle_size) {
+idx_t FindStrInStr(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle, idx_t needle_size) {
 	D_ASSERT(needle_size > 0);
 	// start off by performing a memchr to find the first character of the
 	auto location = memchr(haystack, needle[0], haystack_size);
@@ -134,7 +133,7 @@ idx_t ContainsFun::Find(const unsigned char *haystack, idx_t haystack_size, cons
 	}
 }
 
-idx_t ContainsFun::Find(const string_t &haystack_s, const string_t &needle_s) {
+idx_t FindStrInStr(const string_t &haystack_s, const string_t &needle_s) {
 	auto haystack = const_uchar_ptr_cast(haystack_s.GetData());
 	auto haystack_size = haystack_s.GetSize();
 	auto needle = const_uchar_ptr_cast(needle_s.GetData());
@@ -143,15 +142,21 @@ idx_t ContainsFun::Find(const string_t &haystack_s, const string_t &needle_s) {
 		// empty needle: always true
 		return 0;
 	}
-	return ContainsFun::Find(haystack, haystack_size, needle, needle_size);
+	return FindStrInStr(haystack, haystack_size, needle, needle_size);
 }
 
 struct ContainsOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA left, TB right) {
-		return ContainsFun::Find(left, right) != DConstants::INVALID_INDEX;
+		return FindStrInStr(left, right) != DConstants::INVALID_INDEX;
 	}
 };
+
+ScalarFunction GetStringContains() {
+	ScalarFunction string_fun("contains", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	                          ScalarFunction::BinaryFunction<string_t, string_t, bool, ContainsOperator>);
+	return string_fun;
+}
 
 ScalarFunctionSet ContainsFun::GetFunctions() {
 	auto string_fun = GetStringContains();
@@ -162,16 +167,6 @@ ScalarFunctionSet ContainsFun::GetFunctions() {
 	set.AddFunction(list_fun);
 	set.AddFunction(map_fun);
 	return set;
-}
-
-ScalarFunction ContainsFun::GetStringContains() {
-	ScalarFunction string_fun("contains", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                          ScalarFunction::BinaryFunction<string_t, string_t, bool, ContainsOperator>);
-	return string_fun;
-}
-
-void ContainsFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetFunctions());
 }
 
 } // namespace duckdb

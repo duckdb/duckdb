@@ -41,7 +41,6 @@ void BuiltinFunctions::RegisterNestedFunctions() {
 	Register<StructPackFun>();
 	Register<RowFun>();
 	Register<MapContainsFun>();
-	Register<ListConcatFun>();
 }
 
 } // namespace duckdb
