@@ -281,13 +281,11 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	auto &fs = FileSystem::GetFileSystem(*this);
 	DBPathAndType::ResolveDatabaseType(fs, config.options.database_path, config.options.database_type);
 
-	if (config.options.temporary_directory.empty()) {
-		config.SetDefaultTempDirectory();
-	}
-
 	if (!config.options.use_temporary_directory) {
 		// temporary directories explicitly disabled
 		config.options.temporary_directory = string();
+	} else if (config.options.temporary_directory.empty()) {
+		config.SetDefaultTempDirectory();
 	}
 
 	db_manager = make_uniq<DatabaseManager>(*this);
