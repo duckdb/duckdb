@@ -229,12 +229,46 @@ public:
 		return analyze_state->compression_dict;
 	}
 
-	data_ptr_t GetCompressionBuffer() {
-		if (!compression_buffer) {
-			auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
-			compression_buffer = buffer_manager.GetBufferAllocator().Allocate(info.GetBlockSize() * 2);
+	void AddString(const string_t &string) {
+		auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
+		auto required_space = string.GetSize() + compression_buffer_offset;
+		auto current_size = compression_buffer ? compression_buffer.GetSize() : 0;
+		required_space = MaxValue<idx_t>(info.GetBlockSize(), required_space);
+		if (required_space >= current_size) {
+			idx_t new_size = NextPowerOfTwo(required_space);
+			auto old_buffer = std::move(compression_buffer);
+
+			compression_buffer = buffer_manager.GetBufferAllocator().Allocate(new_size);
+			if (old_buffer) {
+				memcpy(compression_buffer.get(), old_buffer.get(), compression_buffer_offset);
+			}
 		}
-		return compression_buffer.get();
+		memcpy(compression_buffer.get(), string.GetData(), string.GetSize());
+		compression_buffer_offset += string.GetSize();
+		// TODO: add to 'string_lengths'
+		buffered_count++;
+		if (buffered_count == STANDARD_VECTOR_SIZE) {
+			FlushVector();
+		}
+	}
+
+	void FlushVector() {
+		// Write a Vector worth of strings to storage
+
+		// compress the data to 'storage_buffer', then figure out if it can fit in the current segment or not
+		// also write the lengths of every string
+
+		size_t compressed_size = duckdb_zstd::ZSTD_compress_usingCDict(
+		    GetCompressionContext(), storage_buffer.get(), storage_buffer.GetSize(), compression_buffer.get(),
+		    compression_buffer_offset, GetCompressionDictionary());
+	}
+
+	data_ptr_t GetStorageBuffer() {
+		if (!storage_buffer) {
+			auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
+			storage_buffer = buffer_manager.GetBufferAllocator().Allocate(info.GetBlockSize() * 2);
+		}
+		return storage_buffer.get();
 	}
 
 	idx_t GetCurrentMetadataOffset() {
@@ -294,29 +328,6 @@ public:
 	// 	return false;
 	// }
 
-	void AddString(const string_t &str) {
-		// TODO: train dictionary in a better way
-		// FIXME: I don't think the ZSTD API has a better way of doing this
-		// there is no method to incrementally build a dictionary
-		// we would have to hold all (or a sample of) strings and build the dictionary at the end
-
-		auto data_dst = current_data_ptr + sizeof(string_metadata_t);
-		size_t dst_capacity = info.GetBlockSize() - GetCurrentMetadataOffset();
-		// TODO: move to new segment if `dst_capacity` will be too small
-		size_t compressed_size = duckdb_zstd::ZSTD_compress_usingCDict(
-		    GetCompressionContext(), data_dst, dst_capacity, str.GetData(), str.GetSize(), GetCompressionDictionary());
-
-		// Create metadata
-		string_metadata_t meta {.size = compressed_size};
-
-		// Write metadata
-		memcpy(current_data_ptr, &meta, sizeof(string_metadata_t));
-
-		// move data ptr
-		current_data_ptr = data_dst + compressed_size;
-		total_data_size += sizeof(string_metadata_t) + compressed_size;
-	}
-
 public:
 	unique_ptr<ZSTDAnalyzeState> analyze_state;
 	ColumnDataCheckpointer &checkpointer;
@@ -338,7 +349,13 @@ public:
 
 	//! Temporary buffer to store the compressed data before writing
 	//! This is necessary when we will cross block boundaries
+	AllocatedData storage_buffer;
+
+	//! The buffer where strings are copied to before compressing
 	AllocatedData compression_buffer;
+	idx_t compression_buffer_offset = 0;
+	//! Amount of tuples we are currently buffering to compress
+	idx_t buffered_count = 0;
 };
 
 unique_ptr<CompressionState> ZSTDStorage::InitCompression(ColumnDataCheckpointer &checkpointer,
