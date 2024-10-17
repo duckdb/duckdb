@@ -34,6 +34,10 @@ public:
 		return db;
 	}
 
+	TableIOManager &GetIOManager() {
+		return *table_io_manager;
+	}
+
 	TableIndexList &GetIndexes() {
 		return indexes;
 	}

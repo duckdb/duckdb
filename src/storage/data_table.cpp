@@ -174,7 +174,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 	if (constraint.type != ConstraintType::UNIQUE) {
 		VerifyNewConstraint(local_storage, parent, constraint);
 	} else {
-		AddNewIndex(local_storage, parent, constraint);
+		AddAndCreateIndex(local_storage, parent, constraint);
 	}
 	local_storage.MoveStorage(parent, *this);
 	parent.is_root = false;
@@ -678,7 +678,7 @@ void DataTable::VerifyNewConstraint(LocalStorage &local_storage, DataTable &pare
 	local_storage.VerifyNewConstraint(parent, constraint);
 }
 
-void DataTable::AddNewIndex(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint) {
+void DataTable::AddAndCreateIndex(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint) {
 	if (!IsRoot()) {
 		throw TransactionException("cannot add an index to a table that has been altered");
 	}
@@ -1537,8 +1537,8 @@ vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo() {
 //===--------------------------------------------------------------------===//
 // Index Constraint Creation
 //===--------------------------------------------------------------------===//
-void DataTable::AddConstraintIndex(const vector<reference<const ColumnDefinition>> &columns,
-                                   IndexConstraintType constraint_type, const IndexStorageInfo &index_info) {
+void DataTable::AddIndex(const vector<reference<const ColumnDefinition>> &columns, const IndexConstraintType type,
+                         const IndexStorageInfo &index_info) {
 	if (!IsRoot()) {
 		throw TransactionException("cannot add an index to a table that has been altered!");
 	}
@@ -1559,8 +1559,9 @@ void DataTable::AddConstraintIndex(const vector<reference<const ColumnDefinition
 	}
 
 	// Create an ART around the expressions.
-	auto art = make_uniq<ART>(index_info.name, constraint_type, column_ids, TableIOManager::Get(*this),
-	                          std::move(expressions), db, nullptr, index_info);
+	auto &manager = TableIOManager::Get(*this);
+	auto art =
+	    make_uniq<ART>(index_info.name, type, column_ids, manager, std::move(expressions), db, nullptr, index_info);
 	info->indexes.AddIndex(std::move(art));
 }
 

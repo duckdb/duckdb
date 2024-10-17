@@ -124,7 +124,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 			auto index_columns = GetUniqueConstraintKeys(columns, unique);
 			if (info.indexes.empty()) {
 				auto index_storage_info = GetIndexInfo(constraint_type, false, info.base, i);
-				storage->AddConstraintIndex(index_columns, constraint_type, index_storage_info);
+				storage->AddIndex(index_columns, constraint_type, index_storage_info);
 				continue;
 			}
 
@@ -135,7 +135,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 			}
 
 			// Now we can add the index.
-			storage->AddConstraintIndex(index_columns, constraint_type, info.indexes[indexes_idx++]);
+			storage->AddIndex(index_columns, constraint_type, info.indexes[indexes_idx++]);
 			continue;
 		}
 
@@ -154,7 +154,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				if (info.indexes.empty()) {
 					auto constraint_type = IndexConstraintType::FOREIGN;
 					auto index_storage_info = GetIndexInfo(constraint_type, false, info.base, i);
-					storage->AddConstraintIndex(index_columns, constraint_type, index_storage_info);
+					storage->AddIndex(index_columns, constraint_type, index_storage_info);
 					continue;
 				}
 
@@ -165,7 +165,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				}
 
 				// Now we can add the index.
-				storage->AddConstraintIndex(index_columns, IndexConstraintType::FOREIGN, info.indexes[indexes_idx++]);
+				storage->AddIndex(index_columns, IndexConstraintType::FOREIGN, info.indexes[indexes_idx++]);
 			}
 		}
 	}

@@ -213,7 +213,6 @@ public:
 
 	void InitializeIndexes(ClientContext &context);
 	bool HasIndexes() const;
-	void AddIndex(unique_ptr<Index> index);
 	bool HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKeyType type);
 	void SetIndexStorageInfo(vector<IndexStorageInfo> index_storage_info);
 	void VacuumIndexes();
@@ -226,19 +225,24 @@ public:
 
 	idx_t GetRowGroupSize() const;
 
-public:
 	static void VerifyUniqueIndexes(TableIndexList &indexes, ClientContext &context, DataChunk &chunk,
 	                                optional_ptr<ConflictManager> conflict_manager);
 
-	//! Verify the new added constraints against current persistent&local data
-	void VerifyNewConstraint(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint);
-	//! Add a new index to the data table storage.
-	void AddNewIndex(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint);
-
-	void AddConstraintIndex(const vector<reference<const ColumnDefinition>> &columns,
-	                        IndexConstraintType constraint_type, const IndexStorageInfo &index_info);
+	//! AddIndex initializes an index and adds it to the table's index list.
+	//! It is either empty, or initialized via its index storage information.
+	void AddIndex(const vector<reference<const ColumnDefinition>> &columns, const IndexConstraintType type,
+	              const IndexStorageInfo &index_info);
+	//! AddIndex moves an index to this table's index list.
+	void AddIndex(unique_ptr<Index> index);
 
 private:
+	//! AddAndCreateIndex initializes an index both for the global and local table storage.
+	//! Then, it scans both the global and local storage, and appends the respective values to the index.
+	void AddAndCreateIndex(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint);
+
+	//! Verify the new added constraints against current persistent&local data
+	void VerifyNewConstraint(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint);
+
 	//! Verify constraints with a chunk from the Update containing only the specified column_ids
 	void VerifyUpdateConstraints(ConstraintState &state, ClientContext &context, DataChunk &chunk,
 	                             const vector<PhysicalIndex> &column_ids);
