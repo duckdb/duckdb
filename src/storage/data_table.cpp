@@ -223,28 +223,18 @@ TableIOManager &TableIOManager::Get(DataTable &table) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-void DataTable::InitializeScan(TableScanState &state, const vector<column_t> &column_ids,
-                               TableFilterSet *table_filters) {
-	if (!state.checkpoint_lock) {
-		state.checkpoint_lock = make_shared_ptr<CheckpointLock>(info->checkpoint_lock.GetSharedLock());
-	}
-	state.Initialize(column_ids, table_filters);
-	row_groups->InitializeScan(state.table_state, column_ids, table_filters);
-}
-
 void DataTable::InitializeScan(DuckTransaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
                                TableFilterSet *table_filters) {
 	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	auto &local_storage = LocalStorage::Get(transaction);
-	InitializeScan(state, column_ids, table_filters);
+	state.Initialize(column_ids, table_filters);
+	row_groups->InitializeScan(state.table_state, column_ids, table_filters);
 	local_storage.InitializeScan(*this, state.local_state, table_filters);
 }
 
-void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids, idx_t start_row,
-                                         idx_t end_row) {
-	if (!state.checkpoint_lock) {
-		state.checkpoint_lock = make_shared_ptr<CheckpointLock>(info->checkpoint_lock.GetSharedLock());
-	}
+void DataTable::InitializeScanWithOffset(DuckTransaction &transaction, TableScanState &state,
+                                         const vector<column_t> &column_ids, idx_t start_row, idx_t end_row) {
+	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	state.Initialize(column_ids);
 	row_groups->InitializeScanWithOffset(state.table_state, column_ids, start_row, end_row);
 }
@@ -891,7 +881,8 @@ void DataTable::FinalizeAppend(DuckTransaction &transaction, TableAppendState &s
 	row_groups->FinalizeAppend(transaction, state);
 }
 
-void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::function<void(DataChunk &chunk)> &function) {
+void DataTable::ScanTableSegment(DuckTransaction &transaction, idx_t row_start, idx_t count,
+                                 const std::function<void(DataChunk &chunk)> &function) {
 	if (count == 0) {
 		return;
 	}
@@ -909,7 +900,7 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 
 	CreateIndexScanState state;
 
-	InitializeScanWithOffset(state, column_ids, row_start, row_start + count);
+	InitializeScanWithOffset(transaction, state, column_ids, row_start, row_start + count);
 	auto row_start_aligned = state.table_state.row_group->start + state.table_state.vector_index * STANDARD_VECTOR_SIZE;
 
 	idx_t current_row = row_start_aligned;
@@ -951,7 +942,7 @@ void DataTable::MergeStorage(RowGroupCollection &data, TableIndexList &,
 	row_groups->Verify();
 }
 
-void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count,
+void DataTable::WriteToLog(DuckTransaction &transaction, WriteAheadLog &log, idx_t row_start, idx_t count,
                            optional_ptr<StorageCommitState> commit_state) {
 	log.WriteSetTable(info->schema, info->table);
 	if (commit_state) {
@@ -973,7 +964,7 @@ void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count,
 			}
 		}
 	}
-	ScanTableSegment(row_start, count, [&](DataChunk &chunk) { log.WriteInsert(chunk); });
+	ScanTableSegment(transaction, row_start, count, [&](DataChunk &chunk) { log.WriteInsert(chunk); });
 }
 
 void DataTable::CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count) {
@@ -987,7 +978,7 @@ void DataTable::RevertAppendInternal(idx_t start_row) {
 	row_groups->RevertAppendInternal(start_row);
 }
 
-void DataTable::RevertAppend(idx_t start_row, idx_t count) {
+void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_t count) {
 	lock_guard<mutex> lock(append_lock);
 
 	// revert any appends to indexes
@@ -996,7 +987,7 @@ void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 		row_t row_data[STANDARD_VECTOR_SIZE];
 		Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_data));
 		idx_t scan_count = MinValue<idx_t>(count, row_groups->GetTotalRows() - start_row);
-		ScanTableSegment(start_row, scan_count, [&](DataChunk &chunk) {
+		ScanTableSegment(transaction, start_row, scan_count, [&](DataChunk &chunk) {
 			for (idx_t i = 0; i < chunk.size(); i++) {
 				row_data[i] = NumericCast<row_t>(current_row_base + i);
 			}

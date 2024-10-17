@@ -124,15 +124,15 @@ void CSVBufferManager::ResetBuffer(const idx_t buffer_idx) {
 	}
 }
 
-idx_t CSVBufferManager::GetBufferSize() {
+idx_t CSVBufferManager::GetBufferSize() const {
 	return buffer_size;
 }
 
-idx_t CSVBufferManager::BufferCount() {
+idx_t CSVBufferManager::BufferCount() const {
 	return cached_buffers.size();
 }
 
-bool CSVBufferManager::Done() {
+bool CSVBufferManager::Done() const {
 	return done;
 }
 
@@ -149,7 +149,7 @@ void CSVBufferManager::ResetBufferManager() {
 	}
 }
 
-string CSVBufferManager::GetFilePath() {
+string CSVBufferManager::GetFilePath() const {
 	return file_path;
 }
 

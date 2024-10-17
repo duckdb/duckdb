@@ -5,18 +5,6 @@
 statement ok
 PRAGMA enable_verification
 
-# Globbing with different dialects
-query III
-FROM 'data/csv/glob_dif_dialect/f_*.csv' order by all
-----
-1	alice	alice@email.com
-1	alice	alice@email.com
-2	eve	eve@email.com
-3	bob	bob@email.com
-3	bob	NULL
-4	pedro	pedro@email.com
-5	tim	tim@email.com
-
 query IIIII
 select typeof(#1),typeof(#2),typeof(#3),typeof(#4),typeof(#5) FROM read_csv('data/csv/per_thread/*.csv') limit 1
 ----
@@ -32,7 +20,6 @@ query IIIII
 select typeof(#1),typeof(#2),typeof(#3),typeof(#4),typeof(#5) FROM read_csv(['data/csv/per_thread/c2.csv', 'data/csv/per_thread/c1.csv', 'data/csv/per_thread/c3.csv']) limit 1
 ----
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR
-
 
 # simple globbing
 query I

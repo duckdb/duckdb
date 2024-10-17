@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/csv_scanner/csv_sniffer.hpp
+// duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -14,6 +14,7 @@
 #include "duckdb/execution/operator/csv_scanner/column_count_scanner.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_schema.hpp"
 #include "duckdb/execution/operator/csv_scanner/header_value.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/sniff_result.hpp"
 
 namespace duckdb {
 struct DateTimestampSniffing {
@@ -21,18 +22,6 @@ struct DateTimestampSniffing {
 	bool had_match = false;
 	vector<string> format;
 	idx_t initial_size;
-};
-//! Struct to store the result of the Sniffer
-struct SnifferResult {
-	SnifferResult(vector<LogicalType> return_types_p, vector<string> names_p, bool only_header_p = false)
-	    : return_types(std::move(return_types_p)), names(std::move(names_p)), only_header(only_header_p) {
-	}
-	//! Return Types that were detected
-	vector<LogicalType> return_types;
-	//! Column Names that were detected
-	vector<string> names;
-	//! If our CSV File is only a header
-	bool only_header = false;
 };
 
 //! All the options that will be used to sniff the dialect of the CSV file
@@ -136,10 +125,10 @@ public:
 	//! data types It does this considering a priorly set CSV schema. If there is a mismatch of the schema it runs the
 	//! full on blazing all guns sniffer, if that still fails it tells the user to union_by_name.
 	//! It returns the projection order.
-	SnifferResult AdaptiveSniff(CSVSchema &file_schema);
+	SnifferResult AdaptiveSniff(const CSVSchema &file_schema);
 
 	//! Function that only sniffs the first two rows, to verify if a header exists and what are the data types
-	SnifferResult MinimalSniff();
+	AdaptiveSnifferResult MinimalSniff();
 
 	static NewLineIdentifier DetectNewLineDelimiter(CSVBufferManager &buffer_manager);
 
