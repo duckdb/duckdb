@@ -1,6 +1,8 @@
 #include "duckdb/function/function_list.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/list_functions.hpp"
+#include "duckdb/function/scalar/generic_functions.hpp"
+#include "duckdb/function/scalar/system_functions.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 
@@ -46,9 +48,15 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayWhereFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayZipFun),
 	DUCKDB_SCALAR_FUNCTION_SET(BitLengthFun),
+	DUCKDB_SCALAR_FUNCTION(CombineFun),
 	DUCKDB_SCALAR_FUNCTION(ConcatFun),
 	DUCKDB_SCALAR_FUNCTION(ConcatWsFun),
+	DUCKDB_SCALAR_FUNCTION(ConstantOrNullFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ContainsFun),
+	DUCKDB_SCALAR_FUNCTION(CreateSortKeyFun),
+	DUCKDB_SCALAR_FUNCTION(ErrorFun),
+	DUCKDB_SCALAR_FUNCTION(FinalizeFun),
+	DUCKDB_SCALAR_FUNCTION(GetVariableFun),
 	DUCKDB_SCALAR_FUNCTION(IlikeEscapeFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(LcaseFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(LenFun),
