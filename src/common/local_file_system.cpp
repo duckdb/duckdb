@@ -63,12 +63,23 @@ namespace duckdb {
 #ifndef _WIN32
 bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
 	if (!filename.empty()) {
-		if (access(filename.c_str(), 0) == 0) {
-			struct stat status;
-			stat(filename.c_str(), &status);
-			if (S_ISREG(status.st_mode)) {
-				return true;
+		if (access(filename.c_str(), 0) != 0) {
+			if (errno == ENOENT || errno == ENOTDIR) {
+				return false;
 			}
+			throw IOException("Failed to access file \"%s\": %s", {{"errno", std::to_string(errno)}}, filename,
+			                  strerror(errno));
+		}
+		struct stat status;
+		if (stat(filename.c_str(), &status) != 0) {
+			if (errno == ENOENT || errno == ENOTDIR) {
+				return false;
+			}
+			throw IOException("Failed to stat file \"%s\": %s", {{"errno", std::to_string(errno)}}, filename,
+			                  strerror(errno));
+		}
+		if (S_ISREG(status.st_mode)) {
+			return true;
 		}
 	}
 	// if any condition fails
