@@ -1,7 +1,9 @@
 #include "duckdb/function/function_list.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
-#include "duckdb/function/scalar/list_functions.hpp"
+#include "duckdb/function/scalar/date_functions.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
+#include "duckdb/function/scalar/list_functions.hpp"
+#include "duckdb/function/scalar/map_functions.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/system_functions.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
@@ -76,6 +78,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION(ListWhereFun),
 	DUCKDB_SCALAR_FUNCTION(ListZipFun),
 	DUCKDB_SCALAR_FUNCTION(LowerFun),
+	DUCKDB_SCALAR_FUNCTION(MapContainsFun),
 	DUCKDB_SCALAR_FUNCTION_SET(MD5Fun),
 	DUCKDB_SCALAR_FUNCTION_SET(MD5NumberFun),
 	DUCKDB_SCALAR_FUNCTION(NFCNormalizeFun),
@@ -95,16 +98,19 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_ALIAS(SplitFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(StrSplitFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(StrSplitRegexFun),
+	DUCKDB_SCALAR_FUNCTION_SET(StrfTimeFun),
 	DUCKDB_SCALAR_FUNCTION(StringSplitFun),
 	DUCKDB_SCALAR_FUNCTION_SET(StringSplitRegexFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(StringToArrayFun),
 	DUCKDB_SCALAR_FUNCTION(StripAccentsFun),
 	DUCKDB_SCALAR_FUNCTION(StrlenFun),
+	DUCKDB_SCALAR_FUNCTION_SET(StrpTimeFun),
 	DUCKDB_SCALAR_FUNCTION_SET(StructExtractFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(SubstrFun),
 	DUCKDB_SCALAR_FUNCTION_SET(SubstringFun),
 	DUCKDB_SCALAR_FUNCTION_SET(SubstringGraphemeFun),
 	DUCKDB_SCALAR_FUNCTION(SuffixFun),
+	DUCKDB_SCALAR_FUNCTION_SET(TryStrpTimeFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(UcaseFun),
 	DUCKDB_SCALAR_FUNCTION(UpperFun),
 	DUCKDB_SCALAR_FUNCTION(ConcatOperatorFun),
