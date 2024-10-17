@@ -73,7 +73,7 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &
 		auto storage_idx = GetStorageIndex(bind_data.table, col);
 		col = storage_idx;
 	}
-	result->scan_state.Initialize(std::move(column_ids), input.filters.get());
+	result->scan_state.Initialize(std::move(column_ids), input.filters.get(), input.sample_options.get());
 	TableScanParallelStateNext(context.client, input.bind_data.get(), result.get(), gstate);
 	if (input.CanRemoveFilterColumns()) {
 		auto &tsgs = gstate->Cast<TableScanGlobalState>();
@@ -439,6 +439,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;
 	scan_function.filter_prune = true;
+	scan_function.sampling_pushdown = true;
 	scan_function.serialize = TableScanSerialize;
 	scan_function.deserialize = TableScanDeserialize;
 	return scan_function;

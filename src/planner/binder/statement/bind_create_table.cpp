@@ -311,10 +311,30 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		// construct the set of columns based on the names and types of the query
 		auto &names = query_obj.names;
 		auto &sql_types = query_obj.types;
+		// e.g. create table (col1 ,col2) as QUERY
+		// col1 and col2 are the target_col_names
+		auto target_col_names = base.columns.GetColumnNames();
+		// TODO check  types and target_col_names are mismatch in size
 		D_ASSERT(names.size() == sql_types.size());
 		base.columns.SetAllowDuplicates(true);
-		for (idx_t i = 0; i < names.size(); i++) {
-			base.columns.AddColumn(ColumnDefinition(names[i], sql_types[i]));
+		if (!target_col_names.empty()) {
+			if (target_col_names.size() > sql_types.size()) {
+				throw BinderException("Target table has more colum names than query result.");
+			} else if (target_col_names.size() < sql_types.size()) {
+				// filled the target_col_names with the name of query names
+				for (idx_t i = target_col_names.size(); i < sql_types.size(); i++) {
+					target_col_names.push_back(names[i]);
+				}
+			}
+			ColumnList new_colums;
+			for (idx_t i = 0; i < target_col_names.size(); i++) {
+				new_colums.AddColumn(ColumnDefinition(target_col_names[i], sql_types[i]));
+			}
+			base.columns = std::move(new_colums);
+		} else {
+			for (idx_t i = 0; i < names.size(); i++) {
+				base.columns.AddColumn(ColumnDefinition(names[i], sql_types[i]));
+			}
 		}
 	} else {
 		SetCatalogLookupCallback([&dependencies, &schema](CatalogEntry &entry) {

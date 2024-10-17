@@ -99,6 +99,9 @@ public:
 
 	DUCKDB_API static string ColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints);
 
+	//! Returns the expression string list of the column names e.g. (col1, col2, col3)
+	static string ColumnNamesToSQL(const ColumnList &columns);
+
 	//! Returns a list of segment information for this table, if exists
 	virtual vector<ColumnSegmentInfo> GetColumnSegmentInfo();
 

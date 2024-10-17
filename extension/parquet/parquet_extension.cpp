@@ -180,7 +180,7 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 struct ParquetWriteBindData : public TableFunctionData {
 	vector<LogicalType> sql_types;
 	vector<string> column_names;
-	duckdb_parquet::format::CompressionCodec::type codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
+	duckdb_parquet::CompressionCodec::type codec = duckdb_parquet::CompressionCodec::SNAPPY;
 	vector<pair<string, string>> kv_metadata;
 	idx_t row_group_size = Storage::ROW_GROUP_SIZE;
 
@@ -1222,19 +1222,19 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 		} else if (loption == "compression" || loption == "codec") {
 			const auto roption = StringUtil::Lower(option.second[0].ToString());
 			if (roption == "uncompressed") {
-				bind_data->codec = duckdb_parquet::format::CompressionCodec::UNCOMPRESSED;
+				bind_data->codec = duckdb_parquet::CompressionCodec::UNCOMPRESSED;
 			} else if (roption == "snappy") {
-				bind_data->codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
+				bind_data->codec = duckdb_parquet::CompressionCodec::SNAPPY;
 			} else if (roption == "gzip") {
-				bind_data->codec = duckdb_parquet::format::CompressionCodec::GZIP;
+				bind_data->codec = duckdb_parquet::CompressionCodec::GZIP;
 			} else if (roption == "zstd") {
-				bind_data->codec = duckdb_parquet::format::CompressionCodec::ZSTD;
+				bind_data->codec = duckdb_parquet::CompressionCodec::ZSTD;
 			} else if (roption == "brotli") {
-				bind_data->codec = duckdb_parquet::format::CompressionCodec::BROTLI;
+				bind_data->codec = duckdb_parquet::CompressionCodec::BROTLI;
 			} else if (roption == "lz4" || roption == "lz4_raw") {
 				/* LZ4 is technically another compression scheme, but deprecated and arrow also uses them
 				 * interchangeably */
-				bind_data->codec = duckdb_parquet::format::CompressionCodec::LZ4_RAW;
+				bind_data->codec = duckdb_parquet::CompressionCodec::LZ4_RAW;
 			} else {
 				throw BinderException("Expected %s argument to be either [uncompressed, brotli, gzip, snappy, or zstd]",
 				                      loption);
@@ -1370,8 +1370,7 @@ unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ExecutionContext &cont
 
 // FIXME: Have these be generated instead
 template <>
-const char *EnumUtil::ToChars<duckdb_parquet::format::CompressionCodec::type>(
-    duckdb_parquet::format::CompressionCodec::type value) {
+const char *EnumUtil::ToChars<duckdb_parquet::CompressionCodec::type>(duckdb_parquet::CompressionCodec::type value) {
 	switch (value) {
 	case CompressionCodec::UNCOMPRESSED:
 		return "UNCOMPRESSED";
@@ -1403,8 +1402,7 @@ const char *EnumUtil::ToChars<duckdb_parquet::format::CompressionCodec::type>(
 }
 
 template <>
-duckdb_parquet::format::CompressionCodec::type
-EnumUtil::FromString<duckdb_parquet::format::CompressionCodec::type>(const char *value) {
+duckdb_parquet::CompressionCodec::type EnumUtil::FromString<duckdb_parquet::CompressionCodec::type>(const char *value) {
 	if (StringUtil::Equals(value, "UNCOMPRESSED")) {
 		return CompressionCodec::UNCOMPRESSED;
 	}
@@ -1455,7 +1453,7 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	auto data = make_uniq<ParquetWriteBindData>();
 	data->sql_types = deserializer.ReadProperty<vector<LogicalType>>(100, "sql_types");
 	data->column_names = deserializer.ReadProperty<vector<string>>(101, "column_names");
-	data->codec = deserializer.ReadProperty<duckdb_parquet::format::CompressionCodec::type>(102, "codec");
+	data->codec = deserializer.ReadProperty<duckdb_parquet::CompressionCodec::type>(102, "codec");
 	data->row_group_size = deserializer.ReadProperty<idx_t>(103, "row_group_size");
 	data->row_group_size_bytes = deserializer.ReadProperty<idx_t>(104, "row_group_size_bytes");
 	data->kv_metadata = deserializer.ReadProperty<vector<pair<string, string>>>(105, "kv_metadata");

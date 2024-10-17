@@ -5,6 +5,7 @@
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/list_functions.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -156,29 +157,34 @@ static unique_ptr<BaseStatistics> ListExtractStats(ClientContext &context, Funct
 	return child_copy.ToUnique();
 }
 
-void ListExtractFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunctionSet ListExtractFun::GetFunctions() {
+	ScalarFunctionSet list_extract_set("list_extract");
+
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction lfun({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT}, LogicalType::ANY,
 	                    ListExtractFunction, ListExtractBind, nullptr, ListExtractStats);
 
 	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction);
 
-	ScalarFunctionSet list_extract("list_extract");
-	list_extract.AddFunction(lfun);
-	list_extract.AddFunction(sfun);
-	set.AddFunction(list_extract);
+	list_extract_set.AddFunction(lfun);
+	list_extract_set.AddFunction(sfun);
+	return list_extract_set;
+}
 
-	ScalarFunctionSet list_element("list_element");
-	list_element.AddFunction(lfun);
-	list_element.AddFunction(sfun);
-	set.AddFunction(list_element);
+ScalarFunctionSet ArrayExtractFun::GetFunctions() {
+	ScalarFunctionSet array_extract_set("array_extract");
 
-	ScalarFunctionSet array_extract("array_extract");
-	array_extract.AddFunction(lfun);
-	array_extract.AddFunction(sfun);
-	array_extract.AddFunction(StructExtractFun::KeyExtractFunction());
-	array_extract.AddFunction(StructExtractFun::IndexExtractFunction());
-	set.AddFunction(array_extract);
+	// the arguments and return types are actually set in the binder function
+	ScalarFunction lfun({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT}, LogicalType::ANY,
+	                    ListExtractFunction, ListExtractBind, nullptr, ListExtractStats);
+
+	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction);
+
+	array_extract_set.AddFunction(lfun);
+	array_extract_set.AddFunction(sfun);
+	array_extract_set.AddFunction(GetKeyExtractFunction());
+	array_extract_set.AddFunction(GetIndexExtractFunction());
+	return array_extract_set;
 }
 
 } // namespace duckdb

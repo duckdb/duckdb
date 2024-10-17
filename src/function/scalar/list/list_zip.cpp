@@ -1,4 +1,5 @@
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/function/scalar/list_functions.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
@@ -164,7 +165,4 @@ ScalarFunction ListZipFun::GetFunction() {
 	return fun;
 }
 
-void ListZipFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"list_zip", "array_zip"}, GetFunction());
-}
 } // namespace duckdb
