@@ -232,4 +232,3 @@ XXH_PUBLIC_API XXH64_hash_t XXH64_hashFromCanonical(const XXH64_canonical_t* src
 }
 
 #endif /* XXHASH_H_5627135585666179 */
-

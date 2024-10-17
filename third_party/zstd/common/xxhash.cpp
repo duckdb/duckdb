@@ -83,8 +83,8 @@
 /* for memcpy() */
 #include <string.h>
 
-#include "zstd/common/xxhash.h"
-#include "zstd/common/xxhash_static.h"
+#include "zstd/common/xxhash.hpp"
+#include "zstd/common/xxhash_static.hpp"
 
 /* *************************************
 *  Compiler Specific Options
@@ -169,6 +169,7 @@ static U64 XXH_read64(const void* memPtr)
 
 #endif   /* XXH_FORCE_DIRECT_MEMORY_ACCESS */
 
+} // namespace duckdb_zstd
 
 /* ****************************************
 *  Compiler-specific Functions and Macros
@@ -188,6 +189,8 @@ static U64 XXH_read64(const void* memPtr)
 #endif
 #  define XXH_rotl64(x,r) ((x << r) | (x >> (64 - r)))
 #endif
+
+namespace duckdb_zstd {
 
 #if defined(_MSC_VER)     /* Visual Studio */
 #  define XXH_swap32 _byteswap_ulong
@@ -856,4 +859,4 @@ XXH_PUBLIC_API XXH64_hash_t XXH64_hashFromCanonical(const XXH64_canonical_t* src
     return XXH_readBE64(src);
 }
 
-}
+} // namespace duckdb_zstd
