@@ -43,6 +43,8 @@ public:
 	virtual string ToString() const = 0;
 	string BaseToString(string result) const;
 	string BaseToString(string result, const vector<string> &column_name_alias) const;
+	string BaseToString(string result, const vector<string> &column_name_alias,
+	                    const vector<LogicalType> &column_type_hint) const;
 	void Print();
 
 	virtual bool Equals(const TableRef &other) const;
