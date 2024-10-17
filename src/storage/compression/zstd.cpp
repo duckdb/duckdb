@@ -7,65 +7,13 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/storage/compression/utils.hpp"
 #include "zstd_wrapper.hpp"
+#include "duckdb/storage/compression/zstd.hpp"
 #include "zdict.h"
 
 #define ZSTD_STATIC_LINKING_ONLY /* for ZSTD_createCDict_byReference */
 #include "zstd.h"
 
 namespace duckdb {
-
-class DictBuffer {
-public:
-	DictBuffer() : dict_buffer(nullptr), capacity(0), size(0) {
-	}
-	DictBuffer(idx_t capacity) : dict_buffer(nullptr), capacity(capacity), size(capacity) {
-		dict_buffer = malloc(capacity);
-	}
-	DictBuffer(void *buffer, idx_t size) : dict_buffer(buffer), capacity(size), size(size) {
-		D_ASSERT(dict_buffer);
-	}
-	~DictBuffer() {
-		free(dict_buffer);
-	}
-	DictBuffer(const DictBuffer &other) = delete;
-	DictBuffer(DictBuffer &&other) : dict_buffer(other.dict_buffer), capacity(other.capacity), size(other.size) {
-		other.dict_buffer = nullptr;
-		other.size = 0;
-		other.capacity = 0;
-	}
-	DictBuffer &operator=(DictBuffer &other) = delete;
-	DictBuffer &operator=(DictBuffer &&other) {
-		free(dict_buffer);
-		dict_buffer = other.dict_buffer;
-		other.dict_buffer = nullptr;
-		capacity = other.capacity;
-		size = other.size;
-		return *this;
-	}
-
-public:
-	operator bool() {
-		return dict_buffer != nullptr;
-	}
-	void SetSize(idx_t size_p) {
-		D_ASSERT(size_p <= capacity);
-		size = size_p;
-	}
-	idx_t Size() const {
-		return size;
-	}
-	idx_t Capacity() const {
-		return capacity;
-	}
-	void *Buffer() const {
-		return dict_buffer;
-	}
-
-private:
-	void *dict_buffer;
-	idx_t capacity = 0;
-	idx_t size = 0;
-};
 
 struct ZSTDStorage {
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
@@ -288,34 +236,14 @@ class ZSTDCompressionState : public CompressionState {
 public:
 	static constexpr int COMPRESSION_LEVEL = 3;
 
-	explicit ZSTDCompressionState(ColumnDataCheckpointer &checkpointer, const CompressionInfo &info)
-	    : CompressionState(info), checkpointer(checkpointer),
-	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ZSTD)),
+	explicit ZSTDCompressionState(ColumnDataCheckpointer &checkpointer, unique_ptr<ZSTDAnalyzeState> &&analyze_state_p)
+	    : CompressionState(analyze_state_p->info), analyze_state(std::move(analyze_state_p)),
+	      checkpointer(checkpointer), function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ZSTD)),
 	      heap(BufferAllocator::Get(checkpointer.GetDatabase())) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 	}
 
-	ColumnDataCheckpointer &checkpointer;
-	CompressionFunction &function;
-
-	// current segment state
-	unique_ptr<ColumnSegment> current_segment;
-	BufferHandle current_handle;
-
-	// buffer for current segment
-	idx_t total_data_size;
-	StringHeap heap;
-	vector<uint32_t> index_buffer;
-
-	data_ptr_t current_data_ptr;
-
-	//! Temporary buffer
-	// BufferHandle handle;
-	//! The block on-disk to which we are writing
-	// block_id_t block_id;
-	//! The offset within the current block
-	// idx_t offset;
-
+public:
 	idx_t GetCurrentMetadataOffset() {
 		auto start_of_segment = current_handle.Ptr();
 		D_ASSERT(current_data_ptr >= start_of_segment);
@@ -414,12 +342,35 @@ public:
 		// current_data_ptr = data_dst + compressed_size;
 		// total_data_size += sizeof(string_metadata_t) + compressed_size;
 	}
+
+public:
+	unique_ptr<ZSTDAnalyzeState> analyze_state;
+	ColumnDataCheckpointer &checkpointer;
+	CompressionFunction &function;
+
+	// current segment state
+	unique_ptr<ColumnSegment> current_segment;
+	BufferHandle current_handle;
+
+	// buffer for current segment
+	idx_t total_data_size;
+	StringHeap heap;
+	vector<uint32_t> index_buffer;
+
+	data_ptr_t current_data_ptr;
+
+	//! Temporary buffer
+	// BufferHandle handle;
+	//! The block on-disk to which we are writing
+	// block_id_t block_id;
+	//! The offset within the current block
+	// idx_t offset;
 };
 
 unique_ptr<CompressionState> ZSTDStorage::InitCompression(ColumnDataCheckpointer &checkpointer,
                                                           unique_ptr<AnalyzeState> analyze_state_p) {
-	auto &analyze_state = analyze_state_p->Cast<ZSTDAnalyzeState>();
-	return make_uniq<ZSTDCompressionState>(checkpointer, analyze_state.info);
+	return make_uniq<ZSTDCompressionState>(checkpointer,
+	                                       unique_ptr_cast<AnalyzeState, ZSTDAnalyzeState>(std::move(analyze_state_p)));
 }
 
 void ZSTDStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
