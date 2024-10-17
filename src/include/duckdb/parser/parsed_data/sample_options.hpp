@@ -27,6 +27,7 @@ struct SampleOptions {
 	int64_t seed = -1;
 
 	unique_ptr<SampleOptions> Copy();
+	void SetSeed(idx_t new_seed);
 	static bool Equals(SampleOptions *a, SampleOptions *b);
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<SampleOptions> Deserialize(Deserializer &deserializer);
