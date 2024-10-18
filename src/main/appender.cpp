@@ -380,6 +380,15 @@ void BaseAppender::AppendValue(const Value &value) {
 void BaseAppender::AppendDataChunk(DataChunk &chunk_p) {
 	auto chunk_types = chunk_p.GetTypes();
 
+	// Early-out, if types match.
+	if (chunk_types == types) {
+		collection->Append(chunk_p);
+		if (collection->Count() >= flush_count) {
+			Flush();
+		}
+		return;
+	}
+
 	auto count = chunk_p.ColumnCount();
 	if (count != types.size()) {
 		throw InvalidInputException("incorrect column count in AppendDataChunk, expected %d, got %d", types.size(),
