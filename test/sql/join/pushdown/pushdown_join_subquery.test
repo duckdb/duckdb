@@ -98,3 +98,37 @@ SELECT * FROM (SELECT i AS k, UNNEST(l) AS i FROM lists) JOIN (SELECT MAX(i) AS 
 497	999	999
 NULL	999	999
 499	999	999
+
+# set operations
+# union
+query II
+SELECT * FROM (FROM integers UNION ALL FROM integers) JOIN (SELECT MAX(i) AS max_i FROM integers) ON i=max_i
+----
+999	999
+999	999
+
+query II
+SELECT * FROM (FROM integers UNION FROM integers) JOIN (SELECT MAX(i) AS max_i FROM integers) ON i=max_i
+----
+999	999
+
+# intersect
+query II
+SELECT * FROM (FROM integers INTERSECT FROM integers) JOIN (SELECT MAX(i) AS max_i FROM integers) ON i=max_i
+----
+999	999
+
+query II
+SELECT * FROM (FROM integers INTERSECT ALL FROM integers) JOIN (SELECT MAX(i) AS max_i FROM integers) ON i=max_i
+----
+999	999
+
+# except
+query II
+SELECT * FROM (FROM integers EXCEPT (SELECT 42)) JOIN (SELECT MAX(i) AS max_i FROM integers) ON i=max_i
+----
+999	999
+
+query II
+SELECT * FROM ((SELECT 999 i) EXCEPT FROM integers) JOIN (SELECT MAX(i) AS max_i FROM integers) ON i=max_i
+----

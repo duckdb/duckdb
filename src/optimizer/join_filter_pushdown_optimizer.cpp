@@ -56,6 +56,8 @@ void GenerateJoinFiltersRecursive(LogicalOperator &op, vector<JoinFilterPushdown
 		GenerateJoinFiltersRecursive(*probe_child.children[0], std::move(columns), pushdown_info);
 		break;
 	}
+	case LogicalOperatorType::LOGICAL_EXCEPT:
+	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_UNION: {
 		auto &setop = probe_child.Cast<LogicalSetOperation>();
 		// union
@@ -78,6 +80,11 @@ void GenerateJoinFiltersRecursive(LogicalOperator &op, vector<JoinFilterPushdown
 			}
 			// then recurse into the child
 			GenerateJoinFiltersRecursive(*child, std::move(child_columns), pushdown_info);
+
+			// for EXCEPT we can only recurse into the first (left) child
+			if (probe_child.type == LogicalOperatorType::LOGICAL_EXCEPT) {
+				break;
+			}
 		}
 		break;
 	}
