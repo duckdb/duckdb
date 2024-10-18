@@ -139,6 +139,7 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/storage/temporary_file_manager.hpp"
 #include "duckdb/verification/statement_verifier.hpp"
 
 namespace duckdb {
@@ -7703,6 +7704,64 @@ TaskExecutionResult EnumUtil::FromString<TaskExecutionResult>(const char *value)
 		return TaskExecutionResult::TASK_BLOCKED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<TaskExecutionResult>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<TemporaryBufferSize>(TemporaryBufferSize value) {
+	switch(value) {
+	case TemporaryBufferSize::INVALID:
+		return "INVALID";
+	case TemporaryBufferSize::THIRTY_TWO_KB:
+		return "THIRTY_TWO_KB";
+	case TemporaryBufferSize::SIXTY_FOUR_KB:
+		return "SIXTY_FOUR_KB";
+	case TemporaryBufferSize::NINETY_SIX_KB:
+		return "NINETY_SIX_KB";
+	case TemporaryBufferSize::HUNDRED_TWENTY_EIGHT_KB:
+		return "HUNDRED_TWENTY_EIGHT_KB";
+	case TemporaryBufferSize::HUNDRED_SIXTY_KB:
+		return "HUNDRED_SIXTY_KB";
+	case TemporaryBufferSize::HUNDRED_NINETY_TWO_KB:
+		return "HUNDRED_NINETY_TWO_KB";
+	case TemporaryBufferSize::TWO_HUNDRED_TWENTY_FOUR_KB:
+		return "TWO_HUNDRED_TWENTY_FOUR_KB";
+	case TemporaryBufferSize::DEFAULT:
+		return "DEFAULT";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<TemporaryBufferSize>", value));
+	}
+}
+
+template<>
+TemporaryBufferSize EnumUtil::FromString<TemporaryBufferSize>(const char *value) {
+	if (StringUtil::Equals(value, "INVALID")) {
+		return TemporaryBufferSize::INVALID;
+	}
+	if (StringUtil::Equals(value, "THIRTY_TWO_KB")) {
+		return TemporaryBufferSize::THIRTY_TWO_KB;
+	}
+	if (StringUtil::Equals(value, "SIXTY_FOUR_KB")) {
+		return TemporaryBufferSize::SIXTY_FOUR_KB;
+	}
+	if (StringUtil::Equals(value, "NINETY_SIX_KB")) {
+		return TemporaryBufferSize::NINETY_SIX_KB;
+	}
+	if (StringUtil::Equals(value, "HUNDRED_TWENTY_EIGHT_KB")) {
+		return TemporaryBufferSize::HUNDRED_TWENTY_EIGHT_KB;
+	}
+	if (StringUtil::Equals(value, "HUNDRED_SIXTY_KB")) {
+		return TemporaryBufferSize::HUNDRED_SIXTY_KB;
+	}
+	if (StringUtil::Equals(value, "HUNDRED_NINETY_TWO_KB")) {
+		return TemporaryBufferSize::HUNDRED_NINETY_TWO_KB;
+	}
+	if (StringUtil::Equals(value, "TWO_HUNDRED_TWENTY_FOUR_KB")) {
+		return TemporaryBufferSize::TWO_HUNDRED_TWENTY_FOUR_KB;
+	}
+	if (StringUtil::Equals(value, "DEFAULT")) {
+		return TemporaryBufferSize::DEFAULT;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<TemporaryBufferSize>", value));
 }
 
 template<>
