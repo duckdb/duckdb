@@ -13,8 +13,10 @@
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
+#include "duckdb/common/random_engine.hpp"
 #include "duckdb/storage/table/segment_lock.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/parser/parsed_data/sample_options.hpp"
 
 namespace duckdb {
 class AdaptiveFilter;
@@ -36,6 +38,7 @@ class RowGroupSegmentTree;
 class TableFilter;
 struct AdaptiveFilterState;
 struct TableScanOptions;
+struct ScanSamplingInfo;
 
 struct SegmentScanState {
 	virtual ~SegmentScanState() {
@@ -188,10 +191,13 @@ public:
 	//! The valid selection
 	SelectionVector valid_sel;
 
+	RandomEngine random;
+
 public:
 	void Initialize(const vector<LogicalType> &types);
 	const vector<storage_t> &GetColumnIds();
 	ScanFilterInfo &GetFilterInfo();
+	ScanSamplingInfo &GetSamplingInfo();
 	TableScanOptions &GetOptions();
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
 	bool ScanCommitted(DataChunk &result, TableScanType type);
@@ -199,6 +205,13 @@ public:
 
 private:
 	TableScanState &parent;
+};
+
+struct ScanSamplingInfo {
+	//! Whether or not to do a system sample during scanning
+	bool do_system_sample = false;
+	//! The sampling rate to use
+	double sample_rate;
 };
 
 struct TableScanOptions {
@@ -230,13 +243,18 @@ public:
 	shared_ptr<CheckpointLock> checkpoint_lock;
 	//! Filter info
 	ScanFilterInfo filters;
+	//! Sampling info
+	ScanSamplingInfo sampling_info;
 
 public:
-	void Initialize(vector<storage_t> column_ids, optional_ptr<TableFilterSet> table_filters = nullptr);
+	void Initialize(vector<storage_t> column_ids, optional_ptr<TableFilterSet> table_filters = nullptr,
+	                optional_ptr<SampleOptions> table_sampling = nullptr);
 
 	const vector<storage_t> &GetColumnIds();
 
 	ScanFilterInfo &GetFilterInfo();
+
+	ScanSamplingInfo &GetSamplingInfo();
 
 private:
 	//! The column identifiers of the scan

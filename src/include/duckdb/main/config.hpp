@@ -157,7 +157,7 @@ struct DBConfigOptions {
 	bool use_temporary_directory = true;
 	//! Directory to store temporary structures that do not fit in memory
 	string temporary_directory;
-	//! Compression level for the temporary directory (-5=lowest and fastest, 22=highest and slowest)
+	//! Compression level for the temporary directory (-131072=lowest and fastest, 22=highest and slowest)
 	int64_t temp_directory_compression_level = -5;
 	//! Whether or not to invoke filesystem trim on free blocks after checkpoint. This will reclaim
 	//! space for sparse files, on platforms that support it.
