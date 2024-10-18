@@ -836,11 +836,6 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 }
 
 void StringValueResult::InvalidState(StringValueResult &result) {
-	bool force_error = !result.state_machine.options.ignore_errors.GetValue() && result.sniffing;
-	// Invalid unicode, we must error
-	if (force_error) {
-		result.HandleUnicodeError(result.cur_col_id, result.last_position);
-	}
 	result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position);
 }
 
