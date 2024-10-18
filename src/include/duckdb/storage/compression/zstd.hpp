@@ -77,16 +77,20 @@ public:
 		free(owned_buffer);
 	}
 	DictBuffer(const DictBuffer &other) = delete;
-	DictBuffer(DictBuffer &&other) : dict_buffer(other.dict_buffer), capacity(other.capacity), size(other.size) {
+	DictBuffer(DictBuffer &&other)
+	    : owned_buffer(other.owned_buffer), dict_buffer(other.dict_buffer), capacity(other.capacity), size(other.size) {
+		other.owned_buffer = nullptr;
 		other.dict_buffer = nullptr;
 		other.size = 0;
 		other.capacity = 0;
 	}
 	DictBuffer &operator=(DictBuffer &other) = delete;
 	DictBuffer &operator=(DictBuffer &&other) {
-		free(dict_buffer);
+		free(owned_buffer);
 		dict_buffer = other.dict_buffer;
+		owned_buffer = other.owned_buffer;
 		other.dict_buffer = nullptr;
+		other.owned_buffer = nullptr;
 		capacity = other.capacity;
 		size = other.size;
 		return *this;
@@ -111,6 +115,7 @@ public:
 	}
 
 private:
+	//! Optionally own the buffer, should be freed by the destructor
 	void *owned_buffer = nullptr;
 	void *dict_buffer = nullptr;
 	uint32_t capacity = 0;

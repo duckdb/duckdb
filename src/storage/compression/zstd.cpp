@@ -289,6 +289,7 @@ public:
 	      checkpointer(checkpointer), function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ZSTD)) {
 		CreateSegment(checkpointer.GetRowGroup().start);
 		SetCurrentBuffer(segment_handle);
+		vector_count = 0;
 
 		auto &dict = analyze_state->dict;
 		// Write the dictionary to the start of the segment
@@ -301,17 +302,25 @@ public:
 		idx_t amount_of_vectors = analyze_state->GetVectorCount();
 
 		// Set pointers to the Vector Metadata
-		page_ids = (page_id_t *)current_buffer_ptr;
-		current_buffer_ptr += sizeof(page_id_t) * amount_of_vectors;
+		idx_t offset = GetCurrentOffset();
 
-		page_offsets = (page_offset_t *)current_buffer_ptr;
-		current_buffer_ptr += sizeof(page_offset_t) * amount_of_vectors;
+		offset = AlignValue<idx_t, sizeof(page_id_t)>(offset);
+		page_ids = (page_id_t *)(current_buffer->Ptr() + offset);
+		offset += (sizeof(page_id_t) * amount_of_vectors);
 
-		uncompressed_sizes = (uncompressed_size_t *)current_buffer_ptr;
-		current_buffer_ptr += sizeof(uncompressed_size_t) * amount_of_vectors;
+		offset = AlignValue<idx_t, sizeof(page_offset_t)>(offset);
+		page_offsets = (page_offset_t *)(current_buffer->Ptr() + offset);
+		offset += (sizeof(page_offset_t) * amount_of_vectors);
 
-		compressed_sizes = (compressed_size_t *)current_buffer_ptr;
-		current_buffer_ptr += sizeof(compressed_size_t) * amount_of_vectors;
+		offset = AlignValue<idx_t, sizeof(uncompressed_size_t)>(offset);
+		uncompressed_sizes = (uncompressed_size_t *)(current_buffer->Ptr() + offset);
+		offset += (sizeof(uncompressed_size_t) * amount_of_vectors);
+
+		offset = AlignValue<idx_t, sizeof(compressed_size_t)>(offset);
+		compressed_sizes = (compressed_size_t *)(current_buffer->Ptr() + offset);
+		offset += (sizeof(compressed_size_t) * amount_of_vectors);
+
+		current_buffer_ptr = current_buffer->Ptr() + offset;
 	}
 
 public:
@@ -351,9 +360,10 @@ public:
 
 		// compress the data to 'storage_buffer', then figure out if it can fit in the current segment or not
 		// also write the lengths of every string
+		auto storage_buffer_ptr = GetStorageBuffer();
 		auto compressed_size = duckdb_zstd::ZSTD_compress_usingCDict(
 		    /* context = */ analyze_state->context,
-		    /* dst = */ storage_buffer.get(),
+		    /* dst = */ storage_buffer_ptr,
 		    /* dstCapacity = */ storage_buffer.GetSize(),
 		    /* src = */ compression_buffer.get(),
 		    /* srcSize = */ compression_buffer_offset,
@@ -362,6 +372,21 @@ public:
 			throw InvalidInputException("ZSTD Compression failed: %s", duckdb_zstd::ZSTD_getErrorName(compressed_size));
 		}
 
+		idx_t remaining = compressed_size;
+		while (remaining) {
+			auto current_offset = GetCurrentOffset();
+			idx_t available_space = info.GetBlockSize() - sizeof(block_id_t) - current_offset;
+			idx_t to_write = MinValue(available_space, remaining);
+
+			memcpy(current_buffer_ptr, storage_buffer_ptr + (compressed_size - remaining), to_write);
+			remaining -= to_write;
+			current_buffer_ptr += to_write;
+			if (remaining) {
+				// We have more data to write, allocate a new block
+				// TODO ?
+				throw InternalException("TODO: add partial block manager");
+			}
+		}
 		// TODO:
 		// Write from the storage_buffer into the block
 		// FIXME: use streaming compression to skip the 'storage_buffer' entirely
@@ -413,8 +438,21 @@ public:
 	}
 
 	void Finalize() {
+		if (buffered_count != 0) {
+			// Flush the last vector
+			FlushVector();
+		}
+
 		auto &state = checkpointer.GetCheckpointState();
-		state.FlushSegment(std::move(segment), analyze_state->count);
+		idx_t segment_block_size;
+		if (current_buffer.get() == &segment_handle) {
+			segment_block_size = GetCurrentOffset();
+		} else {
+			// If we have overflowed to other pages, the segment block will have been fully utilized
+			// FIXME: we might leave some data at the end uninitialized ???
+			segment_block_size = info.GetBlockSize();
+		}
+		state.FlushSegment(std::move(segment), segment_block_size);
 		segment.reset();
 	}
 
@@ -468,7 +506,7 @@ public:
 	uncompressed_size_t *uncompressed_sizes;
 	compressed_size_t *compressed_sizes;
 	//! The amount of vectors we've seen so far
-	idx_t vector_count;
+	idx_t vector_count = 0;
 
 	//===--------------------------------------------------------------------===//
 	// Temporary buffers
@@ -519,22 +557,86 @@ void ZSTDStorage::FinalizeCompress(CompressionState &state_p) {
 	state.Finalize();
 }
 
+struct ZSTDVectorScanMetadata {
+	block_id_t block_id;
+	page_offset_t block_offset;
+
+	uncompressed_size_t uncompressed_size;
+	compressed_size_t compressed_size;
+
+	//! The amount of tuples that are in this Vector
+	idx_t count;
+	//! The current offset in this Vector
+	idx_t offset;
+};
+
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
 struct ZSTDScanState : public SegmentScanState {
 public:
 	ZSTDScanState() : decompression_dict(nullptr) {
+		decompression_context = duckdb_zstd::ZSTD_createDCtx();
 	}
 	~ZSTDScanState() {
 		duckdb_zstd::ZSTD_freeDDict(decompression_dict);
+		duckdb_zstd::ZSTD_freeDCtx(decompression_context);
 	}
 
 public:
+	ZSTDVectorScanMetadata GetVectorMetadata(idx_t start_idx) {
+		idx_t entire_vectors = start_idx / STANDARD_VECTOR_SIZE;
+		auto vector_idx = entire_vectors + ((start_idx % STANDARD_VECTOR_SIZE) != 0);
+		idx_t remaining = MinValue<idx_t>(segment_count - start_idx, STANDARD_VECTOR_SIZE);
+		auto offset = start_idx - (entire_vectors * STANDARD_VECTOR_SIZE);
+
+		return ZSTDVectorScanMetadata {
+		    /* block_id = */ page_ids[vector_idx],
+		    /* block_offset = */ page_offsets[vector_idx],
+		    /* uncompressed_size = */ uncompressed_sizes[vector_idx],
+		    /* compressed_size = */ compressed_sizes[vector_idx],
+		    /* count = */ remaining,
+		    /* offset = */ offset,
+		};
+	}
+
+	void ScanPartial(idx_t start_idx, Vector &result, idx_t offset, idx_t count) {
+		D_ASSERT(offset + count <= STANDARD_VECTOR_SIZE);
+
+		auto vector_metadata = GetVectorMetadata(start_idx);
+
+		scanned_count += count;
+	}
+
+public:
+	DictBuffer dict;
+
+	duckdb_zstd::ZSTD_DCtx *decompression_context = 0;
+	duckdb_zstd::ZSTD_DDict *decompression_dict = 0;
+
+	//! non-segment block that is being read from
+	shared_ptr<BlockHandle> data_block;
+	BufferHandle data_buffer;
+
 	BufferHandle handle;
-	duckdb_zstd::ZSTD_DCtx *decompression_context;
-	duckdb_zstd::ZSTD_DDict *decompression_dict;
 	data_ptr_t current_data_ptr;
+	//! The temporary buffer to store decompressed data
+	AllocatedData decompression_buffer;
+	//! The amount of tuples we've already consumed from this Vector
+	idx_t offset = 0;
+
+	//===--------------------------------------------------------------------===//
+	// Vector metadata
+	//===--------------------------------------------------------------------===//
+	page_id_t *page_ids;
+	page_offset_t *page_offsets;
+	uncompressed_size_t *uncompressed_sizes;
+	compressed_size_t *compressed_sizes;
+
+	//! The amount of tuples stored in the segment
+	idx_t segment_count;
+	//! The amount of tuples consumed
+	idx_t scanned_count;
 };
 
 unique_ptr<SegmentScanState> ZSTDStorage::StringInitScan(ColumnSegment &segment) {
@@ -545,12 +647,37 @@ unique_ptr<SegmentScanState> ZSTDStorage::StringInitScan(ColumnSegment &segment)
 	// load dictionary
 	auto data = result->handle.Ptr() + segment.GetBlockOffset();
 	auto dict_size = Load<dict_size_t>(data);
-	data += sizeof(dict_size_t);
 
-	result->decompression_dict = duckdb_zstd::ZSTD_createDDict_byReference(data, dict_size);
-	data += dict_size;
-	result->current_data_ptr = data;
+	result->dict = DictBuffer(data + sizeof(dict_size_t), dict_size);
 
+	idx_t offset = 0;
+	offset += sizeof(dict_size_t);
+	result->decompression_dict = duckdb_zstd::ZSTD_createDDict_byReference(result->dict.Buffer(), result->dict.Size());
+	offset += result->dict.Size();
+
+	result->segment_count = segment.count.load();
+	idx_t segment_count = result->segment_count;
+	idx_t amount_of_vectors = (segment_count / STANDARD_VECTOR_SIZE) + ((segment_count % STANDARD_VECTOR_SIZE) != 0);
+
+	// Set pointers to the Vector Metadata
+
+	offset = AlignValue<idx_t, sizeof(page_id_t)>(offset);
+	result->page_ids = (page_id_t *)(data + offset);
+	offset += (sizeof(page_id_t) * amount_of_vectors);
+
+	offset = AlignValue<idx_t, sizeof(page_offset_t)>(offset);
+	result->page_offsets = (page_offset_t *)(data + offset);
+	offset += (sizeof(page_offset_t) * amount_of_vectors);
+
+	offset = AlignValue<idx_t, sizeof(uncompressed_size_t)>(offset);
+	result->uncompressed_sizes = (uncompressed_size_t *)(data + offset);
+	offset += (sizeof(uncompressed_size_t) * amount_of_vectors);
+
+	offset = AlignValue<idx_t, sizeof(compressed_size_t)>(offset);
+	result->compressed_sizes = (compressed_size_t *)(data + offset);
+	offset += (sizeof(compressed_size_t) * amount_of_vectors);
+
+	result->current_data_ptr = data + offset;
 	return std::move(result);
 }
 
@@ -559,15 +686,15 @@ unique_ptr<SegmentScanState> ZSTDStorage::StringInitScan(ColumnSegment &segment)
 //===--------------------------------------------------------------------===//
 void ZSTDStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                                     idx_t result_offset) {
-	// auto &scan_state = state.scan_state->template Cast<ZSTDScanState>();
-	// auto start = segment.GetRelativeIndex(state.row_index);
+	auto &scan_state = state.scan_state->template Cast<ZSTDScanState>();
+	auto start = segment.GetRelativeIndex(state.row_index);
 
-	// auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
-	// auto source_data = data + start * sizeof(T);
+	// FIXME: this could read over a boundary of our internal vector groups
+	// in which case we would need to read the remainder of the last group
 
-	// result.SetVectorType(VectorType::FLAT_VECTOR);
-	// FlatVector::SetData(result, source_data);
-	throw InternalException("FIXME: ZSTD StringScanPartial");
+	// We should have a fast path that directly reads into the StringHeap of the 'result' if an entire Vector is
+	// requested and it aligns with our own internal Vector groups
+	scan_state.ScanPartial(start, result, result_offset, scan_count);
 }
 
 void ZSTDStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
