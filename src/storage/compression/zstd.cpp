@@ -24,23 +24,16 @@
 |   +------------------------------------+   |
 |                                            |
 +--------------------------------------------+
-|              Page Metadata                 |
-|   +------------------------------------+   |
-|   |   uint8_t    block_count           |   |
-|   |   block_id_t block[]               |   |
-|   +------------------------------------+   |
-|                                            |
-+--------------------------------------------+
 |            Vector Metadata                 |
 |   +------------------------------------+   |
-|   |   uint8_t  vector_count            |   |
-|   |   uint8_t  page_idx[]              |   |
+|   |   uint8_t  page_id[]               |   |
+|   |   uint32_t page_offset[]           |   |
 |   |   uint64_t uncompressed_size[]     |   |
 |   |   uint32_t compressed_size[]       |   |
 |   +------------------------------------+   |
 |                                            |
 +--------------------------------------------+
-|              Vector Data                   |
+|              [Vector Data]+                |
 |   +------------------------------------+   |
 |   |   uint32_t lengths[]               |   |
 |   |   void    *compressed_data         |   |
@@ -50,6 +43,10 @@
 */
 
 namespace duckdb {
+
+//===--------------------------------------------------------------------===//
+// (Sampling) Analyze
+//===--------------------------------------------------------------------===//
 
 bool ZSTDSamplingState::Finalize() {
 	finalized = true;
@@ -195,11 +192,13 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	auto &state = state_p.Cast<ZSTDAnalyzeState>();
 
 	if (state.count < 10) {
+		// Not enough samples to train a dictionary
 		return DConstants::INVALID_INDEX;
 	}
 
 	state.dict = CreateDictFromSamples(state.sampling_state);
 	if (!state.dict) {
+		// Training the dictionary failed for some reason
 		return NumericLimits<idx_t>::Maximum();
 	}
 
@@ -217,6 +216,7 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	}
 
 	double compression_ratio = state.sampling_state.total_sample_size / compressed_size;
+	// Check what the size of the data would be if all of it would be compressed at this compression ratio.
 	idx_t expected_compressed_size = LossyNumericCast<idx_t>(state.total_size / compression_ratio);
 	state.sampling_state.Reset();
 
@@ -224,7 +224,20 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	estimated_size += state.dict.Size();
 	estimated_size += expected_compressed_size;
 
-	// TODO: add the footprint of additional metadata
+	// Add the space taken up by the uncompressed lengths
+	estimated_size += state.count * sizeof(uint32_t);
+
+	idx_t total_vectors = state.count / STANDARD_VECTOR_SIZE;
+	total_vectors += (state.count % STANDARD_VECTOR_SIZE) != 0;
+
+	// page_id
+	estimated_size += total_vectors * sizeof(uint8_t);
+	// page_offset
+	estimated_size += total_vectors * sizeof(uint32_t);
+	// uncompressed_size
+	estimated_size += total_vectors * sizeof(uint64_t);
+	// compressed_size
+	estimated_size += total_vectors * sizeof(uint32_t);
 
 	// we only use zstd if it is at least 1.3 times better than the alternative
 	auto zstd_penalty_factor = 1.3;
