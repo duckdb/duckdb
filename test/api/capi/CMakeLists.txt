@@ -7,6 +7,7 @@ add_library_unity(
   capi_table_functions.cpp
   test_capi.cpp
   test_capi_any_invalid_type.cpp
+  test_capi_append_data_chunk.cpp
   test_starting_database.cpp
   test_capi_appender.cpp
   test_capi_arrow.cpp
