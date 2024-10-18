@@ -15,6 +15,40 @@
 #define ZSTD_STATIC_LINKING_ONLY /* for ZSTD_createCDict_byReference*/
 #include "zstd.h"
 
+/*
++--------------------------------------------+
+|                Dictionary                  |
+|   +------------------------------------+   |
+|   |   uint32_t dictionary_size         |   |
+|   |   void    *dictionary_buffer       |   |
+|   +------------------------------------+   |
+|                                            |
++--------------------------------------------+
+|              Page Metadata                 |
+|   +------------------------------------+   |
+|   |   uint8_t    block_count           |   |
+|   |   block_id_t block[]               |   |
+|   +------------------------------------+   |
+|                                            |
++--------------------------------------------+
+|            Vector Metadata                 |
+|   +------------------------------------+   |
+|   |   uint8_t  vector_count            |   |
+|   |   uint8_t  page_idx[]              |   |
+|   |   uint64_t uncompressed_size[]     |   |
+|   |   uint32_t compressed_size[]       |   |
+|   +------------------------------------+   |
+|                                            |
++--------------------------------------------+
+|              Vector Data                   |
+|   +------------------------------------+   |
+|   |   uint32_t lengths[]               |   |
+|   |   void    *compressed_data         |   |
+|   +------------------------------------+   |
+|                                            |
++--------------------------------------------+
+*/
+
 namespace duckdb {
 
 bool ZSTDSamplingState::Finalize() {
