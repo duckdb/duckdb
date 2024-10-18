@@ -981,8 +981,4 @@ ScalarFunction CreateSortKeyFun::GetFunction() {
 	return sort_key_function;
 }
 
-void CreateSortKeyFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetFunction());
-}
-
 } // namespace duckdb
