@@ -114,6 +114,8 @@ public:
 
 	bool ever_quoted = false;
 
+	bool ever_escaped = false;
+
 	//! Shared pointer to the buffer_manager, this is shared across multiple scanners
 	shared_ptr<CSVBufferManager> buffer_manager;
 
@@ -254,6 +256,7 @@ protected:
 			} break;
 			case CSVState::ESCAPE:
 				T::SetEscaped(result);
+				ever_escaped = true;
 				iterator.pos.buffer_pos++;
 				break;
 			case CSVState::STANDARD: {

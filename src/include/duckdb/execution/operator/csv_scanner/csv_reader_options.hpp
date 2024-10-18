@@ -98,7 +98,7 @@ struct CSVReaderOptions {
 	idx_t sample_size_chunks = 20480 / sniff_size;
 	//! Consider all columns to be of type varchar
 	bool all_varchar = false;
-	//! Whether or not to automatically detect dialect and datatypes
+	//! Whether to automatically detect dialect and datatypes
 	bool auto_detect = true;
 	//! The file path of the CSV file to read
 	string file_path;
@@ -108,7 +108,7 @@ struct CSVReaderOptions {
 	idx_t buffer_size = CSVBuffer::CSV_BUFFER_SIZE;
 	//! Decimal separator when reading as numeric
 	string decimal_separator = ".";
-	//! Whether or not to pad rows that do not have enough columns with NULL values
+	//! Whether  to pad rows that do not have enough columns with NULL values
 	bool null_padding = false;
 	//! If we should attempt to run parallel scanning over one file
 	bool parallel = true;
@@ -128,7 +128,7 @@ struct CSVReaderOptions {
 
 	//! The date format to use for writing (if any is specified)
 	map<LogicalTypeId, Value> write_date_format = {{LogicalTypeId::DATE, Value()}, {LogicalTypeId::TIMESTAMP, Value()}};
-	//! Whether or not a type format is specified
+	//! Whether  a type format is specified
 	map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
 
 	void Serialize(Serializer &serializer) const;

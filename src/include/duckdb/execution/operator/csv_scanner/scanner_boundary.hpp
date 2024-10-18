@@ -70,6 +70,10 @@ public:
 	void SetCurrentBoundaryToPosition(bool single_threaded);
 
 	void SetStart(idx_t pos);
+	void SetEnd(idx_t pos);
+
+	// Gets the current position for the file
+	idx_t GetGlobalCurrentPos();
 
 	//! 8 MB TODO: Should benchmarks other values
 	static constexpr idx_t BYTES_PER_THREAD = 8000000;
@@ -79,6 +83,8 @@ public:
 	bool done = false;
 
 	bool first_one = true;
+
+	idx_t buffer_size;
 
 private:
 	//! The original setting
