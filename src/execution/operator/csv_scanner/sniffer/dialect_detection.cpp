@@ -302,6 +302,8 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	// Whether there are more values (rows) available that are consistent, exceeding the current best.
 	bool more_values = consistent_rows > best_consistent_rows && num_cols >= max_columns_found;
 
+	bool more_columns = consistent_rows == best_consistent_rows && num_cols > max_columns_found;
+
 	// If additional padding is required when compared to the previous padding count.
 	bool require_more_padding = padding_count > prev_padding_count;
 
@@ -338,7 +340,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	// - There are more values and no additional padding is required.
 	// - There's more than one column and less padding is required.
 	if (rows_consistent &&
-	    (single_column_before || (more_values && !require_more_padding) ||
+	    (single_column_before || ((more_values || more_columns) && !require_more_padding) ||
 	     (more_than_one_column && require_less_padding)) &&
 	    !invalid_padding && comments_are_acceptable) {
 		if (!candidates.empty() && set_columns.IsSet() && max_columns_found == set_columns.Size()) {
