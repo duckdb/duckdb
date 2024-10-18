@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.5...3.29)
 
 include_directories(include)
 
-#set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
 add_library(
   duckdb_zstd STATIC

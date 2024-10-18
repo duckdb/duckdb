@@ -76,8 +76,12 @@ static const vector<TemporaryBufferSize> TemporaryBufferSizes() {
 	        TemporaryBufferSize::DEFAULT};
 }
 
-static TemporaryBufferSize MinimumTemporaryBufferSize() {
-	return SizeToTemporaryBufferSize(TEMPORARY_BUFFER_SIZE_GRANULARITY);
+static TemporaryBufferSize MinimumCompressedTemporaryBufferSize() {
+	return TemporaryBufferSize::THIRTY_TWO_KB;
+}
+
+static TemporaryBufferSize MaximumCompressedTemporaryBufferSize() {
+	return TemporaryBufferSize::TWO_HUNDRED_TWENTY_FOUR_KB;
 }
 
 //===--------------------------------------------------------------------===//
@@ -231,12 +235,13 @@ unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(idx_t block_inde
 
 	// Decompress into buffer
 	auto buffer = buffer_manager.ConstructManagedBuffer(buffer_manager.GetBlockSize(), std::move(reusable_buffer));
+
 	const auto compressed_size = Load<idx_t>(compressed_buffer.get());
 	D_ASSERT(!duckdb_zstd::ZSTD_isError(compressed_size));
-	const auto decompressed_size =
-	    duckdb_zstd::ZSTD_decompress(buffer->InternalBuffer(), buffer->AllocSize(),
-	                                 compressed_buffer.get() + sizeof(idx_t), Load<idx_t>(compressed_buffer.get()));
+	const auto decompressed_size = duckdb_zstd::ZSTD_decompress(
+	    buffer->InternalBuffer(), buffer->AllocSize(), compressed_buffer.get() + sizeof(idx_t), compressed_size);
 	D_ASSERT(!duckdb_zstd::ZSTD_isError(decompressed_size));
+
 	D_ASSERT(decompressed_size == buffer->AllocSize());
 	return buffer;
 }
@@ -377,22 +382,8 @@ void TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer 
 	// We group DEFAULT_BLOCK_ALLOC_SIZE blocks into the same file.
 	D_ASSERT(buffer.size == BufferManager::GetBufferManager(db).GetBlockSize());
 
-	// Compress the buffer and figure out its size class (if block size is greater than minimum temp buffer size)
-	// Note that we cannot use BufferAllocator for this allocation, otherwise we would trigger eviction recursively
 	AllocatedData compressed_buffer;
-	auto size = TemporaryBufferSize::DEFAULT;
-	if (buffer.AllocSize() > TemporaryBufferSizeToSize(MinimumTemporaryBufferSize())) {
-		compressed_buffer =
-		    Allocator::Get(db).Allocate(sizeof(idx_t) + duckdb_zstd::ZSTD_compressBound(buffer.AllocSize()));
-		const auto compressed_size = duckdb_zstd::ZSTD_compress(compressed_buffer.get() + sizeof(idx_t),
-		                                                        compressed_buffer.GetSize() - sizeof(idx_t),
-		                                                        buffer.InternalBuffer(), buffer.AllocSize(), 3);
-		D_ASSERT(!duckdb_zstd::ZSTD_isError(compressed_size));
-		Store<idx_t>(compressed_size, compressed_buffer.get());
-		if (compressed_size < buffer.AllocSize()) {
-			size = RoundUpSizeToTemporaryBufferSize(compressed_size); // Use default if compression ratio is bad
-		}
-	}
+	const auto size = CompressTemporaryBuffer(buffer, compressed_buffer);
 
 	TemporaryFileIndex index;
 	optional_ptr<TemporaryFileHandle> handle;
@@ -421,6 +412,36 @@ void TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer 
 	D_ASSERT(index.IsValid());
 
 	handle->WriteTemporaryBuffer(buffer, index.block_index.GetIndex(), compressed_buffer);
+}
+
+TemporaryBufferSize TemporaryFileManager::CompressTemporaryBuffer(FileBuffer &buffer,
+                                                                  AllocatedData &compressed_buffer) const {
+	if (buffer.AllocSize() <= TemporaryBufferSizeToSize(MinimumCompressedTemporaryBufferSize())) {
+		return TemporaryBufferSize::DEFAULT; // Buffer size is less or equal to the minimum compressed size - no point
+	}
+
+	const auto temp_directory_compression_level = db.config.options.temp_directory_compression_level;
+	int compression_level;
+	if (temp_directory_compression_level > duckdb_zstd::ZSTD_maxCLevel()) {
+		compression_level = duckdb_zstd::ZSTD_maxCLevel();
+	} else if (temp_directory_compression_level < duckdb_zstd::ZSTD_minCLevel()) {
+		compression_level = duckdb_zstd::ZSTD_minCLevel();
+	} else {
+		compression_level = NumericCast<int>(temp_directory_compression_level);
+	}
+	const auto zstd_bound = duckdb_zstd::ZSTD_compressBound(buffer.AllocSize());
+	compressed_buffer = Allocator::Get(db).Allocate(sizeof(idx_t) + zstd_bound);
+	const auto zstd_size = duckdb_zstd::ZSTD_compress(compressed_buffer.get() + sizeof(idx_t), zstd_bound,
+	                                                  buffer.InternalBuffer(), buffer.AllocSize(), compression_level);
+	D_ASSERT(!duckdb_zstd::ZSTD_isError(zstd_size));
+	Store<idx_t>(zstd_size, compressed_buffer.get());
+	const auto compressed_size = sizeof(idx_t) + zstd_size;
+
+	if (compressed_size > TemporaryBufferSizeToSize(MaximumCompressedTemporaryBufferSize())) {
+		return TemporaryBufferSize::DEFAULT; // Use default if compression ratio is bad
+	}
+
+	return RoundUpSizeToTemporaryBufferSize(compressed_size);
 }
 
 bool TemporaryFileManager::HasTemporaryBuffer(block_id_t block_id) {

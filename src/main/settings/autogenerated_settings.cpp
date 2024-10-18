@@ -1065,4 +1065,20 @@ Value ScalarSubqueryErrorOnMultipleRowsSetting::GetSetting(const ClientContext &
 	return Value::BOOLEAN(config.scalar_subquery_error_on_multiple_rows);
 }
 
+//===----------------------------------------------------------------------===//
+// Temp Directory Compression Level
+//===----------------------------------------------------------------------===//
+void TempDirectoryCompressionLevelSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.temp_directory_compression_level = input.GetValue<int64_t>();
+}
+
+void TempDirectoryCompressionLevelSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.temp_directory_compression_level = DBConfig().options.temp_directory_compression_level;
+}
+
+Value TempDirectoryCompressionLevelSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BIGINT(config.options.temp_directory_compression_level);
+}
+
 } // namespace duckdb

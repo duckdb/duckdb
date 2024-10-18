@@ -225,6 +225,9 @@ public:
 	void DecreaseSizeOnDisk(idx_t amount);
 
 private:
+	//! Compress buffer, write it in compressed_buffer and return the size
+	TemporaryBufferSize CompressTemporaryBuffer(FileBuffer &buffer, AllocatedData &compressed_buffer) const;
+
 	//! Create file name for given size/index
 	string CreateTemporaryFileName(const TemporaryFileIdentifier &identifier) const;
 

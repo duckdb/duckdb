@@ -1050,6 +1050,17 @@ struct TempDirectorySetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct TempDirectoryCompressionLevelSetting {
+	using RETURN_TYPE = int64_t;
+	static constexpr const char *Name = "temp_directory_compression_level";
+	static constexpr const char *Description =
+	    "Compression level for the temporary directory (-5=lowest and fastest, 22=highest and slowest)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct ThreadsSetting {
 	using RETURN_TYPE = int64_t;
 	static constexpr const char *Name = "threads";
