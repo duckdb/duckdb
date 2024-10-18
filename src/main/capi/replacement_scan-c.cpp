@@ -19,18 +19,19 @@ struct CAPIReplacementScanData : public ReplacementScanData {
 };
 
 struct CAPIReplacementScanInfo {
-	CAPIReplacementScanInfo(CAPIReplacementScanData *data) : data(data) {
+	CAPIReplacementScanInfo(optional_ptr<CAPIReplacementScanData> data) : data(data) {
 	}
 
-	CAPIReplacementScanData *data;
+	optional_ptr<CAPIReplacementScanData> data;
 	string function_name;
 	vector<Value> parameters;
 	string error;
 };
 
-unique_ptr<TableRef> duckdb_capi_replacement_callback(ClientContext &context, const string &table_name,
-                                                      ReplacementScanData *data) {
-	auto &scan_data = reinterpret_cast<CAPIReplacementScanData &>(*data);
+unique_ptr<TableRef> duckdb_capi_replacement_callback(ClientContext &context, ReplacementScanInput &input,
+                                                      optional_ptr<ReplacementScanData> data) {
+	auto &table_name = input.table_name;
+	auto &scan_data = data->Cast<CAPIReplacementScanData>();
 
 	CAPIReplacementScanInfo info(&scan_data);
 	scan_data.callback((duckdb_replacement_scan_info)&info, table_name.c_str(), scan_data.extra_data);

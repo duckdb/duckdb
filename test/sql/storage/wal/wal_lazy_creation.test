@@ -1,0 +1,38 @@
+# name: test/sql/storage/wal/wal_lazy_creation.test
+# description: Verify the WAL is lazily created when attaching.
+# group: [wal]
+
+# If we enable alternative verification, then we disable checkpointing on shutdown.
+# Thus, we'll keep the WAL alive when detaching the database.
+require no_alternative_verify
+
+require noforcestorage
+
+require skip_reload
+
+statement ok
+ATTACH '__TEST_DIR__/attach_no_wal.db';
+
+statement ok
+CREATE TABLE attach_no_wal.integers(i INTEGER);
+
+statement ok
+INSERT INTO attach_no_wal.integers FROM range(10000);
+
+statement ok
+DETACH attach_no_wal;
+
+statement ok
+ATTACH '__TEST_DIR__/attach_no_wal.db';
+
+# Verify that we don't have a WAL after attaching.
+query I
+SELECT COUNT(*) FROM glob('__TEST_DIR__/attach_no_wal.db.wal');
+----
+0
+
+# Verify that we checkpointed the WAL.
+query I
+SELECT COUNT(*) FROM attach_no_wal.integers;
+----
+10000

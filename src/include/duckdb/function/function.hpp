@@ -58,13 +58,13 @@ struct FunctionData {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 	// FIXME: this function should be removed in the future
 	template <class TARGET>
 	TARGET &CastNoConst() const {
-		return const_cast<TARGET &>(reinterpret_cast<const TARGET &>(*this));
+		return const_cast<TARGET &>(Cast<TARGET>()); // NOLINT: FIXME
 	}
 };
 
@@ -72,15 +72,10 @@ struct TableFunctionData : public FunctionData {
 	// used to pass on projections to table functions that support them. NB, can contain COLUMN_IDENTIFIER_ROW_ID
 	vector<idx_t> column_ids;
 
-	DUCKDB_API virtual ~TableFunctionData();
+	DUCKDB_API ~TableFunctionData() override;
 
 	DUCKDB_API unique_ptr<FunctionData> Copy() const override;
 	DUCKDB_API bool Equals(const FunctionData &other) const override;
-};
-
-struct PyTableFunctionData : public TableFunctionData {
-	//! External dependencies of this table function
-	unique_ptr<ExternalDependency> external_dependency;
 };
 
 struct FunctionParameters {

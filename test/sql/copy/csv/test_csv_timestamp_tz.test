@@ -5,14 +5,9 @@
 statement ok
 pragma enable_verification
 
-statement ok
+statement error
 copy (
 select '2021-05-25 04:55:03.382494 UTC'::timestamp as ts, '2021-05-25 04:55:03.382494 UTC'::timestamptz as tstz
 ) to '__TEST_DIR__/timestamps.csv' ( timestampformat '%A');
-
-
-query II
-select * from read_csv_auto('__TEST_DIR__/timestamps.csv');
 ----
-Tuesday	Tuesday
-
+No function matches the given name and argument types

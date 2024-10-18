@@ -1,0 +1,52 @@
+# name: test/sql/storage/optimistic_write/optimistic_write_with_regular_writes_wal.test_slow
+# description: Mix of optimistic writes with regular writes with the WAL
+# group: [optimistic_write]
+
+load __TEST_DIR__/optimistic_write_with_regular_writes_wal.db
+
+statement ok
+SET debug_skip_checkpoint_on_commit=true
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+CREATE OR REPLACE TABLE test (a INTEGER, big_payload VARCHAR DEFAULT concat('longprefix_', uuid()::VARCHAR));
+
+# a bunch of (smaller) regular writes
+statement ok
+INSERT INTO test (a) SELECT * FROM range(5000)
+
+statement ok
+INSERT INTO test (a) SELECT * FROM range(5000, 10000)
+
+statement ok
+INSERT INTO test (a) SELECT * FROM range(10000, 15000)
+
+statement ok
+INSERT INTO test (a) SELECT * FROM range(15000, 20000)
+
+# a big write
+statement ok
+INSERT INTO test (a) SELECT * FROM range(20000, 1000000)
+
+query II
+SELECT SUM(a), SUM(STRLEN(big_payload)) FROM test
+----
+499999500000	47000000
+
+# restart
+restart
+
+query II
+SELECT SUM(a), SUM(STRLEN(big_payload)) FROM test
+----
+499999500000	47000000
+
+statement ok
+INSERT INTO test (a) SELECT * FROM range(1000000)
+
+query II
+SELECT SUM(a), SUM(STRLEN(big_payload)) FROM test
+----
+999999000000	94000000

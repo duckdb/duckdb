@@ -107,10 +107,10 @@ struct AlpCompression {
 	 */
 	static int64_t NumberToInt64(T n) {
 		if (IsImpossibleToEncode(n)) {
-			return AlpConstants::ENCODING_UPPER_LIMIT;
+			return ExactNumericCast<int64_t>(AlpConstants::ENCODING_UPPER_LIMIT);
 		}
 		n = n + AlpTypedConstants<T>::MAGIC_NUMBER - AlpTypedConstants<T>::MAGIC_NUMBER;
-		return static_cast<int64_t>(n);
+		return LossyNumericCast<int64_t>(n);
 	}
 
 	/*
@@ -185,7 +185,7 @@ struct AlpCompression {
 
 		// Evaluate factor/exponent compression size (we optimize for FOR)
 		uint64_t delta = (static_cast<uint64_t>(max_encoded_value) - static_cast<uint64_t>(min_encoded_value));
-		estimated_bits_per_value = std::ceil(std::log2(delta + 1));
+		estimated_bits_per_value = ExactNumericCast<uint32_t>(std::ceil(std::log2(delta + 1)));
 		estimated_compression_size += n_values * estimated_bits_per_value;
 		estimated_compression_size +=
 		    exceptions_count * (EXACT_TYPE_BITSIZE + (AlpConstants::EXCEPTION_POSITION_SIZE * 8));
@@ -254,7 +254,8 @@ struct AlpCompression {
 	static void FindBestFactorAndExponent(const T *input_vector, idx_t n_values, State &state) {
 		//! We sample equidistant values within a vector; to do this we skip a fixed number of values
 		vector<T> vector_sample;
-		uint32_t idx_increments = MaxValue(1, (int32_t)std::ceil((double)n_values / AlpConstants::SAMPLES_PER_VECTOR));
+		auto idx_increments = MaxValue<uint32_t>(
+		    1, ExactNumericCast<uint32_t>(std::ceil((double)n_values / AlpConstants::SAMPLES_PER_VECTOR)));
 		for (idx_t i = 0; i < n_values; i += idx_increments) {
 			vector_sample.push_back(input_vector[i]);
 		}
@@ -358,9 +359,9 @@ struct AlpCompression {
 			BitpackingPrimitives::PackBuffer<uint64_t, false>(state.values_encoded, u_encoded_integers, n_values,
 			                                                  bit_width);
 		}
-		state.bit_width = bit_width; // in bits
-		state.bp_size = bp_size;     // in bytes
-		state.frame_of_reference = min_value;
+		state.bit_width = bit_width;                                 // in bits
+		state.bp_size = bp_size;                                     // in bytes
+		state.frame_of_reference = static_cast<uint64_t>(min_value); // understood this can be negative
 	}
 
 	/*

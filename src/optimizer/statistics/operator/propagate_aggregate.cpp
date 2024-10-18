@@ -4,7 +4,7 @@
 namespace duckdb {
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggregate &aggr,
-                                                                     unique_ptr<LogicalOperator> *node_ptr) {
+                                                                     unique_ptr<LogicalOperator> &node_ptr) {
 	// first propagate statistics in the child node
 	node_stats = PropagateStatistics(aggr.children[0]);
 

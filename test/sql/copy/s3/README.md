@@ -12,6 +12,10 @@ brew install docker --cask
 
 Then open `/Applications/Docker`. Note that the first time you open the application you need to go to the `Applications` folder, right-click `Docker` and select `open`.
 
+### Setting Up Docker
+
+In order to finish setting up Docker, you need to open the Docker application, and login to your Docker account. Create a Docker account if you do not have one and finish setting up.
+
 ### Running Minio
 
 Run the `install_s3_test_server` script. This requires root. This makes a few changes to your system, specifically to `/etc/hosts` to set up a few redirect interfaces to localhost. This only needs to be run once.
@@ -59,3 +63,7 @@ build/debug/test/unittest test/sql/copy/s3/s3_hive_partition.test
 ```
 
 > minio uses port 9000. Clickhouse also uses port 9000. If the tests are not working and you have a running Clickhouse service - try killing it first, e.g. using `killall -9 clickhouse`
+
+#### Test Data
+
+The configuration for minio is stored in `scripts/minio_s3.yml`. Data is stored in `/tmp/minio_test_data`.

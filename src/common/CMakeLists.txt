@@ -8,6 +8,7 @@ add_subdirectory(enums)
 add_subdirectory(exception)
 add_subdirectory(operator)
 add_subdirectory(progress_bar)
+add_subdirectory(tree_renderer)
 add_subdirectory(row_operations)
 add_subdirectory(serializer)
 add_subdirectory(sort)
@@ -31,9 +32,11 @@ add_library_unity(
   assert.cpp
   bind_helpers.cpp
   box_renderer.cpp
+  cgroups.cpp
   compressed_file_system.cpp
   constants.cpp
   checksum.cpp
+  encryption_state.cpp
   exception.cpp
   exception_format_value.cpp
   extra_type_info.cpp
@@ -43,9 +46,10 @@ add_library_unity(
   fsst.cpp
   gzip_file_system.cpp
   hive_partitioning.cpp
-  http_state.cpp
+  http_util.cpp
   pipe_file_system.cpp
   local_file_system.cpp
+  multi_file_list.cpp
   multi_file_reader.cpp
   error_data.cpp
   printer.cpp
@@ -55,6 +59,7 @@ add_library_unity(
   string_util.cpp
   enum_util.cpp
   symbols.cpp
+  render_tree.cpp
   tree_renderer.cpp
   types.cpp
   virtual_file_system.cpp

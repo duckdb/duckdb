@@ -15,24 +15,31 @@ namespace duckdb {
 using JSONPathType = JSONCommon::JSONPathType;
 
 static JSONPathType CheckPath(const Value &path_val, string &path, size_t &len) {
+	if (path_val.IsNull()) {
+		throw BinderException("JSON path cannot be NULL");
+	}
 	const auto path_str_val = path_val.DefaultCastAs(LogicalType::VARCHAR);
 	auto path_str = path_str_val.GetValueUnsafe<string_t>();
 	len = path_str.GetSize();
-	auto ptr = path_str.GetData();
+	const auto ptr = path_str.GetData();
 	// Empty strings and invalid $ paths yield an error
 	if (len == 0) {
 		throw BinderException("Empty JSON path");
 	}
 	JSONPathType path_type = JSONPathType::REGULAR;
-	if (*ptr == '$') {
-		path_type = JSONCommon::ValidatePath(ptr, len, true);
-	}
 	// Copy over string to the bind data
 	if (*ptr == '/' || *ptr == '$') {
 		path = string(ptr, len);
-	} else {
+	} else if (path_val.type().IsIntegral()) {
+		path = "$[" + string(ptr, len) + "]";
+	} else if (memchr(ptr, '"', len)) {
 		path = "/" + string(ptr, len);
-		len++;
+	} else {
+		path = "$.\"" + string(ptr, len) + "\"";
+	}
+	len = path.length();
+	if (*path.c_str() == '$') {
+		path_type = JSONCommon::ValidatePath(path.c_str(), len, true);
 	}
 	return path_type;
 }
@@ -58,11 +65,17 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, Scal
 	size_t len = 0;
 	JSONPathType path_type = JSONPathType::REGULAR;
 	if (arguments[1]->IsFoldable()) {
-		constant = true;
 		const auto path_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-		path_type = CheckPath(path_val, path, len);
+		if (!path_val.IsNull()) {
+			constant = true;
+			path_type = CheckPath(path_val, path, len);
+		}
 	}
-	bound_function.arguments[1] = LogicalType::VARCHAR;
+	if (arguments[1]->return_type.IsIntegral()) {
+		bound_function.arguments[1] = LogicalType::BIGINT;
+	} else {
+		bound_function.arguments[1] = LogicalType::VARCHAR;
+	}
 	if (path_type == JSONCommon::JSONPathType::WILDCARD) {
 		bound_function.return_type = LogicalType::LIST(bound_function.return_type);
 	}
@@ -112,6 +125,7 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, 
 
 JSONFunctionLocalState::JSONFunctionLocalState(Allocator &allocator) : json_allocator(allocator) {
 }
+
 JSONFunctionLocalState::JSONFunctionLocalState(ClientContext &context)
     : JSONFunctionLocalState(BufferAllocator::Get(context)) {
 }
@@ -155,12 +169,16 @@ vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
 	// Other
 	functions.push_back(GetArrayLengthFunction());
 	functions.push_back(GetContainsFunction());
+	functions.push_back(GetExistsFunction());
 	functions.push_back(GetKeysFunction());
 	functions.push_back(GetTypeFunction());
 	functions.push_back(GetValidFunction());
+	functions.push_back(GetValueFunction());
 	functions.push_back(GetSerializePlanFunction());
 	functions.push_back(GetSerializeSqlFunction());
 	functions.push_back(GetDeserializeSqlFunction());
+
+	functions.push_back(GetPrettyPrintFunction());
 
 	return functions;
 }
@@ -189,8 +207,9 @@ vector<TableFunctionSet> JSONFunctions::GetTableFunctions() {
 	return functions;
 }
 
-unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, const string &table_name,
-                                                        ReplacementScanData *data) {
+unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, ReplacementScanInput &input,
+                                                        optional_ptr<ReplacementScanData> data) {
+	auto table_name = ReplacementScan::GetFullPath(input);
 	if (!ReplacementScan::CanReplace(table_name, {"json", "jsonl", "ndjson"})) {
 		return nullptr;
 	}

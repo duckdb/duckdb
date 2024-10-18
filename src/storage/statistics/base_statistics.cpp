@@ -341,11 +341,10 @@ BaseStatistics BaseStatistics::Deserialize(Deserializer &deserializer) {
 	auto distinct_count = deserializer.ReadProperty<idx_t>(102, "distinct_count");
 
 	// Get the logical type from the deserializer context.
-	auto type = deserializer.Get<LogicalType &>();
-
+	auto &type = deserializer.Get<const LogicalType &>();
 	auto stats_type = GetStatsType(type);
 
-	BaseStatistics stats(std::move(type));
+	BaseStatistics stats(type);
 
 	stats.has_null = has_null;
 	stats.has_no_null = has_no_null;

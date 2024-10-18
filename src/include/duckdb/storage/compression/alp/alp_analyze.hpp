@@ -10,9 +10,10 @@
 
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/compression/alp/algorithm/alp.hpp"
-#include "duckdb/storage/compression/alp/alp_utils.hpp"
 #include "duckdb/storage/compression/alp/alp_constants.hpp"
+#include "duckdb/storage/compression/alp/alp_utils.hpp"
 #include "duckdb/storage/compression/patas/patas.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 
 #include <cmath>
 
@@ -21,9 +22,9 @@ namespace duckdb {
 template <class T>
 struct AlpAnalyzeState : public AnalyzeState {
 public:
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
+	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
-	AlpAnalyzeState() : state() {
+	explicit AlpAnalyzeState(const CompressionInfo &info) : AnalyzeState(info), state() {
 	}
 
 	idx_t total_bytes_used = 0;
@@ -62,7 +63,7 @@ public:
 		idx_t bytes_to_be_used = AlignValue(current_bytes_used_in_segment + RequiredSpace());
 		// We have enough space if the already used space + the required space for a new vector
 		// does not exceed the space of the block - the segment header (the pointer to the metadata)
-		return bytes_to_be_used <= (Storage::BLOCK_SIZE - AlpConstants::METADATA_POINTER_SIZE);
+		return bytes_to_be_used <= (info.GetBlockSize() - AlpConstants::METADATA_POINTER_SIZE);
 	}
 
 	idx_t TotalUsedBytes() const {
@@ -72,7 +73,8 @@ public:
 
 template <class T>
 unique_ptr<AnalyzeState> AlpInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_uniq<AlpAnalyzeState<T>>();
+	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
+	return make_uniq<AlpAnalyzeState<T>>(info);
 }
 
 /*

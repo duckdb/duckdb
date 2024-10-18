@@ -53,10 +53,12 @@ select * exclude (filename) from read_csv_auto('data/csv/hive-partitioning/misma
 99	world
 xxx	42
 
+# This can either throw a cast error or a schema mismatch error depending on what is executed first because of
+# parallelism
 statement error
 select * from read_csv_auto(['data/csv/hive-partitioning/mismatching_contents/part=1/test.csv', 'data/csv/hive-partitioning/mismatching_contents/part=2/test.csv'])  order by 1
 ----
-date field value out of range
+If you are trying to read files with different schemas, try setting union_by_name=True
 
 query III
 select a, b, c from read_csv_auto('data/csv/hive-partitioning/mismatching_contents/*/*.csv', UNION_BY_NAME=1)  order by 2 NULLS LAST

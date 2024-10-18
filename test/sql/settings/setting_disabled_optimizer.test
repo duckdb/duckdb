@@ -17,7 +17,9 @@ SELECT current_setting('disabled_optimizers');
 statement error
 SET disabled_optimizers TO 'expression_rewriteX'
 ----
+<REGEX>:Parser Error.*Optimizer.*not recognized.*
 
 statement error
 SET disabled_optimizers TO 'unknown_optimizer'
 ----
+<REGEX>:Parser Error.*Optimizer.*not recognized.*

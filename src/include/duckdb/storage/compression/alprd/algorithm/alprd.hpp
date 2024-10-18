@@ -34,7 +34,7 @@ struct AlpRDLeftPartInfo {
 template <class T, bool EMPTY>
 class AlpRDCompressionState {
 public:
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
+	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 	AlpRDCompressionState() : right_bit_width(0), left_bit_width(0), exceptions_count(0) {
 	}
@@ -63,7 +63,7 @@ public:
 template <class T, bool EMPTY>
 struct AlpRDCompression {
 	using State = AlpRDCompressionState<T, EMPTY>;
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
+	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 	static constexpr uint8_t EXACT_TYPE_BITSIZE = sizeof(EXACT_TYPE) * 8;
 
 	/*
@@ -73,7 +73,8 @@ struct AlpRDCompression {
 	                                      uint64_t sample_count) {
 		double exceptions_size =
 		    exceptions_count * ((AlpRDConstants::EXCEPTION_POSITION_SIZE + AlpRDConstants::EXCEPTION_SIZE) * 8);
-		double estimated_size = right_bit_width + left_bit_width + (exceptions_size / sample_count);
+		double estimated_size =
+		    right_bit_width + left_bit_width + (exceptions_size / static_cast<double>(sample_count));
 		return estimated_size;
 	}
 
@@ -105,7 +106,8 @@ struct AlpRDCompression {
 		// The left parts bit width after compression is determined by how many elements are in the dictionary
 		uint64_t actual_dictionary_size =
 		    MinValue<uint64_t>(AlpRDConstants::MAX_DICTIONARY_SIZE, left_parts_sorted_repetitions.size());
-		uint8_t left_bit_width = MaxValue<uint8_t>(1, std::ceil(std::log2(actual_dictionary_size)));
+		uint8_t left_bit_width =
+		    MaxValue<uint8_t>(1, ExactNumericCast<uint8_t>(std::ceil(std::log2(actual_dictionary_size))));
 
 		if (PERSIST_DICT) {
 			for (idx_t dict_idx = 0; dict_idx < actual_dictionary_size; dict_idx++) {
@@ -199,7 +201,7 @@ struct AlpRDCompression {
 
 template <class T>
 struct AlpRDDecompression {
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
+	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 	static void Decompress(uint8_t *left_encoded, uint8_t *right_encoded, const uint16_t *left_parts_dict,
 	                       EXACT_TYPE *output, idx_t values_count, uint16_t exceptions_count,

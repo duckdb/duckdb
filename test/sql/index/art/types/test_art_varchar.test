@@ -1,75 +1,55 @@
 # name: test/sql/index/art/types/test_art_varchar.test
-# description: Test ART VARCHAR key type
+# description: Test ART VARCHAR keys.
 # group: [types]
 
 statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE strings(i varchar)
+CREATE TABLE strings(i varchar);
 
 statement ok
-CREATE INDEX i_index ON strings(i)
-
-# Insert values and create index
-statement ok
-INSERT INTO strings VALUES ('test')
+CREATE INDEX i_index ON strings(i);
 
 statement ok
-INSERT INTO strings VALUES ('test1')
-
-statement ok
-INSERT INTO strings VALUES ('vest1')
-
-statement ok
-INSERT INTO strings VALUES ('somesuperbigstring')
-
-statement ok
-INSERT INTO strings VALUES ('somesuperbigstring1')
-
-statement ok
-INSERT INTO strings VALUES ('somesuperbigstring2')
-
-statement ok
-INSERT INTO strings VALUES ('somesuperbigstring')
-
-statement ok
-INSERT INTO strings VALUES ('maybesomesuperbigstring')
-
-statement ok
-INSERT INTO strings VALUES ('maybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstring')
-
-statement ok
-INSERT INTO strings VALUES ('maybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstring2')
+INSERT INTO strings VALUES ('test'), ('test1'), ('vest1'), ('somesuperbigstring'), ('somesuperbigstring1'),
+	('somesuperbigstring2'), ('somesuperbigstring'), ('maybesomesuperbigstring'),
+	('maybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstring'),
+	('maybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstring2');
 
 query I
-SELECT COUNT(i) FROM strings WHERE i = 'test'
+SELECT COUNT(i) FROM strings WHERE i = 'test';
 ----
 1
 
 query I
-SELECT COUNT(i) FROM strings WHERE i = 'somesuperbigstring'
+SELECT COUNT(i) FROM strings WHERE i = 'somesuperbigstring';
 ----
 2
 
 query I
-SELECT COUNT(i) FROM strings WHERE i = 'maybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstring'
+SELECT COUNT(i) FROM strings WHERE i = 'maybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstring';
 ----
 1
 
 query I
-SELECT COUNT(i) FROM strings WHERE i = 'maybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstring2'
+SELECT COUNT(i) FROM strings WHERE i = 'maybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstring2';
 ----
 1
 
 query I
-SELECT COUNT(i) FROM strings WHERE i >= 'somesuperbigstring' and i <='somesuperbigstringz'
+SELECT COUNT(i) FROM strings WHERE i >= 'somesuperbigstring' and i <='somesuperbigstringz';
 ----
 4
 
-statement ok
-DROP INDEX i_index
+query I
+SELECT COUNT(i) FROM strings WHERE i = 'somesuperthisdoesnotexist';
+----
+0
 
 statement ok
-DROP TABLE strings
+DROP INDEX i_index;
+
+statement ok
+DROP TABLE strings;
 

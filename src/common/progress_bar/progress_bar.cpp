@@ -84,7 +84,7 @@ bool ProgressBar::ShouldPrint(bool final) const {
 		return false;
 	}
 	// FIXME - do we need to check supported before running `profiler.Elapsed()` ?
-	auto sufficient_time_elapsed = profiler.Elapsed() > show_progress_after / 1000.0;
+	auto sufficient_time_elapsed = profiler.Elapsed() > static_cast<double>(show_progress_after) / 1000.0;
 	if (!sufficient_time_elapsed) {
 		// Don't print yet
 		return false;
@@ -121,7 +121,7 @@ void ProgressBar::Update(bool final) {
 		if (final) {
 			FinishProgressBarPrint();
 		} else {
-			PrintProgress(query_progress.percentage);
+			PrintProgress(LossyNumericCast<int>(query_progress.percentage.load()));
 		}
 #endif
 	}

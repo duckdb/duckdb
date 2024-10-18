@@ -45,14 +45,29 @@ CREATE TABLE venue_2 (
     , venuecity      VARCHAR (30)
     , venuestate     CHAR (2)
     , venueseats     VARCHAR
-)
-;
+);
 
-# Similar to the https://tech.marksblogg.com/duckdb-1b-taxi-rides.html issue
-statement error
+statement ok
 INSERT INTO venue_2 SELECT * FROM read_csv('data/csv/venue_pipe_big.csv', sample_size = 1);
+
+query I
+SELECT COUNT(*) from venue_2
 ----
-This type was auto-detected from the CSV file.
+2662
+
+statement ok
+DROP TABLE venue_2
+
+statement ok
+CREATE TABLE venue_2 (
+    venueid          SMALLINT        NOT NULL /*PRIMARY KEY*/
+    , venuename      VARCHAR (100)
+    , venuecity      VARCHAR (30)
+    , venuestate     CHAR (2)
+    , venueseats     VARCHAR
+);
+
+
 
 # Check our  possible solutions:
 #* Override the type for this column manually by setting the type explicitly, e.g. types={'venueseats': 'VARCHAR'}
@@ -76,4 +91,4 @@ This type was auto-detected from the CSV file.
 statement error
 INSERT INTO venue SELECT * FROM read_csv('data/csv/venue_pipe.csv');
 ----
-Conversion Error: Could not convert string '\N' to INT32
+Could not convert string "\N" to 'INTEGER'

@@ -22,14 +22,14 @@
 
 namespace duckdb {
 
-struct DuckDBPyExpression : public std::enable_shared_from_this<DuckDBPyExpression> {
+struct DuckDBPyExpression : public enable_shared_from_this<DuckDBPyExpression> {
 public:
 	explicit DuckDBPyExpression(unique_ptr<ParsedExpression> expr, OrderType order_type = OrderType::ORDER_DEFAULT,
 	                            OrderByNullType null_order = OrderByNullType::ORDER_DEFAULT);
 
 public:
-	std::shared_ptr<DuckDBPyExpression> shared_from_this() {
-		return std::enable_shared_from_this<DuckDBPyExpression>::shared_from_this();
+	shared_ptr<DuckDBPyExpression> shared_from_this() {
+		return enable_shared_from_this<DuckDBPyExpression>::shared_from_this();
 	}
 
 public:
@@ -38,6 +38,7 @@ public:
 	string Type() const;
 
 	string ToString() const;
+	string GetName() const;
 	void Print() const;
 	shared_ptr<DuckDBPyExpression> Add(const DuckDBPyExpression &other);
 	shared_ptr<DuckDBPyExpression> Negate();
@@ -93,12 +94,13 @@ public:
 	shared_ptr<DuckDBPyExpression> Copy() const;
 
 public:
-	static shared_ptr<DuckDBPyExpression> StarExpression(const py::list &exclude = py::none());
+	static shared_ptr<DuckDBPyExpression> StarExpression(py::object exclude = py::none());
 	static shared_ptr<DuckDBPyExpression> ColumnExpression(const string &column_name);
 	static shared_ptr<DuckDBPyExpression> ConstantExpression(const py::object &value);
 	static shared_ptr<DuckDBPyExpression> CaseExpression(const DuckDBPyExpression &condition,
 	                                                     const DuckDBPyExpression &value);
 	static shared_ptr<DuckDBPyExpression> FunctionExpression(const string &function_name, const py::args &args);
+	static shared_ptr<DuckDBPyExpression> Coalesce(const py::args &args);
 
 public:
 	// Internal functions (not exposed to Python)

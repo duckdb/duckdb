@@ -1,11 +1,11 @@
 #ifndef JEMALLOC_INTERNAL_GUARD_H
 #define JEMALLOC_INTERNAL_GUARD_H
 
-#include "jemalloc/internal/jemalloc_internal_decls.h"
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/ehooks.h"
 #include "jemalloc/internal/emap.h"
-
-namespace duckdb_jemalloc {
+#include "jemalloc/internal/jemalloc_internal_externs.h"
+#include "jemalloc/internal/tsd.h"
 
 #define SAN_PAGE_GUARD PAGE
 #define SAN_PAGE_GUARDS_SIZE (SAN_PAGE_GUARD * 2)
@@ -140,7 +140,7 @@ san_junk_ptr_locations(void *ptr, size_t usize, void **first, void **mid,
 
 	*first = ptr;
 
-	*mid = (void *)((uintptr_t)ptr + ((usize >> 1) & ~(ptr_sz - 1)));
+	*mid = (void *)((byte_t *)ptr + ((usize >> 1) & ~(ptr_sz - 1)));
 	assert(*first != *mid || usize == ptr_sz);
 	assert((uintptr_t)*first <= (uintptr_t)*mid);
 
@@ -151,7 +151,7 @@ san_junk_ptr_locations(void *ptr, size_t usize, void **first, void **mid,
 	 * default the tcache only goes up to the 32K size class, and is usually
 	 * tuned lower instead of higher, which makes it less of a concern.
 	 */
-	*last = (void *)((uintptr_t)ptr + usize - sizeof(uaf_detect_junk));
+	*last = (void *)((byte_t *)ptr + usize - sizeof(uaf_detect_junk));
 	assert(*first != *last || usize == ptr_sz);
 	assert(*mid != *last || usize <= ptr_sz * 2);
 	assert((uintptr_t)*mid <= (uintptr_t)*last);
@@ -190,7 +190,5 @@ san_uaf_detection_enabled(void) {
 
 	return ret;
 }
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_GUARD_H */

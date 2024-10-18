@@ -26,7 +26,7 @@ struct ASCIILCaseReader {
 	}
 
 	static char Operation(const char *data, idx_t pos) {
-		return (char)LowerFun::ascii_to_lower_map[(uint8_t)data[pos]];
+		return (char)LowerFun::ASCII_TO_LOWER_MAP[(uint8_t)data[pos]];
 	}
 };
 
@@ -403,11 +403,11 @@ bool ILikeOperatorFunction(string_t &str, string_t &pattern, char escape = '\0')
 
 	// lowercase both the str and the pattern
 	idx_t str_llength = LowerFun::LowerLength(str_data, str_size);
-	auto str_ldata = make_unsafe_uniq_array<char>(str_llength);
+	auto str_ldata = make_unsafe_uniq_array_uninitialized<char>(str_llength);
 	LowerFun::LowerCase(str_data, str_size, str_ldata.get());
 
 	idx_t pat_llength = LowerFun::LowerLength(pat_data, pat_size);
-	auto pat_ldata = make_unsafe_uniq_array<char>(pat_llength);
+	auto pat_ldata = make_unsafe_uniq_array_uninitialized<char>(pat_llength);
 	LowerFun::LowerCase(pat_data, pat_size, pat_ldata.get());
 	string_t str_lcase(str_ldata.get(), UnsafeNumericCast<uint32_t>(str_llength));
 	string_t pat_lcase(pat_ldata.get(), UnsafeNumericCast<uint32_t>(pat_llength));

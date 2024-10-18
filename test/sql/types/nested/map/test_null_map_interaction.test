@@ -1,0 +1,45 @@
+# name: test/sql/types/nested/map/test_null_map_interaction.test
+# group: [map]
+
+statement ok
+pragma enable_verification
+
+query I
+SELECT TYPEOF(MAP_KEYS(NULL::MAP(TEXT, BIGINT)));
+----
+VARCHAR[]
+
+query I
+SELECT TYPEOF(MAP_KEYS(NULL));
+----
+"NULL"[]
+
+query I
+SELECT TYPEOF(MAP_VALUES(NULL::MAP(TEXT, BIGINT)));
+----
+BIGINT[]
+
+query I
+SELECT TYPEOF(MAP_VALUES(NULL));
+----
+"NULL"[]
+
+query I
+SELECT TYPEOF(MAP_ENTRIES(NULL::MAP(TEXT, BIGINT)));
+----
+STRUCT("key" VARCHAR, "value" BIGINT)[]
+
+query I
+SELECT TYPEOF(MAP_ENTRIES(NULL));
+----
+STRUCT("key" "NULL", "value" "NULL")[]
+
+query I
+SELECT TYPEOF(MAP_EXTRACT(NULL::MAP(TEXT, BIGINT), 'a'));
+----
+BIGINT[]
+
+query I
+SELECT TYPEOF(MAP_EXTRACT(NULL, 'a'));
+----
+"NULL"[]

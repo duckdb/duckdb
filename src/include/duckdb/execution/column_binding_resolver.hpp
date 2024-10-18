@@ -19,7 +19,7 @@ namespace duckdb {
 //! are used within the execution engine
 class ColumnBindingResolver : public LogicalOperatorVisitor {
 public:
-	ColumnBindingResolver(bool verify_only = false);
+	explicit ColumnBindingResolver(bool verify_only = false);
 
 	void VisitOperator(LogicalOperator &op) override;
 	static void Verify(LogicalOperator &op);

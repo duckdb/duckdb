@@ -5,10 +5,6 @@
 statement ok
 PRAGMA enable_verification
 
-# With vector size 2, this query will throw an error saying it couldn't detect the dialect
-# This happens due to sniffing being tightly dependent on the vector size
-require vector_size 512
-
 query IIIII
 from 'data/csv/inconsistent_cells.csv'
 ----

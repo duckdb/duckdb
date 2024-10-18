@@ -1,0 +1,16 @@
+# name: test/sql/catalog/dependencies/rename_table_column_referenced_by_index.test
+# group: [dependencies]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+create table tbl(a varchar);
+
+statement ok
+create index idx on tbl(a);
+
+statement error
+alter table tbl rename a to b;
+----
+Cannot alter entry "tbl" because there are entries that depend on it.

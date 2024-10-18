@@ -30,7 +30,7 @@ jobs:
           mkdir cov-analysis-linux64
           tar xzf cov-analysis-linux64.tar.gz --strip 1 -C cov-analysis-linux64
     - name: Install dependencies
-      run: sudo apt update -y -qq && sudo apt install -y git g++ cmake ninja-build libssl-dev default-jdk unixodbc-dev
+      run: sudo apt update -y -qq && sudo apt install -y git g++ cmake ninja-build libssl-dev default-jdk
 
     - uses: actions/setup-python@v5
       with:
@@ -41,8 +41,6 @@ jobs:
       env:
         PYTHON_USER_SPACE: 1
         BUILD_PYTHON: 1
-        BUILD_JDBC: 1
-        BUILD_ODBC: 1
         BUILD_AUTOCOMPLETE: 1
         BUILD_ICU: 1
         BUILD_TPCDS: 1
@@ -50,8 +48,7 @@ jobs:
         BUILD_FTS: 1
         BUILD_HTTPFS: 1
         BUILD_JSON: 1
-        BUILD_INET: 1
-        BUILD_SQLSMITH: 1
+        CORE_EXTENSIONS: "inet"
 
     - name: Upload the result
       run: |

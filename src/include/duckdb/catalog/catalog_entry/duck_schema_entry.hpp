@@ -41,11 +41,11 @@ public:
 	optional_ptr<CatalogEntry> AddEntry(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
 	                                    OnCreateConflict on_conflict);
 	optional_ptr<CatalogEntry> AddEntryInternal(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
-	                                            OnCreateConflict on_conflict, DependencyList dependencies);
+	                                            OnCreateConflict on_conflict, LogicalDependencyList dependencies);
 
 	optional_ptr<CatalogEntry> CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) override;
 	optional_ptr<CatalogEntry> CreateFunction(CatalogTransaction transaction, CreateFunctionInfo &info) override;
-	optional_ptr<CatalogEntry> CreateIndex(ClientContext &context, CreateIndexInfo &info,
+	optional_ptr<CatalogEntry> CreateIndex(CatalogTransaction transaction, CreateIndexInfo &info,
 	                                       TableCatalogEntry &table) override;
 	optional_ptr<CatalogEntry> CreateView(CatalogTransaction transaction, CreateViewInfo &info) override;
 	optional_ptr<CatalogEntry> CreateSequence(CatalogTransaction transaction, CreateSequenceInfo &info) override;
@@ -57,7 +57,7 @@ public:
 	                                                CreatePragmaFunctionInfo &info) override;
 	optional_ptr<CatalogEntry> CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info) override;
 	optional_ptr<CatalogEntry> CreateType(CatalogTransaction transaction, CreateTypeInfo &info) override;
-	void Alter(ClientContext &context, AlterInfo &info) override;
+	void Alter(CatalogTransaction transaction, AlterInfo &info) override;
 	void Scan(ClientContext &context, CatalogType type, const std::function<void(CatalogEntry &)> &callback) override;
 	void Scan(CatalogType type, const std::function<void(CatalogEntry &)> &callback) override;
 	void DropEntry(ClientContext &context, DropInfo &info) override;
@@ -67,6 +67,9 @@ public:
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
 
 	void Verify(Catalog &catalog) override;
+
+private:
+	void OnDropEntry(CatalogTransaction transaction, CatalogEntry &entry);
 
 private:
 	//! Get the catalog set for the specified type

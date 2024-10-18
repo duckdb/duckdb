@@ -32,6 +32,9 @@ struct NumericLimits {
 	static constexpr bool IsSigned() {
 		return std::is_signed<T>::value;
 	}
+	static constexpr bool IsIntegral() {
+		return std::is_integral<T>::value || std::is_enum<T>::value;
+	}
 	static constexpr idx_t Digits();
 };
 
@@ -46,7 +49,9 @@ struct NumericLimits<hugeint_t> {
 	static constexpr bool IsSigned() {
 		return true;
 	}
-
+	static constexpr bool IsIntegral() {
+		return true;
+	}
 	static constexpr idx_t Digits() {
 		return 39;
 	}
@@ -63,7 +68,9 @@ struct NumericLimits<uhugeint_t> {
 	static constexpr bool IsSigned() {
 		return false;
 	}
-
+	static constexpr bool IsIntegral() {
+		return true;
+	}
 	static constexpr idx_t Digits() {
 		return 39;
 	}

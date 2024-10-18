@@ -13,7 +13,6 @@
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/function/built_in_functions.hpp"
-#include "duckdb/function/scalar/list/contains_or_position.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 
@@ -83,49 +82,29 @@ struct HistogramAggState {
 	MAP_TYPE *hist;
 };
 
-struct ListExtractFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct ListConcatFun {
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct ListContainsFun {
+struct MapContainsFun {
+	static ScalarFunction GetFunction();
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct StructPackFun {
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct ListPositionFun {
+struct RowFun {
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct ListResizeFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct ListZipFun {
-	static ScalarFunction GetFunction();
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct ListSelectFun {
-	static ScalarFunction GetFunction();
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct ListWhereFun {
-	static ScalarFunction GetFunction();
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct StructExtractFun {
-	static ScalarFunction KeyExtractFunction();
-	static ScalarFunction IndexExtractFunction();
-	static ScalarFunctionSet GetFunctions();
-	static void RegisterFunction(BuiltinFunctions &set);
-};
+unique_ptr<FunctionData> GetBindData(idx_t index);
+ScalarFunction GetKeyExtractFunction();
+ScalarFunction GetIndexExtractFunction();
 
 } // namespace duckdb

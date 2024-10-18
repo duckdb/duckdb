@@ -123,49 +123,9 @@
 /*-************************************
 *  Compiler Options
 **************************************/
-#if defined(_MSC_VER) && (_MSC_VER >= 1400)  /* Visual Studio 2005+ */
-#  include <intrin.h>               /* only present in VS2005+ */
-#  pragma warning(disable : 4127)   /* disable: C4127: conditional expression is constant */
-#  pragma warning(disable : 6237)   /* disable: C6237: conditional expression is always 0 */
-#endif  /* _MSC_VER */
 
-#ifndef LZ4_FORCE_INLINE
-#  ifdef _MSC_VER    /* Visual Studio */
-#    define LZ4_FORCE_INLINE static __forceinline
-#  else
-#    if defined (__cplusplus) || defined (__STDC_VERSION__) && __STDC_VERSION__ >= 199901L   /* C99 */
-#      ifdef __GNUC__
-#        define LZ4_FORCE_INLINE static inline __attribute__((always_inline))
-#      else
-#        define LZ4_FORCE_INLINE static inline
-#      endif
-#    else
-#      define LZ4_FORCE_INLINE static
-#    endif /* __STDC_VERSION__ */
-#  endif  /* _MSC_VER */
-#endif /* LZ4_FORCE_INLINE */
-
-/* LZ4_FORCE_O2 and LZ4_FORCE_INLINE
- * gcc on ppc64le generates an unrolled SIMDized loop for LZ4_wildCopy8,
- * together with a simple 8-byte copy loop as a fall-back path.
- * However, this optimization hurts the decompression speed by >30%,
- * because the execution does not go to the optimized loop
- * for typical compressible data, and all of the preamble checks
- * before going to the fall-back path become useless overhead.
- * This optimization happens only with the -O3 flag, and -O2 generates
- * a simple 8-byte copy loop.
- * With gcc on ppc64le, all of the LZ4_decompress_* and LZ4_wildCopy8
- * functions are annotated with __attribute__((optimize("O2"))),
- * and also LZ4_wildCopy8 is forcibly inlined, so that the O2 attribute
- * of LZ4_wildCopy8 does not affect the compression speed.
- */
-#if defined(__PPC64__) && defined(__LITTLE_ENDIAN__) && defined(__GNUC__) && !defined(__clang__)
-#  define LZ4_FORCE_O2  __attribute__((optimize("O2")))
-#  undef LZ4_FORCE_INLINE
-#  define LZ4_FORCE_INLINE  static __inline __attribute__((optimize("O2"),always_inline))
-#else
-#  define LZ4_FORCE_O2
-#endif
+#define LZ4_FORCE_INLINE static
+#define LZ4_FORCE_O2
 
 #if (defined(__GNUC__) && (__GNUC__ >= 3)) || (defined(__INTEL_COMPILER) && (__INTEL_COMPILER >= 800)) || defined(__clang__)
 #  define expect(expr,value)    (__builtin_expect ((expr),(value)) )
@@ -562,96 +522,16 @@ static unsigned LZ4_NbCommonBytes (reg_t val)
     assert(val != 0);
     if (LZ4_isLittleEndian()) {
         if (sizeof(val) == 8) {
-#       if defined(_MSC_VER) && (_MSC_VER >= 1800) && (defined(_M_AMD64) && !defined(_M_ARM64EC)) && !defined(LZ4_FORCE_SW_BITCOUNT)
-/*-*************************************************************************************************
-* ARM64EC is a Microsoft-designed ARM64 ABI compatible with AMD64 applications on ARM64 Windows 11.
-* The ARM64EC ABI does not support AVX/AVX2/AVX512 instructions, nor their relevant intrinsics
-* including _tzcnt_u64. Therefore, we need to neuter the _tzcnt_u64 code path for ARM64EC.
-****************************************************************************************************/
-#         if defined(__clang__) && (__clang_major__ < 10)
-            /* Avoid undefined clang-cl intrinsics issue.
-             * See https://github.com/lz4/lz4/pull/1017 for details. */
-            return (unsigned)__builtin_ia32_tzcnt_u64(val) >> 3;
-#         else
-            /* x64 CPUS without BMI support interpret `TZCNT` as `REP BSF` */
-            return (unsigned)_tzcnt_u64(val) >> 3;
-#         endif
-#       elif defined(_MSC_VER) && defined(_WIN64) && !defined(LZ4_FORCE_SW_BITCOUNT)
-            unsigned long r = 0;
-            _BitScanForward64(&r, (U64)val);
-            return (unsigned)r >> 3;
-#       elif (defined(__clang__) || (defined(__GNUC__) && ((__GNUC__ > 3) || \
-                            ((__GNUC__ == 3) && (__GNUC_MINOR__ >= 4))))) && \
-                                        !defined(LZ4_FORCE_SW_BITCOUNT)
-            return (unsigned)__builtin_ctzll((U64)val) >> 3;
-#       else
             const U64 m = 0x0101010101010101ULL;
             val ^= val - 1;
             return (unsigned)(((U64)((val & (m - 1)) * m)) >> 56);
-#       endif
         } else /* 32 bits */ {
-#       if defined(_MSC_VER) && (_MSC_VER >= 1400) && !defined(LZ4_FORCE_SW_BITCOUNT)
-            unsigned long r;
-            _BitScanForward(&r, (U32)val);
-            return (unsigned)r >> 3;
-#       elif (defined(__clang__) || (defined(__GNUC__) && ((__GNUC__ > 3) || \
-                            ((__GNUC__ == 3) && (__GNUC_MINOR__ >= 4))))) && \
-                        !defined(__TINYC__) && !defined(LZ4_FORCE_SW_BITCOUNT)
-            return (unsigned)__builtin_ctz((U32)val) >> 3;
-#       else
             const U32 m = 0x01010101;
             return (unsigned)((((val - 1) ^ val) & (m - 1)) * m) >> 24;
-#       endif
         }
     } else   /* Big Endian CPU */ {
-        if (sizeof(val)==8) {
-#       if (defined(__clang__) || (defined(__GNUC__) && ((__GNUC__ > 3) || \
-                            ((__GNUC__ == 3) && (__GNUC_MINOR__ >= 4))))) && \
-                        !defined(__TINYC__) && !defined(LZ4_FORCE_SW_BITCOUNT)
-            return (unsigned)__builtin_clzll((U64)val) >> 3;
-#       else
-#if 1
-            /* this method is probably faster,
-             * but adds a 128 bytes lookup table */
-            static const unsigned char ctz7_tab[128] = {
-                7, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-                4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-                5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-                4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-                6, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-                4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-                5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-                4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-            };
-            U64 const mask = 0x0101010101010101ULL;
-            U64 const t = (((val >> 8) - mask) | val) & mask;
-            return ctz7_tab[(t * 0x0080402010080402ULL) >> 57];
-#else
-            /* this method doesn't consume memory space like the previous one,
-             * but it contains several branches,
-             * that may end up slowing execution */
-            static const U32 by32 = sizeof(val)*4;  /* 32 on 64 bits (goal), 16 on 32 bits.
-            Just to avoid some static analyzer complaining about shift by 32 on 32-bits target.
-            Note that this code path is never triggered in 32-bits mode. */
-            unsigned r;
-            if (!(val>>by32)) { r=4; } else { r=0; val>>=by32; }
-            if (!(val>>16)) { r+=2; val>>=8; } else { val>>=24; }
-            r += (!val);
-            return r;
-#endif
-#       endif
-        } else /* 32 bits */ {
-#       if (defined(__clang__) || (defined(__GNUC__) && ((__GNUC__ > 3) || \
-                            ((__GNUC__ == 3) && (__GNUC_MINOR__ >= 4))))) && \
-                                        !defined(LZ4_FORCE_SW_BITCOUNT)
-            return (unsigned)__builtin_clz((U32)val) >> 3;
-#       else
-            val >>= 8;
-            val = ((((val + 0x00FFFF00) | 0x00FFFFFF) + val) |
-              (val + 0x00FF0000)) >> 24;
-            return (unsigned)val ^ 3;
-#       endif
-        }
+		assert(false);
+		return 0;
     }
 }
 

@@ -13,15 +13,15 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, FileOpenF
                                                    optional_ptr<FileOpener> opener) {
 	auto compression = flags.Compression();
 	if (compression == FileCompressionType::AUTO_DETECT) {
-		// auto detect compression settings based on file name
+		// auto-detect compression settings based on file name
 		auto lower_path = StringUtil::Lower(path);
 		if (StringUtil::EndsWith(lower_path, ".tmp")) {
 			// strip .tmp
 			lower_path = lower_path.substr(0, lower_path.length() - 4);
 		}
-		if (StringUtil::EndsWith(lower_path, ".gz")) {
+		if (IsFileCompressed(path, FileCompressionType::GZIP)) {
 			compression = FileCompressionType::GZIP;
-		} else if (StringUtil::EndsWith(lower_path, ".zst")) {
+		} else if (IsFileCompressed(path, FileCompressionType::ZSTD)) {
 			compression = FileCompressionType::ZSTD;
 		} else {
 			compression = FileCompressionType::UNCOMPRESSED;
@@ -81,15 +81,15 @@ void VirtualFileSystem::FileSync(FileHandle &handle) {
 }
 
 // need to look up correct fs for this
-bool VirtualFileSystem::DirectoryExists(const string &directory) {
-	return FindFileSystem(directory).DirectoryExists(directory);
+bool VirtualFileSystem::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
+	return FindFileSystem(directory).DirectoryExists(directory, opener);
 }
-void VirtualFileSystem::CreateDirectory(const string &directory) {
-	FindFileSystem(directory).CreateDirectory(directory);
+void VirtualFileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
+	FindFileSystem(directory).CreateDirectory(directory, opener);
 }
 
-void VirtualFileSystem::RemoveDirectory(const string &directory) {
-	FindFileSystem(directory).RemoveDirectory(directory);
+void VirtualFileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
+	FindFileSystem(directory).RemoveDirectory(directory, opener);
 }
 
 bool VirtualFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
@@ -97,20 +97,20 @@ bool VirtualFileSystem::ListFiles(const string &directory, const std::function<v
 	return FindFileSystem(directory).ListFiles(directory, callback, opener);
 }
 
-void VirtualFileSystem::MoveFile(const string &source, const string &target) {
-	FindFileSystem(source).MoveFile(source, target);
+void VirtualFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
+	FindFileSystem(source).MoveFile(source, target, opener);
 }
 
-bool VirtualFileSystem::FileExists(const string &filename) {
-	return FindFileSystem(filename).FileExists(filename);
+bool VirtualFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
+	return FindFileSystem(filename).FileExists(filename, opener);
 }
 
-bool VirtualFileSystem::IsPipe(const string &filename) {
-	return FindFileSystem(filename).IsPipe(filename);
+bool VirtualFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener) {
+	return FindFileSystem(filename).IsPipe(filename, opener);
 }
 
-void VirtualFileSystem::RemoveFile(const string &filename) {
-	FindFileSystem(filename).RemoveFile(filename);
+void VirtualFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
+	FindFileSystem(filename).RemoveFile(filename, opener);
 }
 
 string VirtualFileSystem::PathSeparator(const string &path) {
@@ -180,10 +180,17 @@ FileSystem &VirtualFileSystem::FindFileSystem(const string &path) {
 }
 
 FileSystem &VirtualFileSystem::FindFileSystemInternal(const string &path) {
+	FileSystem *fs = nullptr;
 	for (auto &sub_system : sub_systems) {
 		if (sub_system->CanHandleFile(path)) {
-			return *sub_system;
+			if (sub_system->IsManuallySet()) {
+				return *sub_system;
+			}
+			fs = sub_system.get();
 		}
+	}
+	if (fs) {
+		return *fs;
 	}
 	return *default_fs;
 }

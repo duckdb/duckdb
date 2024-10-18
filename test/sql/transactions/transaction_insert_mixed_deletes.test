@@ -1,0 +1,46 @@
+# name: test/sql/transactions/transaction_insert_mixed_deletes.test
+# description: Test clean-up of inserts and mixed deletes
+# group: [transactions]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+# insert 1000 integers
+statement ok
+INSERT INTO integers FROM range(1000);
+
+statement ok
+SET immediate_transaction_mode=true
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+# con1 inserts more rows
+statement ok con1
+INSERT INTO integers FROM range(1000,3000);
+
+# con2 deletes all existing rows
+query I con2
+DELETE FROM integers
+----
+1000
+
+statement ok con2
+COMMIT
+
+statement ok con1
+COMMIT
+
+statement ok con1
+DELETE FROM integers
+
+query I
+SELECT COUNT(*) FROM integers
+----
+0

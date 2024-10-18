@@ -1,4 +1,5 @@
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
+
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -25,11 +26,11 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(ClientContext &context, All
 	tuple_size = layout.GetRowWidth();
 
 	// allocate and null initialize the data
-	owned_data = make_unsafe_uniq_array<data_t>(tuple_size * total_groups);
+	owned_data = make_unsafe_uniq_array_uninitialized<data_t>(tuple_size * total_groups);
 	data = owned_data.get();
 
 	// set up the empty payloads for every tuple, and initialize the "occupied" flag to false
-	group_is_set = make_unsafe_uniq_array<bool>(total_groups);
+	group_is_set = make_unsafe_uniq_array_uninitialized<bool>(total_groups);
 	memset(group_is_set.get(), 0, total_groups * sizeof(bool));
 
 	// initialize the hash table for each entry
@@ -64,7 +65,7 @@ static void ComputeGroupLocationTemplated(UnifiedVectorFormat &group_data, Value
 			// we only need to handle non-null values here
 			if (group_data.validity.RowIsValid(index)) {
 				D_ASSERT(data[index] >= min_val);
-				uintptr_t adjusted_value = (data[index] - min_val) + 1;
+				auto adjusted_value = UnsafeNumericCast<uintptr_t>((data[index] - min_val) + 1);
 				address_data[i] += adjusted_value << current_shift;
 			}
 		}
@@ -72,7 +73,7 @@ static void ComputeGroupLocationTemplated(UnifiedVectorFormat &group_data, Value
 		// no null values: we can directly compute the addresses
 		for (idx_t i = 0; i < count; i++) {
 			auto index = group_data.sel->get_index(i);
-			uintptr_t adjusted_value = (data[index] - min_val) + 1;
+			auto adjusted_value = UnsafeNumericCast<uintptr_t>((data[index] - min_val) + 1);
 			address_data[i] += adjusted_value << current_shift;
 		}
 	}
@@ -149,7 +150,7 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 		}
 		// move to the next aggregate
 		payload_idx += input_count;
-		VectorOperations::AddInPlace(addresses, aggregate.payload_size, payload.size());
+		VectorOperations::AddInPlace(addresses, UnsafeNumericCast<int64_t>(aggregate.payload_size), payload.size());
 	}
 }
 
@@ -205,7 +206,8 @@ static void ReconstructGroupVectorTemplated(uint32_t group_values[], Value &min,
 			validity_mask.SetInvalid(i);
 		} else {
 			// otherwise we add the value (minus 1) to the min value
-			data[i] = UnsafeNumericCast<T>(min_data + group_index - 1);
+			data[i] = UnsafeNumericCast<T>(UnsafeNumericCast<int64_t>(min_data) +
+			                               UnsafeNumericCast<int64_t>(group_index) - 1);
 		}
 	}
 }

@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/fixed_size_map.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/perfect_map_set.hpp"
 #include "duckdb/common/types/column/column_data_allocator.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
@@ -23,12 +25,46 @@ public:
 public:
 	Vector partition_indices;
 	SelectionVector partition_sel;
+
+	static constexpr idx_t MAP_THRESHOLD = 256;
 	perfect_map_t<list_entry_t> partition_entries;
+	fixed_size_map_t<list_entry_t> fixed_partition_entries;
+
 	DataChunk slice_chunk;
 
 	vector<unique_ptr<DataChunk>> partition_buffers;
 	vector<unique_ptr<ColumnDataAppendState>> partition_append_states;
+
+public:
+	template <bool fixed>
+	typename std::conditional<fixed, fixed_size_map_t<list_entry_t>, perfect_map_t<list_entry_t>>::type &GetMap() {
+		throw NotImplementedException("PartitionedColumnDataAppendState::GetMap for boolean value");
+	}
+
+	optional_idx GetPartitionIndexIfSinglePartition(const bool use_fixed_size_map) {
+		optional_idx result;
+		if (use_fixed_size_map) {
+			if (fixed_partition_entries.size() == 1) {
+				result = fixed_partition_entries.begin().GetKey();
+			}
+		} else {
+			if (partition_entries.size() == 1) {
+				result = partition_entries.begin()->first;
+			}
+		}
+		return result;
+	}
 };
+
+template <>
+inline perfect_map_t<list_entry_t> &PartitionedColumnDataAppendState::GetMap<false>() {
+	return partition_entries;
+}
+
+template <>
+inline fixed_size_map_t<list_entry_t> &PartitionedColumnDataAppendState::GetMap<true>() {
+	return fixed_partition_entries;
+}
 
 enum class PartitionedColumnDataType : uint8_t {
 	INVALID,
@@ -80,6 +116,12 @@ protected:
 	virtual void ComputePartitionIndices(PartitionedColumnDataAppendState &state, DataChunk &input) {
 		throw NotImplementedException("ComputePartitionIndices for this type of PartitionedColumnData");
 	}
+	//!
+
+	//! Maximum partition index (optional)
+	virtual idx_t MaxPartitionIndex() const {
+		return DConstants::INVALID_INDEX;
+	}
 
 protected:
 	//! PartitionedColumnData can only be instantiated by derived classes
@@ -93,6 +135,16 @@ protected:
 	}
 	//! Create a new shared allocator
 	void CreateAllocator();
+	//! Whether to use fixed size map or regular map
+	bool UseFixedSizeMap() const;
+	//! Builds a selection vector in the Append state for the partitions
+	//! - returns true if everything belongs to the same partition - stores partition index in single_partition_idx
+	void BuildPartitionSel(PartitionedColumnDataAppendState &state, const idx_t append_count) const;
+	template <bool fixed>
+	static void BuildPartitionSel(PartitionedColumnDataAppendState &state, const idx_t append_count);
+	//! Appends a DataChunk to this PartitionedColumnData
+	template <bool fixed>
+	void AppendInternal(PartitionedColumnDataAppendState &state, DataChunk &input);
 	//! Create a collection for a specific a partition
 	unique_ptr<ColumnDataCollection> CreatePartitionCollection(idx_t partition_index) const {
 		return make_uniq<ColumnDataCollection>(allocators->allocators[partition_index], types);
@@ -117,7 +169,7 @@ public:
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };

@@ -19,19 +19,18 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExpression
 	// simple expression scan (i.e. no subqueries to evaluate and no prepared statement parameters)
 	// we can evaluate all the expressions right now and turn this into a chunk collection scan
 	auto chunk_scan = make_uniq<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::COLUMN_DATA_SCAN,
-	                                                    expr_scan->expressions.size());
-	chunk_scan->owned_collection = make_uniq<ColumnDataCollection>(context, op.types);
-	chunk_scan->collection = chunk_scan->owned_collection.get();
+	                                                    expr_scan->expressions.size(),
+	                                                    make_uniq<ColumnDataCollection>(context, op.types));
 
 	DataChunk chunk;
 	chunk.Initialize(allocator, op.types);
 
 	ColumnDataAppendState append_state;
-	chunk_scan->owned_collection->InitializeAppend(append_state);
+	chunk_scan->collection->InitializeAppend(append_state);
 	for (idx_t expression_idx = 0; expression_idx < expr_scan->expressions.size(); expression_idx++) {
 		chunk.Reset();
 		expr_scan->EvaluateExpression(context, expression_idx, nullptr, chunk);
-		chunk_scan->owned_collection->Append(append_state, chunk);
+		chunk_scan->collection->Append(append_state, chunk);
 	}
 	return std::move(chunk_scan);
 }

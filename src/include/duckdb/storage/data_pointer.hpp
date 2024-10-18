@@ -34,14 +34,22 @@ struct ColumnSegmentState {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+
+public:
+	vector<block_id_t> blocks;
 };
 
 struct DataPointer {
-	explicit DataPointer(BaseStatistics stats) : statistics(std::move(stats)) {
-	}
+	explicit DataPointer(BaseStatistics stats);
+	// disable copy constructors
+	DataPointer(const DataPointer &other) = delete;
+	DataPointer &operator=(const DataPointer &) = delete;
+	//! enable move constructors
+	DUCKDB_API DataPointer(DataPointer &&other) noexcept;
+	DUCKDB_API DataPointer &operator=(DataPointer &&) noexcept;
 
 	uint64_t row_start;
 	uint64_t tuple_count;

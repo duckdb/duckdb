@@ -8,27 +8,33 @@
 namespace duckdb {
 
 struct GlobFunctionBindData : public TableFunctionData {
-	vector<string> files;
+	shared_ptr<MultiFileList> file_list;
 };
 
 static unique_ptr<FunctionData> GlobFunctionBind(ClientContext &context, TableFunctionBindInput &input,
                                                  vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<GlobFunctionBindData>();
-	result->files = MultiFileReader::GetFileList(context, input.inputs[0], "Globbing", FileGlobOptions::ALLOW_EMPTY);
+	auto multi_file_reader = MultiFileReader::Create(input.table_function);
+	result->file_list = multi_file_reader->CreateFileList(context, input.inputs[0], FileGlobOptions::ALLOW_EMPTY);
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("file");
 	return std::move(result);
 }
 
 struct GlobFunctionState : public GlobalTableFunctionState {
-	GlobFunctionState() : current_idx(0) {
+	GlobFunctionState() {
 	}
 
-	idx_t current_idx;
+	MultiFileListScanData file_list_scan;
 };
 
 static unique_ptr<GlobalTableFunctionState> GlobFunctionInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_uniq<GlobFunctionState>();
+	auto &bind_data = input.bind_data->Cast<GlobFunctionBindData>();
+	auto res = make_uniq<GlobFunctionState>();
+
+	bind_data.file_list->InitializeScan(res->file_list_scan);
+
+	return std::move(res);
 }
 
 static void GlobFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -36,10 +42,12 @@ static void GlobFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 	auto &state = data_p.global_state->Cast<GlobFunctionState>();
 
 	idx_t count = 0;
-	idx_t next_idx = MinValue<idx_t>(state.current_idx + STANDARD_VECTOR_SIZE, bind_data.files.size());
-	for (; state.current_idx < next_idx; state.current_idx++) {
-		output.data[0].SetValue(count, bind_data.files[state.current_idx]);
-		count++;
+	while (count < STANDARD_VECTOR_SIZE) {
+		string file;
+		if (!bind_data.file_list->Scan(state.file_list_scan, file)) {
+			break;
+		}
+		output.data[0].SetValue(count++, file);
 	}
 	output.SetCardinality(count);
 }

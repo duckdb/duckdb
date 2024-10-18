@@ -26,7 +26,7 @@ public:
 	PhysicalTableScan(vector<LogicalType> types, TableFunction function, unique_ptr<FunctionData> bind_data,
 	                  vector<LogicalType> returned_types, vector<column_t> column_ids, vector<idx_t> projection_ids,
 	                  vector<string> names, unique_ptr<TableFilterSet> table_filters, idx_t estimated_cardinality,
-	                  ExtraOperatorInfo extra_info);
+	                  ExtraOperatorInfo extra_info, vector<Value> parameters);
 
 	//! The table function
 	TableFunction function;
@@ -42,12 +42,17 @@ public:
 	vector<string> names;
 	//! The table filters
 	unique_ptr<TableFilterSet> table_filters;
-	//! Currently stores any filters applied to file names (as strings)
+	//! Currently stores info related to filters pushed down into MultiFileLists and sample rate pushed down into the
+	//! table scan
 	ExtraOperatorInfo extra_info;
+	//! Parameters
+	vector<Value> parameters;
+	//! Contains a reference to dynamically generated table filters (through e.g. a join up in the tree)
+	shared_ptr<DynamicTableFilterSet> dynamic_filters;
 
 public:
 	string GetName() const override;
-	string ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
 	bool Equals(const PhysicalOperator &other) const override;
 
@@ -56,19 +61,16 @@ public:
 	                                                 GlobalSourceState &gstate) const override;
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
-	idx_t GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-	                    LocalSourceState &lstate) const override;
+	OperatorPartitionData GetPartitionData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	                                       LocalSourceState &lstate,
+	                                       const OperatorPartitionInfo &partition_info) const override;
 
 	bool IsSource() const override {
 		return true;
 	}
-	bool ParallelSource() const override {
-		return true;
-	}
+	bool ParallelSource() const override;
 
-	bool SupportsBatchIndex() const override {
-		return function.get_batch_index != nullptr;
-	}
+	bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const override;
 
 	double GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
 };

@@ -46,7 +46,7 @@ static void StemFunction(DataChunk &args, ExpressionState &state, Vector &result
 	    });
 }
 
-void FtsExtension::Load(DuckDB &db) {
+static void LoadInternal(DuckDB &db) {
 	auto &db_instance = *db.instance;
 	ScalarFunction stem_func("stem", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, StemFunction);
 
@@ -68,8 +68,20 @@ void FtsExtension::Load(DuckDB &db) {
 	ExtensionUtil::RegisterFunction(db_instance, drop_fts_index_func);
 }
 
+void FtsExtension::Load(DuckDB &db) {
+	LoadInternal(db);
+}
+
 std::string FtsExtension::Name() {
 	return "fts";
+}
+
+std::string FtsExtension::Version() const {
+#ifdef EXT_VERSION_FTS
+	return EXT_VERSION_FTS;
+#else
+	return "";
+#endif
 }
 
 } // namespace duckdb
@@ -78,7 +90,7 @@ extern "C" {
 
 DUCKDB_EXTENSION_API void fts_init(duckdb::DatabaseInstance &db) {
 	duckdb::DuckDB db_wrapper(db);
-	db_wrapper.LoadExtension<duckdb::FtsExtension>();
+	duckdb::LoadInternal(db_wrapper);
 }
 
 DUCKDB_EXTENSION_API const char *fts_version() {

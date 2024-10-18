@@ -1,0 +1,38 @@
+# name: test/sql/parallelism/interquery/concurrent_reads_while_appending.test_slow
+# description: Test concurrent reads while appending
+# group: [interquery]
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers SELECT * FROM range(10000);
+
+concurrentloop threadid 0 20
+
+loop i 0 20
+
+onlyif threadid=0
+statement ok
+INSERT INTO integers SELECT * FROM range(100);
+
+endloop
+
+loop i 0 200
+
+skipif threadid=0
+query II
+SELECT COUNT(*)>=10000 AND COUNT(*)<=12000,
+       SUM(i)>= 49995000 AND SUM(i) <= 50094000 FROM integers;
+----
+true	true
+
+endloop
+
+endloop
+
+query II
+SELECT COUNT(*), SUM(i) FROM integers
+----
+12000	50094000
+

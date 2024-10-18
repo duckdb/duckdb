@@ -135,7 +135,7 @@ private:
 template <class T>
 struct ChimpScanState : public SegmentScanState {
 public:
-	using CHIMP_TYPE = typename ChimpType<T>::type;
+	using CHIMP_TYPE = typename ChimpType<T>::TYPE;
 
 	explicit ChimpScanState(ColumnSegment &segment) : segment(segment), segment_count(segment.count) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
@@ -193,7 +193,7 @@ public:
 		// Load the offset indicating where a groups data starts
 		metadata_ptr -= sizeof(uint32_t);
 		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
-		D_ASSERT(data_byte_offset < Storage::BLOCK_SIZE);
+		D_ASSERT(data_byte_offset < segment.GetBlockManager().GetBlockSize());
 		//  Only used for point queries
 		(void)data_byte_offset;
 
@@ -203,7 +203,7 @@ public:
 		D_ASSERT(leading_zero_block_count <= ChimpPrimitives::CHIMP_SEQUENCE_SIZE / 8);
 
 		// Load the leading zero block count
-		metadata_ptr -= 3 * leading_zero_block_count;
+		metadata_ptr -= 3ULL * leading_zero_block_count;
 		const auto leading_zero_block_ptr = metadata_ptr;
 
 		// Figure out how many flags there are
@@ -240,7 +240,7 @@ public:
 	//! Skip the next 'skip_count' values, we don't store the values
 	// TODO: use the metadata to determine if we can skip a group
 	void Skip(ColumnSegment &segment, idx_t skip_count) {
-		using INTERNAL_TYPE = typename ChimpType<T>::type;
+		using INTERNAL_TYPE = typename ChimpType<T>::TYPE;
 		INTERNAL_TYPE buffer[ChimpPrimitives::CHIMP_SEQUENCE_SIZE];
 
 		while (skip_count) {
@@ -263,7 +263,7 @@ unique_ptr<SegmentScanState> ChimpInitScan(ColumnSegment &segment) {
 template <class T>
 void ChimpScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                       idx_t result_offset) {
-	using INTERNAL_TYPE = typename ChimpType<T>::type;
+	using INTERNAL_TYPE = typename ChimpType<T>::TYPE;
 	auto &scan_state = state.scan_state->Cast<ChimpScanState<T>>();
 
 	T *result_data = FlatVector::GetData<T>(result);

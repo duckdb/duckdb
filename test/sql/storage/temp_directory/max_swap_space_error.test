@@ -1,0 +1,104 @@
+# name: test/sql/storage/temp_directory/max_swap_space_error.test
+# description: Test the maximum swap space.
+# group: [temp_directory]
+
+require skip_reload
+
+require noforcestorage
+
+# This test performs comparisons against the DEFAULT_BLOCK_ALLOC_SIZE of 256KiB.
+require block_size 262144
+
+# The temporary directory usage changes with the vector size.
+require vector_size 2048
+
+# Set a temp_directory to offload data
+statement ok
+set temp_directory='__TEST_DIR__/max_swap_space_reached'
+
+# Ensure the temp_directory is used
+statement ok
+PRAGMA memory_limit='1024KiB'
+
+# Zero blocks
+statement ok
+set max_temp_directory_size='0KiB'
+
+statement error
+CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(1000000);
+----
+failed to offload data block
+
+query I
+select "size" from duckdb_temporary_files()
+----
+0
+
+# Max. one block for the default block allocation size
+statement ok
+set max_temp_directory_size='256KiB'
+
+statement error
+CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(1000000);
+----
+failed to offload data block
+
+statement error
+CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(1000000);
+----
+failed to offload data block
+
+query I
+select "size" from duckdb_temporary_files()
+----
+
+# 6 blocks
+statement ok
+set max_temp_directory_size='1536KiB'
+
+statement ok
+pragma threads=2;
+
+statement ok
+set preserve_insertion_order=true;
+
+# This is 1600000 bytes of BIGINT data, which is roughly 6.1 blocks
+# Because our memory limit is set at 1MiB (4 blocks) this works
+statement ok
+CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(200000);
+
+# When we increase the size to 2400000 bytes of BIGINT data (9.1 blocks) this errors
+statement error
+CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(300000);
+----
+failed to offload data block
+
+query I
+SELECT "size" FROM duckdb_temporary_files();
+----
+1572864
+
+# Lower the limit
+statement error
+set max_temp_directory_size='256KiB'
+----
+failed to adjust the 'max_temp_directory_size', currently used space (1.5 MiB) exceeds the new limit (256.0 KiB)
+
+# Lower the limit
+statement error
+set max_temp_directory_size='256KiB'
+----
+failed to adjust the 'max_temp_directory_size', currently used space (1.5 MiB) exceeds the new limit (256.0 KiB)
+
+query I
+select current_setting('max_temp_directory_size')
+----
+1.5 MiB
+
+statement ok
+set max_temp_directory_size='2550KiB'
+
+query I
+select current_setting('max_temp_directory_size')
+----
+2.4 MiB

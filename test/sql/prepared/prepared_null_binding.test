@@ -1,0 +1,29 @@
+# name: test/sql/prepared/prepared_null_binding.test
+# description: Test binding of prepared statements and constant NULL binding
+# group: [prepared]
+
+statement ok
+PREPARE v1 AS SELECT COALESCE(COALESCE(NULL, $1) / 42::BIGINT, 0.5);
+
+query I
+EXECUTE v1(42)
+----
+1.0
+
+statement error
+EXECUTE v1(INTERVAL '1' DAY)
+----
+Cannot mix values of type INTERVAL
+
+statement ok
+PREPARE v2 AS SELECT COALESCE(CASE WHEN FALSE THEN $1 ELSE NULL END / 42::BIGINT, 0.5);
+
+query I
+EXECUTE v2(42)
+----
+0.5
+
+statement error
+EXECUTE v2(INTERVAL '1' DAY)
+----
+Cannot mix values of type INTERVAL

@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
@@ -30,14 +31,14 @@ static void CheckTreeDepth(const LogicalOperator &op, idx_t max_depth, idx_t dep
 
 void Planner::CreatePlan(SQLStatement &statement) {
 	auto &profiler = QueryProfiler::Get(context);
-	auto parameter_count = statement.n_param;
+	auto parameter_count = statement.named_param_map.size();
 
 	BoundParameterMap bound_parameters(parameter_data);
 
 	// first bind the tables and columns to the catalog
 	bool parameters_resolved = true;
 	try {
-		profiler.StartPhase("binder");
+		profiler.StartPhase(MetricsType::PLANNER_BINDING);
 		binder->parameters = &bound_parameters;
 		auto bound_statement = binder->Bind(statement);
 		profiler.EndPhase();
@@ -76,7 +77,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 			throw;
 		}
 	}
-	this->properties = binder->properties;
+	this->properties = binder->GetStatementProperties();
 	this->properties.parameter_count = parameter_count;
 	properties.bound_all_parameters = !bound_parameters.rebind && parameters_resolved;
 
@@ -101,13 +102,12 @@ shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLSta
 	// create a plan of the underlying statement
 	CreatePlan(std::move(statement));
 	// now create the logical prepare
-	auto prepared_data = make_shared<PreparedStatementData>(copied_statement->type);
+	auto prepared_data = make_shared_ptr<PreparedStatementData>(copied_statement->type);
 	prepared_data->unbound_statement = std::move(copied_statement);
 	prepared_data->names = names;
 	prepared_data->types = types;
 	prepared_data->value_map = std::move(value_map);
 	prepared_data->properties = properties;
-	prepared_data->catalog_version = MetaTransaction::Get(context).catalog_version;
 	return prepared_data;
 }
 
@@ -138,6 +138,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::ATTACH_STATEMENT:
 	case StatementType::DETACH_STATEMENT:
 	case StatementType::COPY_DATABASE_STATEMENT:
+	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
 		CreatePlan(*statement);
 		break;
 	default:
@@ -156,9 +157,20 @@ static bool OperatorSupportsSerialization(LogicalOperator &op) {
 
 void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op,
                          optional_ptr<bound_parameter_map_t> map) {
+	auto &config = DBConfig::GetConfig(context);
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
-	// if alternate verification is enabled we run the original operator
-	return;
+	{
+		auto &serialize_comp = config.GetSetting<StorageCompatibilityVersionSetting>(context);
+		auto latest_version = SerializationCompatibility::Latest();
+		if (serialize_comp.manually_set &&
+		    serialize_comp.serialization_version != latest_version.serialization_version) {
+			// Serialization should not be skipped, this test relies on the serialization to remove certain fields for
+			// compatibility with older versions. This might change behavior, not doing this might make this test fail.
+		} else {
+			// if alternate verification is enabled we run the original operator
+			return;
+		}
+	}
 #endif
 	if (!op || !ClientConfig::GetConfig(context).verify_serializer) {
 		return;
@@ -173,7 +185,16 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 	// format (de)serialization of this operator
 	try {
 		MemoryStream stream;
-		BinarySerializer::Serialize(*op, stream, true);
+
+		SerializationOptions options;
+		if (config.options.serialization_compatibility.manually_set) {
+			// Override the default of 'latest' if this was manually set (for testing, mostly)
+			options.serialization_compatibility = config.options.serialization_compatibility;
+		} else {
+			options.serialization_compatibility = SerializationCompatibility::Latest();
+		}
+
+		BinarySerializer::Serialize(*op, stream, options);
 		stream.Rewind();
 		bound_parameter_map_t parameters;
 		auto new_plan = BinaryDeserializer::Deserialize<LogicalOperator>(stream, context, parameters);
@@ -182,10 +203,14 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 			*map = std::move(parameters);
 		}
 		op = std::move(new_plan);
-	} catch (SerializationException &ex) {
-		// pass
-	} catch (NotImplementedException &ex) {
-		// pass
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		switch (error.Type()) {
+		case ExceptionType::NOT_IMPLEMENTED: // NOLINT: explicitly allowing these errors (for now)
+			break;                           // pass
+		default:
+			throw;
+		}
 	}
 }
 

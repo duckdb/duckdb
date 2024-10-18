@@ -25,6 +25,10 @@ void CreateInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<OnCreateConflict>(105, "on_conflict", on_conflict);
 	serializer.WritePropertyWithDefault<string>(106, "sql", sql);
 	serializer.WritePropertyWithDefault<Value>(107, "comment", comment, Value());
+	serializer.WritePropertyWithDefault<unordered_map<string, string>>(108, "tags", tags, unordered_map<string, string>());
+	if (serializer.ShouldSerialize(2)) {
+		serializer.WritePropertyWithDefault<LogicalDependencyList>(109, "dependencies", dependencies, LogicalDependencyList());
+	}
 }
 
 unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
@@ -35,7 +39,9 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	auto internal = deserializer.ReadPropertyWithDefault<bool>(104, "internal");
 	auto on_conflict = deserializer.ReadProperty<OnCreateConflict>(105, "on_conflict");
 	auto sql = deserializer.ReadPropertyWithDefault<string>(106, "sql");
-	auto comment = deserializer.ReadPropertyWithDefault<Value>(107, "comment", Value());
+	auto comment = deserializer.ReadPropertyWithExplicitDefault<Value>(107, "comment", Value());
+	auto tags = deserializer.ReadPropertyWithExplicitDefault<unordered_map<string, string>>(108, "tags", unordered_map<string, string>());
+	auto dependencies = deserializer.ReadPropertyWithExplicitDefault<LogicalDependencyList>(109, "dependencies", LogicalDependencyList());
 	deserializer.Set<CatalogType>(type);
 	unique_ptr<CreateInfo> result;
 	switch (type) {
@@ -74,6 +80,8 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	result->on_conflict = on_conflict;
 	result->sql = std::move(sql);
 	result->comment = comment;
+	result->tags = std::move(tags);
+	result->dependencies = dependencies;
 	return result;
 }
 
@@ -109,13 +117,16 @@ unique_ptr<CreateInfo> CreateIndexInfo::Deserialize(Deserializer &deserializer) 
 void CreateMacroInfo::Serialize(Serializer &serializer) const {
 	CreateInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "name", name);
-	serializer.WritePropertyWithDefault<unique_ptr<MacroFunction>>(201, "function", function);
+	serializer.WritePropertyWithDefault<unique_ptr<MacroFunction>>(201, "function", macros[0]);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<MacroFunction>>>(202, "extra_functions", GetAllButFirstFunction());
 }
 
 unique_ptr<CreateInfo> CreateMacroInfo::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<CreateMacroInfo>(new CreateMacroInfo(deserializer.Get<CatalogType>()));
-	deserializer.ReadPropertyWithDefault<string>(200, "name", result->name);
-	deserializer.ReadPropertyWithDefault<unique_ptr<MacroFunction>>(201, "function", result->function);
+	auto name = deserializer.ReadPropertyWithDefault<string>(200, "name");
+	auto function = deserializer.ReadPropertyWithDefault<unique_ptr<MacroFunction>>(201, "function");
+	auto extra_functions = deserializer.ReadPropertyWithDefault<vector<unique_ptr<MacroFunction>>>(202, "extra_functions");
+	auto result = duckdb::unique_ptr<CreateMacroInfo>(new CreateMacroInfo(deserializer.Get<CatalogType>(), std::move(function), std::move(extra_functions)));
+	result->name = std::move(name);
 	return std::move(result);
 }
 
@@ -198,7 +209,7 @@ unique_ptr<CreateInfo> CreateViewInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "types", result->types);
 	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(203, "query", result->query);
 	deserializer.ReadPropertyWithDefault<vector<string>>(204, "names", result->names);
-	deserializer.ReadPropertyWithDefault<vector<Value>>(205, "column_comments", result->column_comments, vector<Value>());
+	deserializer.ReadPropertyWithExplicitDefault<vector<Value>>(205, "column_comments", result->column_comments, vector<Value>());
 	return std::move(result);
 }
 

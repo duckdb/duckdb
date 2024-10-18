@@ -4,7 +4,9 @@
 #include "thrift_tools.hpp"
 
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/common/common.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/types/blob.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #endif
 
@@ -13,7 +15,7 @@ namespace duckdb {
 ParquetKeys &ParquetKeys::Get(ClientContext &context) {
 	auto &cache = ObjectCache::GetObjectCache(context);
 	if (!cache.Get<ParquetKeys>(ParquetKeys::ObjectType())) {
-		cache.Put(ParquetKeys::ObjectType(), make_shared<ParquetKeys>());
+		cache.Put(ParquetKeys::ObjectType(), make_shared_ptr<ParquetKeys>());
 	}
 	return *cache.Get<ParquetKeys>(ParquetKeys::ObjectType());
 }
@@ -44,6 +46,7 @@ ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context_p) : con
 
 ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context_p, const Value &arg)
     : ParquetEncryptionConfig(context_p) {
+
 	if (arg.type().id() != LogicalTypeId::STRUCT) {
 		throw BinderException("Parquet encryption_config must be of type STRUCT");
 	}
@@ -79,21 +82,16 @@ const string &ParquetEncryptionConfig::GetFooterKey() const {
 	return keys.GetKey(footer_key);
 }
 
-using duckdb_apache::thrift::transport::TTransport;
-using AESGCMState = duckdb_mbedtls::MbedTlsWrapper::AESGCMState;
 using duckdb_apache::thrift::protocol::TCompactProtocolFactoryT;
-
-static void GenerateNonce(const data_ptr_t nonce) {
-	duckdb_mbedtls::MbedTlsWrapper::GenerateRandomData(nonce, ParquetCrypto::NONCE_BYTES);
-}
+using duckdb_apache::thrift::transport::TTransport;
 
 //! Encryption wrapper for a transport protocol
 class EncryptionTransport : public TTransport {
 public:
-	EncryptionTransport(TProtocol &prot_p, const string &key)
-	    : prot(prot_p), trans(*prot.getTransport()), aes(key),
+	EncryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p)
+	    : prot(prot_p), trans(*prot.getTransport()), aes(encryption_util_p.CreateEncryptionState()),
 	      allocator(Allocator::DefaultAllocator(), ParquetCrypto::CRYPTO_BLOCK_SIZE) {
-		Initialize();
+		Initialize(key);
 	}
 
 	bool isOpen() const override {
@@ -116,38 +114,41 @@ public:
 		// Write length
 		const auto ciphertext_length = allocator.SizeInBytes();
 		const uint32_t total_length = ParquetCrypto::NONCE_BYTES + ciphertext_length + ParquetCrypto::TAG_BYTES;
-		trans.write(const_data_ptr_cast(&total_length), ParquetCrypto::LENGTH_BYTES);
 
-		// Write nonce
+		trans.write(const_data_ptr_cast(&total_length), ParquetCrypto::LENGTH_BYTES);
+		// Write nonce at beginning of encrypted chunk
 		trans.write(nonce, ParquetCrypto::NONCE_BYTES);
 
-		// Encrypt and write data
 		data_t aes_buffer[ParquetCrypto::CRYPTO_BLOCK_SIZE];
 		auto current = allocator.GetTail();
+
+		// Loop through the whole chunk
 		while (current != nullptr) {
 			for (idx_t pos = 0; pos < current->current_position; pos += ParquetCrypto::CRYPTO_BLOCK_SIZE) {
 				auto next = MinValue<idx_t>(current->current_position - pos, ParquetCrypto::CRYPTO_BLOCK_SIZE);
 				auto write_size =
-				    aes.Process(current->data.get() + pos, next, aes_buffer, ParquetCrypto::CRYPTO_BLOCK_SIZE);
+				    aes->Process(current->data.get() + pos, next, aes_buffer, ParquetCrypto::CRYPTO_BLOCK_SIZE);
 				trans.write(aes_buffer, write_size);
 			}
 			current = current->prev;
 		}
 
-		// Finalize the last encrypted data and write tag
+		// Finalize the last encrypted data
 		data_t tag[ParquetCrypto::TAG_BYTES];
-		auto write_size = aes.Finalize(aes_buffer, ParquetCrypto::CRYPTO_BLOCK_SIZE, tag, ParquetCrypto::TAG_BYTES);
+		auto write_size = aes->Finalize(aes_buffer, 0, tag, ParquetCrypto::TAG_BYTES);
 		trans.write(aes_buffer, write_size);
+		// Write tag for verification
 		trans.write(tag, ParquetCrypto::TAG_BYTES);
 
 		return ParquetCrypto::LENGTH_BYTES + total_length;
 	}
 
 private:
-	void Initialize() {
-		// Generate nonce and initialize AES
-		GenerateNonce(nonce);
-		aes.InitializeEncryption(nonce, ParquetCrypto::NONCE_BYTES);
+	void Initialize(const string &key) {
+		// Generate Nonce
+		aes->GenerateRandomData(nonce, ParquetCrypto::NONCE_BYTES);
+		// Initialize Encryption
+		aes->InitializeEncryption(nonce, ParquetCrypto::NONCE_BYTES, &key);
 	}
 
 private:
@@ -155,8 +156,8 @@ private:
 	TProtocol &prot;
 	TTransport &trans;
 
-	//! AES context
-	AESGCMState aes;
+	//! AES context and buffers
+	shared_ptr<EncryptionState> aes;
 
 	//! Nonce created by Initialize()
 	data_t nonce[ParquetCrypto::NONCE_BYTES];
@@ -168,11 +169,11 @@ private:
 //! Decryption wrapper for a transport protocol
 class DecryptionTransport : public TTransport {
 public:
-	DecryptionTransport(TProtocol &prot_p, const string &key)
-	    : prot(prot_p), trans(*prot.getTransport()), aes(key), read_buffer_size(0), read_buffer_offset(0) {
-		Initialize();
+	DecryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p)
+	    : prot(prot_p), trans(*prot.getTransport()), aes(encryption_util_p.CreateEncryptionState()),
+	      read_buffer_size(0), read_buffer_offset(0) {
+		Initialize(key);
 	}
-
 	uint32_t read_virt(uint8_t *buf, uint32_t len) override {
 		const uint32_t result = len;
 
@@ -182,10 +183,9 @@ public:
 
 		while (len != 0) {
 			if (read_buffer_offset == read_buffer_size) {
-				ReadBlock();
+				ReadBlock(buf);
 			}
 			const auto next = MinValue(read_buffer_size - read_buffer_offset, len);
-			memcpy(buf, read_buffer + read_buffer_offset, next);
 			read_buffer_offset += next;
 			buf += next;
 			len -= next;
@@ -195,19 +195,29 @@ public:
 	}
 
 	uint32_t Finalize() {
+
 		if (read_buffer_offset != read_buffer_size) {
-			throw InternalException("DecryptionTransport::Finalize was called with bytes remaining in read buffer");
+			throw InternalException("DecryptionTransport::Finalize was called with bytes remaining in read buffer: \n"
+			                        "read buffer offset: %d, read buffer size: %d",
+			                        read_buffer_offset, read_buffer_size);
 		}
 
 		data_t computed_tag[ParquetCrypto::TAG_BYTES];
-		if (aes.Finalize(read_buffer, AESGCMState::BLOCK_SIZE, computed_tag, ParquetCrypto::TAG_BYTES) != 0) {
-			throw InternalException("DecryptionTransport::Finalize was called with bytes remaining in AES context");
-		}
 
-		data_t read_tag[ParquetCrypto::TAG_BYTES];
-		transport_remaining -= trans.read(read_tag, ParquetCrypto::TAG_BYTES);
-		if (memcmp(computed_tag, read_tag, ParquetCrypto::TAG_BYTES) != 0) {
-			throw InvalidInputException("Computed AES tag differs from read AES tag, are you using the right key?");
+		if (aes->IsOpenSSL()) {
+			// For OpenSSL, the obtained tag is an input argument for aes->Finalize()
+			transport_remaining -= trans.read(computed_tag, ParquetCrypto::TAG_BYTES);
+			if (aes->Finalize(read_buffer, 0, computed_tag, ParquetCrypto::TAG_BYTES) != 0) {
+				throw InternalException(
+				    "DecryptionTransport::Finalize was called with bytes remaining in AES context out");
+			}
+		} else {
+			// For mbedtls, computed_tag is an output argument for aes->Finalize()
+			if (aes->Finalize(read_buffer, 0, computed_tag, ParquetCrypto::TAG_BYTES) != 0) {
+				throw InternalException(
+				    "DecryptionTransport::Finalize was called with bytes remaining in AES context out");
+			}
+			VerifyTag(computed_tag);
 		}
 
 		if (transport_remaining != 0) {
@@ -226,33 +236,41 @@ public:
 	}
 
 private:
-	void Initialize() {
+	void Initialize(const string &key) {
 		// Read encoded length (don't add to read_bytes)
 		data_t length_buf[ParquetCrypto::LENGTH_BYTES];
 		trans.read(length_buf, ParquetCrypto::LENGTH_BYTES);
 		total_bytes = Load<uint32_t>(length_buf);
 		transport_remaining = total_bytes;
-
 		// Read nonce and initialize AES
 		transport_remaining -= trans.read(nonce, ParquetCrypto::NONCE_BYTES);
-		aes.InitializeDecryption(nonce, ParquetCrypto::NONCE_BYTES);
+		// check whether context is initialized
+		aes->InitializeDecryption(nonce, ParquetCrypto::NONCE_BYTES, &key);
 	}
 
-	void ReadBlock() {
+	void ReadBlock(uint8_t *buf) {
 		// Read from transport into read_buffer at one AES block size offset (up to the tag)
 		read_buffer_size = MinValue(ParquetCrypto::CRYPTO_BLOCK_SIZE, transport_remaining - ParquetCrypto::TAG_BYTES);
-		transport_remaining -= trans.read(read_buffer + AESGCMState::BLOCK_SIZE, read_buffer_size);
+		transport_remaining -= trans.read(read_buffer + ParquetCrypto::BLOCK_SIZE, read_buffer_size);
 
 		// Decrypt from read_buffer + block size into read_buffer start (decryption can trail behind in same buffer)
 #ifdef DEBUG
-		auto size = aes.Process(read_buffer + AESGCMState::BLOCK_SIZE, read_buffer_size, read_buffer,
-		                        ParquetCrypto::CRYPTO_BLOCK_SIZE + AESGCMState::BLOCK_SIZE);
+		auto size = aes->Process(read_buffer + ParquetCrypto::BLOCK_SIZE, read_buffer_size, buf,
+		                         ParquetCrypto::CRYPTO_BLOCK_SIZE + ParquetCrypto::BLOCK_SIZE);
 		D_ASSERT(size == read_buffer_size);
 #else
-		aes.Process(read_buffer + AESGCMState::BLOCK_SIZE, read_buffer_size, read_buffer,
-		            ParquetCrypto::CRYPTO_BLOCK_SIZE + AESGCMState::BLOCK_SIZE);
+		aes->Process(read_buffer + ParquetCrypto::BLOCK_SIZE, read_buffer_size, buf,
+		             ParquetCrypto::CRYPTO_BLOCK_SIZE + ParquetCrypto::BLOCK_SIZE);
 #endif
 		read_buffer_offset = 0;
+	}
+
+	void VerifyTag(data_t *computed_tag) {
+		data_t read_tag[ParquetCrypto::TAG_BYTES];
+		transport_remaining -= trans.read(read_tag, ParquetCrypto::TAG_BYTES);
+		if (memcmp(computed_tag, read_tag, ParquetCrypto::TAG_BYTES) != 0) {
+			throw InvalidInputException("Computed AES tag differs from read AES tag, are you using the right key?");
+		}
 	}
 
 private:
@@ -261,10 +279,10 @@ private:
 	TTransport &trans;
 
 	//! AES context and buffers
-	AESGCMState aes;
+	shared_ptr<EncryptionState> aes;
 
 	//! We read/decrypt big blocks at a time
-	data_t read_buffer[ParquetCrypto::CRYPTO_BLOCK_SIZE + AESGCMState::BLOCK_SIZE];
+	data_t read_buffer[ParquetCrypto::CRYPTO_BLOCK_SIZE + ParquetCrypto::BLOCK_SIZE];
 	uint32_t read_buffer_size;
 	uint32_t read_buffer_offset;
 
@@ -297,16 +315,17 @@ private:
 	uint32_t read_buffer_offset;
 };
 
-uint32_t ParquetCrypto::Read(TBase &object, TProtocol &iprot, const string &key) {
-	// Create decryption protocol
+uint32_t ParquetCrypto::Read(TBase &object, TProtocol &iprot, const string &key,
+                             const EncryptionUtil &encryption_util_p) {
 	TCompactProtocolFactoryT<DecryptionTransport> tproto_factory;
-	auto dprot = tproto_factory.getProtocol(make_shared<DecryptionTransport>(iprot, key));
+	auto dprot = tproto_factory.getProtocol(std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p));
 	auto &dtrans = reinterpret_cast<DecryptionTransport &>(*dprot->getTransport());
 
 	// We have to read the whole thing otherwise thrift throws an error before we realize we're decryption is wrong
 	auto all = dtrans.ReadAll();
 	TCompactProtocolFactoryT<SimpleReadTransport> tsimple_proto_factory;
-	auto simple_prot = tsimple_proto_factory.getProtocol(make_shared<SimpleReadTransport>(all.get(), all.GetSize()));
+	auto simple_prot =
+	    tsimple_proto_factory.getProtocol(std::make_shared<SimpleReadTransport>(all.get(), all.GetSize()));
 
 	// Read the object
 	object.read(simple_prot.get());
@@ -314,10 +333,11 @@ uint32_t ParquetCrypto::Read(TBase &object, TProtocol &iprot, const string &key)
 	return ParquetCrypto::LENGTH_BYTES + ParquetCrypto::NONCE_BYTES + all.GetSize() + ParquetCrypto::TAG_BYTES;
 }
 
-uint32_t ParquetCrypto::Write(const TBase &object, TProtocol &oprot, const string &key) {
+uint32_t ParquetCrypto::Write(const TBase &object, TProtocol &oprot, const string &key,
+                              const EncryptionUtil &encryption_util_p) {
 	// Create encryption protocol
 	TCompactProtocolFactoryT<EncryptionTransport> tproto_factory;
-	auto eprot = tproto_factory.getProtocol(make_shared<EncryptionTransport>(oprot, key));
+	auto eprot = tproto_factory.getProtocol(std::make_shared<EncryptionTransport>(oprot, key, encryption_util_p));
 	auto &etrans = reinterpret_cast<EncryptionTransport &>(*eprot->getTransport());
 
 	// Write the object in memory
@@ -328,10 +348,10 @@ uint32_t ParquetCrypto::Write(const TBase &object, TProtocol &oprot, const strin
 }
 
 uint32_t ParquetCrypto::ReadData(TProtocol &iprot, const data_ptr_t buffer, const uint32_t buffer_size,
-                                 const string &key) {
+                                 const string &key, const EncryptionUtil &encryption_util_p) {
 	// Create decryption protocol
 	TCompactProtocolFactoryT<DecryptionTransport> tproto_factory;
-	auto dprot = tproto_factory.getProtocol(make_shared<DecryptionTransport>(iprot, key));
+	auto dprot = tproto_factory.getProtocol(std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p));
 	auto &dtrans = reinterpret_cast<DecryptionTransport &>(*dprot->getTransport());
 
 	// Read buffer
@@ -342,11 +362,11 @@ uint32_t ParquetCrypto::ReadData(TProtocol &iprot, const data_ptr_t buffer, cons
 }
 
 uint32_t ParquetCrypto::WriteData(TProtocol &oprot, const const_data_ptr_t buffer, const uint32_t buffer_size,
-                                  const string &key) {
+                                  const string &key, const EncryptionUtil &encryption_util_p) {
 	// FIXME: we know the size upfront so we could do a streaming write instead of this
 	// Create encryption protocol
 	TCompactProtocolFactoryT<EncryptionTransport> tproto_factory;
-	auto eprot = tproto_factory.getProtocol(make_shared<EncryptionTransport>(oprot, key));
+	auto eprot = tproto_factory.getProtocol(std::make_shared<EncryptionTransport>(oprot, key, encryption_util_p));
 	auto &etrans = reinterpret_cast<EncryptionTransport &>(*eprot->getTransport());
 
 	// Write the data in memory
@@ -356,15 +376,45 @@ uint32_t ParquetCrypto::WriteData(TProtocol &oprot, const const_data_ptr_t buffe
 	return etrans.Finalize();
 }
 
+bool ParquetCrypto::ValidKey(const std::string &key) {
+	switch (key.size()) {
+	case 16:
+	case 24:
+	case 32:
+		return true;
+	default:
+		return false;
+	}
+}
+
+string Base64Decode(const string &key) {
+	auto result_size = Blob::FromBase64Size(key);
+	auto output = duckdb::unique_ptr<unsigned char[]>(new unsigned char[result_size]);
+	Blob::FromBase64(key, output.get(), result_size);
+	string decoded_key(reinterpret_cast<const char *>(output.get()), result_size);
+	return decoded_key;
+}
+
 void ParquetCrypto::AddKey(ClientContext &context, const FunctionParameters &parameters) {
 	const auto &key_name = StringValue::Get(parameters.values[0]);
 	const auto &key = StringValue::Get(parameters.values[1]);
-	if (!AESGCMState::ValidKey(key)) {
-		throw InvalidInputException(
-		    "Invalid AES key. Must have a length of 128, 192, or 256 bits (16, 24, or 32 bytes)");
-	}
+
 	auto &keys = ParquetKeys::Get(context);
-	keys.AddKey(key_name, key);
+	if (ValidKey(key)) {
+		keys.AddKey(key_name, key);
+	} else {
+		string decoded_key;
+		try {
+			decoded_key = Base64Decode(key);
+		} catch (const ConversionException &e) {
+			throw InvalidInputException("Invalid AES key. Not a plain AES key NOR a base64 encoded string");
+		}
+		if (!ValidKey(decoded_key)) {
+			throw InvalidInputException(
+			    "Invalid AES key. Must have a length of 128, 192, or 256 bits (16, 24, or 32 bytes)");
+		}
+		keys.AddKey(key_name, decoded_key);
+	}
 }
 
 } // namespace duckdb

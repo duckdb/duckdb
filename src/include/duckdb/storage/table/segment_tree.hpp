@@ -83,11 +83,11 @@ public:
 		if (index < 0) {
 			// load all segments
 			LoadAllSegments(l);
-			index = nodes.size() + index;
+			index += nodes.size();
 			if (index < 0) {
 				return nullptr;
 			}
-			return nodes[index].node.get();
+			return nodes[UnsafeNumericCast<idx_t>(index)].node.get();
 		} else {
 			// lazily load segments until we reach the specific segment
 			while (idx_t(index) >= nodes.size() && LoadNextSegment(l)) {
@@ -95,7 +95,7 @@ public:
 			if (idx_t(index) >= nodes.size()) {
 				return nullptr;
 			}
-			return nodes[index].node.get();
+			return nodes[UnsafeNumericCast<idx_t>(index)].node.get();
 		}
 	}
 	//! Gets the next segment
@@ -116,7 +116,7 @@ public:
 #ifdef DEBUG
 		D_ASSERT(nodes[segment->index].node.get() == segment);
 #endif
-		return GetSegmentByIndex(l, segment->index + 1);
+		return GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment->index + 1));
 	}
 
 	//! Gets a pointer to the last segment. Useful for appends.
@@ -145,6 +145,7 @@ public:
 		}
 		SegmentNode<T> node;
 		segment->index = nodes.size();
+		segment->next = nullptr;
 		node.row_start = segment->start;
 		node.node = std::move(segment);
 		nodes.push_back(std::move(node));
@@ -182,7 +183,7 @@ public:
 		if (segment_start >= nodes.size() - 1) {
 			return;
 		}
-		nodes.erase(nodes.begin() + segment_start + 1, nodes.end());
+		nodes.erase(nodes.begin() + UnsafeNumericCast<int64_t>(segment_start) + 1, nodes.end());
 	}
 
 	//! Get the segment index of the column segment for the given row
@@ -320,10 +321,10 @@ private:
 		};
 
 	public:
-		SegmentIterator begin() {
+		SegmentIterator begin() { // NOLINT: match stl API
 			return SegmentIterator(tree, tree.GetRootSegment());
 		}
-		SegmentIterator end() {
+		SegmentIterator end() { // NOLINT: match stl API
 			return SegmentIterator(tree, nullptr);
 		}
 	};
@@ -349,8 +350,8 @@ private:
 		if (!SUPPORTS_LAZY_LOADING) {
 			return;
 		}
-		while (LoadNextSegment(l))
-			;
+		while (LoadNextSegment(l)) {
+		}
 	}
 };
 

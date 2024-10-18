@@ -1,0 +1,16 @@
+# name: test/sql/create/create_as_issue_11968.test
+# group: [create]
+
+load __TEST_DIR__/temp_create_as.db
+
+statement ok
+CREATE TABLE test (x INTEGER[]);
+
+statement ok
+INSERT INTO test SELECT CASE WHEN x <= 520 THEN [0, 0] ELSE [0] END FROM generate_series(1, 2048) s(x);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+CREATE TABLE test2 AS SELECT x FROM test;

@@ -49,7 +49,20 @@
         "name": "comment",
         "type": "Value",
         "default": "Value()"
-      }
+      },
+	  {
+        "id": 108,
+        "name": "tags",
+        "type": "unordered_map<string, string>",
+        "default": "unordered_map<string, string>()"
+      },
+      {
+        "id": 109,
+        "name": "dependencies",
+        "type": "LogicalDependencyList",
+        "default": "LogicalDependencyList()",
+        "version": "v0.10.3"
+	  }
     ]
   },
   {
@@ -233,10 +246,17 @@
       {
         "id": 201,
         "name": "function",
+        "serialize_property": "macros[0]",
         "type": "MacroFunction*"
+      },
+      {
+        "id": 202,
+        "name": "extra_functions",
+        "type": "vector<MacroFunction*>",
+        "serialize_property": "GetAllButFirstFunction()"
       }
     ],
-    "constructor": ["$CatalogType"]
+    "constructor": ["$CatalogType", "function", "extra_functions"]
   },
   {
     "class": "CreateSequenceInfo",

@@ -17,11 +17,19 @@
 namespace duckdb {
 
 static DefaultMacro json_macros[] = {
-    {DEFAULT_SCHEMA, "json_group_array", {"x", nullptr}, "to_json(list(x))"},
-    {DEFAULT_SCHEMA, "json_group_object", {"name", "value", nullptr}, "to_json(map(list(name), list(value)))"},
-    {DEFAULT_SCHEMA, "json_group_structure", {"x", nullptr}, "json_structure(json_group_array(x))->'0'"},
-    {DEFAULT_SCHEMA, "json", {"x", nullptr}, "json_extract(x, '$')"},
-    {nullptr, nullptr, {nullptr}, nullptr}};
+    {DEFAULT_SCHEMA, "json_group_array", {"x", nullptr}, {{nullptr, nullptr}}, "to_json(list(x))"},
+    {DEFAULT_SCHEMA,
+     "json_group_object",
+     {"name", "value", nullptr},
+     {{nullptr, nullptr}},
+     "to_json(map(list(name), list(value)))"},
+    {DEFAULT_SCHEMA,
+     "json_group_structure",
+     {"x", nullptr},
+     {{nullptr, nullptr}},
+     "json_structure(json_group_array(x))->0"},
+    {DEFAULT_SCHEMA, "json", {"x", nullptr}, {{nullptr, nullptr}}, "json_extract(x, '$')"},
+    {nullptr, nullptr, {nullptr}, {{nullptr, nullptr}}, nullptr}};
 
 void JsonExtension::Load(DuckDB &db) {
 	auto &db_instance = *db.instance;
@@ -66,6 +74,14 @@ void JsonExtension::Load(DuckDB &db) {
 
 std::string JsonExtension::Name() {
 	return "json";
+}
+
+std::string JsonExtension::Version() const {
+#ifdef EXT_VERSION_JSON
+	return EXT_VERSION_JSON;
+#else
+	return "";
+#endif
 }
 
 } // namespace duckdb

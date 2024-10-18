@@ -1,0 +1,14 @@
+# name: test/sql/copy/csv/test_unquoted_csv.test
+# description: Tests rejects tables on max line size parameter
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+FROM read_csv('data/csv/click_mini.tsv.gz')
+----
+Value with unterminated quote found.
+
+statement ok
+FROM read_csv('data/csv/click_mini.tsv.gz', quote = '')

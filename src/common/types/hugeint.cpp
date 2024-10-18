@@ -64,7 +64,7 @@ const hugeint_t Hugeint::POWERS_OF_TEN[] {
 
 template <>
 void Hugeint::NegateInPlace<false>(hugeint_t &input) {
-	input.lower = NumericLimits<uint64_t>::Maximum() - input.lower + 1;
+	input.lower = NumericLimits<uint64_t>::Maximum() - input.lower + 1ull;
 	input.upper = -1 - input.upper + (input.lower == 0);
 }
 
@@ -77,6 +77,14 @@ bool Hugeint::TryNegate(hugeint_t input, hugeint_t &result) {
 	return true;
 }
 
+hugeint_t Hugeint::Abs(hugeint_t n) {
+	if (n < 0) {
+		return Hugeint::Negate(n);
+	} else {
+		return n;
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Divide
 //===--------------------------------------------------------------------===//
@@ -85,7 +93,7 @@ static uint8_t PositiveHugeintHighestBit(hugeint_t bits) {
 	uint8_t out = 0;
 	if (bits.upper) {
 		out = 64;
-		uint64_t up = bits.upper;
+		uint64_t up = static_cast<uint64_t>(bits.upper);
 		while (up) {
 			up >>= 1;
 			out++;
@@ -104,7 +112,7 @@ static bool PositiveHugeintIsBitSet(hugeint_t lhs, uint8_t bit_position) {
 	if (bit_position < 64) {
 		return lhs.lower & (uint64_t(1) << uint64_t(bit_position));
 	} else {
-		return lhs.upper & (uint64_t(1) << uint64_t(bit_position - 64));
+		return static_cast<uint64_t>(lhs.upper) & (uint64_t(1) << uint64_t(bit_position - 64));
 	}
 }
 
@@ -112,7 +120,8 @@ static hugeint_t PositiveHugeintLeftShift(hugeint_t lhs, uint32_t amount) {
 	D_ASSERT(amount > 0 && amount < 64);
 	hugeint_t result;
 	result.lower = lhs.lower << amount;
-	result.upper = (lhs.upper << amount) + (lhs.lower >> (64 - amount));
+	result.upper =
+	    UnsafeNumericCast<int64_t>((UnsafeNumericCast<uint64_t>(lhs.upper) << amount) + (lhs.lower >> (64 - amount)));
 	return result;
 }
 
@@ -625,7 +634,7 @@ bool Hugeint::TryCast(hugeint_t input, uhugeint_t &result) {
 	}
 
 	result.lower = input.lower;
-	result.upper = input.upper;
+	result.upper = UnsafeNumericCast<uint64_t>(input.upper);
 	return true;
 }
 
@@ -645,7 +654,7 @@ bool CastBigintToFloating(hugeint_t input, REAL_T &result) {
 		result = -REAL_T(NumericLimits<uint64_t>::Maximum() - input.lower) - 1;
 		break;
 	default:
-		result = REAL_T(input.lower) + REAL_T(input.upper) * REAL_T(NumericLimits<uint64_t>::Maximum());
+		result = REAL_T(input.lower) + REAL_T(input.upper) * (REAL_T(NumericLimits<uint64_t>::Maximum()) + 1);
 		break;
 	}
 	return true;
@@ -744,7 +753,7 @@ bool ConvertFloatingToBigint(REAL_T value, hugeint_t &result) {
 		value = -value;
 	}
 	result.lower = (uint64_t)fmod(value, REAL_T(NumericLimits<uint64_t>::Maximum()));
-	result.upper = (uint64_t)(value / REAL_T(NumericLimits<uint64_t>::Maximum()));
+	result.upper = (int64_t)(value / REAL_T(NumericLimits<uint64_t>::Maximum()));
 	if (negative) {
 		Hugeint::NegateInPlace(result);
 	}
@@ -829,14 +838,14 @@ hugeint_t hugeint_t::operator>>(const hugeint_t &rhs) const {
 		return *this;
 	} else if (shift == 64) {
 		result.upper = (upper < 0) ? -1 : 0;
-		result.lower = upper;
+		result.lower = uint64_t(upper);
 	} else if (shift < 64) {
 		// perform lower shift in unsigned integer, and mask away the most significant bit
 		result.lower = (uint64_t(upper) << (64 - shift)) | (lower >> shift);
 		result.upper = upper >> shift;
 	} else {
 		D_ASSERT(shift < 128);
-		result.lower = upper >> (shift - 64);
+		result.lower = uint64_t(upper >> (shift - 64));
 		result.upper = (upper < 0) ? -1 : 0;
 	}
 	return result;
@@ -851,7 +860,7 @@ hugeint_t hugeint_t::operator<<(const hugeint_t &rhs) const {
 	if (rhs.upper != 0 || shift >= 128) {
 		return hugeint_t(0);
 	} else if (shift == 64) {
-		result.upper = lower;
+		result.upper = int64_t(lower);
 		result.lower = 0;
 	} else if (shift == 0) {
 		return *this;
@@ -859,11 +868,11 @@ hugeint_t hugeint_t::operator<<(const hugeint_t &rhs) const {
 		// perform upper shift in unsigned integer, and mask away the most significant bit
 		uint64_t upper_shift = ((uint64_t(upper) << shift) + (lower >> (64 - shift))) & 0x7FFFFFFFFFFFFFFF;
 		result.lower = lower << shift;
-		result.upper = upper_shift;
+		result.upper = int64_t(upper_shift);
 	} else {
 		D_ASSERT(shift < 128);
 		result.lower = 0;
-		result.upper = (lower << (shift - 64)) & 0x7FFFFFFFFFFFFFFF;
+		result.upper = UnsafeNumericCast<int64_t>((lower << (shift - 64)) & 0x7FFFFFFFFFFFFFFF);
 	}
 	return result;
 }

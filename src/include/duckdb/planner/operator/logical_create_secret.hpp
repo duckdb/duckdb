@@ -19,7 +19,7 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_CREATE_SECRET;
 
 public:
-	LogicalCreateSecret(CreateSecretFunction function_p, CreateSecretInfo info_p)
+	explicit LogicalCreateSecret(CreateSecretInfo info_p)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_CREATE_SECRET), info(std::move(info_p)) {
 	}
 

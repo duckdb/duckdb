@@ -12,7 +12,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalRecursiveC
 	D_ASSERT(op.children.size() == 2);
 
 	// Create the working_table that the PhysicalRecursiveCTE will use for evaluation.
-	auto working_table = std::make_shared<ColumnDataCollection>(context, op.types);
+	auto working_table = make_shared_ptr<ColumnDataCollection>(context, op.types);
 
 	// Add the ColumnDataCollection to the context of this PhysicalPlanGenerator
 	recursive_cte_tables[op.table_index] = working_table;

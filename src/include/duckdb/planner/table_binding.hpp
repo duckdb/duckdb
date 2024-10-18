@@ -14,6 +14,7 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
+#include "duckdb/planner/binding_alias.hpp"
 
 namespace duckdb {
 class BindContext;
@@ -31,14 +32,13 @@ enum class BindingType { BASE, TABLE, DUMMY, CATALOG_ENTRY };
 
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index.
 struct Binding {
-	Binding(BindingType binding_type, const string &alias, vector<LogicalType> types, vector<string> names,
-	        idx_t index);
+	Binding(BindingType binding_type, BindingAlias alias, vector<LogicalType> types, vector<string> names, idx_t index);
 	virtual ~Binding() = default;
 
 	//! The type of Binding
 	BindingType binding_type;
 	//! The alias of the binding
-	string alias;
+	BindingAlias alias;
 	//! The table index of the binding
 	idx_t index;
 	//! The types of the bound columns
@@ -55,6 +55,10 @@ public:
 	virtual ErrorData ColumnNotFoundError(const string &column_name) const;
 	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);
 	virtual optional_ptr<StandardEntry> GetStandardEntry();
+	string GetAlias() const;
+
+	static BindingAlias GetAlias(const string &explicit_alias, const StandardEntry &entry);
+	static BindingAlias GetAlias(const string &explicit_alias, optional_ptr<StandardEntry> entry);
 
 public:
 	template <class TARGET>
@@ -133,12 +137,12 @@ public:
 
 public:
 	//! Binding macros
-	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
+	BindResult Bind(ColumnRefExpression &col_ref, idx_t depth) override;
 	//! Binding lambdas
-	BindResult Bind(LambdaRefExpression &lambdaref, idx_t depth);
+	BindResult Bind(LambdaRefExpression &lambda_ref, idx_t depth);
 
-	//! Given the parameter colref, returns a copy of the argument that was supplied for this parameter
-	unique_ptr<ParsedExpression> ParamToArg(ColumnRefExpression &colref);
+	//! Returns a copy of the col_ref parameter as a parsed expression
+	unique_ptr<ParsedExpression> ParamToArg(ColumnRefExpression &col_ref);
 };
 
 } // namespace duckdb

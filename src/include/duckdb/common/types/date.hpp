@@ -18,7 +18,7 @@
 
 namespace duckdb {
 
-struct timestamp_t;
+struct timestamp_t; // NOLINT: primitive case
 
 //! Type used to represent dates (days since 1970-01-01)
 struct date_t { // NOLINT
@@ -173,9 +173,6 @@ public:
 
 	//! Extract year of a date entry
 	DUCKDB_API static int32_t ExtractYear(date_t date);
-	//! Extract year of a date entry, but optimized to first try the last year found
-	DUCKDB_API static int32_t ExtractYear(date_t date, int32_t *last_year);
-	DUCKDB_API static int32_t ExtractYear(timestamp_t ts, int32_t *last_year);
 	//! Extract month of a date entry
 	DUCKDB_API static int32_t ExtractMonth(date_t date);
 	//! Extract day of a date entry

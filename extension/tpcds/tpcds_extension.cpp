@@ -29,6 +29,9 @@ static duckdb::unique_ptr<FunctionData> DsdgenBind(ClientContext &context, Table
                                                    vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<DSDGenFunctionData>();
 	for (auto &kv : input.named_parameters) {
+		if (kv.second.IsNull()) {
+			throw BinderException("Cannot use NULL as function argument");
+		}
 		if (kv.first == "sf") {
 			result->sf = kv.second.GetValue<double>();
 		} else if (kv.first == "catalog") {
@@ -43,13 +46,18 @@ static duckdb::unique_ptr<FunctionData> DsdgenBind(ClientContext &context, Table
 			result->keys = kv.second.GetValue<bool>();
 		}
 	}
+	if (input.binder) {
+		auto &catalog = Catalog::GetCatalog(context, result->catalog);
+		auto &properties = input.binder->GetStatementProperties();
+		properties.RegisterDBModify(catalog, context);
+	}
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
 	return std::move(result);
 }
 
 static void DsdgenFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (DSDGenFunctionData &)*data_p.bind_data;
+	auto &data = data_p.bind_data->CastNoConst<DSDGenFunctionData>();
 	if (data.finished) {
 		return;
 	}
@@ -82,7 +90,7 @@ static duckdb::unique_ptr<FunctionData> TPCDSQueryBind(ClientContext &context, T
 }
 
 static void TPCDSQueryFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (TPCDSData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<TPCDSData>();
 	idx_t tpcds_queries = tpcds::DSDGenWrapper::QueriesCount();
 	if (data.offset >= tpcds_queries) {
 		// finished returning values
@@ -116,7 +124,7 @@ static duckdb::unique_ptr<FunctionData> TPCDSQueryAnswerBind(ClientContext &cont
 }
 
 static void TPCDSQueryAnswerFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (TPCDSData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<TPCDSData>();
 	idx_t tpcds_queries = tpcds::DSDGenWrapper::QueriesCount();
 	vector<double> scale_factors {1, 10};
 	idx_t total_answers = tpcds_queries * scale_factors.size();
@@ -146,7 +154,7 @@ static string PragmaTpcdsQuery(ClientContext &context, const FunctionParameters 
 	return tpcds::DSDGenWrapper::GetQuery(index);
 }
 
-void TpcdsExtension::Load(DuckDB &db) {
+static void LoadInternal(DuckDB &db) {
 	auto &db_instance = *db.instance;
 
 	TableFunction dsdgen_func("dsdgen", {}, DsdgenFunction, DsdgenBind);
@@ -172,6 +180,10 @@ void TpcdsExtension::Load(DuckDB &db) {
 	ExtensionUtil::RegisterFunction(db_instance, tpcds_query_answer_func);
 }
 
+void TpcdsExtension::Load(DuckDB &db) {
+	LoadInternal(db);
+}
+
 std::string TpcdsExtension::GetQuery(int query) {
 	return tpcds::DSDGenWrapper::GetQuery(query);
 }
@@ -184,12 +196,20 @@ std::string TpcdsExtension::Name() {
 	return "tpcds";
 }
 
+std::string TpcdsExtension::Version() const {
+#ifdef EXT_VERSION_TPCDS
+	return EXT_VERSION_TPCDS;
+#else
+	return "";
+#endif
+}
+
 } // namespace duckdb
 
 extern "C" {
 DUCKDB_EXTENSION_API void tpcds_init(duckdb::DatabaseInstance &db) {
 	duckdb::DuckDB db_wrapper(db);
-	db_wrapper.LoadExtension<duckdb::TpcdsExtension>();
+	duckdb::LoadInternal(db_wrapper);
 }
 
 DUCKDB_EXTENSION_API const char *tpcds_version() {

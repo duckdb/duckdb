@@ -33,6 +33,9 @@ public:
 	static inline bool EmptyLine(SkipResult &result, const idx_t buffer_pos);
 	//! Handles QuotedNewline State
 	static inline void QuotedNewLine(SkipResult &result);
+	//! Code to unset comment
+	static inline bool UnsetComment(SkipResult &result, idx_t buffer_pos);
+	//! Internal code to add a row
 	inline void InternalAddRow();
 };
 
@@ -41,9 +44,6 @@ class SkipScanner : public BaseScanner {
 public:
 	SkipScanner(shared_ptr<CSVBufferManager> buffer_manager, const shared_ptr<CSVStateMachine> &state_machine,
 	            shared_ptr<CSVErrorHandler> error_handler, idx_t rows_to_skip);
-
-	~SkipScanner() {
-	}
 
 	SkipResult &ParseChunk() override;
 

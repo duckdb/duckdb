@@ -15,3 +15,32 @@ from (values
 3	5
 4	NULL
 5	NULL
+
+# Lag > 2 with explicit constant default
+statement ok
+create table win(id int, v int, t int, f float, s varchar);
+
+statement ok
+insert into win values
+	(1, 1, 2, 0.54, 'h'),
+	(1, 1, 1, 0.21, 'e'),
+	(1, 2, 3, 0.001, 'l'),
+	(2, 10, 4, 0.04, 'l'),
+	(2, 11, -1, 10.45, 'o'),
+	(3, -1, 0, 13.32, ','),
+	(3, 5, -2, 9.87, 'wor'),
+	(3, null, 10, 6.56, 'ld'); 
+
+query IIII
+select id, v, t, lag(v, 2, NULL) over (partition by id order by t asc)
+from win
+order by id, t
+----
+1	1	1	NULL
+1	1	2	NULL
+1	2	3	1
+2	11	-1	NULL
+2	10	4	NULL
+3	5	-2	NULL
+3	-1	0	NULL
+3	NULL	10	5

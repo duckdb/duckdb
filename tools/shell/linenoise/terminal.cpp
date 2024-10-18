@@ -67,7 +67,7 @@ int Terminal::EnableRawMode() {
 	raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
 	/* output modes - disable post processing */
 	raw.c_oflag &= ~(OPOST);
-#ifndef __MVS__
+#ifdef IUTF8
 	/* control modes - set 8 bit chars */
 	raw.c_iflag |= IUTF8;
 #endif

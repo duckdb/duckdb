@@ -10,37 +10,53 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
+#include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
-void ExtensionUtil::RegisterFunction(DatabaseInstance &db, ScalarFunctionSet set) {
-	D_ASSERT(!set.name.empty());
-	CreateScalarFunctionInfo info(std::move(set));
-	auto &system_catalog = Catalog::GetSystemCatalog(db);
-	auto data = CatalogTransaction::GetSystemTransaction(db);
-	system_catalog.CreateFunction(data, info);
+void ExtensionUtil::RegisterExtension(DatabaseInstance &db, const string &name,
+                                      const ExtensionLoadedInfo &description) {
+
+	db.AddExtensionInfo(name, description);
 }
 
 void ExtensionUtil::RegisterFunction(DatabaseInstance &db, ScalarFunction function) {
-	D_ASSERT(!function.name.empty());
 	ScalarFunctionSet set(function.name);
 	set.AddFunction(std::move(function));
 	RegisterFunction(db, std::move(set));
 }
 
+void ExtensionUtil::RegisterFunction(DatabaseInstance &db, ScalarFunctionSet set) {
+	CreateScalarFunctionInfo info(std::move(set));
+	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+	RegisterFunction(db, std::move(info));
+}
+
+void ExtensionUtil::RegisterFunction(DatabaseInstance &db, CreateScalarFunctionInfo info) {
+	D_ASSERT(!info.functions.name.empty());
+	auto &system_catalog = Catalog::GetSystemCatalog(db);
+	auto data = CatalogTransaction::GetSystemTransaction(db);
+	system_catalog.CreateFunction(data, info);
+}
+
 void ExtensionUtil::RegisterFunction(DatabaseInstance &db, AggregateFunction function) {
-	D_ASSERT(!function.name.empty());
 	AggregateFunctionSet set(function.name);
 	set.AddFunction(std::move(function));
 	RegisterFunction(db, std::move(set));
 }
 
 void ExtensionUtil::RegisterFunction(DatabaseInstance &db, AggregateFunctionSet set) {
-	D_ASSERT(!set.name.empty());
 	CreateAggregateFunctionInfo info(std::move(set));
+	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+	RegisterFunction(db, std::move(info));
+}
+
+void ExtensionUtil::RegisterFunction(DatabaseInstance &db, CreateAggregateFunctionInfo info) {
+	D_ASSERT(!info.functions.name.empty());
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, info);
@@ -53,7 +69,6 @@ void ExtensionUtil::RegisterFunction(DatabaseInstance &db, CreateSecretFunction 
 }
 
 void ExtensionUtil::RegisterFunction(DatabaseInstance &db, TableFunction function) {
-	D_ASSERT(!function.name.empty());
 	TableFunctionSet set(function.name);
 	set.AddFunction(std::move(function));
 	RegisterFunction(db, std::move(set));
@@ -62,6 +77,12 @@ void ExtensionUtil::RegisterFunction(DatabaseInstance &db, TableFunction functio
 void ExtensionUtil::RegisterFunction(DatabaseInstance &db, TableFunctionSet function) {
 	D_ASSERT(!function.name.empty());
 	CreateTableFunctionInfo info(std::move(function));
+	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+	RegisterFunction(db, std::move(info));
+}
+
+void ExtensionUtil::RegisterFunction(DatabaseInstance &db, CreateTableFunctionInfo info) {
+	D_ASSERT(!info.functions.name.empty());
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, info);
@@ -101,6 +122,11 @@ void ExtensionUtil::RegisterCollation(DatabaseInstance &db, CreateCollationInfo 
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	system_catalog.CreateCollation(data, info);
+
+	// Also register as a function for serialisation
+	CreateScalarFunctionInfo finfo(info.function);
+	finfo.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	system_catalog.CreateFunction(data, finfo);
 }
 
 void ExtensionUtil::AddFunctionOverload(DatabaseInstance &db, ScalarFunction function) {
@@ -125,33 +151,42 @@ void ExtensionUtil::AddFunctionOverload(DatabaseInstance &db, TableFunctionSet f
 	}
 }
 
-ScalarFunctionCatalogEntry &ExtensionUtil::GetFunction(DatabaseInstance &db, const string &name) {
+optional_ptr<CatalogEntry> TryGetEntry(DatabaseInstance &db, const string &name, CatalogType type) {
 	D_ASSERT(!name.empty());
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	auto &schema = system_catalog.GetSchema(data, DEFAULT_SCHEMA);
-	auto catalog_entry = schema.GetEntry(data, CatalogType::SCALAR_FUNCTION_ENTRY, name);
+	return schema.GetEntry(data, type, name);
+}
+
+optional_ptr<CatalogEntry> ExtensionUtil::TryGetFunction(DatabaseInstance &db, const string &name) {
+	return TryGetEntry(db, name, CatalogType::SCALAR_FUNCTION_ENTRY);
+}
+
+ScalarFunctionCatalogEntry &ExtensionUtil::GetFunction(DatabaseInstance &db, const string &name) {
+	auto catalog_entry = TryGetFunction(db, name);
 	if (!catalog_entry) {
 		throw InvalidInputException("Function with name \"%s\" not found in ExtensionUtil::GetFunction", name);
 	}
 	return catalog_entry->Cast<ScalarFunctionCatalogEntry>();
 }
 
+optional_ptr<CatalogEntry> ExtensionUtil::TryGetTableFunction(DatabaseInstance &db, const string &name) {
+	return TryGetEntry(db, name, CatalogType::TABLE_FUNCTION_ENTRY);
+}
+
 TableFunctionCatalogEntry &ExtensionUtil::GetTableFunction(DatabaseInstance &db, const string &name) {
-	D_ASSERT(!name.empty());
-	auto &system_catalog = Catalog::GetSystemCatalog(db);
-	auto data = CatalogTransaction::GetSystemTransaction(db);
-	auto &schema = system_catalog.GetSchema(data, DEFAULT_SCHEMA);
-	auto catalog_entry = schema.GetEntry(data, CatalogType::TABLE_FUNCTION_ENTRY, name);
+	auto catalog_entry = TryGetTableFunction(db, name);
 	if (!catalog_entry) {
 		throw InvalidInputException("Function with name \"%s\" not found in ExtensionUtil::GetTableFunction", name);
 	}
 	return catalog_entry->Cast<TableFunctionCatalogEntry>();
 }
 
-void ExtensionUtil::RegisterType(DatabaseInstance &db, string type_name, LogicalType type) {
+void ExtensionUtil::RegisterType(DatabaseInstance &db, string type_name, LogicalType type,
+                                 bind_type_modifiers_function_t bind_modifiers) {
 	D_ASSERT(!type_name.empty());
-	CreateTypeInfo info(std::move(type_name), std::move(type));
+	CreateTypeInfo info(std::move(type_name), std::move(type), bind_modifiers);
 	info.temporary = true;
 	info.internal = true;
 	auto &system_catalog = Catalog::GetSystemCatalog(db);

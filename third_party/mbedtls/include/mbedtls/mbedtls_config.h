@@ -1,3 +1,4 @@
+#define MBEDTLS_SHA1_C
 #define MBEDTLS_SHA256_C
 #define MBEDTLS_SHA224_C
 #define MBEDTLS_RSA_C

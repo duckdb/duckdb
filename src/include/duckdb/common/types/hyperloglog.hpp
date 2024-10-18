@@ -8,63 +8,72 @@
 
 #pragma once
 
-#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "hyperloglog.hpp"
-
-namespace duckdb_hll {
-struct robj;
-}
 
 namespace duckdb {
 
-enum class HLLStorageType : uint8_t { UNCOMPRESSED = 1 };
+enum class HLLStorageType : uint8_t {
+	HLL_V1 = 1, //! Redis HLL
+	HLL_V2 = 2, //! Our own implementation
+};
 
 class Serializer;
 class Deserializer;
 
-//! The HyperLogLog class holds a HyperLogLog counter for approximate cardinality counting
+//! Algorithms from
+//! "New cardinality estimation algorithms for HyperLogLog sketches"
+//! Otmar Ertl, arXiv:1702.01284
 class HyperLogLog {
 public:
-	HyperLogLog();
-	~HyperLogLog();
-	// implicit copying of HyperLogLog is not allowed
-	HyperLogLog(const HyperLogLog &) = delete;
+	static constexpr idx_t P = 6;
+	static constexpr idx_t Q = 64 - P;
+	static constexpr idx_t M = 1 << P;
+	static constexpr double ALPHA = 0.721347520444481703680; // 1 / (2 log(2))
 
-	//! Adds an element of the specified size to the HyperLogLog counter
-	void Add(data_ptr_t element, idx_t size);
-	//! Return the count of this HyperLogLog counter
+public:
+	HyperLogLog() {
+		memset(k, 0, sizeof(k));
+	}
+
+	//! Algorithm 1
+	inline void InsertElement(hash_t h) {
+		const auto i = h & ((1 << P) - 1);
+		h >>= P;
+		h |= hash_t(1) << Q;
+		const uint8_t z = UnsafeNumericCast<uint8_t>(CountZeros<hash_t>::Trailing(h) + 1);
+		Update(i, z);
+	}
+
+	inline void Update(const idx_t &i, const uint8_t &z) {
+		k[i] = MaxValue<uint8_t>(k[i], z);
+	}
+
+	inline uint8_t GetRegister(const idx_t &i) const {
+		return k[i];
+	}
+
 	idx_t Count() const;
-	//! Merge this HyperLogLog counter with another counter to create a new one
-	unique_ptr<HyperLogLog> Merge(HyperLogLog &other);
-	HyperLogLog *MergePointer(HyperLogLog &other);
-	//! Merge a set of HyperLogLogs to create one big one
-	static unique_ptr<HyperLogLog> Merge(HyperLogLog logs[], idx_t count);
-	//! Get the size (in bytes) of a HLL
-	static idx_t GetSize();
-	//! Get pointer to the HLL
-	data_ptr_t GetPtr() const;
+
+	//! Algorithm 2
+	void Merge(const HyperLogLog &other);
+
+public:
+	//! Add data to this HLL
+	void Update(Vector &input, Vector &hashes, idx_t count);
 	//! Get copy of the HLL
-	unique_ptr<HyperLogLog> Copy();
+	unique_ptr<HyperLogLog> Copy() const;
 
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<HyperLogLog> Deserialize(Deserializer &deserializer);
 
-public:
-	//! Compute HLL hashes over vdata, and store them in 'hashes'
-	//! Then, compute register indices and prefix lengths, and also store them in 'hashes' as a pair of uint32_t
-	static void ProcessEntries(UnifiedVectorFormat &vdata, const LogicalType &type, uint64_t hashes[], uint8_t counts[],
-	                           idx_t count);
-	//! Add the indices and counts to the logs
-	static void AddToLogs(UnifiedVectorFormat &vdata, idx_t count, uint64_t indices[], uint8_t counts[],
-	                      HyperLogLog **logs[], const SelectionVector *log_sel);
-	//! Add the indices and counts to THIS log
-	void AddToLog(UnifiedVectorFormat &vdata, idx_t count, uint64_t indices[], uint8_t counts[]);
+	//! Algorithm 4
+	void ExtractCounts(uint32_t *c) const;
+	//! Algorithm 6
+	static int64_t EstimateCardinality(uint32_t *c);
 
 private:
-	explicit HyperLogLog(duckdb_hll::robj *hll);
-
-	duckdb_hll::robj *hll;
-	mutex lock;
+	uint8_t k[M];
 };
+
 } // namespace duckdb

@@ -8,49 +8,46 @@ include_directories(../../../third_party/httplib/)
 configure_file(
   generated_extension_headers.hpp.in
   "${PROJECT_BINARY_DIR}/codegen/include/generated_extension_headers.hpp")
-if(NOT ${DISABLE_BUILTIN_EXTENSIONS})
-  foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
-    string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
-    if(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
-      set(DUCKDB_EXTENSION_HEADER "${EXT_NAME}_extension.hpp")
-      file(
-        APPEND
-        "${PROJECT_BINARY_DIR}/codegen/include/generated_extension_headers.hpp"
-        "#include \"${DUCKDB_EXTENSION_HEADER}\"\n")
-    endif()
-  endforeach()
-endif()
+
+get_statically_linked_extensions("${DUCKDB_EXTENSION_NAMES}"
+                                 STATICALLY_LINKED_EXTENSIONS)
+foreach(EXT_NAME IN LISTS STATICALLY_LINKED_EXTENSIONS)
+  string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
+  if(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
+    set(DUCKDB_EXTENSION_HEADER "${EXT_NAME}_extension.hpp")
+    file(APPEND
+         "${PROJECT_BINARY_DIR}/codegen/include/generated_extension_headers.hpp"
+         "#include \"${DUCKDB_EXTENSION_HEADER}\"\n")
+  endif()
+endforeach()
 
 # generated_extension_loader.hpp
 set(EXT_LOADER_NAME_LIST "")
 set(EXT_LOADER_BODY "")
-if(NOT ${DISABLE_BUILTIN_EXTENSIONS})
-  foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
-    string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
-    if(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
+foreach(EXT_NAME IN LISTS STATICALLY_LINKED_EXTENSIONS)
+  string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
+  if(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
 
-      # Assumes lowercase input!
-      string(REPLACE "_" ";" EXT_NAME_SPLIT ${EXT_NAME})
-      set(EXT_NAME_CAMELCASE "")
-      foreach(EXT_NAME_PART IN LISTS EXT_NAME_SPLIT)
-        string(SUBSTRING ${EXT_NAME_PART} 0 1 FIRST_LETTER)
-        string(SUBSTRING ${EXT_NAME_PART} 1 -1 REMAINDER)
-        string(TOUPPER ${FIRST_LETTER} FIRST_LETTER)
-        set(EXT_NAME_CAMELCASE
-            "${EXT_NAME_CAMELCASE}${FIRST_LETTER}${REMAINDER}")
-      endforeach()
+    # Assumes lowercase input!
+    string(REPLACE "_" ";" EXT_NAME_SPLIT ${EXT_NAME})
+    set(EXT_NAME_CAMELCASE "")
+    foreach(EXT_NAME_PART IN LISTS EXT_NAME_SPLIT)
+      string(SUBSTRING ${EXT_NAME_PART} 0 1 FIRST_LETTER)
+      string(SUBSTRING ${EXT_NAME_PART} 1 -1 REMAINDER)
+      string(TOUPPER ${FIRST_LETTER} FIRST_LETTER)
+      set(EXT_NAME_CAMELCASE "${EXT_NAME_CAMELCASE}${FIRST_LETTER}${REMAINDER}")
+    endforeach()
 
-      set(EXT_LOADER_NAME_LIST "${EXT_LOADER_NAME_LIST},\n\t\"${EXT_NAME}\"")
-      set(EXT_LOADER_BODY
-          "${EXT_LOADER_BODY}\
-    if (extension==\"${EXT_NAME}\") {
-        db.LoadExtension<${EXT_NAME_CAMELCASE}Extension>();
-        return true;
-    }
+    set(EXT_LOADER_NAME_LIST "${EXT_LOADER_NAME_LIST},\n\t\"${EXT_NAME}\"")
+    set(EXT_LOADER_BODY
+        "${EXT_LOADER_BODY}\
+  if (extension==\"${EXT_NAME}\") {
+      db.LoadStaticExtension<${EXT_NAME_CAMELCASE}Extension>();
+      return true;
+  }
 ")
-    endif()
-  endforeach()
-endif()
+  endif()
+endforeach()
 
 # trim comma
 if(NOT ${EXT_LOADER_NAME_LIST} STREQUAL "")

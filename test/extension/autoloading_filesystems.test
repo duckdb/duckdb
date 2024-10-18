@@ -42,4 +42,4 @@ SET s3_endpoint='false_endpoint';
 statement error
 SELECT * FROM 's3://some-bucket/a-file.csv'
 ----
-Connection error for HTTP HEAD to 'https://some-bucket.false_endpoint/a-file.csv'
+Could not establish connection error for HTTP HEAD to 'https://some-bucket.false_endpoint/a-file.csv'

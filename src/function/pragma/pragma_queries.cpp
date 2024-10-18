@@ -3,9 +3,10 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/pragma/pragma_functions.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database_manager.hpp"
-#include "duckdb/main/client_data.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
@@ -42,6 +43,7 @@ string PragmaShowTables() {
 	ORDER BY "name";)EOF";
 	// clang-format on
 }
+
 string PragmaShowTables(ClientContext &context, const FunctionParameters &parameters) {
 	return PragmaShowTables();
 }
@@ -90,6 +92,9 @@ string PragmaShowDatabases(ClientContext &context, const FunctionParameters &par
 	return PragmaShowDatabases();
 }
 
+string PragmaShowVariables() {
+	return "SELECT * FROM duckdb_variables() ORDER BY name";
+}
 string PragmaAllProfiling(ClientContext &context, const FunctionParameters &parameters) {
 	return "SELECT * FROM pragma_last_profiling_output() JOIN pragma_detailed_profiling_output() ON "
 	       "(pragma_last_profiling_output.operator_id);";
@@ -123,6 +128,11 @@ string PragmaVersion(ClientContext &context, const FunctionParameters &parameter
 	return "SELECT * FROM pragma_version();";
 }
 
+string PragmaExtensionVersions(ClientContext &context, const FunctionParameters &parameters) {
+	return "select extension_name, extension_version, install_mode, installed_from from duckdb_extensions() where "
+	       "installed";
+}
+
 string PragmaPlatform(ClientContext &context, const FunctionParameters &parameters) {
 	return "SELECT * FROM pragma_platform();";
 }
@@ -141,9 +151,9 @@ string PragmaImportDatabase(ClientContext &context, const FunctionParameters &pa
 		auto file_path = fs.JoinPath(parameters.values[0].ToString(), file);
 		auto handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_READ);
 		auto fsize = fs.GetFileSize(*handle);
-		auto buffer = make_unsafe_uniq_array<char>(fsize);
+		auto buffer = make_unsafe_uniq_array<char>(UnsafeNumericCast<size_t>(fsize));
 		fs.Read(*handle, buffer.get(), fsize);
-		auto query = string(buffer.get(), fsize);
+		auto query = string(buffer.get(), UnsafeNumericCast<uint32_t>(fsize));
 		// Replace the placeholder with the path provided to IMPORT
 		if (file == "load.sql") {
 			Parser parser;
@@ -202,6 +212,7 @@ void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("collations", PragmaCollations));
 	set.AddFunction(PragmaFunction::PragmaCall("show", PragmaShow, {LogicalType::VARCHAR}));
 	set.AddFunction(PragmaFunction::PragmaStatement("version", PragmaVersion));
+	set.AddFunction(PragmaFunction::PragmaStatement("extension_versions", PragmaExtensionVersions));
 	set.AddFunction(PragmaFunction::PragmaStatement("platform", PragmaPlatform));
 	set.AddFunction(PragmaFunction::PragmaStatement("database_size", PragmaDatabaseSize));
 	set.AddFunction(PragmaFunction::PragmaStatement("functions", PragmaFunctionsQuery));

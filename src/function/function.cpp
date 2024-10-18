@@ -7,6 +7,7 @@
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/main/extension_entries.hpp"
 
 namespace duckdb {
 
@@ -108,6 +109,8 @@ void BuiltinFunctions::Initialize() {
 	AddCollation("nocase", LowerFun::GetFunction(), true);
 	AddCollation("noaccent", StripAccentsFun::GetFunction());
 	AddCollation("nfc", NFCNormalizeFun::GetFunction());
+
+	RegisterExtensionOverloads();
 }
 
 hash_t BaseScalarFunction::Hash() const {
@@ -158,8 +161,8 @@ void Function::EraseArgument(SimpleFunction &bound_function, vector<unique_ptr<E
 	}
 	D_ASSERT(arguments.size() == bound_function.arguments.size());
 	D_ASSERT(argument_index < arguments.size());
-	arguments.erase(arguments.begin() + argument_index);
-	bound_function.arguments.erase(bound_function.arguments.begin() + argument_index);
+	arguments.erase_at(argument_index);
+	bound_function.arguments.erase_at(argument_index);
 }
 
 } // namespace duckdb

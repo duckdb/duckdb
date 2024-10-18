@@ -44,6 +44,10 @@ bool JSONFileHandle::RequestedReadsComplete() {
 	return requested_reads == actual_reads;
 }
 
+bool JSONFileHandle::LastReadRequested() const {
+	return last_read_requested;
+}
+
 idx_t JSONFileHandle::FileSize() const {
 	return file_size;
 }
@@ -54,6 +58,10 @@ idx_t JSONFileHandle::Remaining() const {
 
 bool JSONFileHandle::CanSeek() const {
 	return can_seek;
+}
+
+bool JSONFileHandle::IsPipe() const {
+	return file_handle->IsPipe();
 }
 
 FileHandle &JSONFileHandle::GetHandle() {

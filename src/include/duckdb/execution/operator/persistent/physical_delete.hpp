@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/planner/bound_constraint.hpp"
 
 namespace duckdb {
 class DataTable;
@@ -19,14 +20,13 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::DELETE_OPERATOR;
 
 public:
-	PhysicalDelete(vector<LogicalType> types, TableCatalogEntry &tableref, DataTable &table, idx_t row_id_index,
-	               idx_t estimated_cardinality, bool return_chunk)
-	    : PhysicalOperator(PhysicalOperatorType::DELETE_OPERATOR, std::move(types), estimated_cardinality),
-	      tableref(tableref), table(table), row_id_index(row_id_index), return_chunk(return_chunk) {
-	}
+	PhysicalDelete(vector<LogicalType> types, TableCatalogEntry &tableref, DataTable &table,
+	               vector<unique_ptr<BoundConstraint>> bound_constraints, idx_t row_id_index,
+	               idx_t estimated_cardinality, bool return_chunk);
 
 	TableCatalogEntry &tableref;
 	DataTable &table;
+	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	idx_t row_id_index;
 	bool return_chunk;
 

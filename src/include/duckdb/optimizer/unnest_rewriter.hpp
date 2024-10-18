@@ -26,7 +26,7 @@ struct ReplaceBinding {
 
 struct LHSBinding {
 	LHSBinding() {};
-	LHSBinding(ColumnBinding binding, LogicalType type) : binding(binding), type(type) {
+	LHSBinding(ColumnBinding binding, LogicalType type_p) : binding(binding), type(std::move(type_p)) {
 	}
 	ColumnBinding binding;
 	LogicalType type;

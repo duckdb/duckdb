@@ -1,9 +1,23 @@
+import platform
 import duckdb
 import pytest
 from duckdb.typing import INTEGER, VARCHAR, TIMESTAMP
-from duckdb import Expression, ConstantExpression, ColumnExpression, StarExpression, FunctionExpression, CaseExpression
+from duckdb import (
+    Expression,
+    ConstantExpression,
+    ColumnExpression,
+    CoalesceOperator,
+    StarExpression,
+    FunctionExpression,
+    CaseExpression,
+)
 from duckdb.value.constant import Value, IntegerValue
 import datetime
+
+pytestmark = pytest.mark.skipif(
+    platform.system() == "Emscripten",
+    reason="Extensions are not supported on Emscripten",
+)
 
 
 @pytest.fixture(scope='function')
@@ -44,6 +58,7 @@ class TestExpression(object):
         res = rel.fetchall()
         assert res == [(5,)]
 
+    @pytest.mark.skipif(platform.system() == 'Windows', reason="There is some weird interaction in Windows CI")
     def test_column_expression(self):
         con = duckdb.connect()
 
@@ -63,6 +78,110 @@ class TestExpression(object):
         column = ColumnExpression('d')
         with pytest.raises(duckdb.BinderException, match='Referenced column "d" not found'):
             rel2 = rel.select(column)
+
+    def test_coalesce_operator(self):
+        con = duckdb.connect()
+
+        rel = con.sql(
+            """
+            select 'unused'
+        """
+        )
+
+        rel2 = rel.select(CoalesceOperator(ConstantExpression(None), ConstantExpression('hello').cast(int)))
+        res = rel2.explain()
+        assert 'COALESCE' in res
+
+        with pytest.raises(duckdb.ConversionException, match="Could not convert string 'hello' to INT64"):
+            rel2.fetchall()
+
+        con.execute(
+            """
+            CREATE TABLE exprtest(a INTEGER, b INTEGER);
+            INSERT INTO exprtest VALUES (42, 10), (43, 100), (NULL, 1), (45, 0)
+        """
+        )
+
+        with pytest.raises(duckdb.InvalidInputException, match='Please provide at least one argument'):
+            rel3 = rel.select(CoalesceOperator())
+
+        rel4 = rel.select(CoalesceOperator(ConstantExpression(None)))
+        assert rel4.fetchone() == (None,)
+
+        rel5 = rel.select(CoalesceOperator(ConstantExpression(42)))
+        assert rel5.fetchone() == (42,)
+
+        exprtest = con.table('exprtest')
+        rel6 = exprtest.select(CoalesceOperator(ColumnExpression("a")))
+        res = rel6.fetchall()
+        assert res == [(42,), (43,), (None,), (45,)]
+
+        rel7 = con.sql("select 42")
+        rel7 = rel7.select(
+            CoalesceOperator(
+                ConstantExpression(None), ConstantExpression(None), ConstantExpression(42), ConstantExpression(43)
+            )
+        )
+        res = rel7.fetchall()
+        assert res == [(42,)]
+
+        rel7 = con.sql("select 42")
+        rel7 = rel7.select(CoalesceOperator(ConstantExpression(None), ConstantExpression(None), ConstantExpression(42)))
+        res = rel7.fetchall()
+        assert res == [(42,)]
+
+        rel7 = con.sql("select 42")
+        rel7 = rel7.select(CoalesceOperator(ConstantExpression(None), ConstantExpression(None), ConstantExpression(43)))
+        res = rel7.fetchall()
+        assert res == [(43,)]
+
+        rel7 = con.sql("select 42")
+        rel7 = rel7.select(
+            CoalesceOperator(ConstantExpression(None), ConstantExpression(None), ConstantExpression(None))
+        )
+        res = rel7.fetchall()
+        assert res == [(None,)]
+
+        # These are converted tests
+        # See 'test_coalesce.test_slow' for the original tests
+
+        con.execute("SET default_null_order='nulls_first';")
+
+        rel7 = exprtest.select(
+            CoalesceOperator(
+                ConstantExpression(None),
+                ConstantExpression(None),
+                ConstantExpression(None),
+                ColumnExpression("a"),
+                ConstantExpression(None),
+                ColumnExpression("b"),
+            )
+        )
+        res = rel7.fetchall()
+        assert res == [(42,), (43,), (1,), (45,)]
+
+        rel7 = exprtest.filter((ColumnExpression("b") == 1) | (CoalesceOperator("a", "b") == 42)).sort("a")
+        res = rel7.fetchall()
+        assert res == [(None, 1), (42, 10)]
+
+        rel7 = exprtest.filter(
+            (CoalesceOperator("a", "b") == 1) | (CoalesceOperator("a", "b") == 43) | (CoalesceOperator("a", "b") == 45)
+        ).sort("a")
+        res = rel7.fetchall()
+        assert res == [(None, 1), (43, 100), (45, 0)]
+
+        rel7 = exprtest.filter(
+            (CoalesceOperator("a", "b") == 1)
+            | (CoalesceOperator("a", "b") == 42)
+            | (CoalesceOperator("a", "b") == 43)
+            | (CoalesceOperator("a", "b") == 45)
+        ).sort("a")
+        res = rel7.fetchall()
+        assert res == [(None, 1), (42, 10), (43, 100), (45, 0)]
+
+        rel7 = exprtest.filter((ColumnExpression("b") == 1) | (CoalesceOperator("a", "b") == 1)).sort("a")
+        res = rel7.fetchall()
+        assert res == [(None, 1)]
 
     def test_column_expression_explain(self):
         con = duckdb.connect()
@@ -716,3 +835,38 @@ class TestExpression(object):
         rel2 = rel.sort(b.desc().nulls_last())
         res = rel2.b.fetchall()
         assert res == [('c',), ('b',), ('a',), ('a',), (None,)]
+
+    def test_aggregate(self):
+        con = duckdb.connect()
+        rel = con.sql("select * from range(1000000) t(a)")
+        count = FunctionExpression("count", "a").cast("int")
+        assert rel.aggregate([count]).execute().fetchone()[0] == 1000000
+        assert rel.aggregate([count]).execute().fetchone()[0] == 1000000
+
+    def test_aggregate_error(self):
+        con = duckdb.connect()
+
+        # Not necessarily an error, but even non-aggregates are accepted
+        rel = con.sql("select * from values (5) t(a)")
+        res = rel.aggregate(["a"]).execute().fetchone()[0]
+        assert res == 5
+
+        res = rel.aggregate([5]).execute().fetchone()[0]
+        assert res == 5
+
+        # Providing something that can not be converted into an expression is an error:
+        with pytest.raises(
+            duckdb.InvalidInputException, match='Invalid Input Error: Please provide arguments of type Expression!'
+        ):
+
+            class MyClass:
+                def __init__(self):
+                    pass
+
+            res = rel.aggregate([MyClass()]).fetchone()[0]
+
+        with pytest.raises(
+            duckdb.InvalidInputException,
+            match="Please provide either a string or list of Expression objects, not <class 'int'>",
+        ):
+            res = rel.aggregate(5).execute().fetchone()

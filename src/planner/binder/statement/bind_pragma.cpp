@@ -31,13 +31,13 @@ unique_ptr<BoundPragmaInfo> Binder::BindPragma(PragmaInfo &info, QueryErrorConte
 	auto &entry = Catalog::GetEntry<PragmaFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, info.name);
 	FunctionBinder function_binder(context);
 	ErrorData error;
-	idx_t bound_idx = function_binder.BindFunction(entry.name, entry.functions, params, error);
-	if (bound_idx == DConstants::INVALID_INDEX) {
+	auto bound_idx = function_binder.BindFunction(entry.name, entry.functions, params, error);
+	if (!bound_idx.IsValid()) {
 		D_ASSERT(error.HasError());
 		error.AddQueryLocation(error_context);
 		error.Throw();
 	}
-	auto bound_function = entry.functions.GetFunctionByOffset(bound_idx);
+	auto bound_function = entry.functions.GetFunctionByOffset(bound_idx.GetIndex());
 	// bind and check named params
 	BindNamedParameters(bound_function.named_parameters, named_parameters, error_context, bound_function.name);
 	return make_uniq<BoundPragmaInfo>(std::move(bound_function), std::move(params), std::move(named_parameters));
@@ -55,6 +55,8 @@ BoundStatement Binder::Bind(PragmaStatement &stmt) {
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
 	result.plan = make_uniq<LogicalPragma>(std::move(bound_info));
+
+	auto &properties = GetStatementProperties();
 	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return result;
 }

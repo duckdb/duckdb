@@ -1,0 +1,253 @@
+# name: test/sql/copy/csv/rejects/csv_rejects_two_tables.test
+# group: [rejects]
+
+require skip_reload
+
+# Test will fail on windows because byte_position is slightly different due to \r\n instead of \n
+require notwindows
+
+# Ensure that we can get the schema if we reduce the sample size and ignore errors
+query IIIII
+SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
+    'data/csv/error/mismatch/big_bad*.csv',
+    sample_size=1,
+    store_rejects=true);
+----
+BIGINT	VARCHAR	11044	11044	2
+
+
+query IIIIIIIIIIII
+SELECT * EXCLUDE (scan_id) FROM reject_scans order by all;
+----
+0	data/csv/error/mismatch/big_bad.csv	,	"	"	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	sample_size=1, store_rejects=true
+1	data/csv/error/mismatch/big_bad2.csv	,	"	"	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	sample_size=1, store_rejects=true
+
+query IIIIIIIII
+SELECT * EXCLUDE (scan_id) FROM reject_errors order by all;
+----
+0	2176	10876	10876	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+0	4176	20876	20876	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+1	3680	18396	18396	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+1	5680	28396	28396	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+
+# Test giving the name of errors table
+statement error
+SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
+    'data/csv/error/mismatch/big_bad*.csv',
+    sample_size=1,
+    rejects_table = 'rejects_errors_2');
+----
+Reject Scan Table name "reject_scans" is already in use. Either drop the used name(s), or give other name options in the CSV Reader function.
+
+statement ok
+drop table reject_scans;
+
+query IIIII
+SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
+    'data/csv/error/mismatch/big_bad*.csv',
+    sample_size=1,
+    rejects_table = 'rejects_errors_2'
+    );
+----
+BIGINT	VARCHAR	11044	11044	2
+
+query IIIIIIIIIIII
+SELECT * EXCLUDE (scan_id) FROM reject_scans order by all;
+----
+0	data/csv/error/mismatch/big_bad.csv	,	"	"	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_table='rejects_errors_2', sample_size=1
+1	data/csv/error/mismatch/big_bad2.csv	,	"	"	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_table='rejects_errors_2', sample_size=1
+
+query IIIIIIIII
+SELECT * EXCLUDE (scan_id) FROM rejects_errors_2 order by all;
+----
+0	2176	10876	10876	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+0	4176	20876	20876	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+1	3680	18396	18396	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+1	5680	28396	28396	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+
+statement ok
+drop table reject_errors;
+
+# Test giving the name of scans table
+query IIIII
+SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
+    'data/csv/error/mismatch/big_bad*.csv',
+    sample_size=1,
+    rejects_scan = 'rejects_scan_2');
+----
+BIGINT	VARCHAR	11044	11044	2
+
+query IIIIIIIIIIII
+SELECT * EXCLUDE (scan_id) FROM rejects_scan_2 order by all;
+----
+0	data/csv/error/mismatch/big_bad.csv	,	"	"	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_scan='rejects_scan_2', sample_size=1
+1	data/csv/error/mismatch/big_bad2.csv	,	"	"	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_scan='rejects_scan_2', sample_size=1
+
+query IIIIIIIII
+SELECT * EXCLUDE (scan_id) FROM reject_errors order by all;
+----
+0	2176	10876	10876	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+0	4176	20876	20876	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+1	3680	18396	18396	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+1	5680	28396	28396	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+
+# Test giving the name of both tables
+query IIIII
+SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
+    'data/csv/error/mismatch/big_bad*.csv',
+    sample_size=1,
+    rejects_scan = 'rejects_scan_3',
+     rejects_table = 'rejects_errors_3'
+    );
+----
+BIGINT	VARCHAR	11044	11044	2
+
+query IIIIIIIIIIII
+SELECT * EXCLUDE (scan_id)
+FROM rejects_scan_3 order by all;
+----
+0	data/csv/error/mismatch/big_bad.csv	,	"	"	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_scan='rejects_scan_3', rejects_table='rejects_errors_3', sample_size=1
+1	data/csv/error/mismatch/big_bad2.csv	,	"	"	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_scan='rejects_scan_3', rejects_table='rejects_errors_3', sample_size=1
+
+query IIIIIIIII
+SELECT * EXCLUDE (scan_id) FROM rejects_errors_3 order by all;
+----
+0	2176	10876	10876	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+0	4176	20876	20876	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+1	3680	18396	18396	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+1	5680	28396	28396	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+
+statement ok
+drop table reject_errors;
+
+statement ok
+drop table reject_scans;
+
+
+# Test giving the name of an existing table to the errors table
+statement ok
+create temporary table t (a integer);
+
+statement error
+SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
+    'data/csv/error/mismatch/big_bad*.csv',
+    sample_size=1,
+    rejects_table = 't'
+    );
+----
+Reject Error Table name "t" is already in use. Either drop the used name(s), or give other name options in the CSV Reader function.
+
+# Test giving the name of an existing table to the scans table
+
+statement error
+SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
+    'data/csv/error/mismatch/big_bad*.csv',
+    sample_size=1,
+    rejects_scan = 't'
+    );
+----
+Reject Scan Table name "t" is already in use. Either drop the used name(s), or give other name options in the CSV Reader function.
+
+statement error
+SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
+    'data/csv/error/mismatch/big_bad*.csv',
+    sample_size=1,
+    rejects_table = 't',
+    rejects_scan = 't'
+    );
+----
+The names of the rejects scan and rejects error tables can't be the same. Use different names for these tables.
+
+# Test giving the name of the tables with store_rejects and/or ignore_errors set to false throws
+statement error
+SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
+    'data/csv/error/mismatch/big_bad*.csv',
+    sample_size=1,
+    rejects_scan = 'rejects_scan_3',
+     rejects_table = 'rejects_errors_3',
+     ignore_errors = false
+    );
+----
+STORE_REJECTS option is only supported when IGNORE_ERRORS is not manually set to false
+
+statement error
+SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
+    'data/csv/error/mismatch/big_bad*.csv',
+    sample_size=1,
+    store_rejects = true,
+     ignore_errors = false
+    );
+----
+STORE_REJECTS option is only supported when IGNORE_ERRORS is not manually set to false
+
+statement error
+SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
+    'data/csv/error/mismatch/big_bad*.csv',
+    sample_size=1,
+     rejects_table = 'rejects_errors_3',
+     ignore_errors = false
+    );
+----
+STORE_REJECTS option is only supported when IGNORE_ERRORS is not manually set to false
+
+statement error
+SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
+    'data/csv/error/mismatch/big_bad*.csv',
+    sample_size=1,
+    rejects_scan = 'rejects_scan_3',
+     ignore_errors = false
+    );
+----
+STORE_REJECTS option is only supported when IGNORE_ERRORS is not manually set to false
+
+statement error
+SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
+    'data/csv/error/mismatch/big_bad*.csv',
+    sample_size=1,
+    rejects_scan = 'rejects_scan_3',
+     rejects_table = 'rejects_errors_3',
+     store_rejects = false
+    );
+----
+REJECTS_TABLE option is only supported when store_rejects is not manually set to false
+
+statement error
+SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
+    'data/csv/error/mismatch/big_bad*.csv',
+    sample_size=1,
+     rejects_table = 'rejects_errors_3',
+     store_rejects = false
+    );
+----
+REJECTS_TABLE option is only supported when store_rejects is not manually set to false
+
+statement error
+SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
+    'data/csv/error/mismatch/big_bad*.csv',
+    sample_size=1,
+    rejects_scan = 'rejects_scan_3',
+     store_rejects = false
+    );
+----
+REJECTS_SCAN option is only supported when store_rejects is not manually set to false
+
+# Add a test where both tables have the same name (This should fail, because they both have the same name)
+statement error
+SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
+    'data/csv/error/mismatch/big_bad*.csv',
+    sample_size=1,
+    rejects_scan = 'same_name_because_why_not',
+    rejects_table = 'same_name_because_why_not',
+    store_rejects = true
+    );
+----
+The names of the rejects scan and rejects error tables can't be the same. Use different names for these tables.
+
+# This hopefully doesn't fail because the names don't get registered if they fail.
+statement ok
+SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
+    'data/csv/error/mismatch/big_bad*.csv',
+    sample_size=1,
+    rejects_scan = 'same_name_because_why_not',
+    rejects_table = 'same_name_because_why_not_2',
+    store_rejects = true);

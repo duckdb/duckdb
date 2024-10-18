@@ -115,14 +115,17 @@ class build_ext(CompilerLauncherMixin, _build_ext):
 
 lib_name = 'duckdb'
 
-extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'json']
+extensions = ['core_functions', 'parquet', 'icu', 'fts', 'tpch', 'tpcds', 'json']
 
 if platform.system() == 'Windows':
-    extensions = ['parquet', 'icu', 'fts', 'tpch', 'json']
+    extensions = ['core_functions', 'parquet', 'icu', 'fts', 'tpch', 'json']
 
 is_android = hasattr(sys, 'getandroidapilevel')
+is_pyodide = 'PYODIDE' in os.environ
+no_source_wheel = is_pyodide
 use_jemalloc = (
     not is_android
+    and not is_pyodide
     and platform.system() == 'Linux'
     and platform.architecture()[0] == '64bit'
     and platform.machine() == 'x86_64'
@@ -183,11 +186,19 @@ if 'DUCKDB_LIBS' in os.environ:
 
 define_macros = [('DUCKDB_PYTHON_LIB_NAME', lib_name)]
 
+custom_platform = os.environ.get('DUCKDB_CUSTOM_PLATFORM')
+if custom_platform is not None:
+    define_macros.append(('DUCKDB_CUSTOM_PLATFORM', custom_platform))
+
 if platform.system() == 'Darwin':
     toolchain_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.7'])
 
 if platform.system() == 'Windows':
     define_macros.extend([('DUCKDB_BUILD_LIBRARY', None), ('WIN32', None)])
+
+if is_pyodide:
+    # show more useful error messages in the browser
+    define_macros.append(('PYBIND11_DETAILED_ERROR_MESSAGES', None))
 
 if 'BUILD_HTTPFS' in os.environ:
     libraries += ['crypto', 'ssl']
@@ -196,7 +207,9 @@ if 'BUILD_HTTPFS' in os.environ:
 for ext in extensions:
     define_macros.append(('DUCKDB_EXTENSION_{}_LINKED'.format(ext.upper()), None))
 
-define_macros.extend([('DUCKDB_EXTENSION_AUTOLOAD_DEFAULT', '1'), ('DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT', '1')])
+if not is_pyodide:
+    # currently pyodide environment is not compatible with dynamic extension loading
+    define_macros.extend([('DUCKDB_EXTENSION_AUTOLOAD_DEFAULT', '1'), ('DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT', '1')])
 
 linker_args = toolchain_args[:]
 if platform.system() == 'Windows':
@@ -343,6 +356,8 @@ def setup_data_files(data_files):
 
 
 data_files = setup_data_files(extra_files + header_files)
+if no_source_wheel:
+    data_files = []
 
 packages = [
     lib_name,

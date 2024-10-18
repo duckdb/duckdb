@@ -2,26 +2,15 @@
 # description: Test mixed line endings
 # group: [csv]
 
+statement ok
+PRAGMA enable_verification
+
 # generate CSV file with different line endings
 # load CSV file into a table
 statement ok
 CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);
 
-
-query I
-insert into test select * from read_csv_auto('test/sql/copy/csv/data/test/mixed_line_endings.csv');
+statement error
+insert into test select * from read_csv_auto('data/csv/test/mixed_line_endings.csv');
 ----
-3
-
-query I
-SELECT LENGTH(b) FROM test ORDER BY a;
-----
-5
-5
-4
-
-query RR
-SELECT SUM(a), SUM(c) FROM test;
-----
-60.000000	80.000000
-
+Error when sniffing file

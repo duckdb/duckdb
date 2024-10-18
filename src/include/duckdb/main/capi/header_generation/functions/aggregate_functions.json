@@ -1,0 +1,331 @@
+{
+    "group": "aggregate_functions",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_create_aggregate_function",
+            "return_type": "duckdb_aggregate_function",
+            "params": [],
+            "comment": {
+                "description": "Creates a new empty aggregate function.\n\nThe return value should be destroyed with `duckdb_destroy_aggregate_function`.\n\n",
+                "return_value": "The aggregate function object."
+            }
+        },
+        {
+            "name": "duckdb_destroy_aggregate_function",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_aggregate_function *",
+                    "name": "aggregate_function"
+                }
+            ],
+            "comment": {
+                "description": "Destroys the given aggregate function object.\n\n",
+                "param_comments": {
+                    "scalar_function": "The aggregate function to destroy"
+                }
+            }
+        },
+        {
+            "name": "duckdb_aggregate_function_set_name",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_aggregate_function",
+                    "name": "aggregate_function"
+                },
+                {
+                    "type": "const char *",
+                    "name": "name"
+                }
+            ],
+            "comment": {
+                "description": "Sets the name of the given aggregate function.\n\n",
+                "param_comments": {
+                    "aggregate_function": "The aggregate function",
+                    "name": "The name of the aggregate function"
+                }
+            }
+        },
+        {
+            "name": "duckdb_aggregate_function_add_parameter",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_aggregate_function",
+                    "name": "aggregate_function"
+                },
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Adds a parameter to the aggregate function.\n\n",
+                "param_comments": {
+                    "aggregate_function": "The aggregate function.",
+                    "type": "The parameter type. Cannot contain INVALID."
+                }
+            }
+        },
+        {
+            "name": "duckdb_aggregate_function_set_return_type",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_aggregate_function",
+                    "name": "aggregate_function"
+                },
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Sets the return type of the aggregate function.\n\n",
+                "param_comments": {
+                    "aggregate_function": "The aggregate function.",
+                    "type": "The return type. Cannot contain INVALID or ANY."
+                }
+            }
+        },
+        {
+            "name": "duckdb_aggregate_function_set_functions",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_aggregate_function",
+                    "name": "aggregate_function"
+                },
+                {
+                    "type": "duckdb_aggregate_state_size",
+                    "name": "state_size"
+                },
+                {
+                    "type": "duckdb_aggregate_init_t",
+                    "name": "state_init"
+                },
+                {
+                    "type": "duckdb_aggregate_update_t",
+                    "name": "update"
+                },
+                {
+                    "type": "duckdb_aggregate_combine_t",
+                    "name": "combine"
+                },
+                {
+                    "type": "duckdb_aggregate_finalize_t",
+                    "name": "finalize"
+                }
+            ],
+            "comment": {
+                "description": "Sets the main functions of the aggregate function.\n\n",
+                "param_comments": {
+                    "aggregate_function": "The aggregate function",
+                    "state_size": "state size",
+                    "state_init": "state init function",
+                    "update": "update states",
+                    "combine": "combine states",
+                    "finalize": "finalize states"
+                }
+            }
+        },
+        {
+            "name": "duckdb_aggregate_function_set_destructor",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_aggregate_function",
+                    "name": "aggregate_function"
+                },
+                {
+                    "type": "duckdb_aggregate_destroy_t",
+                    "name": "destroy"
+                }
+            ],
+            "comment": {
+                "description": "Sets the state destructor callback of the aggregate function (optional)\n\n",
+                "param_comments": {
+                    "aggregate_function": "The aggregate function",
+                    "destroy": "state destroy callback"
+                }
+            }
+        },
+        {
+            "name": "duckdb_register_aggregate_function",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "con"
+                },
+                {
+                    "type": "duckdb_aggregate_function",
+                    "name": "aggregate_function"
+                }
+            ],
+            "comment": {
+                "description": "Register the aggregate function object within the given connection.\n\nThe function requires at least a name, functions and a return type.\n\nIf the function is incomplete or a function with this name already exists DuckDBError is returned.\n\n",
+                "param_comments": {
+                    "con": "The connection to register it in.",
+                    "function": "The function pointer"
+                },
+                "return_value": "Whether or not the registration was successful."
+            }
+        },
+        {
+            "name": "duckdb_aggregate_function_set_special_handling",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_aggregate_function",
+                    "name": "aggregate_function"
+                }
+            ],
+            "comment": {
+                "description": "Sets the NULL handling of the aggregate function to SPECIAL_HANDLING.\n\n",
+                "param_comments": {
+                    "aggregate_function": "The aggregate function"
+                }
+            }
+        },
+        {
+            "name": "duckdb_aggregate_function_set_extra_info",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_aggregate_function",
+                    "name": "aggregate_function"
+                },
+                {
+                    "type": "void *",
+                    "name": "extra_info"
+                },
+                {
+                    "type": "duckdb_delete_callback_t",
+                    "name": "destroy"
+                }
+            ],
+            "comment": {
+                "description": "Assigns extra information to the scalar function that can be fetched during binding, etc.\n\n",
+                "param_comments": {
+                    "aggregate_function": "The aggregate function",
+                    "extra_info": "The extra information",
+                    "destroy": "The callback that will be called to destroy the bind data (if any)"
+                }
+            }
+        },
+        {
+            "name": "duckdb_aggregate_function_get_extra_info",
+            "return_type": "void *",
+            "params": [
+                {
+                    "type": "duckdb_function_info",
+                    "name": "info"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the extra info of the function as set in `duckdb_aggregate_function_set_extra_info`.\n\n",
+                "param_comments": {
+                    "info": "The info object"
+                },
+                "return_value": "The extra info"
+            }
+        },
+        {
+            "name": "duckdb_aggregate_function_set_error",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_function_info",
+                    "name": "info"
+                },
+                {
+                    "type": "const char *",
+                    "name": "error"
+                }
+            ],
+            "comment": {
+                "description": "Report that an error has occurred while executing the aggregate function.\n\n",
+                "param_comments": {
+                    "info": "The info object",
+                    "error": "The error message"
+                }
+            }
+        },
+        {
+            "name": "duckdb_create_aggregate_function_set",
+            "return_type": "duckdb_aggregate_function_set",
+            "params": [
+                {
+                    "type": "const char*",
+                    "name": "name"
+                }
+            ],
+            "comment": {
+                "description": "Creates a new empty aggregate function set.\n\nThe return value should be destroyed with `duckdb_destroy_aggregate_function_set`.\n\n",
+                "return_value": "The aggregate function set object."
+            }
+        },
+        {
+            "name": "duckdb_destroy_aggregate_function_set",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_aggregate_function_set *",
+                    "name": "aggregate_function_set"
+                }
+            ],
+            "comment": {
+                "description": "Destroys the given aggregate function set object.\n\n",
+                "param_comments": {
+                    "aggregate_function": "The aggregate function set to destroy"
+                }
+            }
+        },
+        {
+            "name": "duckdb_add_aggregate_function_to_set",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_aggregate_function_set",
+                    "name": "set"
+                },
+                {
+                    "type": "duckdb_aggregate_function",
+                    "name": "function"
+                }
+            ],
+            "comment": {
+                "description": "Adds the aggregate function as a new overload to the aggregate function set.\n\nReturns DuckDBError if the function could not be added, for example if the overload already exists.\n\n",
+                "param_comments": {
+                    "set": "The aggregate function set",
+                    "function": "The function to add"
+                }
+            }
+        },
+        {
+            "name": "duckdb_register_aggregate_function_set",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "con"
+                },
+                {
+                    "type": "duckdb_aggregate_function_set",
+                    "name": "set"
+                }
+            ],
+            "comment": {
+                "description": "Register the aggregate function set within the given connection.\n\nThe set requires at least a single valid overload.\n\nIf the set is incomplete or a function with this name already exists DuckDBError is returned.\n\n",
+                "param_comments": {
+                    "con": "The connection to register it in.",
+                    "set": "The function set to register"
+                },
+                "return_value": "Whether or not the registration was successful."
+            }
+        }
+    ]
+}

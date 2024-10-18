@@ -51,17 +51,17 @@ ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p) {
 	types.clear();
 	count = 0;
 	this->finished_append = false;
-	allocator = make_shared<ColumnDataAllocator>(allocator_p);
+	allocator = make_shared_ptr<ColumnDataAllocator>(allocator_p);
 }
 
 ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p, vector<LogicalType> types_p) {
 	Initialize(std::move(types_p));
-	allocator = make_shared<ColumnDataAllocator>(allocator_p);
+	allocator = make_shared_ptr<ColumnDataAllocator>(allocator_p);
 }
 
 ColumnDataCollection::ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types_p) {
 	Initialize(std::move(types_p));
-	allocator = make_shared<ColumnDataAllocator>(buffer_manager);
+	allocator = make_shared_ptr<ColumnDataAllocator>(buffer_manager);
 }
 
 ColumnDataCollection::ColumnDataCollection(shared_ptr<ColumnDataAllocator> allocator_p, vector<LogicalType> types_p) {
@@ -71,7 +71,7 @@ ColumnDataCollection::ColumnDataCollection(shared_ptr<ColumnDataAllocator> alloc
 
 ColumnDataCollection::ColumnDataCollection(ClientContext &context, vector<LogicalType> types_p,
                                            ColumnDataAllocatorType type)
-    : ColumnDataCollection(make_shared<ColumnDataAllocator>(context, type), std::move(types_p)) {
+    : ColumnDataCollection(make_shared_ptr<ColumnDataAllocator>(context, type), std::move(types_p)) {
 	D_ASSERT(!types.empty());
 }
 
@@ -199,7 +199,7 @@ ColumnDataChunkIterationHelper::ColumnDataChunkIterationHelper(const ColumnDataC
 
 ColumnDataChunkIterationHelper::ColumnDataChunkIterator::ColumnDataChunkIterator(
     const ColumnDataCollection *collection_p, vector<column_t> column_ids_p)
-    : collection(collection_p), scan_chunk(make_shared<DataChunk>()), row_index(0) {
+    : collection(collection_p), scan_chunk(make_shared_ptr<DataChunk>()), row_index(0) {
 	if (!collection) {
 		return;
 	}
@@ -246,7 +246,7 @@ ColumnDataRowIterationHelper::ColumnDataRowIterationHelper(const ColumnDataColle
 }
 
 ColumnDataRowIterationHelper::ColumnDataRowIterator::ColumnDataRowIterator(const ColumnDataCollection *collection_p)
-    : collection(collection_p), scan_chunk(make_shared<DataChunk>()), current_row(*scan_chunk, 0, 0) {
+    : collection(collection_p), scan_chunk(make_shared_ptr<DataChunk>()), current_row(*scan_chunk, 0, 0) {
 	if (!collection) {
 		return;
 	}
@@ -467,6 +467,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 
 	auto current_index = meta_data.vector_data_index;
 	idx_t remaining = copy_count;
+	auto block_size = meta_data.segment.allocator->GetBufferManager().GetBlockSize();
 	while (remaining > 0) {
 		// how many values fit in the current string vector
 		idx_t vector_remaining =
@@ -485,19 +486,18 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 			if (entry.IsInlined()) {
 				continue;
 			}
-			if (heap_size + entry.GetSize() > Storage::BLOCK_SIZE) {
+			if (heap_size + entry.GetSize() > block_size) {
 				break;
 			}
 			heap_size += entry.GetSize();
 		}
 
 		if (vector_remaining != 0 && append_count == 0) {
-			// single string is longer than Storage::BLOCK_SIZE
-			// we allocate one block at a time for long strings
+			// The string exceeds Storage::DEFAULT_BLOCK_SIZE, so we allocate one block at a time for long strings.
 			auto source_idx = source_data.sel->get_index(offset + append_count);
 			D_ASSERT(source_data.validity.RowIsValid(source_idx));
 			D_ASSERT(!source_entries[source_idx].IsInlined());
-			D_ASSERT(source_entries[source_idx].GetSize() > Storage::BLOCK_SIZE);
+			D_ASSERT(source_entries[source_idx].GetSize() > block_size);
 			heap_size += source_entries[source_idx].GetSize();
 			append_count++;
 		}
@@ -690,8 +690,16 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 		}
 	}
 
-	child_function.function(child_meta_data, child_vector_data, child_vector, offset * array_size,
-	                        array_size * copy_count);
+	auto is_constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	// If the array is constant, we need to copy the child vector n times
+	if (is_constant) {
+		for (idx_t i = 0; i < copy_count; i++) {
+			child_function.function(child_meta_data, child_vector_data, child_vector, 0, array_size);
+		}
+	} else {
+		child_function.function(child_meta_data, child_vector_data, child_vector, offset * array_size,
+		                        copy_count * array_size);
+	}
 }
 
 ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &type) {
@@ -915,6 +923,29 @@ bool ColumnDataCollection::NextScanIndex(ColumnDataScanState &state, idx_t &chun
 	return true;
 }
 
+bool ColumnDataCollection::PrevScanIndex(ColumnDataScanState &state, idx_t &chunk_index, idx_t &segment_index,
+                                         idx_t &row_index) const {
+	// check within the current segment if we still have chunks to scan
+	// Note that state.chunk_index is 1-indexed, with 0 as undefined.
+	while (state.chunk_index <= 1) {
+		if (!state.segment_index) {
+			return false;
+		}
+
+		--state.segment_index;
+		state.chunk_index = segments[state.segment_index]->chunk_data.size() + 1;
+		state.current_chunk_state.handles.clear();
+	}
+
+	--state.chunk_index;
+	segment_index = state.segment_index;
+	chunk_index = state.chunk_index - 1;
+	state.next_row_index = state.current_row_index;
+	state.current_row_index -= segments[state.segment_index]->chunk_data[chunk_index].count;
+	row_index = state.current_row_index;
+	return true;
+}
+
 void ColumnDataCollection::ScanAtIndex(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate,
                                        DataChunk &result, idx_t chunk_index, idx_t segment_index,
                                        idx_t row_index) const {
@@ -937,6 +968,38 @@ bool ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) c
 	idx_t row_index;
 	if (!NextScanIndex(state, chunk_index, segment_index, row_index)) {
 		return false;
+	}
+
+	// found a chunk to scan -> scan it
+	auto &segment = *segments[segment_index];
+	state.current_chunk_state.properties = state.properties;
+	segment.ReadChunk(chunk_index, state.current_chunk_state, result, state.column_ids);
+	result.Verify();
+	return true;
+}
+
+bool ColumnDataCollection::Seek(idx_t seek_idx, ColumnDataScanState &state, DataChunk &result) const {
+	//	Idempotency: Don't change anything if the row is already in range
+	if (state.current_row_index <= seek_idx && seek_idx < state.next_row_index) {
+		return true;
+	}
+
+	result.Reset();
+
+	//	Linear scan for now. We could use a current_row_index => chunk map at some point
+	//	but most use cases should be pretty local
+	idx_t chunk_index;
+	idx_t segment_index;
+	idx_t row_index;
+	while (seek_idx < state.current_row_index) {
+		if (!PrevScanIndex(state, chunk_index, segment_index, row_index)) {
+			return false;
+		}
+	}
+	while (state.next_row_index <= seek_idx) {
+		if (!NextScanIndex(state, chunk_index, segment_index, row_index)) {
+			return false;
+		}
 	}
 
 	// found a chunk to scan -> scan it
@@ -1041,7 +1104,7 @@ void ColumnDataCollection::Reset() {
 	segments.clear();
 
 	// Refreshes the ColumnDataAllocator to prevent holding on to allocated data unnecessarily
-	allocator = make_shared<ColumnDataAllocator>(*allocator);
+	allocator = make_shared_ptr<ColumnDataAllocator>(*allocator);
 }
 
 struct ValueResultEquals {

@@ -200,7 +200,7 @@ void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 	initial_state_pipeline.Build(*children[0]);
 
 	// the RHS is the recursive pipeline
-	recursive_meta_pipeline = make_shared<MetaPipeline>(executor, state, this);
+	recursive_meta_pipeline = make_shared_ptr<MetaPipeline>(executor, state, this);
 	recursive_meta_pipeline->SetRecursiveCTE();
 	recursive_meta_pipeline->Build(*children[1]);
 
@@ -223,12 +223,10 @@ vector<const_reference<PhysicalOperator>> PhysicalRecursiveCTE::GetSources() con
 	return {*this};
 }
 
-string PhysicalRecursiveCTE::ParamsToString() const {
-	string result = "";
-	result += "\n[INFOSEPARATOR]\n";
-	result += ctename;
-	result += "\n[INFOSEPARATOR]\n";
-	result += StringUtil::Format("idx: %llu", table_index);
+InsertionOrderPreservingMap<string> PhysicalRecursiveCTE::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	result["CTE Name"] = ctename;
+	result["Table Index"] = StringUtil::Format("%llu", table_index);
 	return result;
 }
 

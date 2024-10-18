@@ -8,9 +8,6 @@ SET default_null_order='nulls_first';
 statement ok
 PRAGMA enable_verification
 
-# FIXME: bug in nested shuffle
-require no_vector_verification
-
 statement ok
 CREATE TABLE lists(l INTEGER[]);
 

@@ -1,0 +1,52 @@
+# name: test/sql/copy_database/copy_database_index.test
+# description: Test COPY DATABASE with indexes
+# group: [copy_database]
+
+require noforcestorage
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH DATABASE ':memory:' AS db1;
+
+statement ok
+USE db1
+
+statement ok
+CREATE TABLE test(a INTEGER, b INTEGER, c VARCHAR(10));
+
+statement ok
+CREATE INDEX i_index ON test(a)
+
+statement ok
+INSERT INTO test VALUES (42, 88, 'hello');
+
+query II
+explain SELECT * FROM db1.test WHERE a=42
+----
+physical_plan	<REGEX>:.*INDEX_SCAN.*
+
+statement ok
+COPY FROM DATABASE db1 TO memory
+
+statement ok
+USE memory
+
+query III
+SELECT * FROM test WHERE a=42
+----
+42	88	hello
+
+query II
+explain SELECT * FROM test WHERE a=42
+----
+physical_plan	<!REGEX>:.*INDEX_SCAN.*
+
+statement ok
+DROP INDEX i_index
+
+query II
+explain SELECT * FROM test WHERE a=42
+----
+physical_plan	<!REGEX>:.*INDEX_SCAN.*

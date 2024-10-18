@@ -7,26 +7,31 @@
 #include "duckdb_python/numpy/numpy_bind.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb_python/pandas/column/pandas_numpy_column.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 
 #include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 
-struct PandasScanFunctionData : public PyTableFunctionData {
+struct PandasScanFunctionData : public TableFunctionData {
 	PandasScanFunctionData(py::handle df, idx_t row_count, vector<PandasColumnBindData> pandas_bind_data,
-	                       vector<LogicalType> sql_types)
+	                       vector<LogicalType> sql_types, shared_ptr<DependencyItem> dependency)
 	    : df(df), row_count(row_count), lines_read(0), pandas_bind_data(std::move(pandas_bind_data)),
-	      sql_types(std::move(sql_types)) {
+	      sql_types(std::move(sql_types)), copied_df(std::move(dependency)) {
 	}
 	py::handle df;
 	idx_t row_count;
 	atomic<idx_t> lines_read;
 	vector<PandasColumnBindData> pandas_bind_data;
 	vector<LogicalType> sql_types;
+	shared_ptr<DependencyItem> copied_df;
 
 	~PandasScanFunctionData() override {
-		py::gil_scoped_acquire acquire;
-		pandas_bind_data.clear();
+		try {
+			py::gil_scoped_acquire acquire;
+			pandas_bind_data.clear();
+		} catch (...) { // NOLINT
+		}
 	}
 };
 
@@ -57,18 +62,20 @@ struct PandasScanGlobalState : public GlobalTableFunctionState {
 PandasScanFunction::PandasScanFunction()
     : TableFunction("pandas_scan", {LogicalType::POINTER}, PandasScanFunc, PandasScanBind, PandasScanInitGlobal,
                     PandasScanInitLocal) {
-	get_batch_index = PandasScanGetBatchIndex;
+	get_partition_data = PandasScanGetPartitionData;
 	cardinality = PandasScanCardinality;
 	table_scan_progress = PandasProgress;
 	serialize = PandasSerialize;
 	projection_pushdown = true;
 }
 
-idx_t PandasScanFunction::PandasScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-                                                  LocalTableFunctionState *local_state,
-                                                  GlobalTableFunctionState *global_state) {
-	auto &data = local_state->Cast<PandasScanLocalState>();
-	return data.batch_index;
+OperatorPartitionData PandasScanFunction::PandasScanGetPartitionData(ClientContext &context,
+                                                                     TableFunctionGetPartitionInput &input) {
+	if (input.partition_info.RequiresPartitionColumns()) {
+		throw InternalException("PandasScan::GetPartitionData: partition columns not supported");
+	}
+	auto &data = input.local_state->Cast<PandasScanLocalState>();
+	return OperatorPartitionData(data.batch_index);
 }
 
 unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &context, TableFunctionBindInput &input,
@@ -86,9 +93,21 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
 	}
 	auto df_columns = py::list(df.attr("keys")());
 
+	auto &ref = input.ref;
+
+	shared_ptr<DependencyItem> dependency_item;
+	if (ref.external_dependency) {
+		// This was created during the replacement scan if this was a pandas DataFrame (see python_replacement_scan.cpp)
+		dependency_item = ref.external_dependency->GetDependency("copy");
+		if (!dependency_item) {
+			// This was created during the replacement if this was a numpy scan
+			dependency_item = ref.external_dependency->GetDependency("data");
+		}
+	}
+
 	auto get_fun = df.attr("__getitem__");
 	idx_t row_count = py::len(get_fun(df_columns[0]));
-	return make_uniq<PandasScanFunctionData>(df, row_count, std::move(pandas_bind_data), return_types);
+	return make_uniq<PandasScanFunctionData>(df, row_count, std::move(pandas_bind_data), return_types, dependency_item);
 }
 
 unique_ptr<GlobalTableFunctionState> PandasScanFunction::PandasScanInitGlobal(ClientContext &context,

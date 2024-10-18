@@ -77,6 +77,9 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery:
 	for (auto &expr : info->expressions) {
 		info->parsed_expressions.emplace_back(expr->Copy());
 	}
+	if (stmt.whereClause) {
+		throw NotImplementedException("Creating partial indexes is not supported currently");
+	}
 	result->info = std::move(info);
 	return result;
 }

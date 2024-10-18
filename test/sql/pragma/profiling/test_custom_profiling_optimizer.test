@@ -1,0 +1,233 @@
+# name: test/sql/pragma/profiling/test_custom_profiling_optimizer.test
+# description: Test profiling the optimizer.
+# group: [profiling]
+
+require json
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"ALL_OPTIMIZERS": "true"}'
+
+statement ok
+SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
+
+statement ok
+PRAGMA disable_profiling;
+
+query I
+SELECT unnest(res) FROM (
+	SELECT current_setting('custom_profiling_settings') as raw_setting,
+	raw_setting.trim('{}') AS setting,
+	string_split(setting, ', ') AS res
+) ORDER BY ALL
+----
+"ALL_OPTIMIZERS": "true"
+"OPTIMIZER_BUILD_SIDE_PROBE_SIDE": "true"
+"OPTIMIZER_COLUMN_LIFETIME": "true"
+"OPTIMIZER_COMMON_AGGREGATE": "true"
+"OPTIMIZER_COMMON_SUBEXPRESSIONS": "true"
+"OPTIMIZER_COMPRESSED_MATERIALIZATION": "true"
+"OPTIMIZER_CTE_FILTER_PUSHER": "true"
+"OPTIMIZER_DELIMINATOR": "true"
+"OPTIMIZER_DUPLICATE_GROUPS": "true"
+"OPTIMIZER_EXPRESSION_REWRITER": "true"
+"OPTIMIZER_EXTENSION": "true"
+"OPTIMIZER_FILTER_PULLUP": "true"
+"OPTIMIZER_FILTER_PUSHDOWN": "true"
+"OPTIMIZER_IN_CLAUSE": "true"
+"OPTIMIZER_JOIN_FILTER_PUSHDOWN": "true"
+"OPTIMIZER_JOIN_ORDER": "true"
+"OPTIMIZER_LIMIT_PUSHDOWN": "true"
+"OPTIMIZER_MATERIALIZED_CTE": "true"
+"OPTIMIZER_REGEX_RANGE": "true"
+"OPTIMIZER_REORDER_FILTER": "true"
+"OPTIMIZER_STATISTICS_PROPAGATION": "true"
+"OPTIMIZER_TOP_N": "true"
+"OPTIMIZER_UNNEST_REWRITER": "true"
+"OPTIMIZER_UNUSED_COLUMNS": "true"
+
+statement ok
+PRAGMA custom_profiling_settings='{}'
+
+statement ok
+SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
+
+query I rowsort
+SELECT unnest(res) FROM (
+	SELECT current_setting('custom_profiling_settings') AS raw_setting,
+	raw_setting.trim('{}') AS setting,
+	string_split(setting, ', ') AS res
+)
+----
+(empty)
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPTIMIZER_JOIN_ORDER": "true"}'
+
+statement ok
+SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
+
+statement ok
+PRAGMA disable_profiling;
+
+query I rowsort
+SELECT unnest(res) FROM (
+	SELECT current_setting('custom_profiling_settings') AS raw_setting,
+	raw_setting.trim('{}') AS setting,
+	string_split(setting, ', ') AS res
+) ORDER BY ALL;
+----
+"OPTIMIZER_JOIN_ORDER": "true"
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+
+query I
+SELECT 
+	CASE WHEN optimizer_join_order > 0 THEN 'true'
+    ELSE 'false' END
+FROM metrics_output;
+----
+true
+
+statement ok
+SET disabled_optimizers = 'JOIN_ORDER';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPTIMIZER_JOIN_ORDER": "true"}';
+
+statement ok
+SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
+
+query I rowsort
+SELECT unnest(res) FROM (
+	SELECT current_setting('custom_profiling_settings') AS raw_setting,
+	raw_setting.trim('{}') AS setting,
+	string_split(setting, ', ') AS res
+) ORDER BY ALL
+----
+(empty)
+
+statement ok
+PRAGMA custom_profiling_settings='{"CUMULATIVE_OPTIMIZER_TIMING": "true"}';
+
+statement ok
+SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+
+query I
+SELECT 
+	CASE WHEN cumulative_optimizer_timing > 0 THEN 'true'
+    ELSE 'false' END
+FROM metrics_output;
+----
+true
+
+# All phase timings must be collected when using detailed profiling mode.
+
+statement ok
+RESET custom_profiling_settings;
+
+statement ok
+SET profiling_mode = 'detailed';
+
+statement ok
+PRAGMA enable_profiling;
+
+statement ok
+SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
+
+query I
+SELECT unnest(res) FROM (
+	SELECT current_setting('custom_profiling_settings') AS raw_setting,
+	raw_setting.trim('{}') AS setting,
+	string_split(setting, ', ') AS res
+) ORDER BY ALL
+----
+"ALL_OPTIMIZERS": "true"
+"BLOCKED_THREAD_TIME": "true"
+"CPU_TIME": "true"
+"CUMULATIVE_CARDINALITY": "true"
+"CUMULATIVE_OPTIMIZER_TIMING": "true"
+"CUMULATIVE_ROWS_SCANNED": "true"
+"EXTRA_INFO": "true"
+"LATENCY": "true"
+"OPERATOR_CARDINALITY": "true"
+"OPERATOR_ROWS_SCANNED": "true"
+"OPERATOR_TIMING": "true"
+"OPERATOR_TYPE": "true"
+"OPTIMIZER_BUILD_SIDE_PROBE_SIDE": "true"
+"OPTIMIZER_COLUMN_LIFETIME": "true"
+"OPTIMIZER_COMMON_AGGREGATE": "true"
+"OPTIMIZER_COMMON_SUBEXPRESSIONS": "true"
+"OPTIMIZER_COMPRESSED_MATERIALIZATION": "true"
+"OPTIMIZER_CTE_FILTER_PUSHER": "true"
+"OPTIMIZER_DELIMINATOR": "true"
+"OPTIMIZER_DUPLICATE_GROUPS": "true"
+"OPTIMIZER_EXPRESSION_REWRITER": "true"
+"OPTIMIZER_EXTENSION": "true"
+"OPTIMIZER_FILTER_PULLUP": "true"
+"OPTIMIZER_FILTER_PUSHDOWN": "true"
+"OPTIMIZER_IN_CLAUSE": "true"
+"OPTIMIZER_JOIN_FILTER_PUSHDOWN": "true"
+"OPTIMIZER_JOIN_ORDER": "true"
+"OPTIMIZER_LIMIT_PUSHDOWN": "true"
+"OPTIMIZER_MATERIALIZED_CTE": "true"
+"OPTIMIZER_REGEX_RANGE": "true"
+"OPTIMIZER_REORDER_FILTER": "true"
+"OPTIMIZER_STATISTICS_PROPAGATION": "true"
+"OPTIMIZER_TOP_N": "true"
+"OPTIMIZER_UNNEST_REWRITER": "true"
+"OPTIMIZER_UNUSED_COLUMNS": "true"
+"PHYSICAL_PLANNER": "true"
+"PHYSICAL_PLANNER_COLUMN_BINDING": "true"
+"PHYSICAL_PLANNER_CREATE_PLAN": "true"
+"PHYSICAL_PLANNER_RESOLVE_TYPES": "true"
+"PLANNER": "true"
+"PLANNER_BINDING": "true"
+"QUERY_NAME": "true"
+"RESULT_SET_SIZE": "true"
+"ROWS_RETURNED": "true"
+
+statement ok
+RESET custom_profiling_settings;
+
+statement ok
+PRAGMA profiling_mode = 'standard';
+
+statement ok
+SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
+
+query I
+SELECT unnest(res) FROM (
+	SELECT current_setting('custom_profiling_settings') AS raw_setting,
+	raw_setting.trim('{}') AS setting,
+	string_split(setting, ', ') AS res
+) ORDER BY ALL;
+----
+"BLOCKED_THREAD_TIME": "true"
+"CPU_TIME": "true"
+"CUMULATIVE_CARDINALITY": "true"
+"CUMULATIVE_ROWS_SCANNED": "true"
+"EXTRA_INFO": "true"
+"LATENCY": "true"
+"OPERATOR_CARDINALITY": "true"
+"OPERATOR_ROWS_SCANNED": "true"
+"OPERATOR_TIMING": "true"
+"OPERATOR_TYPE": "true"
+"QUERY_NAME": "true"
+"RESULT_SET_SIZE": "true"
+"ROWS_RETURNED": "true"

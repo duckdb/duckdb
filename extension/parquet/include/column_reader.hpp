@@ -29,12 +29,12 @@ class ParquetReader;
 
 using duckdb_apache::thrift::protocol::TProtocol;
 
-using duckdb_parquet::format::ColumnChunk;
-using duckdb_parquet::format::CompressionCodec;
-using duckdb_parquet::format::FieldRepetitionType;
-using duckdb_parquet::format::PageHeader;
-using duckdb_parquet::format::SchemaElement;
-using duckdb_parquet::format::Type;
+using duckdb_parquet::ColumnChunk;
+using duckdb_parquet::CompressionCodec;
+using duckdb_parquet::FieldRepetitionType;
+using duckdb_parquet::PageHeader;
+using duckdb_parquet::SchemaElement;
+using duckdb_parquet::Type;
 
 typedef std::bitset<STANDARD_VECTOR_SIZE> parquet_filter_t;
 
@@ -72,19 +72,44 @@ public:
 
 	template <class VALUE_TYPE, class CONVERSION>
 	void PlainTemplated(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, uint64_t num_values,
-	                    parquet_filter_t &filter, idx_t result_offset, Vector &result) {
-		auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
-		auto &result_mask = FlatVector::Validity(result);
-		for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {
-			if (HasDefines() && defines[row_idx + result_offset] != max_define) {
-				result_mask.SetInvalid(row_idx + result_offset);
-				continue;
+	                    parquet_filter_t *filter, idx_t result_offset, Vector &result) {
+		if (HasDefines()) {
+			if (CONVERSION::PlainAvailable(*plain_data, num_values)) {
+				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, true, true>(*plain_data, defines, num_values, filter,
+				                                                           result_offset, result);
+			} else {
+				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, true, false>(*plain_data, defines, num_values, filter,
+				                                                            result_offset, result);
 			}
-			if (filter[row_idx + result_offset]) {
-				VALUE_TYPE val = CONVERSION::PlainRead(*plain_data, *this);
-				result_ptr[row_idx + result_offset] = val;
+		} else {
+			if (CONVERSION::PlainAvailable(*plain_data, num_values)) {
+				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, false, true>(*plain_data, defines, num_values, filter,
+				                                                            result_offset, result);
+			} else {
+				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, false, false>(*plain_data, defines, num_values, filter,
+				                                                             result_offset, result);
+			}
+		}
+	}
+
+private:
+	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES, bool UNSAFE>
+	void PlainTemplatedInternal(ByteBuffer &plain_data, const uint8_t *__restrict defines, const uint64_t num_values,
+	                            const parquet_filter_t *filter, const idx_t result_offset, Vector &result) {
+		const auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
+		auto &result_mask = FlatVector::Validity(result);
+		for (idx_t row_idx = result_offset; row_idx < result_offset + num_values; row_idx++) {
+			if (HAS_DEFINES && defines && defines[row_idx] != max_define) {
+				result_mask.SetInvalid(row_idx);
+			} else if (!filter || filter->test(row_idx)) {
+				result_ptr[row_idx] =
+				    UNSAFE ? CONVERSION::UnsafePlainRead(plain_data, *this) : CONVERSION::PlainRead(plain_data, *this);
 			} else { // there is still some data there that we have to skip over
-				CONVERSION::PlainSkip(*plain_data, *this);
+				if (UNSAFE) {
+					CONVERSION::UnsafePlainSkip(plain_data, *this);
+				} else {
+					CONVERSION::PlainSkip(plain_data, *this);
+				}
 			}
 		}
 	}
@@ -92,14 +117,9 @@ public:
 protected:
 	Allocator &GetAllocator();
 	// readers that use the default Read() need to implement those
-	virtual void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, idx_t num_values, parquet_filter_t &filter,
+	virtual void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, idx_t num_values, parquet_filter_t *filter,
 	                   idx_t result_offset, Vector &result);
-	virtual void Dictionary(shared_ptr<ResizeableBuffer> dictionary_data, idx_t num_entries);
-	virtual void Offsets(uint32_t *offsets, uint8_t *defines, idx_t num_values, parquet_filter_t &filter,
-	                     idx_t result_offset, Vector &result);
-
 	// these are nops for most types, but not for strings
-	virtual void DictReference(Vector &result);
 	virtual void PlainReference(shared_ptr<ByteBuffer>, Vector &result);
 
 	virtual void PrepareDeltaLengthByteArray(ResizeableBuffer &buffer);
@@ -110,11 +130,11 @@ protected:
 	// applies any skips that were registered using Skip()
 	virtual void ApplyPendingSkips(idx_t num_values);
 
-	bool HasDefines() {
+	bool HasDefines() const {
 		return max_define > 0;
 	}
 
-	bool HasRepeats() {
+	bool HasRepeats() const {
 		return max_repeat > 0;
 	}
 
@@ -143,10 +163,10 @@ private:
 	void PreparePageV2(PageHeader &page_hdr);
 	void DecompressInternal(CompressionCodec::type codec, const_data_ptr_t src, idx_t src_size, data_ptr_t dst,
 	                        idx_t dst_size);
+	void ConvertDictToSelVec(uint32_t *offsets, uint8_t *defines, parquet_filter_t &filter, idx_t read_now);
+	const ColumnChunk *chunk = nullptr;
 
-	const duckdb_parquet::format::ColumnChunk *chunk = nullptr;
-
-	duckdb_apache::thrift::protocol::TProtocol *protocol;
+	TProtocol *protocol;
 	idx_t page_rows_available;
 	idx_t group_rows_available;
 	idx_t chunk_read_offset;
@@ -167,6 +187,10 @@ private:
 	parquet_filter_t none_filter;
 	ResizeableBuffer dummy_define;
 	ResizeableBuffer dummy_repeat;
+
+	SelectionVector dictionary_selection_vector;
+	idx_t dictionary_size;
+	unique_ptr<Vector> dictionary;
 
 public:
 	template <class TARGET>

@@ -46,10 +46,12 @@ typedef unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce_t)(uintptr_
                                                                         ArrowStreamParameters &parameters);
 typedef void (*stream_factory_get_schema_t)(ArrowArrayStream *stream_factory_ptr, ArrowSchema &schema);
 
-struct ArrowScanFunctionData : public PyTableFunctionData {
+struct ArrowScanFunctionData : public TableFunctionData {
 public:
-	ArrowScanFunctionData(stream_factory_produce_t scanner_producer_p, uintptr_t stream_factory_ptr_p)
-	    : lines_read(0), stream_factory_ptr(stream_factory_ptr_p), scanner_producer(scanner_producer_p) {
+	ArrowScanFunctionData(stream_factory_produce_t scanner_producer_p, uintptr_t stream_factory_ptr_p,
+	                      shared_ptr<DependencyItem> dependency = nullptr)
+	    : lines_read(0), stream_factory_ptr(stream_factory_ptr_p), scanner_producer(scanner_producer_p),
+	      dependency(std::move(dependency)) {
 	}
 	vector<LogicalType> all_types;
 	atomic<idx_t> lines_read;
@@ -59,6 +61,8 @@ public:
 	uintptr_t stream_factory_ptr;
 	//! Pointer to the scanner factory produce
 	stream_factory_produce_t scanner_producer;
+	//! The (optional) dependency of this function (used in Python for example)
+	shared_ptr<DependencyItem> dependency;
 	//! Arrow table data
 	ArrowTableType arrow_table;
 };
@@ -82,7 +86,7 @@ public:
 struct ArrowScanLocalState;
 struct ArrowArrayScanState {
 public:
-	ArrowArrayScanState(ArrowScanLocalState &state);
+	explicit ArrowArrayScanState(ArrowScanLocalState &state);
 
 public:
 	ArrowScanLocalState &state;
@@ -146,7 +150,7 @@ public:
 		if (it == array_states.end()) {
 			auto child_p = make_uniq<ArrowArrayScanState>(*this);
 			auto &child = *child_p;
-			array_states.emplace(std::make_pair(child_idx, std::move(child_p)));
+			array_states.emplace(child_idx, std::move(child_p));
 			return child;
 		}
 		return *it->second;
@@ -210,9 +214,10 @@ protected:
 	static idx_t ArrowScanMaxThreads(ClientContext &context, const FunctionData *bind_data);
 
 	//! Allows parallel Create Table / Insertion
-	static idx_t ArrowGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-	                                LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state);
+	static OperatorPartitionData ArrowGetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input);
 
+	//! Specify if a given type can be pushed-down by the arrow engine
+	static bool ArrowPushdownType(const LogicalType &type);
 	//! -----Utility Functions:-----
 	//! Gets Arrow Table's Cardinality
 	static unique_ptr<NodeStatistics> ArrowScanCardinality(ClientContext &context, const FunctionData *bind_data);

@@ -17,7 +17,7 @@ BoundLambdaRefExpression::BoundLambdaRefExpression(LogicalType type, ColumnBindi
     : BoundLambdaRefExpression(string(), std::move(type), binding, lambda_idx, depth) {
 }
 
-unique_ptr<Expression> BoundLambdaRefExpression::Copy() {
+unique_ptr<Expression> BoundLambdaRefExpression::Copy() const {
 	return make_uniq<BoundLambdaRefExpression>(alias, return_type, binding, lambda_idx, depth);
 }
 

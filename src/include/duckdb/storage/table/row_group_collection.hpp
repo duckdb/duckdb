@@ -27,20 +27,27 @@ struct TableAppendState;
 class DuckTransaction;
 class BoundConstraint;
 class RowGroupSegmentTree;
+class StorageCommitState;
 struct ColumnSegmentInfo;
 class MetadataManager;
 struct VacuumState;
 struct CollectionCheckpointState;
+struct PersistentCollectionData;
+class CheckpointTask;
+class TableIOManager;
 
 class RowGroupCollection {
 public:
-	RowGroupCollection(shared_ptr<DataTableInfo> info, BlockManager &block_manager, vector<LogicalType> types,
+	RowGroupCollection(shared_ptr<DataTableInfo> info, TableIOManager &io_manager, vector<LogicalType> types,
 	                   idx_t row_start, idx_t total_rows = 0);
+	RowGroupCollection(shared_ptr<DataTableInfo> info, BlockManager &block_manager, vector<LogicalType> types,
+	                   idx_t row_start, idx_t total_rows, idx_t row_group_size);
 
 public:
 	idx_t GetTotalRows() const;
 	Allocator &GetAllocator() const;
 
+	void Initialize(PersistentCollectionData &data);
 	void Initialize(PersistentTableData &data);
 	void InitializeEmpty();
 
@@ -78,8 +85,11 @@ public:
 	void FinalizeAppend(TransactionData transaction, TableAppendState &state);
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
 	void RevertAppendInternal(idx_t start_row);
+	void CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count);
 
-	void MergeStorage(RowGroupCollection &data);
+	void MergeStorage(RowGroupCollection &data, optional_ptr<DataTable> table,
+	                  optional_ptr<StorageCommitState> commit_state);
+	bool IsPersistent() const;
 
 	void RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count);
 
@@ -90,9 +100,11 @@ public:
 
 	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
 
-	void InitializeVacuumState(VacuumState &state, vector<SegmentNode<RowGroup>> &segments);
-	bool ScheduleVacuumTasks(CollectionCheckpointState &checkpoint_state, VacuumState &state, idx_t segment_idx);
-	void ScheduleCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx);
+	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
+	                           vector<SegmentNode<RowGroup>> &segments);
+	bool ScheduleVacuumTasks(CollectionCheckpointState &checkpoint_state, VacuumState &state, idx_t segment_idx,
+	                         bool schedule_vacuum);
+	unique_ptr<CheckpointTask> GetCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx);
 
 	void CommitDropColumn(idx_t index);
 	void CommitDropTable();
@@ -101,7 +113,7 @@ public:
 	const vector<LogicalType> &GetTypes() const;
 
 	shared_ptr<RowGroupCollection> AddColumn(ClientContext &context, ColumnDefinition &new_column,
-	                                         Expression &default_value);
+	                                         ExpressionExecutor &default_executor);
 	shared_ptr<RowGroupCollection> RemoveColumn(idx_t col_idx);
 	shared_ptr<RowGroupCollection> AlterType(ClientContext &context, idx_t changed_idx, const LogicalType &target_type,
 	                                         vector<column_t> bound_columns, Expression &cast_expr);
@@ -124,12 +136,18 @@ public:
 		return allocation_size;
 	}
 
+	idx_t GetRowGroupSize() const {
+		return row_group_size;
+	}
+
 private:
 	bool IsEmpty(SegmentLock &) const;
 
 private:
 	//! BlockManager
 	BlockManager &block_manager;
+	//! The row group size of the row group collection
+	const idx_t row_group_size;
 	//! The number of rows in the table
 	atomic<idx_t> total_rows;
 	//! The data table info

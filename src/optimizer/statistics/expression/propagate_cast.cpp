@@ -27,6 +27,9 @@ static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatisti
 	case LogicalTypeId::TIME: {
 		switch (input.GetType().id()) {
 		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_SEC:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_NS:
 		case LogicalTypeId::TIMESTAMP_TZ:
 			return nullptr;
 		default:
@@ -122,7 +125,7 @@ static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatisti
 }
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCastExpression &cast,
-                                                                     unique_ptr<Expression> *expr_ptr) {
+                                                                     unique_ptr<Expression> &expr_ptr) {
 	auto child_stats = PropagateExpression(cast.child);
 	if (!child_stats) {
 		return nullptr;

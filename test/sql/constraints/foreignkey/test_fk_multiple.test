@@ -2,17 +2,37 @@
 # description: Test multiple foreign key constraint
 # group: [foreignkey]
 
+# Create a table with a primary key
 statement ok
-CREATE TABLE pkt1(i1 INTEGER PRIMARY KEY CHECK(i1 < 3), j1 INTEGER UNIQUE);
+CREATE TABLE pkt1(
+	i1 INTEGER PRIMARY KEY CHECK(i1 < 3),
+	j1 INTEGER UNIQUE
+);
 
+# Create another table with a primary key
 statement ok
-CREATE TABLE pkt2(i2 INTEGER PRIMARY KEY, j2 INTEGER UNIQUE CHECK (j2 > 1000));
+CREATE TABLE pkt2(
+	i2 INTEGER PRIMARY KEY,
+	j2 INTEGER UNIQUE CHECK (j2 > 1000)
+);
 
+# Reference both of the previous tables with foreign keys in this table
 statement ok
-CREATE TABLE fkt1(k1 INTEGER, l1 INTEGER, FOREIGN KEY(k1) REFERENCES pkt1(i1), FOREIGN KEY(l1) REFERENCES pkt2(i2));
+CREATE TABLE fkt1(
+	k1 INTEGER,
+	l1 INTEGER,
+	FOREIGN KEY(k1) REFERENCES pkt1(i1),
+	FOREIGN KEY(l1) REFERENCES pkt2(i2)
+);
 
+# Reference both of the primary key tables again
 statement ok
-CREATE TABLE fkt2(k2 INTEGER, l2 INTEGER, FOREIGN KEY(k2) REFERENCES pkt1(j1), FOREIGN KEY(l2) REFERENCES pkt2(j2));
+CREATE TABLE fkt2(
+	k2 INTEGER,
+	l2 INTEGER,
+	FOREIGN KEY(k2) REFERENCES pkt1(j1),
+	FOREIGN KEY(l2) REFERENCES pkt2(j2)
+);
 
 # ensure the constraints are being correctly copied
 statement error
@@ -131,10 +151,12 @@ SELECT * FROM pkt2;
 statement error
 DROP TABLE pkt1
 ----
+Could not drop the table because this table is main key table of the table "fkt1"
 
 statement error
 DROP TABLE pkt2
 ----
+Could not drop the table because this table is main key table of the table "fkt1"
 
 statement ok
 DROP TABLE fkt2
@@ -142,10 +164,12 @@ DROP TABLE fkt2
 statement error
 DROP TABLE pkt1
 ----
+Could not drop the table because this table is main key table of the table "fkt1"
 
 statement error
 DROP TABLE pkt2
 ----
+Could not drop the table because this table is main key table of the table "fkt1"
 
 statement ok
 DROP TABLE fkt1

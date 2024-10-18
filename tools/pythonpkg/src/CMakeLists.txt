@@ -25,6 +25,8 @@ add_library(
   pyconnection.cpp
   pystatement.cpp
   python_import_cache.cpp
+  python_replacement_scan.cpp
+  python_dependency.cpp
   pyrelation.cpp
   pyexpression.cpp
   dataframe.cpp

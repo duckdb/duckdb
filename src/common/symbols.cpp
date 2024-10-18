@@ -140,12 +140,20 @@ template class unique_ptr<LogicalFilter>;
 template class unique_ptr<LogicalJoin>;
 template class unique_ptr<LogicalComparisonJoin>;
 template class unique_ptr<FilterInfo>;
-template class unique_ptr<JoinNode>;
 template class unique_ptr<SingleJoinRelation>;
 template class unique_ptr<CatalogSet>;
 template class unique_ptr<Binder>;
 template class unique_ptr<PrivateAllocatorData>;
 template class unique_ptr<BaseStatistics>;
+
+template class shared_ptr<Relation>;
+template class shared_ptr<Event>;
+template class shared_ptr<Pipeline>;
+template class shared_ptr<MetaPipeline>;
+template class shared_ptr<RowGroupCollection>;
+template class shared_ptr<ColumnDataAllocator>;
+template class shared_ptr<PreparedStatementData>;
+template class weak_ptr<Pipeline>;
 
 } // namespace duckdb
 
@@ -160,15 +168,6 @@ template class unique_ptr<BaseStatistics>;
 	template std::VECTOR_DEFINITION::const_reference std::VECTOR_DEFINITION::front() const;                            \
 	template std::VECTOR_DEFINITION::reference std::VECTOR_DEFINITION::front();
 
-template class duckdb::vector<ExpressionType>;
-template class duckdb::vector<uint64_t>;
-template class duckdb::vector<string>;
-template class duckdb::vector<PhysicalType>;
-template class duckdb::vector<Value>;
-template class duckdb::vector<int>;
-template class duckdb::vector<duckdb::vector<Expression *>>;
-template class duckdb::vector<LogicalType>;
-
 INSTANTIATE_VECTOR(vector<ColumnDefinition>)
 INSTANTIATE_VECTOR(vector<JoinCondition>)
 INSTANTIATE_VECTOR(vector<OrderByNode>)
@@ -180,33 +179,32 @@ INSTANTIATE_VECTOR(vector<unique_ptr<SQLStatement>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<PhysicalOperator>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<LogicalOperator>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<Transaction>>)
-INSTANTIATE_VECTOR(vector<unique_ptr<JoinNode>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<Rule>>)
-INSTANTIATE_VECTOR(vector<std::shared_ptr<Event>>)
+INSTANTIATE_VECTOR(vector<shared_ptr<Event>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<Pipeline>>)
-INSTANTIATE_VECTOR(vector<std::shared_ptr<Pipeline>>)
-INSTANTIATE_VECTOR(vector<std::weak_ptr<Pipeline>>)
-INSTANTIATE_VECTOR(vector<std::shared_ptr<MetaPipeline>>)
+INSTANTIATE_VECTOR(vector<shared_ptr<Pipeline>>)
+INSTANTIATE_VECTOR(vector<weak_ptr<Pipeline>>)
+INSTANTIATE_VECTOR(vector<shared_ptr<MetaPipeline>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<JoinHashTable>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<ColumnDataCollection>>)
-INSTANTIATE_VECTOR(vector<std::shared_ptr<ColumnDataAllocator>>)
+INSTANTIATE_VECTOR(vector<shared_ptr<ColumnDataAllocator>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<RowDataBlock>>)
 
-template class std::shared_ptr<Relation>;
-template class std::shared_ptr<Event>;
-template class std::shared_ptr<Pipeline>;
-template class std::shared_ptr<MetaPipeline>;
-template class std::shared_ptr<RowGroupCollection>;
-template class std::shared_ptr<ColumnDataAllocator>;
-template class std::shared_ptr<PreparedStatementData>;
-template class std::weak_ptr<Pipeline>;
+template class duckdb::vector<ExpressionType>;
+template class duckdb::vector<uint64_t>;
+template class duckdb::vector<string>;
+template class duckdb::vector<PhysicalType>;
+template class duckdb::vector<Value>;
+template class duckdb::vector<int>;
+template class duckdb::vector<duckdb::vector<Expression *>>;
+template class duckdb::vector<LogicalType>;
 
 #if !defined(__clang__)
 template struct std::atomic<uint64_t>;
 #endif
 
 template class std::bitset<STANDARD_VECTOR_SIZE>;
-template class std::unordered_map<PhysicalOperator *, QueryProfiler::TreeNode *>;
+template class std::unordered_map<PhysicalOperator *, ProfilingNode *>;
 template class std::stack<PhysicalOperator *>;
 
 /* -pedantic does not like this

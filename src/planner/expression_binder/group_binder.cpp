@@ -4,13 +4,14 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression_binder/select_bind_state.hpp"
 #include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
 GroupBinder::GroupBinder(Binder &binder, ClientContext &context, SelectNode &node, idx_t group_index,
-                         case_insensitive_map_t<idx_t> &alias_map, case_insensitive_map_t<idx_t> &group_alias_map)
-    : ExpressionBinder(binder, context), node(node), alias_map(alias_map), group_alias_map(group_alias_map),
+                         SelectBindState &bind_state, case_insensitive_map_t<idx_t> &group_alias_map)
+    : ExpressionBinder(binder, context), node(node), bind_state(bind_state), group_alias_map(group_alias_map),
       group_index(group_index) {
 }
 
@@ -30,9 +31,9 @@ BindResult GroupBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, i
 	}
 	switch (expr.expression_class) {
 	case ExpressionClass::DEFAULT:
-		return BindResult("GROUP BY clause cannot contain DEFAULT clause");
+		return BindUnsupportedExpression(expr, depth, "GROUP BY clause cannot contain DEFAULT clause");
 	case ExpressionClass::WINDOW:
-		return BindResult("GROUP BY clause cannot contain window functions!");
+		return BindUnsupportedExpression(expr, depth, "GROUP BY clause cannot contain window functions!");
 	default:
 		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}
@@ -78,6 +79,29 @@ BindResult GroupBinder::BindConstant(ConstantExpression &constant) {
 	return BindSelectRef(index - 1);
 }
 
+bool GroupBinder::TryBindAlias(ColumnRefExpression &colref, bool root_expression, BindResult &result) {
+	// failed to bind the column and the node is the root expression with depth = 0
+	// check if refers to an alias in the select clause
+	auto &alias_name = colref.GetColumnName();
+	auto entry = bind_state.alias_map.find(alias_name);
+	if (entry == bind_state.alias_map.end()) {
+		// no matching alias found
+		return false;
+	}
+	if (!root_expression) {
+		result = BindResult(BinderException(
+		    colref,
+		    "Alias with name \"%s\" exists, but aliases cannot be used as part of an expression in the GROUP BY",
+		    alias_name));
+		return true;
+	}
+	result = BindResult(BindSelectRef(entry->second));
+	if (!result.HasError()) {
+		group_alias_map[alias_name] = bind_index;
+	}
+	return true;
+}
+
 BindResult GroupBinder::BindColumnRef(ColumnRefExpression &colref) {
 	// columns in GROUP BY clauses:
 	// FIRST refer to the original tables, and
@@ -85,26 +109,7 @@ BindResult GroupBinder::BindColumnRef(ColumnRefExpression &colref) {
 	// THEN if no match is found, refer to outer queries
 
 	// first try to bind to the base columns (original tables)
-	auto result = ExpressionBinder::BindExpression(colref, 0);
-	if (result.HasError()) {
-		if (colref.IsQualified()) {
-			// explicit table name: not an alias reference
-			return result;
-		}
-		// failed to bind the column and the node is the root expression with depth = 0
-		// check if refers to an alias in the select clause
-		auto alias_name = colref.column_names[0];
-		auto entry = alias_map.find(alias_name);
-		if (entry == alias_map.end()) {
-			// no matching alias found
-			return result;
-		}
-		result = BindResult(BindSelectRef(entry->second));
-		if (!result.HasError()) {
-			group_alias_map[alias_name] = bind_index;
-		}
-	}
-	return result;
+	return ExpressionBinder::BindExpression(colref, 0, true);
 }
 
 } // namespace duckdb

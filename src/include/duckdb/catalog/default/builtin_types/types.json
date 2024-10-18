@@ -222,6 +222,13 @@
         "description": "binary value"
     },
     {
+        "id": "VARINT",
+        "names": [
+            "varint"
+        ],
+        "description": "Integers with variable size."
+    },
+    {
         "id": "BOOLEAN",
         "names": [
             "boolean",

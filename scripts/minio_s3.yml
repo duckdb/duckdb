@@ -70,6 +70,7 @@ services:
 
         # Upload the db for the attach 
         /usr/bin/mc cp /duckdb/data/attach_test/attach.db myminio/test-bucket/presigned/attach.db
+        /usr/bin/mc cp /duckdb/data/attach_test/lineitem_sf1.db myminio/test-bucket/presigned/lineitem_sf1.db
     
         /usr/bin/mc share download myminio/test-bucket/presigned/phonenumbers.csv
         /usr/bin/mc share download myminio/test-bucket/presigned/t1.parquet

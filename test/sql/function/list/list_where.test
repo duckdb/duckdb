@@ -221,3 +221,20 @@ query I
 SELECT list_where([{'a': 1}, {'a': 5}, {'a': 3}], [true, true, true])
 ----
 [{'a': 1}, {'a': 5}, {'a': 3}]
+
+# Also make sure it works when casting ARRAY to list
+query I
+SELECT list_where([1,2,3]::INT[3], [true, false, true]::BOOLEAN[3]);
+----
+[1, 3]
+
+query I
+SELECT LIST_WHERE(ARRAY_VALUE('1', NULL), [TRUE, TRUE, TRUE]);
+----
+[1, NULL, NULL]
+
+
+query I
+SELECT LIST_WHERE(ARRAY_VALUE('1', NULL), [TRUE, TRUE, FALSE]);
+----
+[1, NULL]

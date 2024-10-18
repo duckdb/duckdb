@@ -40,9 +40,9 @@ BindResult LateralBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr,
 	auto &expr = *expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::DEFAULT:
-		return BindResult("LATERAL join cannot contain DEFAULT clause");
+		return BindUnsupportedExpression(expr, depth, "LATERAL join cannot contain DEFAULT clause!");
 	case ExpressionClass::WINDOW:
-		return BindResult("LATERAL join cannot contain window functions!");
+		return BindUnsupportedExpression(expr, depth, "LATERAL join cannot contain window functions!");
 	case ExpressionClass::COLUMN_REF:
 		return BindColumnRef(expr_ptr, depth, root_expression);
 	default:
@@ -81,11 +81,6 @@ static void ReduceColumnDepth(vector<CorrelatedColumnInfo> &columns,
 	}
 }
 
-static void ReduceExpressionSubquery(BoundSubqueryExpression &expr,
-                                     const vector<CorrelatedColumnInfo> &correlated_columns) {
-	ReduceColumnDepth(expr.binder->correlated_columns, correlated_columns);
-}
-
 class ExpressionDepthReducerRecursive : public BoundNodeVisitor {
 public:
 	explicit ExpressionDepthReducerRecursive(const vector<CorrelatedColumnInfo> &correlated)
@@ -111,6 +106,13 @@ public:
 		BoundNodeVisitor::VisitBoundTableRef(ref);
 	}
 
+	static void ReduceExpressionSubquery(BoundSubqueryExpression &expr,
+	                                     const vector<CorrelatedColumnInfo> &correlated_columns) {
+		ReduceColumnDepth(expr.binder->correlated_columns, correlated_columns);
+		ExpressionDepthReducerRecursive recursive(correlated_columns);
+		recursive.VisitBoundQueryNode(*expr.subquery);
+	}
+
 private:
 	const vector<CorrelatedColumnInfo> &correlated_columns;
 };
@@ -127,9 +129,7 @@ protected:
 	}
 
 	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override {
-		ReduceExpressionSubquery(expr, correlated_columns);
-		ExpressionDepthReducerRecursive recursive(correlated_columns);
-		recursive.VisitBoundQueryNode(*expr.subquery);
+		ExpressionDepthReducerRecursive::ReduceExpressionSubquery(expr, correlated_columns);
 		return nullptr;
 	}
 

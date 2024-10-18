@@ -10,24 +10,25 @@
 
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
-#include "duckdb/common/enums/pending_execution_result.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/deque.hpp"
+#include "duckdb/common/enums/pending_execution_result.hpp"
+#include "duckdb/common/enums/prepared_statement_mode.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/main/client_config.hpp"
+#include "duckdb/main/client_context_state.hpp"
+#include "duckdb/main/client_properties.hpp"
+#include "duckdb/main/external_dependencies.hpp"
+#include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/main/prepared_statement.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
+#include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
-#include "duckdb/main/pending_query_result.hpp"
-#include "duckdb/common/atomic.hpp"
-#include "duckdb/main/client_config.hpp"
-#include "duckdb/main/external_dependencies.hpp"
-#include "duckdb/common/error_data.hpp"
-#include "duckdb/common/enums/prepared_statement_mode.hpp"
-#include "duckdb/main/client_properties.hpp"
-#include "duckdb/main/client_context_state.hpp"
-#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 class Appender;
@@ -47,22 +48,26 @@ class ScalarFunctionCatalogEntry;
 struct ActiveQueryContext;
 struct ParserOptions;
 class SimpleBufferedData;
+class BufferedData;
 struct ClientData;
 class ClientContextState;
+class RegisteredStateManager;
 
 struct PendingQueryParameters {
 	//! Prepared statement parameters (if any)
-	optional_ptr<case_insensitive_map_t<Value>> parameters;
+	optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters;
 	//! Whether or not a stream result should be allowed
 	bool allow_stream_result = false;
 };
 
 //! The ClientContext holds information relevant to the current client session
 //! during execution
-class ClientContext : public std::enable_shared_from_this<ClientContext> {
-	friend class PendingQueryResult; // LockContext
-	friend class SimpleBufferedData; // ExecuteTaskInternal
-	friend class StreamQueryResult;  // LockContext
+class ClientContext : public enable_shared_from_this<ClientContext> {
+	friend class PendingQueryResult;  // LockContext
+	friend class BufferedData;        // ExecuteTaskInternal
+	friend class SimpleBufferedData;  // ExecuteTaskInternal
+	friend class BatchedBufferedData; // ExecuteTaskInternal
+	friend class StreamQueryResult;   // LockContext
 	friend class ConnectionManager;
 
 public:
@@ -73,10 +78,8 @@ public:
 	shared_ptr<DatabaseInstance> db;
 	//! Whether or not the query is interrupted
 	atomic<bool> interrupted;
-	//! External Objects (e.g., Python objects) that views depend of
-	unordered_map<string, vector<shared_ptr<ExternalDependency>>> external_dependencies;
 	//! Set of optional states (e.g. Caches) that can be held by the ClientContext
-	unordered_map<string, shared_ptr<ClientContextState>> registered_state;
+	unique_ptr<RegisteredStateManager> registered_state;
 	//! The client configuration
 	ClientConfig config;
 	//! The set of client-specific data
@@ -91,6 +94,8 @@ public:
 
 	//! Interrupt execution of a query
 	DUCKDB_API void Interrupt();
+	DUCKDB_API void CancelTransaction();
+
 	//! Enable query profiling
 	DUCKDB_API void EnableProfiling();
 	//! Disable query profiling
@@ -112,13 +117,20 @@ public:
 	//! Destroy the client context
 	DUCKDB_API void Destroy();
 
-	//! Get the table info of a specific table, or nullptr if it cannot be found
+	//! Get the table info of a specific table, or nullptr if it cannot be found.
+	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &database_name, const string &schema_name,
+	                                                  const string &table_name);
+	//! Get the table info of a specific table, or nullptr if it cannot be found. Uses INVALID_CATALOG.
 	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &schema_name, const string &table_name);
 	//! Appends a DataChunk to the specified table. Returns whether or not the append was successful.
 	DUCKDB_API void Append(TableDescription &description, ColumnDataCollection &collection);
+
 	//! Try to bind a relation in the current client context; either throws an exception or fills the result_columns
 	//! list with the set of returned columns
 	DUCKDB_API void TryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns);
+
+	//! Internal function for try bind relation. It does not require a client-context lock.
+	DUCKDB_API void InternalTryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns);
 
 	//! Execute a relation
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const shared_ptr<Relation> &relation,
@@ -141,7 +153,8 @@ public:
 	//! It is possible that the prepared statement will be re-bound. This will generally happen if the catalog is
 	//! modified in between the prepared statement being bound and the prepared statement being run.
 	DUCKDB_API unique_ptr<QueryResult> Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
-	                                           case_insensitive_map_t<Value> &values, bool allow_stream_result = true);
+	                                           case_insensitive_map_t<BoundParameterData> &values,
+	                                           bool allow_stream_result = true);
 	DUCKDB_API unique_ptr<QueryResult> Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
 	                                           const PendingQueryParameters &parameters);
 
@@ -167,14 +180,13 @@ public:
 	                                                 bool requires_valid_transaction = true);
 
 	//! Equivalent to CURRENT_SETTING(key) SQL function.
-	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const std::string &key, Value &result);
+	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const std::string &key, Value &result) const;
 
 	//! Returns the parser options for this client context
 	DUCKDB_API ParserOptions GetParserOptions() const;
 
 	//! Whether or not the given result object (streaming query result or pending query result) is active
 	DUCKDB_API bool IsActiveResult(ClientContextLock &lock, BaseQueryResult &result);
-	DUCKDB_API void SetActiveResult(ClientContextLock &lock, BaseQueryResult &result);
 
 	//! Returns the current executor
 	Executor &GetExecutor();
@@ -227,7 +239,7 @@ private:
 	//! Internally prepare a SQL statement. Caller must hold the context_lock.
 	shared_ptr<PreparedStatementData>
 	CreatePreparedStatement(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-	                        optional_ptr<case_insensitive_map_t<Value>> values = nullptr,
+	                        optional_ptr<case_insensitive_map_t<BoundParameterData>> values = nullptr,
 	                        PreparedStatementMode mode = PreparedStatementMode::PREPARE_ONLY);
 	unique_ptr<PendingQueryResult> PendingStatementInternal(ClientContextLock &lock, const string &query,
 	                                                        unique_ptr<SQLStatement> statement,
@@ -243,8 +255,11 @@ private:
 	unique_ptr<ClientContextLock> LockContext();
 
 	void BeginQueryInternal(ClientContextLock &lock, const string &query);
-	ErrorData EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction);
+	ErrorData EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
+	                           optional_ptr<ErrorData> previous_error);
 
+	//! Wait until a task is available to execute
+	void WaitForTask(ClientContextLock &lock, BaseQueryResult &result);
 	PendingExecutionResult ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result, bool dry_run = false);
 
 	unique_ptr<PendingQueryResult> PendingStatementOrPreparedStatementInternal(
@@ -266,7 +281,7 @@ private:
 
 	shared_ptr<PreparedStatementData>
 	CreatePreparedStatementInternal(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-	                                optional_ptr<case_insensitive_map_t<Value>> values);
+	                                optional_ptr<case_insensitive_map_t<BoundParameterData>> values);
 
 private:
 	//! Lock on using the ClientContext in parallel
@@ -287,24 +302,6 @@ public:
 
 private:
 	lock_guard<mutex> client_guard;
-};
-
-class ClientContextWrapper {
-public:
-	explicit ClientContextWrapper(const shared_ptr<ClientContext> &context)
-	    : client_context(context) {
-
-	      };
-	shared_ptr<ClientContext> GetContext() {
-		auto actual_context = client_context.lock();
-		if (!actual_context) {
-			throw ConnectionException("Connection has already been closed");
-		}
-		return actual_context;
-	}
-
-private:
-	std::weak_ptr<ClientContext> client_context;
 };
 
 } // namespace duckdb

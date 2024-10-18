@@ -1,12 +1,14 @@
 #include "duckdb/storage/table/table_index_list.hpp"
 
-#include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
-#include "duckdb/execution/index/unknown_index.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
-#include "duckdb/storage/table/data_table_info.hpp"
-#include "duckdb/main/database.hpp"
+#include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/planner/expression_binder/index_binder.hpp"
 
 namespace duckdb {
 void TableIndexList::AddIndex(unique_ptr<Index> index) {
@@ -20,8 +22,9 @@ void TableIndexList::RemoveIndex(const string &name) {
 
 	for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
 		auto &index_entry = indexes[index_idx];
-		if (index_entry->name == name) {
-			indexes.erase(indexes.begin() + index_idx);
+
+		if (index_entry->GetIndexName() == name) {
+			indexes.erase_at(index_idx);
 			break;
 		}
 	}
@@ -32,9 +35,8 @@ void TableIndexList::CommitDrop(const string &name) {
 
 	for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
 		auto &index_entry = indexes[index_idx];
-		if (index_entry->name == name) {
+		if (index_entry->GetIndexName() == name) {
 			index_entry->CommitDrop();
-			break;
 		}
 	}
 }
@@ -46,7 +48,7 @@ bool TableIndexList::NameIsUnique(const string &name) {
 	for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
 		auto &index_entry = indexes[index_idx];
 		if (index_entry->IsPrimary() || index_entry->IsForeign() || index_entry->IsUnique()) {
-			if (index_entry->name == name) {
+			if (index_entry->GetIndexName() == name) {
 				return false;
 			}
 		}
@@ -55,33 +57,52 @@ bool TableIndexList::NameIsUnique(const string &name) {
 	return true;
 }
 
-void TableIndexList::InitializeIndexes(ClientContext &context, DataTableInfo &table_info) {
+void TableIndexList::InitializeIndexes(ClientContext &context, DataTableInfo &table_info, const char *index_type) {
+	// Fast path: do we have any unbound indexes?
+	bool needs_binding = false;
+	{
+		lock_guard<mutex> lock(indexes_lock);
+		for (auto &index : indexes) {
+			if (!index->IsBound() && (index_type == nullptr || index->GetIndexType() == index_type)) {
+				needs_binding = true;
+				break;
+			}
+		}
+	}
+	if (!needs_binding) {
+		return;
+	}
+
+	// Get the table from the catalog so we can add it to the binder
+	auto &catalog = table_info.GetDB().GetCatalog();
+	auto &table =
+	    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, table_info.GetSchemaName(), table_info.GetTableName())
+	        .Cast<DuckTableEntry>();
+	vector<LogicalType> column_types;
+	vector<string> column_names;
+	for (auto &col : table.GetColumns().Logical()) {
+		column_types.push_back(col.Type());
+		column_names.push_back(col.Name());
+	}
+
 	lock_guard<mutex> lock(indexes_lock);
 	for (auto &index : indexes) {
-		if (!index->IsUnknown()) {
-			continue;
+		if (!index->IsBound() && (index_type == nullptr || index->GetIndexType() == index_type)) {
+			// Create a binder to bind this index (we cant reuse this binder for other indexes)
+			auto binder = Binder::CreateBinder(context);
+
+			// Add the table to the binder
+			// We're not interested in the column_ids here, so just pass a dummy vector
+			vector<column_t> dummy_column_ids;
+			binder->bind_context.AddBaseTable(0, string(), column_names, column_types, dummy_column_ids, table);
+
+			// Create an IndexBinder to bind the index
+			IndexBinder idx_binder(*binder, context);
+
+			// Replace the unbound index with a bound index
+			auto bound_idx = idx_binder.BindIndex(index->Cast<UnboundIndex>());
+			index = std::move(bound_idx);
 		}
-
-		auto &unknown_index = index->Cast<UnknownIndex>();
-		auto &index_type_name = unknown_index.GetIndexType();
-
-		// Do we know the type of this index now?
-		auto index_type = context.db->config.GetIndexTypes().FindByName(index_type_name);
-		if (!index_type) {
-			continue;
-		}
-
-		// Swap this with a new index
-		auto &create_info = unknown_index.GetCreateInfo();
-		auto &storage_info = unknown_index.GetStorageInfo();
-
-		CreateIndexInput input(*table_info.table_io_manager, table_info.db, create_info.constraint_type,
-		                       create_info.index_name, create_info.column_ids, unknown_index.unbound_expressions,
-		                       storage_info, create_info.options);
-
-		auto index_instance = index_type->create_instance(input);
-
-		index = std::move(index_instance);
 	}
 }
 
@@ -122,15 +143,18 @@ void TableIndexList::VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, Data
 	if (!index) {
 		throw InternalException("Internal Foreign Key error: could not find index to verify...");
 	}
+	if (!index->IsBound()) {
+		throw InternalException("Internal Foreign Key error: trying to verify an unbound index...");
+	}
 	conflict_manager.SetIndexCount(1);
-	index->CheckConstraintsForChunk(chunk, conflict_manager);
+	index->Cast<BoundIndex>().CheckConstraintsForChunk(chunk, conflict_manager);
 }
 
 vector<column_t> TableIndexList::GetRequiredColumns() {
 	lock_guard<mutex> lock(indexes_lock);
 	set<column_t> unique_indexes;
 	for (auto &index : indexes) {
-		for (auto col_index : index->column_ids) {
+		for (auto col_index : index->GetColumnIds()) {
 			unique_indexes.insert(col_index);
 		}
 	}
@@ -142,14 +166,22 @@ vector<column_t> TableIndexList::GetRequiredColumns() {
 	return result;
 }
 
-vector<IndexStorageInfo> TableIndexList::GetStorageInfos() {
+vector<IndexStorageInfo> TableIndexList::GetStorageInfos(const case_insensitive_map_t<Value> &options) {
 
 	vector<IndexStorageInfo> index_storage_infos;
 	for (auto &index : indexes) {
-		auto index_storage_info = index->GetStorageInfo(false);
+		if (index->IsBound()) {
+			auto index_storage_info = index->Cast<BoundIndex>().GetStorageInfo(options, false);
+			D_ASSERT(index_storage_info.IsValid() && !index_storage_info.name.empty());
+			index_storage_infos.push_back(index_storage_info);
+			continue;
+		}
+
+		auto index_storage_info = index->Cast<UnboundIndex>().GetStorageInfo();
 		D_ASSERT(index_storage_info.IsValid() && !index_storage_info.name.empty());
 		index_storage_infos.push_back(index_storage_info);
 	}
+
 	return index_storage_infos;
 }
 

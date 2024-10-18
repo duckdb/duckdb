@@ -1,5 +1,8 @@
 name: Create or Label Mirror Issue
 on:
+  discussion:
+    types:
+      - labeled
   issues:
     types:
       - labeled
@@ -25,12 +28,17 @@ jobs:
       - name: Remove 'needs triage' / 'under review' if 'reproduced'
         if: github.event.label.name == 'reproduced'
         run: |
-          gh issue edit --repo duckdb/duckdb ${{ github.event.issue.number }} --remove-label "needs triage" --remove-label "under review"
+          gh issue edit --repo duckdb/duckdb ${{ github.event.issue.number }} --remove-label "needs triage" --remove-label "under review" --remove-label "needs reproducible example"
 
       - name: Remove 'needs triage' / 'reproduced' if 'under review'
         if: github.event.label.name == 'under review'
         run: |
           gh issue edit --repo duckdb/duckdb ${{ github.event.issue.number }} --remove-label "needs triage" --remove-label "reproduced"
+
+      - name: Remove 'needs triage' if 'expected behavior'
+        if: github.event.label.name == 'expected behavior'
+        run: |
+          gh issue edit --repo duckdb/duckdb ${{ github.event.issue.number }} --remove-label "needs triage"
 
       - name: Get mirror issue number
         run: |

@@ -9,8 +9,13 @@ ValidityColumnData::ValidityColumnData(BlockManager &block_manager, DataTableInf
     : ColumnData(block_manager, info, column_index, start_row, LogicalType(LogicalTypeId::VALIDITY), &parent) {
 }
 
-bool ValidityColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
-	return true;
+FilterPropagateResult ValidityColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
+void ValidityColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata,
+                                    idx_t count) {
+	lock_guard<mutex> l(stats_lock);
+	ColumnData::AppendData(stats, state, vdata, count);
+}
 } // namespace duckdb

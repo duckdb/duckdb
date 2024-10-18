@@ -1,0 +1,57 @@
+# name: test/sql/aggregate/aggregates/arg_min_max_n_all_types.test_slow
+# description: Test the ARG_MIN and ARG_MAX "N" overloads with all types
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table all_types as from test_all_types()
+
+foreach col bool tinyint smallint int bigint hugeint uhugeint utinyint usmallint uint ubigint date time timestamp timestamp_s timestamp_ms timestamp_ns time_tz timestamp_tz float double dec_4_1 dec_9_4 dec_18_6 dec38_10 uuid interval varchar blob bit small_enum medium_enum large_enum int_array double_array date_array timestamp_array timestamptz_array varchar_array nested_int_array struct struct_of_arrays array_of_structs map union fixed_int_array fixed_varchar_array fixed_nested_int_array fixed_nested_varchar_array fixed_struct_array struct_of_fixed_array fixed_array_of_int_list list_of_fixed_int_array
+
+query I
+SELECT MIN("${col}", 1) IS NOT DISTINCT FROM ARG_MIN("${col}", "${col}", 1) FROM all_types
+----
+true
+
+query I
+SELECT MAX("${col}", 1) IS NOT DISTINCT FROM ARG_MAX("${col}", "${col}", 1) FROM all_types
+----
+true
+
+# Ensure the MIN(X,N) and MAX(X,N) produce the same result as the window function equivalent
+query I
+SELECT MAX("${col}", 2)
+IS NOT DISTINCT FROM
+(SELECT list(rs."${col}") FROM (SELECT "${col}", row_number() OVER (ORDER BY "${col}" DESC) as rid FROM all_types ORDER BY "${col}" DESC) as rs WHERE rid < 3)
+FROM all_types;
+----
+true
+
+query I
+SELECT MIN("${col}", 2)
+IS NOT DISTINCT FROM
+(SELECT list(rs."${col}") FROM (SELECT "${col}", row_number() OVER (ORDER BY "${col}" ASC) as rid FROM all_types ORDER BY "${col}" ASC) as rs WHERE rid < 3)
+FROM all_types;
+----
+true
+
+# Ensure the MIN_BY(X,N) and MAX_BY(X,N) produce the same result as the window function equivalent
+query I
+SELECT ARG_MAX("${col}", "${col}", 2)
+IS NOT DISTINCT FROM
+(SELECT list(rs."${col}") FROM (SELECT "${col}", row_number() OVER (ORDER BY "${col}" DESC) as rid FROM all_types ORDER BY "${col}" DESC) as rs WHERE rid < 3)
+FROM all_types;
+----
+true
+
+query I
+SELECT ARG_MIN("${col}", "${col}", 2)
+IS NOT DISTINCT FROM
+(SELECT list(rs."${col}") FROM (SELECT "${col}", row_number() OVER (ORDER BY "${col}" ASC) as rid FROM all_types ORDER BY "${col}" ASC) as rs WHERE rid < 3)
+FROM all_types;
+----
+true
+
+endloop

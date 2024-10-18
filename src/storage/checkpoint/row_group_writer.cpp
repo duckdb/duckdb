@@ -9,10 +9,13 @@ CompressionType RowGroupWriter::GetColumnCompressionType(idx_t i) {
 	return table.GetColumn(LogicalIndex(i)).CompressionType();
 }
 
-void SingleFileRowGroupWriter::WriteColumnDataPointers(ColumnCheckpointState &column_checkpoint_state,
-                                                       Serializer &serializer) {
-	const auto &data_pointers = column_checkpoint_state.data_pointers;
-	serializer.WriteProperty(100, "data_pointers", data_pointers);
+SingleFileRowGroupWriter::SingleFileRowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_manager,
+                                                   TableDataWriter &writer, MetadataWriter &table_data_writer)
+    : RowGroupWriter(table, partial_block_manager), writer(writer), table_data_writer(table_data_writer) {
+}
+
+CheckpointType SingleFileRowGroupWriter::GetCheckpointType() const {
+	return writer.GetCheckpointType();
 }
 
 MetadataWriter &SingleFileRowGroupWriter::GetPayloadWriter() {

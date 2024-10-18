@@ -28,7 +28,7 @@ public:
 	//! Constructs an in-memory column data collection from an allocator
 	DUCKDB_API ColumnDataCollection(Allocator &allocator, vector<LogicalType> types);
 	//! Constructs an empty (but valid) in-memory column data collection from an allocator
-	DUCKDB_API ColumnDataCollection(Allocator &allocator);
+	DUCKDB_API explicit ColumnDataCollection(Allocator &allocator);
 	//! Constructs a buffer-managed column data collection
 	DUCKDB_API ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types);
 	//! Constructs either an in-memory or a buffer-managed column data collection
@@ -141,9 +141,16 @@ public:
 
 	//! Obtains the next scan index to scan from
 	bool NextScanIndex(ColumnDataScanState &state, idx_t &chunk_index, idx_t &segment_index, idx_t &row_index) const;
+	//! Obtains the previous scan index to scan from
+	bool PrevScanIndex(ColumnDataScanState &state, idx_t &chunk_index, idx_t &segment_index, idx_t &row_index) const;
 	//! Scans at the indices (obtained from NextScanIndex)
 	void ScanAtIndex(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate, DataChunk &result,
 	                 idx_t chunk_index, idx_t segment_index, idx_t row_index) const;
+
+	//! Seeks to the chunk _containing_ the row. Returns false if it is past the end.
+	//! Note that the returned chunk will likely not be aligned to the given row
+	//! but the scan state will provide the actual range
+	bool Seek(idx_t row_idx, ColumnDataScanState &state, DataChunk &result) const;
 
 	//! Initialize the column data collection
 	void Initialize(vector<LogicalType> types);
@@ -183,39 +190,39 @@ private:
 //! The ColumnDataRowCollection represents a set of materialized rows, as obtained from the ColumnDataCollection
 class ColumnDataRowCollection {
 public:
-	DUCKDB_API ColumnDataRowCollection(const ColumnDataCollection &collection);
+	DUCKDB_API explicit ColumnDataRowCollection(const ColumnDataCollection &collection);
 
 public:
 	DUCKDB_API Value GetValue(idx_t column, idx_t index) const;
 
 public:
 	// container API
-	bool empty() const {
-		return rows.empty();
+	bool empty() const {     // NOLINT: match stl API
+		return rows.empty(); // NOLINT
 	}
-	idx_t size() const {
+	idx_t size() const { // NOLINT: match stl API
 		return rows.size();
 	}
 
 	DUCKDB_API ColumnDataRow &operator[](idx_t i);
 	DUCKDB_API const ColumnDataRow &operator[](idx_t i) const;
 
-	vector<ColumnDataRow>::iterator begin() {
+	vector<ColumnDataRow>::iterator begin() { // NOLINT: match stl API
 		return rows.begin();
 	}
-	vector<ColumnDataRow>::iterator end() {
+	vector<ColumnDataRow>::iterator end() { // NOLINT: match stl API
 		return rows.end();
 	}
-	vector<ColumnDataRow>::const_iterator cbegin() const {
+	vector<ColumnDataRow>::const_iterator cbegin() const { // NOLINT: match stl API
 		return rows.cbegin();
 	}
-	vector<ColumnDataRow>::const_iterator cend() const {
+	vector<ColumnDataRow>::const_iterator cend() const { // NOLINT: match stl API
 		return rows.cend();
 	}
-	vector<ColumnDataRow>::const_iterator begin() const {
+	vector<ColumnDataRow>::const_iterator begin() const { // NOLINT: match stl API
 		return rows.begin();
 	}
-	vector<ColumnDataRow>::const_iterator end() const {
+	vector<ColumnDataRow>::const_iterator end() const { // NOLINT: match stl API
 		return rows.end();
 	}
 

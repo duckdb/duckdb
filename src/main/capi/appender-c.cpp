@@ -15,18 +15,27 @@ using duckdb::uhugeint_t;
 
 duckdb_state duckdb_appender_create(duckdb_connection connection, const char *schema, const char *table,
                                     duckdb_appender *out_appender) {
+	return duckdb_appender_create_ext(connection, INVALID_CATALOG, schema, table, out_appender);
+}
+
+duckdb_state duckdb_appender_create_ext(duckdb_connection connection, const char *catalog, const char *schema,
+                                        const char *table, duckdb_appender *out_appender) {
 	Connection *conn = reinterpret_cast<Connection *>(connection);
 
 	if (!connection || !table || !out_appender) {
 		return DuckDBError;
 	}
+	if (catalog == nullptr) {
+		catalog = INVALID_CATALOG;
+	}
 	if (schema == nullptr) {
 		schema = DEFAULT_SCHEMA;
 	}
+
 	auto wrapper = new AppenderWrapper();
 	*out_appender = (duckdb_appender)wrapper;
 	try {
-		wrapper->appender = duckdb::make_uniq<Appender>(*conn, schema, table);
+		wrapper->appender = duckdb::make_uniq<Appender>(*conn, catalog, schema, table);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		wrapper->error = error.RawMessage();
@@ -42,13 +51,13 @@ duckdb_state duckdb_appender_destroy(duckdb_appender *appender) {
 	if (!appender || !*appender) {
 		return DuckDBError;
 	}
-	duckdb_appender_close(*appender);
+	auto state = duckdb_appender_close(*appender);
 	auto wrapper = reinterpret_cast<AppenderWrapper *>(*appender);
 	if (wrapper) {
 		delete wrapper;
 	}
 	*appender = nullptr;
-	return DuckDBSuccess;
+	return state;
 }
 
 template <class FUN>
@@ -67,7 +76,7 @@ duckdb_state duckdb_appender_run_function(duckdb_appender appender, FUN &&functi
 		wrapper->error = error.RawMessage();
 		return DuckDBError;
 	} catch (...) { // LCOV_EXCL_START
-		wrapper->error = "Unknown error";
+		wrapper->error = "Unknown appender error.";
 		return DuckDBError;
 	} // LCOV_EXCL_STOP
 	return DuckDBSuccess;
@@ -100,6 +109,24 @@ duckdb_state duckdb_append_internal(duckdb_appender appender, T value) {
 	auto *appender_instance = reinterpret_cast<AppenderWrapper *>(appender);
 	try {
 		appender_instance->appender->Append<T>(value);
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		appender_instance->error = error.RawMessage();
+		return DuckDBError;
+	} catch (...) {
+		return DuckDBError;
+	}
+	return DuckDBSuccess;
+}
+
+duckdb_state duckdb_append_default(duckdb_appender appender) {
+	if (!appender) {
+		return DuckDBError;
+	}
+	auto *appender_instance = reinterpret_cast<AppenderWrapper *>(appender);
+
+	try {
+		appender_instance->appender->AppendDefault();
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		appender_instance->error = error.RawMessage();
@@ -199,6 +226,7 @@ duckdb_state duckdb_append_varchar(duckdb_appender appender, const char *val) {
 duckdb_state duckdb_append_varchar_length(duckdb_appender appender, const char *val, idx_t length) {
 	return duckdb_append_internal<string_t>(appender, string_t(val, duckdb::UnsafeNumericCast<uint32_t>(length)));
 }
+
 duckdb_state duckdb_append_blob(duckdb_appender appender, const void *data, idx_t length) {
 	auto value = duckdb::Value::BLOB((duckdb::const_data_ptr_t)data, length);
 	return duckdb_append_internal<duckdb::Value>(appender, value);

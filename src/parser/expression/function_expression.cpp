@@ -95,4 +95,18 @@ void FunctionExpression::Verify() const {
 	D_ASSERT(!function_name.empty());
 }
 
+bool FunctionExpression::IsLambdaFunction() const {
+	// Ignore the ->> operator (JSON extension).
+	if (function_name == "->>") {
+		return false;
+	}
+	// Check the children for lambda expressions.
+	for (auto &child : children) {
+		if (child->expression_class == ExpressionClass::LAMBDA) {
+			return true;
+		}
+	}
+	return false;
+}
+
 } // namespace duckdb

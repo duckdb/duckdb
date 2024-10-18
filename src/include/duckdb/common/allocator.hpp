@@ -12,6 +12,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
 class Allocator;
@@ -23,10 +24,13 @@ class ThreadContext;
 
 struct AllocatorDebugInfo;
 
+enum class AllocatorFreeType { REQUIRES_FREE, DOES_NOT_REQUIRE_FREE };
+
 struct PrivateAllocatorData {
 	PrivateAllocatorData();
 	virtual ~PrivateAllocatorData();
 
+	AllocatorFreeType free_type = AllocatorFreeType::REQUIRES_FREE;
 	unique_ptr<AllocatorDebugInfo> debug_info;
 
 	template <class TARGET>
@@ -36,7 +40,7 @@ struct PrivateAllocatorData {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -58,10 +62,10 @@ public:
 	DUCKDB_API AllocatedData(AllocatedData &&other) noexcept;
 	DUCKDB_API AllocatedData &operator=(AllocatedData &&) noexcept;
 
-	data_ptr_t get() {
+	data_ptr_t get() { // NOLINT: matching std style
 		return pointer;
 	}
-	const_data_ptr_t get() const {
+	const_data_ptr_t get() const { // NOLINT: matching std style
 		return pointer;
 	}
 	idx_t GetSize() const {
@@ -112,8 +116,12 @@ public:
 	DUCKDB_API static Allocator &DefaultAllocator();
 	DUCKDB_API static shared_ptr<Allocator> &DefaultAllocatorReference();
 
-	static void ThreadFlush(idx_t threshold);
+	static bool SupportsFlush();
+	static optional_idx DecayDelay();
+	static void ThreadFlush(bool allocator_background_threads, idx_t threshold, idx_t thread_count);
+	static void ThreadIdle();
 	static void FlushAll();
+	static void SetBackgroundThreads(bool enable);
 
 private:
 	allocate_function_ptr_t allocate_function;

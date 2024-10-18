@@ -79,6 +79,11 @@ public:
 	PythonImportCacheItem csingle;
 	PythonImportCacheItem cdouble;
 	PythonImportCacheItem clongdouble;
+
+protected:
+	bool IsRequired() const override final {
+		return false;
+	}
 };
 
 } // namespace duckdb

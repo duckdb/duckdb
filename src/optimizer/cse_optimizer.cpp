@@ -13,9 +13,9 @@ namespace duckdb {
 //! underlying projection
 struct CSENode {
 	idx_t count;
-	idx_t column_index;
+	optional_idx column_index;
 
-	CSENode() : count(1), column_index(DConstants::INVALID_INDEX) {
+	CSENode() : count(1), column_index() {
 	}
 };
 
@@ -102,7 +102,7 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 			// check if it has already been pushed into the projection
 			auto alias = expr.alias;
 			auto type = expr.return_type;
-			if (node.column_index == DConstants::INVALID_INDEX) {
+			if (!node.column_index.IsValid()) {
 				// has not been pushed yet: push it
 				node.column_index = state.expressions.size();
 				state.expressions.push_back(std::move(expr_ptr));
@@ -110,8 +110,8 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 				state.cached_expressions.push_back(std::move(expr_ptr));
 			}
 			// replace the original expression with a bound column ref
-			expr_ptr = make_uniq<BoundColumnRefExpression>(alias, type,
-			                                               ColumnBinding(state.projection_index, node.column_index));
+			expr_ptr = make_uniq<BoundColumnRefExpression>(
+			    alias, type, ColumnBinding(state.projection_index, node.column_index.GetIndex()));
 			return;
 		}
 	}
@@ -149,6 +149,9 @@ void CommonSubExpressionOptimizer::ExtractCommonSubExpresions(LogicalOperator &o
 	D_ASSERT(state.expressions.size() > 0);
 	// create a projection node as the child of this node
 	auto projection = make_uniq<LogicalProjection>(state.projection_index, std::move(state.expressions));
+	if (op.children[0]->has_estimated_cardinality) {
+		projection->SetEstimatedCardinality(op.children[0]->estimated_cardinality);
+	}
 	projection->children.push_back(std::move(op.children[0]));
 	op.children[0] = std::move(projection);
 }

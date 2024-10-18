@@ -25,12 +25,12 @@ alter table tbl rename to tbl2;
 statement error
 drop sequence seq;
 ----
-Cannot drop entry "seq" because there are entries that depend on it
+table "tbl2" depends on index "seq".
 
 statement error
 drop sequence other_seq;
 ----
-Cannot drop entry "other_seq" because there are entries that depend on it
+table "tbl2" depends on index "other_seq".
 
 statement ok
 drop table tbl2;

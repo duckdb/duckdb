@@ -1,0 +1,16 @@
+# name: test/sql/types/struct/unnamed_struct_mix.test
+# description: Test mix of named and unnamed structs
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select [{ t:'abc', len:5 }, ('abc', 2)]
+----
+[{'t': abc, 'len': 5}, {'t': abc, 'len': 2}]
+
+query I
+select [('abc', 2), { t:'abc', len:5 }]
+----
+[{'t': abc, 'len': 2}, {'t': abc, 'len': 5}]

@@ -26,7 +26,7 @@ void PartialBlock::FlushInternal(const idx_t free_space_left) {
 			memset(buffer_handle.Ptr() + uninitialized.start, 0, uninitialized.end - uninitialized.start);
 		}
 		// memset any free space at the end of the block to 0 prior to writing to disk
-		memset(buffer_handle.Ptr() + Storage::BLOCK_SIZE - free_space_left, 0, free_space_left);
+		memset(buffer_handle.Ptr() + block_manager.GetBlockSize() - free_space_left, 0, free_space_left);
 	}
 }
 
@@ -34,10 +34,17 @@ void PartialBlock::FlushInternal(const idx_t free_space_left) {
 // PartialBlockManager
 //===--------------------------------------------------------------------===//
 
-PartialBlockManager::PartialBlockManager(BlockManager &block_manager, CheckpointType checkpoint_type,
-                                         uint32_t max_partial_block_size, uint32_t max_use_count)
-    : block_manager(block_manager), checkpoint_type(checkpoint_type), max_partial_block_size(max_partial_block_size),
-      max_use_count(max_use_count) {
+PartialBlockManager::PartialBlockManager(BlockManager &block_manager, PartialBlockType partial_block_type,
+                                         optional_idx max_partial_block_size_p, uint32_t max_use_count)
+    : block_manager(block_manager), partial_block_type(partial_block_type), max_use_count(max_use_count) {
+
+	if (max_partial_block_size_p.IsValid()) {
+		max_partial_block_size = NumericCast<uint32_t>(max_partial_block_size_p.GetIndex());
+		return;
+	}
+
+	// Use the default maximum partial block size with a ratio of 20% free and 80% utilization.
+	max_partial_block_size = NumericCast<uint32_t>(block_manager.GetBlockSize() / 5 * 4);
 }
 PartialBlockManager::~PartialBlockManager() {
 }
@@ -54,7 +61,7 @@ PartialBlockAllocation PartialBlockManager::GetBlockAllocation(uint32_t segment_
 		//! there is! increase the reference count of this block
 		allocation.partial_block->state.block_use_count += 1;
 		allocation.state = allocation.partial_block->state;
-		if (checkpoint_type == CheckpointType::FULL_CHECKPOINT) {
+		if (partial_block_type == PartialBlockType::FULL_CHECKPOINT) {
 			block_manager.IncreaseBlockReferenceCount(allocation.state.block_id);
 		}
 	} else {
@@ -70,13 +77,13 @@ bool PartialBlockManager::HasBlockAllocation(uint32_t segment_size) {
 }
 
 void PartialBlockManager::AllocateBlock(PartialBlockState &state, uint32_t segment_size) {
-	D_ASSERT(segment_size <= Storage::BLOCK_SIZE);
-	if (checkpoint_type == CheckpointType::FULL_CHECKPOINT) {
+	D_ASSERT(segment_size <= block_manager.GetBlockSize());
+	if (partial_block_type == PartialBlockType::FULL_CHECKPOINT) {
 		state.block_id = block_manager.GetFreeBlockId();
 	} else {
 		state.block_id = INVALID_BLOCK;
 	}
-	state.block_size = Storage::BLOCK_SIZE;
+	state.block_size = NumericCast<uint32_t>(block_manager.GetBlockSize());
 	state.offset = 0;
 	state.block_use_count = 1;
 }
@@ -95,9 +102,9 @@ bool PartialBlockManager::GetPartialBlock(idx_t segment_size, unique_ptr<Partial
 	return true;
 }
 
-void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation &&allocation) {
+void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation allocation) {
 	auto &state = allocation.partial_block->state;
-	D_ASSERT(checkpoint_type != CheckpointType::FULL_CHECKPOINT || state.block_id >= 0);
+	D_ASSERT(partial_block_type != PartialBlockType::FULL_CHECKPOINT || state.block_id >= 0);
 	if (state.block_use_count < max_use_count) {
 		auto unaligned_size = allocation.allocation_size + state.offset;
 		auto new_size = AlignValue(unaligned_size);
@@ -108,7 +115,7 @@ void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation &&allocati
 		state.offset = new_size;
 		auto new_space_left = state.block_size - new_size;
 		// check if the block is STILL partially filled after adding the segment_size
-		if (new_space_left >= Storage::BLOCK_SIZE - max_partial_block_size) {
+		if (new_space_left >= block_manager.GetBlockSize() - max_partial_block_size) {
 			// the block is still partially filled: add it to the partially_filled_blocks list
 			partially_filled_blocks.insert(make_pair(new_space_left, std::move(allocation.partial_block)));
 		}
@@ -139,7 +146,7 @@ void PartialBlockManager::Merge(PartialBlockManager &other) {
 		if (!e.second) {
 			throw InternalException("Empty partially filled block found");
 		}
-		auto used_space = NumericCast<uint32_t>(Storage::BLOCK_SIZE - e.first);
+		auto used_space = NumericCast<uint32_t>(block_manager.GetBlockSize() - e.first);
 		if (HasBlockAllocation(used_space)) {
 			// we can merge this block into an existing block - merge them
 			// merge blocks
@@ -181,6 +188,10 @@ void PartialBlockManager::FlushPartialBlocks() {
 		e.second->Flush(e.first);
 	}
 	partially_filled_blocks.clear();
+}
+
+BlockManager &PartialBlockManager::GetBlockManager() const {
+	return block_manager;
 }
 
 void PartialBlockManager::Rollback() {

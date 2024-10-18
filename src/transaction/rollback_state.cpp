@@ -13,6 +13,9 @@
 
 namespace duckdb {
 
+RollbackState::RollbackState(DuckTransaction &transaction_p) : transaction(transaction_p) {
+}
+
 void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {
@@ -25,13 +28,13 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::INSERT_TUPLE: {
 		auto info = reinterpret_cast<AppendInfo *>(data);
 		// revert the append in the base table
-		info->table->RevertAppend(info->start_row, info->count);
+		info->table->RevertAppend(transaction, info->start_row, info->count);
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {
 		auto info = reinterpret_cast<DeleteInfo *>(data);
 		// reset the deleted flag on rollback
-		info->version_info->CommitDelete(info->vector_idx, NOT_DELETED_ID, info->rows, info->count);
+		info->version_info->CommitDelete(info->vector_idx, NOT_DELETED_ID, *info);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
@@ -39,6 +42,8 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 		info->segment->RollbackUpdate(*info);
 		break;
 	}
+	case UndoFlags::SEQUENCE_VALUE:
+		break;
 	default: // LCOV_EXCL_START
 		D_ASSERT(type == UndoFlags::EMPTY_ENTRY);
 		break;

@@ -4,6 +4,9 @@
 
 require tpch
 
+statement ok
+PRAGMA enable_verification
+
 # write lineitem to lineitem.csv.gz
 statement ok
 CALL dbgen(sf=1);

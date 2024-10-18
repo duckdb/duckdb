@@ -2,13 +2,29 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/positional_reference_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 
 namespace duckdb {
+
+void RemoveOrderQualificationRecursive(unique_ptr<ParsedExpression> &expr) {
+	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
+		auto &col_ref = expr->Cast<ColumnRefExpression>();
+		auto &col_names = col_ref.column_names;
+		if (col_names.size() > 1) {
+			col_names = vector<string> {col_names.back()};
+		}
+	} else {
+		ParsedExpressionIterator::EnumerateChildren(
+		    *expr, [](unique_ptr<ParsedExpression> &child) { RemoveOrderQualificationRecursive(child); });
+	}
+}
 
 unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::PGSubLink &root) {
 	auto subquery_expr = make_uniq<SubqueryExpression>();
 
-	subquery_expr->subquery = TransformSelect(root.subselect);
+	subquery_expr->subquery = TransformSelectStmt(*root.subselect);
 	SetQueryLocation(*subquery_expr, root.location);
 	D_ASSERT(subquery_expr->subquery);
 	D_ASSERT(!subquery_expr->subquery->node->GetSelectList().empty());
@@ -69,10 +85,28 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 		vector<unique_ptr<ParsedExpression>> children;
 		children.push_back(std::move(columns_star));
 		auto aggr = make_uniq<FunctionExpression>("array_agg", std::move(children));
+		// push ORDER BY modifiers into the array_agg
 		for (auto &modifier : subquery_expr->subquery->node->modifiers) {
 			if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
 				aggr->order_bys = unique_ptr_cast<ResultModifier, OrderModifier>(modifier->Copy());
 				break;
+			}
+		}
+		// transform constants (e.g. ORDER BY 1) into positional references (ORDER BY #1)
+		if (aggr->order_bys) {
+			for (auto &order : aggr->order_bys->orders) {
+				if (order.expression->type == ExpressionType::VALUE_CONSTANT) {
+					auto &constant_expr = order.expression->Cast<ConstantExpression>();
+					Value bigint_value;
+					string error;
+					if (constant_expr.value.DefaultTryCastAs(LogicalType::BIGINT, bigint_value, &error)) {
+						int64_t order_index = BigIntValue::Get(bigint_value);
+						idx_t positional_index = order_index < 0 ? NumericLimits<idx_t>::Maximum() : idx_t(order_index);
+						order.expression = make_uniq<PositionalReferenceExpression>(positional_index);
+					}
+				} else {
+					RemoveOrderQualificationRecursive(order.expression);
+				}
 			}
 		}
 		// ARRAY_AGG(COLUMNS(*)) IS NULL

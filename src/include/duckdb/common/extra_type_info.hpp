@@ -36,12 +36,14 @@ struct ExtraTypeInfo {
 
 	ExtraTypeInfoType type;
 	string alias;
+	vector<Value> modifiers;
 
 public:
 	bool Equals(ExtraTypeInfo *other_p) const;
 
 	virtual void Serialize(Serializer &serializer) const;
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
+	virtual shared_ptr<ExtraTypeInfo> Copy() const;
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -50,7 +52,7 @@ public:
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 
@@ -67,6 +69,7 @@ struct DecimalTypeInfo : public ExtraTypeInfo {
 public:
 	void Serialize(Serializer &serializer) const override;
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
+	shared_ptr<ExtraTypeInfo> Copy() const override;
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
@@ -83,6 +86,7 @@ struct StringTypeInfo : public ExtraTypeInfo {
 public:
 	void Serialize(Serializer &serializer) const override;
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
+	shared_ptr<ExtraTypeInfo> Copy() const override;
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
@@ -99,6 +103,7 @@ struct ListTypeInfo : public ExtraTypeInfo {
 public:
 	void Serialize(Serializer &serializer) const override;
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
+	shared_ptr<ExtraTypeInfo> Copy() const override;
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
@@ -115,6 +120,7 @@ struct StructTypeInfo : public ExtraTypeInfo {
 public:
 	void Serialize(Serializer &serializer) const override;
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &deserializer);
+	shared_ptr<ExtraTypeInfo> Copy() const override;
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
@@ -131,6 +137,7 @@ struct AggregateStateTypeInfo : public ExtraTypeInfo {
 public:
 	void Serialize(Serializer &serializer) const override;
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
+	shared_ptr<ExtraTypeInfo> Copy() const override;
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
@@ -141,15 +148,18 @@ private:
 
 struct UserTypeInfo : public ExtraTypeInfo {
 	explicit UserTypeInfo(string name_p);
-	UserTypeInfo(string catalog_p, string schema_p, string name_p);
+	UserTypeInfo(string name_p, vector<Value> modifiers_p);
+	UserTypeInfo(string catalog_p, string schema_p, string name_p, vector<Value> modifiers_p);
 
 	string catalog;
 	string schema;
 	string user_type_name;
+	vector<Value> user_type_modifiers;
 
 public:
 	void Serialize(Serializer &serializer) const override;
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
+	shared_ptr<ExtraTypeInfo> Copy() const override;
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
@@ -176,6 +186,7 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
+	shared_ptr<ExtraTypeInfo> Copy() const override;
 
 protected:
 	// Equalities are only used in enums with different catalog entries
@@ -196,6 +207,7 @@ struct ArrayTypeInfo : public ExtraTypeInfo {
 public:
 	void Serialize(Serializer &serializer) const override;
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &reader);
+	shared_ptr<ExtraTypeInfo> Copy() const override;
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
@@ -210,6 +222,7 @@ struct AnyTypeInfo : public ExtraTypeInfo {
 public:
 	void Serialize(Serializer &serializer) const override;
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
+	shared_ptr<ExtraTypeInfo> Copy() const override;
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
@@ -219,13 +232,14 @@ private:
 };
 
 struct IntegerLiteralTypeInfo : public ExtraTypeInfo {
-	IntegerLiteralTypeInfo(Value constant_value);
+	explicit IntegerLiteralTypeInfo(Value constant_value);
 
 	Value constant_value;
 
 public:
 	void Serialize(Serializer &serializer) const override;
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
+	shared_ptr<ExtraTypeInfo> Copy() const override;
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;

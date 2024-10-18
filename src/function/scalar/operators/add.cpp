@@ -36,15 +36,8 @@ interval_t AddOperator::Operation(interval_t left, interval_t right) {
 
 template <>
 date_t AddOperator::Operation(date_t left, int32_t right) {
-	if (!Value::IsFinite(left)) {
-		return left;
-	}
-	int32_t days;
-	if (!TryAddOperator::Operation(left.days, right, days)) {
-		throw OutOfRangeException("Date out of range");
-	}
-	date_t result(days);
-	if (!Value::IsFinite(result)) {
+	date_t result;
+	if (!TryAddOperator::Operation(left, right, result)) {
 		throw OutOfRangeException("Date out of range");
 	}
 	return result;
@@ -152,6 +145,23 @@ bool TryAddOperator::Operation(uint64_t left, uint64_t right, uint64_t &result) 
 		return false;
 	}
 	return OverflowCheckedAddition::Operation<uint64_t, uint64_t>(left, right, result);
+}
+
+template <>
+bool TryAddOperator::Operation(date_t left, int32_t right, date_t &result) {
+	if (left == date_t::infinity() || left == date_t::ninfinity()) {
+		result = date_t(left);
+		return true;
+	}
+	int32_t days;
+	if (!TryAddOperator::Operation(left.days, right, days)) {
+		return false;
+	}
+	result.days = days;
+	if (!Value::IsFinite(result)) {
+		return false;
+	}
+	return true;
 }
 
 template <>

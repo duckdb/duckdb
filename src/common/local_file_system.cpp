@@ -29,6 +29,7 @@
 #ifdef __MINGW32__
 // need to manually define this for mingw
 extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG);
+extern "C" WINBASEAPI BOOL QueryFullProcessImageNameW(HANDLE, DWORD, LPWSTR, PDWORD);
 #endif
 
 #undef FILE_CREATE // woo mingw
@@ -40,6 +41,11 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 #endif
 
 #if defined(__linux__)
+// See https://man7.org/linux/man-pages/man2/fallocate.2.html
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE /* See feature_test_macros(7) */
+#endif
+#include <fcntl.h>
 #include <libgen.h>
 // See e.g.:
 // https://opensource.apple.com/source/CarbonHeaders/CarbonHeaders-18.1/TargetConditionals.h.auto.html
@@ -55,7 +61,7 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 namespace duckdb {
 
 #ifndef _WIN32
-bool LocalFileSystem::FileExists(const string &filename) {
+bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
 	if (!filename.empty()) {
 		if (access(filename.c_str(), 0) == 0) {
 			struct stat status;
@@ -69,7 +75,7 @@ bool LocalFileSystem::FileExists(const string &filename) {
 	return false;
 }
 
-bool LocalFileSystem::IsPipe(const string &filename) {
+bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener) {
 	if (!filename.empty()) {
 		if (access(filename.c_str(), 0) == 0) {
 			struct stat status;
@@ -84,7 +90,7 @@ bool LocalFileSystem::IsPipe(const string &filename) {
 }
 
 #else
-bool LocalFileSystem::FileExists(const string &filename) {
+bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
 	const wchar_t *wpath = unicode_path.c_str();
 	if (_waccess(wpath, 0) == 0) {
@@ -96,7 +102,7 @@ bool LocalFileSystem::FileExists(const string &filename) {
 	}
 	return false;
 }
-bool LocalFileSystem::IsPipe(const string &filename) {
+bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener) {
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
 	const wchar_t *wpath = unicode_path.c_str();
 	if (_waccess(wpath, 0) == 0) {
@@ -212,7 +218,7 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 	try {
 		auto cmdline_file = fs.OpenFile(StringUtil::Format("/proc/%d/cmdline", pid), FileFlags::FILE_FLAGS_READ);
 		auto cmdline = cmdline_file->ReadLine();
-		process_name = basename(const_cast<char *>(cmdline.c_str()));
+		process_name = basename(const_cast<char *>(cmdline.c_str())); // NOLINT: old C API does not take const
 	} catch (std::exception &) {
 		// ignore
 	}
@@ -327,11 +333,18 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		filesec = 0666;
 	}
 
+	if (flags.ExclusiveCreate()) {
+		open_flags |= O_EXCL;
+	}
+
 	// Open the file
 	int fd = open(path.c_str(), open_flags, filesec);
 
 	if (fd == -1) {
 		if (flags.ReturnNullIfNotExists() && errno == ENOENT) {
+			return nullptr;
+		}
+		if (flags.ReturnNullIfExists() && errno == EEXIST) {
 			return nullptr;
 		}
 		throw IOException("Cannot open file \"%s\": %s", {{"errno", std::to_string(errno)}}, path, strerror(errno));
@@ -359,28 +372,48 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 			rc = fcntl(fd, F_SETLK, &fl);
 			// Retain the original error.
 			int retained_errno = errno;
-			if (rc == -1) {
-				string message;
-				// try to find out who is holding the lock using F_GETLK
-				rc = fcntl(fd, F_GETLK, &fl);
-				if (rc == -1) { // fnctl does not want to help us
-					message = strerror(errno);
-				} else {
-					message = AdditionalProcessInfo(*this, fl.l_pid);
-				}
-
-				if (flags.Lock() == FileLockType::WRITE_LOCK) {
-					// maybe we can get a read lock instead and tell this to the user.
-					fl.l_type = F_RDLCK;
-					rc = fcntl(fd, F_SETLK, &fl);
-					if (rc != -1) { // success!
-						message += ". However, you would be able to open this database in read-only mode, e.g. by "
-						           "using the -readonly parameter in the CLI";
+			bool has_error = rc == -1;
+			string extended_error;
+			if (has_error) {
+				if (retained_errno == ENOTSUP) {
+					// file lock not supported for this file system
+					if (flags.Lock() == FileLockType::READ_LOCK) {
+						// for read-only, we ignore not-supported errors
+						has_error = false;
+						errno = 0;
+					} else {
+						extended_error = "File locks are not supported for this file system, cannot open the file in "
+						                 "read-write mode. Try opening the file in read-only mode";
 					}
 				}
-				message += ". See also https://duckdb.org/docs/connect/concurrency";
+			}
+			if (has_error) {
+				if (extended_error.empty()) {
+					// try to find out who is holding the lock using F_GETLK
+					rc = fcntl(fd, F_GETLK, &fl);
+					if (rc == -1) { // fnctl does not want to help us
+						extended_error = strerror(errno);
+					} else {
+						extended_error = AdditionalProcessInfo(*this, fl.l_pid);
+					}
+					if (flags.Lock() == FileLockType::WRITE_LOCK) {
+						// maybe we can get a read lock instead and tell this to the user.
+						fl.l_type = F_RDLCK;
+						rc = fcntl(fd, F_SETLK, &fl);
+						if (rc != -1) { // success!
+							extended_error +=
+							    ". However, you would be able to open this database in read-only mode, e.g. by "
+							    "using the -readonly parameter in the CLI";
+						}
+					}
+				}
+				rc = close(fd);
+				if (rc == -1) {
+					extended_error += ". Also, failed closing file";
+				}
+				extended_error += ". See also https://duckdb.org/docs/connect/concurrency";
 				throw IOException("Could not set lock on file \"%s\": %s", {{"errno", std::to_string(retained_errno)}},
-				                  path, message);
+				                  path, extended_error);
 			}
 		}
 	}
@@ -389,7 +422,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 
 void LocalFileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
-	off_t offset = lseek(fd, location, SEEK_SET);
+	off_t offset = lseek(fd, UnsafeNumericCast<off_t>(location), SEEK_SET);
 	if (offset == (off_t)-1) {
 		throw IOException("Could not seek to location %lld for file \"%s\": %s", {{"errno", std::to_string(errno)}},
 		                  location, handle.path, strerror(errno));
@@ -403,14 +436,15 @@ idx_t LocalFileSystem::GetFilePointer(FileHandle &handle) {
 		throw IOException("Could not get file position file \"%s\": %s", {{"errno", std::to_string(errno)}},
 		                  handle.path, strerror(errno));
 	}
-	return position;
+	return UnsafeNumericCast<idx_t>(position);
 }
 
 void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	auto read_buffer = char_ptr_cast(buffer);
 	while (nr_bytes > 0) {
-		int64_t bytes_read = pread(fd, read_buffer, nr_bytes, location);
+		int64_t bytes_read =
+		    pread(fd, read_buffer, UnsafeNumericCast<size_t>(nr_bytes), UnsafeNumericCast<off_t>(location));
 		if (bytes_read == -1) {
 			throw IOException("Could not read from file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
 			                  strerror(errno));
@@ -422,13 +456,13 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 		}
 		read_buffer += bytes_read;
 		nr_bytes -= bytes_read;
-		location += bytes_read;
+		location += UnsafeNumericCast<idx_t>(bytes_read);
 	}
 }
 
 int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
-	int64_t bytes_read = read(fd, buffer, nr_bytes);
+	int64_t bytes_read = read(fd, buffer, UnsafeNumericCast<size_t>(nr_bytes));
 	if (bytes_read == -1) {
 		throw IOException("Could not read from file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
 		                  strerror(errno));
@@ -440,7 +474,8 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	auto write_buffer = char_ptr_cast(buffer);
 	while (nr_bytes > 0) {
-		int64_t bytes_written = pwrite(fd, write_buffer, nr_bytes, location);
+		int64_t bytes_written =
+		    pwrite(fd, write_buffer, UnsafeNumericCast<size_t>(nr_bytes), UnsafeNumericCast<off_t>(location));
 		if (bytes_written < 0) {
 			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
 			                  strerror(errno));
@@ -451,7 +486,7 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 		}
 		write_buffer += bytes_written;
 		nr_bytes -= bytes_written;
-		location += bytes_written;
+		location += UnsafeNumericCast<idx_t>(bytes_written);
 	}
 }
 
@@ -474,9 +509,15 @@ int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_byte
 
 bool LocalFileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) {
 #if defined(__linux__)
+	// FALLOC_FL_PUNCH_HOLE requires glibc 2.18 or up
+#if __GLIBC__ < 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ < 18)
+	return false;
+#else
 	int fd = handle.Cast<UnixFileHandle>().fd;
-	int res = fallocate(fd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, offset_bytes, length_bytes);
+	int res = fallocate(fd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, UnsafeNumericCast<int64_t>(offset_bytes),
+	                    UnsafeNumericCast<int64_t>(length_bytes));
 	return res == 0;
+#endif
 #else
 	return false;
 #endif
@@ -513,7 +554,7 @@ void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	}
 }
 
-bool LocalFileSystem::DirectoryExists(const string &directory) {
+bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
 	if (!directory.empty()) {
 		if (access(directory.c_str(), 0) == 0) {
 			struct stat status;
@@ -527,13 +568,14 @@ bool LocalFileSystem::DirectoryExists(const string &directory) {
 	return false;
 }
 
-void LocalFileSystem::CreateDirectory(const string &directory) {
+void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
 	struct stat st;
 
 	if (stat(directory.c_str(), &st) != 0) {
 		/* Directory does not exist. EEXIST for race condition */
 		if (mkdir(directory.c_str(), 0755) != 0 && errno != EEXIST) {
-			throw IOException("Failed to create directory \"%s\"!", {{"errno", std::to_string(errno)}}, directory);
+			throw IOException("Failed to create directory \"%s\": %s", {{"errno", std::to_string(errno)}}, directory,
+			                  strerror(errno));
 		}
 	} else if (!S_ISDIR(st.st_mode)) {
 		throw IOException("Failed to create directory \"%s\": path exists but is not a directory!",
@@ -581,11 +623,11 @@ int RemoveDirectoryRecursive(const char *path) {
 	return r;
 }
 
-void LocalFileSystem::RemoveDirectory(const string &directory) {
+void LocalFileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
 	RemoveDirectoryRecursive(directory.c_str());
 }
 
-void LocalFileSystem::RemoveFile(const string &filename) {
+void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
 	if (std::remove(filename.c_str()) != 0) {
 		throw IOException("Could not remove file \"%s\": %s", {{"errno", std::to_string(errno)}}, filename,
 		                  strerror(errno));
@@ -594,13 +636,14 @@ void LocalFileSystem::RemoveFile(const string &filename) {
 
 bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
                                 FileOpener *opener) {
-	if (!DirectoryExists(directory)) {
-		return false;
-	}
-	DIR *dir = opendir(directory.c_str());
+	auto dir = opendir(directory.c_str());
 	if (!dir) {
 		return false;
 	}
+
+	// RAII wrapper around DIR to automatically free on exceptions in callback
+	std::unique_ptr<DIR, std::function<void(DIR *)>> dir_unique_ptr(dir, [](DIR *d) { closedir(d); });
+
 	struct dirent *ent;
 	// loop over all files in the directory
 	while ((ent = readdir(dir)) != nullptr) {
@@ -611,11 +654,11 @@ bool LocalFileSystem::ListFiles(const string &directory, const std::function<voi
 		}
 		// now stat the file to figure out if it is a regular file or directory
 		string full_path = JoinPath(directory, name);
-		if (access(full_path.c_str(), 0) != 0) {
+		struct stat status;
+		auto res = stat(full_path.c_str(), &status);
+		if (res != 0) {
 			continue;
 		}
-		struct stat status;
-		stat(full_path.c_str(), &status);
 		if (!(status.st_mode & S_IFREG) && !(status.st_mode & S_IFDIR)) {
 			// not a file or directory: skip
 			continue;
@@ -623,7 +666,7 @@ bool LocalFileSystem::ListFiles(const string &directory, const std::function<voi
 		// invoke callback
 		callback(name, status.st_mode & S_IFDIR);
 	}
-	closedir(dir);
+
 	return true;
 }
 
@@ -634,7 +677,7 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 	}
 }
 
-void LocalFileSystem::MoveFile(const string &source, const string &target) {
+void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
 	//! FIXME: rename does not guarantee atomicity or overwriting target file if it exists
 	if (rename(source.c_str(), target.c_str()) != 0) {
 		throw IOException("Could not rename file!", {{"errno", std::to_string(errno)}});
@@ -971,18 +1014,19 @@ static DWORD WindowsGetFileAttributes(const string &filename) {
 	return GetFileAttributesW(unicode_path.c_str());
 }
 
-bool LocalFileSystem::DirectoryExists(const string &directory) {
+bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
 	DWORD attrs = WindowsGetFileAttributes(directory);
 	return (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY));
 }
 
-void LocalFileSystem::CreateDirectory(const string &directory) {
+void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
 	if (DirectoryExists(directory)) {
 		return;
 	}
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(directory.c_str());
 	if (directory.empty() || !CreateDirectoryW(unicode_path.c_str(), NULL) || !DirectoryExists(directory)) {
-		throw IOException("Could not create directory: \'%s\'", directory.c_str());
+		auto error = LocalFileSystem::GetLastErrorAsString();
+		throw IOException("Failed to create directory \"%s\": %s", directory.c_str(), error);
 	}
 }
 
@@ -1001,7 +1045,7 @@ static void DeleteDirectoryRecursive(FileSystem &fs, string directory) {
 	}
 }
 
-void LocalFileSystem::RemoveDirectory(const string &directory) {
+void LocalFileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
 	if (FileExists(directory)) {
 		throw IOException("Attempting to delete directory \"%s\", but it is a file and not a directory!", directory);
 	}
@@ -1011,7 +1055,7 @@ void LocalFileSystem::RemoveDirectory(const string &directory) {
 	DeleteDirectoryRecursive(*this, directory.c_str());
 }
 
-void LocalFileSystem::RemoveFile(const string &filename) {
+void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
 	if (!DeleteFileW(unicode_path.c_str())) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
@@ -1055,7 +1099,7 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 	}
 }
 
-void LocalFileSystem::MoveFile(const string &source, const string &target) {
+void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
 	auto source_unicode = WindowsUtil::UTF8ToUnicode(source.c_str());
 	auto target_unicode = WindowsUtil::UTF8ToUnicode(target.c_str());
 	if (!MoveFileW(source_unicode.c_str(), target_unicode.c_str())) {
@@ -1162,7 +1206,7 @@ static void GlobFilesInternal(FileSystem &fs, const string &path, const string &
 
 vector<string> LocalFileSystem::FetchFileWithoutGlob(const string &path, FileOpener *opener, bool absolute_path) {
 	vector<string> result;
-	if (FileExists(path) || IsPipe(path)) {
+	if (FileExists(path, opener) || IsPipe(path, opener)) {
 		result.push_back(path);
 	} else if (!absolute_path) {
 		Value value;
@@ -1171,7 +1215,7 @@ vector<string> LocalFileSystem::FetchFileWithoutGlob(const string &path, FileOpe
 			vector<std::string> search_paths = StringUtil::Split(search_paths_str, ',');
 			for (const auto &search_path : search_paths) {
 				auto joined_path = JoinPath(search_path, path);
-				if (FileExists(joined_path) || IsPipe(joined_path)) {
+				if (FileExists(joined_path, opener) || IsPipe(joined_path, opener)) {
 					result.push_back(joined_path);
 				}
 			}
@@ -1262,7 +1306,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 				if (is_last_chunk) {
 					for (auto &prev_directory : previous_directories) {
 						const string filename = JoinPath(prev_directory, splits[i]);
-						if (FileExists(filename) || DirectoryExists(filename)) {
+						if (FileExists(filename, opener) || DirectoryExists(filename, opener)) {
 							result.push_back(filename);
 						}
 					}

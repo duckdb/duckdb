@@ -17,7 +17,8 @@ namespace duckdb_py_convert {
 
 struct RegularConvert {
 	template <class DUCKDB_T, class NUMPY_T>
-	static NUMPY_T ConvertValue(DUCKDB_T val) {
+	static NUMPY_T ConvertValue(DUCKDB_T val, NumpyAppendData &append_data) {
+		(void)append_data;
 		return (NUMPY_T)val;
 	}
 
@@ -30,7 +31,8 @@ struct RegularConvert {
 
 struct TimestampConvert {
 	template <class DUCKDB_T, class NUMPY_T>
-	static int64_t ConvertValue(timestamp_t val) {
+	static int64_t ConvertValue(timestamp_t val, NumpyAppendData &append_data) {
+		(void)append_data;
 		if (!Timestamp::IsFinite(val)) {
 			return val.value;
 		}
@@ -46,7 +48,8 @@ struct TimestampConvert {
 
 struct TimestampConvertSec {
 	template <class DUCKDB_T, class NUMPY_T>
-	static int64_t ConvertValue(timestamp_t val) {
+	static int64_t ConvertValue(timestamp_t val, NumpyAppendData &append_data) {
+		(void)append_data;
 		if (!Timestamp::IsFinite(val)) {
 			return val.value;
 		}
@@ -62,7 +65,8 @@ struct TimestampConvertSec {
 
 struct TimestampConvertMilli {
 	template <class DUCKDB_T, class NUMPY_T>
-	static int64_t ConvertValue(timestamp_t val) {
+	static int64_t ConvertValue(timestamp_t val, NumpyAppendData &append_data) {
+		(void)append_data;
 		if (!Timestamp::IsFinite(val)) {
 			return val.value;
 		}
@@ -78,7 +82,8 @@ struct TimestampConvertMilli {
 
 struct TimestampConvertNano {
 	template <class DUCKDB_T, class NUMPY_T>
-	static int64_t ConvertValue(timestamp_t val) {
+	static int64_t ConvertValue(timestamp_t val, NumpyAppendData &append_data) {
+		(void)append_data;
 		return val.value;
 	}
 
@@ -91,7 +96,8 @@ struct TimestampConvertNano {
 
 struct DateConvert {
 	template <class DUCKDB_T, class NUMPY_T>
-	static int64_t ConvertValue(date_t val) {
+	static int64_t ConvertValue(date_t val, NumpyAppendData &append_data) {
+		(void)append_data;
 		return Date::EpochMicroseconds(val);
 	}
 
@@ -104,7 +110,8 @@ struct DateConvert {
 
 struct IntervalConvert {
 	template <class DUCKDB_T, class NUMPY_T>
-	static int64_t ConvertValue(interval_t val) {
+	static int64_t ConvertValue(interval_t val, NumpyAppendData &append_data) {
+		(void)append_data;
 		return Interval::GetNanoseconds(val);
 	}
 
@@ -117,9 +124,13 @@ struct IntervalConvert {
 
 struct TimeConvert {
 	template <class DUCKDB_T, class NUMPY_T>
-	static PyObject *ConvertValue(dtime_t val) {
-		auto str = duckdb::Time::ToString(val);
-		return PyUnicode_FromStringAndSize(str.c_str(), str.size());
+	static PyObject *ConvertValue(dtime_t val, NumpyAppendData &append_data) {
+		auto &client_properties = append_data.client_properties;
+		auto value = Value::TIME(val);
+		auto py_obj = PythonObject::FromValue(value, LogicalType::TIME, client_properties);
+		// Release ownership of the PyObject* without decreasing refcount
+		// this returns a handle, of which we take the ptr to get the PyObject*
+		return py_obj.release().ptr();
 	}
 
 	template <class NUMPY_T, bool PANDAS>
@@ -201,7 +212,8 @@ struct StringConvert {
 	}
 
 	template <class DUCKDB_T, class NUMPY_T>
-	static PyObject *ConvertValue(string_t val) {
+	static PyObject *ConvertValue(string_t val, NumpyAppendData &append_data) {
+		(void)append_data;
 		// we could use PyUnicode_FromStringAndSize here, but it does a lot of verification that we don't need
 		// because of that it is a lot slower than it needs to be
 		auto data = const_data_ptr_cast(val.GetData());
@@ -234,7 +246,8 @@ struct StringConvert {
 
 struct BlobConvert {
 	template <class DUCKDB_T, class NUMPY_T>
-	static PyObject *ConvertValue(string_t val) {
+	static PyObject *ConvertValue(string_t val, NumpyAppendData &append_data) {
+		(void)append_data;
 		return PyByteArray_FromStringAndSize(val.GetData(), val.GetSize());
 	}
 
@@ -247,7 +260,8 @@ struct BlobConvert {
 
 struct BitConvert {
 	template <class DUCKDB_T, class NUMPY_T>
-	static PyObject *ConvertValue(string_t val) {
+	static PyObject *ConvertValue(string_t val, NumpyAppendData &append_data) {
+		(void)append_data;
 		return PyBytes_FromStringAndSize(val.GetData(), val.GetSize());
 	}
 
@@ -260,7 +274,8 @@ struct BitConvert {
 
 struct UUIDConvert {
 	template <class DUCKDB_T, class NUMPY_T>
-	static PyObject *ConvertValue(hugeint_t val) {
+	static PyObject *ConvertValue(hugeint_t val, NumpyAppendData &append_data) {
+		(void)append_data;
 		auto &import_cache = *DuckDBPyConnection::ImportCache();
 		py::handle h = import_cache.uuid.UUID()(UUID::ToString(val)).release();
 		return h.ptr();
@@ -358,29 +373,14 @@ struct MapConvert {
 	static py::dict ConvertValue(Vector &input, idx_t chunk_offset, NumpyAppendData &append_data) {
 		auto &client_properties = append_data.client_properties;
 		auto val = input.GetValue(chunk_offset);
-		auto &list_children = ListValue::GetChildren(val);
-
-		auto &key_type = MapType::KeyType(input.GetType());
-		auto &val_type = MapType::ValueType(input.GetType());
-
-		py::list keys;
-		py::list values;
-		for (auto &list_elem : list_children) {
-			auto &struct_children = StructValue::GetChildren(list_elem);
-			keys.append(PythonObject::FromValue(struct_children[0], key_type, client_properties));
-			values.append(PythonObject::FromValue(struct_children[1], val_type, client_properties));
-		}
-
-		py::dict py_struct;
-		py_struct["key"] = keys;
-		py_struct["value"] = values;
-		return py_struct;
+		return PythonObject::FromValue(val, input.GetType(), client_properties);
 	}
 };
 
 struct IntegralConvert {
 	template <class DUCKDB_T, class NUMPY_T>
-	static NUMPY_T ConvertValue(DUCKDB_T val) {
+	static NUMPY_T ConvertValue(DUCKDB_T val, NumpyAppendData &append_data) {
+		(void)append_data;
 		return NUMPY_T(val);
 	}
 
@@ -392,14 +392,16 @@ struct IntegralConvert {
 };
 
 template <>
-double IntegralConvert::ConvertValue(hugeint_t val) {
+double IntegralConvert::ConvertValue(hugeint_t val, NumpyAppendData &append_data) {
+	(void)append_data;
 	double result;
 	Hugeint::TryCast(val, result);
 	return result;
 }
 
 template <>
-double IntegralConvert::ConvertValue(uhugeint_t val) {
+double IntegralConvert::ConvertValue(uhugeint_t val, NumpyAppendData &append_data) {
+	(void)append_data;
 	double result;
 	Uhugeint::TryCast(val, result);
 	return result;
@@ -407,8 +409,8 @@ double IntegralConvert::ConvertValue(uhugeint_t val) {
 
 } // namespace duckdb_py_convert
 
-template <class DUCKDB_T, class NUMPY_T, class CONVERT>
-static bool ConvertColumn(NumpyAppendData &append_data) {
+template <class DUCKDB_T, class NUMPY_T, class CONVERT, bool HAS_NULLS, bool PANDAS>
+static bool ConvertColumnTemplated(NumpyAppendData &append_data) {
 	auto target_offset = append_data.target_offset;
 	auto target_data = append_data.target_data;
 	auto target_mask = append_data.target_mask;
@@ -418,32 +420,44 @@ static bool ConvertColumn(NumpyAppendData &append_data) {
 
 	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
 	auto out_ptr = reinterpret_cast<NUMPY_T *>(target_data);
-	if (!idata.validity.AllValid()) {
-		bool mask_is_set = false;
-		for (idx_t i = 0; i < count; i++) {
-			idx_t src_idx = idata.sel->get_index(i + source_offset);
-			idx_t offset = target_offset + i;
-			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
-				if (append_data.pandas) {
-					out_ptr[offset] = CONVERT::template NullValue<NUMPY_T, true>(target_mask[offset]);
-				} else {
-					out_ptr[offset] = CONVERT::template NullValue<NUMPY_T, false>(target_mask[offset]);
-				}
-				mask_is_set = mask_is_set || target_mask[offset];
-			} else {
-				out_ptr[offset] = CONVERT::template ConvertValue<DUCKDB_T, NUMPY_T>(src_ptr[src_idx]);
-				target_mask[offset] = false;
-			}
-		}
-		return mask_is_set;
-	} else {
-		for (idx_t i = 0; i < count; i++) {
-			idx_t src_idx = idata.sel->get_index(i + source_offset);
-			idx_t offset = target_offset + i;
-			out_ptr[offset] = CONVERT::template ConvertValue<DUCKDB_T, NUMPY_T>(src_ptr[src_idx]);
+	bool mask_is_set = false;
+	for (idx_t i = 0; i < count; i++) {
+		idx_t src_idx = idata.sel->get_index(i + source_offset);
+		idx_t offset = target_offset + i;
+		if (HAS_NULLS && !idata.validity.RowIsValidUnsafe(src_idx)) {
+			out_ptr[offset] = CONVERT::template NullValue<NUMPY_T, PANDAS>(target_mask[offset]);
+			mask_is_set = mask_is_set || target_mask[offset];
+		} else {
+			out_ptr[offset] = CONVERT::template ConvertValue<DUCKDB_T, NUMPY_T>(src_ptr[src_idx], append_data);
 			target_mask[offset] = false;
 		}
-		return false;
+	}
+	return mask_is_set;
+}
+
+template <class DUCKDB_T, class NUMPY_T, class CONVERT>
+static bool ConvertColumn(NumpyAppendData &append_data) {
+	auto target_offset = append_data.target_offset;
+	auto target_data = append_data.target_data;
+	auto &idata = append_data.idata;
+
+	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
+	auto out_ptr = reinterpret_cast<NUMPY_T *>(target_data);
+	if (!idata.validity.AllValid()) {
+		if (append_data.pandas) {
+			return ConvertColumnTemplated<DUCKDB_T, NUMPY_T, CONVERT, /*has_nulls=*/true, /*pandas=*/true>(append_data);
+		} else {
+			return ConvertColumnTemplated<DUCKDB_T, NUMPY_T, CONVERT, /*has_nulls=*/true, /*pandas=*/false>(
+			    append_data);
+		}
+	} else {
+		if (append_data.pandas) {
+			return ConvertColumnTemplated<DUCKDB_T, NUMPY_T, CONVERT, /*has_nulls=*/false, /*pandas=*/true>(
+			    append_data);
+		} else {
+			return ConvertColumnTemplated<DUCKDB_T, NUMPY_T, CONVERT, /*has_nulls=*/false, /*pandas=*/false>(
+			    append_data);
+		}
 	}
 }
 
@@ -464,16 +478,16 @@ static bool ConvertColumnCategoricalTemplate(NumpyAppendData &append_data) {
 			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
 				out_ptr[offset] = static_cast<NUMPY_T>(-1);
 			} else {
-				out_ptr[offset] =
-				    duckdb_py_convert::RegularConvert::template ConvertValue<DUCKDB_T, NUMPY_T>(src_ptr[src_idx]);
+				out_ptr[offset] = duckdb_py_convert::RegularConvert::template ConvertValue<DUCKDB_T, NUMPY_T>(
+				    src_ptr[src_idx], append_data);
 			}
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {
 			idx_t src_idx = idata.sel->get_index(i + source_offset);
 			idx_t offset = target_offset + i;
-			out_ptr[offset] =
-			    duckdb_py_convert::RegularConvert::template ConvertValue<DUCKDB_T, NUMPY_T>(src_ptr[src_idx]);
+			out_ptr[offset] = duckdb_py_convert::RegularConvert::template ConvertValue<DUCKDB_T, NUMPY_T>(
+			    src_ptr[src_idx], append_data);
 		}
 	}
 	// Null values are encoded in the data itself
@@ -560,7 +574,8 @@ static bool ConvertDecimalInternal(NumpyAppendData &append_data, double division
 				target_mask[offset] = true;
 			} else {
 				out_ptr[offset] =
-				    duckdb_py_convert::IntegralConvert::ConvertValue<DUCKDB_T, double>(src_ptr[src_idx]) / division;
+				    duckdb_py_convert::IntegralConvert::ConvertValue<DUCKDB_T, double>(src_ptr[src_idx], append_data) /
+				    division;
 				target_mask[offset] = false;
 			}
 		}
@@ -570,7 +585,8 @@ static bool ConvertDecimalInternal(NumpyAppendData &append_data, double division
 			idx_t src_idx = idata.sel->get_index(i + source_offset);
 			idx_t offset = target_offset + i;
 			out_ptr[offset] =
-			    duckdb_py_convert::IntegralConvert::ConvertValue<DUCKDB_T, double>(src_ptr[src_idx]) / division;
+			    duckdb_py_convert::IntegralConvert::ConvertValue<DUCKDB_T, double>(src_ptr[src_idx], append_data) /
+			    division;
 			target_mask[offset] = false;
 		}
 		return false;
@@ -649,7 +665,8 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t source_size
 		} else {
 			throw InternalException("Size not supported on ENUM types");
 		}
-	} break;
+		break;
+	}
 	case LogicalTypeId::BOOLEAN:
 		may_have_null = ConvertColumnRegular<bool>(append_data);
 		break;

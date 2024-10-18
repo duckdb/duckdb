@@ -1,9 +1,9 @@
-#include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/enums/set_operation_type.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
-#include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/parser/query_node/cte_node.hpp"
+#include "duckdb/parser/query_node/recursive_cte_node.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
 
@@ -42,8 +42,8 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 		auto &cte = *PGPointerCast<duckdb_libpgquery::PGCommonTableExpr>(cte_ele->data.ptr_value);
 		if (cte.aliascolnames) {
 			for (auto node = cte.aliascolnames->head; node != nullptr; node = node->next) {
-				info->aliases.emplace_back(
-				    reinterpret_cast<duckdb_libpgquery::PGValue *>(node->data.ptr_value)->val.str);
+				auto value = PGPointerCast<duckdb_libpgquery::PGValue>(node->data.ptr_value);
+				info->aliases.emplace_back(value->val.str);
 			}
 		}
 		// lets throw some errors on unsupported features early
@@ -70,8 +70,7 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 			info->query = TransformRecursiveCTE(cte, *info);
 		} else {
 			Transformer cte_transformer(*this);
-			info->query =
-			    cte_transformer.TransformSelect(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(cte.ctequery));
+			info->query = cte_transformer.TransformSelectStmt(*cte.ctequery);
 		}
 		D_ASSERT(info->query);
 		auto cte_name = string(cte.ctename);
@@ -82,12 +81,16 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 			throw ParserException("Duplicate CTE name \"%s\"", cte_name);
 		}
 
-#ifdef DUCKDB_ALTERNATIVE_VERIFY
 		if (cte.ctematerialized == duckdb_libpgquery::PGCTEMaterializeDefault) {
-#else
-		if (cte.ctematerialized == duckdb_libpgquery::PGCTEMaterializeAlways) {
-#endif
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
 			info->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
+#else
+			info->materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
+#endif
+		} else if (cte.ctematerialized == duckdb_libpgquery::PGCTEMaterializeAlways) {
+			info->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
+		} else if (cte.ctematerialized == duckdb_libpgquery::PGCTEMaterializeNever) {
+			info->materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
 		}
 
 		cte_map.map[cte_name] = std::move(info);
@@ -100,25 +103,30 @@ unique_ptr<SelectStatement> Transformer::TransformRecursiveCTE(duckdb_libpgquery
 
 	unique_ptr<SelectStatement> select;
 	switch (stmt.op) {
-	case duckdb_libpgquery::PG_SETOP_UNION:
-	case duckdb_libpgquery::PG_SETOP_EXCEPT:
-	case duckdb_libpgquery::PG_SETOP_INTERSECT: {
+	case duckdb_libpgquery::PG_SETOP_UNION: {
 		select = make_uniq<SelectStatement>();
 		select->node = make_uniq_base<QueryNode, RecursiveCTENode>();
 		auto &result = select->node->Cast<RecursiveCTENode>();
 		result.ctename = string(cte.ctename);
 		result.union_all = stmt.all;
-		result.left = TransformSelectNode(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(stmt.larg));
-		result.right = TransformSelectNode(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(stmt.rarg));
-		result.aliases = info.aliases;
-		if (stmt.op != duckdb_libpgquery::PG_SETOP_UNION) {
-			throw ParserException("Unsupported setop type for recursive CTE: only UNION or UNION ALL are supported");
+		if (stmt.withClause) {
+			auto with_clause = PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause);
+			TransformCTE(*with_clause, result.cte_map);
 		}
+		result.left = TransformSelectNode(*stmt.larg);
+		result.right = TransformSelectNode(*stmt.rarg);
+		result.aliases = info.aliases;
 		break;
 	}
-	default:
+	case duckdb_libpgquery::PG_SETOP_EXCEPT:
+	case duckdb_libpgquery::PG_SETOP_INTERSECT:
+	default: {
 		// This CTE is not recursive. Fallback to regular query transformation.
-		return TransformSelect(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(cte.ctequery));
+		auto node = TransformSelectNode(*cte.ctequery);
+		auto result = make_uniq<SelectStatement>();
+		result->node = std::move(node);
+		return result;
+	}
 	}
 
 	if (stmt.limitCount || stmt.limitOffset) {

@@ -23,13 +23,17 @@ void InitializeStaticMethods(py::module_ &m) {
 
 	// Star Expression
 	docs = "";
-	m.def("StarExpression", &DuckDBPyExpression::StarExpression, py::kw_only(), py::arg("exclude") = py::list(), docs);
+	m.def("StarExpression", &DuckDBPyExpression::StarExpression, py::kw_only(), py::arg("exclude") = py::none(), docs);
 	m.def(
 	    "StarExpression", []() { return DuckDBPyExpression::StarExpression(); }, docs);
 
 	// Function Expression
 	docs = "";
 	m.def("FunctionExpression", &DuckDBPyExpression::FunctionExpression, py::arg("function_name"), docs);
+
+	// Coalesce Operator
+	docs = "";
+	m.def("CoalesceOperator", &DuckDBPyExpression::Coalesce, docs);
 }
 
 static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<DuckDBPyExpression>> &m) {
@@ -314,7 +318,7 @@ void DuckDBPyExpression::Initialize(py::module_ &m) {
 	expression.def("isnotnull", &DuckDBPyExpression::IsNotNull, docs);
 
 	docs = R"(
-		Return a IN expression comparing self to the input arguments.
+		Return an IN expression comparing self to the input arguments.
 
 		Returns:
 			DuckDBPyExpression: The compare IN expression
@@ -336,6 +340,8 @@ void DuckDBPyExpression::Initialize(py::module_ &m) {
 			str: The string representation.
 	)";
 	expression.def("__repr__", &DuckDBPyExpression::ToString, docs);
+
+	expression.def("get_name", &DuckDBPyExpression::GetName, docs);
 
 	docs = R"(
 		Create a copy of this expression with the given alias.

@@ -1,0 +1,4 @@
+{"col_a":0,"col_b":0}
+[not a json]
+{"col_a":1,"col_b":2}
+{"col_a":1,"col_b":2, "col_c":3}

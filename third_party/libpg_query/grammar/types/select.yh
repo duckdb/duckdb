@@ -4,11 +4,12 @@
 
 %type <sortorder> opt_asc_desc
 %type <nullorder> opt_nulls_order
+%type <ignorenulls> opt_ignore_nulls
 
 %type <node> opt_collate_clause
 
 %type <node> indirection_expr indirection_expr_or_a_expr
-%type <node> struct_expr
+%type <node> struct_expr list_expr map_expr param_expr sample_value
 
 
 %type <lockwaitpolicy>	opt_nowait_or_skip
@@ -46,6 +47,7 @@
 %type <node>	overlay_placing substr_from substr_for
 
 %type <list>	except_list opt_except_list replace_list_el replace_list opt_replace_list replace_list_opt_comma
+%type <list> except_name except_name_list except_name_list_opt_comma
 
 %type <node> limit_clause select_limit_value
 				offset_clause select_offset_value
@@ -56,14 +58,14 @@
 
 %type <node> TableFuncElement
 
-
+%type <list> columnrefList
 %type <node> where_clause 				a_expr b_expr c_expr d_expr AexprConst opt_slice_bound extended_indirection_el
-				columnref in_expr having_clause qualify_clause func_table
+				columnref columnref_opt_indirection in_expr having_clause qualify_clause func_table
 %type <list>	rowsfrom_item rowsfrom_list opt_col_def_list
 %type <boolean> opt_ordinality
-%type <boolean> opt_ignore_nulls
 %type <list>	func_arg_list
 %type <node>	func_arg_expr
+%type <node>	list_comprehension_lhs
 %type <node>	list_comprehension
 %type <list>	row qualified_row type_list colid_type_list
 %type <node>	case_expr case_arg when_clause case_default

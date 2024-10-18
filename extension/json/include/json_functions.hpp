@@ -70,8 +70,8 @@ public:
 	static vector<ScalarFunctionSet> GetScalarFunctions();
 	static vector<PragmaFunctionSet> GetPragmaFunctions();
 	static vector<TableFunctionSet> GetTableFunctions();
-	static unique_ptr<TableRef> ReadJSONReplacement(ClientContext &context, const string &table_name,
-	                                                ReplacementScanData *data);
+	static unique_ptr<TableRef> ReadJSONReplacement(ClientContext &context, ReplacementScanInput &input,
+	                                                optional_ptr<ReplacementScanData> data);
 	static TableFunction GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info);
 	static CopyFunction GetJSONCopyFunction();
 	static void RegisterSimpleCastFunctions(CastFunctionSet &casts);
@@ -96,12 +96,16 @@ private:
 
 	static ScalarFunctionSet GetArrayLengthFunction();
 	static ScalarFunctionSet GetContainsFunction();
+	static ScalarFunctionSet GetExistsFunction();
 	static ScalarFunctionSet GetKeysFunction();
 	static ScalarFunctionSet GetTypeFunction();
 	static ScalarFunctionSet GetValidFunction();
+	static ScalarFunctionSet GetValueFunction();
 	static ScalarFunctionSet GetSerializeSqlFunction();
 	static ScalarFunctionSet GetDeserializeSqlFunction();
 	static ScalarFunctionSet GetSerializePlanFunction();
+
+	static ScalarFunctionSet GetPrettyPrintFunction();
 
 	static PragmaFunctionSet GetExecuteJsonSerializedSqlPragmaFunction();
 

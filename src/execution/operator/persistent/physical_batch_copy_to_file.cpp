@@ -1,14 +1,16 @@
 #include "duckdb/execution/operator/persistent/physical_batch_copy_to_file.hpp"
-#include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
-#include "duckdb/parallel/base_pipeline_event.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/types/batched_data_collection.hpp"
+
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/queue.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/types/batched_data_collection.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/operator/persistent/batch_memory_manager.hpp"
 #include "duckdb/execution/operator/persistent/batch_task_manager.hpp"
+#include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
+#include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/executor_task.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+
 #include <algorithm>
 
 namespace duckdb {
@@ -62,7 +64,7 @@ struct FixedPreparedBatchData {
 class FixedBatchCopyGlobalState : public GlobalSinkState {
 public:
 	// heuristic - we need at least 4MB of cache space per column per thread we launch
-	static constexpr const idx_t MINIMUM_MEMORY_PER_COLUMN_PER_THREAD = 4 * 1024 * 1024;
+	static constexpr const idx_t MINIMUM_MEMORY_PER_COLUMN_PER_THREAD = 4ULL * 1024ULL * 1024ULL;
 
 public:
 	explicit FixedBatchCopyGlobalState(ClientContext &context_p, unique_ptr<GlobalFunctionData> global_state,
@@ -117,7 +119,7 @@ public:
 	}
 };
 
-enum class FixedBatchCopyState { SINKING_DATA = 1, PROCESSING_TASKS = 2 };
+enum class FixedBatchCopyState : uint8_t { SINKING_DATA = 1, PROCESSING_TASKS = 2 };
 
 class FixedBatchCopyLocalState : public LocalSinkState {
 public:
@@ -158,15 +160,14 @@ SinkResultType PhysicalBatchCopyToFile::Sink(ExecutionContext &context, DataChun
 	auto batch_index = state.partition_info.batch_index.GetIndex();
 	if (state.current_task == FixedBatchCopyState::PROCESSING_TASKS) {
 		ExecuteTasks(context.client, gstate);
-		FlushBatchData(context.client, gstate, memory_manager.GetMinimumBatchIndex());
+		FlushBatchData(context.client, gstate);
 
 		if (!memory_manager.IsMinimumBatchIndex(batch_index) && memory_manager.OutOfMemory(batch_index)) {
-			lock_guard<mutex> l(memory_manager.GetBlockedTaskLock());
+			auto guard = memory_manager.Lock();
 			if (!memory_manager.IsMinimumBatchIndex(batch_index)) {
 				// no tasks to process, we are not the minimum batch index and we have no memory available to buffer
 				// block the task for now
-				memory_manager.BlockTask(input.interrupt_state);
-				return SinkResultType::BLOCKED;
+				return memory_manager.BlockSink(guard, input.interrupt_state);
 			}
 		}
 		state.current_task = FixedBatchCopyState::SINKING_DATA;
@@ -232,7 +233,7 @@ public:
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
 		while (op.ExecuteTask(context, gstate)) {
-			op.FlushBatchData(context, gstate, 0);
+			op.FlushBatchData(context, gstate);
 		}
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
@@ -279,8 +280,8 @@ SinkFinalizeType PhysicalBatchCopyToFile::FinalFlush(ClientContext &context, Glo
 	if (gstate.task_manager.TaskCount() != 0) {
 		throw InternalException("Unexecuted tasks are remaining in PhysicalFixedBatchCopy::FinalFlush!?");
 	}
-	auto min_batch_index = idx_t(NumericLimits<int64_t>::Maximum());
-	FlushBatchData(context, gstate_p, min_batch_index);
+
+	FlushBatchData(context, gstate_p);
 	if (gstate.scheduled_batch_index != gstate.flushed_batch_index) {
 		throw InternalException("Not all batches were flushed to disk - incomplete file?");
 	}
@@ -308,7 +309,7 @@ SinkFinalizeType PhysicalBatchCopyToFile::Finalize(Pipeline &pipeline, Event &ev
 		FinalFlush(context, input.global_state);
 	} else {
 		// we have multiple tasks remaining - launch an event to execute the tasks in parallel
-		auto new_event = make_shared<ProcessRemainingBatchesEvent>(*this, gstate, pipeline, context);
+		auto new_event = make_shared_ptr<ProcessRemainingBatchesEvent>(*this, gstate, pipeline, context);
 		event.InsertEvent(std::move(new_event));
 	}
 	return SinkFinalizeType::READY;
@@ -323,7 +324,7 @@ public:
 	}
 
 	void Execute(const PhysicalBatchCopyToFile &op, ClientContext &context, GlobalSinkState &gstate_p) override {
-		op.FlushBatchData(context, gstate_p, 0);
+		op.FlushBatchData(context, gstate_p);
 	}
 };
 
@@ -434,7 +435,7 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 				// create an empty collection
 				auto new_collection =
 				    make_uniq<ColumnDataCollection>(context, children[0]->types, ColumnDataAllocatorType::HYBRID);
-				append_batch = make_uniq<FixedRawBatchData>(0, std::move(new_collection));
+				append_batch = make_uniq<FixedRawBatchData>(0U, std::move(new_collection));
 			}
 			if (append_batch) {
 				append_batch->collection->InitializeAppend(append_state);
@@ -459,7 +460,7 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 
 			auto new_collection =
 			    make_uniq<ColumnDataCollection>(context, children[0]->types, ColumnDataAllocatorType::HYBRID);
-			append_batch = make_uniq<FixedRawBatchData>(0, std::move(new_collection));
+			append_batch = make_uniq<FixedRawBatchData>(0U, std::move(new_collection));
 			append_batch->collection->InitializeAppend(append_state);
 		}
 	}
@@ -475,7 +476,7 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 	}
 }
 
-void PhysicalBatchCopyToFile::FlushBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index) const {
+void PhysicalBatchCopyToFile::FlushBatchData(ClientContext &context, GlobalSinkState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
 	auto &memory_manager = gstate.memory_manager;
 
@@ -554,14 +555,18 @@ void PhysicalBatchCopyToFile::AddLocalBatch(ClientContext &context, GlobalSinkSt
 	// attempt to repartition to our desired batch size
 	RepartitionBatches(context, gstate, min_batch_index);
 	// unblock tasks so they can help process batches (if any are blocked)
-	auto any_unblocked = memory_manager.UnblockTasks();
+	bool any_unblocked;
+	{
+		auto guard = memory_manager.Lock();
+		any_unblocked = memory_manager.UnblockTasks(guard);
+	}
 	// if any threads were unblocked they can pick up execution of the tasks
 	// otherwise we will execute a task and flush here
 	if (!any_unblocked) {
 		//! Execute a single repartition task
 		ExecuteTask(context, gstate);
 		//! Flush batch data to disk (if any is ready)
-		FlushBatchData(context, gstate, memory_manager.GetMinimumBatchIndex());
+		FlushBatchData(context, gstate);
 	}
 }
 
@@ -605,7 +610,20 @@ SourceResultType PhysicalBatchCopyToFile::GetData(ExecutionContext &context, Dat
 	auto &g = sink_state->Cast<FixedBatchCopyGlobalState>();
 
 	chunk.SetCardinality(1);
-	chunk.SetValue(0, 0, Value::BIGINT(g.rows_copied));
+	switch (return_type) {
+	case CopyFunctionReturnType::CHANGED_ROWS:
+		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
+		break;
+	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST: {
+		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
+		auto fp = use_tmp_file ? PhysicalCopyToFile::GetNonTmpFile(context.client, file_path) : file_path;
+		chunk.SetValue(1, 0, Value::LIST(LogicalType::VARCHAR, {fp}));
+		break;
+	}
+	default:
+		throw NotImplementedException("Unknown CopyFunctionReturnType");
+	}
+
 	return SourceResultType::FINISHED;
 }
 

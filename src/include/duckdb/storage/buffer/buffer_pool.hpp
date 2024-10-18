@@ -8,8 +8,11 @@
 
 #pragma once
 
+#include "duckdb/common/array.hpp"
+#include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/typedefs.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 
 namespace duckdb {
@@ -20,13 +23,10 @@ struct EvictionQueue;
 struct BufferEvictionNode {
 	BufferEvictionNode() {
 	}
-	BufferEvictionNode(weak_ptr<BlockHandle> handle_p, idx_t timestamp_p)
-	    : handle(std::move(handle_p)), timestamp(timestamp_p) {
-		D_ASSERT(!handle.expired());
-	}
+	BufferEvictionNode(weak_ptr<BlockHandle> handle_p, idx_t eviction_seq_num);
 
 	weak_ptr<BlockHandle> handle;
-	idx_t timestamp;
+	idx_t handle_sequence_number;
 
 	bool CanUnload(BlockHandle &handle_p);
 	shared_ptr<BlockHandle> TryGetBlockHandle();
@@ -41,14 +41,18 @@ class BufferPool {
 	friend class StandardBufferManager;
 
 public:
-	explicit BufferPool(idx_t maximum_memory);
+	BufferPool(idx_t maximum_memory, bool track_eviction_timestamps, idx_t allocator_bulk_deallocation_flush_threshold);
 	virtual ~BufferPool();
 
 	//! Set a new memory limit to the buffer pool, throws an exception if the new limit is too low and not enough
 	//! blocks can be evicted
 	void SetLimit(idx_t limit, const char *exception_postscript);
 
-	void IncreaseUsedMemory(MemoryTag tag, idx_t size);
+	//! If bulk deallocation larger than this occurs, flush outstanding allocations
+	void SetAllocatorBulkDeallocationFlushThreshold(idx_t threshold);
+	idx_t GetAllocatorBulkDeallocationFlushThreshold();
+
+	void UpdateUsedMemory(MemoryTag tag, int64_t size);
 
 	idx_t GetUsedMemory() const;
 
@@ -71,62 +75,82 @@ protected:
 	};
 	virtual EvictionResult EvictBlocks(MemoryTag tag, idx_t extra_memory, idx_t memory_limit,
 	                                   unique_ptr<FileBuffer> *buffer = nullptr);
+	virtual EvictionResult EvictBlocksInternal(EvictionQueue &queue, MemoryTag tag, idx_t extra_memory,
+	                                           idx_t memory_limit, unique_ptr<FileBuffer> *buffer = nullptr);
 
-	//! Tries to dequeue an element from the eviction queue, but only after acquiring the purge queue lock.
-	bool TryDequeueWithLock(BufferEvictionNode &node);
-	//! Bulk purge dead nodes from the eviction queue. Then, enqueue those that are still alive.
-	void PurgeIteration(const idx_t purge_size);
+	//! Purge all blocks that haven't been pinned within the last N seconds
+	idx_t PurgeAgedBlocks(uint32_t max_age_sec);
+	idx_t PurgeAgedBlocksInternal(EvictionQueue &queue, uint32_t max_age_sec, int64_t now, int64_t limit);
 	//! Garbage collect dead nodes in the eviction queue.
-	void PurgeQueue();
+	void PurgeQueue(FileBufferType type);
 	//! Add a buffer handle to the eviction queue. Returns true, if the queue is
 	//! ready to be purged, and false otherwise.
 	bool AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
-
-	//! Increment the dead node counter in the purge queue.
-	inline void IncrementDeadNodes() {
-		total_dead_nodes++;
-	}
-	//! Decrement the dead node counter in the purge queue.
-	inline void DecrementDeadNodes() {
-		total_dead_nodes--;
-	}
+	//! Gets the eviction queue for the specified type
+	EvictionQueue &GetEvictionQueueForType(FileBufferType type);
+	//! Increments the dead nodes for the queue with specified type
+	void IncrementDeadNodes(FileBufferType type);
 
 protected:
+	enum class MemoryUsageCaches {
+		FLUSH,
+		NO_FLUSH,
+	};
+
+	struct MemoryUsage {
+		//! The maximum difference between memory statistics and actual usage is 2MB (64 * 32k)
+		static constexpr idx_t MEMORY_USAGE_CACHE_COUNT = 64;
+		static constexpr idx_t MEMORY_USAGE_CACHE_THRESHOLD = 32 << 10;
+		static constexpr idx_t TOTAL_MEMORY_USAGE_INDEX = MEMORY_TAG_COUNT;
+		using MemoryUsageCounters = array<atomic<int64_t>, MEMORY_TAG_COUNT + 1>;
+
+		//! global memory usage counters
+		MemoryUsageCounters memory_usage;
+		//! cache memory usage to improve performance
+		array<MemoryUsageCounters, MEMORY_USAGE_CACHE_COUNT> memory_usage_caches;
+
+		MemoryUsage();
+
+		idx_t GetUsedMemory(MemoryUsageCaches cache) {
+			return GetUsedMemory(TOTAL_MEMORY_USAGE_INDEX, cache);
+		}
+
+		idx_t GetUsedMemory(MemoryTag tag, MemoryUsageCaches cache) {
+			return GetUsedMemory((idx_t)tag, cache);
+		}
+
+		idx_t GetUsedMemory(idx_t index, MemoryUsageCaches cache) {
+			if (cache == MemoryUsageCaches::NO_FLUSH) {
+				auto used_memory = memory_usage[index].load(std::memory_order_relaxed);
+				return used_memory > 0 ? static_cast<idx_t>(used_memory) : 0;
+			}
+			int64_t cached = 0;
+			for (auto &cache : memory_usage_caches) {
+				cached += cache[index].exchange(0, std::memory_order_relaxed);
+			}
+			auto used_memory = memory_usage[index].fetch_add(cached, std::memory_order_relaxed) + cached;
+			return used_memory > 0 ? static_cast<idx_t>(used_memory) : 0;
+		}
+
+		void UpdateUsedMemory(MemoryTag tag, int64_t size);
+	};
+
 	//! The lock for changing the memory limit
 	mutex limit_lock;
-	//! The current amount of memory that is occupied by the buffer manager (in bytes)
-	atomic<idx_t> current_memory;
 	//! The maximum amount of memory that the buffer manager can keep (in bytes)
 	atomic<idx_t> maximum_memory;
-	//! Eviction queue
-	unique_ptr<EvictionQueue> queue;
+	//! If bulk deallocation larger than this occurs, flush outstanding allocations
+	atomic<idx_t> allocator_bulk_deallocation_flush_threshold;
+	//! Record timestamps of buffer manager unpin() events. Usable by custom eviction policies.
+	bool track_eviction_timestamps;
+	//! Eviction queues
+	vector<unique_ptr<EvictionQueue>> queues;
 	//! Memory manager for concurrently used temporary memory, e.g., for physical operators
 	unique_ptr<TemporaryMemoryManager> temporary_memory_manager;
-	//! Memory usage per tag
-	atomic<idx_t> memory_usage_per_tag[MEMORY_TAG_COUNT];
-
-	//! We trigger a purge of the eviction queue every INSERT_INTERVAL insertions
-	constexpr static idx_t INSERT_INTERVAL = 4096;
-	//! We multiply the base purge size by this value.
-	constexpr static idx_t PURGE_SIZE_MULTIPLIER = 2;
-	//! We multiply the purge size by this value to determine early-outs. This is the minimum queue size.
-	//! We never purge below this point.
-	constexpr static idx_t EARLY_OUT_MULTIPLIER = 4;
-	//! We multiply the approximate alive nodes by this value to test whether our total dead nodes
-	//! exceed their allowed ratio. Must be greater than 1.
-	constexpr static idx_t ALIVE_NODE_MULTIPLIER = 4;
-
-	//! Total number of insertions into the eviction queue. This guides the schedule for calling PurgeQueue.
-	atomic<idx_t> evict_queue_insertions;
-	//! Total dead nodes in the eviction queue. There are two scenarios in which a node dies: (1) we destroy its block
-	//! handle, or (2) we insert a newer version into the eviction queue.
-	atomic<idx_t> total_dead_nodes;
-	//! Locked, if a queue purge is currently active or we're trying to forcefully evict a node.
-	//! Only lets a single thread enter the purge phase.
-	mutex purge_lock;
-
-	//! A pre-allocated vector of eviction nodes. We reuse this to keep the allocation overhead of purges small.
-	vector<BufferEvictionNode> purge_nodes;
+	//! To improve performance, MemoryUsage maintains counter caches based on current cpu or thread id,
+	//! and only updates the global counter when the cache value exceeds a threshold.
+	//! Therefore, the statistics may have slight differences from the actual memory usage.
+	mutable MemoryUsage memory_usage;
 };
 
 } // namespace duckdb

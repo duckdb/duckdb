@@ -20,9 +20,7 @@ class FilenamePattern {
 	friend Deserializer;
 
 public:
-	FilenamePattern() : _base("data_"), _pos(_base.length()), _uuid(false) {
-	}
-	~FilenamePattern() {
+	FilenamePattern() : base("data_"), pos(base.length()), uuid(false) {
 	}
 
 public:
@@ -32,10 +30,14 @@ public:
 	void Serialize(Serializer &serializer) const;
 	static FilenamePattern Deserialize(Deserializer &deserializer);
 
+	bool HasUUID() const {
+		return uuid;
+	}
+
 private:
-	string _base;
-	idx_t _pos;
-	bool _uuid;
+	string base;
+	idx_t pos;
+	bool uuid;
 };
 
 } // namespace duckdb

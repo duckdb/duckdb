@@ -5,13 +5,13 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
-#include "utf8proc.hpp"
+#include "utf8proc_wrapper.hpp"
 
 #include <string.h>
 
 namespace duckdb {
 
-uint8_t UpperFun::ascii_to_upper_map[] = {
+const uint8_t UpperFun::ASCII_TO_UPPER_MAP[] = {
     0,   1,   2,   3,   4,   5,   6,   7,   8,   9,   10,  11,  12,  13,  14,  15,  16,  17,  18,  19,  20,  21,
     22,  23,  24,  25,  26,  27,  28,  29,  30,  31,  32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,
     44,  45,  46,  47,  48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,  64,  65,
@@ -24,7 +24,7 @@ uint8_t UpperFun::ascii_to_upper_map[] = {
     198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219,
     220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241,
     242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255};
-uint8_t LowerFun::ascii_to_lower_map[] = {
+const uint8_t LowerFun::ASCII_TO_LOWER_MAP[] = {
     0,   1,   2,   3,   4,   5,   6,   7,   8,   9,   10,  11,  12,  13,  14,  15,  16,  17,  18,  19,  20,  21,
     22,  23,  24,  25,  26,  27,  28,  29,  30,  31,  32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,
     44,  45,  46,  47,  48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,  64,  97,
@@ -44,8 +44,8 @@ static string_t ASCIICaseConvert(Vector &result, const char *input_data, idx_t i
 	auto result_str = StringVector::EmptyString(result, output_length);
 	auto result_data = result_str.GetDataWriteable();
 	for (idx_t i = 0; i < input_length; i++) {
-		result_data[i] = IS_UPPER ? UpperFun::ascii_to_upper_map[uint8_t(input_data[i])]
-		                          : LowerFun::ascii_to_lower_map[uint8_t(input_data[i])];
+		result_data[i] = UnsafeNumericCast<char>(IS_UPPER ? UpperFun::ASCII_TO_UPPER_MAP[uint8_t(input_data[i])]
+		                                                  : LowerFun::ASCII_TO_LOWER_MAP[uint8_t(input_data[i])]);
 	}
 	result_str.Finalize();
 	return result_str;
@@ -58,12 +58,13 @@ static idx_t GetResultLength(const char *input_data, idx_t input_length) {
 		if (input_data[i] & 0x80) {
 			// unicode
 			int sz = 0;
-			int codepoint = utf8proc_codepoint(input_data + i, sz);
-			int converted_codepoint = IS_UPPER ? utf8proc_toupper(codepoint) : utf8proc_tolower(codepoint);
-			int new_sz = utf8proc_codepoint_length(converted_codepoint);
+			auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz);
+			auto converted_codepoint =
+			    IS_UPPER ? Utf8Proc::CodepointToUpper(codepoint) : Utf8Proc::CodepointToLower(codepoint);
+			auto new_sz = Utf8Proc::CodepointLength(converted_codepoint);
 			D_ASSERT(new_sz >= 0);
-			output_length += new_sz;
-			i += sz;
+			output_length += UnsafeNumericCast<idx_t>(new_sz);
+			i += UnsafeNumericCast<idx_t>(sz);
 		} else {
 			// ascii
 			output_length++;
@@ -79,17 +80,18 @@ static void CaseConvert(const char *input_data, idx_t input_length, char *result
 		if (input_data[i] & 0x80) {
 			// non-ascii character
 			int sz = 0, new_sz = 0;
-			int codepoint = utf8proc_codepoint(input_data + i, sz);
-			int converted_codepoint = IS_UPPER ? utf8proc_toupper(codepoint) : utf8proc_tolower(codepoint);
-			auto success = utf8proc_codepoint_to_utf8(converted_codepoint, new_sz, result_data);
+			auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz);
+			auto converted_codepoint =
+			    IS_UPPER ? Utf8Proc::CodepointToUpper(codepoint) : Utf8Proc::CodepointToLower(codepoint);
+			auto success = Utf8Proc::CodepointToUtf8(converted_codepoint, new_sz, result_data);
 			D_ASSERT(success);
 			(void)success;
 			result_data += new_sz;
-			i += sz;
+			i += UnsafeNumericCast<idx_t>(sz);
 		} else {
 			// ascii
-			*result_data = IS_UPPER ? UpperFun::ascii_to_upper_map[uint8_t(input_data[i])]
-			                        : LowerFun::ascii_to_lower_map[uint8_t(input_data[i])];
+			*result_data = UnsafeNumericCast<char>(IS_UPPER ? UpperFun::ASCII_TO_UPPER_MAP[uint8_t(input_data[i])]
+			                                                : LowerFun::ASCII_TO_LOWER_MAP[uint8_t(input_data[i])]);
 			result_data++;
 			i++;
 		}

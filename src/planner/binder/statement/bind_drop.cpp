@@ -14,6 +14,7 @@ namespace duckdb {
 BoundStatement Binder::Bind(DropStatement &stmt) {
 	BoundStatement result;
 
+	auto &properties = GetStatementProperties();
 	switch (stmt.info->type) {
 	case CatalogType::PREPARED_STATEMENT:
 		// dropping prepared statements is always possible
@@ -23,7 +24,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	case CatalogType::SCHEMA_ENTRY: {
 		// dropping a schema is never read-only because there are no temporary schemas
 		auto &catalog = Catalog::GetCatalog(context, stmt.info->catalog);
-		properties.modified_databases.insert(catalog.GetName());
+		properties.RegisterDBModify(catalog, context);
 		break;
 	}
 	case CatalogType::VIEW_ENTRY:
@@ -45,7 +46,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		stmt.info->catalog = entry->ParentCatalog().GetName();
 		if (!entry->temporary) {
 			// we can only drop temporary schema entries in read-only mode
-			properties.modified_databases.insert(stmt.info->catalog);
+			properties.RegisterDBModify(entry->ParentCatalog(), context);
 		}
 		stmt.info->schema = entry->ParentSchema().name;
 		break;
@@ -61,6 +62,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_DROP, std::move(stmt.info));
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
+
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;

@@ -1,0 +1,16 @@
+# name: test/sql/function/array/array_flatten.test
+# description: Test array flatten function
+# group: [array]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+select flatten(['a', 'b', 'c']::varchar[3]);
+----
+No function matches the given name and argument types
+
+query I
+select flatten([['a'], ['b'], ['c']]::varchar[1][3]);
+----
+[a, b, c]

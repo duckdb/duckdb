@@ -1,0 +1,213 @@
+[
+    {
+        "name": "project",
+        "function": "Project",
+        "args": [
+            {
+                "name": "*args",
+                "type": "str"
+            }
+        ],
+        "kwargs": [
+            {
+                "name": "groups",
+                "type": "str",
+                "default": "\"\""
+            }
+        ],
+        "docs": "Project the relation object by the projection in project_expr",
+        "return": "DuckDBPyRelation"
+    },
+    {
+        "name": "distinct",
+        "function": "Distinct",
+        "docs": "Retrieve distinct rows from this relation object",
+        "return": "DuckDBPyRelation"
+    },
+    {
+        "name": "write_csv",
+        "function": "ToCSV",
+        "args": [
+            {
+                "name": "filename",
+                "type": "str"
+            }
+        ],
+        "kwargs": [
+            {
+                "name": "sep",
+                "type": "Optional[str]",
+                "default": "None"
+            },
+            {
+                "name": "na_rep",
+                "type": "Optional[str]",
+                "default": "None"
+            },
+            {
+                "name": "header",
+                "type": "Optional[bool]",
+                "default": "None"
+            },
+            {
+                "name": "quotechar",
+                "type": "Optional[str]",
+                "default": "None"
+            },
+            {
+                "name": "escapechar",
+                "type": "Optional[str]",
+                "default": "None"
+            },
+            {
+                "name": "date_format",
+                "type": "Optional[str]",
+                "default": "None"
+            },
+            {
+                "name": "timestamp_format",
+                "type": "Optional[str]",
+                "default": "None"
+            },
+            {
+                "name": "quoting",
+                "type": "Optional[str | int]",
+                "default": "None"
+            },
+            {
+                "name": "encoding",
+                "type": "Optional[str]",
+                "default": "None"
+            },
+            {
+                "name": "compression",
+                "type": "Optional[str]",
+                "default": "None"
+            },
+            {
+                "name": "overwrite",
+                "type": "Optional[bool]",
+                "default": "None"
+            },
+            {
+                "name": "per_thread_output",
+                "type": "Optional[bool]",
+                "default": "None"
+            },
+            {
+                "name": "use_tmp_file",
+                "type": "Optional[bool]",
+                "default": "None"
+            },
+            {
+                "name": "partition_by",
+                "type": "Optional[List[str]]",
+                "default": "None"
+            }, {
+                "name": "write_partition_columns",
+                "type": "Optional[bool]",
+                "default": "None"
+            }
+        ],
+        "docs": "Write the relation object to a CSV file in 'file_name'",
+        "return": "None"
+    },
+    {
+        "name": "aggregate",
+        "function": "Aggregate",
+        "args": [
+            {
+                "name": "aggr_expr",
+                "type": "str | List[Expression]"
+            },
+            {
+                "name": "group_expr",
+                "type" : "str",
+                "default": "\"\""
+            }
+        ],
+        "docs": "Compute the aggregate aggr_expr by the optional groups group_expr on the relation",
+        "return": "DuckDBPyRelation"
+    },
+    {
+        "name": "alias",
+        "function": "SetAlias",
+        "args": [
+            {
+                "name": "alias",
+                "type": "str"
+            }
+        ],
+        "docs": "Rename the relation object to new alias",
+        "return": "DuckDBPyRelation"
+    },
+    {
+        "name": "filter",
+        "function": "Filter",
+        "args": [
+            {
+                "name": "filter_expr",
+                "type": "str"
+            }
+        ],
+        "docs": "Filter the relation object by the filter in filter_expr",
+        "return": "DuckDBPyRelation"
+    },
+    {
+        "name": "limit",
+        "function": "Limit",
+        "args": [
+            {
+                "name": "n",
+                "type": "int"
+            },
+            {
+                "name": "offset",
+                "type": "int",
+                "default": "0"
+            }
+        ],
+        "docs": "Only retrieve the first n rows from this relation object, starting at offset",
+        "return": "DuckDBPyRelation"
+    },
+    {
+        "name": "order",
+        "function": "Order",
+        "args": [
+            {
+                "name": "order_expr",
+                "type": "str"
+            }
+        ],
+        "docs": "Reorder the relation object by order_expr",
+        "return": "DuckDBPyRelation"
+    },
+    {
+        "name": "query_df",
+        "function": "Query",
+        "args": [
+            {
+                "name": "virtual_table_name",
+                "type": "str"
+            },
+            {
+                "name": "sql_query",
+                "type": "str"
+            }
+        ],
+        "docs": "Run the given SQL query in sql_query on the view named virtual_table_name that refers to the relation object",
+        "return": "DuckDBPyRelation"
+    },
+    {
+        "name": "description",
+        "function": "GetDescription",
+        "docs": "Get result set attributes, mainly column names",
+        "return": "Optional[List[Any]]"
+    },
+    {
+        "name": "rowcount",
+        "function": "GetRowcount",
+        "docs": "Get result set row count",
+        "return": "int"
+    }
+]

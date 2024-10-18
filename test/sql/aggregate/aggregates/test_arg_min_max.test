@@ -158,3 +158,43 @@ query II
 select arg_min(name,salary),arg_max(name,salary)  from names;
 ----
 Pedro	Hubert-Blaine-Wolfeschlegelsteinhausenbergerdorff
+
+statement ok
+CREATE OR REPLACE TABLE employees(
+	employee_id NUMERIC, 
+	department_id NUMERIC, 
+	salary NUMERIC);
+
+statement ok
+INSERT INTO employees VALUES
+  (1001, 10, 10000),
+  (1020, 10, 9000),
+  (1030, 10, 8000),
+  (900, 20, 15000),
+  (2000, 20, NULL),
+  (2010, 20, 15000),
+  (2020, 20, 8000);
+
+foreach casting true false
+
+statement ok
+SET old_implicit_casting=${casting};
+
+query I
+SELECT MAX_BY(employee_id, salary) as employee_with_biggest_salary 
+FROM employees;
+----
+900
+
+query I
+SELECT MIN_BY(employee_id, salary) as employee_with_least_salary 
+FROM employees;
+----
+1030
+
+endloop
+
+query I
+SELECT max_by(c0, c1) FROM (values (1, null)) t(c0,c1);
+----
+NULL

@@ -1,0 +1,66 @@
+# name: test/sql/copy/csv/rejects/test_mixed.test
+# description: Tests a mix of all possible CSV Errors
+# group: [rejects]
+
+require skip_reload
+
+# Test will fail on windows because byte_position is slightly different due to \r\n instead of \n
+require notwindows
+
+query III
+SELECT * FROM read_csv(
+    'data/csv/rejects/frankstein/nightmare.csv',
+    columns = {'a': 'INTEGER', 'b': 'INTEGER', 'c': 'VARCHAR'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=20);
+----
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+1	2	pedro
+
+query IIIIIIIII rowsort
+SELECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
+----
+0	10	103	106	2	c	MISSING COLUMNS	1,2	Expected Number of Columns: 3 Found: 2
+0	14	143	154	4	NULL	TOO MANY COLUMNS	1,2,"pedro",5	Expected Number of Columns: 3 Found: 4
+0	19	205	207	2	b	CAST	1,bla,"pedro"	Error when converting column "b". Could not convert string "bla" to 'INTEGER'
+0	22	243	247	3	c	UNQUOTED VALUE	1,2,"pedro"bla	Value with unterminated quote found.
+0	32	366	366	NULL	NULL	LINE SIZE OVER MAXIMUM	1,2,"pedro thiago timbo holanda"	Maximum line size of 20 bytes exceeded. Actual Size:33 bytes.
+0	38	459	463	3	c	INVALID UNICODE	1,2,"pedro??"	Invalid unicode (byte sequence mismatch) detected.

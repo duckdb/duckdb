@@ -20,11 +20,14 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<TableReferenceType>(100, "type");
 	auto alias = deserializer.ReadPropertyWithDefault<string>(101, "alias");
 	auto sample = deserializer.ReadPropertyWithDefault<unique_ptr<SampleOptions>>(102, "sample");
-	auto query_location = deserializer.ReadPropertyWithDefault<optional_idx>(103, "query_location", optional_idx());
+	auto query_location = deserializer.ReadPropertyWithExplicitDefault<optional_idx>(103, "query_location", optional_idx());
 	unique_ptr<TableRef> result;
 	switch (type) {
 	case TableReferenceType::BASE_TABLE:
 		result = BaseTableRef::Deserialize(deserializer);
+		break;
+	case TableReferenceType::COLUMN_DATA:
+		result = ColumnDataRef::Deserialize(deserializer);
 		break;
 	case TableReferenceType::EMPTY_FROM:
 		result = EmptyTableRef::Deserialize(deserializer);
@@ -73,6 +76,19 @@ unique_ptr<TableRef> BaseTableRef::Deserialize(Deserializer &deserializer) {
 	return std::move(result);
 }
 
+void ColumnDataRef::Serialize(Serializer &serializer) const {
+	TableRef::Serialize(serializer);
+	serializer.WritePropertyWithDefault<vector<string>>(200, "expected_names", expected_names);
+	serializer.WritePropertyWithDefault<shared_ptr<ColumnDataCollection>>(202, "collection", collection);
+}
+
+unique_ptr<TableRef> ColumnDataRef::Deserialize(Deserializer &deserializer) {
+	auto expected_names = deserializer.ReadPropertyWithDefault<vector<string>>(200, "expected_names");
+	auto collection = deserializer.ReadPropertyWithDefault<shared_ptr<ColumnDataCollection>>(202, "collection");
+	auto result = duckdb::unique_ptr<ColumnDataRef>(new ColumnDataRef(std::move(collection), std::move(expected_names)));
+	return std::move(result);
+}
+
 void EmptyTableRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
 }
@@ -105,6 +121,8 @@ void JoinRef::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<JoinType>(203, "join_type", type);
 	serializer.WriteProperty<JoinRefType>(204, "ref_type", ref_type);
 	serializer.WritePropertyWithDefault<vector<string>>(205, "using_columns", using_columns);
+	serializer.WritePropertyWithDefault<bool>(206, "delim_flipped", delim_flipped);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(207, "duplicate_eliminated_columns", duplicate_eliminated_columns);
 }
 
 unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &deserializer) {
@@ -115,6 +133,8 @@ unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty<JoinType>(203, "join_type", result->type);
 	deserializer.ReadProperty<JoinRefType>(204, "ref_type", result->ref_type);
 	deserializer.ReadPropertyWithDefault<vector<string>>(205, "using_columns", result->using_columns);
+	deserializer.ReadPropertyWithDefault<bool>(206, "delim_flipped", result->delim_flipped);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(207, "duplicate_eliminated_columns", result->duplicate_eliminated_columns);
 	return std::move(result);
 }
 

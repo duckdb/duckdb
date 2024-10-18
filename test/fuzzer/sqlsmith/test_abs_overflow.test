@@ -8,9 +8,9 @@ PRAGMA enable_verification
 # test abs function on extremes
 
 statement ok
-CREATE TABLE numerics AS SELECT tinyint, smallint, int, bigint FROM test_all_types();
+CREATE TABLE numerics AS SELECT tinyint, smallint, int, bigint, hugeint FROM test_all_types();
 
-foreach type tinyint smallint int bigint
+foreach type tinyint smallint int bigint hugeint
 
 statement error
 SELECT abs(${type}) FROM numerics;

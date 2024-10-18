@@ -127,7 +127,9 @@ static void renderText(size_t &render_pos, char *&buf, size_t &len, size_t pos, 
 			}
 		}
 		if (highlight) {
-			auto tokens = Highlighting::Tokenize(buf, len, match);
+			bool is_dot_command = buf[0] == '.';
+
+			auto tokens = Highlighting::Tokenize(buf, len, is_dot_command, match);
 			highlight_buffer = Highlighting::HighlightText(buf, len, start_pos, cpos, tokens);
 			buf = (char *)highlight_buffer.c_str();
 			len = highlight_buffer.size();
@@ -508,30 +510,51 @@ void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vecto
 			case '}':
 				CloseBracket(curly_brackets, cursor_brackets, pos, i, errors);
 				break;
-			case '$': // dollar symbol
+			case '$': { // dollar symbol
 				if (i + 1 >= len) {
 					// we need more than just a dollar
 					break;
 				}
-				if (buf[i + 1] >= '0' && buf[i + 1] <= '9') {
-					// $[numeric] is a parameter, not a dollar quoted string
+				// check if this is a dollar-quoted string
+				idx_t next_dollar = 0;
+				for (idx_t idx = i + 1; idx < len; idx++) {
+					if (buf[idx] == '$') {
+						// found the next dollar
+						next_dollar = idx;
+						break;
+					}
+					// all characters can be between A-Z, a-z or \200 - \377
+					if (buf[idx] >= 'A' && buf[idx] <= 'Z') {
+						continue;
+					}
+					if (buf[idx] >= 'a' && buf[idx] <= 'z') {
+						continue;
+					}
+					if (buf[idx] >= '\200' && buf[idx] <= '\377') {
+						continue;
+					}
+					// the first character CANNOT be a numeric, only subsequent characters
+					if (idx > i + 1 && buf[idx] >= '0' && buf[idx] <= '9') {
+						continue;
+					}
+					// not a dollar quoted string
+					break;
+				}
+				if (next_dollar == 0) {
+					// not a dollar quoted string
 					break;
 				}
 				// dollar quoted string
 				state = ScanState::DOLLAR_QUOTED_STRING;
 				quote_pos = i;
-				// scan until the next $
-				for (i++; i < len; i++) {
-					if (buf[i] == '$') {
-						break;
-					}
-				}
+				i = next_dollar;
 				if (i < len) {
 					// found a complete marker - store it
 					idx_t marker_start = quote_pos + 1;
 					dollar_quote_marker = string(buf + marker_start, i - marker_start);
 				}
 				break;
+			}
 			default:
 				break;
 			}
@@ -835,8 +858,9 @@ void Linenoise::RefreshMultiLine() {
 
 	vector<highlightToken> tokens;
 	if (Highlighting::IsEnabled()) {
+		bool is_dot_command = buf[0] == '.';
 		auto match = search_index < search_matches.size() ? &search_matches[search_index] : nullptr;
-		tokens = Highlighting::Tokenize(render_buf, render_len, match);
+		tokens = Highlighting::Tokenize(render_buf, render_len, is_dot_command, match);
 
 		// add error highlighting
 		AddErrorHighlighting(render_start, render_end, tokens);

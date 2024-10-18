@@ -1,0 +1,16 @@
+# name: test/sql/copy/csv/test_quote_default.test
+# description: Test quote and escape are set as default quoted option
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query III
+select quote,escape,delimiter from sniff_csv('data/csv/test_default_option.csv')
+----
+"	"	,
+
+query III
+select quote,escape,delimiter from sniff_csv('data/csv/test_default_option_2.csv')
+----
+"	"	|

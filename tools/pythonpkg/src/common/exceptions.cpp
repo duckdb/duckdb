@@ -66,6 +66,12 @@ public:
 	}
 };
 
+class PyDependencyException : public DatabaseError {
+public:
+	explicit PyDependencyException(const string &err) : DatabaseError(err) {
+	}
+};
+
 //===--------------------------------------------------------------------===//
 // Data Error
 //===--------------------------------------------------------------------===//
@@ -265,6 +271,8 @@ void PyThrowException(ErrorData &error, PyObject *http_exception) {
 		throw PyPermissionException(error.Message());
 	case ExceptionType::SEQUENCE:
 		throw PySequenceException(error.Message());
+	case ExceptionType::DEPENDENCY:
+		throw PyDependencyException(error.Message());
 	case ExceptionType::OUT_OF_RANGE:
 		throw PyOutOfRangeException(error.Message());
 	case ExceptionType::CONVERSION:
@@ -317,6 +325,7 @@ void RegisterExceptions(const py::module &m) {
 	py::register_exception<PyInterruptException>(m, "InterruptException", db_error);
 	py::register_exception<PyPermissionException>(m, "PermissionException", db_error);
 	py::register_exception<PySequenceException>(m, "SequenceException", db_error);
+	py::register_exception<PyDependencyException>(m, "DependencyException", db_error);
 
 	// DataError
 	auto data_error = py::register_exception<DataError>(m, "DataError", db_error).ptr();

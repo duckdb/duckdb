@@ -17,7 +17,7 @@ class RowGroup;
 struct SelectionVector;
 class Transaction;
 struct TransactionData;
-
+struct DeleteInfo;
 class Serializer;
 class Deserializer;
 
@@ -45,6 +45,7 @@ public:
 	virtual bool Fetch(TransactionData transaction, row_t row) = 0;
 	virtual void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) = 0;
 	virtual idx_t GetCommittedDeletedCount(idx_t max_count) = 0;
+	virtual bool Cleanup(transaction_t lowest_transaction, unique_ptr<ChunkInfo> &result) const;
 
 	virtual bool HasDeletes() const = 0;
 
@@ -86,6 +87,7 @@ public:
 	bool Fetch(TransactionData transaction, row_t row) override;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
 	idx_t GetCommittedDeletedCount(idx_t max_count) override;
+	bool Cleanup(transaction_t lowest_transaction, unique_ptr<ChunkInfo> &result) const override;
 
 	bool HasDeletes() const override;
 
@@ -122,6 +124,7 @@ public:
 	                            SelectionVector &sel_vector, idx_t max_count) override;
 	bool Fetch(TransactionData transaction, row_t row) override;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
+	bool Cleanup(transaction_t lowest_transaction, unique_ptr<ChunkInfo> &result) const override;
 	idx_t GetCommittedDeletedCount(idx_t max_count) override;
 
 	void Append(idx_t start, idx_t end, transaction_t commit_id);
@@ -132,7 +135,7 @@ public:
 	//! Note that "rows" is written to to reflect the row ids that were actually deleted
 	//! i.e. after calling this function, rows will hold [0..actual_delete_count] row ids of the actually deleted tuples
 	idx_t Delete(transaction_t transaction_id, row_t rows[], idx_t count);
-	void CommitDelete(transaction_t commit_id, row_t rows[], idx_t count);
+	void CommitDelete(transaction_t commit_id, const DeleteInfo &info);
 
 	bool HasDeletes() const override;
 

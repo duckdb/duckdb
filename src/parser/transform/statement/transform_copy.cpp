@@ -1,6 +1,5 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/core_functions/scalar/struct_functions.hpp"
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -117,7 +116,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(duckdb_libpgquery::PGCopySt
 		info.schema = table.schema_name;
 		info.catalog = table.catalog_name;
 	} else {
-		result->select_statement = TransformSelectNode(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(stmt.query));
+		info.select_statement = TransformSelectNode(*stmt.query);
 	}
 
 	// handle the different options of the COPY statement

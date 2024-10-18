@@ -319,15 +319,17 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Data
 			for (idx_t group_idx = 0; group_idx < grouped_aggregate_data.groups.size(); group_idx++) {
 				auto &group = grouped_aggregate_data.groups[group_idx];
 				auto &bound_ref = group->Cast<BoundReferenceExpression>();
-				filtered_input.data[bound_ref.index].Reference(chunk.data[bound_ref.index]);
+				auto &col = filtered_input.data[bound_ref.index];
+				col.Reference(chunk.data[bound_ref.index]);
+				col.Slice(sel_vec, count);
 			}
 			for (idx_t child_idx = 0; child_idx < aggregate.children.size(); child_idx++) {
 				auto &child = aggregate.children[child_idx];
 				auto &bound_ref = child->Cast<BoundReferenceExpression>();
-
-				filtered_input.data[bound_ref.index].Reference(chunk.data[bound_ref.index]);
+				auto &col = filtered_input.data[bound_ref.index];
+				col.Reference(chunk.data[bound_ref.index]);
+				col.Slice(sel_vec, count);
 			}
-			filtered_input.Slice(sel_vec, count);
 			filtered_input.SetCardinality(count);
 
 			radix_table.Sink(context, filtered_input, sink_input, empty_chunk, empty_filter);
@@ -565,7 +567,7 @@ private:
 
 void HashAggregateDistinctFinalizeEvent::Schedule() {
 	auto n_tasks = CreateGlobalSources();
-	n_tasks = MinValue<idx_t>(n_tasks, TaskScheduler::GetScheduler(context).NumberOfThreads());
+	n_tasks = MinValue<idx_t>(n_tasks, NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads()));
 	vector<shared_ptr<Task>> tasks;
 	for (idx_t i = 0; i < n_tasks; i++) {
 		tasks.push_back(make_uniq<HashAggregateDistinctFinalizeTask>(*pipeline, shared_from_this(), op, gstate));
@@ -608,7 +610,7 @@ idx_t HashAggregateDistinctFinalizeEvent::CreateGlobalSources() {
 
 void HashAggregateDistinctFinalizeEvent::FinishEvent() {
 	// Now that everything is added to the main ht, we can actually finalize
-	auto new_event = make_shared<HashAggregateFinalizeEvent>(context, pipeline.get(), op, gstate);
+	auto new_event = make_shared_ptr<HashAggregateFinalizeEvent>(context, pipeline.get(), op, gstate);
 	this->InsertEvent(std::move(new_event));
 }
 
@@ -755,7 +757,7 @@ SinkFinalizeType PhysicalHashAggregate::FinalizeDistinct(Pipeline &pipeline, Eve
 			radix_table->Finalize(context, radix_state);
 		}
 	}
-	auto new_event = make_shared<HashAggregateDistinctFinalizeEvent>(context, pipeline, *this, gstate);
+	auto new_event = make_shared_ptr<HashAggregateDistinctFinalizeEvent>(context, pipeline, *this, gstate);
 	event.InsertEvent(std::move(new_event));
 	return SinkFinalizeType::READY;
 }
@@ -797,7 +799,6 @@ public:
 	}
 
 	const PhysicalHashAggregate &op;
-	mutex lock;
 	atomic<idx_t> state_index;
 
 	vector<unique_ptr<GlobalSourceState>> radix_states;
@@ -871,7 +872,7 @@ SourceResultType PhysicalHashAggregate::GetData(ExecutionContext &context, DataC
 		}
 
 		// move to the next table
-		lock_guard<mutex> l(gstate.lock);
+		auto guard = gstate.Lock();
 		lstate.radix_idx = lstate.radix_idx.GetIndex() + 1;
 		if (lstate.radix_idx.GetIndex() > gstate.state_index) {
 			// we have not yet worked on the table
@@ -895,26 +896,32 @@ double PhysicalHashAggregate::GetProgress(ClientContext &context, GlobalSourceSt
 	return total_progress / double(groupings.size());
 }
 
-string PhysicalHashAggregate::ParamsToString() const {
-	string result;
+InsertionOrderPreservingMap<string> PhysicalHashAggregate::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	auto &groups = grouped_aggregate_data.groups;
 	auto &aggregates = grouped_aggregate_data.aggregates;
+	string groups_info;
 	for (idx_t i = 0; i < groups.size(); i++) {
 		if (i > 0) {
-			result += "\n";
+			groups_info += "\n";
 		}
-		result += groups[i]->GetName();
+		groups_info += groups[i]->GetName();
 	}
+	result["Groups"] = groups_info;
+
+	string aggregate_info;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggregate = aggregates[i]->Cast<BoundAggregateExpression>();
-		if (i > 0 || !groups.empty()) {
-			result += "\n";
+		if (i > 0) {
+			aggregate_info += "\n";
 		}
-		result += aggregates[i]->GetName();
+		aggregate_info += aggregates[i]->GetName();
 		if (aggregate.filter) {
-			result += " Filter: " + aggregate.filter->GetName();
+			aggregate_info += " Filter: " + aggregate.filter->GetName();
 		}
 	}
+	result["Aggregates"] = aggregate_info;
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 

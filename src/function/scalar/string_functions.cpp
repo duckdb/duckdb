@@ -7,6 +7,7 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<UpperFun>();
 	Register<StripAccentsFun>();
 	Register<ConcatFun>();
+	Register<ConcatWSFun>();
 	Register<ContainsFun>();
 	Register<LengthFun>();
 	Register<LikeFun>();
@@ -16,6 +17,13 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<PrefixFun>();
 	Register<SuffixFun>();
 	Register<NFCNormalizeFun>();
+	Register<StringSplitFun>();
+	Register<StringSplitRegexFun>();
+	Register<RegexpEscapeFun>();
+	Register<SHA1Fun>();
+	Register<SHA256Fun>();
+	Register<MD5Fun>();
+	Register<MD5NumberFun>();
 }
 
 } // namespace duckdb

@@ -9,29 +9,44 @@
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 
 #include <algorithm>
 #include <sstream>
 
 namespace duckdb {
 
+void ReorderTableEntries(catalog_entry_vector_t &tables);
+
 using std::stringstream;
 
-static void WriteCatalogEntries(stringstream &ss, vector<reference<CatalogEntry>> &entries) {
+void ReorderTableEntries(catalog_entry_vector_t &tables);
+
+static void WriteCatalogEntries(stringstream &ss, catalog_entry_vector_t &entries) {
 	for (auto &entry : entries) {
 		if (entry.get().internal) {
 			continue;
 		}
-		ss << entry.get().ToSQL() << std::endl;
+		auto create_info = entry.get().GetInfo();
+		try {
+			// Strip the catalog from the info
+			create_info->catalog.clear();
+			auto to_string = create_info->ToString();
+			ss << to_string;
+		} catch (const NotImplementedException &) {
+			ss << entry.get().ToSQL();
+		}
+		ss << '\n';
 	}
-	ss << std::endl;
+	ss << '\n';
 }
 
 static void WriteStringStreamToFile(FileSystem &fs, stringstream &ss, const string &path) {
 	auto ss_string = ss.str();
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW |
 	                                    FileLockType::WRITE_LOCK);
-	fs.Write(*handle, (void *)ss_string.c_str(), ss_string.size());
+	fs.Write(*handle, (void *)ss_string.c_str(), NumericCast<int64_t>(ss_string.size()));
 	handle.reset();
 }
 
@@ -39,13 +54,13 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
                                CopyFunction const &function) {
 	ss << "COPY ";
 
-	if (exported_table.schema_name != DEFAULT_SCHEMA) {
+	//! NOTE: The catalog is explicitly not set here
+	if (exported_table.schema_name != DEFAULT_SCHEMA && !exported_table.schema_name.empty()) {
 		ss << KeywordHelper::WriteOptionallyQuoted(exported_table.schema_name) << ".";
 	}
 
 	auto file_path = StringUtil::Replace(exported_table.file_path, "\\", "/");
 	ss << StringUtil::Format("%s FROM %s (", SQLIdentifier(exported_table.table_name), SQLString(file_path));
-
 	// write the copy options
 	ss << "FORMAT '" << info.format << "'";
 	if (info.format == "csv") {
@@ -60,6 +75,10 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 		if (info.options.find("quote") == info.options.end()) {
 			info.options["quote"].push_back(Value("\""));
 		}
+		info.options.erase("force_not_null");
+		for (auto &not_null_column : exported_table.not_null_columns) {
+			info.options["force_not_null"].push_back(not_null_column);
+		}
 	}
 	for (auto &copy_option : info.options) {
 		if (copy_option.first == "force_quote") {
@@ -73,11 +92,18 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 		if (copy_option.second.size() == 1) {
 			ss << copy_option.second[0].ToSQLString();
 		} else {
-			// FIXME handle multiple options
-			throw NotImplementedException("FIXME: serialize list of options");
+			// For Lists
+			ss << "(";
+			for (idx_t i = 0; i < copy_option.second.size(); i++) {
+				ss << copy_option.second[i].ToSQLString();
+				if (i != copy_option.second.size() - 1) {
+					ss << ", ";
+				}
+			}
+			ss << ")";
 		}
 	}
-	ss << ");" << std::endl;
+	ss << ");" << '\n';
 }
 
 //===--------------------------------------------------------------------===//
@@ -113,11 +139,24 @@ void PhysicalExport::ExtractEntries(ClientContext &context, vector<reference<Sch
 				result.tables.push_back(entry);
 			}
 		});
-		schema.Scan(context, CatalogType::SEQUENCE_ENTRY,
-		            [&](CatalogEntry &entry) { result.sequences.push_back(entry); });
-		schema.Scan(context, CatalogType::TYPE_ENTRY,
-		            [&](CatalogEntry &entry) { result.custom_types.push_back(entry); });
-		schema.Scan(context, CatalogType::INDEX_ENTRY, [&](CatalogEntry &entry) { result.indexes.push_back(entry); });
+		schema.Scan(context, CatalogType::SEQUENCE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			result.sequences.push_back(entry);
+		});
+		schema.Scan(context, CatalogType::TYPE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			result.custom_types.push_back(entry);
+		});
+		schema.Scan(context, CatalogType::INDEX_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			result.indexes.push_back(entry);
+		});
 		schema.Scan(context, CatalogType::MACRO_ENTRY, [&](CatalogEntry &entry) {
 			if (!entry.internal && entry.type == CatalogType::MACRO_ENTRY) {
 				result.macros.push_back(entry);
@@ -131,6 +170,47 @@ void PhysicalExport::ExtractEntries(ClientContext &context, vector<reference<Sch
 	}
 }
 
+static void AddEntries(catalog_entry_vector_t &all_entries, catalog_entry_vector_t &to_add) {
+	for (auto &entry : to_add) {
+		all_entries.push_back(entry);
+	}
+	to_add.clear();
+}
+
+catalog_entry_vector_t PhysicalExport::GetNaiveExportOrder(ClientContext &context, Catalog &catalog) {
+	// gather all catalog types to export
+	ExportEntries entries;
+	auto schema_list = catalog.GetSchemas(context);
+	PhysicalExport::ExtractEntries(context, schema_list, entries);
+
+	ReorderTableEntries(entries.tables);
+
+	// order macro's by timestamp so nested macro's are imported nicely
+	sort(entries.macros.begin(), entries.macros.end(),
+	     [](const reference<CatalogEntry> &lhs, const reference<CatalogEntry> &rhs) {
+		     return lhs.get().oid < rhs.get().oid;
+	     });
+
+	catalog_entry_vector_t catalog_entries;
+	idx_t size = 0;
+	size += entries.schemas.size();
+	size += entries.custom_types.size();
+	size += entries.sequences.size();
+	size += entries.tables.size();
+	size += entries.views.size();
+	size += entries.indexes.size();
+	size += entries.macros.size();
+	catalog_entries.reserve(size);
+	AddEntries(catalog_entries, entries.schemas);
+	AddEntries(catalog_entries, entries.sequences);
+	AddEntries(catalog_entries, entries.custom_types);
+	AddEntries(catalog_entries, entries.tables);
+	AddEntries(catalog_entries, entries.macros);
+	AddEntries(catalog_entries, entries.views);
+	AddEntries(catalog_entries, entries.indexes);
+	return catalog_entries;
+}
+
 SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk,
                                          OperatorSourceInput &input) const {
 	auto &state = input.global_state.Cast<ExportSourceState>();
@@ -141,36 +221,19 @@ SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &c
 	auto &ccontext = context.client;
 	auto &fs = FileSystem::GetFileSystem(ccontext);
 
-	// gather all catalog types to export
-	ExportEntries entries;
+	auto &catalog = Catalog::GetCatalog(ccontext, info->catalog);
 
-	auto schema_list = Catalog::GetSchemas(ccontext, info->catalog);
-	ExtractEntries(context.client, schema_list, entries);
-
-	// consider the order of tables because of foreign key constraint
-	entries.tables.clear();
-	for (idx_t i = 0; i < exported_tables.data.size(); i++) {
-		entries.tables.push_back(exported_tables.data[i].entry);
+	catalog_entry_vector_t catalog_entries;
+	catalog_entries = GetNaiveExportOrder(context.client, catalog);
+	if (catalog.IsDuckCatalog()) {
+		auto &duck_catalog = catalog.Cast<DuckCatalog>();
+		auto &dependency_manager = duck_catalog.GetDependencyManager();
+		dependency_manager.ReorderEntries(catalog_entries, ccontext);
 	}
 
-	// order macro's by timestamp so nested macro's are imported nicely
-	sort(entries.macros.begin(), entries.macros.end(),
-	     [](const reference<CatalogEntry> &lhs, const reference<CatalogEntry> &rhs) {
-		     return lhs.get().oid < rhs.get().oid;
-	     });
-
 	// write the schema.sql file
-	// export order is SCHEMA -> SEQUENCE -> TABLE -> VIEW -> INDEX
-
 	stringstream ss;
-	WriteCatalogEntries(ss, entries.schemas);
-	WriteCatalogEntries(ss, entries.custom_types);
-	WriteCatalogEntries(ss, entries.sequences);
-	WriteCatalogEntries(ss, entries.tables);
-	WriteCatalogEntries(ss, entries.views);
-	WriteCatalogEntries(ss, entries.indexes);
-	WriteCatalogEntries(ss, entries.macros);
-
+	WriteCatalogEntries(ss, catalog_entries);
 	WriteStringStreamToFile(fs, ss, fs.JoinPath(info->file_path, "schema.sql"));
 
 	// write the load.sql file

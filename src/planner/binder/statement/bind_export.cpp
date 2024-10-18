@@ -16,6 +16,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/constraints/not_null_constraint.hpp"
 
 #include <algorithm>
 
@@ -116,100 +117,7 @@ string CreateFileName(const string &id_suffix, TableCatalogEntry &table, const s
 	return StringUtil::Format("%s_%s%s.%s", schema, name, id_suffix, extension);
 }
 
-static bool IsSupported(CopyTypeSupport support_level) {
-	// For export purposes we don't want to lose information, so we only accept fully supported types
-	return support_level == CopyTypeSupport::SUPPORTED;
-}
-
-static LogicalType AlterLogicalType(const LogicalType &original, copy_supports_type_t type_check) {
-	D_ASSERT(type_check);
-	auto id = original.id();
-	switch (id) {
-	case LogicalTypeId::LIST: {
-		auto child = AlterLogicalType(ListType::GetChildType(original), type_check);
-		return LogicalType::LIST(child);
-	}
-	case LogicalTypeId::ARRAY: {
-		// Attempt to convert the array to a list
-		auto &child = ArrayType::GetChildType(original);
-		return AlterLogicalType(LogicalType::LIST(child), type_check);
-	}
-	case LogicalTypeId::STRUCT: {
-		auto &original_children = StructType::GetChildTypes(original);
-		child_list_t<LogicalType> new_children;
-		for (auto &child : original_children) {
-			auto &child_name = child.first;
-			auto &child_type = child.second;
-
-			LogicalType new_type;
-			if (!IsSupported(type_check(child_type))) {
-				new_type = AlterLogicalType(child_type, type_check);
-			} else {
-				new_type = child_type;
-			}
-			new_children.push_back(std::make_pair(child_name, new_type));
-		}
-		return LogicalType::STRUCT(std::move(new_children));
-	}
-	case LogicalTypeId::UNION: {
-		auto member_count = UnionType::GetMemberCount(original);
-		child_list_t<LogicalType> new_children;
-		for (idx_t i = 0; i < member_count; i++) {
-			auto &child_name = UnionType::GetMemberName(original, i);
-			auto &child_type = UnionType::GetMemberType(original, i);
-
-			LogicalType new_type;
-			if (!IsSupported(type_check(child_type))) {
-				new_type = AlterLogicalType(child_type, type_check);
-			} else {
-				new_type = child_type;
-			}
-
-			new_children.push_back(std::make_pair(child_name, new_type));
-		}
-		return LogicalType::UNION(std::move(new_children));
-	}
-	case LogicalTypeId::MAP: {
-		auto &key_type = MapType::KeyType(original);
-		auto &value_type = MapType::ValueType(original);
-
-		LogicalType new_key_type;
-		LogicalType new_value_type;
-		if (!IsSupported(type_check(key_type))) {
-			new_key_type = AlterLogicalType(key_type, type_check);
-		} else {
-			new_key_type = key_type;
-		}
-
-		if (!IsSupported(type_check(value_type))) {
-			new_value_type = AlterLogicalType(value_type, type_check);
-		} else {
-			new_value_type = value_type;
-		}
-		return LogicalType::MAP(new_key_type, new_value_type);
-	}
-	default: {
-		D_ASSERT(!IsSupported(type_check(original)));
-		return LogicalType::VARCHAR;
-	}
-	}
-}
-
-static bool NeedsCast(LogicalType &type, copy_supports_type_t type_check) {
-	if (!type_check) {
-		return false;
-	}
-	if (IsSupported(type_check(type))) {
-		// The type is supported in it's entirety, no cast is required
-		return false;
-	}
-	// Change the type to something that is supported
-	type = AlterLogicalType(type, type_check);
-	return true;
-}
-
-static unique_ptr<QueryNode> CreateSelectStatement(CopyStatement &stmt, child_list_t<LogicalType> &select_list,
-                                                   copy_supports_type_t type_check) {
+static unique_ptr<QueryNode> CreateSelectStatement(CopyStatement &stmt, child_list_t<LogicalType> &select_list) {
 	auto ref = make_uniq<BaseTableRef>();
 	ref->catalog_name = stmt.info->catalog;
 	ref->schema_name = stmt.info->schema;
@@ -220,19 +128,33 @@ static unique_ptr<QueryNode> CreateSelectStatement(CopyStatement &stmt, child_li
 
 	vector<unique_ptr<ParsedExpression>> expressions;
 	for (auto &col : select_list) {
-		auto &name = col.first;
-		auto &type = col.second;
-
-		auto expression = make_uniq_base<ParsedExpression, ColumnRefExpression>(name);
-		if (NeedsCast(type, type_check)) {
-			// Add a cast to a type supported by the copy function
-			expression = make_uniq_base<ParsedExpression, CastExpression>(type, std::move(expression));
-		}
+		auto expression = make_uniq_base<ParsedExpression, ColumnRefExpression>(col.first);
 		expressions.push_back(std::move(expression));
 	}
 
 	statement->select_list = std::move(expressions);
 	return std::move(statement);
+}
+
+unique_ptr<LogicalOperator> Binder::UnionOperators(vector<unique_ptr<LogicalOperator>> nodes) {
+	if (nodes.empty()) {
+		return nullptr;
+	}
+	while (nodes.size() > 1) {
+		vector<unique_ptr<LogicalOperator>> new_nodes;
+		for (idx_t i = 0; i < nodes.size(); i += 2) {
+			if (i + 1 == nodes.size()) {
+				new_nodes.push_back(std::move(nodes[i]));
+			} else {
+				auto copy_union = make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1U, std::move(nodes[i]),
+				                                                 std::move(nodes[i + 1]),
+				                                                 LogicalOperatorType::LOGICAL_UNION, true, false);
+				new_nodes.push_back(std::move(copy_union));
+			}
+		}
+		nodes = std::move(new_nodes);
+	}
+	return std::move(nodes[0]);
 }
 
 BoundStatement Binder::Bind(ExportStatement &stmt) {
@@ -269,11 +191,11 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 	// now generate the COPY statements for each of the tables
 	auto &fs = FileSystem::GetFileSystem(context);
-	unique_ptr<LogicalOperator> child_operator;
 
 	BoundExportData exported_tables;
 
 	unordered_set<string> table_name_index;
+	vector<unique_ptr<LogicalOperator>> export_nodes;
 	for (auto &t : tables) {
 		auto &table = t.get().Cast<TableCatalogEntry>();
 		auto info = make_uniq<CopyInfo>();
@@ -303,7 +225,14 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 		// We can not export generated columns
 		child_list_t<LogicalType> select_list;
-
+		// Let's verify if any on these columns have not null constraints
+		vector<string> not_null_columns;
+		for (auto &constaint : table.GetConstraints()) {
+			if (constaint->type == ConstraintType::NOT_NULL) {
+				auto &not_null_constraint = constaint->Cast<NotNullConstraint>();
+				not_null_columns.push_back(table.GetColumn(not_null_constraint.index).GetName());
+			}
+		}
 		for (auto &col : table.GetColumns().Physical()) {
 			select_list.push_back(std::make_pair(col.Name(), col.Type()));
 		}
@@ -315,29 +244,23 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 		exported_data.file_path = info->file_path;
 
-		ExportedTableInfo table_info(table, std::move(exported_data));
+		ExportedTableInfo table_info(table, std::move(exported_data), not_null_columns);
 		exported_tables.data.push_back(table_info);
 		id++;
 
 		// generate the copy statement and bind it
 		CopyStatement copy_stmt;
 		copy_stmt.info = std::move(info);
-		copy_stmt.select_statement =
-		    CreateSelectStatement(copy_stmt, select_list, copy_function.function.supports_type);
+		copy_stmt.info->select_statement = CreateSelectStatement(copy_stmt, select_list);
 
 		auto copy_binder = Binder::CreateBinder(context, this);
-		auto bound_statement = copy_binder->Bind(copy_stmt);
+		auto bound_statement = copy_binder->Bind(copy_stmt, CopyToType::EXPORT_DATABASE);
+
 		auto plan = std::move(bound_statement.plan);
 
-		if (child_operator) {
-			// use UNION ALL to combine the individual copy statements into a single node
-			auto copy_union = make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1, std::move(child_operator),
-			                                                 std::move(plan), LogicalOperatorType::LOGICAL_UNION, true);
-			child_operator = std::move(copy_union);
-		} else {
-			child_operator = std::move(plan);
-		}
+		export_nodes.push_back(std::move(plan));
 	}
+	auto child_operator = UnionOperators(std::move(export_nodes));
 
 	// try to create the directory, if it doesn't exist yet
 	// a bit hacky to do it here, but we need to create the directory BEFORE the copy statements run
@@ -345,6 +268,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		fs.CreateDirectory(stmt.info->file_path);
 	}
 
+	stmt.info->catalog = catalog;
 	// create the export node
 	auto export_node = make_uniq<LogicalExport>(copy_function.function, std::move(stmt.info), exported_tables);
 
@@ -353,6 +277,8 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	}
 
 	result.plan = std::move(export_node);
+
+	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;

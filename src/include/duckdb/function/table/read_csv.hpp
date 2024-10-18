@@ -30,8 +30,6 @@ public:
 };
 
 struct BaseCSVData : public TableFunctionData {
-	virtual ~BaseCSVData() {
-	}
 	//! The file path of the CSV file to read or write
 	vector<string> files;
 	//! The CSV reader options
@@ -55,9 +53,11 @@ struct WriteCSVData : public BaseCSVData {
 	//! The newline string to write
 	string newline = "\n";
 	//! The size of the CSV file (in bytes) that we buffer before we flush it to disk
-	idx_t flush_size = 4096 * 8;
+	idx_t flush_size = 4096ULL * 8ULL;
 	//! For each byte whether or not the CSV file requires quotes when containing the byte
 	unsafe_unique_array<bool> requires_quotes;
+	//! Expressions used to convert the input into strings
+	vector<unique_ptr<Expression>> cast_expressions;
 };
 
 struct ColumnInfo {
@@ -92,13 +92,17 @@ struct ReadCSVData : public BaseCSVData {
 	unique_ptr<CSVFileScan> initial_reader;
 	//! The union readers are created (when csv union_by_name option is on) during binding
 	//! Those readers can be re-used during ReadCSVFunction
-	vector<unique_ptr<CSVFileScan>> union_readers;
+	vector<unique_ptr<CSVUnionData>> union_readers;
 	//! Reader bind data
 	MultiFileReaderBindData reader_bind;
+
 	vector<ColumnInfo> column_info;
 
 	void Initialize(unique_ptr<CSVFileScan> &reader) {
 		this->initial_reader = std::move(reader);
+	}
+	void Initialize(ClientContext &, unique_ptr<CSVUnionData> &data) {
+		this->initial_reader = std::move(data->reader);
 	}
 	void FinalizeRead(ClientContext &context);
 

@@ -1230,7 +1230,7 @@ function duckdb_bind_blob(prepared_statement, param_idx, val, length)
         (duckdb_prepared_statement, Int32, Ptr{Cvoid}, Int32),
         prepared_statement,
         param_idx,
-        data,
+        val,
         length
     )
 end
@@ -2586,7 +2586,7 @@ Append a bool value to the appender.
 DUCKDB_API duckdb_state duckdb_append_bool(duckdb_appender appender, bool value);
 """
 function duckdb_append_bool(appender, value)
-    return ccall((:duckdb_append_bool, libduckdb), duckdb_state, (duckdb_appender, Int32), appender, value)
+    return ccall((:duckdb_append_bool, libduckdb), duckdb_state, (duckdb_appender, Bool), appender, value)
 end
 
 """
@@ -2594,7 +2594,7 @@ Append an int8_t value to the appender.
 DUCKDB_API duckdb_state duckdb_append_int8(duckdb_appender appender, int8_t value);
 """
 function duckdb_append_int8(appender, value)
-    return ccall((:duckdb_append_int8, libduckdb), duckdb_state, (duckdb_appender, Int16), appender, value)
+    return ccall((:duckdb_append_int8, libduckdb), duckdb_state, (duckdb_appender, Int8), appender, value)
 end
 
 """
@@ -2610,7 +2610,7 @@ Append an int32_t value to the appender.
 DUCKDB_API duckdb_state duckdb_append_int32(duckdb_appender appender, int32_t value);
 """
 function duckdb_append_int32(appender, value)
-    return ccall((:duckdb_append_int16, libduckdb), duckdb_state, (duckdb_appender, Int32), appender, value)
+    return ccall((:duckdb_append_int32, libduckdb), duckdb_state, (duckdb_appender, Int32), appender, value)
 end
 
 """
@@ -2626,7 +2626,7 @@ Append a duckdb_hugeint value to the appender.
 DUCKDB_API duckdb_state duckdb_append_hugeint(duckdb_appender appender, duckdb_hugeint value);
 """
 function duckdb_append_hugeint(appender, value)
-    return ccall((:duckdb_append_hugeint, libduckdb), duckdb_state, (duckdb_appender, Int64), appender, value)
+    return ccall((:duckdb_append_hugeint, libduckdb), duckdb_state, (duckdb_appender, Int128), appender, value)
 end
 
 """
@@ -2634,7 +2634,7 @@ Append a duckdb_uhugeint value to the appender.
 DUCKDB_API duckdb_state duckdb_append_uhugeint(duckdb_appender appender, duckdb_uhugeint value);
 """
 function duckdb_append_uhugeint(appender, value)
-    return ccall((:duckdb_append_uhugeint, libduckdb), duckdb_state, (duckdb_appender, UInt64), appender, value)
+    return ccall((:duckdb_append_uhugeint, libduckdb), duckdb_state, (duckdb_appender, UInt128), appender, value)
 end
 
 """
@@ -2642,7 +2642,7 @@ Append a uint8_t value to the appender.
 DUCKDB_API duckdb_state duckdb_append_uint8(duckdb_appender appender, uint8_t value);
 """
 function duckdb_append_uint8(appender, value)
-    return ccall((:duckdb_append_uint8, libduckdb), duckdb_state, (duckdb_appender, UInt16), appender, value)
+    return ccall((:duckdb_append_uint8, libduckdb), duckdb_state, (duckdb_appender, UInt8), appender, value)
 end
 
 """
@@ -2977,4 +2977,100 @@ Returns true if execution of the current query is finished.
 """
 function duckdb_execution_is_finished(con)
     return ccall((:duckdb_execution_is_finished, libduckdb), Bool, (duckdb_connection,), con)
+end
+
+# ctypes.jl
+const duckdb_scalar_function = Ptr{Cvoid}
+
+"""
+Creates a new scalar function.
+
+* returns: The created scalar function
+"""
+function duckdb_create_scalar_function()
+    return ccall((:duckdb_create_scalar_function, libduckdb), duckdb_scalar_function, ())
+end
+
+"""
+Destroys the scalar function.
+
+* func: The scalar function to destroy
+"""
+function duckdb_destroy_scalar_function(func)
+    return ccall((:duckdb_destroy_scalar_function, libduckdb), Cvoid, (Ref{duckdb_scalar_function},), func)
+end
+
+"""
+Sets the name of the scalar function.
+
+* func: The scalar function to set the name for
+* name: The name to set for the scalar function
+"""
+function duckdb_scalar_function_set_name(func, name)
+    return ccall((:duckdb_scalar_function_set_name, libduckdb), Cvoid, (duckdb_scalar_function, Ptr{UInt8}), func, name)
+end
+
+"""
+Adds a parameter to the scalar function.
+
+* func: The scalar function to add the parameter to
+* type: The type of the parameter to add
+"""
+function duckdb_scalar_function_add_parameter(func, type)
+    return ccall(
+        (:duckdb_scalar_function_add_parameter, libduckdb),
+        Cvoid,
+        (duckdb_scalar_function, duckdb_logical_type),
+        func,
+        type
+    )
+end
+
+"""
+Sets the return type of the scalar function.
+
+* func: The scalar function to set the return type for
+* type: The return type to set for the scalar function
+"""
+function duckdb_scalar_function_set_return_type(func, type)
+    return ccall(
+        (:duckdb_scalar_function_set_return_type, libduckdb),
+        Cvoid,
+        (duckdb_scalar_function, duckdb_logical_type),
+        func,
+        type
+    )
+end
+
+"""
+Sets the function implementation for the scalar function.
+
+* scalar_func: The scalar function to set the implementation for
+* func: The function implementation to set
+"""
+function duckdb_scalar_function_set_function(scalar_func, func)
+    return ccall(
+        (:duckdb_scalar_function_set_function, libduckdb),
+        Cvoid,
+        (duckdb_scalar_function, Ptr{Cvoid}),
+        scalar_func,
+        func
+    )
+end
+
+"""
+Registers the scalar function with the connection.
+
+* con: The connection to register the scalar function with
+* func: The scalar function to register
+* returns: The result of the registration
+"""
+function duckdb_register_scalar_function(con, func)
+    return ccall(
+        (:duckdb_register_scalar_function, libduckdb),
+        Int32,
+        (duckdb_connection, duckdb_scalar_function),
+        con,
+        func
+    )
 end

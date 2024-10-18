@@ -171,6 +171,15 @@ void RegisterSqllogictests() {
 	    "test/random/expr/slt_good_80.test", "test/random/expr/slt_good_75.test", "test/random/expr/slt_good_42.test",
 	    "test/random/expr/slt_good_49.test", "test/random/expr/slt_good_24.test", "test/random/expr/slt_good_30.test",
 	    "test/random/expr/slt_good_8.test", "test/random/expr/slt_good_61.test",
+	    // dependencies between tables/views prevent dropping in DuckDB without CASCADE
+	    "test/index/view/1000/slt_good_0.test", "test/index/view/100/slt_good_0.test",
+	    "test/index/view/100/slt_good_5.test", "test/index/view/100/slt_good_1.test",
+	    "test/index/view/100/slt_good_3.test", "test/index/view/100/slt_good_4.test",
+	    "test/index/view/100/slt_good_2.test", "test/index/view/10000/slt_good_0.test",
+	    "test/index/view/10/slt_good_5.test", "test/index/view/10/slt_good_7.test",
+	    "test/index/view/10/slt_good_1.test", "test/index/view/10/slt_good_3.test",
+	    "test/index/view/10/slt_good_4.test", "test/index/view/10/slt_good_6.test",
+	    "test/index/view/10/slt_good_2.test",
 	    // strange error in hash comparison, results appear correct...
 	    "test/index/random/10/slt_good_7.test", "test/index/random/10/slt_good_9.test"};
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();

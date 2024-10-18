@@ -4,12 +4,10 @@
 
 namespace duckdb {
 
-DataFileType MagicBytes::CheckMagicBytes(FileSystem *fs_p, const string &path) {
+DataFileType MagicBytes::CheckMagicBytes(FileSystem &fs, const string &path) {
 	if (path.empty() || path == IN_MEMORY_PATH) {
 		return DataFileType::DUCKDB_FILE;
 	}
-	LocalFileSystem lfs;
-	FileSystem &fs = fs_p ? *fs_p : lfs;
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
 	if (!handle) {
 		return DataFileType::FILE_DOES_NOT_EXIST;

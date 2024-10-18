@@ -10,7 +10,8 @@ add_library_unity(
   transaction_manager.cpp
   commit_state.cpp
   rollback_state.cpp
-  cleanup_state.cpp)
+  cleanup_state.cpp
+  wal_write_state.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_transaction>
     PARENT_SCOPE)

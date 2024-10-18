@@ -1,0 +1,36 @@
+# name: test/sql/storage/compact_block_size/ensure_bitpacking.test
+# description: Ensure that we serialize a bitpacking segment for 256KB databases.
+# group: [compact_block_size]
+
+require skip_reload
+
+require noforcestorage
+
+statement ok
+SET threads=1;
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+ATTACH '__TEST_DIR__/smaller_block_size.db' (BLOCK_SIZE 16384);
+
+statement ok
+CREATE TABLE smaller_block_size.tbl AS SELECT range AS i FROM range(10000);
+
+statement ok
+ATTACH '__TEST_DIR__/larger_block_size.db' (BLOCK_SIZE 262144);
+
+statement ok
+CREATE TABLE larger_block_size.tbl AS SELECT range AS i FROM range(10000);
+
+statement ok
+CHECKPOINT smaller_block_size;
+
+statement ok
+CHECKPOINT larger_block_size;
+
+query I
+SELECT COUNT(*) > 0 FROM pragma_storage_info('larger_block_size.tbl') WHERE compression = 'BitPacking';
+----
+1

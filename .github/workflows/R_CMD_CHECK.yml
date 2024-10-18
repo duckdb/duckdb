@@ -22,7 +22,6 @@ on:
     paths-ignore:
       - '**.md'
       - 'tools/**'
-      - '!tools/odbc/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/R_CMD_CHECK.yml'
@@ -51,15 +50,14 @@ jobs:
           - {os: ubuntu-latest,   r: 'release'}
 
     env:
-      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       R_KEEP_PKG_SOURCE: yes
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           path: ${{ env.DUCKDB_SRC }}
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: ${{ env.DUCKDB_R_REPO }}
           path: ${{ env.DUCKDB_R_SRC }}
@@ -101,7 +99,9 @@ jobs:
       - name: update duckdb-r src code with PR code
         shell: bash
         working-directory: ${{ env.DUCKDB_R_SRC }}
-        run: ./vendor.sh $GITHUB_WORKSPACE/$DUCKDB_SRC
+        env:
+          DUCKDB_PATH: ${{ env.DUCKDB_SRC }}
+        run: ./vendor.sh
 
       - uses: r-lib/actions/check-r-package@v2
         with:

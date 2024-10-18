@@ -1,12 +1,14 @@
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 
 #include "duckdb/execution/operator/helper/physical_batch_collector.hpp"
+#include "duckdb/execution/operator/helper/physical_buffered_batch_collector.hpp"
 #include "duckdb/execution/operator/helper/physical_materialized_collector.hpp"
 #include "duckdb/execution/operator/helper/physical_buffered_collector.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
+#include "duckdb/main/query_result.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {
@@ -35,7 +37,7 @@ unique_ptr<PhysicalResultCollector> PhysicalResultCollector::GetResultCollector(
 		// we care about maintaining insertion order and the sources all support batch indexes
 		// use a batch collector
 		if (data.is_streaming) {
-			return make_uniq_base<PhysicalResultCollector, PhysicalBufferedCollector>(data, false);
+			return make_uniq_base<PhysicalResultCollector, PhysicalBufferedBatchCollector>(data);
 		}
 		return make_uniq_base<PhysicalResultCollector, PhysicalBatchCollector>(data);
 	}

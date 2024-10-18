@@ -11,6 +11,8 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/built_in_functions.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 class BoundFunctionExpression;
@@ -33,6 +35,22 @@ struct ExportAggregateFunction {
 	static unique_ptr<BoundAggregateExpression> Bind(unique_ptr<BoundAggregateExpression> child_aggregate);
 	static ScalarFunction GetCombine();
 	static ScalarFunction GetFinalize();
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct ErrorFun {
+	static ScalarFunction GetFunction();
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct GetVariableFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct CreateSortKeyFun {
+	static ScalarFunction GetFunction();
+
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

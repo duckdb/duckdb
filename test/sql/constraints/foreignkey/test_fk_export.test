@@ -66,3 +66,4 @@ DROP TABLE fk_integers;
 
 statement ok
 DROP TABLE pk_integers;
+

@@ -7,6 +7,29 @@ pa = pytest.importorskip("pyarrow", '14.0.0', reason="Needs pyarrow >= 14")
 pc = pytest.importorskip("pyarrow.compute")
 
 
+def create_list_view(offsets, values):
+    sizes = []
+    for i in range(1, len(offsets)):
+        assert offsets[i - 1] <= offsets[i]
+        size = offsets[i] - offsets[i - 1]
+        sizes.append(size)
+    # Cut off the last offset
+    offsets = offsets[:-1]
+    return pa.ListViewArray.from_arrays(offsets, sizes, values=values)
+
+
+def create_list(offsets, values):
+    return pa.ListArray.from_arrays(offsets, values=values)
+
+
+def list_constructors():
+    result = []
+    result.append(create_list)
+    if hasattr(pa, 'ListViewArray'):
+        result.append(create_list_view)
+    return result
+
+
 class TestArrowREE(object):
     @pytest.mark.parametrize(
         'query',
@@ -216,7 +239,8 @@ class TestArrowREE(object):
         actual = duckdb_cursor.query("select {} from res".format(projection)).fetchall()
         assert expected == actual
 
-    def test_arrow_ree_list(self, duckdb_cursor):
+    @pytest.mark.parametrize('create_list', list_constructors())
+    def test_arrow_ree_list(self, duckdb_cursor, create_list):
         size = 1000
         duckdb_cursor.query(
             """
@@ -252,7 +276,7 @@ class TestArrowREE(object):
                 offset += 10
                 chunk_length -= 10
 
-            new_array = pa.ListArray.from_arrays(offsets, values=ree)
+            new_array = create_list(offsets, ree)
             structured_chunks.append(new_array)
 
         structured = pa.chunked_array(structured_chunks)

@@ -1,10 +1,11 @@
-#include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/blob.hpp"
+
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/string_type.hpp"
 
 namespace duckdb {
 
@@ -47,7 +48,7 @@ void Blob::ToString(string_t blob, char *output) {
 	for (idx_t i = 0; i < len; i++) {
 		if (IsRegularCharacter(data[i])) {
 			// ascii characters are rendered as-is
-			output[str_idx++] = data[i];
+			output[str_idx++] = UnsafeNumericCast<char>(data[i]);
 		} else {
 			auto byte_a = data[i] >> 4;
 			auto byte_b = data[i] & 0x0F;
@@ -65,7 +66,7 @@ void Blob::ToString(string_t blob, char *output) {
 
 string Blob::ToString(string_t blob) {
 	auto str_len = GetStringSize(blob);
-	auto buffer = make_unsafe_uniq_array<char>(str_len);
+	auto buffer = make_unsafe_uniq_array_uninitialized<char>(str_len);
 	Blob::ToString(blob, buffer.get());
 	return string(buffer.get(), str_len);
 }
@@ -77,15 +78,16 @@ bool Blob::TryGetBlobSize(string_t str, idx_t &str_len, CastParameters &paramete
 	for (idx_t i = 0; i < len; i++) {
 		if (data[i] == '\\') {
 			if (i + 3 >= len) {
-				string error = "Invalid hex escape code encountered in string -> blob conversion: "
-				               "unterminated escape code at end of blob";
+				string error = StringUtil::Format("Invalid hex escape code encountered in string -> blob conversion of "
+				                                  "string \"%s\": unterminated escape code at end of blob",
+				                                  str.GetString());
 				HandleCastError::AssignError(error, parameters);
 				return false;
 			}
 			if (data[i + 1] != 'x' || Blob::HEX_MAP[data[i + 2]] < 0 || Blob::HEX_MAP[data[i + 3]] < 0) {
-				string error =
-				    StringUtil::Format("Invalid hex escape code encountered in string -> blob conversion: %s",
-				                       string(const_char_ptr_cast(data) + i, 4));
+				string error = StringUtil::Format(
+				    "Invalid hex escape code encountered in string -> blob conversion of string \"%s\": %s",
+				    str.GetString(), string(const_char_ptr_cast(data) + i, 4));
 				HandleCastError::AssignError(error, parameters);
 				return false;
 			}
@@ -94,8 +96,10 @@ bool Blob::TryGetBlobSize(string_t str, idx_t &str_len, CastParameters &paramete
 		} else if (data[i] <= 127) {
 			str_len++;
 		} else {
-			string error = "Invalid byte encountered in STRING -> BLOB conversion. All non-ascii characters "
-			               "must be escaped with hex codes (e.g. \\xAA)";
+			string error = StringUtil::Format(
+			    "Invalid byte encountered in STRING -> BLOB conversion of string \"%s\". All non-ascii characters "
+			    "must be escaped with hex codes (e.g. \\xAA)",
+			    str.GetString());
 			HandleCastError::AssignError(error, parameters);
 			return false;
 		}
@@ -147,7 +151,7 @@ string Blob::ToBlob(string_t str) {
 
 string Blob::ToBlob(string_t str, CastParameters &parameters) {
 	auto blob_len = GetBlobSize(str, parameters);
-	auto buffer = make_unsafe_uniq_array<char>(blob_len);
+	auto buffer = make_unsafe_uniq_array_uninitialized<char>(blob_len);
 	Blob::ToBlob(str, data_ptr_cast(buffer.get()));
 	return string(buffer.get(), blob_len);
 }
@@ -244,8 +248,8 @@ uint32_t DecodeBase64Bytes(const string_t &str, const_data_ptr_t input_data, idx
 			    input_data[base_idx + decode_idx], base_idx + decode_idx);
 		}
 	}
-	return (decoded_bytes[0] << 3 * 6) + (decoded_bytes[1] << 2 * 6) + (decoded_bytes[2] << 1 * 6) +
-	       (decoded_bytes[3] << 0 * 6);
+	return UnsafeNumericCast<uint32_t>((decoded_bytes[0] << 3 * 6) + (decoded_bytes[1] << 2 * 6) +
+	                                   (decoded_bytes[2] << 1 * 6) + (decoded_bytes[3] << 0 * 6));
 }
 
 void Blob::FromBase64(string_t str, data_ptr_t output, idx_t output_size) {

@@ -122,9 +122,9 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		    "(e.g. duckdb -unsigned).");
 		pDb->db = make_uniq<DuckDB>(filename, &config);
 #ifdef SHELL_INLINE_AUTOCOMPLETE
-		pDb->db->LoadExtension<AutocompleteExtension>();
+		pDb->db->LoadStaticExtension<AutocompleteExtension>();
 #endif
-		pDb->db->LoadExtension<ShellExtension>();
+		pDb->db->LoadStaticExtension<ShellExtension>();
 		pDb->con = make_uniq<Connection>(*pDb->db);
 	} catch (const Exception &ex) {
 		if (pDb) {
@@ -214,7 +214,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		stmt->query_string = query;
 		stmt->prepared = std::move(prepared);
 		stmt->current_row = -1;
-		for (idx_t i = 0; i < stmt->prepared->n_param; i++) {
+		for (idx_t i = 0; i < stmt->prepared->named_param_map.size(); i++) {
 			stmt->bound_names.push_back("$" + to_string(i + 1));
 			stmt->bound_values.push_back(Value());
 		}
@@ -482,6 +482,10 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 	if (column_type.IsJSONType()) {
 		return 0; // Does not need to be surrounded in quotes like VARCHAR
 	}
+	if (column_type.HasAlias()) {
+		// Use the text representation for aliased types
+		return SQLITE_TEXT;
+	}
 	switch (column_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 	case LogicalTypeId::TINYINT:
@@ -620,14 +624,14 @@ int sqlite3_bind_parameter_count(sqlite3_stmt *stmt) {
 	if (!stmt) {
 		return 0;
 	}
-	return stmt->prepared->n_param;
+	return stmt->prepared->named_param_map.size();
 }
 
 const char *sqlite3_bind_parameter_name(sqlite3_stmt *stmt, int idx) {
 	if (!stmt) {
 		return nullptr;
 	}
-	if (idx < 1 || idx > (int)stmt->prepared->n_param) {
+	if (idx < 1 || idx > (int)stmt->prepared->named_param_map.size()) {
 		return nullptr;
 	}
 	return stmt->bound_names[idx - 1].c_str();
@@ -649,7 +653,7 @@ int sqlite3_internal_bind_value(sqlite3_stmt *stmt, int idx, Value value) {
 	if (!stmt || !stmt->prepared || stmt->result) {
 		return SQLITE_MISUSE;
 	}
-	if (idx < 1 || idx > (int)stmt->prepared->n_param) {
+	if (idx < 1 || idx > (int)stmt->prepared->named_param_map.size()) {
 		return SQLITE_RANGE;
 	}
 	stmt->bound_values[idx - 1] = value;
@@ -897,7 +901,15 @@ int sqlite3_changes(sqlite3 *db) {
 	return db->last_changes;
 }
 
+sqlite3_int64 sqlite3_changes64(sqlite3 *db) {
+	return db->last_changes;
+}
+
 int sqlite3_total_changes(sqlite3 *db) {
+	return db->total_changes;
+}
+
+sqlite3_int64 sqlite3_total_changes64(sqlite3 *db) {
 	return db->total_changes;
 }
 
@@ -985,21 +997,38 @@ int sqlite3_complete(const char *zSql) {
 			break;
 		}
 		case '$': { /* Dollar-quoted strings */
-			if (zSql[1] >= '0' && zSql[1] <= '9') {
-				// numeric prepared statement parameter
+			// check if this is a dollar-quoted string
+			idx_t next_dollar = 0;
+			for (idx_t idx = 1; zSql[idx]; idx++) {
+				if (zSql[idx] == '$') {
+					// found the next dollar
+					next_dollar = idx;
+					break;
+				}
+				// all characters can be between A-Z, a-z or \200 - \377
+				if (zSql[idx] >= 'A' && zSql[idx] <= 'Z') {
+					continue;
+				}
+				if (zSql[idx] >= 'a' && zSql[idx] <= 'z') {
+					continue;
+				}
+				if (zSql[idx] >= '\200' && zSql[idx] <= '\377') {
+					continue;
+				}
+				// the first character CANNOT be a numeric, only subsequent characters
+				if (idx > 1 && zSql[idx] >= '0' && zSql[idx] <= '9') {
+					continue;
+				}
+				// not a dollar quoted string
+				break;
+			}
+			if (next_dollar == 0) {
+				// not a dollar quoted string
 				next_state = SQLParseState::NORMAL;
 				break;
 			}
-			zSql++;
-			auto start = zSql;
-			// look for the next $ symbol (which is the terminator
-			while (*zSql && *zSql != '$') {
-				zSql++;
-			}
-			if (zSql[0] == 0) {
-				// unterminated dollar string
-				return 0;
-			}
+			auto start = zSql + 1;
+			zSql += next_dollar;
 			const char *delimiterStart = start;
 			idx_t delimiterLength = zSql - start;
 			zSql++;
@@ -1076,8 +1105,29 @@ int sqlite3_get_autocommit(sqlite3 *db) {
 }
 
 int sqlite3_limit(sqlite3 *, int id, int newVal) {
-	fprintf(stderr, "sqlite3_limit: unsupported.\n");
-	return -1;
+	if (newVal >= 0) {
+		// attempting to set limit value
+		return SQLITE_OK;
+	}
+	switch (id) {
+	case SQLITE_LIMIT_LENGTH:
+	case SQLITE_LIMIT_SQL_LENGTH:
+	case SQLITE_LIMIT_COLUMN:
+	case SQLITE_LIMIT_LIKE_PATTERN_LENGTH:
+		return std::numeric_limits<int>::max();
+	case SQLITE_LIMIT_EXPR_DEPTH:
+		return 1000;
+	case SQLITE_LIMIT_FUNCTION_ARG:
+	case SQLITE_LIMIT_VARIABLE_NUMBER:
+		return 256;
+	case SQLITE_LIMIT_ATTACHED:
+		return 1000;
+	case SQLITE_LIMIT_WORKER_THREADS:
+	case SQLITE_LIMIT_TRIGGER_DEPTH:
+		return 0;
+	default:
+		return SQLITE_ERROR;
+	}
 }
 
 int sqlite3_stmt_readonly(sqlite3_stmt *pStmt) {
@@ -1856,7 +1906,7 @@ SQLITE_API char *sqlite3_expanded_sql(sqlite3_stmt *pStmt) {
 }
 
 SQLITE_API int sqlite3_keyword_check(const char *str, int len) {
-	return Parser::IsKeyword(std::string(str, len));
+	return KeywordHelper::IsKeyword(std::string(str, len));
 }
 
 SQLITE_API int sqlite3_keyword_count(void) {

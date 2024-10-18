@@ -29,7 +29,7 @@ class GroupByNode;
 //! plan and executed.
 class Parser {
 public:
-	Parser(ParserOptions options = ParserOptions());
+	explicit Parser(ParserOptions options = ParserOptions());
 
 	//! The parsed SQL statements from an invocation to ParseQuery.
 	vector<unique_ptr<SQLStatement>> statements;
@@ -45,7 +45,7 @@ public:
 	static vector<SimplifiedToken> Tokenize(const string &query);
 
 	//! Returns true if the given text matches a keyword of the parser
-	static bool IsKeyword(const string &text);
+	static KeywordCategory IsKeyword(const string &text);
 	//! Returns a list of all keywords in the parser
 	static vector<ParserKeyword> KeywordList();
 

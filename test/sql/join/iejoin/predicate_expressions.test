@@ -1,0 +1,67 @@
+# name: test/sql/join/iejoin/predicate_expressions.test
+# description: Predicate expressions should work with multiple chunks
+# group: [iejoin]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET merge_join_threshold=0
+
+# Create a range of dates
+statement ok
+create table calendar as SELECT *
+FROM range(DATE '2022-01-01', DATE '2024-02-01', INTERVAL '1' MONTH);
+
+# Create an SCD2 dummy table with nullable end dates
+statement ok
+create table scd2 as 
+select 
+  range as range_start,
+  case when date_part('year', range) < 2023 then range + interval 4 month - interval 1 day end as range_end,
+  n
+from calendar
+cross join generate_series(1, 85) as n
+
+# Create an SCD2 dummy table with non-nullable end dates
+statement ok
+create table scd2_non_null as 
+select 
+  range as range_start,
+  case when date_part('year', range) < 2023 then range + interval 4 month - interval 1 day else '2099-01-01' end as range_end,
+  n
+from calendar
+cross join generate_series(1, 85) as n
+
+# Aggregate each table by using a range join
+query II nosort expected
+select
+    range,
+    count(*) as n
+from scd2_non_null
+inner join calendar
+    on range between range_start and ifnull(range_end,'2099-01-01')
+group by range
+order by range
+
+# First key should work
+query II nosort expected
+select
+	range,
+	count(*) as n
+from scd2
+inner join calendar
+		on range <= ifnull(range_end,'2099-01-01') and range_start <= range
+group by range
+order by range
+
+# Second key should work
+query II nosort expected
+select
+	range,
+	count(*) as n
+from scd2
+inner join calendar
+		on range between range_start and ifnull(range_end,'2099-01-01')
+group by range
+order by range

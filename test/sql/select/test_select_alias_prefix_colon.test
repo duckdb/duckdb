@@ -102,69 +102,13 @@ from "my_wonderful_values" : (values(42))
 ----
 42
 
-query II
-from my_wonderful_values(wonderful_value_one, wonderful_value_two) : (values(42, 43))
+query I
+from r : range(1)
 ----
-42	43
+0
 
 query I
-select column_name from (describe from my_wonderful_values(wonderful_value_one, wonderful_value_two) : (values(42, 43)))
+from "r" : range(1)
 ----
-wonderful_value_one
-wonderful_value_two
-
-query II
-from "my_wonderful_values"("wonderful_value_one", "wonderful_value_two") : (values(42, 43))
-----
-42	43
-
-# single quotes don't work for the table values alias because bison
-statement error
-from 'my_wonderful_values'(wonderful_value_one, wonderful_value_two) : (values(42, 43))
-----
-Parser Error
-
-# but they *do* work for the columns
-query II
-from "my_wonderful_values"('wonderful_value_one', 'wonderful_value_two') : (values(42, 43))
-----
-42	43
-
-query I
-select column_name from (describe from my_wonderful_values(wonderful_value_one, wonderful_value_two) : (select 42, 43))
-----
-wonderful_value_one
-wonderful_value_two
-
-# joins
-
-query II
-from a(i) : (values(42)) join
-     b(j) : (values(42))
-     on a.i = b.j;
-----
-42	42
-
-query II
-from "a"("i") : (values(42)) join
-     "b"("j") : (values(42))
-     on a.i = b.j;
-----
-42	42
-
-# again, single quotes don't work for the table values alias because bison
-statement error
-from 'a'('i') : (values(42)) join
-     'b'('j') : (values(42))
-     on a.i = b.j;
-----
-Parser Error
-
-query II
-from "a"('i') : (values(42)) join
-     "b"('j') : (values(42))
-     on a.i = b.j;
-----
-42	42
-
+0
 

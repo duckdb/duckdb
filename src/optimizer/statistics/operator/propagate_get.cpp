@@ -31,7 +31,7 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &input, TableFi
 }
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet &get,
-                                                                     unique_ptr<LogicalOperator> *node_ptr) {
+                                                                     unique_ptr<LogicalOperator> &node_ptr) {
 	if (get.function.cardinality) {
 		node_stats = get.function.cardinality(context, get.bind_data.get());
 	}
@@ -39,8 +39,9 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 		// no column statistics to get
 		return std::move(node_stats);
 	}
-	for (idx_t i = 0; i < get.column_ids.size(); i++) {
-		auto stats = get.function.statistics(context, get.bind_data.get(), get.column_ids[i]);
+	auto &column_ids = get.GetColumnIds();
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		auto stats = get.function.statistics(context, get.bind_data.get(), column_ids[i]);
 		if (stats) {
 			ColumnBinding binding(get.table_index, i);
 			statistics_map.insert(make_pair(binding, std::move(stats)));
@@ -55,13 +56,13 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 
 	for (auto &table_filter_column : column_indexes) {
 		idx_t column_index;
-		for (column_index = 0; column_index < get.column_ids.size(); column_index++) {
-			if (get.column_ids[column_index] == table_filter_column) {
+		for (column_index = 0; column_index < column_ids.size(); column_index++) {
+			if (column_ids[column_index] == table_filter_column) {
 				break;
 			}
 		}
-		D_ASSERT(column_index < get.column_ids.size());
-		D_ASSERT(get.column_ids[column_index] == table_filter_column);
+		D_ASSERT(column_index < column_ids.size());
+		D_ASSERT(column_ids[column_index] == table_filter_column);
 
 		// find the stats
 		ColumnBinding stats_binding(get.table_index, column_index);
@@ -85,8 +86,8 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 		case FilterPropagateResult::FILTER_FALSE_OR_NULL:
 		case FilterPropagateResult::FILTER_ALWAYS_FALSE:
 			// filter is always false; this entire filter should be replaced by an empty result block
-			ReplaceWithEmptyResult(*node_ptr);
-			return make_uniq<NodeStatistics>(0, 0);
+			ReplaceWithEmptyResult(node_ptr);
+			return make_uniq<NodeStatistics>(0U, 0U);
 		default:
 			// general case: filter can be true or false, update this columns' statistics
 			UpdateFilterStatistics(stats, *filter);

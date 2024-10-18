@@ -153,6 +153,12 @@
         "name": "convert_strings_to_integers",
         "type": "bool",
         "default": false
+      },
+      {
+        "id": 116,
+        "name": "map_inference_threshold",
+        "type": "idx_t",
+        "default": 25
       }
     ],
     "constructor": ["$ClientContext", "files", "date_format", "timestamp_format"]

@@ -11,64 +11,19 @@
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
-// Helper
-//===--------------------------------------------------------------------===//
-
-void ParseOptions(const unique_ptr<AttachInfo> &info, AccessMode &access_mode, string &db_type,
-                  string &unrecognized_option) {
-
-	for (auto &entry : info->options) {
-
-		if (entry.first == "readonly" || entry.first == "read_only") {
-			auto read_only = BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
-			if (read_only) {
-				access_mode = AccessMode::READ_ONLY;
-			} else {
-				access_mode = AccessMode::READ_WRITE;
-			}
-			continue;
-		}
-
-		if (entry.first == "readwrite" || entry.first == "read_write") {
-			auto read_only = !BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
-			if (read_only) {
-				access_mode = AccessMode::READ_ONLY;
-			} else {
-				access_mode = AccessMode::READ_WRITE;
-			}
-			continue;
-		}
-
-		if (entry.first == "type") {
-			// extract the database type
-			db_type = StringValue::Get(entry.second.DefaultCastAs(LogicalType::VARCHAR));
-			continue;
-		}
-
-		// we allow unrecognized options
-		if (unrecognized_option.empty()) {
-			unrecognized_option = entry.first;
-		}
-	}
-}
-
-//===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
 SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk,
                                          OperatorSourceInput &input) const {
 	// parse the options
 	auto &config = DBConfig::GetConfig(context.client);
-	AccessMode access_mode = config.options.access_mode;
-	string db_type;
-	string unrecognized_option;
-	ParseOptions(info, access_mode, db_type, unrecognized_option);
+	AttachOptions options(info, config.options.access_mode);
 
 	// get the name and path of the database
 	auto &name = info->name;
 	auto &path = info->path;
-	if (db_type.empty()) {
-		DBPathAndType::ExtractExtensionPrefix(path, db_type);
+	if (options.db_type.empty()) {
+		DBPathAndType::ExtractExtensionPrefix(path, options.db_type);
 	}
 	if (name.empty()) {
 		auto &fs = FileSystem::GetFileSystem(context.client);
@@ -81,13 +36,12 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 		// constant-time lookup in the catalog for the db name
 		auto existing_db = db_manager.GetDatabase(context.client, name);
 		if (existing_db) {
-
-			if ((existing_db->IsReadOnly() && access_mode == AccessMode::READ_WRITE) ||
-			    (!existing_db->IsReadOnly() && access_mode == AccessMode::READ_ONLY)) {
+			if ((existing_db->IsReadOnly() && options.access_mode == AccessMode::READ_WRITE) ||
+			    (!existing_db->IsReadOnly() && options.access_mode == AccessMode::READ_ONLY)) {
 
 				auto existing_mode = existing_db->IsReadOnly() ? AccessMode::READ_ONLY : AccessMode::READ_WRITE;
 				auto existing_mode_str = EnumUtil::ToString(existing_mode);
-				auto attached_mode = EnumUtil::ToString(access_mode);
+				auto attached_mode = EnumUtil::ToString(options.access_mode);
 				throw BinderException("Database \"%s\" is already attached in %s mode, cannot re-attach in %s mode",
 				                      name, existing_mode_str, attached_mode);
 			}
@@ -96,10 +50,27 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 		}
 	}
 
-	// get the database type and attach the database
-	db_manager.GetDatabaseType(context.client, db_type, *info, config, unrecognized_option);
-	auto attached_db = db_manager.AttachDatabase(context.client, *info, db_type, access_mode);
-	attached_db->Initialize(&context.client);
+	string extension = "";
+	if (FileSystem::IsRemoteFile(path, extension)) {
+		if (!ExtensionHelper::TryAutoLoadExtension(context.client, extension)) {
+			throw MissingExtensionException("Attaching path '%s' requires extension '%s' to be loaded", path,
+			                                extension);
+		}
+		if (options.access_mode == AccessMode::AUTOMATIC) {
+			// Attaching of remote files gets bumped to READ_ONLY
+			// This is due to the fact that on most (all?) remote files writes to DB are not available
+			// and having this raised later is not super helpful
+			options.access_mode = AccessMode::READ_ONLY;
+		}
+	}
+
+	// Get the database type and attach the database.
+	db_manager.GetDatabaseType(context.client, *info, config, options);
+	auto attached_db = db_manager.AttachDatabase(context.client, *info, options);
+
+	//! Initialize the database.
+	const auto storage_options = info->GetStorageOptions();
+	attached_db->Initialize(storage_options);
 	return SourceResultType::FINISHED;
 }
 

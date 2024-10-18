@@ -34,6 +34,15 @@ SELECT * FROM (VALUES
 	(NULL)
 ) tbl(i);
 
+query II
+select min(i), max(i), from struct_int;
+----
+{'x': 1, 'y': 0}	{'x': NULL, 'y': NULL}
+
+# single thread for vsize=2
+statement ok
+set threads=1
+
 query III
 select min(i), max(i), first(i) from struct_int;
 ----

@@ -38,22 +38,22 @@ public:
 	void FileSync(FileHandle &handle) override;
 
 	// need to look up correct fs for this
-	bool DirectoryExists(const string &directory) override;
-	void CreateDirectory(const string &directory) override;
+	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) override;
+	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
 
-	void RemoveDirectory(const string &directory) override;
+	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
 
 	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
 	               FileOpener *opener = nullptr) override;
 
-	void MoveFile(const string &source, const string &target) override;
+	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) override;
 
-	bool FileExists(const string &filename) override;
+	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override;
 
-	bool IsPipe(const string &filename) override;
-	void RemoveFile(const string &filename) override;
+	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override;
+	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
 
-	virtual vector<string> Glob(const string &path, FileOpener *opener = nullptr) override;
+	vector<string> Glob(const string &path, FileOpener *opener = nullptr) override;
 
 	void RegisterSubSystem(unique_ptr<FileSystem> fs) override;
 

@@ -19,16 +19,19 @@ namespace duckdb {
 struct JsonSerializePlanBindData : public FunctionData {
 	bool skip_if_null = false;
 	bool skip_if_empty = false;
+	bool skip_if_default = false;
 	bool format = false;
 	bool optimize = false;
 
-	JsonSerializePlanBindData(bool skip_if_null_p, bool skip_if_empty_p, bool format_p, bool optimize_p)
-	    : skip_if_null(skip_if_null_p), skip_if_empty(skip_if_empty_p), format(format_p), optimize(optimize_p) {
+	JsonSerializePlanBindData(bool skip_if_null_p, bool skip_if_empty_p, bool skip_if_default_p, bool format_p,
+	                          bool optimize_p)
+	    : skip_if_null(skip_if_null_p), skip_if_empty(skip_if_empty_p), skip_if_default(skip_if_default_p),
+	      format(format_p), optimize(optimize_p) {
 	}
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<JsonSerializePlanBindData>(skip_if_null, skip_if_empty, format, optimize);
+		return make_uniq<JsonSerializePlanBindData>(skip_if_null, skip_if_empty, skip_if_default, format, optimize);
 	}
 	bool Equals(const FunctionData &other_p) const override {
 		return true;
@@ -48,6 +51,7 @@ static unique_ptr<FunctionData> JsonSerializePlanBind(ClientContext &context, Sc
 	// Optional arguments
 	bool skip_if_null = false;
 	bool skip_if_empty = false;
+	bool skip_if_default = false;
 	bool format = false;
 	bool optimize = false;
 
@@ -69,6 +73,11 @@ static unique_ptr<FunctionData> JsonSerializePlanBind(ClientContext &context, Sc
 				throw BinderException("json_serialize_plan: 'skip_empty' argument must be a boolean");
 			}
 			skip_if_empty = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
+		} else if (arg->alias == "skip_default") {
+			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
+				throw BinderException("json_serialize_plan: 'skip_default' argument must be a boolean");
+			}
+			skip_if_default = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
 		} else if (arg->alias == "format") {
 			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_plan: 'format' argument must be a boolean");
@@ -83,7 +92,7 @@ static unique_ptr<FunctionData> JsonSerializePlanBind(ClientContext &context, Sc
 			throw BinderException(StringUtil::Format("json_serialize_plan: Unknown argument '%s'", arg->alias.c_str()));
 		}
 	}
-	return make_uniq<JsonSerializePlanBindData>(skip_if_null, skip_if_empty, format, optimize);
+	return make_uniq<JsonSerializePlanBindData>(skip_if_null, skip_if_empty, skip_if_default, format, optimize);
 }
 
 static bool OperatorSupportsSerialization(LogicalOperator &op, string &operator_name) {
@@ -144,7 +153,8 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 					throw InvalidInputException("Operator '%s' does not support serialization", operator_name);
 				}
 
-				auto plan_json = JsonSerializer::Serialize(*plan, doc, info.skip_if_null, info.skip_if_empty);
+				auto plan_json =
+				    JsonSerializer::Serialize(*plan, doc, info.skip_if_null, info.skip_if_empty, info.skip_if_default);
 				yyjson_mut_arr_append(plans_arr, plan_json);
 			}
 

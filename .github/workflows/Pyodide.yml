@@ -1,0 +1,143 @@
+name: Pyodide
+on:
+  workflow_call:
+    inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
+      skip_tests:
+        type: string
+  workflow_dispatch:
+    inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
+      skip_tests:
+        type: string
+  push:
+    branches:
+      - "**"
+      - "!main"
+      - "!feature"
+    paths-ignore:
+      - "**"
+      - "!.github/workflows/Pyodide.yml"
+      - "!tools/pythonpkg/setup.py"
+
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+    paths-ignore:
+      - "**"
+      - "!.github/workflows/Pyodide.yml"
+      - "!tools/pythonpkg/setup.py"
+
+jobs:
+  build_pyodide:
+    name: Build pyodide wheel
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - python: "3.10"
+            pyodide-build: "0.22.1"
+            node: "16"
+            other_deps: "'pydantic<2'"
+          - python: "3.11"
+            pyodide-build: "0.25.1"
+            node: "18"
+            other_deps: "'pydantic<2'"
+          - python: "3.12"
+            pyodide-build: "0.26.1"
+            node: "20"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # fetch everything so that the version on the built wheel path is
+          # correct
+          fetch-depth: 0
+          ref: ${{ inputs.git_ref }}
+
+      - name: Check/Act on inputs.override_git_describe
+        shell: bash
+        run: |
+          if [[ "${{ inputs.override_git_describe }}" == *-* ]]; then
+            echo "override_git_describe ${{ inputs.override_git_describe }}: provide either vX.Y.Z or empty string"
+            exit 1
+          elif [[ -z "${{ inputs.override_git_describe }}" ]]; then
+            echo "No override_git_describe provided"
+          else
+            echo "UPLOAD_ASSETS_TO_STAGING_TARGET=$(git log -1 --format=%h)" >> "$GITHUB_ENV"
+            echo "override_git_describe ${{ inputs.override_git_describe }}: add tag"
+            git tag ${{ inputs.override_git_describe }}
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.version.python }}
+
+      - run: pip install 'pyodide-build==${{ matrix.version.pyodide-build }}' ${{ matrix.version.other_deps }}
+
+      - name: get emscripten version
+        id: emscripten-version
+        run: |
+          echo "value=$(pyodide config get emscripten_version)" | tee -a "$GITHUB_OUTPUT"
+
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: ${{ steps.emscripten-version.outputs.value }}
+
+      - name: build wasm wheel
+        run: pyodide build --exports=whole_archive
+        working-directory: ./tools/pythonpkg
+        env:
+          DUCKDB_CUSTOM_PLATFORM: wasm_eh_pyodide
+          CFLAGS: "-fexceptions"
+          LDFLAGS: "-fexceptions"
+
+      - name: install node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.version.node }}
+
+      - name: create pyodide environment
+        run: pyodide venv .venv-pyodide
+
+      - name: install deps into environment
+        run: |
+          source .venv-pyodide/bin/activate
+          pip install pytest numpy pandas mypy
+
+      - name: install duckdb wasm wheel into environment
+        run: |
+          source .venv-pyodide/bin/activate
+          pip install ./tools/pythonpkg/dist/*.whl
+
+      - name: Wheel sizes
+        run: |
+          ls -lah ./tools/pythonpkg/dist/*.whl
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pyodide-python${{ matrix.version.python }}
+          if-no-files-found: error
+          path: |
+            ./tools/pythonpkg/dist/*.whl
+
+      - name: run tests using pyodide
+        if: ${{ inputs.skip_tests != 'true' }}
+        run: |
+          source .venv-pyodide/bin/activate
+          python -m pytest ./tools/pythonpkg/tests
+        env:
+          TZ: UTC
+
+      - name: Deploy
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+        shell: bash
+        run: |
+          ./scripts/upload-assets-to-staging.sh pyodide tools/pythonpkg/dist/*.whl

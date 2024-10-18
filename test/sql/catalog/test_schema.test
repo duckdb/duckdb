@@ -18,7 +18,7 @@ CREATE TABLE test.hello(i INTEGER);
 statement error con1
 CREATE OR REPLACE SCHEMA test;
 ----
-there are entries that depend on it
+table "hello" depends on schema "test".
 
 # in one transaction drop the table and then the schema (without cascade)
 statement ok con1
@@ -76,4 +76,4 @@ ROLLBACK;
 statement error con2
 SELECT * FROM test.hello
 ----
-
+Table with name hello does not exist

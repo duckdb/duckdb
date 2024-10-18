@@ -15,6 +15,8 @@
 
 namespace duckdb {
 class BaseSecret;
+struct SecretEntry;
+struct FileOpenerInfo;
 
 //! Whether a secret is persistent or temporary
 enum class SecretPersistType : uint8_t { DEFAULT, TEMPORARY, PERSISTENT };
@@ -35,7 +37,8 @@ struct CreateSecretInput {
 	case_insensitive_map_t<Value> options;
 };
 
-typedef unique_ptr<BaseSecret> (*secret_deserializer_t)(Deserializer &deserializer, BaseSecret base_secret);
+typedef unique_ptr<BaseSecret> (*secret_deserializer_t)(Deserializer &deserializer, BaseSecret base_secret,
+                                                        const named_parameter_type_map_t &options);
 typedef unique_ptr<BaseSecret> (*create_secret_function_t)(ClientContext &context, CreateSecretInput &input);
 
 //! A CreateSecretFunction is a function adds a provider for a secret type.
@@ -51,7 +54,9 @@ public:
 //! should be seen as the method of secret creation. (e.g. user-provided config, env variables, auto-detect)
 class CreateSecretFunctionSet {
 public:
-	CreateSecretFunctionSet(string &name) : name(name) {};
+	explicit CreateSecretFunctionSet(string &name) : name(name) {};
+
+public:
 	bool ProviderExists(const string &provider_name);
 	void AddFunction(CreateSecretFunction &function, OnCreateConflict on_conflict);
 	CreateSecretFunction &GetFunction(const string &provider);
@@ -81,8 +86,9 @@ class BaseSecret {
 	friend class SecretManager;
 
 public:
-	BaseSecret(const vector<string> &prefix_paths, const string &type, const string &provider, const string &name)
-	    : prefix_paths(prefix_paths), type(type), provider(provider), name(name), serializable(false) {
+	BaseSecret(vector<string> prefix_paths_p, string type_p, string provider_p, string name_p)
+	    : prefix_paths(std::move(prefix_paths_p)), type(std::move(type_p)), provider(std::move(provider_p)),
+	      name(std::move(name_p)), serializable(false) {
 		D_ASSERT(!type.empty());
 	}
 	BaseSecret(const BaseSecret &other)
@@ -148,7 +154,7 @@ public:
 		D_ASSERT(!type.empty());
 		serializable = true;
 	}
-	KeyValueSecret(BaseSecret &secret)
+	explicit KeyValueSecret(const BaseSecret &secret)
 	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
 		serializable = true;
 	};
@@ -158,15 +164,16 @@ public:
 		redact_keys = secret.redact_keys;
 		serializable = true;
 	};
-	KeyValueSecret(KeyValueSecret &&secret)
-	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
+	KeyValueSecret(KeyValueSecret &&secret) noexcept
+	    : BaseSecret(std::move(secret.prefix_paths), std::move(secret.type), std::move(secret.provider),
+	                 std::move(secret.name)) {
 		secret_map = std::move(secret.secret_map);
 		redact_keys = std::move(secret.redact_keys);
 		serializable = true;
 	};
 
 	//! Print the secret as a key value map in the format 'key1=value;key2=value2'
-	virtual string ToString(SecretDisplayType mode = SecretDisplayType::REDACTED) const override;
+	string ToString(SecretDisplayType mode = SecretDisplayType::REDACTED) const override;
 	void Serialize(Serializer &serializer) const override;
 
 	//! Tries to get the value at key <key>, depending on error_on_missing will throw or return Value()
@@ -174,14 +181,30 @@ public:
 
 	// FIXME: use serialization scripts
 	template <class TYPE>
-	static unique_ptr<BaseSecret> Deserialize(Deserializer &deserializer, BaseSecret base_secret) {
+	static unique_ptr<BaseSecret> Deserialize(Deserializer &deserializer, BaseSecret base_secret,
+	                                          const named_parameter_type_map_t &options) {
 		auto result = make_uniq<TYPE>(base_secret);
 		Value secret_map_value;
 		deserializer.ReadProperty(201, "secret_map", secret_map_value);
 
 		for (const auto &entry : ListValue::GetChildren(secret_map_value)) {
 			auto kv_struct = StructValue::GetChildren(entry);
-			result->secret_map[kv_struct[0].ToString()] = kv_struct[1].ToString();
+			auto key = kv_struct[0].ToString();
+			auto raw_value = kv_struct[1].ToString();
+
+			auto it = options.find(key);
+			if (it == options.end()) {
+				throw IOException("Failed to deserialize secret '%s', it contains an unexpected key: '%s'",
+				                  base_secret.GetName(), key);
+			}
+			auto &logical_type = it->second;
+			Value value;
+			if (logical_type.id() == LogicalTypeId::VARCHAR) {
+				value = Value(raw_value);
+			} else {
+				value = Value(raw_value).DefaultCastAs(logical_type);
+			}
+			result->secret_map[key] = value;
 		}
 
 		Value redact_set_value;
@@ -197,10 +220,116 @@ public:
 		return make_uniq<KeyValueSecret>(*this);
 	}
 
+	// Get a value from the secret
+	bool TryGetValue(const string &key, Value &result) const {
+		auto lookup = secret_map.find(key);
+		if (lookup == secret_map.end()) {
+			return false;
+		}
+		result = lookup->second;
+		return true;
+	}
+
+	bool TrySetValue(const string &key, const CreateSecretInput &input) {
+		auto lookup = input.options.find(key);
+		if (lookup != input.options.end()) {
+			secret_map[key] = lookup->second;
+			return true;
+		}
+		return false;
+	}
+
 	//! the map of key -> values that make up the secret
 	case_insensitive_tree_t<Value> secret_map;
 	//! keys that are sensitive and should be redacted
 	case_insensitive_set_t redact_keys;
+};
+
+// Helper class to fetch secret parameters in a cascading way. The idea being that in many cases there is a direct
+// connection between a KeyValueSecret key and a setting and we want to:
+// - check if the secret has a specific key, if so return the corresponding value
+// - check if a setting exists, if so return its value
+// - return a default value
+
+class KeyValueSecretReader {
+public:
+	//! Manually pass in a secret reference
+	KeyValueSecretReader(const KeyValueSecret &secret_p, FileOpener &opener_p) : secret(secret_p) {};
+
+	//! Initializes the KeyValueSecretReader by fetching the secret automatically
+	KeyValueSecretReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info, const char **secret_types,
+	                     idx_t secret_types_len);
+	KeyValueSecretReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info, const char *secret_type);
+
+	//! Initialize KeyValueSecretReader from a db instance
+	KeyValueSecretReader(DatabaseInstance &db, const char **secret_types, idx_t secret_types_len, string path);
+	KeyValueSecretReader(DatabaseInstance &db, const char *secret_type, string path);
+
+	// Initialize KeyValueSecretReader from a client context
+	KeyValueSecretReader(ClientContext &context, const char **secret_types, idx_t secret_types_len, string path);
+	KeyValueSecretReader(ClientContext &context, const char *secret_type, string path);
+
+	~KeyValueSecretReader();
+
+	//! Lookup a KeyValueSecret value
+	SettingLookupResult TryGetSecretKey(const string &secret_key, Value &result);
+	//! Lookup a KeyValueSecret value or a setting
+	SettingLookupResult TryGetSecretKeyOrSetting(const string &secret_key, const string &setting_name, Value &result);
+	//! Lookup a KeyValueSecret value or a setting, throws InvalidInputException on not found
+	Value GetSecretKey(const string &secret_key);
+	//! Lookup a KeyValueSecret value or a setting, throws InvalidInputException on not found
+	Value GetSecretKeyOrSetting(const string &secret_key, const string &setting_name);
+
+	//! Templating around TryGetSecretKey
+	template <class TYPE>
+	SettingLookupResult TryGetSecretKey(const string &secret_key, TYPE &value_out) {
+		Value result;
+		auto lookup_result = TryGetSecretKey(secret_key, result);
+		if (lookup_result) {
+			value_out = result.GetValue<TYPE>();
+		}
+		return lookup_result;
+	}
+
+	//! Templating around TryGetSecretOrSetting
+	template <class TYPE>
+	SettingLookupResult TryGetSecretKeyOrSetting(const string &secret_key, const string &setting_name,
+	                                             TYPE &value_out) {
+		Value result;
+		auto lookup_result = TryGetSecretKeyOrSetting(secret_key, setting_name, result);
+		if (lookup_result) {
+			value_out = result.GetValue<TYPE>();
+		}
+		return lookup_result;
+	}
+
+	// Like a templated GetSecretOrSetting but instead of throwing on not found, return the default value
+	template <class TYPE>
+	TYPE GetSecretKeyOrSettingOrDefault(const string &secret_key, const string &setting_name, TYPE default_value) {
+		TYPE result;
+		if (TryGetSecretKeyOrSetting(secret_key, setting_name, result)) {
+			return result;
+		}
+		return default_value;
+	}
+
+protected:
+	void Initialize(const char **secret_types, idx_t secret_types_len);
+
+	[[noreturn]] void ThrowNotFoundError(const string &secret_key);
+	[[noreturn]] void ThrowNotFoundError(const string &secret_key, const string &setting_name);
+
+	//! Fetching the secret
+	optional_ptr<const KeyValueSecret> secret;
+	//! Optionally an owning pointer to the secret entry
+	shared_ptr<SecretEntry> secret_entry;
+
+	//! Secrets/settings will be fetched either through a context (local + global settings) or a databaseinstance
+	//! (global only)
+	optional_ptr<DatabaseInstance> db;
+	optional_ptr<ClientContext> context;
+
+	string path;
 };
 
 } // namespace duckdb

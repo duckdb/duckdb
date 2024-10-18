@@ -1,0 +1,255 @@
+# name: test/sql/aggregate/distinct/grouped/distinct_and_non_distinct_mixed.test_slow
+# description: DISTINCT aggregations
+# group: [grouped]
+
+# Since these tests are made to test the grouped operator, and not necessarily the functions themselves
+# This test will mostly focus on the order and mixing of distinct and non-distinct aggregates
+# And not on variation between types and functions
+
+#distinct aggregate =	'D'
+#regular aggregate =	'-'
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table tbl as
+	(select i%50 as i, i%100 as j, i%5 as groups from range(50000) tbl(i))
+;
+
+# D
+query I
+select
+	count(distinct i)
+from tbl group by groups;;
+----
+10
+10
+10
+10
+10
+
+# D--
+query III rowsort
+select
+	sum(distinct i),
+	sum(i),
+	sum(j)
+from tbl group by groups;;
+----
+225	225000	475000
+235	235000	485000
+245	245000	495000
+255	255000	505000
+265	265000	515000
+
+# --D
+query III rowsort
+select
+	sum(i),
+	sum(j),
+	sum(distinct i)
+from tbl group by groups;;
+----
+225000	475000	225
+235000	485000	235
+245000	495000	245
+255000	505000	255
+265000	515000	265
+
+# -D-
+query III rowsort
+select
+	sum(i),
+	sum(distinct i),
+	sum(j)
+from tbl group by groups;;
+----
+225000	225	475000
+235000	235	485000
+245000	245	495000
+255000	255	505000
+265000	265	515000
+
+# D-D
+query III rowsort
+select
+	sum(distinct i),
+	count(j),
+	sum(distinct j)
+from tbl group by groups;;
+----
+225	10000	950
+235	10000	970
+245	10000	990
+255	10000	1010
+265	10000	1030
+
+#-D-D
+query IIII rowsort
+select
+	sum(j),
+	sum(distinct i),
+	count(j),
+	sum(distinct j)
+from tbl group by groups;;
+----
+475000	225	10000	950
+485000	235	10000	970
+495000	245	10000	990
+505000	255	10000	1010
+515000	265	10000	1030
+
+#-D-D
+query IIII rowsort
+select
+	sum(j),
+	sum(distinct i),
+	count(j),
+	sum(distinct j)
+from tbl group by groups;;
+----
+475000	225	10000	950
+485000	235	10000	970
+495000	245	10000	990
+505000	255	10000	1010
+515000	265	10000	1030
+
+#D-D-
+query IIII rowsort
+select
+	sum(distinct i),
+	count(j),
+	sum(distinct j),
+	sum(j)
+from tbl group by groups;;
+----
+225	10000	950	475000
+235	10000	970	485000
+245	10000	990	495000
+255	10000	1010	505000
+265	10000	1030	515000
+
+# These next tests will repeat the previous test, with the addition of filters
+# filtered =		'F'
+# not filtered =	'-'
+
+# D
+# F
+query I
+select
+	count(distinct i) FILTER (WHERE i >= 20)
+from tbl group by groups;;
+----
+6
+6
+6
+6
+6
+
+# D--
+# -FF
+query III rowsort
+select
+	sum(distinct i),
+	sum(i) FILTER (WHERE j < 20),
+	sum(j) FILTER (WHERE i >= 20)
+from tbl group by groups;;
+----
+225	15000	345000
+235	17000	351000
+245	19000	357000
+255	21000	363000
+265	23000	369000
+
+# --D
+# -FF
+query III rowsort
+select
+	sum(i),
+	sum(j) FILTER (WHERE j == 0),
+	sum(distinct i) FILTER (WHERE i == 0)
+from tbl group by groups;;
+----
+225000	0	0
+235000	NULL	NULL
+245000	NULL	NULL
+255000	NULL	NULL
+265000	NULL	NULL
+
+# -D-
+# F-F
+query III rowsort
+select
+	sum(i) FILTER (WHERE j == 5),
+	sum(distinct i),
+	sum(j) FILTER (WHERE i == 5)
+from tbl group by groups;;
+----
+2500	225	30000
+NULL	235	NULL
+NULL	245	NULL
+NULL	255	NULL
+NULL	265	NULL
+
+# D-D
+# F-F
+query III rowsort
+select
+	sum(distinct i) FILTER (WHERE i == 5),
+	count(j),
+	sum(distinct j) FILTER (WHERE i == 5)
+from tbl group by groups;;
+----
+5	10000	60
+NULL	10000	NULL
+NULL	10000	NULL
+NULL	10000	NULL
+NULL	10000	NULL
+
+#-D-D
+#FF--
+query IIII rowsort
+select
+	sum(j) FILTER (WHERE j == 5),
+	sum(distinct i) FILTER (WHERE j == 5),
+	count(j),
+	sum(distinct j)
+from tbl group by groups;;
+----
+2500	5	10000	950
+NULL	NULL	10000	1010
+NULL	NULL	10000	1030
+NULL	NULL	10000	970
+NULL	NULL	10000	990
+
+#-D-D
+#F--F
+query IIII rowsort
+select
+	sum(j) FILTER (WHERE i == 5),
+	sum(distinct i),
+	count(j),
+	sum(distinct j) FILTER (WHERE j == 5)
+from tbl group by groups;;
+----
+30000	225	10000	5
+NULL	235	10000	NULL
+NULL	245	10000	NULL
+NULL	255	10000	NULL
+NULL	265	10000	NULL
+
+#D-D-
+query IIII rowsort
+select
+	sum(distinct i),
+	count(j),
+	sum(distinct j) FILTER (WHERE j == 5),
+	sum(j) FILTER (WHERE j == 5)
+from tbl group by groups;;
+----
+225	10000	5	2500
+235	10000	NULL	NULL
+245	10000	NULL	NULL
+255	10000	NULL	NULL
+265	10000	NULL	NULL

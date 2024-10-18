@@ -1,4 +1,5 @@
 #include "duckdb/parser/expression/bound_expression.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 
@@ -30,11 +31,11 @@ hash_t BoundExpression::Hash() const {
 }
 
 unique_ptr<ParsedExpression> BoundExpression::Copy() const {
-	throw SerializationException("Cannot copy or serialize bound expression");
+	throw SerializationException("Cannot copy bound expression");
 }
 
 void BoundExpression::Serialize(Serializer &serializer) const {
-	throw SerializationException("Cannot copy or serialize bound expression");
+	throw SerializationException("Cannot serialize bound expression");
 }
 
 } // namespace duckdb

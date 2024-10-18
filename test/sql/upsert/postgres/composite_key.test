@@ -37,7 +37,7 @@ statement error
 insert into insertconflicttest
 values (0, 'Crowberry', 0) on conflict (key, fruit) do update set other = 1 where exists (select 1 from insertconflicttest ii where ii.key = excluded.key);
 ----
-Binder Error: conflict_target WHERE clause can not be a subquery
+DO UPDATE SET clause cannot contain a subquery
 
 # inference succeeds:
 
@@ -66,11 +66,15 @@ statement ok
 insert into insertconflicttest values (12, 'Date', 0) on conflict (fruit, key) do update set other = 1
 
 # Partial index tests, no inference predicate specified
-statement ok
+statement error
 create unique index part_comp_key_index on insertconflicttest(key, fruit) where key < 5;
+----
+Creating partial indexes is not supported currently
 
-statement ok
+statement error
 create unique index expr_part_comp_key_index on insertconflicttest(key, fruit) where key < 5;
+----
+Creating partial indexes is not supported currently
 
 # Expression index tests
 statement ok

@@ -24,8 +24,8 @@ public:
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_CTE_REF), table_index(table_index), cte_index(cte_index),
 	      correlated_columns(0), materialized_cte(materialized_cte) {
 		D_ASSERT(types.size() > 0);
-		chunk_types = types;
-		bound_columns = colnames;
+		chunk_types = std::move(types);
+		bound_columns = std::move(colnames);
 	}
 
 	vector<string> bound_columns;
@@ -41,6 +41,7 @@ public:
 	CTEMaterialize materialized_cte;
 
 public:
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 	vector<ColumnBinding> GetColumnBindings() override {
 		return GenerateColumnBindings(table_index, chunk_types.size());
 	}

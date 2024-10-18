@@ -234,3 +234,28 @@ SELECT i FROM test2_table;
 statement ok con2
 SELECT i FROM test2_table;
 
+# Same system functions in pg and duckdb
+
+statement ok
+SET search_path = pg_catalog;
+
+statement ok
+SELECT current_database();
+
+statement ok
+SELECT current_catalog();
+
+query I
+SELECT current_schema();
+----
+pg_catalog
+
+query I
+SELECT current_schemas(true);
+----
+[main, pg_catalog, main, main, pg_catalog]
+
+query I
+SELECT current_query();
+----
+SELECT current_query();

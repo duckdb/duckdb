@@ -1,6 +1,7 @@
 #include "duckdb/transaction/cleanup_state.hpp"
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/update_info.hpp"
+#include "duckdb/transaction/append_info.hpp"
 
 #include "duckdb/storage/data_table.hpp"
 
@@ -12,7 +13,8 @@
 
 namespace duckdb {
 
-CleanupState::CleanupState() : current_table(nullptr), count(0) {
+CleanupState::CleanupState(transaction_t lowest_active_transaction)
+    : lowest_active_transaction(lowest_active_transaction), current_table(nullptr), count(0) {
 }
 
 CleanupState::~CleanupState() {
@@ -27,6 +29,12 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 		auto &entry = *catalog_entry;
 		D_ASSERT(entry.set);
 		entry.set->CleanupEntry(entry);
+		break;
+	}
+	case UndoFlags::INSERT_TUPLE: {
+		auto info = reinterpret_cast<AppendInfo *>(data);
+		// mark the tuples as committed
+		info->table->CleanupAppend(lowest_active_transaction, info->start_row, info->count);
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {
@@ -52,10 +60,7 @@ void CleanupState::CleanupUpdate(UpdateInfo &info) {
 
 void CleanupState::CleanupDelete(DeleteInfo &info) {
 	auto version_table = info.table;
-	D_ASSERT(version_table->info->cardinality >= info.count);
-	version_table->info->cardinality -= info.count;
-
-	if (version_table->info->indexes.Empty()) {
+	if (!version_table->HasIndexes()) {
 		// this table has no indexes: no cleanup to be done
 		return;
 	}
@@ -67,11 +72,18 @@ void CleanupState::CleanupDelete(DeleteInfo &info) {
 	}
 
 	// possibly vacuum any indexes in this table later
-	indexed_tables[current_table->info->table] = current_table;
+	indexed_tables[current_table->GetTableName()] = current_table;
 
 	count = 0;
-	for (idx_t i = 0; i < info.count; i++) {
-		row_numbers[count++] = info.base_row + info.rows[i];
+	if (info.is_consecutive) {
+		for (idx_t i = 0; i < info.count; i++) {
+			row_numbers[count++] = UnsafeNumericCast<int64_t>(info.base_row + i);
+		}
+	} else {
+		auto rows = info.GetRows();
+		for (idx_t i = 0; i < info.count; i++) {
+			row_numbers[count++] = UnsafeNumericCast<int64_t>(info.base_row + rows[i]);
+		}
 	}
 	Flush();
 }
@@ -87,7 +99,7 @@ void CleanupState::Flush() {
 	// delete the tuples from all the indexes
 	try {
 		current_table->RemoveFromIndexes(row_identifiers, count);
-	} catch (...) {
+	} catch (...) { // NOLINT: ignore errors here
 	}
 
 	count = 0;

@@ -19,6 +19,8 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/main/query_result.hpp"
 
 namespace duckdb {
 
@@ -89,7 +91,7 @@ static unique_ptr<SelectNode> ConstructInitialGrouping(PivotRef &ref, vector<uni
 		// if rows are specified only the columns mentioned in rows are added as groups
 		for (auto &row : ref.groups) {
 			subquery->groups.group_expressions.push_back(make_uniq<ConstantExpression>(
-			    Value::INTEGER(UnsafeNumericCast<uint32_t>(subquery->select_list.size() + 1))));
+			    Value::INTEGER(UnsafeNumericCast<int32_t>(subquery->select_list.size() + 1))));
 			subquery->select_list.push_back(make_uniq<ColumnRefExpression>(row));
 		}
 	}
@@ -166,7 +168,7 @@ static unique_ptr<SelectNode> PivotInitialAggregate(PivotBindState &bind_state, 
 			}
 			auto pivot_alias = pivot_expr->alias;
 			subquery_stage1->groups.group_expressions.push_back(make_uniq<ConstantExpression>(
-			    Value::INTEGER(UnsafeNumericCast<uint32_t>(subquery_stage1->select_list.size() + 1))));
+			    Value::INTEGER(UnsafeNumericCast<int32_t>(subquery_stage1->select_list.size() + 1))));
 			subquery_stage1->select_list.push_back(std::move(pivot_expr));
 			pivot_expr = make_uniq<ColumnRefExpression>(std::move(pivot_alias));
 		}
@@ -203,7 +205,7 @@ static unique_ptr<SelectNode> PivotListAggregate(PivotBindState &bind_state, Piv
 	// add all of the groups
 	for (idx_t gr = 0; gr < bind_state.internal_group_names.size(); gr++) {
 		subquery_stage2->groups.group_expressions.push_back(make_uniq<ConstantExpression>(
-		    Value::INTEGER(UnsafeNumericCast<uint32_t>(subquery_stage2->select_list.size() + 1))));
+		    Value::INTEGER(UnsafeNumericCast<int32_t>(subquery_stage2->select_list.size() + 1))));
 		auto group_reference = make_uniq<ColumnRefExpression>(bind_state.internal_group_names[gr]);
 		group_reference->alias = bind_state.internal_group_names[gr];
 		subquery_stage2->select_list.push_back(std::move(group_reference));
@@ -288,6 +290,9 @@ void ExtractPivotAggregates(BoundTableRef &node, vector<unique_ptr<Expression>> 
 	}
 	auto &select2 = subq2.subquery->Cast<BoundSelectNode>();
 	for (auto &aggr : select2.aggregates) {
+		if (aggr->alias == "__collated_group") {
+			continue;
+		}
 		aggregates.push_back(aggr->Copy());
 	}
 }
@@ -344,7 +349,9 @@ unique_ptr<BoundTableRef> Binder::BindBoundPivot(PivotRef &ref) {
 	result->bound_pivot.group_count = ref.bound_group_names.size();
 	result->bound_pivot.types = types;
 	auto subquery_alias = ref.alias.empty() ? "__unnamed_pivot" : ref.alias;
+	QueryResult::DeduplicateColumns(names);
 	bind_context.AddGenericBinding(result->bind_index, subquery_alias, names, types);
+
 	MoveCorrelatedExpressions(*result->child_binder);
 	return std::move(result);
 }
@@ -375,7 +382,9 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 	idx_t total_pivots = 1;
 	for (auto &pivot : ref.pivots) {
 		if (!pivot.pivot_enum.empty()) {
-			auto type = Catalog::GetType(context, INVALID_CATALOG, INVALID_SCHEMA, pivot.pivot_enum);
+			auto &type_entry =
+			    Catalog::GetEntry<TypeCatalogEntry>(context, INVALID_CATALOG, INVALID_SCHEMA, pivot.pivot_enum);
+			auto type = type_entry.user_type;
 			if (type.id() != LogicalTypeId::ENUM) {
 				throw BinderException(ref, "Pivot must reference an ENUM type: \"%s\" is of type \"%s\"",
 				                      pivot.pivot_enum, type.ToString());
@@ -531,6 +540,9 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 	vector<UnpivotEntry> unpivot_entries;
 	for (auto &entry : unpivot.entries) {
 		ExtractUnpivotEntries(child_binder, entry, unpivot_entries);
+	}
+	if (unpivot_entries.empty()) {
+		throw BinderException(ref, "UNPIVOT clause must unpivot on at least one column - zero were provided");
 	}
 
 	case_insensitive_set_t handled_columns;

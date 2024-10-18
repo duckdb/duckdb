@@ -41,7 +41,11 @@ public:
 	virtual unique_ptr<BaseStatistics> GetStatistics();
 
 	virtual void FlushSegment(unique_ptr<ColumnSegment> segment, idx_t segment_size);
-	virtual void WriteDataPointers(RowGroupWriter &writer, Serializer &serializer);
+	virtual PersistentColumnData ToPersistentData();
+
+	PartialBlockManager &GetPartialBlockManager() {
+		return partial_block_manager;
+	}
 
 public:
 	template <class TARGET>
@@ -51,7 +55,7 @@ public:
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };

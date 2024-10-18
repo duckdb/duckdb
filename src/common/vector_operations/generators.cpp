@@ -18,7 +18,7 @@ void TemplatedGenerateSequence(Vector &result, idx_t count, int64_t start, int64
 	}
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<T>(result);
-	auto value = (T)start;
+	auto value = T(start);
 	for (idx_t i = 0; i < count; i++) {
 		if (i > 0) {
 			value += increment;
@@ -44,12 +44,6 @@ void VectorOperations::GenerateSequence(Vector &result, idx_t count, int64_t sta
 	case PhysicalType::INT64:
 		TemplatedGenerateSequence<int64_t>(result, count, start, increment);
 		break;
-	case PhysicalType::FLOAT:
-		TemplatedGenerateSequence<float>(result, count, start, increment);
-		break;
-	case PhysicalType::DOUBLE:
-		TemplatedGenerateSequence<double>(result, count, start, increment);
-		break;
 	default:
 		throw NotImplementedException("Unimplemented type for generate sequence");
 	}
@@ -64,10 +58,10 @@ void TemplatedGenerateSequence(Vector &result, idx_t count, const SelectionVecto
 	}
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<T>(result);
-	auto value = (T)start;
+	auto value = static_cast<uint64_t>(start);
 	for (idx_t i = 0; i < count; i++) {
-		auto idx = UnsafeNumericCast<int64_t>(sel.get_index(i));
-		result_data[idx] = UnsafeNumericCast<T>(value + increment * idx);
+		auto idx = sel.get_index(i);
+		result_data[idx] = static_cast<T>(value + static_cast<uint64_t>(increment) * idx);
 	}
 }
 
@@ -88,12 +82,6 @@ void VectorOperations::GenerateSequence(Vector &result, idx_t count, const Selec
 		break;
 	case PhysicalType::INT64:
 		TemplatedGenerateSequence<int64_t>(result, count, sel, start, increment);
-		break;
-	case PhysicalType::FLOAT:
-		TemplatedGenerateSequence<float>(result, count, sel, start, increment);
-		break;
-	case PhysicalType::DOUBLE:
-		TemplatedGenerateSequence<double>(result, count, sel, start, increment);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for generate sequence");

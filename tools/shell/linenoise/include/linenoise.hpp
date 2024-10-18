@@ -13,7 +13,9 @@
 #include "terminal.hpp"
 #include "linenoise.h"
 
-#define LINENOISE_MAX_LINE 204800
+#define LINENOISE_MAX_LINE    204800
+#define LINENOISE_MAX_HISTORY 104857600
+#define LINENOISE_EDITOR
 
 namespace duckdb {
 struct highlightToken;
@@ -98,6 +100,11 @@ public:
 	void SearchPrev();
 	void SearchNext();
 
+#ifdef LINENOISE_EDITOR
+	bool EditBufferWithEditor(const char *editor);
+	bool EditFileWithEditor(const string &file_name, const char *editor);
+#endif
+
 	char Search(char c);
 
 	void RefreshMultiLine();
@@ -121,6 +128,7 @@ public:
 	static bool IsNewline(char c);
 	static bool IsWordBoundary(char c);
 	static bool AllWhitespace(const char *z);
+	static bool IsSpace(char c);
 
 	TabCompletion TabComplete() const;
 

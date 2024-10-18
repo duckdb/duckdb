@@ -181,6 +181,12 @@ class PySparkValueError(PySparkException, ValueError):
     """
 
 
+class PySparkIndexError(PySparkException, IndexError):
+    """
+    Wrapper class for IndexError to support error classes.
+    """
+
+
 class PySparkTypeError(PySparkException, TypeError):
     """
     Wrapper class for TypeError to support error classes.

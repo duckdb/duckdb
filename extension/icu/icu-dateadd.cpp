@@ -101,13 +101,15 @@ timestamp_t ICUCalendarAdd::Operation(timestamp_t timestamp, interval_t interval
 		calendar->add(UCAL_MINUTE, interval_m, status);
 		CalendarAddHour(calendar, interval_h, status);
 
-		calendar->add(UCAL_DATE, interval.days, status);
+		// PG Adds months before days
 		calendar->add(UCAL_MONTH, interval.months, status);
+		calendar->add(UCAL_DATE, interval.days, status);
 	} else {
-		// Add interval fields from highest to lowest (ragged to non-ragged)
+		// PG Adds months before days
 		calendar->add(UCAL_MONTH, interval.months, status);
 		calendar->add(UCAL_DATE, interval.days, status);
 
+		// Add interval fields from highest to lowest (ragged to non-ragged)
 		CalendarAddHour(calendar, interval_h, status);
 		calendar->add(UCAL_MINUTE, interval_m, status);
 		calendar->add(UCAL_SECOND, interval_s, status);
@@ -245,7 +247,7 @@ struct ICUDateAdd : public ICUDateFunc {
 		                                                                            LogicalType::INTERVAL));
 		set.AddFunction(GetDateAddFunction<interval_t, timestamp_t, ICUCalendarAdd>(LogicalType::INTERVAL,
 		                                                                            LogicalType::TIMESTAMP_TZ));
-		ExtensionUtil::AddFunctionOverload(db, set);
+		ExtensionUtil::RegisterFunction(db, set);
 	}
 
 	template <typename TA, typename OP>
@@ -267,7 +269,7 @@ struct ICUDateAdd : public ICUDateFunc {
 		//	temporal - temporal
 		set.AddFunction(GetBinaryAgeFunction<timestamp_t, timestamp_t, ICUCalendarSub>(LogicalType::TIMESTAMP_TZ,
 		                                                                               LogicalType::TIMESTAMP_TZ));
-		ExtensionUtil::AddFunctionOverload(db, set);
+		ExtensionUtil::RegisterFunction(db, set);
 	}
 
 	static void AddDateAgeFunctions(const string &name, DatabaseInstance &db) {
@@ -276,7 +278,7 @@ struct ICUDateAdd : public ICUDateFunc {
 		set.AddFunction(GetBinaryAgeFunction<timestamp_t, timestamp_t, ICUCalendarAge>(LogicalType::TIMESTAMP_TZ,
 		                                                                               LogicalType::TIMESTAMP_TZ));
 		set.AddFunction(GetUnaryAgeFunction<timestamp_t, ICUCalendarAge>(LogicalType::TIMESTAMP_TZ));
-		ExtensionUtil::AddFunctionOverload(db, set);
+		ExtensionUtil::RegisterFunction(db, set);
 	}
 };
 

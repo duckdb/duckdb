@@ -21,7 +21,7 @@ Transformer::~Transformer() {
 }
 
 void Transformer::Clear() {
-	SetParamCount(0);
+	ClearParameters();
 	pivot_entries.clear();
 }
 
@@ -35,7 +35,6 @@ bool Transformer::TransformParseTree(duckdb_libpgquery::PGList *tree, vector<uni
 		if (HasPivotEntries()) {
 			stmt = CreatePivotStatement(std::move(stmt));
 		}
-		stmt->n_param = ParamCount();
 		statements.push_back(std::move(stmt));
 	}
 	return true;
@@ -58,10 +57,9 @@ StackChecker<Transformer> Transformer::StackCheck(idx_t extra_stack) {
 
 unique_ptr<SQLStatement> Transformer::TransformStatement(duckdb_libpgquery::PGNode &stmt) {
 	auto result = TransformStatementInternal(stmt);
-	result->n_param = ParamCount();
 	if (!named_param_map.empty()) {
 		// Avoid overriding a previous move with nothing
-		result->named_param_map = std::move(named_param_map);
+		result->named_param_map = named_param_map;
 	}
 	return result;
 }
@@ -90,6 +88,12 @@ idx_t Transformer::ParamCount() const {
 void Transformer::SetParamCount(idx_t new_count) {
 	auto &root = RootTransformer();
 	root.prepared_statement_parameter_index = new_count;
+}
+
+void Transformer::ClearParameters() {
+	auto &root = RootTransformer();
+	root.prepared_statement_parameter_index = 0;
+	root.named_param_map.clear();
 }
 
 static void ParamTypeCheck(PreparedParamType last_type, PreparedParamType new_type) {
@@ -134,13 +138,13 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 		auto &raw_stmt = PGCast<duckdb_libpgquery::PGRawStmt>(stmt);
 		auto result = TransformStatement(*raw_stmt.stmt);
 		if (result) {
-			result->stmt_location = raw_stmt.stmt_location;
-			result->stmt_length = raw_stmt.stmt_len;
+			result->stmt_location = NumericCast<idx_t>(raw_stmt.stmt_location);
+			result->stmt_length = NumericCast<idx_t>(raw_stmt.stmt_len);
 		}
 		return result;
 	}
 	case duckdb_libpgquery::T_PGSelectStmt:
-		return TransformSelect(PGCast<duckdb_libpgquery::PGSelectStmt>(stmt));
+		return TransformSelectStmt(PGCast<duckdb_libpgquery::PGSelectStmt>(stmt));
 	case duckdb_libpgquery::T_PGCreateStmt:
 		return TransformCreateTable(PGCast<duckdb_libpgquery::PGCreateStmt>(stmt));
 	case duckdb_libpgquery::T_PGCreateSchemaStmt:
@@ -163,6 +167,8 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 		return TransformDelete(PGCast<duckdb_libpgquery::PGDeleteStmt>(stmt));
 	case duckdb_libpgquery::T_PGUpdateStmt:
 		return TransformUpdate(PGCast<duckdb_libpgquery::PGUpdateStmt>(stmt));
+	case duckdb_libpgquery::T_PGUpdateExtensionsStmt:
+		return TransformUpdateExtensions(PGCast<duckdb_libpgquery::PGUpdateExtensionsStmt>(stmt));
 	case duckdb_libpgquery::T_PGIndexStmt:
 		return TransformCreateIndex(PGCast<duckdb_libpgquery::PGIndexStmt>(stmt));
 	case duckdb_libpgquery::T_PGAlterTableStmt:
@@ -188,9 +194,9 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 	case duckdb_libpgquery::T_PGVacuumStmt:
 		return TransformVacuum(PGCast<duckdb_libpgquery::PGVacuumStmt>(stmt));
 	case duckdb_libpgquery::T_PGVariableShowStmt:
-		return TransformShow(PGCast<duckdb_libpgquery::PGVariableShowStmt>(stmt));
+		return TransformShowStmt(PGCast<duckdb_libpgquery::PGVariableShowStmt>(stmt));
 	case duckdb_libpgquery::T_PGVariableShowSelectStmt:
-		return TransformShowSelect(PGCast<duckdb_libpgquery::PGVariableShowSelectStmt>(stmt));
+		return TransformShowSelectStmt(PGCast<duckdb_libpgquery::PGVariableShowSelectStmt>(stmt));
 	case duckdb_libpgquery::T_PGCallStmt:
 		return TransformCall(PGCast<duckdb_libpgquery::PGCallStmt>(stmt));
 	case duckdb_libpgquery::T_PGVariableSetStmt:
@@ -225,6 +231,7 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 unique_ptr<QueryNode> Transformer::TransformMaterializedCTE(unique_ptr<QueryNode> root) {
 	// Extract materialized CTEs from cte_map
 	vector<unique_ptr<CTENode>> materialized_ctes;
+
 	for (auto &cte : root->cte_map.map) {
 		auto &cte_entry = cte.second;
 		if (cte_entry->materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {

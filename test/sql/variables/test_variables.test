@@ -1,0 +1,67 @@
+# name: test/sql/variables/test_variables.test
+# description: Test SQL variables
+# group: [variables]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET VARIABLE animal = 'duck'
+
+query I
+SELECT GETVARIABLE('animal')
+----
+duck
+
+# overwriting
+statement ok
+SET VARIABLE animal='bird'
+
+query I
+SELECT GETVARIABLE('animal')
+----
+bird
+
+query III
+FROM duckdb_variables();
+----
+animal	bird	VARCHAR
+
+query III
+SHOW VARIABLES
+----
+animal	bird	VARCHAR
+
+statement ok
+RESET VARIABLE animal
+
+query I
+SELECT GETVARIABLE('animal')
+----
+NULL
+
+# setting from a subquery
+statement ok
+CREATE TABLE animal_list(a VARCHAR);
+
+statement ok
+INSERT INTO animal_list VALUES ('duck'), ('goose');
+
+statement ok
+SET VARIABLE animals=(SELECT LIST(a) FROM animal_list)
+
+query I
+SELECT GETVARIABLE('animals')
+----
+[duck, goose]
+
+statement error
+SET VARIABLE animals=UNNEST([1,2,3])
+----
+can only handle a single value
+
+# variable does not exist
+query I
+SELECT GETVARIABLE('xxx')
+----
+NULL

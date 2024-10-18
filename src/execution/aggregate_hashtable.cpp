@@ -9,6 +9,7 @@
 #include "duckdb/common/types/row/tuple_data_iterator.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb {
@@ -40,7 +41,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      idx_t initial_capacity, idx_t radix_bits)
     : BaseAggregateHashTable(context, allocator, aggregate_objects_p, std::move(payload_types_p)),
-      radix_bits(radix_bits), count(0), capacity(0), aggregate_allocator(make_shared<ArenaAllocator>(allocator)) {
+      radix_bits(radix_bits), count(0), capacity(0), aggregate_allocator(make_shared_ptr<ArenaAllocator>(allocator)) {
 
 	// Append hash column to the end and initialise the row layout
 	group_types_p.emplace_back(LogicalType::HASH);
@@ -122,7 +123,7 @@ idx_t GroupedAggregateHashTable::InitialCapacity() {
 
 idx_t GroupedAggregateHashTable::GetCapacityForCount(idx_t count) {
 	count = MaxValue<idx_t>(InitialCapacity(), count);
-	return NextPowerOfTwo(count * LOAD_FACTOR);
+	return NextPowerOfTwo(LossyNumericCast<uint64_t>(static_cast<double>(count) * LOAD_FACTOR));
 }
 
 idx_t GroupedAggregateHashTable::Capacity() const {
@@ -130,7 +131,7 @@ idx_t GroupedAggregateHashTable::Capacity() const {
 }
 
 idx_t GroupedAggregateHashTable::ResizeThreshold() const {
-	return Capacity() / LOAD_FACTOR;
+	return LossyNumericCast<idx_t>(static_cast<double>(Capacity()) / LOAD_FACTOR);
 }
 
 idx_t GroupedAggregateHashTable::ApplyBitMask(hash_t hash) const {
@@ -146,7 +147,7 @@ void GroupedAggregateHashTable::Verify() {
 			continue;
 		}
 		auto hash = Load<hash_t>(entry.GetPointer() + hash_offset);
-		D_ASSERT(entry.GetSalt() == aggr_ht_entry_t::ExtractSalt(hash));
+		D_ASSERT(entry.GetSalt() == ht_entry_t::ExtractSalt(hash));
 		total_count++;
 	}
 	D_ASSERT(total_count == Count());
@@ -154,7 +155,7 @@ void GroupedAggregateHashTable::Verify() {
 }
 
 void GroupedAggregateHashTable::ClearPointerTable() {
-	std::fill_n(entries, capacity, aggr_ht_entry_t(0));
+	std::fill_n(entries, capacity, ht_entry_t::GetEmptyEntry());
 }
 
 void GroupedAggregateHashTable::ResetCount() {
@@ -173,8 +174,8 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 	}
 
 	capacity = size;
-	hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(aggr_ht_entry_t));
-	entries = reinterpret_cast<aggr_ht_entry_t *>(hash_map.get());
+	hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(ht_entry_t));
+	entries = reinterpret_cast<ht_entry_t *>(hash_map.get());
 	ClearPointerTable();
 	bitmask = capacity - 1;
 
@@ -201,7 +202,7 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 					}
 					auto &entry = entries[entry_idx];
 					D_ASSERT(!entry.IsOccupied());
-					entry.SetSalt(aggr_ht_entry_t::ExtractSalt(hash));
+					entry.SetSalt(ht_entry_t::ExtractSalt(hash));
 					entry.SetPointer(row_location);
 					D_ASSERT(entry.IsOccupied());
 				}
@@ -246,7 +247,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 #endif
 
 	const auto new_group_count = FindOrCreateGroups(groups, group_hashes, state.addresses, state.new_groups);
-	VectorOperations::AddInPlace(state.addresses, layout.GetAggrOffset(), payload.size());
+	VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(layout.GetAggrOffset()), payload.size());
 
 	// Now every cell has an entry, update the aggregates
 	auto &aggregates = layout.GetAggregates();
@@ -258,7 +259,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 		if (filter_idx >= filter.size() || i < filter[filter_idx]) {
 			// Skip all the aggregates that are not in the filter
 			payload_idx += aggr.child_count;
-			VectorOperations::AddInPlace(state.addresses, aggr.payload_size, payload.size());
+			VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size), payload.size());
 			continue;
 		}
 		D_ASSERT(i == filter[filter_idx]);
@@ -272,7 +273,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 
 		// Move to the next aggregate
 		payload_idx += aggr.child_count;
-		VectorOperations::AddInPlace(state.addresses, aggr.payload_size, payload.size());
+		VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size), payload.size());
 		filter_idx++;
 	}
 
@@ -333,7 +334,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		const auto &hash = hashes[r];
 		ht_offsets[r] = ApplyBitMask(hash);
 		D_ASSERT(ht_offsets[r] == hash % capacity);
-		hash_salts[r] = aggr_ht_entry_t::ExtractSalt(hash);
+		hash_salts[r] = ht_entry_t::ExtractSalt(hash);
 	}
 
 	// we start out with all entries [0, 1, 2, ..., groups.size()]
@@ -354,13 +355,14 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	auto &chunk_state = state.append_state.chunk_state;
 	TupleDataCollection::ToUnifiedFormat(chunk_state, state.group_chunk);
 	if (!state.group_data) {
-		state.group_data = make_unsafe_uniq_array<UnifiedVectorFormat>(state.group_chunk.ColumnCount());
+		state.group_data = make_unsafe_uniq_array_uninitialized<UnifiedVectorFormat>(state.group_chunk.ColumnCount());
 	}
 	TupleDataCollection::GetVectorData(chunk_state, state.group_data.get());
 
 	idx_t new_group_count = 0;
 	idx_t remaining_entries = groups.size();
-	while (remaining_entries > 0) {
+	idx_t iteration_count;
+	for (iteration_count = 0; remaining_entries > 0 && iteration_count < capacity; iteration_count++) {
 		idx_t new_entry_count = 0;
 		idx_t need_compare_count = 0;
 		idx_t no_match_count = 0;
@@ -370,20 +372,18 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 			const auto index = sel_vector->get_index(i);
 			const auto &salt = hash_salts[index];
 			auto &ht_offset = ht_offsets[index];
-			while (true) {
+
+			idx_t inner_iteration_count;
+			for (inner_iteration_count = 0; inner_iteration_count < capacity; inner_iteration_count++) {
 				auto &entry = entries[ht_offset];
 				if (entry.IsOccupied()) { // Cell is occupied: Compare salts
 					if (entry.GetSalt() == salt) {
 						// Same salt, compare group keys
 						state.group_compare_vector.set_index(need_compare_count++, index);
 						break;
-					} else {
-						// Different salts, move to next entry (linear probing)
-						if (++ht_offset >= capacity) {
-							ht_offset = 0;
-						}
-						continue;
 					}
+					// Different salts, move to next entry (linear probing)
+					IncrementAndWrap(ht_offset, bitmask);
 				} else { // Cell is unoccupied, let's claim it
 					// Set salt (also marks as occupied)
 					entry.SetSalt(salt);
@@ -392,6 +392,9 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 					new_groups_out.set_index(new_group_count++, index);
 					break;
 				}
+			}
+			if (inner_iteration_count == capacity) {
+				throw InternalException("Maximum inner iteration count reached in GroupedAggregateHashTable");
 			}
 		}
 
@@ -433,12 +436,13 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		for (idx_t i = 0; i < no_match_count; i++) {
 			const auto index = state.no_match_vector.get_index(i);
 			auto &ht_offset = ht_offsets[index];
-			if (++ht_offset >= capacity) {
-				ht_offset = 0;
-			}
+			IncrementAndWrap(ht_offset, bitmask);
 		}
 		sel_vector = &state.no_match_vector;
 		remaining_entries = no_match_count;
+	}
+	if (iteration_count == capacity) {
+		throw InternalException("Maximum outer iteration count reached in GroupedAggregateHashTable");
 	}
 
 	count += new_group_count;

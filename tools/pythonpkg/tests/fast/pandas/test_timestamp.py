@@ -1,8 +1,9 @@
 import duckdb
-import os
 import datetime
+import os
 import pytest
 import pandas as pd
+import platform
 from conftest import pandas_2_or_higher
 
 
@@ -64,6 +65,10 @@ class TestPandasTimestamps(object):
         df_from_duck = duckdb.from_df(df).df()
         assert df_from_duck.equals(df)
 
+    @pytest.mark.xfail(
+        condition=platform.system() == "Emscripten" and os.environ.get("TZ") != "UTC",
+        reason="time zones other than UTC don't seem to work on Pyodide",
+    )
     def test_timestamp_timezone(self, duckdb_cursor):
         rel = duckdb_cursor.query(
             """

@@ -35,10 +35,10 @@ SELECT * FROM foo;
 statement ok
 CREATE OR REPLACE TABLE T AS SELECT [{'a': 'A', 'b':'B'}] as x, [{'b':'BB','a':'AA'}] as y;
 
-query III
+statement error
 SELECT x, y, ARRAY_CONCAT(x, y) FROM T;
 ----
-[{'a': A, 'b': B}]	[{'b': BB, 'a': AA}]	[{'a': A, 'b': B}, {'a': AA, 'b': BB}]
+an explicit cast is required
 
 statement error
 INSERT INTO t1 VALUES ({c: 34});
@@ -70,7 +70,12 @@ Invalid Input Error: A table cannot be created from an unnamed struct
 statement error
 SELECT [{'foo': True}, {'bar': False}, {'foobar': NULL}];
 ----
-element "bar" in source struct was not found in target struct
+an explicit cast is required
+
+statement error
+select [(13,24), {'a': 42, 'b': 84}, (43, 85), {'b':10, 'a':123123}] as res;
+----
+an explicit cast is required
 
 statement ok
 PREPARE v1 as SELECT ROW(?);

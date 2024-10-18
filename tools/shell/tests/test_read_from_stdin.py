@@ -13,7 +13,7 @@ class TestReadFromStdin(object):
     def test_read_stdin_csv(self, shell):
         test = (
             ShellTest(shell)
-            .input_file('test/sql/copy/csv/data/test/test.csv')
+            .input_file('data/csv/test/test.csv')
             .statement("""
                 create table mytable as select * from
                 read_csv('/dev/stdin',
@@ -29,12 +29,12 @@ class TestReadFromStdin(object):
         )
         result = test.run()
         result.check_stdout("foo,bar,baz")
-        result.check_stdout('0,0," test"')
+        result.check_stdout('0,0, test')
 
     def test_read_stdin_csv_where_filename(self, shell):
         test = (
             ShellTest(shell)
-            .input_file('test/sql/copy/csv/data/test/test.csv')
+            .input_file('data/csv/test/test.csv')
             .statement("""
                 SELECT * FROM read_csv_auto(
                     'data/csv/bug_9005/teste*.csv',
@@ -58,7 +58,7 @@ class TestReadFromStdin(object):
     def test_read_stdin_csv_auto(self, shell):
         test = (
             ShellTest(shell)
-            .input_file('test/sql/copy/csv/data/test/test.csv')
+            .input_file('data/csv/test/test.csv')
             .statement("""
                 create table mytable as select * from
                 read_csv_auto('/dev/stdin')
@@ -71,8 +71,24 @@ class TestReadFromStdin(object):
         )
         result = test.run()
         result.check_stdout("column0,column1,column2")
-        result.check_stdout('0,0," test"')
+        result.check_stdout('0,0, test')
 
+    def test_split_part_csv(self, shell):
+        test = (
+            ShellTest(shell)
+            .input_file('data/csv/split_part.csv')
+            .statement("""
+                FROM read_csv('/dev/stdin') select split_part(C1, ',', 2) as res;
+            """)
+            .add_argument(
+                '-csv',
+                ':memory:'
+            )
+        )
+        result = test.run()
+        result.check_stdout("res")
+        result.check_stdout('12')
+        result.check_stdout('12')
 
     def test_read_stdin_csv_auto_projection(self, shell):
         test = (
@@ -139,6 +155,27 @@ class TestReadFromStdin(object):
             '3|The Firm',
             '4|Broadcast News',
             '5|Raising Arizona'
+        ])
+
+    def test_read_stdin_json_array(self, shell, json_extension):
+        test = (
+            ShellTest(shell)
+            .input_file('data/json/11407.json')
+            .statement("""
+                create table mytable as select * from
+                read_json_auto('/dev/stdin')
+            """)
+            .statement("select * from mytable;")
+            .add_argument(
+                '-list',
+                ':memory:'
+            )
+        )
+        result = test.run()
+        result.check_stdout([
+            'k',
+            'v',
+            'v2'
         ])
 
     def test_read_stdin_json_auto_recursive_cte(self, shell, json_extension):

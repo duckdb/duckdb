@@ -11,11 +11,10 @@ CREATE TABLE IF NOT EXISTS timestamp (sec TIMESTAMP_S, milli TIMESTAMP_MS,micro 
 statement ok
 INSERT INTO timestamp VALUES ('2008-01-01 00:00:01','2008-01-01 00:00:01.594','2008-01-01 00:00:01.88926','2008-01-01 00:00:01.889268321' )
 
-#FIXME: The timestamp->string string->timestamp functions go only up to microsec right now
 query TTTT
 SELECT * from timestamp;
 ----
-2008-01-01 00:00:01	2008-01-01 00:00:01.594	2008-01-01 00:00:01.88926	2008-01-01 00:00:01.889268
+2008-01-01 00:00:01	2008-01-01 00:00:01.594	2008-01-01 00:00:01.88926	2008-01-01 00:00:01.889268321
 
 # Apply Year Function
 query TTT
@@ -32,7 +31,7 @@ SELECT nano::TIMESTAMP, milli::TIMESTAMP,sec::TIMESTAMP from timestamp;
 query TTT
 SELECT micro::TIMESTAMP_S, micro::TIMESTAMP_MS,micro::TIMESTAMP_NS from timestamp;
 ----
-2008-01-01 00:00:01	2008-01-01 00:00:01.889	2008-01-01 00:00:01.88926
+2008-01-01 00:00:02	2008-01-01 00:00:01.889	2008-01-01 00:00:01.88926
 
 
 statement ok
@@ -46,6 +45,34 @@ INSERT INTO timestamp VALUES ('2008-01-01 00:00:11','2008-01-01 00:00:01.794','2
 statement error
 select '90000-01-19 03:14:07.999999'::TIMESTAMP_US::TIMESTAMP_NS
 ----
+
+query I
+SELECT s::TIMESTAMP_NS
+FROM VALUES 
+	('2024-06-04 10:17:10.987654321'),
+	('2024-06-04 10:17:10.98765432'),
+	('2024-06-04 10:17:10.9876543'),
+	('2024-06-04 10:17:10.9876543'),
+	('2024-06-04 10:17:10.987654'),
+	('2024-06-04 10:17:10.98765'),
+	('2024-06-04 10:17:10.9876'),
+	('2024-06-04 10:17:10.987'),
+	('2024-06-04 10:17:10.98'),
+	('2024-06-04 10:17:10.9'),
+	('2024-06-04 10:17:10')
+AS tbl(s)
+----
+2024-06-04 10:17:10.987654321
+2024-06-04 10:17:10.98765432
+2024-06-04 10:17:10.9876543
+2024-06-04 10:17:10.9876543
+2024-06-04 10:17:10.987654
+2024-06-04 10:17:10.98765
+2024-06-04 10:17:10.9876
+2024-06-04 10:17:10.987
+2024-06-04 10:17:10.98
+2024-06-04 10:17:10.9
+2024-06-04 10:17:10
 
 # TIME conversions are now supported
 query I
@@ -113,9 +140,9 @@ select milli from timestamp order by milli;
 query T
 select nano from timestamp order by nano;
 ----
-2008-01-01 00:00:01.889268
-2008-01-01 00:00:01.899268
-2008-01-01 00:00:01.999268
+2008-01-01 00:00:01.889268321
+2008-01-01 00:00:01.899268321
+2008-01-01 00:00:01.999268321
 
 #GROUP BY on each of these timestamp types
 statement ok
@@ -127,9 +154,9 @@ INSERT INTO timestamp VALUES ('2008-01-01 00:00:11','2008-01-01 00:00:01.794','2
 query TT
 select count(*), nano from timestamp group by nano order by nano;
 ----
-1	2008-01-01 00:00:01.889268
-2	2008-01-01 00:00:01.899268
-2	2008-01-01 00:00:01.999268
+1	2008-01-01 00:00:01.889268321
+2	2008-01-01 00:00:01.899268321
+2	2008-01-01 00:00:01.999268321
 
 query TT
 select count(*), sec from timestamp group by sec order by sec;
@@ -167,8 +194,8 @@ select timestamp.milli from timestamp inner join  timestamp_two on (timestamp.mi
 query T
 select timestamp.nano from timestamp inner join  timestamp_two on (timestamp.nano = timestamp_two.nano);
 ----
-2008-01-01 00:00:01.899268
-2008-01-01 00:00:01.899268
+2008-01-01 00:00:01.899268321
+2008-01-01 00:00:01.899268321
 
 #Comparisons between all the different timestamp types (e.g. TIMESTAMP = TIMESTAMP_MS, etc)
 query T
@@ -233,3 +260,15 @@ query I
 select '2008-01-01 00:00:11'::TIMESTAMP_NS = '2008-01-01 00:00:11'::TIMESTAMP_S
 ----
 true
+
+query I
+SELECT CAST(t0.c0 AS TIME)>=('12:34:56') FROM  values ('2030-01-01'::TIMESTAMP_S), ('1969-12-23 20:44:40'::TIMESTAMP_S) as t0(c0)
+----
+false
+true
+
+query I
+SELECT NOT CAST(t0.c0 AS TIME)>=('12:34:56') FROM  values ('2030-01-01'::TIMESTAMP_MS), ('1969-12-23 20:44:40'::TIMESTAMP_MS) as t0(c0)
+----
+true
+false

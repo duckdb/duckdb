@@ -31,7 +31,7 @@ To use DuckDB in your Swift based project:
 1. Add DuckDB to your `Swift.package` dependencies:
 
     ```swift
-    .package(url: "https://github.com/duckdb/duckdb-swift", .upToNextMinor(from: .init(0, x, 0))),
+    .package(url: "https://github.com/duckdb/duckdb-swift", .upToNextMajor(from: .init(1, 0, 0))),
     ```
 
 2. Add `DuckDB` as a dependency to your target:
@@ -42,9 +42,6 @@ To use DuckDB in your Swift based project:
     ...
     ]),
     ```
-
-## Source and file format stability
-DuckDB is in early release mode and API is subject to change between minor version updates. DuckDB's file format is also subject to change and – in the short-term – it is recommended to make use of [DuckDB's CSV import/export capabilities](https://duckdb.org/docs/csv_import.html) to ensure your data remains accessible between DuckDB version updates.
 
 ## Documentation and Playgrounds
 The DuckDB Swift API is fully documented using DocC and the documentation can be generated from within Xcode via `Product > Build Documentation`.
@@ -64,7 +61,7 @@ Development is managed through [the main DuckDB repository](https://github.com/d
   ```
   3. Generate the Unified Build files for the package:
   ```shell
-  python3 tools/swift/create-package.py tools/swift
+  python3 tools/swift/create_package.py tools/swift
   ```
   4. Open the Xcode workspace at `tools/swift/duckdb-swift/DuckDB.xcworkspace`
 

@@ -307,19 +307,26 @@ ORDER BY id
 # Unsupported
 #
 
+foreach modifier IGNORE RESPECT
+
 # Regular function
 statement error
-SELECT ABS(x IGNORE NULLS) FROM range(10) tbl(x)
+SELECT ABS(x ${modifier} NULLS) FROM range(10) tbl(x)
 ----
+Parser Error: RESPECT/IGNORE NULLS is not supported for non-window functions
 
 # Aggregate function
 statement error
-SELECT SUM(x IGNORE NULLS)
+SELECT SUM(x ${modifier} NULLS)
 FROM range(10) tbl(x)
 ----
+Parser Error: RESPECT/IGNORE NULLS is not supported for non-window functions
 
 # Windowed aggregate
 statement error
-SELECT SUM(x IGNORE NULLS) OVER (PARTITION BY (x / 3) ORDER BY x % 3)
+SELECT SUM(x ${modifier} NULLS) OVER (PARTITION BY (x / 3) ORDER BY x % 3)
 FROM range(10) tbl(x)
 ----
+Parser Error: RESPECT/IGNORE NULLS is not supported for windowed aggregates
+
+endloop

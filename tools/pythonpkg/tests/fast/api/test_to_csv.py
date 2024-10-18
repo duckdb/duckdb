@@ -162,3 +162,159 @@ class TestToCSV(object):
         rel.to_csv(temp_file_name, compression="gzip")
         csv_rel = duckdb.read_csv(temp_file_name, compression="gzip")
         assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_to_csv_partition(self, pandas):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        df = pandas.DataFrame(
+            {
+                "c_category": ['a', 'a', 'b', 'b'],
+                "c_bool": [True, False, True, True],
+                "c_float": [1.0, 3.2, 3.0, 4.0],
+                "c_int": [42, None, 123, 321],
+                "c_string": ["a", "b,c", "e", "f"],
+            }
+        )
+        rel = duckdb.from_df(df)
+        rel.to_csv(temp_file_name, header=True, partition_by=["c_category"])
+        csv_rel = duckdb.sql(
+            f'''FROM read_csv_auto('{temp_file_name}/*/*.csv', hive_partitioning=TRUE, header=TRUE);'''
+        )
+        expected = [
+            (True, 1.0, 42, 'a', 'a'),
+            (False, 3.2, None, 'b,c', 'a'),
+            (True, 3.0, 123, 'e', 'b'),
+            (True, 4.0, 321, 'f', 'b'),
+        ]
+
+        assert csv_rel.execute().fetchall() == expected
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_to_csv_partition_with_columns_written(self, pandas):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        df = pandas.DataFrame(
+            {
+                "c_category": ['a', 'a', 'b', 'b'],
+                "c_bool": [True, False, True, True],
+                "c_float": [1.0, 3.2, 3.0, 4.0],
+                "c_int": [42, None, 123, 321],
+                "c_string": ["a", "b,c", "e", "f"],
+            }
+        )
+        rel = duckdb.from_df(df)
+        rel.to_csv(temp_file_name, header=True, partition_by=["c_category"], write_partition_columns=True)
+        csv_rel = duckdb.sql(
+            f'''FROM read_csv_auto('{temp_file_name}/*/*.csv', hive_partitioning=TRUE, header=TRUE);'''
+        )
+        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_to_csv_overwrite(self, pandas):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        df = pandas.DataFrame(
+            {
+                "c_category_1": ['a', 'a', 'b', 'b'],
+                "c_category_2": ['c', 'c', 'd', 'd'],
+                "c_bool": [True, False, True, True],
+                "c_float": [1.0, 3.2, 3.0, 4.0],
+                "c_int": [42, None, 123, 321],
+                "c_string": ["a", "b,c", "e", "f"],
+            }
+        )
+        rel = duckdb.from_df(df)
+        rel.to_csv(temp_file_name, header=True, partition_by=["c_category_1"])  # csv to be overwritten
+        rel.to_csv(temp_file_name, header=True, partition_by=["c_category_1"], overwrite=True)
+        csv_rel = duckdb.sql(
+            f'''FROM read_csv_auto('{temp_file_name}/*/*.csv', hive_partitioning=TRUE, header=TRUE);'''
+        )
+        # When partition columns are read from directory names, column order become different from original
+        expected = [
+            ('c', True, 1.0, 42, 'a', 'a'),
+            ('c', False, 3.2, None, 'b,c', 'a'),
+            ('d', True, 3.0, 123, 'e', 'b'),
+            ('d', True, 4.0, 321, 'f', 'b'),
+        ]
+
+        assert csv_rel.execute().fetchall() == expected
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_to_csv_overwrite_with_columns_written(self, pandas):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        df = pandas.DataFrame(
+            {
+                "c_category_1": ['a', 'a', 'b', 'b'],
+                "c_category_2": ['c', 'c', 'd', 'd'],
+                "c_bool": [True, False, True, True],
+                "c_float": [1.0, 3.2, 3.0, 4.0],
+                "c_int": [42, None, 123, 321],
+                "c_string": ["a", "b,c", "e", "f"],
+            }
+        )
+        rel = duckdb.from_df(df)
+        rel.to_csv(
+            temp_file_name, header=True, partition_by=["c_category_1"], write_partition_columns=True
+        )  # csv to be overwritten
+        rel.to_csv(
+            temp_file_name, header=True, partition_by=["c_category_1"], overwrite=True, write_partition_columns=True
+        )
+        csv_rel = duckdb.sql(
+            f'''FROM read_csv_auto('{temp_file_name}/*/*.csv', hive_partitioning=TRUE, header=TRUE);'''
+        )
+        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_to_csv_overwrite_not_enabled(self, pandas):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        df = pandas.DataFrame(
+            {
+                "c_category_1": ['a', 'a', 'b', 'b'],
+                "c_category_2": ['c', 'c', 'd', 'd'],
+                "c_bool": [True, False, True, True],
+                "c_float": [1.0, 3.2, 3.0, 4.0],
+                "c_int": [42, None, 123, 321],
+                "c_string": ["a", "b,c", "e", "f"],
+            }
+        )
+        rel = duckdb.from_df(df)
+        rel.to_csv(temp_file_name, header=True, partition_by=["c_category_1"])
+        with pytest.raises(duckdb.IOException, match="OVERWRITE"):
+            rel.to_csv(temp_file_name, header=True, partition_by=["c_category_1"])
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.skip(reason="Skip test due to unreliablility on certain platforms")
+    def test_to_csv_per_thread_output(self, pandas):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        num_threads = duckdb.sql("select current_setting('threads')").fetchone()[0]
+        print('num_threads:', num_threads)
+        df = pandas.DataFrame(
+            {
+                "c_category": ['a', 'a', 'b', 'b'],
+                "c_bool": [True, False, True, True],
+                "c_float": [1.0, 3.2, 3.0, 4.0],
+                "c_int": [42, None, 123, 321],
+                "c_string": ["a", "b,c", "e", "f"],
+            }
+        )
+        rel = duckdb.from_df(df)
+        rel.to_csv(temp_file_name, header=True, per_thread_output=True)
+        csv_rel = duckdb.read_csv(f'{temp_file_name}/*.csv', header=True)
+        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_to_csv_use_tmp_file(self, pandas):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        df = pandas.DataFrame(
+            {
+                "c_category_1": ['a', 'a', 'b', 'b'],
+                "c_category_2": ['c', 'c', 'd', 'd'],
+                "c_bool": [True, False, True, True],
+                "c_float": [1.0, 3.2, 3.0, 4.0],
+                "c_int": [42, None, 123, 321],
+                "c_string": ["a", "b,c", "e", "f"],
+            }
+        )
+        rel = duckdb.from_df(df)
+        rel.to_csv(temp_file_name, header=True)  # csv to be overwritten
+        rel.to_csv(temp_file_name, header=True, use_tmp_file=True)
+        csv_rel = duckdb.read_csv(temp_file_name, header=True)
+        assert rel.execute().fetchall() == csv_rel.execute().fetchall()

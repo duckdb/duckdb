@@ -7,6 +7,9 @@ from conftest import pandas_supports_arrow_backend
 import sys
 from packaging.version import Version
 
+from arrow_canonical_extensions import HugeIntType, UHugeIntType
+
+
 pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")
 ds = pytest.importorskip("pyarrow.dataset")
@@ -158,6 +161,14 @@ def string_check_or_pushdown(connection, tbl_name, create_table):
 
 
 class TestArrowFilterPushdown(object):
+    @classmethod
+    def setup_class(cls):
+        pa.register_extension_type(HugeIntType())
+
+    @classmethod
+    def teardown_class(cls):
+        pa.unregister_extension_type("duckdb.hugeint")
+
     @pytest.mark.parametrize(
         'data_type',
         [
@@ -748,7 +759,7 @@ class TestArrowFilterPushdown(object):
         input = query_res[0][1]
         if 'PANDAS_SCAN' in input:
             pytest.skip(reason="This version of pandas does not produce an Arrow object")
-        match = re.search(".*ARROW_SCAN.*Filters: s\\.a<2 AND s\\.a IS.*NOT NULL.*", input, flags=re.DOTALL)
+        match = re.search(r".*ARROW_SCAN.*Filters:.*s\.a<2 AND s\.a IS NOT NULL.*", input, flags=re.DOTALL)
         assert match
 
         # Check that the filter is applied correctly
@@ -762,7 +773,7 @@ class TestArrowFilterPushdown(object):
 
         # the explain-output is pretty cramped, so just make sure we see both struct references.
         match = re.search(
-            ".*ARROW_SCAN.*Filters: s\\.a<3 AND s\\.a IS.*NOT NULL AND s\\.b=true\\.\\.\\..*\\.b IS NOT NULL.*",
+            r".*ARROW_SCAN.*Filters:.*s\.a<3 AND s\.a IS NOT NULL.*AND s\.b=true AND s\.b IS.*NOT NULL.*",
             query_res[0][1],
             flags=re.DOTALL,
         )
@@ -818,7 +829,7 @@ class TestArrowFilterPushdown(object):
         input = query_res[0][1]
         if 'PANDAS_SCAN' in input:
             pytest.skip(reason="This version of pandas does not produce an Arrow object")
-        match = re.search(".*ARROW_SCAN.*Filters: s\\.a\\.b<2 AND s\\.a\\.b.*IS NOT NULL.*", input, flags=re.DOTALL)
+        match = re.search(r".*ARROW_SCAN.*Filters:.*s\.a\.b<2 AND s\.a\.b IS NOT.*NULL.*", input, flags=re.DOTALL)
         assert match
 
         # Check that the filter is applied correctly
@@ -835,7 +846,7 @@ class TestArrowFilterPushdown(object):
 
         # the explain-output is pretty cramped, so just make sure we see both struct references.
         match = re.search(
-            ".*ARROW_SCAN.*Filters: s\\.a\\.c=true AND s\\.a.*\\.c IS NOT NULL.*AND s\\.d\\.e=5.*AND s\\.d\\.e.*IS NOT NULL.*",
+            r".*ARROW_SCAN.*Filters:.*s\.a\.c=true AND s\.a\.c IS.*NOT NULL AND s\.d\.e=5 AND.*s\.d\.e IS NOT NULL.*",
             query_res[0][1],
             flags=re.DOTALL,
         )
@@ -854,9 +865,10 @@ class TestArrowFilterPushdown(object):
         """
         )
 
+        res = query_res.fetchone()[1]
         match = re.search(
-            ".*ARROW_SCAN.*Filters: s\\.d\\.f=bar AND s\\.d.*\\.f IS NOT NULL.*",
-            query_res.fetchone()[1],
+            r".*ARROW_SCAN.*Filters:.*s\.d\.f='bar' AND s\.d\.f IS.*NOT NULL.*",
+            res,
             flags=re.DOTALL,
         )
 
@@ -867,3 +879,42 @@ class TestArrowFilterPushdown(object):
             'a': {'b': 3, 'c': True},
             'd': {'e': 4, 'f': 'bar'},
         }
+
+    def test_filter_pushdown_not_supported(self):
+        pa.register_extension_type(UHugeIntType())
+
+        con = duckdb.connect()
+        con.execute(
+            "CREATE TABLE T as SELECT i::integer a, i::varchar b, i::uhugeint c, i::integer d FROM range(5) tbl(i)"
+        )
+        arrow_tbl = con.execute("FROM T").arrow()
+
+        # No projection just unsupported filter
+        assert con.execute("from arrow_tbl where c == 3").fetchall() == [(3, '3', 3, 3)]
+
+        # No projection unsupported + supported filter
+        assert con.execute("from arrow_tbl where c < 4 and a > 2").fetchall() == [(3, '3', 3, 3)]
+
+        # No projection supported + unsupported + supported filter
+        assert con.execute("from arrow_tbl where a > 2 and c < 4 and  b == '3' ").fetchall() == [(3, '3', 3, 3)]
+        assert con.execute("from arrow_tbl where a > 2 and c < 4 and  b == '0' ").fetchall() == []
+
+        # Projection with unsupported filter column + unsupported + supported filter
+        assert con.execute("select c, b from arrow_tbl where c < 4 and  b == '3' and a > 2 ").fetchall() == [(3, '3')]
+        assert con.execute("select c, b from arrow_tbl where a > 2 and c < 4 and  b == '3'").fetchall() == [(3, '3')]
+
+        # Projection without unsupported filter column + unsupported + supported filter
+        assert con.execute("select a, b from arrow_tbl where a > 2 and c < 4 and  b == '3' ").fetchall() == [(3, '3')]
+
+        # Lets also experiment with multiple unpush-able filters
+        con.execute(
+            "CREATE TABLE T_2 as SELECT i::integer a, i::varchar b, i::uhugeint c, i::integer d , i::uhugeint e, i::smallint f, i::uhugeint g FROM range(50) tbl(i)"
+        )
+
+        arrow_tbl = con.execute("FROM T_2").arrow()
+
+        assert con.execute(
+            "select a, b from arrow_tbl where a > 2 and c < 40 and b == '28' and g > 15 and e < 30"
+        ).fetchall() == [(28, '28')]
+
+        pa.unregister_extension_type("duckdb.uhugeint")

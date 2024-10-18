@@ -18,7 +18,7 @@ public:
 
 public:
 	explicit BoundDefaultExpression(LogicalType type = LogicalType())
-	    : Expression(ExpressionType::VALUE_DEFAULT, ExpressionClass::BOUND_DEFAULT, type) {
+	    : Expression(ExpressionType::VALUE_DEFAULT, ExpressionClass::BOUND_DEFAULT, std::move(type)) {
 	}
 
 public:
@@ -33,7 +33,7 @@ public:
 		return "DEFAULT";
 	}
 
-	unique_ptr<Expression> Copy() override {
+	unique_ptr<Expression> Copy() const override {
 		return make_uniq<BoundDefaultExpression>(return_type);
 	}
 

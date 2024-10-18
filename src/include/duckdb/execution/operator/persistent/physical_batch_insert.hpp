@@ -20,7 +20,7 @@ public:
 	//! INSERT INTO
 	PhysicalBatchInsert(vector<LogicalType> types, TableCatalogEntry &table,
 	                    physical_index_vector_t<idx_t> column_index_map, vector<unique_ptr<Expression>> bound_defaults,
-	                    idx_t estimated_cardinality);
+	                    vector<unique_ptr<BoundConstraint>> bound_constraints, idx_t estimated_cardinality);
 	//! CREATE TABLE AS
 	PhysicalBatchInsert(LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info,
 	                    idx_t estimated_cardinality);
@@ -33,6 +33,8 @@ public:
 	vector<LogicalType> insert_types;
 	//! The default expressions of the columns for which no value is provided
 	vector<unique_ptr<Expression>> bound_defaults;
+	//! The bound constraints for the table
+	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	//! Table schema, in case of CREATE TABLE AS
 	optional_ptr<SchemaCatalogEntry> schema;
 	//! Create table info, in case of CREATE TABLE AS
@@ -58,8 +60,8 @@ public:
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          OperatorSinkFinalizeInput &input) const override;
 
-	bool RequiresBatchIndex() const override {
-		return true;
+	OperatorPartitionInfo RequiredPartitionInfo() const override {
+		return OperatorPartitionInfo::BatchIndex();
 	}
 
 	bool IsSink() const override {

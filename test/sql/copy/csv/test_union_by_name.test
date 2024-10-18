@@ -3,6 +3,9 @@
 # group: [csv]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 SET default_null_order='nulls_first';
 
 # Setup
@@ -40,10 +43,16 @@ COPY ubn3 TO '__TEST_DIR__/ubn3.csv' WITH (DELIMITER ',');
 
 # Read from them (the order matters)
 
-statement error
+query I
 SELECT * FROM read_csv_auto(['__TEST_DIR__/ubn1.csv', '__TEST_DIR__/ubn2.csv', '__TEST_DIR__/ubn3.csv']);
 ----
-Mismatch between the schema of different files
+1
+2
+9223372036854775807
+3
+5
+100
+102
 
 query III
 SELECT a, b, c
@@ -69,7 +78,7 @@ BIGINT	BIGINT	BIGINT
 statement error
 SELECT * FROM read_csv_auto(['data/csv/union-by-name/ubn1.csv', 'data/csv/union-by-name/ubn2.csv', 'data/csv/union-by-name/ubn3.csv', 'data/csv/union-by-name/ubn4.csv'])
 ----
-Conversion Error
+Column with name: "c" is missing
 
 query IIIII
 SELECT  a, b, c, ts, k
@@ -189,7 +198,7 @@ NULL	300	Friday	data/csv/union-by-name/ubn4.csv
 statement error
 SELECT * FROM read_csv_auto('data/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE, null_padding=0)
 ----
-Mismatch between the number of columns (2) in the CSV file and what is expected in the scanner (3).
+If you are trying to read files with different schemas, try setting union_by_name=True
 
 query IIII
 SELECT id, value, a, part
@@ -203,3 +212,10 @@ ORDER BY id
 statement error
 SELECT * FROM read_csv_auto('data/csv/union-by-name/*[!a]/*',HIVE_PARTITIONING=TRUE ,UNION_BY_NAME=TRUE)
 ----
+
+# Test one thread per file CSV union by name where file only had header.
+query IIII
+from read_csv('data/csv/union_by_name_2/*.csv', union_by_name=True, parallel = false);
+----
+1	1	1	NULL
+

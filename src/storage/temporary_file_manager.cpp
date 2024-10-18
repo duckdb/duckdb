@@ -8,7 +8,10 @@ namespace duckdb {
 // BlockIndexManager
 //===--------------------------------------------------------------------===//
 
-BlockIndexManager::BlockIndexManager() : max_index(0) {
+BlockIndexManager::BlockIndexManager(TemporaryFileManager &manager) : max_index(0), manager(&manager) {
+}
+
+BlockIndexManager::BlockIndexManager() : max_index(0), manager(nullptr) {
 }
 
 idx_t BlockIndexManager::GetNewBlockIndex() {
@@ -28,11 +31,11 @@ bool BlockIndexManager::RemoveIndex(idx_t index) {
 	// check if we can truncate the file
 
 	// get the max_index in use right now
-	auto max_index_in_use = indexes_in_use.empty() ? 0 : *indexes_in_use.rbegin();
+	auto max_index_in_use = indexes_in_use.empty() ? 0 : *indexes_in_use.rbegin() + 1;
 	if (max_index_in_use < max_index) {
 		// max index in use is lower than the max_index
 		// reduce the max_index
-		max_index = indexes_in_use.empty() ? 0 : max_index_in_use + 1;
+		SetMaxIndex(max_index_in_use);
 		// we can remove any free_indexes that are larger than the current max_index
 		while (!free_indexes.empty()) {
 			auto max_entry = *free_indexes.rbegin();
@@ -54,9 +57,32 @@ bool BlockIndexManager::HasFreeBlocks() {
 	return !free_indexes.empty();
 }
 
+void BlockIndexManager::SetMaxIndex(idx_t new_index) {
+	static constexpr idx_t TEMP_FILE_BLOCK_SIZE = DEFAULT_BLOCK_ALLOC_SIZE;
+	if (!manager) {
+		max_index = new_index;
+	} else {
+		auto old = max_index;
+		if (new_index < old) {
+			max_index = new_index;
+			auto difference = old - new_index;
+			auto size_on_disk = difference * TEMP_FILE_BLOCK_SIZE;
+			manager->DecreaseSizeOnDisk(size_on_disk);
+		} else if (new_index > old) {
+			auto difference = new_index - old;
+			auto size_on_disk = difference * TEMP_FILE_BLOCK_SIZE;
+			manager->IncreaseSizeOnDisk(size_on_disk);
+			// Increase can throw, so this is only updated after it was succesfully updated
+			max_index = new_index;
+		}
+	}
+}
+
 idx_t BlockIndexManager::GetNewBlockIndexInternal() {
 	if (free_indexes.empty()) {
-		return max_index++;
+		auto new_index = max_index;
+		SetMaxIndex(max_index + 1);
+		return new_index;
 	}
 	auto entry = free_indexes.begin();
 	auto index = *entry;
@@ -69,9 +95,10 @@ idx_t BlockIndexManager::GetNewBlockIndexInternal() {
 //===--------------------------------------------------------------------===//
 
 TemporaryFileHandle::TemporaryFileHandle(idx_t temp_file_count, DatabaseInstance &db, const string &temp_directory,
-                                         idx_t index)
+                                         idx_t index, TemporaryFileManager &manager)
     : max_allowed_index((1 << temp_file_count) * MAX_ALLOWED_INDEX_BASE), db(db), file_index(index),
-      path(FileSystem::GetFileSystem(db).JoinPath(temp_directory, "duckdb_temp_storage-" + to_string(index) + ".tmp")) {
+      path(FileSystem::GetFileSystem(db).JoinPath(temp_directory, "duckdb_temp_storage-" + to_string(index) + ".tmp")),
+      index_manager(manager) {
 }
 
 TemporaryFileHandle::TemporaryFileLock::TemporaryFileLock(mutex &mutex) : lock(mutex) {
@@ -91,22 +118,23 @@ TemporaryFileIndex TemporaryFileHandle::TryGetBlockIndex() {
 }
 
 void TemporaryFileHandle::WriteTemporaryFile(FileBuffer &buffer, TemporaryFileIndex index) {
-	D_ASSERT(buffer.size == Storage::BLOCK_SIZE);
+	// We group DEFAULT_BLOCK_ALLOC_SIZE blocks into the same file.
+	D_ASSERT(buffer.size == BufferManager::GetBufferManager(db).GetBlockSize());
 	buffer.Write(*handle, GetPositionInFile(index.block_index));
 }
 
 unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(idx_t block_index,
                                                                 unique_ptr<FileBuffer> reusable_buffer) {
-	return StandardBufferManager::ReadTemporaryBufferInternal(BufferManager::GetBufferManager(db), *handle,
-	                                                          GetPositionInFile(block_index), Storage::BLOCK_SIZE,
-	                                                          std::move(reusable_buffer));
+	return StandardBufferManager::ReadTemporaryBufferInternal(
+	    BufferManager::GetBufferManager(db), *handle, GetPositionInFile(block_index),
+	    BufferManager::GetBufferManager(db).GetBlockSize(), std::move(reusable_buffer));
 }
 
 void TemporaryFileHandle::EraseBlockIndex(block_id_t block_index) {
 	// remove the block (and potentially truncate the temp file)
 	TemporaryFileLock lock(file_lock);
 	D_ASSERT(handle);
-	RemoveTempBlockIndex(lock, block_index);
+	RemoveTempBlockIndex(lock, NumericCast<idx_t>(block_index));
 }
 
 bool TemporaryFileHandle::DeleteIfEmpty() {
@@ -147,28 +175,28 @@ void TemporaryFileHandle::RemoveTempBlockIndex(TemporaryFileLock &, idx_t index)
 #ifndef WIN32 // this ended up causing issues when sorting
 		auto max_index = index_manager.GetMaxIndex();
 		auto &fs = FileSystem::GetFileSystem(db);
-		fs.Truncate(*handle, GetPositionInFile(max_index + 1));
+		fs.Truncate(*handle, NumericCast<int64_t>(GetPositionInFile(max_index + 1)));
 #endif
 	}
 }
 
 idx_t TemporaryFileHandle::GetPositionInFile(idx_t index) {
-	return index * Storage::BLOCK_ALLOC_SIZE;
+	return index * BufferManager::GetBufferManager(db).GetBlockAllocSize();
 }
 
 //===--------------------------------------------------------------------===//
 // TemporaryDirectoryHandle
 //===--------------------------------------------------------------------===//
 
-TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string path_p)
+TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string path_p, optional_idx max_swap_space)
     : db(db), temp_directory(std::move(path_p)), temp_file(make_uniq<TemporaryFileManager>(db, temp_directory)) {
 	auto &fs = FileSystem::GetFileSystem(db);
-	if (!temp_directory.empty()) {
-		if (!fs.DirectoryExists(temp_directory)) {
-			fs.CreateDirectory(temp_directory);
-			created_directory = true;
-		}
+	D_ASSERT(!temp_directory.empty());
+	if (!fs.DirectoryExists(temp_directory)) {
+		fs.CreateDirectory(temp_directory);
+		created_directory = true;
 	}
+	temp_file->SetMaxSwapSpace(max_swap_space);
 }
 
 TemporaryDirectoryHandle::~TemporaryDirectoryHandle() {
@@ -224,15 +252,34 @@ bool TemporaryFileIndex::IsValid() const {
 // TemporaryFileManager
 //===--------------------------------------------------------------------===//
 
+static idx_t GetDefaultMax(const string &path) {
+	D_ASSERT(!path.empty());
+	auto disk_space = FileSystem::GetAvailableDiskSpace(path);
+	// Use the available disk space
+	// We have made sure that the file exists before we call this, it shouldn't fail
+	if (!disk_space.IsValid()) {
+		// But if it does (i.e because the system call is not implemented)
+		// we don't cap the available swap space
+		return DConstants::INVALID_INDEX - 1;
+	}
+	// Only use 90% of the available disk space
+	return static_cast<idx_t>(static_cast<double>(disk_space.GetIndex()) * 0.9);
+}
+
 TemporaryFileManager::TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p)
-    : db(db), temp_directory(temp_directory_p) {
+    : db(db), temp_directory(temp_directory_p), size_on_disk(0), max_swap_space(0) {
+}
+
+TemporaryFileManager::~TemporaryFileManager() {
+	files.clear();
 }
 
 TemporaryFileManager::TemporaryManagerLock::TemporaryManagerLock(mutex &mutex) : lock(mutex) {
 }
 
 void TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer) {
-	D_ASSERT(buffer.size == Storage::BLOCK_SIZE);
+	// We group DEFAULT_BLOCK_ALLOC_SIZE blocks into the same file.
+	D_ASSERT(buffer.size == BufferManager::GetBufferManager(db).GetBlockSize());
 	TemporaryFileIndex index;
 	TemporaryFileHandle *handle = nullptr;
 
@@ -250,7 +297,7 @@ void TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer 
 		if (!handle) {
 			// no existing handle to write to; we need to create & open a new file
 			auto new_file_index = index_manager.GetNewBlockIndex();
-			auto new_file = make_uniq<TemporaryFileHandle>(files.size(), db, temp_directory, new_file_index);
+			auto new_file = make_uniq<TemporaryFileHandle>(files.size(), db, temp_directory, new_file_index, *this);
 			handle = new_file.get();
 			files[new_file_index] = std::move(new_file);
 
@@ -267,6 +314,55 @@ void TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer 
 bool TemporaryFileManager::HasTemporaryBuffer(block_id_t block_id) {
 	lock_guard<mutex> lock(manager_lock);
 	return used_blocks.find(block_id) != used_blocks.end();
+}
+
+idx_t TemporaryFileManager::GetTotalUsedSpaceInBytes() {
+	return size_on_disk.load();
+}
+
+optional_idx TemporaryFileManager::GetMaxSwapSpace() const {
+	return max_swap_space;
+}
+
+void TemporaryFileManager::SetMaxSwapSpace(optional_idx limit) {
+	idx_t new_limit;
+	if (limit.IsValid()) {
+		new_limit = limit.GetIndex();
+	} else {
+		new_limit = GetDefaultMax(temp_directory);
+	}
+
+	auto current_size_on_disk = size_on_disk.load();
+	if (current_size_on_disk > new_limit) {
+		auto used = StringUtil::BytesToHumanReadableString(current_size_on_disk);
+		auto max = StringUtil::BytesToHumanReadableString(new_limit);
+		throw OutOfMemoryException(
+		    R"(failed to adjust the 'max_temp_directory_size', currently used space (%s) exceeds the new limit (%s)
+Please increase the limit or destroy the buffers stored in the temp directory by e.g removing temporary tables.
+To get usage information of the temp_directory, use 'CALL duckdb_temporary_files();'
+		)",
+		    used, max);
+	}
+	max_swap_space = new_limit;
+}
+
+void TemporaryFileManager::IncreaseSizeOnDisk(idx_t bytes) {
+	auto current_size_on_disk = size_on_disk.load();
+	if (current_size_on_disk + bytes > max_swap_space) {
+		auto used = StringUtil::BytesToHumanReadableString(current_size_on_disk);
+		auto max = StringUtil::BytesToHumanReadableString(max_swap_space);
+		auto data_size = StringUtil::BytesToHumanReadableString(bytes);
+		throw OutOfMemoryException(R"(failed to offload data block of size %s (%s/%s used).
+This limit was set by the 'max_temp_directory_size' setting.
+By default, this setting utilizes the available disk space on the drive where the 'temp_directory' is located.
+You can adjust this setting, by using (for example) PRAGMA max_temp_directory_size='10GiB')",
+		                           data_size, used, max);
+	}
+	size_on_disk += bytes;
+}
+
+void TemporaryFileManager::DecreaseSizeOnDisk(idx_t bytes) {
+	size_on_disk -= bytes;
 }
 
 unique_ptr<FileBuffer> TemporaryFileManager::ReadTemporaryBuffer(block_id_t id,
@@ -310,7 +406,7 @@ void TemporaryFileManager::EraseUsedBlock(TemporaryManagerLock &lock, block_id_t
 		throw InternalException("EraseUsedBlock - Block %llu not found in used blocks", id);
 	}
 	used_blocks.erase(entry);
-	handle->EraseBlockIndex(index.block_index);
+	handle->EraseBlockIndex(NumericCast<block_id_t>(index.block_index));
 	if (handle->DeleteIfEmpty()) {
 		EraseFileHandle(lock, index.file_index);
 	}

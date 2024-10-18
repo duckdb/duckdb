@@ -1,0 +1,326 @@
+# name: test/sql/function/list/list_grade_up.test_slow
+# description: Test list_grade_up function
+# group: [list]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+PRAGMA default_order='ASC';
+
+statement ok
+PRAGMA default_null_order='NULLS FIRST';
+
+query I
+SELECT list_grade_up(NULL::INT[]);
+----
+NULL
+
+query I
+SELECT list_grade_up(l) FROM VALUES ([1,2,3]), (NULL) as v(l);
+----
+[1, 2, 3]
+NULL
+
+query I
+SELECT list_grade_up([NULL])
+----
+[1]
+
+query I
+SELECT list_grade_up([])
+----
+[]
+
+query I
+SELECT list_grade_up([]) WHERE 1 = 0
+----
+
+
+statement error
+SELECT list_grade_up()
+----
+
+statement error
+SELECT list_grade_up(*)
+----
+
+statement error
+SELECT list_grade_up([1, 2], 2)
+----
+
+statement error
+SELECT list_grade_up([1, 2], 'DESC', 2)
+----
+
+statement error
+SELECT list_grade_up([1, 2], 2, 2)
+----
+
+
+query I
+SELECT list_grade_up([1, 2])
+----
+[1, 2]
+
+query I
+SELECT list_grade_up([1, 3, NULL, 5, NULL, -5])
+----
+[3, 5, 6, 1, 2, 4]
+
+statement ok
+CREATE TABLE integers AS SELECT LIST(i) AS i FROM range(1, 10, 1) t1(i)
+
+statement ok
+INSERT INTO integers VALUES ([NULL]), ([]), (NULL::int[])
+
+query I
+SELECT list_grade_up(i) FROM integers
+----
+[1, 2, 3, 4, 5, 6, 7, 8, 9]
+[1]
+[]
+NULL
+
+# test custom ordering
+
+query I
+SELECT list_grade_up([1, 3, NULL, 2], 'ASC')
+----
+[3, 1, 4, 2]
+
+query I
+SELECT list_grade_up([1, 3, NULL, 2], 'DESC')
+----
+[3, 2, 4, 1]
+
+query I
+SELECT list_grade_up([1, 3, NULL, 2], 'DESC', 'NULLS LAST')
+----
+[2, 4, 1, 3]
+
+query I
+SELECT list_grade_up([1, 3, NULL, 2], 'deSc', 'nuLls LAST')
+----
+[2, 4, 1, 3]
+
+query I
+SELECT list_grade_up([1, 3, NULL, 2], 'DESC', 'NULLS FIRST')
+----
+[3, 2, 4, 1]
+
+query I
+SELECT list_grade_up([1, 3, NULL, 2], 'ASC', 'NULLS FIRST')
+----
+[3, 1, 4, 2]
+
+query I
+SELECT list_grade_up([1, 3, NULL, 2], 'ASC', 'NULLS LAST')
+----
+[1, 4, 2, 3]
+
+
+# test all types
+
+# BOOLEAN
+query I
+SELECT list_grade_up([True, False, NULL, True, True, NULL])
+----
+[3, 6, 2, 1, 4, 5]
+
+query I
+SELECT list_grade_up([NULL::BOOLEAN])
+----
+[1]
+
+# VARCHAR
+query I
+SELECT list_grade_up(['aa', 'a', 'cd', NULL, '42'])
+----
+[4, 5, 2, 1, 3]
+
+query I
+SELECT list_grade_up([NULL::VARCHAR])
+----
+[1]
+
+# INTEGER types
+foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint
+
+query I
+SELECT list_grade_up([1::${type}, NULL, 2::${type}])
+----
+[2, 1, 3]
+
+query I
+SELECT list_grade_up([NULL::${type}])
+----
+[1]
+
+endloop
+
+# FLOAT, DOUBLE and DECIMAL types
+
+foreach type float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10)
+
+statement ok
+SELECT list_grade_up([1::${type}])
+
+query I
+SELECT list_grade_up([NULL::${type}])
+----
+[1]
+
+endloop
+
+# TEMPORAL types
+
+# date
+query I
+SELECT list_grade_up(['2021-08-20'::DATE])
+----
+[1]
+
+# time
+query I
+SELECT list_grade_up(['14:59:37'::TIME])
+----
+[1]
+
+# timestamp
+query I
+SELECT list_grade_up(['2021-08-20'::TIMESTAMP])
+----
+[1]
+
+# timestamp s
+query I
+SELECT list_grade_up(['2021-08-20'::TIMESTAMP_S])
+----
+[1]
+
+# timestamp ms
+query I
+SELECT list_grade_up(['2021-08-20 00:00:00.123'::TIMESTAMP_MS])
+----
+[1]
+
+# timestamp ns
+query I
+SELECT list_grade_up(['2021-08-20 00:00:00.123456'::TIMESTAMP_NS])
+----
+[1]
+
+# time with time zone
+query I
+SELECT list_grade_up(['14:59:37'::TIMETZ])
+----
+[1]
+
+# timestamp with time zone
+query I
+SELECT list_grade_up(['2021-08-20'::TIMESTAMPTZ])
+----
+[1]
+
+# interval
+query I
+SELECT list_grade_up([INTERVAL 1 YEAR])
+----
+[1]
+
+
+foreach type date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval
+
+query I
+SELECT list_grade_up([NULL::${type}])
+----
+[1]
+
+endloop
+
+# BLOB
+
+query I
+SELECT list_grade_up(['{a: 1}'::BLOB, '{a: 3}'::BLOB])
+----
+[1, 2]
+
+query I
+SELECT list_grade_up([NULL::BLOB])
+----
+[1]
+
+
+# ENUMS
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy')
+
+statement ok
+CREATE TABLE enums (e mood[])
+
+statement ok
+INSERT INTO enums VALUES (['happy', 'sad'])
+
+query I
+SELECT list_grade_up(e) FROM enums
+----
+[2, 1]
+
+# NESTED types
+
+query I
+SELECT list_grade_up([[1], [1, 2], NULL, [NULL], [], [1, 2, 3]])
+----
+[3, 5, 1, 2, 6, 4]
+
+query I
+SELECT list_grade_up([{'a': 1}, {'a': 5}, {'a': 3}])
+----
+[1, 3, 2]
+
+statement ok
+SELECT list_grade_up(range(3000));
+
+# bug fixes test for #4591
+
+query II
+select k, list_grade_up(k,'DESC') from (values ([1,2,3,4])) as t(k);
+----
+[1, 2, 3, 4]	[4, 3, 2, 1]
+
+query IIII
+select k, v, map(k,v), map(k,v)[(list_grade_up(k,'DESC'))[1]] from (values ([1,2,3,4],[2,3,4,5])) as t(k,v);
+----
+[1, 2, 3, 4]	[2, 3, 4, 5]	{1=2, 2=3, 3=4, 4=5}	[5]
+
+# bug fixes test for #5694
+
+require parquet
+
+statement ok
+CREATE TABLE stage AS SELECT * FROM 'data/parquet-testing/list_sort_segfault.parquet';
+
+statement ok
+CREATE TABLE health (a VARCHAR[]);
+
+statement ok
+INSERT INTO health SELECT list_grade_up(string_to_array(s, ',')) AS a FROM stage;
+
+
+# Make sure it works for arrays too
+query I
+SELECT array_grade_up(array_value(4,5,3), 'ASC')
+----
+[3, 1, 2]
+
+query I
+SELECT array_grade_up(array_value(4,5,3), 'DESC');
+----
+[2, 1, 3]
+
+query I
+SELECT array_grade_up(NULL::INT[3]);
+----
+NULL

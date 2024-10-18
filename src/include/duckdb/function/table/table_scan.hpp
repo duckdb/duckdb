@@ -23,17 +23,17 @@ struct TableScanBindData : public TableFunctionData {
 	//! The table to scan
 	DuckTableEntry &table;
 
-	//! Whether or not the table scan is an index scan
+	//! Whether or not the table scan is an index scan.
 	bool is_index_scan;
-	//! Whether or not the table scan is for index creation
+	//! Whether or not the table scan is for index creation.
 	bool is_create_index;
-	//! The row ids to fetch (in case of an index scan)
-	vector<row_t> result_ids;
+	//! The row ids to fetch in case of an index scan.
+	unsafe_vector<row_t> row_ids;
 
 public:
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const TableScanBindData &)other_p;
-		return &other.table == &table && result_ids == other.result_ids;
+		auto &other = other_p.Cast<TableScanBindData>();
+		return &other.table == &table && row_ids == other.row_ids;
 	}
 };
 

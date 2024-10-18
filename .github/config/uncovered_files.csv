@@ -435,7 +435,6 @@ include/duckdb/main/query_result.hpp	12
 include/duckdb/main/relation.hpp	3
 include/duckdb/main/relation/subquery_relation.hpp	3
 include/duckdb/main/relation/write_parquet_relation.hpp	3
-include/duckdb/optimizer/join_order/estimated_properties.hpp	1
 include/duckdb/optimizer/matcher/function_matcher.hpp	2
 include/duckdb/optimizer/matcher/set_matcher.hpp	2
 include/duckdb/parallel/base_pipeline_event.hpp	2
@@ -543,7 +542,6 @@ optimizer/join_order/join_order_optimizer.cpp	96
 optimizer/join_order/query_graph.cpp	2
 optimizer/join_order/relation_manager.cpp	4
 optimizer/join_order/query_graph_manager.cpp	3
-optimizer/join_order/estimated_properties.cpp	16
 optimizer/join_order/plan_enumerator.cpp	11
 optimizer/join_order/relation_statistics_helper.cpp	2
 optimizer/matcher/expression_matcher.cpp	2

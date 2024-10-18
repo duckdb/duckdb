@@ -8,10 +8,10 @@ namespace duckdb {
 
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
-template <bool NO_MATCH_SEL, class T, class OP>
-static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, SelectionVector &sel, const idx_t count,
-                            const TupleDataLayout &rhs_layout, Vector &rhs_row_locations, const idx_t col_idx,
-                            const vector<MatchFunction> &, SelectionVector *no_match_sel, idx_t &no_match_count) {
+template <bool NO_MATCH_SEL, class T, class OP, bool LHS_ALL_VALID>
+static idx_t TemplatedMatchLoop(const TupleDataVectorFormat &lhs_format, SelectionVector &sel, const idx_t count,
+                                const TupleDataLayout &rhs_layout, Vector &rhs_row_locations, const idx_t col_idx,
+                                SelectionVector *no_match_sel, idx_t &no_match_count) {
 	using COMPARISON_OP = ComparisonOperationWrapper<OP>;
 
 	// LHS
@@ -31,7 +31,7 @@ static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, S
 		const auto idx = sel.get_index(i);
 
 		const auto lhs_idx = lhs_sel.get_index(idx);
-		const auto lhs_null = lhs_validity.AllValid() ? false : !lhs_validity.RowIsValid(lhs_idx);
+		const auto lhs_null = LHS_ALL_VALID ? false : !lhs_validity.RowIsValid(lhs_idx);
 
 		const auto &rhs_location = rhs_locations[idx];
 		const ValidityBytes rhs_mask(rhs_location);
@@ -45,6 +45,19 @@ static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, S
 		}
 	}
 	return match_count;
+}
+
+template <bool NO_MATCH_SEL, class T, class OP>
+static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, SelectionVector &sel, const idx_t count,
+                            const TupleDataLayout &rhs_layout, Vector &rhs_row_locations, const idx_t col_idx,
+                            const vector<MatchFunction> &, SelectionVector *no_match_sel, idx_t &no_match_count) {
+	if (lhs_format.unified.validity.AllValid()) {
+		return TemplatedMatchLoop<NO_MATCH_SEL, T, OP, true>(lhs_format, sel, count, rhs_layout, rhs_row_locations,
+		                                                     col_idx, no_match_sel, no_match_count);
+	} else {
+		return TemplatedMatchLoop<NO_MATCH_SEL, T, OP, false>(lhs_format, sel, count, rhs_layout, rhs_row_locations,
+		                                                      col_idx, no_match_sel, no_match_count);
+	}
 }
 
 template <bool NO_MATCH_SEL, class OP>
@@ -120,13 +133,13 @@ static idx_t SelectComparison(Vector &, Vector &, const SelectionVector &, idx_t
 template <>
 idx_t SelectComparison<Equals>(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
                                SelectionVector *true_sel, SelectionVector *false_sel) {
-	return VectorOperations::NestedEquals(left, right, sel, count, true_sel, false_sel);
+	return VectorOperations::NestedEquals(left, right, &sel, count, true_sel, false_sel);
 }
 
 template <>
 idx_t SelectComparison<NotEquals>(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
                                   SelectionVector *true_sel, SelectionVector *false_sel) {
-	return VectorOperations::NestedNotEquals(left, right, sel, count, true_sel, false_sel);
+	return VectorOperations::NestedNotEquals(left, right, &sel, count, true_sel, false_sel);
 }
 
 template <>
@@ -198,12 +211,52 @@ void RowMatcher::Initialize(const bool no_match_sel, const TupleDataLayout &layo
 	}
 }
 
+void RowMatcher::Initialize(const bool no_match_sel, const TupleDataLayout &layout, const Predicates &predicates,
+                            vector<column_t> &columns) {
+
+	// The columns must have the same size as the predicates vector
+	D_ASSERT(columns.size() == predicates.size());
+
+	// The largest column_id must be smaller than the number of types to not cause an out-of-bounds error
+	D_ASSERT(*max_element(columns.begin(), columns.end()) < layout.GetTypes().size());
+
+	match_functions.reserve(predicates.size());
+	for (idx_t idx = 0; idx < predicates.size(); idx++) {
+		column_t col_idx = columns[idx];
+		match_functions.push_back(GetMatchFunction(no_match_sel, layout.GetTypes()[col_idx], predicates[idx]));
+	}
+}
+
 idx_t RowMatcher::Match(DataChunk &lhs, const vector<TupleDataVectorFormat> &lhs_formats, SelectionVector &sel,
                         idx_t count, const TupleDataLayout &rhs_layout, Vector &rhs_row_locations,
                         SelectionVector *no_match_sel, idx_t &no_match_count) {
 	D_ASSERT(!match_functions.empty());
 	for (idx_t col_idx = 0; col_idx < match_functions.size(); col_idx++) {
 		const auto &match_function = match_functions[col_idx];
+		count =
+		    match_function.function(lhs.data[col_idx], lhs_formats[col_idx], sel, count, rhs_layout, rhs_row_locations,
+		                            col_idx, match_function.child_functions, no_match_sel, no_match_count);
+	}
+	return count;
+}
+
+idx_t RowMatcher::Match(DataChunk &lhs, const vector<TupleDataVectorFormat> &lhs_formats, SelectionVector &sel,
+                        idx_t count, const TupleDataLayout &rhs_layout, Vector &rhs_row_locations,
+                        SelectionVector *no_match_sel, idx_t &no_match_count, const vector<column_t> &columns) {
+	D_ASSERT(!match_functions.empty());
+
+	// The column_ids must have the same size as the match_functions vector
+	D_ASSERT(columns.size() == match_functions.size());
+
+	// The largest column_id must be smaller than the number columns to not cause an out-of-bounds error
+	D_ASSERT(*max_element(columns.begin(), columns.end()) < lhs.ColumnCount());
+
+	for (idx_t fun_idx = 0; fun_idx < match_functions.size(); fun_idx++) {
+		// if we only care about specific columns, we need to use the column_ids to get the correct column index
+		// otherwise, we just use the fun_idx
+		const auto col_idx = columns[fun_idx];
+
+		const auto &match_function = match_functions[fun_idx];
 		count =
 		    match_function.function(lhs.data[col_idx], lhs_formats[col_idx], sel, count, rhs_layout, rhs_row_locations,
 		                            col_idx, match_function.child_functions, no_match_sel, no_match_count);

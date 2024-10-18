@@ -1,14 +1,15 @@
 #include "duckdb/optimizer/compressed_materialization.hpp"
 
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/scalar/compressed_materialization_functions.hpp"
 #include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
@@ -30,7 +31,7 @@ CMBindingInfo::CMBindingInfo(ColumnBinding binding_p, const LogicalType &type_p)
 
 CompressedMaterializationInfo::CompressedMaterializationInfo(LogicalOperator &op, vector<idx_t> &&child_idxs_p,
                                                              const column_binding_set_t &referenced_bindings)
-    : child_idxs(child_idxs_p) {
+    : child_idxs(std::move(child_idxs_p)) {
 	child_info.reserve(child_idxs.size());
 	for (const auto &child_idx : child_idxs) {
 		child_info.emplace_back(*op.children[child_idx], referenced_bindings);
@@ -41,9 +42,9 @@ CompressExpression::CompressExpression(unique_ptr<Expression> expression_p, uniq
     : expression(std::move(expression_p)), stats(std::move(stats_p)) {
 }
 
-CompressedMaterialization::CompressedMaterialization(ClientContext &context_p, Binder &binder_p,
-                                                     statistics_map_t &&statistics_map_p)
-    : context(context_p), binder(binder_p), statistics_map(std::move(statistics_map_p)) {
+CompressedMaterialization::CompressedMaterialization(Optimizer &optimizer_p, LogicalOperator &root_p,
+                                                     statistics_map_t &statistics_map_p)
+    : optimizer(optimizer_p), context(optimizer.context), root(&root_p), statistics_map(statistics_map_p) {
 }
 
 void CompressedMaterialization::GetReferencedBindings(const Expression &expression,
@@ -74,25 +75,28 @@ void CompressedMaterialization::UpdateBindingInfo(CompressedMaterializationInfo 
 }
 
 void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op) {
-	root = op.get();
-	root->ResolveOperatorTypes();
-
-	CompressInternal(op);
-}
-
-void CompressedMaterialization::CompressInternal(unique_ptr<LogicalOperator> &op) {
 	if (TopN::CanOptimize(*op)) { // Let's not mess with the TopN optimizer
-		CompressInternal(op->children[0]->children[0]);
 		return;
-	}
-
-	for (auto &child : op->children) {
-		CompressInternal(child);
 	}
 
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_DISTINCT:
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+		break;
+	default:
+		return;
+	}
+
+	root->ResolveOperatorTypes();
+
+	switch (op->type) {
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		CompressAggregate(op);
+		break;
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+		CompressComparisonJoin(op);
 		break;
 	case LogicalOperatorType::LOGICAL_DISTINCT:
 		CompressDistinct(op);
@@ -101,7 +105,7 @@ void CompressedMaterialization::CompressInternal(unique_ptr<LogicalOperator> &op
 		CompressOrder(op);
 		break;
 	default:
-		return;
+		break;
 	}
 }
 
@@ -158,7 +162,7 @@ bool CompressedMaterialization::TryCompressChild(CompressedMaterializationInfo &
 }
 
 void CompressedMaterialization::CreateCompressProjection(unique_ptr<LogicalOperator> &child_op,
-                                                         vector<unique_ptr<CompressExpression>> &&compress_exprs,
+                                                         vector<unique_ptr<CompressExpression>> compress_exprs,
                                                          CompressedMaterializationInfo &info, CMChildInfo &child_info) {
 	// Replace child op with a projection
 	vector<unique_ptr<Expression>> projections;
@@ -166,9 +170,11 @@ void CompressedMaterialization::CreateCompressProjection(unique_ptr<LogicalOpera
 	for (auto &compress_expr : compress_exprs) {
 		projections.emplace_back(std::move(compress_expr->expression));
 	}
-	const auto table_index = binder.GenerateTableIndex();
+	const auto table_index = optimizer.binder.GenerateTableIndex();
 	auto compress_projection = make_uniq<LogicalProjection>(table_index, std::move(projections));
-	compression_table_indices.insert(table_index);
+	if (child_op->has_estimated_cardinality) {
+		compress_projection->SetEstimatedCardinality(child_op->estimated_cardinality);
+	}
 	compress_projection->ResolveOperatorTypes();
 
 	compress_projection->children.emplace_back(std::move(child_op));
@@ -191,7 +197,7 @@ void CompressedMaterialization::CreateCompressProjection(unique_ptr<LogicalOpera
 		statistics_map.erase(old_binding);
 	}
 
-	// Make sure we skip the compress operator when replacing bindings
+	// Make sure we stop at the compress operator when replacing bindings
 	replacer.stop_operator = child_op.get();
 
 	// Make the plan consistent again
@@ -253,16 +259,18 @@ void CompressedMaterialization::CreateDecompressProjection(unique_ptr<LogicalOpe
 	}
 
 	// Replace op with a projection
-	const auto table_index = binder.GenerateTableIndex();
+	const auto table_index = optimizer.binder.GenerateTableIndex();
 	auto decompress_projection = make_uniq<LogicalProjection>(table_index, std::move(decompress_exprs));
-	decompression_table_indices.insert(table_index);
+	if (op->has_estimated_cardinality) {
+		decompress_projection->SetEstimatedCardinality(op->estimated_cardinality);
+	}
 
 	decompress_projection->children.emplace_back(std::move(op));
 	op = std::move(decompress_projection);
 
 	// Check if we're placing a projection on top of the root
-	if (op->children[0].get() == root.get()) {
-		root = op.get();
+	if (RefersToSameObject(*op->children[0], *root)) {
+		root = op;
 		return;
 	}
 
@@ -410,11 +418,11 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetStringCompress(uniq
 		auto max_string = StringStats::Max(stats);
 
 		uint8_t min_numeric = 0;
-		if (max_string_length != 0 && min_string.length() != 0) {
+		if (max_string_length != 0 && !min_string.empty()) {
 			min_numeric = *reinterpret_cast<const uint8_t *>(min_string.c_str());
 		}
 		uint8_t max_numeric = 0;
-		if (max_string_length != 0 && max_string.length() != 0) {
+		if (max_string_length != 0 && !max_string.empty()) {
 			max_numeric = *reinterpret_cast<const uint8_t *>(max_string.c_str());
 		}
 

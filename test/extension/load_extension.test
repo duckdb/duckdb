@@ -12,17 +12,25 @@ PRAGMA enable_verification
 statement error
 LOAD 'asdf';
 ----
+<REGEX>:IO Error: Extension.*not found.*
 
 statement error
 LOAD 'Makefile';
 ----
+<REGEX>:IO Error: Extension.*not found.*
 
 statement error
 LOAD NULL;
 ----
+<REGEX>:Parser Error: syntax error.*
 
 statement ok
 LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+
+query I
+SELECT extension_version FROM duckdb_extensions() WHERE extension_name = 'loadable_extension_demo';
+----
+default-version
 
 query I
 SELECT hello('World');
@@ -45,10 +53,12 @@ QUACK
 statement error
 QUAC
 ----
+<REGEX>:Parser Error: Did you mean.*
 
 statement error
 QUACK NOT QUACK
 ----
+<REGEX>:Parser Error: This is not a quack.*
 
 query I
 SELECT contains(loaded_extensions(), 'loadable_extension_demo')

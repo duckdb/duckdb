@@ -20,9 +20,9 @@ static unique_ptr<ParsedExpression> TransformBooleanTestInternal(unique_ptr<Pars
 }
 
 static unique_ptr<ParsedExpression> TransformBooleanTestIsNull(unique_ptr<ParsedExpression> argument,
-                                                               ExpressionType operator_type, idx_t query_location) {
+                                                               ExpressionType operator_type, int query_location) {
 	auto result = make_uniq<OperatorExpression>(operator_type, std::move(argument));
-	Transformer::SetQueryLocation(*result, UnsafeNumericCast<int32_t>(query_location));
+	Transformer::SetQueryLocation(*result, query_location);
 	return std::move(result);
 }
 

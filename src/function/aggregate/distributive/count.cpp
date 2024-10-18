@@ -36,7 +36,7 @@ struct CountStarFunction : public BaseCountFunction {
 	template <typename RESULT_TYPE>
 	static void Window(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition, const_data_ptr_t,
 	                   data_ptr_t l_state, const SubFrames &frames, Vector &result, idx_t rid) {
-		D_ASSERT(partition.input_count == 0);
+		D_ASSERT(partition.inputs == nullptr);
 
 		auto data = FlatVector::GetData<RESULT_TYPE>(result);
 		RESULT_TYPE total = 0;
@@ -65,7 +65,7 @@ struct CountFunction : public BaseCountFunction {
 	}
 
 	static void ConstantOperation(STATE &state, idx_t count) {
-		state += count;
+		state += UnsafeNumericCast<STATE>(count);
 	}
 
 	static bool IgnoreNull() {
@@ -147,7 +147,7 @@ struct CountFunction : public BaseCountFunction {
 			idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
 			if (ValidityMask::AllValid(validity_entry)) {
 				// all valid
-				result += next - base_idx;
+				result += UnsafeNumericCast<STATE>(next - base_idx);
 				base_idx = next;
 			} else if (ValidityMask::NoneValid(validity_entry)) {
 				// nothing valid: skip all
@@ -169,7 +169,7 @@ struct CountFunction : public BaseCountFunction {
 	                                   const SelectionVector &sel_vector) {
 		if (mask.AllValid()) {
 			// no NULL values
-			result += count;
+			result += UnsafeNumericCast<STATE>(count);
 			return;
 		}
 		for (idx_t i = 0; i < count; i++) {
@@ -187,7 +187,7 @@ struct CountFunction : public BaseCountFunction {
 		case VectorType::CONSTANT_VECTOR: {
 			if (!ConstantVector::IsNull(input)) {
 				// if the constant is not null increment the state
-				result += count;
+				result += UnsafeNumericCast<STATE>(count);
 			}
 			break;
 		}
@@ -197,7 +197,7 @@ struct CountFunction : public BaseCountFunction {
 		}
 		case VectorType::SEQUENCE_VECTOR: {
 			// sequence vectors cannot have NULL values
-			result += count;
+			result += UnsafeNumericCast<STATE>(count);
 			break;
 		}
 		default: {

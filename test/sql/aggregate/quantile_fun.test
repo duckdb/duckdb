@@ -49,3 +49,8 @@ SELECT quantile_cont(r::${type}, [0.15, 0.5, 0.9]) FROM quantiles
 [14.8, 49.5, 89.1]
 
 endloop
+
+statement error
+SELECT quantile_cont(NULL, CAST(NULL AS DOUBLE[]))
+----
+not be NULL

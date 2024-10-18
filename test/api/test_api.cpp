@@ -139,6 +139,16 @@ static void parallel_query(Connection *conn, bool *correct, size_t threadnr) {
 	}
 }
 
+TEST_CASE("Test temp_directory defaults", "[api][.]") {
+	const char *db_paths[] = {nullptr, "", ":memory:"};
+	for (auto &path : db_paths) {
+		auto db = make_uniq<DuckDB>(path);
+		auto conn = make_uniq<Connection>(*db);
+
+		REQUIRE(db->instance->config.options.temporary_directory == ".tmp");
+	}
+}
+
 TEST_CASE("Test parallel usage of single client", "[api][.]") {
 	auto db = make_uniq<DuckDB>(nullptr);
 	auto conn = make_uniq<Connection>(*db);
@@ -426,6 +436,35 @@ TEST_CASE("Test fetch API with big results", "[api][.]") {
 	VerifyStreamResult(std::move(result));
 }
 
+TEST_CASE("Test TryFlushCachingOperators interrupted ExecutePushInternal", "[api][.]") {
+	DuckDB db;
+	Connection con(db);
+
+	con.Query("create table tbl as select 100000 a from range(2) t(a);");
+	con.Query("pragma threads=1");
+
+	// Use PhysicalCrossProduct with a very low amount of produced tuples, this caches the result in the
+	// CachingOperatorState This gets flushed with FinalExecute in PipelineExecutor::TryFlushCachingOperator
+	auto pending_query = con.PendingQuery("select unnest(range(a.a)) from tbl a, tbl b;");
+
+	// Through `unnest(range(a.a.))` this FinalExecute multiple chunks, more than the ExecutionBudget can handle with
+	// PROCESS_PARTIAL
+	pending_query->ExecuteTask();
+
+	// query the connection as normal after
+	auto res = pending_query->Execute();
+	REQUIRE(!res->HasError());
+	auto &materialized_res = res->Cast<MaterializedQueryResult>();
+	idx_t initial_tuples = 2 * 2;
+	REQUIRE(materialized_res.RowCount() == initial_tuples * 100000);
+	for (idx_t i = 0; i < initial_tuples; i++) {
+		for (idx_t j = 0; j < 100000; j++) {
+			auto value = static_cast<idx_t>(materialized_res.GetValue<int64_t>(0, (i * 100000) + j));
+			REQUIRE(value == j);
+		}
+	}
+}
+
 TEST_CASE("Test streaming query during stack unwinding", "[api]") {
 	DuckDB db;
 	Connection con(db);
@@ -543,13 +582,13 @@ TEST_CASE("Test large number of connections to a single database", "[api]") {
 		connections.push_back(std::move(conn));
 	}
 
-	REQUIRE(connection_manager.connections.size() == createdConnections);
+	REQUIRE(connection_manager.GetConnectionCount() == createdConnections);
 
 	for (size_t i = 0; i < toRemove; i++) {
 		connections.erase(connections.begin());
 	}
 
-	REQUIRE(connection_manager.connections.size() == remainingConnections);
+	REQUIRE(connection_manager.GetConnectionCount() == remainingConnections);
 }
 
 TEST_CASE("Issue #4583: Catch Insert/Update/Delete errors", "[api]") {
@@ -568,6 +607,25 @@ TEST_CASE("Issue #4583: Catch Insert/Update/Delete errors", "[api]") {
 
 	result = con.SendQuery("SELECT MIN(c0) FROM t0;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+}
+
+TEST_CASE("Issue #14130: InsertStatement::ToString causes InternalException later on", "[api][.]") {
+	auto db = DuckDB(nullptr);
+	auto conn = Connection(db);
+
+	conn.Query("CREATE TABLE foo(a int, b varchar, c int)");
+
+	auto query = "INSERT INTO Foo values (1, 'qwerty', 42)";
+
+	auto stmts = conn.ExtractStatements(query);
+	auto &stmt = stmts[0];
+
+	// Issue was here: calling ToString destroyed the 'alias' of the ValuesList
+	stmt->ToString();
+	// Which caused an 'InternalException: expected non-empty binding_name' here
+	auto prepared_stmt = conn.Prepare(std::move(stmt));
+	REQUIRE(!prepared_stmt->HasError());
+	REQUIRE_NO_FAIL(prepared_stmt->Execute());
 }
 
 TEST_CASE("Issue #6284: CachingPhysicalOperator in pull causes issues", "[api][.]") {
@@ -608,7 +666,7 @@ TEST_CASE("Issue #6284: CachingPhysicalOperator in pull causes issues", "[api][.
 		count += chunk->size();
 	}
 
-	REQUIRE(951468 - count == 0);
+	REQUIRE(951698 == count);
 }
 
 TEST_CASE("Fuzzer 50 - Alter table heap-use-after-free", "[api]") {
@@ -653,4 +711,14 @@ TEST_CASE("Test insert returning in CPP API", "[api]") {
 	auto result = con.Query("SELECT * from test;");
 	REQUIRE(CHECK_COLUMN(result, 0,
 	                     {"query_1", "query_2", "query_arg_1", "query_arg_2", "prepared_arg_1", "prepared_arg_2"}));
+}
+
+TEST_CASE("Test a logical execute still has types after an optimization pass", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.Query("PREPARE test AS SELECT 42::INTEGER;");
+	const auto query_plan = con.ExtractPlan("EXECUTE test");
+	REQUIRE((query_plan->type == LogicalOperatorType::LOGICAL_EXECUTE));
+	REQUIRE((query_plan->types.size() == 1));
+	REQUIRE((query_plan->types[0].id() == LogicalTypeId::INTEGER));
 }

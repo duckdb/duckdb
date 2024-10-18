@@ -14,12 +14,13 @@ namespace duckdb {
 
 class CreateTableRelation : public Relation {
 public:
-	CreateTableRelation(shared_ptr<Relation> child, string schema_name, string table_name);
+	CreateTableRelation(shared_ptr<Relation> child, string schema_name, string table_name, bool temporary);
 
 	shared_ptr<Relation> child;
 	string schema_name;
 	string table_name;
 	vector<ColumnDefinition> columns;
+	bool temporary;
 
 public:
 	BoundStatement Bind(Binder &binder) override;

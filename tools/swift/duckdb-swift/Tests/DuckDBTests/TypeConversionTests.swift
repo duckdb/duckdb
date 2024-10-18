@@ -176,7 +176,7 @@ final class TypeConversionTests: XCTestCase {
   
   func test_extract_from_timestamp_ns() throws {
     let t1 = Timestamp.Components(
-      year: 1677, month: 09, day: 21, hour: 0, minute: 12, second: 43, microsecond: 145_225)
+      year: 1677, month: 09, day: 22, hour: 0, minute: 0, second: 0, microsecond: 0)
     let t2 = Timestamp.Components(
       year: 2262, month: 04, day: 11, hour: 23, minute: 47, second: 16, microsecond: 854_775)
     let expected = [Timestamp(components: t1), Timestamp(components: t2), nil]

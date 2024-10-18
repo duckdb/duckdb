@@ -1,8 +1,11 @@
 #include "duckdb/catalog/catalog_entry.hpp"
-#include "duckdb/parser/parsed_data/create_info.hpp"
+
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/parser/parsed_data/create_info.hpp"
 
 namespace duckdb {
 
@@ -12,7 +15,7 @@ CatalogEntry::CatalogEntry(CatalogType type, string name_p, idx_t oid)
 }
 
 CatalogEntry::CatalogEntry(CatalogType type, Catalog &catalog, string name_p)
-    : CatalogEntry(type, std::move(name_p), catalog.ModifyCatalog()) {
+    : CatalogEntry(type, std::move(name_p), catalog.GetDatabase().GetDatabaseManager().NextOid()) {
 }
 
 CatalogEntry::~CatalogEntry() {
@@ -24,6 +27,13 @@ void CatalogEntry::SetAsRoot() {
 // LCOV_EXCL_START
 unique_ptr<CatalogEntry> CatalogEntry::AlterEntry(ClientContext &context, AlterInfo &info) {
 	throw InternalException("Unsupported alter type for catalog entry!");
+}
+
+unique_ptr<CatalogEntry> CatalogEntry::AlterEntry(CatalogTransaction transaction, AlterInfo &info) {
+	if (!transaction.context) {
+		throw InternalException("Cannot AlterEntry without client context");
+	}
+	return AlterEntry(*transaction.context, info);
 }
 
 void CatalogEntry::UndoAlter(ClientContext &context, AlterInfo &info) {
@@ -74,7 +84,15 @@ Catalog &CatalogEntry::ParentCatalog() {
 	throw InternalException("CatalogEntry::ParentCatalog called on catalog entry without catalog");
 }
 
+const Catalog &CatalogEntry::ParentCatalog() const {
+	throw InternalException("CatalogEntry::ParentCatalog called on catalog entry without catalog");
+}
+
 SchemaCatalogEntry &CatalogEntry::ParentSchema() {
+	throw InternalException("CatalogEntry::ParentSchema called on catalog entry without schema");
+}
+
+const SchemaCatalogEntry &CatalogEntry::ParentSchema() const {
 	throw InternalException("CatalogEntry::ParentSchema called on catalog entry without schema");
 }
 // LCOV_EXCL_STOP

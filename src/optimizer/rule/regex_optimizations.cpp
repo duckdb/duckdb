@@ -184,7 +184,7 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 			return nullptr;
 		}
 		auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(escaped_like_string.like_string)));
-		auto contains = make_uniq<BoundFunctionExpression>(root.return_type, ContainsFun::GetFunction(),
+		auto contains = make_uniq<BoundFunctionExpression>(root.return_type, ContainsFun::GetStringContains(),
 		                                                   std::move(root.children), nullptr);
 		contains->children[1] = std::move(parameter);
 

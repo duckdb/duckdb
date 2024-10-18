@@ -1,0 +1,32 @@
+# name: test/sql/storage/temp_directory/offloading_block_files.test_slow
+# group: [temp_directory]
+
+# For smaller block sizes, the total meta data size increases.
+# On the GitHub runners, this test OOMs on the first query instead of the second.
+# The memory usage and database size is around 7.4 GiB after table creation.
+# In comparison, it is 3.2 GiB for the default block size.
+# FIXME: Investigate why the database size is twice the size of the default block size.
+require block_size 262144
+
+load __TEST_DIR__/offloading_block_files.db
+
+# 500M row table.
+statement ok
+CREATE TABLE tbl AS FROM
+	range(100) t1(i)
+	CROSS JOIN range(100) t2(j)
+	CROSS JOIN range(100) t3(k)
+	CROSS JOIN range(100) t4(l)
+	CROSS JOIN range(5) t5(m)
+	SELECT row_number() OVER () AS i, random() AS random_value;
+
+statement ok
+SET max_temp_directory_size = '1GB';
+
+statement ok
+SET memory_limit = '1GB';
+
+statement error
+SELECT * FROM tbl ORDER BY random_value;
+----
+Out of Memory Error: failed to offload data block of size

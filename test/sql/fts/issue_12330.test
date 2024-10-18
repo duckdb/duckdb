@@ -1,0 +1,36 @@
+# name: test/sql/fts/issue_12330.test
+# description: Issue 12330: BM25 matching scores seems to be invalid
+# group: [fts]
+
+# issue #7384 and #8141
+
+require fts
+
+require noalternativeverify
+
+statement ok
+CREATE OR REPLACE TABLE documents (
+    id VARCHAR,
+    content VARCHAR
+);
+
+statement ok
+INSERT INTO documents VALUES
+    ('doc1', 'DuckDB database lorem'),
+    ('doc2', 'DuckDB database ipsum'),
+    ('doc3', 'DuckDB database ipsum dolor');
+
+statement ok
+PRAGMA create_fts_index('documents', 'id', 'content');
+
+query I
+SELECT
+    id
+FROM
+    documents
+ORDER BY
+    fts_main_documents.match_bm25(id, 'DuckDB database ipsum') DESC;
+----
+doc2
+doc3
+doc1

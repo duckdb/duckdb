@@ -19,10 +19,11 @@ class DataTable;
 class Vector;
 struct UpdateInfo;
 struct UpdateNode;
+struct UpdateNodeData;
 
 class UpdateSegment {
 public:
-	UpdateSegment(ColumnData &column_data);
+	explicit UpdateSegment(ColumnData &column_data);
 	~UpdateSegment();
 
 	ColumnData &column_data;
@@ -51,7 +52,7 @@ public:
 
 private:
 	//! The lock for the update segment
-	StorageLock lock;
+	mutable StorageLock lock;
 	//! The root node (if any)
 	unique_ptr<UpdateNode> root;
 	//! Update statistics
@@ -90,6 +91,8 @@ private:
 	statistics_update_function_t statistics_update_function;
 
 private:
+	optional_ptr<UpdateNodeData> GetUpdateNode(idx_t vector_idx) const;
+	void InitializeUpdateInfo(idx_t vector_idx);
 	void InitializeUpdateInfo(UpdateInfo &info, row_t *ids, const SelectionVector &sel, idx_t count, idx_t vector_index,
 	                          idx_t vector_offset);
 };
@@ -101,7 +104,7 @@ struct UpdateNodeData {
 };
 
 struct UpdateNode {
-	unique_ptr<UpdateNodeData> info[Storage::ROW_GROUP_VECTOR_COUNT];
+	vector<unique_ptr<UpdateNodeData>> info;
 };
 
 } // namespace duckdb

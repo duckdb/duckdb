@@ -22,7 +22,8 @@ struct StripAccentsOperator {
 		}
 
 		// non-ascii, perform collation
-		auto stripped = utf8proc_remove_accents((const utf8proc_uint8_t *)input.GetData(), input.GetSize());
+		auto stripped = utf8proc_remove_accents((const utf8proc_uint8_t *)input.GetData(),
+		                                        UnsafeNumericCast<utf8proc_ssize_t>(input.GetSize()));
 		auto result_str = StringVector::AddString(result, const_char_ptr_cast(stripped));
 		free(stripped);
 		return result_str;
