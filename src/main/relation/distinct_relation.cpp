@@ -8,7 +8,7 @@ DistinctRelation::DistinctRelation(shared_ptr<Relation> child_p)
     : Relation(child_p->context, RelationType::DISTINCT_RELATION), child(std::move(child_p)) {
 	D_ASSERT(child.get() != this);
 	vector<ColumnDefinition> dummy_columns;
-	context.GetContext()->TryBindRelation(*this, dummy_columns);
+	TryBindRelation(dummy_columns);
 }
 
 unique_ptr<QueryNode> DistinctRelation::GetQueryNode() {

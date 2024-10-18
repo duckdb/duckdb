@@ -80,3 +80,13 @@ statement error
 SELECT * FROM read_csv('__TEST_DIR__/test.json', columns={'json': 'VARCHAR'}, sep='🦆');
 ----
 The delimiter option cannot exceed a size of 1 byte.
+
+query II
+EXPLAIN (ANALYZE, FORMAT graphviz) SELECT SUM(i) FROM integers
+----
+analyzed_plan	<REGEX>:.+EXPLAIN_ANALYZE.*
+
+query II
+EXPLAIN (ANALYZE, FORMAT html) SELECT SUM(i) FROM integers
+----
+analyzed_plan	<REGEX>:.+<div class="title">EXPLAIN_ANALYZE</div>.*

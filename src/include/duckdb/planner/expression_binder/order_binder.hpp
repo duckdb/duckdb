@@ -37,6 +37,9 @@ public:
 
 	unique_ptr<Expression> CreateExtraReference(unique_ptr<ParsedExpression> expr);
 
+	//! Sets the query component, for error messages
+	void SetQueryComponent(string component = string());
+
 private:
 	unique_ptr<Expression> CreateProjectionReference(ParsedExpression &expr, const idx_t index);
 	unique_ptr<Expression> BindConstant(ParsedExpression &expr);
@@ -46,6 +49,7 @@ private:
 	vector<reference<Binder>> binders;
 	optional_ptr<vector<unique_ptr<ParsedExpression>>> extra_list;
 	SelectBindState &bind_state;
+	string query_component = "ORDER BY";
 };
 
 } // namespace duckdb

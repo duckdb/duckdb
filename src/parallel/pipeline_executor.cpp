@@ -15,8 +15,9 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 	D_ASSERT(pipeline.source_state);
 	if (pipeline.sink) {
 		local_sink_state = pipeline.sink->GetLocalSinkState(context);
-		requires_batch_index = pipeline.sink->RequiresBatchIndex() && pipeline.source->SupportsBatchIndex();
-		if (requires_batch_index) {
+		required_partition_info = pipeline.sink->RequiredPartitionInfo();
+		if (required_partition_info.AnyRequired()) {
+			D_ASSERT(pipeline.source->SupportsPartitioning(OperatorPartitionInfo::BatchIndex()));
 			auto &partition_info = local_sink_state->partition_info;
 			D_ASSERT(!partition_info.batch_index.IsValid());
 			// batch index is not set yet - initialize before fetching anything
@@ -122,33 +123,34 @@ bool PipelineExecutor::TryFlushCachingOperators(ExecutionBudget &chunk_budget) {
 	return true;
 }
 
-SinkNextBatchType PipelineExecutor::NextBatch(duckdb::DataChunk &source_chunk) {
-	D_ASSERT(requires_batch_index);
-	idx_t next_batch_index;
+SinkNextBatchType PipelineExecutor::NextBatch(DataChunk &source_chunk) {
+	D_ASSERT(required_partition_info.AnyRequired());
 	auto max_batch_index = pipeline.base_batch_index + PipelineBuildState::BATCH_INCREMENT - 1;
-	if (source_chunk.size() == 0) {
-		// set it to the maximum valid batch index value for the current pipeline
-		next_batch_index = max_batch_index;
-	} else {
-		auto batch_index =
-		    pipeline.source->GetBatchIndex(context, source_chunk, *pipeline.source_state, *local_source_state);
+	// by default set it to the maximum valid batch index value for the current pipeline
+	OperatorPartitionData next_data(max_batch_index);
+	if (source_chunk.size() > 0) {
+		// if we retrieved data - initialize the next batch index
+		auto partition_data = pipeline.source->GetPartitionData(context, source_chunk, *pipeline.source_state,
+		                                                        *local_source_state, required_partition_info);
+		auto batch_index = partition_data.batch_index;
 		// we start with the base_batch_index as a valid starting value. Make sure that next batch is called below
-		next_batch_index = pipeline.base_batch_index + batch_index + 1;
-		if (next_batch_index >= max_batch_index) {
+		next_data = std::move(partition_data);
+		next_data.batch_index = pipeline.base_batch_index + batch_index + 1;
+		if (next_data.batch_index >= max_batch_index) {
 			throw InternalException("Pipeline batch index - invalid batch index %llu returned by source operator",
 			                        batch_index);
 		}
 	}
 	auto &partition_info = local_sink_state->partition_info;
-	if (next_batch_index == partition_info.batch_index.GetIndex()) {
+	if (next_data.batch_index == partition_info.batch_index.GetIndex()) {
 		// no changes, return
 		return SinkNextBatchType::READY;
 	}
 	// batch index has changed - update it
-	if (partition_info.batch_index.GetIndex() > next_batch_index) {
+	if (partition_info.batch_index.GetIndex() > next_data.batch_index) {
 		throw InternalException(
 		    "Pipeline batch index - gotten lower batch index %llu (down from previous batch index of %llu)",
-		    next_batch_index, partition_info.batch_index.GetIndex());
+		    next_data.batch_index, partition_info.batch_index.GetIndex());
 	}
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 	if (debug_blocked_next_batch_count < debug_blocked_target_count) {
@@ -165,7 +167,8 @@ SinkNextBatchType PipelineExecutor::NextBatch(duckdb::DataChunk &source_chunk) {
 	}
 #endif
 	auto current_batch = partition_info.batch_index.GetIndex();
-	partition_info.batch_index = next_batch_index;
+	partition_info.batch_index = next_data.batch_index;
+	partition_info.partition_data = std::move(next_data.partition_data);
 	OperatorSinkNextBatchInput next_batch_input {*pipeline.sink->sink_state, *local_sink_state, interrupt_state};
 	// call NextBatch before updating min_batch_index to provide the opportunity to flush the previous batch
 	auto next_batch_result = pipeline.sink->NextBatch(context, next_batch_input);
@@ -175,7 +178,7 @@ SinkNextBatchType PipelineExecutor::NextBatch(duckdb::DataChunk &source_chunk) {
 		return SinkNextBatchType::BLOCKED;
 	}
 
-	partition_info.min_batch_index = pipeline.UpdateBatchIndex(current_batch, next_batch_index);
+	partition_info.min_batch_index = pipeline.UpdateBatchIndex(current_batch, next_data.batch_index);
 
 	return SinkNextBatchType::READY;
 }
@@ -231,7 +234,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 				}
 			}
 
-			if (requires_batch_index) {
+			if (required_partition_info.AnyRequired()) {
 				auto next_batch_result = NextBatch(source_chunk);
 				next_batch_blocked = next_batch_result == SinkNextBatchType::BLOCKED;
 				if (next_batch_blocked) {

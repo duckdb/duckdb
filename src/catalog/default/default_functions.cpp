@@ -12,7 +12,7 @@ namespace duckdb {
 static const DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "current_role", {nullptr}, {{nullptr, nullptr}}, "'duckdb'"},                       // user name of current execution context
 	{DEFAULT_SCHEMA, "current_user", {nullptr}, {{nullptr, nullptr}}, "'duckdb'"},                       // user name of current execution context
-	{DEFAULT_SCHEMA, "current_catalog", {nullptr}, {{nullptr, nullptr}}, "current_database()"},          // name of current database (called "catalog" in the SQL standard)
+	{DEFAULT_SCHEMA, "current_catalog", {nullptr}, {{nullptr, nullptr}}, "main.current_database()"},          // name of current database (called "catalog" in the SQL standard)
 	{DEFAULT_SCHEMA, "user", {nullptr}, {{nullptr, nullptr}}, "current_user"},                           // equivalent to current_user
 	{DEFAULT_SCHEMA, "session_user", {nullptr}, {{nullptr, nullptr}}, "'duckdb'"},                       // session user name
 	{"pg_catalog", "inet_client_addr", {nullptr}, {{nullptr, nullptr}}, "NULL"},                       // address of the remote connection

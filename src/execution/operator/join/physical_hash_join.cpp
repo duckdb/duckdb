@@ -136,7 +136,7 @@ public:
 		// For perfect hash join
 		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table, op.perfect_join_statistics);
 		// For external hash join
-		external = ClientConfig::GetConfig(context).force_external;
+		external = ClientConfig::GetConfig(context).GetSetting<DebugForceExternalSetting>(context);
 		// Set probe types
 		probe_types = op.children[0]->types;
 		probe_types.emplace_back(LogicalType::HASH);
