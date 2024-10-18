@@ -1,7 +1,7 @@
 /* ******************************************************************
  * hist : Histogram functions
  * part of Finite State Entropy project
- * Copyright (c) 2013-2020, Yann Collet, Facebook, Inc.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  *  You can contact the author at :
  *  - FSE source repository : https://github.com/Cyan4973/FiniteStateEntropy
@@ -14,10 +14,10 @@
 ****************************************************************** */
 
 /* --- dependencies --- */
-#include <stddef.h>   /* size_t */
-
+#include "zstd/common/zstd_deps.h"   /* size_t */
 
 namespace duckdb_zstd {
+
 /* --- simple histogram functions --- */
 
 /*! HIST_count():
@@ -75,4 +75,4 @@ size_t HIST_countFast_wksp(unsigned* count, unsigned* maxSymbolValuePtr,
 unsigned HIST_count_simple(unsigned* count, unsigned* maxSymbolValuePtr,
                            const void* src, size_t srcSize);
 
-}
+} // namespace duckdb_zstd

@@ -93,10 +93,6 @@ private:
 //! The LocalStorage class holds appends that have not been committed yet
 class LocalStorage {
 public:
-	// Threshold to merge row groups instead of appending
-	static constexpr const idx_t MERGE_THRESHOLD = Storage::ROW_GROUP_SIZE;
-
-public:
 	struct CommitState {
 		CommitState();
 		~CommitState();

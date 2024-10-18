@@ -922,7 +922,10 @@ unique_ptr<GlobalSourceState> PhysicalWindow::GetGlobalSourceState(ClientContext
 	return make_uniq<WindowGlobalSourceState>(context, gsink);
 }
 
-bool PhysicalWindow::SupportsBatchIndex() const {
+bool PhysicalWindow::SupportsPartitioning(const OperatorPartitionInfo &partition_info) const {
+	if (partition_info.RequiresPartitionColumns()) {
+		return false;
+	}
 	//	We can only preserve order for single partitioning
 	//	or work stealing causes out of order batch numbers
 	auto &wexpr = select_list[order_idx]->Cast<BoundWindowExpression>();
@@ -953,10 +956,14 @@ double PhysicalWindow::GetProgress(ClientContext &context, GlobalSourceState &gs
 	return count ? (double(returned) / double(count)) : -1;
 }
 
-idx_t PhysicalWindow::GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                                    LocalSourceState &lstate_p) const {
+OperatorPartitionData PhysicalWindow::GetPartitionData(ExecutionContext &context, DataChunk &chunk,
+                                                       GlobalSourceState &gstate_p, LocalSourceState &lstate_p,
+                                                       const OperatorPartitionInfo &partition_info) const {
+	if (partition_info.RequiresPartitionColumns()) {
+		throw InternalException("PhysicalWindow::GetPartitionData: partition columns not supported");
+	}
 	auto &lstate = lstate_p.Cast<WindowLocalSourceState>();
-	return lstate.batch_index;
+	return OperatorPartitionData(lstate.batch_index);
 }
 
 SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk,

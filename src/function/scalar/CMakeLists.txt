@@ -14,7 +14,6 @@ add_library_unity(
   compressed_materialization_functions.cpp
   create_sort_key.cpp
   generic_functions.cpp
-  string_functions.cpp
   strftime_format.cpp
   nested_functions.cpp
   operators.cpp

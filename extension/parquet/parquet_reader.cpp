@@ -29,6 +29,7 @@
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
+#include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #endif
@@ -40,15 +41,15 @@
 
 namespace duckdb {
 
-using duckdb_parquet::format::ColumnChunk;
-using duckdb_parquet::format::ConvertedType;
-using duckdb_parquet::format::FieldRepetitionType;
-using duckdb_parquet::format::FileCryptoMetaData;
-using duckdb_parquet::format::FileMetaData;
-using ParquetRowGroup = duckdb_parquet::format::RowGroup;
-using duckdb_parquet::format::SchemaElement;
-using duckdb_parquet::format::Statistics;
-using duckdb_parquet::format::Type;
+using duckdb_parquet::ColumnChunk;
+using duckdb_parquet::ConvertedType;
+using duckdb_parquet::FieldRepetitionType;
+using duckdb_parquet::FileCryptoMetaData;
+using duckdb_parquet::FileMetaData;
+using ParquetRowGroup = duckdb_parquet::RowGroup;
+using duckdb_parquet::SchemaElement;
+using duckdb_parquet::Statistics;
+using duckdb_parquet::Type;
 
 static unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
 CreateThriftFileProtocol(Allocator &allocator, FileHandle &file_handle, bool prefetch_mode) {
@@ -147,6 +148,10 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 		}
 	}
 	if (s_ele.__isset.converted_type) {
+		// Legacy NULL type, does no longer exist, but files are still around of course
+		if (static_cast<uint8_t>(s_ele.converted_type) == 24) {
+			return LogicalTypeId::SQLNULL;
+		}
 		switch (s_ele.converted_type) {
 		case ConvertedType::INT_8:
 			if (s_ele.type == Type::INT32) {
@@ -251,8 +256,6 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 			return LogicalType::INTERVAL;
 		case ConvertedType::JSON:
 			return LogicalType::JSON();
-		case ConvertedType::NULL_TYPE:
-			return LogicalTypeId::SQLNULL;
 		case ConvertedType::MAP:
 		case ConvertedType::MAP_KEY_VALUE:
 		case ConvertedType::LIST:
@@ -1001,7 +1004,12 @@ static void ApplyFilter(Vector &v, TableFilter &filter, parquet_filter_t &filter
 		auto &struct_filter = filter.Cast<StructFilter>();
 		auto &child = StructVector::GetEntries(v)[struct_filter.child_idx];
 		ApplyFilter(*child, *struct_filter.child_filter, filter_mask, count);
-	} break;
+	}
+	case TableFilterType::OPTIONAL_FILTER: {
+		// we don't execute zone map filters here - we only consider them for zone map pruning
+		// do nothing to the mask.
+		break;
+	}
 	default:
 		D_ASSERT(0);
 		break;
@@ -1048,7 +1056,6 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 
 		auto &group = GetGroup(state);
 		if (state.prefetch_mode && state.group_offset != (idx_t)group.num_rows) {
-
 			uint64_t total_row_group_span = GetGroupSpan(state);
 
 			double scan_percentage = (double)(to_scan_compressed_bytes) / static_cast<double>(total_row_group_span);
