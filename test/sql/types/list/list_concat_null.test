@@ -13,3 +13,8 @@ SELECT b || NULL from x1;
 
 statement ok
 SELECT NULL || NULL from x1;
+
+statement error
+select concat([42]);
+----
+No function matches the given name
