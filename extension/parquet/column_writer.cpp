@@ -1,10 +1,10 @@
 #include "column_writer.hpp"
 
 #include "duckdb.hpp"
+#include "geo_parquet.hpp"
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_rle_bp_encoder.hpp"
 #include "parquet_writer.hpp"
-#include "geo_parquet.hpp"
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
@@ -19,11 +19,11 @@
 #include "duckdb/execution/expression_executor.hpp"
 #endif
 
+#include "brotli/encode.h"
 #include "lz4.hpp"
 #include "miniz_wrapper.hpp"
 #include "snappy.h"
 #include "zstd.h"
-#include "brotli/encode.h"
 
 namespace duckdb {
 
@@ -224,16 +224,11 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 		break;
 	}
 	case CompressionCodec::ZSTD: {
-		auto configured_compression = writer.CompressionLevel();
-		int compress_level = ZSTD_CLEVEL_DEFAULT;
-		if (configured_compression.IsValid()) {
-			compress_level = static_cast<int>(configured_compression.GetIndex());
-		}
 		compressed_size = duckdb_zstd::ZSTD_compressBound(temp_writer.GetPosition());
 		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
-		compressed_size =
-		    duckdb_zstd::ZSTD_compress((void *)compressed_buf.get(), compressed_size,
-		                               (const void *)temp_writer.GetData(), temp_writer.GetPosition(), compress_level);
+		compressed_size = duckdb_zstd::ZSTD_compress((void *)compressed_buf.get(), compressed_size,
+		                                             (const void *)temp_writer.GetData(), temp_writer.GetPosition(),
+		                                             writer.CompressionLevel());
 		compressed_data = compressed_buf.get();
 		break;
 	}

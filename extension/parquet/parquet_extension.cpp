@@ -200,7 +200,7 @@ struct ParquetWriteBindData : public TableFunctionData {
 
 	ChildFieldIDs field_ids;
 	//! The compression level, higher value is more
-	optional_idx compression_level;
+	int64_t compression_level = ZStdFileSystem::DefaultCompressionLevel();
 };
 
 struct ParquetWriteGlobalState : public GlobalFunctionData {
@@ -1200,6 +1200,7 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
                                           const vector<string> &names, const vector<LogicalType> &sql_types) {
 	D_ASSERT(names.size() == sql_types.size());
 	bool row_group_size_bytes_set = false;
+	bool compression_level_set = false;
 	auto bind_data = make_uniq<ParquetWriteBindData>();
 	for (auto &option : input.info.options) {
 		const auto loption = StringUtil::Lower(option.first);
@@ -1295,7 +1296,14 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 				throw BinderException("Expected debug_use_openssl to be a BOOLEAN");
 			}
 		} else if (loption == "compression_level") {
-			bind_data->compression_level = option.second[0].GetValue<uint64_t>();
+			const auto val = option.second[0].GetValue<int64_t>();
+			if (val < ZStdFileSystem::MinimumCompressionLevel() || val > ZStdFileSystem::MaximumCompressionLevel()) {
+				throw BinderException("Compression level must be between %lld and %lld",
+				                      ZStdFileSystem::MinimumCompressionLevel(),
+				                      ZStdFileSystem::MaximumCompressionLevel());
+			}
+			bind_data->compression_level = val;
+			compression_level_set = true;
 		} else {
 			throw NotImplementedException("Unrecognized option for PARQUET: %s", option.first.c_str());
 		}
@@ -1308,6 +1316,10 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 	} else {
 		// We always set a max row group size bytes so we don't use too much memory
 		bind_data->row_group_size_bytes = bind_data->row_group_size * ParquetWriteBindData::BYTES_PER_ROW;
+	}
+
+	if (compression_level_set && bind_data->codec != CompressionCodec::ZSTD) {
+		throw BinderException("Compression level is only supported for the ZSTD compression codec");
 	}
 
 	bind_data->sql_types = sql_types;
@@ -1444,7 +1456,7 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	                                                                         bind_data.encryption_config, nullptr);
 	serializer.WriteProperty(108, "dictionary_compression_ratio_threshold",
 	                         bind_data.dictionary_compression_ratio_threshold);
-	serializer.WritePropertyWithDefault<optional_idx>(109, "compression_level", bind_data.compression_level);
+	serializer.WritePropertyWithDefault<int64_t>(109, "compression_level", bind_data.compression_level);
 	serializer.WriteProperty(110, "row_groups_per_file", bind_data.row_groups_per_file);
 	serializer.WriteProperty(111, "debug_use_openssl", bind_data.debug_use_openssl);
 }
@@ -1462,7 +1474,10 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	                                                                                  data->encryption_config, nullptr);
 	deserializer.ReadPropertyWithExplicitDefault<double>(108, "dictionary_compression_ratio_threshold",
 	                                                     data->dictionary_compression_ratio_threshold, 1.0);
-	deserializer.ReadPropertyWithDefault<optional_idx>(109, "compression_level", data->compression_level);
+	deserializer.ReadPropertyWithDefault<int64_t>(109, "compression_level", data->compression_level);
+	if (static_cast<idx_t>(data->compression_level) == DConstants::INVALID_INDEX) {
+		data->compression_level = ZStdFileSystem::DefaultCompressionLevel(); // Used to be serialized as an optional_idx
+	}
 	data->row_groups_per_file =
 	    deserializer.ReadPropertyWithExplicitDefault<optional_idx>(110, "row_groups_per_file", optional_idx::Invalid());
 	data->debug_use_openssl = deserializer.ReadPropertyWithExplicitDefault<bool>(111, "debug_use_openssl", true);
