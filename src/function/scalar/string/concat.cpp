@@ -383,8 +383,8 @@ void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	// the concat function, however, treats NULL values as an empty string
 	// i.e. concat(NULL, 'hello') = 'hello'
 
-	ScalarFunction concat =
-	    ScalarFunction("concat", {LogicalType::ANY}, LogicalType::ANY, ConcatFunction, BindConcatFunction);
+	ScalarFunction concat = ScalarFunction("concat", {LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY,
+	                                       ConcatFunction, BindConcatFunction);
 	concat.varargs = LogicalType::ANY;
 	concat.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(concat);
