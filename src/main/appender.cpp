@@ -58,12 +58,12 @@ Appender::Appender(Connection &con, const string &database_name, const string &s
 
 	description = con.TableInfo(database_name, schema_name, table_name);
 	if (!description) {
-		// table could not be found
 		throw CatalogException(StringUtil::Format("Table \"%s.%s\" could not be found", schema_name, table_name));
 	}
 	if (description->readonly) {
 		throw InvalidInputException("Cannot append to a readonly database.");
 	}
+
 	vector<optional_ptr<const ParsedExpression>> defaults;
 	for (auto &column : description->columns) {
 		if (column.Generated()) {
@@ -72,31 +72,35 @@ Appender::Appender(Connection &con, const string &database_name, const string &s
 		types.push_back(column.Type());
 		defaults.push_back(column.HasDefaultValue() ? &column.DefaultValue() : nullptr);
 	}
-	auto binder = Binder::CreateBinder(*context);
 
+	auto binder = Binder::CreateBinder(*context);
 	context->RunFunctionInTransaction([&]() {
 		for (idx_t i = 0; i < types.size(); i++) {
 			auto &type = types[i];
 			auto &expr = defaults[i];
 
 			if (!expr) {
-				// Insert NULL
+				// The default value is NULL.
 				default_values[i] = Value(type);
 				continue;
 			}
+
 			auto default_copy = expr->Copy();
 			D_ASSERT(!default_copy->HasParameter());
+
 			ConstantBinder default_binder(*binder, *context, "DEFAULT value");
 			default_binder.target_type = type;
 			auto bound_default = default_binder.Bind(default_copy);
+
 			Value result_value;
-			if (bound_default->IsFoldable() &&
-			    ExpressionExecutor::TryEvaluateScalar(*context, *bound_default, result_value)) {
-				// Insert the evaluated Value
-				default_values[i] = result_value;
-			} else {
-				// These are not supported currently, we don't add them to the 'default_values' map
+			if (bound_default->IsFoldable()) {
+				auto eval_success = ExpressionExecutor::TryEvaluateScalar(*context, *bound_default, result_value);
+				if (eval_success) {
+					// Insert the default Value.
+					default_values[i] = result_value;
+				}
 			}
+			// All other cases are not supported currently.
 		}
 	});
 
@@ -373,18 +377,36 @@ void BaseAppender::AppendValue(const Value &value) {
 	column++;
 }
 
-void BaseAppender::AppendDataChunk(DataChunk &chunk) {
-	auto chunk_types = chunk.GetTypes();
-	if (chunk_types != types) {
-		for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
-			if (chunk.data[i].GetType() != types[i]) {
-				throw InvalidInputException("Type mismatch in Append DataChunk and the types required for appender, "
-				                            "expected %s but got %s for column %d",
-				                            types[i].ToString(), chunk.data[i].GetType().ToString(), i + 1);
-			}
+void BaseAppender::AppendDataChunk(DataChunk &chunk_p) {
+	auto chunk_types = chunk_p.GetTypes();
+
+	auto count = chunk_p.ColumnCount();
+	if (count != types.size()) {
+		throw InvalidInputException("incorrect column count in AppendDataChunk, expected %d, got %d", types.size(),
+		                            count);
+	}
+
+	// We try to cast the chunk.
+	auto size = chunk_p.size();
+	DataChunk cast_chunk;
+	cast_chunk.Initialize(allocator, types);
+	cast_chunk.SetCardinality(size);
+
+	for (idx_t i = 0; i < count; i++) {
+		if (chunk_p.data[i].GetType() == types[i]) {
+			cast_chunk.data[i].Reference(chunk_p.data[i]);
+			continue;
+		}
+
+		string error_msg;
+		auto success = VectorOperations::DefaultTryCast(chunk_p.data[i], cast_chunk.data[i], size, &error_msg);
+		if (!success) {
+			throw InvalidInputException("type mismatch in AppendDataChunk, expected %s, got %s for column %d",
+			                            types[i].ToString(), chunk_p.data[i].GetType().ToString(), i);
 		}
 	}
-	collection->Append(chunk);
+
+	collection->Append(cast_chunk);
 	if (collection->Count() >= flush_count) {
 		Flush();
 	}
