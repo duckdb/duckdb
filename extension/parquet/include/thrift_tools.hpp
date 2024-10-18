@@ -1,4 +1,13 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// thrift_tools.hpp
+//
+//
+//===----------------------------------------------------------------------===/
+
 #pragma once
+
 #include <list>
 #include "thrift/protocol/TCompactProtocol.h"
 #include "thrift/transport/TBufferTransports.h"
