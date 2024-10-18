@@ -159,7 +159,7 @@ SinkFinalizeType PhysicalCreateARTIndex::Finalize(Pipeline &pipeline, Event &eve
 
 	auto &storage = table.GetStorage();
 	if (!storage.IsRoot()) {
-		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
+		throw TransactionException("cannot add an index to a table that has been altered");
 	}
 
 	auto &schema = table.schema;

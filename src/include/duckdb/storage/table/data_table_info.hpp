@@ -51,6 +51,7 @@ public:
 	string GetSchemaName();
 	string GetTableName();
 	void SetTableName(string name);
+	unique_ptr<DataTableInfo> Copy();
 
 private:
 	//! The database instance of the table

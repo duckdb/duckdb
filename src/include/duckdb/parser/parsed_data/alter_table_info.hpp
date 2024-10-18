@@ -78,7 +78,8 @@ enum class AlterTableType : uint8_t {
 	FOREIGN_KEY_CONSTRAINT = 7,
 	SET_NOT_NULL = 8,
 	DROP_NOT_NULL = 9,
-	SET_COLUMN_COMMENT = 10
+	SET_COLUMN_COMMENT = 10,
+	ADD_CONSTRAINT = 11
 };
 
 struct AlterTableInfo : public AlterInfo {
@@ -344,6 +345,26 @@ public:
 
 private:
 	RenameViewInfo();
+};
+
+//===--------------------------------------------------------------------===//
+// AddConstraintInfo
+//===--------------------------------------------------------------------===//
+struct AddConstraintInfo : public AlterTableInfo {
+	AddConstraintInfo(AlterEntryData data, unique_ptr<Constraint> constraint);
+	~AddConstraintInfo() override;
+
+	//! The constraint to add.
+	unique_ptr<Constraint> constraint;
+
+public:
+	unique_ptr<AlterInfo> Copy() const override;
+	string ToString() const override;
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
+
+private:
+	AddConstraintInfo();
 };
 
 } // namespace duckdb

@@ -49,11 +49,11 @@ public:
 	}
 
 	const vector<string> &GetColumnNames() const {
-		D_ASSERT(columns.size() >= 1);
+		D_ASSERT(!columns.empty());
 		return columns;
 	}
 	vector<string> &GetColumnNamesMutable() {
-		D_ASSERT(columns.size() >= 1);
+		D_ASSERT(!columns.empty());
 		return columns;
 	}
 
