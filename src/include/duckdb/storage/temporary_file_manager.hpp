@@ -167,13 +167,13 @@ private:
 class TemporaryFileMap {
 private:
 	struct TemporaryBufferSizeHash {
-		std::size_t operator()(const TemporaryBufferSize &k) const {
-			return std::hash<idx_t>()(static_cast<idx_t>(k));
+		size_t operator()(const TemporaryBufferSize &k) const {
+			return Hash(static_cast<idx_t>(k));
 		}
 	};
 	template <class T>
 	using temporary_buffer_size_map_t = unordered_map<TemporaryBufferSize, T, TemporaryBufferSizeHash>;
-	using temporary_file_map_t = map<idx_t, unique_ptr<TemporaryFileHandle>>;
+	using temporary_file_map_t = unordered_map<idx_t, unique_ptr<TemporaryFileHandle>>;
 
 public:
 	explicit TemporaryFileMap(TemporaryFileManager &manager);
