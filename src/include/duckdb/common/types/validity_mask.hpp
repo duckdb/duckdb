@@ -155,6 +155,7 @@ public:
 		return validity_mask[entry_idx];
 	}
 	static inline bool AllValid(V entry) {
+		// Check if all the tuples that are covered by this entry (usually 64) are valid
 		return entry == ValidityBuffer::MAX_ENTRY;
 	}
 	static inline bool NoneValid(V entry) {
