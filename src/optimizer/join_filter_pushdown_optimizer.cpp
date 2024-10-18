@@ -10,12 +10,23 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
-
-#include <duckdb/planner/operator/logical_set_operation.hpp>
+#include "duckdb/planner/operator/logical_set_operation.hpp"
+#include "duckdb/planner/operator/logical_unnest.hpp"
 
 namespace duckdb {
 
 JoinFilterPushdownOptimizer::JoinFilterPushdownOptimizer(Optimizer &optimizer) : optimizer(optimizer) {
+}
+
+bool PushdownJoinFilterExpression(Expression &expr, JoinFilterPushdownColumn &filter) {
+	if (expr.type != ExpressionType::BOUND_COLUMN_REF) {
+		// not a simple column ref - bail-out
+		return false;
+	}
+	// column-ref - pass through the new column binding
+	auto &colref = expr.Cast<BoundColumnRefExpression>();
+	filter.probe_column_index = colref.binding;
+	return true;
 }
 
 void GenerateJoinFiltersRecursive(LogicalOperator &op, vector<JoinFilterPushdownColumn> columns,
@@ -33,6 +44,18 @@ void GenerateJoinFiltersRecursive(LogicalOperator &op, vector<JoinFilterPushdown
 		// FIXME: we can probably recurse into more operators here (e.g. window, unnest)
 		GenerateJoinFiltersRecursive(*probe_child.children[0], std::move(columns), pushdown_info);
 		break;
+	case LogicalOperatorType::LOGICAL_UNNEST: {
+		auto &unnest = probe_child.Cast<LogicalUnnest>();
+		// check if the filters apply to the unnest index
+		for (auto &filter : columns) {
+			if (filter.probe_column_index.table_index == unnest.unnest_index) {
+				// the filter applies to the unnest index - bail out
+				return;
+			}
+		}
+		GenerateJoinFiltersRecursive(*probe_child.children[0], std::move(columns), pushdown_info);
+		break;
+	}
 	case LogicalOperatorType::LOGICAL_UNION: {
 		auto &setop = probe_child.Cast<LogicalSetOperation>();
 		// union
@@ -88,16 +111,30 @@ void GenerateJoinFiltersRecursive(LogicalOperator &op, vector<JoinFilterPushdown
 		for (auto &filter : columns) {
 			if (filter.probe_column_index.table_index != proj.table_index) {
 				// index does not belong to this projection - bail-out
-				break;
+				return;
 			}
 			auto &expr = *proj.expressions[filter.probe_column_index.column_index];
-			if (expr.type != ExpressionType::BOUND_COLUMN_REF) {
-				// not a simple column ref - bail-out
-				break;
+			if (!PushdownJoinFilterExpression(expr, filter)) {
+				// cannot push through this expression - bail-out
+				return;
 			}
-			// column-ref - pass through the new column binding
-			auto &colref = expr.Cast<BoundColumnRefExpression>();
-			filter.probe_column_index = colref.binding;
+		}
+		GenerateJoinFiltersRecursive(*probe_child.children[0], std::move(columns), pushdown_info);
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+		// we can push filters through aggregates IF they all point to groups
+		auto &aggr = probe_child.Cast<LogicalAggregate>();
+		for (auto &filter : columns) {
+			if (filter.probe_column_index.table_index != aggr.group_index) {
+				// index does not refer to a group - bail-out
+				return;
+			}
+			auto &expr = *aggr.groups[filter.probe_column_index.column_index];
+			if (!PushdownJoinFilterExpression(expr, filter)) {
+				// cannot push through this expression - bail-out
+				return;
+			}
 		}
 		GenerateJoinFiltersRecursive(*probe_child.children[0], std::move(columns), pushdown_info);
 		break;
