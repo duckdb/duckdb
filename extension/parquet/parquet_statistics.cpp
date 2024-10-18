@@ -506,14 +506,13 @@ bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filte
 		return false;
 	}
 
-	ParquetBloomFilter bloom_filter;
 	auto new_buffer = make_uniq<ResizeableBuffer>(allocator, filter_header.numBytes);
 	transport.read(new_buffer->ptr, filter_header.numBytes);
-	bloom_filter.Initialize(std::move(new_buffer));
+	ParquetBloomFilter bloom_filter(std::move(new_buffer));
 	return ApplyBloomFilter(duckdb_filter, bloom_filter);
 }
 
-void ParquetBloomFilter::Initialize(idx_t num_blocks) {
+ParquetBloomFilter::ParquetBloomFilter(idx_t num_blocks) {
 	D_ASSERT(IsPowerOfTwo(num_blocks));
 	data = make_uniq<ResizeableBuffer>(Allocator::DefaultAllocator(), sizeof(ParquetBloomBlock) * num_blocks);
 	data->zero();
@@ -521,7 +520,7 @@ void ParquetBloomFilter::Initialize(idx_t num_blocks) {
 	D_ASSERT(data->len % sizeof(ParquetBloomBlock) == 0);
 }
 
-void ParquetBloomFilter::Initialize(unique_ptr<ResizeableBuffer> data_p) {
+ParquetBloomFilter::ParquetBloomFilter(unique_ptr<ResizeableBuffer> data_p) {
 	D_ASSERT(data_p->len % sizeof(ParquetBloomBlock) == 0);
 	data = std::move(data_p);
 	block_count = data->len / sizeof(ParquetBloomBlock);
@@ -546,8 +545,7 @@ void ParquetBloomFilter::Shrink(idx_t new_block_count) {
 	D_ASSERT(IsPowerOfTwo(block_count));
 	D_ASSERT(IsPowerOfTwo(new_block_count));
 
-	ParquetBloomFilter new_bloom_filter;
-	new_bloom_filter.Initialize(new_block_count);
+	ParquetBloomFilter new_bloom_filter(new_block_count);
 
 	uint8_t shift = log2(block_count) - log2(new_block_count);
 	auto old_blocks = (ParquetBloomBlock *)(data->ptr);
@@ -564,6 +562,24 @@ void ParquetBloomFilter::Shrink(idx_t new_block_count) {
 
 	data = std::move(new_bloom_filter.data);
 	block_count = new_block_count;
+}
+
+// compiler optimizes this into a single instruction (popcnt)
+static uint8_t PopCnt64(uint64_t n) {
+	uint8_t c = 0;
+	for (; n; ++c) {
+		n &= n - 1;
+	}
+	return c;
+}
+
+double ParquetBloomFilter::OneRatio() {
+	auto bloom_ptr = (uint64_t *)data->ptr;
+	idx_t one_count = 0;
+	for (idx_t b_idx = 0; b_idx < data->len / sizeof(uint64_t); ++b_idx) {
+		one_count += PopCnt64(bloom_ptr[b_idx]);
+	}
+	auto one_ratio = one_count / (data->len * 8.0);
 }
 
 ResizeableBuffer *ParquetBloomFilter::Get() {

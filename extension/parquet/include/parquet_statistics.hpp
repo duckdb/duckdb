@@ -28,12 +28,15 @@ struct ParquetStatisticsUtils {
 };
 
 class ParquetBloomFilter {
+	static constexpr const idx_t DEFAULT_BLOCK_COUNT = 32; // 4k filter
+
 public:
-	void Initialize(idx_t num_blocks);
-	void Initialize(unique_ptr<ResizeableBuffer> data_p);
+	ParquetBloomFilter(idx_t num_blocks = DEFAULT_BLOCK_COUNT);
+	ParquetBloomFilter(unique_ptr<ResizeableBuffer> data_p);
 	void FilterInsert(uint64_t x);
 	bool FilterCheck(uint64_t x);
 	void Shrink(idx_t new_block_count);
+	double OneRatio();
 	ResizeableBuffer *Get();
 
 private:

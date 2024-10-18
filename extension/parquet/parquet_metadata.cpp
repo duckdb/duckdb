@@ -596,7 +596,7 @@ void ParquetMetaDataOperatorData::BindBloomProbe(vector<LogicalType> &return_typ
 	names.emplace_back("file_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	names.emplace_back("row_group");
+	names.emplace_back("row_group_id");
 	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("bloom_filter_excludes");
@@ -630,6 +630,7 @@ void ParquetMetaDataOperatorData::ExecuteBloomProbe(ClientContext &context, cons
 	auto protocol =
 	    make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 
+	D_ASSERT(!probe.IsNull());
 	ConstantFilter filter(ExpressionType::COMPARE_EQUAL,
 	                      probe.CastAs(context, reader->GetTypes()[probe_column_idx.GetIndex()]));
 
@@ -681,8 +682,11 @@ unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, TableFuncti
 		break;
 	case ParquetMetadataOperatorType::BLOOM_PROBE: {
 		auto probe_bind_data = make_uniq<ParquetBloomProbeBindData>();
-		// TODO verify those
-		probe_bind_data->probe_column_name = input.inputs[1].GetValue<string>();
+		D_ASSERT(input.inputs.size() == 3);
+		if (input.inputs[1].IsNull() || input.inputs[2].IsNull()) {
+			throw InvalidInputException("Can't have NULL parameters for parquet_bloom_probe");
+		}
+		probe_bind_data->probe_column_name = input.inputs[1].CastAs(context, LogicalType::VARCHAR).GetValue<string>();
 		probe_bind_data->probe_constant = input.inputs[2];
 		result = std::move(probe_bind_data);
 		ParquetMetaDataOperatorData::BindBloomProbe(return_types, names);

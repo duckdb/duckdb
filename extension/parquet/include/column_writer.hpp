@@ -18,6 +18,7 @@ class ColumnWriterPageState;
 class BasicColumnWriterState;
 struct ChildFieldIDs;
 class ResizeableBuffer;
+class ParquetBloomFilter;
 
 class ColumnWriterState {
 public:
@@ -47,7 +48,7 @@ public:
 
 	virtual bool HasStats();
 	virtual bool HasBloomFilter();
-	virtual const ResizeableBuffer *GetBloomFilter();
+	virtual unique_ptr<ParquetBloomFilter> GetBloomFilter();
 	virtual string GetMin();
 	virtual string GetMax();
 	virtual string GetMinValue();
