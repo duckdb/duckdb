@@ -22,9 +22,9 @@ class TemporaryFileManager;
 //===--------------------------------------------------------------------===//
 // TemporaryBufferSize
 //===--------------------------------------------------------------------===//
-static constexpr idx_t TEMPORARY_BUFFER_SIZE_GRANULARITY = 32ULL * 1024ULL;
+static constexpr uint64_t TEMPORARY_BUFFER_SIZE_GRANULARITY = 32ULL * 1024ULL;
 
-enum class TemporaryBufferSize : idx_t {
+enum class TemporaryBufferSize : uint64_t {
 	INVALID = 0,
 	THIRTY_TWO_KB = 32768,
 	SIXTY_FOUR_KB = 65536,
@@ -165,6 +165,14 @@ private:
 // TemporaryFileMap
 //===--------------------------------------------------------------------===//
 class TemporaryFileMap {
+private:
+	struct TemporaryBufferSizeHash {
+		std::size_t operator()(const TemporaryBufferSize &k) const {
+			return std::hash<idx_t>()(static_cast<idx_t>(k));
+		}
+	};
+	template <class T>
+	using temporary_buffer_size_map_t = unordered_map<TemporaryBufferSize, T, TemporaryBufferSizeHash>;
 	using temporary_file_map_t = map<idx_t, unique_ptr<TemporaryFileHandle>>;
 
 public:
@@ -182,7 +190,7 @@ public:
 
 private:
 	TemporaryFileManager &manager;
-	unordered_map<TemporaryBufferSize, temporary_file_map_t> files;
+	temporary_buffer_size_map_t<temporary_file_map_t> files;
 };
 
 //===--------------------------------------------------------------------===//

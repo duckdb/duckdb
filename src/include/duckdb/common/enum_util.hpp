@@ -330,7 +330,7 @@ enum class TaskExecutionMode : uint8_t;
 
 enum class TaskExecutionResult : uint8_t;
 
-enum class TemporaryBufferSize : idx_t;
+enum class TemporaryBufferSize : uint64_t;
 
 enum class TimestampCastResult : uint8_t;
 
