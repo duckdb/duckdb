@@ -569,12 +569,14 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 			dict_decoder->GetBatch<uint32_t>(offset_buffer.ptr, read_now - null_count);
 			ConvertDictToSelVec(reinterpret_cast<uint32_t *>(offset_buffer.ptr),
 			                    reinterpret_cast<uint8_t *>(define_out), filter, read_now);
-			if (read_now == num_values) {
-				D_ASSERT(result_offset == 0);
+			if (result_offset == 0) {
 				result.Slice(*dictionary, dictionary_selection_vector, read_now);
 				D_ASSERT(result.GetVectorType() == VectorType::DICTIONARY_VECTOR);
 			} else {
-				VectorOperations::Copy(*dictionary, result, dictionary_selection_vector, read_now, 0, result_offset);
+				Vector flat(result.GetType(), num_values);
+				VectorOperations::Copy(result, flat, result_offset, 0, 0);
+				VectorOperations::Copy(*dictionary, flat, dictionary_selection_vector, read_now, 0, result_offset);
+				result.Reference(flat);
 			}
 		} else if (dbp_decoder) {
 			// TODO keep this in the state
