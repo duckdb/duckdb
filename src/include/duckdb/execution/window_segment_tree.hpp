@@ -19,6 +19,7 @@
 namespace duckdb {
 
 struct WindowSharedExpressions;
+class WindowCollection;
 
 class WindowAggregatorState {
 public:
@@ -43,6 +44,8 @@ public:
 
 class WindowAggregator {
 public:
+	using CollectionPtr = optional_ptr<WindowCollection>;
+
 	WindowAggregator(const BoundWindowExpression &wexpr, const WindowExcludeMode exclude_mode_p);
 	WindowAggregator(const BoundWindowExpression &wexpr, const WindowExcludeMode exclude_mode_p,
 	                 WindowSharedExpressions &shared);
@@ -54,9 +57,10 @@ public:
 	virtual unique_ptr<WindowAggregatorState> GetLocalState(const WindowAggregatorState &gstate) const = 0;
 
 	//	Build
-	virtual void Sink(WindowAggregatorState &gstate, WindowAggregatorState &lstate, DataChunk &arg_chunk,
-	                  idx_t input_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered);
-	virtual void Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, const FrameStats &stats);
+	virtual void Sink(WindowAggregatorState &gstate, WindowAggregatorState &lstate, DataChunk &sink_chunk,
+	                  DataChunk &coll_chunk, idx_t input_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered);
+	virtual void Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, CollectionPtr collection,
+	                      const FrameStats &stats);
 
 	//	Probe
 	virtual void Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate, const DataChunk &bounds,
@@ -99,9 +103,11 @@ public:
 
 	unique_ptr<WindowAggregatorState> GetGlobalState(ClientContext &context, idx_t group_count,
 	                                                 const ValidityMask &partition_mask) const override;
-	void Sink(WindowAggregatorState &gstate, WindowAggregatorState &lstate, DataChunk &arg_chunk, idx_t input_idx,
-	          optional_ptr<SelectionVector> filter_sel, idx_t filtered) override;
-	void Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, const FrameStats &stats) override;
+	void Sink(WindowAggregatorState &gstate, WindowAggregatorState &lstate, DataChunk &sink_chunk,
+	          DataChunk &coll_chunk, idx_t input_idx, optional_ptr<SelectionVector> filter_sel,
+	          idx_t filtered) override;
+	void Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, CollectionPtr collection,
+	              const FrameStats &stats) override;
 
 	unique_ptr<WindowAggregatorState> GetLocalState(const WindowAggregatorState &gstate) const override;
 	void Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate, const DataChunk &bounds,
@@ -116,7 +122,8 @@ public:
 
 	unique_ptr<WindowAggregatorState> GetGlobalState(ClientContext &context, idx_t group_count,
 	                                                 const ValidityMask &partition_mask) const override;
-	void Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, const FrameStats &stats) override;
+	void Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, CollectionPtr collection,
+	              const FrameStats &stats) override;
 
 	unique_ptr<WindowAggregatorState> GetLocalState(const WindowAggregatorState &gstate) const override;
 	void Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate, const DataChunk &bounds,
@@ -132,7 +139,8 @@ public:
 	unique_ptr<WindowAggregatorState> GetGlobalState(ClientContext &context, idx_t group_count,
 	                                                 const ValidityMask &partition_mask) const override;
 	unique_ptr<WindowAggregatorState> GetLocalState(const WindowAggregatorState &gstate) const override;
-	void Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, const FrameStats &stats) override;
+	void Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, CollectionPtr collection,
+	              const FrameStats &stats) override;
 
 	void Evaluate(const WindowAggregatorState &gstate, WindowAggregatorState &lstate, const DataChunk &bounds,
 	              Vector &result, idx_t count, idx_t row_idx) const override;
@@ -155,9 +163,10 @@ public:
 	//	Build
 	unique_ptr<WindowAggregatorState> GetGlobalState(ClientContext &context, idx_t group_count,
 	                                                 const ValidityMask &partition_mask) const override;
-	void Sink(WindowAggregatorState &gsink, WindowAggregatorState &lstate, DataChunk &arg_chunk, idx_t input_idx,
-	          optional_ptr<SelectionVector> filter_sel, idx_t filtered) override;
-	void Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, const FrameStats &stats) override;
+	void Sink(WindowAggregatorState &gsink, WindowAggregatorState &lstate, DataChunk &sink_chunk, DataChunk &coll_chunk,
+	          idx_t input_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered) override;
+	void Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, CollectionPtr collection,
+	              const FrameStats &stats) override;
 
 	//	Evaluate
 	unique_ptr<WindowAggregatorState> GetLocalState(const WindowAggregatorState &gstate) const override;
