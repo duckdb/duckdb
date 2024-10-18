@@ -403,7 +403,66 @@ void WriteAheadLog::WriteUpdate(DataChunk &chunk, const vector<column_t> &column
 void WriteAheadLog::WriteAlter(const AlterInfo &info) {
 	WriteAheadLogSerializer serializer(*this, WALType::ALTER_INFO);
 	serializer.WriteProperty(101, "info", &info);
+
+	if (info.type != AlterType::ALTER_TABLE) {
+		serializer.End();
+		return;
+	}
+
+	auto &table_info = info.Cast<AlterTableInfo>();
+	if (table_info.alter_table_type != AlterTableType::ADD_CONSTRAINT) {
+		serializer.End();
+		return;
+	}
+
+	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
+	if (constraint_info.constraint->type != ConstraintType::UNIQUE) {
+		serializer.End();
+		return;
+	}
+
+	auto &unique_info = constraint_info.constraint->Cast<UniqueConstraint>();
+	if (!unique_info.IsPrimaryKey()) {
+		serializer.End();
+		return;
+	}
+
+	//	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(ClientContext &context, CatalogType type, const string &schema,
+	//	                                               const string &name, OnEntryNotFound if_not_found,
+	//	                                               QueryErrorContext error_context = QueryErrorContext());
+
+	//	auto data_table_info = make_unique<DataTableInfo>()
+
+	//	auto &catalog = database.GetCatalog();
+	//	auto &schema = database.ParentSchema();
+	//	catalog.GetEntry<DuckIndexEntry>()
+
 	serializer.End();
+
+	//	unique_info.
+
+	// TODO: find the matching table index list
+
+	//	auto db_options = database.GetDatabase().config.options;
+	//	auto v1_0_0_storage = db_options.serialization_compatibility.serialization_version < 3;
+	//	case_insensitive_map_t<Value> options;
+	//	if (!v1_0_0_storage) {
+	//		options.emplace("v1_0_0_storage", v1_0_0_storage);
+	//	}
+
+	//	// now serialize the index data to the persistent storage and write the index metadata
+	//	auto &duck_index_entry = entry.Cast<DuckIndexEntry>();
+	//	auto &table_idx_list = duck_index_entry.GetDataTableInfo().GetIndexes();
+	//
+	//
+	//	table_idx_list.Scan([&](Index &index) {
+	//		if (duck_index_entry.name == index.GetIndexName()) {
+	//			SerializeIndexToWAL(serializer, index, options);
+	//			return true;
+	//		}
+	//		return false;
+	//	});
+	//	serializer.End();
 }
 
 //===--------------------------------------------------------------------===//
