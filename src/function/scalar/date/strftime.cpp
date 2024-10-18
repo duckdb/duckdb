@@ -111,10 +111,6 @@ ScalarFunctionSet StrfTimeFun::GetFunctions() {
 	return strftime;
 }
 
-void StrfTimeFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetFunctions());
-}
-
 StrpTimeFormat::StrpTimeFormat() {
 }
 
@@ -315,10 +311,6 @@ ScalarFunctionSet StrpTimeFun::GetFunctions() {
 	return strptime;
 }
 
-void StrpTimeFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetFunctions());
-}
-
 ScalarFunctionSet TryStrpTimeFun::GetFunctions() {
 	ScalarFunctionSet try_strptime("try_strptime");
 
@@ -334,10 +326,6 @@ ScalarFunctionSet TryStrpTimeFun::GetFunctions() {
 	try_strptime.AddFunction(fun);
 
 	return try_strptime;
-}
-
-void TryStrpTimeFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetFunctions());
 }
 
 } // namespace duckdb
