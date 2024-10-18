@@ -1,13 +1,12 @@
 #include "core_functions/scalar/map_functions.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/list/contains_or_position.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+
 namespace duckdb {
 
-static unique_ptr<FunctionData> MapExtractBind(ClientContext &context, ScalarFunction &bound_function,
+static unique_ptr<FunctionData> MapExtractBind(ClientContext &, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
 	if (arguments.size() != 2) {
 		throw BinderException("MAP_EXTRACT must have exactly two arguments");
@@ -17,7 +16,7 @@ static unique_ptr<FunctionData> MapExtractBind(ClientContext &context, ScalarFun
 	auto &input_type = arguments[1]->return_type;
 
 	if (map_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.return_type = LogicalType::LIST(LogicalTypeId::SQLNULL);
+		bound_function.return_type = LogicalTypeId::SQLNULL;
 		return make_uniq<VariableReturnBindData>(bound_function.return_type);
 	}
 
@@ -27,7 +26,7 @@ static unique_ptr<FunctionData> MapExtractBind(ClientContext &context, ScalarFun
 	auto &value_type = MapType::ValueType(map_type);
 
 	//! Here we have to construct the List Type that will be returned
-	bound_function.return_type = LogicalType::LIST(value_type);
+	bound_function.return_type = value_type;
 	auto key_type = MapType::KeyType(map_type);
 	if (key_type.id() != LogicalTypeId::SQLNULL && input_type.id() != LogicalTypeId::SQLNULL) {
 		bound_function.arguments[1] = MapType::KeyType(map_type);
@@ -46,9 +45,8 @@ static void MapExtractFunc(DataChunk &args, ExpressionState &state, Vector &resu
 
 	if (map_is_null || arg_is_null) {
 		// Short-circuit if either the map or the arg is NULL
-		ListVector::SetListSize(result, 0);
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::GetData<list_entry_t>(result)[0] = {0, 0};
+		ConstantVector::SetNull(result, true);
 		result.Verify(count);
 		return;
 	}
@@ -60,19 +58,16 @@ static void MapExtractFunc(DataChunk &args, ExpressionState &state, Vector &resu
 	Vector pos_vec(LogicalType::INTEGER, count);
 	ListSearchOp<true>(map_vec, key_vec, arg_vec, pos_vec, args.size());
 
-	UnifiedVectorFormat val_format;
 	UnifiedVectorFormat pos_format;
 	UnifiedVectorFormat lst_format;
 
-	val_vec.ToUnifiedFormat(ListVector::GetListSize(map_vec), val_format);
 	pos_vec.ToUnifiedFormat(count, pos_format);
 	map_vec.ToUnifiedFormat(count, lst_format);
 
 	const auto pos_data = UnifiedVectorFormat::GetData<int32_t>(pos_format);
 	const auto inc_list_data = ListVector::GetData(map_vec);
-	const auto out_list_data = ListVector::GetData(result);
 
-	idx_t offset = 0;
+	auto &result_validity = FlatVector::Validity(result);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		auto lst_idx = lst_format.sel->get_index(row_idx);
 		if (!lst_format.validity.RowIsValid(lst_idx)) {
@@ -80,23 +75,16 @@ static void MapExtractFunc(DataChunk &args, ExpressionState &state, Vector &resu
 			continue;
 		}
 
-		auto &inc_list = inc_list_data[lst_idx];
-		auto &out_list = out_list_data[row_idx];
-
 		const auto pos_idx = pos_format.sel->get_index(row_idx);
 		if (!pos_format.validity.RowIsValid(pos_idx)) {
-			// We didnt find the key in the map, so return an empty list
-			out_list.offset = offset;
-			out_list.length = 0;
+			// We didnt find the key in the map, so return NULL
+			result_validity.SetInvalid(row_idx);
 			continue;
 		}
 
 		// Compute the actual position of the value in the map value vector
-		const auto pos = inc_list.offset + UnsafeNumericCast<idx_t>(pos_data[pos_idx] - 1);
-		out_list.offset = offset;
-		out_list.length = 1;
-		ListVector::Append(result, val_vec, pos + 1, pos);
-		offset++;
+		const auto pos = inc_list_data[lst_idx].offset + UnsafeNumericCast<idx_t>(pos_data[pos_idx] - 1);
+		VectorOperations::Copy(val_vec, result, pos + 1, pos, row_idx);
 	}
 
 	if (args.size() == 1) {

@@ -13,7 +13,7 @@ WHERE c IS NOT NULL;
 ----
 
 query I nosort correct
-SELECT map([c], [c])[c] IS NOT DISTINCT FROM [c] as equal
+SELECT map([c], [c])[c] IS NOT DISTINCT FROM c as equal
 FROM test_vector_types(NULL::INT[]) t(c)
 WHERE c IS NOT NULL;
 ----
@@ -47,7 +47,7 @@ SELECT
 	filtered,
 	last_element,
 	pos,
-	expected_result = result OR (result = [] AND expected_result = [NULL]) as equal
+	expected_result IS NOT DISTINCT FROM result as equal
 from
 (
 	SELECT
@@ -61,8 +61,8 @@ from
 		END as pos,
 		CASE
 			WHEN last_element IS NULL
-				THEN []
-			ELSE [list_position(filtered, last_element)]
+				THEN NULL
+			ELSE list_position(filtered, last_element)
 		END as expected_result,
 		mymap[last_element] as result,
 	FROM test_vector_types(NULL::INT[]) t(c)
