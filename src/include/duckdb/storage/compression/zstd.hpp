@@ -66,14 +66,15 @@ class DictBuffer {
 public:
 	DictBuffer() : dict_buffer(nullptr), capacity(0), size(0) {
 	}
-	DictBuffer(idx_t capacity) : dict_buffer(nullptr), capacity(capacity), size(capacity) {
-		dict_buffer = malloc(capacity);
+	DictBuffer(uint32_t capacity) : dict_buffer(nullptr), capacity(capacity), size(capacity) {
+		owned_buffer = malloc(capacity);
+		dict_buffer = owned_buffer;
 	}
-	DictBuffer(void *buffer, idx_t size) : dict_buffer(buffer), capacity(size), size(size) {
+	DictBuffer(void *buffer, uint32_t size) : dict_buffer(buffer), capacity(size), size(size) {
 		D_ASSERT(dict_buffer);
 	}
 	~DictBuffer() {
-		free(dict_buffer);
+		free(owned_buffer);
 	}
 	DictBuffer(const DictBuffer &other) = delete;
 	DictBuffer(DictBuffer &&other) : dict_buffer(other.dict_buffer), capacity(other.capacity), size(other.size) {
@@ -95,14 +96,14 @@ public:
 	operator bool() {
 		return dict_buffer != nullptr;
 	}
-	void SetSize(idx_t size_p) {
+	void SetSize(uint32_t size_p) {
 		D_ASSERT(size_p <= capacity);
 		size = size_p;
 	}
-	idx_t Size() const {
+	uint32_t Size() const {
 		return size;
 	}
-	idx_t Capacity() const {
+	uint32_t Capacity() const {
 		return capacity;
 	}
 	void *Buffer() const {
@@ -110,9 +111,10 @@ public:
 	}
 
 private:
-	void *dict_buffer;
-	idx_t capacity = 0;
-	idx_t size = 0;
+	void *owned_buffer = nullptr;
+	void *dict_buffer = nullptr;
+	uint32_t capacity = 0;
+	uint32_t size = 0;
 };
 
 } // namespace duckdb

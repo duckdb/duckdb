@@ -134,6 +134,22 @@ public:
 		auto string_size = str.GetSize();
 		total_size += string_size;
 	}
+	idx_t GetVectorCount() {
+		idx_t vector_count = count / STANDARD_VECTOR_SIZE;
+		vector_count += (count % STANDARD_VECTOR_SIZE) != 0;
+		return vector_count;
+	}
+
+	idx_t GetVectorMetadataSize() {
+		auto vector_count = GetVectorCount();
+
+		idx_t vector_metadata_size = 0;
+		vector_metadata_size += sizeof(page_id_t);
+		vector_metadata_size += sizeof(page_offset_t);
+		vector_metadata_size += sizeof(uncompressed_size_t);
+		vector_metadata_size += sizeof(compressed_size_t);
+		return vector_count * vector_metadata_size;
+	}
 
 public:
 	ZSTDSamplingState sampling_state;
@@ -173,24 +189,42 @@ bool ZSTDStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t coun
 	return true;
 }
 
-DictBuffer CreateDictFromSamples(ZSTDSamplingState &state) {
-	if (!state.Finalize()) {
+DictBuffer CreateDictFromSamples(ZSTDAnalyzeState &state) {
+	auto &sampling_state = state.sampling_state;
+	if (!sampling_state.Finalize()) {
 		return DictBuffer();
 	}
 
-	idx_t dict_buffer_size = MaxValue<idx_t>(state.total_sample_size / 100, ZDICT_DICTSIZE_MIN);
-	DictBuffer buffer(dict_buffer_size);
+	auto space_required = state.GetVectorMetadataSize();
+	space_required += sizeof(block_id_t);
+	if (space_required >= state.info.GetBlockSize()) {
+		// FIXME: allow vector metadata to spill over to the next page
+		return DictBuffer();
+	}
+	auto remaining_size = state.info.GetBlockSize() - space_required;
+	if (remaining_size < ZDICT_DICTSIZE_MIN) {
+		// Not enough room to fit the metadata + the dictionary on the page
+		return DictBuffer();
+	}
+
+	idx_t dict_buffer_size = MaxValue<idx_t>(sampling_state.total_sample_size / 100, ZDICT_DICTSIZE_MIN);
+	if (dict_buffer_size > remaining_size) {
+		// FIXME: perhaps we want to spill this to a separate page instead then?
+		dict_buffer_size = remaining_size;
+	}
+
+	DictBuffer buffer(UnsafeNumericCast<dict_size_t>(dict_buffer_size));
 	if (!buffer.Buffer()) {
 		return DictBuffer();
 	}
 
-	auto res = duckdb_zstd::ZDICT_trainFromBuffer(buffer.Buffer(), buffer.Capacity(), state.concatenated_samples,
-	                                              (size_t *)state.sample_sizes.data(),
-	                                              UnsafeNumericCast<uint32_t>(state.sample_sizes.size()));
+	auto res = duckdb_zstd::ZDICT_trainFromBuffer(
+	    buffer.Buffer(), buffer.Capacity(), sampling_state.concatenated_samples,
+	    (size_t *)sampling_state.sample_sizes.data(), UnsafeNumericCast<uint32_t>(sampling_state.sample_sizes.size()));
 	if (duckdb_zstd::ZSTD_isError(res)) {
 		return DictBuffer();
 	}
-	buffer.SetSize(res);
+	buffer.SetSize(UnsafeNumericCast<dict_size_t>(res));
 	return buffer;
 }
 
@@ -203,7 +237,7 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 		return DConstants::INVALID_INDEX;
 	}
 
-	state.dict = CreateDictFromSamples(state.sampling_state);
+	state.dict = CreateDictFromSamples(state);
 	if (!state.dict) {
 		// Training the dictionary failed for some reason
 		return NumericLimits<idx_t>::Maximum();
@@ -214,6 +248,8 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 
 	auto required_space = duckdb_zstd::ZSTD_compressBound(state.sampling_state.total_sample_size);
 	auto dst = malloc(required_space);
+	// FIXME: use streaming compression ? both to simulate the real compression better and to reduce the amount of space
+	// we have to allocate here
 	auto compressed_size = duckdb_zstd::ZSTD_compress_usingCDict(
 	    state.context, dst, required_space, state.sampling_state.concatenated_samples,
 	    state.sampling_state.total_sample_size, state.compression_dict);
@@ -232,14 +268,7 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	estimated_size += expected_compressed_size;
 
 	estimated_size += state.count * sizeof(string_length_t);
-
-	idx_t total_vectors = state.count / STANDARD_VECTOR_SIZE;
-	total_vectors += (state.count % STANDARD_VECTOR_SIZE) != 0;
-
-	estimated_size += total_vectors * sizeof(page_id_t);
-	estimated_size += total_vectors * sizeof(page_offset_t);
-	estimated_size += total_vectors * sizeof(uncompressed_size_t);
-	estimated_size += total_vectors * sizeof(compressed_size_t);
+	estimated_size += state.GetVectorMetadataSize();
 
 	// we only use zstd if it is at least 1.3 times better than the alternative
 	auto zstd_penalty_factor = 1.3;
@@ -259,32 +288,38 @@ public:
 	    : CompressionState(analyze_state_p->info), analyze_state(std::move(analyze_state_p)),
 	      checkpointer(checkpointer), function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ZSTD)) {
 		CreateSegment(checkpointer.GetRowGroup().start);
+		SetCurrentBuffer(segment_handle);
 
 		auto &dict = analyze_state->dict;
 		// Write the dictionary to the start of the segment
 		D_ASSERT(dict.Size() <= (info.GetBlockSize() - sizeof(block_id_t) - sizeof(dict_size_t)));
-		Store<dict_size_t>(dict.Size(), segment_data_ptr);
-		segment_data_ptr += sizeof(dict_size_t);
-		memcpy(segment_data_ptr, dict.Buffer(), dict.Size());
-		segment_data_ptr += dict.Size();
+		Store<dict_size_t>(dict.Size(), current_buffer_ptr);
+		current_buffer_ptr += sizeof(dict_size_t);
+		memcpy(current_buffer_ptr, dict.Buffer(), dict.Size());
+		current_buffer_ptr += dict.Size();
 
-		// Allocate space for Vector metadata
-		idx_t vector_metadata_size = 0;
-		vector_metadata_size += sizeof(page_id_t);
-		vector_metadata_size += sizeof(page_offset_t);
-		vector_metadata_size += sizeof(uncompressed_size_t);
-		vector_metadata_size += sizeof(compressed_size_t);
+		idx_t amount_of_vectors = analyze_state->GetVectorCount();
 
-		idx_t segment_size = analyze_state->count;
-		idx_t amount_of_vectors = (segment_size / STANDARD_VECTOR_SIZE) + ((segment_size % STANDARD_VECTOR_SIZE) != 0);
+		// Set pointers to the Vector Metadata
+		page_ids = (page_id_t *)current_buffer_ptr;
+		current_buffer_ptr += sizeof(page_id_t) * amount_of_vectors;
 
-		vector_metadata_size *= amount_of_vectors;
+		page_offsets = (page_offset_t *)current_buffer_ptr;
+		current_buffer_ptr += sizeof(page_offset_t) * amount_of_vectors;
 
-		// TODO: make sure we have enough room to store the vector metadata on the first page
-		// then set pointers for it and forward the 'segment_data_ptr' past it
+		uncompressed_sizes = (uncompressed_size_t *)current_buffer_ptr;
+		current_buffer_ptr += sizeof(uncompressed_size_t) * amount_of_vectors;
+
+		compressed_sizes = (compressed_size_t *)current_buffer_ptr;
+		current_buffer_ptr += sizeof(compressed_size_t) * amount_of_vectors;
 	}
 
 public:
+	void SetCurrentBuffer(BufferHandle &handle) {
+		current_buffer = &handle;
+		current_buffer_ptr = handle.Ptr();
+	}
+
 	void AddString(const string_t &string) {
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
 		auto required_space = string.GetSize() + compression_buffer_offset;
@@ -301,7 +336,7 @@ public:
 		}
 		memcpy(compression_buffer.get() + compression_buffer_offset, string.GetData(), string.GetSize());
 		compression_buffer_offset += string.GetSize();
-		string_lengths[buffered_count] = string.GetSize();
+		string_lengths[buffered_count] = UnsafeNumericCast<string_length_t>(string.GetSize());
 		buffered_count++;
 		if (buffered_count == STANDARD_VECTOR_SIZE) {
 			FlushVector();
@@ -311,16 +346,33 @@ public:
 	void FlushVector() {
 		// Write a Vector worth of strings to storage
 
+		page_id_t starting_page_id = GetCurrentId();
+		page_offset_t starting_page_offset = GetCurrentOffset();
+
 		// compress the data to 'storage_buffer', then figure out if it can fit in the current segment or not
 		// also write the lengths of every string
-
-		size_t compressed_size = duckdb_zstd::ZSTD_compress_usingCDict(
+		auto compressed_size = duckdb_zstd::ZSTD_compress_usingCDict(
 		    /* context = */ analyze_state->context,
 		    /* dst = */ storage_buffer.get(),
 		    /* dstCapacity = */ storage_buffer.GetSize(),
 		    /* src = */ compression_buffer.get(),
 		    /* srcSize = */ compression_buffer_offset,
 		    /* dict = */ analyze_state->compression_dict);
+		if (duckdb_zstd::ZSTD_isError(compressed_size)) {
+			throw InvalidInputException("ZSTD Compression failed: %s", duckdb_zstd::ZSTD_getErrorName(compressed_size));
+		}
+
+		// TODO:
+		// Write from the storage_buffer into the block
+		// FIXME: use streaming compression to skip the 'storage_buffer' entirely
+
+		// Write the metadata for this Vector
+		page_ids[vector_count] = starting_page_id;
+		page_offsets[vector_count] = starting_page_offset;
+		compressed_sizes[vector_count] = UnsafeNumericCast<compressed_size_t>(compressed_size);
+		uncompressed_sizes[vector_count] = compression_buffer_offset;
+		vector_count++;
+
 		compression_buffer_offset = 0;
 		buffered_count = 0;
 	}
@@ -333,11 +385,20 @@ public:
 		return storage_buffer.get();
 	}
 
-	// idx_t GetCurrentMetadataOffset() {
-	//	auto start_of_segment = segment_handle.Ptr();
-	//	D_ASSERT(current_data_ptr >= start_of_segment);
-	//	return (idx_t)(current_data_ptr - start_of_segment);
-	//}
+	page_id_t GetCurrentId() {
+		if (&segment_handle == current_buffer.get()) {
+			return INVALID_BLOCK;
+		}
+		D_ASSERT(data_block);
+		return data_block->BlockId();
+	}
+
+	page_offset_t GetCurrentOffset() {
+		auto &handle = *current_buffer;
+		auto start_of_buffer = handle.Ptr();
+		D_ASSERT(current_buffer_ptr >= start_of_buffer);
+		return (page_offset_t)(current_buffer_ptr - start_of_buffer);
+	}
 
 	void CreateSegment(idx_t row_start) {
 		auto &db = checkpointer.GetDatabase();
@@ -349,7 +410,6 @@ public:
 
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
 		segment_handle = buffer_manager.Pin(segment->block);
-		segment_data_ptr = segment_handle.Ptr();
 	}
 
 	void Finalize() {
@@ -391,7 +451,6 @@ public:
 	// The segment state
 	unique_ptr<ColumnSegment> segment;
 	BufferHandle segment_handle;
-	data_ptr_t segment_data_ptr;
 
 	// non-segment block
 	shared_ptr<BlockHandle> data_block;
@@ -399,7 +458,17 @@ public:
 
 	// Current block state
 	optional_ptr<BufferHandle> current_buffer;
-	data_ptr_t buffer_ptr;
+	data_ptr_t current_buffer_ptr;
+
+	//===--------------------------------------------------------------------===//
+	// Vector metadata
+	//===--------------------------------------------------------------------===//
+	page_id_t *page_ids;
+	page_offset_t *page_offsets;
+	uncompressed_size_t *uncompressed_sizes;
+	compressed_size_t *compressed_sizes;
+	//! The amount of vectors we've seen so far
+	idx_t vector_count;
 
 	//===--------------------------------------------------------------------===//
 	// Temporary buffers
