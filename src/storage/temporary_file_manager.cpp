@@ -1,5 +1,6 @@
 #include "duckdb/storage/temporary_file_manager.hpp"
 
+#include "duckdb/common/chrono.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 #include "duckdb/storage/standard_buffer_manager.hpp"
 #include "zstd.h"
@@ -368,7 +369,8 @@ static idx_t GetDefaultMax(const string &path) {
 }
 
 TemporaryFileManager::TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p)
-    : db(db), temp_directory(temp_directory_p), files(*this), size_on_disk(0), max_swap_space(0) {
+    : db(db), temp_directory(temp_directory_p), files(*this), size_on_disk(0), max_swap_space(0),
+      uncompressed_write_ns(1), compressed_write_ns(1) {
 }
 
 TemporaryFileManager::~TemporaryFileManager() {
@@ -381,6 +383,8 @@ TemporaryFileManager::TemporaryFileManagerLock::TemporaryFileManagerLock(mutex &
 void TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer) {
 	// We group DEFAULT_BLOCK_ALLOC_SIZE blocks into the same file.
 	D_ASSERT(buffer.size == BufferManager::GetBufferManager(db).GetBlockSize());
+
+	const int64_t before_ns = duration_cast<nanoseconds>(high_resolution_clock::now().time_since_epoch()).count();
 
 	AllocatedData compressed_buffer;
 	const auto size = CompressTemporaryBuffer(buffer, compressed_buffer);
@@ -412,15 +416,37 @@ void TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer 
 	D_ASSERT(index.IsValid());
 
 	handle->WriteTemporaryBuffer(buffer, index.block_index.GetIndex(), compressed_buffer);
+
+	const auto after_ns = duration_cast<nanoseconds>(high_resolution_clock::now().time_since_epoch()).count();
+	const auto duration_ns = after_ns - before_ns;
+
+	if (size == TemporaryBufferSize::DEFAULT) {
+		uncompressed_write_ns = duration_ns;
+	} else {
+		compressed_write_ns = duration_ns;
+	}
 }
 
 TemporaryBufferSize TemporaryFileManager::CompressTemporaryBuffer(FileBuffer &buffer,
-                                                                  AllocatedData &compressed_buffer) const {
+                                                                  AllocatedData &compressed_buffer) {
 	if (buffer.AllocSize() <= TemporaryBufferSizeToSize(MinimumCompressedTemporaryBufferSize())) {
 		return TemporaryBufferSize::DEFAULT; // Buffer size is less or equal to the minimum compressed size - no point
 	}
 
-	const auto temp_directory_compression_level = db.config.options.temp_directory_compression_level;
+	const double ratio = static_cast<double>(compressed_write_ns) / static_cast<double>(uncompressed_write_ns);
+	bool should_compress = ratio < DURATION_RATIO_THRESHOLD;
+	{
+		lock_guard<mutex> guard(random_engine.lock);
+		if (random_engine.NextRandom() < COMPRESSION_DEVIATION) {
+			should_compress = !should_compress;
+		}
+	}
+
+	if (!should_compress) {
+		return TemporaryBufferSize::DEFAULT;
+	}
+
+	const auto temp_directory_compression_level = DBConfig::GetConfig(db).options.temp_directory_compression_level;
 	int compression_level;
 	if (temp_directory_compression_level > duckdb_zstd::ZSTD_maxCLevel()) {
 		compression_level = duckdb_zstd::ZSTD_maxCLevel();

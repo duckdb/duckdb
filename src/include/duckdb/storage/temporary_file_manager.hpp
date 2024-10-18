@@ -12,6 +12,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/random_engine.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -226,7 +227,7 @@ public:
 
 private:
 	//! Compress buffer, write it in compressed_buffer and return the size
-	TemporaryBufferSize CompressTemporaryBuffer(FileBuffer &buffer, AllocatedData &compressed_buffer) const;
+	TemporaryBufferSize CompressTemporaryBuffer(FileBuffer &buffer, AllocatedData &compressed_buffer);
 
 	//! Create file name for given size/index
 	string CreateTemporaryFileName(const TemporaryFileIdentifier &identifier) const;
@@ -258,6 +259,17 @@ private:
 	atomic<idx_t> size_on_disk;
 	//! The max amount of disk space that can be used
 	idx_t max_swap_space;
+
+	//! Duration of the last uncompressed write
+	atomic<int64_t> uncompressed_write_ns;
+	//! Duration of the last compressed write
+	atomic<int64_t> compressed_write_ns;
+	//! Bias towards compressed writes: we choose uncompressed if it is more than 2x faster than compressed
+	static constexpr double DURATION_RATIO_THRESHOLD = 2.0;
+	//! Probability to deviate from the current best write behavior (1 in 20)
+	static constexpr double COMPRESSION_DEVIATION = 0.05;
+	//! Random engine for random numbers for deviation
+	RandomEngine random_engine;
 };
 
 //===--------------------------------------------------------------------===//
