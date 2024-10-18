@@ -19,8 +19,4 @@ ScalarFunction RegexpEscapeFun::GetFunction() {
 	return ScalarFunction("regexp_escape", {LogicalType::VARCHAR}, LogicalType::VARCHAR, RegexpEscapeFunction);
 }
 
-void RegexpEscapeFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetFunction());
-}
-
 } // namespace duckdb
