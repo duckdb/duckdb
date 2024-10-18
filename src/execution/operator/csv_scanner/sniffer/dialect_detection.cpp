@@ -19,7 +19,7 @@ vector<char> DialectCandidates::GetDefaultDelimiter() {
 }
 
 vector<vector<char>> DialectCandidates::GetDefaultQuote() {
-	return {{'\0'}, {'\"', '\''},{'\"'} };
+	return {{'\0'}, {'\"', '\''}, {'\"'}};
 }
 
 vector<QuoteRule> DialectCandidates::GetDefaultQuoteRule() {
@@ -332,7 +332,9 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	bool comments_are_acceptable = AreCommentsAcceptable(
 	    sniffed_column_counts, num_cols, options.dialect_options.state_machine_options.comment.IsSetByUser());
 
-	bool quoted = scanner->ever_quoted && sniffed_column_counts.state_machine.dialect_options.state_machine_options.quote.GetValue() != '\0';
+	bool quoted = scanner->ever_quoted &&
+	              sniffed_column_counts.state_machine.dialect_options.state_machine_options.quote.GetValue() != '\0';
+
 	// If rows are consistent and no invalid padding happens, this is the best suitable candidate if one of the
 	// following is valid:
 	// - There's a single column before.
@@ -350,9 +352,22 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		}
 		auto &sniffing_state_machine = scanner->GetStateMachine();
 
-		if (!candidates.empty() && candidates.front()->ever_quoted && !scanner->ever_quoted) {
+		if (!candidates.empty() && candidates.front()->ever_quoted) {
 			// Give preference to quoted boys.
-			return;
+			if (!scanner->ever_quoted) {
+				return;
+			} else {
+				// Give preference to one that got escaped
+				if (!scanner->ever_escaped && candidates.front()->ever_escaped) {
+					return;
+				}
+				if (best_consistent_rows == consistent_rows) {
+					// If both have not been escaped, this might get solved later on.
+					sniffing_state_machine.dialect_options.num_cols = num_cols;
+					candidates.emplace_back(std::move(scanner));
+					return;
+				}
+			}
 		}
 		if (max_columns_found == num_cols && ignored_rows > min_ignored_rows) {
 			return;

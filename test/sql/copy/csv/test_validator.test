@@ -11,7 +11,7 @@ require notwindows
 statement error
 FROM read_csv('data/csv/evil_nullpadding.csv', buffer_size=20, quote = '"')
 ----
-piaje
+The Parallel CSV Reader currently does not support a full read on this file.
 
 statement ok
 FROM read_csv('data/csv/evil_nullpadding.csv', buffer_size=20)
