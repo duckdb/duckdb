@@ -511,6 +511,7 @@ struct WindowBoundariesState {
 	            const ValidityMask &partition_mask, const ValidityMask &order_mask);
 
 	// Cached lookups
+	unordered_set<WindowBounds> required;
 	const ExpressionType type;
 	const idx_t input_size;
 	const WindowBoundary start_boundary;
@@ -742,14 +743,81 @@ static bool HasFollowingRange(const BoundWindowExpression &wexpr) {
 	return (wexpr.start == WindowBoundary::EXPR_FOLLOWING_RANGE || wexpr.end == WindowBoundary::EXPR_FOLLOWING_RANGE);
 }
 
+static unordered_set<WindowBounds> GetWindowBounds(const BoundWindowExpression &wexpr) {
+	unordered_set<WindowBounds> result;
+	switch (wexpr.type) {
+	case ExpressionType::WINDOW_ROW_NUMBER:
+		result.insert(PARTITION_BEGIN);
+		break;
+	case ExpressionType::WINDOW_RANK_DENSE:
+	case ExpressionType::WINDOW_RANK:
+		result.insert(PARTITION_BEGIN);
+		result.insert(PEER_BEGIN);
+		break;
+	case ExpressionType::WINDOW_PERCENT_RANK:
+		result.insert(PARTITION_BEGIN);
+		result.insert(PARTITION_END);
+		result.insert(PEER_BEGIN);
+		break;
+	case ExpressionType::WINDOW_CUME_DIST:
+		result.insert(PARTITION_BEGIN);
+		result.insert(PARTITION_END);
+		result.insert(PEER_END);
+		break;
+	case ExpressionType::WINDOW_NTILE:
+	case ExpressionType::WINDOW_LEAD:
+	case ExpressionType::WINDOW_LAG:
+		result.insert(PARTITION_BEGIN);
+		result.insert(PARTITION_END);
+		break;
+	case ExpressionType::WINDOW_FIRST_VALUE:
+	case ExpressionType::WINDOW_LAST_VALUE:
+	case ExpressionType::WINDOW_NTH_VALUE:
+	case ExpressionType::WINDOW_AGGREGATE:
+		result.insert(PARTITION_BEGIN);
+		result.insert(PARTITION_END);
+		result.insert(WINDOW_BEGIN);
+		result.insert(WINDOW_END);
+
+		// if we have EXCLUDE GROUP / TIES, we also need peer boundaries
+		if (wexpr.exclude_clause != WindowExcludeMode::NO_OTHER) {
+			result.insert(PEER_BEGIN);
+			result.insert(PEER_END);
+		}
+
+		// If the frames are RANGE,  then we need peer boundaries
+		switch (wexpr.start) {
+		case WindowBoundary::CURRENT_ROW_RANGE:
+		case WindowBoundary::EXPR_PRECEDING_RANGE:
+		case WindowBoundary::EXPR_FOLLOWING_RANGE:
+			result.insert(PEER_BEGIN);
+			break;
+		default:
+			break;
+		}
+		switch (wexpr.end) {
+		case WindowBoundary::CURRENT_ROW_RANGE:
+		case WindowBoundary::EXPR_PRECEDING_RANGE:
+		case WindowBoundary::EXPR_FOLLOWING_RANGE:
+			result.insert(PEER_END);
+			break;
+		default:
+			break;
+		}
+		break;
+	default:
+		throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr.type));
+	}
+
+	return result;
+}
+
 WindowBoundariesState::WindowBoundariesState(const BoundWindowExpression &wexpr, const idx_t input_size)
-    : type(wexpr.type), input_size(input_size), start_boundary(wexpr.start), end_boundary(wexpr.end),
-      partition_count(wexpr.partitions.size()), order_count(wexpr.orders.size()),
+    : required(GetWindowBounds(wexpr)), type(wexpr.type), input_size(input_size), start_boundary(wexpr.start),
+      end_boundary(wexpr.end), partition_count(wexpr.partitions.size()), order_count(wexpr.orders.size()),
       range_sense(wexpr.orders.empty() ? OrderType::INVALID : wexpr.orders[0].type),
       has_preceding_range(HasPrecedingRange(wexpr)), has_following_range(HasFollowingRange(wexpr)),
-      // if we have EXCLUDE GROUP / TIES, we also need peer boundaries
-      needs_peer(BoundaryNeedsPeer(wexpr.end) || ExpressionNeedsPeer(wexpr.type) ||
-                 wexpr.exclude_clause >= WindowExcludeMode::GROUP) {
+      needs_peer(required.count(PEER_BEGIN) || required.count(PEER_END)) {
 }
 
 void WindowBoundariesState::Bounds(DataChunk &bounds, idx_t row_idx, optional_ptr<WindowCursor> range,
