@@ -20,7 +20,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalFilter &op
 		filter->children.push_back(std::move(plan));
 		plan = std::move(filter);
 	}
-	if (!op.projection_map.empty()) {
+	if (op.HasProjectionMap()) {
 		// there is a projection map, generate a physical projection
 		vector<unique_ptr<Expression>> select_list;
 		for (idx_t i = 0; i < op.projection_map.size(); i++) {
