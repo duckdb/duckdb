@@ -1,5 +1,6 @@
 #include "duckdb/common/types/column/column_data_allocator.hpp"
 
+#include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
@@ -84,6 +85,9 @@ BufferHandle ColumnDataAllocator::AllocateBlock(idx_t size) {
 	auto pin = alloc.buffer_manager->Allocate(MemoryTag::COLUMN_DATA, max_size, false);
 	data.handle = pin.GetBlockHandle();
 	blocks.push_back(std::move(data));
+	if (partition_index.IsValid()) { // Set the eviction queue index logarithmically using RadixBits
+		blocks.back().handle->SetEvictionQueueIndex(RadixPartitioning::RadixBits(partition_index.GetIndex()));
+	}
 	allocated_size += max_size;
 	return pin;
 }

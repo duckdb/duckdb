@@ -356,8 +356,8 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	return buf;
 }
 
-void StandardBufferManager::PurgeQueue(FileBufferType type) {
-	buffer_pool.PurgeQueue(type);
+void StandardBufferManager::PurgeQueue(const BlockHandle &handle) {
+	buffer_pool.PurgeQueue(handle);
 }
 
 void StandardBufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
@@ -395,7 +395,7 @@ void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 
 	// We do not have to keep the handle locked while purging.
 	if (purge) {
-		PurgeQueue(handle->buffer->type);
+		PurgeQueue(*handle);
 	}
 }
 
