@@ -1,21 +1,7 @@
 import pytest
+from duckdb.experimental.spark.errors import IllegalArgumentException
 
 _ = pytest.importorskip("duckdb.experimental.spark")
-
-from duckdb.experimental.spark.sql.types import (
-    LongType,
-    StructType,
-    BooleanType,
-    StructField,
-    StringType,
-    IntegerType,
-    LongType,
-    Row,
-    ArrayType,
-    MapType,
-)
-from duckdb.experimental.spark.sql.functions import col, struct, when, lit, array_contains
-from duckdb.experimental.spark.sql.functions import sum, avg, max, min, mean, count
 
 
 @pytest.fixture
@@ -32,10 +18,34 @@ def df2(spark):
     yield dataframe
 
 
-# https://sparkbyexamples.com/pyspark/pyspark-unionbyname/
-@pytest.mark.skip(reason="union_by_name is not supported in the Relation API yet")
+@pytest.fixture
+def df3(spark):
+    data2 = [
+        (1,),
+    ]
+    dataframe = spark.createDataFrame(data=data2, schema=["extra_col"])
+    yield dataframe
+
+
 class TestDataFrameUnion(object):
     def test_union_by_name(self, df1, df2):
         rel = df1.unionByName(df2)
-        res = rel.collect()
-        print(res)
+
+        assert rel.columns == ["name", "id"]
+        assert rel.count() == 8
+
+        assert rel.select("name").distinct().count() == 6
+        assert rel.select("id").distinct().count() == 5
+
+    def test_error_union_by_name(self, df1, df3):
+        with pytest.raises(IllegalArgumentException):
+            df1.unionByName(df3, allowMissingColumns=False)
+
+        with pytest.raises(IllegalArgumentException):
+            df1.unionByName(df3, allowMissingColumns=False)
+
+    def test_union_by_name_allow_missing_columns(self, df1, df3):
+        rel = df1.unionByName(df3, allowMissingColumns=True)
+
+        assert rel.columns == ["name", "id", "extra_col"]
+        assert rel.count() == 5

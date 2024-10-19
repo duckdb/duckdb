@@ -12,11 +12,11 @@ from typing import (
 )
 
 import duckdb
-from duckdb import ColumnExpression, Expression, StarExpression
+from duckdb import ColumnExpression, ConstantExpression, Expression, StarExpression
 
-from ._typing import ColumnOrName
 from ..errors import PySparkTypeError
 from ..exception import ContributionsAcceptedError
+from ._typing import ColumnOrName
 from .column import Column
 from .readwriter import DataFrameWriter
 from .type_utils import duckdb_to_spark_schema
@@ -25,10 +25,10 @@ from .types import Row, StructType
 if TYPE_CHECKING:
     from pandas.core.frame import DataFrame as PandasDataFrame
 
-    from .group import GroupedData, Grouping
+    from .group import GroupedData
     from .session import SparkSession
 
-from ..errors import PySparkValueError
+from ..errors import IllegalArgumentException, PySparkValueError
 from .functions import _to_column
 
 
@@ -38,7 +38,9 @@ class DataFrame:
         self.session = session
         self._schema = None
         if self.relation is not None:
-            self._schema = duckdb_to_spark_schema(self.relation.columns, self.relation.types)
+            self._schema = duckdb_to_spark_schema(
+                self.relation.columns, self.relation.types
+            )
 
     def show(self, **kwargs) -> None:
         self.relation.show()
@@ -608,12 +610,10 @@ class DataFrame:
         return self._schema
 
     @overload
-    def __getitem__(self, item: Union[int, str]) -> Column:
-        ...
+    def __getitem__(self, item: Union[int, str]) -> Column: ...
 
     @overload
-    def __getitem__(self, item: Union[Column, List, Tuple]) -> "DataFrame":
-        ...
+    def __getitem__(self, item: Union[Column, List, Tuple]) -> "DataFrame": ...
 
     def __getitem__(
         self, item: Union[int, str, Column, List, Tuple]
@@ -658,12 +658,10 @@ class DataFrame:
         return Column(duckdb.ColumnExpression(name))
 
     @overload
-    def groupBy(self, *cols: "ColumnOrName") -> "GroupedData":
-        ...
+    def groupBy(self, *cols: "ColumnOrName") -> "GroupedData": ...
 
     @overload
-    def groupBy(self, __cols: Union[List[Column], List[str]]) -> "GroupedData":
-        ...
+    def groupBy(self, __cols: Union[List[Column], List[str]]) -> "GroupedData": ...
 
     def groupBy(self, *cols: "ColumnOrName") -> "GroupedData":  # type: ignore[misc]
         """Groups the :class:`DataFrame` using the specified columns,
@@ -846,9 +844,32 @@ class DataFrame:
         |NULL|   4|   5|   6|
         +----+----+----+----+
         """
-        if not allowMissingColumns:
-            raise ContributionsAcceptedError
-        raise NotImplementedError
+        if allowMissingColumns:
+            other_missing_cols = set(self.columns) - set(other.columns)
+            curr_df_missing_cols = set(other.columns) - set(self.columns)
+
+            return self.select(
+                *self.columns,
+                *[
+                    Column(ConstantExpression(None)).alias(col)
+                    for col in curr_df_missing_cols
+                ],
+            ).unionByName(
+                other.select(
+                    *other.columns,
+                    *[
+                        Column(ConstantExpression(None)).alias(col)
+                        for col in other_missing_cols
+                    ],
+                )
+            )
+
+        elif set(self.columns) != set(other.columns):
+            raise IllegalArgumentException(
+                "Union by name requires the same set of columns."
+            )
+
+        return self.union(other=other.select(*self.columns))
         # The relational API does not have support for 'union_by_name' yet
         # return DataFrame(self.relation.union_by_name(other.relation, allowMissingColumns), self.session)
 
