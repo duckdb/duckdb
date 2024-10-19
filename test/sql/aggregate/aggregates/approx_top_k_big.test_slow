@@ -1,0 +1,32 @@
+# name: test/sql/aggregate/aggregates/approx_top_k_big.test_slow
+# description: Test approx top K operator
+# group: [aggregates]
+
+# approx top k where we first have many of one element, then the most frequent element, then a non frequent element
+statement ok
+CREATE TABLE alternating_sequences AS SELECT 0 i FROM range(10000) UNION ALL SELECT 1 FROM range(100000) UNION ALL SELECT 2 FROM range(10);
+
+query I
+SELECT approx_top_k(i, 3) FROM alternating_sequences
+----
+[1, 0, 2]
+
+# alternating pattern (1, 0, 0, 1, 0, 0, ...)
+statement ok
+CREATE TABLE alternating AS SELECT case when i%3=0 then 1 else 0 end i FROM range(100000) t(i)
+
+query I
+SELECT approx_top_k(i, 2) FROM alternating
+----
+[0, 1]
+
+# large top-k value
+statement ok
+CREATE TABLE topk_approx AS SELECT unnest(approx_top_k(i, 100000)) from range(50000) t(i)  order by 1
+
+statement ok
+CREATE TABLE topk_exact AS SELECT * from range(50000) t(i) order by 1
+
+query I
+FROM topk_approx EXCEPT FROM topk_exact
+----

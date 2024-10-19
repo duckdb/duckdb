@@ -1,0 +1,199 @@
+# name: test/extension/test_custom_type_modifier.test_slow
+# description: Test custom type level metadata.
+# group: [extension]
+
+require skip_reload
+
+require notmingw
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+
+statement ok
+CREATE TABLE t1 (i BOUNDED(200));
+
+statement ok
+INSERT INTO t1 VALUES (97), (98), (99);
+
+# Example of function ignoring the type property (no cast needed)
+query I
+SELECT bounded_even(i) FROM t1 ORDER BY 1;
+----
+false
+false
+true
+
+query II
+EXPLAIN SELECT bounded_even(i) FROM t1 ORDER BY 1;
+----
+physical_plan	<!REGEX>:.*CAST.*
+
+# Example of function inspecting the type property
+query I
+SELECT bounded_max(i) FROM t1;
+----
+200
+200
+200
+
+# Example of function inspecting the type property to return value of the same type
+query II
+SELECT bounded_invert(i) as b, typeof(b) FROM t1 ORDER BY 1;
+----
+-99	BOUNDED(200)
+-98	BOUNDED(200)
+-97	BOUNDED(200)
+
+statement ok
+CREATE TABLE t2 (i BOUNDED(500));
+
+statement ok
+INSERT INTO t2 VALUES (100), (500);
+
+# Example of function inspecting both arguments type property to return a new type
+query II
+SELECT bounded_add(t1.i, t2.i) as s, typeof(s) FROM t1, t2 ORDER BY 1;
+----
+197	BOUNDED(700)
+198	BOUNDED(700)
+199	BOUNDED(700)
+597	BOUNDED(700)
+598	BOUNDED(700)
+599	BOUNDED(700)
+
+# Example of function that is specialized by the type property
+query II
+EXPLAIN SELECT bounded_ascii(i) FROM t1 ORDER BY 1;
+----
+physical_plan	<REGEX>:.*CAST.*
+
+query I
+SELECT bounded_ascii(i) FROM t1 ORDER BY 1;
+----
+a
+b
+c
+
+statement error
+SELECT bounded_ascii(i) FROM t2 ORDER BY 1;
+----
+Conversion Error: Type BOUNDED(500) can't be cast as BOUNDED(255)
+
+query I
+SELECT bounded_ascii(i::INTEGER::BOUNDED(255)) FROM t2 WHERE i < 255;
+----
+d
+
+# Test that we cant apply too many modifiers
+statement error
+CREATE TABLE t3 (i BOUNDED(200, 300));
+----
+Binder Error: Cannot apply '2' type modifier(s) to type 'BOUNDED' taking at most '1' type modifier(s)
+
+statement ok
+CREATE TYPE user_type AS INTEGER
+
+# We cant apply a modifier to a type without modifiers
+statement error
+CREATE TABLE t4 (i user_type(NULL));
+----
+Binder Error: Type 'user_type' does not take any type modifiers
+
+statement error
+SELECT 1::BOUNDED(NULL)
+----
+Invalid Input Error: BOUNDED type must have a max value
+
+statement error
+SELECT 1::BOUNDED(900000000000000000)
+----
+Binder Error: Cannot apply type modifier '900000000000000000' to type 'BOUNDED', expected value of type 'INTEGER'
+
+
+# MinMax Type
+# This is similar to bounded, except it uses a custom bind function to enforce the min/max values at construction time
+statement ok
+CREATE TABLE t5 (i MINMAX(200, 300));
+
+statement ok
+INSERT INTO t5 VALUES (200), (300);
+
+statement error
+INSERT INTO t5 VALUES (199);
+----
+Conversion Error: Value 199 is outside of range [200,300]
+
+statement error
+INSERT INTO t5 VALUES (301);
+----
+Conversion Error: Value 301 is outside of range [200,300]
+
+statement error
+SELECT 10::MINMAX(0, 1);
+----
+Conversion Error: Value 10 is outside of range [0,1]
+
+statement error
+SELECT 10::MINMAX(1337);
+----
+Binder Error: MINMAX type must have two modifiers
+
+statement error
+SELECT 10::MINMAX('foob', 10);
+----
+Binder Error: MINMAX type modifiers must be integers
+
+statement error
+SELECT 10::MINMAX(10, NULL::INTEGER);
+----
+Parser Error: Expected a constant as type modifier
+
+statement error
+SELECT 10::MINMAX(15, 10);
+----
+Binder Error: MINMAX type min value must be less than max value
+
+
+
+# Test with creating an index
+statement ok
+CREATE TABLE minmax_table (i MINMAX(0, 100));
+
+statement ok
+INSERT INTO minmax_table VALUES (0), (10), (20), (30), (40), (50), (60), (70), (80), (90), (100);
+
+statement ok
+CREATE INDEX minmax_index ON minmax_table(i);
+
+query I
+SELECT * FROM minmax_table WHERE i = 50;
+----
+50
+
+statement ok
+PRAGMA explain_output='optimized_only'
+
+query II
+EXPLAIN SELECT * FROM minmax_table WHERE i = 50;
+----
+logical_opt	<REGEX>:.*INDEX_SCAN.*
+
+# Check the typename in the catalog
+query I
+SELECT parameter_types from duckdb_functions() where function_name = 'minmax_range';
+----
+[MINMAX]
+
+query I
+SELECT parameter_types from duckdb_functions() where function_name = 'bounded_ascii';
+----
+[BOUNDED(255)]
+
+# BOUNDED's default type modifier values is NULL, but it could theorietically be set to something else
+query I
+SELECT parameter_types from duckdb_functions() where function_name = 'bounded_add';
+----
+[BOUNDED(NULL), BOUNDED(NULL)]

@@ -103,11 +103,11 @@ static tokenType convertToken(duckdb::SimplifiedTokenType token_type) {
 	}
 }
 
-vector<highlightToken> Highlighting::Tokenize(char *buf, size_t len, searchMatch *match) {
+vector<highlightToken> GetParseTokens(char *buf, size_t len) {
 	string sql(buf, len);
 	auto parseTokens = duckdb::Parser::Tokenize(sql);
-	vector<highlightToken> tokens;
 
+	vector<highlightToken> tokens;
 	for (auto &token : parseTokens) {
 		highlightToken new_token;
 		new_token.type = convertToken(token.type);
@@ -126,6 +126,38 @@ vector<highlightToken> Highlighting::Tokenize(char *buf, size_t len, searchMatch
 		new_token.type = tokenType::TOKEN_IDENTIFIER;
 		new_token.start = 0;
 		tokens.push_back(new_token);
+	}
+	return tokens;
+}
+
+vector<highlightToken> GetDotCommandTokens(char *buf, size_t len) {
+	vector<highlightToken> tokens;
+
+	// identifier token for the dot command itself
+	highlightToken dot_token;
+	dot_token.type = tokenType::TOKEN_KEYWORD;
+	dot_token.start = 0;
+	tokens.push_back(dot_token);
+
+	for (idx_t i = 0; i + 1 < len; i++) {
+		if (Linenoise::IsSpace(buf[i])) {
+			highlightToken argument_token;
+			argument_token.type = tokenType::TOKEN_STRING_CONSTANT;
+			argument_token.start = i + 1;
+			tokens.push_back(argument_token);
+		}
+	}
+	return tokens;
+}
+
+vector<highlightToken> Highlighting::Tokenize(char *buf, size_t len, bool is_dot_command, searchMatch *match) {
+	vector<highlightToken> tokens;
+	if (!is_dot_command) {
+		// SQL query - use parser to obtain tokens
+		tokens = GetParseTokens(buf, len);
+	} else {
+		// . command
+		tokens = GetDotCommandTokens(buf, len);
 	}
 	if (match) {
 		// we have a search match - insert it into the token list

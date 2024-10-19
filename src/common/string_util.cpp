@@ -4,7 +4,9 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
+#include "jaro_winkler.hpp"
+#include "utf8proc_wrapper.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -27,9 +29,8 @@ string StringUtil::GenerateRandomName(idx_t length) {
 	std::uniform_int_distribution<> dis(0, 15);
 
 	std::stringstream ss;
-	ss << std::hex;
 	for (idx_t i = 0; i < length; i++) {
-		ss << dis(gen);
+		ss << "0123456789abcdef"[dis(gen)];
 	}
 	return ss.str();
 }
@@ -212,6 +213,26 @@ string StringUtil::Lower(const string &str) {
 	return (copy);
 }
 
+string StringUtil::Title(const string &str) {
+	string copy;
+	bool first_character = true;
+	for (auto c : str) {
+		bool is_alpha = StringUtil::CharacterIsAlpha(c);
+		if (is_alpha) {
+			if (first_character) {
+				copy += StringUtil::CharacterToUpper(c);
+				first_character = false;
+			} else {
+				copy += StringUtil::CharacterToLower(c);
+			}
+		} else {
+			first_character = true;
+			copy += c;
+		}
+	}
+	return copy;
+}
+
 bool StringUtil::IsLower(const string &str) {
 	return str == Lower(str);
 }
@@ -234,7 +255,7 @@ bool StringUtil::CIEquals(const string &l1, const string &l2) {
 	if (l1.size() != l2.size()) {
 		return false;
 	}
-	const auto charmap = LowerFun::ASCII_TO_LOWER_MAP;
+	const auto charmap = ASCII_TO_LOWER_MAP;
 	for (idx_t c = 0; c < l1.size(); c++) {
 		if (charmap[(uint8_t)l1[c]] != charmap[(uint8_t)l2[c]]) {
 			return false;
@@ -244,7 +265,7 @@ bool StringUtil::CIEquals(const string &l1, const string &l2) {
 }
 
 bool StringUtil::CILessThan(const string &s1, const string &s2) {
-	const auto charmap = UpperFun::ASCII_TO_UPPER_MAP;
+	const auto charmap = ASCII_TO_UPPER_MAP;
 
 	unsigned char u1 {}, u2 {};
 
@@ -308,22 +329,43 @@ string StringUtil::Replace(string source, const string &from, const string &to) 
 	return source;
 }
 
-vector<string> StringUtil::TopNStrings(vector<pair<string, idx_t>> scores, idx_t n, idx_t threshold) {
+vector<string> StringUtil::TopNStrings(vector<pair<string, double>> scores, idx_t n, double threshold) {
 	if (scores.empty()) {
 		return vector<string>();
 	}
-	sort(scores.begin(), scores.end(), [](const pair<string, idx_t> &a, const pair<string, idx_t> &b) -> bool {
-		return a.second < b.second || (a.second == b.second && a.first.size() < b.first.size());
+	sort(scores.begin(), scores.end(), [](const pair<string, double> &a, const pair<string, double> &b) -> bool {
+		return a.second > b.second || (a.second == b.second && a.first.size() < b.first.size());
 	});
 	vector<string> result;
 	result.push_back(scores[0].first);
 	for (idx_t i = 1; i < MinValue<idx_t>(scores.size(), n); i++) {
-		if (scores[i].second > threshold) {
+		if (scores[i].second < threshold) {
 			break;
 		}
 		result.push_back(scores[i].first);
 	}
 	return result;
+}
+
+static double NormalizeScore(idx_t score, idx_t max_score) {
+	return 1.0 - static_cast<double>(score) / static_cast<double>(max_score);
+}
+
+vector<string> StringUtil::TopNStrings(const vector<pair<string, idx_t>> &scores, idx_t n, idx_t threshold) {
+	// obtain the max score to normalize
+	idx_t max_score = threshold;
+	for (auto &score : scores) {
+		if (score.second > max_score) {
+			max_score = score.second;
+		}
+	}
+
+	// normalize
+	vector<pair<string, double>> normalized_scores;
+	for (auto &score : scores) {
+		normalized_scores.push_back(make_pair(score.first, NormalizeScore(score.second, max_score)));
+	}
+	return TopNStrings(std::move(normalized_scores), n, NormalizeScore(threshold, max_score));
 }
 
 struct LevenshteinArray {
@@ -385,6 +427,11 @@ idx_t StringUtil::SimilarityScore(const string &s1, const string &s2) {
 	return LevenshteinDistance(s1, s2, 3);
 }
 
+double StringUtil::SimilarityRating(const string &s1, const string &s2) {
+	return duckdb_jaro_winkler::jaro_winkler_similarity(s1.data(), s1.data() + s1.size(), s2.data(),
+	                                                    s2.data() + s2.size());
+}
+
 vector<string> StringUtil::TopNLevenshtein(const vector<string> &strings, const string &target, idx_t n,
                                            idx_t threshold) {
 	vector<pair<string, idx_t>> scores;
@@ -395,6 +442,16 @@ vector<string> StringUtil::TopNLevenshtein(const vector<string> &strings, const 
 		} else {
 			scores.emplace_back(str, SimilarityScore(str, target));
 		}
+	}
+	return TopNStrings(scores, n, threshold);
+}
+
+vector<string> StringUtil::TopNJaroWinkler(const vector<string> &strings, const string &target, idx_t n,
+                                           double threshold) {
+	vector<pair<string, double>> scores;
+	scores.reserve(strings.size());
+	for (auto &str : strings) {
+		scores.emplace_back(str, SimilarityRating(str, target));
 	}
 	return TopNStrings(scores, n, threshold);
 }
@@ -472,8 +529,8 @@ string StringUtil::ToJSONMap(ExceptionType type, const string &message, const un
 
 	yyjson_write_err err;
 	size_t len;
-	yyjson_write_flag flags = YYJSON_WRITE_ALLOW_INVALID_UNICODE;
-	const char *json = yyjson_mut_write_opts(doc, flags, nullptr, &len, &err);
+	constexpr yyjson_write_flag flags = YYJSON_WRITE_ALLOW_INVALID_UNICODE;
+	char *json = yyjson_mut_write_opts(doc, flags, nullptr, &len, &err);
 	if (!json) {
 		yyjson_mut_doc_free(doc);
 		throw SerializationException("Failed to write JSON string: %s", err.msg);
@@ -482,7 +539,7 @@ string StringUtil::ToJSONMap(ExceptionType type, const string &message, const un
 	string result(json, len);
 
 	// Free the JSON and the document
-	free((void *)json);
+	free(json);
 	yyjson_mut_doc_free(doc);
 
 	// Return the result
@@ -537,7 +594,6 @@ string StringUtil::GetFileStem(const string &file_name) {
 }
 
 string StringUtil::GetFilePath(const string &file_path) {
-
 	// Trim the trailing slashes
 	auto end = file_path.size() - 1;
 	while (end > 0 && (file_path[end] == '/' || file_path[end] == '\\')) {
@@ -555,5 +611,135 @@ string StringUtil::GetFilePath(const string &file_path) {
 
 	return file_path.substr(0, pos + 1);
 }
+
+struct URLEncodeLength {
+	using RESULT_TYPE = idx_t;
+
+	static void ProcessCharacter(idx_t &result, char) {
+		result++;
+	}
+
+	static void ProcessHex(idx_t &result, const char *, idx_t) {
+		result++;
+	}
+};
+
+struct URLEncodeWrite {
+	using RESULT_TYPE = char *;
+
+	static void ProcessCharacter(char *&result, char c) {
+		*result = c;
+		result++;
+	}
+
+	static void ProcessHex(char *&result, const char *input, idx_t idx) {
+		uint32_t hex_first = StringUtil::GetHexValue(input[idx + 1]);
+		uint32_t hex_second = StringUtil::GetHexValue(input[idx + 2]);
+		uint32_t hex_value = (hex_first << 4) + hex_second;
+		ProcessCharacter(result, static_cast<char>(hex_value));
+	}
+};
+
+template <class OP>
+void URLEncodeInternal(const char *input, idx_t input_size, typename OP::RESULT_TYPE &result, bool encode_slash) {
+	// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
+	static const char *HEX_DIGIT = "0123456789ABCDEF";
+	for (idx_t i = 0; i < input_size; i++) {
+		char ch = input[i];
+		if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' ||
+		    ch == '-' || ch == '~' || ch == '.') {
+			OP::ProcessCharacter(result, ch);
+		} else if (ch == '/' && !encode_slash) {
+			OP::ProcessCharacter(result, ch);
+		} else {
+			OP::ProcessCharacter(result, '%');
+			OP::ProcessCharacter(result, HEX_DIGIT[static_cast<unsigned char>(ch) >> 4]);
+			OP::ProcessCharacter(result, HEX_DIGIT[static_cast<unsigned char>(ch) & 15]);
+		}
+	}
+}
+
+idx_t StringUtil::URLEncodeSize(const char *input, idx_t input_size, bool encode_slash) {
+	idx_t result_length = 0;
+	URLEncodeInternal<URLEncodeLength>(input, input_size, result_length, encode_slash);
+	return result_length;
+}
+
+void StringUtil::URLEncodeBuffer(const char *input, idx_t input_size, char *output, bool encode_slash) {
+	URLEncodeInternal<URLEncodeWrite>(input, input_size, output, encode_slash);
+}
+
+string StringUtil::URLEncode(const string &input, bool encode_slash) {
+	idx_t result_size = URLEncodeSize(input.c_str(), input.size(), encode_slash);
+	auto result_data = make_uniq_array<char>(result_size);
+	URLEncodeBuffer(input.c_str(), input.size(), result_data.get(), encode_slash);
+	return string(result_data.get(), result_size);
+}
+
+template <class OP>
+void URLDecodeInternal(const char *input, idx_t input_size, typename OP::RESULT_TYPE &result, bool plus_to_space) {
+	for (idx_t i = 0; i < input_size; i++) {
+		char ch = input[i];
+		if (plus_to_space && ch == '+') {
+			OP::ProcessCharacter(result, ' ');
+		} else if (ch == '%' && i + 2 < input_size && StringUtil::CharacterIsHex(input[i + 1]) &&
+		           StringUtil::CharacterIsHex(input[i + 2])) {
+			OP::ProcessHex(result, input, i);
+			i += 2;
+		} else {
+			OP::ProcessCharacter(result, ch);
+		}
+	}
+}
+
+idx_t StringUtil::URLDecodeSize(const char *input, idx_t input_size, bool plus_to_space) {
+	idx_t result_length = 0;
+	URLDecodeInternal<URLEncodeLength>(input, input_size, result_length, plus_to_space);
+	return result_length;
+}
+
+void StringUtil::URLDecodeBuffer(const char *input, idx_t input_size, char *output, bool plus_to_space) {
+	char *output_start = output;
+	URLDecodeInternal<URLEncodeWrite>(input, input_size, output, plus_to_space);
+	if (!Utf8Proc::IsValid(output_start, NumericCast<idx_t>(output - output_start))) {
+		throw InvalidInputException("Failed to decode string \"%s\" using URL decoding - decoded value is invalid UTF8",
+		                            string(input, input_size));
+	}
+}
+
+string StringUtil::URLDecode(const string &input, bool plus_to_space) {
+	idx_t result_size = URLDecodeSize(input.c_str(), input.size(), plus_to_space);
+	auto result_data = make_uniq_array<char>(result_size);
+	URLDecodeBuffer(input.c_str(), input.size(), result_data.get(), plus_to_space);
+	return string(result_data.get(), result_size);
+}
+
+const uint8_t StringUtil::ASCII_TO_UPPER_MAP[] = {
+    0,   1,   2,   3,   4,   5,   6,   7,   8,   9,   10,  11,  12,  13,  14,  15,  16,  17,  18,  19,  20,  21,
+    22,  23,  24,  25,  26,  27,  28,  29,  30,  31,  32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,
+    44,  45,  46,  47,  48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,  64,  65,
+    66,  67,  68,  69,  70,  71,  72,  73,  74,  75,  76,  77,  78,  79,  80,  81,  82,  83,  84,  85,  86,  87,
+    88,  89,  90,  91,  92,  93,  94,  95,  96,  65,  66,  67,  68,  69,  70,  71,  72,  73,  74,  75,  76,  77,
+    78,  79,  80,  81,  82,  83,  84,  85,  86,  87,  88,  89,  90,  123, 124, 125, 126, 127, 128, 129, 130, 131,
+    132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153,
+    154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175,
+    176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197,
+    198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219,
+    220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241,
+    242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255};
+
+const uint8_t StringUtil::ASCII_TO_LOWER_MAP[] = {
+    0,   1,   2,   3,   4,   5,   6,   7,   8,   9,   10,  11,  12,  13,  14,  15,  16,  17,  18,  19,  20,  21,
+    22,  23,  24,  25,  26,  27,  28,  29,  30,  31,  32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,
+    44,  45,  46,  47,  48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,  64,  97,
+    98,  99,  100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119,
+    120, 121, 122, 91,  92,  93,  94,  95,  96,  97,  98,  99,  100, 101, 102, 103, 104, 105, 106, 107, 108, 109,
+    110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131,
+    132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153,
+    154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175,
+    176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197,
+    198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219,
+    220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241,
+    242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255};
 
 } // namespace duckdb

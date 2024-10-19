@@ -30,9 +30,9 @@ SimilarCatalogEntry SchemaCatalogEntry::GetSimilarEntry(CatalogTransaction trans
                                                         const string &name) {
 	SimilarCatalogEntry result;
 	Scan(transaction.GetContext(), type, [&](CatalogEntry &entry) {
-		auto ldist = StringUtil::SimilarityScore(entry.name, name);
-		if (ldist < result.distance) {
-			result.distance = ldist;
+		auto entry_score = StringUtil::SimilarityRating(entry.name, name);
+		if (entry_score > result.score) {
+			result.score = entry_score;
 			result.name = entry.name;
 		}
 	});

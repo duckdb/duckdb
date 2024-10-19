@@ -121,6 +121,9 @@ struct MultiFileReader {
 	//! Create a default MultiFileReader, function_name is used for errors
 	DUCKDB_API static unique_ptr<MultiFileReader> CreateDefault(const string &function_name = "");
 
+	//! Create a LIST Value from a vector of strings (list of file paths)
+	static Value CreateValueFromFileList(const vector<string> &files);
+
 	//! Add the parameters for multi-file readers (e.g. union_by_name, filename) to a table function
 	DUCKDB_API static void AddParameters(TableFunction &table_function);
 	//! Creates a table function set from a single reader function (including e.g. list parameters, etc)
@@ -129,11 +132,11 @@ struct MultiFileReader {
 	//! Parse a Value containing 1 or more paths into a vector of paths. Note: no expansion is performed here
 	DUCKDB_API virtual vector<string> ParsePaths(const Value &input);
 	//! Create a MultiFileList from a vector of paths. Any globs will be expanded using the default filesystem
-	DUCKDB_API virtual unique_ptr<MultiFileList>
+	DUCKDB_API virtual shared_ptr<MultiFileList>
 	CreateFileList(ClientContext &context, const vector<string> &paths,
 	               FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
 	//! Shorthand for ParsePaths + CreateFileList
-	DUCKDB_API unique_ptr<MultiFileList> CreateFileList(ClientContext &context, const Value &input,
+	DUCKDB_API shared_ptr<MultiFileList> CreateFileList(ClientContext &context, const Value &input,
 	                                                    FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
 
 	//! Parse the named parameters of a multi-file reader
@@ -142,8 +145,12 @@ struct MultiFileReader {
 	//! Perform filter pushdown into the MultiFileList. Returns a new MultiFileList if filters were pushed down
 	DUCKDB_API virtual unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, MultiFileList &files,
 	                                                                   const MultiFileReaderOptions &options,
-	                                                                   LogicalGet &get,
+	                                                                   MultiFilePushdownInfo &info,
 	                                                                   vector<unique_ptr<Expression>> &filters);
+	DUCKDB_API virtual unique_ptr<MultiFileList>
+	DynamicFilterPushdown(ClientContext &context, const MultiFileList &files, const MultiFileReaderOptions &options,
+	                      const vector<string> &names, const vector<LogicalType> &types,
+	                      const vector<column_t> &column_ids, TableFilterSet &filters);
 	//! Try to use the MultiFileReader for binding. Returns true if a bind could be made, returns false if the
 	//! MultiFileReader can not perform the bind and binding should be performed on 1 or more files in the MultiFileList
 	//! directly.
@@ -188,6 +195,13 @@ struct MultiFileReader {
 	                                      const MultiFileReaderData &reader_data, DataChunk &chunk,
 	                                      optional_ptr<MultiFileReaderGlobalState> global_state);
 
+	//! Fetch the partition data for the current chunk
+	DUCKDB_API virtual void GetPartitionData(ClientContext &context, const MultiFileReaderBindData &bind_data,
+	                                         const MultiFileReaderData &reader_data,
+	                                         optional_ptr<MultiFileReaderGlobalState> global_state,
+	                                         const OperatorPartitionInfo &partition_info,
+	                                         OperatorPartitionData &partition_data);
+
 	template <class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
 	MultiFileReaderBindData BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,
 	                                        vector<string> &names, MultiFileList &files, RESULT_CLASS &result,
@@ -209,7 +223,7 @@ struct MultiFileReader {
 		BindOptions(options.file_options, files, union_col_types, union_col_names, bind_data);
 		names = union_col_names;
 		return_types = union_col_types;
-		result.Initialize(result.union_readers[0]);
+		result.Initialize(context, result.union_readers[0]);
 		D_ASSERT(names.size() == return_types.size());
 		return bind_data;
 	}
@@ -274,6 +288,11 @@ struct MultiFileReader {
 			}
 		}
 	}
+
+	//! Get partition info
+	DUCKDB_API virtual TablePartitionInfo GetPartitionInfo(ClientContext &context,
+	                                                       const MultiFileReaderBindData &bind_data,
+	                                                       TableFunctionPartitionInput &input);
 
 protected:
 	virtual void CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,

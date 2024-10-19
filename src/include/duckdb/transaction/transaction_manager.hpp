@@ -12,7 +12,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/vector.hpp"
-
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/atomic.hpp"
 
 namespace duckdb {

@@ -8,6 +8,7 @@
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
 
 namespace duckdb {
 
@@ -49,7 +50,10 @@ SourceResultType PhysicalCopyDatabase::GetData(ExecutionContext &context, DataCh
 			catalog.CreateTable(context.client, *bound_info);
 			break;
 		}
-		case CatalogType::INDEX_ENTRY:
+		case CatalogType::INDEX_ENTRY: {
+			catalog.CreateIndex(context.client, create_info->Cast<CreateIndexInfo>());
+			break;
+		}
 		default:
 			throw NotImplementedException("Entry type %s not supported in PhysicalCopyDatabase",
 			                              CatalogTypeToString(create_info->type));

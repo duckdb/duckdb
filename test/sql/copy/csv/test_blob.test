@@ -2,6 +2,10 @@
 # description: Test BLOB with COPY INTO
 # group: [csv]
 
+statement ok
+PRAGMA enable_verification
+
+
 # CSV file with almost ALL ASCII chars
 # ASCII chars from 1 to 255, skipping '
 # COPY INTO
@@ -10,7 +14,7 @@ CREATE TABLE blobs (b BYTEA);
 
 # We must set auto_detect to 0 since blobs are not supported in auto-detection
 query I
-COPY blobs FROM 'test/sql/copy/csv/data/test/blob.csv' (HEADER 0, AUTO_DETECT 0);
+COPY blobs FROM 'data/csv/test/blob.csv' (HEADER 0, AUTO_DETECT 0);
 ----
 1
 

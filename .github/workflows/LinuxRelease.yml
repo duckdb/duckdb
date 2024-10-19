@@ -25,7 +25,6 @@ on:
     paths-ignore:
       - '**.md'
       - 'tools/**'
-      - '!tools/odbc/**'
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
@@ -36,7 +35,6 @@ on:
     paths-ignore:
       - '**.md'
       - 'tools/**'
-      - '!tools/odbc/**'
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
@@ -63,10 +61,9 @@ jobs:
       ENABLE_EXTENSION_AUTOINSTALL: 1
       GEN: ninja
       BUILD_BENCHMARK: 1
-      BUILD_ODBC: 1
-      DEBUG_STACKTRACE: 1
       FORCE_WARN_UNUSED: 1
       DUCKDB_RUN_PARALLEL_CSV_TESTS: 1
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
     - uses: actions/checkout@v3
@@ -77,8 +74,7 @@ jobs:
     - uses: ./.github/actions/manylinux_2014_setup
       with:
         ninja-build: 1
-        ccache: 1
-        odbc: 1
+        ccache: 0
         python_alias: 1
         aws-cli: 1
 
@@ -125,9 +121,8 @@ jobs:
         python3 scripts/amalgamation.py
         zip -j duckdb_cli-linux-amd64.zip build/release/duckdb
         zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
-        zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h
-        zip -j duckdb_odbc-linux-amd64.zip build/release/tools/odbc/libduckdb_odbc.so tools/odbc/linux_setup/unixodbc_setup.sh tools/odbc/linux_setup/update_odbc_path.py
-        ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_odbc-linux-amd64.zip
+        zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h src/include/duckdb_extension.h
+        ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip
 
     - uses: actions/upload-artifact@v3
       with:
@@ -135,7 +130,6 @@ jobs:
         path: |
           libduckdb-linux-amd64.zip
           duckdb_cli-linux-amd64.zip
-          duckdb_odbc-linux-amd64.zip
 
  linux-release-aarch64:
    # Builds binaries for linux_arm64
@@ -152,9 +146,8 @@ jobs:
      BUILD_BENCHMARK: 1
      TREAT_WARNINGS_AS_ERRORS: 1
      FORCE_WARN_UNUSED: 1
-     BUILD_ODBC: 1
-     ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
      DUCKDB_PLATFORM: linux_arm64
+     ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
    steps:
      - uses: actions/checkout@v3
@@ -166,19 +159,7 @@ jobs:
        with:
         ccache: 1
         aarch64_cross_compile: 1
-
-     - name: Checkout (again)
-       shell: bash
-       run: git checkout ${{ inputs.git_ref }}
-
-     - name: Install unixODBC
-       shell: bash
-       run: | # we need an x86 odbc_config tool to run cmake. fun.
-         apt-get remove -y unixodbc unixodbc-dev
-         CC=gcc ./scripts/install_unixodbc.sh
-         cp build/unixodbc/build/bin/odbc_config .
-         CC=aarch64-linux-gnu-gcc ./scripts/install_unixodbc.sh --host aarch64-linux-gnu
-         cp odbc_config build/unixodbc/build/bin/odbc_config
+        git_ref: ${{ inputs.git_ref }}
 
      - name: Build
        shell: bash
@@ -192,16 +173,14 @@ jobs:
        run: |
          python3 scripts/amalgamation.py
          zip -j duckdb_cli-linux-aarch64.zip build/release/duckdb
-         zip -j duckdb_odbc-linux-aarch64.zip build/release/tools/odbc/libduckdb_odbc.so
          zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
-         ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_odbc-linux-aarch64.zip
+         ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip
 
      - uses: actions/upload-artifact@v3
        with:
          name: duckdb-binaries-linux-aarch64
          path: |
            libduckdb-linux-aarch64.zip
-           duckdb_odbc-linux-aarch64.zip
            duckdb_cli-linux-aarch64.zip
 
  # Linux extensions for builds that use C++11 ABI, currently these are all linux builds based on ubuntu >= 18 (e.g. NodeJS)
@@ -212,6 +191,8 @@ jobs:
     runs-on: ubuntu-latest
     container: ubuntu:18.04
     needs: linux-release-64
+    env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
     - uses: actions/checkout@v3
@@ -224,10 +205,17 @@ jobs:
         vcpkg: 1
         openssl: 1
         ccache: 1
+        git_ref: ${{ inputs.git_ref }}
 
-    - name: Checkout (again)
-      shell: bash
-      run: git checkout ${{ inputs.git_ref }}
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Configure OpenSSL for Rust
+      run: |
+        echo "OPENSSL_ROOT_DIR=`pwd`/build/release/vcpkg_installed/x64-linux" >> $GITHUB_ENV
+        echo "OPENSSL_DIR=`pwd`/build/release/vcpkg_installed/x64-linux" >> $GITHUB_ENV
+        echo "OPENSSL_INCLUDE_DIR=`pwd`/build/release/vcpkg_installed/x64-linux/include" >> $GITHUB_ENV
+        echo "OPENSSL_USE_STATIC_LIBS=true" >> $GITHUB_ENV
 
     - uses: ./.github/actions/build_extensions
       with:
@@ -255,6 +243,8 @@ jobs:
     runs-on: ubuntu-latest
     container: ubuntu:18.04
     needs: linux-release-64
+    env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
       - uses: actions/checkout@v3
@@ -268,10 +258,19 @@ jobs:
           openssl: 1
           aarch64_cross_compile: 1
           ccache: 1
+          git_ref: ${{ inputs.git_ref }}
 
-      - name: Checkout (again)
-        shell: bash
-        run: git checkout ${{ inputs.git_ref }}
+      - name: Setup Rust for cross compilation
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+
+      - name: Configure OpenSSL for Rust
+        run: |
+          echo "OPENSSL_ROOT_DIR=`pwd`/build/release/vcpkg_installed/arm64-linux" >> $GITHUB_ENV
+          echo "OPENSSL_DIR=`pwd`/build/release/vcpkg_installed/arm64-linux" >> $GITHUB_ENV
+          echo "OPENSSL_INCLUDE_DIR=`pwd`/build/release/vcpkg_installed/arm64-linux/include" >> $GITHUB_ENV
+          echo "OPENSSL_USE_STATIC_LIBS=true" >> $GITHUB_ENV
 
       - uses: ./.github/actions/build_extensions
         with:
@@ -326,7 +325,7 @@ jobs:
     - name: Build
       shell: bash
       env:
-        DISABLE_BUILTIN_EXTENSIONS: 1
+        GENERATE_EXTENSION_ENTRIES: 1
         LOCAL_EXTENSION_REPO: build/release/repository_other
       run: |
         make
@@ -393,63 +392,6 @@ jobs:
       shell: bash
       run: python3 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
 
- linux-httpfs:
-    name: Linux HTTPFS
-    if: ${{ inputs.skip_tests != 'true' }}
-    runs-on: ubuntu-20.04
-    needs: linux-release-64
-    env:
-      BUILD_HTTPFS: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_PARQUET: 1
-      BUILD_JSON: 1
-      S3_TEST_SERVER_AVAILABLE: 1
-      AWS_DEFAULT_REGION: eu-west-1
-      AWS_ACCESS_KEY_ID: minio_duckdb_user
-      AWS_SECRET_ACCESS_KEY: minio_duckdb_user_password
-      DUCKDB_S3_ENDPOINT: duckdb-minio.com:9000
-      DUCKDB_S3_USE_SSL: false
-
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
-
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-
-    - name: Install Ninja
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      run: make
-
-    - name: Start test server & run tests
-      shell: bash
-      run: |
-        sudo ./scripts/install_s3_test_server.sh
-        ./scripts/generate_presigned_url.sh
-        source ./scripts/run_s3_test_server.sh
-        source ./scripts/set_s3_test_server_variables.sh
-        sleep 60
-       
-        python3 scripts/get_test_list.py --file-contains 'require httpfs' --list '"*"' > test.list
-        python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest '-f test.list'
-        python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest '[secret]'  
-
  amalgamation-tests:
     name: Amalgamation Tests
     if: ${{ inputs.skip_tests != 'true' }}
@@ -479,3 +421,31 @@ jobs:
       run:  |
           python scripts/amalgamation.py --extended
           clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/duckdb.cpp -emit-llvm -S -O0
+
+ linux-release-32:
+    name: Linux (32 Bit)
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux2014_x86_64
+    needs: linux-release-64
+    env:
+      CC: /usr/bin/gcc
+      CXX: /usr/bin/g++
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/manylinux_2014_setup
+        with:
+          ninja-build: 1
+          ccache: 1
+          glibc32: 1
+          gcc_4_8: 1 # Note: we run this job on the older gcc 4.8 toolchain
+
+      - name: Build
+        shell: bash
+        run: |
+          mkdir -p build/release
+          (cd build/release && cmake -G "Ninja" -DSTATIC_LIBCPP=1 -DBUILD_EXTENSIONS='icu;parquet;fts;json' -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)

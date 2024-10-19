@@ -1,3 +1,4 @@
+#include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 
 #include "duckdb/common/algorithm.hpp"
@@ -94,7 +95,7 @@ string_t SubstringASCII(Vector &result, string_t input, int64_t offset, int64_t 
 	return SubstringSlice(result, input_data, start, UnsafeNumericCast<int64_t>(end - start));
 }
 
-string_t SubstringFun::SubstringUnicode(Vector &result, string_t input, int64_t offset, int64_t length) {
+string_t SubstringUnicode(Vector &result, string_t input, int64_t offset, int64_t length) {
 	auto input_data = input.GetData();
 	auto input_size = input.GetSize();
 
@@ -129,7 +130,7 @@ string_t SubstringFun::SubstringUnicode(Vector &result, string_t input, int64_t 
 		}
 		int64_t current_character = 0;
 		for (idx_t i = input_size; i > 0; i--) {
-			if (LengthFun::IsCharacter(input_data[i - 1])) {
+			if (IsCharacter(input_data[i - 1])) {
 				current_character++;
 				if (current_character == start) {
 					start_pos = i;
@@ -139,10 +140,10 @@ string_t SubstringFun::SubstringUnicode(Vector &result, string_t input, int64_t 
 				}
 			}
 		}
-		while (!LengthFun::IsCharacter(input_data[start_pos])) {
+		while (!IsCharacter(input_data[start_pos])) {
 			start_pos++;
 		}
-		while (end_pos < input_size && !LengthFun::IsCharacter(input_data[end_pos])) {
+		while (end_pos < input_size && !IsCharacter(input_data[end_pos])) {
 			end_pos++;
 		}
 
@@ -170,7 +171,7 @@ string_t SubstringFun::SubstringUnicode(Vector &result, string_t input, int64_t 
 
 		int64_t current_character = 0;
 		for (idx_t i = 0; i < input_size; i++) {
-			if (LengthFun::IsCharacter(input_data[i])) {
+			if (IsCharacter(input_data[i])) {
 				if (current_character == start) {
 					start_pos = i;
 				} else if (current_character == end) {
@@ -190,7 +191,7 @@ string_t SubstringFun::SubstringUnicode(Vector &result, string_t input, int64_t 
 	                      UnsafeNumericCast<int64_t>(end_pos - start_pos));
 }
 
-string_t SubstringFun::SubstringGrapheme(Vector &result, string_t input, int64_t offset, int64_t length) {
+string_t SubstringGrapheme(Vector &result, string_t input, int64_t offset, int64_t length) {
 	auto input_data = input.GetData();
 	auto input_size = input.GetSize();
 
@@ -224,11 +225,7 @@ string_t SubstringFun::SubstringGrapheme(Vector &result, string_t input, int64_t
 	if (offset < 0) {
 		// negative offset, this case is more difficult
 		// we first need to count the number of characters in the string
-		idx_t num_characters = 0;
-		utf8proc_grapheme_callback(input_data, input_size, [&](size_t start, size_t end) {
-			num_characters++;
-			return true;
-		});
+		idx_t num_characters = Utf8Proc::GraphemeCount(input_data, input_size);
 		// now call substring start and end again, but with the number of unicode characters this time
 		SubstringStartEnd(UnsafeNumericCast<int64_t>(num_characters), offset, length, start, end);
 	}
@@ -236,16 +233,15 @@ string_t SubstringFun::SubstringGrapheme(Vector &result, string_t input, int64_t
 	// now scan the graphemes of the string to find the positions of the start and end characters
 	int64_t current_character = 0;
 	idx_t start_pos = DConstants::INVALID_INDEX, end_pos = input_size;
-	utf8proc_grapheme_callback(input_data, input_size, [&](size_t gstart, size_t gend) {
+	for (auto cluster : Utf8Proc::GraphemeClusters(input_data, input_size)) {
 		if (current_character == start) {
-			start_pos = gstart;
+			start_pos = cluster.start;
 		} else if (current_character == end) {
-			end_pos = gstart;
-			return false;
+			end_pos = cluster.start;
+			break;
 		}
 		current_character++;
-		return true;
-	});
+	}
 	if (start_pos == DConstants::INVALID_INDEX) {
 		return SubstringEmptyString(result);
 	}
@@ -256,13 +252,13 @@ string_t SubstringFun::SubstringGrapheme(Vector &result, string_t input, int64_t
 
 struct SubstringUnicodeOp {
 	static string_t Substring(Vector &result, string_t input, int64_t offset, int64_t length) {
-		return SubstringFun::SubstringUnicode(result, input, offset, length);
+		return SubstringUnicode(result, input, offset, length);
 	}
 };
 
 struct SubstringGraphemeOp {
 	static string_t Substring(Vector &result, string_t input, int64_t offset, int64_t length) {
-		return SubstringFun::SubstringGrapheme(result, input, offset, length);
+		return SubstringGrapheme(result, input, offset, length);
 	}
 };
 
@@ -316,7 +312,7 @@ static unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context
 	return nullptr;
 }
 
-void SubstringFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunctionSet SubstringFun::GetFunctions() {
 	ScalarFunctionSet substr("substring");
 	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT},
 	                                  LogicalType::VARCHAR, SubstringFunction<SubstringUnicodeOp>, nullptr, nullptr,
@@ -324,10 +320,10 @@ void SubstringFun::RegisterFunction(BuiltinFunctions &set) {
 	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
 	                                  SubstringFunction<SubstringUnicodeOp>, nullptr, nullptr,
 	                                  SubstringPropagateStats));
-	set.AddFunction(substr);
-	substr.name = "substr";
-	set.AddFunction(substr);
+	return (substr);
+}
 
+ScalarFunctionSet SubstringGraphemeFun::GetFunctions() {
 	ScalarFunctionSet substr_grapheme("substring_grapheme");
 	substr_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT},
 	                                           LogicalType::VARCHAR, SubstringFunction<SubstringGraphemeOp>, nullptr,
@@ -335,7 +331,7 @@ void SubstringFun::RegisterFunction(BuiltinFunctions &set) {
 	substr_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
 	                                           SubstringFunction<SubstringGraphemeOp>, nullptr, nullptr,
 	                                           SubstringPropagateStats));
-	set.AddFunction(substr_grapheme);
+	return (substr_grapheme);
 }
 
 } // namespace duckdb

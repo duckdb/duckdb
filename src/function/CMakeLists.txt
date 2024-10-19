@@ -4,17 +4,25 @@ add_subdirectory(pragma)
 add_subdirectory(scalar)
 add_subdirectory(table)
 
+if(GENERATE_EXTENSION_ENTRIES)
+  add_definitions(-DGENERATE_EXTENSION_ENTRIES)
+endif()
+
 add_library_unity(
   duckdb_function
   OBJECT
+  aggregate_function.cpp
   built_in_functions.cpp
   cast_rules.cpp
   compression_config.cpp
+  copy_function.cpp
   function.cpp
   function_binder.cpp
+  function_list.cpp
   function_set.cpp
   pragma_function.cpp
   macro_function.cpp
+  register_function_list.cpp
   scalar_macro_function.cpp
   table_macro_function.cpp
   scalar_function.cpp

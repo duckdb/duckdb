@@ -8,14 +8,22 @@ LogicalComparisonJoin::LogicalComparisonJoin(JoinType join_type, LogicalOperator
     : LogicalJoin(join_type, logical_type) {
 }
 
-string LogicalComparisonJoin::ParamsToString() const {
-	string result = EnumUtil::ToChars(join_type);
-	for (auto &condition : conditions) {
-		result += "\n";
+InsertionOrderPreservingMap<string> LogicalComparisonJoin::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	result["Join Type"] = EnumUtil::ToChars(join_type);
+
+	string conditions_info;
+	for (idx_t i = 0; i < conditions.size(); i++) {
+		if (i > 0) {
+			conditions_info += "\n";
+		}
+		auto &condition = conditions[i];
 		auto expr =
 		    make_uniq<BoundComparisonExpression>(condition.comparison, condition.left->Copy(), condition.right->Copy());
-		result += expr->ToString();
+		conditions_info += expr->ToString();
 	}
+	result["Conditions"] = conditions_info;
+	SetParamsEstimatedCardinality(result);
 
 	return result;
 }

@@ -1,17 +1,19 @@
 #include "duckdb/execution/operator/csv_scanner/csv_file_handle.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/compressed_file_system.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
 CSVFileHandle::CSVFileHandle(FileSystem &fs, Allocator &allocator, unique_ptr<FileHandle> file_handle_p,
                              const string &path_p, FileCompressionType compression)
-    : file_handle(std::move(file_handle_p)), path(path_p) {
+    : compression_type(compression), file_handle(std::move(file_handle_p)), path(path_p) {
 	can_seek = file_handle->CanSeek();
 	on_disk_file = file_handle->OnDiskFile();
 	file_size = file_handle->GetFileSize();
 	is_pipe = file_handle->IsPipe();
-	uncompressed = compression == FileCompressionType::UNCOMPRESSED;
+	compression_type = file_handle->GetFileCompressionType();
 }
 
 unique_ptr<FileHandle> CSVFileHandle::OpenFileHandle(FileSystem &fs, Allocator &allocator, const string &path,
@@ -27,6 +29,10 @@ unique_ptr<CSVFileHandle> CSVFileHandle::OpenFile(FileSystem &fs, Allocator &all
                                                   FileCompressionType compression) {
 	auto file_handle = CSVFileHandle::OpenFileHandle(fs, allocator, path, compression);
 	return make_uniq<CSVFileHandle>(fs, allocator, std::move(file_handle), path, compression);
+}
+
+double CSVFileHandle::GetProgress() {
+	return static_cast<double>(file_handle->GetProgress());
 }
 
 bool CSVFileHandle::CanSeek() {
@@ -72,6 +78,7 @@ idx_t CSVFileHandle::Read(void *buffer, idx_t nr_bytes) {
 	if (!finished) {
 		finished = bytes_read == 0;
 	}
+	uncompressed_bytes_read += static_cast<idx_t>(bytes_read);
 	return UnsafeNumericCast<idx_t>(bytes_read);
 }
 

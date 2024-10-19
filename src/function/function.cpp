@@ -2,11 +2,13 @@
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/main/extension_entries.hpp"
 
 namespace duckdb {
 
@@ -99,7 +101,6 @@ void BuiltinFunctions::Initialize() {
 	RegisterGenericFunctions();
 	RegisterOperators();
 	RegisterSequenceFunctions();
-	RegisterStringFunctions();
 	RegisterNestedFunctions();
 
 	RegisterPragmaFunctions();
@@ -108,6 +109,8 @@ void BuiltinFunctions::Initialize() {
 	AddCollation("nocase", LowerFun::GetFunction(), true);
 	AddCollation("noaccent", StripAccentsFun::GetFunction());
 	AddCollation("nfc", NFCNormalizeFun::GetFunction());
+
+	RegisterExtensionOverloads();
 }
 
 hash_t BaseScalarFunction::Hash() const {

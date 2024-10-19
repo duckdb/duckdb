@@ -141,9 +141,16 @@ public:
 
 	//! Obtains the next scan index to scan from
 	bool NextScanIndex(ColumnDataScanState &state, idx_t &chunk_index, idx_t &segment_index, idx_t &row_index) const;
+	//! Obtains the previous scan index to scan from
+	bool PrevScanIndex(ColumnDataScanState &state, idx_t &chunk_index, idx_t &segment_index, idx_t &row_index) const;
 	//! Scans at the indices (obtained from NextScanIndex)
 	void ScanAtIndex(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate, DataChunk &result,
 	                 idx_t chunk_index, idx_t segment_index, idx_t row_index) const;
+
+	//! Seeks to the chunk _containing_ the row. Returns false if it is past the end.
+	//! Note that the returned chunk will likely not be aligned to the given row
+	//! but the scan state will provide the actual range
+	bool Seek(idx_t row_idx, ColumnDataScanState &state, DataChunk &result) const;
 
 	//! Initialize the column data collection
 	void Initialize(vector<LogicalType> types);
@@ -190,8 +197,8 @@ public:
 
 public:
 	// container API
-	bool empty() const { // NOLINT: match stl API
-		return rows.empty();
+	bool empty() const {     // NOLINT: match stl API
+		return rows.empty(); // NOLINT
 	}
 	idx_t size() const { // NOLINT: match stl API
 		return rows.size();

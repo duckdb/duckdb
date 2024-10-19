@@ -19,6 +19,11 @@ VariableResetStmt:
 					$3->scope = VAR_SET_SCOPE_GLOBAL;
 					$$ = (PGNode *) $3;
 				}
+			| RESET VARIABLE_P reset_rest
+				{
+					$3->scope = VAR_SET_SCOPE_VARIABLE;
+					$$ = (PGNode *) $3;
+				}
 		;
 
 

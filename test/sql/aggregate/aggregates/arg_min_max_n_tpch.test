@@ -1,0 +1,68 @@
+# name: test/sql/aggregate/aggregates/arg_min_max_n_tpch.test
+# description: Test max/min N overloads with TPCH data
+# group: [aggregates]
+
+require tpch
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CALL dbgen(sf=0.001);
+
+query I
+select min(l_orderkey, 3) from lineitem;
+----
+[1, 1, 1]
+
+query I
+select max(l_orderkey, 3) from lineitem;
+----
+[5988, 5987, 5987]
+
+# Test with different N values
+query II
+SELECT l_returnflag, max(
+	CASE WHEN l_returnflag='R' THEN null ELSE l_orderkey END,
+	CASE WHEN l_returnflag='N' THEN 5 ELSE 3 END)
+FROM lineitem GROUP BY ALL ORDER BY ALL;
+----
+A	[5986, 5986, 5986]
+N	[5987, 5987, 5987, 5987, 5958]
+R	NULL
+
+# This should be equivalent to "SELECT max(val_col, k) FROM table_name GROUP BY group_col"
+statement ok
+CREATE MACRO compute_top_k(table_name, group_col, val_col, k) AS TABLE
+SELECT rs.grp, array_agg(rs.val ORDER BY rid)
+FROM (
+  SELECT group_col AS grp, val_col AS val, row_number() OVER (PARTITION BY group_col ORDER BY val_col DESC) as rid
+  FROM query_table(table_name::VARCHAR) ORDER BY group_col DESC
+) as rs
+WHERE rid <= k
+GROUP BY ALL
+ORDER BY ALL;
+
+query II nosort top_resultset
+SELECT * FROM compute_top_k(lineitem, l_returnflag, l_orderkey, 3);
+
+query II nosort top_resultset
+SELECT l_returnflag, max(l_orderkey, 3) FROM lineitem GROUP BY ALL ORDER BY ALL;
+
+# This should be equivalent to "SELECT min(val_col, k) FROM table_name GROUP BY group_col"
+statement ok
+CREATE MACRO compute_bottom_k(table_name, group_col, val_col, k) AS TABLE
+SELECT rs.grp, array_agg(rs.val ORDER BY rid)
+FROM (
+  SELECT group_col AS grp, val_col AS val, row_number() OVER (PARTITION BY group_col ORDER BY val_col ASC) as rid
+  FROM query_table(table_name::VARCHAR) ORDER BY group_col ASC
+) as rs
+WHERE rid <= k
+GROUP BY ALL
+ORDER BY ALL;
+
+query II nosort bottom_resultset
+SELECT * FROM compute_bottom_k(lineitem, l_returnflag, l_orderkey, 3);
+
+query II nosort bottom_resultset
+SELECT l_returnflag, min(l_orderkey, 3) FROM lineitem GROUP BY ALL ORDER BY ALL;

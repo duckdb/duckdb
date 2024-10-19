@@ -1,20 +1,19 @@
 #include "duckdb/execution/operator/join/physical_left_delim_join.hpp"
 
 #include "duckdb/common/types/column/column_data_collection.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
+#include "duckdb/execution/operator/join/physical_join.hpp"
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
-#include "duckdb/parallel/thread_context.hpp"
 
 namespace duckdb {
 
 PhysicalLeftDelimJoin::PhysicalLeftDelimJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> original_join,
                                              vector<const_reference<PhysicalOperator>> delim_scans,
-                                             idx_t estimated_cardinality)
+                                             idx_t estimated_cardinality, optional_idx delim_idx)
     : PhysicalDelimJoin(PhysicalOperatorType::LEFT_DELIM_JOIN, std::move(types), std::move(original_join),
-                        std::move(delim_scans), estimated_cardinality) {
+                        std::move(delim_scans), estimated_cardinality, delim_idx) {
 	D_ASSERT(join->children.size() == 2);
 	// now for the original join
 	// we take its left child, this is the side that we will duplicate eliminate
@@ -24,6 +23,9 @@ PhysicalLeftDelimJoin::PhysicalLeftDelimJoin(vector<LogicalType> types, unique_p
 	// the actual chunk collection to scan will be created in the LeftDelimJoinGlobalState
 	auto cached_chunk_scan = make_uniq<PhysicalColumnDataScan>(
 	    children[0]->GetTypes(), PhysicalOperatorType::COLUMN_DATA_SCAN, estimated_cardinality, nullptr);
+	if (delim_idx.IsValid()) {
+		cached_chunk_scan->cte_index = delim_idx.GetIndex();
+	}
 	join->children[0] = std::move(cached_chunk_scan);
 }
 
@@ -99,6 +101,10 @@ SinkCombineResultType PhysicalLeftDelimJoin::Combine(ExecutionContext &context, 
 	distinct->Combine(context, distinct_combine_input);
 
 	return SinkCombineResultType::FINISHED;
+}
+
+void PhysicalLeftDelimJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &sink_state) const {
+	distinct->PrepareFinalize(context, *distinct->sink_state);
 }
 
 SinkFinalizeType PhysicalLeftDelimJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &client,

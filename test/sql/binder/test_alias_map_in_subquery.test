@@ -36,7 +36,7 @@ INSERT INTO testjson VALUES ('{ "location" : { "address" : "123 Main St" }, "sam
 query I
 SELECT (WITH keys AS (SELECT unnest(json_keys(example)) AS k), nonNull AS (
     		SELECT keys.k, example->keys.k AS v
-    		FROM keys WHERE v IS NOT NULL
+    		FROM keys WHERE nullif(v, 'null') IS NOT NULL
     	)
     	SELECT json_group_object(nonNull.k, nonNull.v)
     	FROM nonNull
@@ -51,7 +51,7 @@ CREATE OR REPLACE MACRO strip_null_value(jsonValue) AS (
 	WITH keys AS (SELECT UNNEST(json_keys(jsonValue)) AS k),
 		nonNull AS (
 		SELECT keys.k, jsonValue->keys.k AS v
-		FROM keys WHERE v IS NOT NULL
+		FROM keys WHERE nullif(v, 'null') IS NOT NULL
 	)
 	SELECT json_group_object(nonNull.k, nonNull.v)
 	FROM nonNull

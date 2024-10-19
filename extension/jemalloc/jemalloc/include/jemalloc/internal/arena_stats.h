@@ -1,14 +1,13 @@
 #ifndef JEMALLOC_INTERNAL_ARENA_STATS_H
 #define JEMALLOC_INTERNAL_ARENA_STATS_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/atomic.h"
 #include "jemalloc/internal/lockedint.h"
 #include "jemalloc/internal/mutex.h"
 #include "jemalloc/internal/mutex_prof.h"
 #include "jemalloc/internal/pa.h"
 #include "jemalloc/internal/sc.h"
-
-namespace duckdb_jemalloc {
 
 JEMALLOC_DIAGNOSTIC_DISABLE_SPURIOUS
 
@@ -53,6 +52,8 @@ struct arena_stats_s {
 	 * in pa_shard_stats_t.
 	 */
 	size_t			base; /* Derived. */
+	size_t			metadata_edata; /* Derived. */
+	size_t			metadata_rtree; /* Derived. */
 	size_t			resident; /* Derived. */
 	size_t			metadata_thp; /* Derived. */
 	size_t			mapped; /* Derived. */
@@ -112,7 +113,5 @@ arena_stats_large_flush_nrequests_add(tsdn_t *tsdn, arena_stats_t *arena_stats,
 	    &lstats->nflushes, 1);
 	LOCKEDINT_MTX_UNLOCK(tsdn, arena_stats->mtx);
 }
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_ARENA_STATS_H */

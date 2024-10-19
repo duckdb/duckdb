@@ -1,7 +1,9 @@
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
-#include "duckdb/common/exception.hpp"
+
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/typedefs.hpp"
+
 #include <cstring>
 
 namespace duckdb {
@@ -10,12 +12,13 @@ namespace duckdb {
 constexpr FileOpenFlags BufferedFileWriter::DEFAULT_OPEN_FLAGS;
 
 BufferedFileWriter::BufferedFileWriter(FileSystem &fs, const string &path_p, FileOpenFlags open_flags)
-    : fs(fs), path(path_p), data(make_unsafe_uniq_array<data_t>(FILE_BUFFER_SIZE)), offset(0), total_written(0) {
+    : fs(fs), path(path_p), data(make_unsafe_uniq_array_uninitialized<data_t>(FILE_BUFFER_SIZE)), offset(0),
+      total_written(0) {
 	handle = fs.OpenFile(path, open_flags | FileLockType::WRITE_LOCK);
 }
 
-int64_t BufferedFileWriter::GetFileSize() {
-	return fs.GetFileSize(*handle) + NumericCast<int64_t>(offset);
+idx_t BufferedFileWriter::GetFileSize() {
+	return NumericCast<idx_t>(fs.GetFileSize(*handle)) + offset;
 }
 
 idx_t BufferedFileWriter::GetTotalWritten() {
@@ -65,20 +68,26 @@ void BufferedFileWriter::Flush() {
 	offset = 0;
 }
 
+void BufferedFileWriter::Close() {
+	Flush();
+	handle->Close();
+	handle.reset();
+}
+
 void BufferedFileWriter::Sync() {
 	Flush();
 	handle->Sync();
 }
 
-void BufferedFileWriter::Truncate(int64_t size) {
-	auto persistent = fs.GetFileSize(*handle);
-	D_ASSERT(size <= persistent + NumericCast<int64_t>(offset));
+void BufferedFileWriter::Truncate(idx_t size) {
+	auto persistent = NumericCast<idx_t>(fs.GetFileSize(*handle));
+	D_ASSERT(size <= persistent + offset);
 	if (persistent <= size) {
 		// truncating into the pending write buffer.
-		offset = NumericCast<idx_t>(size - persistent);
+		offset = size - persistent;
 	} else {
 		// truncate the physical file on disk
-		handle->Truncate(size);
+		handle->Truncate(NumericCast<int64_t>(size));
 		// reset anything written in the buffer
 		offset = 0;
 	}

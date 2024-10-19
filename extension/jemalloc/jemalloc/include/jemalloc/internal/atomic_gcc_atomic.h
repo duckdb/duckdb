@@ -1,9 +1,12 @@
 #ifndef JEMALLOC_INTERNAL_ATOMIC_GCC_ATOMIC_H
 #define JEMALLOC_INTERNAL_ATOMIC_GCC_ATOMIC_H
 
-#define ATOMIC_INIT(...) {__VA_ARGS__}
+#include "jemalloc/internal/jemalloc_preamble.h"
+#include "jemalloc/internal/assert.h"
 
-namespace duckdb_jemalloc {
+#define ATOMIC_INLINE JEMALLOC_ALWAYS_INLINE
+
+#define ATOMIC_INIT(...) {__VA_ARGS__}
 
 typedef enum {
 	atomic_memory_order_relaxed,
@@ -126,6 +129,6 @@ atomic_fetch_xor_##short_type(atomic_##short_type##_t *a, type val,	\
 	    atomic_enum_to_builtin(mo));				\
 }
 
-} // namespace duckdb_jemalloc
+#undef ATOMIC_INLINE
 
 #endif /* JEMALLOC_INTERNAL_ATOMIC_GCC_ATOMIC_H */

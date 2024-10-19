@@ -1,6 +1,8 @@
 add_subdirectory(compressed_materialization)
+add_subdirectory(date)
 add_subdirectory(generic)
 add_subdirectory(list)
+add_subdirectory(map)
 add_subdirectory(operators)
 add_subdirectory(sequence)
 add_subdirectory(string)
@@ -10,8 +12,8 @@ add_library_unity(
   duckdb_func_scalar
   OBJECT
   compressed_materialization_functions.cpp
+  create_sort_key.cpp
   generic_functions.cpp
-  string_functions.cpp
   strftime_format.cpp
   nested_functions.cpp
   operators.cpp

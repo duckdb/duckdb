@@ -70,5 +70,5 @@ DUCKDB_API bool RegexMatch(const std::string &input, Match &match, const Regex &
 DUCKDB_API bool RegexMatch(const char *start, const char *end, Match &match, const Regex &regex);
 DUCKDB_API bool RegexMatch(const std::string &input, const Regex &regex);
 DUCKDB_API duckdb::vector<Match> RegexFindAll(const std::string &input, const Regex &regex);
-
+DUCKDB_API duckdb::vector<Match> RegexFindAll(const char *input_data, size_t input_size, const RE2 &regex);
 } // namespace duckdb_re2

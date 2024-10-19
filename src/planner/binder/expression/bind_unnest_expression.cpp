@@ -21,7 +21,7 @@ unique_ptr<Expression> CreateBoundStructExtract(ClientContext &context, unique_p
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(std::move(expr));
 	arguments.push_back(make_uniq<BoundConstantExpression>(Value(key)));
-	auto extract_function = StructExtractFun::KeyExtractFunction();
+	auto extract_function = GetKeyExtractFunction();
 	auto bind_info = extract_function.bind(context, extract_function, arguments);
 	auto return_type = extract_function.return_type;
 	auto result = make_uniq<BoundFunctionExpression>(return_type, std::move(extract_function), std::move(arguments),
@@ -34,13 +34,26 @@ unique_ptr<Expression> CreateBoundStructExtractIndex(ClientContext &context, uni
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(std::move(expr));
 	arguments.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(int64_t(key))));
-	auto extract_function = StructExtractFun::IndexExtractFunction();
+	auto extract_function = GetIndexExtractFunction();
 	auto bind_info = extract_function.bind(context, extract_function, arguments);
 	auto return_type = extract_function.return_type;
 	auto result = make_uniq<BoundFunctionExpression>(return_type, std::move(extract_function), std::move(arguments),
 	                                                 std::move(bind_info));
 	result->alias = "element" + to_string(key);
 	return std::move(result);
+}
+
+void SelectBinder::ThrowIfUnnestInLambda(const ColumnBinding &column_binding) {
+	// Extract the unnests and check if any match the column index.
+	for (auto &node_pair : node.unnests) {
+		auto &unnest_node = node_pair.second;
+
+		if (unnest_node.index == column_binding.table_index) {
+			if (column_binding.column_index < unnest_node.expressions.size()) {
+				throw BinderException("UNNEST in lambda expressions is not supported");
+			}
+		}
+	}
 }
 
 BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, bool root_expression) {
@@ -55,6 +68,11 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	}
 	if (inside_window) {
 		return BindResult(BinderException(function, UnsupportedUnnestMessage()));
+	}
+
+	if (function.distinct || function.filter || !function.order_bys->orders.empty()) {
+		throw InvalidInputException("\"DISTINCT\", \"FILTER\", and \"ORDER BY\" are not "
+		                            "applicable to \"UNNEST\"");
 	}
 
 	idx_t max_depth = 1;

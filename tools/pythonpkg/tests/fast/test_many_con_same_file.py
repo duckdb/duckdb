@@ -73,3 +73,14 @@ def test_diff_config():
         con2 = duckdb.connect("test.db", True)
     con1.close()
     del con1
+
+
+def test_diff_config_extended():
+    con1 = duckdb.connect("test.db", config={'null_order': 'NULLS FIRST'})
+    with pytest.raises(
+        duckdb.ConnectionException,
+        match="Can't open a connection to same database file with a different configuration than existing connections",
+    ):
+        con2 = duckdb.connect("test.db")
+    con1.close()
+    del con1

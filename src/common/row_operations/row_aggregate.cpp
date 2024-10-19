@@ -25,7 +25,7 @@ void RowOperations::InitializeStates(TupleDataLayout &layout, Vector &addresses,
 		for (idx_t i = 0; i < count; ++i) {
 			auto row_idx = sel.get_index(i);
 			auto row = pointers[row_idx];
-			aggr.function.initialize(row + offsets[aggr_idx]);
+			aggr.function.initialize(aggr.function, row + offsets[aggr_idx]);
 		}
 		++aggr_idx;
 	}

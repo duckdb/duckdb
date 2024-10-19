@@ -25,8 +25,6 @@ public:
 
 	//! The subquery
 	unique_ptr<SelectStatement> subquery;
-	//! Aliases for the column names
-	vector<string> column_name_alias;
 
 public:
 	string ToString() const override;

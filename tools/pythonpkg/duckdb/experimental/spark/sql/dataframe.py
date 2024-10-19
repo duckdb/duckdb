@@ -14,7 +14,7 @@ from typing import (
 import duckdb
 from duckdb import ColumnExpression, ConstantExpression, Expression, StarExpression
 
-from ..errors import PySparkTypeError
+from ..errors import IllegalArgumentException, PySparkTypeError, PySparkValueError
 from ..exception import ContributionsAcceptedError
 from ._typing import ColumnOrName
 from .column import Column
@@ -28,7 +28,6 @@ if TYPE_CHECKING:
     from .group import GroupedData
     from .session import SparkSession
 
-from ..errors import IllegalArgumentException, PySparkValueError
 from .functions import _to_column
 
 

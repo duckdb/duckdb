@@ -19,7 +19,7 @@ public:
 	static constexpr uint32_t RG_SAMPLES = 8;
 	static constexpr uint16_t SAMPLES_PER_VECTOR = 32;
 	// We calculate how many equidistant vector we must jump within a rowgroup
-	static constexpr uint32_t RG_SAMPLES_DUCKDB_JUMP = (STANDARD_ROW_GROUPS_SIZE / RG_SAMPLES) / STANDARD_VECTOR_SIZE;
+	static constexpr uint32_t RG_SAMPLES_DUCKDB_JUMP = (DEFAULT_ROW_GROUP_SIZE / RG_SAMPLES) / STANDARD_VECTOR_SIZE;
 
 	static constexpr uint8_t HEADER_SIZE = sizeof(uint32_t);
 	static constexpr uint8_t EXPONENT_SIZE = sizeof(uint8_t);
@@ -35,8 +35,8 @@ public:
 	static constexpr double COMPACT_BLOCK_THRESHOLD = 0.80;
 
 	// Largest double which fits into an int64
-	static constexpr double ENCODING_UPPER_LIMIT = 9223372036854774784;
-	static constexpr double ENCODING_LOWER_LIMIT = -9223372036854774784;
+	static constexpr double ENCODING_UPPER_LIMIT = 9223372036854774784.0;
+	static constexpr double ENCODING_LOWER_LIMIT = -9223372036854774784.0;
 
 	static constexpr uint8_t MAX_COMBINATIONS = 5;
 

@@ -80,7 +80,9 @@ void PlanEnumerator::GenerateCrossProducts() {
 	for (idx_t i = 0; i < query_graph_manager.relation_manager.NumRelations(); i++) {
 		auto &left = query_graph_manager.set_manager.GetJoinRelation(i);
 		for (idx_t j = 0; j < query_graph_manager.relation_manager.NumRelations(); j++) {
-			if (i != j) {
+			auto cross_product_allowed = query_graph_manager.relation_manager.CrossProductWithRelationAllowed(i) &&
+			                             query_graph_manager.relation_manager.CrossProductWithRelationAllowed(j);
+			if (i != j && cross_product_allowed) {
 				auto &right = query_graph_manager.set_manager.GetJoinRelation(j);
 				query_graph_manager.CreateQueryGraphCrossProduct(left, right);
 			}
@@ -99,17 +101,37 @@ const reference_map_t<JoinRelationSet, unique_ptr<DPJoinNode>> &PlanEnumerator::
 unique_ptr<DPJoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
                                                       const vector<reference<NeighborInfo>> &possible_connections,
                                                       DPJoinNode &left, DPJoinNode &right) {
-	// for the hash join we want the right side (build side) to have the smallest cardinality
-	// also just a heuristic but for now...
-	// FIXME: we should probably actually benchmark that as well
+
 	// FIXME: should consider different join algorithms, should we pick a join algorithm here as well? (probably)
-	optional_ptr<NeighborInfo> best_connection = nullptr;
-
-	// cross products are techincally still connections, but the filter expression is a null_ptr
-	if (!possible_connections.empty()) {
-		best_connection = &possible_connections.back().get();
+	optional_ptr<NeighborInfo> best_connection = possible_connections.back().get();
+	// cross products are technically still connections, but the filter expression is a null_ptr
+	bool found_non_cross_product_connection = false;
+	for (auto &connection : possible_connections) {
+		for (auto &filter : connection.get().filters) {
+			if (filter->join_type != JoinType::INVALID) {
+				best_connection = connection.get();
+				found_non_cross_product_connection = true;
+				break;
+			}
+		}
+		if (found_non_cross_product_connection) {
+			break;
+		}
 	}
+	auto join_type = JoinType::INVALID;
+	for (auto &filter_binding : best_connection->filters) {
+		if (!filter_binding->left_set || !filter_binding->right_set) {
+			continue;
+		}
 
+		join_type = filter_binding->join_type;
+		// prefer joining on semi and anti joins as they have a higher chance of being more
+		// selective
+		if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
+			break;
+		}
+	}
+	// need the filter info from the Neighborhood info.
 	auto cost = cost_model.ComputeCost(left, right);
 	auto result = make_uniq<DPJoinNode>(set, best_connection, left.set, right.set, cost);
 	result->cardinality = cost_model.cardinality_estimator.EstimateCardinalityWithSet<idx_t>(set);
@@ -176,7 +198,7 @@ bool PlanEnumerator::EmitCSG(JoinRelationSet &node) {
 	}
 
 	//! Neighbors should be reversed when iterating over them.
-	std::sort(neighbors.begin(), neighbors.end(), std::greater_equal<idx_t>());
+	std::sort(neighbors.begin(), neighbors.end(), std::greater<idx_t>());
 	for (idx_t i = 0; i < neighbors.size() - 1; i++) {
 		D_ASSERT(neighbors[i] > neighbors[i + 1]);
 	}

@@ -115,6 +115,17 @@ SELECT COUNT(*) FROM generate_series(TIMESTAMP '1992-01-01 00:00:00', TIMESTAMP 
 ----
 10228
 
+# null values result in no rows
+query I
+SELECT COUNT(*) FROM range(NULL, TIMESTAMP '1992-12-31 12:00:00', INTERVAL '1 MONTH') tbl(d)
+----
+0
+
+query I
+SELECT COUNT(*) FROM generate_series(NULL, TIMESTAMP '1992-12-31 12:00:00', INTERVAL '1 MONTH') tbl(d)
+----
+0
+
 # zero interval not supported
 statement error
 SELECT d FROM range(TIMESTAMP '1992-01-01 00:00:00', TIMESTAMP '1992-12-31 12:00:00', INTERVAL '0 MONTH') tbl(d)

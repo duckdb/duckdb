@@ -31,14 +31,14 @@ static void CheckTreeDepth(const LogicalOperator &op, idx_t max_depth, idx_t dep
 
 void Planner::CreatePlan(SQLStatement &statement) {
 	auto &profiler = QueryProfiler::Get(context);
-	auto parameter_count = statement.n_param;
+	auto parameter_count = statement.named_param_map.size();
 
 	BoundParameterMap bound_parameters(parameter_data);
 
 	// first bind the tables and columns to the catalog
 	bool parameters_resolved = true;
 	try {
-		profiler.StartPhase("binder");
+		profiler.StartPhase(MetricsType::PLANNER_BINDING);
 		binder->parameters = &bound_parameters;
 		auto bound_statement = binder->Bind(statement);
 		profiler.EndPhase();
@@ -108,7 +108,6 @@ shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLSta
 	prepared_data->types = types;
 	prepared_data->value_map = std::move(value_map);
 	prepared_data->properties = properties;
-	prepared_data->catalog_version = MetaTransaction::Get(context).catalog_version;
 	return prepared_data;
 }
 
@@ -161,7 +160,7 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 	auto &config = DBConfig::GetConfig(context);
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	{
-		auto &serialize_comp = config.options.serialization_compatibility;
+		auto &serialize_comp = config.GetSetting<StorageCompatibilityVersionSetting>(context);
 		auto latest_version = SerializationCompatibility::Latest();
 		if (serialize_comp.manually_set &&
 		    serialize_comp.serialization_version != latest_version.serialization_version) {

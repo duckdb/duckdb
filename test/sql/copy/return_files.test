@@ -1,0 +1,45 @@
+# name: test/sql/copy/return_files.test
+# description: test RETURN_FILES parameter for COPY
+# group: [copy]
+
+require parquet
+
+statement ok
+CREATE TABLE integers AS SELECT range i FROM range(200000);
+
+statement ok
+SET preserve_insertion_order=false;
+
+query II
+COPY integers TO '__TEST_DIR__/test_copy_to_file.parquet' (RETURN_FILES);
+----
+200000	<REGEX>:.*test_copy_to_file.parquet.*
+
+statement ok
+SET preserve_insertion_order=true;
+
+query II
+COPY integers TO '__TEST_DIR__/test_batch_copy_to_file.parquet' (RETURN_FILES TRUE);
+----
+200000	<REGEX>:.*test_batch_copy_to_file.parquet.*
+
+statement ok
+SET threads=2;
+
+query II
+COPY integers TO '__TEST_DIR__/test_per_thread_output' (RETURN_FILES, PER_THREAD_OUTPUT);
+----
+200000	<REGEX>:.*data_0.csv.*data_1.csv.*
+
+require notwindows
+
+statement ok
+SET threads=1;
+
+statement ok
+CREATE TABLE integers2 AS SELECT range i, range % 4 j FROM range(200000);
+
+query II
+COPY integers2 TO '__TEST_DIR__/test_partition_by' (RETURN_FILES TRUE, PARTITION_BY j);
+----
+200000	<REGEX>:.*test_partition_by/j=0/data_0.csv.*test_partition_by/j=1/data_0.csv.*test_partition_by/j=2/data_0.csv.*test_partition_by/j=3/data_0.csv.*

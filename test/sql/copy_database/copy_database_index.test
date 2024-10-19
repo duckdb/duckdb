@@ -22,6 +22,31 @@ CREATE INDEX i_index ON test(a)
 statement ok
 INSERT INTO test VALUES (42, 88, 'hello');
 
-statement error
-COPY FROM DATABASE db1 TO memory
+query II
+explain SELECT * FROM db1.test WHERE a=42
 ----
+physical_plan	<REGEX>:.*INDEX_SCAN.*
+
+statement ok
+COPY FROM DATABASE db1 TO memory
+
+statement ok
+USE memory
+
+query III
+SELECT * FROM test WHERE a=42
+----
+42	88	hello
+
+query II
+explain SELECT * FROM test WHERE a=42
+----
+physical_plan	<!REGEX>:.*INDEX_SCAN.*
+
+statement ok
+DROP INDEX i_index
+
+query II
+explain SELECT * FROM test WHERE a=42
+----
+physical_plan	<!REGEX>:.*INDEX_SCAN.*

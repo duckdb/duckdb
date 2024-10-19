@@ -11,9 +11,9 @@ BindResult InsertBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, 
 	auto &expr = *expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::DEFAULT:
-		return BindResult("DEFAULT is not allowed here!");
+		return BindResult(BinderException::Unsupported(expr, "DEFAULT is not allowed here!"));
 	case ExpressionClass::WINDOW:
-		return BindResult("INSERT statement cannot contain window functions!");
+		return BindResult(BinderException::Unsupported(expr, "INSERT statement cannot contain window functions!"));
 	default:
 		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}

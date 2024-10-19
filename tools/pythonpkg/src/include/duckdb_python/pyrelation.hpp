@@ -49,15 +49,14 @@ public:
 
 	unique_ptr<DuckDBPyRelation> ProjectFromExpression(const string &expr);
 	unique_ptr<DuckDBPyRelation> ProjectFromTypes(const py::object &types);
-	unique_ptr<DuckDBPyRelation> Project(const py::args &args, const py::kwargs &kwargs = py::kwargs());
-
+	unique_ptr<DuckDBPyRelation> Project(const py::args &args, const string &groups = "");
 	unique_ptr<DuckDBPyRelation> Filter(const py::object &expr);
 	unique_ptr<DuckDBPyRelation> FilterFromExpression(const string &expr);
 	unique_ptr<DuckDBPyRelation> Limit(int64_t n, int64_t offset = 0);
 	unique_ptr<DuckDBPyRelation> Order(const string &expr);
 	unique_ptr<DuckDBPyRelation> Sort(const py::args &args);
 
-	unique_ptr<DuckDBPyRelation> Aggregate(const string &expr, const string &groups = "");
+	unique_ptr<DuckDBPyRelation> Aggregate(const py::object &expr, const string &groups = "");
 
 	unique_ptr<DuckDBPyRelation> GenericAggregator(const string &function_name, const string &aggregated_columns,
 	                                               const string &groups = "", const string &function_parameter = "",
@@ -195,6 +194,8 @@ public:
 
 	PolarsDataFrame ToPolars(idx_t batch_size);
 
+	py::object ToArrowCapsule(const py::object &requested_schema = py::none());
+
 	duckdb::pyarrow::RecordBatchReader ToRecordBatch(idx_t batch_size);
 
 	unique_ptr<DuckDBPyRelation> Union(DuckDBPyRelation *other);
@@ -206,6 +207,7 @@ public:
 	unique_ptr<DuckDBPyRelation> Map(py::function fun, Optional<py::object> schema);
 
 	unique_ptr<DuckDBPyRelation> Join(DuckDBPyRelation *other, const py::object &condition, const string &type);
+	unique_ptr<DuckDBPyRelation> Cross(DuckDBPyRelation *other);
 
 	void ToParquet(const string &filename, const py::object &compression = py::none(),
 	               const py::object &field_ids = py::none(), const py::object &row_group_size_bytes = py::none(),
@@ -217,7 +219,8 @@ public:
 	           const py::object &timestamp_format = py::none(), const py::object &quoting = py::none(),
 	           const py::object &encoding = py::none(), const py::object &compression = py::none(),
 	           const py::object &overwrite = py::none(), const py::object &per_thread_output = py::none(),
-	           const py::object &use_tmp_file = py::none(), const py::object &partition_by = py::none());
+	           const py::object &use_tmp_file = py::none(), const py::object &partition_by = py::none(),
+	           const py::object &write_partition_columns = py::none());
 
 	// should this return a rel with the new view?
 	unique_ptr<DuckDBPyRelation> CreateView(const string &view_name, bool replace = true);

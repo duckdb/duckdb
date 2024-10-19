@@ -18,8 +18,8 @@ class SchemaCatalogEntry;
 struct SimilarCatalogEntry {
 	//! The entry name. Empty if absent
 	string name;
-	//! The distance to the given name.
-	idx_t distance = idx_t(-1);
+	//! The similarity score of the given name (between 0.0 and 1.0, higher is better)
+	double score = 0.0;
 	//! The schema of the entry.
 	optional_ptr<SchemaCatalogEntry> schema;
 

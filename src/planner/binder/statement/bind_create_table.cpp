@@ -228,7 +228,10 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 
 		auto bound_expression = expr_binder.Bind(expression);
 		D_ASSERT(bound_expression);
-		D_ASSERT(!bound_expression->HasSubquery());
+		if (bound_expression->HasSubquery()) {
+			throw BinderException("Failed to bind generated column '%s' because the expression contains a subquery",
+			                      col.Name());
+		}
 		if (col.Type().id() == LogicalTypeId::ANY) {
 			// Do this before changing the type, so we know it's the first time the type is set
 			col.ChangeGeneratedExpressionType(bound_expression->return_type);
@@ -316,10 +319,30 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		// construct the set of columns based on the names and types of the query
 		auto &names = query_obj.names;
 		auto &sql_types = query_obj.types;
+		// e.g. create table (col1 ,col2) as QUERY
+		// col1 and col2 are the target_col_names
+		auto target_col_names = base.columns.GetColumnNames();
+		// TODO check  types and target_col_names are mismatch in size
 		D_ASSERT(names.size() == sql_types.size());
 		base.columns.SetAllowDuplicates(true);
-		for (idx_t i = 0; i < names.size(); i++) {
-			base.columns.AddColumn(ColumnDefinition(names[i], sql_types[i]));
+		if (!target_col_names.empty()) {
+			if (target_col_names.size() > sql_types.size()) {
+				throw BinderException("Target table has more colum names than query result.");
+			} else if (target_col_names.size() < sql_types.size()) {
+				// filled the target_col_names with the name of query names
+				for (idx_t i = target_col_names.size(); i < sql_types.size(); i++) {
+					target_col_names.push_back(names[i]);
+				}
+			}
+			ColumnList new_colums;
+			for (idx_t i = 0; i < target_col_names.size(); i++) {
+				new_colums.AddColumn(ColumnDefinition(target_col_names[i], sql_types[i]));
+			}
+			base.columns = std::move(new_colums);
+		} else {
+			for (idx_t i = 0; i < names.size(); i++) {
+				base.columns.AddColumn(ColumnDefinition(names[i], sql_types[i]));
+			}
 		}
 	} else {
 		SetCatalogLookupCallback([&dependencies, &schema](CatalogEntry &entry) {
@@ -349,7 +372,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		if (column.Type().id() == LogicalTypeId::VARCHAR) {
 			ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
 		}
-		BindLogicalType(column.TypeMutable(), &result->schema.catalog);
+		BindLogicalType(column.TypeMutable(), &result->schema.catalog, result->schema.name);
 	}
 	result->dependencies.VerifyDependencies(schema.catalog, result->Base().table);
 

@@ -43,25 +43,32 @@ public:
 	static unique_ptr<FileBuffer> ReadTemporaryBufferInternal(BufferManager &buffer_manager, FileHandle &handle,
 	                                                          idx_t position, idx_t size,
 	                                                          unique_ptr<FileBuffer> reusable_buffer);
-	//! Registers an in-memory buffer that cannot be unloaded until it is destroyed
-	//! This buffer can be small (smaller than BLOCK_SIZE)
-	//! Unpin and pin are nops on this block of memory
-	shared_ptr<BlockHandle> RegisterSmallMemory(idx_t block_size) final;
+
+	//! Registers a transient memory buffer.
+	shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size, const idx_t block_size) final;
+	//! Registers an in-memory buffer that cannot be unloaded until it is destroyed.
+	//! This buffer can be small (smaller than the block size of the temporary block manager).
+	//! Unpin and Pin are NOPs on this block of memory.
+	shared_ptr<BlockHandle> RegisterSmallMemory(const idx_t size) final;
 
 	idx_t GetUsedMemory() const final;
 	idx_t GetMaxMemory() const final;
 	idx_t GetUsedSwap() final;
 	optional_idx GetMaxSwap() const final;
+	//! Returns the block allocation size for buffer-managed blocks.
+	idx_t GetBlockAllocSize() const final;
+	//! Returns the block size for buffer-managed blocks.
+	idx_t GetBlockSize() const final;
 
 	//! Allocate an in-memory buffer with a single pin.
 	//! The allocated memory is released when the buffer handle is destroyed.
-	DUCKDB_API BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true,
-	                                 shared_ptr<BlockHandle> *block = nullptr) final;
+	DUCKDB_API BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true) final;
 
 	//! Reallocate an in-memory buffer that is pinned.
 	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) final;
 
 	BufferHandle Pin(shared_ptr<BlockHandle> &handle) final;
+	void Prefetch(vector<shared_ptr<BlockHandle>> &handles) final;
 	void Unpin(shared_ptr<BlockHandle> &handle) final;
 
 	//! Set a new memory limit to the buffer manager, throws an exception if the new limit is too low and not enough
@@ -102,14 +109,18 @@ protected:
 	                                             ARGS...);
 
 	//! Register an in-memory buffer of arbitrary size, as long as it is >= BLOCK_SIZE. can_destroy signifies whether or
-	//! not the buffer can be destroyed when unpinned, or whether or not it needs to be written to a temporary file so
-	//! it can be reloaded. The resulting buffer will already be allocated, but needs to be pinned in order to be used.
+	//! not the buffer can be destroyed instead of evicted,
+	//! if true, it will be destroyed,
+	//! if false, it will be written to a temporary file so it can be reloaded
+	//! If we want to change this, e.g., to immediately destroy the buffer upon unpinning,
+	//! we can call BlockHandle::SetDestroyBufferUpon
+	//! The resulting buffer will already be allocated, but needs to be pinned in order to be used.
 	//! This needs to be private to prevent creating blocks without ever pinning them:
 	//! blocks that are never pinned are never added to the eviction queue
 	shared_ptr<BlockHandle> RegisterMemory(MemoryTag tag, idx_t block_size, bool can_destroy);
 
 	//! Garbage collect eviction queue
-	void PurgeQueue() final;
+	void PurgeQueue(FileBufferType type) final;
 
 	BufferPool &GetBufferPool() const final;
 	TemporaryMemoryManager &GetTemporaryMemoryManager() final;
@@ -117,12 +128,12 @@ protected:
 	//! Write a temporary buffer to disk
 	void WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) final;
 	//! Read a temporary buffer from disk
-	unique_ptr<FileBuffer> ReadTemporaryBuffer(MemoryTag tag, block_id_t id,
+	unique_ptr<FileBuffer> ReadTemporaryBuffer(MemoryTag tag, BlockHandle &block,
 	                                           unique_ptr<FileBuffer> buffer = nullptr) final;
 	//! Get the path of the temporary buffer
 	string GetTemporaryPath(block_id_t id);
 
-	void DeleteTemporaryFile(block_id_t id) final;
+	void DeleteTemporaryFile(BlockHandle &block) final;
 
 	void RequireTemporaryDirectory();
 
@@ -138,6 +149,9 @@ protected:
 	//! When the BlockHandle reaches 0 readers, this creates a new FileBuffer for this BlockHandle and
 	//! overwrites the data within with garbage. Any readers that do not hold the pin will notice
 	void VerifyZeroReaders(shared_ptr<BlockHandle> &handle);
+
+	void BatchRead(vector<shared_ptr<BlockHandle>> &handles, const map<block_id_t, idx_t> &load_map,
+	               block_id_t first_block, block_id_t last_block);
 
 protected:
 	// These are stored here because temp_directory creation is lazy

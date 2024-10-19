@@ -1,0 +1,264 @@
+{
+    "group": "query_execution",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_query",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "connection"
+                },
+                {
+                    "type": "const char *",
+                    "name": "query"
+                },
+                {
+                    "type": "duckdb_result *",
+                    "name": "out_result"
+                }
+            ],
+            "comment": {
+                "description": "Executes a SQL query within a connection and stores the full (materialized) result in the out_result pointer.\nIf the query fails to execute, DuckDBError is returned and the error message can be retrieved by calling\n`duckdb_result_error`.\n\nNote that after running `duckdb_query`, `duckdb_destroy_result` must be called on the result object even if the\nquery fails, otherwise the error stored within the result will not be freed correctly.\n\n",
+                "param_comments": {
+                    "connection": "The connection to perform the query in.",
+                    "query": "The SQL query to run.",
+                    "out_result": "The query result."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_destroy_result",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                }
+            ],
+            "comment": {
+                "description": "Closes the result and de-allocates all memory allocated for that connection.\n\n",
+                "param_comments": {
+                    "result": "The result to destroy."
+                }
+            }
+        },
+        {
+            "name": "duckdb_column_name",
+            "return_type": "const char *",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                }
+            ],
+            "comment": {
+                "description": "Returns the column name of the specified column. The result should not need to be freed; the column names will\nautomatically be destroyed when the result is destroyed.\n\nReturns `NULL` if the column is out of range.\n\n",
+                "param_comments": {
+                    "result": "The result object to fetch the column name from.",
+                    "col": "The column index."
+                },
+                "return_value": "The column name of the specified column."
+            }
+        },
+        {
+            "name": "duckdb_column_type",
+            "return_type": "duckdb_type",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                }
+            ],
+            "comment": {
+                "description": "Returns the column type of the specified column.\n\nReturns `DUCKDB_TYPE_INVALID` if the column is out of range.\n\n",
+                "param_comments": {
+                    "result": "The result object to fetch the column type from.",
+                    "col": "The column index."
+                },
+                "return_value": "The column type of the specified column."
+            }
+        },
+        {
+            "name": "duckdb_result_statement_type",
+            "return_type": "duckdb_statement_type",
+            "params": [
+                {
+                    "type": "duckdb_result",
+                    "name": "result"
+                }
+            ],
+            "comment": {
+                "description": "Returns the statement type of the statement that was executed\n\n",
+                "param_comments": {
+                    "result": "The result object to fetch the statement type from."
+                },
+                "return_value": "duckdb_statement_type value or DUCKDB_STATEMENT_TYPE_INVALID"
+            }
+        },
+        {
+            "name": "duckdb_column_logical_type",
+            "return_type": "duckdb_logical_type",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                }
+            ],
+            "comment": {
+                "description": "Returns the logical column type of the specified column.\n\nThe return type of this call should be destroyed with `duckdb_destroy_logical_type`.\n\nReturns `NULL` if the column is out of range.\n\n",
+                "param_comments": {
+                    "result": "The result object to fetch the column type from.",
+                    "col": "The column index."
+                },
+                "return_value": "The logical column type of the specified column."
+            }
+        },
+        {
+            "name": "duckdb_column_count",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                }
+            ],
+            "comment": {
+                "description": "Returns the number of columns present in a the result object.\n\n",
+                "param_comments": {
+                    "result": "The result object."
+                },
+                "return_value": "The number of columns present in the result object."
+            }
+        },
+        {
+            "name": "duckdb_row_count",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                }
+            ],
+            "deprecated": true,
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nReturns the number of rows present in the result object.\n\n",
+                "param_comments": {
+                    "result": "The result object."
+                },
+                "return_value": "The number of rows present in the result object."
+            }
+        },
+        {
+            "name": "duckdb_rows_changed",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                }
+            ],
+            "comment": {
+                "description": "Returns the number of rows changed by the query stored in the result. This is relevant only for INSERT/UPDATE/DELETE\nqueries. For other queries the rows_changed will be 0.\n\n",
+                "param_comments": {
+                    "result": "The result object."
+                },
+                "return_value": "The number of rows changed."
+            }
+        },
+        {
+            "name": "duckdb_column_data",
+            "return_type": "void *",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                }
+            ],
+            "deprecated": true,
+            "comment": {
+                "description": "**DEPRECATED**: Prefer using `duckdb_result_get_chunk` instead.\n\nReturns the data of a specific column of a result in columnar format.\n\nThe function returns a dense array which contains the result data. The exact type stored in the array depends on the\ncorresponding duckdb_type (as provided by `duckdb_column_type`). For the exact type by which the data should be\naccessed, see the comments in [the types section](types) or the `DUCKDB_TYPE` enum.\n\nFor example, for a column of type `DUCKDB_TYPE_INTEGER`, rows can be accessed in the following manner:\n```c\nint32_t *data = (int32_t *) duckdb_column_data(&result, 0);\nprintf(\"Data for row %d: %d\\n\", row, data[row]);\n```\n\n",
+                "param_comments": {
+                    "result": "The result object to fetch the column data from.",
+                    "col": "The column index."
+                },
+                "return_value": "The column data of the specified column."
+            }
+        },
+        {
+            "name": "duckdb_nullmask_data",
+            "return_type": "bool *",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                }
+            ],
+            "deprecated": true,
+            "comment": {
+                "description": "**DEPRECATED**: Prefer using `duckdb_result_get_chunk` instead.\n\nReturns the nullmask of a specific column of a result in columnar format. The nullmask indicates for every row\nwhether or not the corresponding row is `NULL`. If a row is `NULL`, the values present in the array provided\nby `duckdb_column_data` are undefined.\n\n```c\nint32_t *data = (int32_t *) duckdb_column_data(&result, 0);\nbool *nullmask = duckdb_nullmask_data(&result, 0);\nif (nullmask[row]) {\n    printf(\"Data for row %d: NULL\\n\", row);\n} else {\n    printf(\"Data for row %d: %d\\n\", row, data[row]);\n}\n```\n\n",
+                "param_comments": {
+                    "result": "The result object to fetch the nullmask from.",
+                    "col": "The column index."
+                },
+                "return_value": "The nullmask of the specified column."
+            }
+        },
+        {
+            "name": "duckdb_result_error",
+            "return_type": "const char *",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                }
+            ],
+            "comment": {
+                "description": "Returns the error message contained within the result. The error is only set if `duckdb_query` returns `DuckDBError`.\n\nThe result of this function must not be freed. It will be cleaned up when `duckdb_destroy_result` is called.\n\n",
+                "param_comments": {
+                    "result": "The result object to fetch the error from."
+                },
+                "return_value": "The error of the result."
+            }
+        },
+        {
+            "name": "duckdb_result_error_type",
+            "return_type": "duckdb_error_type",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                }
+            ],
+            "comment": {
+                "description": "Returns the result error type contained within the result. The error is only set if `duckdb_query` returns\n`DuckDBError`.\n\n",
+                "param_comments": {
+                    "result": "The result object to fetch the error from."
+                },
+                "return_value": "The error type of the result."
+            }
+        }
+    ]
+}

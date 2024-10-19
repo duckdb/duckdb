@@ -1,11 +1,6 @@
 #ifndef JEMALLOC_PREAMBLE_H
 #define JEMALLOC_PREAMBLE_H
 
-#include <cstdint>
-#include <cstdarg>
-#include <cstdbool>
-#include <cstdlib>
-
 #include "jemalloc/internal/jemalloc_internal_defs.h"
 #include "jemalloc/internal/jemalloc_internal_decls.h"
 
@@ -25,11 +20,11 @@
 #  define JEMALLOC_N(n) jet_##n
 #  include "jemalloc/internal/public_namespace.h"
 #  define JEMALLOC_NO_RENAME
-#  include "jemalloc/jemalloc.h"
+#  include "../jemalloc.h"
 #  undef JEMALLOC_NO_RENAME
 #else
-#  define JEMALLOC_N(n) je_##n
-#  include "jemalloc/jemalloc.h"
+#  define JEMALLOC_N(n) duckdb_je_##n
+#  include "../jemalloc.h"
 #endif
 
 #if defined(JEMALLOC_OSATOMIC)
@@ -49,23 +44,18 @@
  * want the inclusion of hooks to happen early, so that we hook as much as
  * possible.
  */
-/*
 #ifndef JEMALLOC_NO_PRIVATE_NAMESPACE
 #  ifndef JEMALLOC_JET
 #    include "jemalloc/internal/private_namespace.h"
 #  else
 #    include "jemalloc/internal/private_namespace_jet.h"
-#include "jemalloc/internal/priva"
 #  endif
 #endif
- */
 #include "jemalloc/internal/test_hooks.h"
 
 #ifdef JEMALLOC_DEFINE_MADVISE_FREE
 #  define JEMALLOC_MADV_FREE 8
 #endif
-
-namespace duckdb_jemalloc {
 
 static const bool config_debug =
 #ifdef JEMALLOC_DEBUG
@@ -225,7 +215,7 @@ static const bool config_enable_cxx =
 #endif
 ;
 
-#if defined(_WIN32) || defined(JEMALLOC_HAVE_SCHED_GETCPU)
+#if defined(_WIN32) || defined(__APPLE__) || defined(JEMALLOC_HAVE_SCHED_GETCPU)
 /* Currently percpu_arena depends on sched_getcpu. */
 #define JEMALLOC_PERCPU_ARENA
 #endif
@@ -269,14 +259,5 @@ static const bool have_memcntl =
     false
 #endif
     ;
-
-// calls to abort() must be within DEBUG block to satisfy duckdb R builds
-static void jemalloc_abort() {
-#ifdef DEBUG
-	abort();
-#endif
-}
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_PREAMBLE_H */

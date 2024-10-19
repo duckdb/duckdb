@@ -1,0 +1,190 @@
+# name: test/sql/parser/test_columns_unpacked.test
+# group: [parser]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select COALESCE(*COLUMNS(*)) from (select NULL, 2, 3) t(a, b, c);
+----
+2
+
+query I
+select column_name from (describe select COALESCE(*COLUMNS(*)) from (select NULL, 2, 3) t(a, b, c));
+----
+COALESCE(t.a, t.b, t.c)
+
+# Aliasing the result
+query I
+select column_name from (describe select COALESCE(*COLUMNS(*)) as a from (select NULL, 2, 3) t(a, b, c));
+----
+a
+
+statement ok
+create table contains_test as select '123abc234' a, 4 b, 'abc' c;
+
+# Feed columns a and c into contains, equivalent to contains(a, c)
+query I
+select contains(*COLUMNS('[a|c]')) from contains_test;
+----
+true
+
+# COLUMNS and *COLUMNS are equivalent as a root expression
+query II
+select COLUMNS('[a|c]') from contains_test;
+----
+123abc234	abc
+
+statement error
+select *COLUMNS('[a|c]') from contains_test;
+----
+*COLUMNS not allowed at the root level, use COLUMNS instead
+
+statement ok
+create table sales as from ( values
+	(150, '2017/06/12'::DATE, 3),
+	(125, '2017/08/29'::DATE, 2),
+	(175, '2017/06/12'::DATE, 4),
+) t(amount, date, priority)
+
+query I
+SELECT first(amount ORDER BY date ASC, priority DESC) FROM sales;
+----
+175
+
+# TODO: this could be supported
+statement error
+select first(amount ORDER BY *COLUMNS('date|priority') ASC) from sales;
+----
+*COLUMNS(...) is not supported in the order expression
+
+# Using a lambda in *COLUMNS
+query I
+select COALESCE(*COLUMNS(c -> c in ('a', 'c'))) from (select NULL, 2, 3) t(a, b, c);
+----
+3
+
+# IN (...)
+query I
+select 2 in (*COLUMNS(*)) from (select 1, 2, 3) t(a, b, c);
+----
+true
+
+# IN in WHERE clause
+query III
+from (VALUES (1, 2, 3), (2, 3, 0), (0, 0, 1)) tbl(a, b, c) where 1 IN (*COLUMNS(*));
+----
+1	2	3
+0	0	1
+
+statement ok
+create table data AS (
+	SELECT * FROM (VALUES
+	(1, 'Alice'),
+	(2, 'Bob'),
+	(3, 'Alice'),
+	(4, 'Carol')
+	) AS t(id, name)
+)
+
+# Using struct pack:
+query I
+select struct_pack(*COLUMNS(*)) from data
+----
+{'id': 1, 'name': Alice}
+{'id': 2, 'name': Bob}
+{'id': 3, 'name': Alice}
+{'id': 4, 'name': Carol}
+
+# It can not be used inside a COLUMNS expression
+statement error
+SELECT COLUMNS(*COLUMNS(*)) FROM (VALUES ('test'))
+----
+COLUMNS expression is not allowed inside another COLUMNS expression
+
+statement error
+SELECT *COLUMNS(COLUMNS(*)) FROM (VALUES ('test'))
+----
+COLUMNS expression is not allowed inside another COLUMNS expression
+
+# COLUMNS and *COLUMNS of different expressions
+query III
+select COLUMNS(*), struct_pack(COLUMNS(['id'])) from data
+----
+1	Alice	{'id': 1}
+2	Bob	{'id': 2}
+3	Alice	{'id': 3}
+4	Carol	{'id': 4}
+
+# (temporary limitation)
+# *COLUMNS with different expressions can not appear in the same expression
+statement error
+select struct_pack(struct_pack(*COLUMNS(['id']), struct_pack(*COLUMNS(['name'])))) from data
+----
+Multiple different STAR/COLUMNS in the same expression are not supported
+
+# When they share the same expression, this is allowed:
+query I
+select struct_pack(
+	b := struct_pack(*COLUMNS(['id'])),
+	a := struct_pack(*COLUMNS(['id']))
+) from data
+----
+{'b': {'id': 1}, 'a': {'id': 1}}
+{'b': {'id': 2}, 'a': {'id': 2}}
+{'b': {'id': 3}, 'a': {'id': 3}}
+{'b': {'id': 4}, 'a': {'id': 4}}
+
+# Multiple *COLUMNS in the same statement are allowed
+# Whether they share the same expression or not:
+query II
+select struct_pack(*COLUMNS('id')) a, struct_pack(*COLUMNS('name')) from data
+----
+{'id': 1}	{'name': Alice}
+{'id': 2}	{'name': Bob}
+{'id': 3}	{'name': Alice}
+{'id': 4}	{'name': Carol}
+
+# Varargs function
+query I
+select CONCAT(*COLUMNS(*), *COLUMNS(*)) from data
+----
+1Alice1Alice
+2Bob2Bob
+3Alice3Alice
+4Carol4Carol
+
+# *COLUMNS inside COLUMNS lambda
+statement error
+select COLUMNS(col -> *COLUMNS('id')) from data
+----
+COLUMNS expression is not allowed inside another COLUMNS expression
+
+statement error
+select *COLUMNS(col -> *COLUMNS(*)) from data
+----
+COLUMNS expression is not allowed inside another COLUMNS expression
+
+# *COLUMNS expanding to more than one column in binary op
+statement error
+with integers as (
+	SELECT * FROM (VALUES
+		(42, 31),
+		(85, 76),
+	) as t(a, b)
+)
+select *COLUMNS(*) + 42 from integers
+----
+No function matches the given name and argument types '+(INTEGER, INTEGER, INTEGER_LITERAL)'.
+
+query I
+with integers as (
+	SELECT * FROM (VALUES
+		(42, 31),
+		(85, 76),
+	) as t(a, b)
+)
+select *COLUMNS('a') + 42 from integers
+----
+84
+127

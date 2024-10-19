@@ -5,6 +5,9 @@
 require parquet
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 COPY (FROM range(100000) tbl(i)) TO '__TEST_DIR__/mix_batches_small.parquet' (ROW_GROUP_SIZE 5000)
 
 statement ok

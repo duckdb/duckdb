@@ -55,3 +55,20 @@ PRAGMA tpch(${i})
 <FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
 
 endloop
+
+statement ok
+USE memory
+
+statement ok
+DETACH db
+
+statement ok
+ATTACH 's3://test-bucket/presigned/lineitem_sf1.db' AS db (READONLY 1);
+
+statement ok
+USE db
+
+query IIIIIIIIIIIIIIII
+select count(distinct columns(*)) from lineitem;
+----
+1500000	200000	10000	7	50	933900	11	9	3	2	2526	2466	2554	4	7	3610733

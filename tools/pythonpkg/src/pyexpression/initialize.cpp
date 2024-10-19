@@ -23,7 +23,7 @@ void InitializeStaticMethods(py::module_ &m) {
 
 	// Star Expression
 	docs = "";
-	m.def("StarExpression", &DuckDBPyExpression::StarExpression, py::kw_only(), py::arg("exclude") = py::list(), docs);
+	m.def("StarExpression", &DuckDBPyExpression::StarExpression, py::kw_only(), py::arg("exclude") = py::none(), docs);
 	m.def(
 	    "StarExpression", []() { return DuckDBPyExpression::StarExpression(); }, docs);
 
@@ -340,6 +340,8 @@ void DuckDBPyExpression::Initialize(py::module_ &m) {
 			str: The string representation.
 	)";
 	expression.def("__repr__", &DuckDBPyExpression::ToString, docs);
+
+	expression.def("get_name", &DuckDBPyExpression::GetName, docs);
 
 	docs = R"(
 		Create a copy of this expression with the given alias.

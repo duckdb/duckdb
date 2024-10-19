@@ -1,0 +1,12 @@
+# name: benchmark/cast/smallint_varint.benchmark
+# description: Casting of a USMALLINT to Varint
+# group: [cast]
+
+name Casting of USMALLINT to Varint
+group csv
+
+load
+CREATE TABLE t1 AS select 65535::USMALLINT as a from range(0,10000000) tbl(i);
+
+run
+create or replace table t2 as select a::varint from t1

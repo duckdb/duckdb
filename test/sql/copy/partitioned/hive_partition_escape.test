@@ -1,0 +1,74 @@
+# name: test/sql/copy/partitioned/hive_partition_escape.test
+# description: Test escaping during hive partition read/write
+# group: [partitioned]
+
+require parquet
+
+statement ok
+CREATE SEQUENCE seq
+
+statement ok
+CREATE TABLE weird_tbl(id INT DEFAULT nextval('seq'), key VARCHAR)
+
+statement ok
+INSERT INTO weird_tbl (key) VALUES
+	('/'),
+	('\/\/'),
+	('==='),
+	('value with strings'),
+	('?:&'),
+	('🦆'),
+	('==='),
+	('===');
+
+
+statement ok
+COPY weird_tbl TO '__TEST_DIR__/escaped_partitions' (FORMAT PARQUET, PARTITION_BY(key))
+
+query II
+select key, COUNT(*)
+from parquet_scan('__TEST_DIR__/escaped_partitions/**/*.parquet')
+GROUP BY ALL
+ORDER BY ALL
+----
+/	1
+===	3
+?:&	1
+\/\/	1
+value with strings	1
+🦆	1
+
+
+# now with columns with weird characters in the name
+statement ok
+ALTER TABLE weird_tbl RENAME COLUMN key TO "=/ \\/"
+
+# this column name won't work with automatic HIVE partition due to the equal character 
+statement ok
+COPY weird_tbl TO '__TEST_DIR__/escaped_partitions_names' (FORMAT PARQUET, PARTITION_BY("=/ \\/"))
+
+statement error
+select "=/ \\/", COUNT(*)
+from parquet_scan('__TEST_DIR__/escaped_partitions_names/**/*.parquet')
+GROUP BY ALL
+ORDER BY ALL
+----
+Binder Error: Referenced column "=/ \\/" not found in FROM clause!
+
+
+# if we write the partition column on files, it can be read
+statement ok
+COPY weird_tbl TO '__TEST_DIR__/escaped_partitions_names' (FORMAT PARQUET, PARTITION_BY("=/ \\/"), OVERWRITE, WRITE_PARTITION_COLUMNS)
+
+query II
+select "=/ \\/", COUNT(*)
+from parquet_scan('__TEST_DIR__/escaped_partitions_names/**/*.parquet')
+GROUP BY ALL
+ORDER BY ALL
+----
+/	1
+===	3
+?:&	1
+\/\/	1
+value with strings	1
+🦆	1

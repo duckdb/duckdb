@@ -1,0 +1,26 @@
+# name: test/sql/storage/large_delete_wal.test_slow
+# description: Test large deletes with a WAL
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/large_delete_wal.db
+
+statement ok
+SET checkpoint_threshold='1MB'
+
+# 10M rows
+statement ok
+CREATE TABLE test AS FROM range(10000000)
+
+statement ok
+CHECKPOINT
+
+# delete all data
+statement ok
+DELETE FROM test
+
+# verify nothing is written to the WAL
+query I
+select wal_size from pragma_database_size();
+----
+0 bytes

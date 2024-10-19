@@ -7,7 +7,7 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 
 #include <algorithm>
@@ -23,7 +23,7 @@ MultiFileReader::~MultiFileReader() {
 unique_ptr<MultiFileReader> MultiFileReader::Create(const TableFunction &table_function) {
 	unique_ptr<MultiFileReader> res;
 	if (table_function.get_multi_file_reader) {
-		res = table_function.get_multi_file_reader();
+		res = table_function.get_multi_file_reader(table_function);
 		res->function_name = table_function.name;
 	} else {
 		res = make_uniq<MultiFileReader>();
@@ -38,8 +38,16 @@ unique_ptr<MultiFileReader> MultiFileReader::CreateDefault(const string &functio
 	return res;
 }
 
+Value MultiFileReader::CreateValueFromFileList(const vector<string> &file_list) {
+	vector<Value> files;
+	for (auto &file : file_list) {
+		files.push_back(file);
+	}
+	return Value::LIST(std::move(files));
+}
+
 void MultiFileReader::AddParameters(TableFunction &table_function) {
-	table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["filename"] = LogicalType::ANY;
 	table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["hive_types"] = LogicalType::ANY;
@@ -70,7 +78,7 @@ vector<string> MultiFileReader::ParsePaths(const Value &input) {
 	}
 }
 
-unique_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
+shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
                                                           FileGlobOptions options) {
 	auto &config = DBConfig::GetConfig(context);
 	if (!config.options.enable_external_access) {
@@ -85,7 +93,7 @@ unique_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context
 	return std::move(res);
 }
 
-unique_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const Value &input,
+shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const Value &input,
                                                           FileGlobOptions options) {
 	auto paths = ParsePaths(input);
 	return CreateFileList(context, paths, options);
@@ -95,7 +103,18 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
                                   ClientContext &context) {
 	auto loption = StringUtil::Lower(key);
 	if (loption == "filename") {
-		options.filename = BooleanValue::Get(val);
+		if (val.type() == LogicalType::VARCHAR) {
+			// If not, we interpret it as the name of the column containing the filename
+			options.filename = true;
+			options.filename_column = StringValue::Get(val);
+		} else {
+			Value boolean_value;
+			string error_message;
+			if (val.DefaultTryCastAs(LogicalType::BOOLEAN, boolean_value, &error_message)) {
+				// If the argument can be cast to boolean, we just interpret it as a boolean
+				options.filename = BooleanValue::Get(boolean_value);
+			}
+		}
 	} else if (loption == "hive_partitioning") {
 		options.hive_partitioning = BooleanValue::Get(val);
 		options.auto_detect_hive_partitioning = false;
@@ -130,9 +149,19 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 }
 
 unique_ptr<MultiFileList> MultiFileReader::ComplexFilterPushdown(ClientContext &context, MultiFileList &files,
-                                                                 const MultiFileReaderOptions &options, LogicalGet &get,
+                                                                 const MultiFileReaderOptions &options,
+                                                                 MultiFilePushdownInfo &info,
                                                                  vector<unique_ptr<Expression>> &filters) {
-	return files.ComplexFilterPushdown(context, options, get, filters);
+	return files.ComplexFilterPushdown(context, options, info, filters);
+}
+
+unique_ptr<MultiFileList> MultiFileReader::DynamicFilterPushdown(ClientContext &context, const MultiFileList &files,
+                                                                 const MultiFileReaderOptions &options,
+                                                                 const vector<string> &names,
+                                                                 const vector<LogicalType> &types,
+                                                                 const vector<column_t> &column_ids,
+                                                                 TableFilterSet &filters) {
+	return files.DynamicFilterPushdown(context, options, names, types, column_ids, filters);
 }
 
 bool MultiFileReader::Bind(MultiFileReaderOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
@@ -146,12 +175,14 @@ void MultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFileList
                                   MultiFileReaderBindData &bind_data) {
 	// Add generated constant column for filename
 	if (options.filename) {
-		if (std::find(names.begin(), names.end(), "filename") != names.end()) {
-			throw BinderException("Using filename option on file with column named filename is not supported");
+		if (std::find(names.begin(), names.end(), options.filename_column) != names.end()) {
+			throw BinderException("Option filename adds column \"%s\", but a column with this name is also in the "
+			                      "file. Try setting a different name: filename='<filename column name>'",
+			                      options.filename_column);
 		}
 		bind_data.filename_idx = names.size();
 		return_types.emplace_back(LogicalType::VARCHAR);
-		names.emplace_back("filename");
+		names.emplace_back(options.filename_column);
 	}
 
 	// Add generated constant columns from hive partitioning scheme
@@ -379,6 +410,49 @@ void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReade
 	chunk.Verify();
 }
 
+void MultiFileReader::GetPartitionData(ClientContext &context, const MultiFileReaderBindData &bind_data,
+                                       const MultiFileReaderData &reader_data,
+                                       optional_ptr<MultiFileReaderGlobalState> global_state,
+                                       const OperatorPartitionInfo &partition_info,
+                                       OperatorPartitionData &partition_data) {
+	for (auto &col : partition_info.partition_columns) {
+		bool found_constant = false;
+		for (auto &constant : reader_data.constant_map) {
+			if (constant.column_id == col) {
+				found_constant = true;
+				partition_data.partition_data.emplace_back(constant.value);
+				break;
+			}
+		}
+		if (!found_constant) {
+			throw InternalException(
+			    "MultiFileReader::GetPartitionData - did not find constant for the given partition");
+		}
+	}
+}
+
+TablePartitionInfo MultiFileReader::GetPartitionInfo(ClientContext &context, const MultiFileReaderBindData &bind_data,
+                                                     TableFunctionPartitionInput &input) {
+	// check if all of the columns are in the hive partition set
+	for (auto &partition_col : input.partition_ids) {
+		// check if this column is in the hive partitioned set
+		bool found = false;
+		for (auto &partition : bind_data.hive_partitioning_indexes) {
+			if (partition.index == partition_col) {
+				found = true;
+				break;
+			}
+		}
+		if (!found) {
+			// the column is not partitioned - hive partitioning alone can't guarantee the groups are partitioned
+			return TablePartitionInfo::NOT_PARTITIONED;
+		}
+	}
+	// if all columns are in the hive partitioning set, we know that each partition will only have a single value
+	// i.e. if the hive partitioning is by (YEAR, MONTH), each partition will have a single unique (YEAR, MONTH)
+	return TablePartitionInfo::SINGLE_VALUE_PARTITIONS;
+}
+
 TableFunctionSet MultiFileReader::CreateFunctionSet(TableFunction table_function) {
 	TableFunctionSet function_set(table_function.name);
 	function_set.AddFunction(table_function);
@@ -392,7 +466,7 @@ HivePartitioningIndex::HivePartitioningIndex(string value_p, idx_t index) : valu
 }
 
 void MultiFileReaderOptions::AddBatchInfo(BindInfo &bind_info) const {
-	bind_info.InsertOption("filename", Value::BOOLEAN(filename));
+	bind_info.InsertOption("filename", Value(filename_column));
 	bind_info.InsertOption("hive_partitioning", Value::BOOLEAN(hive_partitioning));
 	bind_info.InsertOption("auto_detect_hive_partitioning", Value::BOOLEAN(auto_detect_hive_partitioning));
 	bind_info.InsertOption("union_by_name", Value::BOOLEAN(union_by_name));
@@ -421,35 +495,23 @@ void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vecto
 }
 
 bool MultiFileReaderOptions::AutoDetectHivePartitioningInternal(MultiFileList &files, ClientContext &context) {
-	std::unordered_set<string> partitions;
-	auto &fs = FileSystem::GetFileSystem(context);
-
 	auto first_file = files.GetFirstFile();
-	auto splits_first_file = StringUtil::Split(first_file, fs.PathSeparator(first_file));
-	if (splits_first_file.size() < 2) {
-		return false;
-	}
-	for (auto &split : splits_first_file) {
-		auto partition = StringUtil::Split(split, "=");
-		if (partition.size() == 2) {
-			partitions.insert(partition.front());
-		}
-	}
+	auto partitions = HivePartitioning::Parse(first_file);
 	if (partitions.empty()) {
+		// no partitions found in first file
 		return false;
 	}
 
 	for (const auto &file : files.Files()) {
-		auto splits = StringUtil::Split(file, fs.PathSeparator(file));
-		if (splits.size() != splits_first_file.size()) {
+		auto new_partitions = HivePartitioning::Parse(file);
+		if (new_partitions.size() != partitions.size()) {
+			// partition count mismatch
 			return false;
 		}
-		for (auto it = splits.begin(); it != std::prev(splits.end()); it++) {
-			auto part = StringUtil::Split(*it, "=");
-			if (part.size() != 2) {
-				continue;
-			}
-			if (partitions.find(part.front()) == partitions.end()) {
+		for (auto &part : new_partitions) {
+			auto entry = partitions.find(part.first);
+			if (entry == partitions.end()) {
+				// differing partitions between files
 				return false;
 			}
 		}
@@ -459,21 +521,9 @@ bool MultiFileReaderOptions::AutoDetectHivePartitioningInternal(MultiFileList &f
 void MultiFileReaderOptions::AutoDetectHiveTypesInternal(MultiFileList &files, ClientContext &context) {
 	const LogicalType candidates[] = {LogicalType::DATE, LogicalType::TIMESTAMP, LogicalType::BIGINT};
 
-	auto &fs = FileSystem::GetFileSystem(context);
-
 	unordered_map<string, LogicalType> detected_types;
 	for (const auto &file : files.Files()) {
-		unordered_map<string, string> partitions;
-		auto splits = StringUtil::Split(file, fs.PathSeparator(file));
-		if (splits.size() < 2) {
-			return;
-		}
-		for (auto it = splits.begin(); it != std::prev(splits.end()); it++) {
-			auto part = StringUtil::Split(*it, "=");
-			if (part.size() == 2) {
-				partitions[part.front()] = part.back();
-			}
-		}
+		auto partitions = HivePartitioning::Parse(file);
 		if (partitions.empty()) {
 			return;
 		}
@@ -545,24 +595,18 @@ LogicalType MultiFileReaderOptions::GetHiveLogicalType(const string &hive_partit
 	}
 	return LogicalType::VARCHAR;
 }
-Value MultiFileReaderOptions::GetHivePartitionValue(const string &base, const string &entry,
+
+bool MultiFileReaderOptions::AnySet() {
+	return filename || hive_partitioning || union_by_name;
+}
+
+Value MultiFileReaderOptions::GetHivePartitionValue(const string &value, const string &key,
                                                     ClientContext &context) const {
-	Value value(base);
-	auto it = hive_types_schema.find(entry);
+	auto it = hive_types_schema.find(key);
 	if (it == hive_types_schema.end()) {
-		return value;
+		return HivePartitioning::GetValue(context, key, value, LogicalType::VARCHAR);
 	}
-
-	// Handle nulls
-	if (base.empty() || StringUtil::CIEquals(base, "NULL")) {
-		return Value(it->second);
-	}
-
-	if (!value.TryCastAs(context, it->second)) {
-		throw InvalidInputException("Unable to cast '%s' (from hive partition column '%s') to: '%s'", value.ToString(),
-		                            StringUtil::Upper(it->first), it->second.ToString());
-	}
-	return value;
+	return HivePartitioning::GetValue(context, key, value, it->second);
 }
 
 } // namespace duckdb

@@ -55,6 +55,8 @@ public:
 	TupleDataAllocator(BufferManager &buffer_manager, const TupleDataLayout &layout);
 	TupleDataAllocator(TupleDataAllocator &allocator);
 
+	~TupleDataAllocator();
+
 	//! Get the buffer manager
 	BufferManager &GetBufferManager();
 	//! Get the buffer allocator
@@ -81,6 +83,8 @@ public:
 	                           bool release_heap);
 	//! Releases or stores ALL handles in the management state
 	void ReleaseOrStoreHandles(TupleDataPinState &state, TupleDataSegment &segment);
+	//! Sets 'can_destroy' to true for all blocks so they aren't added to the eviction queue
+	void SetDestroyBufferUponUnpin();
 
 private:
 	//! Builds out a single part (grabs the lock)

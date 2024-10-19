@@ -15,6 +15,7 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/common/enums/pending_execution_result.hpp"
+#include "duckdb/common/enums/stream_execution_result.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
@@ -22,38 +23,25 @@ namespace duckdb {
 class StreamQueryResult;
 class ClientContextLock;
 
-struct BlockedSink {
-public:
-	BlockedSink(InterruptState state, idx_t chunk_size) : state(std::move(state)), chunk_size(chunk_size) {
-	}
-
-public:
-	//! The handle to reschedule the blocked sink
-	InterruptState state;
-	//! The amount of tuples this sink would add
-	idx_t chunk_size;
-};
-
 class BufferedData {
 protected:
-	enum class Type { SIMPLE };
+	enum class Type { SIMPLE, BATCHED };
 
 public:
-	BufferedData(Type type, weak_ptr<ClientContext> context) : type(type), context(std::move(context)) {
-	}
-	virtual ~BufferedData() {
-	}
+	BufferedData(Type type, weak_ptr<ClientContext> context_p);
+	virtual ~BufferedData();
 
 public:
-	virtual bool BufferIsFull() = 0;
-	virtual PendingExecutionResult ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) = 0;
+	StreamExecutionResult ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock);
+	virtual StreamExecutionResult ExecuteTaskInternal(StreamQueryResult &result, ClientContextLock &context_lock) = 0;
 	virtual unique_ptr<DataChunk> Scan() = 0;
+	virtual void UnblockSinks() = 0;
 	shared_ptr<ClientContext> GetContext() {
 		return context.lock();
 	}
 	bool Closed() const {
 		if (context.expired()) {
-			return false;
+			return true;
 		}
 		auto c = context.lock();
 		return c == nullptr;
@@ -83,6 +71,8 @@ protected:
 	Type type;
 	//! This is weak to avoid a cyclical reference
 	weak_ptr<ClientContext> context;
+	//! The maximum amount of memory we should keep buffered
+	idx_t total_buffer_size;
 	//! Protect against populate/fetch race condition
 	mutex glock;
 };

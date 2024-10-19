@@ -3,6 +3,10 @@
 # group: [auto]
 
 statement ok
+PRAGMA enable_verification
+
+
+statement ok
 PRAGMA verify_parallelism
 
 # Sample

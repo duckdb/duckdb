@@ -2,6 +2,7 @@
 #include "duckdb/execution/operator/aggregate/physical_window.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
@@ -28,10 +29,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 	types.resize(input_width);
 
 	// Identify streaming windows
+	const bool enable_optimizer = ClientConfig::GetConfig(context).enable_optimizer;
 	vector<idx_t> blocking_windows;
 	vector<idx_t> streaming_windows;
 	for (idx_t expr_idx = 0; expr_idx < op.expressions.size(); expr_idx++) {
-		if (PhysicalStreamingWindow::IsStreamingFunction(op.expressions[expr_idx])) {
+		if (enable_optimizer && PhysicalStreamingWindow::IsStreamingFunction(context, op.expressions[expr_idx])) {
 			streaming_windows.push_back(expr_idx);
 		} else {
 			blocking_windows.push_back(expr_idx);

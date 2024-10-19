@@ -8,9 +8,9 @@ FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, BlockManager &b
     : block_manager(block_manager), buffer_manager(block_manager.buffer_manager), segment_size(segment_size),
       total_segment_count(0) {
 
-	if (segment_size > Storage::BLOCK_SIZE - sizeof(validity_t)) {
+	if (segment_size > block_manager.GetBlockSize() - sizeof(validity_t)) {
 		throw InternalException("The maximum segment size of fixed-size allocators is " +
-		                        to_string(Storage::BLOCK_SIZE - sizeof(validity_t)));
+		                        to_string(block_manager.GetBlockSize() - sizeof(validity_t)));
 	}
 
 	// calculate how many segments fit into one buffer (available_segments_per_buffer)
@@ -21,7 +21,7 @@ FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, BlockManager &b
 	bitmask_count = 0;
 	available_segments_per_buffer = 0;
 
-	while (byte_count < Storage::BLOCK_SIZE) {
+	while (byte_count < block_manager.GetBlockSize()) {
 		if (!bitmask_count || (bitmask_count * bits_per_value) % available_segments_per_buffer == 0) {
 			// we need to add another validity_t value to the bitmask, to allow storing another
 			// bits_per_value segments on a buffer
@@ -29,7 +29,7 @@ FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, BlockManager &b
 			byte_count += sizeof(validity_t);
 		}
 
-		auto remaining_bytes = Storage::BLOCK_SIZE - byte_count;
+		auto remaining_bytes = block_manager.GetBlockSize() - byte_count;
 		auto remaining_segments = MinValue(remaining_bytes / segment_size, bits_per_value);
 
 		if (remaining_segments == 0) {
@@ -126,7 +126,7 @@ idx_t FixedSizeAllocator::GetInMemorySize() const {
 	idx_t memory_usage = 0;
 	for (auto &buffer : buffers) {
 		if (buffer.second.InMemory()) {
-			memory_usage += Storage::BLOCK_SIZE;
+			memory_usage += block_manager.GetBlockSize();
 		}
 	}
 	return memory_usage;
@@ -172,18 +172,7 @@ bool FixedSizeAllocator::InitializeVacuum() {
 		Reset();
 		return false;
 	}
-
-	// remove all empty buffers
-	auto buffer_it = buffers.begin();
-	while (buffer_it != buffers.end()) {
-		if (!buffer_it->second.segment_count) {
-			buffers_with_free_space.erase(buffer_it->first);
-			buffer_it->second.Destroy();
-			buffer_it = buffers.erase(buffer_it);
-		} else {
-			buffer_it++;
-		}
-	}
+	RemoveEmptyBuffers();
 
 	// determine if a vacuum is necessary
 	multimap<idx_t, idx_t> temporary_vacuum_buffers;
@@ -209,7 +198,7 @@ bool FixedSizeAllocator::InitializeVacuum() {
 	// calculate the vacuum threshold adaptively
 	D_ASSERT(excess_buffer_count < temporary_vacuum_buffers.size());
 	idx_t memory_usage = GetInMemorySize();
-	idx_t excess_memory_usage = excess_buffer_count * Storage::BLOCK_SIZE;
+	idx_t excess_memory_usage = excess_buffer_count * block_manager.GetBlockSize();
 	auto excess_percentage = double(excess_memory_usage) / double(memory_usage);
 	auto threshold = double(VACUUM_THRESHOLD) / 100.0;
 	if (excess_percentage < threshold) {
@@ -353,6 +342,21 @@ idx_t FixedSizeAllocator::GetAvailableBufferId() const {
 		buffer_id--;
 	}
 	return buffer_id;
+}
+
+void FixedSizeAllocator::RemoveEmptyBuffers() {
+
+	auto buffer_it = buffers.begin();
+	while (buffer_it != buffers.end()) {
+		if (buffer_it->second.segment_count != 0) {
+			buffer_it++;
+			continue;
+		}
+
+		buffers_with_free_space.erase(buffer_it->first);
+		buffer_it->second.Destroy();
+		buffer_it = buffers.erase(buffer_it);
+	}
 }
 
 } // namespace duckdb

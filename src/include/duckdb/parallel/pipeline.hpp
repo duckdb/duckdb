@@ -90,6 +90,7 @@ public:
 	void ResetSource(bool force);
 	void ClearSource();
 	void Schedule(shared_ptr<Event> &event);
+	void PrepareFinalize();
 
 	string ToString() const;
 	void Print() const;

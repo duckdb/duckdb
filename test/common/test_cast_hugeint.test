@@ -37,6 +37,7 @@ loop i 0 2
 statement error
 SELECT f::HUGEINT FROM (SELECT f FROM broken_floats ORDER BY f LIMIT 1 OFFSET ${i}) t1
 ----
+<REGEX>:Conversion Error.*FLOAT.*is out of range for.*INT128.*
 
 endloop
 
@@ -73,6 +74,7 @@ loop i 0 4
 statement error
 SELECT f::HUGEINT FROM (SELECT f FROM broken_doubles ORDER BY f LIMIT 1 OFFSET ${i}) t1
 ----
+<REGEX>:Conversion Error.*DOUBLE.*is out of range for.*INT128.*
 
 endloop
 
@@ -110,6 +112,7 @@ loop i 0 14
 statement error
 SELECT f::HUGEINT FROM (SELECT f FROM broken_strings ORDER BY f LIMIT 1 OFFSET ${i}) t1
 ----
+<REGEX>:Conversion Error.*string.*INT128.*
 
 endloop
 
@@ -331,10 +334,12 @@ select '255'::HUGEINT::UINT8
 statement error
 select '-1'::hugeint::uint8
 ----
+<REGEX>:Conversion Error.*INT128.*is out of range for.*UINT8.*
 
 statement error
 select '256'::hugeint::uint8
 ----
+<REGEX>:Conversion Error.*INT128.*is out of range for.*UINT8.*
 
 # uint16
 query I
@@ -345,10 +350,12 @@ select '65535'::HUGEINT::UINT16
 statement error
 select '-1'::hugeint::uint16
 ----
+<REGEX>:Conversion Error.*INT128.*is out of range for.*UINT16.*
 
 statement error
 select '65536'::hugeint::uint16
 ----
+<REGEX>:Conversion Error.*INT128.*is out of range for.*UINT16.*
 
 # uint32
 query I
@@ -359,10 +366,12 @@ select '4294967295'::HUGEINT::UINT32
 statement error
 select '-1'::hugeint::uint32
 ----
+<REGEX>:Conversion Error.*INT128.*is out of range for.*UINT32.*
 
 statement error
 select '4294967296'::hugeint::uint32
 ----
+<REGEX>:Conversion Error.*INT128.*is out of range for.*UINT32.*
 
 # UINT64
 query I
@@ -373,10 +382,12 @@ select '18446744073709551615'::HUGEINT::UINT64
 statement error
 select '-1'::hugeint::UINT64
 ----
+<REGEX>:Conversion Error.*INT128.*is out of range for.*UINT64.*
 
 statement error
 select '18446744073709551616'::hugeint::UINT64
 ----
+<REGEX>:Conversion Error.*INT128.*is out of range for.*UINT64.*
 
 # uint -> hugeint
 query I

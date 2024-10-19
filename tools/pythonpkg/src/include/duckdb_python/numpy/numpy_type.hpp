@@ -42,6 +42,7 @@ enum class NumpyNullableType : uint8_t {
 	//! Extension Types
 	//! ------------------------------------------------------------
 	CATEGORY, //! category
+	STRING,   //! string
 };
 
 struct NumpyType {

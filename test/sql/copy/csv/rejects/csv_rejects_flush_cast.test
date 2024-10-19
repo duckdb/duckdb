@@ -7,15 +7,15 @@ require skip_reload
 # Test will fail on windows because byte_position is slightly different due to \r\n instead of \n
 require notwindows
 
-query III
-SELECT typeof(first(a)), typeof(first(b)), COUNT(*) FROM read_csv(
+query IIIII
+SELECT first(a), first(b), typeof(first(a)), typeof(first(b)), COUNT(*) FROM read_csv(
     'data/csv/error/flush_cast.csv',
     columns = {'a': 'DATE', 'b': 'VARCHAR'},
     store_rejects = true,
     delim = ',',
     dateformat = '%d-%m-%Y');
 ----
-DATE	VARCHAR	2811
+2001-09-25	 bla	DATE	VARCHAR	2811
 
 query IIIIIIIII
 SELECT * EXCLUDE (scan_id) FROM reject_errors order by all;

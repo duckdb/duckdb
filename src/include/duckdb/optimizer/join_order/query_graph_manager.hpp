@@ -9,13 +9,12 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/pair.hpp"
-#include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector.hpp"
-
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/optimizer/join_order/join_relation.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
@@ -26,6 +25,8 @@
 #include <functional>
 
 namespace duckdb {
+
+class QueryGraphEdges;
 
 struct GenerateJoinRelation {
 	GenerateJoinRelation(optional_ptr<JoinRelationSet> set, unique_ptr<LogicalOperator> op_p)
@@ -38,18 +39,25 @@ struct GenerateJoinRelation {
 
 //! Filter info struct that is used by the cardinality estimator to set the initial cardinality
 //! but is also eventually transformed into a query edge.
-struct FilterInfo {
-	FilterInfo(unique_ptr<Expression> filter, JoinRelationSet &set, idx_t filter_index)
-	    : filter(std::move(filter)), set(set), filter_index(filter_index) {
+class FilterInfo {
+public:
+	FilterInfo(unique_ptr<Expression> filter, JoinRelationSet &set, idx_t filter_index,
+	           JoinType join_type = JoinType::INNER)
+	    : filter(std::move(filter)), set(set), filter_index(filter_index), join_type(join_type) {
 	}
 
+public:
 	unique_ptr<Expression> filter;
-	JoinRelationSet &set;
+	reference<JoinRelationSet> set;
 	idx_t filter_index;
+	JoinType join_type;
 	optional_ptr<JoinRelationSet> left_set;
 	optional_ptr<JoinRelationSet> right_set;
 	ColumnBinding left_binding;
 	ColumnBinding right_binding;
+
+	void SetLeftSet(optional_ptr<JoinRelationSet> left_set_new);
+	void SetRightSet(optional_ptr<JoinRelationSet> right_set_new);
 };
 
 //! The QueryGraphManager manages the process of extracting the reorderable and nonreorderable operations
@@ -69,7 +77,7 @@ public:
 	ClientContext &context;
 
 	//! Extract the join relations, optimizing non-reoderable relations when encountered
-	bool Build(LogicalOperator &op);
+	bool Build(JoinOrderOptimizer &optimizer, LogicalOperator &op);
 
 	//! Reconstruct the logical plan using the plan found by the plan enumerator
 	unique_ptr<LogicalOperator> Reconstruct(unique_ptr<LogicalOperator> plan);
@@ -85,12 +93,6 @@ public:
 	//! Plan enumerator may not find a full plan and therefore will need to create cross
 	//! products to create edges.
 	void CreateQueryGraphCrossProduct(JoinRelationSet &left, JoinRelationSet &right);
-
-	//! after join order optimization, we perform build side probe side optimizations.
-	//! (Basically we put lower expected cardinality columns on the build side, and larger
-	//! tables on the probe side)
-	unique_ptr<LogicalOperator> LeftRightOptimizations(unique_ptr<LogicalOperator> op);
-	void TryFlipChildren(LogicalOperator &op, idx_t cardinality_ratio = 1);
 
 	//! A map to store the optimal join plan found for a specific JoinRelationSet*
 	optional_ptr<const reference_map_t<JoinRelationSet, unique_ptr<DPJoinNode>>> plans;

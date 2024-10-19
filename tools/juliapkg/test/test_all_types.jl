@@ -11,7 +11,7 @@
             con,
             """SELECT * EXCLUDE(time, time_tz, fixed_int_array, fixed_varchar_array, fixed_nested_int_array,
             		fixed_nested_varchar_array, fixed_struct_array, struct_of_fixed_array, fixed_array_of_int_list,
-            		list_of_fixed_int_array)
+            		list_of_fixed_int_array, varint)
                 , CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time
                 , CASE WHEN time_tz = '24:00:00-15:59:59'::TIMETZ THEN '23:59:59.999999-15:59:59'::TIMETZ ELSE time_tz END AS time_tz
             FROM test_all_types()
@@ -77,7 +77,7 @@
     )
     @test isequal(
         df.timestamp_ns,
-        [Dates.DateTime(1677, 9, 21, 0, 12, 43, 146), Dates.DateTime(2262, 4, 11, 23, 47, 16, 854), missing]
+        [Dates.DateTime(1677, 9, 22, 0, 0, 0, 0), Dates.DateTime(2262, 4, 11, 23, 47, 16, 854), missing]
     )
     @test isequal(
         df.interval,

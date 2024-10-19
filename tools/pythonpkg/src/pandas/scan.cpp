@@ -62,18 +62,20 @@ struct PandasScanGlobalState : public GlobalTableFunctionState {
 PandasScanFunction::PandasScanFunction()
     : TableFunction("pandas_scan", {LogicalType::POINTER}, PandasScanFunc, PandasScanBind, PandasScanInitGlobal,
                     PandasScanInitLocal) {
-	get_batch_index = PandasScanGetBatchIndex;
+	get_partition_data = PandasScanGetPartitionData;
 	cardinality = PandasScanCardinality;
 	table_scan_progress = PandasProgress;
 	serialize = PandasSerialize;
 	projection_pushdown = true;
 }
 
-idx_t PandasScanFunction::PandasScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-                                                  LocalTableFunctionState *local_state,
-                                                  GlobalTableFunctionState *global_state) {
-	auto &data = local_state->Cast<PandasScanLocalState>();
-	return data.batch_index;
+OperatorPartitionData PandasScanFunction::PandasScanGetPartitionData(ClientContext &context,
+                                                                     TableFunctionGetPartitionInput &input) {
+	if (input.partition_info.RequiresPartitionColumns()) {
+		throw InternalException("PandasScan::GetPartitionData: partition columns not supported");
+	}
+	auto &data = input.local_state->Cast<PandasScanLocalState>();
+	return OperatorPartitionData(data.batch_index);
 }
 
 unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &context, TableFunctionBindInput &input,
@@ -95,9 +97,12 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
 
 	shared_ptr<DependencyItem> dependency_item;
 	if (ref.external_dependency) {
-		// This was created during the replacement scan (see python_replacement_scan.cpp)
+		// This was created during the replacement scan if this was a pandas DataFrame (see python_replacement_scan.cpp)
 		dependency_item = ref.external_dependency->GetDependency("copy");
-		D_ASSERT(dependency_item);
+		if (!dependency_item) {
+			// This was created during the replacement if this was a numpy scan
+			dependency_item = ref.external_dependency->GetDependency("data");
+		}
 	}
 
 	auto get_fun = df.attr("__getitem__");

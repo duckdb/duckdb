@@ -3,6 +3,7 @@
 namespace duckdb {
 
 MemoryStream::MemoryStream(idx_t capacity) : position(0), capacity(capacity), owns_data(true) {
+	D_ASSERT(capacity != 0 && IsPowerOfTwo(capacity));
 	auto data_malloc_result = malloc(capacity);
 	if (!data_malloc_result) {
 		throw std::bad_alloc();

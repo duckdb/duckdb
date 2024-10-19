@@ -6,9 +6,9 @@
 
 namespace duckdb {
 
-MetaTransaction::MetaTransaction(ClientContext &context_p, timestamp_t start_timestamp_p, idx_t catalog_version_p)
-    : context(context_p), start_timestamp(start_timestamp_p), catalog_version(catalog_version_p), read_only(true),
-      active_query(MAXIMUM_QUERY_ID), modified_database(nullptr) {
+MetaTransaction::MetaTransaction(ClientContext &context_p, timestamp_t start_timestamp_p)
+    : context(context_p), start_timestamp(start_timestamp_p), active_query(MAXIMUM_QUERY_ID),
+      modified_database(nullptr), is_read_only(false) {
 }
 
 MetaTransaction &MetaTransaction::Get(ClientContext &context) {
@@ -84,6 +84,17 @@ void MetaTransaction::RemoveTransaction(AttachedDatabase &db) {
 	}
 }
 
+void MetaTransaction::SetReadOnly() {
+	if (modified_database) {
+		throw InternalException("Cannot set MetaTransaction to read only - modifications have already been made");
+	}
+	this->is_read_only = true;
+}
+
+bool MetaTransaction::IsReadOnly() const {
+	return is_read_only;
+}
+
 Transaction &Transaction::Get(ClientContext &context, Catalog &catalog) {
 	return Transaction::Get(context, catalog.GetAttached());
 }
@@ -146,6 +157,10 @@ void MetaTransaction::ModifyDatabase(AttachedDatabase &db) {
 	if (db.IsSystem() || db.IsTemporary()) {
 		// we can always modify the system and temp databases
 		return;
+	}
+	if (IsReadOnly()) {
+		throw TransactionException("Cannot write to database \"%s\" - transaction is launched in read-only mode",
+		                           db.GetName());
 	}
 	if (!modified_database) {
 		modified_database = &db;

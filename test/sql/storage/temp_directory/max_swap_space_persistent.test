@@ -1,124 +1,113 @@
 # name: test/sql/storage/temp_directory/max_swap_space_persistent.test
+# description: Test the maximum swap space for temporary directories.
 # group: [temp_directory]
 
 require skip_reload
 
-# Create a persistent database
+# Implicitly relies on the assumption that the block allocation size is 256KB.
+require block_size 262144
+
 load __TEST_DIR__/max_swap_space.db
 
-# Default temp_directory for a persistent database is <db_name>.tmp
+# The default temp_directory for a persistent database is <db_name>.tmp.
 query I
-select current_setting('temp_directory').split('/')[-1]
+SELECT current_setting('temp_directory').split('/')[-1];
 ----
 max_swap_space.db.tmp
 
-## If 'temp_directory' is not set, this defaults to 0
-#query I
-#select current_setting('max_temp_directory_size')
-#----
-#0 bytes
+statement ok
+SET temp_directory='';
 
 statement ok
-set temp_directory='';
+PRAGMA memory_limit='2MB';
 
-statement ok
-PRAGMA memory_limit='2MB'
-
-# --- Set by default to 0 when temp_directory is not set ---
-
-# If 'temp_directory' is not set, this defaults to 0
+# If the 'temp_directory' is not set, then this defaults to zero.
 query I
-select current_setting('max_temp_directory_size')
+SELECT current_setting('max_temp_directory_size');
 ----
 0 bytes
 
-# Set the max size explicitly
+# Set the maximum size.
 statement ok
-set max_temp_directory_size='15gb'
+SET max_temp_directory_size='15GB';
 
-# Should not be 0 anymore
+# Empty result, as the size should not be zero anymore.
 query I
-select current_setting('max_temp_directory_size') a where a == '0 bytes'
+SELECT current_setting('max_temp_directory_size') a WHERE a == '0 bytes';
 ----
 
-# Then reset it, default should be 0 again
+# Back to zero after resetting.
 statement ok
-reset max_temp_directory_size;
+RESET max_temp_directory_size;
 
 query I
-select current_setting('max_temp_directory_size')
+SELECT current_setting('max_temp_directory_size');
 ----
 0 bytes
 
-# --- Set by default to the available disk space when temp_directory exists ---
-
+# The maximum size is by default set to the available disk space, if the temp_directory exists.
 statement ok
-set temp_directory = '__TEST_DIR__';
+SET temp_directory = '__TEST_DIR__';
 
-# Even though __TEST_DIR__ exists, the handle is not created so the size is still 0 (unknown)
+# Even though __TEST_DIR__ exists, the handle is not created so the size is still zero (unknown).
 query I
-select current_setting('max_temp_directory_size')
+SELECT current_setting('max_temp_directory_size');
 ----
 0 bytes
 
-# --- Set explicitly by the user ---
-
-# If we set 'max_temp_directory_size' explicitly, it will not be overridden
+# If we set 'max_temp_directory_size', it cannot be overwritten.
 statement ok
-set max_temp_directory_size='15gb'
+SET max_temp_directory_size='15GB';
 
-# Reported size should not be 0, we set it explicitly
+# The reported size should not be zero, as we set it explicitly.
 query I
-select current_setting('max_temp_directory_size') a where a == '0 bytes'
+SELECT current_setting('max_temp_directory_size') a WHERE a == '0 bytes';
 ----
 
 query I nosort unchanged
-select current_setting('max_temp_directory_size')
+SELECT current_setting('max_temp_directory_size');
 ----
 
-# When we change the temp_directory to something that doesnt exist
+# Change the temp_directory to a path that does not exist, which does not affect the setting.
 statement ok
-set temp_directory = '__TEST_DIR__/does_not_exist'
+SET temp_directory = '__TEST_DIR__/does_not_exist';
 
 query I nosort unchanged
-select current_setting('max_temp_directory_size')
+SELECT current_setting('max_temp_directory_size');
 ----
 
-# When we change the temp_directory to something that does exist
 statement ok
-set temp_directory = '__TEST_DIR__'
+SET temp_directory = '__TEST_DIR__';
 
 query I nosort unchanged
-select current_setting('max_temp_directory_size')
+SELECT current_setting('max_temp_directory_size');
 ----
 
-# When we reset the temp_directory ..
 statement ok
-reset temp_directory;
+RESET temp_directory;
 
 query I nosort unchanged
-select current_setting('max_temp_directory_size')
+SELECT current_setting('max_temp_directory_size');
 ----
 
-# --- Set to the available disk space when we create the (previously non-existant) 'temp_directory'
+# Set the maximum size to the available disk space,
+# if we create the previously non-existant 'temp_directory'.
 
-# Reset it so it's no longer set explicitly
 statement ok
-reset max_temp_directory_size;
+RESET max_temp_directory_size;
 
-# When we change the temp_directory to something that doesnt exist
 statement ok
-set temp_directory = '__TEST_DIR__/does_not_exist'
+SET temp_directory = '__TEST_DIR__/does_not_exist';
 
 query I
-select current_setting('max_temp_directory_size')
+SELECT current_setting('max_temp_directory_size');
 ----
 0 bytes
 
 statement ok
 CREATE TABLE t2 AS SELECT * FROM range(1000000);
 
-# Reported size should not be 0, the directory was created
+# The reported size should not be zero, as the directory was created.
 query I
-select current_setting('max_temp_directory_size') a where a == '0 bytes'
+SELECT current_setting('max_temp_directory_size') a where a == '0 bytes';
 ----

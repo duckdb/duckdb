@@ -42,14 +42,28 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	meta_pipeline.GetPipelines(pipelines_so_far, false);
 	auto &last_pipeline = *pipelines_so_far.back();
 
+	vector<shared_ptr<Pipeline>> dependencies;
+	optional_ptr<MetaPipeline> last_child_ptr;
 	if (build_rhs) {
 		// on the RHS (build side), we construct a child MetaPipeline with this operator as its sink
-		auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, op);
+		auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, op, MetaPipelineType::JOIN_BUILD);
 		child_meta_pipeline.Build(*op.children[1]);
+		if (op.children[1]->CanSaturateThreads(current.GetClientContext())) {
+			// if the build side can saturate all available threads,
+			// we don't just make the LHS pipeline depend on the RHS, but recursively all LHS children too.
+			// this prevents breadth-first plan evaluation
+			child_meta_pipeline.GetPipelines(dependencies, false);
+			last_child_ptr = meta_pipeline.GetLastChild();
+		}
 	}
 
 	// continue building the current pipeline on the LHS (probe side)
 	op.children[0]->BuildPipelines(current, meta_pipeline);
+
+	if (last_child_ptr) {
+		// the pointer was set, set up the dependencies
+		meta_pipeline.AddRecursiveDependencies(dependencies, *last_child_ptr);
+	}
 
 	switch (op.type) {
 	case PhysicalOperatorType::POSITIONAL_JOIN:
@@ -63,13 +77,7 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	}
 
 	// Join can become a source operator if it's RIGHT/OUTER, or if the hash join goes out-of-core
-	bool add_child_pipeline = false;
-	auto &join_op = op.Cast<PhysicalJoin>();
-	if (join_op.IsSource()) {
-		add_child_pipeline = true;
-	}
-
-	if (add_child_pipeline) {
+	if (op.Cast<PhysicalJoin>().IsSource()) {
 		meta_pipeline.CreateChildPipeline(current, op, last_pipeline);
 	}
 }

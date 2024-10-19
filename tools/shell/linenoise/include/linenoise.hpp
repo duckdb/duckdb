@@ -13,7 +13,8 @@
 #include "terminal.hpp"
 #include "linenoise.h"
 
-#define LINENOISE_MAX_LINE 204800
+#define LINENOISE_MAX_LINE    204800
+#define LINENOISE_MAX_HISTORY 104857600
 #define LINENOISE_EDITOR
 
 namespace duckdb {
@@ -127,6 +128,7 @@ public:
 	static bool IsNewline(char c);
 	static bool IsWordBoundary(char c);
 	static bool AllWhitespace(const char *z);
+	static bool IsSpace(char c);
 
 	TabCompletion TabComplete() const;
 

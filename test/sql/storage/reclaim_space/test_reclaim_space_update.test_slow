@@ -21,7 +21,12 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM integers
 ----
 0	999999	1000000
 
-loop i 0 10
+# For smaller block sizes (16KB) the total blocks alternate between a few values in the loop,
+# therefore, we need to compare to a range of total block counts.
+statement ok
+CREATE TABLE total_blocks_tbl AS SELECT total_blocks FROM pragma_database_size();
+
+loop i 0 20
 
 statement ok
 UPDATE integers SET i=i;
@@ -48,10 +53,22 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM integers
 statement ok
 CHECKPOINT;
 
-# ensure that the expected total storage size is the same as in the first iteration of the loop
+# Ensure that the total blocks don't exceed the total blocks by more than 1.2.
 
-query I nosort expected_blocks
-SELECT total_blocks FROM pragma_database_size();
+query I
+SELECT CASE WHEN ${i} < 10 THEN True
+	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.2 THEN True
+	ELSE False END
+FROM pragma_database_size() AS current, total_blocks_tbl;
+----
+1
+
+# Adjust total_blocks_tbl to the count after 10 warm-up iterations.
+
+statement ok
+UPDATE total_blocks_tbl SET total_blocks = (
+ 	SELECT CASE WHEN ${i} < 10 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
+ 		ELSE (total_blocks) END);
 
 query III
 SELECT MIN(i), MAX(i), COUNT(*) FROM integers

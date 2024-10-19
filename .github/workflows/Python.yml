@@ -106,6 +106,7 @@ jobs:
       run: |
         pyproject-build . --sdist
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+
     - name: Build
       shell: bash
       working-directory: tools/pythonpkg
@@ -121,6 +122,7 @@ jobs:
     needs: linux-python3-9
     env:
       GEN: ninja
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
     - uses: actions/checkout@v3
@@ -163,7 +165,7 @@ jobs:
     strategy:
       matrix:
         arch: [x86_64, aarch64]
-        python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*, cp312-*]
+        python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
         manylinux: [manylinux2014, manylinux_2_28]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
@@ -187,7 +189,7 @@ jobs:
     needs: manylinux-extensions-x64
     env:
       CIBW_BUILD: ${{ matrix.python_build}}
-      CIBW_SKIP: '*-musllinux_aarch64'
+      CIBW_SKIP: '*-musllinux_aarch64 cp37-musllinux* cp38-musllinux*'
       CIBW_ARCHS: ${{ matrix.arch == 'aarch64' && 'aarch64' || 'auto64' }}
       CIBW_MANYLINUX_AARCH64_IMAGE: ${{ matrix.manylinux }}
       CIBW_MANYLINUX_PYPY_AARCH64_IMAGE: ${{ matrix.manylinux }}
@@ -279,7 +281,7 @@ jobs:
       runs-on: macos-latest
       strategy:
        matrix:
-        python_build: [cp38-*, cp39-*, cp310-*, cp311-*, cp312-*]
+        python_build: [cp38-*, cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
       needs: linux-python3-9
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
@@ -348,7 +350,7 @@ jobs:
       runs-on: windows-2019
       strategy:
        matrix:
-        python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*, cp312-*]
+        python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
         exclude:

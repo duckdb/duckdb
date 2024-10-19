@@ -14,6 +14,7 @@ void ExtensionInstallInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(101, "full_path", full_path);
 	serializer.WritePropertyWithDefault<string>(102, "repository_url", repository_url);
 	serializer.WritePropertyWithDefault<string>(103, "version", version);
+	serializer.WritePropertyWithDefault<string>(104, "etag", etag);
 }
 
 unique_ptr<ExtensionInstallInfo> ExtensionInstallInfo::Deserialize(Deserializer &deserializer) {
@@ -22,6 +23,7 @@ unique_ptr<ExtensionInstallInfo> ExtensionInstallInfo::Deserialize(Deserializer 
 	deserializer.ReadPropertyWithDefault<string>(101, "full_path", result->full_path);
 	deserializer.ReadPropertyWithDefault<string>(102, "repository_url", result->repository_url);
 	deserializer.ReadPropertyWithDefault<string>(103, "version", result->version);
+	deserializer.ReadPropertyWithDefault<string>(104, "etag", result->etag);
 	return result;
 }
 

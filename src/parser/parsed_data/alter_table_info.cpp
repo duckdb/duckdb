@@ -17,6 +17,9 @@ ChangeOwnershipInfo::ChangeOwnershipInfo(CatalogType entry_catalog_type, string 
       owner_name(std::move(owner_name_p)) {
 }
 
+ChangeOwnershipInfo::ChangeOwnershipInfo() : AlterInfo(AlterType::CHANGE_OWNERSHIP) {
+}
+
 CatalogType ChangeOwnershipInfo::GetCatalogType() const {
 	return entry_catalog_type;
 }
@@ -31,8 +34,9 @@ string ChangeOwnershipInfo::ToString() const {
 
 	result += "ALTER ";
 	result += TypeToString(entry_catalog_type);
+	result += " ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
+		result += "IF EXISTS";
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " OWNED BY ";
@@ -257,7 +261,9 @@ string ChangeColumnTypeInfo::ToString() const {
 	result += " ALTER COLUMN ";
 	result += KeywordHelper::WriteOptionallyQuoted(column_name);
 	result += " TYPE ";
-	result += target_type.ToString(); // FIXME: ToSQLString ?
+	if (target_type.IsValid()) {
+		result += target_type.ToString();
+	}
 	auto extra_type_info = target_type.AuxInfo();
 	if (extra_type_info && extra_type_info->type == ExtraTypeInfoType::STRING_TYPE_INFO) {
 		auto &string_info = extra_type_info->Cast<StringTypeInfo>();

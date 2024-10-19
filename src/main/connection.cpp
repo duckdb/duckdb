@@ -50,11 +50,18 @@ Connection::~Connection() {
 
 string Connection::GetProfilingInformation(ProfilerPrintFormat format) {
 	auto &profiler = QueryProfiler::Get(*context);
-	if (format == ProfilerPrintFormat::JSON) {
-		return profiler.ToJSON();
-	} else {
-		return profiler.QueryTreeToString();
+	return profiler.ToString(format);
+}
+
+optional_ptr<ProfilingNode> Connection::GetProfilingTree() {
+	auto &client_config = ClientConfig::GetConfig(*context);
+	auto enable_profiler = client_config.enable_profiler;
+
+	if (!enable_profiler) {
+		throw Exception(ExceptionType::SETTINGS, "Profiling is not enabled for this connection");
 	}
+	auto &profiler = QueryProfiler::Get(*context);
+	return profiler.GetRoot();
 }
 
 void Connection::Interrupt() {
@@ -149,12 +156,17 @@ unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, ve
 	return statement->Execute(values, false);
 }
 
-unique_ptr<TableDescription> Connection::TableInfo(const string &table_name) {
-	return TableInfo(INVALID_SCHEMA, table_name);
+unique_ptr<TableDescription> Connection::TableInfo(const string &database_name, const string &schema_name,
+                                                   const string &table_name) {
+	return context->TableInfo(database_name, schema_name, table_name);
 }
 
 unique_ptr<TableDescription> Connection::TableInfo(const string &schema_name, const string &table_name) {
-	return context->TableInfo(schema_name, table_name);
+	return TableInfo(INVALID_CATALOG, schema_name, table_name);
+}
+
+unique_ptr<TableDescription> Connection::TableInfo(const string &table_name) {
+	return TableInfo(INVALID_CATALOG, DEFAULT_SCHEMA, table_name);
 }
 
 vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(const string &query) {
@@ -183,7 +195,7 @@ shared_ptr<Relation> Connection::Table(const string &table_name) {
 }
 
 shared_ptr<Relation> Connection::Table(const string &schema_name, const string &table_name) {
-	auto table_info = TableInfo(schema_name, table_name);
+	auto table_info = TableInfo(INVALID_CATALOG, schema_name, table_name);
 	if (!table_info) {
 		throw CatalogException("Table '%s' does not exist!", table_name);
 	}
@@ -277,8 +289,9 @@ shared_ptr<Relation> Connection::RelationFromQuery(const string &query, const st
 	return RelationFromQuery(QueryRelation::ParseStatement(*context, query, error), alias);
 }
 
-shared_ptr<Relation> Connection::RelationFromQuery(unique_ptr<SelectStatement> select_stmt, const string &alias) {
-	return make_shared_ptr<QueryRelation>(context, std::move(select_stmt), alias);
+shared_ptr<Relation> Connection::RelationFromQuery(unique_ptr<SelectStatement> select_stmt, const string &alias,
+                                                   const string &query_p) {
+	return make_shared_ptr<QueryRelation>(context, std::move(select_stmt), alias, query_p);
 }
 
 void Connection::BeginTransaction() {

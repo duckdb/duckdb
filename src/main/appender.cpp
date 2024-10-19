@@ -12,6 +12,9 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/planner/expression_binder/constant_binder.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
@@ -19,9 +22,10 @@ BaseAppender::BaseAppender(Allocator &allocator, AppenderType type_p)
     : allocator(allocator), column(0), appender_type(type_p) {
 }
 
-BaseAppender::BaseAppender(Allocator &allocator_p, vector<LogicalType> types_p, AppenderType type_p)
+BaseAppender::BaseAppender(Allocator &allocator_p, vector<LogicalType> types_p, AppenderType type_p,
+                           idx_t flush_count_p)
     : allocator(allocator_p), types(std::move(types_p)), collection(make_uniq<ColumnDataCollection>(allocator, types)),
-      column(0), appender_type(type_p) {
+      column(0), appender_type(type_p), flush_count(flush_count_p) {
 	InitializeChunk();
 }
 
@@ -40,30 +44,72 @@ void BaseAppender::Destructor() {
 	}
 }
 
-InternalAppender::InternalAppender(ClientContext &context_p, TableCatalogEntry &table_p)
-    : BaseAppender(Allocator::DefaultAllocator(), table_p.GetTypes(), AppenderType::PHYSICAL), context(context_p),
-      table(table_p) {
+InternalAppender::InternalAppender(ClientContext &context_p, TableCatalogEntry &table_p, idx_t flush_count_p)
+    : BaseAppender(Allocator::DefaultAllocator(), table_p.GetTypes(), AppenderType::PHYSICAL, flush_count_p),
+      context(context_p), table(table_p) {
 }
 
 InternalAppender::~InternalAppender() {
 	Destructor();
 }
 
-Appender::Appender(Connection &con, const string &schema_name, const string &table_name)
+Appender::Appender(Connection &con, const string &database_name, const string &schema_name, const string &table_name)
     : BaseAppender(Allocator::DefaultAllocator(), AppenderType::LOGICAL), context(con.context) {
-	description = con.TableInfo(schema_name, table_name);
+
+	description = con.TableInfo(database_name, schema_name, table_name);
 	if (!description) {
 		// table could not be found
 		throw CatalogException(StringUtil::Format("Table \"%s.%s\" could not be found", schema_name, table_name));
 	}
-	for (auto &column : description->columns) {
-		types.push_back(column.Type());
+	if (description->readonly) {
+		throw InvalidInputException("Cannot append to a readonly database.");
 	}
+	vector<optional_ptr<const ParsedExpression>> defaults;
+	for (auto &column : description->columns) {
+		if (column.Generated()) {
+			continue;
+		}
+		types.push_back(column.Type());
+		defaults.push_back(column.HasDefaultValue() ? &column.DefaultValue() : nullptr);
+	}
+	auto binder = Binder::CreateBinder(*context);
+
+	context->RunFunctionInTransaction([&]() {
+		for (idx_t i = 0; i < types.size(); i++) {
+			auto &type = types[i];
+			auto &expr = defaults[i];
+
+			if (!expr) {
+				// Insert NULL
+				default_values[i] = Value(type);
+				continue;
+			}
+			auto default_copy = expr->Copy();
+			D_ASSERT(!default_copy->HasParameter());
+			ConstantBinder default_binder(*binder, *context, "DEFAULT value");
+			default_binder.target_type = type;
+			auto bound_default = default_binder.Bind(default_copy);
+			Value result_value;
+			if (bound_default->IsFoldable() &&
+			    ExpressionExecutor::TryEvaluateScalar(*context, *bound_default, result_value)) {
+				// Insert the evaluated Value
+				default_values[i] = result_value;
+			} else {
+				// These are not supported currently, we don't add them to the 'default_values' map
+			}
+		}
+	});
+
 	InitializeChunk();
 	collection = make_uniq<ColumnDataCollection>(allocator, types);
 }
 
-Appender::Appender(Connection &con, const string &table_name) : Appender(con, DEFAULT_SCHEMA, table_name) {
+Appender::Appender(Connection &con, const string &schema_name, const string &table_name)
+    : Appender(con, INVALID_CATALOG, schema_name, table_name) {
+}
+
+Appender::Appender(Connection &con, const string &table_name)
+    : Appender(con, INVALID_CATALOG, DEFAULT_SCHEMA, table_name) {
 }
 
 Appender::~Appender() {
@@ -80,7 +126,7 @@ void BaseAppender::BeginRow() {
 void BaseAppender::EndRow() {
 	// check that all rows have been appended to
 	if (column != chunk.ColumnCount()) {
-		throw InvalidInputException("Call to EndRow before all rows have been appended to!");
+		throw InvalidInputException("Call to EndRow before all columns have been appended to!");
 	}
 	column = 0;
 	chunk.SetCardinality(chunk.size() + 1);
@@ -339,7 +385,7 @@ void BaseAppender::AppendDataChunk(DataChunk &chunk) {
 		}
 	}
 	collection->Append(chunk);
-	if (collection->Count() >= FLUSH_COUNT) {
+	if (collection->Count() >= flush_count) {
 		Flush();
 	}
 }
@@ -350,7 +396,7 @@ void BaseAppender::FlushChunk() {
 	}
 	collection->Append(chunk);
 	chunk.Reset();
-	if (collection->Count() >= FLUSH_COUNT) {
+	if (collection->Count() >= flush_count) {
 		Flush();
 	}
 }
@@ -373,6 +419,18 @@ void BaseAppender::Flush() {
 
 void Appender::FlushInternal(ColumnDataCollection &collection) {
 	context->Append(*description, collection);
+}
+
+void Appender::AppendDefault() {
+	auto it = default_values.find(column);
+	auto &column_def = description->columns[column];
+	if (it == default_values.end()) {
+		throw NotImplementedException(
+		    "AppendDefault is currently not supported for column \"%s\" because default expression is not foldable.",
+		    column_def.Name());
+	}
+	auto &default_value = it->second;
+	Append(default_value);
 }
 
 void InternalAppender::FlushInternal(ColumnDataCollection &collection) {

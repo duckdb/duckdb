@@ -1,0 +1,120 @@
+# name: benchmark/csv/glob_reorder.benchmark
+# description: Run CSV scan on glob
+# group: [csv]
+
+name CSV Read with glob reorder
+group csv
+
+load
+CREATE TABLE t1 AS select 'a,b,c,d,e';
+insert into t1  select 'a,a,a,a,a' from range(0,1000) tbl(i);
+COPY t1 TO '${BENCHMARK_DIR}/tx1.csv' (FORMAT CSV, HEADER 0,delim ';');
+CREATE TABLE t2 AS select 'a,e,c,d,b';
+insert into t2  select 'a,a,a,a,a' from range(0,1000) tbl(i);
+COPY t2 TO '${BENCHMARK_DIR}/tx2.csv' (FORMAT CSV, HEADER 0,delim ';');
+CREATE TABLE t3 AS select 'a,c,d,b,e';
+insert into t3  select 'a,a,a,a,a' from range(0,1000) tbl(i);
+COPY t3 TO '${BENCHMARK_DIR}/tx3.csv' (FORMAT CSV, HEADER 0,delim ';');
+CREATE TABLE t4 AS select 'e,b,c,d,a';
+insert into t4  select 'a,a,a,a,a' from range(0,1000000) tbl(i);
+COPY t4 TO '${BENCHMARK_DIR}/tx4.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx5.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx6.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx7.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx8.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx9.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx10.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx11.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx12.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx13.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx14.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx15.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx16.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx17.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx18.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx19.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx20.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx21.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx22.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx23.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx24.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx25.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx26.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx27.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx28.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx29.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx30.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx31.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx32.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx33.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx34.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx35.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx36.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx37.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx38.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx39.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx40.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx41.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx42.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx43.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx44.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx45.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx46.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx47.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx48.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx49.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx50.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx51.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx52.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx53.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx54.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx55.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx56.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx57.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx58.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx59.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx60.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx61.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx62.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx63.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx64.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx65.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx66.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx67.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx68.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx69.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx70.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx71.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx72.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx73.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx74.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx75.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx76.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx77.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx78.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx79.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx80.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx81.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx82.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx83.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx84.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx85.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx86.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx87.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx88.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx89.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx90.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx91.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx92.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx93.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx94.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx95.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx96.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx97.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx98.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx99.csv' (FORMAT CSV, HEADER 0,delim ';');
+COPY t4 TO '${BENCHMARK_DIR}/tx100.csv' (FORMAT CSV, HEADER 0,delim ';');
+
+
+run
+SELECT * from read_csv('${BENCHMARK_DIR}/tx*.csv',delim= ',', parallel = false)

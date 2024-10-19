@@ -36,6 +36,7 @@ class TableCatalogEntry;
 class Transaction;
 class TransactionManager;
 class WriteAheadLogDeserializer;
+struct PersistentCollectionData;
 
 //! The WriteAheadLog (WAL) is a log that is used to provide durability. Prior
 //! to committing a transaction it writes the changes the transaction made to
@@ -47,26 +48,21 @@ public:
 	explicit WriteAheadLog(AttachedDatabase &database, const string &wal_path);
 	virtual ~WriteAheadLog();
 
-	//! Skip writing to the WAL
-	bool skip_writing;
-
 public:
 	//! Replay the WAL
 	static bool Replay(AttachedDatabase &database, unique_ptr<FileHandle> handle);
 
 	//! Gets the total bytes written to the WAL since startup
+	idx_t GetWALSize();
+	//! Gets the total bytes written to the WAL since startup
 	idx_t GetTotalWritten();
 
 	//! A WAL is initialized, if a writer to a file exists.
 	bool Initialized() {
-		return writer != nullptr;
+		return initialized;
 	}
 	//! Initializes the file of the WAL by creating the file writer.
 	BufferedFileWriter &Initialize();
-	//! Returns the WAL file writer.
-	BufferedFileWriter &GetWriter() {
-		return *writer;
-	}
 
 	void WriteVersion();
 
@@ -100,6 +96,7 @@ public:
 	void WriteAlter(const AlterInfo &info);
 
 	void WriteInsert(DataChunk &chunk);
+	void WriteRowGroupData(const PersistentCollectionData &data);
 	void WriteDelete(DataChunk &chunk);
 	//! Write a single (sub-) column update to the WAL. Chunk must be a pair of (COL, ROW_ID).
 	//! The column_path vector is a *path* towards a column within the table
@@ -112,7 +109,7 @@ public:
 	void WriteUpdate(DataChunk &chunk, const vector<column_t> &column_path);
 
 	//! Truncate the WAL to a previous size, and clear anything currently set in the writer
-	void Truncate(int64_t size);
+	void Truncate(idx_t size);
 	//! Delete the WAL file on disk. The WAL should not be used after this point.
 	void Delete();
 	void Flush();
@@ -121,8 +118,11 @@ public:
 
 protected:
 	AttachedDatabase &database;
+	mutex wal_lock;
 	unique_ptr<BufferedFileWriter> writer;
 	string wal_path;
+	atomic<idx_t> wal_size;
+	atomic<bool> initialized;
 };
 
 } // namespace duckdb

@@ -1,15 +1,16 @@
 #include "duckdb/execution/operator/persistent/physical_batch_insert.hpp"
+
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/execution/operator/persistent/batch_memory_manager.hpp"
 #include "duckdb/execution/operator/persistent/batch_task_manager.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/storage/table/row_group_collection.hpp"
-#include "duckdb/storage/table_io_manager.hpp"
-#include "duckdb/transaction/local_storage.hpp"
-#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
-#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 
 namespace duckdb {
 
@@ -130,19 +131,21 @@ public:
 	explicit BatchInsertGlobalState(ClientContext &context, DuckTableEntry &table, idx_t minimum_memory_per_thread)
 	    : memory_manager(context, minimum_memory_per_thread), table(table), insert_count(0),
 	      optimistically_written(false), minimum_memory_per_thread(minimum_memory_per_thread) {
+		row_group_size = table.GetStorage().GetRowGroupSize();
 	}
 
 	BatchMemoryManager memory_manager;
 	BatchTaskManager<BatchInsertTask> task_manager;
 	mutex lock;
 	DuckTableEntry &table;
+	idx_t row_group_size;
 	idx_t insert_count;
 	vector<RowGroupBatchEntry> collections;
 	idx_t next_start = 0;
 	atomic<bool> optimistically_written;
 	idx_t minimum_memory_per_thread;
 
-	static bool ReadyToMerge(idx_t count);
+	bool ReadyToMerge(idx_t count) const;
 	void ScheduleMergeTasks(idx_t min_batch_index);
 	unique_ptr<RowGroupCollection> MergeCollections(ClientContext &context,
 	                                                vector<RowGroupBatchEntry> merge_collections,
@@ -177,8 +180,8 @@ public:
 
 	void CreateNewCollection(DuckTableEntry &table, const vector<LogicalType> &insert_types) {
 		auto table_info = table.GetStorage().GetDataTableInfo();
-		auto &block_manager = TableIOManager::Get(table.GetStorage()).GetBlockManagerForRowData();
-		current_collection = make_uniq<RowGroupCollection>(std::move(table_info), block_manager, insert_types,
+		auto &io_manager = TableIOManager::Get(table.GetStorage());
+		current_collection = make_uniq<RowGroupCollection>(std::move(table_info), io_manager, insert_types,
 		                                                   NumericCast<idx_t>(MAX_ROW_ID));
 		current_collection->InitializeEmpty();
 		current_collection->InitializeAppend(current_append_state);
@@ -226,21 +229,21 @@ struct BatchMergeTask {
 	idx_t total_count;
 };
 
-bool BatchInsertGlobalState::ReadyToMerge(idx_t count) {
+bool BatchInsertGlobalState::ReadyToMerge(idx_t count) const {
 	// we try to merge so the count fits nicely into row groups
-	if (count >= Storage::ROW_GROUP_SIZE / 10 * 9 && count <= Storage::ROW_GROUP_SIZE) {
+	if (count >= row_group_size / 10 * 9 && count <= row_group_size) {
 		// 90%-100% of row group size
 		return true;
 	}
-	if (count >= Storage::ROW_GROUP_SIZE / 10 * 18 && count <= Storage::ROW_GROUP_SIZE * 2) {
+	if (count >= row_group_size / 10 * 18 && count <= row_group_size * 2) {
 		// 180%-200% of row group size
 		return true;
 	}
-	if (count >= Storage::ROW_GROUP_SIZE / 10 * 27 && count <= Storage::ROW_GROUP_SIZE * 3) {
+	if (count >= row_group_size / 10 * 27 && count <= row_group_size * 3) {
 		// 270%-300% of row group size
 		return true;
 	}
-	if (count >= Storage::ROW_GROUP_SIZE / 10 * 36) {
+	if (count >= row_group_size / 10 * 36) {
 		// >360% of row group size
 		return true;
 	}
@@ -345,7 +348,7 @@ void BatchInsertGlobalState::AddCollection(ClientContext &context, idx_t batch_i
 		                        batch_index, min_batch_index);
 	}
 	auto new_count = current_collection->GetTotalRows();
-	auto batch_type = new_count < Storage::ROW_GROUP_SIZE ? RowGroupBatchType::NOT_FLUSHED : RowGroupBatchType::FLUSHED;
+	auto batch_type = new_count < row_group_size ? RowGroupBatchType::NOT_FLUSHED : RowGroupBatchType::FLUSHED;
 	if (batch_type == RowGroupBatchType::FLUSHED && writer) {
 		writer->WriteLastRowGroup(*current_collection);
 	}
@@ -438,7 +441,11 @@ SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, Oper
 		gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.min_batch_index.GetIndex(),
 		                     std::move(lstate.current_collection), lstate.writer);
 
-		auto any_unblocked = memory_manager.UnblockTasks();
+		bool any_unblocked;
+		{
+			auto guard = memory_manager.Lock();
+			any_unblocked = memory_manager.UnblockTasks(guard);
+		}
 		if (!any_unblocked) {
 			ExecuteTasks(context.client, gstate, lstate);
 		}
@@ -447,7 +454,8 @@ SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, Oper
 	lstate.current_index = batch_index;
 
 	// unblock any blocked tasks
-	memory_manager.UnblockTasks();
+	auto guard = memory_manager.Lock();
+	memory_manager.UnblockTasks(guard);
 
 	return SinkNextBatchType::READY;
 }
@@ -475,12 +483,11 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &c
 			// execute tasks while we wait (if any are available)
 			ExecuteTasks(context.client, gstate, lstate);
 
-			lock_guard<mutex> l(memory_manager.GetBlockedTaskLock());
+			auto guard = memory_manager.Lock();
 			if (!memory_manager.IsMinimumBatchIndex(batch_index)) {
 				//  we are not the minimum batch index and we have no memory available to buffer - block the task for
 				//  now
-				memory_manager.BlockTask(input.interrupt_state);
-				return SinkResultType::BLOCKED;
+				return memory_manager.BlockSink(guard, input.interrupt_state);
 			}
 		}
 	}
@@ -518,7 +525,7 @@ SinkCombineResultType PhysicalBatchInsert::Combine(ExecutionContext &context, Op
 	auto &lstate = input.local_state.Cast<BatchInsertLocalState>();
 	auto &memory_manager = gstate.memory_manager;
 	auto &client_profiler = QueryProfiler::Get(context.client);
-	context.thread.profiler.Flush(*this, lstate.default_executor, "default_executor", 1);
+	context.thread.profiler.Flush(*this);
 	client_profiler.Flush(context.thread.profiler);
 
 	memory_manager.UpdateMinBatchIndex(lstate.partition_info.min_batch_index.GetIndex());
@@ -537,7 +544,8 @@ SinkCombineResultType PhysicalBatchInsert::Combine(ExecutionContext &context, Op
 	}
 
 	// unblock any blocked tasks
-	memory_manager.UnblockTasks();
+	auto guard = memory_manager.Lock();
+	memory_manager.UnblockTasks(guard);
 
 	return SinkCombineResultType::FINISHED;
 }
@@ -550,7 +558,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 	auto &gstate = input.global_state.Cast<BatchInsertGlobalState>();
 	auto &memory_manager = gstate.memory_manager;
 
-	if (gstate.optimistically_written || gstate.insert_count >= LocalStorage::MERGE_THRESHOLD) {
+	if (gstate.optimistically_written || gstate.insert_count >= gstate.row_group_size) {
 		// we have written data to disk optimistically or are inserting a large amount of data
 		// perform a final pass over all of the row groups and merge them together
 		vector<unique_ptr<CollectionMerger>> mergers;

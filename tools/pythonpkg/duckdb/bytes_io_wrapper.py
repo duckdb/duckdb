@@ -63,3 +63,4 @@ class BytesIOWrapper:
             to_return = combined_bytestring[:n]
             self.overflow = combined_bytestring[n:]
             return to_return
+

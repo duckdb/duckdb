@@ -40,7 +40,7 @@ void TerminalProgressBarDisplay::PrintProgressInternal(int32_t percentage) {
 	}
 	if (i < PROGRESS_BAR_WIDTH) {
 		// print a partial block based on the percentage of the progress bar remaining
-		idx_t index = idx_t((blocks_to_draw - idx_t(blocks_to_draw)) * PARTIAL_BLOCK_COUNT);
+		idx_t index = idx_t((blocks_to_draw - static_cast<double>(idx_t(blocks_to_draw))) * PARTIAL_BLOCK_COUNT);
 		if (index >= PARTIAL_BLOCK_COUNT) {
 			index = PARTIAL_BLOCK_COUNT - 1;
 		}

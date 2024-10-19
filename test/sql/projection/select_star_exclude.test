@@ -48,6 +48,11 @@ SELECT integers.* EXCLUDE (i) FROM integers
 ----
 2	3
 
+query II
+SELECT integers.* EXCLUDE ('i') FROM integers
+----
+2	3
+
 query I
 SELECT integers.* EXCLUDE (i, j) FROM integers
 ----
@@ -88,10 +93,52 @@ SELECT * EXCLUDE (i) FROM integers i1 JOIN integers i2 USING (i)
 ----
 2	3	2	3
 
+# qualified exclude entries
+query II
+SELECT * EXCLUDE integers.i FROM integers
+----
+2	3
+
+query I
+SELECT * EXCLUDE (integers.i, integers.j) FROM integers
+----
+3
+
+query I
+SELECT integers.* EXCLUDE (integers.i, integers.j) FROM integers
+----
+3
+
+query I
+SELECT * EXCLUDE (INTEGERS.i, integers.J) FROM integers
+----
+3
+
+statement error
+SELECT * EXCLUDE (integers.i, integers.j, integers2.i) FROM integers
+----
+not found in FROM clause
+
+statement error
+SELECT * EXCLUDE (integers2.i) FROM integers
+----
+not found in FROM clause
+
+query IIII
+SELECT * EXCLUDE (i1.i, i2.i) FROM integers i1 JOIN integers i2 USING (i)
+----
+2	3	2	3
+
 # duplicate entry in exclude list
 statement error
 SELECT * EXCLUDE (i, i) FROM integers
 ----
+Duplicate entry
+
+statement error
+SELECT * EXCLUDE (integers.i, i) FROM integers
+----
+Duplicate entry
 
 # column name that does not exist
 statement error

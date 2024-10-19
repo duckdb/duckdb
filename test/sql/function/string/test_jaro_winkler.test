@@ -91,22 +91,22 @@ select jaro_winkler_similarity('foo', 'foo')
 query T
 select jaro_winkler_similarity('foo', 'foo ')
 ----
-0.94
+0.9416666666666667
 
 query T
 select jaro_winkler_similarity('foo', 'foo  ')
 ----
-0.91
+0.9066666666666667
 
 query T
 select jaro_winkler_similarity('foo', ' foo ')
 ----
-0.87
+0.8666666666666667
 
 query T
 select jaro_winkler_similarity('foo', '  foo')
 ----
-0.51
+0.5111111111111111
 
 query T
 select jaro_winkler_similarity('', 'a')
@@ -121,7 +121,7 @@ select jaro_winkler_similarity('aaapppp', '')
 query T
 select jaro_winkler_similarity('frog', 'fog')
 ----
-0.93
+0.9249999999999999
 
 query T
 select jaro_winkler_similarity('fly', 'ant')
@@ -131,12 +131,12 @@ select jaro_winkler_similarity('fly', 'ant')
 query T
 select jaro_winkler_similarity('elephant', 'hippo')
 ----
-0.44
+0.44166666666666665
 
 query T
 select jaro_winkler_similarity('hippo', 'elephant')
 ----
-0.44
+0.44166666666666665
 
 query T
 select jaro_winkler_similarity('hippo', 'zzzzzzzz')
@@ -151,7 +151,7 @@ select jaro_winkler_similarity('hello', 'hallo')
 query T
 select jaro_winkler_similarity('ABC Corporation', 'ABC Corp')
 ----
-0.91
+0.9066666666666666
 
 # this is 0.95 in the apache commons library but 0.8648324514991181 in ours
 query T

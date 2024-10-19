@@ -8,7 +8,7 @@
 #include "duckdb/common/union_by_name.hpp"
 #include "duckdb/execution/operator/csv_scanner/global_csv_state.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_error.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -51,7 +51,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	auto multi_file_reader = MultiFileReader::Create(input.table_function);
 	auto multi_file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
 
-	options.FromNamedParameters(input.named_parameters, context, return_types, names);
+	options.FromNamedParameters(input.named_parameters, context);
 	if (options.rejects_table_name.IsSetByUser() && !options.store_rejects.GetValue() &&
 	    options.store_rejects.IsSetByUser()) {
 		throw BinderException("REJECTS_TABLE option is only supported when store_rejects is not manually set to false");
@@ -82,16 +82,20 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 	options.file_options.AutoDetectHivePartitioning(*multi_file_list, context);
 
-	if (!options.auto_detect && return_types.empty()) {
-		throw BinderException("read_csv requires columns to be specified through the 'columns' option. Use "
-		                      "read_csv_auto or set read_csv(..., "
-		                      "AUTO_DETECT=TRUE) to automatically guess columns.");
+	if (!options.auto_detect) {
+		if (!options.columns_set) {
+			throw BinderException("read_csv requires columns to be specified through the 'columns' option. Use "
+			                      "read_csv_auto or set read_csv(..., "
+			                      "AUTO_DETECT=TRUE) to automatically guess columns.");
+		} else {
+			names = options.name_list;
+			return_types = options.sql_type_list;
+		}
 	}
 	if (options.auto_detect && !options.file_options.union_by_name) {
 		options.file_path = multi_file_list->GetFirstFile();
 		result->buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0);
-		CSVSniffer sniffer(options, result->buffer_manager, CSVStateMachineCache::Get(context),
-		                   {&return_types, &names});
+		CSVSniffer sniffer(options, result->buffer_manager, CSVStateMachineCache::Get(context));
 		auto sniffer_result = sniffer.SniffCSV();
 		if (names.empty()) {
 			names = sniffer_result.names;
@@ -107,8 +111,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		result->reader_bind = multi_file_reader->BindUnionReader<CSVFileScan>(context, return_types, names,
 		                                                                      *multi_file_list, *result, options);
 		if (result->union_readers.size() > 1) {
-			result->column_info.emplace_back(result->initial_reader->names, result->initial_reader->types);
-			for (idx_t i = 1; i < result->union_readers.size(); i++) {
+			for (idx_t i = 0; i < result->union_readers.size(); i++) {
 				result->column_info.emplace_back(result->union_readers[i]->names, result->union_readers[i]->types);
 			}
 		}
@@ -202,6 +205,10 @@ unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, 
 		return nullptr;
 	}
 	auto &global_state = global_state_p->Cast<CSVGlobalState>();
+	if (global_state.IsDone()) {
+		// nothing to do
+		return nullptr;
+	}
 	auto csv_scanner = global_state.Next(nullptr);
 	if (!csv_scanner) {
 		global_state.DecrementThread();
@@ -215,6 +222,9 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 		return;
 	}
 	auto &csv_global_state = data_p.global_state->Cast<CSVGlobalState>();
+	if (!data_p.local_state) {
+		return;
+	}
 	auto &csv_local_state = data_p.local_state->Cast<CSVLocalState>();
 
 	if (!csv_local_state.csv_reader) {
@@ -239,10 +249,12 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	} while (true);
 }
 
-static idx_t CSVReaderGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-                                    LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
-	auto &data = local_state->Cast<CSVLocalState>();
-	return data.csv_reader->scanner_idx;
+static OperatorPartitionData CSVReaderGetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input) {
+	if (input.partition_info.RequiresPartitionColumns()) {
+		throw InternalException("CSVReader::GetPartitionData: partition columns not supported");
+	}
+	auto &data = input.local_state->Cast<CSVLocalState>();
+	return OperatorPartitionData(data.csv_reader->scanner_idx);
 }
 
 void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_function) {
@@ -281,7 +293,7 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["types"] = LogicalType::ANY;
 	table_function.named_parameters["names"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["column_names"] = LogicalType::LIST(LogicalType::VARCHAR);
-	table_function.named_parameters["parallel"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["comment"] = LogicalType::VARCHAR;
 
 	MultiFileReader::AddParameters(table_function);
 }
@@ -300,8 +312,9 @@ void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionD
                               vector<unique_ptr<Expression>> &filters) {
 	auto &data = bind_data_p->Cast<ReadCSVData>();
 	SimpleMultiFileList file_list(data.files);
+	MultiFilePushdownInfo info(get);
 	auto filtered_list =
-	    MultiFileReader().ComplexFilterPushdown(context, file_list, data.options.file_options, get, filters);
+	    MultiFileReader().ComplexFilterPushdown(context, file_list, data.options.file_options, info, filters);
 	if (filtered_list) {
 		data.files = filtered_list->GetAllFiles();
 		MultiFileReader::PruneReaders(data, file_list);
@@ -353,7 +366,7 @@ TableFunction ReadCSVTableFunction::GetFunction() {
 	read_csv.pushdown_complex_filter = CSVComplexFilterPushdown;
 	read_csv.serialize = CSVReaderSerialize;
 	read_csv.deserialize = CSVReaderDeserialize;
-	read_csv.get_batch_index = CSVReaderGetBatchIndex;
+	read_csv.get_partition_data = CSVReaderGetPartitionData;
 	read_csv.cardinality = CSVReaderCardinality;
 	read_csv.projection_pushdown = true;
 	read_csv.type_pushdown = PushdownTypeToCSVScanner;
@@ -375,12 +388,12 @@ void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 
 unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, ReplacementScanInput &input,
                                         optional_ptr<ReplacementScanData> data) {
-	auto &table_name = input.table_name;
+	auto table_name = ReplacementScan::GetFullPath(input);
 	auto lower_name = StringUtil::Lower(table_name);
 	// remove any compression
-	if (StringUtil::EndsWith(lower_name, ".gz")) {
+	if (StringUtil::EndsWith(lower_name, CompressionExtensionFromType(FileCompressionType::GZIP))) {
 		lower_name = lower_name.substr(0, lower_name.size() - 3);
-	} else if (StringUtil::EndsWith(lower_name, ".zst")) {
+	} else if (StringUtil::EndsWith(lower_name, CompressionExtensionFromType(FileCompressionType::ZSTD))) {
 		if (!Catalog::TryAutoLoad(context, "parquet")) {
 			throw MissingExtensionException("parquet extension is required for reading zst compressed file");
 		}

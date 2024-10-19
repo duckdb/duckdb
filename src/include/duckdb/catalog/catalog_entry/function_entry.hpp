@@ -22,6 +22,7 @@ public:
 		parameter_names = std::move(info.parameter_names);
 		example = std::move(info.example);
 		this->dependencies = info.dependencies;
+		this->internal = info.internal;
 	}
 
 	//! The description (if any)
