@@ -62,6 +62,9 @@ Appender::Appender(Connection &con, const string &schema_name, const string &tab
 	}
 	vector<optional_ptr<const ParsedExpression>> defaults;
 	for (auto &column : description->columns) {
+		if (column.Generated()) {
+			continue;
+		}
 		types.push_back(column.Type());
 		defaults.push_back(column.HasDefaultValue() ? &column.DefaultValue() : nullptr);
 	}
