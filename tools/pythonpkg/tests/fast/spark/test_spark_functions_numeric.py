@@ -145,3 +145,14 @@ class TestSparkFunctionsNumeric(object):
             Row(log2_value=2.0),
             Row(log2_value=3.0),
         ]
+
+    def test_ln(self, spark):
+        data = [
+            (2.718,),
+            (1,),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("ln_value", F.ln(F.col("firstColumn")))
+        res = df.select("ln_value").collect()
+        round(res[0].ln_value, 2) == 1
+        res[1].ln_value == 0
