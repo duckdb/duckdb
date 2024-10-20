@@ -62,7 +62,6 @@ PhysicalRangeJoin::GlobalSortedTable::GlobalSortedTable(ClientContext &context, 
                                                         RowLayout &payload_layout, const PhysicalOperator &op_p)
     : op(op_p), global_sort_state(BufferManager::GetBufferManager(context), orders, payload_layout), has_null(0),
       count(0), memory_per_thread(0) {
-	D_ASSERT(orders.size() == 1);
 
 	// Set external (can be forced with the PRAGMA)
 	auto &config = ClientConfig::GetConfig(context);
