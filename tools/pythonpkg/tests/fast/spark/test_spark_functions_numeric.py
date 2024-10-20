@@ -107,3 +107,15 @@ class TestSparkFunctionsNumeric(object):
         assert len(res) == 2
         assert res[0].acos_value == pytest.approx(0.0)
         assert res[1].acos_value == pytest.approx(3.141592653589793)
+
+    def test_exp(self, spark):
+        data = [
+            (0.693,),
+            (0,),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("exp_value", F.exp(F.col("firstColumn")))
+        res = df.select("exp_value").collect()
+        round(res[0].exp_value, 2) == 2
+        res[1].exp_value == 1
+

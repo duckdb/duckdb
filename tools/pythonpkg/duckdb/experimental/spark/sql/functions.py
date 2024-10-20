@@ -2037,3 +2037,35 @@ def covar_samp(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     [Row(c=0.0)]
     """
     return _invoke_function_over_columns("covar_samp", col1, col2)
+
+
+def exp(col: "ColumnOrName") -> Column:
+    """
+    Computes the exponential of the given value.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        column to calculate exponential for.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        exponential of the given value.
+
+    Examples
+    --------
+    >>> df = spark.range(1)
+    >>> df.select(exp(lit(0))).show()
+    +------+
+    |EXP(0)|
+    +------+
+    |   1.0|
+    +------+
+    """
+    return _invoke_function_over_columns("exp", col)
