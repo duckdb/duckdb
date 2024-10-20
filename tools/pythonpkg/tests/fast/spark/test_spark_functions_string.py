@@ -96,3 +96,16 @@ class TestSparkFunctionsString(object):
             Row(endswith=True),
             Row(endswith=False),
         ]
+
+    def test_startswith(self, spark):
+        data = [
+            ("firstRowFirstColumn", "irst"),
+            ("2ndRowFirstColumn", "2nd"),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn", "secondColumn"])
+        df = df.withColumn("startswith", F.startswith(F.col("firstColumn"), F.col("secondColumn")))
+        res = df.select("startswith").collect()
+        assert res == [
+            Row(startswith=False),
+            Row(startswith=True),
+        ]
