@@ -51,7 +51,18 @@
             "pandas.isnull",
             "pandas.ArrowDtype",
             "pandas.NaT",
-            "pandas.NA"
+            "pandas.NA",
+            "pandas.BooleanDtype",
+            "pandas.UInt8Dtype",
+            "pandas.UInt16Dtype",
+            "pandas.UInt32Dtype",
+            "pandas.UInt64Dtype",
+            "pandas.Int8Dtype",
+            "pandas.Int16Dtype",
+            "pandas.Int32Dtype",
+            "pandas.Int64Dtype",
+            "pandas.Float32Dtype",
+            "pandas.Float64Dtype"
         ],
         "required": false
     },
@@ -83,6 +94,72 @@
         "type": "attribute",
         "full_path": "pandas.ArrowDtype",
         "name": "ArrowDtype",
+        "children": []
+    },
+    "pandas.BooleanDtype": {
+        "type": "attribute",
+        "full_path": "pandas.BooleanDtype",
+        "name": "BooleanDtype",
+        "children": []
+    },
+    "pandas.UInt8Dtype": {
+        "type": "attribute",
+        "full_path": "pandas.UInt8Dtype",
+        "name": "UInt8Dtype",
+        "children": []
+    },
+    "pandas.UInt16Dtype": {
+        "type": "attribute",
+        "full_path": "pandas.UInt16Dtype",
+        "name": "UInt16Dtype",
+        "children": []
+    },
+    "pandas.UInt32Dtype": {
+        "type": "attribute",
+        "full_path": "pandas.UInt32Dtype",
+        "name": "UInt32Dtype",
+        "children": []
+    },
+    "pandas.UInt64Dtype": {
+        "type": "attribute",
+        "full_path": "pandas.UInt64Dtype",
+        "name": "UInt64Dtype",
+        "children": []
+    },
+    "pandas.Int8Dtype": {
+        "type": "attribute",
+        "full_path": "pandas.Int8Dtype",
+        "name": "Int8Dtype",
+        "children": []
+    },
+    "pandas.Int16Dtype": {
+        "type": "attribute",
+        "full_path": "pandas.Int16Dtype",
+        "name": "Int16Dtype",
+        "children": []
+    },
+    "pandas.Int32Dtype": {
+        "type": "attribute",
+        "full_path": "pandas.Int32Dtype",
+        "name": "Int32Dtype",
+        "children": []
+    },
+    "pandas.Int64Dtype": {
+        "type": "attribute",
+        "full_path": "pandas.Int64Dtype",
+        "name": "Int64Dtype",
+        "children": []
+    },
+    "pandas.Float32Dtype": {
+        "type": "attribute",
+        "full_path": "pandas.Float32Dtype",
+        "name": "Float32Dtype",
+        "children": []
+    },
+    "pandas.Float64Dtype": {
+        "type": "attribute",
+        "full_path": "pandas.Float64Dtype",
+        "name": "Float64Dtype",
         "children": []
     },
     "datetime": {
@@ -281,13 +358,20 @@
         "full_path": "numpy.ma",
         "name": "ma",
         "children": [
-            "numpy.ma.masked"
+            "numpy.ma.masked",
+            "numpy.ma.masked_array"
         ]
     },
     "numpy.ma.masked": {
         "type": "attribute",
         "full_path": "numpy.ma.masked",
         "name": "masked",
+        "children": []
+    },
+    "numpy.ma.masked_array": {
+        "type": "attribute",
+        "full_path": "numpy.ma.masked_array",
+        "name": "masked_array",
         "children": []
     },
     "numpy.ndarray": {

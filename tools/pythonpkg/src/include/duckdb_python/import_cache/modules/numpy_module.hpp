@@ -17,12 +17,13 @@ struct NumpyMaCacheItem : public PythonImportCacheItem {
 
 public:
 	NumpyMaCacheItem(optional_ptr<PythonImportCacheItem> parent)
-	    : PythonImportCacheItem("ma", parent), masked("masked", this) {
+	    : PythonImportCacheItem("ma", parent), masked("masked", this), masked_array("masked_array", this) {
 	}
 	~NumpyMaCacheItem() override {
 	}
 
 	PythonImportCacheItem masked;
+	PythonImportCacheItem masked_array;
 };
 
 struct NumpyCoreCacheItem : public PythonImportCacheItem {
