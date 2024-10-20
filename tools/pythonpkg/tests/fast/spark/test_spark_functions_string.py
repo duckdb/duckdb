@@ -83,3 +83,16 @@ class TestSparkFunctionsString(object):
             Row(rtrimmed=" firstRowFirstColumn"),
             Row(rtrimmed=" 2ndRowFirstColumn"),
         ]
+
+    def test_endswith(self, spark):
+        data = [
+            ("firstRowFirstColumn", "Column"),
+            ("2ndRowFirstColumn", "column"),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn", "secondColumn"])
+        df = df.withColumn("endswith", F.endswith(F.col("firstColumn"), F.col("secondColumn")))
+        res = df.select("endswith").collect()
+        assert res == [
+            Row(endswith=True),
+            Row(endswith=False),
+        ]
