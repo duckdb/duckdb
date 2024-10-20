@@ -83,3 +83,15 @@ class TestSparkFunctionsNumeric(object):
             Row(sqrt_value=2.0),
             Row(sqrt_value=3.0),
         ]
+
+    def test_exp(self, spark):
+        data = [
+            (0.693,),
+            (0,),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("exp_value", F.exp(F.col("firstColumn")))
+        res = df.select("exp_value").collect()
+        round(res[0].exp_value, 2) == 2
+        res[1].exp_value == 1
+
