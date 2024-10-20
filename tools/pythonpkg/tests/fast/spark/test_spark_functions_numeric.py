@@ -119,3 +119,16 @@ class TestSparkFunctionsNumeric(object):
         round(res[0].exp_value, 2) == 2
         res[1].exp_value == 1
 
+    def test_factorial(self, spark):
+        data = [
+            (4,),
+            (5,),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("factorial_value", F.factorial(F.col("firstColumn")))
+        res = df.select("factorial_value").collect()
+        assert res == [
+            Row(factorial_value=24),
+            Row(factorial_value=120),
+        ]
+

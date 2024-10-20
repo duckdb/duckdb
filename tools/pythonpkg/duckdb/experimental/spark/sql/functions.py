@@ -2069,3 +2069,31 @@ def exp(col: "ColumnOrName") -> Column:
     +------+
     """
     return _invoke_function_over_columns("exp", col)
+
+
+def factorial(col: "ColumnOrName") -> Column:
+    """
+    Computes the factorial of the given value.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        a column to calculate factorial for.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        factorial of given value.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(5,)], ['n'])
+    >>> df.select(factorial(df.n).alias('f')).collect()
+    [Row(f=120)]
+    """
+    return _invoke_function_over_columns("factorial", col)
