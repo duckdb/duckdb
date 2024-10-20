@@ -1832,3 +1832,70 @@ def acos(col: "ColumnOrName") -> Column:
     +--------+
     """
     return _invoke_function_over_columns("acos", col)
+
+
+def call_function(funcName: str, *cols: "ColumnOrName") -> Column:
+    """
+    Call a SQL function.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    funcName : str
+        function name that follows the SQL identifier syntax (can be quoted, can be qualified)
+    cols : :class:`~pyspark.sql.Column` or str
+        column names or :class:`~pyspark.sql.Column`\\s to be used in the function
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        result of executed function.
+
+    Examples
+    --------
+    >>> from pyspark.sql.functions import call_udf, col
+    >>> from pyspark.sql.types import IntegerType, StringType
+    >>> df = spark.createDataFrame([(1, "a"),(2, "b"), (3, "c")],["id", "name"])
+    >>> _ = spark.udf.register("intX2", lambda i: i * 2, IntegerType())
+    >>> df.select(call_function("intX2", "id")).show()
+    +---------+
+    |intX2(id)|
+    +---------+
+    |        2|
+    |        4|
+    |        6|
+    +---------+
+    >>> _ = spark.udf.register("strX2", lambda s: s * 2, StringType())
+    >>> df.select(call_function("strX2", col("name"))).show()
+    +-----------+
+    |strX2(name)|
+    +-----------+
+    |         aa|
+    |         bb|
+    |         cc|
+    +-----------+
+    >>> df.select(call_function("avg", col("id"))).show()
+    +-------+
+    |avg(id)|
+    +-------+
+    |    2.0|
+    +-------+
+    >>> _ = spark.sql("CREATE FUNCTION custom_avg AS 'test.org.apache.spark.sql.MyDoubleAvg'")
+    ... # doctest: +SKIP
+    >>> df.select(call_function("custom_avg", col("id"))).show()
+    ... # doctest: +SKIP
+    +------------------------------------+
+    |spark_catalog.default.custom_avg(id)|
+    +------------------------------------+
+    |                               102.0|
+    +------------------------------------+
+    >>> df.select(call_function("spark_catalog.default.custom_avg", col("id"))).show()
+    ... # doctest: +SKIP
+    +------------------------------------+
+    |spark_catalog.default.custom_avg(id)|
+    +------------------------------------+
+    |                               102.0|
+    +------------------------------------+
+    """
+    return _invoke_function_over_columns(funcName, *cols)
