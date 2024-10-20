@@ -2097,3 +2097,34 @@ def factorial(col: "ColumnOrName") -> Column:
     [Row(f=120)]
     """
     return _invoke_function_over_columns("factorial", col)
+
+
+def log2(col: "ColumnOrName") -> Column:
+    """Returns the base-2 logarithm of the argument.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        a column to calculate logariphm for.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        logariphm of given value.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(4,)], ['a'])
+    >>> df.select(log2('a').alias('log2')).show()
+    +----+
+    |log2|
+    +----+
+    | 2.0|
+    +----+
+    """
+    return _invoke_function_over_columns("log2", col)

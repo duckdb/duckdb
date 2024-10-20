@@ -132,3 +132,16 @@ class TestSparkFunctionsNumeric(object):
             Row(factorial_value=120),
         ]
 
+
+    def test_log2(self, spark):
+        data = [
+            (4,),
+            (8,),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("log2_value", F.log2(F.col("firstColumn")))
+        res = df.select("log2_value").collect()
+        assert res == [
+            Row(log2_value=2.0),
+            Row(log2_value=3.0),
+        ]
