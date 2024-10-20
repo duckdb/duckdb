@@ -108,7 +108,6 @@ class TestSparkFunctionsNumeric(object):
             Row(factorial_value=120),
         ]
 
-
     def test_log2(self, spark):
         data = [
             (4,),
