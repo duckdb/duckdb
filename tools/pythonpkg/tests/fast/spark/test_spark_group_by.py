@@ -15,7 +15,7 @@ from duckdb.experimental.spark.sql.types import (
     MapType,
 )
 from duckdb.experimental.spark.sql.functions import col, struct, when, lit, array_contains
-from duckdb.experimental.spark.sql.functions import sum, avg, max, min, mean, count, any_value, approx_count_distinct, covar_pop
+from duckdb.experimental.spark.sql.functions import sum, avg, max, min, mean, count, any_value, approx_count_distinct, covar_pop, covar_samp
 
 
 class TestDataFrameGroupBy(object):
@@ -128,9 +128,9 @@ class TestDataFrameGroupBy(object):
             ],
             schema=["age", "other_variable", "group"],
         )
-        df2 = df.groupBy("group").agg(covar_pop("age", "other_variable"))
+        df2 = df.groupBy("group").agg(covar_pop("age", "other_variable").alias("covar_pop"), covar_samp("age", "other_variable").alias("covar_samp"))
         res = df2.collect()
-        assert str(res) == "[Row(group='a', covar_pop(age, other_variable)=1.5)]"
+        assert str(res) == "[Row(group='a', covar_pop=1.5, covar_samp=2.0)]"
 
     def test_group_by_empty(self, spark):
         df = spark.createDataFrame(
