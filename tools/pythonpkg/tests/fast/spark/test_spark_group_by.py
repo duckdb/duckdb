@@ -128,7 +128,10 @@ class TestDataFrameGroupBy(object):
             ],
             schema=["age", "other_variable", "group"],
         )
-        df2 = df.groupBy("group").agg(covar_pop("age", "other_variable").alias("covar_pop"), covar_samp("age", "other_variable").alias("covar_samp"))
+        df2 = df.groupBy("group").agg(
+            covar_pop("age", "other_variable").alias("covar_pop"),
+            covar_samp("age", "other_variable").alias("covar_samp"),
+        )
         res = df2.collect()
         assert str(res) == "[Row(group='a', covar_pop=1.5, covar_samp=2.0)]"
 
