@@ -1899,3 +1899,35 @@ def call_function(funcName: str, *cols: "ColumnOrName") -> Column:
     +------------------------------------+
     """
     return _invoke_function_over_columns(funcName, *cols)
+
+
+def covar_pop(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
+    """Returns a new :class:`~pyspark.sql.Column` for the population covariance of ``col1`` and
+    ``col2``.
+
+    .. versionadded:: 2.0.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col1 : :class:`~pyspark.sql.Column` or str
+        first column to calculate covariance.
+    col1 : :class:`~pyspark.sql.Column` or str
+        second column to calculate covariance.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        covariance of these two column values.
+
+    Examples
+    --------
+    >>> a = [1] * 10
+    >>> b = [1] * 10
+    >>> df = spark.createDataFrame(zip(a, b), ["a", "b"])
+    >>> df.agg(covar_pop("a", "b").alias('c')).collect()
+    [Row(c=0.0)]
+    """
+    return _invoke_function_over_columns("covar_pop", col1, col2)
