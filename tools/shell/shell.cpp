@@ -3607,18 +3607,12 @@ void ShellState::exec_prepared_stmt_columnar(
       azData.push_back(strdup_handle_newline(z));
     }
   }while( (rc = sqlite3_step(pStmt))==SQLITE_ROW );
-  if( nColumn>nWidth ){
-    colWidth = (int *) realloc(colWidth, nColumn*2*sizeof(int));
-    if( colWidth==0 ) shell_out_of_memory();
-    for(i=nWidth; i<nColumn; i++) colWidth[i] = 0;
-    nWidth = nColumn;
-    actualWidth = &colWidth[nColumn];
-  }
-  memset(actualWidth, 0, nColumn*sizeof(int));
+
+  actualWidth.clear();
   for(i=0; i<nColumn; i++){
-    w = colWidth[i];
+    int w = i < colWidth.size() ? colWidth[i] : 0;
     if( w<0 ) w = -w;
-    actualWidth[i] = w;
+    actualWidth.push_back(w);
   }
   nTotal = nColumn*(nRow+1);
   for(i=0; i<nTotal; i++){
@@ -3635,7 +3629,7 @@ void ShellState::exec_prepared_stmt_columnar(
       if( showHeader ){
         for(i=0; i<nColumn; i++){
           w = actualWidth[i];
-          if( colWidth[i]<0 ) w = -w;
+          if( w<0 ) w = -w;
           utf8_width_print(out, w, azData[i]);
           fputs(i==nColumn-1?"\n":"  ", out);
         }
@@ -3719,7 +3713,7 @@ void ShellState::exec_prepared_stmt_columnar(
       utf8_printf(out, "%s", cMode==RenderMode::BOX?BOX_13" ":"| ");
     }
     w = actualWidth[j];
-    if( colWidth[j]<0 ) w = -w;
+    if( w<0 ) w = -w;
     utf8_width_print(out, w, azData[i]);
     if( j==nColumn-1 ){
       utf8_printf(out, "%s", rowSep);
@@ -6705,7 +6699,6 @@ int ShellState::do_meta_command(char *zLine){
 
   if( c=='s' && strncmp(azArg[0], "show", n)==0 ){
     static const char *azBool[] = { "off", "on", "trigger", "full"};
-    int i;
     if( nArg!=1 ){
       raw_printf(stderr, "Usage: .show\n");
       rc = 1;
@@ -6729,8 +6722,8 @@ int ShellState::do_meta_command(char *zLine){
       output_c_string(out, rowSeparator);
       raw_printf(out, "\n");
     utf8_printf(out, "%12.12s: ", "width");
-    for (i=0;i<nWidth;i++) {
-      raw_printf(out, "%d ", colWidth[i]);
+    for (auto w : colWidth) {
+      raw_printf(out, "%d ", w);
     }
     raw_printf(out, "\n");
     utf8_printf(out, "%12.12s: %s\n", "filename",
@@ -6933,14 +6926,9 @@ int ShellState::do_meta_command(char *zLine){
   }else
 
   if( c=='w' && strncmp(azArg[0], "width", n)==0 ){
-    int j;
-    assert( nArg<=ArraySize(azArg) );
-    nWidth = nArg-1;
-    colWidth = (int *) realloc(colWidth, nWidth*sizeof(int)*2);
-    if( colWidth==0 && nWidth>0 ) shell_out_of_memory();
-    if( nWidth ) actualWidth = &colWidth[nWidth];
-    for(j=1; j<nArg; j++){
-      colWidth[j-1] = (int)integerValue(azArg[j]);
+  	colWidth.clear();
+    for(int j=1; j<nArg; j++){
+      colWidth.push_back((int)integerValue(azArg[j]));
     }
   }
 #if defined(_WIN32) || defined(WIN32)
@@ -7920,7 +7908,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
   free(argvToFree);
 #endif
   free(data.colTypes);
-  free(data.colWidth);
   /* Clear the global data structure so that valgrind will detect memory
   ** leaks */
   memset(&data, 0, sizeof(data));

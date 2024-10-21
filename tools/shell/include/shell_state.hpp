@@ -86,9 +86,8 @@ struct ShellState {
   char colSepPrior[20];  /* Saved column separator */
   char rowSepPrior[20];  /* Saved row separator */
   int *colTypes;         /* Types of each column */
-  int *colWidth;         /* Requested width of each column in columnar modes */
-  int *actualWidth;      /* Actual width of each column */
-  int nWidth;            /* Number of slots in colWidth[] and actualWidth[] */
+  vector<int> colWidth;  /* Requested width of each column in columnar modes */
+  vector<int> actualWidth;/* Actual width of each column */
   char nullValue[20];    /* The text to print when a NULL comes back from
                          ** the database */
   int columns;           /* Column-wise DuckBox rendering */
