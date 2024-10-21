@@ -139,6 +139,7 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/storage/temporary_file_manager.hpp"
 #include "duckdb/verification/statement_verifier.hpp"
 
 namespace duckdb {
@@ -7703,6 +7704,112 @@ TaskExecutionResult EnumUtil::FromString<TaskExecutionResult>(const char *value)
 		return TaskExecutionResult::TASK_BLOCKED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<TaskExecutionResult>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<TemporaryBufferSize>(TemporaryBufferSize value) {
+	switch(value) {
+	case TemporaryBufferSize::INVALID:
+		return "INVALID";
+	case TemporaryBufferSize::S32K:
+		return "S32K";
+	case TemporaryBufferSize::S64K:
+		return "S64K";
+	case TemporaryBufferSize::S96K:
+		return "S96K";
+	case TemporaryBufferSize::S128K:
+		return "S128K";
+	case TemporaryBufferSize::S160K:
+		return "S160K";
+	case TemporaryBufferSize::S192K:
+		return "S192K";
+	case TemporaryBufferSize::S224K:
+		return "S224K";
+	case TemporaryBufferSize::DEFAULT:
+		return "DEFAULT";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<TemporaryBufferSize>", value));
+	}
+}
+
+template<>
+TemporaryBufferSize EnumUtil::FromString<TemporaryBufferSize>(const char *value) {
+	if (StringUtil::Equals(value, "INVALID")) {
+		return TemporaryBufferSize::INVALID;
+	}
+	if (StringUtil::Equals(value, "S32K")) {
+		return TemporaryBufferSize::S32K;
+	}
+	if (StringUtil::Equals(value, "S64K")) {
+		return TemporaryBufferSize::S64K;
+	}
+	if (StringUtil::Equals(value, "S96K")) {
+		return TemporaryBufferSize::S96K;
+	}
+	if (StringUtil::Equals(value, "S128K")) {
+		return TemporaryBufferSize::S128K;
+	}
+	if (StringUtil::Equals(value, "S160K")) {
+		return TemporaryBufferSize::S160K;
+	}
+	if (StringUtil::Equals(value, "S192K")) {
+		return TemporaryBufferSize::S192K;
+	}
+	if (StringUtil::Equals(value, "S224K")) {
+		return TemporaryBufferSize::S224K;
+	}
+	if (StringUtil::Equals(value, "DEFAULT")) {
+		return TemporaryBufferSize::DEFAULT;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<TemporaryBufferSize>", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<TemporaryCompressionLevel>(TemporaryCompressionLevel value) {
+	switch(value) {
+	case TemporaryCompressionLevel::ZSTD_MINUS_FIVE:
+		return "ZSTD_MINUS_FIVE";
+	case TemporaryCompressionLevel::ZSTD_MINUS_THREE:
+		return "ZSTD_MINUS_THREE";
+	case TemporaryCompressionLevel::ZSTD_MINUS_ONE:
+		return "ZSTD_MINUS_ONE";
+	case TemporaryCompressionLevel::UNCOMPRESSED:
+		return "UNCOMPRESSED";
+	case TemporaryCompressionLevel::ZSTD_ONE:
+		return "ZSTD_ONE";
+	case TemporaryCompressionLevel::ZSTD_THREE:
+		return "ZSTD_THREE";
+	case TemporaryCompressionLevel::ZSTD_FIVE:
+		return "ZSTD_FIVE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<TemporaryCompressionLevel>", value));
+	}
+}
+
+template<>
+TemporaryCompressionLevel EnumUtil::FromString<TemporaryCompressionLevel>(const char *value) {
+	if (StringUtil::Equals(value, "ZSTD_MINUS_FIVE")) {
+		return TemporaryCompressionLevel::ZSTD_MINUS_FIVE;
+	}
+	if (StringUtil::Equals(value, "ZSTD_MINUS_THREE")) {
+		return TemporaryCompressionLevel::ZSTD_MINUS_THREE;
+	}
+	if (StringUtil::Equals(value, "ZSTD_MINUS_ONE")) {
+		return TemporaryCompressionLevel::ZSTD_MINUS_ONE;
+	}
+	if (StringUtil::Equals(value, "UNCOMPRESSED")) {
+		return TemporaryCompressionLevel::UNCOMPRESSED;
+	}
+	if (StringUtil::Equals(value, "ZSTD_ONE")) {
+		return TemporaryCompressionLevel::ZSTD_ONE;
+	}
+	if (StringUtil::Equals(value, "ZSTD_THREE")) {
+		return TemporaryCompressionLevel::ZSTD_THREE;
+	}
+	if (StringUtil::Equals(value, "ZSTD_FIVE")) {
+		return TemporaryCompressionLevel::ZSTD_FIVE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<TemporaryCompressionLevel>", value));
 }
 
 template<>

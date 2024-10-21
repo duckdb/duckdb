@@ -81,7 +81,7 @@ for hpp_file in hpp_files:
             enum_type = res.group(2)
 
             enum_members = []
-            # Capture All members: \w+(\s*\=\s*\w*)?
+            # Capture All members: \w+(\s*\=\s*-?\w*)?
             # group one is the member name
             # group two is the member value
             # First clean group from comments
@@ -90,7 +90,7 @@ for hpp_file in hpp_files:
             s = re.sub(r"\/\*.*\*\/", "", s)
 
             enum_values = {}
-            for member in re.finditer(r"(\w+)(\s*\=\s*\w*)?", s):
+            for member in re.finditer(r"(\w+)(\s*\=\s*-?\w*)?", s):
                 key = member.group(1)
                 strings = [key]
                 if enum_name in overrides and key in overrides[enum_name]:
