@@ -2284,3 +2284,32 @@ def atan2(col1: Union["ColumnOrName", float], col2: Union["ColumnOrName", float]
             return lit(x)
         return x
     return _invoke_function_over_columns("atan2", lit_or_column(col1), lit_or_column(col2))
+
+
+def tan(col: "ColumnOrName") -> Column:
+    """
+    Computes tangent of the input column.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        angle in radians
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        tangent of the given value, as if computed by `java.lang.Math.tan()`
+
+    Examples
+    --------
+    >>> import math
+    >>> df = spark.range(1)
+    >>> df.select(tan(lit(math.radians(45)))).first()
+    Row(TAN(0.78539...)=0.99999...)
+    """
+    return _invoke_function_over_columns("tan", col)

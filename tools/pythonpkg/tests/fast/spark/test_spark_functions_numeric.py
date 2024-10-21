@@ -213,3 +213,14 @@ class TestSparkFunctionsNumeric(object):
         res = df2.select("atan2_value_lit_col").collect()
         round(res[0].atan2_value_lit_col, 2) == 0.79
         res[1].atan2_value_lit_col == 0
+
+    def test_tan(self, spark):
+        data = [
+            (0,),
+            (1,),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("tan_value", F.tan(F.col("firstColumn")))
+        res = df.select("tan_value").collect()
+        res[0].tan_value == 0
+        round(res[1].tan_value, 2) == 1.56
