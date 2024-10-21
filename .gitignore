@@ -353,3 +353,12 @@ extension_external
 
 test/sql/pragma/output.json
 tools/pythonpkg/duckdb_build/
+
+# Duckdb database files
+*.db
+*.duckdb
+
+# DuckDB becnhmark result files
+*.out
+*.csv
+*.res
