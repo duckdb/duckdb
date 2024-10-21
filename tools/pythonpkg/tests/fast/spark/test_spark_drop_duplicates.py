@@ -9,7 +9,8 @@ _ = pytest.importorskip("duckdb.experimental.spark")
 
 
 class TestDataFrameDropDuplicates(object):
-    def test_spark_drop_duplicates(self, spark):
+    @pytest.mark.parametrize("method", ["dropDuplicates", "drop_duplicates"])
+    def test_spark_drop_duplicates(self, method, spark):
         # Prepare Data
         data = [
             ("James", "Sales", 3000),
@@ -45,7 +46,7 @@ class TestDataFrameDropDuplicates(object):
         ]
         assert res == expected
 
-        df2 = df.dropDuplicates().sort("employee_name")
+        df2 = getattr(df, method)().sort("employee_name")
         assert df2.count() == 9
         res2 = df2.collect()
         assert res2 == res
@@ -61,7 +62,7 @@ class TestDataFrameDropDuplicates(object):
             Row(department='Sales', salary=4600),
         ]
 
-        dropDisDF = df.dropDuplicates(["department", "salary"]).sort("department", "salary")
+        dropDisDF = getattr(df, method)(["department", "salary"]).sort("department", "salary")
         assert dropDisDF.columns == ["employee_name", "department", "salary"]
         assert dropDisDF.count() == len(expected_subset)
         res = dropDisDF.select("department", "salary").collect()
