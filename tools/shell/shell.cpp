@@ -2930,7 +2930,8 @@ static void print_dashes(FILE *out, int N){
 */
 void ShellState::print_row_separator(
   int nArg,
-  const char *zSep
+  const char *zSep,
+  const vector<int> &actualWidth
 ){
   int i;
   if( nArg>0 ){
@@ -2947,13 +2948,15 @@ void ShellState::print_row_separator(
 
 void ShellState::print_markdown_separator(
   int nArg,
-  const char *zSep
+  const char *zSep,
+  const vector<int> &colTypes,
+  const vector<int> &actualWidth
 ){
 	int i;
 	if( nArg>0 ){
 		for(i=0; i<nArg; i++){
 			fputs(zSep, out);
-			if (colTypes && (colTypes[i] == SQLITE_INTEGER || colTypes[i] == SQLITE_FLOAT)) {
+			if (colTypes[i] == SQLITE_INTEGER || colTypes[i] == SQLITE_FLOAT) {
 				// right-align numerics in tables
 				print_dashes(out, actualWidth[i]+1);
 				fputs(":", out);
@@ -3493,7 +3496,8 @@ void ShellState::print_box_row_separator(
   int nArg,
   const char *zSep1,
   const char *zSep2,
-  const char *zSep3
+  const char *zSep3,
+  const vector<int> &actualWidth
 ){
   int i;
   if( nArg>0 ){
@@ -3583,6 +3587,7 @@ void ShellState::exec_prepared_stmt_columnar(
   sqlite3_int64 nRow = 0;
   int nColumn = 0;
   vector<string> azData;
+  vector<int> colTypes;
   int rc;
   sqlite3_int64 i;
   int j, nTotal, w, n;
@@ -3596,9 +3601,8 @@ void ShellState::exec_prepared_stmt_columnar(
   for(i=0; i<nColumn; i++){
 	  azData.push_back(strdup_handle_newline(sqlite3_column_name(pStmt,i)));
   }
-  colTypes = (int *) realloc(colTypes, nColumn * sizeof(int));
   for(i=0; i<nColumn; i++){
-    colTypes[i] = sqlite3_column_type(pStmt, i);
+    colTypes.push_back(sqlite3_column_type(pStmt, i));
   }
   do{
     nRow++;
@@ -3608,7 +3612,7 @@ void ShellState::exec_prepared_stmt_columnar(
     }
   }while( (rc = sqlite3_step(pStmt))==SQLITE_ROW );
 
-  actualWidth.clear();
+	vector<int> actualWidth;
   for(i=0; i<nColumn; i++){
     int w = i < colWidth.size() ? colWidth[i] : 0;
     if( w<0 ) w = -w;
@@ -3628,9 +3632,7 @@ void ShellState::exec_prepared_stmt_columnar(
       rowSep = "\n";
       if( showHeader ){
         for(i=0; i<nColumn; i++){
-          w = actualWidth[i];
-          if( w<0 ) w = -w;
-          utf8_width_print(out, w, azData[i]);
+          utf8_width_print(out, actualWidth[i], azData[i]);
           fputs(i==nColumn-1?"\n":"  ", out);
         }
         for(i=0; i<nColumn; i++){
@@ -3643,7 +3645,7 @@ void ShellState::exec_prepared_stmt_columnar(
     case RenderMode::TABLE: {
       colSep = " | ";
       rowSep = " |\n";
-      print_row_separator(nColumn, "+");
+      print_row_separator(nColumn, "+", actualWidth);
       fputs("| ", out);
       for(i=0; i<nColumn; i++){
         w = actualWidth[i];
@@ -3651,7 +3653,7 @@ void ShellState::exec_prepared_stmt_columnar(
         utf8_printf(out, "%*s%s%*s", (w-n)/2, "", azData[i].c_str(), (w-n+1)/2, "");
         fputs(i==nColumn-1?" |\n":" | ", out);
       }
-      print_row_separator(nColumn, "+");
+      print_row_separator(nColumn, "+", actualWidth);
       break;
     }
     case RenderMode::MARKDOWN: {
@@ -3664,13 +3666,13 @@ void ShellState::exec_prepared_stmt_columnar(
         utf8_printf(out, "%*s%s%*s", (w-n)/2, "", azData[i].c_str(), (w-n+1)/2, "");
         fputs(i==nColumn-1?" |\n":" | ", out);
       }
-      print_markdown_separator(nColumn, "|");
+      print_markdown_separator(nColumn, "|", colTypes, actualWidth);
       break;
     }
     case RenderMode::BOX: {
       colSep = " " BOX_13 " ";
       rowSep = " " BOX_13 "\n";
-      print_box_row_separator(nColumn, BOX_23, BOX_234, BOX_34);
+      print_box_row_separator(nColumn, BOX_23, BOX_234, BOX_34, actualWidth);
       utf8_printf(out, BOX_13 " ");
       for(i=0; i<nColumn; i++){
         w = actualWidth[i];
@@ -3679,7 +3681,7 @@ void ShellState::exec_prepared_stmt_columnar(
             (w-n)/2, "", azData[i].c_str(), (w-n+1)/2, "",
             i==nColumn-1?" " BOX_13 "\n":" " BOX_13 " ");
       }
-      print_box_row_separator(nColumn, BOX_123, BOX_1234, BOX_134);
+      print_box_row_separator(nColumn, BOX_123, BOX_1234, BOX_134, actualWidth);
       break;
     }
     case RenderMode::LATEX: {
@@ -3724,9 +3726,9 @@ void ShellState::exec_prepared_stmt_columnar(
     }
   }
   if( cMode==RenderMode::TABLE ){
-    print_row_separator(nColumn, "+");
+    print_row_separator(nColumn, "+", actualWidth);
   }else if( cMode==RenderMode::BOX ){
-    print_box_row_separator(nColumn, BOX_12, BOX_124, BOX_14);
+    print_box_row_separator(nColumn, BOX_12, BOX_124, BOX_14, actualWidth);
   } else if (cMode == RenderMode::LATEX) {
     fputs("\\hline\n", out);
     fputs("\\end{tabular}\n", out);
@@ -7907,7 +7909,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
   for(i=0; i<argcToFree; i++) free(argvToFree[i]);
   free(argvToFree);
 #endif
-  free(data.colTypes);
   /* Clear the global data structure so that valgrind will detect memory
   ** leaks */
   memset(&data, 0, sizeof(data));

@@ -85,9 +85,7 @@ struct ShellState {
   char rowSeparator[20]; /* Row separator character for RenderMode::Ascii */
   char colSepPrior[20];  /* Saved column separator */
   char rowSepPrior[20];  /* Saved row separator */
-  int *colTypes;         /* Types of each column */
   vector<int> colWidth;  /* Requested width of each column in columnar modes */
-  vector<int> actualWidth;/* Actual width of each column */
   char nullValue[20];    /* The text to print when a NULL comes back from
                          ** the database */
   int columns;           /* Column-wise DuckBox rendering */
@@ -107,15 +105,16 @@ public:
 	void outputModePush();
 	void outputModePop();
 	void output_csv(const char *z, int bSep);
-	void print_row_separator(int nArg, const char *zSep);
-	void print_markdown_separator(int nArg, const char *zSep);
+	void print_row_separator(int nArg, const char *zSep, const vector<int> &actualWidth);
+	void print_markdown_separator(int nArg, const char *zSep, const vector<int> &colTypes, const vector<int> &actualWidth);
 	void set_table_name(const char *zName);
 	int run_table_dump_query(const char *zSelect);
 	void print_box_row_separator(
 	  int nArg,
 	  const char *zSep1,
 	  const char *zSep2,
-	  const char *zSep3
+	  const char *zSep3,
+	  const vector<int> &actualWidth
 	);
 	string strdup_handle_newline(const char *z);
 	void exec_prepared_stmt_columnar(sqlite3_stmt *pStmt);
