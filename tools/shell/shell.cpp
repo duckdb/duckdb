@@ -2293,6 +2293,30 @@ int sqlite3_fileio_init(
 
 /************************* End ../ext/misc/fileio.c ********************/
 
+enum class RenderMode : uint32_t {
+	LINE = 0,   /* One column per line.  Blank line between records */
+	COLUMN,     /* One record per line in neat columns */
+	LIST,       /* One record per line with a separator */
+	SEMI,       /* Same as RenderMode::List but append ";" to each line */
+	HTML,       /* Generate an XHTML table */
+	INSERT,     /* Generate SQL "insert" statements */
+	QUOTE,      /* Quote values as for SQL */
+	TCL,        /* Generate ANSI-C or TCL quoted elements */
+	CSV,        /* Quote strings, numbers are plain */
+	EXPLAIN,    /* Like RenderMode::Column, but do not truncate data */
+	ASCII,      /* Use ASCII unit and record separators (0x1F/0x1E) */
+	PRETTY,     /* Pretty-print schemas */
+	EQP,        /* Converts EXPLAIN QUERY PLAN output into a graph */
+	JSON,       /* Output JSON */
+	MARKDOWN,   /* Markdown formatting */
+	TABLE,      /* MySQL-style table formatting */
+	BOX,        /* Unicode box-drawing characters */
+	LATEX,      /* Latex tabular formatting */
+	TRASH,      /* Discard output */
+	JSONLINES,  /* Output JSON Lines */
+	DUCKBOX     /* Unicode box drawing - using DuckDB's own renderer */
+};
+
 /*
 ** State information about the database connection is contained in an
 ** instance of the following structure.
@@ -2314,10 +2338,10 @@ struct ShellState {
   FILE *out;             /* Write results here */
   FILE *traceOut;        /* Output for sqlite3_trace() */
   int nErr;              /* Number of errors seen */
-  int mode;              /* An output mode setting */
-  int modePrior;         /* Saved mode */
-  int cMode;             /* temporary output mode for the current query */
-  int normalMode;        /* Output mode before ".explain on" */
+  RenderMode mode;       /* An output mode setting */
+  RenderMode modePrior;  /* Saved mode */
+  RenderMode cMode;      /* temporary output mode for the current query */
+  RenderMode normalMode; /* Output mode before ".explain on" */
   int writableSchema;    /* True if PRAGMA writable_schema=ON */
   int showHeader;        /* True to show column names in List or Column mode */
   int nCheck;            /* Number of ".check" commands run */
@@ -2327,11 +2351,11 @@ struct ShellState {
   unsigned shellFlgs;    /* Various flags */
   unsigned priorShFlgs;  /* Saved copy of flags */
   sqlite3_int64 szMax;   /* --maxsize argument to .open */
-  char *zDestTable;      /* Name of destination table when MODE_Insert */
+  char *zDestTable;      /* Name of destination table when RenderMode::Insert */
   char *zTempFile;       /* Temporary file that might need deleting */
   char zTestcase[30];    /* Name of current test case */
   char colSeparator[20]; /* Column separator character for several modes */
-  char rowSeparator[20]; /* Row separator character for MODE_Ascii */
+  char rowSeparator[20]; /* Row separator character for RenderMode::Ascii */
   char colSepPrior[20];  /* Saved column separator */
   char rowSepPrior[20];  /* Saved row separator */
   int *colTypes;         /* Types of each column */
@@ -2347,7 +2371,7 @@ struct ShellState {
   const char *zVfs;           /* Name of VFS to use */
   sqlite3_stmt *pStmt;   /* Current statement if any. */
   FILE *pLog;            /* Write log output here */
-  int *aiIndent;         /* Array of indents used in MODE_Explain */
+  int *aiIndent;         /* Array of indents used in RenderMode::Explain */
   int nIndent;           /* Size of array aiIndent[] */
   int iIndent;           /* Index of current op in aiIndent[] */
   size_t max_rows;       /* The maximum number of rows to render in DuckBox mode */
@@ -2439,31 +2463,6 @@ public:
 #define SHFLG_CountChanges   0x00000020 /* .changes setting */
 #define SHFLG_Echo           0x00000040 /* .echo or --echo setting */
 #define SHFLG_HeaderSet      0x00000080 /* .header has been used */
-
-/*
-** These are the allowed modes.
-*/
-#define MODE_Line     0    /* One column per line.  Blank line between records */
-#define MODE_Column   1    /* One record per line in neat columns */
-#define MODE_List     2    /* One record per line with a separator */
-#define MODE_Semi     3    /* Same as MODE_List but append ";" to each line */
-#define MODE_Html     4    /* Generate an XHTML table */
-#define MODE_Insert   5    /* Generate SQL "insert" statements */
-#define MODE_Quote    6    /* Quote values as for SQL */
-#define MODE_Tcl      7    /* Generate ANSI-C or TCL quoted elements */
-#define MODE_Csv      8    /* Quote strings, numbers are plain */
-#define MODE_Explain  9    /* Like MODE_Column, but do not truncate data */
-#define MODE_Ascii   10    /* Use ASCII unit and record separators (0x1F/0x1E) */
-#define MODE_Pretty  11    /* Pretty-print schemas */
-#define MODE_EQP     12    /* Converts EXPLAIN QUERY PLAN output into a graph */
-#define MODE_Json    13    /* Output JSON */
-#define MODE_Markdown 14   /* Markdown formatting */
-#define MODE_Table   15    /* MySQL-style table formatting */
-#define MODE_Box     16    /* Unicode box-drawing characters */
-#define MODE_Latex   17    /* Latex tabular formatting */
-#define MODE_Trash   18    /* Discard output */
-#define MODE_Jsonlines 19  /* Output JSON Lines */
-#define MODE_DuckBox 20    /* Unicode box drawing - using DuckDB's own renderer */
 
 static const char *modeDescr[] = {
   "line",
@@ -2990,7 +2989,7 @@ static BOOL WINAPI ConsoleCtrlHandler(
 #endif
 
 /*
-** Print a schema statement.  Part of MODE_Semi and MODE_Pretty output.
+** Print a schema statement.  Part of RenderMode::Semi and RenderMode::Pretty output.
 **
 ** This routine converts some CREATE TABLE statements for shadow tables
 ** in FTS3/4/5 into CREATE TABLE IF NOT EXISTS statements.
@@ -3114,7 +3113,7 @@ int ShellState::shell_callback(
 
   if( azArg==0 ) return 0;
   switch( cMode ){
-    case MODE_Line: {
+    case RenderMode::LINE: {
       int w = 5;
       if( azArg==0 ) break;
       for(i=0; i<nArg; i++){
@@ -3128,7 +3127,7 @@ int ShellState::shell_callback(
       }
       break;
     }
-    case MODE_Explain: {
+    case RenderMode::EXPLAIN: {
       if (nArg != 2) {
         break;
       }
@@ -3150,11 +3149,11 @@ int ShellState::shell_callback(
       utf8_printf(out, "%s", azArg[1]);
       break;
     }
-    case MODE_Semi: {   /* .schema and .fullschema output */
+    case RenderMode::SEMI: {   /* .schema and .fullschema output */
       printSchemaLine(out, azArg[0], "\n");
       break;
     }
-    case MODE_Pretty: {  /* .schema and .fullschema with --indent */
+    case RenderMode::PRETTY: {  /* .schema and .fullschema with --indent */
       char *z;
       int j;
       int nParen = 0;
@@ -3219,7 +3218,7 @@ int ShellState::shell_callback(
       sqlite3_free(z);
       break;
     }
-    case MODE_List: {
+    case RenderMode::LIST: {
       if( cnt++==0 && showHeader ){
         for(i=0; i<nArg; i++){
           utf8_printf(out,"%s%s",azCol[i],
@@ -3239,7 +3238,7 @@ int ShellState::shell_callback(
       }
       break;
     }
-    case MODE_Html: {
+    case RenderMode::HTML: {
       if( cnt++==0 && showHeader ){
         raw_printf(out,"<tr>");
         for(i=0; i<nArg; i++){
@@ -3259,7 +3258,7 @@ int ShellState::shell_callback(
       raw_printf(out,"</tr>\n");
       break;
     }
-    case MODE_Tcl: {
+    case RenderMode::TCL: {
       if( cnt++==0 && showHeader ){
         for(i=0; i<nArg; i++){
           output_c_string(out,azCol[i] ? azCol[i] : "");
@@ -3275,7 +3274,7 @@ int ShellState::shell_callback(
       utf8_printf(out, "%s", rowSeparator);
       break;
     }
-    case MODE_Csv: {
+    case RenderMode::CSV: {
       setBinaryMode(out, 1);
       if( cnt++==0 && showHeader ){
         for(i=0; i<nArg; i++){
@@ -3292,7 +3291,7 @@ int ShellState::shell_callback(
       setTextMode(out, 1);
       break;
     }
-    case MODE_Insert: {
+    case RenderMode::INSERT: {
       if( azArg==0 ) break;
       utf8_printf(out,"INSERT INTO %s",zDestTable);
       if( showHeader ){
@@ -3352,16 +3351,16 @@ int ShellState::shell_callback(
       raw_printf(out,");\n");
       break;
     }
-    case MODE_Json:
-	case MODE_Jsonlines: {
+    case RenderMode::JSON:
+	case RenderMode::JSONLINES: {
       if( azArg==0 ) break;
       if( cnt==0 ){
-        if (cMode == MODE_Json) {
+        if (cMode == RenderMode::JSON) {
           fputc('[', out);
         }
         fputc('{', out);
       }else{
-        if (cMode == MODE_Json) {
+        if (cMode == RenderMode::JSON) {
           fputc(',', out);
         }
         fputs("\n{", out);
@@ -3399,7 +3398,7 @@ int ShellState::shell_callback(
       putc('}', out);
       break;
     }
-    case MODE_Quote: {
+    case RenderMode::QUOTE: {
       if( azArg==0 ) break;
       if( cnt==0 && showHeader ){
         for(i=0; i<nArg; i++){
@@ -3435,7 +3434,7 @@ int ShellState::shell_callback(
       fputs(rowSeparator, out);
       break;
     }
-    case MODE_Ascii: {
+    case RenderMode::ASCII: {
       if( cnt++==0 && showHeader ){
         for(i=0; i<nArg; i++){
           if( i>0 ) utf8_printf(out, "%s", colSeparator);
@@ -3451,6 +3450,8 @@ int ShellState::shell_callback(
       utf8_printf(out, "%s", rowSeparator);
       break;
     }
+  default:
+  	break;
   }
   return 0;
 }
@@ -3619,7 +3620,7 @@ static void print_box_line(FILE *out, int N){
 }
 
 /*
-** Draw a horizontal separator for a MODE_Box table.
+** Draw a horizontal separator for a RenderMode::Box table.
 */
 void ShellState::print_box_row_separator(
   int nArg,
@@ -3645,7 +3646,7 @@ char *ShellState::strdup_handle_newline(const char *z) {
   if (!z) {
     return 0;
   }
-  if (cMode != MODE_Box) {
+  if (cMode != RenderMode::BOX) {
     return strdup(z);
   }
   int max_size = 80;
@@ -3707,8 +3708,8 @@ int column_type_is_integer(const char *type) {
 
 /*
 ** Run a prepared statement and output the result in one of the
-** table-oriented formats: MODE_Column, MODE_Markdown, MODE_Table,
-** MODE_Box or MODE_DuckBox
+** table-oriented formats: RenderMode::Column, RenderMode::Markdown, RenderMode::Table,
+** RenderMode::Box or RenderMode::DuckBox
 **
 ** This is different from ordinary exec_prepared_stmt() in that
 ** it has to run the entire query and gather the results into memory
@@ -3777,7 +3778,7 @@ void ShellState::exec_prepared_stmt_columnar(
   }
   if( seenInterrupt ) goto columnar_end;
   switch( cMode ){
-    case MODE_Column: {
+    case RenderMode::COLUMN: {
       colSep = "  ";
       rowSep = "\n";
       if( showHeader ){
@@ -3794,7 +3795,7 @@ void ShellState::exec_prepared_stmt_columnar(
       }
       break;
     }
-    case MODE_Table: {
+    case RenderMode::TABLE: {
       colSep = " | ";
       rowSep = " |\n";
       print_row_separator(nColumn, "+");
@@ -3808,7 +3809,7 @@ void ShellState::exec_prepared_stmt_columnar(
       print_row_separator(nColumn, "+");
       break;
     }
-    case MODE_Markdown: {
+    case RenderMode::MARKDOWN: {
       colSep = " | ";
       rowSep = " |\n";
       fputs("| ", out);
@@ -3821,7 +3822,7 @@ void ShellState::exec_prepared_stmt_columnar(
       print_markdown_separator(nColumn, "|");
       break;
     }
-    case MODE_Box: {
+    case RenderMode::BOX: {
       colSep = " " BOX_13 " ";
       rowSep = " " BOX_13 "\n";
       print_box_row_separator(nColumn, BOX_23, BOX_234, BOX_34);
@@ -3836,7 +3837,7 @@ void ShellState::exec_prepared_stmt_columnar(
       print_box_row_separator(nColumn, BOX_123, BOX_1234, BOX_134);
       break;
     }
-    case MODE_Latex: {
+    case RenderMode::LATEX: {
       colSep = " & ";
       rowSep = " \\\\\n";
       fputs("\\begin{tabular}{|", out);
@@ -3859,10 +3860,12 @@ void ShellState::exec_prepared_stmt_columnar(
       fputs("\\hline\n", out);
       break;
     }
+  default:
+  	break;
   }
   for(i=nColumn, j=0; i<nTotal; i++, j++){
-    if( j==0 && cMode!=MODE_Column && cMode != MODE_Latex ){
-      utf8_printf(out, "%s", cMode==MODE_Box?BOX_13" ":"| ");
+    if( j==0 && cMode!=RenderMode::COLUMN && cMode != RenderMode::LATEX ){
+      utf8_printf(out, "%s", cMode==RenderMode::BOX?BOX_13" ":"| ");
     }
     z = azData[i];
     if( z==0 ) z = nullValue;
@@ -3877,11 +3880,11 @@ void ShellState::exec_prepared_stmt_columnar(
       utf8_printf(out, "%s", colSep);
     }
   }
-  if( cMode==MODE_Table ){
+  if( cMode==RenderMode::TABLE ){
     print_row_separator(nColumn, "+");
-  }else if( cMode==MODE_Box ){
+  }else if( cMode==RenderMode::BOX ){
     print_box_row_separator(nColumn, BOX_12, BOX_124, BOX_14);
-  } else if (cMode == MODE_Latex) {
+  } else if (cMode == RenderMode::LATEX) {
     fputs("\\hline\n", out);
     fputs("\\end{tabular}\n", out);
   }
@@ -3905,7 +3908,7 @@ void ShellState::exec_prepared_stmt(
   sqlite3_stmt *pStmt                              /* Statment to run */
 ){
   int rc;
-  if (cMode == MODE_DuckBox) {
+  if (cMode == RenderMode::DUCKBOX) {
 	  size_t max_rows = outfile[0] == '\0' || outfile[0] == '|' ? this->max_rows : (size_t) -1;
 	  size_t max_width = outfile[0] == '\0' || outfile[0] == '|' ? this->max_width : (size_t) -1;
 	  char *str = sqlite3_print_duckbox(pStmt, max_rows, max_width, nullValue, columns);
@@ -3916,11 +3919,11 @@ void ShellState::exec_prepared_stmt(
 	  return;
   }
 
-  if( cMode==MODE_Column
-   || cMode==MODE_Table
-   || cMode==MODE_Box
-   || cMode==MODE_Markdown
-   || cMode==MODE_Latex
+  if( cMode==RenderMode::COLUMN
+   || cMode==RenderMode::TABLE
+   || cMode==RenderMode::BOX
+   || cMode==RenderMode::MARKDOWN
+   || cMode==RenderMode::LATEX
   ){
     exec_prepared_stmt_columnar(pStmt);
     return;
@@ -3948,11 +3951,11 @@ void ShellState::exec_prepared_stmt(
         azCols[i] = (char *)sqlite3_column_name(pStmt, i);
       }
       do{
-        if (cMode!=MODE_Trash) {
+        if (cMode!=RenderMode::TRASH) {
           /* extract the data and data types */
           for(i=0; i<nCol; i++){
             aiTypes[i] = x = sqlite3_column_type(pStmt, i);
-            if( x==SQLITE_BLOB && cMode==MODE_Insert ){
+            if( x==SQLITE_BLOB && cMode==RenderMode::INSERT ){
               azVals[i] = (char*) "";
             }else{
               azVals[i] = (char*)sqlite3_column_text(pStmt, i);
@@ -3967,7 +3970,7 @@ void ShellState::exec_prepared_stmt(
         /* if data and types extracted successfully... */
         if( SQLITE_ROW == rc ){
           /* call the supplied callback with the result row data */
-          if( cMode!=MODE_Trash && shell_callback(nCol, azVals, azCols, aiTypes) ){
+          if( cMode!=RenderMode::TRASH && shell_callback(nCol, azVals, azCols, aiTypes) ){
             rc = SQLITE_ABORT;
           }else{
             rc = sqlite3_step(pStmt);
@@ -3975,10 +3978,10 @@ void ShellState::exec_prepared_stmt(
         }
       } while( SQLITE_ROW == rc );
       sqlite3_free(pData);
-      if( cMode==MODE_Json ){
+      if( cMode==RenderMode::JSON ){
         fputs("]\n", out);
       }
-      if( cMode==MODE_Jsonlines ){
+      if( cMode==RenderMode::JSONLINES ){
         fputs("\n", out);
       }
     }
@@ -4037,12 +4040,12 @@ int ShellState::shell_exec(
         cMode = mode;
         if( autoExplain ){
           if( sqlite3_stmt_isexplain(pStmt)==1 ){
-            cMode = MODE_Explain;
+            cMode = RenderMode::EXPLAIN;
           }
 
         /* If the shell is currently in ".explain" mode, gather the extra
         ** data required to add indents to the output.*/
-        // if( pArg->cMode==MODE_Explain ){
+        // if( pArg->cMode==RenderMode::Explain ){
         //   explain_data_prepare(pArg, pStmt);
         // }
       }
@@ -4248,7 +4251,7 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed){
     char **azCol;
     int i;
     char *savedDestTable;
-    int savedMode;
+    RenderMode savedMode;
 
     azCol = p->tableColumnList(zTable);
     if( azCol==0 ){
@@ -4294,7 +4297,7 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed){
     savedDestTable = p->zDestTable;
     savedMode = p->mode;
     p->zDestTable = sTable.z;
-    p->mode = p->cMode = MODE_Insert;
+    p->mode = p->cMode = RenderMode::INSERT;
     rc = p->shell_exec(sSelect.z, 0);
     if( (rc&0xff)==SQLITE_CORRUPT ){
       raw_printf(p->out, "/****** CORRUPTION ERROR *******/\n");
@@ -5582,7 +5585,7 @@ int ShellState::do_meta_command(char *zLine){
     open_db(0);
     memcpy(&data, this, sizeof(data));
     data.showHeader = 0;
-    data.cMode = data.mode = MODE_List;
+    data.cMode = data.mode = RenderMode::LIST;
     sqlite3_snprintf(sizeof(data.colSeparator),data.colSeparator,": ");
     data.cnt = 0;
     sqlite3_exec(db, "SELECT name, file FROM pragma_database_list",
@@ -5917,7 +5920,7 @@ int ShellState::do_meta_command(char *zLine){
     int useOutputMode = 1;      /* Use output mode to determine separators */
 
     memset(&sCtx, 0, sizeof(sCtx));
-    if( mode==MODE_Ascii ){
+    if( mode==RenderMode::ASCII ){
       xRead = ascii_read_one_field;
     }else{
       xRead = csv_read_one_field;
@@ -5990,7 +5993,7 @@ int ShellState::do_meta_command(char *zLine){
         rc = 1;
         goto meta_command_exit;
       }
-      if( nSep==2 && mode==MODE_Csv && strcmp(rowSeparator,SEP_CrLf)==0 ){
+      if( nSep==2 && mode==RenderMode::CSV && strcmp(rowSeparator,SEP_CrLf)==0 ){
         /* When importing CSV (only), if the row separator is set to the
         ** default output row separator, change it to the default input
         ** row separator.  This avoids having to maintain different input
@@ -6133,7 +6136,7 @@ int ShellState::do_meta_command(char *zLine){
         ** columns in ASCII mode?  If so, stop instead of NULL filling
         ** the remaining columns.
         */
-        if( mode==MODE_Ascii && (z==0 || z[0]==0) && i==0 ) break;
+        if( mode==RenderMode::ASCII && (z==0 || z[0]==0) && i==0 ) break;
         sqlite3_bind_text(pStmt, i+1, z, -1, SQLITE_TRANSIENT);
         if( i<nCol-1 && sCtx.cTerm!=sCtx.cColSep ){
           utf8_printf(stderr, "%s:%d: expected %d columns but found %d - "
@@ -6296,60 +6299,60 @@ int ShellState::do_meta_command(char *zLine){
     int n2 = strlen30(zMode);
     int c2 = zMode[0];
     if( c2=='l' && n2>2 && strncmp(azArg[1],"lines",n2)==0 ){
-      mode = MODE_Line;
+      mode = RenderMode::LINE;
       sqlite3_snprintf(sizeof(rowSeparator), rowSeparator, SEP_Row);
     }else if( c2=='c' && strncmp(azArg[1],"columns",n2)==0 ){
-      mode = MODE_Column;
+      mode = RenderMode::COLUMN;
       if( (shellFlgs & SHFLG_HeaderSet)==0 ){
         showHeader = 1;
       }
       sqlite3_snprintf(sizeof(rowSeparator), rowSeparator, SEP_Row);
     }else if( c2=='l' && n2>2 && strncmp(azArg[1],"list",n2)==0 ){
-      mode = MODE_List;
+      mode = RenderMode::LIST;
       sqlite3_snprintf(sizeof(colSeparator), colSeparator, SEP_Column);
       sqlite3_snprintf(sizeof(rowSeparator), rowSeparator, SEP_Row);
     }else if( c2=='h' && strncmp(azArg[1],"html",n2)==0 ){
-      mode = MODE_Html;
+      mode = RenderMode::HTML;
     }else if( c2=='t' && strncmp(azArg[1],"tcl",n2)==0 ){
-      mode = MODE_Tcl;
+      mode = RenderMode::TCL;
       sqlite3_snprintf(sizeof(colSeparator), colSeparator, SEP_Space);
       sqlite3_snprintf(sizeof(rowSeparator), rowSeparator, SEP_Row);
     }else if( c2=='c' && strncmp(azArg[1],"csv",n2)==0 ){
-      mode = MODE_Csv;
+      mode = RenderMode::CSV;
       sqlite3_snprintf(sizeof(colSeparator), colSeparator, SEP_Comma);
       sqlite3_snprintf(sizeof(rowSeparator), rowSeparator, SEP_CrLf);
     }else if( c2=='t' && strncmp(azArg[1],"tabs",n2)==0 ){
-      mode = MODE_List;
+      mode = RenderMode::LIST;
       sqlite3_snprintf(sizeof(colSeparator), colSeparator, SEP_Tab);
     }else if( c2=='i' && strncmp(azArg[1],"insert",n2)==0 ){
-      mode = MODE_Insert;
+      mode = RenderMode::INSERT;
       set_table_name(nArg>=3 ? azArg[2] : "table");
     }else if( c2=='q' && strncmp(azArg[1],"quote",n2)==0 ){
-      mode = MODE_Quote;
+      mode = RenderMode::QUOTE;
       sqlite3_snprintf(sizeof(colSeparator), colSeparator, SEP_Comma);
       sqlite3_snprintf(sizeof(rowSeparator), rowSeparator, SEP_Row);
     }else if( c2=='a' && strncmp(azArg[1],"ascii",n2)==0 ){
-      mode = MODE_Ascii;
+      mode = RenderMode::ASCII;
       sqlite3_snprintf(sizeof(colSeparator), colSeparator, SEP_Unit);
       sqlite3_snprintf(sizeof(rowSeparator), rowSeparator, SEP_Record);
     }else if( c2=='m' && strncmp(azArg[1],"markdown",n2)==0 ){
-      mode = MODE_Markdown;
+      mode = RenderMode::MARKDOWN;
     }else if( c2=='t' && strncmp(azArg[1],"table",n2)==0 ){
-      mode = MODE_Table;
+      mode = RenderMode::TABLE;
     }else if( c2=='b' && strncmp(azArg[1],"box",n2)==0 ){
-      mode = MODE_Box;
+      mode = RenderMode::BOX;
     }else if( c2=='d' && strncmp(azArg[1],"duckbox",n2)==0 ){
-      mode = MODE_DuckBox;
+      mode = RenderMode::DUCKBOX;
     }else if( c2=='j' && strncmp(azArg[1],"json",n2)==0 ){
-      mode = MODE_Json;
+      mode = RenderMode::JSON;
     }else if( c2=='l' && strncmp(azArg[1],"latex",n2)==0 ){
-      mode = MODE_Latex;
+      mode = RenderMode::LATEX;
     }else if( c2=='t' && strncmp(azArg[1],"trash",n2)==0 ){
-      mode = MODE_Trash;
+      mode = RenderMode::TRASH;
 	}else if( c2=='j' && strncmp(azArg[1],"jsonlines",n2)==0 ){
-		mode = MODE_Jsonlines;
+		mode = RenderMode::JSONLINES;
     }else if( nArg==1 ){
-      raw_printf(out, "current output mode: %s\n", modeDescr[mode]);
+      raw_printf(out, "current output mode: %s\n", modeDescr[int(mode)]);
     }else{
       raw_printf(stderr, "Error: mode should be one of: "
          "ascii box column csv duckbox html insert json jsonlines latex line "
@@ -6481,7 +6484,7 @@ int ShellState::do_meta_command(char *zLine){
         /* spreadsheet mode.  Output as CSV. */
         newTempFile("csv");
         ShellClearFlag(SHFLG_Echo);
-        mode = MODE_Csv;
+        mode = RenderMode::CSV;
         sqlite3_snprintf(sizeof(colSeparator), colSeparator, SEP_Comma);
         sqlite3_snprintf(sizeof(rowSeparator), rowSeparator, SEP_CrLf);
       }else{
@@ -6678,11 +6681,11 @@ int ShellState::do_meta_command(char *zLine){
     open_db(0);
     memcpy(&data, this, sizeof(data));
     data.showHeader = 0;
-    data.cMode = data.mode = MODE_Semi;
+    data.cMode = data.mode = RenderMode::SEMI;
     initText(&sSelect);
     for(ii=1; ii<nArg; ii++){
       if( optionMatch(azArg[ii],"indent") ){
-        data.cMode = data.mode = MODE_Pretty;
+        data.cMode = data.mode = RenderMode::PRETTY;
       }else if( optionMatch(azArg[ii],"debug") ){
         bDebug = 1;
       }else if( zName==0 ){
@@ -6896,9 +6899,9 @@ int ShellState::do_meta_command(char *zLine){
     utf8_printf(out, "%12.12s: %s\n","echo",
                                   azBool[ShellHasFlag(SHFLG_Echo)]);
     utf8_printf(out, "%12.12s: %s\n","explain",
-         mode==MODE_Explain ? "on" : autoExplain ? "auto" : "off");
+         mode==RenderMode::EXPLAIN ? "on" : autoExplain ? "auto" : "off");
     utf8_printf(out,"%12.12s: %s\n","headers", azBool[showHeader!=0]);
-    utf8_printf(out, "%12.12s: %s\n","mode", modeDescr[mode]);
+    utf8_printf(out, "%12.12s: %s\n","mode", modeDescr[int(mode)]);
     utf8_printf(out, "%12.12s: ", "nullvalue");
       output_c_string(out, nullValue);
       raw_printf(out, "\n");
@@ -7547,7 +7550,7 @@ static void verify_uninitialized(void){
 */
 static void main_init(ShellState *data) {
   memset(data, 0, sizeof(*data));
-  data->normalMode = data->cMode = data->mode = MODE_DuckBox;
+  data->normalMode = data->cMode = data->mode = RenderMode::DUCKBOX;
   data->max_rows = 40;
   data->autoExplain = 1;
   memcpy(data->colSeparator,SEP_Column, 2);
@@ -7870,29 +7873,29 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
     if( strcmp(z,"-init")==0 ){
       i++;
     }else if( strcmp(z,"-html")==0 ){
-      data.mode = MODE_Html;
+      data.mode = RenderMode::HTML;
     }else if( strcmp(z,"-list")==0 ){
-      data.mode = MODE_List;
+      data.mode = RenderMode::LIST;
     }else if( strcmp(z,"-quote")==0 ){
-      data.mode = MODE_Quote;
+      data.mode = RenderMode::QUOTE;
     }else if( strcmp(z,"-line")==0 ){
-      data.mode = MODE_Line;
+      data.mode = RenderMode::LINE;
     }else if( strcmp(z,"-column")==0 ){
-      data.mode = MODE_Column;
+      data.mode = RenderMode::COLUMN;
     }else if( strcmp(z,"-json")==0 ){
-      data.mode = MODE_Json;
+      data.mode = RenderMode::JSON;
 	}else if( strcmp(z,"-jsonlines")==0 ){
-		data.mode = MODE_Jsonlines;
+		data.mode = RenderMode::JSONLINES;
     }else if( strcmp(z,"-markdown")==0 ){
-      data.mode = MODE_Markdown;
+      data.mode = RenderMode::MARKDOWN;
     }else if( strcmp(z,"-table")==0 ){
-      data.mode = MODE_Table;
+      data.mode = RenderMode::TABLE;
     }else if( strcmp(z,"-box")==0 ){
-      data.mode = MODE_Box;
+      data.mode = RenderMode::BOX;
     }else if( strcmp(z,"-latex")==0 ){
-      data.mode = MODE_Latex;
+      data.mode = RenderMode::LATEX;
     }else if( strcmp(z,"-csv")==0 ){
-      data.mode = MODE_Csv;
+      data.mode = RenderMode::CSV;
       memcpy(data.colSeparator,",",2);
 #ifdef SQLITE_HAVE_ZLIB
     }else if( strcmp(z,"-zip")==0 ){
@@ -7903,7 +7906,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
     }else if( strcmp(z,"-nofollow")==0 ){
       data.openFlags |= SQLITE_OPEN_NOFOLLOW;
     }else if( strcmp(z,"-ascii")==0 ){
-      data.mode = MODE_Ascii;
+      data.mode = RenderMode::ASCII;
       sqlite3_snprintf(sizeof(data.colSeparator), data.colSeparator,
                        SEP_Unit);
       sqlite3_snprintf(sizeof(data.rowSeparator), data.rowSeparator,
