@@ -698,7 +698,7 @@ static char *local_getline(char *zLine, FILE *in){
   while( 1 ){
     if( n+100>nLine ){
       nLine = nLine*2 + 100;
-      zLine = realloc(zLine, nLine);
+      zLine = (char *) realloc(zLine, nLine);
       if( zLine==0 ) shell_out_of_memory();
     }
     if( fgets(&zLine[n], nLine - n, in)==0 ){
@@ -786,7 +786,7 @@ static int hexDigitValue(char c){
 */
 static sqlite3_int64 integerValue(const char *zArg){
   sqlite3_int64 v = 0;
-  static const struct { char *zSuffix; int iMult; } aMult[] = {
+  static const struct { const char *zSuffix; int iMult; } aMult[] = {
     { "KiB", 1024 },
     { "MiB", 1024*1024 },
     { "GiB", 1024*1024*1024 },
@@ -871,7 +871,7 @@ static void appendText(ShellText *p, char const *zAppend, char quote){
 
   if( p->n+len>=p->nAlloc ){
     p->nAlloc = p->nAlloc*2 + len + 20;
-    p->z = realloc(p->z, p->nAlloc);
+    p->z = (char *) realloc(p->z, p->nAlloc);
     if( p->z==0 ) shell_out_of_memory();
   }
 
@@ -922,7 +922,7 @@ static char *shellFakeSchema(
   char *zSql;
   ShellText s;
   char cQuote;
-  char *zDiv = "(";
+  const char *zDiv = "(";
   int nRow = 0;
 
   zSql = sqlite3_mprintf("PRAGMA \"%w\".table_info=%Q;",
@@ -1940,7 +1940,7 @@ static void sha3Func(
   if( eType==SQLITE_NULL ) return;
   SHA3Init(&cx, iSize);
   if( eType==SQLITE_BLOB ){
-    SHA3Update(&cx, sqlite3_value_blob(argv[0]), nByte);
+    SHA3Update(&cx, (unsigned char *) sqlite3_value_blob(argv[0]), nByte);
   }else{
     SHA3Update(&cx, sqlite3_value_text(argv[0]), nByte);
   }
@@ -2584,7 +2584,7 @@ static int fsdirDisconnect(sqlite3_vtab *pVtab){
 static int fsdirOpen(sqlite3_vtab *p, sqlite3_vtab_cursor **ppCursor){
   fsdir_cursor *pCur;
   (void)p;
-  pCur = sqlite3_malloc( sizeof(*pCur) );
+  pCur = (fsdir_cursor *) sqlite3_malloc( sizeof(*pCur) );
   if( pCur==0 ) return SQLITE_NOMEM;
   memset(pCur, 0, sizeof(*pCur));
   pCur->iLvl = -1;
@@ -2740,7 +2740,7 @@ static int fsdirColumn(
           if( n<nBuf ) break;
           if( aBuf!=aStatic ) sqlite3_free(aBuf);
           nBuf = nBuf*2;
-          aBuf = sqlite3_malloc64(nBuf);
+          aBuf = (char *) sqlite3_malloc64(nBuf);
           if( aBuf==0 ){
             sqlite3_result_error_nomem(ctx);
             return SQLITE_NOMEM;
@@ -2855,7 +2855,7 @@ static int fsdirBestIndex(
   int idxDir = -1;       /* Index in pIdxInfo->aConstraint of DIR= */
   int seenPath = 0;      /* True if an unusable PATH= constraint is seen */
   int seenDir = 0;       /* True if an unusable DIR= constraint is seen */
-  const struct sqlite3_index_constraint *pConstraint;
+  const struct sqlite3_index_info::sqlite3_index_constraint *pConstraint;
 
   (void)tab;
   pConstraint = pIdxInfo->aConstraint;
@@ -3107,7 +3107,7 @@ static int completionConnect(
       "  phase INT HIDDEN"        /* Used for debugging only */
       ")");
   if( rc==SQLITE_OK ){
-    pNew = sqlite3_malloc( sizeof(*pNew) );
+    pNew = (completion_vtab *) sqlite3_malloc( sizeof(*pNew) );
     *ppVtab = (sqlite3_vtab*)pNew;
     if( pNew==0 ) return SQLITE_NOMEM;
     memset(pNew, 0, sizeof(*pNew));
@@ -3129,7 +3129,7 @@ static int completionDisconnect(sqlite3_vtab *pVtab){
 */
 static int completionOpen(sqlite3_vtab *p, sqlite3_vtab_cursor **ppCursor){
   completion_cursor *pCur;
-  pCur = sqlite3_malloc( sizeof(*pCur) );
+  pCur = (completion_cursor *) sqlite3_malloc( sizeof(*pCur) );
   if( pCur==0 ) return SQLITE_NOMEM;
   memset(pCur, 0, sizeof(*pCur));
   pCur->db = ((completion_vtab*)p)->db;
@@ -3390,7 +3390,7 @@ static int completionBestIndex(
   int prefixIdx = -1;    /* Index of the start= constraint, or -1 if none */
   int wholelineIdx = -1; /* Index of the stop= constraint, or -1 if none */
   int nArg = 0;          /* Number of arguments that completeFilter() expects */
-  const struct sqlite3_index_constraint *pConstraint;
+  const struct sqlite3_index_info::sqlite3_index_constraint *pConstraint;
 
   (void)(tab);    /* Unused parameter */
   pConstraint = pIdxInfo->aConstraint;
@@ -4329,7 +4329,7 @@ static Decimal *decimal_new(
   int n, i;
   const unsigned char *zIn;
   int iExp = 0;
-  p = sqlite3_malloc( sizeof(*p) );
+  p = (Decimal *) sqlite3_malloc( sizeof(*p) );
   if( p==0 ) goto new_no_mem;
   p->sign = 0;
   p->oom = 0;
@@ -4349,7 +4349,7 @@ static Decimal *decimal_new(
     n = sqlite3_value_bytes(pIn);
     zIn = sqlite3_value_text(pIn);
   }
-  p->a = sqlite3_malloc64( n+1 );
+  p->a = (signed char *) sqlite3_malloc64( n+1 );
   if( p->a==0 ) goto new_no_mem;
   for(i=0; isspace(zIn[i]); i++){}
   if( zIn[i]=='-' ){
@@ -4400,7 +4400,7 @@ static Decimal *decimal_new(
       }
     }
     if( iExp>0 ){
-      p->a = sqlite3_realloc64(p->a, p->nDigit + iExp + 1 );
+      p->a = (signed char *) sqlite3_realloc64(p->a, p->nDigit + iExp + 1 );
       if( p->a==0 ) goto new_no_mem;
       memset(p->a+p->nDigit, 0, iExp);
       p->nDigit += iExp;
@@ -4419,7 +4419,7 @@ static Decimal *decimal_new(
       }
     }
     if( iExp>0 ){
-      p->a = sqlite3_realloc64(p->a, p->nDigit + iExp + 1 );
+      p->a = (signed char *) sqlite3_realloc64(p->a, p->nDigit + iExp + 1 );
       if( p->a==0 ) goto new_no_mem;
       memmove(p->a+iExp, p->a, p->nDigit);
       memset(p->a, 0, iExp);
@@ -4450,7 +4450,7 @@ static void decimal_result(sqlite3_context *pCtx, Decimal *p){
     sqlite3_result_null(pCtx);
     return;
   }
-  z = sqlite3_malloc( p->nDigit+4 );
+  z = (char *) sqlite3_malloc( p->nDigit+4 );
   if( z==0 ){
     sqlite3_result_error_nomem(pCtx);
     return;
@@ -4578,7 +4578,7 @@ static void decimal_expand(Decimal *p, int nDigit, int nFrac){
   nAddFrac = nFrac - p->nFrac;
   nAddSig = (nDigit - p->nDigit) - nAddFrac;
   if( nAddFrac==0 && nAddSig==0 ) return;
-  p->a = sqlite3_realloc64(p->a, nDigit+1);
+  p->a = (signed char *) sqlite3_realloc64(p->a, nDigit+1);
   if( p->a==0 ){
     p->oom = 1;
     return;
@@ -4738,11 +4738,11 @@ static void decimalSumStep(
   Decimal *p;
   Decimal *pArg;
   UNUSED_PARAMETER(argc);
-  p = sqlite3_aggregate_context(context, sizeof(*p));
+  p = (Decimal *) sqlite3_aggregate_context(context, sizeof(*p));
   if( p==0 ) return;
   if( !p->isInit ){
     p->isInit = 1;
-    p->a = sqlite3_malloc(2);
+    p->a = (signed char *) sqlite3_malloc(2);
     if( p->a==0 ){
       p->oom = 1;
     }else{
@@ -4764,7 +4764,7 @@ static void decimalSumInverse(
   Decimal *p;
   Decimal *pArg;
   UNUSED_PARAMETER(argc);
-  p = sqlite3_aggregate_context(context, sizeof(*p));
+  p = (Decimal *) sqlite3_aggregate_context(context, sizeof(*p));
   if( p==0 ) return;
   if( sqlite3_value_type(argv[0])==SQLITE_NULL ) return;
   pArg = decimal_new(context, argv[0], 0, 0);
@@ -4773,12 +4773,12 @@ static void decimalSumInverse(
   decimal_free(pArg);
 }
 static void decimalSumValue(sqlite3_context *context){
-  Decimal *p = sqlite3_aggregate_context(context, 0);
+  Decimal *p = (Decimal *) sqlite3_aggregate_context(context, 0);
   if( p==0 ) return;
   decimal_result(context, p);
 }
 static void decimalSumFinalize(sqlite3_context *context){
-  Decimal *p = sqlite3_aggregate_context(context, 0);
+  Decimal *p = (Decimal *) sqlite3_aggregate_context(context, 0);
   if( p==0 ) return;
   decimal_result(context, p);
   decimal_clear(p);
@@ -4810,7 +4810,7 @@ static void decimalMulFunc(
   ){
     goto mul_end;
   }
-  acc = sqlite3_malloc64( pA->nDigit + pB->nDigit + 2 );
+  acc = (signed char *) sqlite3_malloc64( pA->nDigit + pB->nDigit + 2 );
   if( acc==0 ){
     sqlite3_result_error_nomem(context);
     goto mul_end;
@@ -5009,7 +5009,7 @@ static void ieee754func(
     if( sqlite3_value_type(argv[0])==SQLITE_BLOB
      && sqlite3_value_bytes(argv[0])==sizeof(r)
     ){
-      const unsigned char *x = sqlite3_value_blob(argv[0]);
+      const unsigned char *x = (const unsigned char *) sqlite3_value_blob(argv[0]);
       unsigned int i;
       sqlite3_uint64 v = 0;
       for(i=0; i<sizeof(r); i++){
@@ -5107,7 +5107,7 @@ static void ieee754func_from_blob(
    && sqlite3_value_bytes(argv[0])==sizeof(double)
   ){
     double r;
-    const unsigned char *x = sqlite3_value_blob(argv[0]);
+    const unsigned char *x = (const unsigned char *) sqlite3_value_blob(argv[0]);
     unsigned int i;
     sqlite3_uint64 v = 0;
     for(i=0; i<sizeof(r); i++){
@@ -5149,7 +5149,7 @@ int sqlite3_ieee_init(
   const sqlite3_api_routines *pApi
 ){
   static const struct {
-    char *zFName;
+    const char *zFName;
     int nArg;
     int iAux;
     void (*xFunc)(sqlite3_context*,int,sqlite3_value**);
@@ -7896,7 +7896,7 @@ static int idxHashAdd(
       return 1;
     }
   }
-  pEntry = idxMalloc(pRc, sizeof(IdxHashEntry) + nKey+1 + nVal+1);
+  pEntry = (IdxHashEntry *) idxMalloc(pRc, sizeof(IdxHashEntry) + nKey+1 + nVal+1);
   if( pEntry ){
     pEntry->zKey = (char*)&pEntry[1];
     memcpy(pEntry->zKey, zKey, nKey);
@@ -8032,7 +8032,7 @@ struct ExpertCsr {
 
 static char *expertDequote(const char *zIn){
   int n = STRLEN(zIn);
-  char *zRet = sqlite3_malloc(n);
+  char *zRet = (char *) sqlite3_malloc(n);
 
   assert( zIn[0]=='\'' );
   assert( zIn[n-1]=='\'' );
@@ -8081,7 +8081,7 @@ static int expertConnect(
     if( zCreateTable ){
       rc = sqlite3_declare_vtab(db, zCreateTable);
       if( rc==SQLITE_OK ){
-        p = idxMalloc(&rc, sizeof(ExpertVtab));
+        p = (ExpertVtab *) idxMalloc(&rc, sizeof(ExpertVtab));
       }
       if( rc==SQLITE_OK ){
         p->pExpert = pExpert;
@@ -8114,7 +8114,7 @@ static int expertBestIndex(sqlite3_vtab *pVtab, sqlite3_index_info *pIdxInfo){
     SQLITE_INDEX_CONSTRAINT_LT | SQLITE_INDEX_CONSTRAINT_GE |
     SQLITE_INDEX_CONSTRAINT_LE;
 
-  pScan = idxMalloc(&rc, sizeof(IdxScan));
+  pScan = (IdxScan *) idxMalloc(&rc, sizeof(IdxScan));
   if( pScan ){
     int i;
 
@@ -8125,7 +8125,7 @@ static int expertBestIndex(sqlite3_vtab *pVtab, sqlite3_index_info *pIdxInfo){
 
     /* Add the constraints to the IdxScan object */
     for(i=0; i<pIdxInfo->nConstraint; i++){
-      struct sqlite3_index_constraint *pCons = &pIdxInfo->aConstraint[i];
+      struct sqlite3_index_info::sqlite3_index_constraint *pCons = &pIdxInfo->aConstraint[i];
       if( pCons->usable
        && pCons->iColumn>=0
        && p->pTab->aCol[pCons->iColumn].iPk==0
@@ -8191,7 +8191,7 @@ static int expertOpen(sqlite3_vtab *pVTab, sqlite3_vtab_cursor **ppCursor){
   int rc = SQLITE_OK;
   ExpertCsr *pCsr;
   (void)pVTab;
-  pCsr = idxMalloc(&rc, sizeof(ExpertCsr));
+  pCsr = (ExpertCsr *) idxMalloc(&rc, sizeof(ExpertCsr));
   *ppCursor = (sqlite3_vtab_cursor*)pCsr;
   return rc;
 }
@@ -8371,7 +8371,7 @@ static int idxGetTableInfo(
 
   nByte += sizeof(IdxColumn) * nCol;
   if( rc==SQLITE_OK ){
-    pNew = idxMalloc(&rc, nByte);
+    pNew = (IdxTable *) idxMalloc(&rc, nByte);
   }
   if( rc==SQLITE_OK ){
     pNew->aCol = (IdxColumn*)&pNew[1];
@@ -8869,7 +8869,7 @@ static int idxAuthCallback(
           if( pWrite->pTab==pTab && pWrite->eOp==eOp ) break;
         }
         if( pWrite==0 ){
-          pWrite = idxMalloc(&rc, sizeof(IdxWrite));
+          pWrite = (IdxWrite *) idxMalloc(&rc, sizeof(IdxWrite));
           if( rc==SQLITE_OK ){
             pWrite->pTab = pTab;
             pWrite->eOp = eOp;
@@ -9097,13 +9097,13 @@ static void idxRemFunc(
   sqlite3_value **argv
 ){
   struct IdxRemCtx *p = (struct IdxRemCtx*)sqlite3_user_data(pCtx);
-  struct IdxRemSlot *pSlot;
+  struct IdxRemCtx::IdxRemSlot *pSlot;
   int iSlot;
   assert( argc==2 );
 
   iSlot = sqlite3_value_int(argv[0]);
   assert( iSlot<=p->nSlot );
-  pSlot = &p->aSlot[iSlot];
+  pSlot = (IdxRemCtx::IdxRemSlot *) &p->aSlot[iSlot];
 
   switch( pSlot->eType ){
     case SQLITE_NULL:
@@ -9222,7 +9222,7 @@ static int idxPopulateOneStat1(
       );
     }else{
       zQuery = sqlite3_mprintf(
-          "SELECT %s FROM temp."UNIQUE_TABLE_NAME" x ORDER BY %s", zCols, zOrder
+          "SELECT %s FROM temp." UNIQUE_TABLE_NAME " x ORDER BY %s", zCols, zOrder
       );
     }
   }
@@ -9288,7 +9288,7 @@ static int idxBuildSampleTable(sqlite3expert *p, const char *zTab){
   int rc;
   char *zSql;
 
-  rc = sqlite3_exec(p->dbv,"DROP TABLE IF EXISTS temp."UNIQUE_TABLE_NAME,0,0,0);
+  rc = sqlite3_exec(p->dbv,"DROP TABLE IF EXISTS temp." UNIQUE_TABLE_NAME,0,0,0);
   if( rc!=SQLITE_OK ) return rc;
 
   zSql = sqlite3_mprintf(
@@ -9337,7 +9337,7 @@ static int idxPopulateStat1(sqlite3expert *p, char **pzErr){
   rc = sqlite3_exec(p->dbm, "ANALYZE; PRAGMA writable_schema=1", 0, 0, 0);
 
   if( rc==SQLITE_OK ){
-    int nByte = sizeof(struct IdxRemCtx) + (sizeof(struct IdxRemSlot) * nMax);
+    int nByte = sizeof(struct IdxRemCtx) + (sizeof(struct IdxRemCtx::IdxRemSlot) * nMax);
     pCtx = (struct IdxRemCtx*)idxMalloc(&rc, nByte);
   }
 
@@ -9398,7 +9398,7 @@ static int idxPopulateStat1(sqlite3expert *p, char **pzErr){
     rc = sqlite3_exec(p->dbm, "ANALYZE sqlite_schema", 0, 0, 0);
   }
 
-  sqlite3_exec(p->db, "DROP TABLE IF EXISTS temp."UNIQUE_TABLE_NAME,0,0,0);
+  sqlite3_exec(p->db, "DROP TABLE IF EXISTS temp." UNIQUE_TABLE_NAME,0,0,0);
   return rc;
 }
 
@@ -9840,7 +9840,7 @@ static int dbdataBestIndex(sqlite3_vtab *tab, sqlite3_index_info *pIdx){
   int colSchema = (pTab->bPtr ? DBPTR_COLUMN_SCHEMA : DBDATA_COLUMN_SCHEMA);
 
   for(i=0; i<pIdx->nConstraint; i++){
-    struct sqlite3_index_constraint *p = &pIdx->aConstraint[i];
+    struct sqlite3_index_info::sqlite3_index_constraint *p = &pIdx->aConstraint[i];
     if( p->op==SQLITE_INDEX_CONSTRAINT_EQ ){
       if( p->iColumn==colSchema ){
         if( p->usable==0 ) return SQLITE_CONSTRAINT;
@@ -10835,7 +10835,7 @@ static void editFunc(
   fseek(f, 0, SEEK_END);
   sz = ftell(f);
   rewind(f);
-  p = sqlite3_malloc64( sz+1 );
+  p = (unsigned char *) sqlite3_malloc64( sz+1 );
   if( p==0 ){
     sqlite3_result_error_nomem(context);
     goto edit_func_end;
@@ -11302,7 +11302,7 @@ static void eqp_append(ShellState *p, int iEqpId, int p2, const char *zText){
   if( p->autoEQPtest ){
     utf8_printf(p->out, "%d,%d,%s\n", iEqpId, p2, zText);
   }
-  pNew = sqlite3_malloc64( sizeof(*pNew) + nText );
+  pNew = (EQPGraphRow *) sqlite3_malloc64( sizeof(*pNew) + nText );
   if( pNew==0 ) shell_out_of_memory();
   pNew->iEqpId = iEqpId;
   pNew->iParentId = p2;
@@ -11745,7 +11745,7 @@ static int shell_callback(
         }else if( aiType && aiType[i]==SQLITE_BLOB && p->pStmt ){
           const void *pBlob = sqlite3_column_blob(p->pStmt, i);
           int nBlob = sqlite3_column_bytes(p->pStmt, i);
-          output_json_string(p->out, pBlob, nBlob);
+          output_json_string(p->out, (const char *) pBlob, nBlob);
         }else if( aiType && aiType[i]==SQLITE_TEXT ){
           output_json_string(p->out, azArg[i], -1);
         }else{
@@ -11911,7 +11911,7 @@ static void set_table_name(ShellState *p, const char *zName){
   cQuote = quoteChar(zName);
   n = strlen30(zName);
   if( cQuote ) n += n+2;
-  z = p->zDestTable = malloc( n+1 );
+  z = p->zDestTable = (char *) malloc( n+1 );
   if( z==0 ) shell_out_of_memory();
   n = 0;
   if( cQuote ) z[n++] = cQuote;
@@ -11983,7 +11983,7 @@ static char *save_err_msg(
   sqlite3 *db            /* Database to query */
 ){
   int nErrMsg = 1+strlen30(sqlite3_errmsg(db));
-  char *zErrMsg = sqlite3_malloc64(nErrMsg);
+  char *zErrMsg = (char *) sqlite3_malloc64(nErrMsg);
   if( zErrMsg ){
     memcpy(zErrMsg, sqlite3_errmsg(db), nErrMsg);
   }
@@ -12031,8 +12031,8 @@ static void displayLinuxIoStats(FILE *out){
 */
 static void displayStatLine(
   ShellState *p,            /* The shell context */
-  char *zLabel,             /* Label for this one line */
-  char *zFormat,            /* Format for the result */
+  const char *zLabel,             /* Label for this one line */
+  const char *zFormat,            /* Format for the result */
   int iStatusCtrl,          /* Which status to display */
   int bReset                /* True to reset the stats */
 ){
@@ -12490,7 +12490,7 @@ char *strdup_handle_newline(ShellState *p, const char *z) {
     return strdup(z);
   }
   int max_size = 80;
-  char *result = malloc(max_size * 2 + 10);
+  char *result = (char *) malloc(max_size * 2 + 10);
   char *t = result;
   int count = 0;
   int interrupted = 0;
@@ -12575,19 +12575,19 @@ static void exec_prepared_stmt_columnar(
   if( rc!=SQLITE_ROW ) return;
   nColumn = sqlite3_column_count(pStmt);
   nAlloc = nColumn*4;
-  azData = sqlite3_malloc64( nAlloc*sizeof(char*) );
+  azData = (char **) sqlite3_malloc64( nAlloc*sizeof(char*) );
   if( azData==0 ) shell_out_of_memory();
   for(i=0; i<nColumn; i++){
     azData[i] = strdup_handle_newline(p, sqlite3_column_name(pStmt,i));
   }
-  p->colTypes = realloc(p->colTypes, nColumn * sizeof(int));
+  p->colTypes = (int *) realloc(p->colTypes, nColumn * sizeof(int));
   for(i=0; i<nColumn; i++){
     p->colTypes[i] = sqlite3_column_type(pStmt, i);
   }
   do{
     if( (nRow+2)*nColumn >= nAlloc ){
       nAlloc *= 2;
-      azData = sqlite3_realloc64(azData, nAlloc*sizeof(char*));
+      azData = (char **) sqlite3_realloc64(azData, nAlloc*sizeof(char*));
       if( azData==0 ) shell_out_of_memory();
     }
     nRow++;
@@ -12597,7 +12597,7 @@ static void exec_prepared_stmt_columnar(
     }
   }while( (rc = sqlite3_step(pStmt))==SQLITE_ROW );
   if( nColumn>p->nWidth ){
-    p->colWidth = realloc(p->colWidth, nColumn*2*sizeof(int));
+    p->colWidth = (int *) realloc(p->colWidth, nColumn*2*sizeof(int));
     if( p->colWidth==0 ) shell_out_of_memory();
     for(i=p->nWidth; i<nColumn; i++) p->colWidth[i] = 0;
     p->nWidth = nColumn;
@@ -12673,7 +12673,7 @@ static void exec_prepared_stmt_columnar(
         n = strlenChar(azData[i]);
         utf8_printf(p->out, "%*s%s%*s%s",
             (w-n)/2, "", azData[i], (w-n+1)/2, "",
-            i==nColumn-1?" "BOX_13"\n":" "BOX_13" ");
+            i==nColumn-1?" " BOX_13 "\n":" " BOX_13 " ");
       }
       print_box_row_separator(p, nColumn, BOX_123, BOX_1234, BOX_134);
       break;
@@ -12736,7 +12736,9 @@ columnar_end:
   sqlite3_free(azData);
 }
 
+extern "C" {
 extern char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, char *null_value, int columns);
+}
 
 /*
 ** Run a prepared statement
@@ -13163,7 +13165,7 @@ static char **tableColumnList(ShellState *p, const char *zTab){
   while( sqlite3_step(pStmt)==SQLITE_ROW ){
     if( nCol>=nAlloc-2 ){
       nAlloc = nAlloc*2 + nCol + 10;
-      azCol = sqlite3_realloc(azCol, nAlloc*sizeof(azCol[0]));
+      azCol = (char **) sqlite3_realloc(azCol, nAlloc*sizeof(azCol[0]));
       if( azCol==0 ) shell_out_of_memory();
     }
     azCol[++nCol] = sqlite3_mprintf("%s", sqlite3_column_text(pStmt, 1));
@@ -13213,7 +13215,7 @@ static char **tableColumnList(ShellState *p, const char *zTab){
   if( preserveRowid ){
     /* Only preserve the rowid if we can find a name to use for the
     ** rowid */
-    static char *azRowid[] = { "rowid", "_rowid_", "oid" };
+    static const char *azRowid[] = { "rowid", "_rowid_", "oid" };
     int i, j;
     for(j=0; j<3; j++){
       for(i=1; i<=nCol; i++){
@@ -13225,7 +13227,7 @@ static char **tableColumnList(ShellState *p, const char *zTab){
         ** name for the rowid before adding it to azCol[0].  WITHOUT ROWID
         ** tables will fail this last check */
         rc = sqlite3_table_column_metadata(p->db,0,zTab,azRowid[j],0,0,0,0,0);
-        if( rc==SQLITE_OK ) azCol[0] = azRowid[j];
+        if( rc==SQLITE_OK ) azCol[0] = (char *) azRowid[j];
         break;
       }
     }
@@ -13384,7 +13386,7 @@ static int run_schema_dump_query(
       sqlite3_free(zErr);
       zErr = 0;
     }
-    zQ2 = malloc( len+100 );
+    zQ2 = (char *) malloc( len+100 );
     if( zQ2==0 ) return rc;
     sqlite3_snprintf(len+100, zQ2, "%s ORDER BY rowid DESC", zQuery);
     rc = sqlite3_exec(p->db, zQ2, dump_callback, p, &zErr);
@@ -13722,7 +13724,7 @@ static char *readFile(const char *zName, int *pnByte){
   fseek(in, 0, SEEK_END);
   nIn = ftell(in);
   rewind(in);
-  pBuf = sqlite3_malloc64( nIn+1 );
+  pBuf = (char *) sqlite3_malloc64( nIn+1 );
   if( pBuf==0 ){ fclose(in); return 0; }
   nRead = fread(pBuf, nIn, 1, in);
   fclose(in);
@@ -14487,7 +14489,7 @@ static void import_cleanup(ImportCtx *p){
 static void import_append_char(ImportCtx *p, int c){
   if( p->n+1>=p->nAlloc ){
     p->nAlloc += p->nAlloc + 100;
-    p->z = sqlite3_realloc64(p->z, p->nAlloc);
+    p->z = (char *) sqlite3_realloc64(p->z, p->nAlloc);
     if( p->z==0 ) shell_out_of_memory();
   }
   p->z[p->n++] = (char)c;
@@ -14828,7 +14830,7 @@ static void newTempFile(ShellState *p, const char *zSuffix){
   if( p->zTempFile==0 ){
     /* If p->db is an in-memory database then the TEMPFILENAME file-control
     ** will not work and we will need to fallback to guessing */
-    char *zTemp;
+    const char *zTemp;
     sqlite3_uint64 r;
     sqlite3_randomness(sizeof(r), &r);
     zTemp = getenv("TEMP");
@@ -17168,7 +17170,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     sqlite3_finalize(pStmt);
     pStmt = 0;
     if( nCol==0 ) return 0; /* no columns, no error */
-    zSql = sqlite3_malloc64( nByte*2 + 20 + nCol*2 );
+    zSql = (char *) sqlite3_malloc64( nByte*2 + 20 + nCol*2 );
     if( zSql==0 ){
       import_cleanup(&sCtx);
       shell_out_of_memory();
@@ -18679,7 +18681,7 @@ static int do_meta_command(char *zLine, ShellState *p){
       if( nRow>=nAlloc ){
         char **azNew;
         int n2 = nAlloc*2 + 10;
-        azNew = sqlite3_realloc64(azResult, sizeof(azResult[0])*n2);
+        azNew = (char **) sqlite3_realloc64(azResult, sizeof(azResult[0])*n2);
         if( azNew==0 ) shell_out_of_memory();
         nAlloc = n2;
         azResult = azNew;
@@ -18706,7 +18708,7 @@ static int do_meta_command(char *zLine, ShellState *p){
       nPrintRow = (nRow + nPrintCol - 1)/nPrintCol;
       for(i=0; i<nPrintRow; i++){
         for(j=i; j<nRow; j+=nPrintRow){
-          char *zSp = j<nPrintRow ? "" : "  ";
+          const char *zSp = j<nPrintRow ? "" : "  ";
           utf8_printf(p->out, "%s%-*s", zSp, maxlen,
                       azResult[j] ? azResult[j]:"");
         }
@@ -19143,7 +19145,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     int j;
     assert( nArg<=ArraySize(azArg) );
     p->nWidth = nArg-1;
-    p->colWidth = realloc(p->colWidth, p->nWidth*sizeof(int)*2);
+    p->colWidth = (int *) realloc(p->colWidth, p->nWidth*sizeof(int)*2);
     if( p->colWidth==0 && p->nWidth>0 ) shell_out_of_memory();
     if( p->nWidth ) p->actualWidth = &p->colWidth[p->nWidth];
     for(j=1; j<nArg; j++){
@@ -19363,7 +19365,7 @@ static int process_input(ShellState *p){
     nLine = strlen30(zLine);
     if( nSql+nLine+2>=nAlloc ){
       nAlloc = nSql+nLine+100;
-      zSql = realloc(zSql, nAlloc);
+      zSql = (char *) realloc(zSql, nAlloc);
       if( zSql==0 ) shell_out_of_memory();
     }
     nSqlPrior = nSql;
@@ -19463,7 +19465,7 @@ static char *find_home_dir(int clearFlag){
 
   if( home_dir ){
     int n = strlen30(home_dir) + 1;
-    char *z = malloc( n );
+    char *z = (char *) malloc( n );
     if( z ) memcpy(z, home_dir, n);
     home_dir = z;
   }
@@ -19788,7 +19790,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
         ** mean that nothing is read from stdin */
         readStdin = 0;
         nCmd++;
-        azCmd = realloc(azCmd, sizeof(azCmd[0])*nCmd);
+        azCmd = (char **) realloc(azCmd, sizeof(azCmd[0])*nCmd);
         if( azCmd==0 ) shell_out_of_memory();
         azCmd[nCmd-1] = z;
       }
@@ -20192,7 +20194,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
         zHistory = strdup(zHistory);
       }else if( (zHome = find_home_dir(0))!=0 ){
         nHistory = strlen30(zHome) + 20;
-        if( (zHistory = malloc(nHistory))!=0 ){
+        if( (zHistory = (char *) malloc(nHistory))!=0 ){
           sqlite3_snprintf(nHistory, zHistory,"%s/.duckdb_history", zHome);
         }
       }
