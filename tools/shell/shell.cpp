@@ -65,13 +65,6 @@
 #endif /* defined(_MSC_VER) */
 
 /*
-** No support for loadable extensions in VxWorks.
-*/
-#if (defined(__RTP__) || defined(_WRS_KERNEL)) && !SQLITE_OMIT_LOAD_EXTENSION
-# define SQLITE_OMIT_LOAD_EXTENSION 1
-#endif
-
-/*
 ** Enable large-file support for fopen() and friends on unix.
 */
 #ifndef SQLITE_DISABLE_LFS
@@ -147,6 +140,11 @@ typedef unsigned char u8;
 
 # define SHELL_USE_LOCAL_GETLINE 1
 #endif
+
+#include "shell_renderer.hpp"
+#include "shell_state.hpp"
+
+using namespace duckdb_shell;
 
 
 #if defined(_WIN32) || defined(WIN32)
@@ -2293,142 +2291,6 @@ int sqlite3_fileio_init(
 
 /************************* End ../ext/misc/fileio.c ********************/
 
-enum class RenderMode : uint32_t {
-	LINE = 0,   /* One column per line.  Blank line between records */
-	COLUMN,     /* One record per line in neat columns */
-	LIST,       /* One record per line with a separator */
-	SEMI,       /* Same as RenderMode::List but append ";" to each line */
-	HTML,       /* Generate an XHTML table */
-	INSERT,     /* Generate SQL "insert" statements */
-	QUOTE,      /* Quote values as for SQL */
-	TCL,        /* Generate ANSI-C or TCL quoted elements */
-	CSV,        /* Quote strings, numbers are plain */
-	EXPLAIN,    /* Like RenderMode::Column, but do not truncate data */
-	ASCII,      /* Use ASCII unit and record separators (0x1F/0x1E) */
-	PRETTY,     /* Pretty-print schemas */
-	EQP,        /* Converts EXPLAIN QUERY PLAN output into a graph */
-	JSON,       /* Output JSON */
-	MARKDOWN,   /* Markdown formatting */
-	TABLE,      /* MySQL-style table formatting */
-	BOX,        /* Unicode box-drawing characters */
-	LATEX,      /* Latex tabular formatting */
-	TRASH,      /* Discard output */
-	JSONLINES,  /* Output JSON Lines */
-	DUCKBOX     /* Unicode box drawing - using DuckDB's own renderer */
-};
-
-/*
-** State information about the database connection is contained in an
-** instance of the following structure.
-*/
-typedef struct ShellState ShellState;
-struct ShellState {
-  sqlite3 *db;           /* The database */
-  u8 autoExplain;        /* Automatically turn on .explain mode */
-  u8 openMode;           /* SHELL_OPEN_NORMAL, _APPENDVFS, or _ZIPFILE */
-  u8 doXdgOpen;          /* Invoke start/open/xdg-open in output_reset() */
-  u8 nEqpLevel;          /* Depth of the EQP output graph */
-  u8 eTraceType;         /* SHELL_TRACE_* value for type of trace */
-  unsigned mEqpLines;    /* Mask of veritical lines in the EQP output graph */
-  int outCount;          /* Revert to stdout when reaching zero */
-  int cnt;               /* Number of records displayed so far */
-  int lineno;            /* Line number of last line read from in */
-  int openFlags;         /* Additional flags to open.  (SQLITE_OPEN_NOFOLLOW) */
-  FILE *in;              /* Read commands from this stream */
-  FILE *out;             /* Write results here */
-  FILE *traceOut;        /* Output for sqlite3_trace() */
-  int nErr;              /* Number of errors seen */
-  RenderMode mode;       /* An output mode setting */
-  RenderMode modePrior;  /* Saved mode */
-  RenderMode cMode;      /* temporary output mode for the current query */
-  RenderMode normalMode; /* Output mode before ".explain on" */
-  int writableSchema;    /* True if PRAGMA writable_schema=ON */
-  int showHeader;        /* True to show column names in List or Column mode */
-  int nCheck;            /* Number of ".check" commands run */
-  unsigned nProgress;    /* Number of progress callbacks encountered */
-  unsigned mxProgress;   /* Maximum progress callbacks before failing */
-  unsigned flgProgress;  /* Flags for the progress callback */
-  unsigned shellFlgs;    /* Various flags */
-  unsigned priorShFlgs;  /* Saved copy of flags */
-  sqlite3_int64 szMax;   /* --maxsize argument to .open */
-  char *zDestTable;      /* Name of destination table when RenderMode::Insert */
-  char *zTempFile;       /* Temporary file that might need deleting */
-  char zTestcase[30];    /* Name of current test case */
-  char colSeparator[20]; /* Column separator character for several modes */
-  char rowSeparator[20]; /* Row separator character for RenderMode::Ascii */
-  char colSepPrior[20];  /* Saved column separator */
-  char rowSepPrior[20];  /* Saved row separator */
-  int *colTypes;         /* Types of each column */
-  int *colWidth;         /* Requested width of each column in columnar modes */
-  int *actualWidth;      /* Actual width of each column */
-  int nWidth;            /* Number of slots in colWidth[] and actualWidth[] */
-  char nullValue[20];    /* The text to print when a NULL comes back from
-                         ** the database */
-  int columns;           /* Column-wise DuckBox rendering */
-  char outfile[FILENAME_MAX]; /* Filename for *out */
-  const char *zDbFilename;    /* name of the database file */
-  char *zFreeOnClose;         /* Filename to free when closing */
-  const char *zVfs;           /* Name of VFS to use */
-  sqlite3_stmt *pStmt;   /* Current statement if any. */
-  FILE *pLog;            /* Write log output here */
-  int *aiIndent;         /* Array of indents used in RenderMode::Explain */
-  int nIndent;           /* Size of array aiIndent[] */
-  int iIndent;           /* Index of current op in aiIndent[] */
-  size_t max_rows;       /* The maximum number of rows to render in DuckBox mode */
-  size_t max_width;      /* The maximum number of characters to render horizontally in DuckBox mode */
-
-public:
-	void outputModePush();
-	void outputModePop();
-	void output_csv(const char *z, int bSep);
-	void print_row_separator(int nArg, const char *zSep);
-	void print_markdown_separator(int nArg, const char *zSep);
-	void set_table_name(const char *zName);
-	int run_table_dump_query(const char *zSelect);
-	void print_box_row_separator(
-	  int nArg,
-	  const char *zSep1,
-	  const char *zSep2,
-	  const char *zSep3
-	);
-	char *strdup_handle_newline(const char *z);
-	void exec_prepared_stmt_columnar(sqlite3_stmt *pStmt);
-	char **tableColumnList(const char *zTab);
-	void exec_prepared_stmt(sqlite3_stmt *pStmt);
-
-	int shell_callback(int nArg, char **azArg, char **azCol, int *aiType);
-
-	int shell_exec(
-	  const char *zSql,                         /* SQL to be evaluated */
-	  char **pzErrMsg                           /* Error msg written here */
-	);
-	int run_schema_dump_query(
-	  const char *zQuery
-	);
-	void open_db(int openFlags);
-
-	void setOrClearFlag(unsigned mFlag, const char *zArg);
-	bool ShellHasFlag(int flag) {
-		return (shellFlgs & flag) != 0;
-	}
-
-	void ShellSetFlag(int flag) {
-		shellFlgs |= flag;
-	}
-
-	void ShellClearFlag(int flag) {
-		shellFlgs &= ~flag;
-	}
-	void output_reset();
-	void clearTempFile();
-	void newTempFile(const char *zSuffix);
-	int do_meta_command(char *zLine);
-
-	int runOneSqlLine(char *zSql, int startline);
-	void process_sqliterc(const char *sqliterc_override);
-	int process_input();
-};
-
 /* Allowed values for ShellState.openMode
 */
 #define SHELL_OPEN_UNSPEC      0      /* No open-mode specified */
@@ -4426,9 +4288,6 @@ static const char *azHelp[] = {
   "     brightyellow|brightblue|brightmagenta|brightcyan|brightwhite",
   ".keywordcode ?CODE?      Sets the syntax highlighting terminal code used for keywords",
 #endif
-#ifndef SQLITE_OMIT_LOAD_EXTENSION
-  ".load FILE ?ENTRY?       Load an extension library",
-#endif
   ".log FILE|off            Turn logging on or off.  FILE can be stderr/stdout",
   ".maxrows COUNT           Sets the maximum number of rows for display (default: 40). Only for duckbox mode.",
   ".maxwidth COUNT          Sets the maximum width in characters. 0 defaults to terminal width. Only for duckbox mode.",
@@ -4724,9 +4583,6 @@ void ShellState::open_db(int flags){
       }
       exit(1);
     }
-#ifndef SQLITE_OMIT_LOAD_EXTENSION
-    sqlite3_enable_load_extension(db, 1);
-#endif
     sqlite3_fileio_init(db, 0, 0);
     sqlite3_shathree_init(db, 0, 0);
 #ifndef SQLITE_NOHAVE_SYSTEM
@@ -6237,26 +6093,6 @@ int ShellState::do_meta_command(char *zLine){
     }
   }else
 
-#ifndef SQLITE_OMIT_LOAD_EXTENSION
-  if( c=='l' && strncmp(azArg[0], "load", n)==0 ){
-    const char *zFile, *zProc;
-    char *zErrMsg = 0;
-    if( nArg<2 ){
-      raw_printf(stderr, "Usage: .load FILE ?ENTRYPOINT?\n");
-      rc = 1;
-      goto meta_command_exit;
-    }
-    zFile = azArg[1];
-    zProc = nArg>=3 ? azArg[2] : 0;
-    open_db(0);
-    rc = sqlite3_load_extension(db, zFile, zProc, &zErrMsg);
-    if( rc!=SQLITE_OK ){
-      printDatabaseError(zErrMsg);
-      sqlite3_free(zErrMsg);
-      rc = 1;
-    }
-  }else
-#endif
 
   if( c=='l' && strncmp(azArg[0], "log", n)==0 ){
     if( nArg!=2 ){
