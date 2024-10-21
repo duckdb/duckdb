@@ -2313,3 +2313,33 @@ def tan(col: "ColumnOrName") -> Column:
     Row(TAN(0.78539...)=0.99999...)
     """
     return _invoke_function_over_columns("tan", col)
+
+
+def round(col: "ColumnOrName", scale: int = 0) -> Column:
+    """
+    Round the given value to `scale` decimal places using HALF_UP rounding mode if `scale` >= 0
+    or at integral part when `scale` < 0.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        input column to round.
+    scale : int optional default 0
+        scale value.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        rounded values.
+
+    Examples
+    --------
+    >>> spark.createDataFrame([(2.5,)], ['a']).select(round('a', 0).alias('r')).collect()
+    [Row(r=3.0)]
+    """
+    return _invoke_function_over_columns("round", col, lit(scale))

@@ -224,3 +224,21 @@ class TestSparkFunctionsNumeric(object):
         res = df.select("tan_value").collect()
         res[0].tan_value == 0
         round(res[1].tan_value, 2) == 1.56
+
+    def test_round(self, spark):
+        data = [
+            (11.15,),
+            (2.9,),
+            # Test with this that HALF_UP rounding method is used and not HALF_EVEN
+            (2.5,),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = (df.withColumn("round_value", F.round("firstColumn"))
+            .withColumn("round_value_1", F.round(F.col("firstColumn"), 1))
+            .withColumn("round_value_minus_1", F.round("firstColumn", -1)))
+        res = df.select("round_value", "round_value_1", "round_value_minus_1").collect()
+        assert res == [
+            Row(round_value=11, round_value_1=11.2, round_value_minus_1=10),
+            Row(round_value=3, round_value_1=2.9, round_value_minus_1=0),
+            Row(round_value=3, round_value_1=2.5, round_value_minus_1=0),
+        ]
