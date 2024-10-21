@@ -561,6 +561,11 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 			}
 		}
 
+		if (result_offset != 0 && result.GetVectorType() != VectorType::FLAT_VECTOR) {
+			result.Flatten(result_offset);
+			result.Resize(result_offset, result_offset + read_now);
+		}
+
 		if (dict_decoder) {
 			if ((!dictionary || dictionary_size == 0) && null_count < read_now) {
 				throw std::runtime_error("Parquet file is likely corrupted, missing dictionary");
@@ -573,8 +578,7 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 				result.Slice(*dictionary, dictionary_selection_vector, read_now);
 				D_ASSERT(result.GetVectorType() == VectorType::DICTIONARY_VECTOR);
 			} else {
-				result.Flatten(result_offset);
-				result.Resize(result_offset, result_offset + read_now);
+				D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 				VectorOperations::Copy(*dictionary, result, dictionary_selection_vector, read_now, 0, result_offset);
 			}
 		} else if (dbp_decoder) {
