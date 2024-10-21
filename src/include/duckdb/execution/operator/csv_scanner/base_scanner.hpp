@@ -114,6 +114,8 @@ public:
 
 	bool ever_quoted = false;
 
+	bool ever_escaped = false;
+
 	//! Shared pointer to the buffer_manager, this is shared across multiple scanners
 	shared_ptr<CSVBufferManager> buffer_manager;
 
@@ -121,6 +123,10 @@ public:
 	//! notes are dirty lines on top of the file, before the actual data
 	static CSVIterator SkipCSVRows(shared_ptr<CSVBufferManager> buffer_manager,
 	                               const shared_ptr<CSVStateMachine> &state_machine, idx_t rows_to_skip);
+
+	inline static bool ContainsZeroByte(uint64_t v) {
+		return (v - UINT64_C(0x0101010101010101)) & ~(v)&UINT64_C(0x8080808080808080);
+	}
 
 protected:
 	//! Boundaries of this scanner
@@ -141,10 +147,6 @@ protected:
 	//! Internal Functions used to perform the parsing
 	//! Initializes the scanner
 	virtual void Initialize();
-
-	inline static bool ContainsZeroByte(uint64_t v) {
-		return (v - UINT64_C(0x0101010101010101)) & ~(v)&UINT64_C(0x8080808080808080);
-	}
 
 	//! Process one chunk
 	template <class T>
@@ -254,6 +256,7 @@ protected:
 			} break;
 			case CSVState::ESCAPE:
 				T::SetEscaped(result);
+				ever_escaped = true;
 				iterator.pos.buffer_pos++;
 				break;
 			case CSVState::STANDARD: {

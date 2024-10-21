@@ -488,7 +488,7 @@ void CSVSniffer::DetectTypes() {
 	if (!best_candidate) {
 		DialectCandidates dialect_candidates(options.dialect_options.state_machine_options);
 		auto error = CSVError::SniffingError(options, dialect_candidates.Print());
-		error_handler->Error(error);
+		error_handler->Error(error, true);
 	}
 	// Assert that it's all good at this point.
 	D_ASSERT(best_candidate && !best_format_candidates.empty());

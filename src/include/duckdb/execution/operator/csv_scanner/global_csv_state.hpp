@@ -15,6 +15,7 @@
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 #include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_validator.hpp"
 
 namespace duckdb {
 
@@ -78,6 +79,8 @@ private:
 	unordered_map<idx_t, idx_t> threads_per_file;
 	//! We hold information on the current scanner boundary
 	CSVIterator current_boundary;
+
+	CSVValidator validator;
 };
 
 } // namespace duckdb

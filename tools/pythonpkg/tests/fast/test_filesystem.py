@@ -111,7 +111,7 @@ class TestPythonFilesystem:
             fh.write(b'hello\n\0world\0')
         duckdb_cursor.register_filesystem(memory)
 
-        duckdb_cursor.execute('select * from read_csv("memory://test.csv", header = 0)')
+        duckdb_cursor.execute('select * from read_csv("memory://test.csv", header = 0, quote = \'"\', escape = \'"\')')
 
         assert duckdb_cursor.fetchall() == [('hello',), ('\0world\0',)]
 
