@@ -34,8 +34,7 @@ IndexStorageInfo GetIndexInfo(const IndexConstraintType &type, const string &tab
 	auto name = EnumUtil::ToString(type);
 	string column_names;
 	for (const auto &col : columns) {
-		column_names += "_";
-		column_names += col.get().Name();
+		column_names += "_" + col.get().Name();
 	}
 	return IndexStorageInfo(name + "_" + table_name + column_names);
 }
@@ -702,22 +701,21 @@ void DataTable::AddAndCreateIndex(LocalStorage &local_storage, DataTable &parent
 	vector<column_t> column_ids;
 	vector<unique_ptr<Expression>> global_expressions;
 	vector<unique_ptr<Expression>> local_expressions;
-	column_ids.reserve(columns.size());
-	global_expressions.reserve(columns.size());
-	local_expressions.reserve(columns.size());
+	auto binding = ColumnBinding(0, column_ids.size());
 
-	for (const auto &column_p : columns) {
-		auto &column = column_p.get();
-		auto binding = ColumnBinding(0, column_ids.size());
-		auto column_ref = make_uniq<BoundColumnRefExpression>(column.Name(), column.Type(), binding);
-		global_expressions.push_back(column_ref->Copy());
-		local_expressions.push_back(std::move(column_ref));
-		column_ids.push_back(column.Physical().index);
+	for (const auto &column : columns) {
+		auto ref = make_uniq<BoundColumnRefExpression>(column.get().Name(), column.get().Type(), binding);
+		global_expressions.push_back(ref->Copy());
+		local_expressions.push_back(ref->Copy());
+		column_ids.push_back(column.get().Physical().index);
 	}
 
-	// If this is a WAL replay, then we only create the global index and return.
-	auto global_art = make_uniq<ART>(index_info.name, constraint_type, column_ids, TableIOManager::Get(*this),
+	// Create the global index.
+	auto &io_manager = TableIOManager::Get(*this);
+	auto global_art = make_uniq<ART>(index_info.name, constraint_type, column_ids, io_manager,
 	                                 std::move(global_expressions), db, nullptr, index_info);
+
+	// If this is a WAL replay, then we only create the global index and return.
 	if (!initialize_data) {
 		AddIndex(std::move(global_art));
 		return;
@@ -726,8 +724,8 @@ void DataTable::AddAndCreateIndex(LocalStorage &local_storage, DataTable &parent
 	parent.row_groups->AppendToIndex(parent, *global_art);
 	AddIndex(std::move(global_art));
 
-	// Create a local ART.
-	auto local_art = make_uniq<ART>(index_info.name, constraint_type, column_ids, TableIOManager::Get(*this),
+	// Otherwise, we also create the local index.
+	auto local_art = make_uniq<ART>(index_info.name, constraint_type, column_ids, io_manager,
 	                                std::move(local_expressions), db, nullptr, index_info);
 	local_storage.AppendToIndex(parent, *local_art);
 	local_storage.AddIndex(parent, std::move(local_art));
@@ -1555,21 +1553,18 @@ void DataTable::AddIndex(const column_defs_t &columns, const IndexConstraintType
 	// Fetch the column types and create bound column reference expressions.
 	vector<column_t> column_ids;
 	vector<unique_ptr<Expression>> expressions;
-	column_ids.reserve(columns.size());
-	expressions.reserve(columns.size());
+	auto binding = ColumnBinding(0, column_ids.size());
 
-	for (const auto &column_p : columns) {
-		auto &column = column_p.get();
-		auto binding = ColumnBinding(0, column_ids.size());
-		auto column_ref = make_uniq<BoundColumnRefExpression>(column.Name(), column.Type(), binding);
-		expressions.push_back(std::move(column_ref));
-		column_ids.push_back(column.Physical().index);
+	for (const auto &column : columns) {
+		auto ref = make_uniq<BoundColumnRefExpression>(column.get().Name(), column.get().Type(), binding);
+		expressions.push_back(std::move(ref));
+		column_ids.push_back(column.get().Physical().index);
 	}
 
 	// Create an ART around the expressions.
-	auto &manager = TableIOManager::Get(*this);
+	auto &io_manager = TableIOManager::Get(*this);
 	auto art =
-	    make_uniq<ART>(index_info.name, type, column_ids, manager, std::move(expressions), db, nullptr, index_info);
+	    make_uniq<ART>(index_info.name, type, column_ids, io_manager, std::move(expressions), db, nullptr, index_info);
 	info->indexes.AddIndex(std::move(art));
 }
 

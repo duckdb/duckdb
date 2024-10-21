@@ -1,21 +1,23 @@
 #include "duckdb/storage/write_ahead_log.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/common/checksum.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/storage/index.hpp"
-#include "duckdb/execution/index/bound_index.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
-#include "duckdb/common/checksum.hpp"
-#include "duckdb/common/serializer/memory_stream.hpp"
-#include "duckdb/storage/table/column_data.hpp"
 
 namespace duckdb {
 
