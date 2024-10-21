@@ -475,17 +475,13 @@ void StringValueResult::Reset() {
 }
 
 void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t buffer_pos) {
-	AddPossiblyEscapedValue(
-		result, buffer_pos,
-		result.buffer_ptr + result.quoted_position + 1, buffer_pos - result.quoted_position - 2,
-		buffer_pos < result.last_position.buffer_pos + 2
-	);
+	AddPossiblyEscapedValue(result, buffer_pos, result.buffer_ptr + result.quoted_position + 1,
+	                        buffer_pos - result.quoted_position - 2, buffer_pos < result.last_position.buffer_pos + 2);
 	result.quoted = false;
 }
 
 void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const idx_t buffer_pos,
-												const char* value_ptr, const idx_t length,
-												const bool empty) {
+                                                const char *value_ptr, const idx_t length, const bool empty) {
 	if (result.escaped) {
 		if (result.projecting_columns) {
 			if (!result.projected_columns[result.cur_col_id]) {
@@ -504,10 +500,8 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 					std::ostringstream error;
 					// Casting Error Message
 
-					error << "Could not convert string \""
-					      << std::string(value_ptr, length)
-					      << "\" to \'" << LogicalTypeIdToString(result.parse_types[result.chunk_col_id].type_id)
-					      << "\'";
+					error << "Could not convert string \"" << std::string(value_ptr, length) << "\" to \'"
+					      << LogicalTypeIdToString(result.parse_types[result.chunk_col_id].type_id) << "\'";
 					auto error_string = error.str();
 					SanitizeError(error_string);
 					result.current_errors.ModifyErrorMessageOfLastError(error_string);
@@ -516,8 +510,7 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 				result.chunk_col_id++;
 			} else {
 				auto value = StringValueScanner::RemoveEscape(
-				    value_ptr, length,
-				    result.state_machine.dialect_options.state_machine_options.escape.GetValue(),
+				    value_ptr, length, result.state_machine.dialect_options.state_machine_options.escape.GetValue(),
 				    result.parse_chunk.data[result.chunk_col_id]);
 				result.AddValueToVector(value.GetData(), value.GetSize());
 			}
@@ -541,12 +534,9 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 	if (result.quoted) {
 		StringValueResult::AddQuotedValue(result, buffer_pos);
 	} else if (result.escaped) {
-		StringValueResult::AddPossiblyEscapedValue(
-			result, buffer_pos,
-			result.buffer_ptr + result.last_position.buffer_pos,
-		    buffer_pos - result.last_position.buffer_pos,
-			false
-		);
+		StringValueResult::AddPossiblyEscapedValue(result, buffer_pos,
+		                                           result.buffer_ptr + result.last_position.buffer_pos,
+		                                           buffer_pos - result.last_position.buffer_pos, false);
 	} else {
 		result.AddValueToVector(result.buffer_ptr + result.last_position.buffer_pos,
 		                        buffer_pos - result.last_position.buffer_pos);

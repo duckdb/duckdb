@@ -208,7 +208,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	} else {
 		transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::COMMENT)] =
 		    CSVState::RECORD_SEPARATOR;
-	}	
+	}
 
 	// Initialize characters we can skip during processing, for Standard and Quoted states
 	for (idx_t i = 0; i < StateMachine::NUM_TRANSITIONS; i++) {
