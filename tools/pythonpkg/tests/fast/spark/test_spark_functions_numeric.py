@@ -233,9 +233,11 @@ class TestSparkFunctionsNumeric(object):
             (2.5,),
         ]
         df = spark.createDataFrame(data, ["firstColumn"])
-        df = (df.withColumn("round_value", F.round("firstColumn"))
+        df = (
+            df.withColumn("round_value", F.round("firstColumn"))
             .withColumn("round_value_1", F.round(F.col("firstColumn"), 1))
-            .withColumn("round_value_minus_1", F.round("firstColumn", -1)))
+            .withColumn("round_value_minus_1", F.round("firstColumn", -1))
+        )
         res = df.select("round_value", "round_value_1", "round_value_minus_1").collect()
         assert res == [
             Row(round_value=11, round_value_1=11.2, round_value_minus_1=10),
@@ -251,9 +253,11 @@ class TestSparkFunctionsNumeric(object):
             (2.5,),
         ]
         df = spark.createDataFrame(data, ["firstColumn"])
-        df = (df.withColumn("round_value", F.bround(F.col("firstColumn")))
+        df = (
+            df.withColumn("round_value", F.bround(F.col("firstColumn")))
             .withColumn("round_value_1", F.bround(F.col("firstColumn"), 1))
-            .withColumn("round_value_minus_1", F.bround(F.col("firstColumn"), -1)))
+            .withColumn("round_value_minus_1", F.bround(F.col("firstColumn"), -1))
+        )
         res = df.select("round_value", "round_value_1", "round_value_minus_1").collect()
         assert res == [
             Row(round_value=11, round_value_1=11.2, round_value_minus_1=10),
