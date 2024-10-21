@@ -9,7 +9,7 @@ from duckdb.experimental.spark.sql.functions import col
 
 @pytest.fixture
 def df(spark):
-    return spark.createDataFrame([("a", 1), ("a", 1), ("a", 1), ("a", 2), ("b",  3), ("c", 4)], ["C1", "C2"])
+    return spark.createDataFrame([("a", 1), ("a", 1), ("a", 1), ("a", 2), ("b", 3), ("c", 4)], ["C1", "C2"])
 
 
 @pytest.fixture
