@@ -428,18 +428,11 @@ public:
 			    make_uniq<HashJoinFinalizeTask>(shared_from_this(), context, sink, 0U, chunk_count, false, sink.op));
 		} else {
 			// Parallel finalize
-			auto chunks_per_thread = MaxValue<idx_t>((chunk_count + num_threads - 1) / num_threads, 1);
-
-			idx_t chunk_idx = 0;
-			for (idx_t thread_idx = 0; thread_idx < num_threads; thread_idx++) {
-				auto chunk_idx_from = chunk_idx;
-				auto chunk_idx_to = MinValue<idx_t>(chunk_idx_from + chunks_per_thread, chunk_count);
-				finalize_tasks.push_back(make_uniq<HashJoinFinalizeTask>(shared_from_this(), context, sink,
-				                                                         chunk_idx_from, chunk_idx_to, true, sink.op));
-				chunk_idx = chunk_idx_to;
-				if (chunk_idx == chunk_count) {
-					break;
-				}
+			const idx_t chunks_per_task = context.config.verify_parallelism ? 1 : CHUNKS_PER_TASK;
+			for (idx_t chunk_idx = 0; chunk_idx < chunk_count; chunk_idx += chunks_per_task) {
+				auto chunk_idx_to = MinValue<idx_t>(chunk_idx + chunks_per_task, chunk_count);
+				finalize_tasks.push_back(make_uniq<HashJoinFinalizeTask>(shared_from_this(), context, sink, chunk_idx,
+				                                                         chunk_idx_to, true, sink.op));
 			}
 		}
 		SetTasks(std::move(finalize_tasks));
@@ -450,7 +443,8 @@ public:
 		sink.hash_table->finalized = true;
 	}
 
-	static constexpr const idx_t PARALLEL_CONSTRUCT_THRESHOLD = 1048576;
+	static constexpr idx_t PARALLEL_CONSTRUCT_THRESHOLD = 1048576;
+	static constexpr idx_t CHUNKS_PER_TASK = 64;
 };
 
 void HashJoinGlobalSinkState::ScheduleFinalize(Pipeline &pipeline, Event &event) {
