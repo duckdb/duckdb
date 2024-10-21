@@ -8,13 +8,14 @@
 
 #pragma once
 
-#include <vector>
-#include <string>
+#include "shell_state.hpp"
 
 namespace duckdb_shell {
+struct ShellState;
 
 class ShellRenderer {
 public:
+	static bool IsColumnar(RenderMode mode);
 };
 
 

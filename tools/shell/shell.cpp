@@ -491,7 +491,8 @@ static void shell_out_of_memory(void){
 ** in bytes.  This is different from the %*.*s specification in printf
 ** since with %*.*s the width is measured in bytes, not characters.
 */
-static void utf8_width_print(FILE *pOut, int w, const char *zUtf){
+static void utf8_width_print(FILE *pOut, int w, const string &str){
+	auto zUtf = str.c_str();
   int i;
   int n;
   int aw = w<0 ? -w : w;
@@ -570,6 +571,10 @@ static int strlenChar(const char *z){
   }
   return n;
 #endif
+}
+
+static int strlenChar(const string &str){
+	return strlenChar(str.c_str());
 }
 
 /*
@@ -3504,39 +3509,33 @@ void ShellState::print_box_row_separator(
 }
 
 
-char *ShellState::strdup_handle_newline(const char *z) {
-  if (!z) {
-    return 0;
-  }
+string ShellState::strdup_handle_newline(const char *z) {
+  static constexpr uint64_t MAX_SIZE = 80;
+	if (!z) {
+		return nullValue;
+	}
   if (cMode != RenderMode::BOX) {
-    return strdup(z);
+    return z;
   }
-  int max_size = 80;
-  char *result = (char *) malloc(max_size * 2 + 10);
-  char *t = result;
+  string result;
   int count = 0;
-  int interrupted = 0;
-  const char *s;
-  for(s = z; *s; s++, t++) {
+  bool interrupted = false;
+  for(const char *s = z; *s; s++) {
     if (*s == '\n') {
-      *t = '\\';
-      t++;
-      *t = 'n';
+    	result += "\\";
+    	result += "n";
     } else {
-      *t = *s;
+    	result += *s;
     }
     count++;
-    if (count >= max_size && ((*s & 0xc0) != 0x80)) {
-      interrupted = 1;
+    if (count >= MAX_SIZE && ((*s & 0xc0) != 0x80)) {
+      interrupted = true;
       break;
     }
   }
   if (interrupted) {
-    *t++ = '.';
-    *t++ = '.';
-    *t++ = '.';
+  	result += "...";
   }
-  *t = '\0';
   return result;
 }
 
@@ -3583,11 +3582,9 @@ void ShellState::exec_prepared_stmt_columnar(
 ){
   sqlite3_int64 nRow = 0;
   int nColumn = 0;
-  char **azData = 0;
-  sqlite3_int64 nAlloc = 0;
-  const char *z;
+  vector<string> azData;
   int rc;
-  sqlite3_int64 i, nData;
+  sqlite3_int64 i;
   int j, nTotal, w, n;
   const char *colSep = 0;
   const char *rowSep = 0;
@@ -3595,26 +3592,19 @@ void ShellState::exec_prepared_stmt_columnar(
   rc = sqlite3_step(pStmt);
   if( rc!=SQLITE_ROW ) return;
   nColumn = sqlite3_column_count(pStmt);
-  nAlloc = nColumn*4;
-  azData = (char **) sqlite3_malloc64( nAlloc*sizeof(char*) );
-  if( azData==0 ) shell_out_of_memory();
+	azData.reserve(nColumn * 4);
   for(i=0; i<nColumn; i++){
-    azData[i] = strdup_handle_newline(sqlite3_column_name(pStmt,i));
+	  azData.push_back(strdup_handle_newline(sqlite3_column_name(pStmt,i)));
   }
   colTypes = (int *) realloc(colTypes, nColumn * sizeof(int));
   for(i=0; i<nColumn; i++){
     colTypes[i] = sqlite3_column_type(pStmt, i);
   }
   do{
-    if( (nRow+2)*nColumn >= nAlloc ){
-      nAlloc *= 2;
-      azData = (char **) sqlite3_realloc64(azData, nAlloc*sizeof(char*));
-      if( azData==0 ) shell_out_of_memory();
-    }
     nRow++;
     for(i=0; i<nColumn; i++){
-      z = (const char*)sqlite3_column_text(pStmt,i);
-      azData[nRow*nColumn + i] = strdup_handle_newline(z);
+      auto z = (const char*)sqlite3_column_text(pStmt,i);
+      azData.push_back(strdup_handle_newline(z));
     }
   }while( (rc = sqlite3_step(pStmt))==SQLITE_ROW );
   if( nColumn>nWidth ){
@@ -3632,13 +3622,12 @@ void ShellState::exec_prepared_stmt_columnar(
   }
   nTotal = nColumn*(nRow+1);
   for(i=0; i<nTotal; i++){
-    z = azData[i];
-    if( z==0 ) z = nullValue;
-    n = strlenChar(z);
+    n = strlenChar(azData[i].c_str());
     j = i%nColumn;
     if( n>actualWidth[j] ) actualWidth[j] = n;
   }
   if( seenInterrupt ) goto columnar_end;
+
   switch( cMode ){
     case RenderMode::COLUMN: {
       colSep = "  ";
@@ -3665,7 +3654,7 @@ void ShellState::exec_prepared_stmt_columnar(
       for(i=0; i<nColumn; i++){
         w = actualWidth[i];
         n = strlenChar(azData[i]);
-        utf8_printf(out, "%*s%s%*s", (w-n)/2, "", azData[i], (w-n+1)/2, "");
+        utf8_printf(out, "%*s%s%*s", (w-n)/2, "", azData[i].c_str(), (w-n+1)/2, "");
         fputs(i==nColumn-1?" |\n":" | ", out);
       }
       print_row_separator(nColumn, "+");
@@ -3678,7 +3667,7 @@ void ShellState::exec_prepared_stmt_columnar(
       for(i=0; i<nColumn; i++){
         w = actualWidth[i];
         n = strlenChar(azData[i]);
-        utf8_printf(out, "%*s%s%*s", (w-n)/2, "", azData[i], (w-n+1)/2, "");
+        utf8_printf(out, "%*s%s%*s", (w-n)/2, "", azData[i].c_str(), (w-n+1)/2, "");
         fputs(i==nColumn-1?" |\n":" | ", out);
       }
       print_markdown_separator(nColumn, "|");
@@ -3693,7 +3682,7 @@ void ShellState::exec_prepared_stmt_columnar(
         w = actualWidth[i];
         n = strlenChar(azData[i]);
         utf8_printf(out, "%*s%s%*s%s",
-            (w-n)/2, "", azData[i], (w-n+1)/2, "",
+            (w-n)/2, "", azData[i].c_str(), (w-n+1)/2, "",
             i==nColumn-1?" " BOX_13 "\n":" " BOX_13 " ");
       }
       print_box_row_separator(nColumn, BOX_123, BOX_1234, BOX_134);
@@ -3716,7 +3705,7 @@ void ShellState::exec_prepared_stmt_columnar(
       for(i=0; i<nColumn; i++){
         w = actualWidth[i];
         n = strlenChar(azData[i]);
-        utf8_printf(out, "%*s%s%*s", (w-n)/2, "", azData[i], (w-n+1)/2, "");
+        utf8_printf(out, "%*s%s%*s", (w-n)/2, "", azData[i].c_str(), (w-n+1)/2, "");
         fputs(i==nColumn-1? rowSep:colSep, out);
       }
       fputs("\\hline\n", out);
@@ -3729,11 +3718,9 @@ void ShellState::exec_prepared_stmt_columnar(
     if( j==0 && cMode!=RenderMode::COLUMN && cMode != RenderMode::LATEX ){
       utf8_printf(out, "%s", cMode==RenderMode::BOX?BOX_13" ":"| ");
     }
-    z = azData[i];
-    if( z==0 ) z = nullValue;
     w = actualWidth[j];
     if( colWidth[j]<0 ) w = -w;
-    utf8_width_print(out, w, z);
+    utf8_width_print(out, w, azData[i]);
     if( j==nColumn-1 ){
       utf8_printf(out, "%s", rowSep);
       j = -1;
@@ -3754,9 +3741,6 @@ columnar_end:
   if( seenInterrupt ){
     utf8_printf(out, "Interrupt\n");
   }
-  nData = (nRow+1)*nColumn;
-  for(i=0; i<nData; i++) free(azData[i]);
-  sqlite3_free(azData);
 }
 
 extern "C" {
@@ -3781,12 +3765,7 @@ void ShellState::exec_prepared_stmt(
 	  return;
   }
 
-  if( cMode==RenderMode::COLUMN
-   || cMode==RenderMode::TABLE
-   || cMode==RenderMode::BOX
-   || cMode==RenderMode::MARKDOWN
-   || cMode==RenderMode::LATEX
-  ){
+  if (ShellRenderer::IsColumnar(cMode)) {
     exec_prepared_stmt_columnar(pStmt);
     return;
   }

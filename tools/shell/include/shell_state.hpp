@@ -11,11 +11,15 @@
 #include <vector>
 #include <string>
 #include <cstdint>
+#include <memory>
 
 struct sqlite3;
 struct sqlite3_stmt;
 
 namespace duckdb_shell {
+using std::unique_ptr;
+using std::vector;
+using std::string;
 
 enum class RenderMode : uint32_t {
 	LINE = 0,   /* One column per line.  Blank line between records */
@@ -114,7 +118,7 @@ public:
 	  const char *zSep2,
 	  const char *zSep3
 	);
-	char *strdup_handle_newline(const char *z);
+	string strdup_handle_newline(const char *z);
 	void exec_prepared_stmt_columnar(sqlite3_stmt *pStmt);
 	char **tableColumnList(const char *zTab);
 	void exec_prepared_stmt(sqlite3_stmt *pStmt);
