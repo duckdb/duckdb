@@ -1497,13 +1497,6 @@ void StringValueScanner::SetStart() {
 		}
 		return;
 	}
-	// The result size of the data after skipping the row is one line
-	// We have to look for a new line that fits our schema
-	if (state_machine->options.null_padding) {
-		// When Null Padding, we assume we start from the correct new-line
-		start_pos = iterator.GetGlobalCurrentPos();
-		return;
-	}
 	if (iterator.GetEndPos() > cur_buffer_handle->actual_size) {
 		iterator.SetEnd(cur_buffer_handle->actual_size);
 	}
