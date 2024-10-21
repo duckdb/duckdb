@@ -691,7 +691,12 @@ void DataTable::AddAndCreateIndex(LocalStorage &local_storage, DataTable &parent
 		columns.push_back(column_definitions[key.index]);
 	}
 
-	auto index_info = GetIndexInfo(constraint_type, info->table, columns);
+	auto index_info = unique.info;
+	auto initialize_data = false;
+	if (!unique.info.IsValid()) {
+		index_info = GetIndexInfo(constraint_type, info->table, columns);
+		initialize_data = true;
+	}
 
 	// Fetch the column types and create bound column reference expressions.
 	vector<column_t> column_ids;
@@ -710,9 +715,14 @@ void DataTable::AddAndCreateIndex(LocalStorage &local_storage, DataTable &parent
 		column_ids.push_back(column.Physical().index);
 	}
 
-	// Create a global ART.
+	// If this is a WAL replay, then we only create the global index and return.
 	auto global_art = make_uniq<ART>(index_info.name, constraint_type, column_ids, TableIOManager::Get(*this),
 	                                 std::move(global_expressions), db, nullptr, index_info);
+	if (!initialize_data) {
+		AddIndex(std::move(global_art));
+		return;
+	}
+
 	parent.row_groups->AppendToIndex(parent, *global_art);
 	AddIndex(std::move(global_art));
 

@@ -373,6 +373,72 @@ void WriteAheadLogDeserializer::ReplayDropTable() {
 void WriteAheadLogDeserializer::ReplayAlter() {
 	auto info = deserializer.ReadProperty<unique_ptr<ParseInfo>>(101, "info");
 	auto &alter_info = info->Cast<AlterInfo>();
+
+	if (alter_info.type != AlterType::ALTER_TABLE) {
+		if (DeserializeOnly()) {
+			return;
+		}
+		catalog.Alter(context, alter_info);
+		return;
+	}
+
+	auto &table_info = alter_info.Cast<AlterTableInfo>();
+	if (table_info.alter_table_type != AlterTableType::ADD_CONSTRAINT) {
+		if (DeserializeOnly()) {
+			return;
+		}
+		catalog.Alter(context, alter_info);
+		return;
+	}
+
+	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
+	if (constraint_info.constraint->type != ConstraintType::UNIQUE) {
+		if (DeserializeOnly()) {
+			return;
+		}
+		catalog.Alter(context, alter_info);
+		return;
+	}
+
+	auto &unique_info = constraint_info.constraint->Cast<UniqueConstraint>();
+	if (!unique_info.IsPrimaryKey()) {
+		if (DeserializeOnly()) {
+			return;
+		}
+		catalog.Alter(context, alter_info);
+		return;
+	}
+
+	constraint_info.constraint->info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
+	auto &index_info = constraint_info.constraint->info;
+	D_ASSERT(index_info.IsValid() && !index_info.name.empty());
+
+	auto &storage_manager = db.GetStorageManager();
+	auto &single_file_sm = storage_manager.Cast<SingleFileStorageManager>();
+	auto &block_manager = single_file_sm.block_manager;
+	auto &buffer_manager = block_manager->buffer_manager;
+
+	deserializer.ReadList(103, "index_storage", [&](Deserializer::List &list, idx_t i) {
+		auto &data_info = index_info.allocator_infos[i];
+
+		// read the data into buffer handles and convert them to blocks on disk
+		// then, update the block pointer
+		for (idx_t j = 0; j < data_info.allocation_sizes.size(); j++) {
+
+			// read the data into a buffer handle
+			auto buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager->GetBlockSize(), false);
+			auto block_handle = buffer_handle.GetBlockHandle();
+			auto data_ptr = buffer_handle.Ptr();
+
+			list.ReadElement<bool>(data_ptr, data_info.allocation_sizes[j]);
+
+			// now convert the buffer handle to a persistent block and remember the block id
+			auto block_id = block_manager->GetFreeBlockId();
+			block_manager->ConvertToPersistent(block_id, std::move(block_handle));
+			data_info.block_pointers[j].block_id = block_id;
+		}
+	});
+
 	if (DeserializeOnly()) {
 		return;
 	}

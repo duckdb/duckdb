@@ -30,8 +30,8 @@ ALTER TABLE test ADD PRIMARY KEY (i)
 <REGEX>:Catalog Error.*table "test" can have only one primary key.*
 
 statement error
-INSERT INTO test VALUES (2, 1)
+INSERT INTO test VALUES (2, 2)
 ----
-<REGEX>:Constraint Error.*Duplicate key "j: 1" violates primary key constraint.*
+<REGEX>:Constraint Error.*Duplicate key "j: 2" violates primary key constraint.*
 
 

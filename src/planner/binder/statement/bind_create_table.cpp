@@ -134,7 +134,8 @@ unique_ptr<BoundConstraint> Binder::BindConstraint(Constraint &constraint, const
 			unique.SetColumnName(col.Name());
 			keys.push_back(col.Physical());
 			key_set.insert(col.Physical());
-			return make_uniq<BoundUniqueConstraint>(std::move(keys), std::move(key_set), unique.IsPrimaryKey());
+			return make_uniq<BoundUniqueConstraint>(std::move(keys), std::move(key_set), unique.IsPrimaryKey(),
+			                                        constraint.info);
 		}
 
 		// unique constraint is given by list of names
@@ -151,7 +152,8 @@ unique_ptr<BoundConstraint> Binder::BindConstraint(Constraint &constraint, const
 			keys.push_back(column_index);
 			key_set.insert(column_index);
 		}
-		return make_uniq<BoundUniqueConstraint>(std::move(keys), std::move(key_set), unique.IsPrimaryKey());
+		return make_uniq<BoundUniqueConstraint>(std::move(keys), std::move(key_set), unique.IsPrimaryKey(),
+		                                        constraint.info);
 	}
 	case ConstraintType::FOREIGN_KEY: {
 		auto &fk = constraint.Cast<ForeignKeyConstraint>();

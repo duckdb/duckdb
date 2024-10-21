@@ -64,7 +64,7 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			deserializer.End();
 
 			auto &alter_info = parse_info->Cast<AlterInfo>();
-			log.WriteAlter(alter_info);
+			log.WriteAlter(entry, alter_info);
 		} else {
 			switch (parent.type) {
 			case CatalogType::TABLE_ENTRY:
