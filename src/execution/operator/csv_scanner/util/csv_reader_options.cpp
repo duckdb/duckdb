@@ -4,6 +4,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/set.hpp"
 
 namespace duckdb {
 
@@ -519,7 +520,7 @@ void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, Clie
 		}
 		if (loption == "columns") {
 			if (!name_list.empty()) {
-				throw BinderException("read_csv_auto column_names/names can only be supplied once");
+				throw BinderException("read_csv column_names/names can only be supplied once");
 			}
 			columns_set = true;
 			auto &child_type = kv.second.type();
@@ -568,23 +569,40 @@ void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, Clie
 				auto_type_candidates.emplace_back(candidate_type.second);
 			}
 		} else if (loption == "column_names" || loption == "names") {
+			unordered_set<string> column_names;
 			if (!name_list.empty()) {
-				throw BinderException("read_csv_auto column_names/names can only be supplied once");
+				throw BinderException("read_csv column_names/names can only be supplied once");
 			}
 			if (kv.second.IsNull()) {
-				throw BinderException("read_csv_auto %s cannot be NULL", kv.first);
+				throw BinderException("read_csv %s cannot be NULL", kv.first);
 			}
 			auto &children = ListValue::GetChildren(kv.second);
 			for (auto &child : children) {
 				name_list.push_back(StringValue::Get(child));
 			}
+			for (auto &name : name_list) {
+				bool empty = true;
+				for (auto &c : name) {
+					if (!StringUtil::CharacterIsSpace(c)) {
+						empty = false;
+						break;
+					}
+				}
+				if (empty) {
+					throw BinderException("read_csv %s cannot have empty (or all whitespace) value", kv.first);
+				}
+				if (column_names.find(name) != column_names.end()) {
+					throw BinderException("read_csv %s must have unique values. \"%s\" is repeated.", kv.first, name);
+				}
+				column_names.insert(name);
+			}
 		} else if (loption == "column_types" || loption == "types" || loption == "dtypes") {
 			auto &child_type = kv.second.type();
 			if (child_type.id() != LogicalTypeId::STRUCT && child_type.id() != LogicalTypeId::LIST) {
-				throw BinderException("read_csv_auto %s requires a struct or list as input", kv.first);
+				throw BinderException("read_csv %s requires a struct or list as input", kv.first);
 			}
 			if (!sql_type_list.empty()) {
-				throw BinderException("read_csv_auto column_types/types/dtypes can only be supplied once");
+				throw BinderException("read_csv column_types/types/dtypes can only be supplied once");
 			}
 			vector<string> sql_type_names;
 			if (child_type.id() == LogicalTypeId::STRUCT) {
@@ -594,7 +612,7 @@ void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, Clie
 					auto &name = StructType::GetChildName(child_type, i);
 					auto &val = struct_children[i];
 					if (val.type().id() != LogicalTypeId::VARCHAR) {
-						throw BinderException("read_csv_auto %s requires a type specification as string", kv.first);
+						throw BinderException("read_csv %s requires a type specification as string", kv.first);
 					}
 					sql_type_names.push_back(StringValue::Get(val));
 					sql_types_per_column[name] = i;
@@ -602,7 +620,7 @@ void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, Clie
 			} else {
 				auto &list_child = ListType::GetChildType(child_type);
 				if (list_child.id() != LogicalTypeId::VARCHAR) {
-					throw BinderException("read_csv_auto %s requires a list of types (varchar) as input", kv.first);
+					throw BinderException("read_csv %s requires a list of types (varchar) as input", kv.first);
 				}
 				auto &children = ListValue::GetChildren(kv.second);
 				for (auto &child : children) {
@@ -613,8 +631,7 @@ void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, Clie
 			for (auto &sql_type : sql_type_names) {
 				auto def_type = TransformStringToLogicalType(sql_type, context);
 				if (def_type.id() == LogicalTypeId::USER) {
-					throw BinderException("Unrecognized type \"%s\" for read_csv_auto %s definition", sql_type,
-					                      kv.first);
+					throw BinderException("Unrecognized type \"%s\" for read_csv %s definition", sql_type, kv.first);
 				}
 				sql_type_list.push_back(std::move(def_type));
 			}
