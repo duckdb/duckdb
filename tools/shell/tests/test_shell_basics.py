@@ -486,15 +486,6 @@ def test_scanstats(shell):
     result = test.run()
     result.check_stderr('scanstats')
 
-def test_trace(shell, random_filepath):
-    test = (
-        ShellTest(shell)
-        .statement(f".trace {random_filepath.as_posix()}")
-        .statement("SELECT 42;")
-    )
-    result = test.run()
-    result.check_stderr('sqlite3_trace_v2')
-    
 def test_output_csv_mode(shell, random_filepath):
     test = (
         ShellTest(shell)

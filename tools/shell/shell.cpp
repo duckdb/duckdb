@@ -2647,6 +2647,7 @@ public:
 
 	int runOneSqlLine(char *zSql, int startline);
 	void process_sqliterc(const char *sqliterc_override);
+	int process_input();
 };
 
 /* Allowed values for ShellState.openMode
@@ -4892,9 +4893,6 @@ static int showHelp(FILE *out, const char *zPattern){
   return n;
 }
 
-/* Forward reference */
-static int process_input(ShellState *p);
-
 /*
 ** Read the content of file zName into memory obtained from sqlite3_malloc64()
 ** and return a pointer to the buffer. The caller is responsible for freeing
@@ -5412,65 +5410,6 @@ static FILE *output_file_open(const char *zFile, int bTextMode){
   }
   return f;
 }
-
-#ifndef SQLITE_OMIT_TRACE
-/*
-** A routine for handling output from sqlite3_trace().
-*/
-static int sql_trace_callback(
-  unsigned mType,         /* The trace type */
-  void *pArg,             /* The ShellState pointer */
-  void *pP,               /* Usually a pointer to sqlite_stmt */
-  void *pX                /* Auxiliary output */
-){
-  ShellState *p = (ShellState*)pArg;
-  sqlite3_stmt *pStmt;
-  const char *zSql;
-  int nSql;
-  if( p->traceOut==0 ) return 0;
-  if( mType==SQLITE_TRACE_CLOSE ){
-    utf8_printf(p->traceOut, "-- closing database connection\n");
-    return 0;
-  }
-  if( mType!=SQLITE_TRACE_ROW && ((const char*)pX)[0]=='-' ){
-    zSql = (const char*)pX;
-  }else{
-    pStmt = (sqlite3_stmt*)pP;
-    switch( p->eTraceType ){
-      case SHELL_TRACE_EXPANDED: {
-        zSql = sqlite3_expanded_sql(pStmt);
-        break;
-      }
-#ifdef SQLITE_ENABLE_NORMALIZE
-      case SHELL_TRACE_NORMALIZED: {
-        zSql = sqlite3_normalized_sql(pStmt);
-        break;
-      }
-#endif
-      default: {
-        zSql = sqlite3_sql(pStmt);
-        break;
-      }
-    }
-  }
-  if( zSql==0 ) return 0;
-  nSql = strlen30(zSql);
-  while( nSql>0 && zSql[nSql-1]==';' ){ nSql--; }
-  switch( mType ){
-    case SQLITE_TRACE_ROW:
-    case SQLITE_TRACE_STMT: {
-      utf8_printf(p->traceOut, "%.*s;\n", nSql, zSql);
-      break;
-    }
-    case SQLITE_TRACE_PROFILE: {
-      sqlite3_int64 nNanosec = *(sqlite3_int64*)pX;
-      utf8_printf(p->traceOut, "%.*s; -- %lld ns\n", nSql, zSql, nNanosec);
-      break;
-    }
-  }
-  return 0;
-}
-#endif
 
 /*
 ** A no-op routine that runs with the ".breakpoint" doc-command.  This is
@@ -7304,7 +7243,7 @@ int ShellState::do_meta_command(char *zLine){
       utf8_printf(stderr,"Error: cannot open \"%s\"\n", azArg[1]);
       rc = 1;
     }else{
-      rc = process_input(this);
+      rc = process_input();
       fclose(in);
     }
     in = inSaved;
@@ -7775,57 +7714,6 @@ int ShellState::do_meta_command(char *zLine){
     }
   }else
 
-#ifndef SQLITE_OMIT_TRACE
-  if( c=='t' && strncmp(azArg[0], "trace", n)==0 ){
-    int mType = 0;
-    int jj;
-    open_db(0);
-    for(jj=1; jj<nArg; jj++){
-      const char *z = azArg[jj];
-      if( z[0]=='-' ){
-        if( optionMatch(z, "expanded") ){
-          eTraceType = SHELL_TRACE_EXPANDED;
-        }
-#ifdef SQLITE_ENABLE_NORMALIZE
-        else if( optionMatch(z, "normalized") ){
-          eTraceType = SHELL_TRACE_NORMALIZED;
-        }
-#endif
-        else if( optionMatch(z, "plain") ){
-          eTraceType = SHELL_TRACE_PLAIN;
-        }
-        else if( optionMatch(z, "profile") ){
-          mType |= SQLITE_TRACE_PROFILE;
-        }
-        else if( optionMatch(z, "row") ){
-          mType |= SQLITE_TRACE_ROW;
-        }
-        else if( optionMatch(z, "stmt") ){
-          mType |= SQLITE_TRACE_STMT;
-        }
-        else if( optionMatch(z, "close") ){
-          mType |= SQLITE_TRACE_CLOSE;
-        }
-        else {
-          raw_printf(stderr, "Unknown option \"%s\" on \".trace\"\n", z);
-          rc = 1;
-          goto meta_command_exit;
-        }
-      }else{
-        output_file_close(traceOut);
-        traceOut = output_file_open(azArg[1], 0);
-      }
-    }
-    if( traceOut==0 ){
-      sqlite3_trace_v2(db, 0, 0, 0);
-    }else{
-      if( mType==0 ) mType = SQLITE_TRACE_STMT;
-      sqlite3_trace_v2(db, mType, sql_trace_callback, this);
-    }
-  }else
-#endif /* !defined(SQLITE_OMIT_TRACE) */
-
-
 #if SQLITE_USER_AUTHENTICATION
   if( c=='u' && strncmp(azArg[0], "user", n)==0 ){
     if( nArg<2 ){
@@ -8117,7 +8005,7 @@ int ShellState::runOneSqlLine(char *zSql, int startline){
 **
 ** Return the number of errors.
 */
-static int process_input(ShellState *p){
+int ShellState::process_input(){
   char *zLine = 0;          /* A single input line */
   char *zSql = 0;           /* Accumulated SQL text */
   int nLine;                /* Length of current line */
@@ -8128,13 +8016,13 @@ static int process_input(ShellState *p){
   int errCnt = 0;           /* Number of errors seen */
   int startline = 0;        /* Line number for start of current input */
   int numCtrlC = 0;
-  p->lineno = 0;
-  while( errCnt==0 || !bail_on_error || (p->in==0 && stdin_is_interactive) ){
-    fflush(p->out);
-    zLine = one_input_line(p->in, zLine, nSql>0);
+  lineno = 0;
+  while( errCnt==0 || !bail_on_error || (in==0 && stdin_is_interactive) ){
+    fflush(out);
+    zLine = one_input_line(in, zLine, nSql>0);
     if( zLine==0 ){
       /* End of input */
-      if( p->in==0 && stdin_is_interactive ) printf("\n");
+      if( in==0 && stdin_is_interactive ) printf("\n");
       break;
     }
     if (*zLine == '\3') {
@@ -8153,21 +8041,21 @@ static int process_input(ShellState *p){
       numCtrlC = 0;
     }
     if( seenInterrupt ){
-      if( p->in!=0 ) break;
+      if( in!=0 ) break;
       seenInterrupt = 0;
     }
-    p->lineno++;
+    lineno++;
     if( nSql==0 && _all_whitespace(zLine) ){
-      if( p->ShellHasFlag(SHFLG_Echo) ) printf("%s\n", zLine);
+      if( ShellHasFlag(SHFLG_Echo) ) printf("%s\n", zLine);
       continue;
     }
     if( zLine && (zLine[0]=='.' || zLine[0]=='#') && nSql==0 ){
-      if( p->ShellHasFlag(SHFLG_Echo) ) printf("%s\n", zLine);
+      if( ShellHasFlag(SHFLG_Echo) ) printf("%s\n", zLine);
       if( zLine[0]=='.' ){
 #ifndef SHELL_USE_LOCAL_GETLINE
         if( zLine && *zLine && *zLine != '\3' ) shell_add_history(zLine);
 #endif
-        rc = p->do_meta_command(zLine);
+        rc = do_meta_command(zLine);
         if( rc==2 ){ /* exit requested */
           break;
         }else if( rc ){
@@ -8191,7 +8079,7 @@ static int process_input(ShellState *p){
       for(i=0; zLine[i] && IsSpace(zLine[i]); i++){}
       assert( nAlloc>0 && zSql!=0 );
       memcpy(zSql, zLine+i, nLine+1-i);
-      startline = p->lineno;
+      startline = lineno;
       nSql = nLine-i;
     }else{
       zSql[nSql++] = '\n';
@@ -8200,21 +8088,21 @@ static int process_input(ShellState *p){
     }
     if( nSql && line_contains_semicolon(&zSql[nSqlPrior], nSql-nSqlPrior)
                 && sqlite3_complete(zSql) ){
-      errCnt += p->runOneSqlLine(zSql, startline);
+      errCnt += runOneSqlLine(zSql, startline);
       nSql = 0;
-      if( p->outCount ){
-        p->output_reset();
-        p->outCount = 0;
+      if( outCount ){
+        output_reset();
+        outCount = 0;
       }else{
-        p->clearTempFile();
+        clearTempFile();
       }
     }else if( nSql && _all_whitespace(zSql) ){
-      if( p->ShellHasFlag(SHFLG_Echo) ) printf("%s\n", zSql);
+      if( ShellHasFlag(SHFLG_Echo) ) printf("%s\n", zSql);
       nSql = 0;
     }
   }
   if( nSql && !_all_whitespace(zSql) ){
-    errCnt += p->runOneSqlLine(zSql, startline);
+    errCnt += runOneSqlLine(zSql, startline);
   }
   free(zSql);
   free(zLine);
@@ -8318,7 +8206,7 @@ void ShellState::process_sqliterc(const char *sqliterc_override) {
     if( stdin_is_interactive ){
       utf8_printf(stderr,"-- Loading resources from %s\n",sqliterc);
     }
-    process_input(this);
+    process_input();
     fclose(in);
   }
   in = inSaved;
@@ -8963,7 +8851,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
       linenoiseSetCompletionCallback(linenoise_completion);
 #endif
       data.in = 0;
-      rc = process_input(&data);
+      rc = data.process_input();
       if( zHistory ){
         shell_stifle_history(2000);
         shell_write_history(zHistory);
@@ -8971,7 +8859,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
       }
     }else{
       data.in = stdin;
-      rc = process_input(&data);
+      rc = data.process_input();
     }
   }
   data.set_table_name(0);
