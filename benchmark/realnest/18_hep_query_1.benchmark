@@ -1,5 +1,5 @@
 # name: benchmark/realnest/18_hep_query_1.benchmark
-# description: Plot the missing transverse energy of all events
+# description: Q1 - Plot the missing transverse energy of all events
 # group: [realnest]
 
 name 18_hep_query_1
