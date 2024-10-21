@@ -49,6 +49,10 @@ using uncompressed_size_t = uint64_t;
 using compressed_size_t = uint32_t;
 using string_length_t = uint32_t;
 
+static int32_t GetCompressionLevel() {
+	return duckdb_zstd::ZSTD_defaultCLevel();
+}
+
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -243,8 +247,8 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 		return NumericLimits<idx_t>::Maximum();
 	}
 
-	state.compression_dict = duckdb_zstd::ZSTD_createCDict_byReference(state.dict.Buffer(), state.dict.Size(),
-	                                                                   duckdb_zstd::ZSTD_defaultCLevel());
+	state.compression_dict =
+	    duckdb_zstd::ZSTD_createCDict_byReference(state.dict.Buffer(), state.dict.Size(), GetCompressionLevel());
 
 	auto required_space = duckdb_zstd::ZSTD_compressBound(state.sampling_state.total_sample_size);
 	auto dst = malloc(required_space);
@@ -290,6 +294,7 @@ public:
 		CreateSegment(checkpointer.GetRowGroup().start);
 		SetCurrentBuffer(segment_handle);
 		vector_count = 0;
+		tuple_count = 0;
 
 		auto &dict = analyze_state->dict;
 		// Write the dictionary to the start of the segment
@@ -299,26 +304,26 @@ public:
 		memcpy(current_buffer_ptr, dict.Buffer(), dict.Size());
 		current_buffer_ptr += dict.Size();
 
-		idx_t amount_of_vectors = analyze_state->GetVectorCount();
+		total_vector_count = analyze_state->GetVectorCount();
 
 		// Set pointers to the Vector Metadata
 		idx_t offset = GetCurrentOffset();
 
 		offset = AlignValue<idx_t, sizeof(page_id_t)>(offset);
 		page_ids = (page_id_t *)(current_buffer->Ptr() + offset);
-		offset += (sizeof(page_id_t) * amount_of_vectors);
+		offset += (sizeof(page_id_t) * total_vector_count);
 
 		offset = AlignValue<idx_t, sizeof(page_offset_t)>(offset);
 		page_offsets = (page_offset_t *)(current_buffer->Ptr() + offset);
-		offset += (sizeof(page_offset_t) * amount_of_vectors);
+		offset += (sizeof(page_offset_t) * total_vector_count);
 
 		offset = AlignValue<idx_t, sizeof(uncompressed_size_t)>(offset);
 		uncompressed_sizes = (uncompressed_size_t *)(current_buffer->Ptr() + offset);
-		offset += (sizeof(uncompressed_size_t) * amount_of_vectors);
+		offset += (sizeof(uncompressed_size_t) * total_vector_count);
 
 		offset = AlignValue<idx_t, sizeof(compressed_size_t)>(offset);
 		compressed_sizes = (compressed_size_t *)(current_buffer->Ptr() + offset);
-		offset += (sizeof(compressed_size_t) * amount_of_vectors);
+		offset += (sizeof(compressed_size_t) * total_vector_count);
 
 		current_buffer_ptr = current_buffer->Ptr() + offset;
 	}
@@ -329,85 +334,114 @@ public:
 		current_buffer_ptr = handle.Ptr();
 	}
 
-	void AddString(const string_t &string) {
-		auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
-		auto required_space = string.GetSize() + compression_buffer_offset;
-		auto current_size = compression_buffer ? compression_buffer.GetSize() : 0;
-		required_space = MaxValue<idx_t>(info.GetBlockSize(), required_space);
-		if (required_space >= current_size) {
-			idx_t new_size = NextPowerOfTwo(required_space);
-			auto old_buffer = std::move(compression_buffer);
-
-			compression_buffer = buffer_manager.GetBufferAllocator().Allocate(new_size);
-			if (old_buffer) {
-				memcpy(compression_buffer.get(), old_buffer.get(), compression_buffer_offset);
-			}
+	void InitializeVector() {
+		if (vector_count + 1 >= total_vector_count) {
+			vector_size - analyze_state->count - (STANDARD_VECTOR_SIZE * vector_count);
+		} else {
+			vector_size = STANDARD_VECTOR_SIZE;
 		}
-		memcpy(compression_buffer.get() + compression_buffer_offset, string.GetData(), string.GetSize());
-		compression_buffer_offset += string.GetSize();
-		string_lengths[buffered_count] = UnsafeNumericCast<string_length_t>(string.GetSize());
-		buffered_count++;
-		if (buffered_count == STANDARD_VECTOR_SIZE) {
+		auto current_offset = GetCurrentOffset();
+		// FIXME: align the `current_offset` ??
+		starting_offset = current_offset;
+		starting_page = GetCurrentId();
+		compressed_size = 0;
+		uncompressed_size = 0;
+
+		string_lengths = (string_length_t *)(current_buffer->Ptr() + current_offset);
+		current_buffer_ptr = (data_ptr_t)string_lengths;
+		current_buffer_ptr += vector_size * sizeof(string_length_t);
+
+		duckdb_zstd::ZSTD_CCtx_reset(analyze_state->context, duckdb_zstd::ZSTD_reset_session_only);
+		duckdb_zstd::ZSTD_CCtx_refCDict(analyze_state->context, analyze_state->compression_dict);
+		duckdb_zstd::ZSTD_CCtx_setParameter(analyze_state->context, duckdb_zstd::ZSTD_c_compressionLevel,
+		                                    GetCompressionLevel());
+	}
+
+	// void WriteToCompressionBuffer(const string_t &string) {
+	//	auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
+	//	auto required_space = string.GetSize() + compression_buffer_offset;
+	//	auto current_size = compression_buffer ? compression_buffer.GetSize() : 0;
+	//	required_space = MaxValue<idx_t>(info.GetBlockSize(), required_space);
+	//	if (required_space >= current_size) {
+	//		idx_t new_size = NextPowerOfTwo(required_space);
+	//		auto old_buffer = std::move(compression_buffer);
+
+	//		compression_buffer = buffer_manager.GetBufferAllocator().Allocate(new_size);
+	//		if (old_buffer) {
+	//			memcpy(compression_buffer.get(), old_buffer.get(), compression_buffer_offset);
+	//		}
+	//	}
+	//	memcpy(compression_buffer.get() + compression_buffer_offset, string.GetData(), string.GetSize());
+	//	compression_buffer_offset += string.GetSize();
+	//}
+
+	void CompressString(const string_t &string, bool end_of_vector) {
+		duckdb_zstd::ZSTD_inBuffer in_buffer = {/*data = */ string.GetData(),
+		                                        /*length = */ string.GetSize(),
+		                                        /*pos = */ 0};
+
+		uncompressed_size += string.GetSize();
+		const auto end_mode = end_of_vector ? duckdb_zstd::ZSTD_e_end : duckdb_zstd::ZSTD_e_flush;
+
+		size_t compress_result;
+		while (true) {
+			idx_t old_pos = out_buffer.pos;
+
+			compress_result =
+			    duckdb_zstd::ZSTD_compressStream2(analyze_state->context, &out_buffer, &in_buffer, end_mode);
+			D_ASSERT(out_buffer.pos >= old_pos);
+			auto diff = out_buffer.pos - old_pos;
+			compressed_size += diff;
+
+			if (duckdb_zstd::ZSTD_isError(compress_result)) {
+				throw InvalidInputException("ZSTD Compression failed: %s",
+				                            duckdb_zstd::ZSTD_getErrorName(compress_result));
+			}
+			if (compress_result == 0) {
+				// Finished
+				break;
+			}
+			// FIXME: will 'pos' in the out_buffer always reach 'size' or could the library refuse to fully utilize the
+			// buffer ?? if that is the case, we should somehow serialize how many bytes are utilized for each page
+			D_ASSERT(out_buffer.pos == out_buffer.size);
+			// Allocate a new page
+			FlushPage();
+		}
+	}
+
+	void AddString(const string_t &string) {
+		if (!tuple_count) {
+			InitializeVector();
+		}
+
+		string_lengths[tuple_count] = UnsafeNumericCast<string_length_t>(string.GetSize());
+		// WriteToCompressionBuffer(string);
+		bool final_tuple = tuple_count + 1 >= vector_size;
+		CompressString(string, final_tuple);
+
+		tuple_count++;
+		if (tuple_count == vector_size) {
+			// Reached the end of this vector
 			FlushVector();
 		}
 	}
 
-	void FlushVector() {
-		// Write a Vector worth of strings to storage
-
-		page_id_t starting_page_id = GetCurrentId();
-		page_offset_t starting_page_offset = GetCurrentOffset();
-
-		// compress the data to 'storage_buffer', then figure out if it can fit in the current segment or not
-		// also write the lengths of every string
-		auto storage_buffer_ptr = GetStorageBuffer();
-		auto compressed_size = duckdb_zstd::ZSTD_compress_usingCDict(
-		    /* context = */ analyze_state->context,
-		    /* dst = */ storage_buffer_ptr,
-		    /* dstCapacity = */ storage_buffer.GetSize(),
-		    /* src = */ compression_buffer.get(),
-		    /* srcSize = */ compression_buffer_offset,
-		    /* dict = */ analyze_state->compression_dict);
-		if (duckdb_zstd::ZSTD_isError(compressed_size)) {
-			throw InvalidInputException("ZSTD Compression failed: %s", duckdb_zstd::ZSTD_getErrorName(compressed_size));
-		}
-
-		idx_t remaining = compressed_size;
-		while (remaining) {
-			auto current_offset = GetCurrentOffset();
-			idx_t available_space = info.GetBlockSize() - sizeof(block_id_t) - current_offset;
-			idx_t to_write = MinValue(available_space, remaining);
-
-			memcpy(current_buffer_ptr, storage_buffer_ptr + (compressed_size - remaining), to_write);
-			remaining -= to_write;
-			current_buffer_ptr += to_write;
-			if (remaining) {
-				// We have more data to write, allocate a new block
-				// TODO ?
-				throw InternalException("TODO: add partial block manager");
-			}
-		}
-		// TODO:
-		// Write from the storage_buffer into the block
-		// FIXME: use streaming compression to skip the 'storage_buffer' entirely
-
-		// Write the metadata for this Vector
-		page_ids[vector_count] = starting_page_id;
-		page_offsets[vector_count] = starting_page_offset;
-		compressed_sizes[vector_count] = UnsafeNumericCast<compressed_size_t>(compressed_size);
-		uncompressed_sizes[vector_count] = compression_buffer_offset;
-		vector_count++;
-
-		compression_buffer_offset = 0;
-		buffered_count = 0;
+	void FlushPage() {
+		// Allocate a new block, write the new block id in the old block
+		// flush the old block
+		// update the pointers and 'current_buffer_ptr' etc to point to the new block
+		// update the 'out_buffer'
 	}
 
-	data_ptr_t GetStorageBuffer() {
-		if (!storage_buffer) {
-			auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
-			storage_buffer = buffer_manager.GetBufferAllocator().Allocate(info.GetBlockSize() * 2);
-		}
-		return storage_buffer.get();
+	void FlushVector() {
+		// Write the metadata for this Vector
+		page_ids[vector_count] = starting_page;
+		page_offsets[vector_count] = starting_offset;
+		compressed_sizes[vector_count] = compressed_size;
+		uncompressed_sizes[vector_count] = uncompressed_size;
+		vector_count++;
+
+		tuple_count = 0;
 	}
 
 	page_id_t GetCurrentId() {
@@ -438,10 +472,7 @@ public:
 	}
 
 	void Finalize() {
-		if (buffered_count != 0) {
-			// Flush the last vector
-			FlushVector();
-		}
+		D_ASSERT(!tuple_count);
 
 		auto &state = checkpointer.GetCheckpointState();
 		idx_t segment_block_size;
@@ -501,29 +532,27 @@ public:
 	//===--------------------------------------------------------------------===//
 	// Vector metadata
 	//===--------------------------------------------------------------------===//
+	page_id_t starting_page;
+	page_offset_t starting_offset;
+
 	page_id_t *page_ids;
 	page_offset_t *page_offsets;
 	uncompressed_size_t *uncompressed_sizes;
 	compressed_size_t *compressed_sizes;
 	//! The amount of vectors we've seen so far
 	idx_t vector_count = 0;
+	//! The amount of vectors we're writing
+	idx_t total_vector_count = 0;
+	//! The compression context indicating where we are in the output buffer
+	duckdb_zstd::ZSTD_outBuffer out_buffer;
+	idx_t uncompressed_size = 0;
+	idx_t compressed_size = 0;
+	string_length_t *string_lengths;
 
-	//===--------------------------------------------------------------------===//
-	// Temporary buffers
-	//===--------------------------------------------------------------------===//
-
-	//! The temporary buffer to store the lengths before compressing+serializing them
-	uint32_t string_lengths[STANDARD_VECTOR_SIZE];
-
-	//! Temporary buffer to store the compressed data before writing
-	//! This is necessary when we will cross block boundaries
-	AllocatedData storage_buffer;
-
-	//! The buffer where strings are copied to before compressing
-	AllocatedData compression_buffer;
-	idx_t compression_buffer_offset = 0;
-	//! Amount of tuples we are currently buffering to compress
-	idx_t buffered_count = 0;
+	//! Amount of tuples we have seen for the current vector
+	idx_t tuple_count = 0;
+	//! The expected size of this vector (STANDARD_VECTOR_SIZE except for the last one)
+	idx_t vector_size;
 };
 
 unique_ptr<CompressionState> ZSTDStorage::InitCompression(ColumnDataCheckpointer &checkpointer,
