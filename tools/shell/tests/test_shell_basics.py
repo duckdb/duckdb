@@ -92,20 +92,6 @@ def test_invalid_cast(shell):
     result = test.run()
     result.check_stderr("Could not convert")
 
-
-@pytest.mark.parametrize(
-    ["input", "error"],
-    [
-        (".auth ON", "sqlite3_set_authorizer"),
-        (".auth OFF", "sqlite3_set_authorizer"),
-    ],
-)
-def test_invalid_shell_commands(shell, input, error):
-    test = ShellTest(shell).statement(input)
-    result = test.run()
-    result.check_stderr(error)
-
-
 def test_invalid_backup(shell, random_filepath):
     test = ShellTest(shell).statement(f'.backup {random_filepath.as_posix()}')
     result = test.run()
@@ -300,15 +286,6 @@ def test_execute_display(shell):
     result = test.run()
     result.check_stdout("42")
 
-# this should be fixed
-def test_selftest(shell):
-    test = (
-        ShellTest(shell)
-        .statement(".selftest")
-    )
-    result = test.run()
-    result.check_stderr("sqlite3_table_column_metadata")
-
 @pytest.mark.parametrize('generated_file', ["select 42"], indirect=True)
 def test_read(shell, generated_file):
     test = (
@@ -364,26 +341,6 @@ def test_volatile_commands(shell, cmd):
     )
     result = test.run()
     result.check_stderr("")
-
-def test_stats_error(shell):
-    test = (
-        ShellTest(shell)
-        .statement(".stats")
-    )
-    result = test.run()
-    result.check_stderr("sqlite3_status64")
-
-@pytest.mark.parametrize("param", [
-    "off",
-    "on"
-])
-def test_stats(shell, param):
-    test = (
-        ShellTest(shell)
-        .statement(f".stats {param}")
-    )
-    result = test.run()
-    result.check_stdout("")
 
 @pytest.mark.parametrize("pattern", [
     "test",
