@@ -2646,6 +2646,7 @@ public:
 	int do_meta_command(char *zLine);
 
 	int runOneSqlLine(char *zSql, int startline);
+	void process_sqliterc(const char *sqliterc_override);
 };
 
 /* Allowed values for ShellState.openMode
@@ -8295,15 +8296,12 @@ static char *find_home_dir(int clearFlag){
 **
 ** Returns the number of errors.
 */
-static void process_sqliterc(
-  ShellState *p,                  /* Configuration data */
-  const char *sqliterc_override   /* Name of config file. NULL to use default */
-){
+void ShellState::process_sqliterc(const char *sqliterc_override) {
   char *home_dir = NULL;
   const char *sqliterc = sqliterc_override;
   char *zBuf = 0;
-  FILE *inSaved = p->in;
-  int savedLineno = p->lineno;
+  FILE *inSaved = in;
+  int savedLineno = lineno;
 
   if (sqliterc == NULL) {
     home_dir = find_home_dir(0);
@@ -8315,16 +8313,16 @@ static void process_sqliterc(
     zBuf = sqlite3_mprintf("%s/.duckdbrc",home_dir);
     sqliterc = zBuf;
   }
-  p->in = fopen(sqliterc,"rb");
-  if( p->in ){
+  in = fopen(sqliterc,"rb");
+  if( in ){
     if( stdin_is_interactive ){
       utf8_printf(stderr,"-- Loading resources from %s\n",sqliterc);
     }
-    process_input(p);
-    fclose(p->in);
+    process_input(this);
+    fclose(in);
   }
-  p->in = inSaved;
-  p->lineno = savedLineno;
+  in = inSaved;
+  lineno = savedLineno;
   sqlite3_free(zBuf);
 }
 
@@ -8742,7 +8740,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
   ** is given on the command line, look for a file named ~/.sqliterc and
   ** try to process it.
   */
-  process_sqliterc(&data,zInitFile);
+  data.process_sqliterc(zInitFile);
 
   /* Make a second pass through the command-line argument and set
   ** options.  This second pass is delayed until after the initialization
