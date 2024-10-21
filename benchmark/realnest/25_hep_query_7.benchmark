@@ -13,8 +13,10 @@ cache real_nest.duckdb
 
 load benchmark/realnest/load.sql
 
+# Compute sum of pt of each matching jet
+# Compute the histogram
+
 run
--- Compute sum of pt of each matching jet
 WITH matching_jets AS (
   SELECT event, SUM(j.pt) AS pt_sum
   FROM run2012B_singleMu
@@ -35,7 +37,6 @@ WITH matching_jets AS (
                        pow( (j.phi - x.phi + pi()) % (2 * pi()) - pi(), 2) ) < 0.4)) = 0
   GROUP BY event
 )
--- Compute the histogram
 SELECT
   FLOOR((
     CASE

@@ -1,0 +1,34 @@
+# name: benchmark/realnest/21_hep_query_4.benchmark
+# description: Q4 - Plot the energy emission of the events that have at least two jets with a momentum threshold 40 GeV (gigaelectronvolt).
+# cardinality from the original query replaced with len
+# group: [realnest]
+
+name 21_hep_query_4
+group real_nest
+
+require json
+
+require httpfs
+
+cache real_nest.duckdb
+
+load benchmark/realnest/load.sql
+
+run
+SELECT
+  FLOOR((
+    CASE
+      WHEN MET.pt < 0 THEN -1
+      WHEN MET.pt > 2000 THEN 2001
+      ELSE MET.pt
+    END) / 20) * 20 + 10 AS x,
+  COUNT(*) AS y
+FROM run2012B_singleMu
+WHERE len(filter(Jet, x -> x.pt > 40)) > 1
+GROUP BY FLOOR((
+    CASE
+      WHEN MET.pt < 0 THEN -1
+      WHEN MET.pt > 2000 THEN 2001
+      ELSE MET.pt
+    END) / 20) * 20 + 10
+ORDER BY x;
