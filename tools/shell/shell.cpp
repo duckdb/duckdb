@@ -3560,16 +3560,61 @@ int column_type_is_integer(const char *type) {
     return 1;
   }
   if (strcmp(type, "FLOAT") == 0) {
-    return 1;
+	  return 1;
   }
   if (strcmp(type, "DOUBLE") == 0) {
-    return 1;
+	  return 1;
   }
   if (strcmp(type, "DECIMAL") == 0) {
     return 1;
   }
   return 0;
 }
+
+struct ColumnarResult {
+	idx_t column_count = 0;
+	vector<string> data;
+	vector<int> types;
+	vector<int> column_width;
+};
+
+ColumnarResult ShellState::ExecuteColumnar(sqlite3_stmt *pStmt){
+	ColumnarResult result;
+
+	int rc = sqlite3_step(pStmt);
+	if( rc!=SQLITE_ROW ) return result;
+	// fetch the column count, column names and types
+	result.column_count = sqlite3_column_count(pStmt);
+	result.data.reserve(result.column_count * 4);
+	for(idx_t i=0; i<result.column_count; i++){
+		result.data.push_back(strdup_handle_newline(sqlite3_column_name(pStmt,i)));
+	}
+	for(idx_t i=0; i<result.column_count; i++){
+		result.types.push_back(sqlite3_column_type(pStmt, i));
+	}
+
+	// execute the query and fetch the entire result set
+	do{
+		for(idx_t i=0; i<result.column_count; i++){
+			auto z = (const char*)sqlite3_column_text(pStmt,i);
+			result.data.push_back(strdup_handle_newline(z));
+		}
+	}while( (rc = sqlite3_step(pStmt))==SQLITE_ROW );
+
+	// compute the column widths
+	for(idx_t i=0; i<result.column_count; i++){
+		int w = i < colWidth.size() ? colWidth[i] : 0;
+		if( w<0 ) w = -w;
+		result.column_width.push_back(w);
+	}
+	for(idx_t i=0; i<result.data.size(); i++){
+		idx_t width = strlenChar(result.data[i]);
+		idx_t column_idx = i%result.column_count;
+		if( width>result.column_width[column_idx] ) result.column_width[column_idx] = width;
+	}
+	return result;
+}
+
 
 /*
 ** Run a prepared statement and output the result in one of the
@@ -3584,60 +3629,28 @@ int column_type_is_integer(const char *type) {
 void ShellState::exec_prepared_stmt_columnar(
   sqlite3_stmt *pStmt                   /* Statment to run */
 ){
-  sqlite3_int64 nRow = 0;
-  int nColumn = 0;
-  vector<string> azData;
-  vector<int> colTypes;
-  int rc;
-  sqlite3_int64 i;
-  int j, nTotal, w, n;
   const char *colSep = 0;
   const char *rowSep = 0;
 
-  rc = sqlite3_step(pStmt);
-  if( rc!=SQLITE_ROW ) return;
-  nColumn = sqlite3_column_count(pStmt);
-	azData.reserve(nColumn * 4);
-  for(i=0; i<nColumn; i++){
-	  azData.push_back(strdup_handle_newline(sqlite3_column_name(pStmt,i)));
-  }
-  for(i=0; i<nColumn; i++){
-    colTypes.push_back(sqlite3_column_type(pStmt, i));
-  }
-  do{
-    nRow++;
-    for(i=0; i<nColumn; i++){
-      auto z = (const char*)sqlite3_column_text(pStmt,i);
-      azData.push_back(strdup_handle_newline(z));
-    }
-  }while( (rc = sqlite3_step(pStmt))==SQLITE_ROW );
-
-	vector<int> actualWidth;
-  for(i=0; i<nColumn; i++){
-    int w = i < colWidth.size() ? colWidth[i] : 0;
-    if( w<0 ) w = -w;
-    actualWidth.push_back(w);
-  }
-  nTotal = nColumn*(nRow+1);
-  for(i=0; i<nTotal; i++){
-    n = strlenChar(azData[i].c_str());
-    j = i%nColumn;
-    if( n>actualWidth[j] ) actualWidth[j] = n;
-  }
-  if( seenInterrupt ) goto columnar_end;
+	auto result = ExecuteColumnar(pStmt);
+	if( seenInterrupt ) goto columnar_end;
+	if (result.data.empty()) {
+		// nothing to render
+		return;
+	}
 
   switch( cMode ){
     case RenderMode::COLUMN: {
       colSep = "  ";
       rowSep = "\n";
       if( showHeader ){
-        for(i=0; i<nColumn; i++){
-          utf8_width_print(out, actualWidth[i], azData[i]);
-          fputs(i==nColumn-1?"\n":"  ", out);
+        for(idx_t i=0; i<result.column_count; i++){
+          utf8_width_print(out, result.column_width[i], result.data[i]);
+          fputs(i==result.column_count-1?"\n":"  ", out);
         }
-        for(i=0; i<nColumn; i++){
-          print_dashes(out, actualWidth[i]);
-          fputs(i==nColumn-1?"\n":"  ", out);
+        for(idx_t i=0; i<result.column_count; i++){
+          print_dashes(out, result.column_width[i]);
+          fputs(i==result.column_count-1?"\n":"  ", out);
         }
       }
       break;
@@ -3645,50 +3658,50 @@ void ShellState::exec_prepared_stmt_columnar(
     case RenderMode::TABLE: {
       colSep = " | ";
       rowSep = " |\n";
-      print_row_separator(nColumn, "+", actualWidth);
+      print_row_separator(result.column_count, "+", result.column_width);
       fputs("| ", out);
-      for(i=0; i<nColumn; i++){
-        w = actualWidth[i];
-        n = strlenChar(azData[i]);
-        utf8_printf(out, "%*s%s%*s", (w-n)/2, "", azData[i].c_str(), (w-n+1)/2, "");
-        fputs(i==nColumn-1?" |\n":" | ", out);
+      for(idx_t i=0; i<result.column_count; i++){
+        int w = result.column_width[i];
+        int n = strlenChar(result.data[i]);
+        utf8_printf(out, "%*s%s%*s", (w-n)/2, "", result.data[i].c_str(), (w-n+1)/2, "");
+        fputs(i==result.column_count-1?" |\n":" | ", out);
       }
-      print_row_separator(nColumn, "+", actualWidth);
+      print_row_separator(result.column_count, "+", result.column_width);
       break;
     }
     case RenderMode::MARKDOWN: {
       colSep = " | ";
       rowSep = " |\n";
       fputs("| ", out);
-      for(i=0; i<nColumn; i++){
-        w = actualWidth[i];
-        n = strlenChar(azData[i]);
-        utf8_printf(out, "%*s%s%*s", (w-n)/2, "", azData[i].c_str(), (w-n+1)/2, "");
-        fputs(i==nColumn-1?" |\n":" | ", out);
+      for(idx_t i=0; i<result.column_count; i++){
+        int w = result.column_width[i];
+        int n = strlenChar(result.data[i]);
+        utf8_printf(out, "%*s%s%*s", (w-n)/2, "", result.data[i].c_str(), (w-n+1)/2, "");
+        fputs(i==result.column_count-1?" |\n":" | ", out);
       }
-      print_markdown_separator(nColumn, "|", colTypes, actualWidth);
+      print_markdown_separator(result.column_count, "|", result.types, result.column_width);
       break;
     }
     case RenderMode::BOX: {
       colSep = " " BOX_13 " ";
       rowSep = " " BOX_13 "\n";
-      print_box_row_separator(nColumn, BOX_23, BOX_234, BOX_34, actualWidth);
+      print_box_row_separator(result.column_count, BOX_23, BOX_234, BOX_34, result.column_width);
       utf8_printf(out, BOX_13 " ");
-      for(i=0; i<nColumn; i++){
-        w = actualWidth[i];
-        n = strlenChar(azData[i]);
+      for(idx_t i=0; i<result.column_count; i++){
+        int w = result.column_width[i];
+        int n = strlenChar(result.data[i]);
         utf8_printf(out, "%*s%s%*s%s",
-            (w-n)/2, "", azData[i].c_str(), (w-n+1)/2, "",
-            i==nColumn-1?" " BOX_13 "\n":" " BOX_13 " ");
+            (w-n)/2, "", result.data[i].c_str(), (w-n+1)/2, "",
+            i==result.column_count-1?" " BOX_13 "\n":" " BOX_13 " ");
       }
-      print_box_row_separator(nColumn, BOX_123, BOX_1234, BOX_134, actualWidth);
+      print_box_row_separator(result.column_count, BOX_123, BOX_1234, BOX_134, result.column_width);
       break;
     }
     case RenderMode::LATEX: {
       colSep = " & ";
       rowSep = " \\\\\n";
       fputs("\\begin{tabular}{|", out);
-      for(i=0; i<nColumn; i++){
+      for(idx_t i=0; i<result.column_count; i++){
         const char *column_type = sqlite3_column_decltype(pStmt, i);
         if (column_type_is_integer(column_type)) {
           fputs("r", out);
@@ -3698,11 +3711,11 @@ void ShellState::exec_prepared_stmt_columnar(
       }
       fputs("|}\n", out);
       fputs("\\hline\n", out);
-      for(i=0; i<nColumn; i++){
-        w = actualWidth[i];
-        n = strlenChar(azData[i]);
-        utf8_printf(out, "%*s%s%*s", (w-n)/2, "", azData[i].c_str(), (w-n+1)/2, "");
-        fputs(i==nColumn-1? rowSep:colSep, out);
+      for(idx_t i=0; i<result.column_count; i++){
+        int w = result.column_width[i];
+        int n = strlenChar(result.data[i]);
+        utf8_printf(out, "%*s%s%*s", (w-n)/2, "", result.data[i].c_str(), (w-n+1)/2, "");
+        fputs(i==result.column_count-1? rowSep:colSep, out);
       }
       fputs("\\hline\n", out);
       break;
@@ -3710,14 +3723,14 @@ void ShellState::exec_prepared_stmt_columnar(
   default:
   	break;
   }
-  for(i=nColumn, j=0; i<nTotal; i++, j++){
+  for(idx_t i=result.column_count, j=0; i<result.data.size(); i++, j++){
     if( j==0 && cMode!=RenderMode::COLUMN && cMode != RenderMode::LATEX ){
       utf8_printf(out, "%s", cMode==RenderMode::BOX?BOX_13" ":"| ");
     }
-    w = actualWidth[j];
+    idx_t w = result.column_width[j];
     if( w<0 ) w = -w;
-    utf8_width_print(out, w, azData[i]);
-    if( j==nColumn-1 ){
+    utf8_width_print(out, w, result.data[i]);
+    if( j==result.column_count-1 ){
       utf8_printf(out, "%s", rowSep);
       j = -1;
       if( seenInterrupt ) goto columnar_end;
@@ -3726,9 +3739,9 @@ void ShellState::exec_prepared_stmt_columnar(
     }
   }
   if( cMode==RenderMode::TABLE ){
-    print_row_separator(nColumn, "+", actualWidth);
+    print_row_separator(result.column_count, "+", result.column_width);
   }else if( cMode==RenderMode::BOX ){
-    print_box_row_separator(nColumn, BOX_12, BOX_124, BOX_14, actualWidth);
+    print_box_row_separator(result.column_count, BOX_12, BOX_124, BOX_14, result.column_width);
   } else if (cMode == RenderMode::LATEX) {
     fputs("\\hline\n", out);
     fputs("\\end{tabular}\n", out);

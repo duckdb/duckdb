@@ -15,11 +15,14 @@
 
 struct sqlite3;
 struct sqlite3_stmt;
+struct ColumnarResult;
 
 namespace duckdb_shell {
 using std::unique_ptr;
 using std::vector;
 using std::string;
+
+using idx_t = uint64_t;
 
 enum class RenderMode : uint32_t {
 	LINE = 0,   /* One column per line.  Blank line between records */
@@ -117,6 +120,7 @@ public:
 	  const vector<int> &actualWidth
 	);
 	string strdup_handle_newline(const char *z);
+	ColumnarResult ExecuteColumnar(sqlite3_stmt *pStmt);
 	void exec_prepared_stmt_columnar(sqlite3_stmt *pStmt);
 	char **tableColumnList(const char *zTab);
 	void exec_prepared_stmt(sqlite3_stmt *pStmt);
