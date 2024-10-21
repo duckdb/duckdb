@@ -144,8 +144,7 @@ string JSONScanData::GetTimestampFormat() const {
 }
 
 JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, const JSONScanData &bind_data_p)
-    : bind_data(bind_data_p), transform_options(bind_data.transform_options),
-      allocator(BufferManager::GetBufferManager(context).GetBufferAllocator()),
+    : bind_data(bind_data_p), transform_options(bind_data.transform_options), allocator(BufferAllocator::Get(context)),
       buffer_capacity(bind_data.maximum_object_size * 2), file_index(0), batch_index(0),
       system_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()),
       enable_parallel_scans(bind_data.files.size() < system_threads) {

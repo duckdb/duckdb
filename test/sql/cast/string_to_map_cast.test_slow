@@ -220,7 +220,7 @@ statement ok
 INSERT INTO Duck_tbl VALUES ('{1=Duck, 3=DB}'), ('{12=DuckDB}'), ('{3=DB, 5=🦆 4=Ducky, 7=Duckster}'), ('{0=DuckParty}'), ('{5=DBDuck, 7=Duckster, 1=🦆}'), ('{1="final Quack"}');
 
 query I
-SELECT * FROM Duck_tbl WHERE list_contains(cast(col1 as MAP(INT, VARCHAR))[7], 'Duckster') ;
+SELECT * FROM Duck_tbl WHERE cast(col1 as MAP(INT, VARCHAR))[7] = 'Duckster' ;
 ----
 {3=DB, 5=🦆 4=Ducky, 7=Duckster}
 {5=DBDuck, 7=Duckster, 1=🦆}

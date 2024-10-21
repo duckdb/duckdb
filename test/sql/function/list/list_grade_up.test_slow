@@ -293,7 +293,7 @@ select k, list_grade_up(k,'DESC') from (values ([1,2,3,4])) as t(k);
 query IIII
 select k, v, map(k,v), map(k,v)[(list_grade_up(k,'DESC'))[1]] from (values ([1,2,3,4],[2,3,4,5])) as t(k,v);
 ----
-[1, 2, 3, 4]	[2, 3, 4, 5]	{1=2, 2=3, 3=4, 4=5}	[5]
+[1, 2, 3, 4]	[2, 3, 4, 5]	{1=2, 2=3, 3=4, 4=5}	5
 
 # bug fixes test for #5694
 
