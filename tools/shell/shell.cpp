@@ -91,9 +91,6 @@
 typedef sqlite3_int64 i64;
 typedef sqlite3_uint64 u64;
 typedef unsigned char u8;
-#if SQLITE_USER_AUTHENTICATION
-# include "sqlite3userauth.h"
-#endif
 #include <ctype.h>
 #include <stdarg.h>
 
@@ -106,16 +103,13 @@ typedef unsigned char u8;
 #if (!defined(_WIN32) && !defined(WIN32)) || defined(__MINGW32__)
 # include <unistd.h>
 # include <dirent.h>
-# define GETPID getpid
+#endif
 # if defined(__MINGW32__)
 #  define DIRENT dirent
 #  ifndef S_ISLNK
 #   define S_ISLNK(mode) (0)
 #  endif
 # endif
-#else
-# define GETPID (int)GetCurrentProcessId
-#endif
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -433,15 +427,6 @@ static sqlite3 *globalDb = 0;
 */
 static volatile int seenInterrupt = 0;
 
-#ifdef SQLITE_DEBUG
-/*
-** Out-of-memory simulator variables
-*/
-static unsigned int oomCounter = 0;    /* Simulate OOM when equals 1 */
-static unsigned int oomRepeat = 0;     /* Number of OOMs in a row */
-static void*(*defaultMalloc)(int) = 0; /* The low-level malloc routine */
-#endif /* SQLITE_DEBUG */
-
 /*
 ** This is the name of our program. It is set in main(), used
 ** in a number of other places, mostly for error messages.
@@ -501,75 +486,6 @@ static void shell_out_of_memory(void){
   raw_printf(stderr,"Error: out of memory\n");
   exit(1);
 }
-
-#ifdef SQLITE_DEBUG
-/* This routine is called when a simulated OOM occurs.  It is broken
-** out as a separate routine to make it easy to set a breakpoint on
-** the OOM
-*/
-void shellOomFault(void){
-  if( oomRepeat>0 ){
-    oomRepeat--;
-  }else{
-    oomCounter--;
-  }
-}
-#endif /* SQLITE_DEBUG */
-
-#ifdef SQLITE_DEBUG
-/* This routine is a replacement malloc() that is used to simulate
-** Out-Of-Memory (OOM) errors for testing purposes.
-*/
-static void *oomMalloc(int nByte){
-  if( oomCounter ){
-    if( oomCounter==1 ){
-      shellOomFault();
-      return 0;
-    }else{
-      oomCounter--;
-    }
-  }
-  return defaultMalloc(nByte);
-}
-#endif /* SQLITE_DEBUG */
-
-#ifdef SQLITE_DEBUG
-/* Register the OOM simulator.  This must occur before any memory
-** allocations */
-static void registerOomSimulator(void){
-  sqlite3_mem_methods mem;
-  sqlite3_config(SQLITE_CONFIG_GETMALLOC, &mem);
-  defaultMalloc = mem.xMalloc;
-  mem.xMalloc = oomMalloc;
-  sqlite3_config(SQLITE_CONFIG_MALLOC, &mem);
-}
-#endif
-
-/*
-** Write I/O traces to the following stream.
-*/
-#ifdef SQLITE_ENABLE_IOTRACE
-static FILE *iotrace = 0;
-#endif
-
-/*
-** This routine works like printf in that its first argument is a
-** format string and subsequent arguments are values to be substituted
-** in place of % fields.  The result of formatting this string
-** is written to iotrace.
-*/
-#ifdef SQLITE_ENABLE_IOTRACE
-static void SQLITE_CDECL iotracePrintf(const char *zFormat, ...){
-  va_list ap;
-  char *z;
-  if( iotrace==0 ) return;
-  va_start(ap, zFormat);
-  z = sqlite3_vmprintf(zFormat, ap);
-  va_end(ap);
-  utf8_printf(iotrace, "%s", z);
-  sqlite3_free(z);
-}
-#endif
 
 /*
 ** Output string zUtf to stream pOut as w characters.  If w is negative,
@@ -2377,23 +2293,6 @@ int sqlite3_fileio_init(
 
 /************************* End ../ext/misc/fileio.c ********************/
 
-/* A single line in the EQP output */
-typedef struct EQPGraphRow EQPGraphRow;
-struct EQPGraphRow {
-  int iEqpId;           /* ID for this row */
-  int iParentId;        /* ID of the parent row */
-  EQPGraphRow *pNext;   /* Next row in sequence */
-  char zText[1];        /* Text to display for this row */
-};
-
-/* All EQP output is collected into an instance of the following */
-typedef struct EQPGraph EQPGraph;
-struct EQPGraph {
-  EQPGraphRow *pRow;    /* Linked list of all rows of the EQP output */
-  EQPGraphRow *pLast;   /* Last element of the pRow list */
-  char zPrefix[100];    /* Graph prefix */
-};
-
 /*
 ** State information about the database connection is contained in an
 ** instance of the following structure.
@@ -2451,7 +2350,6 @@ struct ShellState {
   int *aiIndent;         /* Array of indents used in MODE_Explain */
   int nIndent;           /* Size of array aiIndent[] */
   int iIndent;           /* Index of current op in aiIndent[] */
-  EQPGraph sGraph;       /* Information for the graphical EXPLAIN QUERY PLAN */
   size_t max_rows;       /* The maximum number of rows to render in DuckBox mode */
   size_t max_width;      /* The maximum number of characters to render horizontally in DuckBox mode */
 
@@ -4484,12 +4382,6 @@ static const char *azHelp[] = {
   "   TABLE is a LIKE pattern for the tables to dump",
   "   Additional LIKE patterns can be given in subsequent arguments",
   ".echo on|off             Turn command echo on or off",
-  "   Other Modes:",
-#ifdef SQLITE_DEBUG
-  "      test                  Show raw EXPLAIN QUERY PLAN output",
-  "      trace                 Like \"full\" but enable \"PRAGMA vdbe_trace\"",
-#endif
-  "      trigger               Like \"full\" but also show trigger bytecode",
   ".excel                   Display the output of next command in spreadsheet",
   "   --bom                   Put a UTF8 byte-order mark on intermediate file",
 #ifdef HAVE_LINENOISE
@@ -4524,9 +4416,6 @@ static const char *azHelp[] = {
   ".indexes ?TABLE?         Show names of indexes",
   "                           If TABLE is specified, only show indexes for",
   "                           tables matching TABLE using the LIKE operator.",
-#ifdef SQLITE_ENABLE_IOTRACE
-  ".iotrace FILE            Enable I/O diagnostic logging to FILE",
-#endif
 #ifdef HAVE_LINENOISE
   ".keyword ?COLOR?         Sets the syntax highlighting color used for keywords",
   "   COLOR is one of:",
@@ -4566,9 +4455,6 @@ static const char *azHelp[] = {
   "       --bom  Put a UTF8 byte-order mark at the beginning",
   "       -e     Send output to the system text editor",
   "       -x     Send output as CSV to a spreadsheet (same as \".excel\")",
-#ifdef SQLITE_DEBUG
-  ".oom ?--repeat M? ?N?    Simulate an OOM error on the N-th allocation",
-#endif
   ".open ?OPTIONS? ?FILE?   Close existing database and reopen FILE",
   "     Options:",
   "        --new           Initialize FILE to an empty database",
@@ -4614,10 +4500,6 @@ static const char *azHelp[] = {
   ".tables ?TABLE?          List names of tables matching LIKE pattern TABLE",
   ".testcase NAME           Begin redirecting output to 'testcase-out.txt'",
   ".timer on|off            Turn SQL timer on or off",
-#ifdef SQLITE_DEBUG
-  ".unmodule NAME ...       Unregister virtual table modules",
-  "    --allexcept             Unregister everything except those named",
-#endif
   ".width NUM1 NUM2 ...     Set minimum column widths for columnar output",
   "     Negative values right-justify",
 #if defined(_WIN32) || defined(WIN32)
@@ -5995,53 +5877,6 @@ int ShellState::do_meta_command(char *zLine){
 
   if( c=='f' && strncmp(azArg[0], "fullschema", n)==0 ){
     raw_printf(out, "No STAT tables available\n");
-    // ShellState data;
-    // char *zErrMsg = 0;
-    // int doStats = 0;
-    // memcpy(&data, p, sizeof(data));
-    // data.showHeader = 0;
-    // data.cMode = data.mode = MODE_Semi;
-    // if( nArg==2 && optionMatch(azArg[1], "indent") ){
-    //   data.cMode = data.mode = MODE_Pretty;
-    //   nArg = 1;
-    // }
-    // if( nArg!=1 ){
-    //   raw_printf(stderr, "Usage: .fullschema ?--indent?\n");
-    //   rc = 1;
-    //   goto meta_command_exit;
-    // }
-    // open_db(0);
-    // rc = sqlite3_exec(db,
-    //    "SELECT sql FROM"
-    //    "  (SELECT sql sql, type type, tbl_name tbl_name, name name, rowid x"
-    //    "     FROM sqlite_schema UNION ALL"
-    //    "   SELECT sql, type, tbl_name, name, rowid FROM sqlite_temp_schema) "
-    //    "WHERE type!='meta' AND sql NOTNULL AND name NOT LIKE 'sqlite_%' "
-    //    "ORDER BY rowid",
-    //    callback, &data, &zErrMsg
-    // );
-    // if( rc==SQLITE_OK ){
-    //   sqlite3_stmt *pStmt;
-    //   rc = sqlite3_prepare_v2(db,
-    //            "SELECT rowid FROM sqlite_schema"
-    //            " WHERE name GLOB 'sqlite_stat[134]'",
-    //            -1, &pStmt, 0);
-    //   doStats = sqlite3_step(pStmt)==SQLITE_ROW;
-    //   sqlite3_finalize(pStmt);
-    // }
-    // if( doStats==0 ){
-    //   raw_printf(out, "/* No STAT tables available */\n");
-    // }else{
-    //   raw_printf(out, "ANALYZE sqlite_schema;\n");
-    //   sqlite3_exec(db, "SELECT 'ANALYZE sqlite_schema'",
-    //                callback, &data, &zErrMsg);
-    //   data.cMode = data.mode = MODE_Insert;
-    //   data.zDestTable = "sqlite_stat1";
-    //   shell_exec(&data, "SELECT * FROM sqlite_stat1", &zErrMsg);
-    //   data.zDestTable = "sqlite_stat4";
-    //   shell_exec(&data, "SELECT * FROM sqlite_stat4", &zErrMsg);
-    //   raw_printf(out, "ANALYZE sqlite_schema;\n");
-    // }
   }else
 
   if( c=='h' && strncmp(azArg[0], "headers", n)==0 ){
@@ -6340,130 +6175,6 @@ int ShellState::do_meta_command(char *zLine){
     }
   }else
 
-#ifndef SQLITE_UNTESTABLE
-  if( c=='i' && strncmp(azArg[0], "imposter", n)==0 ){
-    char *zSql;
-    char *zCollist = 0;
-    sqlite3_stmt *pStmt;
-    int tnum = 0;
-    int isWO = 0;  /* True if making an imposter of a WITHOUT ROWID table */
-    int lenPK = 0; /* Length of the PRIMARY KEY string for isWO tables */
-    int i;
-    if( !(nArg==3 || (nArg==2 && sqlite3_stricmp(azArg[1],"off")==0)) ){
-      utf8_printf(stderr, "Usage: .imposter INDEX IMPOSTER\n"
-                          "       .imposter off\n");
-      /* Also allowed, but not documented:
-      **
-      **    .imposter TABLE IMPOSTER
-      **
-      ** where TABLE is a WITHOUT ROWID table.  In that case, the
-      ** imposter is another WITHOUT ROWID table with the columns in
-      ** storage order. */
-      rc = 1;
-      goto meta_command_exit;
-    }
-    open_db(0);
-    if( nArg==2 ){
-      sqlite3_test_control(SQLITE_TESTCTRL_IMPOSTER, db, "main", 0, 1);
-      goto meta_command_exit;
-    }
-    zSql = sqlite3_mprintf(
-      "SELECT rootpage, 0 FROM sqlite_schema"
-      " WHERE name='%q' AND type='index'"
-      "UNION ALL "
-      "SELECT rootpage, 1 FROM sqlite_schema"
-      " WHERE name='%q' AND type='table'"
-      "   AND sql LIKE '%%without%%rowid%%'",
-      azArg[1], azArg[1]
-    );
-    sqlite3_prepare_v2(db, zSql, -1, &pStmt, 0);
-    sqlite3_free(zSql);
-    if( sqlite3_step(pStmt)==SQLITE_ROW ){
-      tnum = sqlite3_column_int(pStmt, 0);
-      isWO = sqlite3_column_int(pStmt, 1);
-    }
-    sqlite3_finalize(pStmt);
-    zSql = sqlite3_mprintf("PRAGMA index_xinfo='%q'", azArg[1]);
-    rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, 0);
-    sqlite3_free(zSql);
-    i = 0;
-    while( sqlite3_step(pStmt)==SQLITE_ROW ){
-      char zLabel[20];
-      const char *zCol = (const char*)sqlite3_column_text(pStmt,2);
-      i++;
-      if( zCol==0 ){
-        if( sqlite3_column_int(pStmt,1)==-1 ){
-          zCol = "_ROWID_";
-        }else{
-          sqlite3_snprintf(sizeof(zLabel),zLabel,"expr%d",i);
-          zCol = zLabel;
-        }
-      }
-      if( isWO && lenPK==0 && sqlite3_column_int(pStmt,5)==0 && zCollist ){
-        lenPK = (int)strlen(zCollist);
-      }
-      if( zCollist==0 ){
-        zCollist = sqlite3_mprintf("\"%w\"", zCol);
-      }else{
-        zCollist = sqlite3_mprintf("%z,\"%w\"", zCollist, zCol);
-      }
-    }
-    sqlite3_finalize(pStmt);
-    if( i==0 || tnum==0 ){
-      utf8_printf(stderr, "no such index: \"%s\"\n", azArg[1]);
-      rc = 1;
-      sqlite3_free(zCollist);
-      goto meta_command_exit;
-    }
-    if( lenPK==0 ) lenPK = 100000;
-    zSql = sqlite3_mprintf(
-          "CREATE TABLE \"%w\"(%s,PRIMARY KEY(%.*s))WITHOUT ROWID",
-          azArg[2], zCollist, lenPK, zCollist);
-    sqlite3_free(zCollist);
-    rc = sqlite3_test_control(SQLITE_TESTCTRL_IMPOSTER, db, "main", 1, tnum);
-    if( rc==SQLITE_OK ){
-      rc = sqlite3_exec(db, zSql, 0, 0, 0);
-      sqlite3_test_control(SQLITE_TESTCTRL_IMPOSTER, db, "main", 0, 0);
-      if( rc ){
-        utf8_printf(stderr, "Error in [%s]: %s\n", zSql, sqlite3_errmsg(db));
-      }else{
-        utf8_printf(stdout, "%s;\n", zSql);
-        raw_printf(stdout,
-          "WARNING: writing to an imposter table will corrupt the \"%s\" %s!\n",
-          azArg[1], isWO ? "table" : "index"
-        );
-      }
-    }else{
-      raw_printf(stderr, "SQLITE_TESTCTRL_IMPOSTER returns %d\n", rc);
-      rc = 1;
-    }
-    sqlite3_free(zSql);
-  }else
-#endif /* !defined(SQLITE_OMIT_TEST_CONTROL) */
-
-#ifdef SQLITE_ENABLE_IOTRACE
-  if( c=='i' && strncmp(azArg[0], "iotrace", n)==0 ){
-    SQLITE_API extern void (SQLITE_CDECL *sqlite3IoTrace)(const char*, ...);
-    if( iotrace && iotrace!=stdout ) fclose(iotrace);
-    iotrace = 0;
-    if( nArg<2 ){
-      sqlite3IoTrace = 0;
-    }else if( strcmp(azArg[1], "-")==0 ){
-      sqlite3IoTrace = iotracePrintf;
-      iotrace = stdout;
-    }else{
-      iotrace = fopen(azArg[1], "w");
-      if( iotrace==0 ){
-        utf8_printf(stderr, "Error: cannot open \"%s\"\n", azArg[1]);
-        sqlite3IoTrace = 0;
-        rc = 1;
-      }else{
-        sqlite3IoTrace = iotracePrintf;
-      }
-    }
-  }else
-#endif
-
   if( c=='l' && n>=5 && strncmp(azArg[0], "limits", n)==0 ){
     static const struct {
        const char *zLimitName;   /* Name of a limit */
@@ -6657,34 +6368,6 @@ int ShellState::do_meta_command(char *zLine){
       rc = 1;
     }
   }else
-
-#ifdef SQLITE_DEBUG
-  if( c=='o' && strcmp(azArg[0],"oom")==0 ){
-    int i;
-    for(i=1; i<nArg; i++){
-      const char *z = azArg[i];
-      if( z[0]=='-' && z[1]=='-' ) z++;
-      if( strcmp(z,"-repeat")==0 ){
-        if( i==nArg-1 ){
-          raw_printf(out, "missing argument on \"%s\"\n", azArg[i]);
-          rc = 1;
-        }else{
-          oomRepeat = (int)integerValue(azArg[++i]);
-        }
-      }else if( IsDigit(z[0]) ){
-        oomCounter = (int)integerValue(azArg[i]);
-      }else{
-        raw_printf(out, "unknown argument: \"%s\"\n", azArg[i]);
-        raw_printf(out, "Usage: .oom [--repeat N] [M]\n");
-        rc = 1;
-      }
-    }
-    if( rc==0 ){
-      raw_printf(out, "oomCounter = %d\n", oomCounter);
-      raw_printf(out, "oomRepeat  = %d\n", oomRepeat);
-    }
-  }else
-#endif /* SQLITE_DEBUG */
 
   if( c=='o' && strncmp(azArg[0], "open", n)==0 && n>=2 ){
     char *zNewFilename;  /* Name of the database file to open */
@@ -7050,34 +6733,6 @@ int ShellState::do_meta_command(char *zLine){
     }
   }else
 
-#if defined(SQLITE_DEBUG) && defined(SQLITE_ENABLE_SELECTTRACE)
-  if( c=='s' && n==11 && strncmp(azArg[0], "selecttrace", n)==0 ){
-    sqlite3_unsupported_selecttrace = nArg>=2 ? (int)integerValue(azArg[1]) : 0xffff;
-  }else
-#endif
-
-#ifdef SQLITE_DEBUG
-  /* Undocumented commands for internal testing.  Subject to change
-  ** without notice. */
-  if( c=='s' && n>=10 && strncmp(azArg[0], "selftest-", 9)==0 ){
-    if( strncmp(azArg[0]+9, "boolean", n-9)==0 ){
-      int i, v;
-      for(i=1; i<nArg; i++){
-        v = booleanValue(azArg[i]);
-        utf8_printf(out, "%s: %d 0x%x\n", azArg[i], v, v);
-      }
-    }
-    if( strncmp(azArg[0]+9, "integer", n-9)==0 ){
-      int i; sqlite3_int64 v;
-      for(i=1; i<nArg; i++){
-        char zBuf[200];
-        v = integerValue(azArg[i]);
-        sqlite3_snprintf(sizeof(zBuf),zBuf,"%s: %lld 0x%llx\n", azArg[i],v,v);
-        utf8_printf(out, "%s", zBuf);
-      }
-    }
-  }else
-#endif
 
   if( c=='s' && strncmp(azArg[0], "separator", n)==0 ){
     if( nArg<2 || nArg>3 ){
@@ -7396,69 +7051,6 @@ int ShellState::do_meta_command(char *zLine){
     }
   }else
 
-#if SQLITE_USER_AUTHENTICATION
-  if( c=='u' && strncmp(azArg[0], "user", n)==0 ){
-    if( nArg<2 ){
-      raw_printf(stderr, "Usage: .user SUBCOMMAND ...\n");
-      rc = 1;
-      goto meta_command_exit;
-    }
-    open_db(0);
-    if( strcmp(azArg[1],"login")==0 ){
-      if( nArg!=4 ){
-        raw_printf(stderr, "Usage: .user login USER PASSWORD\n");
-        rc = 1;
-        goto meta_command_exit;
-      }
-      rc = sqlite3_user_authenticate(db, azArg[2], azArg[3],
-                                     strlen30(azArg[3]));
-      if( rc ){
-        utf8_printf(stderr, "Authentication failed for user %s\n", azArg[2]);
-        rc = 1;
-      }
-    }else if( strcmp(azArg[1],"add")==0 ){
-      if( nArg!=5 ){
-        raw_printf(stderr, "Usage: .user add USER PASSWORD ISADMIN\n");
-        rc = 1;
-        goto meta_command_exit;
-      }
-      rc = sqlite3_user_add(db, azArg[2], azArg[3], strlen30(azArg[3]),
-                            booleanValue(azArg[4]));
-      if( rc ){
-        raw_printf(stderr, "User-Add failed: %d\n", rc);
-        rc = 1;
-      }
-    }else if( strcmp(azArg[1],"edit")==0 ){
-      if( nArg!=5 ){
-        raw_printf(stderr, "Usage: .user edit USER PASSWORD ISADMIN\n");
-        rc = 1;
-        goto meta_command_exit;
-      }
-      rc = sqlite3_user_change(db, azArg[2], azArg[3], strlen30(azArg[3]),
-                              booleanValue(azArg[4]));
-      if( rc ){
-        raw_printf(stderr, "User-Edit failed: %d\n", rc);
-        rc = 1;
-      }
-    }else if( strcmp(azArg[1],"delete")==0 ){
-      if( nArg!=3 ){
-        raw_printf(stderr, "Usage: .user delete USER\n");
-        rc = 1;
-        goto meta_command_exit;
-      }
-      rc = sqlite3_user_delete(db, azArg[2]);
-      if( rc ){
-        raw_printf(stderr, "User-Delete failed: %d\n", rc);
-        rc = 1;
-      }
-    }else{
-      raw_printf(stderr, "Usage: .user login|add|edit|delete ...\n");
-      rc = 1;
-      goto meta_command_exit;
-    }
-  }else
-#endif /* SQLITE_USER_AUTHENTICATION */
-
   if( c=='v' && strncmp(azArg[0], "version", n)==0 ){
     utf8_printf(out, "SQLite %s %s\n" /*extra-version-info*/,
         sqlite3_libversion(), sqlite3_sourceid());
@@ -7521,12 +7113,6 @@ int ShellState::do_meta_command(char *zLine){
       }
     }
   }else
-
-#if defined(SQLITE_DEBUG) && defined(SQLITE_ENABLE_WHERETRACE)
-  if( c=='w' && strncmp(azArg[0], "wheretrace", n)==0 ){
-    sqlite3WhereTrace = nArg>=2 ? booleanValue(azArg[1]) : 0xff;
-  }else
-#endif
 
   if( c=='w' && strncmp(azArg[0], "width", n)==0 ){
     int j;
@@ -8050,31 +7636,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
   setvbuf(stderr, 0, _IONBF, 0); /* Make sure stderr is unbuffered */
   stdin_is_interactive = isatty(0);
   stdout_is_console = isatty(1);
-
-#ifdef SQLITE_DEBUG
-  registerOomSimulator();
-#endif
-
-#if !defined(_WIN32_WCE)
-  if( getenv("SQLITE_DEBUG_BREAK") ){
-    if( isatty(0) && isatty(2) ){
-      fprintf(stderr,
-          "attach debugger to process %d and press any key to continue.\n",
-          GETPID());
-      fgetc(stdin);
-    }else{
-#if defined(_WIN32) || defined(WIN32)
-#if SQLITE_OS_WINRT
-      __debugbreak();
-#else
-      DebugBreak();
-#endif
-#elif defined(SIGTRAP)
-      raise(SIGTRAP);
-#endif
-    }
-  }
-#endif
 
 #if USE_SYSTEM_SQLITE+0!=1
   if( strncmp(sqlite3_sourceid(),SQLITE_SOURCE_ID,60)!=0 ){
