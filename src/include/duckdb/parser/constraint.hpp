@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/storage/index_storage_info.hpp"
 
 namespace duckdb {
 
@@ -53,6 +54,7 @@ public:
 	DUCKDB_API virtual ~Constraint();
 
 	ConstraintType type;
+	IndexStorageInfo info;
 
 public:
 	DUCKDB_API virtual string ToString() const = 0;

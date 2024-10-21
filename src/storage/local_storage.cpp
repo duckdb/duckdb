@@ -447,7 +447,6 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		return;
 	}
 	idx_t append_count = storage.row_groups->GetTotalRows() - storage.deleted_rows;
-
 	table.InitializeIndexes(context);
 
 	const idx_t row_group_size = storage.row_groups->GetRowGroupSize();
@@ -593,6 +592,22 @@ void LocalStorage::VerifyNewConstraint(DataTable &parent, const BoundConstraint 
 		return;
 	}
 	storage->row_groups->VerifyNewConstraint(parent, constraint);
+}
+
+void LocalStorage::AppendToIndex(DataTable &parent, Index &index) {
+	auto storage = table_manager.GetStorage(parent);
+	if (!storage) {
+		return;
+	}
+	storage->row_groups->AppendToIndex(parent, index);
+}
+
+void LocalStorage::AddIndex(DataTable &parent, unique_ptr<Index> index) {
+	auto storage = table_manager.GetStorage(parent);
+	if (!storage) {
+		return;
+	}
+	storage->indexes.AddIndex(std::move(index));
 }
 
 } // namespace duckdb
