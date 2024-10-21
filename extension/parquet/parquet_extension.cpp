@@ -1474,9 +1474,12 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	                                                                                  data->encryption_config, nullptr);
 	deserializer.ReadPropertyWithExplicitDefault<double>(108, "dictionary_compression_ratio_threshold",
 	                                                     data->dictionary_compression_ratio_threshold, 1.0);
-	deserializer.ReadPropertyWithDefault<int64_t>(109, "compression_level", data->compression_level);
-	if (static_cast<idx_t>(data->compression_level) == DConstants::INVALID_INDEX) {
+	optional_idx compression_level;
+	deserializer.ReadPropertyWithDefault<optional_idx>(109, "compression_level", compression_level);
+	if (!compression_level.IsValid()) {
 		data->compression_level = ZStdFileSystem::DefaultCompressionLevel(); // Used to be serialized as an optional_idx
+	} else {
+		data->compression_level = static_cast<int64_t>(compression_level.GetIndex());
 	}
 	data->row_groups_per_file =
 	    deserializer.ReadPropertyWithExplicitDefault<optional_idx>(110, "row_groups_per_file", optional_idx::Invalid());
