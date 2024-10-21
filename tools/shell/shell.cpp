@@ -3219,53 +3219,6 @@ static BOOL WINAPI ConsoleCtrlHandler(
 }
 #endif
 
-#ifndef SQLITE_OMIT_AUTHORIZATION
-/*
-** When the ".auth ON" is set, the following authorizer callback is
-** invoked.  It always returns SQLITE_OK.
-*/
-static int shellAuth(
-  void *pClientData,
-  int op,
-  const char *zA1,
-  const char *zA2,
-  const char *zA3,
-  const char *zA4
-){
-  ShellState *p = (ShellState*)pClientData;
-  static const char *azAction[] = { 0,
-     "CREATE_INDEX",         "CREATE_TABLE",         "CREATE_TEMP_INDEX",
-     "CREATE_TEMP_TABLE",    "CREATE_TEMP_TRIGGER",  "CREATE_TEMP_VIEW",
-     "CREATE_TRIGGER",       "CREATE_VIEW",          "DELETE",
-     "DROP_INDEX",           "DROP_TABLE",           "DROP_TEMP_INDEX",
-     "DROP_TEMP_TABLE",      "DROP_TEMP_TRIGGER",    "DROP_TEMP_VIEW",
-     "DROP_TRIGGER",         "DROP_VIEW",            "INSERT",
-     "PRAGMA",               "READ",                 "SELECT",
-     "TRANSACTION",          "UPDATE",               "ATTACH",
-     "DETACH",               "ALTER_TABLE",          "REINDEX",
-     "ANALYZE",              "CREATE_VTABLE",        "DROP_VTABLE",
-     "FUNCTION",             "SAVEPOINT",            "RECURSIVE"
-  };
-  int i;
-  const char *az[4];
-  az[0] = zA1;
-  az[1] = zA2;
-  az[2] = zA3;
-  az[3] = zA4;
-  utf8_printf(p->out, "authorizer: %s", azAction[op]);
-  for(i=0; i<4; i++){
-    raw_printf(p->out, " ");
-    if( az[i] ){
-      output_c_string(p->out, az[i]);
-    }else{
-      raw_printf(p->out, "NULL");
-    }
-  }
-  raw_printf(p->out, "\n");
-  return SQLITE_OK;
-}
-#endif
-
 /*
 ** Print a schema statement.  Part of MODE_Semi and MODE_Pretty output.
 **
@@ -6669,23 +6622,6 @@ static int do_meta_command(char *zLine, ShellState *p){
   n = strlen30(azArg[0]);
   c = azArg[0][0];
   clearTempFile(p);
-
-#ifndef SQLITE_OMIT_AUTHORIZATION
-  if( c=='a' && strncmp(azArg[0], "auth", n)==0 ){
-    if( nArg!=2 ){
-      raw_printf(stderr, "Usage: .auth ON|OFF\n");
-      rc = 1;
-      goto meta_command_exit;
-    }
-    open_db(p, 0);
-    if( booleanValue(azArg[1]) ){
-      sqlite3_set_authorizer(p->db, shellAuth, p);
-    }else{
-      sqlite3_set_authorizer(p->db, 0, 0);
-    }
-  }else
-#endif
-
 
   if( (c=='b' && n>=3 && strncmp(azArg[0], "backup", n)==0)
    || (c=='s' && n>=3 && strncmp(azArg[0], "save", n)==0)
