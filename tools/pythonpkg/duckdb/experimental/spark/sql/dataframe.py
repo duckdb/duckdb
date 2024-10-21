@@ -1005,6 +1005,8 @@ class DataFrame:
 
         return self.distinct()
 
+    drop_duplicates = dropDuplicates
+
 
     def distinct(self) -> "DataFrame":
         """Returns a new :class:`DataFrame` containing the distinct rows in this :class:`DataFrame`.
