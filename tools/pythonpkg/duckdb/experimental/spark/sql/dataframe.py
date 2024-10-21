@@ -786,7 +786,7 @@ class DataFrame:
                 raise PySparkTypeError(
                     error_class="NOT_COLUMN_OR_STR",
                     message_parameters={"arg_name": "col", "arg_type": type(col).__name__},
-                )           
+                )
         # Filter out the columns that don't exist in the relation
         exclude = [x for x in exclude if x in self.relation.columns]
         expr = StarExpression(exclude=exclude)
