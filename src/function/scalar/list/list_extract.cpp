@@ -4,7 +4,7 @@
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/function/scalar/list_functions.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -106,9 +106,8 @@ static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, co
 
 static void ExecuteStringExtract(Vector &result, Vector &input_vector, Vector &subscript_vector, const idx_t count) {
 	BinaryExecutor::Execute<string_t, int64_t, string_t>(
-	    input_vector, subscript_vector, result, count, [&](string_t input_string, int64_t subscript) {
-		    return SubstringFun::SubstringUnicode(result, input_string, subscript, 1);
-	    });
+	    input_vector, subscript_vector, result, count,
+	    [&](string_t input_string, int64_t subscript) { return SubstringUnicode(result, input_string, subscript, 1); });
 }
 
 static void ListExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
