@@ -2627,6 +2627,19 @@ public:
 	  const char *zQuery
 	);
 	void open_db(int openFlags);
+
+	void setOrClearFlag(unsigned mFlag, const char *zArg);
+	bool ShellHasFlag(int flag) {
+		return (shellFlgs & flag) != 0;
+	}
+
+	void ShellSetFlag(int flag) {
+		shellFlgs |= flag;
+	}
+
+	void ShellClearFlag(int flag) {
+		shellFlgs &= ~flag;
+	}
 };
 
 
@@ -2671,13 +2684,6 @@ public:
 #define SHFLG_CountChanges   0x00000020 /* .changes setting */
 #define SHFLG_Echo           0x00000040 /* .echo or --echo setting */
 #define SHFLG_HeaderSet      0x00000080 /* .header has been used */
-
-/*
-** Macros for testing and setting shellFlgs
-*/
-#define ShellHasFlag(P,X)    (((P)->shellFlgs & (X))!=0)
-#define ShellSetFlag(P,X)    ((P)->shellFlgs|=(X))
-#define ShellClearFlag(P,X)  ((P)->shellFlgs&=(~(X)))
 
 /*
 ** These are the allowed modes.
@@ -3571,7 +3577,7 @@ int ShellState::shell_callback(
         if( (azArg[i]==0) || (aiType && aiType[i]==SQLITE_NULL) ){
           utf8_printf(out,"NULL");
         }else if( aiType && aiType[i]==SQLITE_TEXT ){
-          if( ShellHasFlag(this, SHFLG_Newlines) ){
+          if( ShellHasFlag(SHFLG_Newlines) ){
             output_quoted_string(out, azArg[i]);
           }else{
             output_quoted_escaped_string(out, azArg[i]);
@@ -3599,7 +3605,7 @@ int ShellState::shell_callback(
           }
         }else if( isNumber(azArg[i], 0) ){
           utf8_printf(out,"%s", azArg[i]);
-        }else if( ShellHasFlag(this, SHFLG_Newlines) ){
+        }else if( ShellHasFlag(SHFLG_Newlines) ){
           output_quoted_string(out, azArg[i]);
         }else{
           output_quoted_escaped_string(out, azArg[i]);
@@ -4322,7 +4328,7 @@ int ShellState::shell_exec(
       cnt = 0;
 
       /* echo the sql statement if echo on */
-      if( ShellHasFlag(this, SHFLG_Echo) ){
+      if( ShellHasFlag(SHFLG_Echo) ){
         utf8_printf(out, "%s\n", zStmtSql ? zStmtSql : zSql);
       }
 
@@ -4395,7 +4401,7 @@ char **ShellState::tableColumnList(const char *zTab){
   int nAlloc = 0;
   int nPK = 0;       /* Number of PRIMARY KEY columns seen */
   int isIPK = 0;     /* True if one PRIMARY KEY column of type INTEGER */
-  int preserveRowid = ShellHasFlag(this, SHFLG_PreserveRowid);
+  int preserveRowid = ShellHasFlag(SHFLG_PreserveRowid);
   int rc;
 
   zSql = sqlite3_mprintf("PRAGMA table_info=%Q", zTab);
@@ -5371,11 +5377,11 @@ static int booleanValue(const char *zArg){
 /*
 ** Set or clear a shell flag according to a boolean value.
 */
-static void setOrClearFlag(ShellState *p, unsigned mFlag, const char *zArg){
+void ShellState::setOrClearFlag(unsigned mFlag, const char *zArg){
   if( booleanValue(zArg) ){
-    ShellSetFlag(p, mFlag);
+    ShellSetFlag(mFlag);
   }else{
-    ShellClearFlag(p, mFlag);
+    ShellClearFlag(mFlag);
   }
 }
 
@@ -6034,7 +6040,7 @@ static int do_meta_command(char *zLine, ShellState *p){
 
   if( c=='c' && n>=3 && strncmp(azArg[0], "changes", n)==0 ){
     if( nArg==2 ){
-      setOrClearFlag(p, SHFLG_CountChanges, azArg[1]);
+      p->setOrClearFlag(SHFLG_CountChanges, azArg[1]);
     }else{
       raw_printf(stderr, "Usage: .changes on|off\n");
       rc = 1;
@@ -6129,7 +6135,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     int i;
     int savedShowHeader = p->showHeader;
     int savedShellFlags = p->shellFlgs;
-    ShellClearFlag(p, SHFLG_PreserveRowid|SHFLG_Newlines|SHFLG_Echo);
+    p->ShellClearFlag(SHFLG_PreserveRowid|SHFLG_Newlines|SHFLG_Echo);
     for(i=1; i<nArg; i++){
       if( azArg[i][0]=='-' ){
         const char *z = azArg[i]+1;
@@ -6142,11 +6148,11 @@ static int do_meta_command(char *zLine, ShellState *p){
           sqlite3_free(zLike);
           goto meta_command_exit;
 #else
-          ShellSetFlag(p, SHFLG_PreserveRowid);
+          p->ShellSetFlag(SHFLG_PreserveRowid);
 #endif
         }else
         if( strcmp(z,"newlines")==0 ){
-          ShellSetFlag(p, SHFLG_Newlines);
+          p->ShellSetFlag(SHFLG_Newlines);
         }else
         {
           raw_printf(stderr, "Unknown option \"%s\" on \".dump\"\n", azArg[i]);
@@ -6208,7 +6214,7 @@ static int do_meta_command(char *zLine, ShellState *p){
 
   if( c=='e' && strncmp(azArg[0], "echo", n)==0 ){
     if( nArg==2 ){
-      setOrClearFlag(p, SHFLG_Echo, azArg[1]);
+      p->setOrClearFlag(SHFLG_Echo, azArg[1]);
     }else{
       raw_printf(stderr, "Usage: .echo on|off\n");
       rc = 1;
@@ -7171,7 +7177,7 @@ static int do_meta_command(char *zLine, ShellState *p){
       if( eMode=='x' ){
         /* spreadsheet mode.  Output as CSV. */
         newTempFile(p, "csv");
-        ShellClearFlag(p, SHFLG_Echo);
+        p->ShellClearFlag(SHFLG_Echo);
         p->mode = MODE_Csv;
         sqlite3_snprintf(sizeof(p->colSeparator), p->colSeparator, SEP_Comma);
         sqlite3_snprintf(sizeof(p->rowSeparator), p->rowSeparator, SEP_CrLf);
@@ -7613,7 +7619,7 @@ static int do_meta_command(char *zLine, ShellState *p){
       goto meta_command_exit;
     }
     utf8_printf(p->out, "%12.12s: %s\n","echo",
-                                  azBool[ShellHasFlag(p, SHFLG_Echo)]);
+                                  azBool[p->ShellHasFlag(SHFLG_Echo)]);
     utf8_printf(p->out, "%12.12s: %s\n","explain",
          p->mode==MODE_Explain ? "on" : p->autoExplain ? "auto" : "off");
     utf8_printf(p->out,"%12.12s: %s\n","headers", azBool[p->showHeader!=0]);
@@ -8260,7 +8266,7 @@ static int runOneSqlLine(ShellState *p, char *zSql, FILE *in, int startline){
   char *zErrMsg = 0;
 
   p->open_db(0);
-  if( ShellHasFlag(p,SHFLG_Backslash) ) resolve_backslashes(zSql);
+  if( p->ShellHasFlag(SHFLG_Backslash) ) resolve_backslashes(zSql);
   if( p->flgProgress & SHELL_PROGRESS_RESET ) p->nProgress = 0;
 #ifndef SHELL_USE_LOCAL_GETLINE
   if( zSql && *zSql && *zSql != '\3' ) shell_add_history(zSql);
@@ -8277,7 +8283,7 @@ static int runOneSqlLine(ShellState *p, char *zSql, FILE *in, int startline){
 	  shellDatabaseError(p->db);
     }
     return 1;
-  }else if( ShellHasFlag(p, SHFLG_CountChanges) ){
+  }else if( p->ShellHasFlag(SHFLG_CountChanges) ){
     raw_printf(p->out, "changes: %3lld   total_changes: %lld\n",
             sqlite3_changes64(p->db), sqlite3_total_changes64(p->db));
   }
@@ -8335,11 +8341,11 @@ static int process_input(ShellState *p){
     }
     p->lineno++;
     if( nSql==0 && _all_whitespace(zLine) ){
-      if( ShellHasFlag(p, SHFLG_Echo) ) printf("%s\n", zLine);
+      if( p->ShellHasFlag(SHFLG_Echo) ) printf("%s\n", zLine);
       continue;
     }
     if( zLine && (zLine[0]=='.' || zLine[0]=='#') && nSql==0 ){
-      if( ShellHasFlag(p, SHFLG_Echo) ) printf("%s\n", zLine);
+      if( p->ShellHasFlag(SHFLG_Echo) ) printf("%s\n", zLine);
       if( zLine[0]=='.' ){
 #ifndef SHELL_USE_LOCAL_GETLINE
         if( zLine && *zLine && *zLine != '\3' ) shell_add_history(zLine);
@@ -8386,7 +8392,7 @@ static int process_input(ShellState *p){
         clearTempFile(p);
       }
     }else if( nSql && _all_whitespace(zSql) ){
-      if( ShellHasFlag(p, SHFLG_Echo) ) printf("%s\n", zSql);
+      if( p->ShellHasFlag(SHFLG_Echo) ) printf("%s\n", zSql);
       nSql = 0;
     }
   }
@@ -8988,7 +8994,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
     }else if( strcmp(z,"-noheader")==0 ){
       data.showHeader = 0;
     }else if( strcmp(z,"-echo")==0 ){
-      ShellSetFlag(&data, SHFLG_Echo);
+      data.ShellSetFlag(SHFLG_Echo);
     }else if( strcmp(z,"-unsigned")==0 ){
       data.openFlags |= DUCKDB_UNSIGNED_EXTENSIONS;
     }else if( strcmp(z,"-unredacted")==0 ){
@@ -8999,7 +9005,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
       ** prior to sending the SQL into SQLite.  Useful for injecting
       ** crazy bytes in the middle of SQL statements for testing and debugging.
       */
-      ShellSetFlag(&data, SHFLG_Backslash);
+      data.ShellSetFlag(SHFLG_Backslash);
     }else if( strcmp(z,"-bail")==0 ){
       bail_on_error = 1;
     }else if( strcmp(z,"-version")==0 ){
