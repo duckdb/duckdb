@@ -45,3 +45,7 @@ The benchmarks below run the TPC-H queries with Scale Factor 1 (~1GB of data) us
 [window]
 [Window]
 The window micro benchmark set contains benchmarks that look at the speed of executing window functions.
+
+[ssb]
+[SSB]
+Star Schema Benchmarks 
