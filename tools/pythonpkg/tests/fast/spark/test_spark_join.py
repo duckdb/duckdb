@@ -328,3 +328,29 @@ class TestDataFrameJoin(object):
             Row(emp_id=5, name='Brown', superior_emp_id=2, superior_emp_name='Rose'),
             Row(emp_id=6, name='Brown', superior_emp_id=2, superior_emp_name='Rose'),
         ]
+
+    @pytest.mark.parametrize("method", ["join", "crossJoin"])
+    def test_cross_join(self, method, spark):
+        # Same example data as in function docstring. Easier to understand for a
+        # crossjoin compared to using dataframe_a and dataframe_b.
+        people = spark.createDataFrame(
+             [(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
+        heights = spark.createDataFrame([(80,), (85,)], ["height"])
+
+        if method == "join":
+            df = people.join(heights, how="inner")
+        else:
+            df = people.crossJoin(heights)
+
+        df = df.select("age", "name", "height")
+        df = df.sort(*df.columns)
+
+        res = df.collect()
+        assert res == [
+            Row(age=14, name='Tom', height=80),
+            Row(age=14, name='Tom', height=85),
+            Row(age=16, name='Bob', height=80),
+            Row(age=16, name='Bob', height=85),
+            Row(age=23, name='Alice', height=80),
+            Row(age=23, name='Alice', height=85),
+        ]
