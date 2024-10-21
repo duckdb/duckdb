@@ -14,3 +14,12 @@ benchmark/realnest/14_list_slice.benchmark
 benchmark/realnest/15_list_sort.benchmark
 benchmark/realnest/16_most_common_list_aggregates.benchmark
 benchmark/realnest/17_list_aggregates_histogram_stddev_mode.benchmark
+benchmark/realnest/18_hep_query_1.benchmark
+benchmark/realnest/19_hep_query_2.benchmark
+benchmark/realnest/20_hep_query_3.benchmark
+benchmark/realnest/21_hep_query_4.benchmark
+benchmark/realnest/22_hep_query_5.benchmark
+benchmark/realnest/23_hep_query_6_1.benchmark
+benchmark/realnest/24_hep_query_6_2.benchmark
+benchmark/realnest/25_hep_query_7.benchmark
+benchmark/realnest/26_hep_query_8.benchmark
