@@ -1,0 +1,32 @@
+# name: benchmark/realnest/18_hep_query_1.benchmark
+# description: Plot the missing transverse energy of all events
+# group: [realnest]
+
+name 18_hep_query_1
+group real_nest
+
+require json
+
+require httpfs
+
+cache real_nest.duckdb
+
+load benchmark/realnest/load.sql
+
+run
+SELECT
+  FLOOR((
+    CASE
+      WHEN MET.pt < 0 THEN -1
+      WHEN MET.pt > 2000 THEN 2001
+      ELSE MET.pt
+    END) / 20) * 20 + 10 AS x,
+  COUNT(*) AS y
+FROM run2012B_singleMu
+GROUP BY FLOOR((
+    CASE
+      WHEN MET.pt < 0 THEN -1
+      WHEN MET.pt > 2000 THEN 2001
+      ELSE MET.pt
+    END) / 20) * 20 + 10
+ORDER BY x;
