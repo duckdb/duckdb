@@ -115,8 +115,7 @@ unique_ptr<BoundConstraint> BindCheckConstraint(Binder &binder, Constraint &cons
 	// Bind the constraint and reset the original expression.
 	bound_check.expression = check_binder.Bind(check.expression);
 	check.expression = std::move(unbound_expression);
-
-	return bound_constraint;
+	return std::move(bound_constraint);
 }
 
 unique_ptr<BoundConstraint> BindUniqueConstraint(Constraint &constraint, const string &table,
