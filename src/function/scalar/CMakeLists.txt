@@ -11,7 +11,7 @@ add_subdirectory(system)
 add_library_unity(
   duckdb_func_scalar
   OBJECT
-  compressed_materialization_functions.cpp
+  compressed_materialization_utils.cpp
   create_sort_key.cpp
   strftime_format.cpp
   nested_functions.cpp
