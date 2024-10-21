@@ -194,11 +194,13 @@ private:
 // TemporaryFileCompressionLevel/TemporaryFileCompressionAdaptivity
 //===--------------------------------------------------------------------===//
 enum class TemporaryCompressionLevel : int {
+	ZSTD_MINUS_FIVE = -5,
 	ZSTD_MINUS_THREE = -3,
 	ZSTD_MINUS_ONE = -1,
 	UNCOMPRESSED = 0,
 	ZSTD_ONE = 1,
 	ZSTD_THREE = 3,
+	ZSTD_FIVE = 5,
 };
 
 class TemporaryFileCompressionAdaptivity {
@@ -217,14 +219,17 @@ private:
 	//! Convert from level to index into write time array and back
 	static TemporaryCompressionLevel IndexToLevel(idx_t index);
 	static idx_t LevelToIndex(TemporaryCompressionLevel level);
+	//! Min/max compression levels
+	static TemporaryCompressionLevel MinimumCompressionLevel();
+	static TemporaryCompressionLevel MaximumCompressionLevel();
 
 private:
 	//! How many compression levels we adapt between
-	static constexpr idx_t LEVELS = 4;
+	static constexpr idx_t LEVELS = 6;
 	//! Bias towards compressed writes: we only choose uncompressed if it is more than 2x faster than compressed
 	static constexpr double DURATION_RATIO_THRESHOLD = 2.0;
 	//! Probability to deviate from the current best write behavior (1 in 20)
-	static constexpr double COMPRESSION_DEVIATION = 0.05;
+	static constexpr double COMPRESSION_DEVIATION = 0.5;
 
 	//! Random engine to (sometimes) randomize compression
 	RandomEngine random_engine;
@@ -282,7 +287,8 @@ public:
 
 private:
 	//! Compress buffer, write it in compressed_buffer and return the size/level
-	CompressionResult CompressBuffer(FileBuffer &buffer, AllocatedData &compressed_buffer);
+	CompressionResult CompressBuffer(TemporaryFileCompressionAdaptivity &compression_adaptivity, FileBuffer &buffer,
+	                                 AllocatedData &compressed_buffer);
 
 	//! Create file name for given size/index
 	string CreateTemporaryFileName(const TemporaryFileIdentifier &identifier) const;
@@ -314,8 +320,10 @@ private:
 	atomic<idx_t> size_on_disk;
 	//! The max amount of disk space that can be used
 	idx_t max_swap_space;
+	//! How many compression adaptivities we have so that threads don't all share the same one
+	static constexpr idx_t COMPRESSION_ADAPTIVITIES = 64;
 	//! Class that oversees when/how much to compress
-	TemporaryFileCompressionAdaptivity compression_adaptivity;
+	std::array<TemporaryFileCompressionAdaptivity, COMPRESSION_ADAPTIVITIES> compression_adaptivities;
 };
 
 //===--------------------------------------------------------------------===//

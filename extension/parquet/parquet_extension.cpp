@@ -1456,7 +1456,14 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	                                                                         bind_data.encryption_config, nullptr);
 	serializer.WriteProperty(108, "dictionary_compression_ratio_threshold",
 	                         bind_data.dictionary_compression_ratio_threshold);
-	serializer.WritePropertyWithDefault<int64_t>(109, "compression_level", bind_data.compression_level);
+	optional_idx compression_level; // Was originally an optional_idx, now int64_t, so we still serialize as such
+	if (bind_data.compression_level < 0) {
+		// + a negative value, so the negative compression level is essentially subtracted from the max
+		compression_level = NumericLimits<int64_t>::Maximum() + bind_data.compression_level;
+	} else {
+		compression_level = NumericCast<idx_t>(bind_data.compression_level);
+	}
+	serializer.WritePropertyWithDefault<optional_idx>(109, "compression_level", compression_level);
 	serializer.WriteProperty(110, "row_groups_per_file", bind_data.row_groups_per_file);
 	serializer.WriteProperty(111, "debug_use_openssl", bind_data.debug_use_openssl);
 }
@@ -1476,10 +1483,17 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	                                                     data->dictionary_compression_ratio_threshold, 1.0);
 	optional_idx compression_level;
 	deserializer.ReadPropertyWithDefault<optional_idx>(109, "compression_level", compression_level);
-	if (!compression_level.IsValid()) {
-		data->compression_level = ZStdFileSystem::DefaultCompressionLevel(); // Used to be serialized as an optional_idx
+	if (compression_level.IsValid()) { // Was originally an optional_idx, now int64_t, so we still serialize as such
+		if (compression_level.GetIndex() > ZStdFileSystem::MaximumCompressionLevel()) {
+			// re-add the maximum to restore the negative compression level
+			data->compression_level =
+			    NumericCast<int64_t>(compression_level.GetIndex()) - NumericLimits<int64_t>::Maximum();
+			D_ASSERT(data->compression_level < 0);
+		} else {
+			data->compression_level = NumericCast<int64_t>(compression_level.GetIndex());
+		}
 	} else {
-		data->compression_level = static_cast<int64_t>(compression_level.GetIndex());
+		data->compression_level = ZStdFileSystem::DefaultCompressionLevel();
 	}
 	data->row_groups_per_file =
 	    deserializer.ReadPropertyWithExplicitDefault<optional_idx>(110, "row_groups_per_file", optional_idx::Invalid());
