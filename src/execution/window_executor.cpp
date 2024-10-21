@@ -912,22 +912,48 @@ void ExclusionFilter::ResetMask(idx_t row_idx, idx_t offset) {
 	}
 }
 
-column_t WindowSharedExpressions::RegisterExpr(const unique_ptr<Expression> &expr, Expressions &shared) {
+column_t WindowSharedExpressions::RegisterExpr(const unique_ptr<Expression> &expr, Shared &shared) {
 	auto pexpr = expr.get();
 	if (!pexpr) {
 		return DConstants::INVALID_INDEX;
 	}
 
-	column_t result = shared.size();
-	for (column_t i = 0; i < shared.size(); ++i) {
-		if (pexpr->Equals(*shared[i])) {
-			return i;
+	//	We need to make separate columns for volatile arguments
+	const auto is_volatile = expr->IsVolatile();
+	auto i = shared.columns.find(*pexpr);
+	if (i != shared.columns.end() && !is_volatile) {
+		return i->second.front();
+	}
+
+	// New column, find maximum column number
+	column_t result = shared.size++;
+	shared.columns[*pexpr].emplace_back(result);
+
+	return result;
+}
+
+vector<const Expression *> WindowSharedExpressions::GetSortedExpressions(Shared &shared) {
+	vector<const Expression *> sorted(shared.size, nullptr);
+	for (auto &col : shared.columns) {
+		auto &expr = col.first.get();
+		for (auto col_idx : col.second) {
+			sorted[col_idx] = &expr;
 		}
 	}
 
-	shared.emplace_back(pexpr);
+	return sorted;
+}
+void WindowSharedExpressions::PrepareExecutors(Shared &shared, ExpressionExecutor &exec, DataChunk &chunk) {
+	const auto sorted = GetSortedExpressions(shared);
+	vector<LogicalType> types;
+	for (auto expr : sorted) {
+		exec.AddExpression(*expr);
+		types.emplace_back(expr->return_type);
+	}
 
-	return result;
+	if (!types.empty()) {
+		chunk.Initialize(exec.GetAllocator(), types);
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -1488,11 +1514,12 @@ public:
 	using WindowCollectionPtr = unique_ptr<WindowCollection>;
 	WindowValueGlobalState(const WindowValueExecutor &executor, const idx_t payload_count,
 	                       const ValidityMask &partition_mask, const ValidityMask &order_mask)
-	    : WindowExecutorGlobalState(executor, payload_count, partition_mask, order_mask),
+	    : WindowExecutorGlobalState(executor, payload_count, partition_mask, order_mask), ignore_nulls(&all_valid),
 	      child_idx(executor.child_idx) {
 	}
 
 	// IGNORE NULLS
+	ValidityMask all_valid;
 	optional_ptr<ValidityMask> ignore_nulls;
 
 	const column_t child_idx;
@@ -1577,7 +1604,7 @@ unique_ptr<WindowExecutorGlobalState> WindowValueExecutor::GetGlobalState(const 
 
 void WindowValueExecutor::Finalize(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                    CollectionPtr collection) const {
-	if (child_idx != DConstants::INVALID_INDEX) {
+	if (child_idx != DConstants::INVALID_INDEX && wexpr.ignore_nulls) {
 		auto &gvstate = gstate.Cast<WindowValueGlobalState>();
 		gvstate.ignore_nulls = &collection->validities[child_idx];
 	}

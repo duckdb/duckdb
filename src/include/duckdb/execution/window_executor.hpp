@@ -149,14 +149,17 @@ enum WindowBounds : uint8_t { PARTITION_BEGIN, PARTITION_END, PEER_BEGIN, PEER_E
 
 //! A shared set of expressions
 struct WindowSharedExpressions {
-	using Expressions = vector<const Expression *>;
+	struct Shared {
+		column_t size = 0;
+		expression_map_t<vector<column_t>> columns;
+	};
 
 	//! Register a shared expression in a shared set
-	static column_t RegisterExpr(const unique_ptr<Expression> &expr, Expressions &shared);
+	static column_t RegisterExpr(const unique_ptr<Expression> &expr, Shared &shared);
 
 	//! Register a shared collection expression
 	column_t RegisterCollection(const unique_ptr<Expression> &expr, bool build_validity) {
-		auto result = RegisterExpr(expr, coll_exprs);
+		auto result = RegisterExpr(expr, coll_shared);
 		if (build_validity) {
 			coll_validity.insert(result);
 		}
@@ -164,46 +167,40 @@ struct WindowSharedExpressions {
 	}
 	//! Register a shared collection expression
 	inline column_t RegisterSink(const unique_ptr<Expression> &expr) {
-		return RegisterExpr(expr, sink_exprs);
+		return RegisterExpr(expr, sink_shared);
 	}
 	//! Register a shared evaluation expression
 	inline column_t RegisterEvaluate(const unique_ptr<Expression> &expr) {
-		return RegisterExpr(expr, eval_exprs);
+		return RegisterExpr(expr, eval_shared);
 	}
 
+	//! Expression layout
+	static vector<const Expression *> GetSortedExpressions(Shared &shared);
+
 	//! Expression execution utility
-	static void PrepareExecutors(Expressions &exprs, ExpressionExecutor &exec, DataChunk &chunk) {
-		vector<LogicalType> types;
-		for (auto &expr : exprs) {
-			exec.AddExpression(*expr);
-			types.emplace_back(expr->return_type);
-		}
-		if (!types.empty()) {
-			chunk.Initialize(exec.GetAllocator(), types);
-		}
-	}
+	static void PrepareExecutors(Shared &shared, ExpressionExecutor &exec, DataChunk &chunk);
 
 	//! Prepare collection expressions
 	inline void PrepareCollection(ExpressionExecutor &exec, DataChunk &chunk) {
-		PrepareExecutors(coll_exprs, exec, chunk);
+		PrepareExecutors(coll_shared, exec, chunk);
 	}
 
 	//! Prepare collection expressions
 	inline void PrepareSink(ExpressionExecutor &exec, DataChunk &chunk) {
-		PrepareExecutors(sink_exprs, exec, chunk);
+		PrepareExecutors(sink_shared, exec, chunk);
 	}
 
 	//! Prepare collection expressions
 	inline void PrepareEvaluate(ExpressionExecutor &exec, DataChunk &chunk) {
-		PrepareExecutors(eval_exprs, exec, chunk);
+		PrepareExecutors(eval_shared, exec, chunk);
 	}
 
 	//! Fully materialised shared expressions
-	Expressions coll_exprs;
+	Shared coll_shared;
 	//! Sink shared expressions
-	Expressions sink_exprs;
+	Shared sink_shared;
 	//! Evaluate shared expressions
-	Expressions eval_exprs;
+	Shared eval_shared;
 	//! Requested collection validity masks
 	unordered_set<column_t> coll_validity;
 };
