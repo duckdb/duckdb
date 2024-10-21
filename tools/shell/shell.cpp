@@ -910,149 +910,6 @@ static char quoteChar(const char *zName){
 }
 
 /*
-** Construct a fake object name and column list to describe the structure
-** of the view, virtual table, or table valued function zSchema.zName.
-*/
-static char *shellFakeSchema(
-  sqlite3 *db,            /* The database connection containing the vtab */
-  const char *zSchema,    /* Schema of the database holding the vtab */
-  const char *zName       /* The name of the virtual table */
-){
-  sqlite3_stmt *pStmt = 0;
-  char *zSql;
-  ShellText s;
-  char cQuote;
-  const char *zDiv = "(";
-  int nRow = 0;
-
-  zSql = sqlite3_mprintf("PRAGMA \"%w\".table_info=%Q;",
-                         zSchema ? zSchema : "main", zName);
-  sqlite3_prepare_v2(db, zSql, -1, &pStmt, 0);
-  sqlite3_free(zSql);
-  initText(&s);
-  if( zSchema ){
-    cQuote = quoteChar(zSchema);
-    if( cQuote && sqlite3_stricmp(zSchema,"temp")==0 ) cQuote = 0;
-    appendText(&s, zSchema, cQuote);
-    appendText(&s, ".", 0);
-  }
-  cQuote = quoteChar(zName);
-  appendText(&s, zName, cQuote);
-  while( sqlite3_step(pStmt)==SQLITE_ROW ){
-    const char *zCol = (const char*)sqlite3_column_text(pStmt, 1);
-    nRow++;
-    appendText(&s, zDiv, 0);
-    zDiv = ",";
-    cQuote = quoteChar(zCol);
-    appendText(&s, zCol, cQuote);
-  }
-  appendText(&s, ")", 0);
-  sqlite3_finalize(pStmt);
-  if( nRow==0 ){
-    freeText(&s);
-    s.z = 0;
-  }
-  return s.z;
-}
-
-/*
-** SQL function:  shell_module_schema(X)
-**
-** Return a fake schema for the table-valued function or eponymous virtual
-** table X.
-*/
-static void shellModuleSchema(
-  sqlite3_context *pCtx,
-  int nVal,
-  sqlite3_value **apVal
-){
-  const char *zName = (const char*)sqlite3_value_text(apVal[0]);
-  if (!zName) {
-    zName = "module_schema";
-  }
-  char *zFake = shellFakeSchema(sqlite3_context_db_handle(pCtx), 0, zName);
-  UNUSED_PARAMETER(nVal);
-  if( zFake ){
-    sqlite3_result_text(pCtx, sqlite3_mprintf("/* %s */", zFake),
-                        -1, sqlite3_free);
-    free(zFake);
-  }
-}
-
-/*
-** SQL function:  shell_add_schema(S,X)
-**
-** Add the schema name X to the CREATE statement in S and return the result.
-** Examples:
-**
-**    CREATE TABLE t1(x)   ->   CREATE TABLE xyz.t1(x);
-**
-** Also works on
-**
-**    CREATE INDEX
-**    CREATE UNIQUE INDEX
-**    CREATE VIEW
-**    CREATE TRIGGER
-**    CREATE VIRTUAL TABLE
-**
-** This UDF is used by the .schema command to insert the schema name of
-** attached databases into the middle of the sqlite_schema.sql field.
-*/
-static void shellAddSchemaName(
-  sqlite3_context *pCtx,
-  int nVal,
-  sqlite3_value **apVal
-){
-  static const char *aPrefix[] = {
-     "TABLE",
-     "INDEX",
-     "UNIQUE INDEX",
-     "VIEW",
-     "TRIGGER",
-     "VIRTUAL TABLE"
-  };
-  int i = 0;
-  const char *zIn = (const char*)sqlite3_value_text(apVal[0]);
-  const char *zSchema = (const char*)sqlite3_value_text(apVal[1]);
-  const char *zName = (const char*)sqlite3_value_text(apVal[2]);
-  sqlite3 *db = sqlite3_context_db_handle(pCtx);
-  UNUSED_PARAMETER(nVal);
-  if( zIn!=0 && strncmp(zIn, "CREATE ", 7)==0 ){
-    for(i=0; i<(int)(sizeof(aPrefix)/sizeof(aPrefix[0])); i++){
-      int n = strlen30(aPrefix[i]);
-      if( strncmp(zIn+7, aPrefix[i], n)==0 && zIn[n+7]==' ' ){
-        char *z = 0;
-        char *zFake = 0;
-        if( zSchema ){
-          char cQuote = quoteChar(zSchema);
-          if( cQuote && sqlite3_stricmp(zSchema,"temp")!=0 ){
-            z = sqlite3_mprintf("%.*s \"%w\".%s", n+7, zIn, zSchema, zIn+n+8);
-          }else{
-            z = sqlite3_mprintf("%.*s %s.%s", n+7, zIn, zSchema, zIn+n+8);
-          }
-        }
-        if( zName
-         && aPrefix[i][0]=='V'
-         && (zFake = shellFakeSchema(db, zSchema, zName))!=0
-        ){
-          if( z==0 ){
-            z = sqlite3_mprintf("%s\n/* %s */", zIn, zFake);
-          }else{
-            z = sqlite3_mprintf("%z\n/* %s */", z, zFake);
-          }
-          free(zFake);
-        }
-        if( z ){
-          sqlite3_result_text(pCtx, z, -1, sqlite3_free);
-          return;
-        }
-      }
-    }
-  }
-  sqlite3_result_value(pCtx, apVal[0]);
-}
-
-/*
 ** The source code for several run-time loadable extensions is inserted
 ** below by the ../tool/mkshellc.tcl script.  Before processing that included
 ** code, we need to override some macros to make the included program code
@@ -2758,23 +2615,6 @@ static void shellLog(void *pArg, int iErrCode, const char *zMsg){
 }
 
 /*
-** SQL function:  shell_putsnl(X)
-**
-** Write the text X to the screen (or whatever output is being directed)
-** adding a newline at the end, and then return X.
-*/
-static void shellPutsFunc(
-  sqlite3_context *pCtx,
-  int nVal,
-  sqlite3_value **apVal
-){
-  ShellState *p = (ShellState*)sqlite3_user_data(pCtx);
-  (void)nVal;
-  utf8_printf(p->out, "%s\n", sqlite3_value_text(apVal[0]));
-  sqlite3_result_value(pCtx, apVal[0]);
-}
-
-/*
 ** SQL function:   edit(VALUE)
 **                 edit(VALUE,EDITOR)
 **
@@ -3823,42 +3663,6 @@ static char *save_err_msg(
   return zErrMsg;
 }
 
-#ifdef __linux__
-/*
-** Attempt to display I/O stats on Linux using /proc/PID/io
-*/
-static void displayLinuxIoStats(FILE *out){
-  FILE *in;
-  char z[200];
-  sqlite3_snprintf(sizeof(z), z, "/proc/%d/io", getpid());
-  in = fopen(z, "rb");
-  if( in==0 ) return;
-  while( fgets(z, sizeof(z), in)!=0 ){
-    static const struct {
-      const char *zPattern;
-      const char *zDesc;
-    } aTrans[] = {
-      { "rchar: ",                  "Bytes received by read():" },
-      { "wchar: ",                  "Bytes sent to write():"    },
-      { "syscr: ",                  "Read() system calls:"      },
-      { "syscw: ",                  "Write() system calls:"     },
-      { "read_bytes: ",             "Bytes read from storage:"  },
-      { "write_bytes: ",            "Bytes written to storage:" },
-      { "cancelled_write_bytes: ",  "Cancelled write bytes:"    },
-    };
-    int i;
-    for(i=0; i<ArraySize(aTrans); i++){
-      int n = strlen30(aTrans[i].zPattern);
-      if( strncmp(aTrans[i].zPattern, z, n)==0 ){
-        utf8_printf(out, "%-36s %s", aTrans[i].zDesc, &z[n]);
-        break;
-      }
-    }
-  }
-  fclose(in);
-}
-#endif
-
 /*
 ** Bind parameters on a prepared statement.
 **
@@ -4767,11 +4571,9 @@ static const char *azHelp[] = {
 #endif
   ".open ?OPTIONS? ?FILE?   Close existing database and reopen FILE",
   "     Options:",
-  "        --append        Use appendvfs to append database to the end of FILE",
   "        --new           Initialize FILE to an empty database",
   "        --nofollow      Do not follow symbolic links",
   "        --readonly      Open FILE readonly",
-  "        --zip           FILE is a ZIP archive",
   ".output ?FILE?           Send output to FILE or stdout if FILE is omitted",
   "   If FILE begins with '|' then open it as a pipe.",
   "   Options:",
@@ -4974,114 +4776,6 @@ int deduceDatabaseType(const char *zName, int dfltZip){
   return rc;
 }
 
-/*
-** Scalar function "shell_idquote(X)" returns string X quoted as an identifier,
-** using "..." with internal double-quote characters doubled.
-*/
-static void shellIdQuote(
-  sqlite3_context *context,
-  int argc,
-  sqlite3_value **argv
-){
-  const char *zName = (const char*)sqlite3_value_text(argv[0]);
-  UNUSED_PARAMETER(argc);
-  if( zName ){
-    char *z = sqlite3_mprintf("\"%w\"", zName);
-    sqlite3_result_text(context, z, -1, sqlite3_free);
-  }
-}
-
-/*
-** Scalar function "shell_escape_crnl" used by the .recover command.
-** The argument passed to this function is the output of built-in
-** function quote(). If the first character of the input is "'",
-** indicating that the value passed to quote() was a text value,
-** then this function searches the input for "\n" and "\r" characters
-** and adds a wrapper similar to the following:
-**
-**   replace(replace(<input>, '\n', char(10), '\r', char(13));
-**
-** Or, if the first character of the input is not "'", then a copy
-** of the input is returned.
-*/
-static void shellEscapeCrnl(
-  sqlite3_context *context,
-  int argc,
-  sqlite3_value **argv
-){
-  const char *zText = (const char*)sqlite3_value_text(argv[0]);
-  UNUSED_PARAMETER(argc);
-  if( zText && zText[0]=='\'' ){
-    int nText = sqlite3_value_bytes(argv[0]);
-    int i;
-    char zBuf1[20];
-    char zBuf2[20];
-    const char *zNL = 0;
-    const char *zCR = 0;
-    int nCR = 0;
-    int nNL = 0;
-
-    for(i=0; zText[i]; i++){
-      if( zNL==0 && zText[i]=='\n' ){
-        zNL = unused_string(zText, "\\n", "\\012", zBuf1);
-        nNL = (int)strlen(zNL);
-      }
-      if( zCR==0 && zText[i]=='\r' ){
-        zCR = unused_string(zText, "\\r", "\\015", zBuf2);
-        nCR = (int)strlen(zCR);
-      }
-    }
-
-    if( zNL || zCR ){
-      int iOut = 0;
-      i64 nMax = (nNL > nCR) ? nNL : nCR;
-      i64 nAlloc = nMax * nText + (nMax+64)*2;
-      char *zOut = (char*)sqlite3_malloc64(nAlloc);
-      if( zOut==0 ){
-        sqlite3_result_error_nomem(context);
-        return;
-      }
-
-      if( zNL && zCR ){
-        memcpy(&zOut[iOut], "replace(replace(", 16);
-        iOut += 16;
-      }else{
-        memcpy(&zOut[iOut], "replace(", 8);
-        iOut += 8;
-      }
-      for(i=0; zText[i]; i++){
-        if( zText[i]=='\n' ){
-          memcpy(&zOut[iOut], zNL, nNL);
-          iOut += nNL;
-        }else if( zText[i]=='\r' ){
-          memcpy(&zOut[iOut], zCR, nCR);
-          iOut += nCR;
-        }else{
-          zOut[iOut] = zText[i];
-          iOut++;
-        }
-      }
-
-      if( zNL ){
-        memcpy(&zOut[iOut], ",'", 2); iOut += 2;
-        memcpy(&zOut[iOut], zNL, nNL); iOut += nNL;
-        memcpy(&zOut[iOut], "', char(10))", 12); iOut += 12;
-      }
-      if( zCR ){
-        memcpy(&zOut[iOut], ",'", 2); iOut += 2;
-        memcpy(&zOut[iOut], zCR, nCR); iOut += nCR;
-        memcpy(&zOut[iOut], "', char(13))", 12); iOut += 12;
-      }
-
-      sqlite3_result_text(context, zOut, iOut, SQLITE_TRANSIENT);
-      sqlite3_free(zOut);
-      return;
-    }
-  }
-
-  sqlite3_result_value(context, argv[0]);
-}
-
 /* Flags for open_db().
 **
 ** The default behavior of open_db() is to exit(1) if the database fails to
@@ -5150,16 +4844,6 @@ void ShellState::open_db(int flags){
 #endif
     sqlite3_fileio_init(db, 0, 0);
     sqlite3_shathree_init(db, 0, 0);
-    sqlite3_create_function(db, "shell_add_schema", 3, SQLITE_UTF8, 0,
-                            shellAddSchemaName, 0, 0);
-    sqlite3_create_function(db, "shell_module_schema", 1, SQLITE_UTF8, 0,
-                            shellModuleSchema, 0, 0);
-    sqlite3_create_function(db, "shell_putsnl", 1, SQLITE_UTF8, this,
-                            shellPutsFunc, 0, 0);
-    sqlite3_create_function(db, "shell_escape_crnl", 1, SQLITE_UTF8, 0,
-                            shellEscapeCrnl, 0, 0);
-    sqlite3_create_function(db, "shell_idquote", 1, SQLITE_UTF8, 0,
-                            shellIdQuote, 0, 0);
 #ifndef SQLITE_NOHAVE_SYSTEM
     sqlite3_create_function(db, "edit", 1, SQLITE_UTF8, 0,
                             editFunc, 0, 0);
@@ -7025,8 +6709,6 @@ int ShellState::do_meta_command(char *zLine){
       }else if( optionMatch(z, "zip") ){
         openMode = SHELL_OPEN_ZIPFILE;
 #endif
-      }else if( optionMatch(z, "append") ){
-        openMode = SHELL_OPEN_APPENDVFS;
       }else if( optionMatch(z, "readonly") ){
         openMode = SHELL_OPEN_READONLY;
       }else if( optionMatch(z, "nofollow") ){
@@ -8218,7 +7900,6 @@ void ShellState::process_sqliterc(const char *sqliterc_override) {
 ** Show available command line options
 */
 static const char zOptions[] =
-  "   -append              append the database to the end of the file\n"
   "   -ascii               set output mode to 'ascii'\n"
   "   -bail                stop after hitting an error\n"
   "   -batch               force batch I/O\n"
@@ -8230,9 +7911,6 @@ static const char zOptions[] =
   "   -echo                print commands before execution\n"
   "   -init FILENAME       read/process named file\n"
   "   -[no]header          turn headers on or off\n"
-#if defined(SQLITE_ENABLE_MEMSYS3) || defined(SQLITE_ENABLE_MEMSYS5)
-  "   -heap SIZE           Size of heap for memsys3 or memsys5\n"
-#endif
   "   -help                show this message\n"
   "   -html                set output mode to HTML\n"
   "   -interactive         force interactive I/O\n"
@@ -8240,9 +7918,6 @@ static const char zOptions[] =
   "   -line                set output mode to 'line'\n"
   "   -list                set output mode to 'list'\n"
   "   -markdown            set output mode to 'markdown'\n"
-#ifdef SQLITE_ENABLE_MULTIPLEX
-  "   -multiplex           enable the multiplexor VFS\n"
-#endif
   "   -newline SEP         set output row separator. Default: '\\n'\n"
   "   -nofollow            refuse to open symbolic links to database files\n"
   "   -no-stdin            exit after processing options instead of reading stdin\n"
@@ -8251,17 +7926,11 @@ static const char zOptions[] =
   "   -readonly            open the database read-only\n"
   "   -s COMMAND           run \"COMMAND\" and exit\n"
   "   -separator SEP       set output column separator. Default: '|'\n"
-#ifdef SQLITE_ENABLE_SORTER_REFERENCES
-  "   -sorterref SIZE      sorter references threshold size\n"
-#endif
   "   -stats               print memory stats before each finalize\n"
   "   -table               set output mode to 'table'\n"
   "   -unredacted          allow printing unredacted secrets\n"
   "   -unsigned            allow loading of unsigned extensions\n"
   "   -version             show DuckDB version\n"
-#ifdef SQLITE_HAVE_ZLIB
-  "   -zip                 open the file as a ZIP Archive\n"
-#endif
 ;
 static void usage(int showDetail){
   utf8_printf(stderr,
@@ -8564,8 +8233,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
     }else if( strcmp(z,"-zip")==0 ){
       data.openMode = SHELL_OPEN_ZIPFILE;
 #endif
-    }else if( strcmp(z,"-append")==0 ){
-      data.openMode = SHELL_OPEN_APPENDVFS;
     }else if( strcmp(z,"-readonly")==0 ){
       data.openMode = SHELL_OPEN_READONLY;
     }else if( strcmp(z,"-nofollow")==0 ){
@@ -8670,8 +8337,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
     }else if( strcmp(z,"-zip")==0 ){
       data.openMode = SHELL_OPEN_ZIPFILE;
 #endif
-    }else if( strcmp(z,"-append")==0 ){
-      data.openMode = SHELL_OPEN_APPENDVFS;
     }else if( strcmp(z,"-readonly")==0 ){
       data.openMode = SHELL_OPEN_READONLY;
     }else if( strcmp(z,"-nofollow")==0 ){
