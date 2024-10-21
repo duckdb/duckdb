@@ -1,6 +1,7 @@
 #include "duckdb/storage/temporary_file_manager.hpp"
 
 #include "duckdb/common/chrono.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 #include "duckdb/storage/standard_buffer_manager.hpp"
 #include "zstd.h"
@@ -12,13 +13,13 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 static bool TemporaryBufferSizeIsValid(const TemporaryBufferSize size) {
 	switch (size) {
-	case TemporaryBufferSize::THIRTY_TWO_KB:
-	case TemporaryBufferSize::SIXTY_FOUR_KB:
-	case TemporaryBufferSize::NINETY_SIX_KB:
-	case TemporaryBufferSize::HUNDRED_TWENTY_EIGHT_KB:
-	case TemporaryBufferSize::HUNDRED_SIXTY_KB:
-	case TemporaryBufferSize::HUNDRED_NINETY_TWO_KB:
-	case TemporaryBufferSize::TWO_HUNDRED_TWENTY_FOUR_KB:
+	case TemporaryBufferSize::S32K:
+	case TemporaryBufferSize::S64K:
+	case TemporaryBufferSize::S96K:
+	case TemporaryBufferSize::S128K:
+	case TemporaryBufferSize::S160K:
+	case TemporaryBufferSize::S192K:
+	case TemporaryBufferSize::S224K:
 	case TemporaryBufferSize::DEFAULT:
 		return true;
 	default:
@@ -42,47 +43,18 @@ static TemporaryBufferSize RoundUpSizeToTemporaryBufferSize(const idx_t size) {
 	return SizeToTemporaryBufferSize(AlignValue<idx_t, TEMPORARY_BUFFER_SIZE_GRANULARITY>(size));
 }
 
-static string TemporaryBufferSizeShortString(const TemporaryBufferSize size) {
-	D_ASSERT(TemporaryBufferSizeIsValid(size));
-	switch (size) {
-	case TemporaryBufferSize::THIRTY_TWO_KB:
-		return "32k";
-	case TemporaryBufferSize::SIXTY_FOUR_KB:
-		return "64k";
-	case TemporaryBufferSize::NINETY_SIX_KB:
-		return "92k";
-	case TemporaryBufferSize::HUNDRED_TWENTY_EIGHT_KB:
-		return "128k";
-	case TemporaryBufferSize::HUNDRED_SIXTY_KB:
-		return "160k";
-	case TemporaryBufferSize::HUNDRED_NINETY_TWO_KB:
-		return "192k";
-	case TemporaryBufferSize::TWO_HUNDRED_TWENTY_FOUR_KB:
-		return "224k";
-	case TemporaryBufferSize::DEFAULT:
-		return "default";
-	default:
-		throw InternalException("Unknown TemporaryBufferSize in TemporaryBufferSizeShortString");
-	}
-}
-
 static const vector<TemporaryBufferSize> TemporaryBufferSizes() {
-	return {TemporaryBufferSize::THIRTY_TWO_KB,
-	        TemporaryBufferSize::SIXTY_FOUR_KB,
-	        TemporaryBufferSize::NINETY_SIX_KB,
-	        TemporaryBufferSize::HUNDRED_TWENTY_EIGHT_KB,
-	        TemporaryBufferSize::HUNDRED_SIXTY_KB,
-	        TemporaryBufferSize::HUNDRED_NINETY_TWO_KB,
-	        TemporaryBufferSize::TWO_HUNDRED_TWENTY_FOUR_KB,
-	        TemporaryBufferSize::DEFAULT};
+	return {TemporaryBufferSize::S32K,  TemporaryBufferSize::S64K,   TemporaryBufferSize::S96K,
+	        TemporaryBufferSize::S128K, TemporaryBufferSize::S160K,  TemporaryBufferSize::S192K,
+	        TemporaryBufferSize::S224K, TemporaryBufferSize::DEFAULT};
 }
 
 static TemporaryBufferSize MinimumCompressedTemporaryBufferSize() {
-	return TemporaryBufferSize::THIRTY_TWO_KB;
+	return TemporaryBufferSize::S32K;
 }
 
 static TemporaryBufferSize MaximumCompressedTemporaryBufferSize() {
-	return TemporaryBufferSize::TWO_HUNDRED_TWENTY_FOUR_KB;
+	return TemporaryBufferSize::S224K;
 }
 
 //===--------------------------------------------------------------------===//
@@ -352,25 +324,86 @@ void TemporaryFileMap::EraseFile(const TemporaryFileIdentifier &identifier) {
 }
 
 //===--------------------------------------------------------------------===//
-// TemporaryFileManager
+// TemporaryFileCompressionLevel/TemporaryFileCompressionAdaptivity
 //===--------------------------------------------------------------------===//
-static idx_t GetDefaultMax(const string &path) {
-	D_ASSERT(!path.empty());
-	auto disk_space = FileSystem::GetAvailableDiskSpace(path);
-	// Use the available disk space
-	// We have made sure that the file exists before we call this, it shouldn't fail
-	if (!disk_space.IsValid()) {
-		// But if it does (i.e because the system call is not implemented)
-		// we don't cap the available swap space
-		return DConstants::INVALID_INDEX - 1;
+TemporaryFileCompressionAdaptivity::TemporaryFileCompressionAdaptivity() : last_uncompressed_write_ns(1) {
+	for (idx_t i = 0; i < LEVELS; i++) {
+		last_compressed_writes_ns[0] = 1;
 	}
-	// Only use 90% of the available disk space
-	return static_cast<idx_t>(static_cast<double>(disk_space.GetIndex()) * 0.9);
 }
 
+int64_t TemporaryFileCompressionAdaptivity::GetCurrentTimeNanos() {
+	return duration_cast<nanoseconds>(high_resolution_clock::now().time_since_epoch()).count();
+}
+
+TemporaryCompressionLevel TemporaryFileCompressionAdaptivity::IndexToLevel(const idx_t index) {
+	switch (index) {
+	case 0:
+		return TemporaryCompressionLevel::ZSTD_MINUS_THREE;
+	case 1:
+		return TemporaryCompressionLevel::ZSTD_MINUS_ONE;
+	case 2:
+		return TemporaryCompressionLevel::ZSTD_ONE;
+	case 3:
+		return TemporaryCompressionLevel::ZSTD_THREE;
+	default:
+		throw InternalException("Unknown index in IndexToLevel");
+	}
+}
+
+idx_t TemporaryFileCompressionAdaptivity::LevelToIndex(TemporaryCompressionLevel level) {
+	switch (level) {
+	case TemporaryCompressionLevel::ZSTD_MINUS_THREE:
+		return 0;
+	case TemporaryCompressionLevel::ZSTD_MINUS_ONE:
+		return 1;
+	case TemporaryCompressionLevel::ZSTD_ONE:
+		return 2;
+	case TemporaryCompressionLevel::ZSTD_THREE:
+		return 3;
+	default:
+		throw InternalException("Unknown TemporaryFileCompressionLevel in LevelToIndex");
+	}
+}
+
+TemporaryCompressionLevel TemporaryFileCompressionAdaptivity::GetCompressionLevel() {
+	idx_t min_compression_idx = 0;
+	auto min_compressed_time = last_compressed_writes_ns[min_compression_idx].load();
+	for (idx_t compression_idx = 0; compression_idx < LEVELS; compression_idx++) {
+		const auto time = last_compressed_writes_ns[compression_idx].load();
+		if (time < min_compressed_time) {
+			min_compression_idx = compression_idx;
+			min_compressed_time = time;
+		}
+	}
+
+	const double ratio = static_cast<double>(min_compressed_time) / static_cast<double>(last_uncompressed_write_ns);
+	const bool should_compress = ratio < DURATION_RATIO_THRESHOLD;
+
+	lock_guard<mutex> guard(random_engine.lock);
+	const auto should_deviate = random_engine.NextRandom() < COMPRESSION_DEVIATION;
+	if (should_compress) {
+		// Deviating from compressed always entails writing uncompressed
+		return should_deviate ? TemporaryCompressionLevel::UNCOMPRESSED : IndexToLevel(min_compression_idx);
+	}
+	// Deviating from uncompressed picks a compression level at random
+	return should_deviate ? IndexToLevel(random_engine.NextRandomInteger(0, LEVELS))
+	                      : TemporaryCompressionLevel::UNCOMPRESSED;
+}
+
+void TemporaryFileCompressionAdaptivity::Update(const TemporaryCompressionLevel level, const int64_t time_before_ns) {
+	if (level == TemporaryCompressionLevel::UNCOMPRESSED) {
+		last_uncompressed_write_ns = GetCurrentTimeNanos() - time_before_ns;
+	} else {
+		last_compressed_writes_ns[LevelToIndex(level)] = GetCurrentTimeNanos() - time_before_ns;
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// TemporaryFileManager
+//===--------------------------------------------------------------------===//
 TemporaryFileManager::TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p)
-    : db(db), temp_directory(temp_directory_p), files(*this), size_on_disk(0), max_swap_space(0),
-      uncompressed_write_ns(1), compressed_write_ns(1) {
+    : db(db), temp_directory(temp_directory_p), files(*this), size_on_disk(0), max_swap_space(0) {
 }
 
 TemporaryFileManager::~TemporaryFileManager() {
@@ -384,17 +417,17 @@ void TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer 
 	// We group DEFAULT_BLOCK_ALLOC_SIZE blocks into the same file.
 	D_ASSERT(buffer.size == BufferManager::GetBufferManager(db).GetBlockSize());
 
-	const int64_t before_ns = duration_cast<nanoseconds>(high_resolution_clock::now().time_since_epoch()).count();
+	const auto time_before_ns = TemporaryFileCompressionAdaptivity::GetCurrentTimeNanos();
 
 	AllocatedData compressed_buffer;
-	const auto size = CompressTemporaryBuffer(buffer, compressed_buffer);
+	const auto compression_result = CompressBuffer(buffer, compressed_buffer);
 
 	TemporaryFileIndex index;
 	optional_ptr<TemporaryFileHandle> handle;
 	{
 		TemporaryFileManagerLock lock(manager_lock);
 		// first check if we can write to an open existing file
-		for (auto &entry : files.GetMapForSize(size)) {
+		for (auto &entry : files.GetMapForSize(compression_result.size)) {
 			auto &temp_file = entry.second;
 			index = temp_file->TryGetBlockIndex();
 			if (index.IsValid()) {
@@ -404,6 +437,7 @@ void TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer 
 		}
 		if (!handle) {
 			// no existing handle to write to; we need to create & open a new file
+			auto &size = compression_result.size;
 			const TemporaryFileIdentifier identifier(size, index_managers[size].GetNewBlockIndex(size));
 			auto &new_file = files.CreateFile(identifier);
 			index = new_file.TryGetBlockIndex();
@@ -417,44 +451,23 @@ void TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer 
 
 	handle->WriteTemporaryBuffer(buffer, index.block_index.GetIndex(), compressed_buffer);
 
-	const auto after_ns = duration_cast<nanoseconds>(high_resolution_clock::now().time_since_epoch()).count();
-	const auto duration_ns = after_ns - before_ns;
-
-	if (size == TemporaryBufferSize::DEFAULT) {
-		uncompressed_write_ns = duration_ns;
-	} else {
-		compressed_write_ns = duration_ns;
-	}
+	compression_adaptivity.Update(compression_result.level, time_before_ns);
 }
 
-TemporaryBufferSize TemporaryFileManager::CompressTemporaryBuffer(FileBuffer &buffer,
-                                                                  AllocatedData &compressed_buffer) {
+TemporaryFileManager::CompressionResult TemporaryFileManager::CompressBuffer(FileBuffer &buffer,
+                                                                             AllocatedData &compressed_buffer) {
 	if (buffer.AllocSize() <= TemporaryBufferSizeToSize(MinimumCompressedTemporaryBufferSize())) {
-		return TemporaryBufferSize::DEFAULT; // Buffer size is less or equal to the minimum compressed size - no point
+		// Buffer size is less or equal to the minimum compressed size - no point compressing
+		return {TemporaryBufferSize::DEFAULT, TemporaryCompressionLevel::UNCOMPRESSED};
 	}
 
-	const double ratio = static_cast<double>(compressed_write_ns) / static_cast<double>(uncompressed_write_ns);
-	bool should_compress = ratio < DURATION_RATIO_THRESHOLD;
-	{
-		lock_guard<mutex> guard(random_engine.lock);
-		if (random_engine.NextRandom() < COMPRESSION_DEVIATION) {
-			should_compress = !should_compress;
-		}
+	const auto level = compression_adaptivity.GetCompressionLevel();
+	if (level == TemporaryCompressionLevel::UNCOMPRESSED) {
+		return {TemporaryBufferSize::DEFAULT, TemporaryCompressionLevel::UNCOMPRESSED};
 	}
 
-	if (!should_compress) {
-		return TemporaryBufferSize::DEFAULT;
-	}
-
-	const auto temp_directory_compression_level = DBConfig::GetConfig(db).options.temp_directory_compression_level;
-	int compression_level;
-	if (temp_directory_compression_level > duckdb_zstd::ZSTD_maxCLevel()) {
-		compression_level = duckdb_zstd::ZSTD_maxCLevel();
-	} else if (temp_directory_compression_level < duckdb_zstd::ZSTD_minCLevel()) {
-		compression_level = duckdb_zstd::ZSTD_minCLevel();
-	} else {
-		compression_level = NumericCast<int>(temp_directory_compression_level);
-	}
+	const auto compression_level = static_cast<int>(level);
+	D_ASSERT(compression_level >= duckdb_zstd::ZSTD_minCLevel() && compression_level <= duckdb_zstd::ZSTD_maxCLevel());
 	const auto zstd_bound = duckdb_zstd::ZSTD_compressBound(buffer.AllocSize());
 	compressed_buffer = Allocator::Get(db).Allocate(sizeof(idx_t) + zstd_bound);
 	const auto zstd_size = duckdb_zstd::ZSTD_compress(compressed_buffer.get() + sizeof(idx_t), zstd_bound,
@@ -464,10 +477,10 @@ TemporaryBufferSize TemporaryFileManager::CompressTemporaryBuffer(FileBuffer &bu
 	const auto compressed_size = sizeof(idx_t) + zstd_size;
 
 	if (compressed_size > TemporaryBufferSizeToSize(MaximumCompressedTemporaryBufferSize())) {
-		return TemporaryBufferSize::DEFAULT; // Use default if compression ratio is bad
+		return {TemporaryBufferSize::DEFAULT, level}; // Use default size if compression ratio is bad
 	}
 
-	return RoundUpSizeToTemporaryBufferSize(compressed_size);
+	return {RoundUpSizeToTemporaryBufferSize(compressed_size), level};
 }
 
 bool TemporaryFileManager::HasTemporaryBuffer(block_id_t block_id) {
@@ -481,6 +494,20 @@ idx_t TemporaryFileManager::GetTotalUsedSpaceInBytes() const {
 
 optional_idx TemporaryFileManager::GetMaxSwapSpace() const {
 	return max_swap_space;
+}
+
+static idx_t GetDefaultMax(const string &path) {
+	D_ASSERT(!path.empty());
+	auto disk_space = FileSystem::GetAvailableDiskSpace(path);
+	// Use the available disk space
+	// We have made sure that the file exists before we call this, it shouldn't fail
+	if (!disk_space.IsValid()) {
+		// But if it does (i.e because the system call is not implemented)
+		// we don't cap the available swap space
+		return DConstants::INVALID_INDEX - 1;
+	}
+	// Only use 90% of the available disk space
+	return static_cast<idx_t>(static_cast<double>(disk_space.GetIndex()) * 0.9);
 }
 
 void TemporaryFileManager::SetMaxSwapSpace(optional_idx limit) {
@@ -575,10 +602,9 @@ void TemporaryFileManager::EraseUsedBlock(TemporaryFileManagerLock &lock, block_
 }
 
 string TemporaryFileManager::CreateTemporaryFileName(const TemporaryFileIdentifier &identifier) const {
-	return FileSystem::GetFileSystem(db).JoinPath(temp_directory,
-	                                              StringUtil::Format("duckdb_temp_storage_%s-%llu.tmp",
-	                                                                 TemporaryBufferSizeShortString(identifier.size),
-	                                                                 identifier.file_index.GetIndex()));
+	return FileSystem::GetFileSystem(db).JoinPath(
+	    temp_directory, StringUtil::Format("duckdb_temp_storage_%s-%llu.tmp", EnumUtil::ToString(identifier.size),
+	                                       identifier.file_index.GetIndex()));
 }
 
 optional_ptr<TemporaryFileHandle> TemporaryFileManager::GetFileHandle(TemporaryFileManagerLock &,

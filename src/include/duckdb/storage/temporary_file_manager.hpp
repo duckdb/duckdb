@@ -10,11 +10,11 @@
 
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/enum_class_hash.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-
 namespace duckdb {
 
 class TemporaryFileManager;
@@ -26,13 +26,13 @@ static constexpr uint64_t TEMPORARY_BUFFER_SIZE_GRANULARITY = 32ULL * 1024ULL;
 
 enum class TemporaryBufferSize : uint64_t {
 	INVALID = 0,
-	THIRTY_TWO_KB = 32768,
-	SIXTY_FOUR_KB = 65536,
-	NINETY_SIX_KB = 98304,
-	HUNDRED_TWENTY_EIGHT_KB = 131072,
-	HUNDRED_SIXTY_KB = 163840,
-	HUNDRED_NINETY_TWO_KB = 196608,
-	TWO_HUNDRED_TWENTY_FOUR_KB = 229376,
+	S32K = 32768,
+	S64K = 65536,
+	S96K = 98304,
+	S128K = 131072,
+	S160K = 163840,
+	S192K = 196608,
+	S224K = 229376,
 	DEFAULT = DEFAULT_BLOCK_ALLOC_SIZE,
 };
 
@@ -166,13 +166,8 @@ private:
 //===--------------------------------------------------------------------===//
 class TemporaryFileMap {
 private:
-	struct TemporaryBufferSizeHash {
-		size_t operator()(const TemporaryBufferSize &k) const {
-			return Hash(static_cast<idx_t>(k));
-		}
-	};
 	template <class T>
-	using temporary_buffer_size_map_t = unordered_map<TemporaryBufferSize, T, TemporaryBufferSizeHash>;
+	using temporary_buffer_size_map_t = unordered_map<TemporaryBufferSize, T, EnumClassHash>;
 	using temporary_file_map_t = unordered_map<idx_t, unique_ptr<TemporaryFileHandle>>;
 
 public:
@@ -194,6 +189,46 @@ private:
 };
 
 //===--------------------------------------------------------------------===//
+// TemporaryFileCompressionLevel/TemporaryFileCompressionAdaptivity
+//===--------------------------------------------------------------------===//
+enum class TemporaryCompressionLevel : int {
+	ZSTD_MINUS_THREE = -3,
+	ZSTD_MINUS_ONE = -1,
+	UNCOMPRESSED = 0,
+	ZSTD_ONE = 1,
+	ZSTD_THREE = 3,
+};
+
+class TemporaryFileCompressionAdaptivity {
+public:
+	TemporaryFileCompressionAdaptivity();
+
+public:
+	static int64_t GetCurrentTimeNanos();
+	TemporaryCompressionLevel GetCompressionLevel();
+	void Update(TemporaryCompressionLevel level, int64_t time_before_ns);
+
+private:
+	static TemporaryCompressionLevel IndexToLevel(idx_t index);
+	static idx_t LevelToIndex(TemporaryCompressionLevel level);
+
+private:
+	//! How many compression levels we adapt between
+	static constexpr idx_t LEVELS = 4;
+	//! Bias towards compressed writes: we only choose uncompressed if it is more than 2x faster than compressed
+	static constexpr double DURATION_RATIO_THRESHOLD = 2.0;
+	//! Probability to deviate from the current best write behavior (1 in 20)
+	static constexpr double COMPRESSION_DEVIATION = 0.05;
+
+	//! Random engine to (sometimes) randomize compression
+	RandomEngine random_engine;
+	//! Duration of the last uncompressed write
+	atomic<int64_t> last_uncompressed_write_ns;
+	//! Duration of the last compressed writes
+	atomic<int64_t> last_compressed_writes_ns[LEVELS];
+};
+
+//===--------------------------------------------------------------------===//
 // TemporaryFileManager
 //===--------------------------------------------------------------------===//
 class TemporaryFileManager {
@@ -203,6 +238,12 @@ class TemporaryFileManager {
 public:
 	TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p);
 	~TemporaryFileManager();
+
+private:
+	struct CompressionResult {
+		TemporaryBufferSize size;
+		TemporaryCompressionLevel level;
+	};
 
 public:
 	struct TemporaryFileManagerLock {
@@ -234,8 +275,8 @@ public:
 	void DecreaseSizeOnDisk(idx_t amount);
 
 private:
-	//! Compress buffer, write it in compressed_buffer and return the size
-	TemporaryBufferSize CompressTemporaryBuffer(FileBuffer &buffer, AllocatedData &compressed_buffer);
+	//! Compress buffer, write it in compressed_buffer and return the size/level
+	CompressionResult CompressBuffer(FileBuffer &buffer, AllocatedData &compressed_buffer);
 
 	//! Create file name for given size/index
 	string CreateTemporaryFileName(const TemporaryFileIdentifier &identifier) const;
@@ -267,17 +308,8 @@ private:
 	atomic<idx_t> size_on_disk;
 	//! The max amount of disk space that can be used
 	idx_t max_swap_space;
-
-	//! Duration of the last uncompressed write
-	atomic<int64_t> uncompressed_write_ns;
-	//! Duration of the last compressed write
-	atomic<int64_t> compressed_write_ns;
-	//! Bias towards compressed writes: we choose uncompressed if it is more than 2x faster than compressed
-	static constexpr double DURATION_RATIO_THRESHOLD = 2.0;
-	//! Probability to deviate from the current best write behavior (1 in 20)
-	static constexpr double COMPRESSION_DEVIATION = 0.05;
-	//! Random engine for random numbers for deviation
-	RandomEngine random_engine;
+	//! Class that oversees when/how much to compress
+	TemporaryFileCompressionAdaptivity compression_adaptivity;
 };
 
 //===--------------------------------------------------------------------===//

@@ -685,12 +685,6 @@
         "custom_implementation": true
     },
     {
-        "name": "temp_directory_compression_level",
-        "description": "Compression level for the temporary directory (-131072=lowest and fastest, 22=highest and slowest)",
-        "type": "BIGINT",
-        "scope": "global"
-    },
-    {
         "name": "threads",
         "description": "The number of total threads used by the system.",
         "type": "BIGINT",
