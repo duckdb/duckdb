@@ -61,6 +61,8 @@ unique_ptr<BaseSecret> CreateS3SecretFunctions::CreateSecretFunctionInternal(Cli
 				                            lower_name, named_param.second.type().ToString());
 			}
 			secret->secret_map["use_ssl"] = Value::BOOLEAN(named_param.second.GetValue<bool>());
+		} else if (lower_name == "kms_key_id") {
+			secret->secret_map["kms_key_id"] = named_param.second.ToString();
 		} else if (lower_name == "url_compatibility_mode") {
 			if (named_param.second.type() != LogicalType::BOOLEAN) {
 				throw InvalidInputException("Invalid type past to secret option: '%s', found '%s', expected: 'BOOLEAN'",
@@ -90,6 +92,7 @@ void CreateS3SecretFunctions::SetBaseNamedParams(CreateSecretFunction &function,
 	function.named_parameters["endpoint"] = LogicalType::VARCHAR;
 	function.named_parameters["url_style"] = LogicalType::VARCHAR;
 	function.named_parameters["use_ssl"] = LogicalType::BOOLEAN;
+	function.named_parameters["kms_key_id"] = LogicalType::VARCHAR;
 	function.named_parameters["url_compatibility_mode"] = LogicalType::BOOLEAN;
 
 	if (type == "r2") {
