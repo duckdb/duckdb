@@ -2187,3 +2187,32 @@ def degrees(col: "ColumnOrName") -> Column:
     """
     return _invoke_function_over_columns("degrees", col)
 
+
+
+def radians(col: "ColumnOrName") -> Column:
+    """
+    Converts an angle measured in degrees to an approximately equivalent angle
+    measured in radians.
+
+    .. versionadded:: 2.1.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        angle in degrees
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        angle in radians, as if computed by `java.lang.Math.toRadians()`
+
+    Examples
+    --------
+    >>> df = spark.range(1)
+    >>> df.select(radians(lit(180))).first()
+    Row(RADIANS(180)=3.14159...)
+    """
+    return _invoke_function_over_columns("radians", col)

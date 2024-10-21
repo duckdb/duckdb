@@ -166,3 +166,14 @@ class TestSparkFunctionsNumeric(object):
         res = df.select("degrees_value").collect()
         round(res[0].degrees_value, 2) == 180
         res[1].degrees_value == 0
+
+    def test_radians(self, spark):
+        data = [
+            (180,),
+            (0,),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("radians_value", F.radians(F.col("firstColumn")))
+        res = df.select("radians_value").collect()
+        round(res[0].radians_value, 2) == 3.14
+        res[1].radians_value == 0
