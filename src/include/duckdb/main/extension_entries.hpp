@@ -436,6 +436,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"pg_use_ctid_scan", "postgres_scanner"},
     {"s3_access_key_id", "httpfs"},
     {"s3_endpoint", "httpfs"},
+    {"s3_kms_key_id", "httpfs"},
     {"s3_region", "httpfs"},
     {"s3_secret_access_key", "httpfs"},
     {"s3_session_token", "httpfs"},

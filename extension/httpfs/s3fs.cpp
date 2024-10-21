@@ -43,10 +43,19 @@ static HeaderMap create_s3_header(string url, string query, string host, string 
 		datetime_now = StrfTimeFormat::Format(timestamp, "%Y%m%dT%H%M%SZ");
 	}
 
+	// Only some S3 operations supports SSE-KMS, which this "heuristic" attempts to detect.
+	// https://docs.aws.amazon.com/AmazonS3/latest/userguide/specifying-kms-encryption.html#sse-request-headers-kms
+	bool use_sse_kms = auth_params.kms_key_id.length() > 0 && (method == "POST" || method == "PUT") &&
+	                   query.find("uploadId") == std::string::npos;
+
 	res["x-amz-date"] = datetime_now;
 	res["x-amz-content-sha256"] = payload_hash;
 	if (auth_params.session_token.length() > 0) {
 		res["x-amz-security-token"] = auth_params.session_token;
+	}
+	if (use_sse_kms) {
+		res["x-amz-server-side-encryption"] = "aws:kms";
+		res["x-amz-server-side-encryption-aws-kms-key-id"] = auth_params.kms_key_id;
 	}
 
 	string signed_headers = "";
@@ -59,6 +68,9 @@ static HeaderMap create_s3_header(string url, string query, string host, string 
 	if (auth_params.session_token.length() > 0) {
 		signed_headers += ";x-amz-security-token";
 	}
+	if (use_sse_kms) {
+		signed_headers += ";x-amz-server-side-encryption;x-amz-server-side-encryption-aws-kms-key-id";
+	}
 	auto canonical_request = method + "\n" + S3FileSystem::UrlEncode(url) + "\n" + query;
 	if (content_type.length() > 0) {
 		canonical_request += "\ncontent-type:" + content_type;
@@ -66,6 +78,10 @@ static HeaderMap create_s3_header(string url, string query, string host, string 
 	canonical_request += "\nhost:" + host + "\nx-amz-content-sha256:" + payload_hash + "\nx-amz-date:" + datetime_now;
 	if (auth_params.session_token.length() > 0) {
 		canonical_request += "\nx-amz-security-token:" + auth_params.session_token;
+	}
+	if (use_sse_kms) {
+		canonical_request += "\nx-amz-server-side-encryption:aws:kms";
+		canonical_request += "\nx-amz-server-side-encryption-aws-kms-key-id:" + auth_params.kms_key_id;
 	}
 
 	canonical_request += "\n\n" + signed_headers + "\n" + payload_hash;
@@ -130,6 +146,7 @@ void AWSEnvironmentCredentialsProvider::SetAll() {
 	this->SetExtensionOptionValue("s3_session_token", SESSION_TOKEN_ENV_VAR);
 	this->SetExtensionOptionValue("s3_endpoint", DUCKDB_ENDPOINT_ENV_VAR);
 	this->SetExtensionOptionValue("s3_use_ssl", DUCKDB_USE_SSL_ENV_VAR);
+	this->SetExtensionOptionValue("s3_kms_key_id", DUCKDB_KMS_KEY_ID_ENV_VAR);
 }
 
 S3AuthParams AWSEnvironmentCredentialsProvider::CreateParams() {
@@ -141,6 +158,7 @@ S3AuthParams AWSEnvironmentCredentialsProvider::CreateParams() {
 	params.secret_access_key = SECRET_KEY_ENV_VAR;
 	params.session_token = SESSION_TOKEN_ENV_VAR;
 	params.endpoint = DUCKDB_ENDPOINT_ENV_VAR;
+	params.kms_key_id = DUCKDB_KMS_KEY_ID_ENV_VAR;
 	params.use_ssl = DUCKDB_USE_SSL_ENV_VAR;
 
 	return params;
@@ -166,6 +184,7 @@ S3AuthParams S3AuthParams::ReadFrom(optional_ptr<FileOpener> opener, FileOpenerI
 	secret_reader.TryGetSecretKeyOrSetting("session_token", "s3_session_token", result.session_token);
 	secret_reader.TryGetSecretKeyOrSetting("region", "s3_region", result.region);
 	secret_reader.TryGetSecretKeyOrSetting("use_ssl", "s3_use_ssl", result.use_ssl);
+	secret_reader.TryGetSecretKeyOrSetting("kms_key_id", "s3_kms_key_id", result.kms_key_id);
 	secret_reader.TryGetSecretKeyOrSetting("s3_url_compatibility_mode", "s3_url_compatibility_mode",
 	                                       result.s3_url_compatibility_mode);
 
@@ -202,6 +221,7 @@ unique_ptr<KeyValueSecret> CreateSecret(vector<string> &prefix_paths_p, string &
 	return_value->secret_map["endpoint"] = params.endpoint;
 	return_value->secret_map["url_style"] = params.url_style;
 	return_value->secret_map["use_ssl"] = params.use_ssl;
+	return_value->secret_map["kms_key_id"] = params.kms_key_id;
 	return_value->secret_map["s3_url_compatibility_mode"] = params.s3_url_compatibility_mode;
 
 	//! Set redact keys

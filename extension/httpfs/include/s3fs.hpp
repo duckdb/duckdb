@@ -27,6 +27,7 @@ struct S3AuthParams {
 	string secret_access_key;
 	string session_token;
 	string endpoint;
+	string kms_key_id;
 	string url_style;
 	bool use_ssl = true;
 	bool s3_url_compatibility_mode = false;
@@ -42,6 +43,7 @@ struct AWSEnvironmentCredentialsProvider {
 	static constexpr const char *SESSION_TOKEN_ENV_VAR = "AWS_SESSION_TOKEN";
 	static constexpr const char *DUCKDB_ENDPOINT_ENV_VAR = "DUCKDB_S3_ENDPOINT";
 	static constexpr const char *DUCKDB_USE_SSL_ENV_VAR = "DUCKDB_S3_USE_SSL";
+	static constexpr const char *DUCKDB_KMS_KEY_ID_ENV_VAR = "DUCKDB_S3_KMS_KEY_ID";
 
 	explicit AWSEnvironmentCredentialsProvider(DBConfig &config) : config(config) {};
 
