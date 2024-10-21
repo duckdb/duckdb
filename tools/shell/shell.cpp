@@ -2644,6 +2644,8 @@ public:
 	void clearTempFile();
 	void newTempFile(const char *zSuffix);
 	int do_meta_command(char *zLine);
+
+	int runOneSqlLine(char *zSql, int startline);
 };
 
 /* Allowed values for ShellState.openMode
@@ -8075,18 +8077,18 @@ static int line_is_complete(char *zSql, int nSql){
 /*
 ** Run a single line of SQL.  Return the number of errors.
 */
-static int runOneSqlLine(ShellState *p, char *zSql, FILE *in, int startline){
+int ShellState::runOneSqlLine(char *zSql, int startline){
   int rc;
   char *zErrMsg = 0;
 
-  p->open_db(0);
-  if( p->ShellHasFlag(SHFLG_Backslash) ) resolve_backslashes(zSql);
-  if( p->flgProgress & SHELL_PROGRESS_RESET ) p->nProgress = 0;
+  open_db(0);
+  if( ShellHasFlag(SHFLG_Backslash) ) resolve_backslashes(zSql);
+  if( flgProgress & SHELL_PROGRESS_RESET ) nProgress = 0;
 #ifndef SHELL_USE_LOCAL_GETLINE
   if( zSql && *zSql && *zSql != '\3' ) shell_add_history(zSql);
 #endif
   BEGIN_TIMER;
-  rc = p->shell_exec(zSql, &zErrMsg);
+  rc = shell_exec(zSql, &zErrMsg);
   END_TIMER;
   if( rc || zErrMsg ){
     if( zErrMsg!=0 ){
@@ -8094,12 +8096,12 @@ static int runOneSqlLine(ShellState *p, char *zSql, FILE *in, int startline){
       sqlite3_free(zErrMsg);
       zErrMsg = 0;
     }else{
-	  shellDatabaseError(p->db);
+	  shellDatabaseError(db);
     }
     return 1;
-  }else if( p->ShellHasFlag(SHFLG_CountChanges) ){
-    raw_printf(p->out, "changes: %3lld   total_changes: %lld\n",
-            sqlite3_changes64(p->db), sqlite3_total_changes64(p->db));
+  }else if( ShellHasFlag(SHFLG_CountChanges) ){
+    raw_printf(out, "changes: %3lld   total_changes: %lld\n",
+            sqlite3_changes64(db), sqlite3_total_changes64(db));
   }
   return 0;
 }
@@ -8197,7 +8199,7 @@ static int process_input(ShellState *p){
     }
     if( nSql && line_contains_semicolon(&zSql[nSqlPrior], nSql-nSqlPrior)
                 && sqlite3_complete(zSql) ){
-      errCnt += runOneSqlLine(p, zSql, p->in, startline);
+      errCnt += p->runOneSqlLine(zSql, startline);
       nSql = 0;
       if( p->outCount ){
         p->output_reset();
@@ -8211,7 +8213,7 @@ static int process_input(ShellState *p){
     }
   }
   if( nSql && !_all_whitespace(zSql) ){
-    errCnt += runOneSqlLine(p, zSql, p->in, startline);
+    errCnt += p->runOneSqlLine(zSql, startline);
   }
   free(zSql);
   free(zLine);
