@@ -15,6 +15,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+
 namespace duckdb {
 
 class TemporaryFileManager;
@@ -204,11 +205,15 @@ public:
 	TemporaryFileCompressionAdaptivity();
 
 public:
+	//! Get current time in nanoseconds to measure write times
 	static int64_t GetCurrentTimeNanos();
+	//! Get the compression level to use based on current write times
 	TemporaryCompressionLevel GetCompressionLevel();
+	//! Update write time for given compression level
 	void Update(TemporaryCompressionLevel level, int64_t time_before_ns);
 
 private:
+	//! Convert from level to index into write time array and back
 	static TemporaryCompressionLevel IndexToLevel(idx_t index);
 	static idx_t LevelToIndex(TemporaryCompressionLevel level);
 
