@@ -1100,6 +1100,82 @@ class DataFrame:
 
         return DataFrame(self.relation.union(other.relation), self.session)
 
+    def intersect(self, other: "DataFrame") -> "DataFrame":
+        """Return a new :class:`DataFrame` containing rows only in
+        both this :class:`DataFrame` and another :class:`DataFrame`.
+        Note that any duplicates are removed. To preserve duplicates
+        use :func:`intersectAll`.
+
+        .. versionadded:: 1.3.0
+
+        .. versionchanged:: 3.4.0
+            Supports Spark Connect.
+
+        Parameters
+        ----------
+        other : :class:`DataFrame`
+            Another :class:`DataFrame` that needs to be combined.
+
+        Returns
+        -------
+        :class:`DataFrame`
+            Combined DataFrame.
+
+        Notes
+        -----
+        This is equivalent to `INTERSECT` in SQL.
+
+        Examples
+        --------
+        >>> df1 = spark.createDataFrame([("a", 1), ("a", 1), ("b", 3), ("c", 4)], ["C1", "C2"])
+        >>> df2 = spark.createDataFrame([("a", 1), ("a", 1), ("b", 3)], ["C1", "C2"])
+        >>> df1.intersect(df2).sort(df1.C1.desc()).show()
+        +---+---+
+        | C1| C2|
+        +---+---+
+        |  b|  3|
+        |  a|  1|
+        +---+---+
+        """
+        return self.intersectAll(other).drop_duplicates()
+
+    def intersectAll(self, other: "DataFrame") -> "DataFrame":
+        """Return a new :class:`DataFrame` containing rows in both this :class:`DataFrame`
+        and another :class:`DataFrame` while preserving duplicates.
+
+        This is equivalent to `INTERSECT ALL` in SQL. As standard in SQL, this function
+        resolves columns by position (not by name).
+
+        .. versionadded:: 2.4.0
+
+        .. versionchanged:: 3.4.0
+            Supports Spark Connect.
+
+        Parameters
+        ----------
+        other : :class:`DataFrame`
+            Another :class:`DataFrame` that needs to be combined.
+
+        Returns
+        -------
+        :class:`DataFrame`
+            Combined DataFrame.
+
+        Examples
+        --------
+        >>> df1 = spark.createDataFrame([("a", 1), ("a", 1), ("b", 3), ("c", 4)], ["C1", "C2"])
+        >>> df2 = spark.createDataFrame([("a", 1), ("a", 1), ("b", 3)], ["C1", "C2"])
+        >>> df1.intersectAll(df2).sort("C1", "C2").show()
+        +---+---+
+        | C1| C2|
+        +---+---+
+        |  a|  1|
+        |  a|  1|
+        |  b|  3|
+        +---+---+
+        """
+        return DataFrame(self.relation.intersect(other.relation), self.session)
+
     def dropDuplicates(self, subset: Optional[List[str]] = None) -> "DataFrame":
         """Return a new :class:`DataFrame` with duplicate rows removed,
         optionally only considering certain columns.
