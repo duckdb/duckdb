@@ -40,7 +40,7 @@ struct CSVStates {
 		return (states[0] == CSVState::DELIMITER &&
 		        (states[1] == CSVState::RECORD_SEPARATOR || states[1] == CSVState::CARRIAGE_RETURN ||
 		         states[1] == CSVState::DELIMITER)) ||
-		       states[0] == CSVState::STANDARD && states[1] == CSVState::DELIMITER;
+		       (states[0] == CSVState::STANDARD && states[1] == CSVState::DELIMITER);
 	}
 
 	inline bool EmptyLine() const {

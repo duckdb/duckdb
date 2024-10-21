@@ -342,6 +342,7 @@ private:
 	//! If the current row we found is valid
 	bool IsRowValid(CSVIterator &current_iterator) const;
 	ValidRowInfo TryRow(CSVState state, idx_t start_pos, idx_t end_pos) const;
+	bool FirstValueEndsOnQuote(CSVIterator iterator) const;
 
 	StringValueResult result;
 	vector<LogicalType> types;
