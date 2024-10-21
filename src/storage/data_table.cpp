@@ -18,7 +18,6 @@
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/standard_column_data.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/types/constraint_conflict_info.hpp"
@@ -701,9 +700,9 @@ void DataTable::AddAndCreateIndex(LocalStorage &local_storage, DataTable &parent
 	vector<column_t> column_ids;
 	vector<unique_ptr<Expression>> global_expressions;
 	vector<unique_ptr<Expression>> local_expressions;
-	auto binding = ColumnBinding(0, column_ids.size());
 
 	for (const auto &column : columns) {
+		auto binding = ColumnBinding(0, column_ids.size());
 		auto ref = make_uniq<BoundColumnRefExpression>(column.get().Name(), column.get().Type(), binding);
 		global_expressions.push_back(ref->Copy());
 		local_expressions.push_back(ref->Copy());
@@ -1553,9 +1552,9 @@ void DataTable::AddIndex(const column_defs_t &columns, const IndexConstraintType
 	// Fetch the column types and create bound column reference expressions.
 	vector<column_t> column_ids;
 	vector<unique_ptr<Expression>> expressions;
-	auto binding = ColumnBinding(0, column_ids.size());
 
 	for (const auto &column : columns) {
+		auto binding = ColumnBinding(0, column_ids.size());
 		auto ref = make_uniq<BoundColumnRefExpression>(column.get().Name(), column.get().Type(), binding);
 		expressions.push_back(std::move(ref));
 		column_ids.push_back(column.get().Physical().index);

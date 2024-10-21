@@ -9,10 +9,11 @@
 #pragma once
 
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/storage/index.hpp"
 #include "duckdb/parser/constraint.hpp"
+#include "duckdb/storage/index.hpp"
 
 namespace duckdb {
+
 class ConflictManager;
 struct IndexStorageInfo;
 struct DataTableInfo;
