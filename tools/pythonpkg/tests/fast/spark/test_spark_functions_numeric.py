@@ -155,3 +155,14 @@ class TestSparkFunctionsNumeric(object):
         res = df.select("ln_value").collect()
         round(res[0].ln_value, 2) == 1
         res[1].ln_value == 0
+
+    def test_degrees(self, spark):
+        data = [
+            (3.14159,),
+            (0,),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("degrees_value", F.degrees(F.col("firstColumn")))
+        res = df.select("degrees_value").collect()
+        round(res[0].degrees_value, 2) == 180
+        res[1].degrees_value == 0
