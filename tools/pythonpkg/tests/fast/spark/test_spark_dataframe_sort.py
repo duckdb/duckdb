@@ -2,6 +2,7 @@ import pytest
 
 from duckdb.experimental.spark.sql.types import Row
 from duckdb.experimental.spark.errors import PySparkTypeError, PySparkValueError, PySparkIndexError
+from duckdb.experimental.spark.sql.functions import desc, asc
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
@@ -70,3 +71,27 @@ class TestDataFrameSort(object):
 
         with pytest.raises(PySparkTypeError):
             df = df.sort(dict(a=1))
+
+    def test_sort_with_desc(self, spark):
+        df = spark.createDataFrame(self.data, ["age", "name"])
+        df = df.sort(desc("name"))
+        res = df.collect()
+        assert res == [
+            Row(age=3, name='Dave'),
+            Row(age=56, name='Carol'),
+            Row(age=1, name='Ben'),
+            Row(age=3, name='Anna'),
+            Row(age=20, name='Alice'),
+        ]
+
+    def test_sort_with_asc(self, spark):
+        df = spark.createDataFrame(self.data, ["age", "name"])
+        df = df.sort(asc("name"))
+        res = df.collect()
+        assert res == [
+            Row(age=20, name='Alice'),
+            Row(age=3, name='Anna'),
+            Row(age=1, name='Ben'),
+            Row(age=56, name='Carol'),
+            Row(age=3, name='Dave'),
+        ]
