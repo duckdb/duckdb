@@ -8586,7 +8586,7 @@ static void exec_prepared_stmt(
           for(i=0; i<nCol; i++){
             aiTypes[i] = x = sqlite3_column_type(pStmt, i);
             if( x==SQLITE_BLOB && pArg && pArg->cMode==MODE_Insert ){
-              azVals[i] = "";
+              azVals[i] = (char*) "";
             }else{
               azVals[i] = (char*)sqlite3_column_text(pStmt, i);
             }
@@ -9203,7 +9203,7 @@ static int run_schema_dump_query(
 ** There must be two or more spaces between the end of the command and the
 ** start of the description of what that command does.
 */
-static const char *(azHelp[]) = {
+static const char *azHelp[] = {
 #if defined(SQLITE_HAVE_ZLIB) && !defined(SQLITE_OMIT_VIRTUALTABLE)
   ".archive ...             Manage SQL archives",
   "   Each command must have exactly one of the following options:",
@@ -9936,7 +9936,7 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc){
   char *zSql;
   char zBuf[1000];
 
-  if( nLine>sizeof(zBuf)-30 ) return;
+  if( nLine>int(sizeof(zBuf)-30) ) return;
   if (zLine[0] == '.') {
     // auto-complete dot command
     // look for all completions in the help file
@@ -9950,14 +9950,14 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc){
       size_t line_pos;
       for(line_pos = 0; !IsSpace(line[line_pos]) && line[line_pos] && line_pos + 1 < sizeof(zBuf); line_pos++) {
         zBuf[line_pos] = line[line_pos];
-		if (line_pos < nLine && line[line_pos] != zLine[line_pos]) {
+		if (int(line_pos) < nLine && line[line_pos] != zLine[line_pos]) {
 			// only match prefixes for auto-completion, i.e. ".sh" matches ".shell"
 			found_match = 0;
 			break;
 		}
       }
       zBuf[line_pos] = '\0';
-      if (found_match && line_pos >= nLine) {
+      if (found_match && int(line_pos) >= nLine) {
         linenoiseAddCompletion(lc, zBuf);
       }
 	}
@@ -9978,7 +9978,7 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc){
     const char *zCompletion = (const char*)sqlite3_column_text(pStmt, 0);
 	int nCompletion = sqlite3_column_bytes(pStmt, 0);
 	int iStart = sqlite3_column_int(pStmt, 1);
-    if( iStart+nCompletion < sizeof(zBuf)-1 ){
+    if( iStart+nCompletion < int(sizeof(zBuf)-1 )){
 		if (!copiedSuggestion) {
 			memcpy(zBuf, zLine, iStart);
 			copiedSuggestion = 1;
@@ -12644,12 +12644,12 @@ static int do_meta_command(char *zLine, ShellState *p){
       }
     }
     if( bSchema ){
-      zSql = "SELECT lower(name) FROM sqlite_schema"
+      zSql = (char*)"SELECT lower(name) FROM sqlite_schema"
              " WHERE type='table' AND coalesce(rootpage,0)>1"
              " UNION ALL SELECT 'sqlite_schema'"
              " ORDER BY 1 collate nocase";
     }else{
-      zSql = "SELECT lower(name) FROM sqlite_schema"
+      zSql = (char*)"SELECT lower(name) FROM sqlite_schema"
              " WHERE type='table' AND coalesce(rootpage,0)>1"
              " AND name NOT LIKE 'sqlite_%'"
              " ORDER BY 1 collate nocase";
@@ -12658,7 +12658,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     initText(&sQuery);
     initText(&sSql);
     appendText(&sSql, "WITH [sha3sum$query](a,b) AS(",0);
-    zSep = "VALUES(";
+    zSep = (char*)"VALUES(";
     while( SQLITE_ROW==sqlite3_step(pStmt) ){
       const char *zTab = (const char*)sqlite3_column_text(pStmt,0);
       if( zLike && sqlite3_strlike(zLike, zTab, 0)!=0 ) continue;
@@ -12685,7 +12685,7 @@ static int do_meta_command(char *zLine, ShellState *p){
       sQuery.n = 0;
       appendText(&sSql, ",", 0);
       appendText(&sSql, zTab, '\'');
-      zSep = "),(";
+      zSep = (char*)"),(";
     }
     sqlite3_finalize(pStmt);
     if( bSeparate ){
