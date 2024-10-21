@@ -2623,6 +2623,10 @@ public:
 	  const char *zSql,                         /* SQL to be evaluated */
 	  char **pzErrMsg                           /* Error msg written here */
 	);
+	int run_schema_dump_query(
+	  const char *zQuery
+	);
+	void open_db(int openFlags);
 };
 
 
@@ -4606,28 +4610,27 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed){
 ** If we get a SQLITE_CORRUPT error, rerun the query after appending
 ** "ORDER BY rowid DESC" to the end.
 */
-static int run_schema_dump_query(
-  ShellState *p,
+int ShellState::run_schema_dump_query(
   const char *zQuery
 ){
   int rc;
   char *zErr = 0;
-  rc = sqlite3_exec(p->db, zQuery, dump_callback, p, &zErr);
+  rc = sqlite3_exec(db, zQuery, dump_callback, this, &zErr);
   if( rc==SQLITE_CORRUPT ){
     char *zQ2;
     int len = strlen30(zQuery);
-    raw_printf(p->out, "/****** CORRUPTION ERROR *******/\n");
+    raw_printf(out, "/****** CORRUPTION ERROR *******/\n");
     if( zErr ){
-      utf8_printf(p->out, "/****** %s ******/\n", zErr);
+      utf8_printf(out, "/****** %s ******/\n", zErr);
       sqlite3_free(zErr);
       zErr = 0;
     }
     zQ2 = (char *) malloc( len+100 );
     if( zQ2==0 ) return rc;
     sqlite3_snprintf(len+100, zQ2, "%s ORDER BY rowid DESC", zQuery);
-    rc = sqlite3_exec(p->db, zQ2, dump_callback, p, &zErr);
+    rc = sqlite3_exec(db, zQ2, dump_callback, this, &zErr);
     if( rc ){
-      utf8_printf(p->out, "/****** ERROR: %s ******/\n", zErr);
+      utf8_printf(out, "/****** ERROR: %s ******/\n", zErr);
     }else{
       rc = SQLITE_CORRUPT;
     }
@@ -4759,11 +4762,6 @@ static const char *azHelp[] = {
   ".open ?OPTIONS? ?FILE?   Close existing database and reopen FILE",
   "     Options:",
   "        --append        Use appendvfs to append database to the end of FILE",
-#ifdef SQLITE_ENABLE_DESERIALIZE
-  "        --deserialize   Load into memory useing sqlite3_deserialize()",
-  "        --hexdb         Load the output of \"dbtotxt\" as an in-memory db",
-  "        --maxsize N     Maximum size for --hexdb or --deserialized database",
-#endif
   "        --new           Initialize FILE to an empty database",
   "        --nofollow      Do not follow symbolic links",
   "        --readonly      Open FILE readonly",
@@ -4973,97 +4971,6 @@ int deduceDatabaseType(const char *zName, int dfltZip){
   return rc;
 }
 
-#ifdef SQLITE_ENABLE_DESERIALIZE
-/*
-** Reconstruct an in-memory database using the output from the "dbtotxt"
-** program.  Read content from the file in p->zDbFilename.  If p->zDbFilename
-** is 0, then read from standard input.
-*/
-static unsigned char *readHexDb(ShellState *p, int *pnData){
-  unsigned char *a = 0;
-  int nLine;
-  int n = 0;
-  int pgsz = 0;
-  int iOffset = 0;
-  int j, k;
-  int rc;
-  FILE *in;
-  unsigned int x[16];
-  char zLine[1000];
-  if( p->zDbFilename ){
-    in = fopen(p->zDbFilename, "r");
-    if( in==0 ){
-      utf8_printf(stderr, "cannot open \"%s\" for reading\n", p->zDbFilename);
-      return 0;
-    }
-    nLine = 0;
-  }else{
-    in = p->in;
-    nLine = p->lineno;
-    if( in==0 ) in = stdin;
-  }
-  *pnData = 0;
-  nLine++;
-  if( fgets(zLine, sizeof(zLine), in)==0 ) goto readHexDb_error;
-  rc = sscanf(zLine, "| size %d pagesize %d", &n, &pgsz);
-  if( rc!=2 ) goto readHexDb_error;
-  if( n<0 ) goto readHexDb_error;
-  if( pgsz<512 || pgsz>65536 || (pgsz&(pgsz-1))!=0 ) goto readHexDb_error;
-  n = (n+pgsz-1)&~(pgsz-1);  /* Round n up to the next multiple of pgsz */
-  a = sqlite3_malloc( n ? n : 1 );
-  if( a==0 ){
-    utf8_printf(stderr, "Out of memory!\n");
-    goto readHexDb_error;
-  }
-  memset(a, 0, n);
-  if( pgsz<512 || pgsz>65536 || (pgsz & (pgsz-1))!=0 ){
-    utf8_printf(stderr, "invalid pagesize\n");
-    goto readHexDb_error;
-  }
-  for(nLine++; fgets(zLine, sizeof(zLine), in)!=0; nLine++){
-    rc = sscanf(zLine, "| page %d offset %d", &j, &k);
-    if( rc==2 ){
-      iOffset = k;
-      continue;
-    }
-    if( strncmp(zLine, "| end ", 6)==0 ){
-      break;
-    }
-    rc = sscanf(zLine,"| %d: %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x",
-                &j, &x[0], &x[1], &x[2], &x[3], &x[4], &x[5], &x[6], &x[7],
-                &x[8], &x[9], &x[10], &x[11], &x[12], &x[13], &x[14], &x[15]);
-    if( rc==17 ){
-      k = iOffset+j;
-      if( k+16<=n ){
-        int ii;
-        for(ii=0; ii<16; ii++) a[k+ii] = x[ii]&0xff;
-      }
-    }
-  }
-  *pnData = n;
-  if( in!=p->in ){
-    fclose(in);
-  }else{
-    p->lineno = nLine;
-  }
-  return a;
-
-readHexDb_error:
-  if( in!=p->in ){
-    fclose(in);
-  }else{
-    while( fgets(zLine, sizeof(zLine), p->in)!=0 ){
-      nLine++;
-      if(strncmp(zLine, "| end ", 6)==0 ) break;
-    }
-    p->lineno = nLine;
-  }
-  sqlite3_free(a);
-  utf8_printf(stderr,"Error on line %d of --hexdb input\n", nLine);
-  return 0;
-}
-#endif /* SQLITE_ENABLE_DESERIALIZE */
-
 /*
 ** Scalar function "shell_idquote(X)" returns string X quoted as an identifier,
 ** using "..." with internal double-quote characters doubled.
@@ -5188,109 +5095,84 @@ static void shellEscapeCrnl(
 ** Make sure the database is open.  If it is not, then open it.  If
 ** the database fails to open, print an error message and exit.
 */
-static void open_db(ShellState *p, int openFlags){
-  if( p->db==0 ){
-    if( p->openMode==SHELL_OPEN_UNSPEC ){
-      if( p->zDbFilename==0 || p->zDbFilename[0]==0 ){
-        p->openMode = SHELL_OPEN_NORMAL;
+void ShellState::open_db(int openFlags){
+  if( db==0 ){
+    if( openMode==SHELL_OPEN_UNSPEC ){
+      if( zDbFilename==0 || zDbFilename[0]==0 ){
+        openMode = SHELL_OPEN_NORMAL;
       }else{
-        p->openMode = (u8)deduceDatabaseType(p->zDbFilename,
+        openMode = (u8)deduceDatabaseType(zDbFilename,
                              (openFlags & OPEN_DB_ZIPFILE)!=0);
       }
     }
-    switch( p->openMode ){
+    switch( openMode ){
       case SHELL_OPEN_APPENDVFS: {
-        sqlite3_open_v2(p->zDbFilename, &p->db,
-           SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE|p->openFlags, "apndvfs");
+        sqlite3_open_v2(zDbFilename, &db,
+           SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE|openFlags, "apndvfs");
         break;
       }
       case SHELL_OPEN_HEXDB:
       case SHELL_OPEN_DESERIALIZE: {
-        sqlite3_open(0, &p->db);
+        sqlite3_open(0, &db);
         break;
       }
       case SHELL_OPEN_ZIPFILE: {
-        sqlite3_open(":memory:", &p->db);
+        sqlite3_open(":memory:", &db);
         break;
       }
       case SHELL_OPEN_READONLY: {
-        sqlite3_open_v2(p->zDbFilename, &p->db,
-            SQLITE_OPEN_READONLY|p->openFlags, 0);
+        sqlite3_open_v2(zDbFilename, &db,
+            SQLITE_OPEN_READONLY|openFlags, 0);
         break;
       }
       case SHELL_OPEN_UNSPEC:
       case SHELL_OPEN_NORMAL: {
-        sqlite3_open_v2(p->zDbFilename, &p->db,
-           SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE|p->openFlags, 0);
+        sqlite3_open_v2(zDbFilename, &db,
+           SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE|openFlags, 0);
         break;
       }
     }
-    globalDb = p->db;
-    if( p->db==0 || SQLITE_OK!=sqlite3_errcode(p->db) ){
+    globalDb = db;
+    if( db==0 || SQLITE_OK!=sqlite3_errcode(db) ){
       utf8_printf(stderr,"Error: unable to open database \"%s\": %s\n",
-          p->zDbFilename, sqlite3_errmsg(p->db));
+          zDbFilename, sqlite3_errmsg(db));
       if( openFlags & OPEN_DB_KEEPALIVE ){
-        sqlite3_open(":memory:", &p->db);
+        sqlite3_open(":memory:", &db);
         return;
       }
       exit(1);
     }
 #ifndef SQLITE_OMIT_LOAD_EXTENSION
-    sqlite3_enable_load_extension(p->db, 1);
+    sqlite3_enable_load_extension(db, 1);
 #endif
-    sqlite3_fileio_init(p->db, 0, 0);
-    sqlite3_shathree_init(p->db, 0, 0);
-    sqlite3_create_function(p->db, "shell_add_schema", 3, SQLITE_UTF8, 0,
+    sqlite3_fileio_init(db, 0, 0);
+    sqlite3_shathree_init(db, 0, 0);
+    sqlite3_create_function(db, "shell_add_schema", 3, SQLITE_UTF8, 0,
                             shellAddSchemaName, 0, 0);
-    sqlite3_create_function(p->db, "shell_module_schema", 1, SQLITE_UTF8, 0,
+    sqlite3_create_function(db, "shell_module_schema", 1, SQLITE_UTF8, 0,
                             shellModuleSchema, 0, 0);
-    sqlite3_create_function(p->db, "shell_putsnl", 1, SQLITE_UTF8, p,
+    sqlite3_create_function(db, "shell_putsnl", 1, SQLITE_UTF8, this,
                             shellPutsFunc, 0, 0);
-    sqlite3_create_function(p->db, "shell_escape_crnl", 1, SQLITE_UTF8, 0,
+    sqlite3_create_function(db, "shell_escape_crnl", 1, SQLITE_UTF8, 0,
                             shellEscapeCrnl, 0, 0);
-    sqlite3_create_function(p->db, "shell_idquote", 1, SQLITE_UTF8, 0,
+    sqlite3_create_function(db, "shell_idquote", 1, SQLITE_UTF8, 0,
                             shellIdQuote, 0, 0);
 #ifndef SQLITE_NOHAVE_SYSTEM
-    sqlite3_create_function(p->db, "edit", 1, SQLITE_UTF8, 0,
+    sqlite3_create_function(db, "edit", 1, SQLITE_UTF8, 0,
                             editFunc, 0, 0);
-    sqlite3_create_function(p->db, "edit", 2, SQLITE_UTF8, 0,
+    sqlite3_create_function(db, "edit", 2, SQLITE_UTF8, 0,
                             editFunc, 0, 0);
 #endif
 	if (stdout_is_console) {
-		sqlite3_exec(p->db, "PRAGMA enable_progress_bar", NULL, NULL, NULL);
-		sqlite3_exec(p->db, "PRAGMA enable_print_progress_bar", NULL, NULL, NULL);
+		sqlite3_exec(db, "PRAGMA enable_progress_bar", NULL, NULL, NULL);
+		sqlite3_exec(db, "PRAGMA enable_print_progress_bar", NULL, NULL, NULL);
 	}
-    if( p->openMode==SHELL_OPEN_ZIPFILE ){
+    if( openMode==SHELL_OPEN_ZIPFILE ){
       char *zSql = sqlite3_mprintf(
-         "CREATE VIRTUAL TABLE zip USING zipfile(%Q);", p->zDbFilename);
-      sqlite3_exec(p->db, zSql, 0, 0, 0);
+         "CREATE VIRTUAL TABLE zip USING zipfile(%Q);", zDbFilename);
+      sqlite3_exec(db, zSql, 0, 0, 0);
       sqlite3_free(zSql);
     }
-#ifdef SQLITE_ENABLE_DESERIALIZE
-    else
-    if( p->openMode==SHELL_OPEN_DESERIALIZE || p->openMode==SHELL_OPEN_HEXDB ){
-      int rc;
-      int nData = 0;
-      unsigned char *aData;
-      if( p->openMode==SHELL_OPEN_DESERIALIZE ){
-        aData = (unsigned char*)readFile(p->zDbFilename, &nData);
-      }else{
-        aData = readHexDb(p, &nData);
-        if( aData==0 ){
-          return;
-        }
-      }
-      rc = sqlite3_deserialize(p->db, "main", aData, nData, nData,
-                   SQLITE_DESERIALIZE_RESIZEABLE |
-                   SQLITE_DESERIALIZE_FREEONCLOSE);
-      if( rc ){
-        utf8_printf(stderr, "Error: sqlite3_deserialize() returns %d\n", rc);
-      }
-      if( p->szMax>0 ){
-        sqlite3_file_control(p->db, "main", SQLITE_FCNTL_SIZE_LIMIT, &p->szMax);
-      }
-    }
-#endif
   }
 }
 
@@ -6084,7 +5966,7 @@ static int do_meta_command(char *zLine, ShellState *p){
       sqlite3_exec(pDest, "PRAGMA synchronous=OFF; PRAGMA journal_mode=OFF;",
                    0, 0, 0);
     }
-    open_db(p, 0);
+    p->open_db(0);
     pBackup = sqlite3_backup_init(pDest, "main", p->db, zDb);
     if( pBackup==0 ){
       shellDatabaseError(pDest);
@@ -6187,7 +6069,7 @@ static int do_meta_command(char *zLine, ShellState *p){
   if( c=='d' && n>1 && strncmp(azArg[0], "databases", n)==0 ){
     ShellState data;
     char *zErrMsg = 0;
-    open_db(p, 0);
+    p->open_db(0);
     memcpy(&data, p, sizeof(data));
     data.showHeader = 0;
     data.cMode = data.mode = MODE_List;
@@ -6225,7 +6107,7 @@ static int do_meta_command(char *zLine, ShellState *p){
         { "writable_schema",    SQLITE_DBCONFIG_WRITABLE_SCHEMA       },
     };
     int ii, v;
-    open_db(p, 0);
+    p->open_db(0);
     for(ii=0; ii<ArraySize(aDbConfig); ii++){
       if( nArg>1 && strcmp(azArg[1], aDbConfig[ii].zName)!=0 ) continue;
       if( nArg>=3 ){
@@ -6280,7 +6162,7 @@ static int do_meta_command(char *zLine, ShellState *p){
       }
     }
 
-    open_db(p, 0);
+    p->open_db(0);
 
     /* When playing back a "dump", the content might appear in an order
     ** which causes immediate foreign key constraints to be violated.
@@ -6302,7 +6184,7 @@ static int do_meta_command(char *zLine, ShellState *p){
       " ORDER BY tbl_name='sqlite_sequence'",
       zLike
     );
-    run_schema_dump_query(p,zSql);
+    p->run_schema_dump_query(zSql);
     sqlite3_free(zSql);
     zSql = sqlite3_mprintf(
       "SELECT sql FROM sqlite_schema "
@@ -6363,7 +6245,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     const char *zCmd = 0;
     const char *zSchema = 0;
 
-    open_db(p, 0);
+    p->open_db(0);
     zCmd = nArg>=2 ? azArg[1] : "help";
 
     if( zCmd[0]=='-'
@@ -6500,7 +6382,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     //   rc = 1;
     //   goto meta_command_exit;
     // }
-    // open_db(p, 0);
+    // p->open_db(0);
     // rc = sqlite3_exec(p->db,
     //    "SELECT sql FROM"
     //    "  (SELECT sql sql, type type, tbl_name tbl_name, name name, rowid x"
@@ -6620,7 +6502,7 @@ static int do_meta_command(char *zLine, ShellState *p){
       goto meta_command_exit;
     }
     seenInterrupt = 0;
-    open_db(p, 0);
+    p->open_db(0);
     if( useOutputMode ){
       /* If neither the --csv or --ascii options are specified, then set
       ** the column and row separator characters from the output mode. */
@@ -6852,7 +6734,7 @@ static int do_meta_command(char *zLine, ShellState *p){
       rc = 1;
       goto meta_command_exit;
     }
-    open_db(p, 0);
+    p->open_db(0);
     if( nArg==2 ){
       sqlite3_test_control(SQLITE_TESTCTRL_IMPOSTER, p->db, "main", 0, 1);
       goto meta_command_exit;
@@ -6973,7 +6855,7 @@ static int do_meta_command(char *zLine, ShellState *p){
       { "worker_threads",        SQLITE_LIMIT_WORKER_THREADS            },
     };
     int i, n2;
-    open_db(p, 0);
+    p->open_db(0);
     if( nArg==1 ){
       for(i=0; i<ArraySize(aLimit); i++){
         printf("%20s %d\n", aLimit[i].zLimitName,
@@ -7024,7 +6906,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     }
     zFile = azArg[1];
     zProc = nArg>=3 ? azArg[2] : 0;
-    open_db(p, 0);
+    p->open_db(0);
     rc = sqlite3_load_extension(p->db, zFile, zProc, &zErrMsg);
     if( rc!=SQLITE_OK ){
       printDatabaseError(zErrMsg);
@@ -7205,14 +7087,6 @@ static int do_meta_command(char *zLine, ShellState *p){
         p->openMode = SHELL_OPEN_READONLY;
       }else if( optionMatch(z, "nofollow") ){
         p->openFlags |= SQLITE_OPEN_NOFOLLOW;
-#ifdef SQLITE_ENABLE_DESERIALIZE
-      }else if( optionMatch(z, "deserialize") ){
-        p->openMode = SHELL_OPEN_DESERIALIZE;
-      }else if( optionMatch(z, "hexdb") ){
-        p->openMode = SHELL_OPEN_HEXDB;
-      }else if( optionMatch(z, "maxsize") && iName+1<nArg ){
-        p->szMax = integerValue(azArg[++iName]);
-#endif /* SQLITE_ENABLE_DESERIALIZE */
       }else if( z[0]=='-' ){
         utf8_printf(stderr, "unknown option: %s\n", z);
         rc = 1;
@@ -7224,7 +7098,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     if( zNewFilename || p->openMode==SHELL_OPEN_HEXDB ){
       if( newFlag ) shellDeleteFile(zNewFilename);
       p->zDbFilename = zNewFilename;
-      open_db(p, OPEN_DB_KEEPALIVE);
+      p->open_db(OPEN_DB_KEEPALIVE);
       if( p->db==0 ){
         utf8_printf(stderr, "Error: cannot open '%s'\n", zNewFilename);
         sqlite3_free(zNewFilename);
@@ -7235,7 +7109,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     if( p->db==0 ){
       /* As a fall-back open a TEMP database */
       p->zDbFilename = 0;
-      open_db(p, 0);
+      p->open_db(0);
     }
   }else
 
@@ -7390,7 +7264,7 @@ static int do_meta_command(char *zLine, ShellState *p){
         nn = (int)integerValue(z);
       }
     }
-    open_db(p, 0);
+    p->open_db(0);
     sqlite3_progress_handler(p->db, nn, progress_handler, p);
   }else
 #endif /* SQLITE_OMIT_PROGRESS_CALLBACK */
@@ -7456,7 +7330,7 @@ static int do_meta_command(char *zLine, ShellState *p){
       close_db(pSrc);
       return 1;
     }
-    open_db(p, 0);
+    p->open_db(0);
     pBackup = sqlite3_backup_init(p->db, zDb, pSrc, "main");
     if( pBackup==0 ){
       shellDatabaseError(p->db);
@@ -7492,7 +7366,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     int bDebug = 0;
     int ii;
 
-    open_db(p, 0);
+    p->open_db(0);
     memcpy(&data, p, sizeof(data));
     data.showHeader = 0;
     data.cMode = data.mode = MODE_Semi;
@@ -7606,7 +7480,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     char *zSep;              /* Separator */
     ShellText sSql;          /* Complete SQL for the query to run the hash */
     ShellText sQuery;        /* Set of queries used to read all content */
-    open_db(p, 0);
+    p->open_db(0);
     for(i=1; i<nArg; i++){
       const char *z = azArg[i];
       if( z[0]=='-' ){
@@ -7774,7 +7648,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     int ii;
     ShellText s;
     initText(&s);
-    open_db(p, 0);
+    p->open_db(0);
 //    rc = sqlite3_prepare_v2(p->db, "PRAGMA database_list", -1, &pStmt, 0);
 //    if( rc ){
 //      sqlite3_finalize(pStmt);
@@ -7912,7 +7786,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     int i, n2;
     const char *zCmd = 0;
 
-    open_db(p, 0);
+    p->open_db(0);
     zCmd = nArg>=2 ? azArg[1] : "help";
 
     /* The argument can optionally begin with "-" or "--" */
@@ -8061,7 +7935,7 @@ static int do_meta_command(char *zLine, ShellState *p){
 #endif /* !defined(SQLITE_UNTESTABLE) */
 
   if( c=='t' && n>4 && strncmp(azArg[0], "timeout", n)==0 ){
-    open_db(p, 0);
+    p->open_db(0);
     sqlite3_busy_timeout(p->db, nArg>=2 ? (int)integerValue(azArg[1]) : 0);
   }else
 
@@ -8082,7 +7956,7 @@ static int do_meta_command(char *zLine, ShellState *p){
   if( c=='t' && strncmp(azArg[0], "trace", n)==0 ){
     int mType = 0;
     int jj;
-    open_db(p, 0);
+    p->open_db(0);
     for(jj=1; jj<nArg; jj++){
       const char *z = azArg[jj];
       if( z[0]=='-' ){
@@ -8136,7 +8010,7 @@ static int do_meta_command(char *zLine, ShellState *p){
       rc = 1;
       goto meta_command_exit;
     }
-    open_db(p, 0);
+    p->open_db(0);
     if( strcmp(azArg[1],"login")==0 ){
       if( nArg!=4 ){
         raw_printf(stderr, "Usage: .user login USER PASSWORD\n");
@@ -8385,7 +8259,7 @@ static int runOneSqlLine(ShellState *p, char *zSql, FILE *in, int startline){
   int rc;
   char *zErrMsg = 0;
 
-  open_db(p, 0);
+  p->open_db(0);
   if( ShellHasFlag(p,SHFLG_Backslash) ) resolve_backslashes(zSql);
   if( p->flgProgress & SHELL_PROGRESS_RESET ) p->nProgress = 0;
 #ifndef SHELL_USE_LOCAL_GETLINE
@@ -8645,9 +8519,6 @@ static const char zOptions[] =
   "   -cmd COMMAND         run \"COMMAND\" before reading stdin\n"
   "   -c COMMAND           run \"COMMAND\" and exit\n"
   "   -csv                 set output mode to 'csv'\n"
-#if defined(SQLITE_ENABLE_DESERIALIZE)
-  "   -deserialize         open the database using sqlite3_deserialize()\n"
-#endif
   "   -echo                print commands before execution\n"
   "   -init FILENAME       read/process named file\n"
   "   -[no]header          turn headers on or off\n"
@@ -8661,9 +8532,6 @@ static const char zOptions[] =
   "   -line                set output mode to 'line'\n"
   "   -list                set output mode to 'list'\n"
   "   -markdown            set output mode to 'markdown'\n"
-#if defined(SQLITE_ENABLE_DESERIALIZE)
-  "   -maxsize N           maximum size for a --deserialize database\n"
-#endif
 #ifdef SQLITE_ENABLE_MULTIPLEX
   "   -multiplex           enable the multiplexor VFS\n"
 #endif
@@ -8990,12 +8858,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
 #endif
     }else if( strcmp(z,"-append")==0 ){
       data.openMode = SHELL_OPEN_APPENDVFS;
-#ifdef SQLITE_ENABLE_DESERIALIZE
-    }else if( strcmp(z,"-deserialize")==0 ){
-      data.openMode = SHELL_OPEN_DESERIALIZE;
-    }else if( strcmp(z,"-maxsize")==0 && i+1<argc ){
-      data.szMax = integerValue(argv[++i]);
-#endif
     }else if( strcmp(z,"-readonly")==0 ){
       data.openMode = SHELL_OPEN_READONLY;
     }else if( strcmp(z,"-nofollow")==0 ){
@@ -9051,7 +8913,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
   ** to the sqlite command-line tool.
   */
   if( access(data.zDbFilename, 0)==0 ){
-    open_db(&data, 0);
+    data.open_db(0);
   }
 
   /* Process the initialization file if there is one.  If no -init option
@@ -9102,12 +8964,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
 #endif
     }else if( strcmp(z,"-append")==0 ){
       data.openMode = SHELL_OPEN_APPENDVFS;
-#ifdef SQLITE_ENABLE_DESERIALIZE
-    }else if( strcmp(z,"-deserialize")==0 ){
-      data.openMode = SHELL_OPEN_DESERIALIZE;
-    }else if( strcmp(z,"-maxsize")==0 && i+1<argc ){
-      data.szMax = integerValue(argv[++i]);
-#endif
     }else if( strcmp(z,"-readonly")==0 ){
       data.openMode = SHELL_OPEN_READONLY;
     }else if( strcmp(z,"-nofollow")==0 ){
@@ -9199,7 +9055,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
           return rc==2 ? 0 : rc;
         }
       }else{
-        open_db(&data, 0);
+        data.open_db(0);
         rc = data.shell_exec(z, &zErrMsg);
         if( zErrMsg!=0 ){
           printDatabaseError(zErrMsg);
@@ -9238,7 +9094,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
           return rc==2 ? 0 : rc;
         }
       }else{
-        open_db(&data, 0);
+        data.open_db(0);
         rc = data.shell_exec(azCmd[i], &zErrMsg);
         if( zErrMsg!=0 ){
           printDatabaseError(zErrMsg);
