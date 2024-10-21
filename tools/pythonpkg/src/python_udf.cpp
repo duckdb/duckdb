@@ -93,9 +93,11 @@ static void ConvertArrowTableToVector(const py::object &table, Vector &out, Clie
 
 	TableFunctionRef empty;
 	TableFunction dummy_table_function;
+	vector<string> empty_names;
+	vector<LogicalType> empty_types;
 	dummy_table_function.name = "ConvertArrowTableToVector";
 	TableFunctionBindInput bind_input(children, named_params, input_types, input_names, nullptr, nullptr,
-	                                  dummy_table_function, empty);
+	                                  dummy_table_function, empty, empty_types, empty_names);
 	vector<LogicalType> return_types;
 	vector<string> return_names;
 
