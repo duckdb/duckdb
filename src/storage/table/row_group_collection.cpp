@@ -1211,6 +1211,7 @@ void RowGroupCollection::AppendToIndex(DataTable &parent, Index &index) {
 
 	auto row_id_idx = scan_chunk.ColumnCount() - 1;
 	while (true) {
+		scan_chunk.Reset();
 		state.table_state.ScanCommitted(scan_chunk, state.segment_lock, scan_type);
 		if (scan_chunk.size() == 0) {
 			break;
@@ -1230,7 +1231,6 @@ void RowGroupCollection::AppendToIndex(DataTable &parent, Index &index) {
 		if (error.HasError()) {
 			error.Throw();
 		}
-		scan_chunk.Reset();
 	}
 }
 
