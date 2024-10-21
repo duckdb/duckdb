@@ -1409,8 +1409,44 @@ bool StringValueScanner::SkipUntilState(CSVState initial_state, CSVState until_s
 	CSVStates current_state;
 	current_state.Initialize(initial_state);
 	bool first_column = true;
-	while (current_iterator.pos.buffer_pos < current_iterator.GetEndPos()) {
+	const idx_t to_pos = current_iterator.GetEndPos();
+	while (current_iterator.pos.buffer_pos < to_pos) {
 		state_machine->Transition(current_state, buffer_handle_ptr[current_iterator.pos.buffer_pos++]);
+		if (current_state.IsState(CSVState::STANDARD)) {
+			while (current_iterator.pos.buffer_pos + 8 < to_pos) {
+				uint64_t value = Load<uint64_t>(
+				    reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[current_iterator.pos.buffer_pos]));
+				if (ContainsZeroByte((value ^ state_machine->transition_array.delimiter) &
+				                     (value ^ state_machine->transition_array.new_line) &
+				                     (value ^ state_machine->transition_array.carriage_return) &
+				                     (value ^ state_machine->transition_array.comment))) {
+					break;
+				}
+				current_iterator.pos.buffer_pos += 8;
+			}
+			while (state_machine->transition_array
+			           .skip_standard[static_cast<uint8_t>(buffer_handle_ptr[current_iterator.pos.buffer_pos])] &&
+			       current_iterator.pos.buffer_pos < to_pos - 1) {
+				current_iterator.pos.buffer_pos++;
+			}
+		}
+		if (current_state.IsState(CSVState::QUOTED)) {
+			while (current_iterator.pos.buffer_pos + 8 < to_pos) {
+				uint64_t value = Load<uint64_t>(
+				    reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[current_iterator.pos.buffer_pos]));
+				if (ContainsZeroByte((value ^ state_machine->transition_array.quote) &
+				                     (value ^ state_machine->transition_array.escape))) {
+					break;
+				}
+				current_iterator.pos.buffer_pos += 8;
+			}
+
+			while (state_machine->transition_array
+			           .skip_quoted[static_cast<uint8_t>(buffer_handle_ptr[current_iterator.pos.buffer_pos])] &&
+			       current_iterator.pos.buffer_pos < to_pos - 1) {
+				current_iterator.pos.buffer_pos++;
+			}
+		}
 		if (current_state.WasState(CSVState::DELIMITER)) {
 			first_column = false;
 		}

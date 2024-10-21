@@ -124,6 +124,10 @@ public:
 	static CSVIterator SkipCSVRows(shared_ptr<CSVBufferManager> buffer_manager,
 	                               const shared_ptr<CSVStateMachine> &state_machine, idx_t rows_to_skip);
 
+	inline static bool ContainsZeroByte(uint64_t v) {
+		return (v - UINT64_C(0x0101010101010101)) & ~(v)&UINT64_C(0x8080808080808080);
+	}
+
 protected:
 	//! Boundaries of this scanner
 	CSVIterator iterator;
@@ -143,10 +147,6 @@ protected:
 	//! Internal Functions used to perform the parsing
 	//! Initializes the scanner
 	virtual void Initialize();
-
-	inline static bool ContainsZeroByte(uint64_t v) {
-		return (v - UINT64_C(0x0101010101010101)) & ~(v)&UINT64_C(0x8080808080808080);
-	}
 
 	//! Process one chunk
 	template <class T>
