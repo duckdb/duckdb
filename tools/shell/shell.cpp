@@ -5095,14 +5095,14 @@ static void shellEscapeCrnl(
 ** Make sure the database is open.  If it is not, then open it.  If
 ** the database fails to open, print an error message and exit.
 */
-void ShellState::open_db(int openFlags){
+void ShellState::open_db(int flags){
   if( db==0 ){
     if( openMode==SHELL_OPEN_UNSPEC ){
       if( zDbFilename==0 || zDbFilename[0]==0 ){
         openMode = SHELL_OPEN_NORMAL;
       }else{
         openMode = (u8)deduceDatabaseType(zDbFilename,
-                             (openFlags & OPEN_DB_ZIPFILE)!=0);
+                             (flags & OPEN_DB_ZIPFILE)!=0);
       }
     }
     switch( openMode ){
@@ -5136,7 +5136,7 @@ void ShellState::open_db(int openFlags){
     if( db==0 || SQLITE_OK!=sqlite3_errcode(db) ){
       utf8_printf(stderr,"Error: unable to open database \"%s\": %s\n",
           zDbFilename, sqlite3_errmsg(db));
-      if( openFlags & OPEN_DB_KEEPALIVE ){
+      if( flags & OPEN_DB_KEEPALIVE ){
         sqlite3_open(":memory:", &db);
         return;
       }
