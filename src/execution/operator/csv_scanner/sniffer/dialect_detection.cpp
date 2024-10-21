@@ -335,12 +335,17 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	bool quoted = scanner->ever_quoted &&
 	              sniffed_column_counts.state_machine.dialect_options.state_machine_options.quote.GetValue() != '\0';
 
+	// For our columns to match, we either don't have them manually set, or they match in value with the sniffed value
+	bool columns_match_set = num_cols == set_columns.Size() ||
+	                         (num_cols == set_columns.Size() + 1 && sniffed_column_counts[0].last_value_always_empty) ||
+	                         !set_columns.IsSet();
+
 	// If rows are consistent and no invalid padding happens, this is the best suitable candidate if one of the
 	// following is valid:
 	// - There's a single column before.
 	// - There are more values and no additional padding is required.
 	// - There's more than one column and less padding is required.
-	if (rows_consistent &&
+	if (columns_match_set && rows_consistent &&
 	    (single_column_before || (more_values && !require_more_padding) ||
 	     (more_than_one_column && require_less_padding) || quoted) &&
 	    !invalid_padding && comments_are_acceptable) {
@@ -397,8 +402,8 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	// If there's more than one row and column, the start is good, rows are consistent,
 	// no additional padding is required, and there is no invalid padding, and there is not yet a candidate
 	// with the same quote, we add this state_machine as a suitable candidate.
-	if (more_than_one_row && more_than_one_column && start_good && rows_consistent && !require_more_padding &&
-	    !invalid_padding && num_cols == max_columns_found && comments_are_acceptable) {
+	if (columns_match_set && more_than_one_row && more_than_one_column && start_good && rows_consistent &&
+	    !require_more_padding && !invalid_padding && num_cols == max_columns_found && comments_are_acceptable) {
 		auto &sniffing_state_machine = scanner->GetStateMachine();
 
 		bool same_quote_is_candidate = false;
@@ -541,7 +546,7 @@ void CSVSniffer::DetectDialect() {
 	// if no dialect candidate was found, we throw an exception
 	if (candidates.empty()) {
 		auto error = CSVError::SniffingError(options, dialect_candidates.Print());
-		error_handler->Error(error);
+		error_handler->Error(error, true);
 	}
 }
 } // namespace duckdb
