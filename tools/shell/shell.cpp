@@ -725,7 +725,7 @@ static char *local_getline(char *zLine, FILE *in){
     if( zTrans ){
       int nTrans = strlen30(zTrans)+1;
       if( nTrans>nLine ){
-        zLine = realloc(zLine, nTrans);
+        zLine = (char*) realloc(zLine, nTrans);
         if( zLine==0 ) shell_out_of_memory();
       }
       memcpy(zLine, zTrans, nTrans);
@@ -10195,7 +10195,7 @@ static char *find_home_dir(int clearFlag){
     zPath = getenv("HOMEPATH");
     if( zDrive && zPath ){
       n = strlen30(zDrive) + strlen30(zPath) + 1;
-      home_dir = malloc( n );
+      home_dir = (char*) malloc( n );
       if( home_dir==0 ) return 0;
       sqlite3_snprintf(n, home_dir, "%s%s", zDrive, zPath);
       return home_dir;
@@ -10471,7 +10471,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
   */
 #if !SQLITE_SHELL_IS_UTF8
   sqlite3_initialize();
-  argvToFree = malloc(sizeof(argv[0])*argc*2);
+  argvToFree = (char**) malloc(sizeof(argv[0])*argc*2);
   argcToFree = argc;
   argv = argvToFree + argc;
   if( argv==0 ) shell_out_of_memory();
@@ -10480,7 +10480,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
     int n;
     if( z==0 ) shell_out_of_memory();
     n = (int)strlen(z);
-    argv[i] = malloc( n+1 );
+    argv[i] = (char*) malloc( n+1 );
     if( argv[i]==0 ) shell_out_of_memory();
     memcpy(argv[i], z, n+1);
     argvToFree[i] = argv[i];
