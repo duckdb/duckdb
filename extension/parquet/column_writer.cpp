@@ -882,7 +882,7 @@ static void TemplatedWritePlain(Vector &col, ColumnWriterStatistics *stats, cons
 
 class StandardColumnWriterState : public BasicColumnWriterState {
 public:
-	StandardColumnWriterState(duckdb_parquet::format::RowGroup &row_group, idx_t col_idx)
+	StandardColumnWriterState(duckdb_parquet::RowGroup &row_group, idx_t col_idx)
 	    : BasicColumnWriterState(row_group, col_idx) {
 	}
 	~StandardColumnWriterState() override = default;
@@ -909,7 +909,7 @@ public:
 	~StandardColumnWriter() override = default;
 
 public:
-	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) override {
+	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) override {
 		auto result = make_uniq<StandardColumnWriterState>(row_group, row_group.columns.size());
 		RegisterToRowGroup(row_group);
 		return std::move(result);
