@@ -833,6 +833,8 @@ const char* EnumUtil::ToChars<CSVState>(CSVState value) {
 		return "EMPTY_SPACE";
 	case CSVState::COMMENT:
 		return "COMMENT";
+	case CSVState::UNQUOTED_ESCAPE:
+		return "UNQUOTED_ESCAPE";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<CSVState>", value));
 	}
@@ -875,6 +877,9 @@ CSVState EnumUtil::FromString<CSVState>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "COMMENT")) {
 		return CSVState::COMMENT;
+	}
+	if (StringUtil::Equals(value, "UNQUOTED_ESCAPE")) {
+		return CSVState::UNQUOTED_ESCAPE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<CSVState>", value));
 }

@@ -253,6 +253,7 @@ protected:
 				}
 			} break;
 			case CSVState::ESCAPE:
+			case CSVState::UNQUOTED_ESCAPE:
 				T::SetEscaped(result);
 				iterator.pos.buffer_pos++;
 				break;

@@ -1,0 +1,17 @@
+# name: test/sql/copy/csv/unquoted_escape.test
+# description: Test the parsing of unquoted escape characters
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE special_char(a INT, b STRING);
+
+statement ok
+INSERT INTO special_char VALUES (0, '\'), (1, E'\t'), (2, E'\n'), (3, E'a\ta'), (4, E'b\nb'), (5, 'c\c');
+
+query I
+SELECT bool_and(b = s)::int FROM special_char JOIN read_csv('data/csv/unquoted_escape.csv', quote = '', escape = '\', sep = '\t') t (i, s, j) ON i = a;
+----
+1
