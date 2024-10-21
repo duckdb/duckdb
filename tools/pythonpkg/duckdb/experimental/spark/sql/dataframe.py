@@ -25,6 +25,7 @@ from .type_utils import duckdb_to_spark_schema
 from .types import Row, StructType
 
 if TYPE_CHECKING:
+    import pyarrow as pa
     from pandas.core.frame import DataFrame as PandasDataFrame
 
     from .group import GroupedData, Grouping
@@ -47,6 +48,33 @@ class DataFrame:
 
     def toPandas(self) -> "PandasDataFrame":
         return self.relation.df()
+
+    def toArrow(self) -> "pa.Table":
+        """
+        Returns the contents of this :class:`DataFrame` as PyArrow ``pyarrow.Table``.
+
+        This is only available if PyArrow is installed and available.
+
+        .. versionadded:: 4.0.0
+
+        Notes
+        -----
+        This method should only be used if the resulting PyArrow ``pyarrow.Table`` is
+        expected to be small, as all the data is loaded into the driver's memory.
+
+        This API is a developer API.
+
+        Examples
+        --------
+        >>> df.toArrow()  # doctest: +SKIP
+        pyarrow.Table
+        age: int64
+        name: string
+        ----
+        age: [[2,5]]
+        name: [["Alice","Bob"]]
+        """
+        return self.relation.arrow()
 
     def createOrReplaceTempView(self, name: str) -> None:
         """Creates or replaces a local temporary view with this :class:`DataFrame`.
