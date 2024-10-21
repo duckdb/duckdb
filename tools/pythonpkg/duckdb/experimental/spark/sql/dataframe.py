@@ -1176,6 +1176,45 @@ class DataFrame:
         """
         return DataFrame(self.relation.intersect(other.relation), self.session)
 
+    def exceptAll(self, other: "DataFrame") -> "DataFrame":
+        """Return a new :class:`DataFrame` containing rows in this :class:`DataFrame` but
+        not in another :class:`DataFrame` while preserving duplicates.
+
+        This is equivalent to `EXCEPT ALL` in SQL.
+        As standard in SQL, this function resolves columns by position (not by name).
+
+        .. versionadded:: 2.4.0
+
+        .. versionchanged:: 3.4.0
+            Supports Spark Connect.
+
+        Parameters
+        ----------
+        other : :class:`DataFrame`
+            The other :class:`DataFrame` to compare to.
+
+        Returns
+        -------
+        :class:`DataFrame`
+
+        Examples
+        --------
+        >>> df1 = spark.createDataFrame(
+        ...         [("a", 1), ("a", 1), ("a", 1), ("a", 2), ("b",  3), ("c", 4)], ["C1", "C2"])
+        >>> df2 = spark.createDataFrame([("a", 1), ("b", 3)], ["C1", "C2"])
+        >>> df1.exceptAll(df2).show()
+        +---+---+
+        | C1| C2|
+        +---+---+
+        |  a|  1|
+        |  a|  1|
+        |  a|  2|
+        |  c|  4|
+        +---+---+
+
+        """
+        return DataFrame(self.relation.except_(other.relation), self.session)
+
     def dropDuplicates(self, subset: Optional[List[str]] = None) -> "DataFrame":
         """Return a new :class:`DataFrame` with duplicate rows removed,
         optionally only considering certain columns.
