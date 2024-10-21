@@ -333,8 +333,7 @@ class TestDataFrameJoin(object):
     def test_cross_join(self, method, spark):
         # Same example data as in function docstring. Easier to understand for a
         # crossjoin compared to using dataframe_a and dataframe_b.
-        people = spark.createDataFrame(
-             [(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
+        people = spark.createDataFrame([(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
         heights = spark.createDataFrame([(80,), (85,)], ["height"])
 
         if method == "join":
