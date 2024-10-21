@@ -121,11 +121,13 @@ struct ModeState {
 		}
 	}
 
-	void InitializePage(const ColumnDataCollection &inputs) {
+	void InitializePage(const WindowPartitionInput &partition) {
 		if (page.ColumnCount() == 0) {
-			this->inputs = &inputs;
-			inputs.InitializeScan(scan);
-			inputs.InitializeScanChunk(scan, page);
+			D_ASSERT(partition.inputs);
+			inputs = partition.inputs;
+			D_ASSERT(partition.column_ids.size() == 1);
+			inputs->InitializeScan(scan, partition.column_ids);
+			inputs->InitializeScanChunk(scan, page);
 		}
 	}
 
@@ -346,10 +348,7 @@ struct ModeFunction : TypedModeFunction<TYPE_OP> {
 	                   idx_t rid) {
 		auto &state = *reinterpret_cast<STATE *>(l_state);
 
-		D_ASSERT(partition.inputs);
-		const auto &inputs = *partition.inputs;
-		D_ASSERT(inputs.ColumnCount() == 1);
-		state.InitializePage(inputs);
+		state.InitializePage(partition);
 		const auto &fmask = partition.filter_mask;
 
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);

@@ -26,9 +26,13 @@ namespace duckdb {
 // Paged access
 template <typename INPUT_TYPE>
 struct QuantileCursor {
-	explicit QuantileCursor(const ColumnDataCollection &inputs, bool all_valid) : inputs(inputs), all_valid(all_valid) {
-		inputs.InitializeScan(scan);
+	explicit QuantileCursor(const WindowPartitionInput &partition) : inputs(*partition.inputs) {
+		D_ASSERT(partition.column_ids.size() == 1);
+		inputs.InitializeScan(scan, partition.column_ids);
 		inputs.InitializeScanChunk(scan, page);
+
+		D_ASSERT(partition.all_valid.size() == 1);
+		all_valid = partition.all_valid[0];
 	}
 
 	inline sel_t RowOffset(idx_t row_idx) const {
@@ -330,7 +334,11 @@ static unique_ptr<GlobalSortState> SortQuantileIndices(const WindowPartitionInpu
 	SelectionVector filtered(capacity);
 
 	// TODO: Two pass parallel sorting using Build
-	auto order_expr = make_uniq<BoundConstantExpression>(Value(inputs.Types()[0]));
+	ColumnDataScanState state;
+	DataChunk sort;
+	inputs.InitializeScan(state, partition.column_ids);
+	inputs.InitializeScanChunk(state, sort);
+	auto order_expr = make_uniq<BoundConstantExpression>(Value(sort.GetTypes()[0]));
 	vector<BoundOrderByNode> orders;
 	orders.emplace_back(BoundOrderByNode(order_type, OrderByNullType::NULLS_LAST, std::move(order_expr)));
 
@@ -343,10 +351,6 @@ static unique_ptr<GlobalSortState> SortQuantileIndices(const WindowPartitionInpu
 	local_sort.Initialize(*global_sort, global_sort->buffer_manager);
 
 	//	Build the indirection array by scanning the valid indices
-	ColumnDataScanState state;
-	DataChunk sort;
-	inputs.InitializeScan(state);
-	inputs.InitializeScanChunk(state, sort);
 	while (inputs.Scan(state, sort)) {
 		// Match the payload to the scanned data
 		if (sort.size() > capacity) {
@@ -361,7 +365,7 @@ static unique_ptr<GlobalSortState> SortQuantileIndices(const WindowPartitionInpu
 		payload.SetCardinality(sort);
 		indices.Sequence(int64_t(state.current_row_index), 1, payload.size());
 
-		if (!filter_mask.AllValid() || !partition.all_valid) {
+		if (!filter_mask.AllValid() || !partition.all_valid[0]) {
 			auto &key = sort.data[0];
 			auto &validity = FlatVector::Validity(key);
 			idx_t valid = 0;

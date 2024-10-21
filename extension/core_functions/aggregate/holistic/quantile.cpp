@@ -214,10 +214,7 @@ struct QuantileScalarOperation : public QuantileOperation {
 		auto &state = *reinterpret_cast<STATE *>(l_state);
 		auto gstate = reinterpret_cast<const STATE *>(g_state);
 
-		D_ASSERT(partition.inputs);
-		const auto &inputs = *partition.inputs;
-		D_ASSERT(inputs.ColumnCount() == 1);
-		auto &data = state.GetOrCreateWindowCursor(inputs, partition.all_valid);
+		auto &data = state.GetOrCreateWindowCursor(partition);
 		const auto &fmask = partition.filter_mask;
 
 		QuantileIncluded<INPUT_TYPE> included(fmask, data);
@@ -320,10 +317,7 @@ struct QuantileListOperation : QuantileOperation {
 		auto &state = *reinterpret_cast<STATE *>(l_state);
 		auto gstate = reinterpret_cast<const STATE *>(g_state);
 
-		D_ASSERT(partition.inputs);
-		const auto &inputs = *partition.inputs;
-		D_ASSERT(inputs.ColumnCount() == 1);
-		auto &data = state.GetOrCreateWindowCursor(inputs, partition.all_valid);
+		auto &data = state.GetOrCreateWindowCursor(partition);
 		const auto &fmask = partition.filter_mask;
 
 		D_ASSERT(aggr_input_data.bind_data);

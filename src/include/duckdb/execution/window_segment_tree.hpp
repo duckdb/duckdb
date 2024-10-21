@@ -18,6 +18,9 @@
 
 namespace duckdb {
 
+struct WindowSharedExpressions;
+class WindowCollection;
+
 class WindowAggregatorState {
 public:
 	WindowAggregatorState();
@@ -41,8 +44,11 @@ public:
 
 class WindowAggregator {
 public:
-	WindowAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types_p, const LogicalType &result_type_p,
-	                 const WindowExcludeMode exclude_mode_p);
+	using CollectionPtr = optional_ptr<WindowCollection>;
+
+	WindowAggregator(const BoundWindowExpression &wexpr, const WindowExcludeMode exclude_mode_p);
+	WindowAggregator(const BoundWindowExpression &wexpr, const WindowExcludeMode exclude_mode_p,
+	                 WindowSharedExpressions &shared);
 	virtual ~WindowAggregator();
 
 	//	Threading states
@@ -51,31 +57,36 @@ public:
 	virtual unique_ptr<WindowAggregatorState> GetLocalState(const WindowAggregatorState &gstate) const = 0;
 
 	//	Build
-	virtual void Sink(WindowAggregatorState &gstate, WindowAggregatorState &lstate, DataChunk &arg_chunk,
-	                  idx_t input_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered);
-	virtual void Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, const FrameStats &stats);
+	virtual void Sink(WindowAggregatorState &gstate, WindowAggregatorState &lstate, DataChunk &sink_chunk,
+	                  DataChunk &coll_chunk, idx_t input_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered);
+	virtual void Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, CollectionPtr collection,
+	                      const FrameStats &stats);
 
 	//	Probe
 	virtual void Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate, const DataChunk &bounds,
 	                      Vector &result, idx_t count, idx_t row_idx) const = 0;
 
+	//! The window function
+	const BoundWindowExpression &wexpr;
 	//! A description of the aggregator
 	const AggregateObject aggr;
 	//! The argument types for the function
-	const vector<LogicalType> arg_types;
+	vector<LogicalType> arg_types;
 	//! The result type of the window function
 	const LogicalType result_type;
 	//! The size of a single aggregate state
 	const idx_t state_size;
 	//! The window exclusion clause
 	const WindowExcludeMode exclude_mode;
+	//! Partition collection column indicies
+	vector<column_t> child_idx;
 };
 
 // Used for validation
 class WindowNaiveAggregator : public WindowAggregator {
 public:
-	WindowNaiveAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types_p,
-	                      const LogicalType &result_type_p, const WindowExcludeMode exclude_mode);
+	WindowNaiveAggregator(const BoundWindowExpression &wexpr, const WindowExcludeMode exclude_mode,
+	                      WindowSharedExpressions &shared);
 	~WindowNaiveAggregator() override;
 
 	unique_ptr<WindowAggregatorState> GetLocalState(const WindowAggregatorState &gstate) const override;
@@ -85,16 +96,18 @@ public:
 
 class WindowConstantAggregator : public WindowAggregator {
 public:
-	WindowConstantAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types_p,
-	                         const LogicalType &result_type_p, WindowExcludeMode exclude_mode_p);
+	WindowConstantAggregator(const BoundWindowExpression &wexpr, WindowExcludeMode exclude_mode_p,
+	                         WindowSharedExpressions &shared);
 	~WindowConstantAggregator() override {
 	}
 
 	unique_ptr<WindowAggregatorState> GetGlobalState(ClientContext &context, idx_t group_count,
 	                                                 const ValidityMask &partition_mask) const override;
-	void Sink(WindowAggregatorState &gstate, WindowAggregatorState &lstate, DataChunk &arg_chunk, idx_t input_idx,
-	          optional_ptr<SelectionVector> filter_sel, idx_t filtered) override;
-	void Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, const FrameStats &stats) override;
+	void Sink(WindowAggregatorState &gstate, WindowAggregatorState &lstate, DataChunk &sink_chunk,
+	          DataChunk &coll_chunk, idx_t input_idx, optional_ptr<SelectionVector> filter_sel,
+	          idx_t filtered) override;
+	void Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, CollectionPtr collection,
+	              const FrameStats &stats) override;
 
 	unique_ptr<WindowAggregatorState> GetLocalState(const WindowAggregatorState &gstate) const override;
 	void Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate, const DataChunk &bounds,
@@ -103,13 +116,14 @@ public:
 
 class WindowCustomAggregator : public WindowAggregator {
 public:
-	WindowCustomAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types_p,
-	                       const LogicalType &result_type_p, const WindowExcludeMode exclude_mode);
+	WindowCustomAggregator(const BoundWindowExpression &wexpr, const WindowExcludeMode exclude_mode,
+	                       WindowSharedExpressions &shared);
 	~WindowCustomAggregator() override;
 
 	unique_ptr<WindowAggregatorState> GetGlobalState(ClientContext &context, idx_t group_count,
 	                                                 const ValidityMask &partition_mask) const override;
-	void Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, const FrameStats &stats) override;
+	void Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, CollectionPtr collection,
+	              const FrameStats &stats) override;
 
 	unique_ptr<WindowAggregatorState> GetLocalState(const WindowAggregatorState &gstate) const override;
 	void Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate, const DataChunk &bounds,
@@ -119,13 +133,14 @@ public:
 class WindowSegmentTree : public WindowAggregator {
 
 public:
-	WindowSegmentTree(AggregateObject aggr, const vector<LogicalType> &arg_types_p, const LogicalType &result_type_p,
-	                  WindowAggregationMode mode_p, const WindowExcludeMode exclude_mode);
+	WindowSegmentTree(const BoundWindowExpression &wexpr, WindowAggregationMode mode_p,
+	                  const WindowExcludeMode exclude_mode, WindowSharedExpressions &shared);
 
 	unique_ptr<WindowAggregatorState> GetGlobalState(ClientContext &context, idx_t group_count,
 	                                                 const ValidityMask &partition_mask) const override;
 	unique_ptr<WindowAggregatorState> GetLocalState(const WindowAggregatorState &gstate) const override;
-	void Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, const FrameStats &stats) override;
+	void Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, CollectionPtr collection,
+	              const FrameStats &stats) override;
 
 	void Evaluate(const WindowAggregatorState &gstate, WindowAggregatorState &lstate, const DataChunk &bounds,
 	              Vector &result, idx_t count, idx_t row_idx) const override;
@@ -142,16 +157,16 @@ public:
 
 class WindowDistinctAggregator : public WindowAggregator {
 public:
-	WindowDistinctAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types_p,
-	                         const LogicalType &result_type_p, const WindowExcludeMode exclude_mode_p,
-	                         ClientContext &context);
+	WindowDistinctAggregator(const BoundWindowExpression &wexpr, const WindowExcludeMode exclude_mode_p,
+	                         WindowSharedExpressions &shared, ClientContext &context);
 
 	//	Build
 	unique_ptr<WindowAggregatorState> GetGlobalState(ClientContext &context, idx_t group_count,
 	                                                 const ValidityMask &partition_mask) const override;
-	void Sink(WindowAggregatorState &gsink, WindowAggregatorState &lstate, DataChunk &arg_chunk, idx_t input_idx,
-	          optional_ptr<SelectionVector> filter_sel, idx_t filtered) override;
-	void Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, const FrameStats &stats) override;
+	void Sink(WindowAggregatorState &gsink, WindowAggregatorState &lstate, DataChunk &sink_chunk, DataChunk &coll_chunk,
+	          idx_t input_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered) override;
+	void Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, CollectionPtr collection,
+	              const FrameStats &stats) override;
 
 	//	Evaluate
 	unique_ptr<WindowAggregatorState> GetLocalState(const WindowAggregatorState &gstate) const override;
