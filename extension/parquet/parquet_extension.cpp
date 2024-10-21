@@ -1442,6 +1442,22 @@ duckdb_parquet::CompressionCodec::type EnumUtil::FromString<duckdb_parquet::Comp
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
 
+static optional_idx SerializeCompressionLevel(const int64_t compression_level) {
+	return compression_level < 0 ? NumericLimits<int64_t>::Maximum() + compression_level
+	                             : NumericCast<idx_t>(compression_level);
+}
+
+static int64_t DeserializeCompressionLevel(const optional_idx compression_level) {
+	if (compression_level.IsValid()) { // Was originally an optional_idx, now int64_t, so we still serialize as such
+		if (compression_level.GetIndex() > ZStdFileSystem::MaximumCompressionLevel()) {
+			// re-add the maximum to restore the negative compression level
+			return NumericCast<int64_t>(compression_level.GetIndex()) - NumericLimits<int64_t>::Maximum();
+		}
+		return NumericCast<int64_t>(compression_level.GetIndex());
+	}
+	return ZStdFileSystem::DefaultCompressionLevel();
+}
+
 static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bind_data_p,
                                  const CopyFunction &function) {
 	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
@@ -1456,13 +1472,8 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	                                                                         bind_data.encryption_config, nullptr);
 	serializer.WriteProperty(108, "dictionary_compression_ratio_threshold",
 	                         bind_data.dictionary_compression_ratio_threshold);
-	optional_idx compression_level; // Was originally an optional_idx, now int64_t, so we still serialize as such
-	if (bind_data.compression_level < 0) {
-		// + a negative value, so the negative compression level is essentially subtracted from the max
-		compression_level = NumericLimits<int64_t>::Maximum() + bind_data.compression_level;
-	} else {
-		compression_level = NumericCast<idx_t>(bind_data.compression_level);
-	}
+	const auto compression_level = SerializeCompressionLevel(bind_data.compression_level);
+	D_ASSERT(DeserializeCompressionLevel(compression_level) == bind_data.compression_level);
 	serializer.WritePropertyWithDefault<optional_idx>(109, "compression_level", compression_level);
 	serializer.WriteProperty(110, "row_groups_per_file", bind_data.row_groups_per_file);
 	serializer.WriteProperty(111, "debug_use_openssl", bind_data.debug_use_openssl);
@@ -1483,18 +1494,8 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	                                                     data->dictionary_compression_ratio_threshold, 1.0);
 	optional_idx compression_level;
 	deserializer.ReadPropertyWithDefault<optional_idx>(109, "compression_level", compression_level);
-	if (compression_level.IsValid()) { // Was originally an optional_idx, now int64_t, so we still serialize as such
-		if (compression_level.GetIndex() > ZStdFileSystem::MaximumCompressionLevel()) {
-			// re-add the maximum to restore the negative compression level
-			data->compression_level =
-			    NumericCast<int64_t>(compression_level.GetIndex()) - NumericLimits<int64_t>::Maximum();
-			D_ASSERT(data->compression_level < 0);
-		} else {
-			data->compression_level = NumericCast<int64_t>(compression_level.GetIndex());
-		}
-	} else {
-		data->compression_level = ZStdFileSystem::DefaultCompressionLevel();
-	}
+	data->compression_level = DeserializeCompressionLevel(compression_level);
+	D_ASSERT(SerializeCompressionLevel(data->compression_level) == compression_level);
 	data->row_groups_per_file =
 	    deserializer.ReadPropertyWithExplicitDefault<optional_idx>(110, "row_groups_per_file", optional_idx::Invalid());
 	data->debug_use_openssl = deserializer.ReadPropertyWithExplicitDefault<bool>(111, "debug_use_openssl", true);

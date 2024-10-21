@@ -392,10 +392,6 @@ TemporaryCompressionLevel TemporaryFileCompressionAdaptivity::GetCompressionLeve
 		             ? TemporaryCompressionLevel::UNCOMPRESSED // Already lowest level, go to uncompressed
 		             : IndexToLevel(min_compression_idx - 1);
 	}
-	// Printer::PrintF("%s in %lld, %s in %lld, ratio %.17g, compress %d, deviate %d: %s", EnumUtil::ToString(level),
-	//                 min_compressed_time, EnumUtil::ToString(TemporaryCompressionLevel::UNCOMPRESSED),
-	//                 last_uncompressed_write_ns.load(), ratio, should_compress, should_deviate,
-	//                 EnumUtil::ToString(result));
 	return result;
 }
 
