@@ -177,3 +177,39 @@ class TestSparkFunctionsNumeric(object):
         res = df.select("radians_value").collect()
         round(res[0].radians_value, 2) == 3.14
         res[1].radians_value == 0
+
+    def test_atan(self, spark):
+        data = [
+            (1,),
+            (0,),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("atan_value", F.atan(F.col("firstColumn")))
+        res = df.select("atan_value").collect()
+        round(res[0].atan_value, 2) == 0.79
+        res[1].atan_value == 0
+
+    def test_atan2(self, spark):
+        data = [
+            (1, 1),
+            (0, 0),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn", "secondColumn"])
+
+        # Both columns
+        df2 = df.withColumn("atan2_value", F.atan2(F.col("firstColumn"), "secondColumn"))
+        res = df2.select("atan2_value").collect()
+        round(res[0].atan2_value, 2) == 0.79
+        res[1].atan2_value == 0
+
+        # Both literals
+        df2 = df.withColumn("atan2_value_lit", F.atan2(1, 1))
+        res = df2.select("atan2_value_lit").collect()
+        round(res[0].atan2_value_lit, 2) == 0.79
+        round(res[1].atan2_value_lit, 2) == 0.79
+
+        # One literal, one column
+        df2 = df.withColumn("atan2_value_lit_col", F.atan2(1.0, F.col("secondColumn")))
+        res = df2.select("atan2_value_lit_col").collect()
+        round(res[0].atan2_value_lit_col, 2) == 0.79
+        res[1].atan2_value_lit_col == 0

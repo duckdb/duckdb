@@ -2216,3 +2216,71 @@ def radians(col: "ColumnOrName") -> Column:
     Row(RADIANS(180)=3.14159...)
     """
     return _invoke_function_over_columns("radians", col)
+
+
+def atan(col: "ColumnOrName") -> Column:
+    """
+    Compute inverse tangent of the input column.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        inverse tangent of `col`, as if computed by `java.lang.Math.atan()`
+
+    Examples
+    --------
+    >>> df = spark.range(1)
+    >>> df.select(atan(df.id)).show()
+    +--------+
+    |ATAN(id)|
+    +--------+
+    |     0.0|
+    +--------+
+    """
+    return _invoke_function_over_columns("atan", col)
+
+
+def atan2(col1: Union["ColumnOrName", float], col2: Union["ColumnOrName", float]) -> Column:
+    """
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col1 : str, :class:`~pyspark.sql.Column` or float
+        coordinate on y-axis
+    col2 : str, :class:`~pyspark.sql.Column` or float
+        coordinate on x-axis
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the `theta` component of the point
+        (`r`, `theta`)
+        in polar coordinates that corresponds to the point
+        (`x`, `y`) in Cartesian coordinates,
+        as if computed by `java.lang.Math.atan2()`
+
+    Examples
+    --------
+    >>> df = spark.range(1)
+    >>> df.select(atan2(lit(1), lit(2))).first()
+    Row(ATAN2(1, 2)=0.46364...)
+    """
+    def lit_or_column(x: Union["ColumnOrName", float]) -> Column:
+        if isinstance(x, (int, float)):
+            return lit(x)
+        return x
+    return _invoke_function_over_columns("atan2", lit_or_column(col1), lit_or_column(col2))
