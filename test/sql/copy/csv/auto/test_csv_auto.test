@@ -9,6 +9,16 @@ statement ok
 PRAGMA verify_parallelism
 
 query I
+FROM read_csv('data/csv/nullterm.csv')
+----
+world
+
+query I
+FROM read_csv('data/csv/nullterm.csv', quote = '"', escape = '"')
+----
+\0world\0
+
+query I
 select columns FROM sniff_csv('data/csv/auto/mock_duckdb_test_data.csv', ignore_errors = true);
 ----
 [{'name': id, 'type': BIGINT}, {'name': name, 'type': VARCHAR}, {'name': age, 'type': BIGINT}, {'name': sex, 'type': VARCHAR}, {'name': state, 'type': VARCHAR}]
