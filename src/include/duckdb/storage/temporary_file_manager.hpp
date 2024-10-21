@@ -14,6 +14,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/random_engine.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -308,7 +309,7 @@ private:
 	//! Map of block_id -> temporary file position
 	unordered_map<block_id_t, TemporaryFileIndex> used_blocks;
 	//! Map of TemporaryBufferSize -> manager of in-use temporary file indexes
-	unordered_map<TemporaryBufferSize, BlockIndexManager> index_managers;
+	unordered_map<TemporaryBufferSize, BlockIndexManager, EnumClassHash> index_managers;
 	//! The size in bytes of the temporary files that are currently alive
 	atomic<idx_t> size_on_disk;
 	//! The max amount of disk space that can be used
