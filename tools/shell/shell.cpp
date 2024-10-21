@@ -2640,15 +2640,10 @@ public:
 	void ShellClearFlag(int flag) {
 		shellFlgs &= ~flag;
 	}
+	void output_reset();
+	void clearTempFile();
+	void newTempFile(const char *zSuffix);
 };
-
-
-/* Allowed values for ShellState.autoEQP
-*/
-#define AUTOEQP_off      0           /* Automatic EXPLAIN QUERY PLAN is off */
-#define AUTOEQP_on       1           /* Automatic EQP is on */
-#define AUTOEQP_trigger  2           /* On and also show plans for triggers */
-#define AUTOEQP_full     3           /* Show full EXPLAIN */
 
 /* Allowed values for ShellState.openMode
 */
@@ -5652,15 +5647,15 @@ static char *SQLITE_CDECL ascii_read_one_field(ImportCtx *p){
 ** redirected to a temporary file named by p->zTempFile.  In that case,
 ** launch start/open/xdg-open on that temporary file.
 */
-static void output_reset(ShellState *p){
-  if( p->outfile[0]=='|' ){
+void ShellState::output_reset(){
+  if( outfile[0]=='|' ){
 #ifndef SQLITE_OMIT_POPEN
-    pclose(p->out);
+    pclose(out);
 #endif
   }else{
-    output_file_close(p->out);
+    output_file_close(out);
 #ifndef SQLITE_NOHAVE_SYSTEM
-    if( p->doXdgOpen ){
+    if( doXdgOpen ){
       const char *zXdgOpenCmd =
 #if defined(_WIN32)
       "start";
@@ -5670,23 +5665,23 @@ static void output_reset(ShellState *p){
       "xdg-open";
 #endif
       char *zCmd;
-      zCmd = sqlite3_mprintf("%s %s", zXdgOpenCmd, p->zTempFile);
+      zCmd = sqlite3_mprintf("%s %s", zXdgOpenCmd, zTempFile);
       if( system(zCmd) ){
         utf8_printf(stderr, "Failed: [%s]\n", zCmd);
       }else{
         /* Give the start/open/xdg-open command some time to get
         ** going before we continue, and potential delete the
-        ** p->zTempFile data file out from under it */
+        ** zTempFile data file out from under it */
         sqlite3_sleep(2000);
       }
       sqlite3_free(zCmd);
-      p->outputModePop();
-      p->doXdgOpen = 0;
+      outputModePop();
+      doXdgOpen = 0;
     }
 #endif /* !defined(SQLITE_NOHAVE_SYSTEM) */
   }
-  p->outfile[0] = 0;
-  p->out = stdout;
+  outfile[0] = 0;
+  out = stdout;
 }
 
 static void printDatabaseError(const char *zErr) {
@@ -5834,26 +5829,26 @@ int shellDeleteFile(const char *zFilename){
 ** Try to delete the temporary file (if there is one) and free the
 ** memory used to hold the name of the temp file.
 */
-static void clearTempFile(ShellState *p){
-  if( p->zTempFile==0 ) return;
-  if( p->doXdgOpen ) return;
-  if( shellDeleteFile(p->zTempFile) ) return;
-  sqlite3_free(p->zTempFile);
-  p->zTempFile = 0;
+void ShellState::clearTempFile(){
+  if( zTempFile==0 ) return;
+  if( doXdgOpen ) return;
+  if( shellDeleteFile(zTempFile) ) return;
+  sqlite3_free(zTempFile);
+  zTempFile = 0;
 }
 
 /*
 ** Create a new temp file name with the given suffix.
 */
-static void newTempFile(ShellState *p, const char *zSuffix){
-  clearTempFile(p);
-  sqlite3_free(p->zTempFile);
-  p->zTempFile = 0;
-  if( p->db ){
-    sqlite3_file_control(p->db, 0, SQLITE_FCNTL_TEMPFILENAME, &p->zTempFile);
+void ShellState::newTempFile(const char *zSuffix){
+  clearTempFile();
+  sqlite3_free(zTempFile);
+  zTempFile = 0;
+  if( db ){
+    sqlite3_file_control(db, 0, SQLITE_FCNTL_TEMPFILENAME, &zTempFile);
   }
-  if( p->zTempFile==0 ){
-    /* If p->db is an in-memory database then the TEMPFILENAME file-control
+  if( zTempFile==0 ){
+    /* If db is an in-memory database then the TEMPFILENAME file-control
     ** will not work and we will need to fallback to guessing */
     const char *zTemp;
     sqlite3_uint64 r;
@@ -5867,11 +5862,11 @@ static void newTempFile(ShellState *p, const char *zSuffix){
       zTemp = "/tmp";
 #endif
     }
-    p->zTempFile = sqlite3_mprintf("%s/temp%llx.%s", zTemp, r, zSuffix);
+    zTempFile = sqlite3_mprintf("%s/temp%llx.%s", zTemp, r, zSuffix);
   }else{
-    p->zTempFile = sqlite3_mprintf("%z.%s", p->zTempFile, zSuffix);
+    zTempFile = sqlite3_mprintf("%z.%s", zTempFile, zSuffix);
   }
-  if( p->zTempFile==0 ){
+  if( zTempFile==0 ){
     raw_printf(stderr, "out of memory\n");
     exit(1);
   }
@@ -5920,7 +5915,7 @@ static int do_meta_command(char *zLine, ShellState *p){
   if( nArg==0 ) return 0; /* no tokens, no error */
   n = strlen30(azArg[0]);
   c = azArg[0][0];
-  clearTempFile(p);
+  p->clearTempFile();
 
   if( (c=='b' && n>=3 && strncmp(azArg[0], "backup", n)==0)
    || (c=='s' && n>=3 && strncmp(azArg[0], "save", n)==0)
@@ -6053,7 +6048,7 @@ static int do_meta_command(char *zLine, ShellState *p){
   */
   if( c=='c' && n>=3 && strncmp(azArg[0], "check", n)==0 ){
     char *zRes = 0;
-    output_reset(p);
+    p->output_reset();
     if( nArg!=2 ){
       raw_printf(stderr, "Usage: .check GLOB-PATTERN\n");
       rc = 2;
@@ -7169,21 +7164,21 @@ static int do_meta_command(char *zLine, ShellState *p){
     }else{
       p->outCount = 0;
     }
-    output_reset(p);
+    p->output_reset();
 #ifndef SQLITE_NOHAVE_SYSTEM
     if( eMode=='e' || eMode=='x' ){
       p->doXdgOpen = 1;
       p->outputModePush();
       if( eMode=='x' ){
         /* spreadsheet mode.  Output as CSV. */
-        newTempFile(p, "csv");
+        p->newTempFile("csv");
         p->ShellClearFlag(SHFLG_Echo);
         p->mode = MODE_Csv;
         sqlite3_snprintf(sizeof(p->colSeparator), p->colSeparator, SEP_Comma);
         sqlite3_snprintf(sizeof(p->rowSeparator), p->rowSeparator, SEP_CrLf);
       }else{
         /* text editor mode */
-        newTempFile(p, "txt");
+        p->newTempFile("txt");
         bTxtMode = 1;
       }
       zFile = p->zTempFile;
@@ -7746,7 +7741,7 @@ static int do_meta_command(char *zLine, ShellState *p){
 
   /* Begin redirecting output to the file "testcase-out.txt" */
   if( c=='t' && strcmp(azArg[0],"testcase")==0 ){
-    output_reset(p);
+    p->output_reset();
     p->out = output_file_open("testcase-out.txt", 0);
     if( p->out==0 ){
       raw_printf(stderr, "Error: cannot open 'testcase-out.txt'\n");
@@ -8178,7 +8173,7 @@ static int do_meta_command(char *zLine, ShellState *p){
 meta_command_exit:
   if( p->outCount ){
     p->outCount--;
-    if( p->outCount==0 ) output_reset(p);
+    if( p->outCount==0 ) p->output_reset();
   }
   return rc;
 }
@@ -8386,10 +8381,10 @@ static int process_input(ShellState *p){
       errCnt += runOneSqlLine(p, zSql, p->in, startline);
       nSql = 0;
       if( p->outCount ){
-        output_reset(p);
+        p->output_reset();
         p->outCount = 0;
       }else{
-        clearTempFile(p);
+        p->clearTempFile();
       }
     }else if( nSql && _all_whitespace(zSql) ){
       if( p->ShellHasFlag(SHFLG_Echo) ) printf("%s\n", zSql);
@@ -9166,9 +9161,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
   }
   sqlite3_free(data.zFreeOnClose);
   find_home_dir(1);
-  output_reset(&data);
+  data.output_reset();
   data.doXdgOpen = 0;
-  clearTempFile(&data);
+  data.clearTempFile();
 #if !SQLITE_SHELL_IS_UTF8
   for(i=0; i<argcToFree; i++) free(argvToFree[i]);
   free(argvToFree);
