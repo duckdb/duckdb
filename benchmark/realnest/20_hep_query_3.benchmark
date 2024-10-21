@@ -1,0 +1,34 @@
+# name: benchmark/realnest/20_hep_query_3.benchmark
+# description: Q3 - Plot the momentum of jets with |𝜂| < 1 (jet pseudorapidity).
+# group: [realnest]
+
+name 20_hep_query_3
+group real_nest
+
+require json
+
+require httpfs
+
+cache real_nest.duckdb
+
+load benchmark/realnest/load.sql
+
+run
+SELECT
+  FLOOR((
+    CASE
+      WHEN j.pt < 15 THEN 14.99
+      WHEN j.pt > 60 THEN 60.01
+      ELSE j.pt
+    END - 0.15) / 0.45) * 0.45 + 0.375 AS x,
+  COUNT(*) AS y
+FROM run2012B_singleMu
+CROSS JOIN UNNEST(Jet) AS _j(j)
+WHERE abs(j.eta) < 1
+GROUP BY FLOOR((
+    CASE
+      WHEN j.pt < 15 THEN 14.99
+      WHEN j.pt > 60 THEN 60.01
+      ELSE j.pt
+    END - 0.15) / 0.45) * 0.45 + 0.375
+ORDER BY x;
