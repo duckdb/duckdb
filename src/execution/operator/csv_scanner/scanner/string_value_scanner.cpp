@@ -819,8 +819,13 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 		if (result.quoted) {
 			AddQuotedValue(result, buffer_pos);
 		} else {
-			result.AddValueToVector(result.buffer_ptr + result.last_position.buffer_pos,
-			                        buffer_pos - result.last_position.buffer_pos);
+			char* value_ptr = result.buffer_ptr + result.last_position.buffer_pos;
+			idx_t size = buffer_pos - result.last_position.buffer_pos;
+			if (result.escaped) {
+				AddPossiblyEscapedValue(result, buffer_pos, value_ptr, size, size == 0);
+			} else {
+				result.AddValueToVector(value_ptr, size);
+			}
 		}
 		if (result.state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
 			if (result.states.states[1] == CSVState::RECORD_SEPARATOR) {
@@ -1290,6 +1295,11 @@ void StringValueScanner::ProcessOverbufferValue() {
 			}
 		} else {
 			value = string_t(overbuffer_string.c_str(), UnsafeNumericCast<uint32_t>(overbuffer_string.size()));
+			if (result.escaped) {
+				value = RemoveEscape(overbuffer_string.c_str(), overbuffer_string.size(),
+				                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
+				                     result.parse_chunk.data[result.chunk_col_id]);
+			}
 		}
 		if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
 			result.EmptyLine(result, iterator.pos.buffer_pos);
