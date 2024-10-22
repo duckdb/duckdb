@@ -4619,7 +4619,6 @@ int ShellState::do_meta_command(char *zLine){
     ShellState data;
     char *zErrMsg = 0;
     open_db(0);
-    memcpy(&data, this, sizeof(data));
     data.showHeader = 0;
     data.cMode = data.mode = RenderMode::LIST;
   	data.colSeparator = ": ";
@@ -5626,7 +5625,6 @@ int ShellState::do_meta_command(char *zLine){
     int ii;
 
     open_db(0);
-    memcpy(&data, this, sizeof(data));
     data.showHeader = 0;
     data.cMode = data.mode = RenderMode::SEMI;
     for(ii=1; ii<nArg; ii++){
