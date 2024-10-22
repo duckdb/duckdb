@@ -424,6 +424,64 @@ public:
 	}
 };
 
+class ModeTclRenderer : public RowRenderer {
+public:
+	explicit ModeTclRenderer(ShellState &state) : RowRenderer(state) {}
+
+	void RenderHeader(RowResult &result) override {
+		if (!state.showHeader) {
+			return;
+		}
+		auto &col_names = result.column_names;
+		for(idx_t i=0; i<col_names.size(); i++){
+			if (i > 0) {
+				state.Print(state.colSeparator);
+			}
+			state.output_c_string(col_names[i] ? col_names[i] : "");
+		}
+		state.Print(state.rowSeparator);
+	}
+
+	void RenderRow(RowResult &result) override {
+		auto &data = result.data;
+		for(idx_t i=0; i<data.size(); i++){
+			if (i > 0) {
+				state.Print(state.colSeparator);
+			}
+			state.output_c_string(data[i] ? data[i] : state.nullValue);
+		}
+		state.Print(state.rowSeparator);
+	}
+};
+
+class ModeCsvRenderer : public RowRenderer {
+public:
+	explicit ModeCsvRenderer(ShellState &state) : RowRenderer(state) {}
+
+	void Render(RowResult &result) override {
+		state.SetBinaryMode();
+		RowRenderer::Render(result);
+		state.SetTextMode();
+	}
+	void RenderHeader(RowResult &result) override {
+		if (!state.showHeader) {
+			return;
+		}
+		auto &col_names = result.column_names;
+		for(idx_t i=0; i<col_names.size(); i++){
+			state.output_csv(col_names[i] ? col_names[i] : "", i<col_names.size()-1);
+		}
+		state.Print(state.rowSeparator);
+	}
+
+	void RenderRow(RowResult &result) override {
+		auto &data = result.data;
+		for(idx_t i=0; i<data.size(); i++){
+			state.output_csv(data[i], i<data.size()-1);
+		}
+		state.Print(state.rowSeparator);
+	}
+};
 
 unique_ptr<RowRenderer> ShellState::GetRowRenderer() {
 	switch(cMode) {
@@ -435,6 +493,10 @@ unique_ptr<RowRenderer> ShellState::GetRowRenderer() {
 		return unique_ptr<RowRenderer>(new ModeListRenderer(*this));
 	case RenderMode::HTML:
 		return unique_ptr<RowRenderer>(new ModeHtmlRenderer(*this));
+	case RenderMode::TCL:
+		return unique_ptr<RowRenderer>(new ModeTclRenderer(*this));
+	case RenderMode::CSV:
+		return unique_ptr<RowRenderer>(new ModeCsvRenderer(*this));
 	case RenderMode::TRASH:
 		// no renderer
 		return nullptr;

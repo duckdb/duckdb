@@ -113,10 +113,13 @@ public:
 	void output_csv(const char *z, int bSep);
 	void print_row_separator(int nArg, const char *zSep, const vector<int> &actualWidth);
 	void print_markdown_separator(int nArg, const char *zSep, const vector<int> &colTypes, const vector<int> &actualWidth);
+	void output_c_string(const char *z);
 	void print_dashes(int N);
 	void utf8_width_print(FILE *pOut, int w, const string &str);
 	int strlenChar(const char *z);
 	int strlenChar(const string &str);
+	void SetBinaryMode();
+	void SetTextMode();
 	static int StringLength(const char *z);
 	void set_table_name(const char *zName);
 	int run_table_dump_query(const char *zSelect);

@@ -2654,32 +2654,32 @@ static void output_quoted_escaped_string(FILE *out, const char *z){
 /*
 ** Output the given string as a quoted according to C or TCL quoting rules.
 */
-static void output_c_string(FILE *out, const char *z){
-  unsigned int c;
-  fputc('"', out);
-  while( (c = *(z++))!=0 ){
-    if( c=='\\' ){
-      fputc(c, out);
-      fputc(c, out);
-    }else if( c=='"' ){
-      fputc('\\', out);
-      fputc('"', out);
-    }else if( c=='\t' ){
-      fputc('\\', out);
-      fputc('t', out);
-    }else if( c=='\n' ){
-      fputc('\\', out);
-      fputc('n', out);
-    }else if( c=='\r' ){
-      fputc('\\', out);
-      fputc('r', out);
-    }else if( !isprint(c&0xff) ){
-      raw_printf(out, "\\%03o", c&0xff);
-    }else{
-      fputc(c, out);
-    }
-  }
-  fputc('"', out);
+void ShellState::output_c_string(const char *z){
+	unsigned int c;
+	fputc('"', out);
+	while( (c = *(z++))!=0 ){
+		if( c=='\\' ){
+			fputc(c, out);
+			fputc(c, out);
+		}else if( c=='"' ){
+			fputc('\\', out);
+			fputc('"', out);
+		}else if( c=='\t' ){
+			fputc('\\', out);
+			fputc('t', out);
+		}else if( c=='\n' ){
+			fputc('\\', out);
+			fputc('n', out);
+		}else if( c=='\r' ){
+			fputc('\\', out);
+			fputc('r', out);
+		}else if( !isprint(c&0xff) ){
+			raw_printf(out, "\\%03o", c&0xff);
+		}else{
+			fputc(c, out);
+		}
+	}
+	fputc('"', out);
 }
 
 /*
@@ -2746,9 +2746,8 @@ static const char needCsvQuote[] = {
 ** is only issued if bSep is true.
 */
 void ShellState::output_csv(const char *z, int bSep){
-  FILE *out = this->out;
-  if( z==0 ){
-    utf8_printf(out,"%s",nullValue);
+  if(!z){
+    Print(nullValue);
   }else{
     int i;
     int nSep = strlen30(colSeparator);
@@ -2762,14 +2761,14 @@ void ShellState::output_csv(const char *z, int bSep){
     }
     if( i==0 ){
       char *zQuoted = sqlite3_mprintf("\"%w\"", z);
-      utf8_printf(out, "%s", zQuoted);
+      Print(zQuoted);
       sqlite3_free(zQuoted);
     }else{
-      utf8_printf(out, "%s", z);
+      Print(z);
     }
   }
   if( bSep ){
-    utf8_printf(out, "%s", colSeparator);
+    Print(colSeparator);
   }
 }
 
@@ -2912,6 +2911,13 @@ void ShellState::print_markdown_separator(
 	Print("\n");
 }
 
+void ShellState::SetBinaryMode() {
+   setBinaryMode(out, 1);
+}
+
+void ShellState::SetTextMode() {
+   setTextMode(out, 1);
+}
 /*
 ** This is the callback routine that the shell
 ** invokes for each row of a query result.
@@ -2995,36 +3001,6 @@ int ShellState::shell_callback(
       }
       printSchemaLine(out, z, ";\n");
       sqlite3_free(z);
-      break;
-    }
-    case RenderMode::TCL: {
-      if( cnt++==0 && showHeader ){
-        for(idx_t i=0; i<col_names.size(); i++){
-          output_c_string(out,col_names[i] ? col_names[i] : "");
-          if(i<col_names.size()-1) utf8_printf(out, "%s", colSeparator);
-        }
-        utf8_printf(out, "%s", rowSeparator);
-      }
-      for(idx_t i=0; i<data.size(); i++){
-        output_c_string(out, data[i] ? data[i] : nullValue);
-        if(i<data.size()-1) utf8_printf(out, "%s", colSeparator);
-      }
-      utf8_printf(out, "%s", rowSeparator);
-      break;
-    }
-    case RenderMode::CSV: {
-      setBinaryMode(out, 1);
-      if( cnt++==0 && showHeader ){
-        for(idx_t i=0; i<col_names.size(); i++){
-          output_csv(col_names[i] ? col_names[i] : "", i<col_names.size()-1);
-        }
-        utf8_printf(out, "%s", rowSeparator);
-      }
-      for(idx_t i=0; i<data.size(); i++){
-        output_csv(data[i], i<data.size()-1);
-      }
-      utf8_printf(out, "%s", rowSeparator);
-      setTextMode(out, 1);
       break;
     }
     case RenderMode::INSERT: {
@@ -5584,10 +5560,10 @@ int ShellState::do_meta_command(char *zLine){
       zSep[1] = 0;
       zSep[0] = sCtx.cColSep;
       utf8_printf(out, "Column separator ");
-      output_c_string(out, zSep);
+      output_c_string(zSep);
       utf8_printf(out, ", row separator ");
       zSep[0] = sCtx.cRowSep;
-      output_c_string(out, zSep);
+      output_c_string(zSep);
       utf8_printf(out, "\n");
     }
     while( (nSkip--)>0 ){
@@ -6423,15 +6399,15 @@ int ShellState::do_meta_command(char *zLine){
     utf8_printf(out,"%12.12s: %s\n","headers", azBool[showHeader!=0]);
     utf8_printf(out, "%12.12s: %s\n","mode", modeDescr[int(mode)]);
     utf8_printf(out, "%12.12s: ", "nullvalue");
-      output_c_string(out, nullValue);
+      output_c_string(nullValue);
       raw_printf(out, "\n");
     utf8_printf(out,"%12.12s: %s\n","output",
             strlen30(outfile) ? outfile : "stdout");
     utf8_printf(out,"%12.12s: ", "colseparator");
-      output_c_string(out, colSeparator);
+      output_c_string(colSeparator);
       raw_printf(out, "\n");
     utf8_printf(out,"%12.12s: ", "rowseparator");
-      output_c_string(out, rowSeparator);
+      output_c_string(rowSeparator);
       raw_printf(out, "\n");
     utf8_printf(out, "%12.12s: ", "width");
     for (auto w : colWidth) {
