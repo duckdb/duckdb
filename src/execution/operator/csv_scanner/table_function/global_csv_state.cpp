@@ -33,7 +33,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 	scanner_idx = 0;
 	running_threads = MaxThreads();
 	current_boundary = file_scans.back()->start_iterator;
-	current_boundary.SetCurrentBoundaryToPosition(single_threaded);
+	current_boundary.SetCurrentBoundaryToPosition(single_threaded, options.buffer_size.GetValue());
 	if (current_boundary.done && context.client_data->debug_set_max_line_length) {
 		context.client_data->debug_max_line_length = current_boundary.pos.buffer_pos;
 	}
@@ -108,7 +108,8 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 				file_scans.emplace_back(std::move(file_scan));
 				auto current_file = file_scans.back();
 				current_boundary = current_file->start_iterator;
-				current_boundary.SetCurrentBoundaryToPosition(single_threaded);
+				current_boundary.SetCurrentBoundaryToPosition(single_threaded,
+				                                              bind_data.options.buffer_size.GetValue());
 				current_buffer_in_use = make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager,
 				                                                        current_boundary.GetBufferIdx());
 				if (previous_scanner) {
@@ -157,7 +158,8 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 				                                                     column_ids, file_schema, false));
 				// And re-start the boundary-iterator
 				current_boundary = file_scans.back()->start_iterator;
-				current_boundary.SetCurrentBoundaryToPosition(single_threaded);
+				current_boundary.SetCurrentBoundaryToPosition(single_threaded,
+				                                              bind_data.options.buffer_size.GetValue());
 				current_buffer_in_use = make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager,
 				                                                        current_boundary.GetBufferIdx());
 			} else {

@@ -85,7 +85,8 @@ struct CSVReaderOptions {
 	//===--------------------------------------------------------------------===//
 	//! Maximum CSV line size: specified because if we reach this amount, we likely have wrong delimiters (default: 2MB)
 	//! note that this is the guaranteed line length that will succeed, longer lines may be accepted if slightly above
-	CSVOption<idx_t> maximum_line_size = 2097152;
+	static constexpr idx_t max_line_size_default = 2097152;
+	CSVOption<idx_t> maximum_line_size = max_line_size_default;
 	//! Whether or not header names shall be normalized
 	bool normalize_names = false;
 	//! True, if column with that index must skip null check
@@ -105,7 +106,7 @@ struct CSVReaderOptions {
 	//! Multi-file reader options
 	MultiFileReaderOptions file_options;
 	//! Buffer Size (Parallel Scan)
-	CSVOption<idx_t> buffer_size = CSVBuffer::ROWS_PER_BUFFER * maximum_line_size.GetValue();
+	CSVOption<idx_t> buffer_size = CSVBuffer::ROWS_PER_BUFFER * max_line_size_default;
 	//! Decimal separator when reading as numeric
 	string decimal_separator = ".";
 	//! Whether  to pad rows that do not have enough columns with NULL values

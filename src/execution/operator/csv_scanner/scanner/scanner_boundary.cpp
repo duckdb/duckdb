@@ -37,7 +37,7 @@ bool CSVIterator::Next(CSVBufferManager &buffer_manager) {
 	if (!is_set) {
 		return false;
 	}
-	idx_t bytes_per_thread = buffer_manager.GetBufferSize() / ROWS_PER_THREAD;
+	idx_t bytes_per_thread = buffer_manager.GetBufferSize() / CSVBuffer::ROWS_PER_BUFFER * ROWS_PER_THREAD;
 	// If we are calling next this is not the first one anymore
 	first_one = false;
 	boundary.boundary_idx++;
@@ -86,12 +86,12 @@ void CSVIterator::SetCurrentPositionToBoundary() {
 	pos.buffer_pos = boundary.buffer_pos;
 }
 
-void CSVIterator::SetCurrentBoundaryToPosition(bool single_threaded) {
+void CSVIterator::SetCurrentBoundaryToPosition(bool single_threaded, idx_t buffer_size) {
 	if (single_threaded) {
 		is_set = false;
 		return;
 	}
-	idx_t bytes_per_thread = buffer_size / ROWS_PER_THREAD;
+	idx_t bytes_per_thread = buffer_size / CSVBuffer::ROWS_PER_BUFFER * ROWS_PER_THREAD;
 
 	boundary.buffer_idx = pos.buffer_idx;
 	if (pos.buffer_pos == 0) {
