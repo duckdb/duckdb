@@ -31,6 +31,12 @@ overrides = {
         "NULLS_FIRST": ["NULLS_FIRST", "NULLS FIRST"],
         "NULLS_LAST": ["NULLS_LAST", "NULLS LAST"],
     },
+    "CheckpointAbort": {
+        "NO_ABORT": "NONE",
+        "DEBUG_ABORT_BEFORE_TRUNCATE": "BEFORE_TRUNCATE",
+        "DEBUG_ABORT_BEFORE_HEADER": "BEFORE_HEADER",
+        "DEBUG_ABORT_AFTER_FREE_LIST_WRITE": "AFTER_FREE_LIST_WRITE",
+    },
     "SampleMethod": {"SYSTEM_SAMPLE": "System", "BERNOULLI_SAMPLE": "Bernoulli", "RESERVOIR_SAMPLE": "Reservoir"},
     "TableReferenceType": {"EMPTY_FROM": "EMPTY"},
 }

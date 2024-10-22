@@ -1,7 +1,7 @@
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_buffer_manager.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -50,6 +50,7 @@ static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFuncti
 		input.named_parameters.erase("auto_detect");
 	}
 	result->options.FromNamedParameters(input.named_parameters, context);
+	result->options.Verify();
 	// We want to return the whole CSV Configuration
 	// 1. Delimiter
 	return_types.emplace_back(LogicalType::VARCHAR);

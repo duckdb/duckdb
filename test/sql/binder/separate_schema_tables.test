@@ -1,0 +1,163 @@
+# name: test/sql/binder/separate_schema_tables.test
+# description: Test tables in different schemas with the same name
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE SCHEMA IF NOT EXISTS s1;
+
+statement ok
+CREATE SCHEMA IF NOT EXISTS s2;
+
+statement ok
+CREATE SCHEMA IF NOT EXISTS s3;
+
+statement ok
+CREATE TABLE s1.tbl(i INT);
+
+statement ok
+CREATE TABLE s2.tbl(i INT);
+
+statement ok
+CREATE TABLE s3.tbl(i INT);
+
+statement ok
+CREATE TABLE tbl(i INT);
+
+statement ok
+INSERT INTO s1.tbl VALUES (10);
+
+statement ok
+INSERT INTO s2.tbl VALUES (100);
+
+statement ok
+INSERT INTO s3.tbl VALUES (1000);
+
+statement ok
+INSERT INTO tbl VALUES (1);
+
+query III
+SELECT * FROM tbl, s1.tbl, s2.tbl
+----
+1	10	100
+
+query IIII
+SELECT * FROM tbl, s1.tbl, s2.tbl, s3.tbl
+----
+1	10	100	1000
+
+statement error
+SELECT tbl.i FROM s1.tbl, s2.tbl
+----
+s1.tbl or s2.tbl
+
+statement error
+SELECT tbl.i FROM s1.tbl, s2.tbl, s3.tbl
+----
+s1.tbl, s2.tbl or s3.tbl
+
+# struct pack
+query III
+SELECT s1.tbl, s2.tbl, s3.tbl FROM s1.tbl, s2.tbl, s3.tbl
+----
+{'i': 10}	{'i': 100}	{'i': 1000}
+
+# test joins
+statement ok
+CREATE TABLE s1.t AS SELECT 1 id, 's1.t' payload UNION ALL SELECT 10 id, 'AAA' payload
+
+statement ok
+CREATE TABLE s2.t AS SELECT 1 id, 's2.t' payload2 UNION ALL SELECT 100 id, 'BBB' payload2
+
+statement ok
+CREATE TABLE s3.t AS SELECT 1 id, 's3.t' payload3 UNION ALL SELECT 1000 id, 'CCC' payload3
+
+# USING
+query IIII
+SELECT * FROM s1.t JOIN s2.t USING (id) JOIN s3.t USING (id)
+----
+1	s1.t	s2.t	s3.t
+
+# explicit column reference to using column
+query I
+SELECT id FROM s1.t JOIN s2.t USING (id) JOIN s3.t USING (id)
+----
+1
+
+# natural join
+query IIII
+SELECT * FROM s1.t NATURAL JOIN s2.t NATURAL JOIN s3.t
+----
+1	s1.t	s2.t	s3.t
+
+# left join
+query IIIIIII
+SELECT id, s1.t.id, s2.t.id, s3.t.id, s1.t.payload, s2.t.payload2, s3.t.payload3
+FROM s1.t LEFT JOIN s2.t USING (id) LEFT JOIN s3.t USING (id)
+ORDER BY ALL
+----
+1	1	1	1	s1.t	s2.t	s3.t
+10	10	NULL	NULL	AAA	NULL	NULL
+
+# right join
+query IIIIIII
+SELECT id, s1.t.id, s2.t.id, s3.t.id, s1.t.payload, s2.t.payload2, s3.t.payload3
+FROM s1.t RIGHT JOIN s2.t USING (id) RIGHT JOIN s3.t USING (id)
+ORDER BY ALL
+----
+1	1	1	1	s1.t	s2.t	s3.t
+1000	NULL	NULL	1000	NULL	NULL	CCC
+
+# full outer join
+query IIIIIII
+SELECT id, s1.t.id, s2.t.id, s3.t.id, s1.t.payload, s2.t.payload2, s3.t.payload3
+FROM s1.t FULL OUTER JOIN s2.t USING (id) FULL OUTER JOIN s3.t USING (id)
+ORDER BY ALL
+----
+1	1	1	1	s1.t	s2.t	s3.t
+10	10	NULL	NULL	AAA	NULL	NULL
+100	NULL	100	NULL	NULL	BBB	NULL
+1000	NULL	NULL	1000	NULL	NULL	CCC
+
+
+# now do the same with identifiers that differ in case only
+statement ok
+CREATE OR REPLACE TABLE s1.tbl(col INT);
+
+statement ok
+CREATE OR REPLACE TABLE s2.TBL(COL INT);
+
+statement ok
+CREATE OR REPLACE TABLE s3.Tbl(Col INT);
+
+statement ok
+INSERT INTO s1.tbl VALUES (10);
+
+statement ok
+INSERT INTO s2.tbl VALUES (100);
+
+statement ok
+INSERT INTO s3.tbl VALUES (1000);
+
+query IIII
+SELECT * FROM tbl, s1.tbl, s2.tbl, s3.tbl
+----
+1	10	100	1000
+
+statement error
+SELECT tbl.col FROM s1.tbl, s2.tbl
+----
+s1.tbl or s2.TBL
+
+statement error
+SELECT tbl.col FROM s1.tbl, s2.tbl, s3.tbl
+----
+s1.tbl, s2.TBL or s3.Tbl
+
+# struct pack
+query III
+SELECT s1.tbl, s2.tbl, s3.tbl FROM s1.tbl, s2.tbl, s3.tbl
+----
+{'col': 10}	{'COL': 100}	{'Col': 1000}

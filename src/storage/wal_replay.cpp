@@ -597,7 +597,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 
 	// create a binder to bind the parsed expressions
 	vector<column_t> column_ids;
-	binder->bind_context.AddBaseTable(0, info.table, column_names, column_types, column_ids, &table);
+	binder->bind_context.AddBaseTable(0, string(), column_names, column_types, column_ids, table);
 	IndexBinder idx_binder(*binder, context);
 
 	// bind the parsed expressions to create unbound expressions
@@ -699,7 +699,7 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 	}
 	auto &storage = state.current_table->GetStorage();
 	auto &table_info = storage.GetDataTableInfo();
-	RowGroupCollection new_row_groups(table_info, block_manager, storage.GetTypes(), 0);
+	RowGroupCollection new_row_groups(table_info, table_info->GetIOManager(), storage.GetTypes(), 0);
 	new_row_groups.Initialize(data);
 	TableIndexList index_list;
 	storage.MergeStorage(new_row_groups, index_list, nullptr);

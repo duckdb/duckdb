@@ -4,6 +4,7 @@ from typing import (
     Any,
     Callable,
     List,
+    Dict,
     Optional,
     Tuple,
     Union,
@@ -30,7 +31,7 @@ if TYPE_CHECKING:
     from .session import SparkSession
 
 from ..errors import PySparkValueError
-from .functions import _to_column_expr, col
+from .functions import _to_column_expr, col, lit
 
 
 class DataFrame:
@@ -112,6 +113,154 @@ class DataFrame:
             cols.append(col.expr.alias(columnName))
         rel = self.relation.select(*cols)
         return DataFrame(rel, self.session)
+
+    def withColumns(self, *colsMap: Dict[str, Column]) -> "DataFrame":
+        """
+        Returns a new :class:`DataFrame` by adding multiple columns or replacing the
+        existing columns that have the same names.
+
+        The colsMap is a map of column name and column, the column must only refer to attributes
+        supplied by this Dataset. It is an error to add columns that refer to some other Dataset.
+
+        .. versionadded:: 3.3.0
+           Added support for multiple columns adding
+
+        .. versionchanged:: 3.4.0
+            Supports Spark Connect.
+
+        Parameters
+        ----------
+        colsMap : dict
+            a dict of column name and :class:`Column`. Currently, only a single map is supported.
+
+        Returns
+        -------
+        :class:`DataFrame`
+            DataFrame with new or replaced columns.
+
+        Examples
+        --------
+        >>> df = spark.createDataFrame([(2, "Alice"), (5, "Bob")], schema=["age", "name"])
+        >>> df.withColumns({'age2': df.age + 2, 'age3': df.age + 3}).show()
+        +---+-----+----+----+
+        |age| name|age2|age3|
+        +---+-----+----+----+
+        |  2|Alice|   4|   5|
+        |  5|  Bob|   7|   8|
+        +---+-----+----+----+
+        """
+        # Below code is to help enable kwargs in future.
+        assert len(colsMap) == 1
+        colsMap = colsMap[0]  # type: ignore[assignment]
+
+        if not isinstance(colsMap, dict):
+            raise PySparkTypeError(
+                error_class="NOT_DICT",
+                message_parameters={
+                    "arg_name": "colsMap",
+                    "arg_type": type(colsMap).__name__,
+                },
+            )
+
+        column_names = list(colsMap.keys())
+        columns = list(colsMap.values())
+
+        # Compute this only once
+        column_names_for_comparison = [x.casefold() for x in column_names]
+
+        cols = []
+        for x in self.relation.columns:
+            if x.casefold() in column_names_for_comparison:
+                idx = column_names_for_comparison.index(x)
+                # We extract the column name from the originally passed
+                # in ones, as the casing might be different than the one
+                # in the relation
+                col_name = column_names.pop(idx)
+                col = columns.pop(idx)
+                cols.append(col.expr.alias(col_name))
+            else:
+                cols.append(ColumnExpression(x))
+
+        # In case anything is remaining, these are new columns
+        # that we need to add to the DataFrame
+        for col_name, col in zip(column_names, columns):
+            cols.append(col.expr.alias(col_name))
+
+        rel = self.relation.select(*cols)
+        return DataFrame(rel, self.session)
+
+    def withColumnsRenamed(self, colsMap: Dict[str, str]) -> "DataFrame":
+        """
+        Returns a new :class:`DataFrame` by renaming multiple columns.
+        This is a no-op if the schema doesn't contain the given column names.
+
+        .. versionadded:: 3.4.0
+           Added support for multiple columns renaming
+
+        Parameters
+        ----------
+        colsMap : dict
+            a dict of existing column names and corresponding desired column names.
+            Currently, only a single map is supported.
+
+        Returns
+        -------
+        :class:`DataFrame`
+            DataFrame with renamed columns.
+
+        See Also
+        --------
+        :meth:`withColumnRenamed`
+
+        Notes
+        -----
+        Support Spark Connect
+
+        Examples
+        --------
+        >>> df = spark.createDataFrame([(2, "Alice"), (5, "Bob")], schema=["age", "name"])
+        >>> df = df.withColumns({'age2': df.age + 2, 'age3': df.age + 3})
+        >>> df.withColumnsRenamed({'age2': 'age4', 'age3': 'age5'}).show()
+        +---+-----+----+----+
+        |age| name|age4|age5|
+        +---+-----+----+----+
+        |  2|Alice|   4|   5|
+        |  5|  Bob|   7|   8|
+        +---+-----+----+----+
+        """
+        if not isinstance(colsMap, dict):
+            raise PySparkTypeError(
+                error_class="NOT_DICT",
+                message_parameters={"arg_name": "colsMap", "arg_type": type(colsMap).__name__},
+            )
+
+        unknown_columns = set(colsMap.keys()) - set(self.relation.columns)
+        if unknown_columns:
+            raise ValueError(
+                f"DataFrame does not contain column(s): {', '.join(unknown_columns)}"
+            )
+
+        # Compute this only once
+        old_column_names = list(colsMap.keys())
+        old_column_names_for_comparison = [x.casefold() for x in old_column_names]
+
+        cols = []
+        for x in self.relation.columns:
+            col = ColumnExpression(x)
+            if x.casefold() in old_column_names_for_comparison:
+                idx = old_column_names.index(x)
+                # We extract the column name from the originally passed
+                # in ones, as the casing might be different than the one
+                # in the relation
+                col_name = old_column_names.pop(idx)
+                new_col_name = colsMap[col_name]
+                col = col.alias(new_col_name)
+            cols.append(col)
+
+        rel = self.relation.select(*cols)
+        return DataFrame(rel, self.session)
+
+
 
     def transform(
         self, func: Callable[..., "DataFrame"], *args: Any, **kwargs: Any
@@ -302,7 +451,7 @@ class DataFrame:
                 error_class="NOT_BOOL_OR_LIST",
                 message_parameters={"arg_name": "ascending", "arg_type": type(ascending).__name__},
             )
-       
+
         columns = [_to_column_expr(c) for c in columns]
         rel = self.relation.sort(*columns)
         return DataFrame(rel, self.session)
@@ -553,6 +702,45 @@ class DataFrame:
             result = self.relation.join(other.relation, on, how)
         return DataFrame(result, self.session)
 
+    def crossJoin(self, other: "DataFrame") -> "DataFrame":
+        """Returns the cartesian product with another :class:`DataFrame`.
+
+        .. versionadded:: 2.1.0
+
+        .. versionchanged:: 3.4.0
+            Supports Spark Connect.
+
+        Parameters
+        ----------
+        other : :class:`DataFrame`
+            Right side of the cartesian product.
+
+        Returns
+        -------
+        :class:`DataFrame`
+            Joined DataFrame.
+
+        Examples
+        --------
+        >>> from pyspark.sql import Row
+        >>> df = spark.createDataFrame(
+        ...     [(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
+        >>> df2 = spark.createDataFrame(
+        ...     [Row(height=80, name="Tom"), Row(height=85, name="Bob")])
+        >>> df.crossJoin(df2.select("height")).select("age", "name", "height").show()
+        +---+-----+------+
+        |age| name|height|
+        +---+-----+------+
+        | 14|  Tom|    80|
+        | 14|  Tom|    85|
+        | 23|Alice|    80|
+        | 23|Alice|    85|
+        | 16|  Bob|    80|
+        | 16|  Bob|    85|
+        +---+-----+------+
+        """
+        return DataFrame(self.relation.cross(other.relation), self.session)
+
     def alias(self, alias: str) -> "DataFrame":
         """Returns a new :class:`DataFrame` with an alias set.
 
@@ -588,19 +776,17 @@ class DataFrame:
         return DataFrame(self.relation.set_alias(alias), self.session)
 
     def drop(self, *cols: "ColumnOrName") -> "DataFrame":  # type: ignore[misc]
-        if len(cols) == 1:
-            col = cols[0]
+        exclude = []
+        for col in cols:
             if isinstance(col, str):
-                exclude = [col]
+                exclude.append(col)
             elif isinstance(col, Column):
-                exclude = [col.expr]
+                exclude.append(col.expr.get_name())
             else:
-                raise TypeError("col should be a string or a Column")
-        else:
-            for col in cols:
-                if not isinstance(col, str):
-                    raise TypeError("each col in the param list should be a string")
-            exclude = list(cols)
+                raise PySparkTypeError(
+                    error_class="NOT_COLUMN_OR_STR",
+                    message_parameters={"arg_name": "col", "arg_type": type(col).__name__},
+                )           
         # Filter out the columns that don't exist in the relation
         exclude = [x for x in exclude if x in self.relation.columns]
         expr = StarExpression(exclude=exclude)
@@ -901,11 +1087,18 @@ class DataFrame:
         |NULL|   4|   5|   6|
         +----+----+----+----+
         """
-        if not allowMissingColumns:
-            raise ContributionsAcceptedError
-        raise NotImplementedError
-        # The relational API does not have support for 'union_by_name' yet
-        # return DataFrame(self.relation.union_by_name(other.relation, allowMissingColumns), self.session)
+        if allowMissingColumns:
+            cols = []
+            for col in self.relation.columns:
+                if col in other.relation.columns:
+                    cols.append(col)
+                else:
+                    cols.append(lit(None))
+            other = other.select(*cols)
+        else:
+            other = other.select(*self.relation.columns)
+
+        return DataFrame(self.relation.union(other.relation), self.session)
 
     def dropDuplicates(self, subset: Optional[List[str]] = None) -> "DataFrame":
         """Return a new :class:`DataFrame` with duplicate rows removed,

@@ -52,7 +52,7 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalTyp
 					for (auto &type : new_column_types) {
 						logical_get.returned_types[type.first] = type.second;
 					}
-					return op;
+					return std::move(op->children[0]);
 				}
 			}
 		}

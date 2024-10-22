@@ -236,8 +236,10 @@ idx_t ExpressionExecutor::Select(const Expression &expr, ExpressionState *state,
 	D_ASSERT(true_sel || false_sel);
 	D_ASSERT(expr.return_type.id() == LogicalTypeId::BOOLEAN);
 	switch (expr.expression_class) {
+#ifndef DUCKDB_SMALLER_BINARY
 	case ExpressionClass::BOUND_BETWEEN:
 		return Select(expr.Cast<BoundBetweenExpression>(), state, sel, count, true_sel, false_sel);
+#endif
 	case ExpressionClass::BOUND_COMPARISON:
 		return Select(expr.Cast<BoundComparisonExpression>(), state, sel, count, true_sel, false_sel);
 	case ExpressionClass::BOUND_CONJUNCTION:

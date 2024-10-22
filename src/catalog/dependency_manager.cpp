@@ -485,6 +485,54 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 	}
 }
 
+void DependencyManager::ReorderEntries(catalog_entry_vector_t &entries, ClientContext &context) {
+	auto transaction = catalog.GetCatalogTransaction(context);
+	// Read all the entries visible to this snapshot
+	ReorderEntries(entries, transaction);
+}
+
+void DependencyManager::ReorderEntries(catalog_entry_vector_t &entries) {
+	// Read all committed entries
+	CatalogTransaction transaction(catalog.GetDatabase(), TRANSACTION_ID_START - 1, TRANSACTION_ID_START - 1);
+	ReorderEntries(entries, transaction);
+}
+
+void DependencyManager::ReorderEntry(CatalogTransaction transaction, CatalogEntry &entry, catalog_entry_set_t &visited,
+                                     catalog_entry_vector_t &order) {
+	auto &catalog_entry = *LookupEntry(transaction, entry);
+	// We use this in CheckpointManager, it has the highest commit ID, allowing us to read any committed data
+	bool allow_internal = transaction.start_time == TRANSACTION_ID_START - 1;
+	if (visited.count(catalog_entry) || (!allow_internal && catalog_entry.internal)) {
+		// Already seen and ordered appropriately
+		return;
+	}
+
+	// Check if there are any entries that this entry depends on, those are written first
+	catalog_entry_vector_t dependents;
+	auto info = GetLookupProperties(entry);
+	ScanSubjects(transaction, info, [&](DependencyEntry &dep) { dependents.push_back(dep); });
+	for (auto &dep : dependents) {
+		ReorderEntry(transaction, dep, visited, order);
+	}
+
+	// Then write the entry
+	visited.insert(catalog_entry);
+	order.push_back(catalog_entry);
+}
+
+void DependencyManager::ReorderEntries(catalog_entry_vector_t &entries, CatalogTransaction transaction) {
+	catalog_entry_vector_t reordered;
+	catalog_entry_set_t visited;
+	for (auto &entry : entries) {
+		ReorderEntry(transaction, entry, visited, reordered);
+	}
+	// If this would fail, that means there are more entries that we somehow reached through the dependency manager
+	// but those entries should not actually be visible to this transaction
+	D_ASSERT(entries.size() == reordered.size());
+	entries.clear();
+	entries = reordered;
+}
+
 void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj,
                                     AlterInfo &alter_info) {
 	if (IsSystemEntry(new_obj)) {
