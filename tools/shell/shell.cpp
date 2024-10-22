@@ -2940,53 +2940,50 @@ void ShellState::print_markdown_separator(
 ** invokes for each row of a query result.
 */
 int ShellState::shell_callback(
-  int nArg,        /* Number of result columns */
-  char **azArg,    /* Text of each result column */
-  char **azCol,    /* Column names */
-  int *aiType      /* Column types.  Might be NULL */
+	RowResult &result
 ){
-  int i;
-
-  if( azArg==0 ) return 0;
+	auto &data = result.data;
+	auto &col_names = result.column_names;
+	auto &types = result.types;
+  if( result.data.empty() ) return 0;
   switch( cMode ){
     case RenderMode::LINE: {
       int w = 5;
-      if( azArg==0 ) break;
-      for(i=0; i<nArg; i++){
-        int len = strlen30(azCol[i] ? azCol[i] : "");
+      for(idx_t i=0; i<data.size(); i++){
+        int len = strlen30(col_names[i] ? col_names[i] : "");
         if( len>w ) w = len;
       }
       if( cnt++>0 ) utf8_printf(out, "%s", rowSeparator);
-      for(i=0; i<nArg; i++){
-        utf8_printf(out,"%*s = %s%s", w, azCol[i],
-                azArg[i] ? azArg[i] : nullValue, rowSeparator);
+      for(idx_t i=0; i<data.size(); i++){
+        utf8_printf(out,"%*s = %s%s", w, col_names[i],
+                data[i] ? data[i] : nullValue, rowSeparator);
       }
       break;
     }
     case RenderMode::EXPLAIN: {
-      if (nArg != 2) {
+      if (data.size() != 2) {
         break;
       }
-      if (strcmp(azArg[0], "logical_plan") == 0
-            || strcmp(azArg[0], "logical_opt") == 0
-            || strcmp(azArg[0], "physical_plan") == 0) {
+      if (strcmp(data[0], "logical_plan") == 0
+            || strcmp(data[0], "logical_opt") == 0
+            || strcmp(data[0], "physical_plan") == 0) {
         utf8_printf(out, "\n┌─────────────────────────────┐\n");
         utf8_printf(out, "│┌───────────────────────────┐│\n");
-        if (strcmp(azArg[0], "logical_plan") == 0) {
+        if (strcmp(data[0], "logical_plan") == 0) {
           utf8_printf(out, "││ Unoptimized Logical Plan  ││\n");
-        } else if (strcmp(azArg[0], "logical_opt") == 0) {
+        } else if (strcmp(data[0], "logical_opt") == 0) {
           utf8_printf(out, "││  Optimized Logical Plan   ││\n");
-        } else if (strcmp(azArg[0], "physical_plan") == 0) {
+        } else if (strcmp(data[0], "physical_plan") == 0) {
           utf8_printf(out, "││       Physical Plan       ││\n");
         }
         utf8_printf(out, "│└───────────────────────────┘│\n");
         utf8_printf(out, "└─────────────────────────────┘\n");
       }
-      utf8_printf(out, "%s", azArg[1]);
+      utf8_printf(out, "%s", data[1]);
       break;
     }
     case RenderMode::SEMI: {   /* .schema and .fullschema output */
-      printSchemaLine(out, azArg[0], "\n");
+      printSchemaLine(out, data[0], "\n");
       break;
     }
     case RenderMode::PRETTY: {  /* .schema and .fullschema with --indent */
@@ -2996,16 +2993,17 @@ int ShellState::shell_callback(
       char cEnd = 0;
       char c;
       int nLine = 0;
-      assert( nArg==1 );
-      if( azArg[0]==0 ) break;
-      if( sqlite3_strlike("CREATE VIEW%", azArg[0], 0)==0
-       || sqlite3_strlike("CREATE TRIG%", azArg[0], 0)==0
+      assert( data.size()==1 );
+      if( data[0]==0 ) break;
+      if( sqlite3_strlike("CREATE VIEW%", data[0], 0)==0
+       || sqlite3_strlike("CREATE TRIG%", data[0], 0)==0
       ){
-        utf8_printf(out, "%s;\n", azArg[0]);
+        utf8_printf(out, "%s;\n", data[0]);
         break;
       }
-      z = sqlite3_mprintf("%s", azArg[0]);
+      z = sqlite3_mprintf("%s", data[0]);
       j = 0;
+    	idx_t i;
       for(i=0; IsSpace(z[i]); i++){}
       for(; (c = z[i])!=0; i++){
         if( IsSpace(c) ){
@@ -3056,17 +3054,16 @@ int ShellState::shell_callback(
     }
     case RenderMode::LIST: {
       if( cnt++==0 && showHeader ){
-        for(i=0; i<nArg; i++){
-          utf8_printf(out,"%s%s",azCol[i],
-                  i==nArg-1 ? rowSeparator : colSeparator);
+        for(idx_t i=0; i<col_names.size(); i++){
+          utf8_printf(out,"%s%s",col_names[i],
+                  i==col_names.size()-1 ? rowSeparator : colSeparator);
         }
       }
-      if( azArg==0 ) break;
-      for(i=0; i<nArg; i++){
-        char *z = azArg[i];
+      for(idx_t i=0; i<data.size(); i++){
+        auto z = data[i];
         if( z==0 ) z = nullValue;
         utf8_printf(out, "%s", z);
-        if( i<nArg-1 ){
+        if( i<data.size()-1 ){
           utf8_printf(out, "%s", colSeparator);
         }else{
           utf8_printf(out, "%s", rowSeparator);
@@ -3077,18 +3074,17 @@ int ShellState::shell_callback(
     case RenderMode::HTML: {
       if( cnt++==0 && showHeader ){
         raw_printf(out,"<tr>");
-        for(i=0; i<nArg; i++){
+        for(idx_t i=0; i<col_names.size(); i++){
           raw_printf(out,"<th>");
-          output_html_string(out, azCol[i]);
+          output_html_string(out, col_names[i]);
           raw_printf(out,"</th>\n");
         }
         raw_printf(out,"</tr>\n");
       }
-      if( azArg==0 ) break;
       raw_printf(out,"<tr>");
-      for(i=0; i<nArg; i++){
+      for(idx_t i=0; i<data.size(); i++){
         raw_printf(out,"<td>");
-        output_html_string(out, azArg[i] ? azArg[i] : nullValue);
+        output_html_string(out, data[i] ? data[i] : nullValue);
         raw_printf(out,"</td>\n");
       }
       raw_printf(out,"</tr>\n");
@@ -3096,16 +3092,15 @@ int ShellState::shell_callback(
     }
     case RenderMode::TCL: {
       if( cnt++==0 && showHeader ){
-        for(i=0; i<nArg; i++){
-          output_c_string(out,azCol[i] ? azCol[i] : "");
-          if(i<nArg-1) utf8_printf(out, "%s", colSeparator);
+        for(idx_t i=0; i<col_names.size(); i++){
+          output_c_string(out,col_names[i] ? col_names[i] : "");
+          if(i<col_names.size()-1) utf8_printf(out, "%s", colSeparator);
         }
         utf8_printf(out, "%s", rowSeparator);
       }
-      if( azArg==0 ) break;
-      for(i=0; i<nArg; i++){
-        output_c_string(out, azArg[i] ? azArg[i] : nullValue);
-        if(i<nArg-1) utf8_printf(out, "%s", colSeparator);
+      for(idx_t i=0; i<data.size(); i++){
+        output_c_string(out, data[i] ? data[i] : nullValue);
+        if(i<data.size()-1) utf8_printf(out, "%s", colSeparator);
       }
       utf8_printf(out, "%s", rowSeparator);
       break;
@@ -3113,51 +3108,48 @@ int ShellState::shell_callback(
     case RenderMode::CSV: {
       setBinaryMode(out, 1);
       if( cnt++==0 && showHeader ){
-        for(i=0; i<nArg; i++){
-          output_csv(azCol[i] ? azCol[i] : "", i<nArg-1);
+        for(idx_t i=0; i<col_names.size(); i++){
+          output_csv(col_names[i] ? col_names[i] : "", i<col_names.size()-1);
         }
         utf8_printf(out, "%s", rowSeparator);
       }
-      if( nArg>0 ){
-        for(i=0; i<nArg; i++){
-          output_csv(azArg[i], i<nArg-1);
-        }
-        utf8_printf(out, "%s", rowSeparator);
+      for(idx_t i=0; i<data.size(); i++){
+        output_csv(data[i], i<data.size()-1);
       }
+      utf8_printf(out, "%s", rowSeparator);
       setTextMode(out, 1);
       break;
     }
     case RenderMode::INSERT: {
-      if( azArg==0 ) break;
       utf8_printf(out,"INSERT INTO %s",zDestTable);
       if( showHeader ){
         raw_printf(out,"(");
-        for(i=0; i<nArg; i++){
+        for(idx_t i=0; i<col_names.size(); i++){
           if( i>0 ) raw_printf(out, ",");
-          if( quoteChar(azCol[i]) ){
-            char *z = sqlite3_mprintf("\"%w\"", azCol[i]);
+          if( quoteChar(col_names[i]) ){
+            char *z = sqlite3_mprintf("\"%w\"", col_names[i]);
             utf8_printf(out, "%s", z);
             sqlite3_free(z);
           }else{
-            raw_printf(out, "%s", azCol[i]);
+            raw_printf(out, "%s", col_names[i]);
           }
         }
         raw_printf(out,")");
       }
       cnt++;
-      for(i=0; i<nArg; i++){
+      for(idx_t i=0; i<data.size(); i++){
         raw_printf(out, i>0 ? "," : " VALUES(");
-        if( (azArg[i]==0) || (aiType && aiType[i]==SQLITE_NULL) ){
+        if( (data[i]==0) || (!types.empty() && types[i]==SQLITE_NULL) ){
           utf8_printf(out,"NULL");
-        }else if( aiType && aiType[i]==SQLITE_TEXT ){
+        }else if( !types.empty() && types[i]==SQLITE_TEXT ){
           if( ShellHasFlag(SHFLG_Newlines) ){
-            output_quoted_string(out, azArg[i]);
+            output_quoted_string(out, data[i]);
           }else{
-            output_quoted_escaped_string(out, azArg[i]);
+            output_quoted_escaped_string(out, data[i]);
           }
-        }else if( aiType && aiType[i]==SQLITE_INTEGER ){
-          utf8_printf(out,"%s", azArg[i]);
-        }else if( aiType && aiType[i]==SQLITE_FLOAT ){
+        }else if( !types.empty() && types[i]==SQLITE_INTEGER ){
+          utf8_printf(out,"%s", data[i]);
+        }else if( !types.empty() && types[i]==SQLITE_FLOAT ){
           double r = sqlite3_column_double(pStmt, i);
           sqlite3_uint64 ur;
           memcpy(&ur,&r,sizeof(r));
@@ -3166,9 +3158,9 @@ int ShellState::shell_callback(
           }else if( ur==0xfff0000000000000LL ){
             raw_printf(out, "-1e999");
           }else{
-            utf8_printf(out,"%s", azArg[i]);
+            utf8_printf(out,"%s", data[i]);
           }
-        }else if( aiType && aiType[i]==SQLITE_BLOB && pStmt ){
+        }else if( !types.empty() && types[i]==SQLITE_BLOB && pStmt ){
           const void *pBlob = sqlite3_column_blob(pStmt, i);
           if(pBlob) {
           	int nBlob = sqlite3_column_bytes(pStmt, i);
@@ -3176,12 +3168,12 @@ int ShellState::shell_callback(
           } else {
 	        utf8_printf(out,"NULL");
           }
-        }else if( isNumber(azArg[i], 0) ){
-          utf8_printf(out,"%s", azArg[i]);
+        }else if( isNumber(data[i], 0) ){
+          utf8_printf(out,"%s", data[i]);
         }else if( ShellHasFlag(SHFLG_Newlines) ){
-          output_quoted_string(out, azArg[i]);
+          output_quoted_string(out, data[i]);
         }else{
-          output_quoted_escaped_string(out, azArg[i]);
+          output_quoted_escaped_string(out, data[i]);
         }
       }
       raw_printf(out,");\n");
@@ -3189,7 +3181,6 @@ int ShellState::shell_callback(
     }
     case RenderMode::JSON:
 	case RenderMode::JSONLINES: {
-      if( azArg==0 ) break;
       if( cnt==0 ){
         if (cMode == RenderMode::JSON) {
           fputc('[', out);
@@ -3202,12 +3193,12 @@ int ShellState::shell_callback(
         fputs("\n{", out);
       }
       cnt++;
-      for(i=0; i<nArg; i++){
-        output_json_string(out, azCol[i], -1);
+      for(idx_t i=0; i<col_names.size(); i++){
+        output_json_string(out, col_names[i], -1);
         putc(':', out);
-        if( (azArg[i]==0) || (aiType && aiType[i]==SQLITE_NULL) ){
+        if( (data[i]==0) || (!types.empty() && types[i]==SQLITE_NULL) ){
           fputs("null",out);
-        }else if( aiType && aiType[i]==SQLITE_FLOAT ){
+        }else if( !types.empty() && types[i]==SQLITE_FLOAT ){
           double r = sqlite3_column_double(pStmt, i);
           sqlite3_uint64 ur;
           memcpy(&ur,&r,sizeof(r));
@@ -3216,18 +3207,18 @@ int ShellState::shell_callback(
           }else if( ur==0xfff0000000000000LL ){
             raw_printf(out, "-1e999");
           }else{
-            utf8_printf(out, "%s", azArg[i]);
+            utf8_printf(out, "%s", data[i]);
           }
-        }else if( aiType && aiType[i]==SQLITE_BLOB && pStmt ){
+        }else if( !types.empty() && types[i]==SQLITE_BLOB && pStmt ){
           const void *pBlob = sqlite3_column_blob(pStmt, i);
           int nBlob = sqlite3_column_bytes(pStmt, i);
           output_json_string(out, (const char *) pBlob, nBlob);
-        }else if( aiType && aiType[i]==SQLITE_TEXT ){
-          output_json_string(out, azArg[i], -1);
+        }else if( !types.empty() && types[i]==SQLITE_TEXT ){
+          output_json_string(out, data[i], -1);
         }else{
-          utf8_printf(out,"%s", azArg[i]);
+          utf8_printf(out,"%s", data[i]);
         }
-        if( i<nArg-1 ){
+        if( i<data.size()-1 ){
           putc(',', out);
         }
       }
@@ -3235,36 +3226,35 @@ int ShellState::shell_callback(
       break;
     }
     case RenderMode::QUOTE: {
-      if( azArg==0 ) break;
       if( cnt==0 && showHeader ){
-        for(i=0; i<nArg; i++){
+        for(idx_t i=0; i<col_names.size(); i++){
           if( i>0 ) fputs(colSeparator, out);
-          output_quoted_string(out, azCol[i]);
+          output_quoted_string(out, col_names[i]);
         }
         fputs(rowSeparator, out);
       }
       cnt++;
-      for(i=0; i<nArg; i++){
+      for(idx_t i=0; i<data.size(); i++){
         if( i>0 ) fputs(colSeparator, out);
-        if( (azArg[i]==0) || (aiType && aiType[i]==SQLITE_NULL) ){
+        if( (data[i]==0) || (!types.empty() && types[i]==SQLITE_NULL) ){
           utf8_printf(out,"NULL");
-        }else if( aiType && aiType[i]==SQLITE_TEXT ){
-          output_quoted_string(out, azArg[i]);
-        }else if( aiType && aiType[i]==SQLITE_INTEGER ){
-          utf8_printf(out,"%s", azArg[i]);
-        }else if( aiType && aiType[i]==SQLITE_FLOAT ){
+        }else if( !types.empty() && types[i]==SQLITE_TEXT ){
+          output_quoted_string(out, data[i]);
+        }else if( !types.empty() && types[i]==SQLITE_INTEGER ){
+          utf8_printf(out,"%s", data[i]);
+        }else if( !types.empty() && types[i]==SQLITE_FLOAT ){
           char z[50];
           double r = sqlite3_column_double(pStmt, i);
           sqlite3_snprintf(50,z,"%!.20g", r);
           raw_printf(out, "%s", z);
-        }else if( aiType && aiType[i]==SQLITE_BLOB && pStmt ){
+        }else if( !types.empty() && types[i]==SQLITE_BLOB && pStmt ){
           const void *pBlob = sqlite3_column_blob(pStmt, i);
           int nBlob = sqlite3_column_bytes(pStmt, i);
           output_hex_blob(out, pBlob, nBlob);
-        }else if( isNumber(azArg[i], 0) ){
-          utf8_printf(out,"%s", azArg[i]);
+        }else if( isNumber(data[i], 0) ){
+          utf8_printf(out,"%s", data[i]);
         }else{
-          output_quoted_string(out, azArg[i]);
+          output_quoted_string(out, data[i]);
         }
       }
       fputs(rowSeparator, out);
@@ -3272,16 +3262,15 @@ int ShellState::shell_callback(
     }
     case RenderMode::ASCII: {
       if( cnt++==0 && showHeader ){
-        for(i=0; i<nArg; i++){
+        for(idx_t i=0; i<col_names.size(); i++){
           if( i>0 ) utf8_printf(out, "%s", colSeparator);
-          utf8_printf(out,"%s",azCol[i] ? azCol[i] : "");
+          utf8_printf(out,"%s",col_names[i] ? col_names[i] : "");
         }
         utf8_printf(out, "%s", rowSeparator);
       }
-      if( azArg==0 ) break;
-      for(i=0; i<nArg; i++){
+      for(idx_t i=0; i<data.size(); i++){
         if( i>0 ) utf8_printf(out, "%s", colSeparator);
-        utf8_printf(out,"%s",azArg[i] ? azArg[i] : nullValue);
+        utf8_printf(out,"%s",data[i] ? data[i] : nullValue);
       }
       utf8_printf(out, "%s", rowSeparator);
       break;
@@ -3299,7 +3288,12 @@ int ShellState::shell_callback(
 static int callback(void *pArg, int nArg, char **azArg, char **azCol){
   /* since we don't have type info, call the shell_callback with a NULL value */
 	auto p = (ShellState *) pArg;
-  return p->shell_callback(nArg, azArg, azCol, NULL);
+	RowResult result;
+	for(idx_t i = 0; i < nArg; i++) {
+		result.column_names.push_back(azCol[i]);
+		result.data.push_back(azArg[i]);
+	}
+  return p->shell_callback(result);
 }
 
 /*
@@ -3482,8 +3476,6 @@ ColumnarResult ShellState::ExecuteColumnar(sqlite3_stmt *pStmt){
 	result.data.reserve(result.column_count * 4);
 	for(idx_t i=0; i<result.column_count; i++){
 		result.data.push_back(strdup_handle_newline(sqlite3_column_name(pStmt,i)));
-	}
-	for(idx_t i=0; i<result.column_count; i++){
 		result.types.push_back(sqlite3_column_type(pStmt, i));
 		result.type_names.push_back(sqlite3_column_decltype(pStmt, i));
 	}
@@ -3572,7 +3564,6 @@ extern char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t 
 void ShellState::exec_prepared_stmt(
   sqlite3_stmt *pStmt                              /* Statment to run */
 ){
-  int rc;
   if (cMode == RenderMode::DUCKBOX) {
 	  size_t max_rows = outfile[0] == '\0' || outfile[0] == '|' ? this->max_rows : (size_t) -1;
 	  size_t max_width = outfile[0] == '\0' || outfile[0] == '|' ? this->max_width : (size_t) -1;
@@ -3592,60 +3583,57 @@ void ShellState::exec_prepared_stmt(
   /* perform the first step.  this will tell us if we
   ** have a result set or not and how wide it is.
   */
-  rc = sqlite3_step(pStmt);
+  int rc = sqlite3_step(pStmt);
   /* if we have a result set... */
-  if( SQLITE_ROW == rc ){
-    /* allocate space for col name ptr, value ptr, and type */
-    int nCol = sqlite3_column_count(pStmt);
-    void *pData = sqlite3_malloc64(3*nCol*sizeof(const char*) + 1);
-    if( !pData ){
-      rc = SQLITE_NOMEM;
-    }else{
-      char **azCols = (char **)pData;      /* Names of result columns */
-      char **azVals = &azCols[nCol];       /* Results */
-      int *aiTypes = (int *)&azVals[nCol]; /* Result types */
-      int i, x;
-      assert(sizeof(int) <= sizeof(char *));
-      /* save off ptrs to column names */
-      for(i=0; i<nCol; i++){
-        azCols[i] = (char *)sqlite3_column_name(pStmt, i);
-      }
-      do{
-        if (cMode!=RenderMode::TRASH) {
-          /* extract the data and data types */
-          for(i=0; i<nCol; i++){
-            aiTypes[i] = x = sqlite3_column_type(pStmt, i);
-            if( x==SQLITE_BLOB && cMode==RenderMode::INSERT ){
-              azVals[i] = (char*) "";
-            }else{
-              azVals[i] = (char*)sqlite3_column_text(pStmt, i);
-            }
-            if( !azVals[i] && (aiTypes[i]!=SQLITE_NULL) ){
-              rc = SQLITE_NOMEM;
-              break; /* from for */
-            }
-          } /* end for */
-        }
-
-        /* if data and types extracted successfully... */
-        if( SQLITE_ROW == rc ){
-          /* call the supplied callback with the result row data */
-          if( cMode!=RenderMode::TRASH && shell_callback(nCol, azVals, azCols, aiTypes) ){
-            rc = SQLITE_ABORT;
-          }else{
-            rc = sqlite3_step(pStmt);
-          }
-        }
-      } while( SQLITE_ROW == rc );
-      sqlite3_free(pData);
-      if( cMode==RenderMode::JSON ){
-        fputs("]\n", out);
-      }
-      if( cMode==RenderMode::JSONLINES ){
-        fputs("\n", out);
-      }
-    }
+  if( SQLITE_ROW != rc ) {
+	  return;
   }
+	RowResult result;
+	// initialize the result and the column names
+    int nCol = sqlite3_column_count(pStmt);
+	result.column_names.reserve(nCol);
+	result.data.resize(nCol);
+	result.types.resize(nCol);
+	for(idx_t i = 0; i < nCol; i++) {
+		result.column_names.push_back(sqlite3_column_name(pStmt, i));
+	}
+
+	// iterate over the rows
+	do{
+		if (cMode!=RenderMode::TRASH) {
+		  /* extract the data and data types */
+		  for(idx_t i=0; i<nCol; i++){
+			result.types[i] = sqlite3_column_type(pStmt, i);
+			if( result.types[i]==SQLITE_BLOB && cMode==RenderMode::INSERT ){
+			  result.data[i] = "";
+			}else{
+			  result.data[i] = (const char *) sqlite3_column_text(pStmt, i);
+			}
+			if( !result.data[i][i] && (result.types[i]!=SQLITE_NULL) ){
+				// OOM
+			  rc = SQLITE_NOMEM;
+			  break;
+			}
+		  }
+		}
+
+		/* if data and types extracted successfully... */
+		if( SQLITE_ROW == rc ){
+		  /* call the supplied callback with the result row data */
+		  if( cMode!=RenderMode::TRASH && shell_callback(result) ){
+			rc = SQLITE_ABORT;
+		  }else{
+			rc = sqlite3_step(pStmt);
+		  }
+		}
+	} while( SQLITE_ROW == rc );
+
+	if( cMode==RenderMode::JSON ){
+	fputs("]\n", out);
+	}
+	if( cMode==RenderMode::JSONLINES ){
+	fputs("\n", out);
+	}
 }
 
 /*

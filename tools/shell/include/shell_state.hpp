@@ -21,6 +21,7 @@ using std::unique_ptr;
 using std::vector;
 using std::string;
 struct ColumnarResult;
+struct RowResult;
 class ColumnRenderer;
 
 using idx_t = uint64_t;
@@ -127,7 +128,7 @@ public:
 	char **tableColumnList(const char *zTab);
 	void exec_prepared_stmt(sqlite3_stmt *pStmt);
 
-	int shell_callback(int nArg, char **azArg, char **azCol, int *aiType);
+	int shell_callback(RowResult &result);
 
 	int shell_exec(
 	  const char *zSql,                         /* SQL to be evaluated */

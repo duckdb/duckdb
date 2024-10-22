@@ -26,6 +26,12 @@ struct ColumnarResult {
 	vector<const char *> type_names;
 };
 
+struct RowResult {
+	vector<const char *> column_names;
+	vector<const char *> data;
+	vector<int> types;
+};
+
 class ColumnRenderer {
 public:
 	explicit ColumnRenderer(ShellState &state);
