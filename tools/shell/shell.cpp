@@ -5376,6 +5376,104 @@ MetadataResult SetWidths(ShellState &state, const char **azArg, idx_t nArg) {
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult ShellState::DisplayEntries(const char **azArg, idx_t nArg, char type) {
+		sqlite3_stmt *pStmt;
+    char **azResult;
+    int nRow, nAlloc;
+    int ii;
+    string s;
+    open_db(0);
+//    rc = sqlite3_prepare_v2(db, "PRAGMA database_list", -1, &pStmt, 0);
+//    if( rc ){
+//      sqlite3_finalize(pStmt);
+//      return shellDatabaseError(db);
+//    }
+
+    if( nArg>2){
+    	return MetadataResult::PRINT_USAGE;
+    }
+//    for(ii=0; sqlite3_step(pStmt)==SQLITE_ROW; ii++){
+//      const char *zDbName = (const char*)sqlite3_column_text(pStmt, 1);
+//      if( zDbName==0 ) continue;
+//      if( s.z && s.z[0] ) appendText(&s, " UNION ALL ", 0);
+        appendText(s, "SELECT name FROM ", 0);
+//      appendText(&s, zDbName, '"');
+      appendText(s, "sqlite_schema ", 0);
+      if( type=='t' ){
+        appendText(s," WHERE type IN ('table','view')"
+                      "   AND name NOT LIKE 'sqlite_%'"
+                      "   AND name LIKE ?1", 0);
+      }else{
+        appendText(s," WHERE type='index'"
+                      "   AND tbl_name LIKE ?1", 0);
+      }
+//    }
+//    rc = sqlite3_finalize(pStmt);
+    appendText(s, " ORDER BY 1", 0);
+    int rc = sqlite3_prepare_v2(db, s.c_str(), -1, &pStmt, 0);
+    if( rc ) return MetadataResult::ERROR;
+
+    /* Run the SQL statement prepared by the above block. Store the results
+    ** as an array of nul-terminated strings in azResult[].  */
+    nRow = nAlloc = 0;
+    azResult = 0;
+    if( nArg>1 ){
+      sqlite3_bind_text(pStmt, 1, azArg[1], -1, SQLITE_TRANSIENT);
+    }else{
+      sqlite3_bind_text(pStmt, 1, "%", -1, SQLITE_STATIC);
+    }
+    while( sqlite3_step(pStmt)==SQLITE_ROW ){
+      if( nRow>=nAlloc ){
+        char **azNew;
+        int n2 = nAlloc*2 + 10;
+        azNew = (char **) sqlite3_realloc64(azResult, sizeof(azResult[0])*n2);
+        if( azNew==0 ) shell_out_of_memory();
+        nAlloc = n2;
+        azResult = azNew;
+      }
+      azResult[nRow] = sqlite3_mprintf("%s", sqlite3_column_text(pStmt, 0));
+      if( 0==azResult[nRow] ) shell_out_of_memory();
+      nRow++;
+    }
+    if( sqlite3_finalize(pStmt)!=SQLITE_OK ){
+      rc = shellDatabaseError(db);
+    }
+
+    /* Pretty-print the contents of array azResult[] to the output */
+    if( rc==0 && nRow>0 ){
+      int len, maxlen = 0;
+      int i, j;
+      int nPrintCol, nPrintRow;
+      for(i=0; i<nRow; i++){
+        len = strlen30(azResult[i]);
+        if( len>maxlen ) maxlen = len;
+      }
+      nPrintCol = 80/(maxlen+2);
+      if( nPrintCol<1 ) nPrintCol = 1;
+      nPrintRow = (nRow + nPrintCol - 1)/nPrintCol;
+      for(i=0; i<nPrintRow; i++){
+        for(j=i; j<nRow; j+=nPrintRow){
+          const char *zSp = j<nPrintRow ? "" : "  ";
+          utf8_printf(out, "%s%-*s", zSp, maxlen,
+                      azResult[j] ? azResult[j]:"");
+        }
+        raw_printf(out, "\n");
+      }
+    }
+
+    for(ii=0; ii<nRow; ii++) sqlite3_free(azResult[ii]);
+    sqlite3_free(azResult);
+	return rc == 0 ? MetadataResult::SUCCESS : MetadataResult::ERROR;
+}
+
+MetadataResult ShowIndexes(ShellState &state, const char **azArg, idx_t nArg) {
+	return state.DisplayEntries(azArg, nArg, 'i');
+}
+
+MetadataResult ShowTables(ShellState &state, const char **azArg, idx_t nArg) {
+	return state.DisplayEntries(azArg, nArg, 't');
+}
+
 #if defined(_WIN32) || defined(WIN32)
 MetadataResult SetUTF8Mode(ShellState &state, const char **azArg, idx_t nArg) {
     win_utf8_mode = 1;
@@ -5401,6 +5499,8 @@ static const MetadataCommand metadata_commands[] = {
 	{"help", 0, ShowHelp, "?-all? ?PATTERN?", "Show help text for PATTERN", 0},
 	{"import", 0, ImportData, "FILE TABLE", "Import data from FILE into TABLE", 0},
 
+	{"indexes", 0, ShowIndexes, "?TABLE?", "Show names of indexes", 0},
+	{"indices", 0, ShowIndexes, "?TABLE?", "Show names of indexes", 0},
 	{"log", 2, ToggleLog, "FILE|off", "Turn logging on or off.  FILE can be stderr/stdout", 0},
 	{"maxrows", 0, SetMaxRows, "COUNT", "Sets the maximum number of rows for display (default: 40). Only for duckbox mode.", 0},
 	{"maxwidth", 0, SetMaxWidth, "COUNT", "Sets the maximum width in characters. 0 defaults to terminal width. Only for duckbox mode.", 0},
@@ -5423,7 +5523,7 @@ static const MetadataCommand metadata_commands[] = {
 	{"shell", 0, RunShellCommand, "CMD ARGS...", "Run CMD ARGS... in a system shell", 0},
 	{"show", 1, ShowConfiguration, "", "Show the current values for various settings", 0},
 	{"system", 0, RunShellCommand, "CMD ARGS...", "Run CMD ARGS... in a system shell", 0},
-
+    {"tables", 0, ShowTables, "?TABLE?", "List names of tables matching LIKE pattern TABLE", 2},
 	{"timeout", 0, nullptr, "", "", 5},
 	{"timer", 2, ToggleTimer, "on|off", "Turn SQL timer on or off", 0},
 	{"version", 1, ShowVersion, "", "Show the version", 0},
@@ -5505,106 +5605,7 @@ int ShellState::do_meta_command(char *zLine){
 		break;
 	}
   if (found_argument) {
-  } else
-
-  if( (c=='t' && n>1 && strncmp(azArg[0], "tables", n)==0)
-   || (c=='i' && (strncmp(azArg[0], "indices", n)==0
-                 || strncmp(azArg[0], "indexes", n)==0) )
-  ){
-    sqlite3_stmt *pStmt;
-    char **azResult;
-    int nRow, nAlloc;
-    int ii;
-    string s;
-    open_db(0);
-//    rc = sqlite3_prepare_v2(db, "PRAGMA database_list", -1, &pStmt, 0);
-//    if( rc ){
-//      sqlite3_finalize(pStmt);
-//      return shellDatabaseError(db);
-//    }
-
-    if( nArg>2 && c=='i' ){
-      /* It is an historical accident that the .indexes command shows an error
-      ** when called with the wrong number of arguments whereas the .tables
-      ** command does not. */
-      raw_printf(stderr, "Usage: .indexes ?LIKE-PATTERN?\n");
-      rc = 1;
-//      sqlite3_finalize(pStmt);
-      goto meta_command_exit;
-    }
-//    for(ii=0; sqlite3_step(pStmt)==SQLITE_ROW; ii++){
-//      const char *zDbName = (const char*)sqlite3_column_text(pStmt, 1);
-//      if( zDbName==0 ) continue;
-//      if( s.z && s.z[0] ) appendText(&s, " UNION ALL ", 0);
-        appendText(s, "SELECT name FROM ", 0);
-//      appendText(&s, zDbName, '"');
-      appendText(s, "sqlite_schema ", 0);
-      if( c=='t' ){
-        appendText(s," WHERE type IN ('table','view')"
-                      "   AND name NOT LIKE 'sqlite_%'"
-                      "   AND name LIKE ?1", 0);
-      }else{
-        appendText(s," WHERE type='index'"
-                      "   AND tbl_name LIKE ?1", 0);
-      }
-//    }
-//    rc = sqlite3_finalize(pStmt);
-    appendText(s, " ORDER BY 1", 0);
-    rc = sqlite3_prepare_v2(db, s.c_str(), -1, &pStmt, 0);
-    if( rc ) return shellDatabaseError(db);
-
-    /* Run the SQL statement prepared by the above block. Store the results
-    ** as an array of nul-terminated strings in azResult[].  */
-    nRow = nAlloc = 0;
-    azResult = 0;
-    if( nArg>1 ){
-      sqlite3_bind_text(pStmt, 1, azArg[1], -1, SQLITE_TRANSIENT);
-    }else{
-      sqlite3_bind_text(pStmt, 1, "%", -1, SQLITE_STATIC);
-    }
-    while( sqlite3_step(pStmt)==SQLITE_ROW ){
-      if( nRow>=nAlloc ){
-        char **azNew;
-        int n2 = nAlloc*2 + 10;
-        azNew = (char **) sqlite3_realloc64(azResult, sizeof(azResult[0])*n2);
-        if( azNew==0 ) shell_out_of_memory();
-        nAlloc = n2;
-        azResult = azNew;
-      }
-      azResult[nRow] = sqlite3_mprintf("%s", sqlite3_column_text(pStmt, 0));
-      if( 0==azResult[nRow] ) shell_out_of_memory();
-      nRow++;
-    }
-    if( sqlite3_finalize(pStmt)!=SQLITE_OK ){
-      rc = shellDatabaseError(db);
-    }
-
-    /* Pretty-print the contents of array azResult[] to the output */
-    if( rc==0 && nRow>0 ){
-      int len, maxlen = 0;
-      int i, j;
-      int nPrintCol, nPrintRow;
-      for(i=0; i<nRow; i++){
-        len = strlen30(azResult[i]);
-        if( len>maxlen ) maxlen = len;
-      }
-      nPrintCol = 80/(maxlen+2);
-      if( nPrintCol<1 ) nPrintCol = 1;
-      nPrintRow = (nRow + nPrintCol - 1)/nPrintCol;
-      for(i=0; i<nPrintRow; i++){
-        for(j=i; j<nRow; j+=nPrintRow){
-          const char *zSp = j<nPrintRow ? "" : "  ";
-          utf8_printf(out, "%s%-*s", zSp, maxlen,
-                      azResult[j] ? azResult[j]:"");
-        }
-        raw_printf(out, "\n");
-      }
-    }
-
-    for(ii=0; ii<nRow; ii++) sqlite3_free(azResult[ii]);
-    sqlite3_free(azResult);
-  }
-  else {
+  } else {
 #ifdef HAVE_LINENOISE
     const char *error = NULL;
     if (linenoiseParseOption((const char**) azArg, nArg, &error)) {
@@ -5622,7 +5623,6 @@ int ShellState::do_meta_command(char *zLine){
 #endif
   }
 
-meta_command_exit:
   if( outCount ){
     outCount--;
     if( outCount==0 ) output_reset();
@@ -5985,7 +5985,6 @@ static const char zOptions[] =
   "   -readonly            open the database read-only\n"
   "   -s COMMAND           run \"COMMAND\" and exit\n"
   "   -separator SEP       set output column separator. Default: '|'\n"
-  "   -stats               print memory stats before each finalize\n"
   "   -table               set output mode to 'table'\n"
   "   -unredacted          allow printing unredacted secrets\n"
   "   -unsigned            allow loading of unsigned extensions\n"

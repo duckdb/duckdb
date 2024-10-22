@@ -15,6 +15,7 @@
 
 struct sqlite3;
 struct sqlite3_stmt;
+enum class MetadataResult : uint8_t;
 
 namespace duckdb_shell {
 using std::string;
@@ -131,6 +132,7 @@ public:
 	bool SetOutputFile(const char **azArg, idx_t nArg, char output_mode);
 	bool ReadFromFile(const string &file);
 	bool DisplaySchemas(const char **azArg, idx_t nArg);
+	MetadataResult DisplayEntries(const char **azArg, idx_t nArg, char type);
 	void ShowConfiguration();
 
 	int strlenChar(const char *z);
