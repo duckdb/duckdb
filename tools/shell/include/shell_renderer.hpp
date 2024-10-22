@@ -48,6 +48,7 @@ public:
 	}
 
 	void RenderAlignedValue(ColumnarResult &result, idx_t i);
+
 protected:
 	ShellState &state;
 };
@@ -62,9 +63,10 @@ public:
 	virtual void RenderHeader(RowResult &result);
 	virtual void RenderRow(RowResult &result) = 0;
 	virtual void RenderFooter(RowResult &result);
+
 protected:
 	ShellState &state;
 	bool first_row = true;
 };
 
-}
+} // namespace duckdb_shell

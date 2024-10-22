@@ -7,7 +7,7 @@
 namespace duckdb_shell {
 
 bool ShellRenderer::IsColumnar(RenderMode mode) {
-	switch(mode) {
+	switch (mode) {
 	case RenderMode::COLUMN:
 	case RenderMode::TABLE:
 	case RenderMode::BOX:
@@ -22,7 +22,8 @@ bool ShellRenderer::IsColumnar(RenderMode mode) {
 //===--------------------------------------------------------------------===//
 // Column Renderers
 //===--------------------------------------------------------------------===//
-ColumnRenderer::ColumnRenderer(ShellState &state) : state(state) {}
+ColumnRenderer::ColumnRenderer(ShellState &state) : state(state) {
+}
 
 void ColumnRenderer::RenderFooter(ColumnarResult &result) {
 }
@@ -37,19 +38,20 @@ void ColumnRenderer::RenderAlignedValue(ColumnarResult &result, idx_t i) {
 
 class ModeColumnRenderer : public ColumnRenderer {
 public:
-	explicit ModeColumnRenderer(ShellState &state) : ColumnRenderer(state) {}
+	explicit ModeColumnRenderer(ShellState &state) : ColumnRenderer(state) {
+	}
 
 	void RenderHeader(ColumnarResult &result) override {
-		if( !state.showHeader ) {
+		if (!state.showHeader) {
 			return;
 		}
-		for(idx_t i=0; i<result.column_count; i++){
+		for (idx_t i = 0; i < result.column_count; i++) {
 			state.utf8_width_print(state.out, result.column_width[i], result.data[i]);
-			state.Print(i==result.column_count-1?"\n":"  ");
+			state.Print(i == result.column_count - 1 ? "\n" : "  ");
 		}
-		for(idx_t i=0; i<result.column_count; i++){
+		for (idx_t i = 0; i < result.column_count; i++) {
 			state.print_dashes(result.column_width[i]);
-			state.Print(i==result.column_count-1?"\n":"  ");
+			state.Print(i == result.column_count - 1 ? "\n" : "  ");
 		}
 	}
 
@@ -63,14 +65,15 @@ public:
 
 class ModeTableRenderer : public ColumnRenderer {
 public:
-	explicit ModeTableRenderer(ShellState &state) : ColumnRenderer(state) {}
+	explicit ModeTableRenderer(ShellState &state) : ColumnRenderer(state) {
+	}
 
 	void RenderHeader(ColumnarResult &result) override {
 		state.print_row_separator(result.column_count, "+", result.column_width);
 		state.Print("| ");
-		for(idx_t i=0; i<result.column_count; i++){
+		for (idx_t i = 0; i < result.column_count; i++) {
 			RenderAlignedValue(result, i);
-			state.Print(i==result.column_count-1?" |\n":" | ");
+			state.Print(i == result.column_count - 1 ? " |\n" : " | ");
 		}
 		state.print_row_separator(result.column_count, "+", result.column_width);
 	}
@@ -92,10 +95,11 @@ public:
 
 class ModeMarkdownRenderer : public ColumnRenderer {
 public:
-	explicit ModeMarkdownRenderer(ShellState &state) : ColumnRenderer(state) {}
+	explicit ModeMarkdownRenderer(ShellState &state) : ColumnRenderer(state) {
+	}
 
 	void RenderHeader(ColumnarResult &result) override {
-		for(idx_t i=0; i<result.column_count; i++){
+		for (idx_t i = 0; i < result.column_count; i++) {
 			RenderAlignedValue(result, i);
 		}
 		state.print_markdown_separator(result.column_count, "|", result.types, result.column_width);
@@ -125,28 +129,29 @@ public:
 ** the center.  The characters are here identified by the numbers of
 ** their corresponding lines.
 */
-#define BOX_24   "\342\224\200"  /* U+2500 --- */
-#define BOX_13   "\342\224\202"  /* U+2502  |  */
-#define BOX_23   "\342\224\214"  /* U+250c  ,- */
-#define BOX_34   "\342\224\220"  /* U+2510 -,  */
-#define BOX_12   "\342\224\224"  /* U+2514  '- */
-#define BOX_14   "\342\224\230"  /* U+2518 -'  */
-#define BOX_123  "\342\224\234"  /* U+251c  |- */
-#define BOX_134  "\342\224\244"  /* U+2524 -|  */
-#define BOX_234  "\342\224\254"  /* U+252c -,- */
-#define BOX_124  "\342\224\264"  /* U+2534 -'- */
-#define BOX_1234 "\342\224\274"  /* U+253c -|- */
+#define BOX_24   "\342\224\200" /* U+2500 --- */
+#define BOX_13   "\342\224\202" /* U+2502  |  */
+#define BOX_23   "\342\224\214" /* U+250c  ,- */
+#define BOX_34   "\342\224\220" /* U+2510 -,  */
+#define BOX_12   "\342\224\224" /* U+2514  '- */
+#define BOX_14   "\342\224\230" /* U+2518 -'  */
+#define BOX_123  "\342\224\234" /* U+251c  |- */
+#define BOX_134  "\342\224\244" /* U+2524 -|  */
+#define BOX_234  "\342\224\254" /* U+252c -,- */
+#define BOX_124  "\342\224\264" /* U+2534 -'- */
+#define BOX_1234 "\342\224\274" /* U+253c -|- */
 
 class ModeBoxRenderer : public ColumnRenderer {
 public:
-	explicit ModeBoxRenderer(ShellState &state) : ColumnRenderer(state) {}
+	explicit ModeBoxRenderer(ShellState &state) : ColumnRenderer(state) {
+	}
 
 	void RenderHeader(ColumnarResult &result) override {
 		print_box_row_separator(result.column_count, BOX_23, BOX_234, BOX_34, result.column_width);
 		state.Print(BOX_13 " ");
-		for(idx_t i=0; i<result.column_count; i++){
+		for (idx_t i = 0; i < result.column_count; i++) {
 			RenderAlignedValue(result, i);
-			state.Print(i==result.column_count-1?" " BOX_13 "\n":" " BOX_13 " ");
+			state.Print(i == result.column_count - 1 ? " " BOX_13 "\n" : " " BOX_13 " ");
 		}
 		print_box_row_separator(result.column_count, BOX_123, BOX_1234, BOX_134, result.column_width);
 	}
@@ -162,16 +167,16 @@ public:
 		return " " BOX_13 "\n";
 	}
 	const char *GetRowStart() override {
-		return BOX_13" ";
+		return BOX_13 " ";
 	}
 
 private:
 	/* Draw horizontal line N characters long using unicode box
 	** characters
 	*/
-	void print_box_line(int N){
+	void print_box_line(int N) {
 		string box_line;
-		for(idx_t i = 0; i < N; i++) {
+		for (idx_t i = 0; i < N; i++) {
 			box_line += BOX_24;
 		}
 		state.Print(box_line);
@@ -180,20 +185,15 @@ private:
 	/*
 	** Draw a horizontal separator for a RenderMode::Box table.
 	*/
-	void print_box_row_separator(
-	  int nArg,
-	  const char *zSep1,
-	  const char *zSep2,
-	  const char *zSep3,
-	  const vector<int> &actualWidth
-	){
+	void print_box_row_separator(int nArg, const char *zSep1, const char *zSep2, const char *zSep3,
+	                             const vector<int> &actualWidth) {
 		int i;
-		if( nArg>0 ){
+		if (nArg > 0) {
 			state.Print(zSep1);
-			print_box_line(actualWidth[0]+2);
-			for(i=1; i<nArg; i++){
+			print_box_line(actualWidth[0] + 2);
+			for (i = 1; i < nArg; i++) {
 				state.Print(zSep2);
-				print_box_line(actualWidth[i]+2);
+				print_box_line(actualWidth[i] + 2);
 			}
 			state.Print(zSep3);
 		}
@@ -203,11 +203,12 @@ private:
 
 class ModeLatexRenderer : public ColumnRenderer {
 public:
-	explicit ModeLatexRenderer(ShellState &state) : ColumnRenderer(state) {}
+	explicit ModeLatexRenderer(ShellState &state) : ColumnRenderer(state) {
+	}
 
 	void RenderHeader(ColumnarResult &result) override {
 		state.Print("\\begin{tabular}{|");
-		for(idx_t i=0; i<result.column_count; i++){
+		for (idx_t i = 0; i < result.column_count; i++) {
 			if (state.column_type_is_integer(result.type_names[i])) {
 				state.Print("r");
 			} else {
@@ -216,9 +217,9 @@ public:
 		}
 		state.Print("|}\n");
 		state.Print("\\hline\n");
-		for(idx_t i=0; i<result.column_count; i++){
+		for (idx_t i = 0; i < result.column_count; i++) {
 			RenderAlignedValue(result, i);
-			state.Print(i==result.column_count-1? GetRowSeparator():GetColumnSeparator());
+			state.Print(i == result.column_count - 1 ? GetRowSeparator() : GetColumnSeparator());
 		}
 		state.Print("\\hline\n");
 	}
@@ -237,7 +238,7 @@ public:
 };
 
 unique_ptr<ColumnRenderer> ShellState::GetColumnRenderer() {
-	switch(cMode) {
+	switch (cMode) {
 	case RenderMode::COLUMN:
 		return unique_ptr<ColumnRenderer>(new ModeColumnRenderer(*this));
 	case RenderMode::TABLE:
@@ -256,7 +257,8 @@ unique_ptr<ColumnRenderer> ShellState::GetColumnRenderer() {
 //===--------------------------------------------------------------------===//
 // Row Renderers
 //===--------------------------------------------------------------------===//
-RowRenderer::RowRenderer(ShellState &state) : state(state) {}
+RowRenderer::RowRenderer(ShellState &state) : state(state) {
+}
 
 void RowRenderer::Render(RowResult &result) {
 	if (first_row) {
@@ -266,22 +268,27 @@ void RowRenderer::Render(RowResult &result) {
 	RenderRow(result);
 }
 
-void RowRenderer::RenderHeader(RowResult &result) {}
+void RowRenderer::RenderHeader(RowResult &result) {
+}
 
-void RowRenderer::RenderFooter(RowResult &result) {}
+void RowRenderer::RenderFooter(RowResult &result) {
+}
 
 class ModeLineRenderer : public RowRenderer {
 public:
-	explicit ModeLineRenderer(ShellState &state) : RowRenderer(state) {}
+	explicit ModeLineRenderer(ShellState &state) : RowRenderer(state) {
+	}
 
 	void Render(RowResult &result) override {
 		if (first_row) {
 			auto &col_names = result.column_names;
 			// determine the render width by going over the column names
-			w = 5;
-			for(idx_t i=0; i<col_names.size(); i++){
+			header_width = 5;
+			for (idx_t i = 0; i < col_names.size(); i++) {
 				int len = ShellState::StringLength(col_names[i] ? col_names[i] : "");
-				if( len>w ) w = len;
+				if (len > header_width) {
+					header_width = len;
+				}
 			}
 			first_row = false;
 		} else {
@@ -294,29 +301,29 @@ public:
 	void RenderRow(RowResult &result) override {
 		auto &data = result.data;
 		auto &col_names = result.column_names;
-		for(idx_t i=0; i<data.size(); i++){
-			state.PrintPadded(col_names[i], w);
+		for (idx_t i = 0; i < data.size(); i++) {
+			state.PrintPadded(col_names[i], header_width);
 			state.Print(" = ");
 			state.Print(data[i] ? data[i] : state.nullValue);
 			state.Print(state.rowSeparator);
 		}
 	}
 
-	int w = 0;
+	int header_width = 0;
 };
 
 class ModeExplainRenderer : public RowRenderer {
 public:
-	explicit ModeExplainRenderer(ShellState &state) : RowRenderer(state) {}
+	explicit ModeExplainRenderer(ShellState &state) : RowRenderer(state) {
+	}
 
 	void RenderRow(RowResult &result) override {
 		auto &data = result.data;
 		if (data.size() != 2) {
 			throw std::runtime_error("Invalid usage of explain renderer - must have two data points per row");
 		}
-		if (strcmp(data[0], "logical_plan") == 0
-			  || strcmp(data[0], "logical_opt") == 0
-			  || strcmp(data[0], "physical_plan") == 0) {
+		if (strcmp(data[0], "logical_plan") == 0 || strcmp(data[0], "logical_opt") == 0 ||
+		    strcmp(data[0], "physical_plan") == 0) {
 			state.Print("\n┌─────────────────────────────┐\n");
 			state.Print("│┌───────────────────────────┐│\n");
 			if (strcmp(data[0], "logical_plan") == 0) {
@@ -328,21 +335,22 @@ public:
 			}
 			state.Print("│└───────────────────────────┘│\n");
 			state.Print("└─────────────────────────────┘\n");
-			  }
+		}
 		state.Print(data[1]);
 	}
 };
 
 class ModeListRenderer : public RowRenderer {
 public:
-	explicit ModeListRenderer(ShellState &state) : RowRenderer(state) {}
+	explicit ModeListRenderer(ShellState &state) : RowRenderer(state) {
+	}
 
 	void RenderHeader(RowResult &result) override {
 		if (!state.showHeader) {
 			return;
 		}
 		auto &col_names = result.column_names;
-		for(idx_t i=0; i<col_names.size(); i++){
+		for (idx_t i = 0; i < col_names.size(); i++) {
 			if (i > 0) {
 				state.Print(state.colSeparator);
 			}
@@ -353,12 +361,14 @@ public:
 
 	void RenderRow(RowResult &result) override {
 		auto &data = result.data;
-		for(idx_t i=0; i<data.size(); i++){
+		for (idx_t i = 0; i < data.size(); i++) {
 			if (i > 0) {
 				state.Print(state.colSeparator);
 			}
 			auto z = data[i];
-			if( z==0 ) z = state.nullValue;
+			if (z == 0) {
+				z = state.nullValue;
+			}
 			state.Print(z);
 		}
 		state.Print(state.rowSeparator);
@@ -367,7 +377,8 @@ public:
 
 class ModeHtmlRenderer : public RowRenderer {
 public:
-	explicit ModeHtmlRenderer(ShellState &state) : RowRenderer(state) {}
+	explicit ModeHtmlRenderer(ShellState &state) : RowRenderer(state) {
+	}
 
 	void RenderHeader(RowResult &result) override {
 		if (!state.showHeader) {
@@ -375,7 +386,7 @@ public:
 		}
 		auto &col_names = result.column_names;
 		state.Print("<tr>");
-		for(idx_t i=0; i<col_names.size(); i++){
+		for (idx_t i = 0; i < col_names.size(); i++) {
 			state.Print("<th>");
 			output_html_string(col_names[i]);
 			state.Print("</th>\n");
@@ -386,7 +397,7 @@ public:
 	void RenderRow(RowResult &result) override {
 		auto &data = result.data;
 		state.Print("<tr>");
-		for(idx_t i=0; i<data.size(); i++){
+		for (idx_t i = 0; i < data.size(); i++) {
 			state.Print("<td>");
 			output_html_string(data[i] ? data[i] : state.nullValue);
 			state.Print("</td>\n");
@@ -398,11 +409,12 @@ public:
 	** Output the given string with characters that are special to
 	** HTML escaped.
 	*/
-	void output_html_string(const char *z){
-		if( z==0 ) z = "";
+	void output_html_string(const char *z) {
+		if (z == 0)
+			z = "";
 		string escaped;
-		for(; *z; z++ ) {
-			switch(*z) {
+		for (; *z; z++) {
+			switch (*z) {
 			case '<':
 				escaped += "&lt;";
 				break;
@@ -428,14 +440,15 @@ public:
 
 class ModeTclRenderer : public RowRenderer {
 public:
-	explicit ModeTclRenderer(ShellState &state) : RowRenderer(state) {}
+	explicit ModeTclRenderer(ShellState &state) : RowRenderer(state) {
+	}
 
 	void RenderHeader(RowResult &result) override {
 		if (!state.showHeader) {
 			return;
 		}
 		auto &col_names = result.column_names;
-		for(idx_t i=0; i<col_names.size(); i++){
+		for (idx_t i = 0; i < col_names.size(); i++) {
 			if (i > 0) {
 				state.Print(state.colSeparator);
 			}
@@ -446,7 +459,7 @@ public:
 
 	void RenderRow(RowResult &result) override {
 		auto &data = result.data;
-		for(idx_t i=0; i<data.size(); i++){
+		for (idx_t i = 0; i < data.size(); i++) {
 			if (i > 0) {
 				state.Print(state.colSeparator);
 			}
@@ -458,7 +471,8 @@ public:
 
 class ModeCsvRenderer : public RowRenderer {
 public:
-	explicit ModeCsvRenderer(ShellState &state) : RowRenderer(state) {}
+	explicit ModeCsvRenderer(ShellState &state) : RowRenderer(state) {
+	}
 
 	void Render(RowResult &result) override {
 		state.SetBinaryMode();
@@ -470,16 +484,16 @@ public:
 			return;
 		}
 		auto &col_names = result.column_names;
-		for(idx_t i=0; i<col_names.size(); i++){
-			state.output_csv(col_names[i] ? col_names[i] : "", i<col_names.size()-1);
+		for (idx_t i = 0; i < col_names.size(); i++) {
+			state.output_csv(col_names[i] ? col_names[i] : "", i < col_names.size() - 1);
 		}
 		state.Print(state.rowSeparator);
 	}
 
 	void RenderRow(RowResult &result) override {
 		auto &data = result.data;
-		for(idx_t i=0; i<data.size(); i++){
-			state.output_csv(data[i], i<data.size()-1);
+		for (idx_t i = 0; i < data.size(); i++) {
+			state.output_csv(data[i], i < data.size() - 1);
 		}
 		state.Print(state.rowSeparator);
 	}
@@ -487,15 +501,17 @@ public:
 
 class ModeAsciiRenderer : public RowRenderer {
 public:
-	explicit ModeAsciiRenderer(ShellState &state) : RowRenderer(state) {}
+	explicit ModeAsciiRenderer(ShellState &state) : RowRenderer(state) {
+	}
 
 	void RenderHeader(RowResult &result) override {
 		if (!state.showHeader) {
 			return;
 		}
 		auto &col_names = result.column_names;
-		for(idx_t i=0; i<col_names.size(); i++){
-			if( i>0 ) state.Print(state.colSeparator);
+		for (idx_t i = 0; i < col_names.size(); i++) {
+			if (i > 0)
+				state.Print(state.colSeparator);
 			state.Print(col_names[i] ? col_names[i] : "");
 		}
 		state.Print(state.rowSeparator);
@@ -503,8 +519,9 @@ public:
 
 	void RenderRow(RowResult &result) override {
 		auto &data = result.data;
-		for(idx_t i=0; i<data.size(); i++){
-			if( i>0 ) state.Print(state.colSeparator);
+		for (idx_t i = 0; i < data.size(); i++) {
+			if (i > 0)
+				state.Print(state.colSeparator);
 			state.Print(data[i] ? data[i] : state.nullValue);
 		}
 		state.Print(state.rowSeparator);
@@ -513,15 +530,17 @@ public:
 
 class ModeQuoteRenderer : public RowRenderer {
 public:
-	explicit ModeQuoteRenderer(ShellState &state) : RowRenderer(state) {}
+	explicit ModeQuoteRenderer(ShellState &state) : RowRenderer(state) {
+	}
 
 	void RenderHeader(RowResult &result) override {
 		if (!state.showHeader) {
 			return;
 		}
 		auto &col_names = result.column_names;
-		for(idx_t i=0; i<col_names.size(); i++){
-			if( i>0 ) state.Print(state.colSeparator);
+		for (idx_t i = 0; i < col_names.size(); i++) {
+			if (i > 0)
+				state.Print(state.colSeparator);
 			state.output_quoted_string(col_names[i]);
 		}
 		state.Print(state.rowSeparator);
@@ -530,17 +549,18 @@ public:
 	void RenderRow(RowResult &result) override {
 		auto &data = result.data;
 		auto &types = result.types;
-		for(idx_t i=0; i<data.size(); i++){
-			if( i>0 ) state.Print(state.colSeparator);
-			if( (data[i]==0) || (!types.empty() && types[i]==SQLITE_NULL) ){
+		for (idx_t i = 0; i < data.size(); i++) {
+			if (i > 0)
+				state.Print(state.colSeparator);
+			if ((data[i] == 0) || (!types.empty() && types[i] == SQLITE_NULL)) {
 				state.Print("NULL");
-			}else if( !types.empty() && (types[i]==SQLITE_TEXT || types[i] == SQLITE_BLOB)){
+			} else if (!types.empty() && (types[i] == SQLITE_TEXT || types[i] == SQLITE_BLOB)) {
 				state.output_quoted_string(data[i]);
-			}else if( !types.empty() && (types[i]==SQLITE_INTEGER || types[i] == SQLITE_FLOAT) ){
+			} else if (!types.empty() && (types[i] == SQLITE_INTEGER || types[i] == SQLITE_FLOAT)) {
 				state.Print(data[i]);
-			}else if( state.isNumber(data[i], 0) ){
+			} else if (state.isNumber(data[i], 0)) {
 				state.Print(data[i]);
-			}else{
+			} else {
 				state.output_quoted_string(data[i]);
 			}
 		}
@@ -550,7 +570,8 @@ public:
 
 class ModeJsonRenderer : public RowRenderer {
 public:
-	explicit ModeJsonRenderer(ShellState &state, bool json_array) : RowRenderer(state), json_array(json_array) {}
+	explicit ModeJsonRenderer(ShellState &state, bool json_array) : RowRenderer(state), json_array(json_array) {
+	}
 
 	void Render(RowResult &result) override {
 		if (first_row) {
@@ -574,15 +595,15 @@ public:
 		auto &data = result.data;
 		auto &types = result.types;
 		auto &col_names = result.column_names;
-		for(idx_t i=0; i<col_names.size(); i++){
-			if(i > 0) {
+		for (idx_t i = 0; i < col_names.size(); i++) {
+			if (i > 0) {
 				state.Print(",");
 			}
 			state.output_json_string(col_names[i], -1);
 			state.Print(":");
-			if( (data[i]==0) || (!types.empty() && types[i]==SQLITE_NULL) ){
+			if ((data[i] == 0) || (!types.empty() && types[i] == SQLITE_NULL)) {
 				state.Print("null");
-			}else if( !types.empty() && types[i]==SQLITE_FLOAT){
+			} else if (!types.empty() && types[i] == SQLITE_FLOAT) {
 				if (strcmp(data[i], "inf") == 0) {
 					state.Print("1e999");
 				} else if (strcmp(data[i], "-inf") == 0) {
@@ -590,13 +611,13 @@ public:
 				} else {
 					state.Print(data[i]);
 				}
-			}else if( !types.empty() && types[i]==SQLITE_BLOB && result.pStmt ){
+			} else if (!types.empty() && types[i] == SQLITE_BLOB && result.pStmt) {
 				const void *pBlob = sqlite3_column_blob(result.pStmt, i);
 				int nBlob = sqlite3_column_bytes(result.pStmt, i);
-				state.output_json_string((const char *) pBlob, nBlob);
-			}else if( !types.empty() && types[i]==SQLITE_TEXT ){
+				state.output_json_string((const char *)pBlob, nBlob);
+			} else if (!types.empty() && types[i] == SQLITE_TEXT) {
 				state.output_json_string(data[i], -1);
-			}else{
+			} else {
 				state.Print(data[i]);
 			}
 		}
@@ -604,55 +625,57 @@ public:
 	}
 
 	void RenderFooter(RowResult &result) override {
-		if(json_array){
+		if (json_array) {
 			state.Print("]\n");
 		} else {
 			state.Print("\n");
 		}
 	}
 
-
 	bool json_array;
 };
 
 class ModeInsertRenderer : public RowRenderer {
 public:
-	explicit ModeInsertRenderer(ShellState &state) : RowRenderer(state) {}
+	explicit ModeInsertRenderer(ShellState &state) : RowRenderer(state) {
+	}
 
 	void RenderRow(RowResult &result) override {
 		auto &data = result.data;
 		auto &types = result.types;
 		auto &col_names = result.column_names;
 
-      state.Print("INSERT INTO ");
+		state.Print("INSERT INTO ");
 		state.Print(state.zDestTable);
-      if( state.showHeader ){
-        state.Print("(");
-        for(idx_t i=0; i<col_names.size(); i++){
-          if( i>0 ) state.Print(",");
-          state.PrintOptionallyQuotedIdentifier(col_names[i]);
-        }
-        state.Print(")");
-      }
-      for(idx_t i=0; i<data.size(); i++){
-        state.Print(i>0 ? "," : " VALUES(");
-        if( (data[i]==0) || (!types.empty() && types[i]==SQLITE_NULL) ){
-          state.Print("NULL");
-        }else if( state.isNumber(data[i], nullptr) ){
-          state.Print(data[i]);
-        }else if( state.ShellHasFlag(SHFLG_Newlines) ){
-          state.output_quoted_string(data[i]);
-        }else{
-          state.output_quoted_escaped_string(data[i]);
-        }
-      }
-      state.Print(");\n");
+		if (state.showHeader) {
+			state.Print("(");
+			for (idx_t i = 0; i < col_names.size(); i++) {
+				if (i > 0)
+					state.Print(",");
+				state.PrintOptionallyQuotedIdentifier(col_names[i]);
+			}
+			state.Print(")");
+		}
+		for (idx_t i = 0; i < data.size(); i++) {
+			state.Print(i > 0 ? "," : " VALUES(");
+			if ((data[i] == 0) || (!types.empty() && types[i] == SQLITE_NULL)) {
+				state.Print("NULL");
+			} else if (state.isNumber(data[i], nullptr)) {
+				state.Print(data[i]);
+			} else if (state.ShellHasFlag(SHFLG_Newlines)) {
+				state.output_quoted_string(data[i]);
+			} else {
+				state.output_quoted_escaped_string(data[i]);
+			}
+		}
+		state.Print(");\n");
 	}
 };
 
 class ModeSemiRenderer : public RowRenderer {
 public:
-	explicit ModeSemiRenderer(ShellState &state) : RowRenderer(state) {}
+	explicit ModeSemiRenderer(ShellState &state) : RowRenderer(state) {
+	}
 
 	void RenderRow(RowResult &result) override {
 		/* .schema and .fullschema output */
@@ -662,7 +685,8 @@ public:
 
 class ModePrettyRenderer : public RowRenderer {
 public:
-	explicit ModePrettyRenderer(ShellState &state) : RowRenderer(state) {}
+	explicit ModePrettyRenderer(ShellState &state) : RowRenderer(state) {
+	}
 
 	void RenderRow(RowResult &result) override {
 		auto &data = result.data;
@@ -676,10 +700,10 @@ public:
 		char cEnd = 0;
 		char c;
 		int nLine = 0;
-		if( !data[0] ) return;
-		if( sqlite3_strlike("CREATE VIEW%", data[0], 0)==0
-		 || sqlite3_strlike("CREATE TRIG%", data[0], 0)==0
-		){
+		if (!data[0]) {
+			return;
+		}
+		if (sqlite3_strlike("CREATE VIEW%", data[0], 0) == 0 || sqlite3_strlike("CREATE TRIG%", data[0], 0) == 0) {
 			state.Print(data[0]);
 			state.Print(";\n");
 			return;
@@ -687,46 +711,52 @@ public:
 		z = sqlite3_mprintf("%s", data[0]);
 		j = 0;
 		idx_t i;
-		for(i=0; IsSpace(z[i]); i++){}
-		for(; (c = z[i])!=0; i++){
-			if( IsSpace(c) ){
-				if( z[j-1]=='\r' ) z[j-1] = '\n';
-				if( IsSpace(z[j-1]) || z[j-1]=='(' ) continue;
-			}else if( (c=='(' || c==')') && j>0 && IsSpace(z[j-1]) ){
+		for (i = 0; IsSpace(z[i]); i++) {
+		}
+		for (; (c = z[i]) != 0; i++) {
+			if (IsSpace(c)) {
+				if (z[j - 1] == '\r')
+					z[j - 1] = '\n';
+				if (IsSpace(z[j - 1]) || z[j - 1] == '(')
+					continue;
+			} else if ((c == '(' || c == ')') && j > 0 && IsSpace(z[j - 1])) {
 				j--;
 			}
 			z[j++] = c;
 		}
-		while( j>0 && IsSpace(z[j-1]) ){ j--; }
+		while (j > 0 && IsSpace(z[j - 1])) {
+			j--;
+		}
 		z[j] = 0;
-		if( state.StringLength(z)>=79 ){
-			for(i=j=0; (c = z[i])!=0; i++){ /* Copy from z[i] back to z[j] */
-				if( c==cEnd ){
+		if (state.StringLength(z) >= 79) {
+			for (i = j = 0; (c = z[i]) != 0; i++) { /* Copy from z[i] back to z[j] */
+				if (c == cEnd) {
 					cEnd = 0;
-				}else if( c=='"' || c=='\'' || c=='`' ){
+				} else if (c == '"' || c == '\'' || c == '`') {
 					cEnd = c;
-				}else if( c=='[' ){
+				} else if (c == '[') {
 					cEnd = ']';
-				}else if( c=='-' && z[i+1]=='-' ){
+				} else if (c == '-' && z[i + 1] == '-') {
 					cEnd = '\n';
-				}else if( c=='(' ){
+				} else if (c == '(') {
 					nParen++;
-				}else if( c==')' ){
+				} else if (c == ')') {
 					nParen--;
-					if( nLine>0 && nParen==0 && j>0 ){
+					if (nLine > 0 && nParen == 0 && j > 0) {
 						state.printSchemaLineN(z, j, "\n");
 						j = 0;
 					}
 				}
 				z[j++] = c;
-				if( nParen==1 && cEnd==0
-				 && (c=='(' || c=='\n' || (c==',' && !wsToEol(z+i+1)))
-				){
-					if( c=='\n' ) j--;
+				if (nParen == 1 && cEnd == 0 && (c == '(' || c == '\n' || (c == ',' && !wsToEol(z + i + 1)))) {
+					if (c == '\n')
+						j--;
 					state.printSchemaLineN(z, j, "\n  ");
 					j = 0;
 					nLine++;
-					while( IsSpace(z[i+1]) ){ i++; }
+					while (IsSpace(z[i + 1])) {
+						i++;
+					}
 				}
 			}
 			z[j] = 0;
@@ -739,21 +769,23 @@ public:
 	** Return true if string z[] has nothing but whitespace and comments to the
 	** end of the first line.
 	*/
-	static int wsToEol(const char *z){
+	static int wsToEol(const char *z) {
 		int i;
-		for(i=0; z[i]; i++){
-			if( z[i]=='\n' ) return 1;
-			if( IsSpace(z[i]) ) continue;
-			if( z[i]=='-' && z[i+1]=='-' ) return 1;
+		for (i = 0; z[i]; i++) {
+			if (z[i] == '\n')
+				return 1;
+			if (IsSpace(z[i]))
+				continue;
+			if (z[i] == '-' && z[i + 1] == '-')
+				return 1;
 			return 0;
 		}
 		return 1;
 	}
 };
 
-
 unique_ptr<RowRenderer> ShellState::GetRowRenderer() {
-	switch(cMode) {
+	switch (cMode) {
 	case RenderMode::LINE:
 		return unique_ptr<RowRenderer>(new ModeLineRenderer(*this));
 	case RenderMode::EXPLAIN:
@@ -788,4 +820,4 @@ unique_ptr<RowRenderer> ShellState::GetRowRenderer() {
 	}
 }
 
-}
+} // namespace duckdb_shell
