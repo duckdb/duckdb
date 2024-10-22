@@ -306,7 +306,7 @@ public:
 		for (idx_t i = 0; i < data.size(); i++) {
 			state.PrintPadded(col_names[i], header_width);
 			state.Print(" = ");
-			state.Print(data[i] ? data[i] : state.nullValue);
+			state.PrintValue(data[i]);
 			state.Print(state.rowSeparator);
 		}
 	}
@@ -367,11 +367,7 @@ public:
 			if (i > 0) {
 				state.Print(state.colSeparator);
 			}
-			auto z = data[i];
-			if (z == 0) {
-				z = state.nullValue;
-			}
-			state.Print(z);
+			state.PrintValue(data[i]);
 		}
 		state.Print(state.rowSeparator);
 	}
@@ -401,7 +397,7 @@ public:
 		state.Print("<tr>");
 		for (idx_t i = 0; i < data.size(); i++) {
 			state.Print("<td>");
-			output_html_string(data[i] ? data[i] : state.nullValue);
+			output_html_string(data[i] ? data[i] : state.nullValue.c_str());
 			state.Print("</td>\n");
 		}
 		state.Print("</tr>\n");
@@ -465,7 +461,7 @@ public:
 			if (i > 0) {
 				state.Print(state.colSeparator);
 			}
-			state.output_c_string(data[i] ? data[i] : state.nullValue);
+			state.output_c_string(data[i] ? data[i] : state.nullValue.c_str());
 		}
 		state.Print(state.rowSeparator);
 	}
@@ -524,7 +520,7 @@ public:
 		for (idx_t i = 0; i < data.size(); i++) {
 			if (i > 0)
 				state.Print(state.colSeparator);
-			state.Print(data[i] ? data[i] : state.nullValue);
+			state.PrintValue(data[i]);
 		}
 		state.Print(state.rowSeparator);
 	}

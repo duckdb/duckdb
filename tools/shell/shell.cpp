@@ -488,6 +488,10 @@ void ShellState::Print(const string &str) {
 	utf8_printf(out, "%s", str.c_str());
 }
 
+void ShellState::PrintValue(const char *str) {
+	Print(str ? str : nullValue.c_str());
+}
+
 void ShellState::PrintPadded(const char *str, idx_t len) {
 	utf8_printf(out, "%*s", int(len), str);
 }
@@ -3182,7 +3186,7 @@ columnar_end:
 }
 
 extern "C" {
-extern char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, char *null_value, int columns);
+extern char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value, int columns);
 }
 
 /*
@@ -3194,7 +3198,7 @@ void ShellState::exec_prepared_stmt(
   if (cMode == RenderMode::DUCKBOX) {
 	  size_t max_rows = outfile[0] == '\0' || outfile[0] == '|' ? this->max_rows : (size_t) -1;
 	  size_t max_width = outfile[0] == '\0' || outfile[0] == '|' ? this->max_width : (size_t) -1;
-	  char *str = sqlite3_print_duckbox(pStmt, max_rows, max_width, nullValue, columns);
+	  char *str = sqlite3_print_duckbox(pStmt, max_rows, max_width, nullValue.c_str(), columns);
 	  if (str) {
 		  utf8_printf(out, "%s", str);
 		  sqlite3_free(str);
@@ -5390,8 +5394,7 @@ int ShellState::do_meta_command(char *zLine){
 
   if( c=='n' && strncmp(azArg[0], "nullvalue", n)==0 ){
     if( nArg==2 ){
-      sqlite3_snprintf(sizeof(nullValue), nullValue,
-                       "%.*s", (int)ArraySize(nullValue)-1, azArg[1]);
+		nullValue = azArg[1];
     }else{
       raw_printf(stderr, "Usage: .nullvalue STRING\n");
       rc = 1;
@@ -5913,7 +5916,7 @@ int ShellState::do_meta_command(char *zLine){
     utf8_printf(out,"%12.12s: %s\n","headers", azBool[showHeader!=0]);
     utf8_printf(out, "%12.12s: %s\n","mode", modeDescr[int(mode)]);
     utf8_printf(out, "%12.12s: ", "nullvalue");
-      output_c_string(nullValue);
+      output_c_string(nullValue.c_str());
       raw_printf(out, "\n");
     utf8_printf(out,"%12.12s: %s\n","output",
             strlen30(outfile) ? outfile : "stdout");
@@ -6526,7 +6529,6 @@ static void verify_uninitialized(void){
 ** Initialize the state information in data
 */
 static void main_init(ShellState *data) {
-  memset(data, 0, sizeof(*data));
   data->normalMode = data->cMode = data->mode = RenderMode::DUCKBOX;
   data->max_rows = 40;
   data->autoExplain = 1;
@@ -6853,8 +6855,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
       sqlite3_snprintf(sizeof(data.rowSeparator), data.rowSeparator,
                        "%s",cmdline_option_value(argc,argv,++i));
     }else if( strcmp(z,"-nullvalue")==0 ){
-      sqlite3_snprintf(sizeof(data.nullValue), data.nullValue,
-                       "%s",cmdline_option_value(argc,argv,++i));
+    	data.nullValue = cmdline_option_value(argc,argv,++i);
     }else if( strcmp(z,"-header")==0 ){
       data.showHeader = 1;
     }else if( strcmp(z,"-noheader")==0 ){
@@ -7038,8 +7039,5 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
   for(i=0; i<argcToFree; i++) free(argvToFree[i]);
   free(argvToFree);
 #endif
-  /* Clear the global data structure so that valgrind will detect memory
-  ** leaks */
-  memset(&data, 0, sizeof(data));
   return rc;
 }
