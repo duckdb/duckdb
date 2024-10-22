@@ -3101,7 +3101,7 @@ ColumnarResult ShellState::ExecuteColumnar(sqlite3_stmt *pStmt){
 	for(idx_t i=0; i<result.data.size(); i++){
 		idx_t width = strlenChar(result.data[i]);
 		idx_t column_idx = i%result.column_count;
-		if( width>result.column_width[column_idx] ) result.column_width[column_idx] = width;
+		if( static_cast<int>(width)>result.column_width[column_idx] ) result.column_width[column_idx] = width;
 	}
 	return result;
 }
