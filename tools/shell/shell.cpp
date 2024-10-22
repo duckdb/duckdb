@@ -2918,6 +2918,9 @@ static int callback(void *pArg, int nArg, char **azArg, char **azCol){
   /* since we don't have type info, call the shell_callback with a NULL value */
 	auto p = (ShellState *) pArg;
 	auto renderer = p->GetRowRenderer();
+	if (!renderer) {
+		return 0;
+	}
 	RowResult result;
 	for(idx_t i = 0; i < nArg; i++) {
 		result.column_names.push_back(azCol[i]);
@@ -3226,7 +3229,6 @@ void ShellState::exec_prepared_stmt(
 	result.types.resize(nCol);
 	for(idx_t i = 0; i < nCol; i++) {
 		result.column_names.push_back(sqlite3_column_name(pStmt, i));
-		result.types[i] = sqlite3_column_type(pStmt, i);
 	}
 	result.pStmt = pStmt;
 
@@ -3237,12 +3239,13 @@ void ShellState::exec_prepared_stmt(
 		if (renderer) {
 		  /* extract the data and data types */
 		  for(idx_t i=0; i<nCol; i++){
+			result.types[i] = sqlite3_column_type(pStmt, i);
 			if( result.types[i]==SQLITE_BLOB && cMode==RenderMode::INSERT ){
 			  result.data[i] = "";
 			}else{
 			  result.data[i] = (const char *) sqlite3_column_text(pStmt, i);
 			}
-			if( !result.data[i] && (result.types[i]!=SQLITE_NULL) ){
+			if( !result.data[i] && result.types[i]!=SQLITE_NULL){
 				// OOM
 			  rc = SQLITE_NOMEM;
 			  break;
@@ -3261,7 +3264,9 @@ void ShellState::exec_prepared_stmt(
 		}
 	} while( SQLITE_ROW == rc );
 
-	renderer->RenderFooter(result);
+	if (renderer) {
+		renderer->RenderFooter(result);
+	}
 }
 
 /*

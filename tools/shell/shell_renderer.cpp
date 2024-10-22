@@ -609,7 +609,7 @@ public:
 				if (strcmp(data[i], "inf") == 0) {
 					state.Print("1e999");
 				} else if (strcmp(data[i], "-inf") == 0) {
-					state.Print("1e999");
+					state.Print("-1e999");
 				} else {
 					state.Print(data[i]);
 				}
