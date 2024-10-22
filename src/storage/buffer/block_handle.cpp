@@ -36,7 +36,7 @@ BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
 	if (buffer && buffer->type != FileBufferType::TINY_BUFFER) {
 		// we kill the latest version in the eviction queue
 		auto &buffer_manager = block_manager.buffer_manager;
-		buffer_manager.GetBufferPool().IncrementDeadNodes(buffer->type);
+		buffer_manager.GetBufferPool().IncrementDeadNodes(*this);
 	}
 
 	// no references remain to this block: erase

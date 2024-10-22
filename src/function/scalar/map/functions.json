@@ -1,0 +1,9 @@
+[
+    {
+        "name": "map_contains",
+        "parameters": "map,key",
+        "description": "Checks if a map contains a given key.",
+        "example": "map_contains(MAP {'key1': 10, 'key2': 20, 'key3': 30}, 'key2')",
+        "type": "scalar_function"
+    }
+]

@@ -40,7 +40,6 @@ void MapUtil::ReinterpretMap(Vector &result, Vector &input, idx_t count) {
 void BuiltinFunctions::RegisterNestedFunctions() {
 	Register<StructPackFun>();
 	Register<RowFun>();
-	Register<MapContainsFun>();
 }
 
 } // namespace duckdb
