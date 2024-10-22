@@ -32,7 +32,7 @@ statement ok
 checkpoint
 
 query III
-SELECT list_aggr(str_split(a,''),'min'), list_aggr(str_split(a,''),'min'), strlen(a)  from normal_string
+SELECT list_aggr(string_split_regex(a,''),'min'), list_aggr(string_split_regex(a,''),'min'), strlen(a)  from normal_string
 ----
 a	a	3900
 b	b	3900
@@ -61,7 +61,7 @@ statement ok
 checkpoint
 
 query III
-SELECT list_aggr(str_split(a,''),'min'), list_aggr(str_split(a,''),'min'), strlen(a)  from big_string
+SELECT list_aggr(string_split_regex(a,''),'min'), list_aggr(string_split_regex(a,''),'min'), strlen(a)  from big_string
 ----
 a	a	8000
 b	b	8000
