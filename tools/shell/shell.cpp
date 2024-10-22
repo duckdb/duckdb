@@ -3311,7 +3311,6 @@ int ShellState::shell_exec(
 
       /* save off the prepared statment handle and reset row count */
       this->pStmt = pStmt;
-      cnt = 0;
 
       /* echo the sql statement if echo on */
       if( ShellHasFlag(SHFLG_Echo) ){
@@ -4858,7 +4857,6 @@ int ShellState::do_meta_command(char *zLine){
     data.showHeader = 0;
     data.cMode = data.mode = RenderMode::LIST;
     sqlite3_snprintf(sizeof(data.colSeparator),data.colSeparator,": ");
-    data.cnt = 0;
     sqlite3_exec(db, "SELECT name, file FROM pragma_database_list",
                  callback, &data, &zErrMsg);
     if( zErrMsg ){
@@ -4951,7 +4949,6 @@ int ShellState::do_meta_command(char *zLine){
     /* When playing back a "dump", the content might appear in an order
     ** which causes immediate foreign key constraints to be violated.
     ** So disable foreign-key constraint enforcement to prevent problems. */
-    raw_printf(out, "PRAGMA foreign_keys=OFF;\n");
     raw_printf(out, "BEGIN TRANSACTION;\n");
     writableSchema = 0;
     showHeader = 0;

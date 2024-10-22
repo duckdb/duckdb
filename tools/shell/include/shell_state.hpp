@@ -81,7 +81,6 @@ struct ShellState {
 	uint8_t eTraceType;         /* SHELL_TRACE_* value for type of trace */
 	unsigned mEqpLines;         /* Mask of veritical lines in the EQP output graph */
 	int outCount;               /* Revert to stdout when reaching zero */
-	int cnt;                    /* Number of records displayed so far */
 	int lineno;                 /* Line number of last line read from in */
 	int openFlags;              /* Additional flags to open.  (SQLITE_OPEN_NOFOLLOW) */
 	FILE *in;                   /* Read commands from this stream */
