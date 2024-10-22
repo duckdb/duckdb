@@ -4724,6 +4724,11 @@ MetadataResult SetOutputMode(ShellState &state, const char **azArg, idx_t nArg) 
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult SetNullValue(ShellState &state, const char **azArg, idx_t nArg) {
+	state.nullValue = azArg[1];
+	return MetadataResult::SUCCESS;
+}
+
 static const MetadataCommand metadata_commands[] = {
 	{"backup", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
 	{"bail", 2, ToggleBail, "on|off", "Stop after hitting an error.  Default OFF", 3},
@@ -4742,7 +4747,8 @@ static const MetadataCommand metadata_commands[] = {
 	{"log", 2, ToggleLog, "FILE|off", "Turn logging on or off.  FILE can be stderr/stdout", 0},
 	{"maxrows", 0, SetMaxRows, "COUNT", "Sets the maximum number of rows for display (default: 40). Only for duckbox mode.", 0},
 	{"maxwidth", 0, SetMaxWidth, "COUNT", "Sets the maximum width in characters. 0 defaults to terminal width. Only for duckbox mode.", 0},
-{"mode", 0, SetOutputMode, "MODE ?TABLE?", "Set output mode", 0},
+	{"mode", 0, SetOutputMode, "MODE ?TABLE?", "Set output mode", 0},
+	{"nullvalue", 2, SetNullValue, "STRING", "Use STRING in place of NULL values", 0},
 
 	{"rows", 1, SetRowRendering, "", "Row-wise rendering of query results (default)", 0},
 	{"save", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
@@ -5095,15 +5101,6 @@ int ShellState::do_meta_command(char *zLine){
     }
   }else
 
-  if( c=='n' && strncmp(azArg[0], "nullvalue", n)==0 ){
-    if( nArg==2 ){
-		nullValue = azArg[1];
-    }else{
-      raw_printf(stderr, "Usage: .nullvalue STRING\n");
-      rc = 1;
-    }
-  }else
-
   if( c=='o' && strncmp(azArg[0], "open", n)==0 && n>=2 ){
     char *zNewFilename;  /* Name of the database file to open */
     int iName = 1;       /* Index in azArg[] of the filename */
@@ -5426,115 +5423,6 @@ int ShellState::do_meta_command(char *zLine){
     }
   }else
 
-  if( c=='s' && n>=4 && strncmp(azArg[0],"sha3sum",n)==0 ){
-    const char *zLike = 0;   /* Which table to checksum. 0 means everything */
-    int i;                   /* Loop counter */
-    int bSchema = 0;         /* Also hash the schema */
-    int bSeparate = 0;       /* Hash each table separately */
-    int iSize = 224;         /* Hash algorithm to use */
-    int bDebug = 0;          /* Only show the query that would have run */
-    sqlite3_stmt *pStmt;     /* For querying tables names */
-    char *zSql;              /* SQL to be run */
-    char *zSep;              /* Separator */
-    string sSql;          /* Complete SQL for the query to run the hash */
-    string sQuery;        /* Set of queries used to read all content */
-    open_db(0);
-    for(i=1; i<nArg; i++){
-      const char *z = azArg[i];
-      if( z[0]=='-' ){
-        z++;
-        if( z[0]=='-' ) z++;
-        if( strcmp(z,"schema")==0 ){
-          bSchema = 1;
-        }else
-        if( strcmp(z,"sha3-224")==0 || strcmp(z,"sha3-256")==0
-         || strcmp(z,"sha3-384")==0 || strcmp(z,"sha3-512")==0
-        ){
-          iSize = atoi(&z[5]);
-        }else
-        if( strcmp(z,"debug")==0 ){
-          bDebug = 1;
-        }else
-        {
-          utf8_printf(stderr, "Unknown option \"%s\" on \"%s\"\n",
-                      azArg[i], azArg[0]);
-          showHelp(out, azArg[0]);
-          rc = 1;
-          goto meta_command_exit;
-        }
-      }else if( zLike ){
-        raw_printf(stderr, "Usage: .sha3sum ?OPTIONS? ?LIKE-PATTERN?\n");
-        rc = 1;
-        goto meta_command_exit;
-      }else{
-        zLike = z;
-        bSeparate = 1;
-        if( sqlite3_strlike("sqlite\\_%", zLike, '\\')==0 ) bSchema = 1;
-      }
-    }
-    if( bSchema ){
-      zSql = (char*)"SELECT lower(name) FROM sqlite_schema"
-             " WHERE type='table' AND coalesce(rootpage,0)>1"
-             " UNION ALL SELECT 'sqlite_schema'"
-             " ORDER BY 1 collate nocase";
-    }else{
-      zSql = (char*)"SELECT lower(name) FROM sqlite_schema"
-             " WHERE type='table' AND coalesce(rootpage,0)>1"
-             " AND name NOT LIKE 'sqlite_%'"
-             " ORDER BY 1 collate nocase";
-    }
-    sqlite3_prepare_v2(db, zSql, -1, &pStmt, 0);
-    appendText(sSql, "WITH [sha3sum$query](a,b) AS(",0);
-    zSep = (char*)"VALUES(";
-    while( SQLITE_ROW==sqlite3_step(pStmt) ){
-      const char *zTab = (const char*)sqlite3_column_text(pStmt,0);
-      if( zLike && sqlite3_strlike(zLike, zTab, 0)!=0 ) continue;
-      if( strncmp(zTab, "sqlite_",7)!=0 ){
-        appendText(sQuery,"SELECT * FROM ", 0);
-        appendText(sQuery,zTab,'"');
-        appendText(sQuery," NOT INDEXED;", 0);
-      }else if( strcmp(zTab, "sqlite_schema")==0 ){
-        appendText(sQuery,"SELECT type,name,tbl_name,sql FROM sqlite_schema"
-                           " ORDER BY name;", 0);
-      }else if( strcmp(zTab, "sqlite_sequence")==0 ){
-        appendText(sQuery,"SELECT name,seq FROM sqlite_sequence"
-                           " ORDER BY name;", 0);
-      }else if( strcmp(zTab, "sqlite_stat1")==0 ){
-        appendText(sQuery,"SELECT tbl,idx,stat FROM sqlite_stat1"
-                           " ORDER BY tbl,idx;", 0);
-      }else if( strcmp(zTab, "sqlite_stat4")==0 ){
-        appendText(sQuery, "SELECT * FROM ", 0);
-        appendText(sQuery, zTab, 0);
-        appendText(sQuery, " ORDER BY tbl, idx, rowid;\n", 0);
-      }
-      appendText(sSql, zSep, 0);
-      appendText(sSql, sQuery.c_str(), '\'');
-      appendText(sSql, ",", 0);
-      appendText(sSql, zTab, '\'');
-      zSep = (char*)"),(";
-    }
-    sqlite3_finalize(pStmt);
-    if( bSeparate ){
-      zSql = sqlite3_mprintf(
-          "%s))"
-          " SELECT lower(hex(sha3_query(a,%d))) AS hash, b AS label"
-          "   FROM [sha3sum$query]",
-          sSql.c_str(), iSize);
-    }else{
-      zSql = sqlite3_mprintf(
-          "%s))"
-          " SELECT lower(hex(sha3_query(group_concat(a,''),%d))) AS hash"
-          "   FROM [sha3sum$query]",
-          sSql.c_str(), iSize);
-    }
-    if( bDebug ){
-      utf8_printf(out, "%s\n", zSql);
-    }else{
-      shell_exec(zSql, 0);
-    }
-    sqlite3_free(zSql);
-  }else
-
 #ifndef SQLITE_NOHAVE_SYSTEM
   if( c=='s'
    && (strncmp(azArg[0], "shell", n)==0 || strncmp(azArg[0],"system",n)==0)
@@ -5688,11 +5576,6 @@ int ShellState::do_meta_command(char *zLine){
     sqlite3_free(azResult);
   }else
 
-  if( c=='t' && n>4 && strncmp(azArg[0], "timeout", n)==0 ){
-    open_db(0);
-    sqlite3_busy_timeout(db, nArg>=2 ? (int)integerValue(azArg[1]) : 0);
-  }else
-
   if( c=='t' && n>=5 && strncmp(azArg[0], "timer", n)==0 ){
     if( nArg==2 ){
       enableTimer = booleanValue(azArg[1]);
@@ -5723,38 +5606,6 @@ int ShellState::do_meta_command(char *zLine){
 #elif defined(__GNUC__) && defined(__VERSION__)
     utf8_printf(out, "gcc-" __VERSION__ "\n");
 #endif
-  }else
-
-  if( c=='v' && strncmp(azArg[0], "vfsinfo", n)==0 ){
-    const char *zDbName = nArg==2 ? azArg[1] : "main";
-    sqlite3_vfs *pVfs = 0;
-    if( db ){
-      sqlite3_file_control(db, zDbName, SQLITE_FCNTL_VFS_POINTER, &pVfs);
-      if( pVfs ){
-        utf8_printf(out, "vfs.zName      = \"%s\"\n", pVfs->zName);
-        raw_printf(out, "vfs.iVersion   = %d\n", pVfs->iVersion);
-        raw_printf(out, "vfs.szOsFile   = %d\n", pVfs->szOsFile);
-        raw_printf(out, "vfs.mxPathname = %d\n", pVfs->mxPathname);
-      }
-    }
-  }else
-
-  if( c=='v' && strncmp(azArg[0], "vfslist", n)==0 ){
-    sqlite3_vfs *pVfs;
-    sqlite3_vfs *pCurrent = 0;
-    if( db ){
-      sqlite3_file_control(db, "main", SQLITE_FCNTL_VFS_POINTER, &pCurrent);
-    }
-    for(pVfs=sqlite3_vfs_find(0); pVfs; pVfs=pVfs->pNext){
-      utf8_printf(out, "vfs.zName      = \"%s\"%s\n", pVfs->zName,
-           pVfs==pCurrent ? "  <--- CURRENT" : "");
-      raw_printf(out, "vfs.iVersion   = %d\n", pVfs->iVersion);
-      raw_printf(out, "vfs.szOsFile   = %d\n", pVfs->szOsFile);
-      raw_printf(out, "vfs.mxPathname = %d\n", pVfs->mxPathname);
-      if( pVfs->pNext ){
-        raw_printf(out, "-----------------------------------\n");
-      }
-    }
   }else
 
   if( c=='w' && strncmp(azArg[0], "width", n)==0 ){
