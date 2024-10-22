@@ -342,7 +342,7 @@ idx_t BufferPool::PurgeAgedBlocksInternal(EvictionQueue &queue, uint32_t max_age
 		bool is_fresh = handle->lru_timestamp_msec >= limit && handle->lru_timestamp_msec <= now;
 		purged_bytes += handle->GetMemoryUsage();
 		handle->Unload();
-        // Return false to stop iterating if the current block is_fresh
+		// Return false to stop iterating if the current block is_fresh
 		return !is_fresh;
 	});
 	return purged_bytes;
