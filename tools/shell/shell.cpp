@@ -5309,6 +5309,39 @@ MetadataResult RunShellCommand(ShellState &state, const char **azArg, idx_t nArg
 	return MetadataResult::SUCCESS;
 }
 
+void ShellState::ShowConfiguration() {
+	static const char *azBool[] = { "off", "on", "trigger", "full"};
+	utf8_printf(out, "%12.12s: %s\n","echo",
+								  azBool[ShellHasFlag(SHFLG_Echo)]);
+	utf8_printf(out, "%12.12s: %s\n","explain",
+		 mode==RenderMode::EXPLAIN ? "on" : autoExplain ? "auto" : "off");
+	utf8_printf(out,"%12.12s: %s\n","headers", azBool[showHeader!=0]);
+	utf8_printf(out, "%12.12s: %s\n","mode", modeDescr[int(mode)]);
+	utf8_printf(out, "%12.12s: ", "nullvalue");
+	output_c_string(nullValue.c_str());
+	raw_printf(out, "\n");
+	utf8_printf(out,"%12.12s: %s\n","output",
+			!outfile.empty() ? outfile.c_str() : "stdout");
+	utf8_printf(out,"%12.12s: ", "colseparator");
+	output_c_string(colSeparator.c_str());
+	raw_printf(out, "\n");
+	utf8_printf(out,"%12.12s: ", "rowseparator");
+	output_c_string(rowSeparator.c_str());
+	raw_printf(out, "\n");
+	utf8_printf(out, "%12.12s: ", "width");
+	for (auto w : colWidth) {
+		raw_printf(out, "%d ", w);
+	}
+	raw_printf(out, "\n");
+	utf8_printf(out, "%12.12s: %s\n", "filename",
+				zDbFilename.c_str());
+}
+
+MetadataResult ShowConfiguration(ShellState &state, const char **azArg, idx_t nArg) {
+	state.ShowConfiguration();
+	return MetadataResult::SUCCESS;
+}
+
 static const MetadataCommand metadata_commands[] = {
 	{"backup", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
 	{"bail", 2, ToggleBail, "on|off", "Stop after hitting an error.  Default OFF", 3},
@@ -5347,6 +5380,7 @@ static const MetadataCommand metadata_commands[] = {
 	{"separator", 0, SetSeparator, "COL ?ROW?", "Change the column and row separators", 0},
 	{"schema", 0, DisplaySchemas, "?PATTERN?", "Show the CREATE statements matching PATTERN", 0},
 	{"shell", 0, RunShellCommand, "CMD ARGS...", "Run CMD ARGS... in a system shell", 0},
+	{"show", 1, ShowConfiguration, "", "Show the current values for various settings", 0},
 	{"system", 0, RunShellCommand, "CMD ARGS...", "Run CMD ARGS... in a system shell", 0},
 
 	{"timeout", 0, nullptr, "", "", 5},
@@ -5423,61 +5457,6 @@ int ShellState::do_meta_command(char *zLine){
 	}
   if (found_argument) {
   } else
-
-#ifndef SQLITE_NOHAVE_SYSTEM
-  if( c=='s'
-   && (strncmp(azArg[0], "shell", n)==0 || strncmp(azArg[0],"system",n)==0)
-  ){
-    char *zCmd;
-    int i, x;
-    if( nArg<2 ){
-      raw_printf(stderr, "Usage: .system COMMAND\n");
-      rc = 1;
-      goto meta_command_exit;
-    }
-    zCmd = sqlite3_mprintf(strchr(azArg[1],' ')==0?"%s":"\"%s\"", azArg[1]);
-    for(i=2; i<nArg; i++){
-      zCmd = sqlite3_mprintf(strchr(azArg[i],' ')==0?"%z %s":"%z \"%s\"",
-                             zCmd, azArg[i]);
-    }
-    x = system(zCmd);
-    sqlite3_free(zCmd);
-    if( x ) raw_printf(stderr, "System command returns %d\n", x);
-  }else
-#endif /* !defined(SQLITE_NOHAVE_SYSTEM) */
-
-  if( c=='s' && strncmp(azArg[0], "show", n)==0 ){
-    static const char *azBool[] = { "off", "on", "trigger", "full"};
-    if( nArg!=1 ){
-      raw_printf(stderr, "Usage: .show\n");
-      rc = 1;
-      goto meta_command_exit;
-    }
-    utf8_printf(out, "%12.12s: %s\n","echo",
-                                  azBool[ShellHasFlag(SHFLG_Echo)]);
-    utf8_printf(out, "%12.12s: %s\n","explain",
-         mode==RenderMode::EXPLAIN ? "on" : autoExplain ? "auto" : "off");
-    utf8_printf(out,"%12.12s: %s\n","headers", azBool[showHeader!=0]);
-    utf8_printf(out, "%12.12s: %s\n","mode", modeDescr[int(mode)]);
-    utf8_printf(out, "%12.12s: ", "nullvalue");
-      output_c_string(nullValue.c_str());
-      raw_printf(out, "\n");
-    utf8_printf(out,"%12.12s: %s\n","output",
-            !outfile.empty() ? outfile.c_str() : "stdout");
-    utf8_printf(out,"%12.12s: ", "colseparator");
-      output_c_string(colSeparator.c_str());
-      raw_printf(out, "\n");
-    utf8_printf(out,"%12.12s: ", "rowseparator");
-      output_c_string(rowSeparator.c_str());
-      raw_printf(out, "\n");
-    utf8_printf(out, "%12.12s: ", "width");
-    for (auto w : colWidth) {
-      raw_printf(out, "%d ", w);
-    }
-    raw_printf(out, "\n");
-    utf8_printf(out, "%12.12s: %s\n", "filename",
-                zDbFilename.c_str());
-  }else
 
   if( (c=='t' && n>1 && strncmp(azArg[0], "tables", n)==0)
    || (c=='i' && (strncmp(azArg[0], "indices", n)==0

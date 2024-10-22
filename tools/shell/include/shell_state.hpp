@@ -131,6 +131,7 @@ public:
 	bool SetOutputFile(const char **azArg, idx_t nArg, char output_mode);
 	bool ReadFromFile(const string &file);
 	bool DisplaySchemas(const char **azArg, idx_t nArg);
+	void ShowConfiguration();
 
 	int strlenChar(const char *z);
 	int strlenChar(const string &str);
