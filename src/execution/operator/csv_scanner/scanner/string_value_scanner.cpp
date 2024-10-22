@@ -1457,7 +1457,7 @@ bool StringValueScanner::IsRowValid() {
 	    make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, make_shared_ptr<CSVErrorHandler>(),
 	                                  csv_file_scan, false, iterator, result_size);
 	auto &tuples = scan_finder->ParseChunk();
-	return tuples.number_of_rows == 1 && tuples.borked_rows.empty();
+	return tuples.number_of_rows == 1 && tuples.borked_rows.empty() && !tuples.current_errors.HasError();
 }
 
 void StringValueScanner::TryRow(CSVState state, idx_t &start_pos, idx_t &end_pos, bool &valid) {
@@ -1532,6 +1532,7 @@ void StringValueScanner::SetStart() {
 	}
 	// 3. We are in an escaped value
 	if (!any_valid_row && potential_start > next_new_line &&
+	    state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0' &&
 	    state_machine->dialect_options.state_machine_options.escape.GetValue() != '\0') {
 		TryRow(CSVState::ESCAPE, potential_start, largest_end_pos, any_valid_row);
 	}

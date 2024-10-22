@@ -261,7 +261,9 @@ string ChangeColumnTypeInfo::ToString() const {
 	result += " ALTER COLUMN ";
 	result += KeywordHelper::WriteOptionallyQuoted(column_name);
 	result += " TYPE ";
-	result += target_type.ToString(); // FIXME: ToSQLString ?
+	if (target_type.IsValid()) {
+		result += target_type.ToString();
+	}
 	auto extra_type_info = target_type.AuxInfo();
 	if (extra_type_info && extra_type_info->type == ExtraTypeInfoType::STRING_TYPE_INFO) {
 		auto &string_info = extra_type_info->Cast<StringTypeInfo>();

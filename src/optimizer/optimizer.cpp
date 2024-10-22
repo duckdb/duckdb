@@ -13,6 +13,7 @@
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pullup.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/optimizer/empty_result_pullup.hpp"
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/limit_pushdown.hpp"
@@ -26,6 +27,7 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/optimizer/unnest_rewriter.hpp"
+#include "duckdb/optimizer/sampling_pushdown.hpp"
 #include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
@@ -142,6 +144,12 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = deliminator.Optimize(std::move(plan));
 	});
 
+	// Pulls up empty results
+	RunOptimizer(OptimizerType::EMPTY_RESULT_PULLUP, [&]() {
+		EmptyResultPullup empty_result_pullup;
+		plan = empty_result_pullup.Optimize(std::move(plan));
+	});
+
 	// then we perform the join ordering optimization
 	// this also rewrites cross products + filters into joins and performs filter pushdowns
 	RunOptimizer(OptimizerType::JOIN_ORDER, [&]() {
@@ -184,6 +192,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::LIMIT_PUSHDOWN, [&]() {
 		LimitPushdown limit_pushdown;
 		plan = limit_pushdown.Optimize(std::move(plan));
+	});
+
+	// perform sampling pushdown
+	RunOptimizer(OptimizerType::SAMPLING_PUSHDOWN, [&]() {
+		SamplingPushdown sampling_pushdown;
+		plan = sampling_pushdown.Optimize(std::move(plan));
 	});
 
 	// transform ORDER BY + LIMIT to TopN

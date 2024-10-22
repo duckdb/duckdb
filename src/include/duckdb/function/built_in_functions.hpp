@@ -59,9 +59,7 @@ private:
 
 	// scalar functions
 	void RegisterCompressedMaterializationFunctions();
-	void RegisterGenericFunctions();
 	void RegisterOperators();
-	void RegisterStringFunctions();
 	void RegisterNestedFunctions();
 	void RegisterSequenceFunctions();
 

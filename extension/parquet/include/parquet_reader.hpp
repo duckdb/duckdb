@@ -93,6 +93,7 @@ struct ParquetOptions {
 
 	MultiFileReaderOptions file_options;
 	vector<ParquetColumnDefinition> schema;
+	idx_t explicit_cardinality = 0;
 
 public:
 	void Serialize(Serializer &serializer) const;
@@ -137,7 +138,7 @@ public:
 	//! Index of the file_row_number column
 	idx_t file_row_number_idx = DConstants::INVALID_INDEX;
 	//! Parquet schema for the generated columns
-	vector<duckdb_parquet::format::SchemaElement> generated_column_schema;
+	vector<duckdb_parquet::SchemaElement> generated_column_schema;
 	//! Table column names - set when using COPY tbl FROM file.parquet
 	vector<string> table_columns;
 
@@ -166,7 +167,7 @@ public:
 	idx_t NumRows();
 	idx_t NumRowGroups();
 
-	const duckdb_parquet::format::FileMetaData *GetFileMetadata();
+	const duckdb_parquet::FileMetaData *GetFileMetadata();
 
 	uint32_t Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot);
 	uint32_t ReadData(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
@@ -203,7 +204,7 @@ private:
 
 	unique_ptr<ColumnReader> CreateReaderRecursive(ClientContext &context, idx_t depth, idx_t max_define,
 	                                               idx_t max_repeat, idx_t &next_schema_idx, idx_t &next_file_idx);
-	const duckdb_parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
+	const duckdb_parquet::RowGroup &GetGroup(ParquetReaderScanState &state);
 	uint64_t GetGroupCompressedSize(ParquetReaderScanState &state);
 	idx_t GetGroupOffset(ParquetReaderScanState &state);
 	// Group span is the distance between the min page offset and the max page offset plus the max page compressed size

@@ -108,6 +108,11 @@ TEST_CASE("Test Arrow Extension Types", "[arrow][.]") {
 
 	// TIME_TZ
 	TestArrowRoundtrip("SELECT '02:30:00+04'::TIMETZ str FROM range(5) tbl(i)", false, true);
+
+	// VARINT
+	TestArrowRoundtrip("SELECT 85070591730234614260976917445211069672::VARINT str FROM range(5) tbl(i)", false, true);
+
+	TestArrowRoundtrip("SELECT 85070591730234614260976917445211069672::VARINT str FROM range(5) tbl(i)", true, true);
 }
 
 TEST_CASE("Test Arrow Extension Types - JSON", "[arrow][.]") {

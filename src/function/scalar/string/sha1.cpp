@@ -32,8 +32,4 @@ ScalarFunctionSet SHA1Fun::GetFunctions() {
 	return set;
 }
 
-void SHA1Fun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetFunctions());
-}
-
 } // namespace duckdb

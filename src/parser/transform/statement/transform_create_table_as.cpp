@@ -8,17 +8,25 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(duckdb_libpgquer
 	if (stmt.relkind == duckdb_libpgquery::PG_OBJECT_MATVIEW) {
 		throw NotImplementedException("Materialized view not implemented");
 	}
-	if (stmt.is_select_into || stmt.into->colNames || stmt.into->options) {
+	if (stmt.is_select_into || stmt.into->options) {
 		throw NotImplementedException("Unimplemented features for CREATE TABLE as");
 	}
-	auto qname = TransformQualifiedName(*stmt.into->rel);
 	if (stmt.query->type != duckdb_libpgquery::T_PGSelectStmt) {
 		throw ParserException("CREATE TABLE AS requires a SELECT clause");
 	}
-	auto query = TransformSelectStmt(*stmt.query, false);
 
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateTableInfo>();
+	auto qname = TransformQualifiedName(*stmt.into->rel);
+	auto query = TransformSelectStmt(*stmt.query, false);
+
+	if (stmt.into->colNames) {
+		auto cols = TransformStringList(stmt.into->colNames);
+		for (idx_t i = 0; i < cols.size(); i++) {
+			// We really don't know the type of the columns during parsing, so we just use UNKNOWN
+			info->columns.AddColumn(ColumnDefinition(cols[i], LogicalType::UNKNOWN));
+		}
+	}
 	info->catalog = qname.catalog;
 	info->schema = qname.schema;
 	info->table = qname.name;

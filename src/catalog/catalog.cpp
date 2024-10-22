@@ -315,17 +315,6 @@ struct CatalogLookup {
 	string schema;
 };
 
-//! Return value of Catalog::LookupEntry
-struct CatalogEntryLookup {
-	optional_ptr<SchemaCatalogEntry> schema;
-	optional_ptr<CatalogEntry> entry;
-	ErrorData error;
-
-	DUCKDB_API bool Found() const {
-		return entry;
-	}
-};
-
 //===--------------------------------------------------------------------===//
 // Generic
 //===--------------------------------------------------------------------===//
@@ -600,7 +589,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 	auto databases = db_manager.GetDatabases(context);
 	auto &config = DBConfig::GetConfig(context);
 
-	auto max_schema_count = config.options.catalog_error_max_schemas;
+	auto max_schema_count = config.GetSetting<CatalogErrorMaxSchemasSetting>(context);
 	for (auto database : databases) {
 		if (unseen_schemas.size() >= max_schema_count) {
 			break;

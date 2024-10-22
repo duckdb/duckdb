@@ -209,7 +209,7 @@ struct DBConfigOptions {
 	bool arrow_use_list_view = false;
 	//! Whenever a DuckDB type does not have a clear native or canonical extension match in Arrow, export the types
 	//! with a duckdb.type_name extension name
-	bool arrow_arrow_lossless_conversion = false;
+	bool arrow_lossless_conversion = false;
 	//! Whether when producing arrow objects we produce string_views or regular strings
 	bool produce_arrow_string_views = false;
 	//! Database configuration variables as controlled by SET
@@ -372,6 +372,18 @@ public:
 	OrderType ResolveOrder(OrderType order_type) const;
 	OrderByNullType ResolveNullOrder(OrderType order_type, OrderByNullType null_type) const;
 	const string UserAgent() const;
+
+	template <class OP>
+	typename OP::RETURN_TYPE GetSetting(const ClientContext &context) {
+		std::lock_guard<mutex> lock(config_lock);
+		return OP::GetSetting(context).template GetValue<typename OP::RETURN_TYPE>();
+	}
+
+	template <class OP>
+	Value GetSettingValue(const ClientContext &context) {
+		std::lock_guard<mutex> lock(config_lock);
+		return OP::GetSetting(context);
+	}
 
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;
