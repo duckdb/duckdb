@@ -4665,7 +4665,7 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 	sqlite3_stmt *pStmt = NULL;                /* A statement */
 	int nCol;                                  /* Number of columns in the table */
 	int nByte;                                 /* Number of bytes in an SQL string */
-	int j;                                  /* Loop counters */
+	int j;                                     /* Loop counters */
 	int needCommit;                            /* True to COMMIT or ROLLBACK at end */
 	char *zSql;                                /* An SQL statement */
 	ImportCtx sCtx;                            /* Reader context */
@@ -4697,7 +4697,7 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 		} else if (strcmp(z, "-v") == 0) {
 			eVerbose++;
 		} else if (strcmp(z, "-skip") == 0 && i < nArg - 1) {
-			nSkip = (int) integerValue(azArg[++i]);
+			nSkip = (int)integerValue(azArg[++i]);
 		} else if (strcmp(z, "-ascii") == 0) {
 			sCtx.cColSep = SEP_Unit[0];
 			sCtx.cRowSep = SEP_Record[0];
@@ -4940,7 +4940,7 @@ MetadataResult ImportData(ShellState &state, const char **azArg, idx_t nArg) {
 
 bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
 	char *zNewFilename; /* Name of the database file to open */
-	idx_t iName = 1;      /* Index in azArg[] of the filename */
+	idx_t iName = 1;    /* Index in azArg[] of the filename */
 	int newFlag = 0;    /* True to delete file before opening */
 	/* Close the existing database */
 	close_db(db);
