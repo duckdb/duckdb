@@ -59,45 +59,60 @@ namespace duckdb {
 // (Sampling) Analyze
 //===--------------------------------------------------------------------===//
 
-bool ZSTDSamplingState::Finalize() {
-	finalized = true;
-	concatenated_samples = malloc(total_sample_size);
-	if (!concatenated_samples) {
-		return false;
-	}
-	idx_t offset = 0;
+static void IterateThroughVector(Vector &vec, idx_t count, std::function<void(const string_t &val)> callback) {
+	UnifiedVectorFormat vdata;
+	vec.ToUnifiedFormat(count, vdata);
 
-	sample_sizes.reserve(vector_sizes.size() * STANDARD_VECTOR_SIZE);
-	for (idx_t i = 0; i < vector_sizes.size(); i++) {
-		auto &count = vector_sizes[i];
-		auto &vec = to_sample_vectors[i];
-
-		UnifiedVectorFormat vdata;
-		vec.ToUnifiedFormat(count, vdata);
-
-		auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = vdata.sel->get_index(i);
-			if (!vdata.validity.RowIsValid(idx)) {
-				continue;
-			}
-			auto &str = data[idx];
-			auto string_size = str.GetSize();
-			memcpy((char *)concatenated_samples + offset, str.GetData(), string_size);
-			offset += string_size;
-			sample_sizes.push_back(string_size);
+	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
+	for (idx_t j = 0; j < count; j++) {
+		auto idx = vdata.sel->get_index(j);
+		if (!vdata.validity.RowIsValid(idx)) {
+			continue;
 		}
+		auto &str = data[idx];
+		callback(str);
 	}
-	return true;
+}
+
+static void SampleVector(ZSTDSamplingState &state, Vector &vec, idx_t count) {
+	idx_t sum = 0;
+	auto collect_string_sizes = [&sum, &state](const string_t &str) {
+		auto string_size = str.GetSize();
+		sum += string_size;
+		state.sample_sizes.push_back(string_size);
+	};
+	IterateThroughVector(vec, count, collect_string_sizes);
+
+	auto &total_sample_size = state.total_sample_size;
+	auto &sample_buffer = state.sample_buffer;
+
+	// Grow the sample_buffer if necessary
+	idx_t required_size = NextPowerOfTwo(total_sample_size + sum);
+	required_size = MaxValue<idx_t>(required_size, Storage::DEFAULT_BLOCK_SIZE);
+	if (required_size > sample_buffer.GetSize()) {
+		auto new_buffer = Allocator::DefaultAllocator().Allocate(required_size);
+		if (total_sample_size) {
+			memcpy(new_buffer.get(), sample_buffer.get(), total_sample_size);
+		}
+		sample_buffer = std::move(new_buffer);
+	}
+
+	auto copy_into_samples = [&total_sample_size, &sample_buffer](const string_t &str) {
+		auto string_size = str.GetSize();
+		memcpy((char *)sample_buffer.get() + total_sample_size, str.GetData(), string_size);
+		total_sample_size += string_size;
+	};
+	IterateThroughVector(vec, count, copy_into_samples);
+}
+
+ZSTDSamplingState::ZSTDSamplingState() {
+	auto &zstd_sample_state = *this;
+	sampling_state.SetSampler(
+	    [&zstd_sample_state](Vector &vec, idx_t count) { SampleVector(zstd_sample_state, vec, count); });
 }
 
 void ZSTDSamplingState::Reset() {
-	free(concatenated_samples);
-	concatenated_samples = nullptr;
 	sample_sizes.clear();
-	finalized = false;
-	to_sample_vectors.clear();
-	vector_sizes.clear();
 	total_sample_size = 0;
 	sampling_state = AnalyzeSamplingState();
 }
@@ -195,9 +210,6 @@ bool ZSTDStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t coun
 
 DictBuffer CreateDictFromSamples(ZSTDAnalyzeState &state) {
 	auto &sampling_state = state.sampling_state;
-	if (!sampling_state.Finalize()) {
-		return DictBuffer();
-	}
 
 	auto space_required = state.GetVectorMetadataSize();
 	space_required += sizeof(block_id_t);
@@ -223,7 +235,7 @@ DictBuffer CreateDictFromSamples(ZSTDAnalyzeState &state) {
 	}
 
 	auto res = duckdb_zstd::ZDICT_trainFromBuffer(
-	    buffer.Buffer(), buffer.Capacity(), sampling_state.concatenated_samples,
+	    buffer.Buffer(), buffer.Capacity(), sampling_state.sample_buffer.get(),
 	    (size_t *)sampling_state.sample_sizes.data(), UnsafeNumericCast<uint32_t>(sampling_state.sample_sizes.size()));
 	if (duckdb_zstd::ZSTD_isError(res)) {
 		return DictBuffer();
@@ -255,7 +267,7 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	// FIXME: use streaming compression ? both to simulate the real compression better and to reduce the amount of space
 	// we have to allocate here
 	auto compressed_size = duckdb_zstd::ZSTD_compress_usingCDict(
-	    state.context, dst, required_space, state.sampling_state.concatenated_samples,
+	    state.context, dst, required_space, state.sampling_state.sample_buffer.get(),
 	    state.sampling_state.total_sample_size, state.compression_dict);
 	free(dst);
 	if (duckdb_zstd::ZSTD_isError(compressed_size)) {
@@ -327,11 +339,6 @@ public:
 		offset += (sizeof(compressed_size_t) * total_vector_count);
 
 		current_buffer_ptr = current_buffer->Ptr() + offset;
-
-		// Initialize the context for streaming compression
-		duckdb_zstd::ZSTD_CCtx_refCDict(analyze_state->context, analyze_state->compression_dict);
-		duckdb_zstd::ZSTD_CCtx_setParameter(analyze_state->context, duckdb_zstd::ZSTD_c_compressionLevel,
-		                                    GetCompressionLevel());
 	}
 
 public:
@@ -407,6 +414,12 @@ public:
 		current_buffer_ptr += vector_size * sizeof(string_length_t);
 		// 'out_buffer' should be set to point directly after the string_lengths
 		ResetOutBuffer();
+
+		// Initialize the context for streaming compression
+		duckdb_zstd::ZSTD_CCtx_reset(analyze_state->context, duckdb_zstd::ZSTD_reset_session_only);
+		duckdb_zstd::ZSTD_CCtx_refCDict(analyze_state->context, analyze_state->compression_dict);
+		duckdb_zstd::ZSTD_CCtx_setParameter(analyze_state->context, duckdb_zstd::ZSTD_c_compressionLevel,
+		                                    GetCompressionLevel());
 	}
 
 	void CompressString(const string_t &string, bool end_of_vector) {
@@ -695,6 +708,8 @@ public:
 	string_length_t *string_lengths;
 	//! The amount of values already consumed from the state
 	idx_t scanned_count = 0;
+	//! The amount of compressed data read
+	idx_t compressed_scan_count = 0;
 	//! The inBuffer that ZSTD_decompressStream reads the compressed data from
 	duckdb_zstd::ZSTD_inBuffer in_buffer;
 };
@@ -742,9 +757,6 @@ public:
 		offset += (sizeof(compressed_size_t) * amount_of_vectors);
 
 		scanned_count = 0;
-
-		// Initialize the context for streaming decompression
-		duckdb_zstd::ZSTD_DCtx_refDDict(decompression_context, decompression_dict);
 	}
 	~ZSTDScanState() {
 		duckdb_zstd::ZSTD_freeDDict(decompression_dict);
@@ -833,7 +845,13 @@ public:
 		scan_state.in_buffer.pos = 0;
 		scan_state.in_buffer.size = block_manager.GetBlockSize() - sizeof(block_id_t) - current_offset;
 
-		Skip(scan_state, internal_offset);
+		// Initialize the context for streaming decompression
+		duckdb_zstd::ZSTD_DCtx_reset(decompression_context, duckdb_zstd::ZSTD_reset_session_only);
+		duckdb_zstd::ZSTD_DCtx_refDDict(decompression_context, decompression_dict);
+
+		if (internal_offset) {
+			Skip(scan_state, internal_offset);
+		}
 		return scan_state;
 	}
 
@@ -856,7 +874,10 @@ public:
 		// Update the in_buffer to point to the new page
 		scan_state.in_buffer.src = ptr;
 		scan_state.in_buffer.pos = 0;
-		scan_state.in_buffer.size = block_manager.GetBlockSize() - sizeof(block_id_t);
+
+		idx_t page_size = block_manager.GetBlockSize() - sizeof(block_id_t);
+		idx_t remaining_compressed_data = scan_state.metadata.compressed_size - scan_state.compressed_scan_count;
+		scan_state.in_buffer.size = MinValue<idx_t>(page_size, remaining_compressed_data);
 	}
 
 	void Skip(ZSTDVectorScanState &scan_state, idx_t count) {
@@ -872,14 +893,16 @@ public:
 		out_buffer.size = uncompressed_length;
 
 		while (true) {
+			idx_t old_pos = scan_state.in_buffer.pos;
 			size_t res = duckdb_zstd::ZSTD_decompressStream(
 			    /* zds = */ decompression_context,
 			    /* output =*/&out_buffer,
 			    /* input =*/&scan_state.in_buffer);
+			scan_state.compressed_scan_count += scan_state.in_buffer.pos - old_pos;
 			if (duckdb_zstd::ZSTD_isError(res)) {
 				throw InvalidInputException("ZSTD Decompression failed: %s", duckdb_zstd::ZSTD_getErrorName(res));
 			}
-			if (!res) {
+			if (out_buffer.pos == out_buffer.size) {
 				break;
 			}
 			// Did not fully decompress, it needs a new page to read from
@@ -903,27 +926,28 @@ public:
 			data_ptr_t start_of_uncompressed_string = (data_ptr_t)uncompressed_data;
 			DecompressString(scan_state, start_of_uncompressed_string, string_lengths[i]);
 
-			// uncompressed_data += ???
+			uncompressed_data += string_lengths[i];
 			string_data[result_offset + i] = string_t((const char *)start_of_uncompressed_string, string_lengths[i]);
 		}
+		scan_state.scanned_count += count;
+		scanned_count += count;
 	}
 
 	void ScanPartial(idx_t start_idx, Vector &result, idx_t offset, idx_t count) {
 		D_ASSERT(offset + count <= STANDARD_VECTOR_SIZE);
 
 		idx_t remaining = count;
+		idx_t scanned = 0;
 		while (remaining) {
 			idx_t internal_offset;
-			idx_t vector_idx = GetVectorIndex(start_idx, internal_offset);
+			idx_t vector_idx = GetVectorIndex(start_idx + scanned, internal_offset);
 			auto &scan_state = LoadVector(vector_idx, internal_offset);
 			idx_t remaining_in_vector = scan_state.metadata.count - scan_state.scanned_count;
 			idx_t to_scan = MaxValue<idx_t>(remaining, remaining_in_vector);
 			ScanInternal(scan_state, to_scan, result, offset);
-
 			remaining -= to_scan;
+			scanned += to_scan;
 		}
-
-		scanned_count += count;
 	}
 
 public:
