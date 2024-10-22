@@ -112,13 +112,9 @@ struct ShellState {
 	                            ** the database */
 	int columns;                /* Column-wise DuckBox rendering */
 	char outfile[FILENAME_MAX]; /* Filename for *out */
-	const char *zDbFilename;    /* name of the database file */
-	char *zFreeOnClose;         /* Filename to free when closing */
+	string zDbFilename;         /* name of the database file */
 	sqlite3_stmt *pStmt;        /* Current statement if any. */
 	FILE *pLog;                 /* Write log output here */
-	int *aiIndent;              /* Array of indents used in RenderMode::Explain */
-	int nIndent;                /* Size of array aiIndent[] */
-	int iIndent;                /* Index of current op in aiIndent[] */
 	size_t max_rows;            /* The maximum number of rows to render in DuckBox mode */
 	size_t max_width;           /* The maximum number of characters to render horizontally in DuckBox mode */
 

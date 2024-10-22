@@ -3863,38 +3863,7 @@ static int showHelp(FILE *out, const char *zPattern){
 ** the type cannot be determined from content.
 */
 int deduceDatabaseType(const char *zName, int dfltZip){
-  FILE *f = fopen(zName, "rb");
-  size_t n;
-  int rc = SHELL_OPEN_UNSPEC;
-  char zBuf[100];
-  if( f==0 ){
-    if( dfltZip && sqlite3_strlike("%.zip",zName,0)==0 ){
-       return SHELL_OPEN_ZIPFILE;
-    }else{
-       return SHELL_OPEN_NORMAL;
-    }
-  }
-  n = fread(zBuf, 16, 1, f);
-  if( n==1 && memcmp(zBuf, "SQLite format 3", 16)==0 ){
-    fclose(f);
-    return SHELL_OPEN_NORMAL;
-  }
-  fseek(f, -25, SEEK_END);
-  n = fread(zBuf, 25, 1, f);
-  if( n==1 && memcmp(zBuf, "Start-Of-SQLite3-", 17)==0 ){
-    rc = SHELL_OPEN_APPENDVFS;
-  }else{
-    fseek(f, -22, SEEK_END);
-    n = fread(zBuf, 22, 1, f);
-    if( n==1 && zBuf[0]==0x50 && zBuf[1]==0x4b && zBuf[2]==0x05
-       && zBuf[3]==0x06 ){
-      rc = SHELL_OPEN_ZIPFILE;
-    }else if( n==0 && dfltZip && sqlite3_strlike("%.zip",zName,0)==0 ){
-      rc = SHELL_OPEN_ZIPFILE;
-    }
-  }
-  fclose(f);
-  return rc;
+  return SHELL_OPEN_NORMAL;
 }
 
 /* Flags for open_db().
@@ -3916,16 +3885,16 @@ int deduceDatabaseType(const char *zName, int dfltZip){
 void ShellState::open_db(int flags){
   if( db==0 ){
     if( openMode==SHELL_OPEN_UNSPEC ){
-      if( zDbFilename==0 || zDbFilename[0]==0 ){
+      if( zDbFilename.empty() ){
         openMode = SHELL_OPEN_NORMAL;
       }else{
-        openMode = (u8)deduceDatabaseType(zDbFilename,
+        openMode = (u8)deduceDatabaseType(zDbFilename.c_str(),
                              (flags & OPEN_DB_ZIPFILE)!=0);
       }
     }
     switch( openMode ){
       case SHELL_OPEN_APPENDVFS: {
-        sqlite3_open_v2(zDbFilename, &db,
+        sqlite3_open_v2(zDbFilename.c_str(), &db,
            SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE|openFlags, "apndvfs");
         break;
       }
@@ -3939,13 +3908,13 @@ void ShellState::open_db(int flags){
         break;
       }
       case SHELL_OPEN_READONLY: {
-        sqlite3_open_v2(zDbFilename, &db,
+        sqlite3_open_v2(zDbFilename.c_str(), &db,
             SQLITE_OPEN_READONLY|openFlags, 0);
         break;
       }
       case SHELL_OPEN_UNSPEC:
       case SHELL_OPEN_NORMAL: {
-        sqlite3_open_v2(zDbFilename, &db,
+        sqlite3_open_v2(zDbFilename.c_str(), &db,
            SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE|openFlags, 0);
         break;
       }
@@ -3953,7 +3922,7 @@ void ShellState::open_db(int flags){
     globalDb = db;
     if( db==0 || SQLITE_OK!=sqlite3_errcode(db) ){
       utf8_printf(stderr,"Error: unable to open database \"%s\": %s\n",
-          zDbFilename, sqlite3_errmsg(db));
+          zDbFilename.c_str(), sqlite3_errmsg(db));
       if( flags & OPEN_DB_KEEPALIVE ){
         sqlite3_open(":memory:", &db);
         return;
@@ -3972,12 +3941,6 @@ void ShellState::open_db(int flags){
 		sqlite3_exec(db, "PRAGMA enable_progress_bar", NULL, NULL, NULL);
 		sqlite3_exec(db, "PRAGMA enable_print_progress_bar", NULL, NULL, NULL);
 	}
-    if( openMode==SHELL_OPEN_ZIPFILE ){
-      char *zSql = sqlite3_mprintf(
-         "CREATE VIRTUAL TABLE zip USING zipfile(%Q);", zDbFilename);
-      sqlite3_exec(db, zSql, 0, 0, 0);
-      sqlite3_free(zSql);
-    }
   }
 }
 
@@ -5464,9 +5427,7 @@ int ShellState::do_meta_command(char *zLine){
     close_db(db);
     db = 0;
     globalDb = 0;
-    zDbFilename = 0;
-    sqlite3_free(zFreeOnClose);
-    zFreeOnClose = 0;
+    zDbFilename = string();
     openMode = SHELL_OPEN_UNSPEC;
     openFlags = openFlags & ~(SQLITE_OPEN_NOFOLLOW); // don't overwrite settings loaded in the command line
     szMax = 0;
@@ -5475,10 +5436,6 @@ int ShellState::do_meta_command(char *zLine){
       const char *z = azArg[iName];
       if( optionMatch(z,"new") ){
         newFlag = 1;
-#ifdef SQLITE_HAVE_ZLIB
-      }else if( optionMatch(z, "zip") ){
-        openMode = SHELL_OPEN_ZIPFILE;
-#endif
       }else if( optionMatch(z, "readonly") ){
         openMode = SHELL_OPEN_READONLY;
       }else if( optionMatch(z, "nofollow") ){
@@ -5494,17 +5451,15 @@ int ShellState::do_meta_command(char *zLine){
     if( zNewFilename || openMode==SHELL_OPEN_HEXDB ){
       if( newFlag ) shellDeleteFile(zNewFilename);
       zDbFilename = zNewFilename;
+      sqlite3_free(zNewFilename);
       open_db(OPEN_DB_KEEPALIVE);
-      if( db==0 ){
+      if( !db ){
         utf8_printf(stderr, "Error: cannot open '%s'\n", zNewFilename);
-        sqlite3_free(zNewFilename);
-      }else{
-        zFreeOnClose = zNewFilename;
       }
     }
-    if( db==0 ){
+    if( !db){
       /* As a fall-back open a TEMP database */
-      zDbFilename = 0;
+      zDbFilename = string();
       open_db(0);
     }
   }else
@@ -5995,7 +5950,7 @@ int ShellState::do_meta_command(char *zLine){
     }
     raw_printf(out, "\n");
     utf8_printf(out, "%12.12s: %s\n", "filename",
-                zDbFilename ? zDbFilename : "");
+                zDbFilename.c_str());
   }else
 
   if( (c=='t' && n>1 && strncmp(azArg[0], "tables", n)==0)
@@ -6751,7 +6706,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
     char *z;
     z = argv[i];
     if( z[0]!='-' ){
-      if( data.zDbFilename==0 ){
+      if( data.zDbFilename.empty() ){
         data.zDbFilename = z;
       }else{
         /* Excesss arguments are interpreted as SQL (or dot-commands) and
@@ -6840,7 +6795,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
   sqlite3_initialize();
 #endif
 
-  if( data.zDbFilename==0 ){
+  if( data.zDbFilename.empty() ){
 #ifndef SQLITE_OMIT_MEMORYDB
     data.zDbFilename = ":memory:";
     warnInmemoryDb = argc==1;
@@ -6856,7 +6811,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
   ** files from being created if a user mistypes the database name argument
   ** to the sqlite command-line tool.
   */
-  if( access(data.zDbFilename, 0)==0 ){
+  if( access(data.zDbFilename.c_str(), 0)==0 ){
     data.open_db(0);
   }
 
@@ -6902,10 +6857,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
     }else if( strcmp(z,"-csv")==0 ){
       data.mode = RenderMode::CSV;
       memcpy(data.colSeparator,",",2);
-#ifdef SQLITE_HAVE_ZLIB
-    }else if( strcmp(z,"-zip")==0 ){
-      data.openMode = SHELL_OPEN_ZIPFILE;
-#endif
     }else if( strcmp(z,"-readonly")==0 ){
       data.openMode = SHELL_OPEN_READONLY;
     }else if( strcmp(z,"-nofollow")==0 ){
@@ -7100,7 +7051,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
   if( data.db ){
     close_db(data.db);
   }
-  sqlite3_free(data.zFreeOnClose);
   find_home_dir(1);
   data.output_reset();
   data.doXdgOpen = 0;
