@@ -145,7 +145,16 @@ public:
 };
 
 //	Column indexes of the bounds chunk
-enum WindowBounds : uint8_t { PARTITION_BEGIN, PARTITION_END, PEER_BEGIN, PEER_END, WINDOW_BEGIN, WINDOW_END };
+enum WindowBounds : uint8_t {
+	PARTITION_BEGIN,
+	PARTITION_END,
+	PEER_BEGIN,
+	PEER_END,
+	VALID_BEGIN,
+	VALID_END,
+	FRAME_BEGIN,
+	FRAME_END
+};
 
 //! A shared set of expressions
 struct WindowSharedExpressions {

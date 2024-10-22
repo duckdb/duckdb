@@ -444,7 +444,7 @@ void WindowConstantAggregator::Evaluate(const WindowAggregatorState &gsink, Wind
 	const auto &partition_offsets = gasink.partition_offsets;
 	const auto &results = *gasink.results;
 
-	auto begins = FlatVector::GetData<const idx_t>(bounds.data[WINDOW_BEGIN]);
+	auto begins = FlatVector::GetData<const idx_t>(bounds.data[FRAME_BEGIN]);
 	//	Chunk up the constants and copy them one at a time
 	auto &lcstate = lstate.Cast<WindowConstantAggregatorLocalState>();
 	idx_t matched = 0;
@@ -603,8 +603,8 @@ unique_ptr<WindowAggregatorState> WindowCustomAggregator::GetLocalState(const Wi
 template <typename OP>
 static void EvaluateSubFrames(const DataChunk &bounds, const WindowExcludeMode exclude_mode, idx_t count, idx_t row_idx,
                               SubFrames &frames, OP operation) {
-	auto begins = FlatVector::GetData<const idx_t>(bounds.data[WINDOW_BEGIN]);
-	auto ends = FlatVector::GetData<const idx_t>(bounds.data[WINDOW_END]);
+	auto begins = FlatVector::GetData<const idx_t>(bounds.data[FRAME_BEGIN]);
+	auto ends = FlatVector::GetData<const idx_t>(bounds.data[FRAME_END]);
 	auto peer_begin = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);
 	auto peer_end = FlatVector::GetData<const idx_t>(bounds.data[PEER_END]);
 
@@ -1291,8 +1291,8 @@ void WindowSegmentTree::Evaluate(const WindowAggregatorState &gsink, WindowAggre
 
 void WindowSegmentTreeState::Evaluate(const WindowSegmentTreeGlobalState &gtstate, const DataChunk &bounds,
                                       Vector &result, idx_t count, idx_t row_idx) {
-	auto window_begin = FlatVector::GetData<const idx_t>(bounds.data[WINDOW_BEGIN]);
-	auto window_end = FlatVector::GetData<const idx_t>(bounds.data[WINDOW_END]);
+	auto window_begin = FlatVector::GetData<const idx_t>(bounds.data[FRAME_BEGIN]);
+	auto window_end = FlatVector::GetData<const idx_t>(bounds.data[FRAME_END]);
 	auto peer_begin = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);
 	auto peer_end = FlatVector::GetData<const idx_t>(bounds.data[PEER_END]);
 
