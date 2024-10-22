@@ -3632,7 +3632,7 @@ static const char *azHelp[] = {
   "     *  The editor is read from the environment variables",
   "        DUCKDB_EDITOR, EDITOR, VISUAL in-order",
   "     * If none of these are set, the default editor is vi",
-    "   * \\e can be used as an alais for .edit",
+    "   * \\e can be used as an alias for .edit",
 #endif
   ".exit ?CODE?             Exit this program with return-code CODE",
   ".explain ?on|off|auto?   Change the EXPLAIN formatting mode.  Default: auto",
@@ -4140,13 +4140,6 @@ static FILE *output_file_open(const char *zFile, int bTextMode){
 }
 
 /*
-** A no-op routine that runs with the ".breakpoint" doc-command.  This is
-** a useful spot to set a debugger breakpoint.
-*/
-static void test_breakpoint(void){
-}
-
-/*
 ** An object used to read a CSV and other files for import.
 */
 typedef struct ImportCtx ImportCtx;
@@ -4445,6 +4438,81 @@ void ShellState::newTempFile(const char *zSuffix){
   }
 }
 
+typedef bool (*metadata_command_t)(ShellState &state, const char **azArg, idx_t nArg);
+
+struct MetadataCommand {
+	const char *command;
+	idx_t argument_count;
+	metadata_command_t callback;
+	const char *usage;
+	const char *description;
+	idx_t match_size;
+};
+
+bool ToggleBail(ShellState &state, const char **azArg, idx_t nArg) {
+	bail_on_error = booleanValue(azArg[1]);
+	return true;
+}
+
+bool ToggleBinary(ShellState &state, const char **azArg, idx_t nArg) {
+	if( booleanValue(azArg[1]) ){
+		state.SetBinaryMode();
+	}else{
+		state.SetTextMode();
+	}
+	return true;
+}
+
+bool ChangeDirectory(ShellState &state, const char **azArg, idx_t nArg) {
+	int rc;
+#if defined(_WIN32) || defined(WIN32)
+	wchar_t *z = sqlite3_win32_utf8_to_unicode(azArg[1]);
+	rc = !SetCurrentDirectoryW(z);
+	sqlite3_free(z);
+#else
+	rc = chdir(azArg[1]);
+#endif
+	if( rc ){
+		utf8_printf(stderr, "Cannot change to directory \"%s\"\n", azArg[1]);
+		return false;
+	}
+	return true;
+}
+
+bool ToggleChanges(ShellState &state, const char **azArg, idx_t nArg) {
+	state.setOrClearFlag(SHFLG_CountChanges, azArg[1]);
+	return true;
+}
+
+bool ShowDatabases(ShellState &state, const char **azArg, idx_t nArg) {
+	char *zErrMsg = 0;
+	state.open_db(0);
+
+	auto renderer = state.GetRowRenderer(RenderMode::LIST);
+	renderer->show_header = false;
+	renderer->col_sep = ": ";
+	sqlite3_exec(state.db, "SELECT name, file FROM pragma_database_list",
+				 callback, renderer.get(), &zErrMsg);
+	if( zErrMsg ){
+		printDatabaseError(zErrMsg);
+		sqlite3_free(zErrMsg);
+		return false;
+	}
+	return true;
+}
+
+static const MetadataCommand metadata_commands[] = {
+	{"backup", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
+	{"bail", 2, ToggleBail, "on|off", "Stop after hitting an error.  Default OFF", 3},
+	{"binary", 2, ToggleBinary, "on|off", "Turn binary output on or off.  Default OFF", 3},
+	{"cd", 2, ChangeDirectory, "DIRECTORY", "Change the working directory to DIRECTORY", 0},
+	{"changes", 2, ToggleChanges, "on|off", "Show number of rows changed by SQL", 3},
+	{"databases", 1, ShowDatabases, "", "List names and files of attached databases", 2},
+	{"save", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
+	{ nullptr, 0, nullptr }
+};
+
+
 /*
 ** If an input line begins with "." then invoke this routine to
 ** process that line.
@@ -4490,181 +4558,30 @@ int ShellState::do_meta_command(char *zLine){
   c = azArg[0][0];
   clearTempFile();
 
-  if( (c=='b' && n>=3 && strncmp(azArg[0], "backup", n)==0)
-   || (c=='s' && n>=3 && strncmp(azArg[0], "save", n)==0)
-  ){
-    const char *zDestFile = 0;
-    const char *zDb = 0;
-    sqlite3 *pDest;
-    sqlite3_backup *pBackup;
-    int j;
-    int bAsync = 0;
-    for(j=1; j<nArg; j++){
-      const char *z = azArg[j];
-      if( z[0]=='-' ){
-        if( z[1]=='-' ) z++;
-        if( strcmp(z, "-async")==0 ){
-          bAsync = 1;
-        }else
-        {
-          utf8_printf(stderr, "unknown option: %s\n", azArg[j]);
-          return 1;
-        }
-      }else if( zDestFile==0 ){
-        zDestFile = azArg[j];
-      }else if( zDb==0 ){
-        zDb = zDestFile;
-        zDestFile = azArg[j];
-      }else{
-        raw_printf(stderr, "Usage: .backup ?DB? ?OPTIONS? FILENAME\n");
-        return 1;
-      }
-    }
-    if( zDestFile==0 ){
-      raw_printf(stderr, "missing FILENAME argument on .backup\n");
-      return 1;
-    }
-    if( zDb==0 ) zDb = "main";
-    rc = sqlite3_open_v2(zDestFile, &pDest,
-                  SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE, nullptr);
-    if( rc!=SQLITE_OK ){
-      utf8_printf(stderr, "Error: cannot open \"%s\"\n", zDestFile);
-      close_db(pDest);
-      return 1;
-    }
-    if( bAsync ){
-      sqlite3_exec(pDest, "PRAGMA synchronous=OFF; PRAGMA journal_mode=OFF;",
-                   0, 0, 0);
-    }
-    open_db(0);
-    pBackup = sqlite3_backup_init(pDest, "main", db, zDb);
-    if( pBackup==0 ){
-      shellDatabaseError(pDest);
-      close_db(pDest);
-      return 1;
-    }
-    while(  (rc = sqlite3_backup_step(pBackup,100))==SQLITE_OK ){}
-    sqlite3_backup_finish(pBackup);
-    if( rc==SQLITE_DONE ){
-      rc = 0;
-    }else{
-      shellDatabaseError(pDest);
-      rc = 1;
-    }
-    close_db(pDest);
-  }else
 
-  if( c=='b' && n>=3 && strncmp(azArg[0], "bail", n)==0 ){
-    if( nArg==2 ){
-      bail_on_error = booleanValue(azArg[1]);
-    }else{
-      raw_printf(stderr, "Usage: .bail on|off\n");
-      rc = 1;
-    }
-  }else
-
-  if( c=='b' && n>=3 && strncmp(azArg[0], "binary", n)==0 ){
-    if( nArg==2 ){
-      if( booleanValue(azArg[1]) ){
-        setBinaryMode(out, 1);
-      }else{
-        setTextMode(out, 1);
-      }
-    }else{
-      raw_printf(stderr, "Usage: .binary on|off\n");
-      rc = 1;
-    }
-  }else
-
-  if( c=='c' && strcmp(azArg[0],"cd")==0 ){
-    if( nArg==2 ){
-#if defined(_WIN32) || defined(WIN32)
-      wchar_t *z = sqlite3_win32_utf8_to_unicode(azArg[1]);
-      rc = !SetCurrentDirectoryW(z);
-      sqlite3_free(z);
-#else
-      rc = chdir(azArg[1]);
-#endif
-      if( rc ){
-        utf8_printf(stderr, "Cannot change to directory \"%s\"\n", azArg[1]);
-        rc = 1;
-      }
-    }else{
-      raw_printf(stderr, "Usage: .cd DIRECTORY\n");
-      rc = 1;
-    }
-  }else
-
-  /* The undocumented ".breakpoint" command causes a call to the no-op
-  ** routine named test_breakpoint().
-  */
-  if( c=='b' && n>=3 && strncmp(azArg[0], "breakpoint", n)==0 ){
-    test_breakpoint();
-  }else
-
-  if( c=='c' && n>=3 && strncmp(azArg[0], "changes", n)==0 ){
-    if( nArg==2 ){
-      setOrClearFlag(SHFLG_CountChanges, azArg[1]);
-    }else{
-      raw_printf(stderr, "Usage: .changes on|off\n");
-      rc = 1;
-    }
-  }else
-
-  if( c=='d' && n>1 && strncmp(azArg[0], "databases", n)==0 ){
-    char *zErrMsg = 0;
-    open_db(0);
-
-  	auto renderer = GetRowRenderer(RenderMode::LIST);
-  	renderer->show_header = false;
-  	renderer->col_sep = ": ";
-    sqlite3_exec(db, "SELECT name, file FROM pragma_database_list",
-                 callback, renderer.get(), &zErrMsg);
-    if( zErrMsg ){
-      printDatabaseError(zErrMsg);
-      sqlite3_free(zErrMsg);
-      rc = 1;
-    }
-  }else
-
-  if( c=='d' && n>=3 && strncmp(azArg[0], "dbconfig", n)==0 ){
-    static const struct DbConfigChoices {
-      const char *zName;
-      int op;
-    } aDbConfig[] = {
-        { "defensive",          SQLITE_DBCONFIG_DEFENSIVE             },
-        { "dqs_ddl",            SQLITE_DBCONFIG_DQS_DDL               },
-        { "dqs_dml",            SQLITE_DBCONFIG_DQS_DML               },
-        { "enable_fkey",        SQLITE_DBCONFIG_ENABLE_FKEY           },
-        { "enable_qpsg",        SQLITE_DBCONFIG_ENABLE_QPSG           },
-        { "enable_trigger",     SQLITE_DBCONFIG_ENABLE_TRIGGER        },
-        { "enable_view",        SQLITE_DBCONFIG_ENABLE_VIEW           },
-        { "fts3_tokenizer",     SQLITE_DBCONFIG_ENABLE_FTS3_TOKENIZER },
-        { "legacy_alter_table", SQLITE_DBCONFIG_LEGACY_ALTER_TABLE    },
-        { "legacy_file_format", SQLITE_DBCONFIG_LEGACY_FILE_FORMAT    },
-        { "load_extension",     SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION },
-        { "no_ckpt_on_close",   SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE      },
-        { "reset_database",     SQLITE_DBCONFIG_RESET_DATABASE        },
-        { "trigger_eqp",        SQLITE_DBCONFIG_TRIGGER_EQP           },
-        { "trusted_schema",     SQLITE_DBCONFIG_TRUSTED_SCHEMA        },
-        { "writable_schema",    SQLITE_DBCONFIG_WRITABLE_SCHEMA       },
-    };
-    int ii, v;
-    open_db(0);
-    for(ii=0; ii<ArraySize(aDbConfig); ii++){
-      if( nArg>1 && strcmp(azArg[1], aDbConfig[ii].zName)!=0 ) continue;
-      if( nArg>=3 ){
-        sqlite3_db_config(db, aDbConfig[ii].op, booleanValue(azArg[2]), 0);
-      }
-      sqlite3_db_config(db, aDbConfig[ii].op, -1, &v);
-      utf8_printf(out, "%19s %s\n", aDbConfig[ii].zName, v ? "on" : "off");
-      if( nArg>1 ) break;
-    }
-    if( nArg>1 && ii==ArraySize(aDbConfig) ){
-      utf8_printf(stderr, "Error: unknown dbconfig \"%s\"\n", azArg[1]);
-      utf8_printf(stderr, "Enter \".dbconfig\" with no arguments for a list\n");
-    }
-  }else
+	bool found_argument = false;
+	for(idx_t command_idx = 0; metadata_commands[command_idx].command; command_idx++) {
+		auto &command = metadata_commands[command_idx];
+		idx_t match_size = command.match_size ? command.match_size : strlen(command.command);
+		if (n < match_size || strncmp(azArg[0], command.command, n) != 0) {
+			continue;
+		}
+		found_argument = true;
+		bool success = false;
+		if (!command.callback) {
+			raw_printf(stderr, "Command \"%s\" is unsupported in the current version of the CLI\n", command.command);
+		} else if (command.argument_count == 0 || command.argument_count == nArg) {
+			success = command.callback(*this, (const char **) azArg, nArg);
+		} else {
+			raw_printf(stderr, "Usage: .%s %s\n", command.command, command.usage);
+		}
+		if (!success) {
+			rc = 1;
+		}
+		break;
+	}
+  if (found_argument) {
+  } else
 
   if( c=='d' && strncmp(azArg[0], "dump", n)==0 ){
     char *zLike = 0;
