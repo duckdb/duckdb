@@ -493,6 +493,10 @@ void ShellState::Print(const string &str) {
 	utf8_printf(out, "%s", str.c_str());
 }
 
+void ShellState::PrintPadded(const char *str, idx_t len) {
+	utf8_printf(out, "%*s", int(len), str);
+}
+
 /*
 ** Output string zUtf to stream pOut as w characters.  If w is negative,
 ** then right-justify the text.  W is the width in UTF-8 characters, not
@@ -560,10 +564,18 @@ static int isNumber(const char *z, int *realnum){
 ** Compute a string length that is limited to what can be stored in
 ** lower 30 bits of a 32-bit signed integer.
 */
-static int strlen30(const char *z){
-  const char *z2 = z;
-  while( *z2 ){ z2++; }
-  return 0x3fffffff & (int)(z2 - z);
+int strlen30(const char *z){
+	const char *z2 = z;
+	while( *z2 ){ z2++; }
+	return 0x3fffffff & (int)(z2 - z);
+}
+
+/*
+** Compute a string length that is limited to what can be stored in
+** lower 30 bits of a 32-bit signed integer.
+*/
+int ShellState::StringLength(const char *z){
+	return strlen30(z);
 }
 
 /*
@@ -2940,26 +2952,16 @@ void ShellState::print_markdown_separator(
 ** invokes for each row of a query result.
 */
 int ShellState::shell_callback(
+	RowRenderer &renderer,
 	RowResult &result
 ){
 	auto &data = result.data;
 	auto &col_names = result.column_names;
 	auto &types = result.types;
   if( result.data.empty() ) return 0;
+	renderer.Render(result);
+
   switch( cMode ){
-    case RenderMode::LINE: {
-      int w = 5;
-      for(idx_t i=0; i<data.size(); i++){
-        int len = strlen30(col_names[i] ? col_names[i] : "");
-        if( len>w ) w = len;
-      }
-      if( cnt++>0 ) utf8_printf(out, "%s", rowSeparator);
-      for(idx_t i=0; i<data.size(); i++){
-        utf8_printf(out,"%*s = %s%s", w, col_names[i],
-                data[i] ? data[i] : nullValue, rowSeparator);
-      }
-      break;
-    }
     case RenderMode::EXPLAIN: {
       if (data.size() != 2) {
         break;
@@ -3288,12 +3290,13 @@ int ShellState::shell_callback(
 static int callback(void *pArg, int nArg, char **azArg, char **azCol){
   /* since we don't have type info, call the shell_callback with a NULL value */
 	auto p = (ShellState *) pArg;
+	auto renderer = p->GetRowRenderer();
 	RowResult result;
 	for(idx_t i = 0; i < nArg; i++) {
 		result.column_names.push_back(azCol[i]);
 		result.data.push_back(azArg[i]);
 	}
-  return p->shell_callback(result);
+  return p->shell_callback(*renderer, result);
 }
 
 /*
@@ -3596,20 +3599,22 @@ void ShellState::exec_prepared_stmt(
 	result.types.resize(nCol);
 	for(idx_t i = 0; i < nCol; i++) {
 		result.column_names.push_back(sqlite3_column_name(pStmt, i));
+		result.types[i] = sqlite3_column_type(pStmt, i);
 	}
+
+	auto renderer = GetRowRenderer();
 
 	// iterate over the rows
 	do{
-		if (cMode!=RenderMode::TRASH) {
+		if (renderer) {
 		  /* extract the data and data types */
 		  for(idx_t i=0; i<nCol; i++){
-			result.types[i] = sqlite3_column_type(pStmt, i);
 			if( result.types[i]==SQLITE_BLOB && cMode==RenderMode::INSERT ){
 			  result.data[i] = "";
 			}else{
 			  result.data[i] = (const char *) sqlite3_column_text(pStmt, i);
 			}
-			if( !result.data[i][i] && (result.types[i]!=SQLITE_NULL) ){
+			if( !result.data[i] && (result.types[i]!=SQLITE_NULL) ){
 				// OOM
 			  rc = SQLITE_NOMEM;
 			  break;
@@ -3620,7 +3625,7 @@ void ShellState::exec_prepared_stmt(
 		/* if data and types extracted successfully... */
 		if( SQLITE_ROW == rc ){
 		  /* call the supplied callback with the result row data */
-		  if( cMode!=RenderMode::TRASH && shell_callback(result) ){
+		  if(renderer && shell_callback(*renderer, result) ){
 			rc = SQLITE_ABORT;
 		  }else{
 			rc = sqlite3_step(pStmt);

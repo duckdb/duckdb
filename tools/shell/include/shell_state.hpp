@@ -23,6 +23,7 @@ using std::string;
 struct ColumnarResult;
 struct RowResult;
 class ColumnRenderer;
+class RowRenderer;
 
 using idx_t = uint64_t;
 
@@ -116,19 +117,22 @@ public:
 	void utf8_width_print(FILE *pOut, int w, const string &str);
 	int strlenChar(const char *z);
 	int strlenChar(const string &str);
+	static int StringLength(const char *z);
 	void set_table_name(const char *zName);
 	int run_table_dump_query(const char *zSelect);
 	void Print(const char *str);
 	void Print(const string &str);
+	void PrintPadded(const char *str, idx_t len);
 	bool column_type_is_integer(const char *type);
 	string strdup_handle_newline(const char *z);
 	ColumnarResult ExecuteColumnar(sqlite3_stmt *pStmt);
 	unique_ptr<ColumnRenderer> GetColumnRenderer();
+	unique_ptr<RowRenderer> GetRowRenderer();
 	void exec_prepared_stmt_columnar(sqlite3_stmt *pStmt);
 	char **tableColumnList(const char *zTab);
 	void exec_prepared_stmt(sqlite3_stmt *pStmt);
 
-	int shell_callback(RowResult &result);
+	int shell_callback(RowRenderer &renderer, RowResult &result);
 
 	int shell_exec(
 	  const char *zSql,                         /* SQL to be evaluated */

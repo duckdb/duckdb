@@ -51,5 +51,19 @@ protected:
 	ShellState &state;
 };
 
+class RowRenderer {
+public:
+	explicit RowRenderer(ShellState &state);
+	virtual ~RowRenderer() = default;
+
+	virtual void Render(RowResult &result);
+
+	virtual void RenderHeader(RowResult &result);
+	virtual void RenderRow(RowResult &result) = 0;
+	virtual void RenderFooter(RowResult &result);
+protected:
+	ShellState &state;
+	bool first_row = true;
+};
 
 }

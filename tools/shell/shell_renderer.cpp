@@ -17,6 +17,9 @@ bool ShellRenderer::IsColumnar(RenderMode mode) {
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// Column Renderers
+//===--------------------------------------------------------------------===//
 ColumnRenderer::ColumnRenderer(ShellState &state) : state(state) {}
 
 void ColumnRenderer::RenderFooter(ColumnarResult &result) {
@@ -25,9 +28,9 @@ void ColumnRenderer::RenderFooter(ColumnarResult &result) {
 void ColumnRenderer::RenderAlignedValue(ColumnarResult &result, idx_t i) {
 	int w = result.column_width[i];
 	int n = state.strlenChar(result.data[i]);
-	state.Print(string((w - n) / 2, ' '));
+	state.PrintPadded("", (w - n) / 2);
 	state.Print(result.data[i]);
-	state.Print(string((w - n + 1) / 2, ' '));
+	state.PrintPadded("", (w - n + 1) / 2);
 }
 
 class ModeColumnRenderer : public ColumnRenderer {
@@ -245,6 +248,71 @@ unique_ptr<ColumnRenderer> ShellState::GetColumnRenderer() {
 		return unique_ptr<ColumnRenderer>(new ModeLatexRenderer(*this));
 	default:
 		throw std::runtime_error("Unsupported mode for GetColumnRenderer");
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// Row Renderers
+//===--------------------------------------------------------------------===//
+RowRenderer::RowRenderer(ShellState &state) : state(state) {}
+
+void RowRenderer::Render(RowResult &result) {
+	if (first_row) {
+		RenderHeader(result);
+		first_row = false;
+	}
+	RenderRow(result);
+}
+
+void RowRenderer::RenderHeader(RowResult &result) {}
+
+void RowRenderer::RenderFooter(RowResult &result) {}
+
+class ModeLineRenderer : public RowRenderer {
+public:
+	explicit ModeLineRenderer(ShellState &state) : RowRenderer(state) {}
+
+	void Render(RowResult &result) override {
+		if (first_row) {
+			auto &col_names = result.column_names;
+			// determine the render width by going over the column names
+			w = 5;
+			for(idx_t i=0; i<col_names.size(); i++){
+				int len = ShellState::StringLength(col_names[i] ? col_names[i] : "");
+				if( len>w ) w = len;
+			}
+			first_row = false;
+		} else {
+			state.Print(state.rowSeparator);
+		}
+		// render the row
+		RenderRow(result);
+	}
+
+	void RenderRow(RowResult &result) override {
+		auto &data = result.data;
+		auto &col_names = result.column_names;
+		for(idx_t i=0; i<data.size(); i++){
+			state.PrintPadded(col_names[i], w);
+			state.Print(" = ");
+			state.Print(data[i] ? data[i] : state.nullValue);
+			state.Print(state.rowSeparator);
+		}
+	}
+
+	int w = 0;
+};
+
+
+unique_ptr<RowRenderer> ShellState::GetRowRenderer() {
+	switch(cMode) {
+	case RenderMode::LINE:
+		return unique_ptr<RowRenderer>(new ModeLineRenderer(*this));
+	case RenderMode::TRASH:
+		// no renderer
+		return nullptr;
+	default:
+		throw std::runtime_error("Unsupported mode for GetRowRenderer");
 	}
 }
 
