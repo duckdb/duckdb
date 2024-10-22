@@ -1443,19 +1443,20 @@ duckdb_parquet::CompressionCodec::type EnumUtil::FromString<duckdb_parquet::Comp
 }
 
 static optional_idx SerializeCompressionLevel(const int64_t compression_level) {
-	return compression_level < 0 ? NumericLimits<int64_t>::Maximum() + compression_level
+	return compression_level < 0 ? NumericLimits<idx_t>::Maximum() - NumericCast<idx_t>(AbsValue(compression_level))
 	                             : NumericCast<idx_t>(compression_level);
 }
 
 static int64_t DeserializeCompressionLevel(const optional_idx compression_level) {
-	if (compression_level.IsValid()) { // Was originally an optional_idx, now int64_t, so we still serialize as such
-		if (compression_level.GetIndex() > ZStdFileSystem::MaximumCompressionLevel()) {
-			// re-add the maximum to restore the negative compression level
-			return NumericCast<int64_t>(compression_level.GetIndex()) - NumericLimits<int64_t>::Maximum();
-		}
-		return NumericCast<int64_t>(compression_level.GetIndex());
+	// Was originally an optional_idx, now int64_t, so we still serialize as such
+	if (!compression_level.IsValid()) {
+		return ZStdFileSystem::DefaultCompressionLevel();
 	}
-	return ZStdFileSystem::DefaultCompressionLevel();
+	if (compression_level.GetIndex() > NumericCast<idx_t>(ZStdFileSystem::MaximumCompressionLevel())) {
+		// restore the negative compression level
+		return -NumericCast<int64_t>(NumericLimits<idx_t>::Maximum() - compression_level.GetIndex());
+	}
+	return NumericCast<int64_t>(compression_level.GetIndex());
 }
 
 static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bind_data_p,

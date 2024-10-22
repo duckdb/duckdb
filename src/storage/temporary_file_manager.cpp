@@ -424,8 +424,8 @@ void TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer 
 
 	const auto adaptivity_idx = TaskScheduler::GetEstimatedCPUId() % COMPRESSION_ADAPTIVITIES;
 	auto &compression_adaptivity = compression_adaptivities[adaptivity_idx];
-	const auto time_before_ns = TemporaryFileCompressionAdaptivity::GetCurrentTimeNanos();
 
+	const auto time_before_ns = TemporaryFileCompressionAdaptivity::GetCurrentTimeNanos();
 	AllocatedData compressed_buffer;
 	const auto compression_result = CompressBuffer(compression_adaptivity, buffer, compressed_buffer);
 

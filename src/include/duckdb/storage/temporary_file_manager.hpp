@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/array.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/enum_class_hash.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -323,7 +324,7 @@ private:
 	//! How many compression adaptivities we have so that threads don't all share the same one
 	static constexpr idx_t COMPRESSION_ADAPTIVITIES = 64;
 	//! Class that oversees when/how much to compress
-	std::array<TemporaryFileCompressionAdaptivity, COMPRESSION_ADAPTIVITIES> compression_adaptivities;
+	array<TemporaryFileCompressionAdaptivity, COMPRESSION_ADAPTIVITIES> compression_adaptivities;
 };
 
 //===--------------------------------------------------------------------===//
