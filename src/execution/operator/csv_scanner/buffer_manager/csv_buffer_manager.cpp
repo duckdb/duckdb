@@ -6,7 +6,7 @@ namespace duckdb {
 CSVBufferManager::CSVBufferManager(ClientContext &context_p, const CSVReaderOptions &options, const string &file_path_p,
                                    const idx_t file_idx_p, bool per_file_single_threaded_p)
     : context(context_p), per_file_single_threaded(per_file_single_threaded_p), file_idx(file_idx_p),
-      file_path(file_path_p), buffer_size(options.buffer_size) {
+      file_path(file_path_p), buffer_size(options.buffer_size.GetValue()) {
 	D_ASSERT(!file_path.empty());
 	file_handle = ReadCSV::OpenCSV(file_path, options.compression, context);
 	is_pipe = file_handle->IsPipe();

@@ -730,7 +730,7 @@ bool StringValueResult::AddRowInternal() {
 	}
 	current_line_position.begin = current_line_position.end;
 	current_line_position.end = current_line_start;
-	if (current_line_size > state_machine.options.maximum_line_size) {
+	if (current_line_size > state_machine.options.maximum_line_size.GetValue()) {
 		current_errors.Insert(MAXIMUM_LINE_SIZE, 1, chunk_col_id, last_position, current_line_size);
 	}
 	if (!state_machine.options.null_padding) {
@@ -880,7 +880,7 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSV
              iterator.pos.buffer_pos, *error_handler, iterator,
              buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan, lines_read, sniffing,
              buffer_manager->GetFilePath()) {
-	iterator.buffer_size = state_machine->options.buffer_size;
+	iterator.buffer_size = state_machine->options.buffer_size.GetValue();
 }
 
 StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffer_manager,
@@ -892,7 +892,7 @@ StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffe
              iterator.pos.buffer_pos, *error_handler, iterator,
              buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan, lines_read, sniffing,
              buffer_manager->GetFilePath()) {
-	iterator.buffer_size = state_machine->options.buffer_size;
+	iterator.buffer_size = state_machine->options.buffer_size.GetValue();
 }
 
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
