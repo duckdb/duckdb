@@ -2905,7 +2905,7 @@ int ShellState::shell_callback(
 	RowResult &result
 ){
 	auto &data = result.data;
-  if( result.data.empty() ) return 0;
+  if( data.empty() ) return 0;
 	renderer.Render(result);
   return 0;
 }

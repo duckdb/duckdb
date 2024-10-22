@@ -3,6 +3,8 @@
 #include "shell_state.hpp"
 #include "duckdb_shell_wrapper.h"
 #include "sqlite3.h"
+#include <stdexcept>
+#include <cstring>
 
 namespace duckdb_shell {
 
@@ -176,7 +178,7 @@ private:
 	*/
 	void print_box_line(int N) {
 		string box_line;
-		for (idx_t i = 0; i < N; i++) {
+		for (int i = 0; i < N; i++) {
 			box_line += BOX_24;
 		}
 		state.Print(box_line);
