@@ -15,6 +15,7 @@
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/storage/database_size.hpp"
 #include "duckdb/common/enums/checkpoint_type.hpp"
+#include "duckdb/storage/storage_options.hpp"
 
 namespace duckdb {
 class BlockManager;
@@ -71,7 +72,7 @@ public:
 	//! Initialize a database or load an existing database from the database file path. The block_alloc_size is
 	//! either set, or invalid. If invalid, then DuckDB defaults to the default_block_alloc_size (DBConfig),
 	//! or the file's block allocation size, if it is an existing database.
-	void Initialize(const optional_idx block_alloc_size);
+	void Initialize(StorageOptions options);
 
 	DatabaseInstance &GetDatabase();
 	AttachedDatabase &GetAttached() {
@@ -106,7 +107,7 @@ public:
 	virtual BlockManager &GetBlockManager() = 0;
 
 protected:
-	virtual void LoadDatabase(const optional_idx block_alloc_size) = 0;
+	virtual void LoadDatabase(StorageOptions options) = 0;
 
 protected:
 	//! The database this storage manager belongs to
@@ -156,6 +157,6 @@ public:
 	BlockManager &GetBlockManager() override;
 
 protected:
-	void LoadDatabase(const optional_idx block_alloc_size) override;
+	void LoadDatabase(StorageOptions options) override;
 };
 } // namespace duckdb

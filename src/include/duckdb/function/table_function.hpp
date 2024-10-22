@@ -23,9 +23,12 @@ namespace duckdb {
 class BaseStatistics;
 class LogicalDependencyList;
 class LogicalGet;
+class TableFunction;
 class TableFilterSet;
 class TableCatalogEntry;
 struct MultiFileReader;
+struct OperatorPartitionData;
+struct OperatorPartitionInfo;
 
 struct TableFunctionInfo {
 	DUCKDB_API virtual ~TableFunctionInfo();
@@ -102,14 +105,17 @@ struct TableFunctionBindInput {
 
 struct TableFunctionInitInput {
 	TableFunctionInitInput(optional_ptr<const FunctionData> bind_data_p, const vector<column_t> &column_ids_p,
-	                       const vector<idx_t> &projection_ids_p, optional_ptr<TableFilterSet> filters_p)
-	    : bind_data(bind_data_p), column_ids(column_ids_p), projection_ids(projection_ids_p), filters(filters_p) {
+	                       const vector<idx_t> &projection_ids_p, optional_ptr<TableFilterSet> filters_p,
+	                       optional_ptr<SampleOptions> sample_options_p = nullptr)
+	    : bind_data(bind_data_p), column_ids(column_ids_p), projection_ids(projection_ids_p), filters(filters_p),
+	      sample_options(sample_options_p) {
 	}
 
 	optional_ptr<const FunctionData> bind_data;
 	const vector<column_t> &column_ids;
 	const vector<idx_t> projection_ids;
 	optional_ptr<TableFilterSet> filters;
+	optional_ptr<SampleOptions> sample_options;
 
 	bool CanRemoveFilterColumns() const {
 		if (projection_ids.empty()) {
@@ -137,6 +143,32 @@ public:
 	optional_ptr<const FunctionData> bind_data;
 	optional_ptr<LocalTableFunctionState> local_state;
 	optional_ptr<GlobalTableFunctionState> global_state;
+};
+
+struct TableFunctionPartitionInput {
+	TableFunctionPartitionInput(optional_ptr<const FunctionData> bind_data_p, const vector<column_t> &partition_ids)
+	    : bind_data(bind_data_p), partition_ids(partition_ids) {
+	}
+
+	optional_ptr<const FunctionData> bind_data;
+	const vector<column_t> &partition_ids;
+};
+
+struct TableFunctionGetPartitionInput {
+public:
+	TableFunctionGetPartitionInput(optional_ptr<const FunctionData> bind_data_p,
+	                               optional_ptr<LocalTableFunctionState> local_state_p,
+	                               optional_ptr<GlobalTableFunctionState> global_state_p,
+	                               const OperatorPartitionInfo &partition_info_p)
+	    : bind_data(bind_data_p), local_state(local_state_p), global_state(global_state_p),
+	      partition_info(partition_info_p) {
+	}
+
+public:
+	optional_ptr<const FunctionData> bind_data;
+	optional_ptr<LocalTableFunctionState> local_state;
+	optional_ptr<GlobalTableFunctionState> global_state;
+	const OperatorPartitionInfo &partition_info;
 };
 
 enum class ScanType : uint8_t { TABLE, PARQUET, EXTERNAL };
@@ -181,6 +213,14 @@ public:
 	}
 };
 
+//! How a table is partitioned by a given set of columns
+enum class TablePartitionInfo : uint8_t {
+	NOT_PARTITIONED,         // the table is not partitioned by the given set of columns
+	SINGLE_VALUE_PARTITIONS, // each partition has exactly one unique value (e.g. bounds = [1,1][2,2][3,3])
+	OVERLAPPING_PARTITIONS,  // the partitions overlap **only** at the boundaries (e.g. bounds = [1,2][2,3][3,4]
+	DISJOINT_PARTITIONS      // the partitions are disjoint (e.g. bounds = [1,2][3,4][5,6])
+};
+
 typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context, TableFunctionBindInput &input,
                                                           vector<LogicalType> &return_types, vector<string> &names);
 typedef unique_ptr<TableRef> (*table_function_bind_replace_t)(ClientContext &context, TableFunctionBindInput &input);
@@ -196,13 +236,12 @@ typedef OperatorResultType (*table_in_out_function_t)(ExecutionContext &context,
                                                       DataChunk &input, DataChunk &output);
 typedef OperatorFinalizeResultType (*table_in_out_function_final_t)(ExecutionContext &context, TableFunctionInput &data,
                                                                     DataChunk &output);
-typedef idx_t (*table_function_get_batch_index_t)(ClientContext &context, const FunctionData *bind_data,
-                                                  LocalTableFunctionState *local_state,
-                                                  GlobalTableFunctionState *global_state);
+typedef OperatorPartitionData (*table_function_get_partition_data_t)(ClientContext &context,
+                                                                     TableFunctionGetPartitionInput &input);
 
 typedef BindInfo (*table_function_get_bind_info_t)(const optional_ptr<FunctionData> bind_data);
 
-typedef unique_ptr<MultiFileReader> (*table_function_get_multi_file_reader_t)();
+typedef unique_ptr<MultiFileReader> (*table_function_get_multi_file_reader_t)(const TableFunction &);
 
 typedef bool (*table_function_supports_pushdown_type_t)(const LogicalType &type);
 
@@ -223,6 +262,9 @@ typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(Deserializer &d
 typedef void (*table_function_type_pushdown_t)(ClientContext &context, optional_ptr<FunctionData> bind_data,
                                                const unordered_map<idx_t, LogicalType> &new_column_types);
 
+typedef TablePartitionInfo (*table_function_get_partition_info_t)(ClientContext &context,
+                                                                  TableFunctionPartitionInput &input);
+
 //! When to call init_global to initialize the table function
 enum class TableFunctionInitialization { INITIALIZE_ON_EXECUTE, INITIALIZE_ON_SCHEDULE };
 
@@ -242,7 +284,7 @@ public:
 	//! The returned FunctionData object should be constant and should not be changed during execution.
 	table_function_bind_t bind;
 	//! (Optional) Bind replace function
-	//! This function is called before the regular bind function. It allows returning a TableRef will be used to
+	//! This function is called before the regular bind function. It allows returning a TableRef that will be used to
 	//! to generate a logical plan that replaces the LogicalGet of a regularly bound TableFunction. The BindReplace can
 	//! also return a nullptr to indicate a regular bind needs to be performed instead.
 	table_function_bind_replace_t bind_replace;
@@ -277,8 +319,8 @@ public:
 	table_function_to_string_t to_string;
 	//! (Optional) return how much of the table we have scanned up to this point (% of the data)
 	table_function_progress_t table_scan_progress;
-	//! (Optional) returns the current batch index of the current scan operator
-	table_function_get_batch_index_t get_batch_index;
+	//! (Optional) returns the partition info of the current scan operator
+	table_function_get_partition_data_t get_partition_data;
 	//! (Optional) returns extra bind info
 	table_function_get_bind_info_t get_bind_info;
 	//! (Optional) pushes down type information to scanner, returns true if pushdown was successful
@@ -287,6 +329,8 @@ public:
 	table_function_get_multi_file_reader_t get_multi_file_reader;
 	//! (Optional) If this scanner supports filter pushdown, but not to all data types
 	table_function_supports_pushdown_type_t supports_pushdown_type;
+	//! Get partition info of the table
+	table_function_get_partition_info_t get_partition_info;
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;
@@ -301,6 +345,9 @@ public:
 	//! Whether or not the table function can immediately prune out filter columns that are unused in the remainder of
 	//! the query plan, e.g., "SELECT i FROM tbl WHERE j = 42;" - j does not need to leave the table function at all
 	bool filter_prune;
+	//! Whether or not the table function supports sampling pushdown. If not supported a sample will be taken after the
+	//! table function.
+	bool sampling_pushdown;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
 

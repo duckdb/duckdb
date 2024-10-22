@@ -237,7 +237,7 @@ static bool ParsedExpressionIsAggregate(Binder &binder, const ParsedExpression &
 	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &function = expr.Cast<FunctionExpression>();
 		QueryErrorContext error_context;
-		auto entry = binder.GetCatalogEntry(CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
+		auto entry = binder.GetCatalogEntry(CatalogType::AGGREGATE_FUNCTION_ENTRY, function.catalog, function.schema,
 		                                    function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
 		if (entry && entry->type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 			return true;

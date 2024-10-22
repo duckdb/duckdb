@@ -119,6 +119,13 @@ idx_t ColumnDataCollection::AllocationSize() const {
 	return total_size;
 }
 
+void ColumnDataCollection::SetPartitionIndex(const idx_t index) {
+	D_ASSERT(!partition_index.IsValid());
+	D_ASSERT(Count() == 0);
+	partition_index = index;
+	allocator->SetPartitionIndex(index);
+}
+
 //===--------------------------------------------------------------------===//
 // ColumnDataRow
 //===--------------------------------------------------------------------===//
@@ -401,7 +408,7 @@ static void TemplatedColumnDataCopy(ColumnDataMetaData &meta_data, const Unified
 
 		auto base_ptr = segment.allocator->GetDataPointer(append_state.current_chunk_state, current_segment.block_id,
 		                                                  current_segment.offset);
-		auto validity_data = ColumnDataCollectionSegment::GetValidityPointer(base_ptr, OP::TypeSize());
+		auto validity_data = ColumnDataCollectionSegment::GetValidityPointerForWriting(base_ptr, OP::TypeSize());
 
 		ValidityMask result_validity(validity_data);
 		if (current_segment.count == 0) {
@@ -517,7 +524,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 		auto &current_segment = segment.GetVectorData(current_index);
 		auto base_ptr = segment.allocator->GetDataPointer(append_state.current_chunk_state, current_segment.block_id,
 		                                                  current_segment.offset);
-		auto validity_data = ColumnDataCollectionSegment::GetValidityPointer(base_ptr, sizeof(string_t));
+		auto validity_data = ColumnDataCollectionSegment::GetValidityPointerForWriting(base_ptr, sizeof(string_t));
 		ValidityMask target_validity(validity_data);
 		if (current_segment.count == 0) {
 			// first time appending to this vector
@@ -923,6 +930,29 @@ bool ColumnDataCollection::NextScanIndex(ColumnDataScanState &state, idx_t &chun
 	return true;
 }
 
+bool ColumnDataCollection::PrevScanIndex(ColumnDataScanState &state, idx_t &chunk_index, idx_t &segment_index,
+                                         idx_t &row_index) const {
+	// check within the current segment if we still have chunks to scan
+	// Note that state.chunk_index is 1-indexed, with 0 as undefined.
+	while (state.chunk_index <= 1) {
+		if (!state.segment_index) {
+			return false;
+		}
+
+		--state.segment_index;
+		state.chunk_index = segments[state.segment_index]->chunk_data.size() + 1;
+		state.current_chunk_state.handles.clear();
+	}
+
+	--state.chunk_index;
+	segment_index = state.segment_index;
+	chunk_index = state.chunk_index - 1;
+	state.next_row_index = state.current_row_index;
+	state.current_row_index -= segments[state.segment_index]->chunk_data[chunk_index].count;
+	row_index = state.current_row_index;
+	return true;
+}
+
 void ColumnDataCollection::ScanAtIndex(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate,
                                        DataChunk &result, idx_t chunk_index, idx_t segment_index,
                                        idx_t row_index) const {
@@ -945,6 +975,38 @@ bool ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) c
 	idx_t row_index;
 	if (!NextScanIndex(state, chunk_index, segment_index, row_index)) {
 		return false;
+	}
+
+	// found a chunk to scan -> scan it
+	auto &segment = *segments[segment_index];
+	state.current_chunk_state.properties = state.properties;
+	segment.ReadChunk(chunk_index, state.current_chunk_state, result, state.column_ids);
+	result.Verify();
+	return true;
+}
+
+bool ColumnDataCollection::Seek(idx_t seek_idx, ColumnDataScanState &state, DataChunk &result) const {
+	//	Idempotency: Don't change anything if the row is already in range
+	if (state.current_row_index <= seek_idx && seek_idx < state.next_row_index) {
+		return true;
+	}
+
+	result.Reset();
+
+	//	Linear scan for now. We could use a current_row_index => chunk map at some point
+	//	but most use cases should be pretty local
+	idx_t chunk_index;
+	idx_t segment_index;
+	idx_t row_index;
+	while (seek_idx < state.current_row_index) {
+		if (!PrevScanIndex(state, chunk_index, segment_index, row_index)) {
+			return false;
+		}
+	}
+	while (state.next_row_index <= seek_idx) {
+		if (!NextScanIndex(state, chunk_index, segment_index, row_index)) {
+			return false;
+		}
 	}
 
 	// found a chunk to scan -> scan it

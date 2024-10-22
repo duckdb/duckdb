@@ -39,4 +39,16 @@ struct LastFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct MinFun {
+	static AggregateFunction GetFunction();
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct MaxFun {
+	static AggregateFunction GetFunction();
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb

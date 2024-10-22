@@ -1039,6 +1039,15 @@ from_list_opt_comma:
 			| from_list ','							{ $$ = $1; }
 		;
 
+alias_prefix_colon_clause:
+            ColIdOrString ':'
+            {
+                $$ = makeNode(PGAlias);
+                $$->aliasname = $1;
+            }
+    ;
+
+
 /*
  * table_ref is where an alias clause can be attached.
  */
@@ -1048,7 +1057,13 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					$1->sample = $3;
 					$$ = (PGNode *) $1;
 				}
-			| func_table func_alias_clause opt_tablesample_clause
+			| alias_prefix_colon_clause relation_expr opt_tablesample_clause
+                {
+                    $2->alias = $1;
+                    $2->sample = $3;
+                    $$ = (PGNode *) $2;
+                }
+            | func_table func_alias_clause opt_tablesample_clause
 				{
 					PGRangeFunction *n = (PGRangeFunction *) $1;
 					n->alias = (PGAlias*) linitial($2);
@@ -1056,15 +1071,24 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					n->sample = $3;
 					$$ = (PGNode *) n;
 				}
-			| values_clause_opt_comma alias_clause opt_tablesample_clause
-			{
-				PGRangeSubselect *n = makeNode(PGRangeSubselect);
-				n->lateral = false;
-				n->subquery = $1;
-				n->alias = $2;
-				n->sample = $3;
-				$$ = (PGNode *) n;
-			}
+		     | alias_prefix_colon_clause func_table opt_tablesample_clause
+                    {
+                        PGRangeFunction *n = (PGRangeFunction *) $2;
+                        n->alias = $1;
+                        n->sample = $3;
+                        $$ = (PGNode *) n;
+                    }
+		    |
+            values_clause_opt_comma alias_clause opt_tablesample_clause
+                {
+                    PGRangeSubselect *n = makeNode(PGRangeSubselect);
+                    n->lateral = false;
+                    n->subquery = $1;
+                    n->alias = $2;
+                    n->sample = $3;
+                    $$ = (PGNode *) n;
+                }
+
 			| LATERAL_P func_table func_alias_clause
 				{
 					PGRangeFunction *n = (PGRangeFunction *) $2;
@@ -1082,6 +1106,15 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					n->sample = $3;
 					$$ = (PGNode *) n;
 				}
+			| alias_prefix_colon_clause select_with_parens opt_tablesample_clause
+                {
+                    PGRangeSubselect *n = makeNode(PGRangeSubselect);
+                    n->lateral = false;
+                    n->subquery = $2;
+                    n->alias = $1;
+                    n->sample = $3;
+                    $$ = (PGNode *) n;
+                }
 			| LATERAL_P select_with_parens opt_alias_clause
 				{
 					PGRangeSubselect *n = makeNode(PGRangeSubselect);
@@ -1100,6 +1133,11 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					$2->alias = $4;
 					$$ = (PGNode *) $2;
 				}
+            | alias_prefix_colon_clause '(' joined_table ')'
+                {
+                    $3->alias = $1;
+                    $$ = (PGNode *) $3;
+                }
 			| table_ref PIVOT '(' target_list_opt_comma FOR pivot_value_list opt_pivot_group_by ')' opt_alias_clause
 				{
 					PGPivotExpr *n = makeNode(PGPivotExpr);
@@ -1609,6 +1647,7 @@ opt_collate_clause:
 				}
 			| /* EMPTY */				{ $$ = NULL; }
 		;
+
 /*****************************************************************************
  *
  *	Type syntax
@@ -3948,6 +3987,14 @@ target_el:	a_expr AS ColLabelOrString
 					$$->name = NULL;
 					$$->indirection = NIL;
 					$$->val = (PGNode *)$1;
+					$$->location = @1;
+				}
+            | ColId ':' a_expr
+				{
+					$$ = makeNode(PGResTarget);
+					$$->name = $1;
+					$$->indirection = NIL;
+					$$->val = (PGNode *)$3;
 					$$->location = @1;
 				}
 		;

@@ -1,158 +1,70 @@
-diff --git a/test/sql/index/rtree_basic_points.test b/test/sql/index/rtree_basic_points.test
-index c4de65b..047ad35 100644
---- a/test/sql/index/rtree_basic_points.test
-+++ b/test/sql/index/rtree_basic_points.test
-@@ -7,7 +7,7 @@ FROM st_generatepoints({min_x: 0, min_y: 0, max_x: 10000, max_y: 10000}::BOX_2D,
- query I
- SELECT count(*) FROM t1 WHERE ST_Within(geom, ST_MakeEnvelope(450, 450, 650, 650));
- ----
--352
-+390
+diff --git a/spatial/src/spatial/core/functions/table/st_generatepoints.cpp b/spatial/src/spatial/core/functions/table/st_generatepoints.cpp
+index 007d386..8754619 100644
+--- a/spatial/src/spatial/core/functions/table/st_generatepoints.cpp
++++ b/spatial/src/spatial/core/functions/table/st_generatepoints.cpp
+@@ -79,8 +79,8 @@ static void Execute(ClientContext &context, TableFunctionInput &data_p, DataChun
+ 	const auto chunk_size = MinValue<idx_t>(STANDARD_VECTOR_SIZE, bind_data.count - state.current_idx);
+ 	for (idx_t i = 0; i < chunk_size; i++) {
  
- statement ok
- CREATE INDEX my_idx ON t1 USING RTREE (geom);
-@@ -20,4 +20,4 @@ physical_plan	<REGEX>:.*RTREE_INDEX_SCAN.*
- query I
- SELECT count(*) FROM t1 WHERE ST_Within(geom, ST_MakeEnvelope(450, 450, 650, 650));
- ----
--352
-\ No newline at end of file
-+390
-diff --git a/test/sql/index/rtree_block_reclaim.test_slow b/test/sql/index/rtree_block_reclaim.test_slow
-index f474266..903f634 100644
---- a/test/sql/index/rtree_block_reclaim.test_slow
-+++ b/test/sql/index/rtree_block_reclaim.test_slow
-@@ -21,7 +21,7 @@ CREATE INDEX idx ON tbl USING RTREE (geom);
- query II
- SELECT i, geom FROM tbl WHERE i = 50000;;
- ----
--50000	POINT (4732.4060765095055 128.3674407750368)
-+50000	POINT (1345.636742415942 425.3127709233669)
+-		x_data[i] = state.rng.NextRandom(bind_data.bbox.min.x, bind_data.bbox.max.x);
+-		y_data[i] = state.rng.NextRandom(bind_data.bbox.min.y, bind_data.bbox.max.y);
++		x_data[i] = state.rng.NextRandom32(bind_data.bbox.min.x, bind_data.bbox.max.x);
++		y_data[i] = state.rng.NextRandom32(bind_data.bbox.min.y, bind_data.bbox.max.y);
  
- statement ok
- CHECKPOINT;
-@@ -51,7 +51,7 @@ CHECKPOINT;
- query II
- SELECT i, geom FROM tbl WHERE i = 50000;
- ----
--50000	POINT (4732.4060765095055 128.3674407750368)
-+50000	POINT (1345.636742415942 425.3127709233669)
+ 		state.current_idx++;
+ 	}
+diff --git a/spatial/src/spatial/core/index/rtree/rtree_index_scan.cpp b/spatial/src/spatial/core/index/rtree/rtree_index_scan.cpp
+index 9168790..7fd53a2 100644
+--- a/spatial/src/spatial/core/index/rtree/rtree_index_scan.cpp
++++ b/spatial/src/spatial/core/index/rtree/rtree_index_scan.cpp
+@@ -208,7 +208,6 @@ TableFunction RTreeIndexScanFunction::GetFunction() {
+ 	func.pushdown_complex_filter = nullptr;
+ 	func.to_string = RTreeIndexScanToString;
+ 	func.table_scan_progress = nullptr;
+-	func.get_batch_index = nullptr;
+ 	func.projection_pushdown = true;
+ 	func.filter_pushdown = false;
+ 	func.get_bind_info = RTreeIndexScanBindInfo;
+diff --git a/spatial/src/spatial/core/io/osm/st_read_osm.cpp b/spatial/src/spatial/core/io/osm/st_read_osm.cpp
+index 465cb87..5aa49dd 100644
+--- a/spatial/src/spatial/core/io/osm/st_read_osm.cpp
++++ b/spatial/src/spatial/core/io/osm/st_read_osm.cpp
+@@ -836,10 +836,12 @@ static double Progress(ClientContext &context, const FunctionData *bind_data,
+ 	return state.GetProgress();
+ }
  
- # now loop and always DROP INDEX, then recreate (reusing the same blocks)
+-static idx_t GetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
+-                           LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
+-	auto &state = (LocalState &)*local_state;
+-	return state.block->block_idx;
++static OperatorPartitionData GetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input) {
++	if (input.partition_info.RequiresPartitionColumns()) {
++		throw InternalException("ST_ReadOSM::GetPartitionData: partition columns not supported");
++	}
++	auto &state = input.local_state->Cast<LocalState>();
++	return OperatorPartitionData(state.block->block_idx);
+ }
  
-@@ -87,6 +87,6 @@ FROM pragma_database_size() current, blocks_idx;
- query II
- SELECT i, geom FROM tbl WHERE i = 50000;
- ----
--50000	POINT (4732.4060765095055 128.3674407750368)
-+50000	POINT (1345.636742415942 425.3127709233669)
+ static unique_ptr<TableRef> ReadOsmPBFReplacementScan(ClientContext &context, ReplacementScanInput &input,
+@@ -898,7 +900,7 @@ static constexpr const char *DOC_EXAMPLE = R"(
+ void CoreTableFunctions::RegisterOsmTableFunction(DatabaseInstance &db) {
+ 	TableFunction read("ST_ReadOSM", {LogicalType::VARCHAR}, Execute, Bind, InitGlobal, InitLocal);
  
- endloop
-\ No newline at end of file
-diff --git a/test/sql/index/rtree_persistence.test b/test/sql/index/rtree_persistence.test
-index a971dd5..926ab36 100644
---- a/test/sql/index/rtree_persistence.test
-+++ b/test/sql/index/rtree_persistence.test
-@@ -10,7 +10,7 @@ FROM st_generatepoints({min_x: 0, min_y: 0, max_x: 10000, max_y: 10000}::BOX_2D,
- query I
- SELECT count(*) FROM t1 WHERE ST_Within(geom, ST_MakeEnvelope(450, 450, 650, 650));
- ----
--352
-+390
+-	read.get_batch_index = GetBatchIndex;
++	read.get_partition_data = GetPartitionData;
+ 	read.table_scan_progress = Progress;
  
- statement ok
- CREATE INDEX my_idx ON t1 USING RTREE (geom);
-@@ -31,4 +31,4 @@ physical_plan	<REGEX>:.*RTREE_INDEX_SCAN.*
- query I
- SELECT count(*) FROM t1 WHERE ST_Within(geom, ST_MakeEnvelope(450, 450, 650, 650));
- ----
--352
-\ No newline at end of file
-+390
-diff --git a/test/sql/index/rtree_persistence_load.test b/test/sql/index/rtree_persistence_load.test
-index 15ca910..056d8ce 100644
---- a/test/sql/index/rtree_persistence_load.test
-+++ b/test/sql/index/rtree_persistence_load.test
-@@ -10,7 +10,7 @@ FROM st_generatepoints({min_x: 0, min_y: 0, max_x: 10000, max_y: 10000}::BOX_2D,
- query I
- SELECT count(*) FROM t1 WHERE ST_Within(geom, ST_MakeEnvelope(450, 450, 650, 650));
- ----
--43
-+36
+ 	ExtensionUtil::RegisterFunction(db, read);
+diff --git a/spatial/src/spatial/gdal/functions/st_read.cpp b/spatial/src/spatial/gdal/functions/st_read.cpp
+index 177548c..42d2df7 100644
+--- a/spatial/src/spatial/gdal/functions/st_read.cpp
++++ b/spatial/src/spatial/gdal/functions/st_read.cpp
+@@ -675,7 +675,7 @@ void GdalTableFunction::Register(DatabaseInstance &db) {
+ 	                   GdalTableFunction::InitGlobal, GdalTableFunction::InitLocal);
  
- statement ok
- CREATE INDEX my_idx ON t1 USING RTREE (geom);
-@@ -39,4 +39,4 @@ physical_plan	<REGEX>:.*RTREE_INDEX_SCAN.*
- query I
- SELECT count(*) FROM t1 WHERE ST_Within(geom, ST_MakeEnvelope(450, 450, 650, 650));
- ----
--43
-\ No newline at end of file
-+36
-diff --git a/test/sql/index/rtree_persistence_wal.test b/test/sql/index/rtree_persistence_wal.test
-index 14b3c53..6d310ed 100644
---- a/test/sql/index/rtree_persistence_wal.test
-+++ b/test/sql/index/rtree_persistence_wal.test
-@@ -13,7 +13,7 @@ FROM st_generatepoints({min_x: 0, min_y: 0, max_x: 10000, max_y: 10000}::BOX_2D,
- query I
- SELECT count(*) FROM t1 WHERE ST_Within(geom, ST_MakeEnvelope(450, 450, 650, 650));
- ----
--43
-+36
+ 	scan.cardinality = GdalTableFunction::Cardinality;
+-	scan.get_batch_index = ArrowTableFunction::ArrowGetBatchIndex;
++	scan.get_partition_data = ArrowTableFunction::ArrowGetPartitionData;
  
- statement ok
- CREATE INDEX my_idx ON t1 USING RTREE (geom);
-@@ -34,4 +34,4 @@ physical_plan	<REGEX>:.*RTREE_INDEX_SCAN.*
- query I
- SELECT count(*) FROM t1 WHERE ST_Within(geom, ST_MakeEnvelope(450, 450, 650, 650));
- ----
--43
-\ No newline at end of file
-+36
-diff --git a/test/sql/index/rtree_projection.test b/test/sql/index/rtree_projection.test
-index b60c922..23488e4 100644
---- a/test/sql/index/rtree_projection.test
-+++ b/test/sql/index/rtree_projection.test
-@@ -15,30 +15,30 @@ CREATE INDEX my_idx ON points USING RTREE(geom);
- query II rowsort
- SELECT * FROM points WHERE ST_Intersects(geom, ST_MakeEnvelope(0, 0, 500, 500));
- ----
--351	POINT (359.812940005213 406.6655575297773)
--472	POINT (169.11179292947054 129.24372218549252)
--775	POINT (173.61568519845605 455.52933821454644)
-+249	POINT (42.208750495658 488.510431689545)
-+760	POINT (16.631746553017916 252.64710064171524)
-+907	POINT (88.77047830284079 251.89159351805182)
- 
- query II rowsort
- SELECT geom, id FROM points WHERE ST_Intersects(geom, ST_MakeEnvelope(0, 0, 500, 500));
- ----
--POINT (169.11179292947054 129.24372218549252)	472
--POINT (173.61568519845605 455.52933821454644)	775
--POINT (359.812940005213 406.6655575297773)	351
-+POINT (16.631746553017916 252.64710064171524)	760
-+POINT (42.208750495658 488.510431689545)	249
-+POINT (88.77047830284079 251.89159351805182)	907
- 
- query I rowsort
- SELECT id FROM points WHERE ST_Intersects(geom, ST_MakeEnvelope(0, 0, 500, 500));
- ----
--351
--472
--775
-+249
-+760
-+907
- 
- query III rowsort
- SELECT id, geom, ST_Intersects(geom, ST_MakeEnvelope(0, 0, 500, 500)) as contained FROM points WHERE ST_Intersects(geom, ST_MakeEnvelope(0, 0, 500, 500));
- ----
--351	POINT (359.812940005213 406.6655575297773)	true
--472	POINT (169.11179292947054 129.24372218549252)	true
--775	POINT (173.61568519845605 455.52933821454644)	true
-+249	POINT (42.208750495658 488.510431689545)	1
-+760	POINT (16.631746553017916 252.64710064171524)	1
-+907	POINT (88.77047830284079 251.89159351805182)	1
- 
- query I rowsort
- SELECT ST_Intersects(geom, ST_MakeEnvelope(0, 0, 500, 500)) as contained FROM points WHERE ST_Intersects(geom, ST_MakeEnvelope(0, 0, 500, 500));
+ 	scan.projection_pushdown = true;
+ 	scan.filter_pushdown = true;

@@ -225,6 +225,9 @@ static unique_ptr<TableRef> ReplaceInternal(ClientContext &context, const string
 			}
 		}
 		current_frame = current_frame.attr("f_back");
+		if (py::none().is(current_frame)) {
+			break;
+		}
 	} while (scan_all_frames && (has_locals || has_globals));
 	return nullptr;
 }

@@ -140,11 +140,6 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 	// Test if the database is a DuckDB database file.
 	if (StringUtil::CIEquals(options.db_type, "DUCKDB")) {
 		options.db_type = "";
-
-		// The DuckDB format does not allow unrecognized options.
-		if (!options.unrecognized_option.empty()) {
-			throw BinderException("Unrecognized option for attach \"%s\"", options.unrecognized_option);
-		}
 		return;
 	}
 
@@ -165,12 +160,6 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 			ExtensionHelper::LoadExternalExtension(context, options.db_type);
 		}
 		return;
-	}
-
-	// The DuckDB file format does not allow unrecognized options, except for the block_size option,
-	// which is specific to DuckDB files.
-	if (!options.unrecognized_option.empty() && options.unrecognized_option != "block_size") {
-		throw BinderException("Unrecognized option for attach \"%s\"", options.unrecognized_option);
 	}
 }
 

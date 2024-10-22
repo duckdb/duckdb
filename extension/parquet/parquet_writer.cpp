@@ -25,16 +25,16 @@ using namespace duckdb_apache::thrift;            // NOLINT
 using namespace duckdb_apache::thrift::protocol;  // NOLINT
 using namespace duckdb_apache::thrift::transport; // NOLINT
 
-using duckdb_parquet::format::CompressionCodec;
-using duckdb_parquet::format::ConvertedType;
-using duckdb_parquet::format::Encoding;
-using duckdb_parquet::format::FieldRepetitionType;
-using duckdb_parquet::format::FileCryptoMetaData;
-using duckdb_parquet::format::FileMetaData;
-using duckdb_parquet::format::PageHeader;
-using duckdb_parquet::format::PageType;
-using ParquetRowGroup = duckdb_parquet::format::RowGroup;
-using duckdb_parquet::format::Type;
+using duckdb_parquet::CompressionCodec;
+using duckdb_parquet::ConvertedType;
+using duckdb_parquet::Encoding;
+using duckdb_parquet::FieldRepetitionType;
+using duckdb_parquet::FileCryptoMetaData;
+using duckdb_parquet::FileMetaData;
+using duckdb_parquet::PageHeader;
+using duckdb_parquet::PageType;
+using ParquetRowGroup = duckdb_parquet::RowGroup;
+using duckdb_parquet::Type;
 
 ChildFieldIDs::ChildFieldIDs() : ids(make_uniq<case_insensitive_map_t<FieldID>>()) {
 }
@@ -167,8 +167,7 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 	throw NotImplementedException("Unimplemented type for Parquet \"%s\"", duckdb_type.ToString());
 }
 
-void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
-                                        duckdb_parquet::format::SchemaElement &schema_ele) {
+void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_parquet::SchemaElement &schema_ele) {
 	if (duckdb_type.IsJSONType()) {
 		schema_ele.converted_type = ConvertedType::JSON;
 		schema_ele.__isset.converted_type = true;
@@ -356,7 +355,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 	file_meta_data.schema.resize(1);
 
 	for (auto &kv_pair : kv_metadata) {
-		duckdb_parquet::format::KeyValue kv;
+		duckdb_parquet::KeyValue kv;
 		kv.__set_key(kv_pair.first);
 		kv.__set_value(kv_pair.second);
 		file_meta_data.key_value_metadata.push_back(kv);
@@ -380,7 +379,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 	file_meta_data.schema[0].name = "duckdb_schema";
 	file_meta_data.schema[0].num_children = NumericCast<int32_t>(sql_types.size());
 	file_meta_data.schema[0].__isset.num_children = true;
-	file_meta_data.schema[0].repetition_type = duckdb_parquet::format::FieldRepetitionType::REQUIRED;
+	file_meta_data.schema[0].repetition_type = duckdb_parquet::FieldRepetitionType::REQUIRED;
 	file_meta_data.schema[0].__isset.repetition_type = true;
 
 	auto &unique_names = column_names;
@@ -466,7 +465,7 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 // Validation code adapted from Impala
 static void ValidateOffsetInFile(const string &filename, idx_t col_idx, idx_t file_length, idx_t offset,
                                  const string &offset_name) {
-	if (offset < 0 || offset >= file_length) {
+	if (offset >= file_length) {
 		throw IOException("File '%s': metadata is corrupt. Column %d has invalid "
 		                  "%s (offset=%llu file_size=%llu).",
 		                  filename, col_idx, offset_name, offset, file_length);
@@ -539,8 +538,8 @@ void ParquetWriter::Finalize() {
 	if (encryption_config) {
 		// Crypto metadata is written unencrypted
 		FileCryptoMetaData crypto_metadata;
-		duckdb_parquet::format::AesGcmV1 aes_gcm_v1;
-		duckdb_parquet::format::EncryptionAlgorithm alg;
+		duckdb_parquet::AesGcmV1 aes_gcm_v1;
+		duckdb_parquet::EncryptionAlgorithm alg;
 		alg.__set_AES_GCM_V1(aes_gcm_v1);
 		crypto_metadata.__set_encryption_algorithm(alg);
 		crypto_metadata.write(protocol.get());

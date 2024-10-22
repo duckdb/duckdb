@@ -40,7 +40,7 @@ ifeq (${DISABLE_SANITIZER}, 1)
 	DISABLE_SANITIZER_FLAG=-DENABLE_SANITIZER=FALSE -DENABLE_UBSAN=0
 endif
 ifeq (${DISABLE_UBSAN}, 1)
-	DISABLE_SANITIZER_FLAG=-DENABLE_UBSAN=0
+	DISABLE_SANITIZER_FLAG:=${DISABLE_SANITIZER_FLAG} -DENABLE_UBSAN=0
 endif
 ifeq (${DISABLE_VPTR_SANITIZER}, 1)
 	DISABLE_SANITIZER_FLAG:=${DISABLE_SANITIZER_FLAG} -DDISABLE_VPTR_SANITIZER=1
@@ -90,6 +90,9 @@ ifeq (${EXTENSION_STATIC_BUILD}, 1)
 endif
 ifeq (${DISABLE_BUILTIN_EXTENSIONS}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_BUILTIN_EXTENSIONS=1
+endif
+ifeq (${GENERATE_EXTENSION_ENTRIES}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DGENERATE_EXTENSION_ENTRIES=1
 endif
 ifneq (${ENABLE_EXTENSION_AUTOLOADING}, "")
 	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_EXTENSION_AUTOLOADING=${ENABLE_EXTENSION_AUTOLOADING}
@@ -235,7 +238,7 @@ ifeq (${DEBUG_STACKTRACE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDEBUG_STACKTRACE=1
 endif
 ifeq (${DISABLE_CORE_FUNCTIONS}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_CORE_FUNCTIONS_EXTENSION=0
+	SKIP_EXTENSIONS:=${SKIP_EXTENSIONS};core_functions
 endif
 ifeq (${DISABLE_EXTENSION_LOAD}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_EXTENSION_LOAD=1
@@ -477,6 +480,7 @@ coverage-check:
 generate-files:
 	python3 scripts/generate_c_api.py
 	python3 scripts/generate_functions.py
+	python3 scripts/generate_settings.py
 	python3 scripts/generate_serialization.py
 	python3 scripts/generate_enum_util.py
 	-@python3 tools/pythonpkg/scripts/generate_connection_code.py || echo "Warning: generate_connection_code.py failed, cxxheaderparser & pcpp are required to perform this step"

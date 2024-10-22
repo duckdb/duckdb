@@ -144,8 +144,7 @@ string JSONScanData::GetTimestampFormat() const {
 }
 
 JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, const JSONScanData &bind_data_p)
-    : bind_data(bind_data_p), transform_options(bind_data.transform_options),
-      allocator(BufferManager::GetBufferManager(context).GetBufferAllocator()),
+    : bind_data(bind_data_p), transform_options(bind_data.transform_options), allocator(BufferAllocator::Get(context)),
       buffer_capacity(bind_data.maximum_object_size * 2), file_index(0), batch_index(0),
       system_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()),
       enable_parallel_scans(bind_data.files.size() < system_threads) {
@@ -957,10 +956,12 @@ double JSONScan::ScanProgress(ClientContext &, const FunctionData *, const Globa
 	return progress / double(gstate.json_readers.size());
 }
 
-idx_t JSONScan::GetBatchIndex(ClientContext &, const FunctionData *, LocalTableFunctionState *local_state,
-                              GlobalTableFunctionState *) {
-	auto &lstate = local_state->Cast<JSONLocalTableFunctionState>();
-	return lstate.GetBatchIndex();
+OperatorPartitionData JSONScan::GetPartitionData(ClientContext &, TableFunctionGetPartitionInput &input) {
+	if (input.partition_info.RequiresPartitionColumns()) {
+		throw InternalException("JSONScan::GetPartitionData: partition columns not supported");
+	}
+	auto &lstate = input.local_state->Cast<JSONLocalTableFunctionState>();
+	return OperatorPartitionData(lstate.GetBatchIndex());
 }
 
 unique_ptr<NodeStatistics> JSONScan::Cardinality(ClientContext &, const FunctionData *bind_data) {
@@ -1014,7 +1015,7 @@ void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
 	table_function.named_parameters["compression"] = LogicalType::VARCHAR;
 
 	table_function.table_scan_progress = ScanProgress;
-	table_function.get_batch_index = GetBatchIndex;
+	table_function.get_partition_data = GetPartitionData;
 	table_function.cardinality = Cardinality;
 
 	table_function.serialize = Serialize;

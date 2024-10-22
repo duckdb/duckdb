@@ -404,7 +404,7 @@ string CSVReaderOptions::ToString(const string &current_file_path) const {
 	auto &skip_rows = dialect_options.skip_rows;
 
 	auto &header = dialect_options.header;
-	string error = "  file=" + current_file_path + "\n  ";
+	string error = "  file = " + current_file_path + "\n  ";
 	// Let's first print options that can either be set by the user or by the sniffer
 	// delimiter
 	error += FormatOptionLine("delimiter", delimiter);
@@ -427,13 +427,13 @@ string CSVReaderOptions::ToString(const string &current_file_path) const {
 
 	// Now we do options that can only be set by the user, that might hold some general significance
 	// null padding
-	error += "null_padding=" + std::to_string(null_padding) + "\n  ";
+	error += "null_padding = " + std::to_string(null_padding) + "\n  ";
 	// sample_size
-	error += "sample_size=" + std::to_string(sample_size_chunks * STANDARD_VECTOR_SIZE) + "\n  ";
+	error += "sample_size = " + std::to_string(sample_size_chunks * STANDARD_VECTOR_SIZE) + "\n  ";
 	// ignore_errors
-	error += "ignore_errors=" + ignore_errors.FormatValue() + "\n  ";
+	error += "ignore_errors = " + ignore_errors.FormatValue() + "\n  ";
 	// all_varchar
-	error += "all_varchar=" + std::to_string(all_varchar) + "\n";
+	error += "all_varchar = " + std::to_string(all_varchar) + "\n";
 
 	// Add information regarding sniffer mismatches (if any)
 	error += sniffer_user_mismatch_error;
@@ -452,15 +452,15 @@ static Value StringVectorToValue(const vector<string> &vec) {
 static uint8_t GetCandidateSpecificity(const LogicalType &candidate_type) {
 	//! Const ht with accepted auto_types and their weights in specificity
 	const duckdb::unordered_map<uint8_t, uint8_t> auto_type_candidates_specificity {
-	    {(uint8_t)LogicalTypeId::VARCHAR, 0},   {(uint8_t)LogicalTypeId::DOUBLE, 1},
-	    {(uint8_t)LogicalTypeId::FLOAT, 2},     {(uint8_t)LogicalTypeId::DECIMAL, 3},
-	    {(uint8_t)LogicalTypeId::BIGINT, 4},    {(uint8_t)LogicalTypeId::INTEGER, 5},
-	    {(uint8_t)LogicalTypeId::SMALLINT, 6},  {(uint8_t)LogicalTypeId::TINYINT, 7},
-	    {(uint8_t)LogicalTypeId::TIMESTAMP, 8}, {(uint8_t)LogicalTypeId::DATE, 9},
-	    {(uint8_t)LogicalTypeId::TIME, 10},     {(uint8_t)LogicalTypeId::BOOLEAN, 11},
-	    {(uint8_t)LogicalTypeId::SQLNULL, 12}};
+	    {static_cast<uint8_t>(LogicalTypeId::VARCHAR), 0},   {static_cast<uint8_t>(LogicalTypeId::DOUBLE), 1},
+	    {static_cast<uint8_t>(LogicalTypeId::FLOAT), 2},     {static_cast<uint8_t>(LogicalTypeId::DECIMAL), 3},
+	    {static_cast<uint8_t>(LogicalTypeId::BIGINT), 4},    {static_cast<uint8_t>(LogicalTypeId::INTEGER), 5},
+	    {static_cast<uint8_t>(LogicalTypeId::SMALLINT), 6},  {static_cast<uint8_t>(LogicalTypeId::TINYINT), 7},
+	    {static_cast<uint8_t>(LogicalTypeId::TIMESTAMP), 8}, {static_cast<uint8_t>(LogicalTypeId::DATE), 9},
+	    {static_cast<uint8_t>(LogicalTypeId::TIME), 10},     {static_cast<uint8_t>(LogicalTypeId::BOOLEAN), 11},
+	    {static_cast<uint8_t>(LogicalTypeId::SQLNULL), 12}};
 
-	auto id = (uint8_t)candidate_type.id();
+	auto id = static_cast<uint8_t>(candidate_type.id());
 	auto it = auto_type_candidates_specificity.find(id);
 	if (it == auto_type_candidates_specificity.end()) {
 		throw BinderException("Auto Type Candidate of type %s is not accepted as a valid input",
@@ -468,7 +468,7 @@ static uint8_t GetCandidateSpecificity(const LogicalType &candidate_type) {
 	}
 	return it->second;
 }
-bool StoreUserDefinedParameter(string &option) {
+bool StoreUserDefinedParameter(const string &option) {
 	if (option == "column_types" || option == "types" || option == "dtypes" || option == "auto_detect" ||
 	    option == "auto_type_candidates" || option == "columns" || option == "names") {
 		// We don't store options related to types, names and auto-detection since these are either irrelevant to our
@@ -477,14 +477,43 @@ bool StoreUserDefinedParameter(string &option) {
 	}
 	return true;
 }
-void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientContext &context) {
+
+void CSVReaderOptions::Verify() {
+	if (rejects_table_name.IsSetByUser() && !store_rejects.GetValue() && store_rejects.IsSetByUser()) {
+		throw BinderException("REJECTS_TABLE option is only supported when store_rejects is not manually set to false");
+	}
+	if (rejects_scan_name.IsSetByUser() && !store_rejects.GetValue() && store_rejects.IsSetByUser()) {
+		throw BinderException("REJECTS_SCAN option is only supported when store_rejects is not manually set to false");
+	}
+	if (rejects_scan_name.IsSetByUser() || rejects_table_name.IsSetByUser()) {
+		// Ensure we set store_rejects to true automagically
+		store_rejects.Set(true, false);
+	}
+	// Validate rejects_table options
+	if (store_rejects.GetValue()) {
+		if (!ignore_errors.GetValue() && ignore_errors.IsSetByUser()) {
+			throw BinderException(
+			    "STORE_REJECTS option is only supported when IGNORE_ERRORS is not manually set to false");
+		}
+		// Ensure we set ignore errors to true automagically
+		ignore_errors.Set(true, false);
+		if (file_options.union_by_name) {
+			throw BinderException("REJECTS_TABLE option is not supported when UNION_BY_NAME is set to true");
+		}
+	}
+	if (rejects_limit != 0 && !store_rejects.GetValue()) {
+		throw BinderException("REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
+	}
+}
+
+void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, ClientContext &context) {
 	map<string, string> ordered_user_defined_parameters;
 	for (auto &kv : in) {
 		if (MultiFileReader().ParseOption(kv.first, kv.second, file_options, context)) {
 			continue;
 		}
 		auto loption = StringUtil::Lower(kv.first);
-		// skip variables that are specific to auto detection
+		// skip variables that are specific to auto-detection
 		if (StoreUserDefinedParameter(loption)) {
 			ordered_user_defined_parameters[loption] = kv.second.ToSQLString();
 		}
@@ -606,7 +635,7 @@ void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientCont
 }
 
 //! This function is used to remember options set by the sniffer, for use in ReadCSVRelation
-void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) {
+void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) const {
 	auto &delimiter = dialect_options.state_machine_options.delimiter;
 	auto &quote = dialect_options.state_machine_options.quote;
 	auto &escape = dialect_options.state_machine_options.escape;
