@@ -127,6 +127,7 @@ public:
 	void utf8_width_print(FILE *pOut, int w, const string &str);
 	bool SetOutputMode(const char *mode, const char *tbl_name);
 	bool ImportData(const char **azArg, idx_t nArg);
+	bool OpenDatabase(const char **azArg, idx_t nArg);
 
 	int strlenChar(const char *z);
 	int strlenChar(const string &str);

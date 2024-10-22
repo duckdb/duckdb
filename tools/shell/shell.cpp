@@ -4979,7 +4979,61 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 }
 
 MetadataResult ImportData(ShellState &state, const char **azArg, idx_t nArg) {
-	state.ImportData(azArg, nArg);
+	if (!state.ImportData(azArg, nArg)) {
+		return MetadataResult::ERROR;
+	}
+	return MetadataResult::SUCCESS;
+}
+
+bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
+	char *zNewFilename;  /* Name of the database file to open */
+	int iName = 1;       /* Index in azArg[] of the filename */
+	int newFlag = 0;     /* True to delete file before opening */
+	/* Close the existing database */
+	close_db(db);
+	db = 0;
+	globalDb = 0;
+	zDbFilename = string();
+	openMode = SHELL_OPEN_UNSPEC;
+	openFlags = openFlags & ~(SQLITE_OPEN_NOFOLLOW); // don't overwrite settings loaded in the command line
+	szMax = 0;
+	/* Check for command-line arguments */
+	for(iName=1; iName<nArg && azArg[iName][0]=='-'; iName++){
+		const char *z = azArg[iName];
+		if( optionMatch(z,"new") ){
+			newFlag = 1;
+		}else if( optionMatch(z, "readonly") ){
+			openMode = SHELL_OPEN_READONLY;
+		}else if( optionMatch(z, "nofollow") ){
+			openFlags |= SQLITE_OPEN_NOFOLLOW;
+		}else if( z[0]=='-' ){
+			utf8_printf(stderr, "unknown option: %s\n", z);
+			return false;
+		}
+	}
+	/* If a filename is specified, try to open it first */
+	zNewFilename = nArg>iName ? sqlite3_mprintf("%s", azArg[iName]) : 0;
+	if( zNewFilename || openMode==SHELL_OPEN_HEXDB ){
+		if( newFlag ) shellDeleteFile(zNewFilename);
+		zDbFilename = zNewFilename;
+		sqlite3_free(zNewFilename);
+		open_db(OPEN_DB_KEEPALIVE);
+		if( !db ){
+			utf8_printf(stderr, "Error: cannot open '%s'\n", zNewFilename);
+		}
+	}
+	if( !db){
+		/* As a fall-back open a TEMP database */
+		zDbFilename = string();
+		open_db(0);
+	}
+	return true;
+}
+
+MetadataResult OpenDatabase(ShellState &state, const char **azArg, idx_t nArg) {
+	if (!state.OpenDatabase(azArg, nArg)) {
+		return MetadataResult::ERROR;
+	}
 	return MetadataResult::SUCCESS;
 }
 
@@ -5006,6 +5060,7 @@ static const MetadataCommand metadata_commands[] = {
 	{"mode", 0, SetOutputMode, "MODE ?TABLE?", "Set output mode", 0},
 	{"nullvalue", 2, SetNullValue, "STRING", "Use STRING in place of NULL values", 0},
 
+	{"open", 0, OpenDatabase, "?OPTIONS? ?FILE?", "Close existing database and reopen FILE", 2},
 	{"rows", 1, SetRowRendering, "", "Row-wise rendering of query results (default)", 0},
 	{"restore", 0, nullptr, "", "", 3},
 	{"save", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
@@ -5084,51 +5139,6 @@ int ShellState::do_meta_command(char *zLine){
 	}
   if (found_argument) {
   } else
-
-  if( c=='o' && strncmp(azArg[0], "open", n)==0 && n>=2 ){
-    char *zNewFilename;  /* Name of the database file to open */
-    int iName = 1;       /* Index in azArg[] of the filename */
-    int newFlag = 0;     /* True to delete file before opening */
-    /* Close the existing database */
-    close_db(db);
-    db = 0;
-    globalDb = 0;
-    zDbFilename = string();
-    openMode = SHELL_OPEN_UNSPEC;
-    openFlags = openFlags & ~(SQLITE_OPEN_NOFOLLOW); // don't overwrite settings loaded in the command line
-    szMax = 0;
-    /* Check for command-line arguments */
-    for(iName=1; iName<nArg && azArg[iName][0]=='-'; iName++){
-      const char *z = azArg[iName];
-      if( optionMatch(z,"new") ){
-        newFlag = 1;
-      }else if( optionMatch(z, "readonly") ){
-        openMode = SHELL_OPEN_READONLY;
-      }else if( optionMatch(z, "nofollow") ){
-        openFlags |= SQLITE_OPEN_NOFOLLOW;
-      }else if( z[0]=='-' ){
-        utf8_printf(stderr, "unknown option: %s\n", z);
-        rc = 1;
-        goto meta_command_exit;
-      }
-    }
-    /* If a filename is specified, try to open it first */
-    zNewFilename = nArg>iName ? sqlite3_mprintf("%s", azArg[iName]) : 0;
-    if( zNewFilename || openMode==SHELL_OPEN_HEXDB ){
-      if( newFlag ) shellDeleteFile(zNewFilename);
-      zDbFilename = zNewFilename;
-      sqlite3_free(zNewFilename);
-      open_db(OPEN_DB_KEEPALIVE);
-      if( !db ){
-        utf8_printf(stderr, "Error: cannot open '%s'\n", zNewFilename);
-      }
-    }
-    if( !db){
-      /* As a fall-back open a TEMP database */
-      zDbFilename = string();
-      open_db(0);
-    }
-  }else
 
   if( (c=='o'
         && (strncmp(azArg[0], "output", n)==0||strncmp(azArg[0], "once", n)==0))
