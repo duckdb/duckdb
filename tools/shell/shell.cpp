@@ -5047,6 +5047,10 @@ MetadataResult PrintArguments(ShellState &state, const char **azArg, idx_t nArg)
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult QuitProcess(ShellState &, const char **azArg, idx_t nArg) {
+	return MetadataResult::EXIT;
+}
+
 static const MetadataCommand metadata_commands[] = {
 	{"backup", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
 	{"bail", 2, ToggleBail, "on|off", "Stop after hitting an error.  Default OFF", 3},
@@ -5072,6 +5076,7 @@ static const MetadataCommand metadata_commands[] = {
 
 	{"open", 0, OpenDatabase, "?OPTIONS? ?FILE?", "Close existing database and reopen FILE", 2},
 	{"print", 0, PrintArguments, "STRING...", "Print literal STRING", 3},
+	{"quit", 0, QuitProcess, "", "Exit this program", 0},
 	{"rows", 1, SetRowRendering, "", "Row-wise rendering of query results (default)", 0},
 	{"restore", 0, nullptr, "", "", 3},
 	{"save", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
@@ -5263,10 +5268,6 @@ int ShellState::do_meta_command(char *zLine){
       strncpy(continuePromptSelected,azArg[3],(int)ArraySize(continuePromptSelected)-1);
     }
   } else
-
-  if( c=='q' && strncmp(azArg[0], "quit", n)==0 ){
-    rc = 2;
-  }else
 
   if( c=='r' && n>=3 && strncmp(azArg[0], "read", n)==0 ){
     FILE *inSaved = in;
