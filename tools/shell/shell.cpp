@@ -3854,43 +3854,6 @@ static int showHelp(FILE *out, const char *zPattern){
 }
 
 /*
-** Read the content of file zName into memory obtained from sqlite3_malloc64()
-** and return a pointer to the buffer. The caller is responsible for freeing
-** the memory.
-**
-** If parameter pnByte is not NULL, (*pnByte) is set to the number of bytes
-** read.
-**
-** For convenience, a nul-terminator byte is always appended to the data read
-** from the file before the buffer is returned. This byte is not included in
-** the final value of (*pnByte), if applicable.
-**
-** NULL is returned if any error is encountered. The final value of *pnByte
-** is undefined in this case.
-*/
-static char *readFile(const char *zName, int *pnByte){
-  FILE *in = fopen(zName, "rb");
-  long nIn;
-  size_t nRead;
-  char *pBuf;
-  if( in==0 ) return 0;
-  fseek(in, 0, SEEK_END);
-  nIn = ftell(in);
-  rewind(in);
-  pBuf = (char *) sqlite3_malloc64( nIn+1 );
-  if( pBuf==0 ){ fclose(in); return 0; }
-  nRead = fread(pBuf, nIn, 1, in);
-  fclose(in);
-  if( nRead!=1 ){
-    sqlite3_free(pBuf);
-    return 0;
-  }
-  pBuf[nIn] = 0;
-  if( pnByte ) *pnByte = nIn;
-  return pBuf;
-}
-
-/*
 ** Try to deduce the type of file for zName based on its content.  Return
 ** one of the SHELL_OPEN_* constants.
 **
@@ -4484,104 +4447,6 @@ static int shellDatabaseError(sqlite3 *db){
 }
 
 /*
-** Compare the pattern in zGlob[] against the text in z[].  Return TRUE
-** if they match and FALSE (0) if they do not match.
-**
-** Globbing rules:
-**
-**      '*'       Matches any sequence of zero or more characters.
-**
-**      '?'       Matches exactly one character.
-**
-**     [...]      Matches one character from the enclosed list of
-**                characters.
-**
-**     [^...]     Matches one character not in the enclosed list.
-**
-**      '#'       Matches any sequence of one or more digits with an
-**                optional + or - sign in front
-**
-**      ' '       Any span of whitespace matches any other span of
-**                whitespace.
-**
-** Extra whitespace at the end of z[] is ignored.
-*/
-static int testcase_glob(const char *zGlob, const char *z){
-  int c, c2;
-  int invert;
-  int seen;
-
-  while( (c = (*(zGlob++)))!=0 ){
-    if( IsSpace(c) ){
-      if( !IsSpace(*z) ) return 0;
-      while( IsSpace(*zGlob) ) zGlob++;
-      while( IsSpace(*z) ) z++;
-    }else if( c=='*' ){
-      while( (c=(*(zGlob++))) == '*' || c=='?' ){
-        if( c=='?' && (*(z++))==0 ) return 0;
-      }
-      if( c==0 ){
-        return 1;
-      }else if( c=='[' ){
-        while( *z && testcase_glob(zGlob-1,z)==0 ){
-          z++;
-        }
-        return (*z)!=0;
-      }
-      while( (c2 = (*(z++)))!=0 ){
-        while( c2!=c ){
-          c2 = *(z++);
-          if( c2==0 ) return 0;
-        }
-        if( testcase_glob(zGlob,z) ) return 1;
-      }
-      return 0;
-    }else if( c=='?' ){
-      if( (*(z++))==0 ) return 0;
-    }else if( c=='[' ){
-      int prior_c = 0;
-      seen = 0;
-      invert = 0;
-      c = *(z++);
-      if( c==0 ) return 0;
-      c2 = *(zGlob++);
-      if( c2=='^' ){
-        invert = 1;
-        c2 = *(zGlob++);
-      }
-      if( c2==']' ){
-        if( c==']' ) seen = 1;
-        c2 = *(zGlob++);
-      }
-      while( c2 && c2!=']' ){
-        if( c2=='-' && zGlob[0]!=']' && zGlob[0]!=0 && prior_c>0 ){
-          c2 = *(zGlob++);
-          if( c>=prior_c && c<=c2 ) seen = 1;
-          prior_c = 0;
-        }else{
-          if( c==c2 ){
-            seen = 1;
-          }
-          prior_c = c2;
-        }
-        c2 = *(zGlob++);
-      }
-      if( c2==0 || (seen ^ invert)==0 ) return 0;
-    }else if( c=='#' ){
-      if( (z[0]=='-' || z[0]=='+') && IsDigit(z[1]) ) z++;
-      if( !IsDigit(z[0]) ) return 0;
-      z++;
-      while( IsDigit(z[0]) ){ z++; }
-    }else{
-      if( c!=(*(z++)) ) return 0;
-    }
-  }
-  while( IsSpace(*z) ){ z++; }
-  return *z==0;
-}
-
-
-/*
 ** Compare the string as a command-line option with either one or two
 ** initial "-" characters.
 */
@@ -4708,14 +4573,10 @@ int ShellState::do_meta_command(char *zLine){
     sqlite3_backup *pBackup;
     int j;
     int bAsync = 0;
-    const char *zVfs = 0;
     for(j=1; j<nArg; j++){
       const char *z = azArg[j];
       if( z[0]=='-' ){
         if( z[1]=='-' ) z++;
-        if( strcmp(z, "-append")==0 ){
-          zVfs = "apndvfs";
-        }else
         if( strcmp(z, "-async")==0 ){
           bAsync = 1;
         }else
@@ -4739,7 +4600,7 @@ int ShellState::do_meta_command(char *zLine){
     }
     if( zDb==0 ) zDb = "main";
     rc = sqlite3_open_v2(zDestFile, &pDest,
-                  SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE, zVfs);
+                  SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE, nullptr);
     if( rc!=SQLITE_OK ){
       utf8_printf(stderr, "Error: cannot open \"%s\"\n", zDestFile);
       close_db(pDest);
@@ -6304,18 +6165,6 @@ int ShellState::do_meta_command(char *zLine){
     }
   }else
 
-  if( c=='v' && strncmp(azArg[0], "vfsname", n)==0 ){
-    const char *zDbName = nArg==2 ? azArg[1] : "main";
-    char *zVfsName = 0;
-    if( db ){
-      sqlite3_file_control(db, zDbName, SQLITE_FCNTL_VFSNAME, &zVfsName);
-      if( zVfsName ){
-        utf8_printf(out, "%s\n", zVfsName);
-        sqlite3_free(zVfsName);
-      }
-    }
-  }else
-
   if( c=='w' && strncmp(azArg[0], "width", n)==0 ){
   	colWidth.clear();
     for(int j=1; j<nArg; j++){
@@ -6823,7 +6672,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
   int readStdin = 1;
   int nCmd = 0;
   char **azCmd = 0;
-  const char *zVfs = 0;           /* Value of -vfs command-line option */
 #if !SQLITE_SHELL_IS_UTF8
   char **argvToFree = 0;
   int argcToFree = 0;
@@ -6961,36 +6809,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
       if( n<0 ) n = 0;
       sqlite3_config(SQLITE_CONFIG_LOOKASIDE, sz, n);
       if( sz*n==0 ) data.shellFlgs &= ~SHFLG_Lookaside;
-#ifdef SQLITE_ENABLE_VFSTRACE
-    }else if( strcmp(z,"-vfstrace")==0 ){
-      extern int vfstrace_register(
-         const char *zTraceName,
-         const char *zOldVfsName,
-         int (*xOut)(const char*,void*),
-         void *pOutArg,
-         int makeDefault
-      );
-      vfstrace_register("trace",0,(int(*)(const char*,void*))fputs,stderr,1);
-#endif
-#ifdef SQLITE_ENABLE_MULTIPLEX
-    }else if( strcmp(z,"-multiplex")==0 ){
-      extern int sqlite3_multiple_initialize(const char*,int);
-      sqlite3_multiplex_initialize(0, 1);
-#endif
     }else if( strcmp(z,"-mmap")==0 ){
       sqlite3_int64 sz = integerValue(cmdline_option_value(argc,argv,++i));
       sqlite3_config(SQLITE_CONFIG_MMAP_SIZE, sz, sz);
-#ifdef SQLITE_ENABLE_SORTER_REFERENCES
-    }else if( strcmp(z,"-sorterref")==0 ){
-      sqlite3_int64 sz = integerValue(cmdline_option_value(argc,argv,++i));
-      sqlite3_config(SQLITE_CONFIG_SORTERREF_SIZE, (int)sz);
-#endif
-    }else if( strcmp(z,"-vfs")==0 ){
-      zVfs = cmdline_option_value(argc, argv, ++i);
-#ifdef SQLITE_HAVE_ZLIB
-    }else if( strcmp(z,"-zip")==0 ){
-      data.openMode = SHELL_OPEN_ZIPFILE;
-#endif
     }else if( strcmp(z,"-readonly")==0 ){
       data.openMode = SHELL_OPEN_READONLY;
     }else if( strcmp(z,"-nofollow")==0 ){
@@ -7018,16 +6839,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
   ** to call sqlite3_initialize() and process any command line -vfs option. */
   sqlite3_initialize();
 #endif
-
-  if( zVfs ){
-    sqlite3_vfs *pVfs = sqlite3_vfs_find(zVfs);
-    if( pVfs ){
-      sqlite3_vfs_register(pVfs, 1);
-    }else{
-      utf8_printf(stderr, "no such VFS: \"%s\"\n", argv[i]);
-      exit(1);
-    }
-  }
 
   if( data.zDbFilename==0 ){
 #ifndef SQLITE_OMIT_MEMORYDB

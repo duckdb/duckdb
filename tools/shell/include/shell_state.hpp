@@ -114,7 +114,6 @@ struct ShellState {
 	char outfile[FILENAME_MAX]; /* Filename for *out */
 	const char *zDbFilename;    /* name of the database file */
 	char *zFreeOnClose;         /* Filename to free when closing */
-	const char *zVfs;           /* Name of VFS to use */
 	sqlite3_stmt *pStmt;        /* Current statement if any. */
 	FILE *pLog;                 /* Write log output here */
 	int *aiIndent;              /* Array of indents used in RenderMode::Explain */
