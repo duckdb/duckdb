@@ -23,6 +23,7 @@ struct ColumnarResult {
 	vector<string> data;
 	vector<int> types;
 	vector<int> column_width;
+	vector<const char *> type_names;
 };
 
 class ColumnRenderer {
@@ -38,6 +39,8 @@ public:
 	virtual const char *GetRowStart() {
 		return nullptr;
 	}
+
+	void RenderAlignedValue(ColumnarResult &result, idx_t i);
 protected:
 	ShellState &state;
 };

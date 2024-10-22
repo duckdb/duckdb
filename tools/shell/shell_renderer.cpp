@@ -22,6 +22,14 @@ ColumnRenderer::ColumnRenderer(ShellState &state) : state(state) {}
 void ColumnRenderer::RenderFooter(ColumnarResult &result) {
 }
 
+void ColumnRenderer::RenderAlignedValue(ColumnarResult &result, idx_t i) {
+	int w = result.column_width[i];
+	int n = state.strlenChar(result.data[i]);
+	state.Print(string((w - n) / 2, ' '));
+	state.Print(result.data[i]);
+	state.Print(string((w - n + 1) / 2, ' '));
+}
+
 class ModeColumnRenderer : public ColumnRenderer {
 public:
 	explicit ModeColumnRenderer(ShellState &state) : ColumnRenderer(state) {}
@@ -56,11 +64,7 @@ public:
 		state.print_row_separator(result.column_count, "+", result.column_width);
 		state.Print("| ");
 		for(idx_t i=0; i<result.column_count; i++){
-			int w = result.column_width[i];
-			int n = state.strlenChar(result.data[i]);
-			state.Print(string((w - n) / 2, ' '));
-			state.Print(result.data[i]);
-			state.Print(string((w - n + 1) / 2, ' '));
+			RenderAlignedValue(result, i);
 			state.Print(i==result.column_count-1?" |\n":" | ");
 		}
 		state.print_row_separator(result.column_count, "+", result.column_width);
@@ -81,16 +85,164 @@ public:
 	}
 };
 
+class ModeMarkdownRenderer : public ColumnRenderer {
+public:
+	explicit ModeMarkdownRenderer(ShellState &state) : ColumnRenderer(state) {}
+
+	void RenderHeader(ColumnarResult &result) override {
+		for(idx_t i=0; i<result.column_count; i++){
+			RenderAlignedValue(result, i);
+		}
+		state.print_markdown_separator(result.column_count, "|", result.types, result.column_width);
+	}
+
+	const char *GetColumnSeparator() override {
+		return " | ";
+	}
+	const char *GetRowSeparator() override {
+		return " |\n";
+	}
+	const char *GetRowStart() override {
+		return "| ";
+	}
+};
+
+/*
+** UTF8 box-drawing characters.  Imagine box lines like this:
+**
+**           1
+**           |
+**       4 --+-- 2
+**           |
+**           3
+**
+** Each box characters has between 2 and 4 of the lines leading from
+** the center.  The characters are here identified by the numbers of
+** their corresponding lines.
+*/
+#define BOX_24   "\342\224\200"  /* U+2500 --- */
+#define BOX_13   "\342\224\202"  /* U+2502  |  */
+#define BOX_23   "\342\224\214"  /* U+250c  ,- */
+#define BOX_34   "\342\224\220"  /* U+2510 -,  */
+#define BOX_12   "\342\224\224"  /* U+2514  '- */
+#define BOX_14   "\342\224\230"  /* U+2518 -'  */
+#define BOX_123  "\342\224\234"  /* U+251c  |- */
+#define BOX_134  "\342\224\244"  /* U+2524 -|  */
+#define BOX_234  "\342\224\254"  /* U+252c -,- */
+#define BOX_124  "\342\224\264"  /* U+2534 -'- */
+#define BOX_1234 "\342\224\274"  /* U+253c -|- */
+
+class ModeBoxRenderer : public ColumnRenderer {
+public:
+	explicit ModeBoxRenderer(ShellState &state) : ColumnRenderer(state) {}
+
+	void RenderHeader(ColumnarResult &result) override {
+		print_box_row_separator(result.column_count, BOX_23, BOX_234, BOX_34, result.column_width);
+		state.Print(BOX_13 " ");
+		for(idx_t i=0; i<result.column_count; i++){
+			RenderAlignedValue(result, i);
+			state.Print(i==result.column_count-1?" " BOX_13 "\n":" " BOX_13 " ");
+		}
+		print_box_row_separator(result.column_count, BOX_123, BOX_1234, BOX_134, result.column_width);
+	}
+
+	void RenderFooter(ColumnarResult &result) override {
+		print_box_row_separator(result.column_count, BOX_12, BOX_124, BOX_14, result.column_width);
+	}
+
+	const char *GetColumnSeparator() override {
+		return " " BOX_13 " ";
+	}
+	const char *GetRowSeparator() override {
+		return " " BOX_13 "\n";
+	}
+	const char *GetRowStart() override {
+		return BOX_13" ";
+	}
+
+private:
+	/* Draw horizontal line N characters long using unicode box
+	** characters
+	*/
+	void print_box_line(int N){
+		string box_line;
+		for(idx_t i = 0; i < N; i++) {
+			box_line += BOX_24;
+		}
+		state.Print(box_line);
+	}
+
+	/*
+	** Draw a horizontal separator for a RenderMode::Box table.
+	*/
+	void print_box_row_separator(
+	  int nArg,
+	  const char *zSep1,
+	  const char *zSep2,
+	  const char *zSep3,
+	  const vector<int> &actualWidth
+	){
+		int i;
+		if( nArg>0 ){
+			state.Print(zSep1);
+			print_box_line(actualWidth[0]+2);
+			for(i=1; i<nArg; i++){
+				state.Print(zSep2);
+				print_box_line(actualWidth[i]+2);
+			}
+			state.Print(zSep3);
+		}
+		state.Print("\n");
+	}
+};
+
+class ModeLatexRenderer : public ColumnRenderer {
+public:
+	explicit ModeLatexRenderer(ShellState &state) : ColumnRenderer(state) {}
+
+	void RenderHeader(ColumnarResult &result) override {
+		state.Print("\\begin{tabular}{|");
+		for(idx_t i=0; i<result.column_count; i++){
+			if (state.column_type_is_integer(result.type_names[i])) {
+				state.Print("r");
+			} else {
+				state.Print("l");
+			}
+		}
+		state.Print("|}\n");
+		state.Print("\\hline\n");
+		for(idx_t i=0; i<result.column_count; i++){
+			RenderAlignedValue(result, i);
+			state.Print(i==result.column_count-1? GetRowSeparator():GetColumnSeparator());
+		}
+		state.Print("\\hline\n");
+	}
+
+	void RenderFooter(ColumnarResult &) override {
+		state.Print("\\hline\n");
+		state.Print("\\end{tabular}\n");
+	}
+
+	const char *GetColumnSeparator() override {
+		return " & ";
+	}
+	const char *GetRowSeparator() override {
+		return " \\\\\n";
+	}
+};
+
 unique_ptr<ColumnRenderer> ShellState::GetColumnRenderer() {
 	switch(cMode) {
 	case RenderMode::COLUMN:
 		return unique_ptr<ColumnRenderer>(new ModeColumnRenderer(*this));
 	case RenderMode::TABLE:
 		return unique_ptr<ColumnRenderer>(new ModeTableRenderer(*this));
-	case RenderMode::BOX:
 	case RenderMode::MARKDOWN:
+		return unique_ptr<ColumnRenderer>(new ModeMarkdownRenderer(*this));
+	case RenderMode::BOX:
+		return unique_ptr<ColumnRenderer>(new ModeBoxRenderer(*this));
 	case RenderMode::LATEX:
-		return nullptr;
+		return unique_ptr<ColumnRenderer>(new ModeLatexRenderer(*this));
 	default:
 		throw std::runtime_error("Unsupported mode for GetColumnRenderer");
 	}

@@ -486,11 +486,11 @@ static void shell_out_of_memory(void){
 }
 
 void ShellState::Print(const char *str) {
-	fputs(str, out);
+	utf8_printf(out, "%s", str);
 }
 
 void ShellState::Print(const string &str) {
-	fputs(str.c_str(), out);
+	utf8_printf(out, "%s", str.c_str());
 }
 
 /*
@@ -2963,18 +2963,18 @@ void ShellState::print_markdown_separator(
 	int i;
 	if( nArg>0 ){
 		for(i=0; i<nArg; i++){
-			fputs(zSep, out);
+			Print(zSep);
 			if (colTypes[i] == SQLITE_INTEGER || colTypes[i] == SQLITE_FLOAT) {
 				// right-align numerics in tables
 				print_dashes(actualWidth[i]+1);
-				fputs(":", out);
+				Print(":");
 			} else {
 				print_dashes(actualWidth[i]+2);
 			}
 		}
-		fputs(zSep, out);
+		Print(zSep);
 	}
-	fputs("\n", out);
+	Print("\n");
 }
 
 /*
@@ -3456,71 +3456,6 @@ static void bind_prepared_stmt(ShellState *pArg, sqlite3_stmt *pStmt){
   return;
 }
 
-/*
-** UTF8 box-drawing characters.  Imagine box lines like this:
-**
-**           1
-**           |
-**       4 --+-- 2
-**           |
-**           3
-**
-** Each box characters has between 2 and 4 of the lines leading from
-** the center.  The characters are here identified by the numbers of
-** their corresponding lines.
-*/
-#define BOX_24   "\342\224\200"  /* U+2500 --- */
-#define BOX_13   "\342\224\202"  /* U+2502  |  */
-#define BOX_23   "\342\224\214"  /* U+250c  ,- */
-#define BOX_34   "\342\224\220"  /* U+2510 -,  */
-#define BOX_12   "\342\224\224"  /* U+2514  '- */
-#define BOX_14   "\342\224\230"  /* U+2518 -'  */
-#define BOX_123  "\342\224\234"  /* U+251c  |- */
-#define BOX_134  "\342\224\244"  /* U+2524 -|  */
-#define BOX_234  "\342\224\254"  /* U+252c -,- */
-#define BOX_124  "\342\224\264"  /* U+2534 -'- */
-#define BOX_1234 "\342\224\274"  /* U+253c -|- */
-
-/* Draw horizontal line N characters long using unicode box
-** characters
-*/
-static void print_box_line(FILE *out, int N){
-  const char zDash[] =
-      BOX_24 BOX_24 BOX_24 BOX_24 BOX_24 BOX_24 BOX_24 BOX_24 BOX_24 BOX_24
-      BOX_24 BOX_24 BOX_24 BOX_24 BOX_24 BOX_24 BOX_24 BOX_24 BOX_24 BOX_24;
-  const int nDash = sizeof(zDash) - 1;
-  N *= 3;
-  while( N>nDash ){
-    utf8_printf(out, zDash);
-    N -= nDash;
-  }
-  utf8_printf(out, "%.*s", N, zDash);
-}
-
-/*
-** Draw a horizontal separator for a RenderMode::Box table.
-*/
-void ShellState::print_box_row_separator(
-  int nArg,
-  const char *zSep1,
-  const char *zSep2,
-  const char *zSep3,
-  const vector<int> &actualWidth
-){
-  int i;
-  if( nArg>0 ){
-    utf8_printf(out, "%s", zSep1);
-    print_box_line(out, actualWidth[0]+2);
-    for(i=1; i<nArg; i++){
-      utf8_printf(out, "%s", zSep2);
-      print_box_line(out, actualWidth[i]+2);
-    }
-    utf8_printf(out, "%s", zSep3);
-  }
-  fputs("\n", out);
-}
-
-
 string ShellState::strdup_handle_newline(const char *z) {
   static constexpr uint64_t MAX_SIZE = 80;
 	if (!z) {
@@ -3551,32 +3486,32 @@ string ShellState::strdup_handle_newline(const char *z) {
   return result;
 }
 
-int column_type_is_integer(const char *type) {
+bool ShellState::column_type_is_integer(const char *type) {
   if (!type) {
-    return 0;
+    return false;
   }
   if (strcmp(type, "TINYINT") == 0) {
-    return 1;
+    return true;
   }
   if (strcmp(type, "SMALLINT") == 0) {
-    return 1;
+    return true;
   }
   if (strcmp(type, "INTEGER") == 0) {
-    return 1;
+    return true;
   }
   if (strcmp(type, "BIGINT") == 0) {
-    return 1;
+    return true;
   }
   if (strcmp(type, "FLOAT") == 0) {
-	  return 1;
+	  return true;
   }
   if (strcmp(type, "DOUBLE") == 0) {
-	  return 1;
+	  return true;
   }
   if (strcmp(type, "DECIMAL") == 0) {
-    return 1;
+    return true;
   }
-  return 0;
+  return false;
 }
 
 ColumnarResult ShellState::ExecuteColumnar(sqlite3_stmt *pStmt){
@@ -3592,6 +3527,7 @@ ColumnarResult ShellState::ExecuteColumnar(sqlite3_stmt *pStmt){
 	}
 	for(idx_t i=0; i<result.column_count; i++){
 		result.types.push_back(sqlite3_column_type(pStmt, i));
+		result.type_names.push_back(sqlite3_column_decltype(pStmt, i));
 	}
 
 	// execute the query and fetch the entire result set
@@ -3646,68 +3582,10 @@ void ShellState::exec_prepared_stmt_columnar(
 	auto rowSep = column_renderer->GetRowSeparator();
   	auto row_start = column_renderer->GetRowStart();
 
-  switch( cMode ){
-    case RenderMode::MARKDOWN: {
-      colSep = " | ";
-      rowSep = " |\n";
-      fputs("| ", out);
-      for(idx_t i=0; i<result.column_count; i++){
-        int w = result.column_width[i];
-        int n = strlenChar(result.data[i]);
-        utf8_printf(out, "%*s%s%*s", (w-n)/2, "", result.data[i].c_str(), (w-n+1)/2, "");
-        fputs(i==result.column_count-1?" |\n":" | ", out);
-      }
-      print_markdown_separator(result.column_count, "|", result.types, result.column_width);
-      break;
-    }
-    case RenderMode::BOX: {
-      colSep = " " BOX_13 " ";
-      rowSep = " " BOX_13 "\n";
-      print_box_row_separator(result.column_count, BOX_23, BOX_234, BOX_34, result.column_width);
-      utf8_printf(out, BOX_13 " ");
-      for(idx_t i=0; i<result.column_count; i++){
-        int w = result.column_width[i];
-        int n = strlenChar(result.data[i]);
-        utf8_printf(out, "%*s%s%*s%s",
-            (w-n)/2, "", result.data[i].c_str(), (w-n+1)/2, "",
-            i==result.column_count-1?" " BOX_13 "\n":" " BOX_13 " ");
-      }
-      print_box_row_separator(result.column_count, BOX_123, BOX_1234, BOX_134, result.column_width);
-      break;
-    }
-    case RenderMode::LATEX: {
-      colSep = " & ";
-      rowSep = " \\\\\n";
-      fputs("\\begin{tabular}{|", out);
-      for(idx_t i=0; i<result.column_count; i++){
-        const char *column_type = sqlite3_column_decltype(pStmt, i);
-        if (column_type_is_integer(column_type)) {
-          fputs("r", out);
-        } else {
-          fputs("l", out);
-        }
-      }
-      fputs("|}\n", out);
-      fputs("\\hline\n", out);
-      for(idx_t i=0; i<result.column_count; i++){
-        int w = result.column_width[i];
-        int n = strlenChar(result.data[i]);
-        utf8_printf(out, "%*s%s%*s", (w-n)/2, "", result.data[i].c_str(), (w-n+1)/2, "");
-        fputs(i==result.column_count-1? rowSep:colSep, out);
-      }
-      fputs("\\hline\n", out);
-      break;
-    }
-  default:
-  	break;
-  }
   for(idx_t i=result.column_count, j=0; i<result.data.size(); i++, j++){
   	if (j == 0 && row_start) {
   		Print(row_start);
   	}
-    // if( j==0 && cMode!=RenderMode::COLUMN && cMode != RenderMode::LATEX ){
-    //   utf8_printf(out, "%s", cMode==RenderMode::BOX?BOX_13" ":"| ");
-    // }
     idx_t w = result.column_width[j];
     if( w<0 ) w = -w;
     utf8_width_print(out, w, result.data[i]);
@@ -3720,12 +3598,6 @@ void ShellState::exec_prepared_stmt_columnar(
     }
   }
 	column_renderer->RenderFooter(result);
-  if( cMode==RenderMode::BOX ){
-    print_box_row_separator(result.column_count, BOX_12, BOX_124, BOX_14, result.column_width);
-  } else if (cMode == RenderMode::LATEX) {
-    fputs("\\hline\n", out);
-    fputs("\\end{tabular}\n", out);
-  }
 columnar_end:
   if( seenInterrupt ){
     utf8_printf(out, "Interrupt\n");

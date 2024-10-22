@@ -119,13 +119,7 @@ public:
 	int run_table_dump_query(const char *zSelect);
 	void Print(const char *str);
 	void Print(const string &str);
-	void print_box_row_separator(
-	  int nArg,
-	  const char *zSep1,
-	  const char *zSep2,
-	  const char *zSep3,
-	  const vector<int> &actualWidth
-	);
+	bool column_type_is_integer(const char *type);
 	string strdup_handle_newline(const char *z);
 	ColumnarResult ExecuteColumnar(sqlite3_stmt *pStmt);
 	unique_ptr<ColumnRenderer> GetColumnRenderer();
