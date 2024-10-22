@@ -105,7 +105,7 @@ struct CSVReaderOptions {
 	//! Multi-file reader options
 	MultiFileReaderOptions file_options;
 	//! Buffer Size (Parallel Scan)
-	idx_t buffer_size = CSVBuffer::CSV_BUFFER_SIZE;
+	idx_t buffer_size = 4 * maximum_line_size;
 	//! Decimal separator when reading as numeric
 	string decimal_separator = ".";
 	//! Whether  to pad rows that do not have enough columns with NULL values

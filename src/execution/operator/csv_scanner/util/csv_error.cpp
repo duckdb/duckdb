@@ -281,6 +281,7 @@ CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &
 	}
 	error << "* Check you are using the correct file compression, otherwise set it (e.g., compression = \'zstd\')"
 	      << '\n';
+	error << "* Be sure that the maximum line size is set to an appropriate value, otherwise set it (e.g., max_line_size=1000000000000)" << "\n";
 
 	return CSVError(error.str(), SNIFFING, {});
 }
