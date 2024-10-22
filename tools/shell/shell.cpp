@@ -2922,7 +2922,7 @@ static int callback(void *pArg, int nArg, char **azArg, char **azCol){
 		return 0;
 	}
 	RowResult result;
-	for(idx_t i = 0; i < nArg; i++) {
+	for(int i = 0; i < nArg; i++) {
 		result.column_names.push_back(azCol[i]);
 		result.data.push_back(azArg[i]);
 	}
@@ -3042,7 +3042,7 @@ static void bind_prepared_stmt(ShellState *pArg, sqlite3_stmt *pStmt){
 }
 
 string ShellState::strdup_handle_newline(const char *z) {
-  static constexpr uint64_t MAX_SIZE = 80;
+  static constexpr int MAX_SIZE = 80;
 	if (!z) {
 		return nullValue;
 	}
@@ -3227,7 +3227,7 @@ void ShellState::exec_prepared_stmt(
 	result.column_names.reserve(nCol);
 	result.data.resize(nCol);
 	result.types.resize(nCol);
-	for(idx_t i = 0; i < nCol; i++) {
+	for(int i = 0; i < nCol; i++) {
 		result.column_names.push_back(sqlite3_column_name(pStmt, i));
 	}
 	result.pStmt = pStmt;
@@ -3238,7 +3238,7 @@ void ShellState::exec_prepared_stmt(
 	do{
 		if (renderer) {
 		  /* extract the data and data types */
-		  for(idx_t i=0; i<nCol; i++){
+		  for(int i=0; i<nCol; i++){
 			result.types[i] = sqlite3_column_type(pStmt, i);
 			if( result.types[i]==SQLITE_BLOB && cMode==RenderMode::INSERT ){
 			  result.data[i] = "";
@@ -4824,31 +4824,6 @@ int ShellState::do_meta_command(char *zLine){
     }
   }else
 
-  /* Cancel output redirection, if it is currently set (by .testcase)
-  ** Then read the content of the testcase-out.txt file and compare against
-  ** azArg[1].  If there are differences, report an error and exit.
-  */
-  if( c=='c' && n>=3 && strncmp(azArg[0], "check", n)==0 ){
-    char *zRes = 0;
-    output_reset();
-    if( nArg!=2 ){
-      raw_printf(stderr, "Usage: .check GLOB-PATTERN\n");
-      rc = 2;
-    }else if( (zRes = readFile("testcase-out.txt", 0))==0 ){
-      raw_printf(stderr, "Error: cannot read 'testcase-out.txt'\n");
-      rc = 2;
-    }else if( testcase_glob(azArg[1],zRes)==0 ){
-      utf8_printf(stderr,
-                 "testcase-%s FAILED\n Expected: [%s]\n      Got: [%s]\n",
-                 zTestcase, azArg[1], zRes);
-      rc = 1;
-    }else{
-      utf8_printf(stdout, "testcase-%s ok\n", zTestcase);
-      nCheck++;
-    }
-    sqlite3_free(zRes);
-  }else
-
   if( c=='d' && n>1 && strncmp(azArg[0], "databases", n)==0 ){
     ShellState data;
     char *zErrMsg = 0;
@@ -6258,20 +6233,6 @@ int ShellState::do_meta_command(char *zLine){
 
     for(ii=0; ii<nRow; ii++) sqlite3_free(azResult[ii]);
     sqlite3_free(azResult);
-  }else
-
-  /* Begin redirecting output to the file "testcase-out.txt" */
-  if( c=='t' && strcmp(azArg[0],"testcase")==0 ){
-    output_reset();
-    out = output_file_open("testcase-out.txt", 0);
-    if( out==0 ){
-      raw_printf(stderr, "Error: cannot open 'testcase-out.txt'\n");
-    }
-    if( nArg>=2 ){
-      sqlite3_snprintf(sizeof(zTestcase), zTestcase, "%s", azArg[1]);
-    }else{
-      sqlite3_snprintf(sizeof(zTestcase), zTestcase, "?");
-    }
   }else
 
   if( c=='t' && n>4 && strncmp(azArg[0], "timeout", n)==0 ){
