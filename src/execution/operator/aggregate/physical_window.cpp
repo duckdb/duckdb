@@ -574,9 +574,9 @@ WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gstate, const idx_t hash
 	}
 
 	// Set up the collection for any fully materialised data
-	const auto &shared = gstate.shared;
+	const auto &shared = WindowSharedExpressions::GetSortedExpressions(gstate.shared.coll_shared);
 	vector<LogicalType> types;
-	for (auto &expr : shared.coll_exprs) {
+	for (auto &expr : shared) {
 		types.emplace_back(expr->return_type);
 	}
 	auto &buffer_manager = BufferManager::GetBufferManager(gstate.context);

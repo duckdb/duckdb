@@ -1,4 +1,4 @@
-from typing import Any, Callable, Union, overload
+from typing import Any, Callable, Union, overload, Optional
 
 from duckdb import (
     CaseExpression,
@@ -146,6 +146,154 @@ def array_contains(col: "ColumnOrName", value: Any) -> Column:
     """
     value = _get_expr(value)
     return _invoke_function("array_contains", _to_column_expr(col), value)
+
+
+def array_distinct(col: "ColumnOrName") -> Column:
+    """
+    Collection function: removes duplicate values from the array.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        name of column or expression
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        an array of unique values.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([([1, 2, 3, 2],), ([4, 5, 5, 4],)], ['data'])
+    >>> df.select(array_distinct(df.data)).collect()
+    [Row(array_distinct(data)=[1, 2, 3]), Row(array_distinct(data)=[4, 5])]
+    """
+    return _invoke_function_over_columns("array_distinct", col)
+
+
+def array_intersect(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
+    """
+    Collection function: returns an array of the elements in the intersection of col1 and col2,
+    without duplicates.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col1 : :class:`~pyspark.sql.Column` or str
+        name of column containing array
+    col2 : :class:`~pyspark.sql.Column` or str
+        name of column containing array
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        an array of values in the intersection of two arrays.
+
+    Examples
+    --------
+    >>> from pyspark.sql import Row
+    >>> df = spark.createDataFrame([Row(c1=["b", "a", "c"], c2=["c", "d", "a", "f"])])
+    >>> df.select(array_intersect(df.c1, df.c2)).collect()
+    [Row(array_intersect(c1, c2)=['a', 'c'])]
+    """
+    return _invoke_function_over_columns("array_intersect", col1, col2)
+
+
+def array_union(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
+    """
+    Collection function: returns an array of the elements in the union of col1 and col2,
+    without duplicates.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col1 : :class:`~pyspark.sql.Column` or str
+        name of column containing array
+    col2 : :class:`~pyspark.sql.Column` or str
+        name of column containing array
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        an array of values in union of two arrays.
+
+    Examples
+    --------
+    >>> from pyspark.sql import Row
+    >>> df = spark.createDataFrame([Row(c1=["b", "a", "c"], c2=["c", "d", "a", "f"])])
+    >>> df.select(array_union(df.c1, df.c2)).collect()
+    [Row(array_union(c1, c2)=['b', 'a', 'c', 'd', 'f'])]
+    """
+    return _invoke_function_over_columns("array_distinct", _invoke_function_over_columns("array_concat", col1, col2))
+
+
+def array_max(col: "ColumnOrName") -> Column:
+    """
+    Collection function: returns the maximum value of the array.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        name of column or expression
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        maximum value of an array.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([([2, 1, 3],), ([None, 10, -1],)], ['data'])
+    >>> df.select(array_max(df.data).alias('max')).collect()
+    [Row(max=3), Row(max=10)]
+    """
+    return _invoke_function("array_extract", _to_column_expr(_invoke_function_over_columns("array_sort", col)), _get_expr(-1))
+
+
+def array_min(col: "ColumnOrName") -> Column:
+    """
+    Collection function: returns the minimum value of the array.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        name of column or expression
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        minimum value of array.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([([2, 1, 3],), ([None, 10, -1],)], ['data'])
+    >>> df.select(array_min(df.data).alias('min')).collect()
+    [Row(min=1), Row(min=-1)]
+    """
+    return _invoke_function("array_extract", _to_column_expr(_invoke_function_over_columns("array_sort", col)), _get_expr(1))
 
 
 def avg(col: "ColumnOrName") -> Column:
@@ -309,6 +457,38 @@ def min(col: "ColumnOrName") -> Column:
     return _invoke_function_over_columns("min", col)
 
 
+def any_value(col: "ColumnOrName") -> Column:
+    """Returns some value of `col` for a group of rows.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+    ignorenulls : :class:`~pyspark.sql.Column` or bool
+        if first value is null then look for first non-null value.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        some value of `col` for a group of rows.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(None, 1),
+    ...                             ("a", 2),
+    ...                             ("a", 3),
+    ...                             ("b", 8),
+    ...                             ("b", 2)], ["c1", "c2"])
+    >>> df.select(any_value('c1'), any_value('c2')).collect()
+    [Row(any_value(c1)=None, any_value(c2)=1)]
+    >>> df.select(any_value('c1', True), any_value('c2', True)).collect()
+    [Row(any_value(c1)='a', any_value(c2)=1)]
+    """
+    return _invoke_function_over_columns("any_value", col)
+
+
 def count(col: "ColumnOrName") -> Column:
     """
     Aggregate function: returns the number of items in a group.
@@ -341,6 +521,44 @@ def count(col: "ColumnOrName") -> Column:
     +--------+----------------+
     """
     return _invoke_function_over_columns("count", col)
+
+
+def approx_count_distinct(col: "ColumnOrName", rsd: Optional[float] = None) -> Column:
+    """Aggregate function: returns a new :class:`~pyspark.sql.Column` for approximate distinct count
+    of column `col`.
+
+    .. versionadded:: 2.1.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+    rsd : float, optional
+        maximum relative standard deviation allowed (default = 0.05).
+        For rsd < 0.01, it is more efficient to use :func:`count_distinct`
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column of computed results.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([1,2,2,3], "INT")
+    >>> df.agg(approx_count_distinct("value").alias('distinct_values')).show()
+    +---------------+
+    |distinct_values|
+    +---------------+
+    |              3|
+    +---------------+
+    """
+    if rsd is not None:
+        raise ValueError("rsd is not supported by DuckDB")
+    return _invoke_function_over_columns("approx_count_distinct", col)
+
+
 
 
 @overload
@@ -953,7 +1171,7 @@ def ifnull(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     """
     return coalesce(col1, col2)
 
- 
+
 def md5(col: "ColumnOrName") -> Column:
     """Calculates the MD5 digest and returns the value as a 32 character hex string.
 
@@ -1552,3 +1770,65 @@ def weekofyear(col: "ColumnOrName") -> Column:
     [Row(week=15)]
     """
     return _invoke_function_over_columns("weekofyear", col)
+
+
+def cos(col: "ColumnOrName") -> Column:
+    """
+    Computes cosine of the input column.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        angle in radians
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        cosine of the angle, as if computed by `java.lang.Math.cos()`.
+
+    Examples
+    --------
+    >>> import math
+    >>> df = spark.range(1)
+    >>> df.select(cos(lit(math.pi))).first()
+    Row(COS(3.14159...)=-1.0)
+    """
+    return _invoke_function_over_columns("cos", col)
+
+
+def acos(col: "ColumnOrName") -> Column:
+    """
+    Computes inverse cosine of the input column.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        inverse cosine of `col`, as if computed by `java.lang.Math.acos()`
+
+    Examples
+    --------
+    >>> df = spark.range(1, 3)
+    >>> df.select(acos(df.id)).show()
+    +--------+
+    |ACOS(id)|
+    +--------+
+    |     0.0|
+    |     NaN|
+    +--------+
+    """
+    return _invoke_function_over_columns("acos", col)

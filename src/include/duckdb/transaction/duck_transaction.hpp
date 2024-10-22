@@ -102,8 +102,12 @@ private:
 	reference_map_t<RowGroupCollection, shared_ptr<RowGroupCollection>> updated_collections;
 	//! Lock for the active_locks map
 	mutex active_locks_lock;
+	struct ActiveTableLock {
+		mutex checkpoint_lock_mutex; // protects access to the checkpoint_lock field in this class
+		weak_ptr<CheckpointLock> checkpoint_lock;
+	};
 	//! Active locks on tables
-	reference_map_t<DataTableInfo, weak_ptr<CheckpointLock>> active_locks;
+	reference_map_t<DataTableInfo, unique_ptr<ActiveTableLock>> active_locks;
 };
 
 } // namespace duckdb
