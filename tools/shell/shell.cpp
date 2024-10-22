@@ -4501,6 +4501,66 @@ bool ShowDatabases(ShellState &state, const char **azArg, idx_t nArg) {
 	return true;
 }
 
+bool DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
+	char *zLike = 0;
+    char *zSql;
+    int i;
+    int savedShowHeader = state.showHeader;
+    int savedShellFlags = state.shellFlgs;
+    state.ShellClearFlag(SHFLG_PreserveRowid|SHFLG_Newlines|SHFLG_Echo);
+    for(i=1; i<nArg; i++){
+      if( azArg[i][0]=='-' ){
+        const char *z = azArg[i]+1;
+        if( z[0]=='-' ) z++;
+        if( strcmp(z,"newlines")==0 ){
+          state.ShellSetFlag(SHFLG_Newlines);
+        }else
+        {
+          raw_printf(stderr, "Unknown option \"%s\" on \".dump\"\n", azArg[i]);
+          sqlite3_free(zLike);
+			return false;
+        }
+      }else if( zLike ){
+        zLike = sqlite3_mprintf("%z OR name LIKE %Q ESCAPE '\\'",
+                zLike, azArg[i]);
+      }else{
+        zLike = sqlite3_mprintf("name LIKE %Q ESCAPE '\\'", azArg[i]);
+      }
+    }
+
+    state.open_db(0);
+
+    /* When playing back a "dump", the content might appear in an order
+    ** which causes immediate foreign key constraints to be violated.
+    ** So disable foreign-key constraint enforcement to prevent problems. */
+    raw_printf(state.out, "BEGIN TRANSACTION;\n");
+    state.showHeader = 0;
+    state.nErr = 0;
+    if( zLike==0 ) zLike = sqlite3_mprintf("true");
+    zSql = sqlite3_mprintf(
+      "SELECT name, type, sql FROM sqlite_schema "
+      "WHERE (%s) AND type=='table'"
+      "  AND sql NOT NULL"
+      " ORDER BY tbl_name='sqlite_sequence'",
+      zLike
+    );
+    state.run_schema_dump_query(zSql);
+    sqlite3_free(zSql);
+    zSql = sqlite3_mprintf(
+      "SELECT sql FROM sqlite_schema "
+      "WHERE (%s) AND sql NOT NULL"
+      "  AND type IN ('index','trigger','view')",
+      zLike
+    );
+    state.run_table_dump_query(zSql);
+    sqlite3_free(zSql);
+    sqlite3_free(zLike);
+    raw_printf(state.out, state.nErr?"ROLLBACK; -- due to errors\n":"COMMIT;\n");
+    state.showHeader = savedShowHeader;
+    state.shellFlgs = savedShellFlags;
+	return true;
+}
+
 static const MetadataCommand metadata_commands[] = {
 	{"backup", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
 	{"bail", 2, ToggleBail, "on|off", "Stop after hitting an error.  Default OFF", 3},
@@ -4508,6 +4568,7 @@ static const MetadataCommand metadata_commands[] = {
 	{"cd", 2, ChangeDirectory, "DIRECTORY", "Change the working directory to DIRECTORY", 0},
 	{"changes", 2, ToggleChanges, "on|off", "Show number of rows changed by SQL", 3},
 	{"databases", 1, ShowDatabases, "", "List names and files of attached databases", 2},
+	{"dump", 0, DumpTable, "?TABLE?", "Render database content as SQL\n   Options:\n     --newlines             Allow unescaped newline characters in output\n   TABLE is a LIKE pattern for the tables to dump\n   Additional LIKE patterns can be given in subsequent arguments", 0},
 	{"save", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
 	{ nullptr, 0, nullptr }
 };
@@ -4583,77 +4644,6 @@ int ShellState::do_meta_command(char *zLine){
   if (found_argument) {
   } else
 
-  if( c=='d' && strncmp(azArg[0], "dump", n)==0 ){
-    char *zLike = 0;
-    char *zSql;
-    int i;
-    int savedShowHeader = showHeader;
-    int savedShellFlags = shellFlgs;
-    ShellClearFlag(SHFLG_PreserveRowid|SHFLG_Newlines|SHFLG_Echo);
-    for(i=1; i<nArg; i++){
-      if( azArg[i][0]=='-' ){
-        const char *z = azArg[i]+1;
-        if( z[0]=='-' ) z++;
-        if( strcmp(z,"preserve-rowids")==0 ){
-#ifdef SQLITE_OMIT_VIRTUALTABLE
-          raw_printf(stderr, "The --preserve-rowids option is not compatible"
-                             " with SQLITE_OMIT_VIRTUALTABLE\n");
-          rc = 1;
-          sqlite3_free(zLike);
-          goto meta_command_exit;
-#else
-          ShellSetFlag(SHFLG_PreserveRowid);
-#endif
-        }else
-        if( strcmp(z,"newlines")==0 ){
-          ShellSetFlag(SHFLG_Newlines);
-        }else
-        {
-          raw_printf(stderr, "Unknown option \"%s\" on \".dump\"\n", azArg[i]);
-          rc = 1;
-          sqlite3_free(zLike);
-          goto meta_command_exit;
-        }
-      }else if( zLike ){
-        zLike = sqlite3_mprintf("%z OR name LIKE %Q ESCAPE '\\'",
-                zLike, azArg[i]);
-      }else{
-        zLike = sqlite3_mprintf("name LIKE %Q ESCAPE '\\'", azArg[i]);
-      }
-    }
-
-    open_db(0);
-
-    /* When playing back a "dump", the content might appear in an order
-    ** which causes immediate foreign key constraints to be violated.
-    ** So disable foreign-key constraint enforcement to prevent problems. */
-    raw_printf(out, "BEGIN TRANSACTION;\n");
-    showHeader = 0;
-    nErr = 0;
-    if( zLike==0 ) zLike = sqlite3_mprintf("true");
-    zSql = sqlite3_mprintf(
-      "SELECT name, type, sql FROM sqlite_schema "
-      "WHERE (%s) AND type=='table'"
-      "  AND sql NOT NULL"
-      " ORDER BY tbl_name='sqlite_sequence'",
-      zLike
-    );
-    run_schema_dump_query(zSql);
-    sqlite3_free(zSql);
-    zSql = sqlite3_mprintf(
-      "SELECT sql FROM sqlite_schema "
-      "WHERE (%s) AND sql NOT NULL"
-      "  AND type IN ('index','trigger','view')",
-      zLike
-    );
-    run_table_dump_query(zSql);
-    sqlite3_free(zSql);
-    sqlite3_free(zLike);
-    raw_printf(out, nErr?"ROLLBACK; -- due to errors\n":"COMMIT;\n");
-    showHeader = savedShowHeader;
-    shellFlgs = savedShellFlags;
-  }else
-
   if( c=='e' && strncmp(azArg[0], "echo", n)==0 ){
     if( nArg==2 ){
       setOrClearFlag(SHFLG_Echo, azArg[1]);
@@ -4666,151 +4656,6 @@ int ShellState::do_meta_command(char *zLine){
   if( c=='e' && strncmp(azArg[0], "exit", n)==0 ){
     if( nArg>1 && (rc = (int)integerValue(azArg[1]))!=0 ) exit(rc);
     rc = 2;
-  }else
-
-  if( c=='f' && strncmp(azArg[0], "filectrl", n)==0 ){
-    static const struct {
-       const char *zCtrlName;   /* Name of a test-control option */
-       int ctrlCode;            /* Integer code for that option */
-       const char *zUsage;      /* Usage notes */
-    } aCtrl[] = {
-      { "size_limit",     SQLITE_FCNTL_SIZE_LIMIT,      "[LIMIT]"        },
-      { "chunk_size",     SQLITE_FCNTL_CHUNK_SIZE,      "SIZE"           },
-   /* { "win32_av_retry", SQLITE_FCNTL_WIN32_AV_RETRY,  "COUNT DELAY"    },*/
-      { "persist_wal",    SQLITE_FCNTL_PERSIST_WAL,     "[BOOLEAN]"      },
-      { "psow",       SQLITE_FCNTL_POWERSAFE_OVERWRITE, "[BOOLEAN]"      },
-   /* { "pragma",         SQLITE_FCNTL_PRAGMA,          "NAME ARG"       },*/
-      { "tempfilename",   SQLITE_FCNTL_TEMPFILENAME,    ""               },
-      { "has_moved",      SQLITE_FCNTL_HAS_MOVED,       ""               },
-      { "lock_timeout",   SQLITE_FCNTL_LOCK_TIMEOUT,    "MILLISEC"       },
-      { "reserve_bytes",  SQLITE_FCNTL_RESERVE_BYTES,   "[N]"            },
-    };
-    int filectrl = -1;
-    int iCtrl = -1;
-    sqlite3_int64 iRes = 0;  /* Integer result to display if rc2==1 */
-    int isOk = 0;            /* 0: usage  1: %lld  2: no-result */
-    int n2, i;
-    const char *zCmd = 0;
-    const char *zSchema = 0;
-
-    open_db(0);
-    zCmd = nArg>=2 ? azArg[1] : "help";
-
-    if( zCmd[0]=='-'
-     && (strcmp(zCmd,"--schema")==0 || strcmp(zCmd,"-schema")==0)
-     && nArg>=4
-    ){
-      zSchema = azArg[2];
-      for(i=3; i<nArg; i++) azArg[i-2] = azArg[i];
-      nArg -= 2;
-      zCmd = azArg[1];
-    }
-
-    /* The argument can optionally begin with "-" or "--" */
-    if( zCmd[0]=='-' && zCmd[1] ){
-      zCmd++;
-      if( zCmd[0]=='-' && zCmd[1] ) zCmd++;
-    }
-
-    /* --help lists all file-controls */
-    if( strcmp(zCmd,"help")==0 ){
-      utf8_printf(out, "Available file-controls:\n");
-      for(i=0; i<ArraySize(aCtrl); i++){
-        utf8_printf(out, "  .filectrl %s %s\n",
-                    aCtrl[i].zCtrlName, aCtrl[i].zUsage);
-      }
-      rc = 1;
-      goto meta_command_exit;
-    }
-
-    /* convert filectrl text option to value. allow any unique prefix
-    ** of the option name, or a numerical value. */
-    n2 = strlen30(zCmd);
-    for(i=0; i<ArraySize(aCtrl); i++){
-      if( strncmp(zCmd, aCtrl[i].zCtrlName, n2)==0 ){
-        if( filectrl<0 ){
-          filectrl = aCtrl[i].ctrlCode;
-          iCtrl = i;
-        }else{
-          utf8_printf(stderr, "Error: ambiguous file-control: \"%s\"\n"
-                              "Use \".filectrl --help\" for help\n", zCmd);
-          rc = 1;
-          goto meta_command_exit;
-        }
-      }
-    }
-    if( filectrl<0 ){
-      utf8_printf(stderr,"Error: unknown file-control: %s\n"
-                         "Use \".filectrl --help\" for help\n", zCmd);
-    }else{
-      switch(filectrl){
-        case SQLITE_FCNTL_SIZE_LIMIT: {
-          if( nArg!=2 && nArg!=3 ) break;
-          iRes = nArg==3 ? integerValue(azArg[2]) : -1;
-          sqlite3_file_control(db, zSchema, SQLITE_FCNTL_SIZE_LIMIT, &iRes);
-          isOk = 1;
-          break;
-        }
-        case SQLITE_FCNTL_LOCK_TIMEOUT:
-        case SQLITE_FCNTL_CHUNK_SIZE: {
-          int x;
-          if( nArg!=3 ) break;
-          x = (int)integerValue(azArg[2]);
-          sqlite3_file_control(db, zSchema, filectrl, &x);
-          isOk = 2;
-          break;
-        }
-        case SQLITE_FCNTL_PERSIST_WAL:
-        case SQLITE_FCNTL_POWERSAFE_OVERWRITE: {
-          int x;
-          if( nArg!=2 && nArg!=3 ) break;
-          x = nArg==3 ? booleanValue(azArg[2]) : -1;
-          sqlite3_file_control(db, zSchema, filectrl, &x);
-          iRes = x;
-          isOk = 1;
-          break;
-        }
-        case SQLITE_FCNTL_HAS_MOVED: {
-          int x;
-          if( nArg!=2 ) break;
-          sqlite3_file_control(db, zSchema, filectrl, &x);
-          iRes = x;
-          isOk = 1;
-          break;
-        }
-        case SQLITE_FCNTL_TEMPFILENAME: {
-          char *z = 0;
-          if( nArg!=2 ) break;
-          sqlite3_file_control(db, zSchema, filectrl, &z);
-          if( z ){
-            utf8_printf(out, "%s\n", z);
-            sqlite3_free(z);
-          }
-          isOk = 2;
-          break;
-        }
-        case SQLITE_FCNTL_RESERVE_BYTES: {
-          int x;
-          if( nArg>=3 ){
-            x = atoi(azArg[2]);
-            sqlite3_file_control(db, zSchema, filectrl, &x);
-          }
-          x = -1;
-          sqlite3_file_control(db, zSchema, filectrl, &x);
-          utf8_printf(out,"%d\n", x);
-          isOk = 2;
-          break;
-        }
-      }
-    }
-    if( isOk==0 && iCtrl>=0 ){
-      utf8_printf(out, "Usage: .filectrl %s %s\n", zCmd,aCtrl[iCtrl].zUsage);
-      rc = 1;
-    }else if( isOk==1 ){
-      char zBuf[100];
-      sqlite3_snprintf(sizeof(zBuf), zBuf, "%lld", iRes);
-      raw_printf(out, "%s\n", zBuf);
-    }
   }else
 
   if( c=='f' && strncmp(azArg[0], "fullschema", n)==0 ){
