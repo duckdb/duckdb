@@ -4445,11 +4445,10 @@ MetadataResult ShowDatabases(ShellState &state, const char **azArg, idx_t nArg) 
 MetadataResult DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
 	char *zLike = 0;
 	char *zSql;
-	int i;
 	int savedShowHeader = state.showHeader;
 	int savedShellFlags = state.shellFlgs;
 	state.ShellClearFlag(SHFLG_PreserveRowid | SHFLG_Newlines | SHFLG_Echo);
-	for (i = 1; i < nArg; i++) {
+	for (idx_t i = 1; i < nArg; i++) {
 		if (azArg[i][0] == '-') {
 			const char *z = azArg[i] + 1;
 			if (z[0] == '-')
@@ -4666,7 +4665,7 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 	sqlite3_stmt *pStmt = NULL;                /* A statement */
 	int nCol;                                  /* Number of columns in the table */
 	int nByte;                                 /* Number of bytes in an SQL string */
-	int i, j;                                  /* Loop counters */
+	int j;                                  /* Loop counters */
 	int needCommit;                            /* True to COMMIT or ROLLBACK at end */
 	char *zSql;                                /* An SQL statement */
 	ImportCtx sCtx;                            /* Reader context */
@@ -4681,7 +4680,7 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 	} else {
 		xRead = csv_read_one_field;
 	}
-	for (i = 1; i < nArg; i++) {
+	for (idx_t i = 1; i < nArg; i++) {
 		auto z = azArg[i];
 		if (z[0] == '-' && z[1] == '-')
 			z++;
@@ -4698,7 +4697,7 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 		} else if (strcmp(z, "-v") == 0) {
 			eVerbose++;
 		} else if (strcmp(z, "-skip") == 0 && i < nArg - 1) {
-			nSkip = integerValue(azArg[++i]);
+			nSkip = (int) integerValue(azArg[++i]);
 		} else if (strcmp(z, "-ascii") == 0) {
 			sCtx.cColSep = SEP_Unit[0];
 			sCtx.cRowSep = SEP_Record[0];
@@ -4847,7 +4846,7 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 	}
 	sqlite3_snprintf(nByte + 20, zSql, "INSERT INTO \"%w\" VALUES(?", zTable);
 	j = strlen30(zSql);
-	for (i = 1; i < nCol; i++) {
+	for (int i = 1; i < nCol; i++) {
 		zSql[j++] = ',';
 		zSql[j++] = '?';
 	}
@@ -4870,6 +4869,7 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 		sqlite3_exec(db, "BEGIN", 0, 0, 0);
 	do {
 		int startLine = sCtx.nLine;
+		int i;
 		for (i = 0; i < nCol; i++) {
 			char *z = xRead(&sCtx);
 			/*
@@ -4940,7 +4940,7 @@ MetadataResult ImportData(ShellState &state, const char **azArg, idx_t nArg) {
 
 bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
 	char *zNewFilename; /* Name of the database file to open */
-	int iName = 1;      /* Index in azArg[] of the filename */
+	idx_t iName = 1;      /* Index in azArg[] of the filename */
 	int newFlag = 0;    /* True to delete file before opening */
 	/* Close the existing database */
 	close_db(db);
@@ -4951,7 +4951,7 @@ bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
 	openFlags = openFlags & ~(SQLITE_OPEN_NOFOLLOW); // don't overwrite settings loaded in the command line
 	szMax = 0;
 	/* Check for command-line arguments */
-	for (iName = 1; iName < nArg && azArg[iName][0] == '-'; iName++) {
+	for (idx_t iName = 1; iName < nArg && azArg[iName][0] == '-'; iName++) {
 		const char *z = azArg[iName];
 		if (optionMatch(z, "new")) {
 			newFlag = 1;
@@ -4992,10 +4992,10 @@ MetadataResult OpenDatabase(ShellState &state, const char **azArg, idx_t nArg) {
 }
 
 MetadataResult PrintArguments(ShellState &state, const char **azArg, idx_t nArg) {
-	int i;
-	for (i = 1; i < nArg; i++) {
-		if (i > 1)
+	for (idx_t i = 1; i < nArg; i++) {
+		if (i > 1) {
 			raw_printf(state.out, " ");
+		}
 		utf8_printf(state.out, "%s", azArg[i]);
 	}
 	raw_printf(state.out, "\n");
@@ -5033,7 +5033,6 @@ MetadataResult QuitProcess(ShellState &, const char **azArg, idx_t nArg) {
 bool ShellState::SetOutputFile(const char **azArg, idx_t nArg, char output_mode) {
 	const char *zFile = 0;
 	int bTxtMode = 0;
-	int i;
 	int eMode = 0;
 	int bBOM = 0;
 	int bOnce = 0; /* 0: .output, 1: .once, 2: .excel */
@@ -5046,7 +5045,7 @@ bool ShellState::SetOutputFile(const char **azArg, idx_t nArg, char output_mode)
 		// .once
 		bOnce = 1;
 	}
-	for (i = 1; i < nArg; i++) {
+	for (idx_t i = 1; i < nArg; i++) {
 		const char *z = azArg[i];
 		if (z[0] == '-') {
 			if (z[1] == '-')
@@ -5070,8 +5069,9 @@ bool ShellState::SetOutputFile(const char **azArg, idx_t nArg, char output_mode)
 			return false;
 		}
 	}
-	if (zFile == 0)
+	if (zFile == 0) {
 		zFile = "stdout";
+	}
 	if (bOnce) {
 		outCount = 2;
 	} else {
@@ -5181,13 +5181,12 @@ bool ShellState::DisplaySchemas(const char **azArg, idx_t nArg) {
 	const char *zDiv = "(";
 	const char *zName = 0;
 	int bDebug = 0;
-	int ii;
 	int rc;
 
 	open_db(0);
 
 	RenderMode mode = RenderMode::SEMI;
-	for (ii = 1; ii < nArg; ii++) {
+	for (idx_t ii = 1; ii < nArg; ii++) {
 		if (optionMatch(azArg[ii], "indent")) {
 			mode = RenderMode::PRETTY;
 		} else if (optionMatch(azArg[ii], "debug")) {
@@ -5250,18 +5249,19 @@ MetadataResult DisplaySchemas(ShellState &state, const char **azArg, idx_t nArg)
 
 MetadataResult RunShellCommand(ShellState &state, const char **azArg, idx_t nArg) {
 	char *zCmd;
-	int i, x;
+	int x;
 	if (nArg < 2) {
 		return MetadataResult::PRINT_USAGE;
 	}
 	zCmd = sqlite3_mprintf(strchr(azArg[1], ' ') == 0 ? "%s" : "\"%s\"", azArg[1]);
-	for (i = 2; i < nArg; i++) {
+	for (idx_t i = 2; i < nArg; i++) {
 		zCmd = sqlite3_mprintf(strchr(azArg[i], ' ') == 0 ? "%z %s" : "%z \"%s\"", zCmd, azArg[i]);
 	}
 	x = system(zCmd);
 	sqlite3_free(zCmd);
-	if (x)
+	if (x) {
 		raw_printf(stderr, "System command returns %d\n", x);
+	}
 	return MetadataResult::SUCCESS;
 }
 
@@ -5320,7 +5320,7 @@ MetadataResult ShowVersion(ShellState &state, const char **azArg, idx_t nArg) {
 
 MetadataResult SetWidths(ShellState &state, const char **azArg, idx_t nArg) {
 	state.colWidth.clear();
-	for (int j = 1; j < nArg; j++) {
+	for (idx_t j = 1; j < nArg; j++) {
 		state.colWidth.push_back((int)integerValue(azArg[j]));
 	}
 	return MetadataResult::SUCCESS;
@@ -5557,7 +5557,7 @@ int ShellState::do_meta_command(char *zLine) {
 	for (idx_t command_idx = 0; metadata_commands[command_idx].command; command_idx++) {
 		auto &command = metadata_commands[command_idx];
 		idx_t match_size = command.match_size ? command.match_size : n;
-		if (n < match_size || c != *command.command || strncmp(azArg[0], command.command, n) != 0) {
+		if (n < int(match_size) || c != *command.command || strncmp(azArg[0], command.command, n) != 0) {
 			continue;
 		}
 		found_argument = true;
@@ -5565,7 +5565,7 @@ int ShellState::do_meta_command(char *zLine) {
 		if (!command.callback) {
 			raw_printf(stderr, "Command \"%s\" is unsupported in the current version of the CLI\n", command.command);
 			result = MetadataResult::FAIL;
-		} else if (command.argument_count == 0 || command.argument_count == nArg) {
+		} else if (command.argument_count == 0 || int(command.argument_count) == nArg) {
 			result = command.callback(*this, (const char **)azArg, nArg);
 		}
 		if (result == MetadataResult::PRINT_USAGE) {
