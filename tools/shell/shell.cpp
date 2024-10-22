@@ -754,27 +754,6 @@ static sqlite3_int64 integerValue(const char *zArg){
   return isNeg? -v : v;
 }
 
-/*
-** A variable length string to which one can append text.
-*/
-typedef struct ShellText ShellText;
-struct ShellText {
-  char *z;
-  int n;
-  int nAlloc;
-};
-
-/*
-** Initialize and destroy a ShellText object
-*/
-static void initText(ShellText *p){
-  memset(p, 0, sizeof(*p));
-}
-static void freeText(ShellText *p){
-  free(p->z);
-  initText(p);
-}
-
 /* zIn is either a pointer to a NULL-terminated string in memory obtained
 ** from malloc(), or a NULL pointer. The string pointed to by zAppend is
 ** added to zIn, and the result returned in memory obtained from malloc().
@@ -783,40 +762,19 @@ static void freeText(ShellText *p){
 ** If the third argument, quote, is not '\0', then it is used as a
 ** quote character for zAppend.
 */
-static void appendText(ShellText *p, char const *zAppend, char quote){
-  int len;
-  int i;
-  int nAppend = strlen30(zAppend);
-
-  len = nAppend+p->n+1;
-  if( quote ){
-    len += 2;
-    for(i=0; i<nAppend; i++){
-      if( zAppend[i]==quote ) len++;
-    }
+static void appendText(string &text, char const *zAppend, char quote){
+  if(!quote ) {
+	  text += zAppend;
+  	return;
   }
-
-  if( p->n+len>=p->nAlloc ){
-    p->nAlloc = p->nAlloc*2 + len + 20;
-    p->z = (char *) realloc(p->z, p->nAlloc);
-    if( p->z==0 ) shell_out_of_memory();
-  }
-
-  if( quote ){
-    char *zCsr = p->z+p->n;
-    *zCsr++ = quote;
-    for(i=0; i<nAppend; i++){
-      *zCsr++ = zAppend[i];
-      if( zAppend[i]==quote ) *zCsr++ = quote;
-    }
-    *zCsr++ = quote;
-    p->n = (int)(zCsr - p->z);
-    *zCsr = '\0';
-  }else{
-    memcpy(p->z+p->n, zAppend, nAppend);
-    p->n += nAppend;
-    p->z[p->n] = '\0';
-  }
+	text += quote;
+	for(const char *c = zAppend; *c; c++) {
+		text += *c;
+		if (*c == quote) {
+			text += quote;
+		}
+	}
+	text += quote;
 }
 
 /*
@@ -3948,8 +3906,8 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed){
   }
 
   if( strcmp(zType, "table")==0 ){
-    ShellText sSelect;
-    ShellText sTable;
+    string sSelect;
+    string sTable;
     char **azCol;
     int i;
     char *savedDestTable;
@@ -3963,54 +3921,50 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed){
 
     /* Always quote the table name, even if it appears to be pure ascii,
     ** in case it is a keyword. Ex:  INSERT INTO "table" ... */
-    initText(&sTable);
-    appendText(&sTable, zTable, quoteChar(zTable));
+    appendText(sTable, zTable, quoteChar(zTable));
     /* If preserving the rowid, add a column list after the table name.
     ** In other words:  "INSERT INTO tab(rowid,a,b,c,...) VALUES(...)"
     ** instead of the usual "INSERT INTO tab VALUES(...)".
     */
     if( azCol[0] ){
-      appendText(&sTable, "(", 0);
-      appendText(&sTable, azCol[0], 0);
+      appendText(sTable, "(", 0);
+      appendText(sTable, azCol[0], 0);
       for(i=1; azCol[i]; i++){
-        appendText(&sTable, ",", 0);
-        appendText(&sTable, azCol[i], quoteChar(azCol[i]));
+        appendText(sTable, ",", 0);
+        appendText(sTable, azCol[i], quoteChar(azCol[i]));
       }
-      appendText(&sTable, ")", 0);
+      appendText(sTable, ")", 0);
     }
 
     /* Build an appropriate SELECT statement */
-    initText(&sSelect);
-    appendText(&sSelect, "SELECT ", 0);
+    appendText(sSelect, "SELECT ", 0);
     if( azCol[0] ){
-      appendText(&sSelect, azCol[0], 0);
-      appendText(&sSelect, ",", 0);
+      appendText(sSelect, azCol[0], 0);
+      appendText(sSelect, ",", 0);
     }
     for(i=1; azCol[i]; i++){
-      appendText(&sSelect, azCol[i], quoteChar(azCol[i]));
+      appendText(sSelect, azCol[i], quoteChar(azCol[i]));
       if( azCol[i+1] ){
-        appendText(&sSelect, ",", 0);
+        appendText(sSelect, ",", 0);
       }
     }
     freeColumnList(azCol);
-    appendText(&sSelect, " FROM ", 0);
-    appendText(&sSelect, zTable, quoteChar(zTable));
+    appendText(sSelect, " FROM ", 0);
+    appendText(sSelect, zTable, quoteChar(zTable));
 
     savedDestTable = p->zDestTable;
     savedMode = p->mode;
-    p->zDestTable = sTable.z;
+    p->zDestTable = (char *) sTable.c_str();
     p->mode = p->cMode = RenderMode::INSERT;
-    rc = p->shell_exec(sSelect.z, 0);
+    rc = p->shell_exec(sSelect.c_str(), 0);
     if( (rc&0xff)==SQLITE_CORRUPT ){
       raw_printf(p->out, "/****** CORRUPTION ERROR *******/\n");
       toggleSelectOrder(p->db);
-      p->shell_exec(sSelect.z, 0);
+      p->shell_exec(sSelect.c_str(), 0);
       toggleSelectOrder(p->db);
     }
     p->zDestTable = savedDestTable;
     p->mode = savedMode;
-    freeText(&sTable);
-    freeText(&sSelect);
     if( rc ) p->nErr++;
   }
   return 0;
@@ -6346,7 +6300,7 @@ int ShellState::do_meta_command(char *zLine){
   }else
 
   if( c=='s' && strncmp(azArg[0], "schema", n)==0 ){
-    ShellText sSelect;
+    string sSelect;
     ShellState data;
     char *zErrMsg = 0;
     const char *zDiv = "(";
@@ -6358,7 +6312,6 @@ int ShellState::do_meta_command(char *zLine){
     memcpy(&data, this, sizeof(data));
     data.showHeader = 0;
     data.cMode = data.mode = RenderMode::SEMI;
-    initText(&sSelect);
     for(ii=1; ii<nArg; ii++){
       if( optionMatch(azArg[ii],"indent") ){
         data.cMode = data.mode = RenderMode::PRETTY;
@@ -6373,32 +6326,31 @@ int ShellState::do_meta_command(char *zLine){
       }
     }
     if( zDiv ){
-      appendText(&sSelect, "SELECT sql FROM sqlite_master WHERE ", 0);
+      appendText(sSelect, "SELECT sql FROM sqlite_master WHERE ", 0);
       if( zName ){
         char *zQarg = sqlite3_mprintf("%Q", zName);
         int bGlob = strchr(zName, '*') != 0 || strchr(zName, '?') != 0 ||
                     strchr(zName, '[') != 0;
         if( strchr(zName, '.') ){
-          appendText(&sSelect, "lower(printf('%s.%s',sname,tbl_name))", 0);
+          appendText(sSelect, "lower(printf('%s.%s',sname,tbl_name))", 0);
         }else{
-          appendText(&sSelect, "lower(tbl_name)", 0);
+          appendText(sSelect, "lower(tbl_name)", 0);
         }
-        appendText(&sSelect, bGlob ? " GLOB " : " LIKE ", 0);
-        appendText(&sSelect, zQarg, 0);
+        appendText(sSelect, bGlob ? " GLOB " : " LIKE ", 0);
+        appendText(sSelect, zQarg, 0);
         if( !bGlob ){
-          appendText(&sSelect, " ESCAPE '\\' ", 0);
+          appendText(sSelect, " ESCAPE '\\' ", 0);
         }
-        appendText(&sSelect, " AND ", 0);
+        appendText(sSelect, " AND ", 0);
         sqlite3_free(zQarg);
       }
-      appendText(&sSelect, "type!='meta' AND sql IS NOT NULL"
+      appendText(sSelect, "type!='meta' AND sql IS NOT NULL"
                            " ORDER BY name", 0);
       if( bDebug ){
-        utf8_printf(out, "SQL: %s;\n", sSelect.z);
+        utf8_printf(out, "SQL: %s;\n", sSelect.c_str());
       }else{
-        rc = sqlite3_exec(db, sSelect.z, callback, &data, &zErrMsg);
+        rc = sqlite3_exec(db, sSelect.c_str(), callback, &data, &zErrMsg);
       }
-      freeText(&sSelect);
     }
     if( zErrMsg ){
       printDatabaseError(zErrMsg);
@@ -6438,8 +6390,8 @@ int ShellState::do_meta_command(char *zLine){
     sqlite3_stmt *pStmt;     /* For querying tables names */
     char *zSql;              /* SQL to be run */
     char *zSep;              /* Separator */
-    ShellText sSql;          /* Complete SQL for the query to run the hash */
-    ShellText sQuery;        /* Set of queries used to read all content */
+    string sSql;          /* Complete SQL for the query to run the hash */
+    string sQuery;        /* Set of queries used to read all content */
     open_db(0);
     for(i=1; i<nArg; i++){
       const char *z = azArg[i];
@@ -6486,36 +6438,33 @@ int ShellState::do_meta_command(char *zLine){
              " ORDER BY 1 collate nocase";
     }
     sqlite3_prepare_v2(db, zSql, -1, &pStmt, 0);
-    initText(&sQuery);
-    initText(&sSql);
-    appendText(&sSql, "WITH [sha3sum$query](a,b) AS(",0);
+    appendText(sSql, "WITH [sha3sum$query](a,b) AS(",0);
     zSep = (char*)"VALUES(";
     while( SQLITE_ROW==sqlite3_step(pStmt) ){
       const char *zTab = (const char*)sqlite3_column_text(pStmt,0);
       if( zLike && sqlite3_strlike(zLike, zTab, 0)!=0 ) continue;
       if( strncmp(zTab, "sqlite_",7)!=0 ){
-        appendText(&sQuery,"SELECT * FROM ", 0);
-        appendText(&sQuery,zTab,'"');
-        appendText(&sQuery," NOT INDEXED;", 0);
+        appendText(sQuery,"SELECT * FROM ", 0);
+        appendText(sQuery,zTab,'"');
+        appendText(sQuery," NOT INDEXED;", 0);
       }else if( strcmp(zTab, "sqlite_schema")==0 ){
-        appendText(&sQuery,"SELECT type,name,tbl_name,sql FROM sqlite_schema"
+        appendText(sQuery,"SELECT type,name,tbl_name,sql FROM sqlite_schema"
                            " ORDER BY name;", 0);
       }else if( strcmp(zTab, "sqlite_sequence")==0 ){
-        appendText(&sQuery,"SELECT name,seq FROM sqlite_sequence"
+        appendText(sQuery,"SELECT name,seq FROM sqlite_sequence"
                            " ORDER BY name;", 0);
       }else if( strcmp(zTab, "sqlite_stat1")==0 ){
-        appendText(&sQuery,"SELECT tbl,idx,stat FROM sqlite_stat1"
+        appendText(sQuery,"SELECT tbl,idx,stat FROM sqlite_stat1"
                            " ORDER BY tbl,idx;", 0);
       }else if( strcmp(zTab, "sqlite_stat4")==0 ){
-        appendText(&sQuery, "SELECT * FROM ", 0);
-        appendText(&sQuery, zTab, 0);
-        appendText(&sQuery, " ORDER BY tbl, idx, rowid;\n", 0);
+        appendText(sQuery, "SELECT * FROM ", 0);
+        appendText(sQuery, zTab, 0);
+        appendText(sQuery, " ORDER BY tbl, idx, rowid;\n", 0);
       }
-      appendText(&sSql, zSep, 0);
-      appendText(&sSql, sQuery.z, '\'');
-      sQuery.n = 0;
-      appendText(&sSql, ",", 0);
-      appendText(&sSql, zTab, '\'');
+      appendText(sSql, zSep, 0);
+      appendText(sSql, sQuery.c_str(), '\'');
+      appendText(sSql, ",", 0);
+      appendText(sSql, zTab, '\'');
       zSep = (char*)"),(";
     }
     sqlite3_finalize(pStmt);
@@ -6524,16 +6473,14 @@ int ShellState::do_meta_command(char *zLine){
           "%s))"
           " SELECT lower(hex(sha3_query(a,%d))) AS hash, b AS label"
           "   FROM [sha3sum$query]",
-          sSql.z, iSize);
+          sSql.c_str(), iSize);
     }else{
       zSql = sqlite3_mprintf(
           "%s))"
           " SELECT lower(hex(sha3_query(group_concat(a,''),%d))) AS hash"
           "   FROM [sha3sum$query]",
-          sSql.z, iSize);
+          sSql.c_str(), iSize);
     }
-    freeText(&sQuery);
-    freeText(&sSql);
     if( bDebug ){
       utf8_printf(out, "%s\n", zSql);
     }else{
@@ -6605,8 +6552,7 @@ int ShellState::do_meta_command(char *zLine){
     char **azResult;
     int nRow, nAlloc;
     int ii;
-    ShellText s;
-    initText(&s);
+    string s;
     open_db(0);
 //    rc = sqlite3_prepare_v2(db, "PRAGMA database_list", -1, &pStmt, 0);
 //    if( rc ){
@@ -6627,22 +6573,21 @@ int ShellState::do_meta_command(char *zLine){
 //      const char *zDbName = (const char*)sqlite3_column_text(pStmt, 1);
 //      if( zDbName==0 ) continue;
 //      if( s.z && s.z[0] ) appendText(&s, " UNION ALL ", 0);
-        appendText(&s, "SELECT name FROM ", 0);
+        appendText(s, "SELECT name FROM ", 0);
 //      appendText(&s, zDbName, '"');
-      appendText(&s, "sqlite_schema ", 0);
+      appendText(s, "sqlite_schema ", 0);
       if( c=='t' ){
-        appendText(&s," WHERE type IN ('table','view')"
+        appendText(s," WHERE type IN ('table','view')"
                       "   AND name NOT LIKE 'sqlite_%'"
                       "   AND name LIKE ?1", 0);
       }else{
-        appendText(&s," WHERE type='index'"
+        appendText(s," WHERE type='index'"
                       "   AND tbl_name LIKE ?1", 0);
       }
 //    }
 //    rc = sqlite3_finalize(pStmt);
-    appendText(&s, " ORDER BY 1", 0);
-    rc = sqlite3_prepare_v2(db, s.z, -1, &pStmt, 0);
-    freeText(&s);
+    appendText(s, " ORDER BY 1", 0);
+    rc = sqlite3_prepare_v2(db, s.c_str(), -1, &pStmt, 0);
     if( rc ) return shellDatabaseError(db);
 
     /* Run the SQL statement prepared by the above block. Store the results
