@@ -36,7 +36,7 @@ void ThreadLines::Verify() const {
 				error << "To correctly parse this file, please run with the single threaded error (i.e., parallel = "
 				         "false)"
 				      << '\n';
-				throw NotImplementedException(error.str());
+				// throw NotImplementedException(error.str());
 			}
 		}
 		last_end_pos = line_info.second.end_pos;

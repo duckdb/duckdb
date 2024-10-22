@@ -37,15 +37,16 @@ bool CSVIterator::Next(CSVBufferManager &buffer_manager) {
 	if (!is_set) {
 		return false;
 	}
+	idx_t bytes_per_thread = buffer_manager.GetBufferSize() / ROWS_PER_THREAD;
 	// If we are calling next this is not the first one anymore
 	first_one = false;
 	boundary.boundary_idx++;
 	// This is our start buffer
 	auto buffer = buffer_manager.GetBuffer(boundary.buffer_idx);
-	if (buffer->is_last_buffer && boundary.buffer_pos + CSVIterator::BYTES_PER_THREAD > buffer->actual_size) {
+	if (buffer->is_last_buffer && boundary.buffer_pos + bytes_per_thread > buffer->actual_size) {
 		// 1) We are done with the current file
 		return false;
-	} else if (boundary.buffer_pos + BYTES_PER_THREAD >= buffer->actual_size) {
+	} else if (boundary.buffer_pos + bytes_per_thread >= buffer->actual_size) {
 		// 2) We still have data to scan in this file, we set the iterator accordingly.
 		// We must move the buffer
 		boundary.buffer_idx++;
@@ -58,9 +59,9 @@ bool CSVIterator::Next(CSVBufferManager &buffer_manager) {
 
 	} else {
 		// 3) We are not done with the current buffer, hence we just move where we start within the buffer
-		boundary.buffer_pos += BYTES_PER_THREAD;
+		boundary.buffer_pos += bytes_per_thread;
 	}
-	boundary.end_pos = boundary.buffer_pos + BYTES_PER_THREAD;
+	boundary.end_pos = boundary.buffer_pos + bytes_per_thread;
 	SetCurrentPositionToBoundary();
 	return true;
 }
@@ -90,15 +91,16 @@ void CSVIterator::SetCurrentBoundaryToPosition(bool single_threaded) {
 		is_set = false;
 		return;
 	}
+	idx_t bytes_per_thread = buffer_size / ROWS_PER_THREAD;
+
 	boundary.buffer_idx = pos.buffer_idx;
 	if (pos.buffer_pos == 0) {
-		boundary.end_pos = CSVIterator::BYTES_PER_THREAD;
+		boundary.end_pos = bytes_per_thread;
 	} else {
-		boundary.end_pos = ((pos.buffer_pos + CSVIterator::BYTES_PER_THREAD - 1) / CSVIterator::BYTES_PER_THREAD) *
-		                   CSVIterator::BYTES_PER_THREAD;
+		boundary.end_pos = ((pos.buffer_pos + bytes_per_thread - 1) / bytes_per_thread) * bytes_per_thread;
 	}
 
-	boundary.buffer_pos = boundary.end_pos - CSVIterator::BYTES_PER_THREAD;
+	boundary.buffer_pos = boundary.end_pos - bytes_per_thread;
 	is_set = true;
 }
 

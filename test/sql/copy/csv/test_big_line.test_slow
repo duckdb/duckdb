@@ -1,4 +1,4 @@
-# name: test/sql/copy/csv/test_big_line.test
+# name: test/sql/copy/csv/test_big_line.test_slow
 # description: Test big lines
 # group: [csv]
 
@@ -14,7 +14,7 @@ create table t as FROM 'bigval.csv'
 Be sure that the maximum line size is set to an appropriate value
 
 statement ok
-create table t as FROM read_csv('bigval.csv', max_line_size = 40000001)
+create table t as FROM read_csv('bigval.csv', max_line_size = 40000010)
 
 query I
 SELECT count(*) from t

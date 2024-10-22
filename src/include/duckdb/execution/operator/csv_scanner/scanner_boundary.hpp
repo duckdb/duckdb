@@ -75,8 +75,7 @@ public:
 	// Gets the current position for the file
 	idx_t GetGlobalCurrentPos();
 
-	//! 8 MB TODO: Should benchmarks other values
-	static constexpr idx_t BYTES_PER_THREAD = 8000000;
+	static constexpr idx_t ROWS_PER_THREAD = 4;
 
 	CSVPosition pos;
 

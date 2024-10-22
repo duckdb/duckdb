@@ -214,7 +214,7 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 	} else if (loption == "skip") {
 		SetSkipRows(ParseInteger(value, loption));
 	} else if (loption == "max_line_size" || loption == "maximum_line_size") {
-		maximum_line_size = NumericCast<idx_t>(ParseInteger(value, loption));
+		maximum_line_size.Set(NumericCast<idx_t>(ParseInteger(value, loption)));
 	} else if (loption == "date_format" || loption == "dateformat") {
 		string format = ParseString(value, loption);
 		SetDateFormat(LogicalTypeId::DATE, format, true);
@@ -224,7 +224,7 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 	} else if (loption == "ignore_errors") {
 		ignore_errors.Set(ParseBoolean(value, loption));
 	} else if (loption == "buffer_size") {
-		buffer_size = NumericCast<idx_t>(ParseInteger(value, loption));
+		buffer_size.Set(NumericCast<idx_t>(ParseInteger(value, loption)));
 		if (buffer_size == 0) {
 			throw InvalidInputException("Buffer Size option must be higher than 0");
 		}
@@ -503,6 +503,16 @@ void CSVReaderOptions::Verify() {
 	}
 	if (rejects_limit != 0 && !store_rejects.GetValue()) {
 		throw BinderException("REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
+	}
+	// Validate CSV Buffer and max_line_size do not conflict.
+	if (buffer_size.IsSetByUser() && maximum_line_size.IsSetByUser()) {
+		if (buffer_size.GetValue() < maximum_line_size.GetValue()) {
+			throw BinderException("BUFFER_SIZE option was set to %d, while MAX_LINE_SIZE was set to %d. BUFFER_SIZE "
+			                      "must have always be set to value bigger than MAX_LINE_SIZE",
+			                      buffer_size.GetValue(), maximum_line_size.GetValue());
+		}
+	} else if (maximum_line_size.IsSetByUser()) {
+		buffer_size.Set(CSVBuffer::ROWS_PER_BUFFER * maximum_line_size.GetValue(), false);
 	}
 }
 

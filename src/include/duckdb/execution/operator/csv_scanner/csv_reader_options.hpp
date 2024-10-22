@@ -105,7 +105,7 @@ struct CSVReaderOptions {
 	//! Multi-file reader options
 	MultiFileReaderOptions file_options;
 	//! Buffer Size (Parallel Scan)
-	CSVOption<idx_t> buffer_size = 4 * maximum_line_size.GetValue();
+	CSVOption<idx_t> buffer_size = CSVBuffer::ROWS_PER_BUFFER * maximum_line_size.GetValue();
 	//! Decimal separator when reading as numeric
 	string decimal_separator = ".";
 	//! Whether  to pad rows that do not have enough columns with NULL values
