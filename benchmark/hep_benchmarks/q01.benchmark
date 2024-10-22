@@ -1,0 +1,7 @@
+# name: benchmark/hep_benchmarks/q01.benchmark
+# description: Q1 - Plot the missing transverse energy of all events
+# group: [hep]
+
+template benchmark/hep_benchmarks/hep.benchmark.in
+QUERY_NUMBER=1
+QUERY_NUMBER_PADDED=01

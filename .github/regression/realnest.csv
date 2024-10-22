@@ -14,3 +14,7 @@ benchmark/realnest/14_list_slice.benchmark
 benchmark/realnest/15_list_sort.benchmark
 benchmark/realnest/16_most_common_list_aggregates.benchmark
 benchmark/realnest/17_list_aggregates_histogram_stddev_mode.benchmark
+benchmark/realnest/hep_benchmarks/q01.benchmark
+benchmark/realnest/hep_benchmarks/q02.benchmark
+benchmark/realnest/hep_benchmarks/q03.benchmark
+benchmark/realnest/hep_benchmarks/q07.benchmark

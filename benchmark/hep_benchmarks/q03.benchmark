@@ -1,0 +1,7 @@
+# name: benchmark/hep_benchmarks/q03.benchmark
+# description: Q3 - Plot the momentum of jets with |𝜂| < 1 (jet pseudorapidity).
+# group: [hep]
+
+template benchmark/hep_benchmarks/hep.benchmark.in
+QUERY_NUMBER=3
+QUERY_NUMBER_PADDED=03
