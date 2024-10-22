@@ -3705,13 +3705,6 @@ static const char *azHelp[] = {
   "     --bom                 Prefix output with a UTF8 byte-order mark",
   "     -e                    Send output to the system text editor",
   "     -x                    Send output as CSV to a spreadsheet",
-  ".parameter CMD ...       Manage SQL parameter bindings",
-  "   clear                   Erase all bindings",
-  "   init                    Initialize the TEMP table that holds bindings",
-  "   list                    List the current parameter bindings",
-  "   set PARAMETER VALUE     Given SQL parameter PARAMETER a value of VALUE",
-  "                           PARAMETER should start with one of: $ : @ ?",
-  "   unset PARAMETER         Remove PARAMETER from the binding table",
   ".print STRING...         Print literal STRING",
   ".prompt MAIN CONTINUE    Replace the standard prompts",
   ".quit                    Exit this program",
@@ -3721,14 +3714,6 @@ static const char *azHelp[] = {
   "     Options:",
   "         --indent            Try to pretty-print the schema",
   ".separator COL ?ROW?     Change the column and row separators",
-  ".sha3sum ...             Compute a SHA3 hash of database content",
-  "    Options:",
-  "      --schema              Also hash the sqlite_schema table",
-  "      --sha3-224            Use the sha3-224 algorithm",
-  "      --sha3-256            Use the sha3-256 algorithm (default)",
-  "      --sha3-384            Use the sha3-384 algorithm",
-  "      --sha3-512            Use the sha3-512 algorithm",
-  "    Any other argument is a LIKE pattern for tables to hash",
 #ifndef SQLITE_NOHAVE_SYSTEM
   ".shell CMD ARGS...       Run CMD ARGS... in a system shell",
 #endif
@@ -4729,6 +4714,275 @@ MetadataResult SetNullValue(ShellState &state, const char **azArg, idx_t nArg) {
 	return MetadataResult::SUCCESS;
 }
 
+bool ShellState::ImportData(const char **azArg, idx_t nArg) {
+	int rc;
+    const char *zTable = 0;           /* Insert data into this table */
+    const char *zFile = 0;            /* Name of file to extra content from */
+    sqlite3_stmt *pStmt = NULL; /* A statement */
+    int nCol;                   /* Number of columns in the table */
+    int nByte;                  /* Number of bytes in an SQL string */
+    int i, j;                   /* Loop counters */
+    int needCommit;             /* True to COMMIT or ROLLBACK at end */
+    char *zSql;                 /* An SQL statement */
+    ImportCtx sCtx;             /* Reader context */
+    char *(SQLITE_CDECL *xRead)(ImportCtx*); /* Func to read one value */
+    int eVerbose = 0;           /* Larger for more console output */
+    int nSkip = 0;              /* Initial lines to skip */
+    int useOutputMode = 1;      /* Use output mode to determine separators */
+
+    memset(&sCtx, 0, sizeof(sCtx));
+    if( mode==RenderMode::ASCII ){
+      xRead = ascii_read_one_field;
+    }else{
+      xRead = csv_read_one_field;
+    }
+    for(i=1; i<nArg; i++){
+      auto z = azArg[i];
+      if( z[0]=='-' && z[1]=='-' ) z++;
+      if( z[0]!='-' ){
+        if( zFile==0 ){
+          zFile = z;
+        }else if( zTable==0 ){
+          zTable = z;
+        }else{
+          utf8_printf(out, "ERROR: extra argument: \"%s\".  Usage:\n", z);
+          showHelp(out, "import");
+			return false;
+        }
+      }else if( strcmp(z,"-v")==0 ){
+        eVerbose++;
+      }else if( strcmp(z,"-skip")==0 && i<nArg-1 ){
+        nSkip = integerValue(azArg[++i]);
+      }else if( strcmp(z,"-ascii")==0 ){
+        sCtx.cColSep = SEP_Unit[0];
+        sCtx.cRowSep = SEP_Record[0];
+        xRead = ascii_read_one_field;
+        useOutputMode = 0;
+      }else if( strcmp(z,"-csv")==0 ){
+        sCtx.cColSep = ',';
+        sCtx.cRowSep = '\n';
+        xRead = csv_read_one_field;
+        useOutputMode = 0;
+      }else{
+        utf8_printf(out, "ERROR: unknown option: \"%s\".  Usage:\n", z);
+        showHelp(out, "import");
+		return false;
+      }
+    }
+    if( zTable==0 ){
+      utf8_printf(out, "ERROR: missing %s argument. Usage:\n",
+                  zFile==0 ? "FILE" : "TABLE");
+      showHelp(out, "import");
+		return false;
+    }
+    seenInterrupt = 0;
+    open_db(0);
+    if( useOutputMode ){
+      /* If neither the --csv or --ascii options are specified, then set
+      ** the column and row separator characters from the output mode. */
+      int nSep = colSeparator.size();
+      if( nSep==0 ){
+        raw_printf(stderr,
+                   "Error: non-null column separator required for import\n");
+		return false;
+      }
+      if( nSep>1 ){
+        raw_printf(stderr,
+              "Error: multi-character column separators not allowed"
+              " for import\n");
+		return false;
+      }
+      nSep = rowSeparator.size();
+      if( nSep==0 ){
+        raw_printf(stderr,
+            "Error: non-null row separator required for import\n");
+		return false;
+      }
+      if( nSep==2 && mode==RenderMode::CSV && rowSeparator == SEP_CrLf ){
+        /* When importing CSV (only), if the row separator is set to the
+        ** default output row separator, change it to the default input
+        ** row separator.  This avoids having to maintain different input
+        ** and output row separators. */
+      	rowSeparator = SEP_Row;
+        nSep = rowSeparator.size();
+      }
+      if( nSep>1 ){
+        raw_printf(stderr, "Error: multi-character row separators not allowed"
+                           " for import\n");
+		return false;
+      }
+      sCtx.cColSep = colSeparator[0];
+      sCtx.cRowSep = rowSeparator[0];
+    }
+    sCtx.zFile = zFile;
+    sCtx.nLine = 1;
+    if( sCtx.zFile[0]=='|' ){
+#ifdef SQLITE_OMIT_POPEN
+      raw_printf(stderr, "Error: pipes are not supported in this OS\n");
+      rc = 1;
+      goto meta_command_exit;
+#else
+      sCtx.in = popen(sCtx.zFile+1, "r");
+      sCtx.zFile = "<pipe>";
+      sCtx.xCloser = pclose;
+#endif
+    }else{
+      sCtx.in = fopen(sCtx.zFile, "rb");
+      sCtx.xCloser = fclose;
+    }
+    if( sCtx.in==0 ){
+      utf8_printf(stderr, "Error: cannot open \"%s\"\n", zFile);
+		return false;
+    }
+    if( eVerbose>=2 || (eVerbose>=1 && useOutputMode) ){
+      char zSep[2];
+      zSep[1] = 0;
+      zSep[0] = sCtx.cColSep;
+      utf8_printf(out, "Column separator ");
+      output_c_string(zSep);
+      utf8_printf(out, ", row separator ");
+      zSep[0] = sCtx.cRowSep;
+      output_c_string(zSep);
+      utf8_printf(out, "\n");
+    }
+    while( (nSkip--)>0 ){
+      while( xRead(&sCtx) && sCtx.cTerm==sCtx.cColSep ){}
+    }
+    zSql = sqlite3_mprintf("SELECT * FROM %s", zTable);
+    if( zSql==0 ){
+      import_cleanup(&sCtx);
+      shell_out_of_memory();
+    }
+    nByte = strlen30(zSql);
+    rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, 0);
+    import_append_char(&sCtx, 0);    /* To ensure sCtx.z is allocated */
+    if( rc && sqlite3_strglob("Catalog Error: Table with name *", sqlite3_errmsg(db))==0 ){
+      char *zCreate = sqlite3_mprintf("CREATE TABLE %s", zTable);
+      char cSep = '(';
+      while( xRead(&sCtx) ){
+        zCreate = sqlite3_mprintf("%z%c\n  \"%w\" TEXT", zCreate, cSep, sCtx.z);
+        cSep = ',';
+        if( sCtx.cTerm!=sCtx.cColSep ) break;
+      }
+      if( cSep=='(' ){
+        sqlite3_free(zCreate);
+        import_cleanup(&sCtx);
+        utf8_printf(stderr,"%s: empty file\n", sCtx.zFile);
+		return false;
+      }
+      zCreate = sqlite3_mprintf("%z\n)", zCreate);
+      if( eVerbose>=1 ){
+        utf8_printf(out, "%s\n", zCreate);
+      }
+      rc = sqlite3_exec(db, zCreate, 0, 0, 0);
+      sqlite3_free(zCreate);
+      if( rc ){
+        utf8_printf(stderr, "CREATE TABLE %s(...) failed: %s\n", zTable,
+                sqlite3_errmsg(db));
+        import_cleanup(&sCtx);
+		return false;
+      }
+      rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, 0);
+    }
+    sqlite3_free(zSql);
+    if( rc ){
+      if (pStmt) sqlite3_finalize(pStmt);
+      shellDatabaseError(db);
+      import_cleanup(&sCtx);
+	  return false;
+    }
+    nCol = sqlite3_column_count(pStmt);
+    sqlite3_finalize(pStmt);
+    pStmt = 0;
+    if( nCol==0 ) return 0; /* no columns, no error */
+    zSql = (char *) sqlite3_malloc64( nByte*2 + 20 + nCol*2 );
+    if( zSql==0 ){
+      import_cleanup(&sCtx);
+      shell_out_of_memory();
+    }
+    sqlite3_snprintf(nByte+20, zSql, "INSERT INTO \"%w\" VALUES(?", zTable);
+    j = strlen30(zSql);
+    for(i=1; i<nCol; i++){
+      zSql[j++] = ',';
+      zSql[j++] = '?';
+    }
+    zSql[j++] = ')';
+    zSql[j] = 0;
+    if( eVerbose>=2 ){
+      utf8_printf(out, "Insert using: %s\n", zSql);
+    }
+    rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, 0);
+    sqlite3_free(zSql);
+    if( rc ){
+      shellDatabaseError(db);
+      if (pStmt) sqlite3_finalize(pStmt);
+      import_cleanup(&sCtx);
+		return false;
+    }
+    needCommit = sqlite3_get_autocommit(db);
+    if( needCommit ) sqlite3_exec(db, "BEGIN", 0, 0, 0);
+    do{
+      int startLine = sCtx.nLine;
+      for(i=0; i<nCol; i++){
+        char *z = xRead(&sCtx);
+        /*
+        ** Did we reach end-of-file before finding any columns?
+        ** If so, stop instead of NULL filling the remaining columns.
+        */
+        if( z==0 && i==0 ) break;
+        /*
+        ** Did we reach end-of-file OR end-of-line before finding any
+        ** columns in ASCII mode?  If so, stop instead of NULL filling
+        ** the remaining columns.
+        */
+        if( mode==RenderMode::ASCII && (z==0 || z[0]==0) && i==0 ) break;
+        sqlite3_bind_text(pStmt, i+1, z, -1, SQLITE_TRANSIENT);
+        if( i<nCol-1 && sCtx.cTerm!=sCtx.cColSep ){
+          utf8_printf(stderr, "%s:%d: expected %d columns but found %d - "
+                          "filling the rest with NULL\n",
+                          sCtx.zFile, startLine, nCol, i+1);
+          i += 2;
+          while( i<=nCol ){ sqlite3_bind_null(pStmt, i); i++; }
+        }
+      }
+      if( sCtx.cTerm==sCtx.cColSep ){
+        do{
+          xRead(&sCtx);
+          i++;
+        }while( sCtx.cTerm==sCtx.cColSep );
+        utf8_printf(stderr, "%s:%d: expected %d columns but found %d - "
+                        "extras ignored\n",
+                        sCtx.zFile, startLine, nCol, i);
+      }
+      if( i>=nCol ){
+        sqlite3_step(pStmt);
+        rc = sqlite3_reset(pStmt);
+        if( rc!=SQLITE_OK ){
+          utf8_printf(stderr, "%s:%d: INSERT failed: %s\n", sCtx.zFile,
+                      startLine, sqlite3_errmsg(db));
+          sCtx.nErr++;
+        }else{
+          sCtx.nRow++;
+        }
+      }
+    }while( sCtx.cTerm!=EOF );
+
+    import_cleanup(&sCtx);
+    sqlite3_finalize(pStmt);
+    if( needCommit ) sqlite3_exec(db, "COMMIT", 0, 0, 0);
+    if( eVerbose>0 ){
+      utf8_printf(out,
+          "Added %d rows with %d errors using %d lines of input\n",
+          sCtx.nRow, sCtx.nErr, sCtx.nLine-1);
+    }
+	return true;
+}
+
+MetadataResult ImportData(ShellState &state, const char **azArg, idx_t nArg) {
+	state.ImportData(azArg, nArg);
+	return MetadataResult::SUCCESS;
+}
+
 static const MetadataCommand metadata_commands[] = {
 	{"backup", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
 	{"bail", 2, ToggleBail, "on|off", "Stop after hitting an error.  Default OFF", 3},
@@ -4744,6 +4998,8 @@ static const MetadataCommand metadata_commands[] = {
 	{"fullschema", 0, nullptr, "", "", 0},
 	{"headers", 2, ToggleHeaders, "on|off", "Turn display of headers on or off", 0},
 	{"help", 0, ShowHelp, "?-all? ?PATTERN?", "Show help text for PATTERN", 0},
+	{"import", 0, ImportData, "FILE TABLE", "Import data from FILE into TABLE", 0},
+
 	{"log", 2, ToggleLog, "FILE|off", "Turn logging on or off.  FILE can be stderr/stdout", 0},
 	{"maxrows", 0, SetMaxRows, "COUNT", "Sets the maximum number of rows for display (default: 40). Only for duckbox mode.", 0},
 	{"maxwidth", 0, SetMaxWidth, "COUNT", "Sets the maximum width in characters. 0 defaults to terminal width. Only for duckbox mode.", 0},
@@ -4751,7 +5007,9 @@ static const MetadataCommand metadata_commands[] = {
 	{"nullvalue", 2, SetNullValue, "STRING", "Use STRING in place of NULL values", 0},
 
 	{"rows", 1, SetRowRendering, "", "Row-wise rendering of query results (default)", 0},
+	{"restore", 0, nullptr, "", "", 3},
 	{"save", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
+	{"timeout", 0, nullptr, "", "", 5},
 	{ nullptr, 0, nullptr }
 };
 
@@ -4826,280 +5084,6 @@ int ShellState::do_meta_command(char *zLine){
 	}
   if (found_argument) {
   } else
-
-  if( c=='i' && strncmp(azArg[0], "import", n)==0 ){
-    char *zTable = 0;           /* Insert data into this table */
-    char *zFile = 0;            /* Name of file to extra content from */
-    sqlite3_stmt *pStmt = NULL; /* A statement */
-    int nCol;                   /* Number of columns in the table */
-    int nByte;                  /* Number of bytes in an SQL string */
-    int i, j;                   /* Loop counters */
-    int needCommit;             /* True to COMMIT or ROLLBACK at end */
-    char *zSql;                 /* An SQL statement */
-    ImportCtx sCtx;             /* Reader context */
-    char *(SQLITE_CDECL *xRead)(ImportCtx*); /* Func to read one value */
-    int eVerbose = 0;           /* Larger for more console output */
-    int nSkip = 0;              /* Initial lines to skip */
-    int useOutputMode = 1;      /* Use output mode to determine separators */
-
-    memset(&sCtx, 0, sizeof(sCtx));
-    if( mode==RenderMode::ASCII ){
-      xRead = ascii_read_one_field;
-    }else{
-      xRead = csv_read_one_field;
-    }
-    for(i=1; i<nArg; i++){
-      char *z = azArg[i];
-      if( z[0]=='-' && z[1]=='-' ) z++;
-      if( z[0]!='-' ){
-        if( zFile==0 ){
-          zFile = z;
-        }else if( zTable==0 ){
-          zTable = z;
-        }else{
-          utf8_printf(out, "ERROR: extra argument: \"%s\".  Usage:\n", z);
-          showHelp(out, "import");
-          rc = 1;
-          goto meta_command_exit;
-        }
-      }else if( strcmp(z,"-v")==0 ){
-        eVerbose++;
-      }else if( strcmp(z,"-skip")==0 && i<nArg-1 ){
-        nSkip = integerValue(azArg[++i]);
-      }else if( strcmp(z,"-ascii")==0 ){
-        sCtx.cColSep = SEP_Unit[0];
-        sCtx.cRowSep = SEP_Record[0];
-        xRead = ascii_read_one_field;
-        useOutputMode = 0;
-      }else if( strcmp(z,"-csv")==0 ){
-        sCtx.cColSep = ',';
-        sCtx.cRowSep = '\n';
-        xRead = csv_read_one_field;
-        useOutputMode = 0;
-      }else{
-        utf8_printf(out, "ERROR: unknown option: \"%s\".  Usage:\n", z);
-        showHelp(out, "import");
-        rc = 1;
-        goto meta_command_exit;
-      }
-    }
-    if( zTable==0 ){
-      utf8_printf(out, "ERROR: missing %s argument. Usage:\n",
-                  zFile==0 ? "FILE" : "TABLE");
-      showHelp(out, "import");
-      rc = 1;
-      goto meta_command_exit;
-    }
-    seenInterrupt = 0;
-    open_db(0);
-    if( useOutputMode ){
-      /* If neither the --csv or --ascii options are specified, then set
-      ** the column and row separator characters from the output mode. */
-      int nSep = colSeparator.size();
-      if( nSep==0 ){
-        raw_printf(stderr,
-                   "Error: non-null column separator required for import\n");
-        rc = 1;
-        goto meta_command_exit;
-      }
-      if( nSep>1 ){
-        raw_printf(stderr,
-              "Error: multi-character column separators not allowed"
-              " for import\n");
-        rc = 1;
-        goto meta_command_exit;
-      }
-      nSep = rowSeparator.size();
-      if( nSep==0 ){
-        raw_printf(stderr,
-            "Error: non-null row separator required for import\n");
-        rc = 1;
-        goto meta_command_exit;
-      }
-      if( nSep==2 && mode==RenderMode::CSV && rowSeparator == SEP_CrLf ){
-        /* When importing CSV (only), if the row separator is set to the
-        ** default output row separator, change it to the default input
-        ** row separator.  This avoids having to maintain different input
-        ** and output row separators. */
-      	rowSeparator = SEP_Row;
-        nSep = rowSeparator.size();
-      }
-      if( nSep>1 ){
-        raw_printf(stderr, "Error: multi-character row separators not allowed"
-                           " for import\n");
-        rc = 1;
-        goto meta_command_exit;
-      }
-      sCtx.cColSep = colSeparator[0];
-      sCtx.cRowSep = rowSeparator[0];
-    }
-    sCtx.zFile = zFile;
-    sCtx.nLine = 1;
-    if( sCtx.zFile[0]=='|' ){
-#ifdef SQLITE_OMIT_POPEN
-      raw_printf(stderr, "Error: pipes are not supported in this OS\n");
-      rc = 1;
-      goto meta_command_exit;
-#else
-      sCtx.in = popen(sCtx.zFile+1, "r");
-      sCtx.zFile = "<pipe>";
-      sCtx.xCloser = pclose;
-#endif
-    }else{
-      sCtx.in = fopen(sCtx.zFile, "rb");
-      sCtx.xCloser = fclose;
-    }
-    if( sCtx.in==0 ){
-      utf8_printf(stderr, "Error: cannot open \"%s\"\n", zFile);
-      rc = 1;
-      goto meta_command_exit;
-    }
-    if( eVerbose>=2 || (eVerbose>=1 && useOutputMode) ){
-      char zSep[2];
-      zSep[1] = 0;
-      zSep[0] = sCtx.cColSep;
-      utf8_printf(out, "Column separator ");
-      output_c_string(zSep);
-      utf8_printf(out, ", row separator ");
-      zSep[0] = sCtx.cRowSep;
-      output_c_string(zSep);
-      utf8_printf(out, "\n");
-    }
-    while( (nSkip--)>0 ){
-      while( xRead(&sCtx) && sCtx.cTerm==sCtx.cColSep ){}
-    }
-    zSql = sqlite3_mprintf("SELECT * FROM %s", zTable);
-    if( zSql==0 ){
-      import_cleanup(&sCtx);
-      shell_out_of_memory();
-    }
-    nByte = strlen30(zSql);
-    rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, 0);
-    import_append_char(&sCtx, 0);    /* To ensure sCtx.z is allocated */
-    if( rc && sqlite3_strglob("Catalog Error: Table with name *", sqlite3_errmsg(db))==0 ){
-      char *zCreate = sqlite3_mprintf("CREATE TABLE %s", zTable);
-      char cSep = '(';
-      while( xRead(&sCtx) ){
-        zCreate = sqlite3_mprintf("%z%c\n  \"%w\" TEXT", zCreate, cSep, sCtx.z);
-        cSep = ',';
-        if( sCtx.cTerm!=sCtx.cColSep ) break;
-      }
-      if( cSep=='(' ){
-        sqlite3_free(zCreate);
-        import_cleanup(&sCtx);
-        utf8_printf(stderr,"%s: empty file\n", sCtx.zFile);
-        rc = 1;
-        goto meta_command_exit;
-      }
-      zCreate = sqlite3_mprintf("%z\n)", zCreate);
-      if( eVerbose>=1 ){
-        utf8_printf(out, "%s\n", zCreate);
-      }
-      rc = sqlite3_exec(db, zCreate, 0, 0, 0);
-      sqlite3_free(zCreate);
-      if( rc ){
-        utf8_printf(stderr, "CREATE TABLE %s(...) failed: %s\n", zTable,
-                sqlite3_errmsg(db));
-        import_cleanup(&sCtx);
-        rc = 1;
-        goto meta_command_exit;
-      }
-      rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, 0);
-    }
-    sqlite3_free(zSql);
-    if( rc ){
-      if (pStmt) sqlite3_finalize(pStmt);
-      shellDatabaseError(db);
-      import_cleanup(&sCtx);
-      rc = 1;
-      goto meta_command_exit;
-    }
-    nCol = sqlite3_column_count(pStmt);
-    sqlite3_finalize(pStmt);
-    pStmt = 0;
-    if( nCol==0 ) return 0; /* no columns, no error */
-    zSql = (char *) sqlite3_malloc64( nByte*2 + 20 + nCol*2 );
-    if( zSql==0 ){
-      import_cleanup(&sCtx);
-      shell_out_of_memory();
-    }
-    sqlite3_snprintf(nByte+20, zSql, "INSERT INTO \"%w\" VALUES(?", zTable);
-    j = strlen30(zSql);
-    for(i=1; i<nCol; i++){
-      zSql[j++] = ',';
-      zSql[j++] = '?';
-    }
-    zSql[j++] = ')';
-    zSql[j] = 0;
-    if( eVerbose>=2 ){
-      utf8_printf(out, "Insert using: %s\n", zSql);
-    }
-    rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, 0);
-    sqlite3_free(zSql);
-    if( rc ){
-      shellDatabaseError(db);
-      if (pStmt) sqlite3_finalize(pStmt);
-      import_cleanup(&sCtx);
-      rc = 1;
-      goto meta_command_exit;
-    }
-    needCommit = sqlite3_get_autocommit(db);
-    if( needCommit ) sqlite3_exec(db, "BEGIN", 0, 0, 0);
-    do{
-      int startLine = sCtx.nLine;
-      for(i=0; i<nCol; i++){
-        char *z = xRead(&sCtx);
-        /*
-        ** Did we reach end-of-file before finding any columns?
-        ** If so, stop instead of NULL filling the remaining columns.
-        */
-        if( z==0 && i==0 ) break;
-        /*
-        ** Did we reach end-of-file OR end-of-line before finding any
-        ** columns in ASCII mode?  If so, stop instead of NULL filling
-        ** the remaining columns.
-        */
-        if( mode==RenderMode::ASCII && (z==0 || z[0]==0) && i==0 ) break;
-        sqlite3_bind_text(pStmt, i+1, z, -1, SQLITE_TRANSIENT);
-        if( i<nCol-1 && sCtx.cTerm!=sCtx.cColSep ){
-          utf8_printf(stderr, "%s:%d: expected %d columns but found %d - "
-                          "filling the rest with NULL\n",
-                          sCtx.zFile, startLine, nCol, i+1);
-          i += 2;
-          while( i<=nCol ){ sqlite3_bind_null(pStmt, i); i++; }
-        }
-      }
-      if( sCtx.cTerm==sCtx.cColSep ){
-        do{
-          xRead(&sCtx);
-          i++;
-        }while( sCtx.cTerm==sCtx.cColSep );
-        utf8_printf(stderr, "%s:%d: expected %d columns but found %d - "
-                        "extras ignored\n",
-                        sCtx.zFile, startLine, nCol, i);
-      }
-      if( i>=nCol ){
-        sqlite3_step(pStmt);
-        rc = sqlite3_reset(pStmt);
-        if( rc!=SQLITE_OK ){
-          utf8_printf(stderr, "%s:%d: INSERT failed: %s\n", sCtx.zFile,
-                      startLine, sqlite3_errmsg(db));
-          sCtx.nErr++;
-        }else{
-          sCtx.nRow++;
-        }
-      }
-    }while( sCtx.cTerm!=EOF );
-
-    import_cleanup(&sCtx);
-    sqlite3_finalize(pStmt);
-    if( needCommit ) sqlite3_exec(db, "COMMIT", 0, 0, 0);
-    if( eVerbose>0 ){
-      utf8_printf(out,
-          "Added %d rows with %d errors using %d lines of input\n",
-          sCtx.nRow, sCtx.nErr, sCtx.nLine-1);
-    }
-  }else
 
   if( c=='o' && strncmp(azArg[0], "open", n)==0 && n>=2 ){
     char *zNewFilename;  /* Name of the database file to open */
