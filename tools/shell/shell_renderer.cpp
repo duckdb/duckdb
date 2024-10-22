@@ -650,6 +650,108 @@ public:
 	}
 };
 
+class ModeSemiRenderer : public RowRenderer {
+public:
+	explicit ModeSemiRenderer(ShellState &state) : RowRenderer(state) {}
+
+	void RenderRow(RowResult &result) override {
+		/* .schema and .fullschema output */
+		state.printSchemaLine(result.data[0], "\n");
+	}
+};
+
+class ModePrettyRenderer : public RowRenderer {
+public:
+	explicit ModePrettyRenderer(ShellState &state) : RowRenderer(state) {}
+
+	void RenderRow(RowResult &result) override {
+		auto &data = result.data;
+		/* .schema and .fullschema with --indent */
+		if (data.size() != 1) {
+			throw std::runtime_error("row must have exactly one value for pretty rendering");
+		}
+		char *z;
+		int j;
+		int nParen = 0;
+		char cEnd = 0;
+		char c;
+		int nLine = 0;
+		if( !data[0] ) return;
+		if( sqlite3_strlike("CREATE VIEW%", data[0], 0)==0
+		 || sqlite3_strlike("CREATE TRIG%", data[0], 0)==0
+		){
+			state.Print(data[0]);
+			state.Print(";\n");
+			return;
+		}
+		z = sqlite3_mprintf("%s", data[0]);
+		j = 0;
+		idx_t i;
+		for(i=0; IsSpace(z[i]); i++){}
+		for(; (c = z[i])!=0; i++){
+			if( IsSpace(c) ){
+				if( z[j-1]=='\r' ) z[j-1] = '\n';
+				if( IsSpace(z[j-1]) || z[j-1]=='(' ) continue;
+			}else if( (c=='(' || c==')') && j>0 && IsSpace(z[j-1]) ){
+				j--;
+			}
+			z[j++] = c;
+		}
+		while( j>0 && IsSpace(z[j-1]) ){ j--; }
+		z[j] = 0;
+		if( state.StringLength(z)>=79 ){
+			for(i=j=0; (c = z[i])!=0; i++){ /* Copy from z[i] back to z[j] */
+				if( c==cEnd ){
+					cEnd = 0;
+				}else if( c=='"' || c=='\'' || c=='`' ){
+					cEnd = c;
+				}else if( c=='[' ){
+					cEnd = ']';
+				}else if( c=='-' && z[i+1]=='-' ){
+					cEnd = '\n';
+				}else if( c=='(' ){
+					nParen++;
+				}else if( c==')' ){
+					nParen--;
+					if( nLine>0 && nParen==0 && j>0 ){
+						state.printSchemaLineN(z, j, "\n");
+						j = 0;
+					}
+				}
+				z[j++] = c;
+				if( nParen==1 && cEnd==0
+				 && (c=='(' || c=='\n' || (c==',' && !wsToEol(z+i+1)))
+				){
+					if( c=='\n' ) j--;
+					state.printSchemaLineN(z, j, "\n  ");
+					j = 0;
+					nLine++;
+					while( IsSpace(z[i+1]) ){ i++; }
+				}
+			}
+			z[j] = 0;
+		}
+		state.printSchemaLine(z, ";\n");
+		sqlite3_free(z);
+	}
+
+	/*
+	** Return true if string z[] has nothing but whitespace and comments to the
+	** end of the first line.
+	*/
+	static int wsToEol(const char *z){
+		int i;
+		for(i=0; z[i]; i++){
+			if( z[i]=='\n' ) return 1;
+			if( IsSpace(z[i]) ) continue;
+			if( z[i]=='-' && z[i+1]=='-' ) return 1;
+			return 0;
+		}
+		return 1;
+	}
+};
+
+
 unique_ptr<RowRenderer> ShellState::GetRowRenderer() {
 	switch(cMode) {
 	case RenderMode::LINE:
@@ -674,6 +776,10 @@ unique_ptr<RowRenderer> ShellState::GetRowRenderer() {
 		return unique_ptr<RowRenderer>(new ModeJsonRenderer(*this, false));
 	case RenderMode::INSERT:
 		return unique_ptr<RowRenderer>(new ModeInsertRenderer(*this));
+	case RenderMode::SEMI:
+		return unique_ptr<RowRenderer>(new ModeSemiRenderer(*this));
+	case RenderMode::PRETTY:
+		return unique_ptr<RowRenderer>(new ModePrettyRenderer(*this));
 	case RenderMode::TRASH:
 		// no renderer
 		return nullptr;

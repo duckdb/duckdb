@@ -190,11 +190,6 @@ using namespace duckdb_shell;
 #define isatty(x) 1
 #endif
 
-/* ctype macros that work with signed characters */
-#define IsSpace(X)  isspace((unsigned char)X)
-#define IsDigit(X)  isdigit((unsigned char)X)
-#define ToLower(X)  (char)tolower((unsigned char)X)
-
 #if defined(_WIN32) || defined(WIN32)
 #if SQLITE_OS_WINRT
 #include <intrin.h>
@@ -2801,7 +2796,7 @@ static BOOL WINAPI ConsoleCtrlHandler(
 ** This routine converts some CREATE TABLE statements for shadow tables
 ** in FTS3/4/5 into CREATE TABLE IF NOT EXISTS statements.
 */
-static void printSchemaLine(FILE *out, const char *z, const char *zTail){
+void ShellState::printSchemaLine(const char *z, const char *zTail){
   if( z==0 ) return;
   if( zTail==0 ) return;
   if( sqlite3_strglob("CREATE TABLE ['\"]*", z)==0 ){
@@ -2810,26 +2805,11 @@ static void printSchemaLine(FILE *out, const char *z, const char *zTail){
     utf8_printf(out, "%s%s", z, zTail);
   }
 }
-static void printSchemaLineN(FILE *out, char *z, int n, const char *zTail){
+void ShellState::printSchemaLineN(char *z, int n, const char *zTail){
   char c = z[n];
   z[n] = 0;
-  printSchemaLine(out, z, zTail);
+  printSchemaLine(z, zTail);
   z[n] = c;
-}
-
-/*
-** Return true if string z[] has nothing but whitespace and comments to the
-** end of the first line.
-*/
-static int wsToEol(const char *z){
-  int i;
-  for(i=0; z[i]; i++){
-    if( z[i]=='\n' ) return 1;
-    if( IsSpace(z[i]) ) continue;
-    if( z[i]=='-' && z[i+1]=='-' ) return 1;
-    return 0;
-  }
-  return 1;
 }
 
 #ifndef SQLITE_OMIT_PROGRESS_CALLBACK
@@ -2927,81 +2907,6 @@ int ShellState::shell_callback(
 	auto &data = result.data;
   if( result.data.empty() ) return 0;
 	renderer.Render(result);
-
-  switch( cMode ){
-    case RenderMode::SEMI: {   /* .schema and .fullschema output */
-      printSchemaLine(out, data[0], "\n");
-      break;
-    }
-    case RenderMode::PRETTY: {  /* .schema and .fullschema with --indent */
-      char *z;
-      int j;
-      int nParen = 0;
-      char cEnd = 0;
-      char c;
-      int nLine = 0;
-      assert( data.size()==1 );
-      if( data[0]==0 ) break;
-      if( sqlite3_strlike("CREATE VIEW%", data[0], 0)==0
-       || sqlite3_strlike("CREATE TRIG%", data[0], 0)==0
-      ){
-        utf8_printf(out, "%s;\n", data[0]);
-        break;
-      }
-      z = sqlite3_mprintf("%s", data[0]);
-      j = 0;
-    	idx_t i;
-      for(i=0; IsSpace(z[i]); i++){}
-      for(; (c = z[i])!=0; i++){
-        if( IsSpace(c) ){
-          if( z[j-1]=='\r' ) z[j-1] = '\n';
-          if( IsSpace(z[j-1]) || z[j-1]=='(' ) continue;
-        }else if( (c=='(' || c==')') && j>0 && IsSpace(z[j-1]) ){
-          j--;
-        }
-        z[j++] = c;
-      }
-      while( j>0 && IsSpace(z[j-1]) ){ j--; }
-      z[j] = 0;
-      if( strlen30(z)>=79 ){
-        for(i=j=0; (c = z[i])!=0; i++){ /* Copy from z[i] back to z[j] */
-          if( c==cEnd ){
-            cEnd = 0;
-          }else if( c=='"' || c=='\'' || c=='`' ){
-            cEnd = c;
-          }else if( c=='[' ){
-            cEnd = ']';
-          }else if( c=='-' && z[i+1]=='-' ){
-            cEnd = '\n';
-          }else if( c=='(' ){
-            nParen++;
-          }else if( c==')' ){
-            nParen--;
-            if( nLine>0 && nParen==0 && j>0 ){
-              printSchemaLineN(out, z, j, "\n");
-              j = 0;
-            }
-          }
-          z[j++] = c;
-          if( nParen==1 && cEnd==0
-           && (c=='(' || c=='\n' || (c==',' && !wsToEol(z+i+1)))
-          ){
-            if( c=='\n' ) j--;
-            printSchemaLineN(out, z, j, "\n  ");
-            j = 0;
-            nLine++;
-            while( IsSpace(z[i+1]) ){ i++; }
-          }
-        }
-        z[j] = 0;
-      }
-      printSchemaLine(out, z, ";\n");
-      sqlite3_free(z);
-      break;
-    }
-  default:
-  	break;
-  }
   return 0;
 }
 
@@ -3613,7 +3518,7 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed){
     sqlite3_free(zIns);
     return 0;
   }else{
-    printSchemaLine(p->out, zSql, ";\n");
+    p->printSchemaLine(zSql, ";\n");
   }
 
   if( strcmp(zType, "table")==0 ){

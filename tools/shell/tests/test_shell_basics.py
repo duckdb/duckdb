@@ -358,6 +358,22 @@ def test_schema(shell, pattern):
     result = test.run()
     result.check_stdout("CREATE TABLE test(a INTEGER, b VARCHAR);")
 
+def test_schema_indent(shell):
+    test = (
+        ShellTest(shell)
+        .statement("create table test (a int, b varchar, c int, d int, k int, primary key(a, b));")
+        .statement(f".schema -indent")
+    )
+    result = test.run()
+    result.check_stdout("""CREATE TABLE test(
+  a INTEGER,
+  b VARCHAR,
+  c INTEGER,
+  d INTEGER,
+  k INTEGER,
+  PRIMARY KEY(a, b)
+);""")
+
 def test_tables(shell):
     test = (
         ShellTest(shell)

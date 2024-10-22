@@ -63,6 +63,11 @@ enum class RenderMode : uint32_t {
 #define SHFLG_Echo           0x00000040 /* .echo or --echo setting */
 #define SHFLG_HeaderSet      0x00000080 /* .header has been used */
 
+/* ctype macros that work with signed characters */
+#define IsSpace(X)  isspace((unsigned char)X)
+#define IsDigit(X)  isdigit((unsigned char)X)
+#define ToLower(X)  (char)tolower((unsigned char)X)
+
 /*
 ** State information about the database connection is contained in an
 ** instance of the following structure.
@@ -129,6 +134,8 @@ public:
 	void output_quoted_string(const char *z);
 	void output_quoted_escaped_string(const char *z);
 	void output_hex_blob(const void *pBlob, int nBlob);
+	void printSchemaLine(const char *z, const char *zTail);
+	void printSchemaLineN(char *z, int n, const char *zTail);
 	void PrintOptionallyQuotedIdentifier(const char *z);
 	int isNumber(const char *z, int *realnum);
 	void output_json_string(const char *z, int n);
