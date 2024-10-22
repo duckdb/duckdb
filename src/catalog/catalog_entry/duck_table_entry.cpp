@@ -784,18 +784,32 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropForeignKeyConstraint(ClientContext 
 void RollbackAddIndex(CatalogEntry &rollback_entry, CatalogEntry &entry) {
 	auto &rollback_table = rollback_entry.Cast<DuckTableEntry>();
 	auto &table = entry.Cast<DuckTableEntry>();
-
 	auto &info = table.GetStorage().GetDataTableInfo();
 	auto &indexes = info->GetIndexes();
 
 	// Find all index-based constraints that exist in rollback_table, but not in table.
+	// Then, remove them.
+
 	unordered_set<string> names;
+	for (const auto &constraint : table.GetConstraints()) {
+		if (constraint->type != ConstraintType::UNIQUE) {
+			continue;
+		}
+		const auto &unique = constraint->Cast<UniqueConstraint>();
+		if (unique.is_primary_key) {
+			names.insert(unique.info.name);
+		}
+	}
+
 	for (const auto &constraint : rollback_table.GetConstraints()) {
 		if (constraint->type != ConstraintType::UNIQUE) {
 			continue;
 		}
 		const auto &unique = constraint->Cast<UniqueConstraint>();
-		if (unique.IsPrimaryKey()) {
+		if (!unique.IsPrimaryKey()) {
+			continue;
+		}
+		if (names.find(constraint->info.name) == names.end()) {
 			indexes.RemoveIndex(constraint->info.name);
 		}
 	}
