@@ -167,7 +167,7 @@ def generate_tree_recursive(json_graph: object) -> str:
 def generate_timing_html(graph_json: object, query_timings: object) -> object:
     json_graph = json.loads(graph_json)
     gather_timing_information(json_graph, query_timings)
-    total_time = float(json_graph['children'][0]['operator_timing'])
+    total_time = query_timings.get_sum_of_all_timings()
     table_head = """
 	<table class=\"styled-table\"> 
 		<thead>
@@ -181,7 +181,7 @@ def generate_timing_html(graph_json: object, query_timings: object) -> object:
     table_body = "<tbody>"
     table_end = "</tbody></table>"
 
-    execution_time = query_timings.get_sum_of_all_timings()
+    execution_time = float(json_graph['latency'])
 
     all_phases = query_timings.get_phases()
     query_timings.add_node_timing(NodeTiming("TOTAL TIME", total_time))
