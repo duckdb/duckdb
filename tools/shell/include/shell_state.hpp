@@ -128,6 +128,9 @@ public:
 	bool SetOutputMode(const char *mode, const char *tbl_name);
 	bool ImportData(const char **azArg, idx_t nArg);
 	bool OpenDatabase(const char **azArg, idx_t nArg);
+	bool SetOutputFile(const char **azArg, idx_t nArg, char output_mode);
+	bool ReadFromFile(const string &file);
+	bool DisplaySchemas(const char **azArg, idx_t nArg);
 
 	int strlenChar(const char *z);
 	int strlenChar(const string &str);

@@ -5075,6 +5075,240 @@ MetadataResult QuitProcess(ShellState &, const char **azArg, idx_t nArg) {
 	return MetadataResult::EXIT;
 }
 
+bool ShellState::SetOutputFile(const char **azArg, idx_t nArg, char output_mode) {
+    const char *zFile = 0;
+    int bTxtMode = 0;
+    int i;
+    int eMode = 0;
+    int bBOM = 0;
+    int bOnce = 0;  /* 0: .output, 1: .once, 2: .excel */
+
+    if( output_mode == 'e' ){
+    	// .excel
+      eMode = 'x';
+      bOnce = 2;
+    }else if( output_mode == 'o' ){
+    	// .once
+      bOnce = 1;
+    }
+    for(i=1; i<nArg; i++){
+      const char *z = azArg[i];
+      if( z[0]=='-' ){
+        if( z[1]=='-' ) z++;
+        if( strcmp(z,"-bom")==0 ){
+          bBOM = 1;
+        }else if( output_mode!='e' && strcmp(z,"-x")==0 ){
+          eMode = 'x';  /* spreadsheet */
+        }else if( output_mode!='e' && strcmp(z,"-e")==0 ){
+          eMode = 'e';  /* text editor */
+        }else{
+          utf8_printf(out, "ERROR: unknown option: \"%s\".  Usage:\n",
+                      azArg[i]);
+          showHelp(out, azArg[0]);
+		  return false;
+        }
+      }else if( zFile==0 ){
+        zFile = z;
+      }else{
+        utf8_printf(out,"ERROR: extra parameter: \"%s\".  Usage:\n",
+                    azArg[i]);
+        showHelp(out, azArg[0]);
+		return false;
+      }
+    }
+    if( zFile==0 ) zFile = "stdout";
+    if( bOnce ){
+      outCount = 2;
+    }else{
+      outCount = 0;
+    }
+    output_reset();
+#ifndef SQLITE_NOHAVE_SYSTEM
+    if( eMode=='e' || eMode=='x' ){
+      doXdgOpen = 1;
+      outputModePush();
+      if( eMode=='x' ){
+        /* spreadsheet mode.  Output as CSV. */
+        newTempFile("csv");
+        ShellClearFlag(SHFLG_Echo);
+        mode = RenderMode::CSV;
+        colSeparator = SEP_Comma;
+        rowSeparator = SEP_CrLf;
+      }else{
+        /* text editor mode */
+        newTempFile("txt");
+        bTxtMode = 1;
+      }
+      zFile = zTempFile;
+    }
+#endif /* SQLITE_NOHAVE_SYSTEM */
+    if( zFile[0]=='|' ){
+#ifdef SQLITE_OMIT_POPEN
+      raw_printf(stderr, "Error: pipes are not supported in this OS\n");
+      out = stdout;
+      return false;
+#else
+      out = popen(zFile + 1, "w");
+      if( out==0 ){
+        utf8_printf(stderr,"Error: cannot open pipe \"%s\"\n", zFile + 1);
+        out = stdout;
+		return false;
+      }else{
+        if( bBOM ) fprintf(out,"\357\273\277");
+      	outfile = zFile;
+      }
+#endif
+    }else{
+      out = output_file_open(zFile, bTxtMode);
+      if( out==0 ){
+        if( strcmp(zFile,"off")!=0 ){
+          utf8_printf(stderr,"Error: cannot write to \"%s\"\n", zFile);
+        }
+        out = stdout;
+		return false;
+      } else {
+        if( bBOM ) fprintf(out,"\357\273\277");
+        outfile = zFile;
+      }
+    }
+	return true;
+}
+
+MetadataResult SetOutput(ShellState &state, const char **azArg, idx_t nArg) {
+    if (!state.SetOutputFile(azArg, nArg, '\0')) {
+		return MetadataResult::ERROR;
+    }
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetOutputOnce(ShellState &state, const char **azArg, idx_t nArg) {
+	if (!state.SetOutputFile(azArg, nArg, 'o')) {
+		return MetadataResult::ERROR;
+	}
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetOutputExcel(ShellState &state, const char **azArg, idx_t nArg) {
+	if (!state.SetOutputFile(azArg, nArg, 'e')) {
+		return MetadataResult::ERROR;
+	}
+	return MetadataResult::SUCCESS;
+}
+
+bool ShellState::ReadFromFile(const string &file) {
+	FILE *inSaved = in;
+	int savedLineno = lineno;
+	int rc;
+	if( notNormalFile(file.c_str())
+	 || (in = fopen(file.c_str(), "rb"))==0
+	){
+		utf8_printf(stderr,"Error: cannot open \"%s\"\n", file.c_str());
+		rc = 1;
+	}else{
+		rc = process_input();
+		fclose(in);
+	}
+	in = inSaved;
+	lineno = savedLineno;
+	return rc == 0;
+}
+
+MetadataResult ReadFromFile(ShellState &state, const char **azArg, idx_t nArg) {
+	if (!state.ReadFromFile(azArg[1])) {
+		return MetadataResult::ERROR;
+	}
+	return MetadataResult::SUCCESS;
+}
+
+bool ShellState::DisplaySchemas(const char **azArg, idx_t nArg) {
+	string sSelect;
+	char *zErrMsg = 0;
+	const char *zDiv = "(";
+	const char *zName = 0;
+	int bDebug = 0;
+	int ii;
+	int rc;
+
+	open_db(0);
+
+	RenderMode mode = RenderMode::SEMI;
+	for(ii=1; ii<nArg; ii++){
+		if( optionMatch(azArg[ii],"indent") ){
+			mode = RenderMode::PRETTY;
+		}else if( optionMatch(azArg[ii],"debug") ){
+			bDebug = 1;
+		}else if( zName==0 ){
+			zName = azArg[ii];
+		}else{
+			raw_printf(stderr, "Usage: .schema ?--indent? ?LIKE-PATTERN?\n");
+			return false;
+		}
+	}
+	auto renderer = GetRowRenderer(mode);
+	renderer->show_header = false;
+	if( zDiv ){
+		appendText(sSelect, "SELECT sql FROM sqlite_master WHERE ", 0);
+		if( zName ){
+			char *zQarg = sqlite3_mprintf("%Q", zName);
+			int bGlob = strchr(zName, '*') != 0 || strchr(zName, '?') != 0 ||
+						strchr(zName, '[') != 0;
+			if( strchr(zName, '.') ){
+				appendText(sSelect, "lower(printf('%s.%s',sname,tbl_name))", 0);
+			}else{
+				appendText(sSelect, "lower(tbl_name)", 0);
+			}
+			appendText(sSelect, bGlob ? " GLOB " : " LIKE ", 0);
+			appendText(sSelect, zQarg, 0);
+			if( !bGlob ){
+				appendText(sSelect, " ESCAPE '\\' ", 0);
+			}
+			appendText(sSelect, " AND ", 0);
+			sqlite3_free(zQarg);
+		}
+		appendText(sSelect, "type!='meta' AND sql IS NOT NULL"
+							 " ORDER BY name", 0);
+		if( bDebug ){
+			utf8_printf(out, "SQL: %s;\n", sSelect.c_str());
+		}else{
+			rc = sqlite3_exec(db, sSelect.c_str(), callback, renderer.get(), &zErrMsg);
+		}
+	}
+	if( zErrMsg ){
+		printDatabaseError(zErrMsg);
+		sqlite3_free(zErrMsg);
+		return false;
+	}else if( rc != SQLITE_OK ){
+		raw_printf(stderr,"Error: querying schema information\n");
+		return false;
+	}else{
+		return true;
+	}
+}
+
+MetadataResult DisplaySchemas(ShellState &state, const char **azArg, idx_t nArg) {
+	if (!state.DisplaySchemas(azArg, nArg)) {
+		return MetadataResult::ERROR;
+	}
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult RunShellCommand(ShellState &state, const char **azArg, idx_t nArg) {
+	char *zCmd;
+	int i, x;
+	if( nArg<2 ){
+		return MetadataResult::PRINT_USAGE;
+	}
+	zCmd = sqlite3_mprintf(strchr(azArg[1],' ')==0?"%s":"\"%s\"", azArg[1]);
+	for(i=2; i<nArg; i++){
+		zCmd = sqlite3_mprintf(strchr(azArg[i],' ')==0?"%z %s":"%z \"%s\"",
+							   zCmd, azArg[i]);
+	}
+	x = system(zCmd);
+	sqlite3_free(zCmd);
+	if( x ) raw_printf(stderr, "System command returns %d\n", x);
+	return MetadataResult::SUCCESS;
+}
+
 static const MetadataCommand metadata_commands[] = {
 	{"backup", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
 	{"bail", 2, ToggleBail, "on|off", "Stop after hitting an error.  Default OFF", 3},
@@ -5086,6 +5320,7 @@ static const MetadataCommand metadata_commands[] = {
 	{"databases", 1, ShowDatabases, "", "List names and files of attached databases", 2},
 	{"dump", 0, DumpTable, "?TABLE?", "Render database content as SQL\n   Options:\n     --newlines             Allow unescaped newline characters in output\n   TABLE is a LIKE pattern for the tables to dump\n   Additional LIKE patterns can be given in subsequent arguments", 0},
 	{"echo", 2, ToggleEcho, "on|off", "Turn command echo on or off", 3},
+	{"excel", 0, SetOutputExcel, "", "Display the output of next command in spreadsheet", 0},
     {"exit", 0, ExitProcess, "?CODE?", "Exit this program with return-code CODE", 0},
 	{"fullschema", 0, nullptr, "", "", 0},
 	{"headers", 2, ToggleHeaders, "on|off", "Turn display of headers on or off", 0},
@@ -5099,18 +5334,24 @@ static const MetadataCommand metadata_commands[] = {
 	{"nullvalue", 2, SetNullValue, "STRING", "Use STRING in place of NULL values", 0},
 
 	{"open", 0, OpenDatabase, "?OPTIONS? ?FILE?", "Close existing database and reopen FILE", 2},
+	{"once", 0, SetOutputOnce, "?FILE?", "Output for the next SQL command only to FILE", 0},
+	{"output", 0, SetOutput, "?FILE?", "Send output to FILE or stdout if FILE is omitted", 0},
 	{"print", 0, PrintArguments, "STRING...", "Print literal STRING", 3},
 	{"prompt", 0, SetPrompt, "MAIN CONTINUE", "Replace the standard prompts", 0},
+
 	{"quit", 0, QuitProcess, "", "Exit this program", 0},
+	{"read", 2, ReadFromFile, "FILE", "Read input from FILE", 3},
 	{"rows", 1, SetRowRendering, "", "Row-wise rendering of query results (default)", 0},
 	{"restore", 0, nullptr, "", "", 3},
 	{"save", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
 	{"separator", 0, SetSeparator, "COL ?ROW?", "Change the column and row separators", 0},
+	{"schema", 0, DisplaySchemas, "?PATTERN?", "Show the CREATE statements matching PATTERN", 0},
+	{"shell", 0, RunShellCommand, "CMD ARGS...", "Run CMD ARGS... in a system shell", 0},
+	{"system", 0, RunShellCommand, "CMD ARGS...", "Run CMD ARGS... in a system shell", 0},
 
 	{"timeout", 0, nullptr, "", "", 5},
 	{ nullptr, 0, nullptr }
 };
-
 
 /*
 ** If an input line begins with "." then invoke this routine to
@@ -5182,194 +5423,6 @@ int ShellState::do_meta_command(char *zLine){
 	}
   if (found_argument) {
   } else
-
-  if( (c=='o'
-        && (strncmp(azArg[0], "output", n)==0||strncmp(azArg[0], "once", n)==0))
-   || (c=='e' && n==5 && strcmp(azArg[0],"excel")==0)
-  ){
-    const char *zFile = 0;
-    int bTxtMode = 0;
-    int i;
-    int eMode = 0;
-    int bBOM = 0;
-    int bOnce = 0;  /* 0: .output, 1: .once, 2: .excel */
-
-    if( c=='e' ){
-      eMode = 'x';
-      bOnce = 2;
-    }else if( strncmp(azArg[0],"once",n)==0 ){
-      bOnce = 1;
-    }
-    for(i=1; i<nArg; i++){
-      char *z = azArg[i];
-      if( z[0]=='-' ){
-        if( z[1]=='-' ) z++;
-        if( strcmp(z,"-bom")==0 ){
-          bBOM = 1;
-        }else if( c!='e' && strcmp(z,"-x")==0 ){
-          eMode = 'x';  /* spreadsheet */
-        }else if( c!='e' && strcmp(z,"-e")==0 ){
-          eMode = 'e';  /* text editor */
-        }else{
-          utf8_printf(out, "ERROR: unknown option: \"%s\".  Usage:\n",
-                      azArg[i]);
-          showHelp(out, azArg[0]);
-          rc = 1;
-          goto meta_command_exit;
-        }
-      }else if( zFile==0 ){
-        zFile = z;
-      }else{
-        utf8_printf(out,"ERROR: extra parameter: \"%s\".  Usage:\n",
-                    azArg[i]);
-        showHelp(out, azArg[0]);
-        rc = 1;
-        goto meta_command_exit;
-      }
-    }
-    if( zFile==0 ) zFile = "stdout";
-    if( bOnce ){
-      outCount = 2;
-    }else{
-      outCount = 0;
-    }
-    output_reset();
-#ifndef SQLITE_NOHAVE_SYSTEM
-    if( eMode=='e' || eMode=='x' ){
-      doXdgOpen = 1;
-      outputModePush();
-      if( eMode=='x' ){
-        /* spreadsheet mode.  Output as CSV. */
-        newTempFile("csv");
-        ShellClearFlag(SHFLG_Echo);
-        mode = RenderMode::CSV;
-        colSeparator = SEP_Comma;
-        rowSeparator = SEP_CrLf;
-      }else{
-        /* text editor mode */
-        newTempFile("txt");
-        bTxtMode = 1;
-      }
-      zFile = zTempFile;
-    }
-#endif /* SQLITE_NOHAVE_SYSTEM */
-    if( zFile[0]=='|' ){
-#ifdef SQLITE_OMIT_POPEN
-      raw_printf(stderr, "Error: pipes are not supported in this OS\n");
-      rc = 1;
-      out = stdout;
-#else
-      out = popen(zFile + 1, "w");
-      if( out==0 ){
-        utf8_printf(stderr,"Error: cannot open pipe \"%s\"\n", zFile + 1);
-        out = stdout;
-        rc = 1;
-      }else{
-        if( bBOM ) fprintf(out,"\357\273\277");
-      	outfile = zFile;
-      }
-#endif
-    }else{
-      out = output_file_open(zFile, bTxtMode);
-      if( out==0 ){
-        if( strcmp(zFile,"off")!=0 ){
-          utf8_printf(stderr,"Error: cannot write to \"%s\"\n", zFile);
-        }
-        out = stdout;
-        rc = 1;
-      } else {
-        if( bBOM ) fprintf(out,"\357\273\277");
-        outfile = zFile;
-      }
-    }
-  }else
-
-  if( c=='r' && n>=3 && strncmp(azArg[0], "read", n)==0 ){
-    FILE *inSaved = in;
-    int savedLineno = lineno;
-    if( nArg!=2 ){
-      raw_printf(stderr, "Usage: .read FILE\n");
-      rc = 1;
-      goto meta_command_exit;
-    }
-    if( notNormalFile(azArg[1])
-     || (in = fopen(azArg[1], "rb"))==0
-    ){
-      utf8_printf(stderr,"Error: cannot open \"%s\"\n", azArg[1]);
-      rc = 1;
-    }else{
-      rc = process_input();
-      fclose(in);
-    }
-    in = inSaved;
-    lineno = savedLineno;
-  }else
-
-  if( c=='s' && strncmp(azArg[0], "schema", n)==0 ){
-    string sSelect;
-    char *zErrMsg = 0;
-    const char *zDiv = "(";
-    const char *zName = 0;
-    int bDebug = 0;
-    int ii;
-
-    open_db(0);
-
-    RenderMode mode = RenderMode::SEMI;
-    for(ii=1; ii<nArg; ii++){
-      if( optionMatch(azArg[ii],"indent") ){
-        mode = RenderMode::PRETTY;
-      }else if( optionMatch(azArg[ii],"debug") ){
-        bDebug = 1;
-      }else if( zName==0 ){
-        zName = azArg[ii];
-      }else{
-        raw_printf(stderr, "Usage: .schema ?--indent? ?LIKE-PATTERN?\n");
-        rc = 1;
-        goto meta_command_exit;
-      }
-    }
-  	auto renderer = GetRowRenderer(mode);
-  	renderer->show_header = false;
-    if( zDiv ){
-      appendText(sSelect, "SELECT sql FROM sqlite_master WHERE ", 0);
-      if( zName ){
-        char *zQarg = sqlite3_mprintf("%Q", zName);
-        int bGlob = strchr(zName, '*') != 0 || strchr(zName, '?') != 0 ||
-                    strchr(zName, '[') != 0;
-        if( strchr(zName, '.') ){
-          appendText(sSelect, "lower(printf('%s.%s',sname,tbl_name))", 0);
-        }else{
-          appendText(sSelect, "lower(tbl_name)", 0);
-        }
-        appendText(sSelect, bGlob ? " GLOB " : " LIKE ", 0);
-        appendText(sSelect, zQarg, 0);
-        if( !bGlob ){
-          appendText(sSelect, " ESCAPE '\\' ", 0);
-        }
-        appendText(sSelect, " AND ", 0);
-        sqlite3_free(zQarg);
-      }
-      appendText(sSelect, "type!='meta' AND sql IS NOT NULL"
-                           " ORDER BY name", 0);
-      if( bDebug ){
-        utf8_printf(out, "SQL: %s;\n", sSelect.c_str());
-      }else{
-        rc = sqlite3_exec(db, sSelect.c_str(), callback, renderer.get(), &zErrMsg);
-      }
-    }
-    if( zErrMsg ){
-      printDatabaseError(zErrMsg);
-      sqlite3_free(zErrMsg);
-      rc = 1;
-    }else if( rc != SQLITE_OK ){
-      raw_printf(stderr,"Error: querying schema information\n");
-      rc = 1;
-    }else{
-      rc = 0;
-    }
-  }else
-
 
 #ifndef SQLITE_NOHAVE_SYSTEM
   if( c=='s'
