@@ -186,6 +186,10 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	buffer_manager->sniffing = true;
 	// 1. Dialect Detection
 	DetectDialect();
+	if (buffer_manager->file_handle->compression_type != FileCompressionType::UNCOMPRESSED &&
+	    buffer_manager->IsBlockUnloaded(0)) {
+		buffer_manager->ResetBufferManager();
+	}
 	// 2. Type Detection
 	DetectTypes();
 	// 3. Type Refinement
