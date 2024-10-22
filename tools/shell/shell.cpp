@@ -5342,6 +5342,40 @@ MetadataResult ShowConfiguration(ShellState &state, const char **azArg, idx_t nA
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult ToggleTimer(ShellState &state, const char **azArg, idx_t nArg) {
+	enableTimer = booleanValue(azArg[1]);
+	if( enableTimer && !HAS_TIMER ){
+		raw_printf(stderr, "Error: timer not available on this system.\n");
+		enableTimer = 0;
+	}
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult ShowVersion(ShellState &state, const char **azArg, idx_t nArg) {
+    utf8_printf(state.out, "SQLite %s %s\n" /*extra-version-info*/,
+        sqlite3_libversion(), sqlite3_sourceid());
+#define CTIMEOPT_VAL_(opt) #opt
+#define CTIMEOPT_VAL(opt) CTIMEOPT_VAL_(opt)
+#if defined(__clang__) && defined(__clang_major__)
+    utf8_printf(state.out, "clang-" CTIMEOPT_VAL(__clang_major__) "."
+                    CTIMEOPT_VAL(__clang_minor__) "."
+                    CTIMEOPT_VAL(__clang_patchlevel__) "\n");
+#elif defined(_MSC_VER)
+    utf8_printf(state.out, "msvc-" CTIMEOPT_VAL(_MSC_VER) "\n");
+#elif defined(__GNUC__) && defined(__VERSION__)
+    utf8_printf(state.out, "gcc-" __VERSION__ "\n");
+#endif
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetWidths(ShellState &state, const char **azArg, idx_t nArg) {
+	state.colWidth.clear();
+	for(int j=1; j<nArg; j++){
+		state.colWidth.push_back((int)integerValue(azArg[j]));
+	}
+	return MetadataResult::SUCCESS;
+}
+
 static const MetadataCommand metadata_commands[] = {
 	{"backup", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
 	{"bail", 2, ToggleBail, "on|off", "Stop after hitting an error.  Default OFF", 3},
@@ -5384,6 +5418,10 @@ static const MetadataCommand metadata_commands[] = {
 	{"system", 0, RunShellCommand, "CMD ARGS...", "Run CMD ARGS... in a system shell", 0},
 
 	{"timeout", 0, nullptr, "", "", 5},
+	{"timer", 2, ToggleTimer, "on|off", "Turn SQL timer on or off", 0},
+	{"version", 1, ShowVersion, "", "Show the version", 0},
+	{"width", 0, SetWidths, "NUM1 NUM2 ...", "Set minimum column widths for columnar output", 0},
+
 	{ nullptr, 0, nullptr }
 };
 
@@ -5554,45 +5592,6 @@ int ShellState::do_meta_command(char *zLine){
 
     for(ii=0; ii<nRow; ii++) sqlite3_free(azResult[ii]);
     sqlite3_free(azResult);
-  }else
-
-  if( c=='t' && n>=5 && strncmp(azArg[0], "timer", n)==0 ){
-    if( nArg==2 ){
-      enableTimer = booleanValue(azArg[1]);
-      if( enableTimer && !HAS_TIMER ){
-        raw_printf(stderr, "Error: timer not available on this system.\n");
-        enableTimer = 0;
-      }
-    }else{
-      raw_printf(stderr, "Usage: .timer on|off\n");
-      rc = 1;
-    }
-  }else
-
-  if( c=='v' && strncmp(azArg[0], "version", n)==0 ){
-    utf8_printf(out, "SQLite %s %s\n" /*extra-version-info*/,
-        sqlite3_libversion(), sqlite3_sourceid());
-#if SQLITE_HAVE_ZLIB
-    utf8_printf(out, "zlib version %s\n", zlibVersion());
-#endif
-#define CTIMEOPT_VAL_(opt) #opt
-#define CTIMEOPT_VAL(opt) CTIMEOPT_VAL_(opt)
-#if defined(__clang__) && defined(__clang_major__)
-    utf8_printf(out, "clang-" CTIMEOPT_VAL(__clang_major__) "."
-                    CTIMEOPT_VAL(__clang_minor__) "."
-                    CTIMEOPT_VAL(__clang_patchlevel__) "\n");
-#elif defined(_MSC_VER)
-    utf8_printf(out, "msvc-" CTIMEOPT_VAL(_MSC_VER) "\n");
-#elif defined(__GNUC__) && defined(__VERSION__)
-    utf8_printf(out, "gcc-" __VERSION__ "\n");
-#endif
-  }else
-
-  if( c=='w' && strncmp(azArg[0], "width", n)==0 ){
-  	colWidth.clear();
-    for(int j=1; j<nArg; j++){
-      colWidth.push_back((int)integerValue(azArg[j]));
-    }
   }
 #if defined(_WIN32) || defined(WIN32)
   else if( c=='u' && strncmp(azArg[0], "utf8", n)==0 ){
@@ -6374,20 +6373,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
       i++;
     }else if( strcmp(z,"-memtrace")==0 ){
       i++;
-#ifdef SQLITE_ENABLE_SORTER_REFERENCES
-    }else if( strcmp(z,"-sorterref")==0 ){
-      i++;
-#endif
     }else if( strcmp(z,"-vfs")==0 ){
       i++;
-#ifdef SQLITE_ENABLE_VFSTRACE
-    }else if( strcmp(z,"-vfstrace")==0 ){
-      i++;
-#endif
-#ifdef SQLITE_ENABLE_MULTIPLEX
-    }else if( strcmp(z,"-multiplex")==0 ){
-      i++;
-#endif
     }else if( strcmp(z,"-help")==0 ){
       usage(1);
     }else if( strcmp(z,"-no-stdin")==0 ){
