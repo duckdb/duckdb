@@ -77,9 +77,6 @@ struct ShellState {
 	uint8_t autoExplain;        /* Automatically turn on .explain mode */
 	uint8_t openMode;           /* SHELL_OPEN_NORMAL, _APPENDVFS, or _ZIPFILE */
 	uint8_t doXdgOpen;          /* Invoke start/open/xdg-open in output_reset() */
-	uint8_t nEqpLevel;          /* Depth of the EQP output graph */
-	uint8_t eTraceType;         /* SHELL_TRACE_* value for type of trace */
-	unsigned mEqpLines;         /* Mask of veritical lines in the EQP output graph */
 	int outCount;               /* Revert to stdout when reaching zero */
 	int lineno;                 /* Line number of last line read from in */
 	int openFlags;              /* Additional flags to open.  (SQLITE_OPEN_NOFOLLOW) */
@@ -91,9 +88,7 @@ struct ShellState {
 	RenderMode modePrior;       /* Saved mode */
 	RenderMode cMode;           /* temporary output mode for the current query */
 	RenderMode normalMode;      /* Output mode before ".explain on" */
-	int writableSchema;         /* True if PRAGMA writable_schema=ON */
 	int showHeader;             /* True to show column names in List or Column mode */
-	int nCheck;                 /* Number of ".check" commands run */
 	unsigned nProgress;         /* Number of progress callbacks encountered */
 	unsigned mxProgress;        /* Maximum progress callbacks before failing */
 	unsigned flgProgress;       /* Flags for the progress callback */
@@ -102,7 +97,6 @@ struct ShellState {
 	int64_t szMax;              /* --maxsize argument to .open */
 	char *zDestTable;           /* Name of destination table when RenderMode::Insert */
 	char *zTempFile;            /* Temporary file that might need deleting */
-	char zTestcase[30];         /* Name of current test case */
 	char colSeparator[20];      /* Column separator character for several modes */
 	char rowSeparator[20];      /* Row separator character for RenderMode::Ascii */
 	char colSepPrior[20];       /* Saved column separator */

@@ -2279,12 +2279,6 @@ int sqlite3_fileio_init(
 #define SHELL_OPEN_DESERIALIZE 5      /* Open using sqlite3_deserialize() */
 #define SHELL_OPEN_HEXDB       6      /* Use "dbtotxt" output as data source */
 
-/* Allowed values for ShellState.eTraceType
-*/
-#define SHELL_TRACE_PLAIN      0      /* Show input SQL text */
-#define SHELL_TRACE_EXPANDED   1      /* Show expanded SQL text */
-#define SHELL_TRACE_NORMALIZED 2      /* Show normalized SQL text */
-
 /* Bits in the ShellState.flgProgress variable */
 #define SHELL_PROGRESS_QUIET 0x01  /* Omit announcing every progress callback */
 #define SHELL_PROGRESS_RESET 0x02  /* Reset the count when the progres
@@ -3510,10 +3504,6 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed){
     return 0;
   }else if( strncmp(zSql, "CREATE VIRTUAL TABLE", 20)==0 ){
     char *zIns;
-    if( !p->writableSchema ){
-      raw_printf(p->out, "PRAGMA writable_schema=ON;\n");
-      p->writableSchema = 1;
-    }
     zIns = sqlite3_mprintf(
        "INSERT INTO sqlite_schema(type,name,tbl_name,rootpage,sql)"
        "VALUES('table','%q','%q',0,'%q');",
@@ -4749,12 +4739,7 @@ int ShellState::do_meta_command(char *zLine){
     ** which causes immediate foreign key constraints to be violated.
     ** So disable foreign-key constraint enforcement to prevent problems. */
     raw_printf(out, "BEGIN TRANSACTION;\n");
-    writableSchema = 0;
     showHeader = 0;
-    /* Set writable_schema=ON since doing so forces SQLite to initialize
-    ** as much of the schema as it can even if the sqlite_schema table is
-    ** corrupt. */
-    sqlite3_exec(db, "SAVEPOINT dump; PRAGMA writable_schema=ON", 0, 0, 0);
     nErr = 0;
     if( zLike==0 ) zLike = sqlite3_mprintf("true");
     zSql = sqlite3_mprintf(
@@ -4775,12 +4760,6 @@ int ShellState::do_meta_command(char *zLine){
     run_table_dump_query(zSql);
     sqlite3_free(zSql);
     sqlite3_free(zLike);
-    if( writableSchema ){
-      raw_printf(out, "PRAGMA writable_schema=OFF;\n");
-      writableSchema = 0;
-    }
-    sqlite3_exec(db, "PRAGMA writable_schema=OFF;", 0, 0, 0);
-    sqlite3_exec(db, "RELEASE dump;", 0, 0, 0);
     raw_printf(out, nErr?"ROLLBACK; -- due to errors\n":"COMMIT;\n");
     showHeader = savedShowHeader;
     shellFlgs = savedShellFlags;
