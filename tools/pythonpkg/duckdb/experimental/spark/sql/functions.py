@@ -1091,7 +1091,7 @@ def endswith(str: "ColumnOrName", suffix: "ColumnOrName") -> Column:
     |          true|         false|
     +--------------+--------------+
     """
-    return _invoke_function_over_columns("ends_with", str, suffix)
+    return _invoke_function_over_columns("suffix", str, suffix)
 
 
 def startswith(str: "ColumnOrName", prefix: "ColumnOrName") -> Column:
