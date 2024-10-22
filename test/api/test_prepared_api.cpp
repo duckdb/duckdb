@@ -13,6 +13,10 @@ TEST_CASE("Test prepared statements API", "[api]") {
 	// prepare no statements
 	REQUIRE_FAIL(con.Prepare(""));
 
+	// PrepareAndExecute with no values
+	duckdb::vector<Value> values;
+	REQUIRE_FAIL(con.PrepareAndExecute("", values, false));
+
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a (i TINYINT)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO a VALUES (11), (12), (13)"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(s VARCHAR)"));
@@ -47,6 +51,10 @@ TEST_CASE("Test prepared statements API", "[api]") {
 	result = prepare->Execute(13);
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	REQUIRE(prepare->named_param_map.size() == 1);
+
+	duckdb::vector<Value> values_2 = {12};
+	result = con.PrepareAndExecute("SELECT COUNT(*) FROM a WHERE i=$1", values_2, false);
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
 
 TEST_CASE("Test type resolution of function with parameter expressions", "[api]") {

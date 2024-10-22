@@ -103,6 +103,14 @@ public:
 	//! Prepare the specified statement, returning a prepared statement object
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(unique_ptr<SQLStatement> statement);
 
+	//! Runs prepare and execute in single transaction
+	DUCKDB_API unique_ptr<QueryResult> PrepareAndExecute(const string &query, vector<Value> &values,
+	                                                     bool allow_stream_result);
+	DUCKDB_API unique_ptr<QueryResult> PrepareAndExecute(unique_ptr<SQLStatement> statement, vector<Value> &values,
+	                                                     bool allow_stream_result = false);
+	DUCKDB_API unique_ptr<QueryResult> PrepareAndExecute(unique_ptr<SQLStatement> statement,
+	                                                     case_insensitive_map_t<BoundParameterData> &named_values,
+	                                                     bool allow_stream_result);
 	//! Get the table info of a specific table, or nullptr if it cannot be found.
 	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &database_name, const string &schema_name,
 	                                                  const string &table_name);

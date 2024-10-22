@@ -4,6 +4,6 @@ if(NOT SUN AND BUILD_SHELL)
 endif()
 
 # Just to make CLion aware of the python package for development purposes
-if(BUILD_PYTHON_PKG)
-  add_subdirectory(pythonpkg)
-endif()
+# if(BUILD_PYTHON_PKG)
+add_subdirectory(pythonpkg)
+# endif()

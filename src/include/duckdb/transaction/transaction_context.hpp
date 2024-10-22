@@ -55,9 +55,13 @@ public:
 	void ResetActiveQuery();
 	void SetActiveQuery(transaction_t query_number);
 
+	bool open_autocommit_transaction = false;
+
 private:
 	ClientContext &context;
 	bool auto_commit;
+	// When true, auto-commit transactions are not automatically committed on query end
+	bool requires_explicit_auto_commit;
 
 	unique_ptr<MetaTransaction> current_transaction;
 

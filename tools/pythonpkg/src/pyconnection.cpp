@@ -511,6 +511,24 @@ py::list TransformNamedParameters(const case_insensitive_map_t<idx_t> &named_par
 	return new_params;
 }
 
+case_insensitive_map_t<BoundParameterData> TransformPreparedParameters(const py::object &params) {
+	case_insensitive_map_t<BoundParameterData> named_values;
+	if (py::is_list_like(params)) {
+		auto unnamed_values = DuckDBPyConnection::TransformPythonParamList(params);
+		for (idx_t i = 0; i < unnamed_values.size(); i++) {
+			auto &value = unnamed_values[i];
+			auto identifier = std::to_string(i + 1);
+			named_values[identifier] = BoundParameterData(std::move(value));
+		}
+	} else if (py::is_dict_like(params)) {
+		auto dict = py::cast<py::dict>(params);
+		named_values = DuckDBPyConnection::TransformPythonParamDict(dict);
+	} else {
+		throw InvalidInputException("Prepared parameters can only be passed as a list or a dictionary");
+	}
+	return named_values;
+}
+
 case_insensitive_map_t<BoundParameterData> TransformPreparedParameters(PreparedStatement &prep,
                                                                        const py::object &params) {
 	case_insensitive_map_t<BoundParameterData> named_values;
@@ -580,6 +598,28 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(PreparedStatement &p
 	return res;
 }
 
+unique_ptr<QueryResult> DuckDBPyConnection::PrepareAndExecuteInternal(unique_ptr<SQLStatement> statement,
+                                                                      py::object params) {
+	if (params.is_none()) {
+		params = py::list();
+	}
+
+	auto named_values = TransformPreparedParameters(params);
+
+	unique_ptr<QueryResult> res;
+	{
+		D_ASSERT(py::gil_check());
+		py::gil_scoped_release release;
+		unique_lock<std::mutex> lock(py_connection_lock);
+
+		res = con.GetConnection().PrepareAndExecute(std::move(statement), named_values, true);
+		if (res->HasError()) {
+			res->ThrowError();
+		}
+	}
+	return res;
+}
+
 vector<unique_ptr<SQLStatement>> DuckDBPyConnection::GetStatements(const py::object &query) {
 	vector<unique_ptr<SQLStatement>> result;
 	auto &connection = con.GetConnection();
@@ -616,8 +656,14 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const py::object &que
 	// FIXME: SQLites implementation says to not accept an 'execute' call with multiple statements
 	ExecuteImmediately(std::move(statements));
 
-	auto prep = PrepareQuery(std::move(last_statement));
-	auto res = ExecuteInternal(*prep, std::move(params));
+	// FIXME: use PrepareAndExecute for all
+	unique_ptr<QueryResult> res;
+	if (params.is_none() || ((py::is_list_like(params) && py::is_dict_like(params)) && py::len(params) == 0)) {
+		res = PrepareAndExecuteInternal(std::move(last_statement), std::move(params));
+	} else {
+		auto prep = PrepareQuery(std::move(last_statement));
+		res = ExecuteInternal(*prep, std::move(params));
+	}
 
 	// Set the internal 'result' object
 	if (res) {
@@ -1467,8 +1513,15 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const py::object &quer
 
 	if (!relation) {
 		// Could not create a relation, resort to direct execution
-		auto prep = PrepareQuery(std::move(last_statement));
-		auto res = ExecuteInternal(*prep, std::move(params));
+		// FIXME: use PrepareAndExecute for all
+		unique_ptr<QueryResult> res;
+		if (params.is_none() || ((py::is_list_like(params) && py::is_dict_like(params)) && py::len(params) == 0)) {
+			res = PrepareAndExecuteInternal(std::move(last_statement), std::move(params));
+		} else {
+			auto prep = PrepareQuery(std::move(last_statement));
+			res = ExecuteInternal(*prep, std::move(params));
+		}
+
 		if (!res) {
 			return nullptr;
 		}

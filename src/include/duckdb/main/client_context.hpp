@@ -29,6 +29,7 @@
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
+#include "duckdb/parser/parsed_data/transaction_info.hpp"
 
 namespace duckdb {
 class Appender;
@@ -142,6 +143,13 @@ public:
 	//! Directly prepare a SQL statement
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(unique_ptr<SQLStatement> statement);
 
+	DUCKDB_API unique_ptr<QueryResult> PrepareAndExecute(unique_ptr<SQLStatement> statement,
+	                                                     case_insensitive_map_t<BoundParameterData> &values,
+	                                                     bool allow_stream_result = true);
+	DUCKDB_API unique_ptr<QueryResult> PrepareAndExecute(const string &query,
+	                                                     case_insensitive_map_t<BoundParameterData> &values,
+	                                                     bool allow_stream_result = true);
+
 	//! Create a pending query result from a prepared statement with the given name and set of parameters
 	//! It is possible that the prepared statement will be re-bound. This will generally happen if the catalog is
 	//! modified in between the prepared statement being bound and the prepared statement being run.
@@ -174,10 +182,12 @@ public:
 	//! Runs a function with a valid transaction context, potentially starting a transaction if the context is in auto
 	//! commit mode.
 	DUCKDB_API void RunFunctionInTransaction(const std::function<void(void)> &fun,
-	                                         bool requires_valid_transaction = true);
+	                                         bool requires_valid_transaction = true,
+	                                         bool dont_commit_on_success = false);
 	//! Same as RunFunctionInTransaction, but does not obtain a lock on the client context or check for validation
 	DUCKDB_API void RunFunctionInTransactionInternal(ClientContextLock &lock, const std::function<void(void)> &fun,
-	                                                 bool requires_valid_transaction = true);
+	                                                 bool requires_valid_transaction = true,
+	                                                 bool dont_commit_on_success = false);
 
 	//! Equivalent to CURRENT_SETTING(key) SQL function.
 	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const std::string &key, Value &result) const;
@@ -247,7 +257,11 @@ private:
 	unique_ptr<QueryResult> RunStatementInternal(ClientContextLock &lock, const string &query,
 	                                             unique_ptr<SQLStatement> statement, bool allow_stream_result,
 	                                             bool verify = true);
-	unique_ptr<PreparedStatement> PrepareInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement);
+	unique_ptr<PreparedStatement> PrepareInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
+	                                              bool leave_autocommit_open = false);
+	unique_ptr<QueryResult> PrepareAndExecuteInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
+	                                                  case_insensitive_map_t<BoundParameterData> &values,
+	                                                  bool allow_stream_result);
 	void LogQueryInternal(ClientContextLock &lock, const string &query);
 
 	unique_ptr<QueryResult> FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending);

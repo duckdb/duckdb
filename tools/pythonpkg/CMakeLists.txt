@@ -2,10 +2,7 @@ include_directories(src)
 include_directories(../../)
 include_directories(src/include)
 
-find_package(PythonLibs)
-if(NOT PythonLibs_FOUND)
-  return()
-endif()
+# find_package(PythonLibs) if(NOT PythonLibs_FOUND) return() endif()
 
 find_package(pybind11)
 if(NOT pybind11_FOUND)

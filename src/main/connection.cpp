@@ -148,12 +148,35 @@ unique_ptr<PreparedStatement> Connection::Prepare(unique_ptr<SQLStatement> state
 	return context->Prepare(std::move(statement));
 }
 
-unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, vector<Value> &values) {
-	auto statement = Prepare(query);
-	if (statement->HasError()) {
-		return make_uniq<MaterializedQueryResult>(statement->error);
+unique_ptr<QueryResult> Connection::PrepareAndExecute(const string &query, vector<Value> &values,
+                                                      bool allow_stream_result) {
+	case_insensitive_map_t<BoundParameterData> named_values;
+	for (idx_t i = 0; i < values.size(); i++) {
+		auto &val = values[i];
+		named_values[std::to_string(i + 1)] = BoundParameterData(val);
 	}
-	return statement->Execute(values, false);
+	return context->PrepareAndExecute(query, named_values, allow_stream_result);
+}
+
+unique_ptr<QueryResult> Connection::PrepareAndExecute(unique_ptr<SQLStatement> statement, vector<Value> &values,
+                                                      bool allow_stream_result) {
+	case_insensitive_map_t<BoundParameterData> named_values;
+	for (idx_t i = 0; i < values.size(); i++) {
+		auto &val = values[i];
+		named_values[std::to_string(i + 1)] = BoundParameterData(val);
+	}
+	return context->PrepareAndExecute(std::move(statement), named_values, allow_stream_result);
+}
+
+unique_ptr<QueryResult> Connection::PrepareAndExecute(unique_ptr<SQLStatement> statement,
+                                                      case_insensitive_map_t<BoundParameterData> &named_values,
+                                                      bool allow_stream_result) {
+	return context->PrepareAndExecute(std::move(statement), named_values, allow_stream_result);
+}
+
+unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, vector<Value> &values) {
+
+	return PrepareAndExecute(query, values, false);
 }
 
 unique_ptr<TableDescription> Connection::TableInfo(const string &database_name, const string &schema_name,

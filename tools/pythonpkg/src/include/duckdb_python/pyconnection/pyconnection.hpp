@@ -233,6 +233,8 @@ public:
 	void ExecuteImmediately(vector<unique_ptr<SQLStatement>> statements);
 	unique_ptr<PreparedStatement> PrepareQuery(unique_ptr<SQLStatement> statement);
 	unique_ptr<QueryResult> ExecuteInternal(PreparedStatement &prep, py::object params = py::list());
+	unique_ptr<QueryResult> PrepareAndExecuteInternal(unique_ptr<SQLStatement> statement,
+	                                                  py::object params = py::list());
 
 	shared_ptr<DuckDBPyConnection> Execute(const py::object &query, py::object params = py::list());
 	shared_ptr<DuckDBPyConnection> ExecuteFromString(const string &query);
