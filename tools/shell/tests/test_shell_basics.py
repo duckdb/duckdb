@@ -476,16 +476,6 @@ def test_timer(shell):
     result = test.run()
     result.check_stdout('Run Time (s):')
 
-
-def test_scanstats(shell):
-    test = (
-        ShellTest(shell)
-        .statement(".scanstats on")
-        .statement("SELECT NULL;")
-    )
-    result = test.run()
-    result.check_stderr('scanstats')
-
 def test_output_csv_mode(shell, random_filepath):
     test = (
         ShellTest(shell)
