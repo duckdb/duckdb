@@ -4425,7 +4425,7 @@ void ShellState::newTempFile(const char *zSuffix){
 
 enum class MetadataResult : uint8_t {
 	SUCCESS = 0,
-	ERROR = 1,
+	FAIL = 1,
 	EXIT = 2,
 	PRINT_USAGE = 3
 };
@@ -4466,7 +4466,7 @@ MetadataResult ChangeDirectory(ShellState &state, const char **azArg, idx_t nArg
 #endif
 	if( rc ){
 		utf8_printf(stderr, "Cannot change to directory \"%s\"\n", azArg[1]);
-		return MetadataResult::ERROR;
+		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
 }
@@ -4488,7 +4488,7 @@ MetadataResult ShowDatabases(ShellState &state, const char **azArg, idx_t nArg) 
 	if( zErrMsg ){
 		printDatabaseError(zErrMsg);
 		sqlite3_free(zErrMsg);
-		return MetadataResult::ERROR;
+		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
 }
@@ -4510,7 +4510,7 @@ MetadataResult DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
         {
           raw_printf(stderr, "Unknown option \"%s\" on \".dump\"\n", azArg[i]);
           sqlite3_free(zLike);
-			return MetadataResult::ERROR;
+			return MetadataResult::FAIL;
         }
       }else if( zLike ){
         zLike = sqlite3_mprintf("%z OR name LIKE %Q ESCAPE '\\'",
@@ -4703,7 +4703,7 @@ MetadataResult SetOutputMode(ShellState &state, const char **azArg, idx_t nArg) 
       raw_printf(state.out, "current output mode: %s\n", modeDescr[int(state.mode)]);
 	} else {
 		if (!state.SetOutputMode(azArg[1], nArg > 2 ? azArg[2] : nullptr)) {
-			return MetadataResult::ERROR;
+			return MetadataResult::FAIL;
 		}
 	}
 	return MetadataResult::SUCCESS;
@@ -4980,7 +4980,7 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 
 MetadataResult ImportData(ShellState &state, const char **azArg, idx_t nArg) {
 	if (!state.ImportData(azArg, nArg)) {
-		return MetadataResult::ERROR;
+		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
 }
@@ -5032,7 +5032,7 @@ bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
 
 MetadataResult OpenDatabase(ShellState &state, const char **azArg, idx_t nArg) {
 	if (!state.OpenDatabase(azArg, nArg)) {
-		return MetadataResult::ERROR;
+		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
 }
@@ -5176,21 +5176,21 @@ bool ShellState::SetOutputFile(const char **azArg, idx_t nArg, char output_mode)
 
 MetadataResult SetOutput(ShellState &state, const char **azArg, idx_t nArg) {
     if (!state.SetOutputFile(azArg, nArg, '\0')) {
-		return MetadataResult::ERROR;
+		return MetadataResult::FAIL;
     }
 	return MetadataResult::SUCCESS;
 }
 
 MetadataResult SetOutputOnce(ShellState &state, const char **azArg, idx_t nArg) {
 	if (!state.SetOutputFile(azArg, nArg, 'o')) {
-		return MetadataResult::ERROR;
+		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
 }
 
 MetadataResult SetOutputExcel(ShellState &state, const char **azArg, idx_t nArg) {
 	if (!state.SetOutputFile(azArg, nArg, 'e')) {
-		return MetadataResult::ERROR;
+		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
 }
@@ -5215,7 +5215,7 @@ bool ShellState::ReadFromFile(const string &file) {
 
 MetadataResult ReadFromFile(ShellState &state, const char **azArg, idx_t nArg) {
 	if (!state.ReadFromFile(azArg[1])) {
-		return MetadataResult::ERROR;
+		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
 }
@@ -5287,7 +5287,7 @@ bool ShellState::DisplaySchemas(const char **azArg, idx_t nArg) {
 
 MetadataResult DisplaySchemas(ShellState &state, const char **azArg, idx_t nArg) {
 	if (!state.DisplaySchemas(azArg, nArg)) {
-		return MetadataResult::ERROR;
+		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
 }
@@ -5411,7 +5411,7 @@ MetadataResult ShellState::DisplayEntries(const char **azArg, idx_t nArg, char t
 //    rc = sqlite3_finalize(pStmt);
     appendText(s, " ORDER BY 1", 0);
     int rc = sqlite3_prepare_v2(db, s.c_str(), -1, &pStmt, 0);
-    if( rc ) return MetadataResult::ERROR;
+    if( rc ) return MetadataResult::FAIL;
 
     /* Run the SQL statement prepared by the above block. Store the results
     ** as an array of nul-terminated strings in azResult[].  */
@@ -5463,7 +5463,7 @@ MetadataResult ShellState::DisplayEntries(const char **azArg, idx_t nArg, char t
 
     for(ii=0; ii<nRow; ii++) sqlite3_free(azResult[ii]);
     sqlite3_free(azResult);
-	return rc == 0 ? MetadataResult::SUCCESS : MetadataResult::ERROR;
+	return rc == 0 ? MetadataResult::SUCCESS : MetadataResult::FAIL;
 }
 
 MetadataResult ShowIndexes(ShellState &state, const char **azArg, idx_t nArg) {
@@ -5593,13 +5593,13 @@ int ShellState::do_meta_command(char *zLine){
 		MetadataResult result = MetadataResult::PRINT_USAGE;
 		if (!command.callback) {
 			raw_printf(stderr, "Command \"%s\" is unsupported in the current version of the CLI\n", command.command);
-			result = MetadataResult::ERROR;
+			result = MetadataResult::FAIL;
 		} else if (command.argument_count == 0 || command.argument_count == nArg) {
 			result = command.callback(*this, (const char **) azArg, nArg);
 		}
 		if (result == MetadataResult::PRINT_USAGE) {
 			raw_printf(stderr, "Usage: .%s %s\n", command.command, command.usage);
-			result = MetadataResult::ERROR;
+			result = MetadataResult::FAIL;
 		}
 		rc = int(result);
 		break;
