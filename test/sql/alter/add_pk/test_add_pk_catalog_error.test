@@ -37,7 +37,7 @@ ALTER TABLE uniq ADD PRIMARY KEY (i)
 statement error
 INSERT INTO uniq VALUES (1, 101)
 ----
-<REGEX>:Constraint Error.*Duplicate key "i: 1" violates primary key constraint.*
+<REGEX>:Constraint Error.*Duplicate key "i: 1" violates.*constraint.*
 
 statement error
 INSERT INTO uniq VALUES (NULL, 100)

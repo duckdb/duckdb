@@ -22,6 +22,7 @@
 #include "duckdb/transaction/local_storage.hpp"
 
 namespace duckdb {
+
 class BoundForeignKeyConstraint;
 class ClientContext;
 class ColumnDataCollection;
@@ -239,7 +240,7 @@ public:
 private:
 	//! AddAndCreateIndex initializes an index both for the global and local table storage.
 	//! Then, it scans both the global and local storage, and appends the respective values to the index.
-	void AddAndCreateIndex(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint);
+	void AddAndCreateIndex(LocalStorage &local_storage, DataTable &parent, BoundConstraint &constraint);
 
 	//! Verify the new added constraints against current persistent&local data
 	void VerifyNewConstraint(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint);

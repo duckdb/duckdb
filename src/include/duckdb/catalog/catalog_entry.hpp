@@ -18,17 +18,23 @@
 #include <memory>
 
 namespace duckdb {
-struct AlterInfo;
+
 class Catalog;
+class CatalogEntry;
 class CatalogSet;
 class ClientContext;
+class Deserializer;
 class SchemaCatalogEntry;
 class Serializer;
-class Deserializer;
 class Value;
 
+struct AlterInfo;
 struct CatalogTransaction;
 struct CreateInfo;
+struct FunctionData;
+
+//! Additional steps prior to rolling back a catalog entry.
+typedef void (*rollback_catalog_entry_t)(CatalogEntry &rollback_entry, CatalogEntry &entry);
 
 //! Abstract base class of an entry in the catalog
 class CatalogEntry {
@@ -57,6 +63,8 @@ public:
 	Value comment;
 	//! (optional) extra data associated with this entry
 	unordered_map<string, string> tags;
+	//! (optional) function to clean up the catalog entry during ROLLBACK.
+	rollback_catalog_entry_t rollback;
 
 private:
 	//! Child entry

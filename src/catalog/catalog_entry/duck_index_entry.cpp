@@ -9,20 +9,25 @@ IndexDataTableInfo::IndexDataTableInfo(shared_ptr<DataTableInfo> info_p, const s
     : info(std::move(info_p)), index_name(index_name_p) {
 }
 
-IndexDataTableInfo::~IndexDataTableInfo() {
-	if (!info) {
+void RollbackDuckIndexEntry(CatalogEntry &rollback_entry, CatalogEntry &) {
+	auto &index_entry = rollback_entry.Cast<DuckIndexEntry>();
+	if (!index_entry.info) {
 		return;
 	}
-	// FIXME: this should happen differently.
-	info->GetIndexes().RemoveIndex(index_name);
+	if (!index_entry.info->info) {
+		return;
+	}
+	index_entry.info->info->GetIndexes().RemoveIndex(index_entry.name);
 }
 
 DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &create_info,
                                TableCatalogEntry &table_p)
     : IndexCatalogEntry(catalog, schema, create_info), initial_index_size(0) {
+
 	auto &table = table_p.Cast<DuckTableEntry>();
 	auto &storage = table.GetStorage();
 	info = make_shared_ptr<IndexDataTableInfo>(storage.GetDataTableInfo(), name);
+	rollback = RollbackDuckIndexEntry;
 }
 
 DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &create_info,

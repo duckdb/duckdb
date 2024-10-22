@@ -781,6 +781,26 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropForeignKeyConstraint(ClientContext 
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
 }
 
+void RollbackAddIndex(CatalogEntry &rollback_entry, CatalogEntry &entry) {
+	auto &rollback_table = rollback_entry.Cast<DuckTableEntry>();
+	auto &table = entry.Cast<DuckTableEntry>();
+
+	auto &info = table.GetStorage().GetDataTableInfo();
+	auto &indexes = info->GetIndexes();
+
+	// Find all index-based constraints that exist in rollback_table, but not in table.
+	unordered_set<string> names;
+	for (const auto &constraint : rollback_table.GetConstraints()) {
+		if (constraint->type != ConstraintType::UNIQUE) {
+			continue;
+		}
+		const auto &unique = constraint->Cast<UniqueConstraint>();
+		if (unique.IsPrimaryKey()) {
+			indexes.RemoveIndex(constraint->info.name);
+		}
+	}
+}
+
 unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, AddConstraintInfo &info) {
 	auto create_info = make_uniq<CreateTableInfo>(schema, name);
 	create_info->comment = comment;
@@ -791,30 +811,46 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 		create_info->constraints.push_back(constraint->Copy());
 	}
 
-	switch (info.constraint->type) {
-	case ConstraintType::UNIQUE: {
-		const auto unique = info.constraint->Cast<UniqueConstraint>();
+	bool set_add_index_rollback = false;
+	if (info.constraint->type == ConstraintType::UNIQUE) {
+		const auto &unique = info.constraint->Cast<UniqueConstraint>();
+		const auto existing_pk = GetPrimaryKey();
 
-		const auto existing_primary_key = GetPrimaryKey();
-		if (unique.is_primary_key && existing_primary_key) {
-			auto existing_name = existing_primary_key->ToString();
+		if (unique.is_primary_key && existing_pk) {
+			auto existing_name = existing_pk->ToString();
 			throw CatalogException("table \"%s\" can have only one primary key: %s", name, existing_name);
 		}
-
 		create_info->constraints.push_back(info.constraint->Copy());
-		break;
-	}
-	default:
-		throw InternalException("Unsupported constraint type in ALTER TABLE statement!");
+
+		if (unique.is_primary_key) {
+			set_add_index_rollback = true;
+		}
+	} else {
+		throw InternalException("unsupported constraint type in ALTER TABLE statement");
 	}
 
+	// We create a physical table with a new constraint and a new unique index.
 	const auto binder = Binder::CreateBinder(context);
-	// We need to create a new physical table with a new constraint and a new unique index.
 	const auto bound_constraint = binder->BindConstraint(*info.constraint, create_info->table, create_info->columns);
 	const auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
 
 	auto new_storage = make_shared_ptr<DataTable>(context, *storage, *bound_constraint);
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
+	auto new_entry = make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
+
+	if (set_add_index_rollback) {
+		new_entry->rollback = RollbackAddIndex;
+		for (auto &constraint : new_entry->GetConstraints()) {
+			if (constraint->type != ConstraintType::UNIQUE) {
+				continue;
+			}
+			auto &unique = constraint->Cast<UniqueConstraint>();
+			if (unique.IsPrimaryKey()) {
+				auto bound_unique = bound_constraint->Cast<BoundUniqueConstraint>();
+				unique.info = bound_unique.info;
+			}
+		}
+	}
+	return std::move(new_entry);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::Copy(ClientContext &context) const {

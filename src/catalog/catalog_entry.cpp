@@ -11,7 +11,7 @@ namespace duckdb {
 
 CatalogEntry::CatalogEntry(CatalogType type, string name_p, idx_t oid)
     : oid(oid), type(type), set(nullptr), name(std::move(name_p)), deleted(false), temporary(false), internal(false),
-      parent(nullptr) {
+      rollback(nullptr), parent(nullptr) {
 }
 
 CatalogEntry::CatalogEntry(CatalogType type, Catalog &catalog, string name_p)

@@ -29,13 +29,13 @@
 
 namespace duckdb {
 
-IndexStorageInfo GetIndexInfo(const IndexConstraintType &type, const string &table_name, const column_defs_t &columns) {
+IndexStorageInfo GetIndexInfo(IndexConstraintType type, const string &table, const column_defs_t &columns) {
 	auto name = EnumUtil::ToString(type);
 	string column_names;
 	for (const auto &col : columns) {
 		column_names += "_" + col.get().Name();
 	}
-	return IndexStorageInfo(name + "_" + table_name + column_names);
+	return IndexStorageInfo(name + "_" + table + column_names);
 }
 
 DataTableInfo::DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, string schema,
@@ -49,10 +49,6 @@ void DataTableInfo::InitializeIndexes(ClientContext &context, const char *index_
 
 bool DataTableInfo::IsTemporary() const {
 	return db.IsTemporary();
-}
-
-unique_ptr<DataTableInfo> DataTableInfo::Copy() {
-	return make_uniq<DataTableInfo>(db, table_io_manager, schema, table);
 }
 
 DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, const string &schema,
@@ -147,14 +143,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint &constraint)
-    : db(parent.db), row_groups(parent.row_groups), is_root(true) {
-
+    : db(parent.db), info(parent.info), row_groups(parent.row_groups), is_root(true) {
 	// ALTER COLUMN to add a new constraint.
-
-	// Clone data table info and index storage info.
-	// Otherwise, when adding a UNIQUE constraint, we modify the previous instance,
-	// causing changes to persist even when rolling back.
-	info = parent.info->Copy();
 
 	// Clone the storage info vector or the table.
 	for (const auto &index_info : parent.info->index_storage_infos) {
@@ -675,7 +665,7 @@ void DataTable::VerifyNewConstraint(LocalStorage &local_storage, DataTable &pare
 	local_storage.VerifyNewConstraint(parent, constraint);
 }
 
-void DataTable::AddAndCreateIndex(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint) {
+void DataTable::AddAndCreateIndex(LocalStorage &local_storage, DataTable &parent, BoundConstraint &constraint) {
 	if (!IsRoot()) {
 		throw TransactionException("cannot add an index to a table that has been altered");
 	}
@@ -689,12 +679,12 @@ void DataTable::AddAndCreateIndex(LocalStorage &local_storage, DataTable &parent
 		columns.push_back(column_definitions[key.index]);
 	}
 
-	auto index_info = unique.info;
 	auto initialize_data = false;
 	if (!unique.info.IsValid()) {
-		index_info = GetIndexInfo(constraint_type, info->table, columns);
+		unique.info = GetIndexInfo(constraint_type, info->table, columns);
 		initialize_data = true;
 	}
+	D_ASSERT(!unique.info.name.empty());
 
 	// Fetch the column types and create bound column reference expressions.
 	vector<column_t> column_ids;
@@ -711,8 +701,8 @@ void DataTable::AddAndCreateIndex(LocalStorage &local_storage, DataTable &parent
 
 	// Create the global index.
 	auto &io_manager = TableIOManager::Get(*this);
-	auto global_art = make_uniq<ART>(index_info.name, constraint_type, column_ids, io_manager,
-	                                 std::move(global_expressions), db, nullptr, index_info);
+	auto global_art = make_uniq<ART>(unique.info.name, constraint_type, column_ids, io_manager,
+	                                 std::move(global_expressions), db, nullptr, unique.info);
 
 	// If this is a WAL replay, then we only create the global index and return.
 	if (!initialize_data) {
@@ -724,8 +714,8 @@ void DataTable::AddAndCreateIndex(LocalStorage &local_storage, DataTable &parent
 	AddIndex(std::move(global_art));
 
 	// Otherwise, we also create the local index.
-	auto local_art = make_uniq<ART>(index_info.name, constraint_type, column_ids, io_manager,
-	                                std::move(local_expressions), db, nullptr, index_info);
+	auto local_art =
+	    make_uniq<ART>(unique.info.name, constraint_type, column_ids, io_manager, std::move(local_expressions), db);
 	local_storage.AppendToIndex(parent, *local_art);
 	local_storage.AddIndex(parent, std::move(local_art));
 }

@@ -105,6 +105,7 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
 		case CatalogType::INDEX_ENTRY: {
 			auto &index_entry = entry.Cast<DuckIndexEntry>();
 			index_entry.CommitDrop();
+			index_entry.GetDataTableInfo().GetIndexes().RemoveIndex(index_entry.name);
 			break;
 		}
 		default:
