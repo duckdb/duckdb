@@ -225,19 +225,23 @@ private:
 	static TemporaryCompressionLevel MaximumCompressionLevel();
 
 private:
+	//! The value to initialize the atomic write counters to
+	static constexpr int64_t INITIAL_NS = 50000;
 	//! How many compression levels we adapt between
 	static constexpr idx_t LEVELS = 6;
 	//! Bias towards compressed writes: we only choose uncompressed if it is more than 2x faster than compressed
 	static constexpr double DURATION_RATIO_THRESHOLD = 2.0;
 	//! Probability to deviate from the current best write behavior (1 in 20)
 	static constexpr double COMPRESSION_DEVIATION = 0.5;
+	//! Weight to use for moving weighted average
+	static constexpr int64_t WEIGHT = 16;
 
 	//! Random engine to (sometimes) randomize compression
 	RandomEngine random_engine;
 	//! Duration of the last uncompressed write
-	atomic<int64_t> last_uncompressed_write_ns;
+	int64_t last_uncompressed_write_ns;
 	//! Duration of the last compressed writes
-	atomic<int64_t> last_compressed_writes_ns[LEVELS];
+	int64_t last_compressed_writes_ns[LEVELS];
 };
 
 //===--------------------------------------------------------------------===//

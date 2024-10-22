@@ -327,9 +327,9 @@ void TemporaryFileMap::EraseFile(const TemporaryFileIdentifier &identifier) {
 //===--------------------------------------------------------------------===//
 // TemporaryFileCompressionLevel/TemporaryFileCompressionAdaptivity
 //===--------------------------------------------------------------------===//
-TemporaryFileCompressionAdaptivity::TemporaryFileCompressionAdaptivity() : last_uncompressed_write_ns(1) {
+TemporaryFileCompressionAdaptivity::TemporaryFileCompressionAdaptivity() : last_uncompressed_write_ns(INITIAL_NS) {
 	for (idx_t i = 0; i < LEVELS; i++) {
-		last_compressed_writes_ns[i] = 1;
+		last_compressed_writes_ns[i] = INITIAL_NS;
 	}
 }
 
@@ -355,30 +355,36 @@ TemporaryCompressionLevel TemporaryFileCompressionAdaptivity::MaximumCompression
 
 TemporaryCompressionLevel TemporaryFileCompressionAdaptivity::GetCompressionLevel() {
 	idx_t min_compression_idx = 0;
-	auto min_compressed_time = last_compressed_writes_ns[min_compression_idx].load();
-	for (idx_t compression_idx = 1; compression_idx < LEVELS; compression_idx++) {
-		const auto time = last_compressed_writes_ns[compression_idx].load();
-		if (time < min_compressed_time) {
-			min_compression_idx = compression_idx;
-			min_compressed_time = time;
-		}
-	}
-	const auto level = IndexToLevel(min_compression_idx);
+	TemporaryCompressionLevel level;
 
-	const double ratio = static_cast<double>(min_compressed_time) / static_cast<double>(last_uncompressed_write_ns);
-	const auto should_compress = ratio < DURATION_RATIO_THRESHOLD;
+	double ratio;
+	bool should_compress;
 
 	bool should_deviate;
 	bool deviate_uncompressed;
 	{
 		lock_guard<mutex> guard(random_engine.lock);
+
+		auto min_compressed_time = last_compressed_writes_ns[min_compression_idx];
+		for (idx_t compression_idx = 1; compression_idx < LEVELS; compression_idx++) {
+			const auto time = last_compressed_writes_ns[compression_idx];
+			if (time < min_compressed_time) {
+				min_compression_idx = compression_idx;
+				min_compressed_time = time;
+			}
+		}
+		level = IndexToLevel(min_compression_idx);
+
+		ratio = static_cast<double>(min_compressed_time) / static_cast<double>(last_uncompressed_write_ns);
+		should_compress = ratio < DURATION_RATIO_THRESHOLD;
+
 		should_deviate = random_engine.NextRandom() < COMPRESSION_DEVIATION;
 		deviate_uncompressed = random_engine.NextRandom() < 0.5; // Coin flip to deviate with just uncompressed
 	}
 
 	TemporaryCompressionLevel result;
-	if (!should_deviate) { // Don't deviate from the last fastest write strategy
-		result = should_compress ? level : TemporaryCompressionLevel::UNCOMPRESSED;
+	if (!should_deviate) {
+		result = should_compress ? level : TemporaryCompressionLevel::UNCOMPRESSED; // Don't deviate
 	} else if (!should_compress) {
 		result = MinimumCompressionLevel(); // Deviate from uncompressed -> go to fastest level
 	} else if (deviate_uncompressed) {
@@ -397,11 +403,11 @@ TemporaryCompressionLevel TemporaryFileCompressionAdaptivity::GetCompressionLeve
 
 void TemporaryFileCompressionAdaptivity::Update(const TemporaryCompressionLevel level, const int64_t time_before_ns) {
 	const auto duration = GetCurrentTimeNanos() - time_before_ns;
-	if (level == TemporaryCompressionLevel::UNCOMPRESSED) {
-		last_uncompressed_write_ns = duration;
-	} else {
-		last_compressed_writes_ns[LevelToIndex(level)] = duration;
-	}
+	auto &last_write_ns = level == TemporaryCompressionLevel::UNCOMPRESSED
+	                          ? last_uncompressed_write_ns
+	                          : last_compressed_writes_ns[LevelToIndex(level)];
+	lock_guard<mutex> guard(random_engine.lock);
+	last_write_ns = (last_write_ns * (WEIGHT - 1) + duration) / WEIGHT;
 }
 
 //===--------------------------------------------------------------------===//
