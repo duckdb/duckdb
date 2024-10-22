@@ -548,6 +548,73 @@ public:
 	}
 };
 
+class ModeJsonRenderer : public RowRenderer {
+public:
+	explicit ModeJsonRenderer(ShellState &state, bool json_array) : RowRenderer(state), json_array(json_array) {}
+
+	void Render(RowResult &result) override {
+		if (first_row) {
+			if (json_array) {
+				// wrap all JSON objects in an array
+				state.Print("[");
+			}
+			state.Print("{");
+			first_row = false;
+		} else {
+			if (json_array) {
+				// wrap all JSON objects in an array
+				state.Print(",");
+			}
+			state.Print("\n{");
+		}
+		RenderRow(result);
+	}
+
+	void RenderRow(RowResult &result) override {
+		auto &data = result.data;
+		auto &types = result.types;
+		auto &col_names = result.column_names;
+		for(idx_t i=0; i<col_names.size(); i++){
+			if(i > 0) {
+				state.Print(",");
+			}
+			state.output_json_string(col_names[i], -1);
+			state.Print(":");
+			if( (data[i]==0) || (!types.empty() && types[i]==SQLITE_NULL) ){
+				state.Print("null");
+			}else if( !types.empty() && types[i]==SQLITE_FLOAT){
+				if (strcmp(data[i], "inf") == 0) {
+					state.Print("1e999");
+				} else if (strcmp(data[i], "-inf") == 0) {
+					state.Print("1e999");
+				} else {
+					state.Print(data[i]);
+				}
+			}else if( !types.empty() && types[i]==SQLITE_BLOB && result.pStmt ){
+				const void *pBlob = sqlite3_column_blob(result.pStmt, i);
+				int nBlob = sqlite3_column_bytes(result.pStmt, i);
+				state.output_json_string((const char *) pBlob, nBlob);
+			}else if( !types.empty() && types[i]==SQLITE_TEXT ){
+				state.output_json_string(data[i], -1);
+			}else{
+				state.Print(data[i]);
+			}
+		}
+		state.Print("}");
+	}
+
+	void RenderFooter(RowResult &result) override {
+		if(json_array){
+			state.Print("]\n");
+		} else {
+			state.Print("\n");
+		}
+	}
+
+
+	bool json_array;
+};
+
 unique_ptr<RowRenderer> ShellState::GetRowRenderer() {
 	switch(cMode) {
 	case RenderMode::LINE:
@@ -566,6 +633,10 @@ unique_ptr<RowRenderer> ShellState::GetRowRenderer() {
 		return unique_ptr<RowRenderer>(new ModeAsciiRenderer(*this));
 	case RenderMode::QUOTE:
 		return unique_ptr<RowRenderer>(new ModeQuoteRenderer(*this));
+	case RenderMode::JSON:
+		return unique_ptr<RowRenderer>(new ModeJsonRenderer(*this, true));
+	case RenderMode::JSONLINES:
+		return unique_ptr<RowRenderer>(new ModeJsonRenderer(*this, false));
 	case RenderMode::TRASH:
 		// no renderer
 		return nullptr;

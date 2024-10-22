@@ -117,6 +117,7 @@ public:
 	void output_quoted_string(const char *z);
 	void output_hex_blob(const void *pBlob, int nBlob);
 	int isNumber(const char *z, int *realnum);
+	void output_json_string(const char *z, int n);
 	void print_dashes(int N);
 	void utf8_width_print(FILE *pOut, int w, const string &str);
 	int strlenChar(const char *z);

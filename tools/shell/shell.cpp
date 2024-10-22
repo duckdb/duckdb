@@ -2685,7 +2685,7 @@ void ShellState::output_c_string(const char *z){
 /*
 ** Output the given string as a quoted according to JSON quoting rules.
 */
-static void output_json_string(FILE *out, const char *z, int n){
+void ShellState::output_json_string(const char *z, int n){
   unsigned int c;
   if( n<0 ) n = (int)strlen(z);
   fputc('"', out);
@@ -3062,52 +3062,6 @@ int ShellState::shell_callback(
       raw_printf(out,");\n");
       break;
     }
-    case RenderMode::JSON:
-	case RenderMode::JSONLINES: {
-      if( cnt==0 ){
-        if (cMode == RenderMode::JSON) {
-          fputc('[', out);
-        }
-        fputc('{', out);
-      }else{
-        if (cMode == RenderMode::JSON) {
-          fputc(',', out);
-        }
-        fputs("\n{", out);
-      }
-      cnt++;
-      for(idx_t i=0; i<col_names.size(); i++){
-        output_json_string(out, col_names[i], -1);
-        putc(':', out);
-        if( (data[i]==0) || (!types.empty() && types[i]==SQLITE_NULL) ){
-          fputs("null",out);
-        }else if( !types.empty() && types[i]==SQLITE_FLOAT ){
-          double r = sqlite3_column_double(pStmt, i);
-          sqlite3_uint64 ur;
-          memcpy(&ur,&r,sizeof(r));
-          if( ur==0x7ff0000000000000LL ){
-            raw_printf(out, "1e999");
-          }else if( ur==0xfff0000000000000LL ){
-            raw_printf(out, "-1e999");
-          }else{
-            utf8_printf(out, "%s", data[i]);
-          }
-        }else if( !types.empty() && types[i]==SQLITE_BLOB && pStmt ){
-          const void *pBlob = sqlite3_column_blob(pStmt, i);
-          int nBlob = sqlite3_column_bytes(pStmt, i);
-          output_json_string(out, (const char *) pBlob, nBlob);
-        }else if( !types.empty() && types[i]==SQLITE_TEXT ){
-          output_json_string(out, data[i], -1);
-        }else{
-          utf8_printf(out,"%s", data[i]);
-        }
-        if( i<data.size()-1 ){
-          putc(',', out);
-        }
-      }
-      putc('}', out);
-      break;
-    }
   default:
   	break;
   }
@@ -3432,6 +3386,7 @@ void ShellState::exec_prepared_stmt(
 		result.column_names.push_back(sqlite3_column_name(pStmt, i));
 		result.types[i] = sqlite3_column_type(pStmt, i);
 	}
+	result.pStmt = pStmt;
 
 	auto renderer = GetRowRenderer();
 
@@ -3464,12 +3419,7 @@ void ShellState::exec_prepared_stmt(
 		}
 	} while( SQLITE_ROW == rc );
 
-	if( cMode==RenderMode::JSON ){
-	fputs("]\n", out);
-	}
-	if( cMode==RenderMode::JSONLINES ){
-	fputs("\n", out);
-	}
+	renderer->RenderFooter(result);
 }
 
 /*

@@ -30,6 +30,7 @@ struct RowResult {
 	vector<const char *> column_names;
 	vector<const char *> data;
 	vector<int> types;
+	sqlite3_stmt *pStmt = nullptr;
 };
 
 class ColumnRenderer {
