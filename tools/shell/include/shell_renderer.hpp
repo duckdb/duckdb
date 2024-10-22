@@ -15,6 +15,15 @@ struct ShellState;
 
 class ShellRenderer {
 public:
+	explicit ShellRenderer(ShellState &state);
+	virtual ~ShellRenderer() = default;
+
+	ShellState &state;
+	bool show_header;
+	string col_sep;
+	string row_sep;
+
+public:
 	static bool IsColumnar(RenderMode mode);
 };
 
@@ -33,10 +42,9 @@ struct RowResult {
 	sqlite3_stmt *pStmt = nullptr;
 };
 
-class ColumnRenderer {
+class ColumnRenderer : public ShellRenderer {
 public:
 	explicit ColumnRenderer(ShellState &state);
-	virtual ~ColumnRenderer() = default;
 
 	virtual void RenderHeader(ColumnarResult &result) = 0;
 	virtual void RenderFooter(ColumnarResult &result);
@@ -48,25 +56,20 @@ public:
 	}
 
 	void RenderAlignedValue(ColumnarResult &result, idx_t i);
-
-protected:
-	ShellState &state;
 };
 
-class RowRenderer {
+class RowRenderer : public ShellRenderer {
 public:
 	explicit RowRenderer(ShellState &state);
-	virtual ~RowRenderer() = default;
 
+	bool first_row = true;
+
+public:
 	virtual void Render(RowResult &result);
 
 	virtual void RenderHeader(RowResult &result);
 	virtual void RenderRow(RowResult &result) = 0;
 	virtual void RenderFooter(RowResult &result);
-
-protected:
-	ShellState &state;
-	bool first_row = true;
 };
 
 } // namespace duckdb_shell

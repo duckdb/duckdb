@@ -141,6 +141,7 @@ public:
 	ColumnarResult ExecuteColumnar(sqlite3_stmt *pStmt);
 	unique_ptr<ColumnRenderer> GetColumnRenderer();
 	unique_ptr<RowRenderer> GetRowRenderer();
+	unique_ptr<RowRenderer> GetRowRenderer(RenderMode mode);
 	void exec_prepared_stmt_columnar(sqlite3_stmt *pStmt);
 	char **tableColumnList(const char *zTab);
 	void exec_prepared_stmt(sqlite3_stmt *pStmt);

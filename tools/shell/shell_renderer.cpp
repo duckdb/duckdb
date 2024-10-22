@@ -21,10 +21,14 @@ bool ShellRenderer::IsColumnar(RenderMode mode) {
 	}
 }
 
+ShellRenderer::ShellRenderer(ShellState &state)
+    : state(state), show_header(state.showHeader), col_sep(state.colSeparator), row_sep(state.rowSeparator) {
+}
+
 //===--------------------------------------------------------------------===//
 // Column Renderers
 //===--------------------------------------------------------------------===//
-ColumnRenderer::ColumnRenderer(ShellState &state) : state(state) {
+ColumnRenderer::ColumnRenderer(ShellState &state) : ShellRenderer(state) {
 }
 
 void ColumnRenderer::RenderFooter(ColumnarResult &result) {
@@ -44,7 +48,7 @@ public:
 	}
 
 	void RenderHeader(ColumnarResult &result) override {
-		if (!state.showHeader) {
+		if (!show_header) {
 			return;
 		}
 		for (idx_t i = 0; i < result.column_count; i++) {
@@ -259,7 +263,7 @@ unique_ptr<ColumnRenderer> ShellState::GetColumnRenderer() {
 //===--------------------------------------------------------------------===//
 // Row Renderers
 //===--------------------------------------------------------------------===//
-RowRenderer::RowRenderer(ShellState &state) : state(state) {
+RowRenderer::RowRenderer(ShellState &state) : ShellRenderer(state) {
 }
 
 void RowRenderer::Render(RowResult &result) {
@@ -348,28 +352,28 @@ public:
 	}
 
 	void RenderHeader(RowResult &result) override {
-		if (!state.showHeader) {
+		if (!show_header) {
 			return;
 		}
 		auto &col_names = result.column_names;
 		for (idx_t i = 0; i < col_names.size(); i++) {
 			if (i > 0) {
-				state.Print(state.colSeparator);
+				state.Print(col_sep);
 			}
 			state.Print(col_names[i]);
 		}
-		state.Print(state.rowSeparator);
+		state.Print(row_sep);
 	}
 
 	void RenderRow(RowResult &result) override {
 		auto &data = result.data;
 		for (idx_t i = 0; i < data.size(); i++) {
 			if (i > 0) {
-				state.Print(state.colSeparator);
+				state.Print(col_sep);
 			}
 			state.PrintValue(data[i]);
 		}
-		state.Print(state.rowSeparator);
+		state.Print(row_sep);
 	}
 };
 
@@ -379,7 +383,7 @@ public:
 	}
 
 	void RenderHeader(RowResult &result) override {
-		if (!state.showHeader) {
+		if (!show_header) {
 			return;
 		}
 		auto &col_names = result.column_names;
@@ -442,28 +446,28 @@ public:
 	}
 
 	void RenderHeader(RowResult &result) override {
-		if (!state.showHeader) {
+		if (!show_header) {
 			return;
 		}
 		auto &col_names = result.column_names;
 		for (idx_t i = 0; i < col_names.size(); i++) {
 			if (i > 0) {
-				state.Print(state.colSeparator);
+				state.Print(col_sep);
 			}
 			state.output_c_string(col_names[i] ? col_names[i] : "");
 		}
-		state.Print(state.rowSeparator);
+		state.Print(row_sep);
 	}
 
 	void RenderRow(RowResult &result) override {
 		auto &data = result.data;
 		for (idx_t i = 0; i < data.size(); i++) {
 			if (i > 0) {
-				state.Print(state.colSeparator);
+				state.Print(col_sep);
 			}
 			state.output_c_string(data[i] ? data[i] : state.nullValue.c_str());
 		}
-		state.Print(state.rowSeparator);
+		state.Print(row_sep);
 	}
 };
 
@@ -478,14 +482,14 @@ public:
 		state.SetTextMode();
 	}
 	void RenderHeader(RowResult &result) override {
-		if (!state.showHeader) {
+		if (!show_header) {
 			return;
 		}
 		auto &col_names = result.column_names;
 		for (idx_t i = 0; i < col_names.size(); i++) {
 			state.output_csv(col_names[i] ? col_names[i] : "", i < col_names.size() - 1);
 		}
-		state.Print(state.rowSeparator);
+		state.Print(row_sep);
 	}
 
 	void RenderRow(RowResult &result) override {
@@ -493,7 +497,7 @@ public:
 		for (idx_t i = 0; i < data.size(); i++) {
 			state.output_csv(data[i], i < data.size() - 1);
 		}
-		state.Print(state.rowSeparator);
+		state.Print(row_sep);
 	}
 };
 
@@ -503,26 +507,28 @@ public:
 	}
 
 	void RenderHeader(RowResult &result) override {
-		if (!state.showHeader) {
+		if (!show_header) {
 			return;
 		}
 		auto &col_names = result.column_names;
 		for (idx_t i = 0; i < col_names.size(); i++) {
-			if (i > 0)
-				state.Print(state.colSeparator);
+			if (i > 0) {
+				state.Print(col_sep);
+			}
 			state.Print(col_names[i] ? col_names[i] : "");
 		}
-		state.Print(state.rowSeparator);
+		state.Print(row_sep);
 	}
 
 	void RenderRow(RowResult &result) override {
 		auto &data = result.data;
 		for (idx_t i = 0; i < data.size(); i++) {
-			if (i > 0)
-				state.Print(state.colSeparator);
+			if (i > 0) {
+				state.Print(col_sep);
+			}
 			state.PrintValue(data[i]);
 		}
-		state.Print(state.rowSeparator);
+		state.Print(row_sep);
 	}
 };
 
@@ -532,16 +538,17 @@ public:
 	}
 
 	void RenderHeader(RowResult &result) override {
-		if (!state.showHeader) {
+		if (!show_header) {
 			return;
 		}
 		auto &col_names = result.column_names;
 		for (idx_t i = 0; i < col_names.size(); i++) {
-			if (i > 0)
-				state.Print(state.colSeparator);
+			if (i > 0) {
+				state.Print(col_sep);
+			}
 			state.output_quoted_string(col_names[i]);
 		}
-		state.Print(state.rowSeparator);
+		state.Print(row_sep);
 	}
 
 	void RenderRow(RowResult &result) override {
@@ -549,7 +556,7 @@ public:
 		auto &types = result.types;
 		for (idx_t i = 0; i < data.size(); i++) {
 			if (i > 0)
-				state.Print(state.colSeparator);
+				state.Print(col_sep);
 			if ((data[i] == 0) || (!types.empty() && types[i] == SQLITE_NULL)) {
 				state.Print("NULL");
 			} else if (!types.empty() && (types[i] == SQLITE_TEXT || types[i] == SQLITE_BLOB)) {
@@ -562,7 +569,7 @@ public:
 				state.output_quoted_string(data[i]);
 			}
 		}
-		state.Print(state.rowSeparator);
+		state.Print(row_sep);
 	}
 };
 
@@ -645,11 +652,12 @@ public:
 
 		state.Print("INSERT INTO ");
 		state.Print(state.zDestTable);
-		if (state.showHeader) {
+		if (show_header) {
 			state.Print("(");
 			for (idx_t i = 0; i < col_names.size(); i++) {
-				if (i > 0)
+				if (i > 0) {
 					state.Print(",");
+				}
 				state.PrintOptionallyQuotedIdentifier(col_names[i]);
 			}
 			state.Print(")");
@@ -783,7 +791,11 @@ public:
 };
 
 unique_ptr<RowRenderer> ShellState::GetRowRenderer() {
-	switch (cMode) {
+	return GetRowRenderer(cMode);
+}
+
+unique_ptr<RowRenderer> ShellState::GetRowRenderer(RenderMode mode) {
+	switch (mode) {
 	case RenderMode::LINE:
 		return unique_ptr<RowRenderer>(new ModeLineRenderer(*this));
 	case RenderMode::EXPLAIN:

@@ -2887,17 +2887,13 @@ int ShellState::shell_callback(
 */
 static int callback(void *pArg, int nArg, char **azArg, char **azCol){
   /* since we don't have type info, call the shell_callback with a NULL value */
-	auto p = (ShellState *) pArg;
-	auto renderer = p->GetRowRenderer();
-	if (!renderer) {
-		return 0;
-	}
+	auto renderer = (RowRenderer *) pArg;
 	RowResult result;
 	for(int i = 0; i < nArg; i++) {
 		result.column_names.push_back(azCol[i]);
 		result.data.push_back(azArg[i]);
 	}
-  return p->shell_callback(*renderer, result);
+  return renderer->state.shell_callback(*renderer, result);
 }
 
 /*
@@ -4616,14 +4612,14 @@ int ShellState::do_meta_command(char *zLine){
   }else
 
   if( c=='d' && n>1 && strncmp(azArg[0], "databases", n)==0 ){
-    ShellState data;
     char *zErrMsg = 0;
     open_db(0);
-    data.showHeader = 0;
-    data.cMode = data.mode = RenderMode::LIST;
-  	data.colSeparator = ": ";
+
+  	auto renderer = GetRowRenderer(RenderMode::LIST);
+  	renderer->show_header = false;
+  	renderer->col_sep = ": ";
     sqlite3_exec(db, "SELECT name, file FROM pragma_database_list",
-                 callback, &data, &zErrMsg);
+                 callback, renderer.get(), &zErrMsg);
     if( zErrMsg ){
       printDatabaseError(zErrMsg);
       sqlite3_free(zErrMsg);
@@ -5617,7 +5613,6 @@ int ShellState::do_meta_command(char *zLine){
 
   if( c=='s' && strncmp(azArg[0], "schema", n)==0 ){
     string sSelect;
-    ShellState data;
     char *zErrMsg = 0;
     const char *zDiv = "(";
     const char *zName = 0;
@@ -5625,11 +5620,11 @@ int ShellState::do_meta_command(char *zLine){
     int ii;
 
     open_db(0);
-    data.showHeader = 0;
-    data.cMode = data.mode = RenderMode::SEMI;
+
+    RenderMode mode = RenderMode::SEMI;
     for(ii=1; ii<nArg; ii++){
       if( optionMatch(azArg[ii],"indent") ){
-        data.cMode = data.mode = RenderMode::PRETTY;
+        mode = RenderMode::PRETTY;
       }else if( optionMatch(azArg[ii],"debug") ){
         bDebug = 1;
       }else if( zName==0 ){
@@ -5640,6 +5635,8 @@ int ShellState::do_meta_command(char *zLine){
         goto meta_command_exit;
       }
     }
+  	auto renderer = GetRowRenderer(mode);
+  	renderer->show_header = false;
     if( zDiv ){
       appendText(sSelect, "SELECT sql FROM sqlite_master WHERE ", 0);
       if( zName ){
@@ -5664,7 +5661,7 @@ int ShellState::do_meta_command(char *zLine){
       if( bDebug ){
         utf8_printf(out, "SQL: %s;\n", sSelect.c_str());
       }else{
-        rc = sqlite3_exec(db, sSelect.c_str(), callback, &data, &zErrMsg);
+        rc = sqlite3_exec(db, sSelect.c_str(), callback, renderer.get(), &zErrMsg);
       }
     }
     if( zErrMsg ){
