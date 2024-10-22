@@ -587,17 +587,6 @@ public:
 		AddString("");
 	}
 
-	// size_t GetRequiredSize(size_t string_len) {
-	// 	throw InternalException("FIXME: ZSTD GetRequiredSize");
-	// 	return 0;
-	// }
-
-	// Checks if there is enough space, if there is, sets last_fitting_size
-	// bool HasEnoughSpace(size_t string_len) {
-	// 	throw InternalException("FIXME: ZSTD HasEnoughSpace");
-	// 	return false;
-	// }
-
 public:
 	unique_ptr<ZSTDAnalyzeState> analyze_state;
 	ColumnDataCheckpointer &checkpointer;
@@ -991,11 +980,6 @@ void ZSTDStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 	auto &scan_state = state.scan_state->template Cast<ZSTDScanState>();
 	auto start = segment.GetRelativeIndex(state.row_index);
 
-	// FIXME: this could read over a boundary of our internal vector groups
-	// in which case we would need to read the remainder of the last group
-
-	// We should have a fast path that directly reads into the StringHeap of the 'result' if an entire Vector is
-	// requested and it aligns with our own internal Vector groups
 	scan_state.ScanPartial(start, result, result_offset, scan_count);
 }
 
