@@ -526,7 +526,7 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
     {"azure/service_principal", "azure"},
     {"huggingface/config", "httfps"},
     {"huggingface/credential_chain", "httpfs"},
-    {"bearer/config", "httpfs"}}; // EXTENSION_SECRET_PROVIDERS
+    {"http/config", "httpfs"}}; // EXTENSION_SECRET_PROVIDERS
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "aws",   "azure", "autocomplete", "delta",   "excel",          "fts",      "httpfs",
