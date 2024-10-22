@@ -52,6 +52,18 @@ enum class RenderMode : uint32_t {
 };
 
 /*
+** These are the allowed shellFlgs values
+*/
+#define SHFLG_Pagecache      0x00000001 /* The --pagecache option is used */
+#define SHFLG_Lookaside      0x00000002 /* Lookaside memory is used */
+#define SHFLG_Backslash      0x00000004 /* The --backslash option is used */
+#define SHFLG_PreserveRowid  0x00000008 /* .dump preserves rowid values */
+#define SHFLG_Newlines       0x00000010 /* .dump --newline flag */
+#define SHFLG_CountChanges   0x00000020 /* .changes setting */
+#define SHFLG_Echo           0x00000040 /* .echo or --echo setting */
+#define SHFLG_HeaderSet      0x00000080 /* .header has been used */
+
+/*
 ** State information about the database connection is contained in an
 ** instance of the following structure.
 */
@@ -115,7 +127,9 @@ public:
 	void print_markdown_separator(int nArg, const char *zSep, const vector<int> &colTypes, const vector<int> &actualWidth);
 	void output_c_string(const char *z);
 	void output_quoted_string(const char *z);
+	void output_quoted_escaped_string(const char *z);
 	void output_hex_blob(const void *pBlob, int nBlob);
+	void PrintOptionallyQuotedIdentifier(const char *z);
 	int isNumber(const char *z, int *realnum);
 	void output_json_string(const char *z, int n);
 	void print_dashes(int N);

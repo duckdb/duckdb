@@ -615,6 +615,41 @@ public:
 	bool json_array;
 };
 
+class ModeInsertRenderer : public RowRenderer {
+public:
+	explicit ModeInsertRenderer(ShellState &state) : RowRenderer(state) {}
+
+	void RenderRow(RowResult &result) override {
+		auto &data = result.data;
+		auto &types = result.types;
+		auto &col_names = result.column_names;
+
+      state.Print("INSERT INTO ");
+		state.Print(state.zDestTable);
+      if( state.showHeader ){
+        state.Print("(");
+        for(idx_t i=0; i<col_names.size(); i++){
+          if( i>0 ) state.Print(",");
+          state.PrintOptionallyQuotedIdentifier(col_names[i]);
+        }
+        state.Print(")");
+      }
+      for(idx_t i=0; i<data.size(); i++){
+        state.Print(i>0 ? "," : " VALUES(");
+        if( (data[i]==0) || (!types.empty() && types[i]==SQLITE_NULL) ){
+          state.Print("NULL");
+        }else if( state.isNumber(data[i], nullptr) ){
+          state.Print(data[i]);
+        }else if( state.ShellHasFlag(SHFLG_Newlines) ){
+          state.output_quoted_string(data[i]);
+        }else{
+          state.output_quoted_escaped_string(data[i]);
+        }
+      }
+      state.Print(");\n");
+	}
+};
+
 unique_ptr<RowRenderer> ShellState::GetRowRenderer() {
 	switch(cMode) {
 	case RenderMode::LINE:
@@ -637,6 +672,8 @@ unique_ptr<RowRenderer> ShellState::GetRowRenderer() {
 		return unique_ptr<RowRenderer>(new ModeJsonRenderer(*this, true));
 	case RenderMode::JSONLINES:
 		return unique_ptr<RowRenderer>(new ModeJsonRenderer(*this, false));
+	case RenderMode::INSERT:
+		return unique_ptr<RowRenderer>(new ModeInsertRenderer(*this));
 	case RenderMode::TRASH:
 		// no renderer
 		return nullptr;

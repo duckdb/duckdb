@@ -2297,18 +2297,6 @@ int sqlite3_fileio_init(
                                    ** top-level SQL statement */
 #define SHELL_PROGRESS_ONCE  0x04  /* Cancel the --limit after firing once */
 
-/*
-** These are the allowed shellFlgs values
-*/
-#define SHFLG_Pagecache      0x00000001 /* The --pagecache option is used */
-#define SHFLG_Lookaside      0x00000002 /* Lookaside memory is used */
-#define SHFLG_Backslash      0x00000004 /* The --backslash option is used */
-#define SHFLG_PreserveRowid  0x00000008 /* .dump preserves rowid values */
-#define SHFLG_Newlines       0x00000010 /* .dump --newline flag */
-#define SHFLG_CountChanges   0x00000020 /* .changes setting */
-#define SHFLG_Echo           0x00000040 /* .echo or --echo setting */
-#define SHFLG_HeaderSet      0x00000080 /* .header has been used */
-
 static const char *modeDescr[] = {
   "line",
   "column",
@@ -2593,7 +2581,7 @@ void ShellState::output_quoted_string(const char *z){
 ** This is like output_quoted_string() but with the addition of the \r\n
 ** escape mechanism.
 */
-static void output_quoted_escaped_string(FILE *out, const char *z){
+void ShellState::output_quoted_escaped_string(const char *z){
   int i;
   char c;
   setBinaryMode(out, 1);
@@ -2738,6 +2726,16 @@ static const char needCsvQuote[] = {
   1, 1, 1, 1, 1, 1, 1, 1,   1, 1, 1, 1, 1, 1, 1, 1,
   1, 1, 1, 1, 1, 1, 1, 1,   1, 1, 1, 1, 1, 1, 1, 1,
 };
+
+void ShellState::PrintOptionallyQuotedIdentifier(const char *input) {
+	if( quoteChar(input )){
+		char *quoted = sqlite3_mprintf("\"%w\"", input);
+		Print(quoted);
+		sqlite3_free(quoted);
+	}else{
+		Print(input);
+	}
+}
 
 /*
 ** Output a single term of CSV.  Actually, p->colSeparator is used for
@@ -2927,8 +2925,6 @@ int ShellState::shell_callback(
 	RowResult &result
 ){
 	auto &data = result.data;
-	auto &col_names = result.column_names;
-	auto &types = result.types;
   if( result.data.empty() ) return 0;
 	renderer.Render(result);
 
@@ -3001,65 +2997,6 @@ int ShellState::shell_callback(
       }
       printSchemaLine(out, z, ";\n");
       sqlite3_free(z);
-      break;
-    }
-    case RenderMode::INSERT: {
-      utf8_printf(out,"INSERT INTO %s",zDestTable);
-      if( showHeader ){
-        raw_printf(out,"(");
-        for(idx_t i=0; i<col_names.size(); i++){
-          if( i>0 ) raw_printf(out, ",");
-          if( quoteChar(col_names[i]) ){
-            char *z = sqlite3_mprintf("\"%w\"", col_names[i]);
-            utf8_printf(out, "%s", z);
-            sqlite3_free(z);
-          }else{
-            raw_printf(out, "%s", col_names[i]);
-          }
-        }
-        raw_printf(out,")");
-      }
-      cnt++;
-      for(idx_t i=0; i<data.size(); i++){
-        raw_printf(out, i>0 ? "," : " VALUES(");
-        if( (data[i]==0) || (!types.empty() && types[i]==SQLITE_NULL) ){
-          utf8_printf(out,"NULL");
-        }else if( !types.empty() && types[i]==SQLITE_TEXT ){
-          if( ShellHasFlag(SHFLG_Newlines) ){
-            output_quoted_string(data[i]);
-          }else{
-            output_quoted_escaped_string(out, data[i]);
-          }
-        }else if( !types.empty() && types[i]==SQLITE_INTEGER ){
-          utf8_printf(out,"%s", data[i]);
-        }else if( !types.empty() && types[i]==SQLITE_FLOAT ){
-          double r = sqlite3_column_double(pStmt, i);
-          sqlite3_uint64 ur;
-          memcpy(&ur,&r,sizeof(r));
-          if( ur==0x7ff0000000000000LL ){
-            raw_printf(out, "1e999");
-          }else if( ur==0xfff0000000000000LL ){
-            raw_printf(out, "-1e999");
-          }else{
-            utf8_printf(out,"%s", data[i]);
-          }
-        }else if( !types.empty() && types[i]==SQLITE_BLOB && pStmt ){
-          const void *pBlob = sqlite3_column_blob(pStmt, i);
-          if(pBlob) {
-          	int nBlob = sqlite3_column_bytes(pStmt, i);
-          	output_hex_blob(pBlob, nBlob);
-          } else {
-	        utf8_printf(out,"NULL");
-          }
-        }else if( isNumber(data[i], 0) ){
-          utf8_printf(out,"%s", data[i]);
-        }else if( ShellHasFlag(SHFLG_Newlines) ){
-          output_quoted_string(data[i]);
-        }else{
-          output_quoted_escaped_string(out, data[i]);
-        }
-      }
-      raw_printf(out,");\n");
       break;
     }
   default:
