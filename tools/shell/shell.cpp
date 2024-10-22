@@ -5037,6 +5037,16 @@ MetadataResult OpenDatabase(ShellState &state, const char **azArg, idx_t nArg) {
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult PrintArguments(ShellState &state, const char **azArg, idx_t nArg) {
+	int i;
+	for(i=1; i<nArg; i++){
+		if( i>1 ) raw_printf(state.out, " ");
+		utf8_printf(state.out, "%s", azArg[i]);
+	}
+	raw_printf(state.out, "\n");
+	return MetadataResult::SUCCESS;
+}
+
 static const MetadataCommand metadata_commands[] = {
 	{"backup", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
 	{"bail", 2, ToggleBail, "on|off", "Stop after hitting an error.  Default OFF", 3},
@@ -5061,6 +5071,7 @@ static const MetadataCommand metadata_commands[] = {
 	{"nullvalue", 2, SetNullValue, "STRING", "Use STRING in place of NULL values", 0},
 
 	{"open", 0, OpenDatabase, "?OPTIONS? ?FILE?", "Close existing database and reopen FILE", 2},
+	{"print", 0, PrintArguments, "STRING...", "Print literal STRING", 3},
 	{"rows", 1, SetRowRendering, "", "Row-wise rendering of query results (default)", 0},
 	{"restore", 0, nullptr, "", "", 3},
 	{"save", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
@@ -5239,15 +5250,6 @@ int ShellState::do_meta_command(char *zLine){
         outfile = zFile;
       }
     }
-  }else
-
-  if( c=='p' && n>=3 && strncmp(azArg[0], "print", n)==0 ){
-    int i;
-    for(i=1; i<nArg; i++){
-      if( i>1 ) raw_printf(out, " ");
-      utf8_printf(out, "%s", azArg[i]);
-    }
-    raw_printf(out, "\n");
   }else
 
   if( c=='p' && strncmp(azArg[0], "prompt", n)==0 ){
