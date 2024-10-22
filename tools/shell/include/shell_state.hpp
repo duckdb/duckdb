@@ -73,39 +73,39 @@ enum class RenderMode : uint32_t {
 ** instance of the following structure.
 */
 struct ShellState {
-	sqlite3 *db = nullptr;                         /* The database */
-	uint8_t autoExplain = 0;                       /* Automatically turn on .explain mode */
-	uint8_t openMode = 0;                          /* SHELL_OPEN_NORMAL, _APPENDVFS, or _ZIPFILE */
-	uint8_t doXdgOpen = 0;                         /* Invoke start/open/xdg-open in output_reset() */
-	int outCount = 0;                              /* Revert to stdout when reaching zero */
-	int lineno = 0;                                /* Line number of last line read from in */
-	int openFlags = 0;                             /* Additional flags to open.  (SQLITE_OPEN_NOFOLLOW) */
-	FILE *in = nullptr;                            /* Read commands from this stream */
-	FILE *out = nullptr;                           /* Write results here */
-	int nErr = 0;                                  /* Number of errors seen */
-	RenderMode mode = RenderMode::LINE;            /* An output mode setting */
-	RenderMode modePrior = RenderMode::LINE;       /* Saved mode */
-	RenderMode cMode = RenderMode::LINE;           /* temporary output mode for the current query */
-	RenderMode normalMode = RenderMode::LINE;      /* Output mode before ".explain on" */
-	int showHeader = 0;                            /* True to show column names in List or Column mode */
-	unsigned shellFlgs = 0;                        /* Various flags */
-	unsigned priorShFlgs = 0;                      /* Saved copy of flags */
-	int64_t szMax = 0;                             /* --maxsize argument to .open */
-	char *zDestTable = nullptr;                    /* Name of destination table when RenderMode::Insert */
-	char *zTempFile = nullptr;                     /* Temporary file that might need deleting */
-	char colSeparator[20];                         /* Column separator character for several modes */
-	char rowSeparator[20];                         /* Row separator character for RenderMode::Ascii */
-	char colSepPrior[20];                          /* Saved column separator */
-	char rowSepPrior[20];                          /* Saved row separator */
-	vector<int> colWidth;                          /* Requested width of each column in columnar modes */
-	string nullValue;                              /* The text to print when a NULL comes back from the database */
-	int columns = 0;                               /* Column-wise DuckBox rendering */
-	string outfile;                                /* Filename for *out */
-	string zDbFilename;                            /* name of the database file */
-	sqlite3_stmt *pStmt = nullptr;                 /* Current statement if any. */
-	FILE *pLog = nullptr;                          /* Write log output here */
-	size_t max_rows = 0;                           /* The maximum number of rows to render in DuckBox mode */
-	size_t max_width = 0;                          /* The maximum number of characters to render horizontally in DuckBox mode */
+	sqlite3 *db = nullptr;                    /* The database */
+	uint8_t autoExplain = 0;                  /* Automatically turn on .explain mode */
+	uint8_t openMode = 0;                     /* SHELL_OPEN_NORMAL, _APPENDVFS, or _ZIPFILE */
+	uint8_t doXdgOpen = 0;                    /* Invoke start/open/xdg-open in output_reset() */
+	int outCount = 0;                         /* Revert to stdout when reaching zero */
+	int lineno = 0;                           /* Line number of last line read from in */
+	int openFlags = 0;                        /* Additional flags to open.  (SQLITE_OPEN_NOFOLLOW) */
+	FILE *in = nullptr;                       /* Read commands from this stream */
+	FILE *out = nullptr;                      /* Write results here */
+	int nErr = 0;                             /* Number of errors seen */
+	RenderMode mode = RenderMode::LINE;       /* An output mode setting */
+	RenderMode modePrior = RenderMode::LINE;  /* Saved mode */
+	RenderMode cMode = RenderMode::LINE;      /* temporary output mode for the current query */
+	RenderMode normalMode = RenderMode::LINE; /* Output mode before ".explain on" */
+	int showHeader = 0;                       /* True to show column names in List or Column mode */
+	unsigned shellFlgs = 0;                   /* Various flags */
+	unsigned priorShFlgs = 0;                 /* Saved copy of flags */
+	int64_t szMax = 0;                        /* --maxsize argument to .open */
+	char *zDestTable = nullptr;               /* Name of destination table when RenderMode::Insert */
+	char *zTempFile = nullptr;                /* Temporary file that might need deleting */
+	string colSeparator;                      /* Column separator character for several modes */
+	string rowSeparator;                      /* Row separator character for RenderMode::Ascii */
+	string colSepPrior;                       /* Saved column separator */
+	string rowSepPrior;                       /* Saved row separator */
+	vector<int> colWidth;                     /* Requested width of each column in columnar modes */
+	string nullValue;                         /* The text to print when a NULL comes back from the database */
+	int columns = 0;                          /* Column-wise DuckBox rendering */
+	string outfile;                           /* Filename for *out */
+	string zDbFilename;                       /* name of the database file */
+	sqlite3_stmt *pStmt = nullptr;            /* Current statement if any. */
+	FILE *pLog = nullptr;                     /* Write log output here */
+	size_t max_rows = 0;                      /* The maximum number of rows to render in DuckBox mode */
+	size_t max_width = 0; /* The maximum number of characters to render horizontally in DuckBox mode */
 
 public:
 	void outputModePush();

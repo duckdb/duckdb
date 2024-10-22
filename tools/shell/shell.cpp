@@ -2480,15 +2480,15 @@ edit_func_end:
 void ShellState::outputModePush(){
   modePrior = mode;
   priorShFlgs = shellFlgs;
-  memcpy(colSepPrior, colSeparator, sizeof(colSeparator));
-  memcpy(rowSepPrior, rowSeparator, sizeof(rowSeparator));
+  colSepPrior = colSeparator;
+  rowSepPrior = rowSeparator;
 }
 
 void ShellState::outputModePop(){
   mode = modePrior;
   shellFlgs = priorShFlgs;
-  memcpy(colSeparator, colSepPrior, sizeof(colSeparator));
-  memcpy(rowSeparator, rowSepPrior, sizeof(rowSeparator));
+  colSeparator = colSepPrior;
+  rowSeparator = rowSepPrior;
 }
 
 /*
@@ -2734,11 +2734,11 @@ void ShellState::output_csv(const char *z, int bSep){
     Print(nullValue);
   }else{
     int i;
-    int nSep = strlen30(colSeparator);
+    int nSep = colSeparator.size();
     for(i=0; z[i]; i++){
       if( needCsvQuote[((unsigned char*)z)[i]]
          || (z[i]==colSeparator[0] &&
-             (nSep==1 || memcmp(z, colSeparator, nSep)==0)) ){
+             (nSep==1 || memcmp(z, colSeparator.c_str(), nSep)==0)) ){
         i = 0;
         break;
       }
@@ -4622,7 +4622,7 @@ int ShellState::do_meta_command(char *zLine){
     memcpy(&data, this, sizeof(data));
     data.showHeader = 0;
     data.cMode = data.mode = RenderMode::LIST;
-    sqlite3_snprintf(sizeof(data.colSeparator),data.colSeparator,": ");
+  	data.colSeparator = ": ";
     sqlite3_exec(db, "SELECT name, file FROM pragma_database_list",
                  callback, &data, &zErrMsg);
     if( zErrMsg ){
@@ -4934,7 +4934,6 @@ int ShellState::do_meta_command(char *zLine){
     int nByte;                  /* Number of bytes in an SQL string */
     int i, j;                   /* Loop counters */
     int needCommit;             /* True to COMMIT or ROLLBACK at end */
-    int nSep;                   /* Number of bytes in colSeparator[] */
     char *zSql;                 /* An SQL statement */
     ImportCtx sCtx;             /* Reader context */
     char *(SQLITE_CDECL *xRead)(ImportCtx*); /* Func to read one value */
@@ -4995,7 +4994,7 @@ int ShellState::do_meta_command(char *zLine){
     if( useOutputMode ){
       /* If neither the --csv or --ascii options are specified, then set
       ** the column and row separator characters from the output mode. */
-      nSep = strlen30(colSeparator);
+      int nSep = colSeparator.size();
       if( nSep==0 ){
         raw_printf(stderr,
                    "Error: non-null column separator required for import\n");
@@ -5009,20 +5008,20 @@ int ShellState::do_meta_command(char *zLine){
         rc = 1;
         goto meta_command_exit;
       }
-      nSep = strlen30(rowSeparator);
+      nSep = rowSeparator.size();
       if( nSep==0 ){
         raw_printf(stderr,
             "Error: non-null row separator required for import\n");
         rc = 1;
         goto meta_command_exit;
       }
-      if( nSep==2 && mode==RenderMode::CSV && strcmp(rowSeparator,SEP_CrLf)==0 ){
+      if( nSep==2 && mode==RenderMode::CSV && rowSeparator == SEP_CrLf ){
         /* When importing CSV (only), if the row separator is set to the
         ** default output row separator, change it to the default input
         ** row separator.  This avoids having to maintain different input
         ** and output row separators. */
-        sqlite3_snprintf(sizeof(rowSeparator), rowSeparator, SEP_Row);
-        nSep = strlen30(rowSeparator);
+      	rowSeparator = SEP_Row;
+        nSep = rowSeparator.size();
       }
       if( nSep>1 ){
         raw_printf(stderr, "Error: multi-character row separators not allowed"
@@ -5303,41 +5302,41 @@ int ShellState::do_meta_command(char *zLine){
     int c2 = zMode[0];
     if( c2=='l' && n2>2 && strncmp(azArg[1],"lines",n2)==0 ){
       mode = RenderMode::LINE;
-      sqlite3_snprintf(sizeof(rowSeparator), rowSeparator, SEP_Row);
+    	rowSeparator = SEP_Row;
     }else if( c2=='c' && strncmp(azArg[1],"columns",n2)==0 ){
       mode = RenderMode::COLUMN;
       if( (shellFlgs & SHFLG_HeaderSet)==0 ){
         showHeader = 1;
       }
-      sqlite3_snprintf(sizeof(rowSeparator), rowSeparator, SEP_Row);
+      rowSeparator = SEP_Row;
     }else if( c2=='l' && n2>2 && strncmp(azArg[1],"list",n2)==0 ){
       mode = RenderMode::LIST;
-      sqlite3_snprintf(sizeof(colSeparator), colSeparator, SEP_Column);
-      sqlite3_snprintf(sizeof(rowSeparator), rowSeparator, SEP_Row);
+      colSeparator = SEP_Column;
+      rowSeparator = SEP_Row;
     }else if( c2=='h' && strncmp(azArg[1],"html",n2)==0 ){
       mode = RenderMode::HTML;
     }else if( c2=='t' && strncmp(azArg[1],"tcl",n2)==0 ){
       mode = RenderMode::TCL;
-      sqlite3_snprintf(sizeof(colSeparator), colSeparator, SEP_Space);
-      sqlite3_snprintf(sizeof(rowSeparator), rowSeparator, SEP_Row);
+      colSeparator = SEP_Space;
+      rowSeparator = SEP_Row;
     }else if( c2=='c' && strncmp(azArg[1],"csv",n2)==0 ){
       mode = RenderMode::CSV;
-      sqlite3_snprintf(sizeof(colSeparator), colSeparator, SEP_Comma);
-      sqlite3_snprintf(sizeof(rowSeparator), rowSeparator, SEP_CrLf);
+      colSeparator = SEP_Comma;
+      rowSeparator = SEP_CrLf;
     }else if( c2=='t' && strncmp(azArg[1],"tabs",n2)==0 ){
       mode = RenderMode::LIST;
-      sqlite3_snprintf(sizeof(colSeparator), colSeparator, SEP_Tab);
+      colSeparator = SEP_Tab;
     }else if( c2=='i' && strncmp(azArg[1],"insert",n2)==0 ){
       mode = RenderMode::INSERT;
       set_table_name(nArg>=3 ? azArg[2] : "table");
     }else if( c2=='q' && strncmp(azArg[1],"quote",n2)==0 ){
       mode = RenderMode::QUOTE;
-      sqlite3_snprintf(sizeof(colSeparator), colSeparator, SEP_Comma);
-      sqlite3_snprintf(sizeof(rowSeparator), rowSeparator, SEP_Row);
+      colSeparator = SEP_Comma;
+      rowSeparator = SEP_Row;
     }else if( c2=='a' && strncmp(azArg[1],"ascii",n2)==0 ){
       mode = RenderMode::ASCII;
-      sqlite3_snprintf(sizeof(colSeparator), colSeparator, SEP_Unit);
-      sqlite3_snprintf(sizeof(rowSeparator), rowSeparator, SEP_Record);
+      colSeparator = SEP_Unit;
+      rowSeparator = SEP_Record;
     }else if( c2=='m' && strncmp(azArg[1],"markdown",n2)==0 ){
       mode = RenderMode::MARKDOWN;
     }else if( c2=='t' && strncmp(azArg[1],"table",n2)==0 ){
@@ -5479,8 +5478,8 @@ int ShellState::do_meta_command(char *zLine){
         newTempFile("csv");
         ShellClearFlag(SHFLG_Echo);
         mode = RenderMode::CSV;
-        sqlite3_snprintf(sizeof(colSeparator), colSeparator, SEP_Comma);
-        sqlite3_snprintf(sizeof(rowSeparator), rowSeparator, SEP_CrLf);
+        colSeparator = SEP_Comma;
+        rowSeparator = SEP_CrLf;
       }else{
         /* text editor mode */
         newTempFile("txt");
@@ -5689,12 +5688,10 @@ int ShellState::do_meta_command(char *zLine){
       rc = 1;
     }
     if( nArg>=2 ){
-      sqlite3_snprintf(sizeof(colSeparator), colSeparator,
-                       "%.*s", (int)ArraySize(colSeparator)-1, azArg[1]);
+      colSeparator = azArg[1];
     }
     if( nArg>=3 ){
-      sqlite3_snprintf(sizeof(rowSeparator), rowSeparator,
-                       "%.*s", (int)ArraySize(rowSeparator)-1, azArg[2]);
+      rowSeparator = azArg[2];
     }
   }else
 
@@ -5848,10 +5845,10 @@ int ShellState::do_meta_command(char *zLine){
     utf8_printf(out,"%12.12s: %s\n","output",
             !outfile.empty() ? outfile.c_str() : "stdout");
     utf8_printf(out,"%12.12s: ", "colseparator");
-      output_c_string(colSeparator);
+      output_c_string(colSeparator.c_str());
       raw_printf(out, "\n");
     utf8_printf(out,"%12.12s: ", "rowseparator");
-      output_c_string(rowSeparator);
+      output_c_string(rowSeparator.c_str());
       raw_printf(out, "\n");
     utf8_printf(out, "%12.12s: ", "width");
     for (auto w : colWidth) {
@@ -6458,8 +6455,8 @@ static void main_init(ShellState *data) {
   data->normalMode = data->cMode = data->mode = RenderMode::DUCKBOX;
   data->max_rows = 40;
   data->autoExplain = 1;
-  memcpy(data->colSeparator,SEP_Column, 2);
-  memcpy(data->rowSeparator,SEP_Row, 2);
+  data->colSeparator = SEP_Column;
+  data->rowSeparator = SEP_Row;
   data->showHeader = 1;
   data->shellFlgs = SHFLG_Lookaside;
   verify_uninitialized();
@@ -6763,23 +6760,19 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
       data.mode = RenderMode::LATEX;
     }else if( strcmp(z,"-csv")==0 ){
       data.mode = RenderMode::CSV;
-      memcpy(data.colSeparator,",",2);
+      data.colSeparator = ",";
     }else if( strcmp(z,"-readonly")==0 ){
       data.openMode = SHELL_OPEN_READONLY;
     }else if( strcmp(z,"-nofollow")==0 ){
       data.openFlags |= SQLITE_OPEN_NOFOLLOW;
     }else if( strcmp(z,"-ascii")==0 ){
       data.mode = RenderMode::ASCII;
-      sqlite3_snprintf(sizeof(data.colSeparator), data.colSeparator,
-                       SEP_Unit);
-      sqlite3_snprintf(sizeof(data.rowSeparator), data.rowSeparator,
-                       SEP_Record);
+      data.colSeparator = SEP_Unit;
+      data.rowSeparator = SEP_Record;
     }else if( strcmp(z,"-separator")==0 ){
-      sqlite3_snprintf(sizeof(data.colSeparator), data.colSeparator,
-                       "%s",cmdline_option_value(argc,argv,++i));
+      data.colSeparator = cmdline_option_value(argc,argv,++i);
     }else if( strcmp(z,"-newline")==0 ){
-      sqlite3_snprintf(sizeof(data.rowSeparator), data.rowSeparator,
-                       "%s",cmdline_option_value(argc,argv,++i));
+      data.rowSeparator = cmdline_option_value(argc,argv,++i);
     }else if( strcmp(z,"-nullvalue")==0 ){
     	data.nullValue = cmdline_option_value(argc,argv,++i);
     }else if( strcmp(z,"-header")==0 ){
