@@ -138,13 +138,13 @@ public:
 		auto string_size = str.GetSize();
 		total_size += string_size;
 	}
-	idx_t GetVectorCount() {
+	inline idx_t GetVectorCount() const {
 		idx_t vector_count = count / STANDARD_VECTOR_SIZE;
 		vector_count += (count % STANDARD_VECTOR_SIZE) != 0;
 		return vector_count;
 	}
 
-	idx_t GetVectorMetadataSize() {
+	inline idx_t GetVectorMetadataSize() const {
 		auto vector_count = GetVectorCount();
 
 		idx_t vector_metadata_size = 0;
@@ -343,13 +343,40 @@ public:
 		current_buffer_ptr = handle.Ptr();
 	}
 
-	BufferHandle &GetExtraPageBuffer() {
+	BufferHandle &GetExtraPageBuffer(block_id_t current_block_id, bool additional_data_page) {
 		auto &block_manager = partial_block_manager.GetBlockManager();
 		auto &buffer_manager = block_manager.buffer_manager;
-		if (!extra_page_buffer.IsValid()) {
-			extra_page_buffer = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, block_manager.GetBlockSize());
+
+		optional_ptr<BufferHandle> to_use;
+
+		if (additional_data_page) {
+			bool already_separated = current_buffer != vector_lengths_buffer;
+			if (already_separated) {
+				// Already separated, can keep using the other buffer (flush it first)
+				FlushPage(*current_buffer, current_block_id);
+				to_use = current_buffer;
+			} else {
+				// Not already separated, have to use the other page
+				to_use = current_buffer == &extra_pages[0] ? &extra_pages[1] : &extra_pages[0];
+			}
+		} else {
+			bool previous_page_is_segment = current_buffer == &segment_handle;
+			if (!previous_page_is_segment) {
+				// We're asking for a fresh buffer to start the vectors data
+				// that means the previous vector is finished - so we can flush the current page and reuse it
+				D_ASSERT(current_block_id != INVALID_BLOCK);
+				FlushPage(*current_buffer, current_block_id);
+				to_use = current_buffer;
+			} else {
+				// Previous buffer was the segment, take the first extra page in this case
+				to_use = &extra_pages[0];
+			}
 		}
-		return extra_page_buffer;
+
+		if (!to_use->IsValid()) {
+			*to_use = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, block_manager.GetBlockSize());
+		}
+		return *to_use;
 	}
 
 	void InitializeVector() {
@@ -366,11 +393,10 @@ public:
 		uncompressed_size = 0;
 
 		if (current_offset + (vector_size * sizeof(string_length_t)) >= GetWritableSpace()) {
-			NewPage();
+			NewPage(false);
 		}
-		// !!FIXME!!: this means we need to keep multiple pages active at once
-		// we could be writing on page 5 to serialize the compressed data, while the start is on page 3
-		// which means we need to write the string lengths to page 3
+
+		vector_lengths_buffer = current_buffer;
 		string_lengths = (string_length_t *)(current_buffer->Ptr() + current_offset);
 		current_buffer_ptr = (data_ptr_t)string_lengths;
 		current_buffer_ptr += vector_size * sizeof(string_length_t);
@@ -416,7 +442,7 @@ public:
 			// FIXME: will 'pos' in the out_buffer always reach 'size' or could the library refuse to fully utilize the
 			// buffer ?? if that is the case, we should somehow serialize how many bytes are utilized for each page
 			D_ASSERT(out_buffer.pos == out_buffer.size);
-			NewPage();
+			NewPage(true);
 		}
 	}
 
@@ -442,35 +468,33 @@ public:
 		return info.GetBlockSize() - sizeof(block_id_t);
 	}
 
-	void NewPage() {
-		auto &block_manager = partial_block_manager.GetBlockManager();
-		auto new_id = block_manager.GetFreeBlockId();
-
-		FlushPage(new_id);
-
+	void NewPage(bool additional_data_page = false) {
+		block_id_t new_id = FinalizePage();
+		block_id_t current_block_id = block_id;
+		auto &buffer = GetExtraPageBuffer(current_block_id, additional_data_page);
 		block_id = new_id;
-		auto &buffer = GetExtraPageBuffer();
 		SetCurrentBuffer(buffer);
 		ResetOutBuffer();
 	}
 
-	void FlushPage(block_id_t new_id) {
-		// update the pointers and 'current_buffer_ptr' etc to point to the new block
-		// update the 'out_buffer'
-		// there is an old block, write it first
-		// write the new block id at the end of the previous block
+	block_id_t FinalizePage() {
+		auto &block_manager = partial_block_manager.GetBlockManager();
+		auto new_id = block_manager.GetFreeBlockId();
 
 		D_ASSERT(current_buffer_ptr <= current_buffer->Ptr() + GetWritableSpace());
 
+		// Write the new id at the end of the last page
 		Store<block_id_t>(new_id, current_buffer_ptr);
 		current_buffer_ptr += sizeof(block_id_t);
-		if (block_id == INVALID_BLOCK) {
-			return;
-		}
+		return new_id;
+	}
+
+	void FlushPage(BufferHandle &buffer, block_id_t block_id) {
+		D_ASSERT(block_id != INVALID_BLOCK);
 
 		// Write the current page to disk
 		auto &block_manager = partial_block_manager.GetBlockManager();
-		block_manager.Write(current_buffer->GetFileBuffer(), block_id);
+		block_manager.Write(buffer.GetFileBuffer(), block_id);
 		{
 			auto lock = partial_block_manager.GetLock();
 			partial_block_manager.AddWrittenBlock(block_id);
@@ -485,7 +509,25 @@ public:
 		uncompressed_sizes[vector_count] = uncompressed_size;
 		vector_count++;
 
+		const bool is_last_vector = vector_count == total_vector_count;
 		tuple_count = 0;
+		if (vector_lengths_buffer == &segment_handle) {
+			// This gets flushed at the very end
+			return;
+		}
+		if (is_last_vector) {
+			FlushPage(*current_buffer, block_id);
+			if (starting_page != block_id) {
+				FlushPage(*vector_lengths_buffer, starting_page);
+			}
+		} else {
+			if (vector_lengths_buffer == current_buffer) {
+				// We did not cross a page boundary writing this vector
+				return;
+			}
+			// Flush the page that holds the vector lengths
+			FlushPage(*vector_lengths_buffer, starting_page);
+		}
 	}
 
 	page_id_t GetCurrentId() {
@@ -516,7 +558,6 @@ public:
 
 	void Finalize() {
 		D_ASSERT(!tuple_count);
-		FlushPage(INVALID_BLOCK);
 
 		auto &state = checkpointer.GetCheckpointState();
 		idx_t segment_block_size;
@@ -556,12 +597,14 @@ public:
 	unique_ptr<ColumnSegment> segment;
 	BufferHandle segment_handle;
 
-	// Extra page(s)
-	BufferHandle extra_page_buffer;
+	// Non-segment buffers
+	BufferHandle extra_pages[2];
 	block_id_t block_id = INVALID_BLOCK;
 
 	// Current block state
 	optional_ptr<BufferHandle> current_buffer;
+	//! The buffer that contains the vector lengths
+	optional_ptr<BufferHandle> vector_lengths_buffer;
 	data_ptr_t current_buffer_ptr;
 
 	//===--------------------------------------------------------------------===//
@@ -622,6 +665,8 @@ void ZSTDStorage::FinalizeCompress(CompressionState &state_p) {
 }
 
 struct ZSTDVectorScanMetadata {
+	//! The index of the (internal) vector being read
+	idx_t vector_idx;
 	block_id_t block_id;
 	page_offset_t block_offset;
 
@@ -630,19 +675,26 @@ struct ZSTDVectorScanMetadata {
 
 	//! The amount of tuples that are in this Vector
 	idx_t count;
-	//! The current offset in this Vector
-	idx_t offset;
 };
 
-struct ZSTDVectorScanData {
+struct ZSTDVectorScanState {
+public:
+	ZSTDVectorScanState() {
+	}
+	ZSTDVectorScanState(ZSTDVectorScanState &&other) = default;
+	ZSTDVectorScanState(const ZSTDVectorScanState &other) = delete;
+
+public:
 	//! The metadata of the vector
 	ZSTDVectorScanMetadata metadata;
-	//! The pointer to the (pinned) buffer handle for this vector's first data page
-	optional_ptr<BufferHandle> buffer_handle;
-	//! The pointer to the start of the compressed vector data
+	//! The (pinned) buffer handle(s) for this vectors data
+	vector<BufferHandle> buffer_handles;
+	//! The current pointer at which we're reading the vectors data
 	data_ptr_t current_buffer_ptr;
 	//! The (uncompressed) string lengths for this vector
 	string_length_t *string_lengths;
+	//! The amount of values already consumed from the state
+	idx_t scanned_count = 0;
 };
 
 //===--------------------------------------------------------------------===//
@@ -650,8 +702,44 @@ struct ZSTDVectorScanData {
 //===--------------------------------------------------------------------===//
 struct ZSTDScanState : public SegmentScanState {
 public:
-	ZSTDScanState() : decompression_dict(nullptr) {
+	ZSTDScanState(ColumnSegment &segment)
+	    : block_manager(segment.GetBlockManager()), buffer_manager(BufferManager::GetBufferManager(segment.db)),
+	      decompression_dict(nullptr) {
 		decompression_context = duckdb_zstd::ZSTD_createDCtx();
+		segment_handle = buffer_manager.Pin(segment.block);
+
+		// Load dictionary
+		auto data = segment_handle.Ptr() + segment.GetBlockOffset();
+		auto dict_size = Load<dict_size_t>(data);
+
+		dict = DictBuffer(data + sizeof(dict_size_t), dict_size);
+
+		idx_t offset = 0;
+		decompression_dict = duckdb_zstd::ZSTD_createDDict_byReference(dict.Buffer(), dict.Size());
+		offset += sizeof(dict_size_t) + dict.Size();
+
+		segment_count = segment.count.load();
+		idx_t amount_of_vectors =
+		    (segment_count / STANDARD_VECTOR_SIZE) + ((segment_count % STANDARD_VECTOR_SIZE) != 0);
+
+		// Set pointers to the Vector Metadata
+		offset = AlignValue<idx_t, sizeof(page_id_t)>(offset);
+		page_ids = (page_id_t *)(data + offset);
+		offset += (sizeof(page_id_t) * amount_of_vectors);
+
+		offset = AlignValue<idx_t, sizeof(page_offset_t)>(offset);
+		page_offsets = (page_offset_t *)(data + offset);
+		offset += (sizeof(page_offset_t) * amount_of_vectors);
+
+		offset = AlignValue<idx_t, sizeof(uncompressed_size_t)>(offset);
+		uncompressed_sizes = (uncompressed_size_t *)(data + offset);
+		offset += (sizeof(uncompressed_size_t) * amount_of_vectors);
+
+		offset = AlignValue<idx_t, sizeof(compressed_size_t)>(offset);
+		compressed_sizes = (compressed_size_t *)(data + offset);
+		offset += (sizeof(compressed_size_t) * amount_of_vectors);
+
+		scanned_count = 0;
 	}
 	~ZSTDScanState() {
 		duckdb_zstd::ZSTD_freeDDict(decompression_dict);
@@ -659,20 +747,19 @@ public:
 	}
 
 public:
-	ZSTDVectorScanMetadata GetVectorMetadata(idx_t start_idx) {
+	ZSTDVectorScanMetadata GetVectorMetadata(idx_t start_idx, idx_t &offset) {
 		idx_t entire_vectors = start_idx / STANDARD_VECTOR_SIZE;
 		auto vector_idx = entire_vectors + ((start_idx % STANDARD_VECTOR_SIZE) != 0);
 		idx_t remaining = MinValue<idx_t>(segment_count - start_idx, STANDARD_VECTOR_SIZE);
-		auto offset = start_idx - (entire_vectors * STANDARD_VECTOR_SIZE);
 
-		return ZSTDVectorScanMetadata {
-		    /* block_id = */ page_ids[vector_idx],
-		    /* block_offset = */ page_offsets[vector_idx],
-		    /* uncompressed_size = */ uncompressed_sizes[vector_idx],
-		    /* compressed_size = */ compressed_sizes[vector_idx],
-		    /* count = */ remaining,
-		    /* offset = */ offset,
-		};
+		offset = start_idx - (entire_vectors * STANDARD_VECTOR_SIZE);
+
+		return ZSTDVectorScanMetadata {/* vector_idx = */ vector_idx,
+		                               /* block_id = */ page_ids[vector_idx],
+		                               /* block_offset = */ page_offsets[vector_idx],
+		                               /* uncompressed_size = */ uncompressed_sizes[vector_idx],
+		                               /* compressed_size = */ compressed_sizes[vector_idx],
+		                               /* count = */ remaining};
 	}
 
 	shared_ptr<BlockHandle> LoadPage(block_id_t block_id) {
@@ -687,30 +774,105 @@ public:
 		return result;
 	}
 
-	ZSTDVectorScanData LoadVector(ZSTDVectorScanMetadata &metadata) {
-		ZSTDVectorScanData scan_data;
+	bool UseVectorStateCache(idx_t vector_idx, idx_t internal_offset) {
+		if (!current_vector) {
+			// No vector loaded yet
+			return false;
+		}
+		if (current_vector->metadata.vector_idx != vector_idx) {
+			// Not the same vector
+			return false;
+		}
+		if (current_vector->scanned_count != internal_offset) {
+			// Not the same scan offset
+			return false;
+		}
+		return true;
+	}
 
+	ZSTDVectorScanState &LoadVector(ZSTDVectorScanMetadata &metadata, idx_t internal_offset) {
+		if (UseVectorStateCache(metadata.vector_idx, internal_offset)) {
+			return *current_vector;
+		}
+		current_vector = make_uniq<ZSTDVectorScanState> auto &scan_data = *current_vector;
 		if (metadata.block_id == INVALID_BLOCK) {
 			// Data lives on the segment's page
-			scan_data.buffer_handle = &segment_handle;
+			scan_data.current_buffer_ptr = segment_handle.Ptr() + metadata.block_offset;
 		} else {
 			// Data lives on an extra page, have to load the block first
 			auto block = LoadPage(metadata.block_id);
 			data_handle = buffer_manager.Pin(block);
-			scan_data.buffer_handle = &data_handle;
+			auto ptr = data_handle.Ptr();
+			scan_data.buffer_handles.push_back(std::move(data_handle));
+			scan_data.current_buffer_ptr = ptr + metadata.block_offset;
 		}
 
 		auto vector_size = metadata.count;
-		scan_data.string_lengths = (string_length_t *)scan_data.buffer_handle->Ptr() + metadata.block_offset;
-		// scan_data.current_buffer_ptr += ...
+		scan_data.string_lengths = (string_length_t *)(scan_data.current_buffer_ptr);
+		scan_data.current_buffer_ptr += (sizeof(string_length_t) * vector_size);
+
+		Skip(scan_data, internal_offset);
 		return scan_data;
+	}
+
+	void Skip(ZSTDVectorScanState &scan_data, idx_t count) {
+	}
+
+	void DecompressString(ZSTDVectorScanState &scan_state, data_ptr_t destination,
+	                      string_length_t uncompressed_length) {
+		duckdb_zstd::ZSTD_outBuffer out_buffer;
+
+		out_buffer.dst = destination;
+		out_buffer.pos = 0;
+		out_buffer.size = uncompressed_length;
+
+		while (true) {
+			size_t res = duckdb_zstd::ZSTD_decompressStream();
+			if (duckdb_zstd::ZSTD_isError(res)) {
+				throw InvalidInputException("ZSTD Decompression failed: %s", duckdb_zstd::ZSTD_getErrorName(res));
+			}
+			if (!res) {
+				break;
+			}
+			// Did not fully decompress, it needs a new page to read from
+		}
+	}
+
+	void ScanInternal(ZSTDVectorScanState &scan_data, idx_t count, Vector &result, idx_t result_offset) {
+		D_ASSERT(scan_data.scanned_count + count <= scan_data.metadata.count);
+		D_ASSERT(result.type().id() == LogicalTypeId::VARCHAR);
+
+		string_length_t *string_lengths = &scan_data.string_lengths[scan_data.scanned_count];
+		idx_t uncompressed_length = 0;
+		for (idx_t i = 0; i < count; i++) {
+			uncompressed_length += string_lengths[i];
+		}
+		auto empty_string = StringVector::EmptyString(result, uncompressed_length);
+		auto uncompressed_data = empty_string.GetData();
+		auto string_data = FlatVector::GetData<string_t>(result);
+		for (idx_t i = 0; i < count; i++) {
+			data_ptr_t start_of_uncompressed_string = uncompressed_data;
+			DecompressString(scan_state, start_of_uncompressed_string, string_lengths[i]);
+
+			// uncompressed_data += ???
+			string_data[result_offset + i] = string_t(start_of_uncompressed_string, string_lengths[i]);
+		}
 	}
 
 	void ScanPartial(idx_t start_idx, Vector &result, idx_t offset, idx_t count) {
 		D_ASSERT(offset + count <= STANDARD_VECTOR_SIZE);
 
-		auto vector_metadata = GetVectorMetadata(start_idx);
-		auto scan_data = LoadVector(vector_metadata);
+		idx_t remaining = count;
+		while (remaining) {
+			idx_t internal_offset;
+			auto vector_metadata = GetVectorMetadata(start_idx, internal_offset);
+			auto &scan_state = LoadVector(vector_metadata, internal_offset);
+			idx_t remaining_in_vector = scan_state.metadata.count - scan_state.scanned_count;
+			idx_t to_scan = MaxValue<idx_t>(remaining, remaining_in_vector);
+			ScanInternal(scan_state, to_scan, result, offset);
+
+			remaining -= to_scan;
+		}
 
 		scanned_count += count;
 	}
@@ -720,8 +882,6 @@ public:
 	BufferManager &buffer_manager;
 	mutex block_lock;
 	unordered_map<block_id_t, shared_ptr<BlockHandle>> handles;
-	//! The extra page that is currently being read
-	BufferHandle data_handle;
 
 	DictBuffer dict;
 	duckdb_zstd::ZSTD_DCtx *decompression_context = 0;
@@ -737,6 +897,9 @@ public:
 	uncompressed_size_t *uncompressed_sizes;
 	compressed_size_t *compressed_sizes;
 
+	//! Cache of (the scan state of) the current vector being read
+	unique_ptr<ZSTDVectorScanState> current_vector;
+
 	//! The amount of tuples stored in the segment
 	idx_t segment_count;
 	//! The amount of tuples consumed
@@ -744,43 +907,7 @@ public:
 };
 
 unique_ptr<SegmentScanState> ZSTDStorage::StringInitScan(ColumnSegment &segment) {
-	auto result = make_uniq<ZSTDScanState>();
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	result->segment_handle = buffer_manager.Pin(segment.block);
-
-	// load dictionary
-	auto data = result->segment_handle.Ptr() + segment.GetBlockOffset();
-	auto dict_size = Load<dict_size_t>(data);
-
-	result->dict = DictBuffer(data + sizeof(dict_size_t), dict_size);
-
-	idx_t offset = 0;
-	result->decompression_dict = duckdb_zstd::ZSTD_createDDict_byReference(result->dict.Buffer(), result->dict.Size());
-	offset += sizeof(dict_size_t) + result->dict.Size();
-
-	result->segment_count = segment.count.load();
-	idx_t segment_count = result->segment_count;
-	idx_t amount_of_vectors = (segment_count / STANDARD_VECTOR_SIZE) + ((segment_count % STANDARD_VECTOR_SIZE) != 0);
-
-	// Set pointers to the Vector Metadata
-
-	offset = AlignValue<idx_t, sizeof(page_id_t)>(offset);
-	result->page_ids = (page_id_t *)(data + offset);
-	offset += (sizeof(page_id_t) * amount_of_vectors);
-
-	offset = AlignValue<idx_t, sizeof(page_offset_t)>(offset);
-	result->page_offsets = (page_offset_t *)(data + offset);
-	offset += (sizeof(page_offset_t) * amount_of_vectors);
-
-	offset = AlignValue<idx_t, sizeof(uncompressed_size_t)>(offset);
-	result->uncompressed_sizes = (uncompressed_size_t *)(data + offset);
-	offset += (sizeof(uncompressed_size_t) * amount_of_vectors);
-
-	offset = AlignValue<idx_t, sizeof(compressed_size_t)>(offset);
-	result->compressed_sizes = (compressed_size_t *)(data + offset);
-	offset += (sizeof(compressed_size_t) * amount_of_vectors);
-
-	result->scanned_count = 0;
+	auto result = make_uniq<ZSTDScanState>(segment);
 	return std::move(result);
 }
 
@@ -804,13 +931,11 @@ void ZSTDStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx
 	// StringScanPartial(segment, state, scan_count, result, 0);
 
 	auto &scan_state = state.scan_state->Cast<ZSTDScanState>();
-	auto &block_manager = segment.GetBlockManager();
-	auto &buffer_manager = block_manager.buffer_manager;
 
-	data_ptr_t src = scan_state.current_data_ptr;
-	auto result_data = FlatVector::GetData<string_t>(result);
+	// data_ptr_t src = scan_state.current_data_ptr;
+	// auto result_data = FlatVector::GetData<string_t>(result);
 
-	duckdb_zstd::ZSTD_DCtx *zstd_context = duckdb_zstd::ZSTD_createDCtx();
+	// duckdb_zstd::ZSTD_DCtx *zstd_context = duckdb_zstd::ZSTD_createDCtx();
 
 	//// create temporary buffer
 	//// TODO: fix this
@@ -827,7 +952,7 @@ void ZSTDStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx
 	//	result_data[i] = string_t(buffer, UnsafeNumericCast<uint32_t>(uncompressed_size));
 	//}
 
-	duckdb_zstd::ZSTD_freeDCtx(zstd_context);
+	// duckdb_zstd::ZSTD_freeDCtx(zstd_context);
 }
 
 //===--------------------------------------------------------------------===//
