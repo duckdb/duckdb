@@ -1,6 +1,8 @@
 #include "shell_renderer.hpp"
 
 #include "shell_state.hpp"
+#include "duckdb_shell_wrapper.h"
+#include "sqlite3.h"
 
 namespace duckdb_shell {
 
@@ -483,6 +485,69 @@ public:
 	}
 };
 
+class ModeAsciiRenderer : public RowRenderer {
+public:
+	explicit ModeAsciiRenderer(ShellState &state) : RowRenderer(state) {}
+
+	void RenderHeader(RowResult &result) override {
+		if (!state.showHeader) {
+			return;
+		}
+		auto &col_names = result.column_names;
+		for(idx_t i=0; i<col_names.size(); i++){
+			if( i>0 ) state.Print(state.colSeparator);
+			state.Print(col_names[i] ? col_names[i] : "");
+		}
+		state.Print(state.rowSeparator);
+	}
+
+	void RenderRow(RowResult &result) override {
+		auto &data = result.data;
+		for(idx_t i=0; i<data.size(); i++){
+			if( i>0 ) state.Print(state.colSeparator);
+			state.Print(data[i] ? data[i] : state.nullValue);
+		}
+		state.Print(state.rowSeparator);
+	}
+};
+
+class ModeQuoteRenderer : public RowRenderer {
+public:
+	explicit ModeQuoteRenderer(ShellState &state) : RowRenderer(state) {}
+
+	void RenderHeader(RowResult &result) override {
+		if (!state.showHeader) {
+			return;
+		}
+		auto &col_names = result.column_names;
+		for(idx_t i=0; i<col_names.size(); i++){
+			if( i>0 ) state.Print(state.colSeparator);
+			state.output_quoted_string(col_names[i]);
+		}
+		state.Print(state.rowSeparator);
+	}
+
+	void RenderRow(RowResult &result) override {
+		auto &data = result.data;
+		auto &types = result.types;
+		for(idx_t i=0; i<data.size(); i++){
+			if( i>0 ) state.Print(state.colSeparator);
+			if( (data[i]==0) || (!types.empty() && types[i]==SQLITE_NULL) ){
+				state.Print("NULL");
+			}else if( !types.empty() && (types[i]==SQLITE_TEXT || types[i] == SQLITE_BLOB)){
+				state.output_quoted_string(data[i]);
+			}else if( !types.empty() && (types[i]==SQLITE_INTEGER || types[i] == SQLITE_FLOAT) ){
+				state.Print(data[i]);
+			}else if( state.isNumber(data[i], 0) ){
+				state.Print(data[i]);
+			}else{
+				state.output_quoted_string(data[i]);
+			}
+		}
+		state.Print(state.rowSeparator);
+	}
+};
+
 unique_ptr<RowRenderer> ShellState::GetRowRenderer() {
 	switch(cMode) {
 	case RenderMode::LINE:
@@ -497,6 +562,10 @@ unique_ptr<RowRenderer> ShellState::GetRowRenderer() {
 		return unique_ptr<RowRenderer>(new ModeTclRenderer(*this));
 	case RenderMode::CSV:
 		return unique_ptr<RowRenderer>(new ModeCsvRenderer(*this));
+	case RenderMode::ASCII:
+		return unique_ptr<RowRenderer>(new ModeAsciiRenderer(*this));
+	case RenderMode::QUOTE:
+		return unique_ptr<RowRenderer>(new ModeQuoteRenderer(*this));
 	case RenderMode::TRASH:
 		// no renderer
 		return nullptr;

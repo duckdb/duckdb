@@ -536,7 +536,7 @@ void ShellState::utf8_width_print(FILE *pOut, int w, const string &str){
 /*
 ** Determines if a string is a number of not.
 */
-static int isNumber(const char *z, int *realnum){
+int ShellState::isNumber(const char *z, int *realnum){
   if( *z=='-' || *z=='+' ) z++;
   if( !IsDigit(*z) ){
     return 0;
@@ -2520,7 +2520,7 @@ void ShellState::outputModePop(){
 /*
 ** Output the given string as a hex-encoded blob (eg. X'1234' )
 */
-static void output_hex_blob(FILE *out, const void *pBlob, int nBlob){
+void ShellState::output_hex_blob(const void *pBlob, int nBlob){
   int i;
   char *zBlob = (char *)pBlob;
   raw_printf(out,"X'");
@@ -2554,10 +2554,10 @@ static const char *unused_string(
 **
 ** See also: output_quoted_escaped_string()
 */
-static void output_quoted_string(FILE *out, const char *z){
+void ShellState::output_quoted_string(const char *z){
   int i;
   char c;
-  setBinaryMode(out, 1);
+	SetBinaryMode();
   for(i=0; (c = z[i])!=0 && c!='\''; i++){}
   if( c==0 ){
     utf8_printf(out,"'%s'",z);
@@ -2581,7 +2581,7 @@ static void output_quoted_string(FILE *out, const char *z){
     }
     raw_printf(out, "'");
   }
-  setTextMode(out, 1);
+	SetTextMode();
 }
 
 /*
@@ -3026,7 +3026,7 @@ int ShellState::shell_callback(
           utf8_printf(out,"NULL");
         }else if( !types.empty() && types[i]==SQLITE_TEXT ){
           if( ShellHasFlag(SHFLG_Newlines) ){
-            output_quoted_string(out, data[i]);
+            output_quoted_string(data[i]);
           }else{
             output_quoted_escaped_string(out, data[i]);
           }
@@ -3047,14 +3047,14 @@ int ShellState::shell_callback(
           const void *pBlob = sqlite3_column_blob(pStmt, i);
           if(pBlob) {
           	int nBlob = sqlite3_column_bytes(pStmt, i);
-          	output_hex_blob(out, pBlob, nBlob);
+          	output_hex_blob(pBlob, nBlob);
           } else {
 	        utf8_printf(out,"NULL");
           }
         }else if( isNumber(data[i], 0) ){
           utf8_printf(out,"%s", data[i]);
         }else if( ShellHasFlag(SHFLG_Newlines) ){
-          output_quoted_string(out, data[i]);
+          output_quoted_string(data[i]);
         }else{
           output_quoted_escaped_string(out, data[i]);
         }
@@ -3106,56 +3106,6 @@ int ShellState::shell_callback(
         }
       }
       putc('}', out);
-      break;
-    }
-    case RenderMode::QUOTE: {
-      if( cnt==0 && showHeader ){
-        for(idx_t i=0; i<col_names.size(); i++){
-          if( i>0 ) fputs(colSeparator, out);
-          output_quoted_string(out, col_names[i]);
-        }
-        fputs(rowSeparator, out);
-      }
-      cnt++;
-      for(idx_t i=0; i<data.size(); i++){
-        if( i>0 ) fputs(colSeparator, out);
-        if( (data[i]==0) || (!types.empty() && types[i]==SQLITE_NULL) ){
-          utf8_printf(out,"NULL");
-        }else if( !types.empty() && types[i]==SQLITE_TEXT ){
-          output_quoted_string(out, data[i]);
-        }else if( !types.empty() && types[i]==SQLITE_INTEGER ){
-          utf8_printf(out,"%s", data[i]);
-        }else if( !types.empty() && types[i]==SQLITE_FLOAT ){
-          char z[50];
-          double r = sqlite3_column_double(pStmt, i);
-          sqlite3_snprintf(50,z,"%!.20g", r);
-          raw_printf(out, "%s", z);
-        }else if( !types.empty() && types[i]==SQLITE_BLOB && pStmt ){
-          const void *pBlob = sqlite3_column_blob(pStmt, i);
-          int nBlob = sqlite3_column_bytes(pStmt, i);
-          output_hex_blob(out, pBlob, nBlob);
-        }else if( isNumber(data[i], 0) ){
-          utf8_printf(out,"%s", data[i]);
-        }else{
-          output_quoted_string(out, data[i]);
-        }
-      }
-      fputs(rowSeparator, out);
-      break;
-    }
-    case RenderMode::ASCII: {
-      if( cnt++==0 && showHeader ){
-        for(idx_t i=0; i<col_names.size(); i++){
-          if( i>0 ) utf8_printf(out, "%s", colSeparator);
-          utf8_printf(out,"%s",col_names[i] ? col_names[i] : "");
-        }
-        utf8_printf(out, "%s", rowSeparator);
-      }
-      for(idx_t i=0; i<data.size(); i++){
-        if( i>0 ) utf8_printf(out, "%s", colSeparator);
-        utf8_printf(out,"%s",data[i] ? data[i] : nullValue);
-      }
-      utf8_printf(out, "%s", rowSeparator);
       break;
     }
   default:

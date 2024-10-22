@@ -114,6 +114,9 @@ public:
 	void print_row_separator(int nArg, const char *zSep, const vector<int> &actualWidth);
 	void print_markdown_separator(int nArg, const char *zSep, const vector<int> &colTypes, const vector<int> &actualWidth);
 	void output_c_string(const char *z);
+	void output_quoted_string(const char *z);
+	void output_hex_blob(const void *pBlob, int nBlob);
+	int isNumber(const char *z, int *realnum);
 	void print_dashes(int N);
 	void utf8_width_print(FILE *pOut, int w, const string &str);
 	int strlenChar(const char *z);
