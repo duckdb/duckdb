@@ -125,6 +125,7 @@ public:
 	void output_json_string(const char *z, int n);
 	void print_dashes(int N);
 	void utf8_width_print(FILE *pOut, int w, const string &str);
+	bool SetOutputMode(const char *mode, const char *tbl_name);
 	int strlenChar(const char *z);
 	int strlenChar(const string &str);
 	void SetBinaryMode();

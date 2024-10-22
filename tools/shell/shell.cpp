@@ -4644,6 +4644,86 @@ MetadataResult SetRowRendering(ShellState &state, const char **azArg, idx_t nArg
 	return MetadataResult::SUCCESS;
 }
 
+bool ShellState::SetOutputMode(const char *mode_str, const char *tbl_name) {
+    int n2 = strlen30(mode_str);
+    int c2 = mode_str[0];
+    if( c2=='l' && n2>2 && strncmp(mode_str,"lines",n2)==0 ){
+      mode = RenderMode::LINE;
+      rowSeparator = SEP_Row;
+    }else if( c2=='c' && strncmp(mode_str,"columns",n2)==0 ){
+      mode = RenderMode::COLUMN;
+      if( (shellFlgs & SHFLG_HeaderSet)==0 ){
+        showHeader = 1;
+      }
+      rowSeparator = SEP_Row;
+    }else if( c2=='l' && n2>2 && strncmp(mode_str,"list",n2)==0 ){
+      mode = RenderMode::LIST;
+      colSeparator = SEP_Column;
+      rowSeparator = SEP_Row;
+    }else if( c2=='h' && strncmp(mode_str,"html",n2)==0 ){
+      mode = RenderMode::HTML;
+    }else if( c2=='t' && strncmp(mode_str,"tcl",n2)==0 ){
+      mode = RenderMode::TCL;
+      colSeparator = SEP_Space;
+      rowSeparator = SEP_Row;
+    }else if( c2=='c' && strncmp(mode_str, "csv",n2)==0 ){
+      mode = RenderMode::CSV;
+      colSeparator = SEP_Comma;
+      rowSeparator = SEP_CrLf;
+    }else if( c2=='t' && strncmp(mode_str,"tabs",n2)==0 ){
+      mode = RenderMode::LIST;
+      colSeparator = SEP_Tab;
+    }else if( c2=='i' && strncmp(mode_str,"insert",n2)==0 ){
+      mode = RenderMode::INSERT;
+      set_table_name(tbl_name ? tbl_name : "table");
+    }else if( c2=='q' && strncmp(mode_str,"quote",n2)==0 ){
+      mode = RenderMode::QUOTE;
+      colSeparator = SEP_Comma;
+      rowSeparator = SEP_Row;
+    }else if( c2=='a' && strncmp(mode_str,"ascii",n2)==0 ){
+      mode = RenderMode::ASCII;
+      colSeparator = SEP_Unit;
+      rowSeparator = SEP_Record;
+    }else if( c2=='m' && strncmp(mode_str,"markdown",n2)==0 ){
+      mode = RenderMode::MARKDOWN;
+    }else if( c2=='t' && strncmp(mode_str,"table",n2)==0 ){
+      mode = RenderMode::TABLE;
+    }else if( c2=='b' && strncmp(mode_str,"box",n2)==0 ){
+      mode = RenderMode::BOX;
+    }else if( c2=='d' && strncmp(mode_str,"duckbox",n2)==0 ){
+      mode = RenderMode::DUCKBOX;
+    }else if( c2=='j' && strncmp(mode_str,"json",n2)==0 ){
+      mode = RenderMode::JSON;
+    }else if( c2=='l' && strncmp(mode_str,"latex",n2)==0 ){
+      mode = RenderMode::LATEX;
+    }else if( c2=='t' && strncmp(mode_str,"trash",n2)==0 ){
+      mode = RenderMode::TRASH;
+	}else if( c2=='j' && strncmp(mode_str,"jsonlines",n2)==0 ){
+		mode = RenderMode::JSONLINES;
+    }else{
+      raw_printf(stderr, "Error: mode should be one of: "
+         "ascii box column csv duckbox html insert json jsonlines latex line "
+         "list markdown quote table tabs tcl trash \n");
+      return false;
+    }
+    cMode = mode;
+	return true;
+}
+
+MetadataResult SetOutputMode(ShellState &state, const char **azArg, idx_t nArg) {
+	if (nArg > 3) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	if (nArg == 1) {
+      raw_printf(state.out, "current output mode: %s\n", modeDescr[int(state.mode)]);
+	} else {
+		if (!state.SetOutputMode(azArg[1], nArg > 2 ? azArg[2] : nullptr)) {
+			return MetadataResult::ERROR;
+		}
+	}
+	return MetadataResult::SUCCESS;
+}
+
 static const MetadataCommand metadata_commands[] = {
 	{"backup", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
 	{"bail", 2, ToggleBail, "on|off", "Stop after hitting an error.  Default OFF", 3},
@@ -4659,9 +4739,11 @@ static const MetadataCommand metadata_commands[] = {
 	{"fullschema", 0, nullptr, "", "", 0},
 	{"headers", 2, ToggleHeaders, "on|off", "Turn display of headers on or off", 0},
 	{"help", 0, ShowHelp, "?-all? ?PATTERN?", "Show help text for PATTERN", 0},
-	{"log", 1, ToggleLog, "FILE|off", "Turn logging on or off.  FILE can be stderr/stdout", 0},
+	{"log", 2, ToggleLog, "FILE|off", "Turn logging on or off.  FILE can be stderr/stdout", 0},
 	{"maxrows", 0, SetMaxRows, "COUNT", "Sets the maximum number of rows for display (default: 40). Only for duckbox mode.", 0},
 	{"maxwidth", 0, SetMaxWidth, "COUNT", "Sets the maximum width in characters. 0 defaults to terminal width. Only for duckbox mode.", 0},
+{"mode", 0, SetOutputMode, "MODE ?TABLE?", "Set output mode", 0},
+
 	{"rows", 1, SetRowRendering, "", "Row-wise rendering of query results (default)", 0},
 	{"save", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
 	{ nullptr, 0, nullptr }
@@ -4717,8 +4799,8 @@ int ShellState::do_meta_command(char *zLine){
 	bool found_argument = false;
 	for(idx_t command_idx = 0; metadata_commands[command_idx].command; command_idx++) {
 		auto &command = metadata_commands[command_idx];
-		idx_t match_size = command.match_size ? command.match_size : strlen(command.command);
-		if (n < match_size || strncmp(azArg[0], command.command, n) != 0) {
+		idx_t match_size = command.match_size ? command.match_size : n;
+		if (n < match_size || c != *command.command || strncmp(azArg[0], command.command, n) != 0) {
 			continue;
 		}
 		found_argument = true;
@@ -5011,74 +5093,6 @@ int ShellState::do_meta_command(char *zLine){
           "Added %d rows with %d errors using %d lines of input\n",
           sCtx.nRow, sCtx.nErr, sCtx.nLine-1);
     }
-  }else
-
-  if( c=='m' && strncmp(azArg[0], "mode", n)==0 ){
-    const char *zMode = nArg>=2 ? azArg[1] : "";
-    int n2 = strlen30(zMode);
-    int c2 = zMode[0];
-    if( c2=='l' && n2>2 && strncmp(azArg[1],"lines",n2)==0 ){
-      mode = RenderMode::LINE;
-    	rowSeparator = SEP_Row;
-    }else if( c2=='c' && strncmp(azArg[1],"columns",n2)==0 ){
-      mode = RenderMode::COLUMN;
-      if( (shellFlgs & SHFLG_HeaderSet)==0 ){
-        showHeader = 1;
-      }
-      rowSeparator = SEP_Row;
-    }else if( c2=='l' && n2>2 && strncmp(azArg[1],"list",n2)==0 ){
-      mode = RenderMode::LIST;
-      colSeparator = SEP_Column;
-      rowSeparator = SEP_Row;
-    }else if( c2=='h' && strncmp(azArg[1],"html",n2)==0 ){
-      mode = RenderMode::HTML;
-    }else if( c2=='t' && strncmp(azArg[1],"tcl",n2)==0 ){
-      mode = RenderMode::TCL;
-      colSeparator = SEP_Space;
-      rowSeparator = SEP_Row;
-    }else if( c2=='c' && strncmp(azArg[1],"csv",n2)==0 ){
-      mode = RenderMode::CSV;
-      colSeparator = SEP_Comma;
-      rowSeparator = SEP_CrLf;
-    }else if( c2=='t' && strncmp(azArg[1],"tabs",n2)==0 ){
-      mode = RenderMode::LIST;
-      colSeparator = SEP_Tab;
-    }else if( c2=='i' && strncmp(azArg[1],"insert",n2)==0 ){
-      mode = RenderMode::INSERT;
-      set_table_name(nArg>=3 ? azArg[2] : "table");
-    }else if( c2=='q' && strncmp(azArg[1],"quote",n2)==0 ){
-      mode = RenderMode::QUOTE;
-      colSeparator = SEP_Comma;
-      rowSeparator = SEP_Row;
-    }else if( c2=='a' && strncmp(azArg[1],"ascii",n2)==0 ){
-      mode = RenderMode::ASCII;
-      colSeparator = SEP_Unit;
-      rowSeparator = SEP_Record;
-    }else if( c2=='m' && strncmp(azArg[1],"markdown",n2)==0 ){
-      mode = RenderMode::MARKDOWN;
-    }else if( c2=='t' && strncmp(azArg[1],"table",n2)==0 ){
-      mode = RenderMode::TABLE;
-    }else if( c2=='b' && strncmp(azArg[1],"box",n2)==0 ){
-      mode = RenderMode::BOX;
-    }else if( c2=='d' && strncmp(azArg[1],"duckbox",n2)==0 ){
-      mode = RenderMode::DUCKBOX;
-    }else if( c2=='j' && strncmp(azArg[1],"json",n2)==0 ){
-      mode = RenderMode::JSON;
-    }else if( c2=='l' && strncmp(azArg[1],"latex",n2)==0 ){
-      mode = RenderMode::LATEX;
-    }else if( c2=='t' && strncmp(azArg[1],"trash",n2)==0 ){
-      mode = RenderMode::TRASH;
-	}else if( c2=='j' && strncmp(azArg[1],"jsonlines",n2)==0 ){
-		mode = RenderMode::JSONLINES;
-    }else if( nArg==1 ){
-      raw_printf(out, "current output mode: %s\n", modeDescr[int(mode)]);
-    }else{
-      raw_printf(stderr, "Error: mode should be one of: "
-         "ascii box column csv duckbox html insert json jsonlines latex line "
-         "list markdown quote table tabs tcl trash \n");
-      rc = 1;
-    }
-    cMode = mode;
   }else
 
   if( c=='n' && strncmp(azArg[0], "nullvalue", n)==0 ){
