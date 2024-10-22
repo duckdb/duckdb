@@ -21,7 +21,7 @@
 
 #include "zstd/common/debug.h"
 
-//#if !defined(ZSTD_LINUX_KERNEL) || (DEBUGLEVEL>=2)
+#if !defined(ZSTD_LINUX_KERNEL) || (DEBUGLEVEL>=2)
 
 namespace duckdb_zstd {
 
@@ -33,4 +33,4 @@ int g_debuglevel = DEBUGLEVEL;
 
 } // namespace duckdb_zstd
 
-//#endif
+#endif

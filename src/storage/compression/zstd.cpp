@@ -1000,31 +1000,7 @@ void ZSTDStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 }
 
 void ZSTDStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	// StringScanPartial(segment, state, scan_count, result, 0);
-
-	auto &scan_state = state.scan_state->Cast<ZSTDScanState>();
-
-	// data_ptr_t src = scan_state.current_data_ptr;
-	// auto result_data = FlatVector::GetData<string_t>(result);
-
-	// duckdb_zstd::ZSTD_DCtx *zstd_context = duckdb_zstd::ZSTD_createDCtx();
-
-	//// create temporary buffer
-	//// TODO: fix this
-	// char buffer[1024];
-
-	// for (idx_t i = 0; i < scan_count; i++) {
-
-	//	// get metadata
-	//	string_metadata_t *meta = reinterpret_cast<string_metadata_t *>(src);
-	//	size_t uncompressed_size = duckdb_zstd::ZSTD_decompress_usingDDict(
-	//	    zstd_context, buffer, 1024, src + sizeof(string_metadata_t), meta->size, scan_state.decompression_dict);
-
-	//	// ALLOCATE STRING?
-	//	result_data[i] = string_t(buffer, UnsafeNumericCast<uint32_t>(uncompressed_size));
-	//}
-
-	// duckdb_zstd::ZSTD_freeDCtx(zstd_context);
+	StringScanPartial(segment, state, scan_count, result, 0);
 }
 
 //===--------------------------------------------------------------------===//

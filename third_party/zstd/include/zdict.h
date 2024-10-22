@@ -296,7 +296,7 @@ namespace duckdb_zstd {
  * Use them only in association with static linking.
  * ==================================================================================== */
 
-#define ZDICT_DICTSIZE_MIN 256
+#define ZDICT_DICTSIZE_MIN    256
 /* Deprecated: Remove in v1.6.0 */
 #define ZDICT_CONTENTSIZE_MIN 128
 

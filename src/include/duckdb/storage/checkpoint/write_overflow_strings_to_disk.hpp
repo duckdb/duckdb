@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/storage/checkpoint/string_checkpoint_state.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -36,7 +35,6 @@ public:
 private:
 	void AllocateNewBlock(UncompressedStringSegmentState &state, block_id_t new_block_id);
 	idx_t GetStringSpace() const;
-	BufferManager &GetBufferManager();
 };
 
 } // namespace duckdb

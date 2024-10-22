@@ -5,7 +5,6 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
 #include "duckdb/storage/table/column_data.hpp"
-#include "zstd_wrapper.hpp"
 
 namespace duckdb {
 
@@ -381,22 +380,6 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 				offset = 0;
 			}
 		}
-
-		// overflow strings on disk are gzipped, decompress here
-		// if (compressed_size < uncompressed_size) {
-		// 	auto decompressed_target_handle =
-		// 		buffer_manager.Allocate(MaxValue<idx_t>(Storage::BLOCK_SIZE, uncompressed_size));
-		// 	auto decompressed_target_ptr = decompressed_target_handle.Ptr();
-		// 	ZSTDWrapper s;
-		// 	s.Decompress(const_char_ptr_cast(decompression_ptr), compressed_size,
-		// char_ptr_cast(decompressed_target_ptr), 				 uncompressed_size);
-
-		// 	auto final_buffer = decompressed_target_handle.Ptr();
-		// 	StringVector::AddHandle(result, std::move(decompressed_target_handle));
-		// 	return ReadString(final_buffer, 0, uncompressed_size);
-		// } else {
-		// 	return StringVector::AddString(result, const_char_ptr_cast(decompression_ptr), compressed_size);
-		// }
 
 		auto final_buffer = target_handle.Ptr();
 		StringVector::AddHandle(result, std::move(target_handle));

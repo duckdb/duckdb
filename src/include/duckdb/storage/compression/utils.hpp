@@ -11,7 +11,7 @@ using analyze_sample_func_t = std::function<void(Vector &, idx_t)>;
 
 struct AnalyzeSamplingState {
 public:
-	static constexpr uint32_t VECTORS_TO_SKIP = STANDARD_ROW_GROUPS_SIZE / STANDARD_VECTOR_SIZE / 8;
+	static constexpr uint32_t VECTORS_TO_SKIP = DEFAULT_ROW_GROUP_SIZE / STANDARD_VECTOR_SIZE / 8;
 	static constexpr uint32_t MINIMUM_TUPLES = 32;
 
 public:

@@ -1,7 +1,6 @@
 #include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "zstd_wrapper.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
 
 namespace duckdb {
@@ -38,11 +37,6 @@ void UncompressedStringSegmentState::RegisterBlock(BlockManager &manager, block_
 	on_disk_blocks.push_back(block_id);
 }
 
-BufferManager &WriteOverflowStringsToDisk::GetBufferManager() {
-	auto &block_manager = partial_block_manager.GetBlockManager();
-	return block_manager.buffer_manager;
-}
-
 void WriteOverflowStringsToDisk::WriteString(UncompressedStringSegmentState &state, string_t string,
                                              block_id_t &result_block, int32_t &result_offset) {
 	auto &block_manager = partial_block_manager.GetBlockManager();
@@ -57,25 +51,6 @@ void WriteOverflowStringsToDisk::WriteString(UncompressedStringSegmentState &sta
 	result_block = block_id;
 	result_offset = UnsafeNumericCast<int32_t>(offset);
 
-	// GZIP the string
-	auto uncompressed_size = string.GetSize();
-	unsafe_unique_array<data_t> compressed_buf;
-	string_t compressed_string;
-	size_t compressed_size = 0;
-	if (uncompressed_size >= GetBufferManager().GetBlockSize()) {
-		ZSTDWrapper zstd;
-		compressed_size = zstd.MaxCompressedLength(uncompressed_size);
-		compressed_buf = make_unsafe_uniq_array<data_t>(compressed_size);
-		zstd.Compress(string.GetData(), uncompressed_size, char_ptr_cast(compressed_buf.get()), &compressed_size);
-		compressed_string = string_t(const_char_ptr_cast(compressed_buf.get()), compressed_size);
-	} else {
-		compressed_size = uncompressed_size;
-	}
-	if (compressed_size >= uncompressed_size) {
-		compressed_string = string;
-	}
-
-	// store sizes
 	// write the length field
 	auto data_ptr = handle.Ptr();
 	auto string_length = string.GetSize();
