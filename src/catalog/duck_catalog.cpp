@@ -8,6 +8,7 @@
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
+#include "duckdb/function/function_list.hpp"
 
 namespace duckdb {
 
@@ -32,9 +33,11 @@ void DuckCatalog::Initialize(bool load_builtin) {
 	CreateSchema(data, info);
 
 	if (load_builtin) {
-		// initialize default functions
 		BuiltinFunctions builtin(data, *this);
 		builtin.Initialize();
+
+		// initialize default functions
+		FunctionList::RegisterFunctions(*this, data);
 	}
 
 	Verify();

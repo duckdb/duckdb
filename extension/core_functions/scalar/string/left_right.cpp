@@ -1,7 +1,7 @@
 #include "core_functions/scalar/string_functions.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/limits.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
 
 #include <ctype.h>
 #include <algorithm>
@@ -11,22 +11,22 @@ namespace duckdb {
 struct LeftRightUnicode {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
-		return LengthFun::Length<TA, TR>(input);
+		return Length<TA, TR>(input);
 	}
 
 	static string_t Substring(Vector &result, string_t input, int64_t offset, int64_t length) {
-		return SubstringFun::SubstringUnicode(result, input, offset, length);
+		return SubstringUnicode(result, input, offset, length);
 	}
 };
 
 struct LeftRightGrapheme {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
-		return LengthFun::GraphemeCount<TA, TR>(input);
+		return GraphemeCount<TA, TR>(input);
 	}
 
 	static string_t Substring(Vector &result, string_t input, int64_t offset, int64_t length) {
-		return SubstringFun::SubstringGrapheme(result, input, offset, length);
+		return SubstringGrapheme(result, input, offset, length);
 	}
 };
 

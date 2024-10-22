@@ -95,6 +95,10 @@ idx_t RowGroup::GetColumnCount() const {
 	return columns.size();
 }
 
+idx_t RowGroup::GetRowGroupSize() const {
+	return collection.get().GetRowGroupSize();
+}
+
 ColumnData &RowGroup::GetColumn(storage_t c) {
 	D_ASSERT(c < columns.size());
 	if (!is_loaded) {
@@ -488,6 +492,13 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 		idx_t current_row = state.vector_index * STANDARD_VECTOR_SIZE;
 		auto max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row_group_row - current_row);
 
+		// check the sampling info if we have to sample this chunk
+		if (state.GetSamplingInfo().do_system_sample &&
+		    state.random.NextRandom() > state.GetSamplingInfo().sample_rate) {
+			NextVector(state);
+			continue;
+		}
+
 		//! first check the zonemap if we have to scan this partition
 		if (!CheckZonemapSegments(state)) {
 			continue;
@@ -776,10 +787,11 @@ void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, co
 }
 
 void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t count) {
+	const idx_t row_group_size = GetRowGroupSize();
 	idx_t row_group_start = this->count.load();
 	idx_t row_group_end = row_group_start + count;
-	if (row_group_end > Storage::ROW_GROUP_SIZE) {
-		row_group_end = Storage::ROW_GROUP_SIZE;
+	if (row_group_end > row_group_size) {
+		row_group_end = row_group_size;
 	}
 	// create the version_info if it doesn't exist yet
 	auto &vinfo = GetOrCreateVersionInfo();

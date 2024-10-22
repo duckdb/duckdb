@@ -4,6 +4,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -60,11 +61,11 @@ static idx_t CalculateSliceLength(idx_t begin, idx_t end, INDEX_TYPE step, bool 
 
 struct BlobSliceOperations {
 	static int64_t ValueLength(const string_t &value) {
-		return value.GetSize();
+		return UnsafeNumericCast<int64_t>(value.GetSize());
 	}
 
 	static string_t SliceValue(Vector &result, string_t input, int64_t begin, int64_t end) {
-		return SubstringFun::SubstringASCII(result, input, begin + 1, end - begin);
+		return SubstringASCII(result, input, begin + 1, end - begin);
 	}
 
 	static string_t SliceValueWithSteps(Vector &result, SelectionVector &sel, string_t input, int64_t begin,
@@ -75,11 +76,11 @@ struct BlobSliceOperations {
 
 struct StringSliceOperations {
 	static int64_t ValueLength(const string_t &value) {
-		return LengthFun::Length<string_t, int64_t>(value);
+		return Length<string_t, int64_t>(value);
 	}
 
 	static string_t SliceValue(Vector &result, string_t input, int64_t begin, int64_t end) {
-		return SubstringFun::SubstringUnicode(result, input, begin + 1, end - begin);
+		return SubstringUnicode(result, input, begin + 1, end - begin);
 	}
 
 	static string_t SliceValueWithSteps(Vector &result, SelectionVector &sel, string_t input, int64_t begin,
