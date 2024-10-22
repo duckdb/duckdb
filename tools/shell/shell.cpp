@@ -5376,6 +5376,13 @@ MetadataResult SetWidths(ShellState &state, const char **azArg, idx_t nArg) {
 	return MetadataResult::SUCCESS;
 }
 
+#if defined(_WIN32) || defined(WIN32)
+MetadataResult SetUTF8Mode(ShellState &state, const char **azArg, idx_t nArg) {
+    win_utf8_mode = 1;
+	return MetadataResult::SUCCESS;
+}
+#endif
+
 static const MetadataCommand metadata_commands[] = {
 	{"backup", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
 	{"bail", 2, ToggleBail, "on|off", "Stop after hitting an error.  Default OFF", 3},
@@ -5421,6 +5428,10 @@ static const MetadataCommand metadata_commands[] = {
 	{"timer", 2, ToggleTimer, "on|off", "Turn SQL timer on or off", 0},
 	{"version", 1, ShowVersion, "", "Show the version", 0},
 	{"width", 0, SetWidths, "NUM1 NUM2 ...", "Set minimum column widths for columnar output", 0},
+#if defined(_WIN32) || defined(WIN32)
+	{"utf8", 1, SetUTF8Mode, "", "Enable experimental UTF-8 console output mode", 0},
+#endif
+
 
 	{ nullptr, 0, nullptr }
 };
@@ -5593,11 +5604,6 @@ int ShellState::do_meta_command(char *zLine){
     for(ii=0; ii<nRow; ii++) sqlite3_free(azResult[ii]);
     sqlite3_free(azResult);
   }
-#if defined(_WIN32) || defined(WIN32)
-  else if( c=='u' && strncmp(azArg[0], "utf8", n)==0 ){
-    win_utf8_mode = 1;
-  }
-#endif
   else {
 #ifdef HAVE_LINENOISE
     const char *error = NULL;
