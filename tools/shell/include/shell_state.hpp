@@ -15,12 +15,13 @@
 
 struct sqlite3;
 struct sqlite3_stmt;
-struct ColumnarResult;
 
 namespace duckdb_shell {
 using std::unique_ptr;
 using std::vector;
 using std::string;
+struct ColumnarResult;
+class ColumnRenderer;
 
 using idx_t = uint64_t;
 
@@ -110,8 +111,14 @@ public:
 	void output_csv(const char *z, int bSep);
 	void print_row_separator(int nArg, const char *zSep, const vector<int> &actualWidth);
 	void print_markdown_separator(int nArg, const char *zSep, const vector<int> &colTypes, const vector<int> &actualWidth);
+	void print_dashes(int N);
+	void utf8_width_print(FILE *pOut, int w, const string &str);
+	int strlenChar(const char *z);
+	int strlenChar(const string &str);
 	void set_table_name(const char *zName);
 	int run_table_dump_query(const char *zSelect);
+	void Print(const char *str);
+	void Print(const string &str);
 	void print_box_row_separator(
 	  int nArg,
 	  const char *zSep1,
@@ -121,6 +128,7 @@ public:
 	);
 	string strdup_handle_newline(const char *z);
 	ColumnarResult ExecuteColumnar(sqlite3_stmt *pStmt);
+	unique_ptr<ColumnRenderer> GetColumnRenderer();
 	void exec_prepared_stmt_columnar(sqlite3_stmt *pStmt);
 	char **tableColumnList(const char *zTab);
 	void exec_prepared_stmt(sqlite3_stmt *pStmt);

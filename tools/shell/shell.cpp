@@ -485,13 +485,21 @@ static void shell_out_of_memory(void){
   exit(1);
 }
 
+void ShellState::Print(const char *str) {
+	fputs(str, out);
+}
+
+void ShellState::Print(const string &str) {
+	fputs(str.c_str(), out);
+}
+
 /*
 ** Output string zUtf to stream pOut as w characters.  If w is negative,
 ** then right-justify the text.  W is the width in UTF-8 characters, not
 ** in bytes.  This is different from the %*.*s specification in printf
 ** since with %*.*s the width is measured in bytes, not characters.
 */
-static void utf8_width_print(FILE *pOut, int w, const string &str){
+void ShellState::utf8_width_print(FILE *pOut, int w, const string &str){
 	auto zUtf = str.c_str();
   int i;
   int n;
@@ -561,7 +569,7 @@ static int strlen30(const char *z){
 /*
 ** Return the length of a string in characters.
 */
-static int strlenChar(const char *z){
+int ShellState::strlenChar(const char *z){
 #ifdef HAVE_LINENOISE
   return linenoiseComputeRenderWidth(z, strlen(z));
 #else
@@ -573,7 +581,7 @@ static int strlenChar(const char *z){
 #endif
 }
 
-static int strlenChar(const string &str){
+int ShellState::strlenChar(const string &str){
 	return strlenChar(str.c_str());
 }
 
@@ -2915,7 +2923,7 @@ static int progress_handler(void *pClientData) {
 /*
 ** Print N dashes
 */
-static void print_dashes(FILE *out, int N){
+void ShellState::print_dashes(int N){
   const char zDash[] = "--------------------------------------------------";
   const int nDash = sizeof(zDash) - 1;
   while( N>nDash ){
@@ -2936,10 +2944,10 @@ void ShellState::print_row_separator(
   int i;
   if( nArg>0 ){
     fputs(zSep, out);
-    print_dashes(out, actualWidth[0]+2);
+    print_dashes(actualWidth[0]+2);
     for(i=1; i<nArg; i++){
       fputs(zSep, out);
-      print_dashes(out, actualWidth[i]+2);
+      print_dashes(actualWidth[i]+2);
     }
     fputs(zSep, out);
   }
@@ -2958,10 +2966,10 @@ void ShellState::print_markdown_separator(
 			fputs(zSep, out);
 			if (colTypes[i] == SQLITE_INTEGER || colTypes[i] == SQLITE_FLOAT) {
 				// right-align numerics in tables
-				print_dashes(out, actualWidth[i]+1);
+				print_dashes(actualWidth[i]+1);
 				fputs(":", out);
 			} else {
-				print_dashes(out, actualWidth[i]+2);
+				print_dashes(actualWidth[i]+2);
 			}
 		}
 		fputs(zSep, out);
@@ -3571,13 +3579,6 @@ int column_type_is_integer(const char *type) {
   return 0;
 }
 
-struct ColumnarResult {
-	idx_t column_count = 0;
-	vector<string> data;
-	vector<int> types;
-	vector<int> column_width;
-};
-
 ColumnarResult ShellState::ExecuteColumnar(sqlite3_stmt *pStmt){
 	ColumnarResult result;
 
@@ -3629,46 +3630,23 @@ ColumnarResult ShellState::ExecuteColumnar(sqlite3_stmt *pStmt){
 void ShellState::exec_prepared_stmt_columnar(
   sqlite3_stmt *pStmt                   /* Statment to run */
 ){
-  const char *colSep = 0;
-  const char *rowSep = 0;
-
 	auto result = ExecuteColumnar(pStmt);
-	if( seenInterrupt ) goto columnar_end;
+	if( seenInterrupt ) {
+		utf8_printf(out, "Interrupt\n");
+		return;
+	}
 	if (result.data.empty()) {
 		// nothing to render
 		return;
 	}
 
+	auto column_renderer = GetColumnRenderer();
+	column_renderer->RenderHeader(result);
+	auto colSep = column_renderer->GetColumnSeparator();
+	auto rowSep = column_renderer->GetRowSeparator();
+  	auto row_start = column_renderer->GetRowStart();
+
   switch( cMode ){
-    case RenderMode::COLUMN: {
-      colSep = "  ";
-      rowSep = "\n";
-      if( showHeader ){
-        for(idx_t i=0; i<result.column_count; i++){
-          utf8_width_print(out, result.column_width[i], result.data[i]);
-          fputs(i==result.column_count-1?"\n":"  ", out);
-        }
-        for(idx_t i=0; i<result.column_count; i++){
-          print_dashes(out, result.column_width[i]);
-          fputs(i==result.column_count-1?"\n":"  ", out);
-        }
-      }
-      break;
-    }
-    case RenderMode::TABLE: {
-      colSep = " | ";
-      rowSep = " |\n";
-      print_row_separator(result.column_count, "+", result.column_width);
-      fputs("| ", out);
-      for(idx_t i=0; i<result.column_count; i++){
-        int w = result.column_width[i];
-        int n = strlenChar(result.data[i]);
-        utf8_printf(out, "%*s%s%*s", (w-n)/2, "", result.data[i].c_str(), (w-n+1)/2, "");
-        fputs(i==result.column_count-1?" |\n":" | ", out);
-      }
-      print_row_separator(result.column_count, "+", result.column_width);
-      break;
-    }
     case RenderMode::MARKDOWN: {
       colSep = " | ";
       rowSep = " |\n";
@@ -3724,23 +3702,25 @@ void ShellState::exec_prepared_stmt_columnar(
   	break;
   }
   for(idx_t i=result.column_count, j=0; i<result.data.size(); i++, j++){
-    if( j==0 && cMode!=RenderMode::COLUMN && cMode != RenderMode::LATEX ){
-      utf8_printf(out, "%s", cMode==RenderMode::BOX?BOX_13" ":"| ");
-    }
+  	if (j == 0 && row_start) {
+  		Print(row_start);
+  	}
+    // if( j==0 && cMode!=RenderMode::COLUMN && cMode != RenderMode::LATEX ){
+    //   utf8_printf(out, "%s", cMode==RenderMode::BOX?BOX_13" ":"| ");
+    // }
     idx_t w = result.column_width[j];
     if( w<0 ) w = -w;
     utf8_width_print(out, w, result.data[i]);
     if( j==result.column_count-1 ){
-      utf8_printf(out, "%s", rowSep);
+      Print(rowSep);
       j = -1;
       if( seenInterrupt ) goto columnar_end;
     }else{
-      utf8_printf(out, "%s", colSep);
+      Print(colSep);
     }
   }
-  if( cMode==RenderMode::TABLE ){
-    print_row_separator(result.column_count, "+", result.column_width);
-  }else if( cMode==RenderMode::BOX ){
+	column_renderer->RenderFooter(result);
+  if( cMode==RenderMode::BOX ){
     print_box_row_separator(result.column_count, BOX_12, BOX_124, BOX_14, result.column_width);
   } else if (cMode == RenderMode::LATEX) {
     fputs("\\hline\n", out);
