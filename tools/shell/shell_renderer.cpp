@@ -303,11 +303,138 @@ public:
 	int w = 0;
 };
 
+class ModeExplainRenderer : public RowRenderer {
+public:
+	explicit ModeExplainRenderer(ShellState &state) : RowRenderer(state) {}
+
+	void RenderRow(RowResult &result) override {
+		auto &data = result.data;
+		if (data.size() != 2) {
+			throw std::runtime_error("Invalid usage of explain renderer - must have two data points per row");
+		}
+		if (strcmp(data[0], "logical_plan") == 0
+			  || strcmp(data[0], "logical_opt") == 0
+			  || strcmp(data[0], "physical_plan") == 0) {
+			state.Print("\n┌─────────────────────────────┐\n");
+			state.Print("│┌───────────────────────────┐│\n");
+			if (strcmp(data[0], "logical_plan") == 0) {
+				state.Print("││ Unoptimized Logical Plan  ││\n");
+			} else if (strcmp(data[0], "logical_opt") == 0) {
+				state.Print("││  Optimized Logical Plan   ││\n");
+			} else if (strcmp(data[0], "physical_plan") == 0) {
+				state.Print("││       Physical Plan       ││\n");
+			}
+			state.Print("│└───────────────────────────┘│\n");
+			state.Print("└─────────────────────────────┘\n");
+			  }
+		state.Print(data[1]);
+	}
+};
+
+class ModeListRenderer : public RowRenderer {
+public:
+	explicit ModeListRenderer(ShellState &state) : RowRenderer(state) {}
+
+	void RenderHeader(RowResult &result) override {
+		if (!state.showHeader) {
+			return;
+		}
+		auto &col_names = result.column_names;
+		for(idx_t i=0; i<col_names.size(); i++){
+			if (i > 0) {
+				state.Print(state.colSeparator);
+			}
+			state.Print(col_names[i]);
+		}
+		state.Print(state.rowSeparator);
+	}
+
+	void RenderRow(RowResult &result) override {
+		auto &data = result.data;
+		for(idx_t i=0; i<data.size(); i++){
+			if (i > 0) {
+				state.Print(state.colSeparator);
+			}
+			auto z = data[i];
+			if( z==0 ) z = state.nullValue;
+			state.Print(z);
+		}
+		state.Print(state.rowSeparator);
+	}
+};
+
+class ModeHtmlRenderer : public RowRenderer {
+public:
+	explicit ModeHtmlRenderer(ShellState &state) : RowRenderer(state) {}
+
+	void RenderHeader(RowResult &result) override {
+		if (!state.showHeader) {
+			return;
+		}
+		auto &col_names = result.column_names;
+		state.Print("<tr>");
+		for(idx_t i=0; i<col_names.size(); i++){
+			state.Print("<th>");
+			output_html_string(col_names[i]);
+			state.Print("</th>\n");
+		}
+		state.Print("</tr>\n");
+	}
+
+	void RenderRow(RowResult &result) override {
+		auto &data = result.data;
+		state.Print("<tr>");
+		for(idx_t i=0; i<data.size(); i++){
+			state.Print("<td>");
+			output_html_string(data[i] ? data[i] : state.nullValue);
+			state.Print("</td>\n");
+		}
+		state.Print("</tr>\n");
+	}
+
+	/*
+	** Output the given string with characters that are special to
+	** HTML escaped.
+	*/
+	void output_html_string(const char *z){
+		if( z==0 ) z = "";
+		string escaped;
+		for(; *z; z++ ) {
+			switch(*z) {
+			case '<':
+				escaped += "&lt;";
+				break;
+			case '&':
+				escaped += "&amp;";
+				break;
+			case '>':
+				escaped += "&gt;";
+				break;
+			case '\"':
+				escaped += "&quot;";
+				break;
+			case '\'':
+				escaped += "&#39;";
+				break;
+			default:
+				escaped += *z;
+			}
+		}
+		state.Print(escaped);
+	}
+};
+
 
 unique_ptr<RowRenderer> ShellState::GetRowRenderer() {
 	switch(cMode) {
 	case RenderMode::LINE:
 		return unique_ptr<RowRenderer>(new ModeLineRenderer(*this));
+	case RenderMode::EXPLAIN:
+		return unique_ptr<RowRenderer>(new ModeExplainRenderer(*this));
+	case RenderMode::LIST:
+		return unique_ptr<RowRenderer>(new ModeListRenderer(*this));
+	case RenderMode::HTML:
+		return unique_ptr<RowRenderer>(new ModeHtmlRenderer(*this));
 	case RenderMode::TRASH:
 		// no renderer
 		return nullptr;

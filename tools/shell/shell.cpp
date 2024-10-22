@@ -2717,41 +2717,6 @@ static void output_json_string(FILE *out, const char *z, int n){
 }
 
 /*
-** Output the given string with characters that are special to
-** HTML escaped.
-*/
-static void output_html_string(FILE *out, const char *z){
-  int i;
-  if( z==0 ) z = "";
-  while( *z ){
-    for(i=0;   z[i]
-            && z[i]!='<'
-            && z[i]!='&'
-            && z[i]!='>'
-            && z[i]!='\"'
-            && z[i]!='\'';
-        i++){}
-    if( i>0 ){
-      utf8_printf(out,"%.*s",i,z);
-    }
-    if( z[i]=='<' ){
-      raw_printf(out,"&lt;");
-    }else if( z[i]=='&' ){
-      raw_printf(out,"&amp;");
-    }else if( z[i]=='>' ){
-      raw_printf(out,"&gt;");
-    }else if( z[i]=='\"' ){
-      raw_printf(out,"&quot;");
-    }else if( z[i]=='\'' ){
-      raw_printf(out,"&#39;");
-    }else{
-      break;
-    }
-    z += i + 1;
-  }
-}
-
-/*
 ** If a field contains any character identified by a 1 in the following
 ** array, then the string must be quoted for CSV.
 */
@@ -2962,28 +2927,6 @@ int ShellState::shell_callback(
 	renderer.Render(result);
 
   switch( cMode ){
-    case RenderMode::EXPLAIN: {
-      if (data.size() != 2) {
-        break;
-      }
-      if (strcmp(data[0], "logical_plan") == 0
-            || strcmp(data[0], "logical_opt") == 0
-            || strcmp(data[0], "physical_plan") == 0) {
-        utf8_printf(out, "\n┌─────────────────────────────┐\n");
-        utf8_printf(out, "│┌───────────────────────────┐│\n");
-        if (strcmp(data[0], "logical_plan") == 0) {
-          utf8_printf(out, "││ Unoptimized Logical Plan  ││\n");
-        } else if (strcmp(data[0], "logical_opt") == 0) {
-          utf8_printf(out, "││  Optimized Logical Plan   ││\n");
-        } else if (strcmp(data[0], "physical_plan") == 0) {
-          utf8_printf(out, "││       Physical Plan       ││\n");
-        }
-        utf8_printf(out, "│└───────────────────────────┘│\n");
-        utf8_printf(out, "└─────────────────────────────┘\n");
-      }
-      utf8_printf(out, "%s", data[1]);
-      break;
-    }
     case RenderMode::SEMI: {   /* .schema and .fullschema output */
       printSchemaLine(out, data[0], "\n");
       break;
@@ -3052,44 +2995,6 @@ int ShellState::shell_callback(
       }
       printSchemaLine(out, z, ";\n");
       sqlite3_free(z);
-      break;
-    }
-    case RenderMode::LIST: {
-      if( cnt++==0 && showHeader ){
-        for(idx_t i=0; i<col_names.size(); i++){
-          utf8_printf(out,"%s%s",col_names[i],
-                  i==col_names.size()-1 ? rowSeparator : colSeparator);
-        }
-      }
-      for(idx_t i=0; i<data.size(); i++){
-        auto z = data[i];
-        if( z==0 ) z = nullValue;
-        utf8_printf(out, "%s", z);
-        if( i<data.size()-1 ){
-          utf8_printf(out, "%s", colSeparator);
-        }else{
-          utf8_printf(out, "%s", rowSeparator);
-        }
-      }
-      break;
-    }
-    case RenderMode::HTML: {
-      if( cnt++==0 && showHeader ){
-        raw_printf(out,"<tr>");
-        for(idx_t i=0; i<col_names.size(); i++){
-          raw_printf(out,"<th>");
-          output_html_string(out, col_names[i]);
-          raw_printf(out,"</th>\n");
-        }
-        raw_printf(out,"</tr>\n");
-      }
-      raw_printf(out,"<tr>");
-      for(idx_t i=0; i<data.size(); i++){
-        raw_printf(out,"<td>");
-        output_html_string(out, data[i] ? data[i] : nullValue);
-        raw_printf(out,"</td>\n");
-      }
-      raw_printf(out,"</tr>\n");
       break;
     }
     case RenderMode::TCL: {

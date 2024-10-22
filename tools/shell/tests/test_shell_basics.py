@@ -562,6 +562,15 @@ def test_mode_html(shell):
     result = test.run()
     result.check_stdout('<td>fourty-two</td>')
 
+def test_mode_html_escapes(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode html")
+        .statement("SELECT '<&>\"\'\'' AS \"&><\"\"\'\";")
+    )
+    result = test.run()
+    result.check_stdout('<tr><th>&amp;&gt;&lt;&quot;&#39;</th>\n</tr>\n<tr><td>&lt;&amp;&gt;&quot;&#39;</td>\n</tr>')
+
 # Original comment: FIXME sqlite3_column_blob
 def test_mode_insert(shell):
     test = (
