@@ -5293,57 +5293,6 @@ int ShellState::do_meta_command(char *zLine){
     lineno = savedLineno;
   }else
 
-  if( c=='r' && n>=3 && strncmp(azArg[0], "restore", n)==0 ){
-    const char *zSrcFile;
-    const char *zDb;
-    sqlite3 *pSrc;
-    sqlite3_backup *pBackup;
-    int nTimeout = 0;
-
-    if( nArg==2 ){
-      zSrcFile = azArg[1];
-      zDb = "main";
-    }else if( nArg==3 ){
-      zSrcFile = azArg[2];
-      zDb = azArg[1];
-    }else{
-      raw_printf(stderr, "Usage: .restore ?DB? FILE\n");
-      rc = 1;
-      goto meta_command_exit;
-    }
-    rc = sqlite3_open(zSrcFile, &pSrc);
-    if( rc!=SQLITE_OK ){
-      utf8_printf(stderr, "Error: cannot open \"%s\"\n", zSrcFile);
-      close_db(pSrc);
-      return 1;
-    }
-    open_db(0);
-    pBackup = sqlite3_backup_init(db, zDb, pSrc, "main");
-    if( pBackup==0 ){
-      shellDatabaseError(db);
-      close_db(pSrc);
-      return 1;
-    }
-    while( (rc = sqlite3_backup_step(pBackup,100))==SQLITE_OK
-          || rc==SQLITE_BUSY  ){
-      if( rc==SQLITE_BUSY ){
-        if( nTimeout++ >= 3 ) break;
-        sqlite3_sleep(100);
-      }
-    }
-    sqlite3_backup_finish(pBackup);
-    if( rc==SQLITE_DONE ){
-      rc = 0;
-    }else if( rc==SQLITE_BUSY || rc==SQLITE_LOCKED ){
-      raw_printf(stderr, "Error: source database is busy\n");
-      rc = 1;
-    }else{
-      shellDatabaseError(db);
-      rc = 1;
-    }
-    close_db(pSrc);
-  }else
-
   if( c=='s' && strncmp(azArg[0], "schema", n)==0 ){
     string sSelect;
     char *zErrMsg = 0;
