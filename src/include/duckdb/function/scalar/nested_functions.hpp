@@ -82,17 +82,6 @@ struct HistogramAggState {
 	MAP_TYPE *hist;
 };
 
-struct ListConcatFun {
-	static ScalarFunction GetFunction();
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct MapContainsFun {
-	static ScalarFunction GetFunction();
-
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct StructPackFun {
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);

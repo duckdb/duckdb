@@ -5,7 +5,7 @@
 #include "parquet_timestamp.hpp"
 #include "string_column_reader.hpp"
 #include "struct_column_reader.hpp"
-#include "zstd/common/xxhash.h"
+#include "zstd/common/xxhash.hpp"
 
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/blob.hpp"
@@ -579,7 +579,7 @@ double ParquetBloomFilter::OneRatio() {
 	for (idx_t b_idx = 0; b_idx < data->len / sizeof(uint64_t); ++b_idx) {
 		one_count += PopCnt64(bloom_ptr[b_idx]);
 	}
-	auto one_ratio = one_count / (data->len * 8.0);
+	return one_count / (data->len * 8.0);
 }
 
 ResizeableBuffer *ParquetBloomFilter::Get() {
