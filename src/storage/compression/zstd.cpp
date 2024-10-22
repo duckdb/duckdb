@@ -503,7 +503,9 @@ public:
 	}
 
 	void FlushPage(BufferHandle &buffer, block_id_t block_id) {
-		D_ASSERT(block_id != INVALID_BLOCK);
+		if (block_id == INVALID_BLOCK) {
+			return;
+		}
 
 		// Write the current page to disk
 		auto &block_manager = partial_block_manager.GetBlockManager();
@@ -524,10 +526,6 @@ public:
 
 		const bool is_last_vector = vector_count == total_vector_count;
 		tuple_count = 0;
-		if (vector_lengths_buffer == &segment_handle) {
-			// This gets flushed at the very end
-			return;
-		}
 		if (is_last_vector) {
 			FlushPage(*current_buffer, block_id);
 			if (starting_page != block_id) {
