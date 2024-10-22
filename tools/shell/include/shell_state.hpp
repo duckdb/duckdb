@@ -103,7 +103,7 @@ struct ShellState {
 	vector<int> colWidth;                          /* Requested width of each column in columnar modes */
 	string nullValue;                              /* The text to print when a NULL comes back from the database */
 	int columns = 0;                               /* Column-wise DuckBox rendering */
-	char outfile[FILENAME_MAX];                    /* Filename for *out */
+	string outfile;                                /* Filename for *out */
 	string zDbFilename;                            /* name of the database file */
 	sqlite3_stmt *pStmt = nullptr;                 /* Current statement if any. */
 	FILE *pLog = nullptr;                          /* Write log output here */

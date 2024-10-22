@@ -3196,8 +3196,8 @@ void ShellState::exec_prepared_stmt(
   sqlite3_stmt *pStmt                              /* Statment to run */
 ){
   if (cMode == RenderMode::DUCKBOX) {
-	  size_t max_rows = outfile[0] == '\0' || outfile[0] == '|' ? this->max_rows : (size_t) -1;
-	  size_t max_width = outfile[0] == '\0' || outfile[0] == '|' ? this->max_width : (size_t) -1;
+	  size_t max_rows = outfile.empty() || outfile[0] == '|' ? this->max_rows : (size_t) -1;
+	  size_t max_width = outfile.empty() || outfile[0] == '|' ? this->max_width : (size_t) -1;
 	  char *str = sqlite3_print_duckbox(pStmt, max_rows, max_width, nullValue.c_str(), columns);
 	  if (str) {
 		  utf8_printf(out, "%s", str);
@@ -4350,7 +4350,7 @@ static char *SQLITE_CDECL ascii_read_one_field(ImportCtx *p){
 ** launch start/open/xdg-open on that temporary file.
 */
 void ShellState::output_reset(){
-  if( outfile[0]=='|' ){
+  if( outfile.size() > 1 && outfile[0]=='|' ){
 #ifndef SQLITE_OMIT_POPEN
     pclose(out);
 #endif
@@ -4382,7 +4382,7 @@ void ShellState::output_reset(){
     }
 #endif /* !defined(SQLITE_NOHAVE_SYSTEM) */
   }
-  outfile[0] = 0;
+  outfile = string();
   out = stdout;
 }
 
@@ -5529,7 +5529,7 @@ int ShellState::do_meta_command(char *zLine){
         rc = 1;
       }else{
         if( bBOM ) fprintf(out,"\357\273\277");
-        sqlite3_snprintf(sizeof(outfile), outfile, "%s", zFile);
+      	outfile = zFile;
       }
 #endif
     }else{
@@ -5542,7 +5542,7 @@ int ShellState::do_meta_command(char *zLine){
         rc = 1;
       } else {
         if( bBOM ) fprintf(out,"\357\273\277");
-        sqlite3_snprintf(sizeof(outfile), outfile, "%s", zFile);
+        outfile = zFile;
       }
     }
   }else
@@ -5919,7 +5919,7 @@ int ShellState::do_meta_command(char *zLine){
       output_c_string(nullValue.c_str());
       raw_printf(out, "\n");
     utf8_printf(out,"%12.12s: %s\n","output",
-            strlen30(outfile) ? outfile : "stdout");
+            !outfile.empty() ? outfile.c_str() : "stdout");
     utf8_printf(out,"%12.12s: ", "colseparator");
       output_c_string(colSeparator);
       raw_printf(out, "\n");
