@@ -4438,7 +4438,14 @@ void ShellState::newTempFile(const char *zSuffix){
   }
 }
 
-typedef bool (*metadata_command_t)(ShellState &state, const char **azArg, idx_t nArg);
+enum class MetadataResult : uint8_t {
+	SUCCESS = 0,
+	ERROR = 1,
+	EXIT = 2,
+	PRINT_USAGE = 3
+};
+
+typedef MetadataResult (*metadata_command_t)(ShellState &state, const char **azArg, idx_t nArg);
 
 struct MetadataCommand {
 	const char *command;
@@ -4449,21 +4456,21 @@ struct MetadataCommand {
 	idx_t match_size;
 };
 
-bool ToggleBail(ShellState &state, const char **azArg, idx_t nArg) {
+MetadataResult ToggleBail(ShellState &state, const char **azArg, idx_t nArg) {
 	bail_on_error = booleanValue(azArg[1]);
-	return true;
+	return MetadataResult::SUCCESS;
 }
 
-bool ToggleBinary(ShellState &state, const char **azArg, idx_t nArg) {
+MetadataResult ToggleBinary(ShellState &state, const char **azArg, idx_t nArg) {
 	if( booleanValue(azArg[1]) ){
 		state.SetBinaryMode();
 	}else{
 		state.SetTextMode();
 	}
-	return true;
+	return MetadataResult::SUCCESS;
 }
 
-bool ChangeDirectory(ShellState &state, const char **azArg, idx_t nArg) {
+MetadataResult ChangeDirectory(ShellState &state, const char **azArg, idx_t nArg) {
 	int rc;
 #if defined(_WIN32) || defined(WIN32)
 	wchar_t *z = sqlite3_win32_utf8_to_unicode(azArg[1]);
@@ -4474,17 +4481,17 @@ bool ChangeDirectory(ShellState &state, const char **azArg, idx_t nArg) {
 #endif
 	if( rc ){
 		utf8_printf(stderr, "Cannot change to directory \"%s\"\n", azArg[1]);
-		return false;
+		return MetadataResult::ERROR;
 	}
-	return true;
+	return MetadataResult::SUCCESS;
 }
 
-bool ToggleChanges(ShellState &state, const char **azArg, idx_t nArg) {
+MetadataResult ToggleChanges(ShellState &state, const char **azArg, idx_t nArg) {
 	state.setOrClearFlag(SHFLG_CountChanges, azArg[1]);
-	return true;
+	return MetadataResult::SUCCESS;
 }
 
-bool ShowDatabases(ShellState &state, const char **azArg, idx_t nArg) {
+MetadataResult ShowDatabases(ShellState &state, const char **azArg, idx_t nArg) {
 	char *zErrMsg = 0;
 	state.open_db(0);
 
@@ -4496,12 +4503,12 @@ bool ShowDatabases(ShellState &state, const char **azArg, idx_t nArg) {
 	if( zErrMsg ){
 		printDatabaseError(zErrMsg);
 		sqlite3_free(zErrMsg);
-		return false;
+		return MetadataResult::ERROR;
 	}
-	return true;
+	return MetadataResult::SUCCESS;
 }
 
-bool DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
+MetadataResult DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
 	char *zLike = 0;
     char *zSql;
     int i;
@@ -4518,7 +4525,7 @@ bool DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
         {
           raw_printf(stderr, "Unknown option \"%s\" on \".dump\"\n", azArg[i]);
           sqlite3_free(zLike);
-			return false;
+			return MetadataResult::ERROR;
         }
       }else if( zLike ){
         zLike = sqlite3_mprintf("%z OR name LIKE %Q ESCAPE '\\'",
@@ -4558,7 +4565,83 @@ bool DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
     raw_printf(state.out, state.nErr?"ROLLBACK; -- due to errors\n":"COMMIT;\n");
     state.showHeader = savedShowHeader;
     state.shellFlgs = savedShellFlags;
-	return true;
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult ToggleEcho(ShellState &state, const char **azArg, idx_t nArg) {
+    state.setOrClearFlag(SHFLG_Echo, azArg[1]);
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult ExitProcess(ShellState &state, const char **azArg, idx_t nArg) {
+	if (nArg >= 2) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	int rc = 0;
+	if( nArg>1 && (rc = (int)integerValue(azArg[1]))!=0 ) {
+		// exit immediately if a custom error code is provided
+		exit(rc);
+	}
+	return MetadataResult::EXIT;
+}
+
+MetadataResult ToggleHeaders(ShellState &state, const char **azArg, idx_t nArg) {
+	state.showHeader = booleanValue(azArg[1]);
+	state.shellFlgs |= SHFLG_HeaderSet;
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult ShowHelp(ShellState &state, const char **azArg, idx_t nArg) {
+	if( nArg>=2 ){
+		int n = showHelp(state.out, azArg[1]);
+		if( n==0 ){
+			utf8_printf(state.out, "Nothing matches '%s'\n", azArg[1]);
+		}
+	}else{
+		showHelp(state.out, 0);
+	}
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult ToggleLog(ShellState &state, const char **azArg, idx_t nArg) {
+	const char *zFile = azArg[1];
+	output_file_close(state.pLog);
+	state.pLog = output_file_open(zFile, 0);
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetMaxRows(ShellState &state, const char **azArg, idx_t nArg) {
+	if (nArg > 2) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	if( nArg==1 ){
+		raw_printf(state.out, "current max rows: %zu\n", state.max_rows);
+	} else {
+		state.max_rows = (size_t)integerValue(azArg[1]);
+	}
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetMaxWidth(ShellState &state, const char **azArg, idx_t nArg) {
+	if (nArg > 2) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	if( nArg==1 ){
+		raw_printf(state.out, "current max rows: %zu\n", state.max_width);
+	} else {
+		state.max_width = (size_t)integerValue(azArg[1]);
+	}
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetColumnRendering(ShellState &state, const char **azArg, idx_t nArg) {
+	state.columns = 1;
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetRowRendering(ShellState &state, const char **azArg, idx_t nArg) {
+	state.columns = 1;
+	return MetadataResult::SUCCESS;
 }
 
 static const MetadataCommand metadata_commands[] = {
@@ -4567,8 +4650,19 @@ static const MetadataCommand metadata_commands[] = {
 	{"binary", 2, ToggleBinary, "on|off", "Turn binary output on or off.  Default OFF", 3},
 	{"cd", 2, ChangeDirectory, "DIRECTORY", "Change the working directory to DIRECTORY", 0},
 	{"changes", 2, ToggleChanges, "on|off", "Show number of rows changed by SQL", 3},
+	{"columns", 1, SetColumnRendering, "", "Column-wise rendering of query results", 0},
+
 	{"databases", 1, ShowDatabases, "", "List names and files of attached databases", 2},
 	{"dump", 0, DumpTable, "?TABLE?", "Render database content as SQL\n   Options:\n     --newlines             Allow unescaped newline characters in output\n   TABLE is a LIKE pattern for the tables to dump\n   Additional LIKE patterns can be given in subsequent arguments", 0},
+	{"echo", 2, ToggleEcho, "on|off", "Turn command echo on or off", 3},
+    {"exit", 0, ExitProcess, "?CODE?", "Exit this program with return-code CODE", 0},
+	{"fullschema", 0, nullptr, "", "", 0},
+	{"headers", 2, ToggleHeaders, "on|off", "Turn display of headers on or off", 0},
+	{"help", 0, ShowHelp, "?-all? ?PATTERN?", "Show help text for PATTERN", 0},
+	{"log", 1, ToggleLog, "FILE|off", "Turn logging on or off.  FILE can be stderr/stdout", 0},
+	{"maxrows", 0, SetMaxRows, "COUNT", "Sets the maximum number of rows for display (default: 40). Only for duckbox mode.", 0},
+	{"maxwidth", 0, SetMaxWidth, "COUNT", "Sets the maximum width in characters. 0 defaults to terminal width. Only for duckbox mode.", 0},
+	{"rows", 1, SetRowRendering, "", "Row-wise rendering of query results (default)", 0},
 	{"save", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
 	{ nullptr, 0, nullptr }
 };
@@ -4628,60 +4722,22 @@ int ShellState::do_meta_command(char *zLine){
 			continue;
 		}
 		found_argument = true;
-		bool success = false;
+		MetadataResult result = MetadataResult::PRINT_USAGE;
 		if (!command.callback) {
 			raw_printf(stderr, "Command \"%s\" is unsupported in the current version of the CLI\n", command.command);
+			result = MetadataResult::ERROR;
 		} else if (command.argument_count == 0 || command.argument_count == nArg) {
-			success = command.callback(*this, (const char **) azArg, nArg);
-		} else {
+			result = command.callback(*this, (const char **) azArg, nArg);
+		}
+		if (result == MetadataResult::PRINT_USAGE) {
 			raw_printf(stderr, "Usage: .%s %s\n", command.command, command.usage);
+			result = MetadataResult::ERROR;
 		}
-		if (!success) {
-			rc = 1;
-		}
+		rc = int(result);
 		break;
 	}
   if (found_argument) {
   } else
-
-  if( c=='e' && strncmp(azArg[0], "echo", n)==0 ){
-    if( nArg==2 ){
-      setOrClearFlag(SHFLG_Echo, azArg[1]);
-    }else{
-      raw_printf(stderr, "Usage: .echo on|off\n");
-      rc = 1;
-    }
-  }else
-
-  if( c=='e' && strncmp(azArg[0], "exit", n)==0 ){
-    if( nArg>1 && (rc = (int)integerValue(azArg[1]))!=0 ) exit(rc);
-    rc = 2;
-  }else
-
-  if( c=='f' && strncmp(azArg[0], "fullschema", n)==0 ){
-    raw_printf(out, "No STAT tables available\n");
-  }else
-
-  if( c=='h' && strncmp(azArg[0], "headers", n)==0 ){
-    if( nArg==2 ){
-      showHeader = booleanValue(azArg[1]);
-      shellFlgs |= SHFLG_HeaderSet;
-    }else{
-      raw_printf(stderr, "Usage: .headers on|off\n");
-      rc = 1;
-    }
-  }else
-
-  if( c=='h' && strncmp(azArg[0], "help", n)==0 ){
-    if( nArg>=2 ){
-      n = showHelp(out, azArg[1]);
-      if( n==0 ){
-        utf8_printf(out, "Nothing matches '%s'\n", azArg[1]);
-      }
-    }else{
-      showHelp(out, 0);
-    }
-  }else
 
   if( c=='i' && strncmp(azArg[0], "import", n)==0 ){
     char *zTable = 0;           /* Insert data into this table */
@@ -4957,102 +5013,6 @@ int ShellState::do_meta_command(char *zLine){
     }
   }else
 
-  if( c=='l' && n>=5 && strncmp(azArg[0], "limits", n)==0 ){
-    static const struct {
-       const char *zLimitName;   /* Name of a limit */
-       int limitCode;            /* Integer code for that limit */
-    } aLimit[] = {
-      { "length",                SQLITE_LIMIT_LENGTH                    },
-      { "sql_length",            SQLITE_LIMIT_SQL_LENGTH                },
-      { "column",                SQLITE_LIMIT_COLUMN                    },
-      { "expr_depth",            SQLITE_LIMIT_EXPR_DEPTH                },
-      { "compound_select",       SQLITE_LIMIT_COMPOUND_SELECT           },
-      { "vdbe_op",               SQLITE_LIMIT_VDBE_OP                   },
-      { "function_arg",          SQLITE_LIMIT_FUNCTION_ARG              },
-      { "attached",              SQLITE_LIMIT_ATTACHED                  },
-      { "like_pattern_length",   SQLITE_LIMIT_LIKE_PATTERN_LENGTH       },
-      { "variable_number",       SQLITE_LIMIT_VARIABLE_NUMBER           },
-      { "trigger_depth",         SQLITE_LIMIT_TRIGGER_DEPTH             },
-      { "worker_threads",        SQLITE_LIMIT_WORKER_THREADS            },
-    };
-    int i, n2;
-    open_db(0);
-    if( nArg==1 ){
-      for(i=0; i<ArraySize(aLimit); i++){
-        printf("%20s %d\n", aLimit[i].zLimitName,
-               sqlite3_limit(db, aLimit[i].limitCode, -1));
-      }
-    }else if( nArg>3 ){
-      raw_printf(stderr, "Usage: .limit NAME ?NEW-VALUE?\n");
-      rc = 1;
-      goto meta_command_exit;
-    }else{
-      int iLimit = -1;
-      n2 = strlen30(azArg[1]);
-      for(i=0; i<ArraySize(aLimit); i++){
-        if( sqlite3_strnicmp(aLimit[i].zLimitName, azArg[1], n2)==0 ){
-          if( iLimit<0 ){
-            iLimit = i;
-          }else{
-            utf8_printf(stderr, "ambiguous limit: \"%s\"\n", azArg[1]);
-            rc = 1;
-            goto meta_command_exit;
-          }
-        }
-      }
-      if( iLimit<0 ){
-        utf8_printf(stderr, "unknown limit: \"%s\"\n"
-                        "enter \".limits\" with no arguments for a list.\n",
-                         azArg[1]);
-        rc = 1;
-        goto meta_command_exit;
-      }
-      if( nArg==3 ){
-        sqlite3_limit(db, aLimit[iLimit].limitCode,
-                      (int)integerValue(azArg[2]));
-      }
-      printf("%20s %d\n", aLimit[iLimit].zLimitName,
-             sqlite3_limit(db, aLimit[iLimit].limitCode, -1));
-    }
-  }else
-
-
-  if( c=='l' && strncmp(azArg[0], "log", n)==0 ){
-    if( nArg!=2 ){
-      raw_printf(stderr, "Usage: .log FILENAME\n");
-      rc = 1;
-    }else{
-      const char *zFile = azArg[1];
-      output_file_close(pLog);
-      pLog = output_file_open(zFile, 0);
-    }
-  }else
-  if( c=='m' && strncmp(azArg[0], "maxrows", n)==0 ){
-	if( nArg==1 ){
-      raw_printf(out, "current max rows: %zu\n", max_rows);
-	}else
-    if( nArg!=2 ){
-		raw_printf(stderr, "Usage: .maxrows COUNT\n");
-		rc = 1;
-	}else{
-	  max_rows = (size_t)integerValue(azArg[1]);
-	}
-  }else
-  if( c=='m' && strncmp(azArg[0], "maxwidth", n)==0 ){
-	if( nArg==1 ){
-      raw_printf(out, "current max maxwidth: %zu\n", max_width);
-	}else
-    if( nArg!=2 ){
-		raw_printf(stderr, "Usage: .maxwidth COUNT\n");
-		rc = 1;
-	}else{
-	  max_width = (size_t)integerValue(azArg[1]);
-	}
-  }else if( c=='c' && strncmp(azArg[0],"columns",n)==0 ){
-    columns = 1;
-  }else if( c=='r' && strncmp(azArg[0],"rows",n)==0 ){
-    columns = 0;
-  }else
   if( c=='m' && strncmp(azArg[0], "mode", n)==0 ){
     const char *zMode = nArg>=2 ? azArg[1] : "";
     int n2 = strlen30(zMode);
