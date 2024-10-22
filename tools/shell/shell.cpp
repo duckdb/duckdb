@@ -5047,6 +5047,30 @@ MetadataResult PrintArguments(ShellState &state, const char **azArg, idx_t nArg)
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult SetPrompt(ShellState &, const char **azArg, idx_t nArg) {
+    if( nArg >= 2) {
+      strncpy(mainPrompt,azArg[1],(int)ArraySize(mainPrompt)-1);
+    }
+    if( nArg >= 3) {
+      strncpy(continuePrompt,azArg[2],(int)ArraySize(continuePrompt)-1);
+    }
+    if( nArg >= 4) {
+      strncpy(continuePromptSelected,azArg[3],(int)ArraySize(continuePromptSelected)-1);
+    }
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetSeparator(ShellState &state, const char **azArg, idx_t nArg) {
+    if( nArg<2 || nArg>3 ){
+		return MetadataResult::PRINT_USAGE;
+    }
+    state.colSeparator = azArg[1];
+    if( nArg>=3 ){
+		state.rowSeparator = azArg[2];
+    }
+	return MetadataResult::SUCCESS;
+}
+
 MetadataResult QuitProcess(ShellState &, const char **azArg, idx_t nArg) {
 	return MetadataResult::EXIT;
 }
@@ -5076,10 +5100,13 @@ static const MetadataCommand metadata_commands[] = {
 
 	{"open", 0, OpenDatabase, "?OPTIONS? ?FILE?", "Close existing database and reopen FILE", 2},
 	{"print", 0, PrintArguments, "STRING...", "Print literal STRING", 3},
+	{"prompt", 0, SetPrompt, "MAIN CONTINUE", "Replace the standard prompts", 0},
 	{"quit", 0, QuitProcess, "", "Exit this program", 0},
 	{"rows", 1, SetRowRendering, "", "Row-wise rendering of query results (default)", 0},
 	{"restore", 0, nullptr, "", "", 3},
 	{"save", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
+	{"separator", 0, SetSeparator, "COL ?ROW?", "Change the column and row separators", 0},
+
 	{"timeout", 0, nullptr, "", "", 5},
 	{ nullptr, 0, nullptr }
 };
@@ -5257,18 +5284,6 @@ int ShellState::do_meta_command(char *zLine){
     }
   }else
 
-  if( c=='p' && strncmp(azArg[0], "prompt", n)==0 ){
-    if( nArg >= 2) {
-      strncpy(mainPrompt,azArg[1],(int)ArraySize(mainPrompt)-1);
-    }
-    if( nArg >= 3) {
-      strncpy(continuePrompt,azArg[2],(int)ArraySize(continuePrompt)-1);
-    }
-    if( nArg >= 4) {
-      strncpy(continuePromptSelected,azArg[3],(int)ArraySize(continuePromptSelected)-1);
-    }
-  } else
-
   if( c=='r' && n>=3 && strncmp(azArg[0], "read", n)==0 ){
     FILE *inSaved = in;
     int savedLineno = lineno;
@@ -5355,19 +5370,6 @@ int ShellState::do_meta_command(char *zLine){
     }
   }else
 
-
-  if( c=='s' && strncmp(azArg[0], "separator", n)==0 ){
-    if( nArg<2 || nArg>3 ){
-      raw_printf(stderr, "Usage: .separator COL ?ROW?\n");
-      rc = 1;
-    }
-    if( nArg>=2 ){
-      colSeparator = azArg[1];
-    }
-    if( nArg>=3 ){
-      rowSeparator = azArg[2];
-    }
-  }else
 
 #ifndef SQLITE_NOHAVE_SYSTEM
   if( c=='s'
