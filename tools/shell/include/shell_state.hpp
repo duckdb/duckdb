@@ -88,9 +88,6 @@ struct ShellState {
 	RenderMode cMode = RenderMode::LINE;           /* temporary output mode for the current query */
 	RenderMode normalMode = RenderMode::LINE;      /* Output mode before ".explain on" */
 	int showHeader = 0;                            /* True to show column names in List or Column mode */
-	unsigned nProgress = 0;                        /* Number of progress callbacks encountered */
-	unsigned mxProgress = 0;                       /* Maximum progress callbacks before failing */
-	unsigned flgProgress = 0;                      /* Flags for the progress callback */
 	unsigned shellFlgs = 0;                        /* Various flags */
 	unsigned priorShFlgs = 0;                      /* Saved copy of flags */
 	int64_t szMax = 0;                             /* --maxsize argument to .open */

@@ -2283,13 +2283,6 @@ int sqlite3_fileio_init(
 #define SHELL_OPEN_DESERIALIZE 5      /* Open using sqlite3_deserialize() */
 #define SHELL_OPEN_HEXDB       6      /* Use "dbtotxt" output as data source */
 
-/* Bits in the ShellState.flgProgress variable */
-#define SHELL_PROGRESS_QUIET 0x01  /* Omit announcing every progress callback */
-#define SHELL_PROGRESS_RESET 0x02  /* Reset the count when the progres
-                                   ** callback limit is reached, and for each
-                                   ** top-level SQL statement */
-#define SHELL_PROGRESS_ONCE  0x04  /* Cancel the --limit after firing once */
-
 static const char *modeDescr[] = {
   "line",
   "column",
@@ -2809,26 +2802,6 @@ void ShellState::printSchemaLineN(char *z, int n, const char *zTail){
   printSchemaLine(z, zTail);
   z[n] = c;
 }
-
-#ifndef SQLITE_OMIT_PROGRESS_CALLBACK
-/*
-** Progress handler callback.
-*/
-static int progress_handler(void *pClientData) {
-  ShellState *p = (ShellState*)pClientData;
-  p->nProgress++;
-  if( p->nProgress>=p->mxProgress && p->mxProgress>0 ){
-    raw_printf(p->out, "Progress limit reached (%u)\n", p->nProgress);
-    if( p->flgProgress & SHELL_PROGRESS_RESET ) p->nProgress = 0;
-    if( p->flgProgress & SHELL_PROGRESS_ONCE ) p->mxProgress = 0;
-    return 1;
-  }
-  if( (p->flgProgress & SHELL_PROGRESS_QUIET)==0 ){
-    raw_printf(p->out, "Progress %u\n", p->nProgress);
-  }
-  return 0;
-}
-#endif /* SQLITE_OMIT_PROGRESS_CALLBACK */
 
 /*
 ** Print N dashes
@@ -5556,52 +5529,6 @@ int ShellState::do_meta_command(char *zLine){
     raw_printf(out, "\n");
   }else
 
-#ifndef SQLITE_OMIT_PROGRESS_CALLBACK
-  if( c=='p' && n>=3 && strncmp(azArg[0], "progress", n)==0 ){
-    int i;
-    int nn = 0;
-    flgProgress = 0;
-    mxProgress = 0;
-    nProgress = 0;
-    for(i=1; i<nArg; i++){
-      const char *z = azArg[i];
-      if( z[0]=='-' ){
-        z++;
-        if( z[0]=='-' ) z++;
-        if( strcmp(z,"quiet")==0 || strcmp(z,"q")==0 ){
-          flgProgress |= SHELL_PROGRESS_QUIET;
-          continue;
-        }
-        if( strcmp(z,"reset")==0 ){
-          flgProgress |= SHELL_PROGRESS_RESET;
-          continue;
-        }
-        if( strcmp(z,"once")==0 ){
-          flgProgress |= SHELL_PROGRESS_ONCE;
-          continue;
-        }
-        if( strcmp(z,"limit")==0 ){
-          if( i+1>=nArg ){
-            utf8_printf(stderr, "Error: missing argument on --limit\n");
-            rc = 1;
-            goto meta_command_exit;
-          }else{
-            mxProgress = (int)integerValue(azArg[++i]);
-          }
-          continue;
-        }
-        utf8_printf(stderr, "Error: unknown option: \"%s\"\n", azArg[i]);
-        rc = 1;
-        goto meta_command_exit;
-      }else{
-        nn = (int)integerValue(z);
-      }
-    }
-    open_db(0);
-    sqlite3_progress_handler(db, nn, progress_handler, this);
-  }else
-#endif /* SQLITE_OMIT_PROGRESS_CALLBACK */
-
   if( c=='p' && strncmp(azArg[0], "prompt", n)==0 ){
     if( nArg >= 2) {
       strncpy(mainPrompt,azArg[1],(int)ArraySize(mainPrompt)-1);
@@ -6223,7 +6150,6 @@ int ShellState::runOneSqlLine(char *zSql, int startline){
 
   open_db(0);
   if( ShellHasFlag(SHFLG_Backslash) ) resolve_backslashes(zSql);
-  if( flgProgress & SHELL_PROGRESS_RESET ) nProgress = 0;
 #ifndef SHELL_USE_LOCAL_GETLINE
   if( zSql && *zSql && *zSql != '\3' ) shell_add_history(zSql);
 #endif
