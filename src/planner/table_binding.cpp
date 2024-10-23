@@ -202,8 +202,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	// fetch the type of the column
 	LogicalType col_type;
 	if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
-		// row id: BIGINT type
-		col_type = LogicalType::BIGINT;
+		col_type = LogicalType::ROW_TYPE;
 	} else {
 		// normal column: fetch type from base column
 		col_type = types[column_index];
