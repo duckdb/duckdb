@@ -195,7 +195,7 @@ def generate_timing_html(graph_json: object, query_timings: object) -> object:
 	<tr>
 			<td>{phase_column}</td>
             <td>{summarized_phase.time}</td>
-            <td>{str(summarized_phase.percentage * 100)[:6]}%</td>
+            <td>{round(summarized_phase.percentage*100,4)}%</td>
     </tr>
 """
     table_body += table_end
