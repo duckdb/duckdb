@@ -29,6 +29,8 @@
 #include "zstd.h"
 #include "zstd/common/xxhash.hpp"
 
+#include <cmath>
+
 namespace duckdb {
 
 using namespace duckdb_parquet; // NOLINT
