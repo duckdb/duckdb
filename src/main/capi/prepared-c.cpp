@@ -140,6 +140,25 @@ duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_statement, idx_
 	return DUCKDB_TYPE_INVALID;
 }
 
+duckdb_logical_type duckdb_param_logical_type(duckdb_prepared_statement prepared_statement, idx_t param_idx) {
+	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(prepared_statement);
+	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
+		return nullptr;
+	}
+	LogicalType param_type;
+	auto identifier = std::to_string(param_idx);
+	if (wrapper->statement->data->TryGetType(identifier, param_type)) {
+		return reinterpret_cast<duckdb_logical_type>(new LogicalType(param_type));
+	}
+	// The value_map is gone after executing the prepared statement
+	// See if this is the case and we still have a value registered for it
+	auto it = wrapper->values.find(identifier);
+	if (it != wrapper->values.end()) {
+		return reinterpret_cast<duckdb_logical_type>(new LogicalType(it->second.return_type));
+	}
+	return nullptr;
+}
+
 duckdb_state duckdb_clear_bindings(duckdb_prepared_statement prepared_statement) {
 	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(prepared_statement);
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
