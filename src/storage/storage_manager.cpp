@@ -61,11 +61,22 @@ bool ObjectCache::ObjectCacheEnabled(ClientContext &context) {
 }
 
 idx_t StorageManager::GetWALSize() {
-	auto wal_ptr = GetWAL();
+	auto wal_ptr = GetWALIfExists();
 	if (!wal_ptr) {
 		return 0;
 	}
 	return wal_ptr->GetWALSize();
+}
+
+optional_ptr<WriteAheadLog> StorageManager::GetWALIfExists() {
+	if (InMemory() || read_only || !load_complete) {
+		return nullptr;
+	}
+
+	if (!wal) {
+		return nullptr;
+	}
+	return wal.get();
 }
 
 optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
@@ -74,6 +85,7 @@ optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
 	}
 
 	if (!wal) {
+		// Create one
 		auto wal_path = GetWALPath();
 		wal = make_uniq<WriteAheadLog>(db, wal_path);
 	}
@@ -81,7 +93,7 @@ optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
 }
 
 void StorageManager::ResetWAL() {
-	auto wal_ptr = GetWAL();
+	auto wal_ptr = GetWALIfExists();
 	if (wal_ptr) {
 		wal_ptr->Delete();
 	}
