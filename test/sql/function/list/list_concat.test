@@ -186,3 +186,9 @@ query T
 SELECT array_push_front(NULL, 1);
 ----
 [1]
+
+# type mismatch
+statement error
+SELECT concat([42], [84], 'str')
+----
+an explicit cast is required

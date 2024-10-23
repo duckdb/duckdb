@@ -92,24 +92,10 @@ def test_invalid_cast(shell):
     result = test.run()
     result.check_stderr("Could not convert")
 
-
-@pytest.mark.parametrize(
-    ["input", "error"],
-    [
-        (".auth ON", "sqlite3_set_authorizer"),
-        (".auth OFF", "sqlite3_set_authorizer"),
-    ],
-)
-def test_invalid_shell_commands(shell, input, error):
-    test = ShellTest(shell).statement(input)
-    result = test.run()
-    result.check_stderr(error)
-
-
 def test_invalid_backup(shell, random_filepath):
     test = ShellTest(shell).statement(f'.backup {random_filepath.as_posix()}')
     result = test.run()
-    result.check_stderr("sqlite3_backup_init")
+    result.check_stderr("unsupported in the current version of the CLI")
 
 def test_newline_in_value(shell):
     test = (
@@ -300,15 +286,6 @@ def test_execute_display(shell):
     result = test.run()
     result.check_stdout("42")
 
-# this should be fixed
-def test_selftest(shell):
-    test = (
-        ShellTest(shell)
-        .statement(".selftest")
-    )
-    result = test.run()
-    result.check_stderr("sqlite3_table_column_metadata")
-
 @pytest.mark.parametrize('generated_file', ["select 42"], indirect=True)
 def test_read(shell, generated_file):
     test = (
@@ -332,7 +309,7 @@ def test_timeout(shell):
         .statement(".timeout")
     )
     result = test.run()
-    result.check_stderr("sqlite3_busy_timeout")
+    result.check_stderr("unsupported in the current version of the CLI")
 
 
 def test_save(shell, random_filepath):
@@ -341,7 +318,7 @@ def test_save(shell, random_filepath):
         .statement(f".save {random_filepath.as_posix()}")
     )
     result = test.run()
-    result.check_stderr("sqlite3_backup_init")
+    result.check_stderr("unsupported in the current version of the CLI")
 
 def test_restore(shell, random_filepath):
     test = (
@@ -349,7 +326,7 @@ def test_restore(shell, random_filepath):
         .statement(f".restore {random_filepath.as_posix()}")
     )
     result = test.run()
-    result.check_stderr("sqlite3_backup_init")
+    result.check_stderr("unsupported in the current version of the CLI")
 
 @pytest.mark.parametrize("cmd", [
     ".vfsinfo",
@@ -364,26 +341,6 @@ def test_volatile_commands(shell, cmd):
     )
     result = test.run()
     result.check_stderr("")
-
-def test_stats_error(shell):
-    test = (
-        ShellTest(shell)
-        .statement(".stats")
-    )
-    result = test.run()
-    result.check_stderr("sqlite3_status64")
-
-@pytest.mark.parametrize("param", [
-    "off",
-    "on"
-])
-def test_stats(shell, param):
-    test = (
-        ShellTest(shell)
-        .statement(f".stats {param}")
-    )
-    result = test.run()
-    result.check_stdout("")
 
 @pytest.mark.parametrize("pattern", [
     "test",
@@ -400,6 +357,15 @@ def test_schema(shell, pattern):
     )
     result = test.run()
     result.check_stdout("CREATE TABLE test(a INTEGER, b VARCHAR);")
+
+def test_schema_indent(shell):
+    test = (
+        ShellTest(shell)
+        .statement("create table test (a int, b varchar, c int, d int, k int, primary key(a, b));")
+        .statement(f".schema -indent")
+    )
+    result = test.run()
+    result.check_stdout("CREATE TABLE test(")
 
 def test_tables(shell):
     test = (
@@ -519,25 +485,6 @@ def test_timer(shell):
     result = test.run()
     result.check_stdout('Run Time (s):')
 
-
-def test_scanstats(shell):
-    test = (
-        ShellTest(shell)
-        .statement(".scanstats on")
-        .statement("SELECT NULL;")
-    )
-    result = test.run()
-    result.check_stderr('scanstats')
-
-def test_trace(shell, random_filepath):
-    test = (
-        ShellTest(shell)
-        .statement(f".trace {random_filepath.as_posix()}")
-        .statement("SELECT 42;")
-    )
-    result = test.run()
-    result.check_stderr('sqlite3_trace_v2')
-    
 def test_output_csv_mode(shell, random_filepath):
     test = (
         ShellTest(shell)
@@ -613,6 +560,42 @@ def test_mode_html(shell):
     )
     result = test.run()
     result.check_stdout('<td>fourty-two</td>')
+
+def test_mode_html_escapes(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode html")
+        .statement("SELECT '<&>\"\'\'' AS \"&><\"\"\'\";")
+    )
+    result = test.run()
+    result.check_stdout('<tr><th>&amp;&gt;&lt;&quot;&#39;</th>')
+
+def test_mode_tcl_escapes(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode tcl")
+        .statement("SELECT '<&>\"\'\'' AS \"&><\"\"\'\";")
+    )
+    result = test.run()
+    result.check_stdout('"&><\\"\'"')
+
+def test_mode_csv_escapes(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode csv")
+        .statement("SELECT 'BEGINVAL,\n\"ENDVAL' AS \"BEGINHEADER\"\",\nENDHEADER\";")
+    )
+    result = test.run()
+    result.check_stdout('"BEGINHEADER"",\nENDHEADER"\r\n"BEGINVAL,\n""ENDVAL"')
+
+def test_mode_json_infinity(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode json")
+        .statement("SELECT 'inf'::DOUBLE AS inf, '-inf'::DOUBLE AS ninf, 'nan'::DOUBLE AS nan;")
+    )
+    result = test.run()
+    result.check_stdout('[{"inf":1e999,"ninf":-1e999,"nan":nan}]')
 
 # Original comment: FIXME sqlite3_column_blob
 def test_mode_insert(shell):
