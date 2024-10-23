@@ -821,19 +821,15 @@ void WindowBoundariesState::PeerBegin(DataChunk &bounds, idx_t row_idx, const id
 
 void WindowBoundariesState::PeerEnd(DataChunk &bounds, idx_t row_idx, const idx_t count,
                                     const ValidityMask &partition_mask, const ValidityMask &order_mask) {
-
-	auto partition_end_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
-	auto peer_end_data = FlatVector::GetData<idx_t>(bounds.data[PEER_END]);
-
 	//	OVER()
 	if (!order_count) {
-		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
-			peer_end_data[chunk_idx] = partition_end_data[chunk_idx];
-		}
+		bounds.data[PEER_END].Reference(bounds.data[PARTITION_END]);
 		return;
 	}
 
+	auto partition_end_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
 	auto peer_begin_data = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);
+	auto peer_end_data = FlatVector::GetData<idx_t>(bounds.data[PEER_END]);
 	for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
 		idx_t n = 1;
 		const auto peer_start = peer_begin_data[chunk_idx];
@@ -914,9 +910,9 @@ void WindowBoundariesState::ValidEnd(DataChunk &bounds, idx_t row_idx, const idx
 
 void WindowBoundariesState::FrameBegin(DataChunk &bounds, idx_t row_idx, const idx_t count,
                                        WindowInputExpression &boundary_begin, optional_ptr<WindowCursor> range) {
-	auto partition_begin_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
+	auto partition_begin_data = FlatVector::GetData<idx_t>(bounds.data[PARTITION_BEGIN]);
 	auto partition_end_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
-	auto peer_begin_data = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);
+	auto peer_begin_data = FlatVector::GetData<idx_t>(bounds.data[PEER_BEGIN]);
 	auto valid_begin_data = FlatVector::GetData<const idx_t>(bounds.data[VALID_BEGIN]);
 	auto valid_end_data = FlatVector::GetData<const idx_t>(bounds.data[VALID_END]);
 	auto frame_begin_data = FlatVector::GetData<idx_t>(bounds.data[FRAME_BEGIN]);
@@ -925,9 +921,8 @@ void WindowBoundariesState::FrameBegin(DataChunk &bounds, idx_t row_idx, const i
 
 	switch (start_boundary) {
 	case WindowBoundary::UNBOUNDED_PRECEDING:
-		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
-			frame_begin_data[chunk_idx] = partition_begin_data[chunk_idx];
-		}
+		bounds.data[FRAME_BEGIN].Reference(bounds.data[PARTITION_BEGIN]);
+		frame_begin_data = partition_begin_data;
 		break;
 	case WindowBoundary::CURRENT_ROW_ROWS:
 		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
@@ -935,9 +930,8 @@ void WindowBoundariesState::FrameBegin(DataChunk &bounds, idx_t row_idx, const i
 		}
 		break;
 	case WindowBoundary::CURRENT_ROW_RANGE:
-		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
-			frame_begin_data[chunk_idx] = peer_begin_data[chunk_idx];
-		}
+		bounds.data[FRAME_BEGIN].Reference(bounds.data[PEER_BEGIN]);
+		frame_begin_data = peer_begin_data;
 		break;
 	case WindowBoundary::EXPR_PRECEDING_ROWS:
 		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
@@ -1001,8 +995,8 @@ void WindowBoundariesState::FrameBegin(DataChunk &bounds, idx_t row_idx, const i
 void WindowBoundariesState::FrameEnd(DataChunk &bounds, idx_t row_idx, const idx_t count,
                                      WindowInputExpression &boundary_end, optional_ptr<WindowCursor> range) {
 	auto partition_begin_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
-	auto partition_end_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
-	auto peer_end_data = FlatVector::GetData<const idx_t>(bounds.data[PEER_END]);
+	auto partition_end_data = FlatVector::GetData<idx_t>(bounds.data[PARTITION_END]);
+	auto peer_end_data = FlatVector::GetData<idx_t>(bounds.data[PEER_END]);
 	auto valid_begin_data = FlatVector::GetData<const idx_t>(bounds.data[VALID_BEGIN]);
 	auto valid_end_data = FlatVector::GetData<const idx_t>(bounds.data[VALID_END]);
 	auto frame_end_data = FlatVector::GetData<idx_t>(bounds.data[FRAME_END]);
@@ -1016,14 +1010,12 @@ void WindowBoundariesState::FrameEnd(DataChunk &bounds, idx_t row_idx, const idx
 		}
 		break;
 	case WindowBoundary::CURRENT_ROW_RANGE:
-		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
-			frame_end_data[chunk_idx] = peer_end_data[chunk_idx];
-		}
+		bounds.data[FRAME_END].Reference(bounds.data[PEER_END]);
+		frame_end_data = peer_end_data;
 		break;
 	case WindowBoundary::UNBOUNDED_FOLLOWING:
-		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
-			frame_end_data[chunk_idx] = partition_end_data[chunk_idx];
-		}
+		bounds.data[FRAME_END].Reference(bounds.data[PARTITION_END]);
+		frame_end_data = partition_end_data;
 		break;
 	case WindowBoundary::EXPR_PRECEDING_ROWS: {
 		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
