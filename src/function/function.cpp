@@ -96,7 +96,6 @@ void BuiltinFunctions::Initialize() {
 
 	RegisterDistributiveAggregates();
 
-	RegisterCompressedMaterializationFunctions();
 	RegisterOperators();
 	RegisterSequenceFunctions();
 	RegisterNestedFunctions();
