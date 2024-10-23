@@ -63,7 +63,7 @@
 
 #if (DEBUGLEVEL>=1)
 #  define ZSTD_DEPS_NEED_ASSERT
-#  include "zstd/common/zstd_deps.h"
+// #  include "zstd/common/zstd_deps.h" // DuckDB: comment out otherwise amalgamation won't be happy
 #else
 #  ifndef assert   /* assert may be already defined, due to prior #include <assert.h> */
 #    define assert(condition) ((void)0)   /* disable assert (default) */
@@ -72,7 +72,7 @@
 
 #if (DEBUGLEVEL>=2)
 #  define ZSTD_DEPS_NEED_IO
-// #  include "zstd/common/zstd_deps.h"
+// #  include "zstd/common/zstd_deps.h" // DuckDB: comment out otherwise amalgamation won't be happy
 
 namespace duckdb_zstd {
 

@@ -8,9 +8,6 @@
  * You may select, at your option, one of the above-listed licenses.
  */
 
-#ifndef ZSTD_COVER_H
-#define ZSTD_COVER_H
-
 #ifndef ZDICT_STATIC_LINKING_ONLY
 #  define ZDICT_STATIC_LINKING_ONLY
 #endif
@@ -157,5 +154,3 @@ void COVER_dictSelectionFree(COVER_dictSelection_t selection);
                        size_t nbCheckSamples, size_t nbSamples, ZDICT_cover_params_t params, size_t* offsets, size_t totalCompressedSize);
 
 } // namespace duckdb_zstd
-
-#endif /* ZSTD_COVER_H */

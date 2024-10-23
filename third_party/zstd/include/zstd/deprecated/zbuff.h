@@ -22,8 +22,10 @@
 /* *************************************
 *  Dependencies
 ***************************************/
+// DuckDB: just enable everything for amalgamation
+#define ZSTD_STATIC_LINKING_ONLY
+
 #include <stddef.h>      /* size_t */
-#  define ZSTD_STATIC_LINKING_ONLY   /* ZSTD_parameters, ZSTD_customMem */
 #include "zstd.h"        /* ZSTD_CStream, ZSTD_DStream, ZSTDLIB_API */
 
 namespace duckdb_zstd {
@@ -184,8 +186,9 @@ ZBUFF_DEPRECATED("use ZSTD_DStreamOutSize") size_t ZBUFF_recommendedDOutSize(voi
 
 
 /*--- Dependency ---*/
-//#  define ZSTD_STATIC_LINKING_ONLY   /* ZSTD_parameters, ZSTD_customMem */
-//#include "zstd.h"
+// DuckDB: comment out otherwise amalgamation won't be happy
+// #  define ZSTD_STATIC_LINKING_ONLY   /* ZSTD_parameters, ZSTD_customMem */
+// #include "zstd.h"
 
 namespace duckdb_zstd {
 

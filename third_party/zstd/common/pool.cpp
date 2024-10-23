@@ -10,6 +10,9 @@
 
 
 /* ======   Dependencies   ======= */
+// DuckDB: just enable everything for amalgamation
+#define ZSTD_MULTITHREAD
+
 #include "zstd/common/allocations.h"  /* ZSTD_customCalloc, ZSTD_customFree */
 #include "zstd/common/zstd_deps.h" /* size_t */
 #include "zstd/common/debug.h"     /* assert */

@@ -28,6 +28,13 @@
 #include <stddef.h>
 #include <string.h>
 
+// DuckDB: just enable everything for amalgamation
+#define ZSTD_DEPS_NEED_MALLOC
+#define ZSTD_DEPS_NEED_MATH64
+#define ZSTD_DEPS_NEED_ASSERT
+#define ZSTD_DEPS_NEED_IO
+#define ZSTD_DEPS_NEED_STDINT
+
 #if defined(__GNUC__) && __GNUC__ >= 4
 # define ZSTD_memcpy(d,s,l) __builtin_memcpy((d),(s),(l))
 # define ZSTD_memmove(d,s,l) __builtin_memmove((d),(s),(l))
