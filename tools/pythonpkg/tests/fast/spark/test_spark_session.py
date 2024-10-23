@@ -46,6 +46,7 @@ class TestSparkSession(object):
             .getOrCreate()
         )
 
+    @pytest.mark.skipif(USE_ACTUAL_SPARK, reason="Different version numbers")
     def test_version(self, spark):
         version = spark.version
         assert version == '1.0.0'
@@ -73,6 +74,7 @@ class TestSparkSession(object):
         context = spark.sparkContext
         spark.stop()
 
+    @pytest.mark.skipif(USE_ACTUAL_SPARK, reason="Can't create table with the local PySpark setup in the CI/CD pipeline")
     def test_table(self, spark):
         spark.sql('create table tbl(a varchar(10))')
         df = spark.table('tbl')
