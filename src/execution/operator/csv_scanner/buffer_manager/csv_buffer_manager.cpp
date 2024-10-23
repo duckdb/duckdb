@@ -145,4 +145,11 @@ string CSVBufferManager::GetFilePath() const {
 	return file_path;
 }
 
+bool CSVBufferManager::IsBlockUnloaded(idx_t block_idx) {
+	if (block_idx < cached_buffers.size()) {
+		return cached_buffers[block_idx]->IsUnloaded();
+	}
+	return false;
+}
+
 } // namespace duckdb

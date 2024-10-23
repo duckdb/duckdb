@@ -72,6 +72,9 @@ public:
 	char *Ptr() {
 		return char_ptr_cast(handle.Ptr());
 	}
+	bool IsUnloaded() {
+		return block->IsUnloaded();
+	}
 
 	//! By default, we use CSV_BUFFER_SIZE to allocate each buffer
 	static constexpr idx_t ROWS_PER_BUFFER = 16;

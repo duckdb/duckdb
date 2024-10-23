@@ -460,24 +460,31 @@ void CSVSniffer::RefineCandidates() {
 		// Only one candidate nothing to refine or all candidates already checked
 		return;
 	}
-	vector<unique_ptr<ColumnCountScanner>> successful_candidates;
-	for (auto &cur_candidate : candidates) {
-		for (idx_t i = 1; i <= options.sample_size_chunks; i++) {
+
+	for (idx_t i = 1; i <= options.sample_size_chunks; i++) {
+		vector<unique_ptr<ColumnCountScanner>> successful_candidates;
+		bool done = false;
+		for (auto &cur_candidate : candidates) {
 			bool finished_file = cur_candidate->FinishedFile();
 			if (finished_file || i == options.sample_size_chunks) {
 				// we finished the file or our chunk sample successfully
 				successful_candidates.push_back(std::move(cur_candidate));
+				done = true;
 				break;
 			}
-			if (!RefineCandidateNextChunk(*cur_candidate) || cur_candidate->GetResult().error) {
-				// This candidate failed, move to the next one
+			if ((!!RefineCandidateNextChunk(*cur_candidate) || cur_candidate->GetResult().error)) {
+				successful_candidates.push_back(std::move(cur_candidate));
 				break;
 			}
+		}
+		candidates = std::move(successful_candidates);
+		if (done) {
+			break;
 		}
 	}
 	// If we have multiple candidates with quotes set, we will give the preference to ones
 	// that have actually quoted values, otherwise we will choose quotes = \0
-	candidates.clear();
+	vector<unique_ptr<ColumnCountScanner>> successful_candidates = std::move(candidates);
 	if (!successful_candidates.empty()) {
 		for (idx_t i = 0; i < successful_candidates.size(); i++) {
 			unique_ptr<ColumnCountScanner> cc_best_candidate = std::move(successful_candidates[i]);
