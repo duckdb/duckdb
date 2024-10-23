@@ -1,6 +1,6 @@
 # name: test/sql/copy/csv/unquoted_escape/identical.test
 # description: Ensure that the identical quote & escape case works as before and is not affected by the handling of unquoted escaped values.
-# group: [csv]
+# group: [unquoted_escape]
 
 statement ok
 PRAGMA enable_verification

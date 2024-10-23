@@ -1,6 +1,6 @@
 # name: test/sql/copy/csv/unquoted_escape/basic.test
 # description: Test the parsing of unquoted escape characters
-# group: [csv]
+# group: [unquoted_escape]
 
 statement ok
 PRAGMA enable_verification

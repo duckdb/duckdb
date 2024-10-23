@@ -1,6 +1,6 @@
 # name: test/sql/copy/csv/unquoted_escape/32k_rows.test
 # description: Test large number of rows with unquoted escape characters
-# group: [csv]
+# group: [unquoted_escape]
 
 statement ok
 PRAGMA enable_verification

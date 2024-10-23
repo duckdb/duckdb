@@ -1,6 +1,6 @@
 # name: test/sql/copy/csv/unquoted_escape/mixed.test
 # description: Test the parsing of escaped values within and without quote in the same file
-# group: [csv]
+# group: [unquoted_escape]
 
 statement ok
 PRAGMA enable_verification
