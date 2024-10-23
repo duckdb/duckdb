@@ -398,7 +398,8 @@ public:
 			vector_size = STANDARD_VECTOR_SIZE;
 		}
 		auto current_offset = GetCurrentOffset();
-		// FIXME: align the `current_offset` ??
+		current_offset = UnsafeNumericCast<page_offset_t>(
+		    AlignValue<idx_t, sizeof(string_length_t)>(UnsafeNumericCast<idx_t>(current_offset)));
 		starting_offset = current_offset;
 		starting_page = GetCurrentId();
 		compressed_size = 0;
@@ -806,22 +807,25 @@ public:
 		auto &metadata = current_vector->metadata;
 		auto &scan_state = *current_vector;
 		data_ptr_t handle_start;
-		data_ptr_t ptr;
+		idx_t ptr_offset = 0;
 		if (metadata.block_id == INVALID_BLOCK) {
 			// Data lives on the segment's page
 			handle_start = segment_handle.Ptr();
-			ptr = handle_start + segment_block_offset;
+			ptr_offset += segment_block_offset;
 		} else {
 			// Data lives on an extra page, have to load the block first
 			auto block = LoadPage(metadata.block_id);
 			auto data_handle = buffer_manager.Pin(block);
 			handle_start = data_handle.Ptr();
-			ptr = handle_start;
 			scan_state.buffer_handles.push_back(std::move(data_handle));
 		}
-		scan_state.current_buffer_ptr = ptr + metadata.block_offset;
+
+		ptr_offset += metadata.block_offset;
+		ptr_offset = AlignValue<idx_t, sizeof(string_length_t)>(ptr_offset);
+		scan_state.current_buffer_ptr = handle_start + ptr_offset;
 
 		auto vector_size = metadata.count;
+
 		scan_state.string_lengths = (string_length_t *)(scan_state.current_buffer_ptr);
 		scan_state.current_buffer_ptr += (sizeof(string_length_t) * vector_size);
 
@@ -866,6 +870,35 @@ public:
 		scan_state.in_buffer.size = MinValue<idx_t>(page_size, remaining_compressed_data);
 	}
 
+	void DecompressString(ZSTDVectorScanState &scan_state, data_ptr_t destination, idx_t uncompressed_length) {
+		if (uncompressed_length == 0) {
+			return;
+		}
+
+		duckdb_zstd::ZSTD_outBuffer out_buffer;
+
+		out_buffer.dst = destination;
+		out_buffer.pos = 0;
+		out_buffer.size = uncompressed_length;
+
+		while (true) {
+			idx_t old_pos = scan_state.in_buffer.pos;
+			size_t res = duckdb_zstd::ZSTD_decompressStream(
+			    /* zds = */ decompression_context,
+			    /* output =*/&out_buffer,
+			    /* input =*/&scan_state.in_buffer);
+			scan_state.compressed_scan_count += scan_state.in_buffer.pos - old_pos;
+			if (duckdb_zstd::ZSTD_isError(res)) {
+				throw InvalidInputException("ZSTD Decompression failed: %s", duckdb_zstd::ZSTD_getErrorName(res));
+			}
+			if (out_buffer.pos == out_buffer.size) {
+				break;
+			}
+			// Did not fully decompress, it needs a new page to read from
+			LoadNextPageForVector(scan_state);
+		}
+	}
+
 	void Skip(ZSTDVectorScanState &scan_state, idx_t count) {
 		if (!skip_buffer) {
 			skip_buffer = Allocator::DefaultAllocator().Allocate(duckdb_zstd::ZSTD_DStreamOutSize());
@@ -889,31 +922,6 @@ public:
 		}
 		scan_state.scanned_count += count;
 		scanned_count += count;
-	}
-
-	void DecompressString(ZSTDVectorScanState &scan_state, data_ptr_t destination, idx_t uncompressed_length) {
-		duckdb_zstd::ZSTD_outBuffer out_buffer;
-
-		out_buffer.dst = destination;
-		out_buffer.pos = 0;
-		out_buffer.size = uncompressed_length;
-
-		while (true) {
-			idx_t old_pos = scan_state.in_buffer.pos;
-			size_t res = duckdb_zstd::ZSTD_decompressStream(
-			    /* zds = */ decompression_context,
-			    /* output =*/&out_buffer,
-			    /* input =*/&scan_state.in_buffer);
-			scan_state.compressed_scan_count += scan_state.in_buffer.pos - old_pos;
-			if (duckdb_zstd::ZSTD_isError(res)) {
-				throw InvalidInputException("ZSTD Decompression failed: %s", duckdb_zstd::ZSTD_getErrorName(res));
-			}
-			if (out_buffer.pos == out_buffer.size) {
-				break;
-			}
-			// Did not fully decompress, it needs a new page to read from
-			LoadNextPageForVector(scan_state);
-		}
 	}
 
 	void ScanInternal(ZSTDVectorScanState &scan_state, idx_t count, Vector &result, idx_t result_offset) {
