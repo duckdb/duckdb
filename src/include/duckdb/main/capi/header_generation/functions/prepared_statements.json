@@ -123,7 +123,7 @@
         },
         {
             "name": "duckdb_param_logical_type",
-            "return_type": "duckdb_type",
+            "return_type": "duckdb_logical_type",
             "params": [
                 {
                     "type": "duckdb_prepared_statement",
