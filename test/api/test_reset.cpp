@@ -132,6 +132,8 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 bool OptionIsExcludedFromTest(const string &name) {
 	static unordered_set<string> excluded_options = {
 	    "access_mode",
+	    "allowed_directories",
+	    "allowed_paths",
 	    "schema",
 	    "search_path",
 	    "debug_window_mode",

@@ -31,4 +31,4 @@ CHECKPOINT a2
 statement error
 ATTACH '__TEST_DIR__/attach_access3.db' AS a2
 ----
-disabled by configuration
+Permission Error

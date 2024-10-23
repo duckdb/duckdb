@@ -36,7 +36,6 @@ static unique_ptr<GlobalTableFunctionState> CSVSniffInitGlobal(ClientContext &co
 static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFunctionBindInput &input,
                                              vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<CSVSniffFunctionData>();
-	auto &config = DBConfig::GetConfig(context);
 	result->path = input.inputs[0].ToString();
 	auto it = input.named_parameters.find("auto_detect");
 	if (it != input.named_parameters.end()) {

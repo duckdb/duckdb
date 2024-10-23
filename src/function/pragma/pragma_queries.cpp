@@ -138,7 +138,6 @@ string PragmaPlatform(ClientContext &context, const FunctionParameters &paramete
 }
 
 string PragmaImportDatabase(ClientContext &context, const FunctionParameters &parameters) {
-	auto &config = DBConfig::GetConfig(context);
 	auto &fs = FileSystem::GetFileSystem(context);
 
 	string final_query;
