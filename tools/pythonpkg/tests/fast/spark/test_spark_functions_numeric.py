@@ -86,7 +86,7 @@ class TestSparkFunctionsNumeric(object):
 
     def test_cos(self, spark):
         data = [
-            (0,),
+            (0.0,),
             (3.14159,),
         ]
         df = spark.createDataFrame(data, ["firstColumn"])
