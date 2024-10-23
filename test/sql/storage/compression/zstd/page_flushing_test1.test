@@ -80,13 +80,16 @@ insert into tbl select 'bbbbaaaa' from range(2047)
 # ------------------------
 
 statement ok
+pragma limit_zstd_dictionary_size;
+
+statement ok
 pragma force_compression='zstd'
 
 statement ok
 checkpoint
 
 query II
-select strlen(a), count(a) from tbl group by strlen(a);
+select strlen(a), count(a) from tbl group by strlen(a) order by all;
 ----
 8	8188
 3888890	3

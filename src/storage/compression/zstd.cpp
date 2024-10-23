@@ -145,7 +145,8 @@ struct ZSTDStorage {
 //===--------------------------------------------------------------------===//
 struct ZSTDAnalyzeState : public AnalyzeState {
 public:
-	ZSTDAnalyzeState(CompressionInfo &info) : AnalyzeState(info), compression_dict(nullptr), context(nullptr) {
+	ZSTDAnalyzeState(CompressionInfo &info, DBConfig &config)
+	    : AnalyzeState(info), config(config), compression_dict(nullptr), context(nullptr) {
 		context = duckdb_zstd::ZSTD_createCCtx();
 	}
 	~ZSTDAnalyzeState() {
@@ -182,6 +183,7 @@ public:
 	}
 
 public:
+	DBConfig &config;
 	ZSTDSamplingState sampling_state;
 
 	//! The trained 'dictBuffer' (populated in FinalAnalyze)
@@ -195,7 +197,11 @@ public:
 
 unique_ptr<AnalyzeState> ZSTDStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
-	return make_uniq<ZSTDAnalyzeState>(info);
+	auto &data_table_info = col_data.info;
+	auto &attached_db = data_table_info.GetDB();
+	auto &config = DBConfig::Get(attached_db);
+
+	return make_uniq<ZSTDAnalyzeState>(info, config);
 }
 
 // Determines wether compression is possible and calculates sizes for the FinalAnalyze
@@ -245,6 +251,11 @@ DictBuffer CreateDictFromSamples(ZSTDAnalyzeState &state) {
 	if (dict_buffer_size > remaining_size) {
 		// FIXME: perhaps we want to spill this to a separate page instead then?
 		dict_buffer_size = remaining_size;
+	}
+	if (state.config.options.limit_zstd_dictionary) {
+		// Create the smallest possible dictionary to produce very badly compressed data
+		// useful for testing how big amounts of compressed data behaves when it crosses page boundaries
+		dict_buffer_size = ZDICT_DICTSIZE_MIN;
 	}
 
 	DictBuffer buffer(UnsafeNumericCast<dict_size_t>(dict_buffer_size));

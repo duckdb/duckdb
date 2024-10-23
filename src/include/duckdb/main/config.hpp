@@ -240,6 +240,8 @@ struct DBConfigOptions {
 	case_insensitive_map_t<Value> unrecognized_options;
 	//! Whether or not the configuration settings can be altered
 	bool lock_configuration = false;
+	//! (Debugging/Testing) use the smallest possible dictionary size to create uncompressable data
+	bool limit_zstd_dictionary = false;
 	//! Whether to print bindings when printing the plan (debug mode only)
 	static bool debug_print_bindings; // NOLINT: debug setting
 	//! The peak allocation threshold at which to flush the allocator after completing a task (1 << 27, ~128MB)
