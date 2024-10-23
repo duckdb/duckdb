@@ -36,7 +36,9 @@ class TestsSparkFunctionsDate(object):
         gen_record = df.select(*[F.date_trunc(fmt, "dt_ref").alias(fmt) for fmt in cols]).collect()[0]
 
         expected_record = spark.createDataFrame(
-            [r.values() for r in expected],
+            # Need to convert to a list for Spark which otherwise throws a TypeError.
+            # It would work without it for DuckDB.
+            [list(r.values()) for r in expected],
             cols,
         ).collect()[0]
 
