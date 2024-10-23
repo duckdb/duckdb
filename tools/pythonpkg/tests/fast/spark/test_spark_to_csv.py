@@ -5,7 +5,7 @@ import os
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
-from ...spark_namespace import USE_ACTUAL_SPARK
+from spark_namespace import USE_ACTUAL_SPARK
 
 if USE_ACTUAL_SPARK:
     pytest.skip("Skipping these tests as right now,"
@@ -13,8 +13,8 @@ if USE_ACTUAL_SPARK:
                 + " For example, PySpark does read back numbers as strings and has the option 'headers' set to False.", allow_module_level=True)
 
 from duckdb import connect, InvalidInputException, read_csv
-from ...conftest import NumpyPandas, ArrowPandas, getTimeSeriesData
-from ...spark_namespace import USE_ACTUAL_SPARK
+from conftest import NumpyPandas, ArrowPandas, getTimeSeriesData
+from spark_namespace import USE_ACTUAL_SPARK
 import pandas._testing as tm
 import datetime
 import csv

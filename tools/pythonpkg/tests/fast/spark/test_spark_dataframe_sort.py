@@ -1,8 +1,8 @@
 import pytest
 
-from ...spark_namespace.sql.types import Row
-from ...spark_namespace.errors import PySparkTypeError, PySparkValueError
-from ...spark_namespace import USE_ACTUAL_SPARK
+from spark_namespace.sql.types import Row
+from spark_namespace.errors import PySparkTypeError, PySparkValueError
+from spark_namespace import USE_ACTUAL_SPARK
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
@@ -70,7 +70,7 @@ class TestDataFrameSort(object):
     def test_sort_zero_index(self, spark):
         df = spark.createDataFrame(self.data, ["age", "name"])
 
-        from ...spark_namespace.errors import PySparkIndexError
+        from spark_namespace.errors import PySparkIndexError
         with pytest.raises(PySparkIndexError):
             df = df.sort(0)
 

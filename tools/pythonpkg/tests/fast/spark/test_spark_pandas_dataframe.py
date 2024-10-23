@@ -3,7 +3,7 @@ import pytest
 _ = pytest.importorskip("duckdb.experimental.spark")
 pd = pytest.importorskip("pandas")
 
-from ...spark_namespace.sql.types import (
+from spark_namespace.sql.types import (
     LongType,
     StructType,
     BooleanType,
@@ -15,7 +15,7 @@ from ...spark_namespace.sql.types import (
     ArrayType,
     MapType,
 )
-from ...spark_namespace.sql.functions import col, struct, when
+from spark_namespace.sql.functions import col, struct, when
 import duckdb
 import re
 from pandas.testing import assert_frame_equal

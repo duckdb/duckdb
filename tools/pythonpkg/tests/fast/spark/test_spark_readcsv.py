@@ -2,8 +2,8 @@ import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
-from ...spark_namespace.sql.types import Row
-from ...spark_namespace import USE_ACTUAL_SPARK
+from spark_namespace.sql.types import Row
+from spark_namespace import USE_ACTUAL_SPARK
 import textwrap
 
 

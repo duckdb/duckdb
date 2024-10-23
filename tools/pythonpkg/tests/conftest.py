@@ -6,7 +6,6 @@ import glob
 import duckdb
 import warnings
 from importlib import import_module
-from typing import NamedTuple
 
 try:
     # need to ignore warnings that might be thrown deep inside pandas's import tree (from dateutil in this case)
@@ -225,11 +224,11 @@ def require():
 # By making the scope 'function' we ensure that a new connection gets created for every function that uses the fixture
 @pytest.fixture(scope='function')
 def spark():
-    from .spark_namespace import USE_ACTUAL_SPARK
+    from spark_namespace import USE_ACTUAL_SPARK
 
     if not hasattr(spark, 'session'):
         # Cache the import
-        from .spark_namespace.sql import SparkSession as session
+        from spark_namespace.sql import SparkSession as session
         spark.session = session
 
     if USE_ACTUAL_SPARK:

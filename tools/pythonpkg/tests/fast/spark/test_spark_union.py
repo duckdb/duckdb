@@ -3,8 +3,8 @@ import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
-from ...spark_namespace.sql.types import Row
-from ...spark_namespace.sql.functions import col
+from spark_namespace.sql.types import Row
+from spark_namespace.sql.functions import col
 
 
 @pytest.fixture

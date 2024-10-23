@@ -1,7 +1,7 @@
 import pytest
 
 
-from ...spark_namespace.sql.types import (
+from spark_namespace.sql.types import (
     Row,
 )
 

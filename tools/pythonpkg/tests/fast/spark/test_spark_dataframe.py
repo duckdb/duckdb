@@ -2,8 +2,8 @@ import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
-from ...spark_namespace import USE_ACTUAL_SPARK
-from ...spark_namespace.sql.types import (
+from spark_namespace import USE_ACTUAL_SPARK
+from spark_namespace.sql.types import (
     LongType,
     StructType,
     BooleanType,
@@ -15,12 +15,12 @@ from ...spark_namespace.sql.types import (
     ArrayType,
     MapType,
 )
-from ...spark_namespace.sql.functions import col, struct, when
-from ...spark_namespace.sql.column import Column
+from spark_namespace.sql.functions import col, struct, when
+from spark_namespace.sql.column import Column
 import duckdb
 import re
 
-from ...spark_namespace.errors import PySparkValueError, PySparkTypeError
+from spark_namespace.errors import PySparkValueError, PySparkTypeError
 
 
 def assert_column_objects_equal(col1: Column, col2: Column):
@@ -190,7 +190,7 @@ class TestDataFrame(object):
         assert res == [Row(a=42, b=True), Row(a=21, b=False)]
 
     def test_df_creation_coverage(self, spark):
-        from ...spark_namespace.sql.types import StructType, StructField, StringType, IntegerType
+        from spark_namespace.sql.types import StructType, StructField, StringType, IntegerType
 
         data2 = [
             ("James", "", "Smith", "36636", "M", 3000),
@@ -294,7 +294,7 @@ class TestDataFrame(object):
         )
 
     def test_df_columns(self, spark):
-        from ...spark_namespace.sql.functions import col, struct, when
+        from spark_namespace.sql.functions import col, struct, when
 
         structureData = [
             (("James", "", "Smith"), "36636", "M", 3100),
