@@ -80,10 +80,26 @@ insert into tbl select 'bbbbaaaa' from range(2047)
 # ------------------------
 
 statement ok
-pragma limit_zstd_dictionary_size;
+pragma enable_zstd_dictionary_limit;
 
 statement ok
 pragma force_compression='zstd'
+
+statement ok
+checkpoint
+
+query II
+select strlen(a), count(a) from tbl group by strlen(a) order by all;
+----
+8	8188
+3888890	3
+7777780	2
+
+# Now compress it again, but this time without limiting the dictionary
+# This will force the data of the first vector to move to a new page instead of occupying the segment page
+
+statement ok
+pragma disable_zstd_dictionary_limit;
 
 statement ok
 checkpoint

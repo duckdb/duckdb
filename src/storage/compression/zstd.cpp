@@ -462,7 +462,7 @@ public:
 		                                        /*length = */ string.GetSize(),
 		                                        /*pos = */ 0};
 
-		if (string.GetSize() == 0) {
+		if (!end_of_vector && string.GetSize() == 0) {
 			return;
 		}
 		uncompressed_size += string.GetSize();
