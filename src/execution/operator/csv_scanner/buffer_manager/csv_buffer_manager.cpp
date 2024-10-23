@@ -11,10 +11,6 @@ CSVBufferManager::CSVBufferManager(ClientContext &context_p, const CSVReaderOpti
 	file_handle = ReadCSV::OpenCSV(file_path, options.compression, context);
 	is_pipe = file_handle->IsPipe();
 	skip_rows = options.dialect_options.skip_rows.GetValue();
-	// auto file_size = file_handle->FileSize();
-	// if (file_size > 0 && file_size < buffer_size) {
-	// 	buffer_size = CSVBuffer::MIN_ROWS_PER_BUFFER * options.maximum_line_size;
-	// }
 	Initialize();
 }
 

@@ -512,7 +512,8 @@ void CSVReaderOptions::Verify() {
 			                      buffer_size.GetValue(), maximum_line_size.GetValue());
 		}
 	} else if (maximum_line_size.IsSetByUser() && maximum_line_size.GetValue() > max_line_size_default) {
-		// If the max line size is set by the user and bigger than we have by default, we make it part of our buffer size decision.
+		// If the max line size is set by the user and bigger than we have by default, we make it part of our buffer
+		// size decision.
 		buffer_size.Set(CSVBuffer::ROWS_PER_BUFFER * maximum_line_size.GetValue(), false);
 	}
 }

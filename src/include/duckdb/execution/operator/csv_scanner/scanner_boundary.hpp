@@ -78,6 +78,8 @@ public:
 	//! Checks if we are done with this iterator
 	void CheckIfDone();
 
+	static idx_t BytesPerThread(const CSVReaderOptions &reader_options);
+
 	static constexpr idx_t ROWS_PER_THREAD = 4;
 
 	CSVPosition pos;
@@ -94,7 +96,5 @@ private:
 	//! Sometimes life knows no boundaries.
 	//! The boundaries don't have to be set for single-threaded execution.
 	bool is_set;
-
-	static idx_t BytesPerThread(const CSVReaderOptions &reader_options);
 };
 } // namespace duckdb

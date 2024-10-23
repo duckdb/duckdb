@@ -160,8 +160,8 @@ CSVError CSVError::CastError(const CSVReaderOptions &options, string &column_nam
 	                how_to_fix_it.str(), current_path);
 }
 
-CSVError CSVError::LineSizeError(const CSVReaderOptions &options,  LinesPerBoundary error_info,
-                                 string &csv_row, idx_t byte_position, const string &current_path) {
+CSVError CSVError::LineSizeError(const CSVReaderOptions &options, LinesPerBoundary error_info, string &csv_row,
+                                 idx_t byte_position, const string &current_path) {
 	std::ostringstream error;
 	error << "Maximum line size of " << options.maximum_line_size.GetValue() << " bytes exceeded. ";
 	error << "Actual Size:" << csv_row.size() << " bytes." << '\n';
@@ -282,7 +282,7 @@ CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &
 	error << "* Check you are using the correct file compression, otherwise set it (e.g., compression = \'zstd\')"
 	      << '\n';
 	error << "* Be sure that the maximum line size is set to an appropriate value, otherwise set it (e.g., "
-	         "max_line_size=1000000000000)"
+	         "max_line_size=10000000)"
 	      << "\n";
 
 	return CSVError(error.str(), SNIFFING, {});

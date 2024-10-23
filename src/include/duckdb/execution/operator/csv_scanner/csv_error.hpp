@@ -62,8 +62,8 @@ public:
 	                          idx_t column_idx, string &csv_row, LinesPerBoundary error_info, idx_t row_byte_position,
 	                          optional_idx byte_position, LogicalTypeId type, const string &current_path);
 	//! Produces error for when the line size exceeds the maximum line size option
-	static CSVError LineSizeError(const CSVReaderOptions &options, LinesPerBoundary error_info,
-	                              string &csv_row, idx_t byte_position, const string &current_path);
+	static CSVError LineSizeError(const CSVReaderOptions &options, LinesPerBoundary error_info, string &csv_row,
+	                              idx_t byte_position, const string &current_path);
 	//! Produces an error message for a dialect sniffing error.
 	static CSVError SniffingError(const CSVReaderOptions &options, const string &search_space);
 	//! Produces an error message for a header sniffing error.

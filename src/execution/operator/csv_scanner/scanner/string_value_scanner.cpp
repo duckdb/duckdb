@@ -1543,9 +1543,6 @@ ValidRowInfo StringValueScanner::TryRow(CSVState state, idx_t start_pos, idx_t e
 		auto iterator_start = current_iterator;
 		idx_t current_pos = current_iterator.pos.buffer_pos;
 		current_iterator.SetEnd(iterator.GetEndPos());
-		// if (iterator.GetEndPos() == current_pos) {
-		// 	return {false, current_pos, current_iterator.pos.buffer_idx, current_iterator.pos.buffer_pos, quoted};
-		// }
 		if (IsRowValid(current_iterator)) {
 			if (!quoted) {
 				quoted = FirstValueEndsOnQuote(iterator_start);
@@ -1568,57 +1565,56 @@ void StringValueScanner::SetStart() {
 	if (iterator.GetEndPos() > cur_buffer_handle->actual_size) {
 		iterator.SetEnd(cur_buffer_handle->actual_size);
 	}
-		// At this point we have 3 options:
-		// 1. We are at the start of a valid line
-		ValidRowInfo best_row = TryRow(CSVState::STANDARD_NEWLINE, iterator.pos.buffer_pos, iterator.GetEndPos());
-		// 2. We are in the middle of a quoted value
-		if (state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0') {
-			idx_t end_pos = iterator.GetEndPos();
-			if (best_row.is_valid && best_row.end_buffer_idx == iterator.pos.buffer_idx) {
-				// If we got a valid row from the standard state, we limit our search up to that.
-				end_pos = best_row.end_pos;
-			}
-			auto quoted_row = TryRow(CSVState::QUOTED, iterator.pos.buffer_pos, end_pos);
-			if (quoted_row.is_valid && (!best_row.is_valid || best_row.last_state_quote)) {
-				best_row = quoted_row;
-			}
-			if (!best_row.is_valid && !quoted_row.is_valid && best_row.start_pos < quoted_row.start_pos) {
-				best_row = quoted_row;
-			}
+	// At this point we have 3 options:
+	// 1. We are at the start of a valid line
+	ValidRowInfo best_row = TryRow(CSVState::STANDARD_NEWLINE, iterator.pos.buffer_pos, iterator.GetEndPos());
+	// 2. We are in the middle of a quoted value
+	if (state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0') {
+		idx_t end_pos = iterator.GetEndPos();
+		if (best_row.is_valid && best_row.end_buffer_idx == iterator.pos.buffer_idx) {
+			// If we got a valid row from the standard state, we limit our search up to that.
+			end_pos = best_row.end_pos;
 		}
-		// 3. We are in an escaped value
-		if (!best_row.is_valid && state_machine->dialect_options.state_machine_options.escape.GetValue() != '\0' &&
-		    state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0') {
-			auto escape_row = TryRow(CSVState::ESCAPE, iterator.pos.buffer_pos, iterator.GetEndPos());
-			if (escape_row.is_valid) {
-				best_row = escape_row;
-			} else {
-				if (best_row.start_pos < escape_row.start_pos) {
-					best_row = escape_row;
-				}
-			}
+		auto quoted_row = TryRow(CSVState::QUOTED, iterator.pos.buffer_pos, end_pos);
+		if (quoted_row.is_valid && (!best_row.is_valid || best_row.last_state_quote)) {
+			best_row = quoted_row;
 		}
-		if (!best_row.is_valid) {
-			bool is_this_the_end =
-			    best_row.start_pos >= cur_buffer_handle->actual_size && cur_buffer_handle->is_last_buffer;
-			if (is_this_the_end) {
-				iterator.pos.buffer_pos = best_row.start_pos;
-				iterator.done = true;
-			} else {
-				bool mock;
-				if (!SkipUntilState(CSVState::STANDARD_NEWLINE, CSVState::RECORD_SEPARATOR, iterator, mock)) {
-					iterator.CheckIfDone();
-				}
-			}
+		if (!best_row.is_valid && !quoted_row.is_valid && best_row.start_pos < quoted_row.start_pos) {
+			best_row = quoted_row;
+		}
+	}
+	// 3. We are in an escaped value
+	if (!best_row.is_valid && state_machine->dialect_options.state_machine_options.escape.GetValue() != '\0' &&
+	    state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0') {
+		auto escape_row = TryRow(CSVState::ESCAPE, iterator.pos.buffer_pos, iterator.GetEndPos());
+		if (escape_row.is_valid) {
+			best_row = escape_row;
 		} else {
-			iterator.pos.buffer_pos = best_row.start_pos;
-			bool is_this_the_end =
-			    best_row.start_pos >= cur_buffer_handle->actual_size && cur_buffer_handle->is_last_buffer;
-			if (is_this_the_end) {
-				iterator.done = true;
+			if (best_row.start_pos < escape_row.start_pos) {
+				best_row = escape_row;
 			}
 		}
-
+	}
+	if (!best_row.is_valid) {
+		bool is_this_the_end =
+		    best_row.start_pos >= cur_buffer_handle->actual_size && cur_buffer_handle->is_last_buffer;
+		if (is_this_the_end) {
+			iterator.pos.buffer_pos = best_row.start_pos;
+			iterator.done = true;
+		} else {
+			bool mock;
+			if (!SkipUntilState(CSVState::STANDARD_NEWLINE, CSVState::RECORD_SEPARATOR, iterator, mock)) {
+				iterator.CheckIfDone();
+			}
+		}
+	} else {
+		iterator.pos.buffer_pos = best_row.start_pos;
+		bool is_this_the_end =
+		    best_row.start_pos >= cur_buffer_handle->actual_size && cur_buffer_handle->is_last_buffer;
+		if (is_this_the_end) {
+			iterator.done = true;
+		}
+	}
 
 	// 4. We have an error, if we have an error, we let life go on, the scanner will either ignore it
 	// or throw.
