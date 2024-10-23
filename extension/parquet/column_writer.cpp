@@ -350,6 +350,7 @@ public:
 	vector<PageWriteInformation> write_info;
 	unique_ptr<ColumnWriterStatistics> stats_state;
 	idx_t current_page = 0;
+
 };
 
 //===--------------------------------------------------------------------===//
@@ -842,7 +843,7 @@ struct BaseParquetOperator {
 	}
 
 	template <class SRC, class TGT>
-	static void HandleStats(ColumnWriterStatistics *stats, SRC source_value, TGT target_value) {
+	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
 		auto &numeric_stats = (NumericStatisticsState<SRC, TGT, BaseParquetOperator> &)*stats;
 		if (LessThan::Operation(target_value, numeric_stats.min)) {
 			numeric_stats.min = target_value;
@@ -894,7 +895,7 @@ struct ParquetHugeintOperator {
 	}
 
 	template <class SRC, class TGT>
-	static void HandleStats(ColumnWriterStatistics *stats, SRC source_value, TGT target_value) {
+	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
 	}
 };
 
@@ -910,7 +911,7 @@ struct ParquetUhugeintOperator {
 	}
 
 	template <class SRC, class TGT>
-	static void HandleStats(ColumnWriterStatistics *stats, SRC source_value, TGT target_value) {
+	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
 	}
 };
 
@@ -927,7 +928,7 @@ static void TemplatedWritePlain(Vector &col, ColumnWriterStatistics *stats, cons
 			continue;
 		}
 		TGT target_value = OP::template Operation<SRC, TGT>(ptr[r]);
-		OP::template HandleStats<SRC, TGT>(stats, ptr[r], target_value);
+		OP::template HandleStats<SRC, TGT>(stats, target_value);
 		write_combiner[write_combiner_count++] = target_value;
 		if (write_combiner_count == WRITE_COMBINER_CAPACITY) {
 			ser.WriteData(const_data_ptr_cast(write_combiner), WRITE_COMBINER_CAPACITY * sizeof(TGT));
@@ -937,6 +938,7 @@ static void TemplatedWritePlain(Vector &col, ColumnWriterStatistics *stats, cons
 	ser.WriteData(const_data_ptr_cast(write_combiner), write_combiner_count * sizeof(TGT));
 }
 
+template<class T>
 class StandardColumnWriterState : public BasicColumnWriterState {
 public:
 	StandardColumnWriterState(duckdb_parquet::RowGroup &row_group, idx_t col_idx)
@@ -946,13 +948,24 @@ public:
 
 	// analysis state for integer values for DELTA_BINARY_PACKED
 	idx_t total_value_count = 0;
+
+	unordered_map<T, uint32_t> dictionary;
+	duckdb_parquet::Encoding::type encoding;
+
 };
 
+template<class T>
 class StandardWriterPageState : public ColumnWriterPageState {
 public:
-	explicit StandardWriterPageState(const idx_t total_value_count) : encoder(total_value_count), initialized(false) {
+	explicit StandardWriterPageState(const idx_t total_value_count, const idx_t dictionary_size) : dbp_encoder(total_value_count), encoding(Encoding::RLE_DICTIONARY), written_value(false), bit_width(RleBpDecoder::ComputeBitWidth(dictionary_size)), dict_encoder(bit_width), initialized(false) {
 	}
-	DbpEncoder encoder;
+	DbpEncoder dbp_encoder;
+	unordered_map<T, uint32_t> dictionary;
+	duckdb_parquet::Encoding::type encoding;
+	bool written_value;
+	uint32_t bit_width;
+	RleBpEncoder dict_encoder;
+
 	bool initialized;
 };
 
@@ -967,74 +980,148 @@ public:
 
 public:
 	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) override {
-		auto result = make_uniq<StandardColumnWriterState>(row_group, row_group.columns.size());
+		auto result = make_uniq<StandardColumnWriterState<TGT>>(row_group, row_group.columns.size());
+		result->encoding = Encoding::RLE_DICTIONARY;
 		RegisterToRowGroup(row_group);
 		return std::move(result);
 	}
 
 	unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state_p) override {
-		auto &state = state_p.Cast<StandardColumnWriterState>();
-		auto result = make_uniq<StandardWriterPageState>(state.total_value_count);
+		auto &state = state_p.Cast<StandardColumnWriterState<TGT>>();
+
+		// TODO move the dict in the constructor?
+		auto result = make_uniq<StandardWriterPageState<TGT>>(state.total_value_count, state.dictionary.size());
+		result->dictionary = state.dictionary; // TODO does this have to be a copy??
+		result->encoding = state.encoding;
 		return std::move(result);
 	}
 
 	void FlushPageState(WriteStream &temp_writer, ColumnWriterPageState *state_p) override {
-		auto &page_state = state_p->Cast<StandardWriterPageState>();
-		if (!page_state.initialized) {
-			page_state.encoder.BeginWrite(temp_writer, 0);
+		auto &page_state = state_p->Cast<StandardWriterPageState<TGT>>();
+		if (page_state.encoding== Encoding::DELTA_BINARY_PACKED) {
+			if (!page_state.initialized) {
+				page_state.dbp_encoder.BeginWrite(temp_writer, 0);
+			}
+			page_state.dbp_encoder.FinishWrite(temp_writer);
 		}
-		page_state.encoder.FinishWrite(temp_writer);
+	// TODO uugly
+		if (page_state.encoding== Encoding::RLE_DICTIONARY) {
+
+			if (page_state.bit_width != 0) {
+				if (!page_state.written_value) {
+					// all values are null
+					// just write the bit width
+					temp_writer.Write<uint8_t>(page_state.bit_width);
+					return;
+				}
+				page_state.dict_encoder.FinishWrite(temp_writer);
+			}
+
+		}
 	}
 
-	Encoding::type GetEncoding(BasicColumnWriterState &state) override {
-		return HasAnalyze() ? Encoding::DELTA_BINARY_PACKED : Encoding::PLAIN;
+	Encoding::type GetEncoding(BasicColumnWriterState &state_p) override {
+		auto &state = state_p.Cast<StandardColumnWriterState<TGT>>();
+
+		return state.encoding;
 	}
 
 	bool HasAnalyze() override {
-		// We can only do DELTA_BINARY_PACKED if the target type is int32_t/int64_t
-		const auto type = writer.GetType(schema_idx);
-		return type == Type::type::INT32 || type == Type::type::INT64;
+		return true;
 	}
 
 	void Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) override {
-		D_ASSERT(HasAnalyze());
-		auto &state = state_p.Cast<StandardColumnWriterState>();
+		auto &state = state_p.Cast<StandardColumnWriterState<TGT>>();
 
-		const bool check_parent_empty = parent && !parent->is_empty.empty();
-		const idx_t parent_index = state.definition_levels.size();
-
-		const idx_t vcount =
-		    check_parent_empty ? parent->definition_levels.size() - state.definition_levels.size() : count;
-		const auto &validity = FlatVector::Validity(vector);
-
+		auto data_ptr = FlatVector::GetData<SRC>(vector);
 		idx_t vector_index = 0;
+		uint32_t new_value_index = state.dictionary.size();
+
+
+
+	  const bool check_parent_empty = parent && !parent->is_empty.empty();
+	  const idx_t parent_index = state.definition_levels.size();
+
+	  const idx_t vcount =
+	      check_parent_empty ? parent->definition_levels.size() - state.definition_levels.size() : count;
+
+	  const auto &validity = FlatVector::Validity(vector);
+
 		for (idx_t i = 0; i < vcount; i++) {
 			if (check_parent_empty && parent->is_empty[parent_index + i]) {
 				continue;
 			}
-
 			if (validity.RowIsValid(vector_index)) {
+				if (state.dictionary.size() < DICTIONARY_ANALYZE_THRESHOLD) {
+					const auto &src_value = data_ptr[vector_index];
+					auto target_val = OP::template Operation<SRC, TGT>(src_value);
+					// Try to insert into the dictionary. If it's already there, we get back the value index
+					auto found = state.dictionary.insert(pair<TGT, uint32_t>(target_val, new_value_index));
+					if (found.second) {
+						// string didn't exist yet in the dictionary
+						new_value_index++;
+					}
+				}
 				state.total_value_count++;
 			}
 			vector_index++;
 		}
 	}
 
-	void FinalizeAnalyze(ColumnWriterState &state) override {
-		// NOP
+	void FinalizeAnalyze(ColumnWriterState &state_p) override {
+		const auto type = writer.GetType(schema_idx);
+
+		auto &state = state_p.Cast<StandardColumnWriterState<TGT>>();
+		if (state.dictionary.size() >= DICTIONARY_ANALYZE_THRESHOLD) {
+			// FIXME this is duplicated from above
+			state.encoding = (type == Type::type::INT32 || type == Type::type::INT64) ?  Encoding::DELTA_BINARY_PACKED : Encoding::PLAIN;
+			state.dictionary.clear();
+		}
 	}
 
 	unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
 		return OP::template InitializeStats<SRC, TGT>();
 	}
 
+	bool HasDictionary(BasicColumnWriterState &state_p) override {
+		auto &state = state_p.Cast<StandardColumnWriterState<TGT>>();
+		return state.encoding == Encoding::RLE_DICTIONARY;
+	}
+
+	idx_t DictionarySize(BasicColumnWriterState &state_p) override {
+		auto &state = state_p.Cast<StandardColumnWriterState<TGT>>();
+		return state.dictionary.size();
+	}
+
 	void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state_p,
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
 		const auto &mask = FlatVector::Validity(input_column);
-		if (HasAnalyze()) {
-			auto &page_state = page_state_p->Cast<StandardWriterPageState>();
-			auto &encoder = page_state.encoder;
-			const auto *ptr = FlatVector::GetData<SRC>(input_column);
+		const auto *data_ptr = FlatVector::GetData<SRC>(input_column);
+
+		auto &page_state = page_state_p->Cast<StandardWriterPageState<TGT>>();
+		if (page_state.encoding == Encoding::RLE_DICTIONARY) {
+			for (idx_t r = chunk_start; r < chunk_end; r++) {
+				if (!mask.RowIsValid(r)) {
+					continue;
+				}
+				auto target_val = OP::template Operation<SRC, TGT>(data_ptr[r]);
+				OP::template HandleStats<SRC, TGT>(stats, target_val);
+
+				auto value_index = page_state.dictionary.at(target_val);
+				if (!page_state.written_value) {
+					// first value
+					// write the bit-width as a one-byte entry
+					temp_writer.Write<uint8_t>(page_state.bit_width);
+					// now begin writing the actual value
+					page_state.dict_encoder.BeginWrite(temp_writer, value_index);
+					page_state.written_value = true;
+				} else {
+					page_state.dict_encoder.WriteValue(temp_writer, value_index);
+				}
+			}
+		} else if (page_state.encoding == Encoding::DELTA_BINARY_PACKED) {
+			auto &page_state = page_state_p->Cast<StandardWriterPageState<TGT>>();
+			auto &encoder = page_state.dbp_encoder;
 
 			idx_t r = chunk_start;
 			if (!page_state.initialized) {
@@ -1043,8 +1130,8 @@ public:
 					if (!mask.RowIsValid(r)) {
 						continue;
 					}
-					const TGT target_value = OP::template Operation<SRC, TGT>(ptr[r]);
-					OP::template HandleStats<SRC, TGT>(stats, ptr[r], target_value);
+					const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
+					OP::template HandleStats<SRC, TGT>(stats, target_value);
 					encoder.BeginWrite(temp_writer, target_value);
 					page_state.initialized = true;
 					r++; // skip over
@@ -1056,17 +1143,50 @@ public:
 				if (!mask.RowIsValid(r)) {
 					continue;
 				}
-				const TGT target_value = OP::template Operation<SRC, TGT>(ptr[r]);
-				OP::template HandleStats<SRC, TGT>(stats, ptr[r], target_value);
+				const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
+				OP::template HandleStats<SRC, TGT>(stats, target_value);
 				encoder.WriteValue(temp_writer, target_value);
 			}
 		} else {
+			D_ASSERT(page_state.encoding == Encoding::PLAIN);
 			TemplatedWritePlain<SRC, TGT, OP>(input_column, stats, chunk_start, chunk_end, mask, temp_writer);
 		}
 	}
 
-	idx_t GetRowSize(const Vector &vector, const idx_t index, const BasicColumnWriterState &state) const override {
-		return sizeof(TGT);
+
+	void FlushDictionary(BasicColumnWriterState &state_p, ColumnWriterStatistics *stats_p) override {
+		// this might be a good place to create the bloom filter??
+
+		auto &stats = stats_p->Cast<NumericStatisticsState<SRC, TGT, OP>>();
+		auto &state = state_p.Cast<StandardColumnWriterState<TGT>>();
+		if (state.encoding != Encoding::RLE_DICTIONARY) {
+			return;
+		}
+		// first we need to sort the values in index order
+		auto values = vector<TGT>(state.dictionary.size());
+		for (const auto &entry : state.dictionary) {
+			values[entry.second] = entry.first;
+		}
+		// first write the contents of the dictionary page to a temporary buffer
+		auto temp_writer = make_uniq<MemoryStream>(
+			MaxValue<idx_t>(NextPowerOfTwo(state.dictionary.size() * sizeof(TGT)), MemoryStream::DEFAULT_INITIAL_CAPACITY));
+		for (idx_t r = 0; r < values.size(); r++) {
+			auto &value = values[r];
+			// update the statistics
+			//stats.Update(value);
+			OP::template HandleStats<SRC, TGT>(&stats, value);
+			// write this string value to the dictionary
+			//  TODO is this not just a plain write? Maybe we should keep the dict as a flat vector anyway
+			temp_writer->WriteData((const_data_ptr_t)&value, sizeof(TGT));
+		}
+		// flush the dictionary page and add it to the to-be-written pages
+		WriteDictionary(state, std::move(temp_writer), values.size());
+	}
+
+//	TODO what on earth is this used for??
+	idx_t GetRowSize(const Vector &vector, const idx_t index, const BasicColumnWriterState &state_p) const override {
+
+			return sizeof(TGT);
 	}
 };
 
