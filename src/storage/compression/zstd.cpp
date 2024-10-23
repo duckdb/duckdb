@@ -752,9 +752,8 @@ public:
 
 public:
 	idx_t GetVectorIndex(idx_t start_index, idx_t &offset) {
-		idx_t entire_vectors = start_index / STANDARD_VECTOR_SIZE;
-		auto vector_idx = entire_vectors + ((start_index % STANDARD_VECTOR_SIZE) != 0);
-		offset = start_index - (entire_vectors * STANDARD_VECTOR_SIZE);
+		idx_t vector_idx = start_index / STANDARD_VECTOR_SIZE;
+		offset = start_index % STANDARD_VECTOR_SIZE;
 		return vector_idx;
 	}
 
@@ -868,11 +867,31 @@ public:
 	}
 
 	void Skip(ZSTDVectorScanState &scan_state, idx_t count) {
-		throw InternalException("TODO: IMPLEMENT SKIP");
+		if (!skip_buffer) {
+			skip_buffer = Allocator::DefaultAllocator().Allocate(duckdb_zstd::ZSTD_DStreamOutSize());
+		}
+
+		D_ASSERT(scan_state.scanned_count + count <= scan_state.metadata.count);
+
+		// Figure out how much we need to skip
+		string_length_t *string_lengths = &scan_state.string_lengths[scan_state.scanned_count];
+		idx_t uncompressed_length = 0;
+		for (idx_t i = 0; i < count; i++) {
+			uncompressed_length += string_lengths[i];
+		}
+
+		// Skip that many bytes by decompressing into the skip_buffer
+		idx_t remaining = uncompressed_length;
+		while (remaining) {
+			idx_t to_scan = MinValue<idx_t>(skip_buffer.GetSize(), remaining);
+			DecompressString(scan_state, skip_buffer.get(), to_scan);
+			remaining -= to_scan;
+		}
+		scan_state.scanned_count += count;
+		scanned_count += count;
 	}
 
-	void DecompressString(ZSTDVectorScanState &scan_state, data_ptr_t destination,
-	                      string_length_t uncompressed_length) {
+	void DecompressString(ZSTDVectorScanState &scan_state, data_ptr_t destination, idx_t uncompressed_length) {
 		duckdb_zstd::ZSTD_outBuffer out_buffer;
 
 		out_buffer.dst = destination;
@@ -930,7 +949,7 @@ public:
 			idx_t vector_idx = GetVectorIndex(start_idx + scanned, internal_offset);
 			auto &scan_state = LoadVector(vector_idx, internal_offset);
 			idx_t remaining_in_vector = scan_state.metadata.count - scan_state.scanned_count;
-			idx_t to_scan = MaxValue<idx_t>(remaining, remaining_in_vector);
+			idx_t to_scan = MinValue<idx_t>(remaining, remaining_in_vector);
 			ScanInternal(scan_state, to_scan, result, offset);
 			remaining -= to_scan;
 			scanned += to_scan;
@@ -965,6 +984,9 @@ public:
 	idx_t segment_count;
 	//! The amount of tuples consumed
 	idx_t scanned_count = 0;
+
+	//! Buffer for skipping data
+	AllocatedData skip_buffer;
 };
 
 unique_ptr<SegmentScanState> ZSTDStorage::StringInitScan(ColumnSegment &segment) {
@@ -992,7 +1014,8 @@ void ZSTDStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx
 //===--------------------------------------------------------------------===//
 void ZSTDStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                                  idx_t result_idx) {
-	throw InternalException("FIXME: ZSTD StringFetchRow");
+	ZSTDScanState scan_state(segment);
+	scan_state.ScanPartial(UnsafeNumericCast<idx_t>(row_id), result, result_idx, 1);
 }
 
 //===--------------------------------------------------------------------===//
