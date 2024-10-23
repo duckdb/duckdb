@@ -5,8 +5,16 @@ import os
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
+from ...spark_namespace import USE_ACTUAL_SPARK
+
+if USE_ACTUAL_SPARK:
+    pytest.skip("Skipping these tests as right now,"
+                + " there are too many differences between DuckDB and PySpark when reading and writing CSV files."
+                + " For example, PySpark does read back numbers as strings and has the option 'headers' set to False.", allow_module_level=True)
+
 from duckdb import connect, InvalidInputException, read_csv
 from ...conftest import NumpyPandas, ArrowPandas, getTimeSeriesData
+from ...spark_namespace import USE_ACTUAL_SPARK
 import pandas._testing as tm
 import datetime
 import csv
@@ -185,6 +193,7 @@ class TestSparkToCSV(object):
         csv_rel = spark.read.csv(temp_file_name)
         assert df.collect() == csv_rel.collect()
 
+    @pytest.mark.skipif(USE_ACTUAL_SPARK, reason="This test uses DuckDB to read the CSV. However, this does not work if Spark created it as Spark creates a folder instead of a single file.")
     def test_compression_gzip(self, pandas_df_strings, spark, tmp_path):
         temp_file_name = os.path.join(tmp_path, "temp_file.csv")
         df = spark.createDataFrame(pandas_df_strings)
