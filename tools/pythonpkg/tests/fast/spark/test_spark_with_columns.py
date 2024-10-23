@@ -4,6 +4,7 @@ _ = pytest.importorskip("duckdb.experimental.spark")
 
 
 from ...spark_namespace.sql.functions import col, lit
+from ...spark_namespace import USE_ACTUAL_SPARK
 
 
 class TestWithColumns:
@@ -18,7 +19,7 @@ class TestWithColumns:
 
         columns = ["firstname", "middlename", "lastname", "dob", "gender", "salary"]
         df = spark.createDataFrame(data=data, schema=columns)
-        assert df.schema['salary'].dataType.typeName() == 'integer'
+        assert df.schema['salary'].dataType.typeName() == ('long' if USE_ACTUAL_SPARK else 'integer')
 
         # The type of 'salary' has been cast to Bigint
         new_df = df.withColumns({"salary": col("salary").cast("BIGINT")})
@@ -41,4 +42,4 @@ class TestWithColumns:
         assert res[1].anotherColumn == 'anotherValue'
 
         df2 = df.drop("salary")
-        assert 'salary' not in df2
+        assert 'salary' not in df2.columns
