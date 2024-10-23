@@ -521,8 +521,20 @@ Value DuckDBAPISetting::GetSetting(const ClientContext &context) {
 // Enable External Access
 //===----------------------------------------------------------------------===//
 bool EnableExternalAccessSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (db && input.GetValue<bool>()) {
+	if (!db) {
+		return true;
+	}
+	if (input.GetValue<bool>()) {
 		throw InvalidInputException("Cannot change enable_external_access setting while database is running");
+	}
+	if (db && config.options.enable_external_access) {
+		// we are turning off external access - add any already attached databases to the list of accepted paths
+		auto &db_manager = DatabaseManager::Get(*db);
+		auto attached_paths = db_manager.GetAttachedDatabasePaths();
+		for(auto &path : attached_paths) {
+			config.options.allowed_paths.insert(path);
+			config.options.allowed_paths.insert(path + ".wal");
+		}
 	}
 	return true;
 }

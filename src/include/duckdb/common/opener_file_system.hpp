@@ -24,9 +24,25 @@ public:
 		}
 	}
 
+	void VerifyFSAccessAllowed(const string &path) {
+		auto opener = GetOpener();
+		if (!opener) {
+			return;
+		}
+		auto db = opener->TryGetDatabase();
+		if (!db) {
+			return;
+		}
+		auto &config = db->config;
+		if (!config.CanAccessFile(path)) {
+			throw PermissionException("Cannot access file \"%s\" - file system operations are disabled by configuration", path);
+		}
+	}
+
 	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
 	                                optional_ptr<FileOpener> opener = nullptr) override {
 		VerifyNoOpener(opener);
+		VerifyFSAccessAllowed(path);
 		return GetFileSystem().OpenFile(path, flags, GetOpener());
 	}
 
@@ -66,26 +82,32 @@ public:
 
 	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
+		VerifyFSAccessAllowed(directory);
 		return GetFileSystem().DirectoryExists(directory, GetOpener());
 	}
 	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
+		VerifyFSAccessAllowed(directory);
 		return GetFileSystem().CreateDirectory(directory, GetOpener());
 	}
 
 	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
+		VerifyFSAccessAllowed(directory);
 		return GetFileSystem().RemoveDirectory(directory, GetOpener());
 	}
 
 	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
 	               FileOpener *opener = nullptr) override {
 		VerifyNoOpener(opener);
+		VerifyFSAccessAllowed(directory);
 		return GetFileSystem().ListFiles(directory, callback, GetOpener().get());
 	}
 
 	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
+		VerifyFSAccessAllowed(source);
+		VerifyFSAccessAllowed(target);
 		GetFileSystem().MoveFile(source, target, GetOpener());
 	}
 
@@ -99,6 +121,7 @@ public:
 
 	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
+		VerifyFSAccessAllowed(filename);
 		return GetFileSystem().FileExists(filename, GetOpener());
 	}
 
@@ -108,6 +131,7 @@ public:
 	}
 	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
+		VerifyFSAccessAllowed(filename);
 		GetFileSystem().RemoveFile(filename, GetOpener());
 	}
 
@@ -117,6 +141,7 @@ public:
 
 	vector<string> Glob(const string &path, FileOpener *opener = nullptr) override {
 		VerifyNoOpener(opener);
+		VerifyFSAccessAllowed(path);
 		return GetFileSystem().Glob(path, GetOpener().get());
 	}
 

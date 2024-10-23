@@ -548,6 +548,51 @@ const string DBConfig::UserAgent() const {
 	return user_agent;
 }
 
+bool DBConfig::CanAccessFile(const string &path) {
+	if (options.enable_external_access) {
+		// all external access is allowed
+		return true;
+	}
+	if (options.allowed_paths.count(path) > 0) {
+		// path is explicitly allowed
+		return true;
+	}
+	auto prefix_entry = options.allowed_directories.upper_bound(path);
+	if (prefix_entry == options.allowed_directories.end()) {
+		// no prefix found
+		return false;
+	}
+	auto &prefix = *prefix_entry;
+	auto path_sep = file_system->PathSeparator(path);
+	D_ASSERT(StringUtil::EndsWith(prefix, path_sep));
+	if (!StringUtil::StartsWith(path, prefix)) {
+		// path is inside an allowed directory
+		return false;
+	}
+	// path is inside an allowed directory - HOWEVER, we could still exit the allowed directory using ".."
+	// we check if we ever exit the allowed directory using ".." by looking at the path fragments
+	D_ASSERT(path_sep.size() == 1);
+	idx_t directory_level = 0;
+	idx_t current_pos = prefix.size();
+	for(; current_pos < path.size(); current_pos++) {
+		idx_t dir_begin = current_pos;
+		// find either the end of the path or the directory separator
+		for(; path[current_pos] != path_sep[0] && current_pos < path.size(); current_pos++) {
+		}
+		if (current_pos - dir_begin == 2 && path[dir_begin] == '.' && path[dir_begin + 1] == '.') {
+			// go up a directory
+			if (directory_level == 0) {
+				// we cannot go up past the prefix
+				return false;
+			}
+			--directory_level;
+		} else {
+			directory_level++;
+		}
+	}
+	return true;
+}
+
 SerializationCompatibility SerializationCompatibility::FromString(const string &input) {
 	if (input.empty()) {
 		throw InvalidInputException("Version string can not be empty");

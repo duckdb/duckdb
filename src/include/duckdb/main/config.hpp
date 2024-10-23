@@ -272,6 +272,10 @@ struct DBConfigOptions {
 	bool debug_skip_checkpoint_on_commit = false;
 	//! The maximum amount of vacuum tasks to schedule during a checkpoint
 	idx_t max_vacuum_tasks = 100;
+	//! Paths that are explicitly allowed, even if enable_external_access is false
+	unordered_set<string> allowed_paths;
+	//! Directories that are explicitly allowed, even if enable_external_access is false
+	set<string> allowed_directories;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
@@ -384,6 +388,8 @@ public:
 		std::lock_guard<mutex> lock(config_lock);
 		return OP::GetSetting(context);
 	}
+
+	bool CanAccessFile(const string &path);
 
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;
