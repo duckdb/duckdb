@@ -16,7 +16,7 @@ CSVBoundary::CSVBoundary() : buffer_idx(0), buffer_pos(0), boundary_idx(0), end_
 CSVIterator::CSVIterator() : is_set(false) {
 }
 
-void CSVBoundary::Print() {
+void CSVBoundary::Print() const {
 #ifndef DUCKDB_DISABLE_PRINT
 	std::cout << "---Boundary: " << boundary_idx << " ---" << '\n';
 	std::cout << "Buffer Index: " << buffer_idx << '\n';
@@ -26,18 +26,30 @@ void CSVBoundary::Print() {
 #endif
 }
 
-void CSVIterator::Print() {
+void CSVIterator::Print() const {
 #ifndef DUCKDB_DISABLE_PRINT
 	boundary.Print();
 	std::cout << "Is set: " << is_set << '\n';
 #endif
 }
 
-bool CSVIterator::Next(CSVBufferManager &buffer_manager) {
+idx_t CSVIterator::BytesPerThread(const CSVReaderOptions &reader_options) {
+	const idx_t buffer_size = reader_options.buffer_size.GetValue();
+	const idx_t max_row_size = reader_options.maximum_line_size.GetValue();
+	const idx_t bytes_per_thread = buffer_size / CSVBuffer::ROWS_PER_BUFFER * ROWS_PER_THREAD;
+	if (bytes_per_thread < max_row_size) {
+		// If we are setting up the buffer size directly, we must make sure each thread will read the full buffer.
+		return max_row_size;
+	}
+	return bytes_per_thread;
+}
+
+bool CSVIterator::Next(CSVBufferManager &buffer_manager, const CSVReaderOptions &reader_options) {
 	if (!is_set) {
 		return false;
 	}
-	idx_t bytes_per_thread = buffer_manager.GetBufferSize() / CSVBuffer::ROWS_PER_BUFFER * ROWS_PER_THREAD;
+	const auto bytes_per_thread = BytesPerThread(reader_options);
+
 	// If we are calling next this is not the first one anymore
 	first_one = false;
 	boundary.boundary_idx++;
@@ -86,12 +98,12 @@ void CSVIterator::SetCurrentPositionToBoundary() {
 	pos.buffer_pos = boundary.buffer_pos;
 }
 
-void CSVIterator::SetCurrentBoundaryToPosition(bool single_threaded, idx_t buffer_size) {
+void CSVIterator::SetCurrentBoundaryToPosition(bool single_threaded, const CSVReaderOptions &reader_options) {
 	if (single_threaded) {
 		is_set = false;
 		return;
 	}
-	idx_t bytes_per_thread = buffer_size / CSVBuffer::ROWS_PER_BUFFER * ROWS_PER_THREAD;
+	const auto bytes_per_thread = BytesPerThread(reader_options);
 
 	boundary.buffer_idx = pos.buffer_idx;
 	if (pos.buffer_pos == 0) {
@@ -112,7 +124,7 @@ void CSVIterator::SetEnd(idx_t pos) {
 	boundary.end_pos = pos;
 }
 
-idx_t CSVIterator::GetGlobalCurrentPos() {
+idx_t CSVIterator::GetGlobalCurrentPos() const {
 	return pos.buffer_pos + buffer_size * pos.buffer_idx;
 }
 
