@@ -47,8 +47,6 @@ public:
 	virtual ~ColumnWriterStatistics();
 
 	virtual bool HasStats();
-	virtual bool HasBloomFilter();
-	virtual unique_ptr<ParquetBloomFilter> GetBloomFilter();
 	virtual string GetMin();
 	virtual string GetMax();
 	virtual string GetMinValue();

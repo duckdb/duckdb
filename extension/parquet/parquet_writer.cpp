@@ -4,6 +4,7 @@
 #include "mbedtls_wrapper.hpp"
 #include "parquet_crypto.hpp"
 #include "parquet_timestamp.hpp"
+#include "resizable_buffer.hpp"
 
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/file_system.hpp"
@@ -534,7 +535,32 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 }
 
 void ParquetWriter::Finalize() {
-	const auto start_offset = writer->GetTotalWritten();
+
+	// dump the bloom filters right before footer
+	for (auto &bloom_filter_entry : bloom_filters) {
+		// write nonsense bloom filter header
+		duckdb_parquet::BloomFilterHeader filter_header;
+		auto bloom_filter_bytes = bloom_filter_entry.bloom_filter->Get();
+		filter_header.numBytes = bloom_filter_bytes->len;
+		filter_header.algorithm.__set_BLOCK(duckdb_parquet::SplitBlockAlgorithm());
+		filter_header.compression.__set_UNCOMPRESSED(duckdb_parquet::Uncompressed());
+		filter_header.hash.__set_XXHASH(duckdb_parquet::XxHash());
+
+		auto bloom_filter_header_size = Write(filter_header);
+
+		// write actual data
+		WriteData(bloom_filter_bytes->ptr, bloom_filter_bytes->len);
+
+		// set metadata flags
+		auto &column_chunk =
+		    file_meta_data.row_groups[bloom_filter_entry.row_group_idx].columns[bloom_filter_entry.column_idx];
+		column_chunk.meta_data.__isset.bloom_filter_offset = true;
+		column_chunk.meta_data.bloom_filter_offset = writer->GetTotalWritten();
+		column_chunk.meta_data.__isset.bloom_filter_length = true;
+		column_chunk.meta_data.bloom_filter_length = bloom_filter_header_size + bloom_filter_bytes->len;
+	}
+
+	const auto metadata_start_offset = writer->GetTotalWritten();
 	if (encryption_config) {
 		// Crypto metadata is written unencrypted
 		FileCryptoMetaData crypto_metadata;
@@ -552,7 +578,7 @@ void ParquetWriter::Finalize() {
 
 	Write(file_meta_data);
 
-	writer->Write<uint32_t>(writer->GetTotalWritten() - start_offset);
+	writer->Write<uint32_t>(writer->GetTotalWritten() - metadata_start_offset);
 
 	if (encryption_config) {
 		// encrypted parquet files also end with the string "PARE"
@@ -572,6 +598,14 @@ GeoParquetFileMetadata &ParquetWriter::GetGeoParquetData() {
 		geoparquet_data = make_uniq<GeoParquetFileMetadata>();
 	}
 	return *geoparquet_data;
+}
+
+void ParquetWriter::BufferBloomFilter(idx_t col_idx, unique_ptr<ParquetBloomFilter> bloom_filter) {
+	ParquetBloomFilterEntry new_entry;
+	new_entry.bloom_filter = std::move(bloom_filter);
+	new_entry.column_idx = col_idx;
+	new_entry.row_group_idx = file_meta_data.row_groups.size();
+	bloom_filters.push_back(std::move(new_entry));
 }
 
 } // namespace duckdb

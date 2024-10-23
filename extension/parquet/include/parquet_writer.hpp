@@ -19,6 +19,7 @@
 #include "duckdb/function/copy_function.hpp"
 #endif
 
+#include "parquet_statistics.hpp"
 #include "column_writer.hpp"
 #include "parquet_types.h"
 #include "geo_parquet.hpp"
@@ -59,6 +60,12 @@ struct FieldID {
 
 	void Serialize(Serializer &serializer) const;
 	static FieldID Deserialize(Deserializer &source);
+};
+
+struct ParquetBloomFilterEntry {
+	unique_ptr<ParquetBloomFilter> bloom_filter;
+	idx_t row_group_idx;
+	idx_t column_idx;
 };
 
 class ParquetWriter {
@@ -116,6 +123,8 @@ public:
 	static bool TryGetParquetType(const LogicalType &duckdb_type,
 	                              optional_ptr<duckdb_parquet::Type::type> type = nullptr);
 
+	void BufferBloomFilter(idx_t col_idx, unique_ptr<ParquetBloomFilter> bloom_filter);
+
 private:
 	string file_name;
 	vector<LogicalType> sql_types;
@@ -136,6 +145,7 @@ private:
 	vector<unique_ptr<ColumnWriter>> column_writers;
 
 	unique_ptr<GeoParquetFileMetadata> geoparquet_data;
+	vector<ParquetBloomFilterEntry> bloom_filters;
 };
 
 } // namespace duckdb
