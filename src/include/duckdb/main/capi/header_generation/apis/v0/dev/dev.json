@@ -3,6 +3,7 @@
     "entries": [
         "duckdb_appender_create_ext",
         "duckdb_table_description_create_ext",
-        "duckdb_table_description_get_column_name"
+        "duckdb_table_description_get_column_name",
+		"duckdb_param_logical_type"
     ]
 }
