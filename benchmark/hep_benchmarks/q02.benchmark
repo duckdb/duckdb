@@ -1,6 +1,6 @@
 # name: benchmark/hep_benchmarks/q02.benchmark
 # description: Q2 - Plot the transverse momentum of all jets in all events.
-# group: [hep]
+# group: [hep_benchmarks]
 
 template benchmark/hep_benchmarks/hep.benchmark.in
 QUERY_NUMBER=2

@@ -1,6 +1,6 @@
-# name: benchmark/hep_benchmarks/q01.benchmark
+# name: benchmark/hep_benchmarks/q05.benchmark
 # description: Q5 - Plot the transeverse energy of events that have an opposite-charge muon pair with an invariant mass between 60 GeV and 120 GeV.
-# group: [hep]
+# group: [hep_benchmarks]
 
 template benchmark/hep_benchmarks/hep.benchmark.in
 QUERY_NUMBER=5
