@@ -262,6 +262,11 @@ struct MultiFileReader {
 	static void PruneReaders(BIND_DATA &data, MultiFileList &file_list) {
 		unordered_set<string> file_set;
 
+		// Avoid materializing the file list if there's nothing to prune
+		if (!data.initial_reader && data.union_readers.empty()) {
+			return;
+		}
+
 		for (const auto &file : file_list.Files()) {
 			file_set.insert(file);
 		}
