@@ -26,8 +26,10 @@ class TestDataFrameSort(object):
         df = df.sort("age", "name")
         assert df.collect() == expected
 
-        df = df.sort(1, 2)
-        assert df.collect() == expected
+        if not USE_ACTUAL_SPARK:
+            # Spark does not support passing integers
+            df = df.sort(1, 2)
+            assert df.collect() == expected
 
     def test_sort_descending(self, spark):
         df = spark.createDataFrame(self.data, ["age", "name"])
@@ -45,8 +47,10 @@ class TestDataFrameSort(object):
         df = df.sort("name", "age")
         assert df.collect() == expected
 
-        df = df.sort(2, 1)
-        assert df.collect() == expected
+        if not USE_ACTUAL_SPARK:
+            # Spark does not support passing integers
+            df = df.sort(2, 1)
+            assert df.collect() == expected
 
     def test_sort_wrong_asc_params(self, spark):
         df = spark.createDataFrame(self.data, ["age", "name"])
