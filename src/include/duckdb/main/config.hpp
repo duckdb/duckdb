@@ -352,7 +352,6 @@ public:
 	DUCKDB_API void ResetOption(const string &name);
 	static LogicalType ParseLogicalType(const string &type);
 
-
 	DUCKDB_API void CheckLock(const string &name);
 
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);

@@ -137,7 +137,7 @@ void DatabaseManager::EraseDatabasePath(const string &path) {
 vector<string> DatabaseManager::GetAttachedDatabasePaths() {
 	lock_guard<mutex> path_lock(db_paths_lock);
 	vector<string> paths;
-	for(auto &path : db_paths) {
+	for (auto &path : db_paths) {
 		paths.push_back(path);
 	}
 	return paths;

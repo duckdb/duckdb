@@ -1,6 +1,6 @@
 # name: test/sql/settings/allowed_directories.test
 # description: Test allowed_directories setting together with enable_external_access = false
-# group: [storage]
+# group: [settings]
 
 require skip_reload
 

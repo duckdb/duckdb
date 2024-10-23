@@ -35,7 +35,8 @@ public:
 		}
 		auto &config = db->config;
 		if (!config.CanAccessFile(path)) {
-			throw PermissionException("Cannot access file \"%s\" - file system operations are disabled by configuration", path);
+			throw PermissionException(
+			    "Cannot access file \"%s\" - file system operations are disabled by configuration", path);
 		}
 	}
 

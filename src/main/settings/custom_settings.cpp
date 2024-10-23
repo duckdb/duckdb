@@ -195,7 +195,7 @@ void AllowedDirectoriesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 	}
 	config.options.allowed_directories.clear();
 	auto &list = ListValue::GetChildren(input);
-	for(auto &val : list) {
+	for (auto &val : list) {
 		auto allowed_directory = val.GetValue<string>();
 		if (allowed_directory.empty()) {
 			throw InvalidInputException("Cannot provide an empty string for allowed_directory");
@@ -219,7 +219,7 @@ void AllowedDirectoriesSetting::ResetGlobal(DatabaseInstance *db, DBConfig &conf
 Value AllowedDirectoriesSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	vector<Value> allowed_directories;
-	for(auto &dir : config.options.allowed_directories) {
+	for (auto &dir : config.options.allowed_directories) {
 		allowed_directories.emplace_back(dir);
 	}
 	return Value::LIST(LogicalType::VARCHAR, std::move(allowed_directories));
@@ -600,7 +600,7 @@ bool EnableExternalAccessSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &co
 		// we are turning off external access - add any already attached databases to the list of accepted paths
 		auto &db_manager = DatabaseManager::Get(*db);
 		auto attached_paths = db_manager.GetAttachedDatabasePaths();
-		for(auto &path : attached_paths) {
+		for (auto &path : attached_paths) {
 			config.options.allowed_paths.insert(path);
 			config.options.allowed_paths.insert(path + ".wal");
 		}

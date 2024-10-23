@@ -1,6 +1,6 @@
 # name: test/sql/attach/attach_enable_external_access.test
 # description: enable_external_access with attached  databases
-# group: [storage]
+# group: [attach]
 
 require skip_reload
 

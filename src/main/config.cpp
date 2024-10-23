@@ -284,14 +284,14 @@ LogicalType DBConfig::ParseLogicalType(const string &type) {
 	if (StringUtil::EndsWith(type, "()")) {
 		if (type != "STRUCT()") {
 			throw InternalException("Error while generating extension function overloads - expected STRUCT(), not %s",
-									type);
+			                        type);
 		}
 		return LogicalType::STRUCT({});
 	}
 	auto type_id = TransformStringToLogicalTypeId(type);
 	if (type_id == LogicalTypeId::USER) {
 		throw InternalException("Error while generating extension function overloads - unrecognized logical type %s",
-								type);
+		                        type);
 	}
 	return type_id;
 }
@@ -591,7 +591,7 @@ bool DBConfig::CanAccessFile(const string &path) {
 	auto end_bound = options.allowed_directories.upper_bound(path);
 
 	string prefix;
-	for(auto it = start_bound; it != end_bound; ++it) {
+	for (auto it = start_bound; it != end_bound; ++it) {
 		if (StringUtil::StartsWith(path, *it)) {
 			prefix = *it;
 			break;
