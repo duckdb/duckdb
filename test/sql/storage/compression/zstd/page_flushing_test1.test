@@ -34,25 +34,50 @@ insert into tbl values ('aaaabbbb');
 insert into tbl values ('aaaabbbb');
 insert into tbl values ('aaaabbbb');
 
+# ------- VECTOR 1 -------
+
 # This will start on the segment page and write the remainder on 'extra_pages[0]' buffer
 statement ok
 insert into tbl select getvariable('my_string');
+
+# ------- VECTOR 2 -------
 
 # This starts on 'extra_pages[0]' and writes onto 'extra_pages[1]'
 statement ok
 insert into tbl select getvariable('my_string');
 
+# Insert 2036 (STANDARD_VECTOR_SIZE - 12) to finish the vector of values
+statement ok
+insert into tbl select 'bbbbaaaa' from range(2036)
+
+# ------- VECTOR 3 -------
+
 # This starts on 'extra_pages[1]' and writes onto 'extra_pages[0]'
 statement ok
 insert into tbl select getvariable('my_string');
+
+statement ok
+insert into tbl select 'bbbbaaaa' from range(2047)
+
+# ------- VECTOR 4 -------
 
 # This starts on 'extra_pages[0]', overflows to 'extra_pages[1]' twice
 statement ok
 insert into tbl select concat(getvariable('my_string'), getvariable('my_string'));
 
+statement ok
+insert into tbl select 'bbbbaaaa' from range(2047)
+
+# ------- VECTOR 5 -------
+
 # This starts on 'extra_pages[1]', overflows to 'extra_pages[0]' twice
 statement ok
 insert into tbl select concat(getvariable('my_string'), getvariable('my_string'));
+
+statement ok
+insert into tbl select 'bbbbaaaa' from range(2047)
+
+# ------------------------
 
 statement ok
 pragma force_compression='zstd'
@@ -61,21 +86,8 @@ statement ok
 checkpoint
 
 query II
-select a[1], strlen(a) from tbl;
+select strlen(a), count(a) from tbl group by strlen(a);
 ----
-a	8
-a	8
-a	8
-a	8
-a	8
-a	8
-a	8
-a	8
-a	8
-a	8
-a	8
-[	3888890
-[	3888890
-[	3888890
-[	7777780
-[	7777780
+8	8188
+3888890	3
+7777780	2
