@@ -25,7 +25,7 @@
 #include "zstd/decompress/zstd_ddict.h"
 
 #if defined(ZSTD_LEGACY_SUPPORT) && (ZSTD_LEGACY_SUPPORT>=1)
-#  include "zstd/legacy/zstd_legacy.h"
+// #  include "zstd/legacy/zstd_legacy.h"
 #endif
 
 namespace duckdb_zstd {

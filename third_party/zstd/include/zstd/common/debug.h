@@ -72,7 +72,7 @@
 
 #if (DEBUGLEVEL>=2)
 #  define ZSTD_DEPS_NEED_IO
-#  include "zstd/common/zstd_deps.h"
+// #  include "zstd/common/zstd_deps.h"
 
 namespace duckdb_zstd {
 

@@ -54,7 +54,9 @@ def third_party_sources():
     sources += [os.path.join('third_party', 'libpg_query')]
     sources += [os.path.join('third_party', 'mbedtls')]
     sources += [os.path.join('third_party', 'yyjson')]
-    sources += [os.path.join('third_party', 'zstd')]
+    sources += [os.path.join('third_party', 'zstd', 'common')]
+    sources += [os.path.join('third_party', 'zstd', 'compress')]
+    sources += [os.path.join('third_party', 'zstd', 'decompress')]
     return sources
 
 
