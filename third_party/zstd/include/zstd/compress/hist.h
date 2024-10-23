@@ -12,6 +12,8 @@
  * in the COPYING file in the root directory of this source tree).
  * You may select, at your option, one of the above-listed licenses.
 ****************************************************************** */
+#ifndef ZSTD_HIST_H
+#define ZSTD_HIST_H
 
 /* --- dependencies --- */
 #include "zstd/common/zstd_deps.h"   /* size_t */
@@ -76,3 +78,5 @@ unsigned HIST_count_simple(unsigned* count, unsigned* maxSymbolValuePtr,
                            const void* src, size_t srcSize);
 
 } // namespace duckdb_zstd
+
+#endif   /* ZSTD_HIST_H */
