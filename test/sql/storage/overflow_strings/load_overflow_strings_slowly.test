@@ -30,9 +30,10 @@ CHECKPOINT;
 endloop
 
 query I
-SELECT EXISTS (SELECT * FROM pragma_storage_info('strings') WHERE contains(segment_info, 'Overflow String'));
+SELECT segment_info FROM pragma_storage_info('strings');
 ----
-1
+(empty)
+(empty)
 
 # ensure that the expected total storage size is the same as in the first iteration of the loop
 
