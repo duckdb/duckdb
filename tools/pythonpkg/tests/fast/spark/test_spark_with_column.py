@@ -15,6 +15,7 @@ from ...spark_namespace.sql.types import (
     MapType,
 )
 from ...spark_namespace.sql.functions import col, struct, when, lit
+from ...spark_namespace import USE_ACTUAL_SPARK
 import duckdb
 import re
 
@@ -31,7 +32,7 @@ class TestWithColumn(object):
 
         columns = ["firstname", "middlename", "lastname", "dob", "gender", "salary"]
         df = spark.createDataFrame(data=data, schema=columns)
-        assert df.schema['salary'].dataType.typeName() == 'integer'
+        assert df.schema['salary'].dataType.typeName() == ('long' if USE_ACTUAL_SPARK else 'integer')
 
         # The type of 'salary' has been cast to Bigint
         new_df = df.withColumn("salary", col("salary").cast("BIGINT"))
@@ -57,8 +58,8 @@ class TestWithColumn(object):
         assert res[1].anotherColumn == 'anotherValue'
 
         df2 = df.withColumnRenamed("gender", "sex")
-        assert 'gender' not in df2
-        assert 'sex' in df2
+        assert 'gender' not in df2.columns
+        assert 'sex' in df2.columns
 
         df2 = df.drop("salary")
-        assert 'salary' not in df2
+        assert 'salary' not in df2.columns
