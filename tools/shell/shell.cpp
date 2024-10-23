@@ -420,6 +420,12 @@ static volatile int seenInterrupt = 0;
 static char *Argv0;
 
 /*
+** Whether or not we are running in safe mode
+*/
+static bool safe_mode = false;
+
+
+/*
 ** Prompt strings. Initialized in main. Settable with
 **   .prompt main continue
 */
@@ -2266,6 +2272,9 @@ void ShellState::open_db(int flags) {
 			}
 			exit(1);
 		}
+		if (safe_mode) {
+			sqlite3_exec(db, "SET enable_external_access=false", NULL, NULL, NULL);
+		}
 		if (stdout_is_console) {
 			sqlite3_exec(db, "PRAGMA enable_progress_bar", NULL, NULL, NULL);
 			sqlite3_exec(db, "PRAGMA enable_print_progress_bar", NULL, NULL, NULL);
@@ -2847,6 +2856,10 @@ MetadataResult ToggleBinary(ShellState &state, const char **azArg, idx_t nArg) {
 }
 
 MetadataResult ChangeDirectory(ShellState &state, const char **azArg, idx_t nArg) {
+	if (safe_mode) {
+		utf8_printf(stderr, ".cd cannot be used in -safe mode\n");
+		return MetadataResult::FAIL;
+	}
 	int rc;
 #if defined(_WIN32) || defined(WIN32)
 	wchar_t *z = sqlite3_win32_utf8_to_unicode(azArg[1]);
@@ -2974,6 +2987,10 @@ MetadataResult ShowHelp(ShellState &state, const char **azArg, idx_t nArg) {
 }
 
 MetadataResult ToggleLog(ShellState &state, const char **azArg, idx_t nArg) {
+	if (safe_mode) {
+		utf8_printf(stderr, ".log cannot be used in -safe mode\n");
+		return MetadataResult::FAIL;
+	}
 	const char *zFile = azArg[1];
 	output_file_close(state.pLog);
 	state.pLog = output_file_open(zFile, 0);
@@ -3100,6 +3117,10 @@ MetadataResult SetNullValue(ShellState &state, const char **azArg, idx_t nArg) {
 }
 
 bool ShellState::ImportData(const char **azArg, idx_t nArg) {
+	if (safe_mode) {
+		utf8_printf(stderr, ".import cannot be used in -safe mode\n");
+		return false;
+	}
 	int rc;
 	const char *zTable = 0;                    /* Insert data into this table */
 	const char *zFile = 0;                     /* Name of file to extra content from */
@@ -3380,6 +3401,10 @@ MetadataResult ImportData(ShellState &state, const char **azArg, idx_t nArg) {
 }
 
 bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
+	if (safe_mode) {
+		utf8_printf(stderr, ".open cannot be used in -safe mode\n");
+		return false;
+	}
 	char *zNewFilename; /* Name of the database file to open */
 	idx_t iName = 1;    /* Index in azArg[] of the filename */
 	int newFlag = 0;    /* True to delete file before opening */
@@ -3472,6 +3497,10 @@ MetadataResult QuitProcess(ShellState &, const char **azArg, idx_t nArg) {
 }
 
 bool ShellState::SetOutputFile(const char **azArg, idx_t nArg, char output_mode) {
+	if (safe_mode) {
+		utf8_printf(stderr, ".output/.once/.excel cannot be used in -safe mode\n");
+		return false;
+	}
 	const char *zFile = 0;
 	int bTxtMode = 0;
 	int eMode = 0;
@@ -3594,6 +3623,10 @@ MetadataResult SetOutputExcel(ShellState &state, const char **azArg, idx_t nArg)
 }
 
 bool ShellState::ReadFromFile(const string &file) {
+	if (safe_mode) {
+		utf8_printf(stderr, ".read cannot be used in -safe mode\n");
+		return false;
+	}
 	FILE *inSaved = in;
 	int savedLineno = lineno;
 	int rc;
@@ -3689,6 +3722,10 @@ MetadataResult DisplaySchemas(ShellState &state, const char **azArg, idx_t nArg)
 }
 
 MetadataResult RunShellCommand(ShellState &state, const char **azArg, idx_t nArg) {
+	if (safe_mode) {
+		utf8_printf(stderr, ".sh/.system cannot be used in -safe mode\n");
+		return MetadataResult::FAIL;
+	}
 	char *zCmd;
 	int x;
 	if (nArg < 2) {
@@ -4420,6 +4457,7 @@ static const char zOptions[] = "   -ascii               set output mode to 'asci
                                "   -quote               set output mode to 'quote'\n"
                                "   -readonly            open the database read-only\n"
                                "   -s COMMAND           run \"COMMAND\" and exit\n"
+                               "   -safe                enable safe-mode\n"
                                "   -separator SEP       set output column separator. Default: '|'\n"
                                "   -table               set output mode to 'table'\n"
                                "   -unredacted          allow printing unredacted secrets\n"
@@ -4824,6 +4862,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			usage(1);
 		} else if (strcmp(z, "-no-stdin") == 0) {
 			readStdin = 0;
+		} else if (strcmp(z, "-safe") == 0) {
+			safe_mode = true;
 		} else if (strcmp(z, "-cmd") == 0 || strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
 			if (strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
 				readStdin = 0;
