@@ -509,7 +509,7 @@ static constexpr ExtensionEntry EXTENSION_FILE_CONTAINS[] = {{".parquet?", "parq
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
     {"s3", "httpfs"},   {"r2", "httpfs"},          {"gcs", "httpfs"},
-    {"azure", "azure"}, {"huggingface", "httpfs"}, {"http", "httpfs"}}; // EXTENSION_SECRET_TYPES
+    {"azure", "azure"}, {"huggingface", "httpfs"}, {"http", ""}}; // EXTENSION_SECRET_TYPES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
@@ -526,7 +526,7 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
     {"azure/service_principal", "azure"},
     {"huggingface/config", "httfps"},
     {"huggingface/credential_chain", "httpfs"},
-    {"http/config", "httpfs"}}; // EXTENSION_SECRET_PROVIDERS
+    {"bearer/config", "httpfs"}}; // EXTENSION_SECRET_PROVIDERS
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "aws",   "azure", "autocomplete", "delta",   "excel",          "fts",      "httpfs",
