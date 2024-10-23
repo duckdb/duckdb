@@ -16,11 +16,7 @@ void CommonAggregateOptimizer::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
-	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
-		CommonAggregateOptimizer common_aggregate(true);
-		common_aggregate.StandardVisitOperator(op);
-		return;
-	}
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		CommonAggregateOptimizer common_aggregate;
 		common_aggregate.StandardVisitOperator(op);
@@ -28,13 +24,6 @@ void CommonAggregateOptimizer::VisitOperator(LogicalOperator &op) {
 	}
 	default:
 		break;
-	}
-
-	if (!everything_referenced && op.HasProjectionMap()) {
-		// Removing aggregates will mess up projection maps. Better to just remove the maps now
-		// They will be re-added by the 2nd pass of ColumnLifetimeAnalyzer
-		// Note that we cannot clear the projection map if everything is referenced
-		LogicalOperator::ClearProjectionMap(op);
 	}
 
 	StandardVisitOperator(op);

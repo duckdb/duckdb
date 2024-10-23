@@ -15,9 +15,6 @@ namespace duckdb {
 //! The CommonAggregateOptimizer optimizer eliminates duplicate aggregates from aggregate nodes
 class CommonAggregateOptimizer : public LogicalOperatorVisitor {
 public:
-	explicit CommonAggregateOptimizer(bool is_root = false) : everything_referenced(is_root) {
-	}
-
 	void VisitOperator(LogicalOperator &op) override;
 
 private:
@@ -27,6 +24,5 @@ private:
 
 private:
 	column_binding_map_t<ColumnBinding> aggregate_map;
-	bool everything_referenced;
 };
 } // namespace duckdb

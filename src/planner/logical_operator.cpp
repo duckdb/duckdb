@@ -124,32 +124,6 @@ vector<ColumnBinding> LogicalOperator::MapBindings(const vector<ColumnBinding> &
 	}
 }
 
-void LogicalOperator::ClearProjectionMap(LogicalOperator &op) {
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_ANY_JOIN:
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-	case LogicalOperatorType::LOGICAL_ASOF_JOIN: {
-		auto &join = op.Cast<LogicalJoin>();
-		join.left_projection_map.clear();
-		join.right_projection_map.clear();
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_ORDER_BY: {
-		auto &order = op.Cast<LogicalOrder>();
-		order.projection_map.clear();
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_FILTER: {
-		auto &filter = op.Cast<LogicalFilter>();
-		filter.projection_map.clear();
-		break;
-	}
-	default:
-		throw NotImplementedException("LogicalOperator::ClearProjectionMap for %s", EnumUtil::ToString(op.type));
-	}
-}
-
 string LogicalOperator::ToString(ExplainFormat format) const {
 	auto renderer = TreeRenderer::CreateRenderer(format);
 	stringstream ss;

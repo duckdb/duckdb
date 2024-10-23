@@ -72,7 +72,12 @@ void LogicalOperatorVisitor::VisitChildOfOperatorWithProjectionMap(LogicalOperat
 				break;
 			}
 		}
-		D_ASSERT(proj_idx_after < child_bindings_after.size()); // Must've found it in there somewhere
+		if (proj_idx_after == child_bindings_after.size()) {
+			// VisitOperator has removed this binding, e.g., by replacing one binding with another
+			// Inside here we don't know how it has been replaced, and projection maps are positional: bail
+			new_projection_map.clear();
+			break;
+		}
 		new_projection_map.push_back(proj_idx_after);
 	}
 	projection_map = std::move(new_projection_map);

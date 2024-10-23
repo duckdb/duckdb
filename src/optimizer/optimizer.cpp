@@ -222,7 +222,7 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// remove duplicate aggregates
 	RunOptimizer(OptimizerType::COMMON_AGGREGATE, [&]() {
-		CommonAggregateOptimizer common_aggregate(true);
+		CommonAggregateOptimizer common_aggregate;
 		common_aggregate.VisitOperator(*plan);
 	});
 
