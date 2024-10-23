@@ -84,7 +84,7 @@ PathLike PathLike::Create(const py::object &object, DuckDBPyConnection &connecti
 	PathLikeProcessor processor(connection, import_cache);
 	if (py::isinstance<py::list>(object)) {
 		auto list = py::list(object);
-		for (auto &item : list) {
+		for (auto item : list) {
 			processor.AddFile(py::reinterpret_borrow<py::object>(item));
 		}
 	} else {

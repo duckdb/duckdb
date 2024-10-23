@@ -115,11 +115,59 @@ jobs:
         # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
         cibuildwheel --output-dir wheelhouse --config-file pyproject.toml duckdb_tarball
 
+   linux-pypy3-10:
+    name: PyPy 3.10 Linux
+    runs-on: ubuntu-20.04
+    needs: linux-python3-9
+
+    env:
+      CIBW_BUILD: 'pp310-manylinux_x86_64'
+      CIBW_TEST_SKIP: 'pp310-*'
+      PYTEST_TIMEOUT: '600'
+      CIBW_ENVIRONMENT: 'OVERRIDE_GIT_DESCRIBE=${{ inputs.override_git_describe }}'
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: 'pypy-3.10'
+
+    - name: Install
+      shell: bash
+      run: pip install 'cibuildwheel>=2.16.2' build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Build source dist
+      shell: bash
+      working-directory: tools/pythonpkg
+      run: |
+        pyproject-build . --sdist
+        mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+
+    - name: Build
+      shell: bash
+      working-directory: tools/pythonpkg
+      run: |
+        export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+        # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
+        cibuildwheel --output-dir wheelhouse --config-file pyproject.toml duckdb_tarball
+
    manylinux-extensions-x64:
     name: Linux Extensions (linux_amd64_gcc4)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
-    needs: linux-python3-9
+    needs:
+      - linux-python3-9
+      - linux-pypy3-10
     env:
       GEN: ninja
       ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
