@@ -915,42 +915,6 @@ select 42;
     result = test.run()
     result.check_stdout('42')
 
-def test_sqlite_udfs_error(shell):
-    test = (
-        ShellTest(shell)
-        .statement("SELECT writefile()")
-    )
-    result = test.run()
-    result.check_stderr('wrong number of arguments to function writefile')
-
-    test = (
-        ShellTest(shell)
-        .statement("SELECT writefile('hello')")
-    )
-    result = test.run()
-    result.check_stderr('wrong number of arguments to function writefile')
-
-def test_sqlite_udfs_correct(shell, random_filepath):
-    import os
-    test = (
-        ShellTest(shell)
-        .statement(f"SELECT writefile('{random_filepath.as_posix()}', 'hello');")
-    )
-    result = test.run()
-    if not os.path.exists(random_filepath):
-        raise Exception(f"Failed to write file {random_filepath.as_posix()}")
-    with open(random_filepath, 'r') as f:
-        result.stdout = f.read()
-    result.check_stdout('hello')
-
-def test_lsmode(shell):
-    test = (
-        ShellTest(shell)
-        .statement("SELECT lsmode(1) AS lsmode;")
-    )
-    result = test.run()
-    result.check_stdout('lsmode')
-
 def test_duckbox(shell):
     test = (
         ShellTest(shell)
@@ -1035,32 +999,5 @@ def test_nullbyte_error_rendering(shell):
     )
     result = test.run()
     result.check_stderr('INT32')
-
-@pytest.mark.parametrize("stmt", [
-	"select sha3(NULL);"
-])
-def test_sqlite_udf_null(shell, stmt):
-    test = (
-        ShellTest(shell)
-        .statement(stmt)
-    )
-    result = test.run()
-    result.check_stdout('NULL')
-
-def test_sqlite_udf_sha3_int(shell):
-    test = (
-        ShellTest(shell)
-        .statement("select sha3(256)")
-    )
-    result = test.run()
-    result.check_stdout('A7')
-
-def test_sqlite_udf_sha3_non_inlined_string(shell):
-    test = (
-        ShellTest(shell)
-        .statement("select sha3('hello world this is a long string');")
-    )
-    result = test.run()
-    result.check_stdout('D4')
 
 # fmt: on
