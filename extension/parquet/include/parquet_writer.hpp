@@ -73,7 +73,7 @@ public:
 	ParquetWriter(ClientContext &context, FileSystem &fs, string file_name, vector<LogicalType> types,
 	              vector<string> names, duckdb_parquet::CompressionCodec::type codec, ChildFieldIDs field_ids,
 	              const vector<pair<string, string>> &kv_metadata,
-	              shared_ptr<ParquetEncryptionConfig> encryption_config, double dictionary_compression_ratio_threshold,
+	              shared_ptr<ParquetEncryptionConfig> encryption_config, idx_t dictionary_size_limit,
 	              optional_idx compression_level, bool debug_use_openssl);
 
 public:
@@ -104,8 +104,8 @@ public:
 		lock_guard<mutex> glock(lock);
 		return writer->total_written;
 	}
-	double DictionaryCompressionRatioThreshold() const {
-		return dictionary_compression_ratio_threshold;
+	idx_t DictionarySizeLimit() const {
+		return dictionary_size_limit;
 	}
 	optional_idx CompressionLevel() const {
 		return compression_level;
@@ -132,7 +132,7 @@ private:
 	duckdb_parquet::CompressionCodec::type codec;
 	ChildFieldIDs field_ids;
 	shared_ptr<ParquetEncryptionConfig> encryption_config;
-	double dictionary_compression_ratio_threshold;
+	idx_t dictionary_size_limit;
 	optional_idx compression_level;
 	bool debug_use_openssl;
 	shared_ptr<EncryptionUtil> encryption_util;

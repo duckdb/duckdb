@@ -911,14 +911,15 @@ public:
 template <class T>
 class StandardWriterPageState : public ColumnWriterPageState {
 public:
-	explicit StandardWriterPageState(const idx_t total_value_count, const unordered_map<T, uint32_t>& dictionary_p)
-	    : dbp_encoder(total_value_count), encoding(Encoding::RLE_DICTIONARY), dictionary(dictionary_p), written_value(false),
-	      bit_width(RleBpDecoder::ComputeBitWidth(dictionary.size())), dict_encoder(bit_width), initialized(false) {
+	explicit StandardWriterPageState(const idx_t total_value_count, const unordered_map<T, uint32_t> &dictionary_p)
+	    : dbp_encoder(total_value_count), encoding(Encoding::RLE_DICTIONARY), dictionary(dictionary_p),
+	      written_value(false), bit_width(RleBpDecoder::ComputeBitWidth(dictionary.size())), dict_encoder(bit_width),
+	      initialized(false) {
 	}
 	DbpEncoder dbp_encoder;
 
 	duckdb_parquet::Encoding::type encoding;
-	const unordered_map<T, uint32_t>& dictionary;
+	const unordered_map<T, uint32_t> &dictionary;
 	bool written_value;
 
 	uint32_t bit_width;
@@ -955,30 +956,34 @@ public:
 
 	void FlushPageState(WriteStream &temp_writer, ColumnWriterPageState *state_p) override {
 		auto &page_state = state_p->Cast<StandardWriterPageState<SRC>>();
-		if (page_state.encoding == Encoding::DELTA_BINARY_PACKED) {
+		switch (page_state.encoding) {
+		case Encoding::DELTA_BINARY_PACKED:
 			if (!page_state.initialized) {
 				page_state.dbp_encoder.BeginWrite(temp_writer, 0);
 			}
 			page_state.dbp_encoder.FinishWrite(temp_writer);
-		}
-		// TODO uugly
-		if (page_state.encoding == Encoding::RLE_DICTIONARY) {
-
-			if (page_state.bit_width != 0) {
-				if (!page_state.written_value) {
-					// all values are null
-					// just write the bit width
-					temp_writer.Write<uint8_t>(page_state.bit_width);
-					return;
-				}
-				page_state.dict_encoder.FinishWrite(temp_writer);
+			break;
+		case Encoding::RLE_DICTIONARY:
+			if (page_state.bit_width == 0) {
+				// TODO does this ever happen?
+				return;
 			}
+			if (!page_state.written_value) {
+				// all values are null, just write the bit width
+				temp_writer.Write<uint8_t>(page_state.bit_width);
+				return;
+			}
+			page_state.dict_encoder.FinishWrite(temp_writer);
+			break;
+		case Encoding::PLAIN:
+			break;
+		default:
+			throw InternalException("Unknown encoding");
 		}
 	}
 
 	Encoding::type GetEncoding(BasicColumnWriterState &state_p) override {
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
-
 		return state.encoding;
 	}
 
@@ -1006,7 +1011,7 @@ public:
 				continue;
 			}
 			if (validity.RowIsValid(vector_index)) {
-				if (state.dictionary.size() < DICTIONARY_ANALYZE_THRESHOLD) {
+				if (state.dictionary.size() < writer.DictionarySizeLimit()) {
 					const auto &src_value = data_ptr[vector_index];
 					// Try to insert into the dictionary. If it's not there yet, we get .second = true
 					auto found = state.dictionary.insert(pair<SRC, uint32_t>(src_value, new_value_index));
@@ -1024,7 +1029,7 @@ public:
 		const auto type = writer.GetType(schema_idx);
 
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
-		if (state.dictionary.size() >= DICTIONARY_ANALYZE_THRESHOLD) {
+		if (state.dictionary.size() >= writer.DictionarySizeLimit()) {
 			// special handling for int column: dpb, otherwise plain
 			state.encoding = (type == Type::type::INT32 || type == Type::type::INT64) ? Encoding::DELTA_BINARY_PACKED
 			                                                                          : Encoding::PLAIN;
@@ -1116,7 +1121,7 @@ public:
 		auto &stats = stats_p->Cast<NumericStatisticsState<SRC, TGT, OP>>();
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
 
-		D_ASSERT (state.encoding == Encoding::RLE_DICTIONARY);
+		D_ASSERT(state.encoding == Encoding::RLE_DICTIONARY);
 
 		// first we need to sort the values in index order
 		auto values = vector<SRC>(state.dictionary.size());
@@ -1135,6 +1140,7 @@ public:
 		D_ASSERT(b > 0 && IsPowerOfTwo(b));
 
 		state.bloom_filter = make_uniq<ParquetBloomFilter>(b);
+
 		// first write the contents of the dictionary page to a temporary buffer
 		auto temp_writer = make_uniq<MemoryStream>(MaxValue<idx_t>(
 		    NextPowerOfTwo(state.dictionary.size() * sizeof(TGT)), MemoryStream::DEFAULT_INITIAL_CAPACITY));
@@ -1150,11 +1156,12 @@ public:
 		}
 		// flush the dictionary page and add it to the to-be-written pages
 		WriteDictionary(state, std::move(temp_writer), values.size());
+
+		// bloom filter will be queued for writing in ParquetWriter::BufferBloomFilter one level up
 	}
 
 	//	TODO what on earth is this used for??
 	idx_t GetRowSize(const Vector &vector, const idx_t index, const BasicColumnWriterState &state_p) const override {
-
 		return sizeof(TGT);
 	}
 };
@@ -1566,10 +1573,8 @@ public:
 
 	void Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) override {
 		auto &state = state_p.Cast<StringColumnWriterState>();
-		if (writer.DictionaryCompressionRatioThreshold() == NumericLimits<double>::Maximum() ||
-		    (state.dictionary.size() > DICTIONARY_ANALYZE_THRESHOLD && WontUseDictionary(state))) {
-			// Early out: compression ratio is less than the specified parameter
-			// after seeing more entries than the threshold
+		if (writer.DictionarySizeLimit() == 0 || (state.dictionary.size() > writer.DictionarySizeLimit())) {
+			// Early out: seeing more entries than the threshold or entirely disabled
 			return;
 		}
 
@@ -1620,7 +1625,7 @@ public:
 
 		// check if a dictionary will require more space than a plain write, or if the dictionary page is going to
 		// be too large
-		if (WontUseDictionary(state)) {
+		if (writer.DictionarySizeLimit() == 0 || (state.dictionary.size() >= writer.DictionarySizeLimit())) {
 			// clearing the dictionary signals a plain write
 			state.dictionary.clear();
 			state.key_bit_width = 0;
@@ -1714,6 +1719,7 @@ public:
 			D_ASSERT(values[entry.second].GetSize() == 0);
 			values[entry.second] = entry.first;
 		}
+		// TODO also size this bloom filter
 		state.bloom_filter = make_uniq<ParquetBloomFilter>();
 
 		// first write the contents of the dictionary page to a temporary buffer
@@ -1745,11 +1751,6 @@ public:
 	}
 
 private:
-	bool WontUseDictionary(StringColumnWriterState &state) const {
-		return state.estimated_dict_page_size > MAX_UNCOMPRESSED_DICT_PAGE_SIZE ||
-		       DictionaryCompressionRatio(state) < writer.DictionaryCompressionRatioThreshold();
-	}
-
 	static double DictionaryCompressionRatio(StringColumnWriterState &state) {
 		// If any are 0, we just return a compression ratio of 1
 		if (state.estimated_plain_size == 0 || state.estimated_rle_pages_size == 0 ||
