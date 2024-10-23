@@ -17,7 +17,7 @@ def extract_declarations(setting) -> str:
         f"    using RETURN_TYPE = {setting.return_type};\n"
         f"    static constexpr const char *Name = \"{setting.name}\";\n"
         f"    static constexpr const char *Description = \"{setting.description}\";\n"
-        f"    static constexpr const LogicalTypeId InputType = LogicalTypeId::{setting.sql_type};\n"
+        f"    static constexpr const char *InputType = \"{setting.sql_type}\";\n"
     )
     if setting.scope == "GLOBAL" or setting.scope == "GLOBAL_LOCAL":
         definition += f"    static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);\n"

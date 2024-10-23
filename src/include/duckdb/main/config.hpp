@@ -70,7 +70,7 @@ typedef Value (*get_setting_function_t)(const ClientContext &context);
 struct ConfigurationOption {
 	const char *name;
 	const char *description;
-	LogicalTypeId parameter_type;
+	const char *parameter_type;
 	set_global_function_t set_global;
 	set_local_function_t set_local;
 	reset_global_function_t reset_global;
@@ -350,6 +350,8 @@ public:
 	DUCKDB_API void ResetOption(DatabaseInstance *db, const ConfigurationOption &option);
 	DUCKDB_API void SetOption(const string &name, Value value);
 	DUCKDB_API void ResetOption(const string &name);
+	static LogicalType ParseLogicalType(const string &type);
+
 
 	DUCKDB_API void CheckLock(const string &name);
 

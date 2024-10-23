@@ -54,7 +54,7 @@ bool DBConfigOptions::debug_print_bindings = false;
 		    _PARAM::ResetLocal, _PARAM::GetSetting                                                                     \
 	}
 #define FINAL_SETTING                                                                                                  \
-	{ nullptr, nullptr, LogicalTypeId::INVALID, nullptr, nullptr, nullptr, nullptr, nullptr }
+	{ nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr }
 
 static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(AccessModeSetting),
@@ -66,6 +66,8 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(AllowPersistentSecretsSetting),
     DUCKDB_GLOBAL(AllowUnredactedSecretsSetting),
     DUCKDB_GLOBAL(AllowUnsignedExtensionsSetting),
+    DUCKDB_GLOBAL(AllowedDirectoriesSetting),
+    DUCKDB_GLOBAL(AllowedPathsSetting),
     DUCKDB_GLOBAL(ArrowLargeBufferSizeSetting),
     DUCKDB_GLOBAL(ArrowLosslessConversionSetting),
     DUCKDB_GLOBAL(ArrowOutputListViewSetting),
@@ -241,7 +243,7 @@ void DBConfig::SetOption(DatabaseInstance *db, const ConfigurationOption &option
 		throw InvalidInputException("Could not set option \"%s\" as a global option", option.name);
 	}
 	D_ASSERT(option.reset_global);
-	Value input = value.DefaultCastAs(option.parameter_type);
+	Value input = value.DefaultCastAs(ParseLogicalType(option.parameter_type));
 	option.set_global(db, *this, input);
 }
 
@@ -271,6 +273,27 @@ void DBConfig::ResetOption(const string &name) {
 		// Otherwise just remove it from the 'set_variables' map
 		options.set_variables.erase(name);
 	}
+}
+
+LogicalType DBConfig::ParseLogicalType(const string &type) {
+	if (StringUtil::EndsWith(type, "[]")) {
+		// array - recurse
+		auto child_type = ParseLogicalType(type.substr(0, type.size() - 2));
+		return LogicalType::LIST(child_type);
+	}
+	if (StringUtil::EndsWith(type, "()")) {
+		if (type != "STRUCT()") {
+			throw InternalException("Error while generating extension function overloads - expected STRUCT(), not %s",
+									type);
+		}
+		return LogicalType::STRUCT({});
+	}
+	auto type_id = TransformStringToLogicalTypeId(type);
+	if (type_id == LogicalTypeId::USER) {
+		throw InternalException("Error while generating extension function overloads - unrecognized logical type %s",
+								type);
+	}
+	return type_id;
 }
 
 void DBConfig::AddExtensionOption(const string &name, string description, LogicalType parameter,
