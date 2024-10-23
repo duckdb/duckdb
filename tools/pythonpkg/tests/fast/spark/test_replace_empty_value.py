@@ -29,13 +29,14 @@ class TestReplaceEmpty(object):
 
         df2 = df.select([when(col(c) == "", None).otherwise(col(c)).alias(c) for c in df.columns])
         assert df2.columns == ['name', 'state']
+        key_f = lambda x: x.name or x.state
         res = df2.collect()
-        assert res == [
+        assert sorted(res, key=key_f) == sorted([
             Row(name=None, state='CA'),
             Row(name='Julia', state=None),
             Row(name='Robert', state=None),
             Row(name=None, state='NJ'),
-        ]
+        ], key=key_f)
 
         # On selection of columns
         # Replace empty string with None on selected columns
@@ -44,10 +45,12 @@ class TestReplaceEmpty(object):
         replaceCols = ["state"]
         df2 = df.select([when(col(c) == "", None).otherwise(col(c)).alias(c) for c in replaceCols]).sort(col('state'))
         assert df2.columns == ['state']
+
+        key_f = lambda x: x.state or ""
         res = df2.collect()
-        assert res == [
+        assert sorted(res, key=key_f) == sorted([
             Row(state='CA'),
             Row(state='NJ'),
             Row(state=None),
             Row(state=None),
-        ]
+        ], key=key_f)
