@@ -124,6 +124,12 @@ void CSVIterator::SetEnd(idx_t pos) {
 	boundary.end_pos = pos;
 }
 
+void CSVIterator::CheckIfDone() {
+	if (IsBoundarySet() && (pos.buffer_idx > boundary.buffer_idx || pos.buffer_pos > boundary.buffer_pos)) {
+		done = true;
+	}
+}
+
 idx_t CSVIterator::GetGlobalCurrentPos() const {
 	return pos.buffer_pos + buffer_size * pos.buffer_idx;
 }

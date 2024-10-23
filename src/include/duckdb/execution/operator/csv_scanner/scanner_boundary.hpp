@@ -75,6 +75,9 @@ public:
 	// Gets the current position for the file
 	idx_t GetGlobalCurrentPos() const;
 
+	//! Checks if we are done with this iterator
+	void CheckIfDone();
+
 	static constexpr idx_t ROWS_PER_THREAD = 4;
 
 	CSVPosition pos;

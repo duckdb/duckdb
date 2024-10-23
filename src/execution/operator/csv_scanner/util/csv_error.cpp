@@ -160,14 +160,14 @@ CSVError CSVError::CastError(const CSVReaderOptions &options, string &column_nam
 	                how_to_fix_it.str(), current_path);
 }
 
-CSVError CSVError::LineSizeError(const CSVReaderOptions &options, idx_t actual_size, LinesPerBoundary error_info,
+CSVError CSVError::LineSizeError(const CSVReaderOptions &options,  LinesPerBoundary error_info,
                                  string &csv_row, idx_t byte_position, const string &current_path) {
 	std::ostringstream error;
 	error << "Maximum line size of " << options.maximum_line_size.GetValue() << " bytes exceeded. ";
-	error << "Actual Size:" << actual_size << " bytes." << '\n';
+	error << "Actual Size:" << csv_row.size() << " bytes." << '\n';
 
 	std::ostringstream how_to_fix_it;
-	how_to_fix_it << "Possible Solution: Change the maximum length size, e.g., max_line_size=" << actual_size + 1
+	how_to_fix_it << "Possible Solution: Change the maximum length size, e.g., max_line_size=" << csv_row.size() + 2
 	              << "\n";
 
 	return CSVError(error.str(), MAXIMUM_LINE_SIZE, 0, csv_row, error_info, byte_position, byte_position, options,
