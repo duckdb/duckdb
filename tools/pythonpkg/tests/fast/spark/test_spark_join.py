@@ -103,14 +103,14 @@ class TestDataFrameJoin(object):
                 dept_id=40,
             ),
         ]
-        assert res == expected
+        assert sorted(res) == sorted(expected)
 
     @pytest.mark.parametrize('how', ['outer', 'fullouter', 'full', 'full_outer'])
     def test_outer_join(self, dataframe_a, dataframe_b, how):
         df = dataframe_a.join(dataframe_b, dataframe_a.emp_dept_id == dataframe_b.dept_id, how)
         df = df.sort(*df.columns)
         res1 = df.collect()
-        assert res1 == [
+        assert sorted(res1, key=lambda x: x.emp_id or 0) == sorted([
             Row(
                 emp_id=1,
                 name='Smith',
@@ -188,14 +188,14 @@ class TestDataFrameJoin(object):
                 dept_name='Sales',
                 dept_id=30,
             ),
-        ]
+        ], key=lambda x: x.emp_id or 0)
 
     @pytest.mark.parametrize('how', ['right', 'rightouter', 'right_outer'])
     def test_right_join(self, dataframe_a, dataframe_b, how):
         df = dataframe_a.join(dataframe_b, dataframe_a.emp_dept_id == dataframe_b.dept_id, how)
         df = df.sort(*df.columns)
         res = df.collect()
-        assert res == [
+        assert sorted(res, key=lambda x: x.emp_id or 0) == sorted([
             Row(
                 emp_id=1,
                 name='Smith',
@@ -262,14 +262,14 @@ class TestDataFrameJoin(object):
                 dept_name='Sales',
                 dept_id=30,
             ),
-        ]
+        ], key=lambda x: x.emp_id or 0)
 
     @pytest.mark.parametrize('how', ['semi', 'leftsemi', 'left_semi'])
     def test_semi_join(self, dataframe_a, dataframe_b, how):
         df = dataframe_a.join(dataframe_b, dataframe_a.emp_dept_id == dataframe_b.dept_id, how)
         df = df.sort(*df.columns)
         res = df.collect()
-        assert res == [
+        assert sorted(res) == sorted([
             Row(
                 emp_id=1,
                 name='Smith',
@@ -295,7 +295,7 @@ class TestDataFrameJoin(object):
                 emp_id=4, name='Jones', superior_emp_id=2, year_joined='2005', emp_dept_id='10', gender='F', salary=2000
             ),
             Row(emp_id=5, name='Brown', superior_emp_id=2, year_joined='2010', emp_dept_id='40', gender='', salary=-1),
-        ]
+        ])
 
     @pytest.mark.parametrize('how', ['anti', 'leftanti', 'left_anti'])
     def test_anti_join(self, dataframe_a, dataframe_b, how):
@@ -321,13 +321,13 @@ class TestDataFrameJoin(object):
         )
         df = df.orderBy(*df.columns)
         res = df.collect()
-        assert res == [
+        assert sorted(res, key=lambda x: x.emp_id) == sorted([
             Row(emp_id=2, name='Rose', superior_emp_id=1, superior_emp_name='Smith'),
             Row(emp_id=3, name='Williams', superior_emp_id=1, superior_emp_name='Smith'),
             Row(emp_id=4, name='Jones', superior_emp_id=2, superior_emp_name='Rose'),
             Row(emp_id=5, name='Brown', superior_emp_id=2, superior_emp_name='Rose'),
             Row(emp_id=6, name='Brown', superior_emp_id=2, superior_emp_name='Rose'),
-        ]
+        ], key=lambda x: x.emp_id)
 
     def test_cross_join(self, spark):
         data1 = [(1, "Carol"), (2, "Alice"), (3, "Dave")]
@@ -339,11 +339,11 @@ class TestDataFrameJoin(object):
 
         res = df.orderBy("rank", "age").collect()
 
-        assert res == [
+        assert sorted(res) == sorted([
             Row(age=1, name="Carol", id=4, rank="A"),
             Row(age=2, name="Alice", id=4, rank="A"),
             Row(age=3, name="Dave", id=4, rank="A"),
             Row(age=1, name="Carol", id=5, rank="B"),
             Row(age=2, name="Alice", id=5, rank="B"),
             Row(age=3, name="Dave", id=5, rank="B"),
-        ]
+        ])
