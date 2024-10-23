@@ -163,6 +163,7 @@ jobs:
     name: Python 3 Linux
     runs-on: ubuntu-20.04
     strategy:
+      fail-fast: ${{ !startsWith(github.ref, 'refs/tags/v') && !github.ref == 'refs/heads/main' }}
       matrix:
         arch: [x86_64, aarch64]
         python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
@@ -280,6 +281,7 @@ jobs:
       name: Python 3 OSX
       runs-on: macos-latest
       strategy:
+       fail-fast: ${{ !startsWith(github.ref, 'refs/tags/v') && !github.ref == 'refs/heads/main' }}
        matrix:
         python_build: [cp38-*, cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
       needs: linux-python3-9
@@ -349,6 +351,7 @@ jobs:
       name: Python 3 Windows
       runs-on: windows-2019
       strategy:
+       fail-fast: ${{ !startsWith(github.ref, 'refs/tags/v') && !github.ref == 'refs/heads/main' }}
        matrix:
         python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
         isRelease:
