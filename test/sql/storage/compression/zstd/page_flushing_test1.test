@@ -1,0 +1,81 @@
+# name: test/sql/storage/compression/zstd/page_flushing_test1.test
+# group: [zstd]
+
+load __TEST_DIR__/zstd_page_flushing_test1.db
+
+require block_size 262144
+
+require vector_size 2048
+
+statement ok
+create table tbl (
+	a VARCHAR
+);
+
+statement ok
+set variable my_string = (
+	select concat(range(0,500000)::VARCHAR)
+);
+
+statement ok
+SET checkpoint_threshold = '10.0 GB';
+
+# Feed it enough data to actually use zstd (enough to train a dictionary)
+statement ok
+insert into tbl values ('aaaabbbb');
+insert into tbl values ('aaaabbbb');
+insert into tbl values ('aaaabbbb');
+insert into tbl values ('aaaabbbb');
+insert into tbl values ('aaaabbbb');
+insert into tbl values ('aaaabbbb');
+insert into tbl values ('aaaabbbb');
+insert into tbl values ('aaaabbbb');
+insert into tbl values ('aaaabbbb');
+insert into tbl values ('aaaabbbb');
+insert into tbl values ('aaaabbbb');
+
+# This will start on the segment page and write the remainder on 'extra_pages[0]' buffer
+statement ok
+insert into tbl select getvariable('my_string');
+
+# This starts on 'extra_pages[0]' and writes onto 'extra_pages[1]'
+statement ok
+insert into tbl select getvariable('my_string');
+
+# This starts on 'extra_pages[1]' and writes onto 'extra_pages[0]'
+statement ok
+insert into tbl select getvariable('my_string');
+
+# This starts on 'extra_pages[0]', overflows to 'extra_pages[1]' twice
+statement ok
+insert into tbl select concat(getvariable('my_string'), getvariable('my_string'));
+
+# This starts on 'extra_pages[1]', overflows to 'extra_pages[0]' twice
+statement ok
+insert into tbl select concat(getvariable('my_string'), getvariable('my_string'));
+
+statement ok
+pragma force_compression='zstd'
+
+statement ok
+checkpoint
+
+query II
+select a[1], strlen(a) from tbl;
+----
+a	8
+a	8
+a	8
+a	8
+a	8
+a	8
+a	8
+a	8
+a	8
+a	8
+a	8
+[	3888890
+[	3888890
+[	3888890
+[	7777780
+[	7777780

@@ -59,6 +59,8 @@ namespace duckdb {
 // (Sampling) Analyze
 //===--------------------------------------------------------------------===//
 
+static constexpr idx_t ZSTD_SAMPLE_MIN_SIZE = 8;
+
 static void IterateThroughVector(Vector &vec, idx_t count, std::function<void(const string_t &val)> callback) {
 	UnifiedVectorFormat vdata;
 	vec.ToUnifiedFormat(count, vdata);
@@ -70,6 +72,9 @@ static void IterateThroughVector(Vector &vec, idx_t count, std::function<void(co
 			continue;
 		}
 		auto &str = data[idx];
+		if (str.GetSize() < ZSTD_SAMPLE_MIN_SIZE) {
+			continue;
+		}
 		callback(str);
 	}
 }
@@ -163,11 +168,17 @@ public:
 		auto vector_count = GetVectorCount();
 
 		idx_t vector_metadata_size = 0;
-		vector_metadata_size += sizeof(page_id_t);
-		vector_metadata_size += sizeof(page_offset_t);
-		vector_metadata_size += sizeof(uncompressed_size_t);
-		vector_metadata_size += sizeof(compressed_size_t);
-		return vector_count * vector_metadata_size;
+		vector_metadata_size += sizeof(page_id_t) * vector_count;
+
+		vector_metadata_size = AlignValue<idx_t, sizeof(page_offset_t)>(vector_metadata_size);
+		vector_metadata_size += sizeof(page_offset_t) * vector_count;
+
+		vector_metadata_size = AlignValue<idx_t, sizeof(uncompressed_size_t)>(vector_metadata_size);
+		vector_metadata_size += sizeof(uncompressed_size_t) * vector_count;
+
+		vector_metadata_size = AlignValue<idx_t, sizeof(compressed_size_t)>(vector_metadata_size);
+		vector_metadata_size += sizeof(compressed_size_t) * vector_count;
+		return vector_metadata_size;
 	}
 
 public:
@@ -213,13 +224,20 @@ DictBuffer CreateDictFromSamples(ZSTDAnalyzeState &state) {
 
 	auto space_required = state.GetVectorMetadataSize();
 	space_required += sizeof(block_id_t);
+	space_required += sizeof(dict_size_t);
 	if (space_required >= state.info.GetBlockSize()) {
 		// FIXME: allow vector metadata to spill over to the next page
 		return DictBuffer();
 	}
+	space_required = AlignValue<idx_t>(space_required);
 	auto remaining_size = state.info.GetBlockSize() - space_required;
 	if (remaining_size < ZDICT_DICTSIZE_MIN) {
 		// Not enough room to fit the metadata + the dictionary on the page
+		return DictBuffer();
+	}
+
+	if (sampling_state.sample_sizes.size() < 10) {
+		// Not enough samples to train a dictionary
 		return DictBuffer();
 	}
 
@@ -247,11 +265,6 @@ DictBuffer CreateDictFromSamples(ZSTDAnalyzeState &state) {
 // Compression score to determine which compression to use
 idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	auto &state = state_p.Cast<ZSTDAnalyzeState>();
-
-	if (state.count < 10) {
-		// Not enough samples to train a dictionary
-		return DConstants::INVALID_INDEX;
-	}
 
 	state.dict = CreateDictFromSamples(state);
 	if (!state.dict) {
@@ -311,7 +324,8 @@ public:
 
 		auto &dict = analyze_state->dict;
 		// Write the dictionary to the start of the segment
-		D_ASSERT(dict.Size() <= (info.GetBlockSize() - sizeof(block_id_t) - sizeof(dict_size_t)));
+		D_ASSERT(dict.Size() <= (info.GetBlockSize() - sizeof(block_id_t) - sizeof(dict_size_t) -
+		                         analyze_state->GetVectorMetadataSize()));
 		Store<dict_size_t>(dict.Size(), current_buffer_ptr);
 		current_buffer_ptr += sizeof(dict_size_t);
 		memcpy(current_buffer_ptr, dict.Buffer(), dict.Size());
@@ -323,6 +337,9 @@ public:
 		idx_t offset = GetCurrentOffset();
 
 		offset = AlignValue<idx_t, sizeof(page_id_t)>(offset);
+#ifdef DEBUG
+		auto start_of_vector_metadata = current_buffer->Ptr() + offset;
+#endif
 		page_ids = (page_id_t *)(current_buffer->Ptr() + offset);
 		offset += (sizeof(page_id_t) * total_vector_count);
 
@@ -337,8 +354,12 @@ public:
 		offset = AlignValue<idx_t, sizeof(compressed_size_t)>(offset);
 		compressed_sizes = (compressed_size_t *)(current_buffer->Ptr() + offset);
 		offset += (sizeof(compressed_size_t) * total_vector_count);
-
 		current_buffer_ptr = current_buffer->Ptr() + offset;
+
+#ifdef DEBUG
+		D_ASSERT(uint64_t(current_buffer_ptr - start_of_vector_metadata) == analyze_state->GetVectorMetadataSize());
+#endif
+		D_ASSERT(GetCurrentOffset() <= GetWritableSpace());
 	}
 
 public:
@@ -400,14 +421,16 @@ public:
 		auto current_offset = GetCurrentOffset();
 		current_offset = UnsafeNumericCast<page_offset_t>(
 		    AlignValue<idx_t, sizeof(string_length_t)>(UnsafeNumericCast<idx_t>(current_offset)));
-		starting_offset = current_offset;
-		starting_page = GetCurrentId();
+		current_buffer_ptr = current_buffer->Ptr() + current_offset;
 		compressed_size = 0;
 		uncompressed_size = 0;
 
 		if (current_offset + (vector_size * sizeof(string_length_t)) >= GetWritableSpace()) {
 			NewPage(false);
 		}
+		current_offset = GetCurrentOffset();
+		starting_offset = current_offset;
+		starting_page = GetCurrentId();
 
 		vector_lengths_buffer = current_buffer;
 		string_lengths = (string_length_t *)(current_buffer->Ptr() + current_offset);
@@ -495,7 +518,7 @@ public:
 		auto &block_manager = partial_block_manager.GetBlockManager();
 		auto new_id = block_manager.GetFreeBlockId();
 
-		D_ASSERT(current_buffer_ptr <= current_buffer->Ptr() + GetWritableSpace());
+		D_ASSERT(GetCurrentOffset() <= GetWritableSpace());
 
 		// Write the new id at the end of the last page
 		Store<block_id_t>(new_id, current_buffer_ptr);
@@ -553,7 +576,9 @@ public:
 		auto &handle = *current_buffer;
 		auto start_of_buffer = handle.Ptr();
 		D_ASSERT(current_buffer_ptr >= start_of_buffer);
-		return (page_offset_t)(current_buffer_ptr - start_of_buffer);
+		auto res = (page_offset_t)(current_buffer_ptr - start_of_buffer);
+		D_ASSERT(res <= GetWritableSpace());
+		return res;
 	}
 
 	void CreateSegment(idx_t row_start) {
