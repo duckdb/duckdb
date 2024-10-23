@@ -79,3 +79,10 @@ public:
 };
 
 } // namespace duckdb
+
+template <>
+struct std::hash<duckdb::uhugeint_t> {
+	inline size_t operator()(const duckdb::uhugeint_t &val) const {
+		return hash<uint64_t> {}(val.upper) ^ hash<uint64_t> {}(val.lower);
+	}
+};

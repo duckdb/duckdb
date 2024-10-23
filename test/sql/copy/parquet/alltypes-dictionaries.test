@@ -1,0 +1,17 @@
+# name: test/sql/copy/parquet/alltypes-dictionaries.test
+# group: [parquet]
+
+require parquet
+
+
+foreach type TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT UHUGEINT FLOAT DOUBLE VARCHAR
+
+statement ok
+copy (select r1.range::${type} r from range(10) r1, range(1000) r2) to '__TEST_DIR__/dict-${type}.parquet' (row_group_size 2048);
+
+query I
+select first(encodings) from parquet_metadata('__TEST_DIR__/dict-${type}.parquet') group by encodings;
+----
+RLE_DICTIONARY
+
+endloop
