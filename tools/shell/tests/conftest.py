@@ -47,7 +47,7 @@ class TestResult:
 
 
 class ShellTest:
-    def __init__(self, shell, arguments = []):
+    def __init__(self, shell, arguments=[]):
         if not shell:
             raise ValueError("Please provide a shell binary")
         self.shell = shell
