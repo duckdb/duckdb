@@ -1,7 +1,7 @@
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
-from duckdb.experimental.spark.sql import functions as F
+from ...spark_namespace.sql import functions as F
 
 
 class TestSparkFunctionsHash(object):

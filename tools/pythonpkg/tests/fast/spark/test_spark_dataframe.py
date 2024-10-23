@@ -2,7 +2,7 @@ import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
-from duckdb.experimental.spark.sql.types import (
+from ...spark_namespace.sql.types import (
     LongType,
     StructType,
     BooleanType,
@@ -14,11 +14,11 @@ from duckdb.experimental.spark.sql.types import (
     ArrayType,
     MapType,
 )
-from duckdb.experimental.spark.sql.functions import col, struct, when
+from ...spark_namespace.sql.functions import col, struct, when
 import duckdb
 import re
 
-from duckdb.experimental.spark.errors import PySparkValueError, PySparkTypeError
+from ...spark_namespace.errors import PySparkValueError, PySparkTypeError
 
 
 class TestDataFrame(object):
@@ -166,7 +166,7 @@ class TestDataFrame(object):
         assert res == [Row(a=42, b=True), Row(a=21, b=False)]
 
     def test_df_creation_coverage(self, spark):
-        from duckdb.experimental.spark.sql.types import StructType, StructField, StringType, IntegerType
+        from ...spark_namespace.sql.types import StructType, StructField, StringType, IntegerType
 
         data2 = [
             ("James", "", "Smith", "36636", "M", 3000),
@@ -267,7 +267,7 @@ class TestDataFrame(object):
         )
 
     def test_df_columns(self, spark):
-        from duckdb.experimental.spark.sql.functions import col, struct, when
+        from ...spark_namespace.sql.functions import col, struct, when
 
         structureData = [
             (("James", "", "Smith"), "36636", "M", 3100),

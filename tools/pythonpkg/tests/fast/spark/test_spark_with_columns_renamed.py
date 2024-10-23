@@ -13,7 +13,7 @@ class TestWithColumnsRenamed(object):
             (('Maria', 'Anne', 'Jones'), '1967-12-01', 'F', 4000),
             (('Jen', 'Mary', 'Brown'), '1980-02-17', 'F', -1),
         ]
-        from duckdb.experimental.spark.sql.types import StructType, StructField, StringType, IntegerType
+        from ...spark_namespace.sql.types import StructType, StructField, StringType, IntegerType
 
         schema = StructType(
             [

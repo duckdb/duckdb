@@ -3,7 +3,7 @@ import pytest
 _ = pytest.importorskip("duckdb.experimental.spark")
 
 
-from duckdb.experimental.spark.sql.functions import col, lit
+from ...spark_namespace.sql.functions import col, lit
 
 
 class TestWithColumns:

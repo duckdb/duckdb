@@ -1,7 +1,7 @@
 import pytest
 
 
-from duckdb.experimental.spark.sql.types import (
+from ...spark_namespace.sql.types import (
     Row,
 )
 

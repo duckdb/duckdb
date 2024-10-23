@@ -1,7 +1,7 @@
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
-from duckdb.experimental.spark.sql.types import Row
+from ...spark_namespace.sql.types import Row
 
 
 # https://sparkbyexamples.com/pyspark/pyspark-replace-empty-value-with-none-on-dataframe-2/?expand_article=1
@@ -17,7 +17,7 @@ class TestReplaceEmpty(object):
 
         # Replace name
         # CASE WHEN "name" == '' THEN NULL ELSE "name" END
-        from duckdb.experimental.spark.sql.functions import col, when
+        from ...spark_namespace.sql.functions import col, when
 
         df2 = df.withColumn("name", when(col("name") == "", None).otherwise(col("name")))
         assert df2.columns == ['name', 'state']
@@ -25,7 +25,7 @@ class TestReplaceEmpty(object):
         assert res == [Row(name=None), Row(name='Julia'), Row(name='Robert'), Row(name=None)]
 
         # Replace state + name
-        from duckdb.experimental.spark.sql.functions import col, when
+        from ...spark_namespace.sql.functions import col, when
 
         df2 = df.select([when(col(c) == "", None).otherwise(col(c)).alias(c) for c in df.columns])
         assert df2.columns == ['name', 'state']
@@ -39,7 +39,7 @@ class TestReplaceEmpty(object):
 
         # On selection of columns
         # Replace empty string with None on selected columns
-        from duckdb.experimental.spark.sql.functions import col, when
+        from ...spark_namespace.sql.functions import col, when
 
         replaceCols = ["state"]
         df2 = df.select([when(col(c) == "", None).otherwise(col(c)).alias(c) for c in replaceCols]).sort(col('state'))

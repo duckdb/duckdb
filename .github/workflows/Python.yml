@@ -62,7 +62,7 @@ jobs:
 
     env:
       CIBW_BUILD: 'cp39-manylinux_x86_64'
-      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests --verbose'
+      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests --verbose && USE_ACTUAL_SPARK=true python -m pytest {project}/tests/fast/spark --verbose'
       PYTEST_TIMEOUT: '600'
       CIBW_ENVIRONMENT: 'OVERRIDE_GIT_DESCRIBE=${{ inputs.override_git_describe }}'
 
@@ -89,6 +89,17 @@ jobs:
     - uses: actions/setup-python@v5
       with:
         python-version: '3.10'
+
+    # We need Java for running the Spark API tests with the actual Spark engine
+    - uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: temurin
+
+    - uses: vemonet/setup-spark@v1
+      with:
+        spark-version: '3.5.3'
+        hadoop-version: '3'
 
     - name: Install
       shell: bash

@@ -3,8 +3,8 @@ import pytest
 _ = pytest.importorskip("duckdb.experimental.spark")
 from datetime import date, datetime
 
-from duckdb.experimental.spark.sql import functions as F
-from duckdb.experimental.spark.sql.types import Row
+from ...spark_namespace.sql import functions as F
+from ...spark_namespace.sql.types import Row
 
 
 class TestsSparkFunctionsDate(object):
