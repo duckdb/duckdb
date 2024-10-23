@@ -71,11 +71,10 @@ class TestDataFrame(object):
         exptected_res_str = "[Row(id=1, address='14851 Jeffrey Rd', id='DE'), Row(id=2, address='43421 Margarita St', id='NY'), Row(id=3, address='13111 Siemon Ave', id='DE')]"
         if USE_ACTUAL_SPARK:
             # Spark uses string for both ID columns. DuckDB correctly infers the types.
-            exptected_res_str = exptected_res_str.replace("id=1", "id='1'").replace("id=2", "id='2'").replace("id=3", "id='3'")
-        assert (
-            str(res)
-            == exptected_res_str
-        )
+            exptected_res_str = (
+                exptected_res_str.replace("id=1", "id='1'").replace("id=2", "id='2'").replace("id=3", "id='3'")
+            )
+        assert str(res) == exptected_res_str
 
         # Not enough column names
         if not USE_ACTUAL_SPARK:

@@ -74,7 +74,9 @@ class TestSparkSession(object):
         context = spark.sparkContext
         spark.stop()
 
-    @pytest.mark.skipif(USE_ACTUAL_SPARK, reason="Can't create table with the local PySpark setup in the CI/CD pipeline")
+    @pytest.mark.skipif(
+        USE_ACTUAL_SPARK, reason="Can't create table with the local PySpark setup in the CI/CD pipeline"
+    )
     def test_table(self, spark):
         spark.sql('create table tbl(a varchar(10))')
         df = spark.table('tbl')

@@ -229,6 +229,7 @@ def spark():
     if not hasattr(spark, 'session'):
         # Cache the import
         from spark_namespace.sql import SparkSession as session
+
         spark.session = session
 
     if USE_ACTUAL_SPARK:

@@ -3,8 +3,11 @@ import pytest
 _ = pytest.importorskip("duckdb.experimental.spark")
 
 from spark_namespace import USE_ACTUAL_SPARK
+
 if USE_ACTUAL_SPARK:
-    pytest.skip("Skipping these tests as they use test_all_types() which is specific to DuckDB", allow_module_level=True)
+    pytest.skip(
+        "Skipping these tests as they use test_all_types() which is specific to DuckDB", allow_module_level=True
+    )
 
 from spark_namespace.sql.types import Row
 from spark_namespace.sql.types import (

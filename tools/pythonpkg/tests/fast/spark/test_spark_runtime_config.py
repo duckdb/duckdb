@@ -10,8 +10,9 @@ class TestSparkRuntimeConfig(object):
         # This fetches the internal runtime config from the session
         spark.conf
 
-
-    @pytest.mark.skipif(USE_ACTUAL_SPARK, reason="Getting an error with our local PySpark setup. Unclear why but not a priority.")
+    @pytest.mark.skipif(
+        USE_ACTUAL_SPARK, reason="Getting an error with our local PySpark setup. Unclear why but not a priority."
+    )
     def test_spark_runtime_config_set(self, spark):
         # Set Config
         with pytest.raises(NotImplementedError):

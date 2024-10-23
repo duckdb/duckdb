@@ -74,10 +74,7 @@ class TestDataFrameGroupBy(object):
         expected_res_str = "[Row(department='Finance', mean(salary)=87750.0), Row(department='Marketing', mean(salary)=85500.0), Row(department='Sales', mean(salary)=85666.66666666667)]"
         if USE_ACTUAL_SPARK:
             expected_res_str = expected_res_str.replace("mean(", "avg(")
-        assert (
-            str(res)
-            == expected_res_str
-        )
+        assert str(res) == expected_res_str
 
         df2 = df.groupBy("department", "state").sum("salary", "bonus").sort("department", "state")
         res = df2.collect()
