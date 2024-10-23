@@ -424,7 +424,6 @@ static char *Argv0;
 */
 static bool safe_mode = false;
 
-
 /*
 ** Prompt strings. Initialized in main. Settable with
 **   .prompt main continue
