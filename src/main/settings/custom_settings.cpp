@@ -187,6 +187,75 @@ bool AllowUnsignedExtensionsSetting::OnGlobalReset(DatabaseInstance *db, DBConfi
 }
 
 //===----------------------------------------------------------------------===//
+// Allowed Directories
+//===----------------------------------------------------------------------===//
+void AllowedDirectoriesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (!config.options.enable_external_access) {
+		throw InvalidInputException("Cannot change allowed_directories when enable_external_access is disabled");
+	}
+	config.options.allowed_directories.clear();
+	auto &list = ListValue::GetChildren(input);
+	for(auto &val : list) {
+		auto allowed_directory = val.GetValue<string>();
+		if (allowed_directory.empty()) {
+			throw InvalidInputException("Cannot provide an empty string for allowed_directory");
+		}
+		// ensure the directory ends with a path separator
+		auto path_sep = config.file_system->PathSeparator(allowed_directory);
+		if (!StringUtil::EndsWith(allowed_directory, path_sep)) {
+			allowed_directory += path_sep;
+		}
+		config.options.allowed_directories.insert(allowed_directory);
+	}
+}
+
+void AllowedDirectoriesSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (!config.options.enable_external_access) {
+		throw InvalidInputException("Cannot change allowed_directories when enable_external_access is disabled");
+	}
+	config.options.allowed_directories = DBConfig().options.allowed_directories;
+}
+
+Value AllowedDirectoriesSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	vector<Value> allowed_directories;
+	for(auto &dir : config.options.allowed_directories) {
+		allowed_directories.emplace_back(dir);
+	}
+	return Value::LIST(LogicalType::VARCHAR, std::move(allowed_directories));
+}
+
+//===----------------------------------------------------------------------===//
+// Allowed Paths
+//===----------------------------------------------------------------------===//void
+void AllowedPathsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (!config.options.enable_external_access) {
+		throw InvalidInputException("Cannot change allowed_paths when enable_external_access is disabled");
+	}
+	config.options.allowed_paths.clear();
+	auto &list = ListValue::GetChildren(input);
+	for (auto &val : list) {
+		config.options.allowed_paths.insert(val.GetValue<string>());
+	}
+}
+
+void AllowedPathsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (!config.options.enable_external_access) {
+		throw InvalidInputException("Cannot change allowed_paths when enable_external_access is disabled");
+	}
+	config.options.allowed_paths = DBConfig().options.allowed_paths;
+}
+
+Value AllowedPathsSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	vector<Value> allowed_paths;
+	for (auto &dir : config.options.allowed_paths) {
+		allowed_paths.emplace_back(dir);
+	}
+	return Value::LIST(LogicalType::VARCHAR, std::move(allowed_paths));
+}
+
+//===----------------------------------------------------------------------===//
 // Arrow Large Buffer Size
 //===----------------------------------------------------------------------===//
 void ArrowLargeBufferSizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
