@@ -878,10 +878,10 @@ typedef struct {
 #define duckdb_destroy_cast_function                duckdb_ext_api.duckdb_destroy_cast_function
 
 // Version dev
+#define duckdb_param_logical_type                duckdb_ext_api.duckdb_param_logical_type
 #define duckdb_appender_create_ext               duckdb_ext_api.duckdb_appender_create_ext
 #define duckdb_table_description_create_ext      duckdb_ext_api.duckdb_table_description_create_ext
 #define duckdb_table_description_get_column_name duckdb_ext_api.duckdb_table_description_get_column_name
-#define duckdb_param_logical_type                duckdb_ext_api.duckdb_param_logical_type
 
 //===--------------------------------------------------------------------===//
 // Struct Global Macros

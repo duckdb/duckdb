@@ -1467,7 +1467,7 @@ Returns `DUCKDB_TYPE_INVALID` if the parameter index is out of range or the stat
 
 * @param prepared_statement The prepared statement.
 * @param param_idx The parameter index.
-* @return The parameter logical type
+* @return The parameter type
 */
 DUCKDB_API duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_statement, idx_t param_idx);
 
@@ -1478,7 +1478,7 @@ Returns `nullptr` if the parameter index is out of range or the statement was no
 
 * @param prepared_statement The prepared statement.
 * @param param_idx The parameter index.
-* @return The parameter type
+* @return The parameter logical type
 */
 DUCKDB_API duckdb_logical_type duckdb_param_logical_type(duckdb_prepared_statement prepared_statement, idx_t param_idx);
 
