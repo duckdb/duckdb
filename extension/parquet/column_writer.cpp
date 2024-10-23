@@ -23,12 +23,11 @@
 #endif
 
 #include "brotli/encode.h"
-#include "zstd/common/xxhash.hpp"
-
 #include "lz4.hpp"
 #include "miniz_wrapper.hpp"
 #include "snappy.h"
 #include "zstd.h"
+#include "zstd/common/xxhash.hpp"
 
 namespace duckdb {
 
@@ -912,14 +911,16 @@ public:
 template <class T>
 class StandardWriterPageState : public ColumnWriterPageState {
 public:
-	explicit StandardWriterPageState(const idx_t total_value_count, const idx_t dictionary_size)
-	    : dbp_encoder(total_value_count), encoding(Encoding::RLE_DICTIONARY), written_value(false),
-	      bit_width(RleBpDecoder::ComputeBitWidth(dictionary_size)), dict_encoder(bit_width), initialized(false) {
+	explicit StandardWriterPageState(const idx_t total_value_count, const unordered_map<T, uint32_t>& dictionary_p)
+	    : dbp_encoder(total_value_count), encoding(Encoding::RLE_DICTIONARY), dictionary(dictionary_p), written_value(false),
+	      bit_width(RleBpDecoder::ComputeBitWidth(dictionary.size())), dict_encoder(bit_width), initialized(false) {
 	}
 	DbpEncoder dbp_encoder;
-	unordered_map<T, uint32_t> dictionary;
+
 	duckdb_parquet::Encoding::type encoding;
+	const unordered_map<T, uint32_t>& dictionary;
 	bool written_value;
+
 	uint32_t bit_width;
 	RleBpEncoder dict_encoder;
 
@@ -947,8 +948,7 @@ public:
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
 
 		// TODO move the dict in the constructor?
-		auto result = make_uniq<StandardWriterPageState<SRC>>(state.total_value_count, state.dictionary.size());
-		result->dictionary = state.dictionary; // TODO does this have to be a copy??
+		auto result = make_uniq<StandardWriterPageState<SRC>>(state.total_value_count, state.dictionary);
 		result->encoding = state.encoding;
 		return std::move(result);
 	}
@@ -1008,10 +1008,9 @@ public:
 			if (validity.RowIsValid(vector_index)) {
 				if (state.dictionary.size() < DICTIONARY_ANALYZE_THRESHOLD) {
 					const auto &src_value = data_ptr[vector_index];
-					// Try to insert into the dictionary. If it's already there, we get back the value index
+					// Try to insert into the dictionary. If it's not there yet, we get .second = true
 					auto found = state.dictionary.insert(pair<SRC, uint32_t>(src_value, new_value_index));
 					if (found.second) {
-						// string didn't exist yet in the dictionary
 						new_value_index++;
 					}
 				}
@@ -1026,7 +1025,7 @@ public:
 
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
 		if (state.dictionary.size() >= DICTIONARY_ANALYZE_THRESHOLD) {
-			// FIXME this is duplicated from above
+			// special handling for int column: dpb, otherwise plain
 			state.encoding = (type == Type::type::INT32 || type == Type::type::INT64) ? Encoding::DELTA_BINARY_PACKED
 			                                                                          : Encoding::PLAIN;
 			state.dictionary.clear();
@@ -1049,11 +1048,13 @@ public:
 
 	void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state_p,
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
+		auto &page_state = page_state_p->Cast<StandardWriterPageState<SRC>>();
+
 		const auto &mask = FlatVector::Validity(input_column);
 		const auto *data_ptr = FlatVector::GetData<SRC>(input_column);
 
-		auto &page_state = page_state_p->Cast<StandardWriterPageState<SRC>>();
-		if (page_state.encoding == Encoding::RLE_DICTIONARY) {
+		switch (page_state.encoding) {
+		case Encoding::RLE_DICTIONARY: {
 			for (idx_t r = chunk_start; r < chunk_end; r++) {
 				if (!mask.RowIsValid(r)) {
 					continue;
@@ -1071,10 +1072,10 @@ public:
 					page_state.dict_encoder.WriteValue(temp_writer, value_index);
 				}
 			}
-		} else if (page_state.encoding == Encoding::DELTA_BINARY_PACKED) {
-			auto &page_state = page_state_p->Cast<StandardWriterPageState<SRC>>();
+			break;
+		}
+		case Encoding::DELTA_BINARY_PACKED: {
 			auto &encoder = page_state.dbp_encoder;
-
 			idx_t r = chunk_start;
 			if (!page_state.initialized) {
 				// find first non-null value
@@ -1099,43 +1100,56 @@ public:
 				OP::template HandleStats<SRC, TGT>(stats, target_value);
 				encoder.WriteValue(temp_writer, target_value);
 			}
-		} else {
+			break;
+		}
+		case Encoding::PLAIN: {
 			D_ASSERT(page_state.encoding == Encoding::PLAIN);
 			TemplatedWritePlain<SRC, TGT, OP>(input_column, stats, chunk_start, chunk_end, mask, temp_writer);
+			break;
+		}
+		default:
+			throw InternalException("Unknown encoding");
 		}
 	}
 
 	void FlushDictionary(BasicColumnWriterState &state_p, ColumnWriterStatistics *stats_p) override {
 		auto &stats = stats_p->Cast<NumericStatisticsState<SRC, TGT, OP>>();
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
-		if (state.encoding != Encoding::RLE_DICTIONARY) {
-			return;
-		}
+
+		D_ASSERT (state.encoding == Encoding::RLE_DICTIONARY);
+
 		// first we need to sort the values in index order
 		auto values = vector<SRC>(state.dictionary.size());
 		for (const auto &entry : state.dictionary) {
 			values[entry.second] = entry.first;
 		}
 
-		// TODO pre- size the bloom filter using dict size
 		// aim for hit ratio of 0.01%
-		state.bloom_filter = make_uniq<ParquetBloomFilter>();
+		// see http://tfk.mit.edu/pdf/bloom.pdf
+		double f = 0.01; // TODO make this configurable
+		double k = 8.0;
+		double n = state.dictionary.size();
+		double m = -k * n / std::log(1 - std::pow(f, 1 / k));
+		auto b = MaxValue<idx_t>(NextPowerOfTwo(m / 8) / 32, 1);
+
+		D_ASSERT(b > 0 && IsPowerOfTwo(b));
+
+		state.bloom_filter = make_uniq<ParquetBloomFilter>(b);
 		// first write the contents of the dictionary page to a temporary buffer
 		auto temp_writer = make_uniq<MemoryStream>(MaxValue<idx_t>(
 		    NextPowerOfTwo(state.dictionary.size() * sizeof(TGT)), MemoryStream::DEFAULT_INITIAL_CAPACITY));
 		for (idx_t r = 0; r < values.size(); r++) {
-			auto &src_value = values[r];
-			const TGT target_value = OP::template Operation<SRC, TGT>(src_value);
+			const TGT target_value = OP::template Operation<SRC, TGT>(values[r]);
 			// update the statistics
 			OP::template HandleStats<SRC, TGT>(&stats, target_value);
+			// update the bloom filter
 			auto hash = duckdb_zstd::XXH64(&target_value, sizeof(target_value), 0);
 			state.bloom_filter->FilterInsert(hash);
+			// actually write the dictionary value
 			temp_writer->WriteData((const_data_ptr_t)&target_value, sizeof(TGT));
 		}
 		// flush the dictionary page and add it to the to-be-written pages
 		WriteDictionary(state, std::move(temp_writer), values.size());
-
-		D_ASSERT(state.bloom_filter->OneRatio() < 0.1);
 	}
 
 	//	TODO what on earth is this used for??
