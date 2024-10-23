@@ -536,8 +536,10 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 
 void ParquetWriter::Finalize() {
 
-	// dump the bloom filters right before footer
+	// dump the bloom filters right before footer, not if stuff is encrypted
+
 	for (auto &bloom_filter_entry : bloom_filters) {
+		D_ASSERT(!encryption_config);
 		// write nonsense bloom filter header
 		duckdb_parquet::BloomFilterHeader filter_header;
 		auto bloom_filter_bytes = bloom_filter_entry.bloom_filter->Get();
@@ -546,16 +548,17 @@ void ParquetWriter::Finalize() {
 		filter_header.compression.__set_UNCOMPRESSED(duckdb_parquet::Uncompressed());
 		filter_header.hash.__set_XXHASH(duckdb_parquet::XxHash());
 
-		auto bloom_filter_header_size = Write(filter_header);
-
-		// write actual data
-		WriteData(bloom_filter_bytes->ptr, bloom_filter_bytes->len);
-
 		// set metadata flags
 		auto &column_chunk =
 		    file_meta_data.row_groups[bloom_filter_entry.row_group_idx].columns[bloom_filter_entry.column_idx];
+
 		column_chunk.meta_data.__isset.bloom_filter_offset = true;
 		column_chunk.meta_data.bloom_filter_offset = writer->GetTotalWritten();
+
+		auto bloom_filter_header_size = Write(filter_header);
+		// write actual data
+		WriteData(bloom_filter_bytes->ptr, bloom_filter_bytes->len);
+
 		column_chunk.meta_data.__isset.bloom_filter_length = true;
 		column_chunk.meta_data.bloom_filter_length = bloom_filter_header_size + bloom_filter_bytes->len;
 	}
@@ -601,6 +604,9 @@ GeoParquetFileMetadata &ParquetWriter::GetGeoParquetData() {
 }
 
 void ParquetWriter::BufferBloomFilter(idx_t col_idx, unique_ptr<ParquetBloomFilter> bloom_filter) {
+	if (encryption_config) {
+		return;
+	}
 	ParquetBloomFilterEntry new_entry;
 	new_entry.bloom_filter = std::move(bloom_filter);
 	new_entry.column_idx = col_idx;
