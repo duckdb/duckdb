@@ -4720,6 +4720,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			data.openFlags |= DUCKDB_UNREDACTED_SECRETS;
 		} else if (strcmp(z, "-unsigned") == 0) {
 			data.openFlags |= DUCKDB_UNSIGNED_EXTENSIONS;
+		} else if (strcmp(z, "-safe") == 0) {
+			safe_mode = true;
 		}
 	}
 	verify_uninitialized();
@@ -4861,8 +4863,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			usage(1);
 		} else if (strcmp(z, "-no-stdin") == 0) {
 			readStdin = 0;
-		} else if (strcmp(z, "-safe") == 0) {
-			safe_mode = true;
 		} else if (strcmp(z, "-cmd") == 0 || strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
 			if (strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
 				readStdin = 0;
@@ -4898,6 +4898,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 					}
 				}
 			}
+		} else if (strcmp(z, "-safe") == 0) {
+			// safe mode has been set before
 		} else {
 			utf8_printf(stderr, "%s: Error: unknown option: %s\n", Argv0, z);
 			raw_printf(stderr, "Use -help for a list of options.\n");

@@ -47,11 +47,11 @@ class TestResult:
 
 
 class ShellTest:
-    def __init__(self, shell):
+    def __init__(self, shell, arguments = []):
         if not shell:
             raise ValueError("Please provide a shell binary")
         self.shell = shell
-        self.arguments = [shell, '--batch', '--init', '/dev/null']
+        self.arguments = [shell, '--batch', '--init', '/dev/null'] + arguments
         self.statements: List[str] = []
         self.input = None
         self.output = None
