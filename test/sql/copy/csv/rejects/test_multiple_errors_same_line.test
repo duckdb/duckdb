@@ -378,6 +378,6 @@ SELECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
 0	6	152	183	3	barks	MISSING COLUMNS	"oogie boogie"bla,3, 2023-01-04	Expected Number of Columns: 4 Found: 3
 0	7	184	199	3	current_day	CAST	oogie boogie,3, bla	Error when converting column "current_day". Could not convert string " bla" to 'DATE'
 0	7	184	203	3	barks	MISSING COLUMNS	oogie boogie,3, bla	Expected Number of Columns: 4 Found: 3
-0	8	204	204	NULL	NULL	LINE SIZE OVER MAXIMUM	oogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogie,3, bla	Maximum line size of 40 bytes exceeded. Actual Size:92 bytes.
+0	8	204	204	NULL	NULL	LINE SIZE OVER MAXIMUM	oogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogie,3, bla	Maximum line size of 40 bytes exceeded. Actual Size:91 bytes.
 0	8	204	291	3	current_day	CAST	oogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogie,3, bla	Error when converting column "current_day". Could not convert string " bla" to 'DATE'
 0	8	204	295	3	barks	MISSING COLUMNS	oogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogie,3, bla	Expected Number of Columns: 4 Found: 3

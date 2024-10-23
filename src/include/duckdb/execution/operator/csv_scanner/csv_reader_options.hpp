@@ -24,7 +24,7 @@ struct DialectOptions {
 	CSVStateMachineOptions state_machine_options;
 	//! Expected number of columns
 	idx_t num_cols = 0;
-	//! Whether or not the file has a header line
+	//! Whether the file has a header line
 	CSVOption<bool> header = false;
 	//! The date format to use (if any is specified)
 	map<LogicalTypeId, CSVOption<StrpTimeFormat>> date_format = {{LogicalTypeId::DATE, {}},
@@ -87,7 +87,7 @@ struct CSVReaderOptions {
 	//! note that this is the guaranteed line length that will succeed, longer lines may be accepted if slightly above
 	static constexpr idx_t max_line_size_default = 2097152;
 	CSVOption<idx_t> maximum_line_size = max_line_size_default;
-	//! Whether or not header names shall be normalized
+	//! Whether header names shall be normalized
 	bool normalize_names = false;
 	//! True, if column with that index must skip null check
 	unordered_set<string> force_not_null_names;
