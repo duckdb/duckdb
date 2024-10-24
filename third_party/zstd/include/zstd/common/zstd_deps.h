@@ -29,11 +29,14 @@
 #include <string.h>
 
 // DuckDB: just enable everything for amalgamation
+#ifdef DUCKDB_AMALGAMATION
 #define ZSTD_DEPS_NEED_MALLOC
 #define ZSTD_DEPS_NEED_MATH64
 #define ZSTD_DEPS_NEED_ASSERT
 #define ZSTD_DEPS_NEED_IO
 #define ZSTD_DEPS_NEED_STDINT
+#define ZSTD_MULTITHREAD
+#endif
 
 #if defined(__GNUC__) && __GNUC__ >= 4
 # define ZSTD_memcpy(d,s,l) __builtin_memcpy((d),(s),(l))

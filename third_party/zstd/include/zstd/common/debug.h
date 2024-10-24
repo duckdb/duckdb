@@ -32,6 +32,8 @@
 #ifndef DEBUG_H_12987983217
 #define DEBUG_H_12987983217
 
+#include "zstd/common/zstd_deps.h" // DuckDB: added here
+
 /* static assert is triggered at compile time, leaving no runtime artefact.
  * static assert only works with compile-time constants.
  * Also, this variant can only be used inside a function. */

@@ -37,19 +37,22 @@ if(NOT CLANG_TIDY)
       ../../third_party/thrift/thrift/transport/TBufferTransports.cpp
       ../../third_party/snappy/snappy.cc
       ../../third_party/snappy/snappy-sinksource.cc)
+  # lz4
+  set(PARQUET_EXTENSION_FILES
+      ${PARQUET_EXTENSION_FILES}
+      ../../third_party/lz4/lz4.cpp)
   # zstd
   set(PARQUET_EXTENSION_FILES
       ${PARQUET_EXTENSION_FILES}
-      ../../third_party/lz4/lz4.cpp
-      ../../third_party/zstd/decompress/zstd_ddict.cpp
-      ../../third_party/zstd/decompress/huf_decompress.cpp
-      ../../third_party/zstd/decompress/zstd_decompress.cpp
-      ../../third_party/zstd/decompress/zstd_decompress_block.cpp
       ../../third_party/zstd/common/entropy_common.cpp
       ../../third_party/zstd/common/fse_decompress.cpp
       ../../third_party/zstd/common/zstd_common.cpp
       ../../third_party/zstd/common/error_private.cpp
       ../../third_party/zstd/common/xxhash.cpp
+      ../../third_party/zstd/decompress/zstd_ddict.cpp
+      ../../third_party/zstd/decompress/huf_decompress.cpp
+      ../../third_party/zstd/decompress/zstd_decompress.cpp
+      ../../third_party/zstd/decompress/zstd_decompress_block.cpp
       ../../third_party/zstd/compress/fse_compress.cpp
       ../../third_party/zstd/compress/hist.cpp
       ../../third_party/zstd/compress/huf_compress.cpp
@@ -61,7 +64,10 @@ if(NOT CLANG_TIDY)
       ../../third_party/zstd/compress/zstd_fast.cpp
       ../../third_party/zstd/compress/zstd_lazy.cpp
       ../../third_party/zstd/compress/zstd_ldm.cpp
-      ../../third_party/zstd/compress/zstd_opt.cpp
+      ../../third_party/zstd/compress/zstd_opt.cpp)
+  # brotli
+  set(PARQUET_EXTENSION_FILES
+      ${PARQUET_EXTENSION_FILES}
       ../../third_party/brotli/enc/dictionary_hash.cpp
       ../../third_party/brotli/enc/backward_references_hq.cpp
       ../../third_party/brotli/enc/histogram.cpp
