@@ -1401,19 +1401,21 @@ if(NOT DUCKDB_EXPLICIT_PLATFORM)
   set_target_properties(duckdb_platform_binary PROPERTIES OUTPUT_NAME duckdb_platform_binary)
   set_target_properties(duckdb_platform_binary PROPERTIES RUNTIME_OUTPUT_DIRECTORY
                                          ${PROJECT_BINARY_DIR})
-  add_custom_target(
-          duckdb_platform ALL
+  add_custom_command(
+          OUTPUT ${PROJECT_BINARY_DIR}/duckdb_platform_out
+          DEPENDS duckdb_platform_binary
           COMMAND duckdb_platform_binary > ${PROJECT_BINARY_DIR}/duckdb_platform_out || ( echo "Provide explicit DUCKDB_PLATFORM=your_target_arch to avoid build-type detection of the platform" && exit 1 )
           WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
           )
-  add_dependencies(duckdb_platform duckdb_platform_binary)
 else()
-  add_custom_target(
-          duckdb_platform ALL
+  add_custom_command(
+          OUTPUT ${PROJECT_BINARY_DIR}/duckdb_platform_out
           COMMAND
-          ${CMAKE_COMMAND} -E echo_append \"${DUCKDB_EXPLICIT_PLATFORM}\" > duckdb_platform_out
+          ${CMAKE_COMMAND} -E echo_append \"${DUCKDB_EXPLICIT_PLATFORM}\" > ${PROJECT_BINARY_DIR}/duckdb_platform_out
+          WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
           )
 endif()
+add_custom_target(duckdb_platform DEPENDS ${PROJECT_BINARY_DIR}/duckdb_platform_out)
 
 if(NOT CLANG_TIDY)
   if(${BUILD_UNITTESTS})
