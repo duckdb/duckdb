@@ -94,7 +94,7 @@ class TestSimpleDBAPI(object):
         result = duckdb_cursor.fetchdf()
         arr = numpy.ma.masked_array(numpy.arange(11))
         arr.mask = [False] * 10 + [True]
-        arr = {'i': arr}
+        arr = {'i': pandas.Series(arr, dtype=pandas.Int32Dtype)}
         arr = pandas.DataFrame(arr)
         pandas.testing.assert_frame_equal(result, arr)
 
