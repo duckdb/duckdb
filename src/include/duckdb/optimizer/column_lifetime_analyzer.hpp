@@ -21,8 +21,8 @@ class BoundColumnRefExpression;
 //! the plan when no longer required
 class ColumnLifetimeAnalyzer : public LogicalOperatorVisitor {
 public:
-	explicit ColumnLifetimeAnalyzer(Optimizer &optimizer_p, bool is_root = false)
-	    : optimizer(optimizer_p), everything_referenced(is_root) {
+	explicit ColumnLifetimeAnalyzer(Optimizer &optimizer_p, LogicalOperator &root_p, bool is_root = false)
+	    : optimizer(optimizer_p), root(root_p), everything_referenced(is_root) {
 	}
 
 	void VisitOperator(LogicalOperator &op) override;
@@ -33,6 +33,7 @@ protected:
 
 private:
 	Optimizer &optimizer;
+	LogicalOperator &root;
 	//! Whether or not all the columns are referenced. This happens in the case of the root expression (because the
 	//! output implicitly refers all the columns below it)
 	bool everything_referenced;
@@ -40,9 +41,12 @@ private:
 	column_binding_set_t column_references;
 
 private:
+	void VisitOperatorInternal(LogicalOperator &op);
 	void StandardVisitOperator(LogicalOperator &op);
 	void ExtractUnusedColumnBindings(const vector<ColumnBinding> &bindings, column_binding_set_t &unused_bindings);
 	static void GenerateProjectionMap(vector<ColumnBinding> bindings, column_binding_set_t &unused_bindings,
 	                                  vector<idx_t> &map);
+	void Verify(LogicalOperator &op);
+	void AddVerificationProjection(unique_ptr<LogicalOperator> &child);
 };
 } // namespace duckdb
