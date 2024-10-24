@@ -42,7 +42,8 @@ public:
 	vector<string> names;
 	//! The table filters
 	unique_ptr<TableFilterSet> table_filters;
-	//! Currently stores info related to filters pushed down into MultiFileLists
+	//! Currently stores info related to filters pushed down into MultiFileLists and sample rate pushed down into the
+	//! table scan
 	ExtraOperatorInfo extra_info;
 	//! Parameters
 	vector<Value> parameters;

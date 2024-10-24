@@ -30,6 +30,19 @@ public:
 	bool readonly;
 	//! The columns of the table.
 	vector<ColumnDefinition> columns;
+
+public:
+	idx_t PhysicalColumnCount() const {
+		idx_t count = 0;
+		for (auto &column : columns) {
+			if (column.Generated()) {
+				continue;
+			}
+			count++;
+		}
+		D_ASSERT(count != 0);
+		return count;
+	}
 };
 
 } // namespace duckdb

@@ -170,6 +170,16 @@ public:
 		user_variables.erase(name);
 	}
 
+	template <class OP>
+	typename OP::RETURN_TYPE GetSetting(const ClientContext &context) {
+		return OP::GetSetting(context).template GetValue<typename OP::RETURN_TYPE>();
+	}
+
+	template <class OP>
+	Value GetSettingValue(const ClientContext &context) {
+		return OP::GetSetting(context);
+	}
+
 public:
 	void SetDefaultStreamingBufferSize();
 };

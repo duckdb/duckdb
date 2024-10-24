@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// parquet_statistics.hpp
+//
+//
+//===----------------------------------------------------------------------===/
+
 #pragma once
 
 #include "duckdb.hpp"
@@ -8,8 +16,8 @@
 
 namespace duckdb {
 
-using duckdb_parquet::format::ColumnChunk;
-using duckdb_parquet::format::SchemaElement;
+using duckdb_parquet::ColumnChunk;
+using duckdb_parquet::SchemaElement;
 
 struct LogicalType;
 class ColumnReader;
@@ -19,7 +27,7 @@ struct ParquetStatisticsUtils {
 	static unique_ptr<BaseStatistics> TransformColumnStatistics(const ColumnReader &reader,
 	                                                            const vector<ColumnChunk> &columns);
 
-	static Value ConvertValue(const LogicalType &type, const duckdb_parquet::format::SchemaElement &schema_ele,
+	static Value ConvertValue(const LogicalType &type, const duckdb_parquet::SchemaElement &schema_ele,
 	                          const std::string &stats);
 };
 
