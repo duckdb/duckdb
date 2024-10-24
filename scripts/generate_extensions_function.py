@@ -507,7 +507,7 @@ def write_header(data: ExtensionData):
                                                                 {"gcs", "httpfs"},
                                                                 {"azure", "azure"},
                                                                 {"huggingface", "httpfs"},
-                                                                {"bearer", "httpfs"}
+                                                                {"http", ""}}
     }; // EXTENSION_SECRET_TYPES
                                                                 
                                                                 
