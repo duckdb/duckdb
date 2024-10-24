@@ -626,8 +626,8 @@ static int notNormalFile(const char *zFile) {
 ** a previous call to this routine that may be reused.
 */
 static char *local_getline(char *zLine, FILE *in) {
-	int nLine = zLine == 0 ? 0 : 100;
-	int n = 0;
+	idx_t nLine = zLine == 0 ? 0 : 100;
+	idx_t n = 0;
 
 #if defined(_WIN32) || defined(WIN32)
 	int is_stdin = stdin_is_interactive && in == stdin;
@@ -669,7 +669,7 @@ static char *local_getline(char *zLine, FILE *in) {
 	if (is_stdin && !is_utf8) {
 		char *zTrans = sqlite3_win32_mbcs_to_utf8_v2(zLine, 0);
 		if (zTrans) {
-			int nTrans = ShellState::StringLength(zTrans) + 1;
+			idx_t nTrans = ShellState::StringLength(zTrans) + 1;
 			if (nTrans > nLine) {
 				zLine = (char *)realloc(zLine, nTrans);
 				if (zLine == 0)
@@ -4312,7 +4312,7 @@ static char *find_home_dir(int clearFlag) {
 #if defined(_WIN32) || defined(WIN32)
 	if (!home_dir) {
 		char *zDrive, *zPath;
-		int n;
+		idx_t n;
 		zDrive = getenv("HOMEDRIVE");
 		zPath = getenv("HOMEPATH");
 		if (zDrive && zPath) {
