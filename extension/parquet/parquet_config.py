@@ -15,7 +15,7 @@ include_directories = [
         'third_party/snappy',
         'third_party/mbedtls',
         'third_party/mbedtls/include',
-        'third_party/zstd/include'
+        'third_party/zstd/include',
     ]
 ]
 # source files
