@@ -45,7 +45,6 @@ void ColumnLifetimeAnalyzer::GenerateProjectionMap(vector<ColumnBinding> binding
 void ColumnLifetimeAnalyzer::StandardVisitOperator(LogicalOperator &op) {
 	VisitOperatorExpressions(op);
 	VisitOperatorChildren(op);
-	Verify(op);
 }
 
 void ExtractColumnBindings(Expression &expr, vector<ColumnBinding> &bindings) {
@@ -57,6 +56,7 @@ void ExtractColumnBindings(Expression &expr, vector<ColumnBinding> &bindings) {
 }
 
 void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
+	Verify(op);
 	if (TopN::CanOptimize(op) && op.children[0]->type == LogicalOperatorType::LOGICAL_ORDER_BY) {
 		// Let's not mess with this, TopN is more important than projection maps
 		// TopN does not support a projection map like Order does
@@ -164,7 +164,7 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 }
 
 void ColumnLifetimeAnalyzer::Verify(LogicalOperator &op) {
-	// #ifdef DUCKDB_ALTERNATIVE_VERIFY
+#ifdef DEBUG
 	if (everything_referenced) {
 		return;
 	}
@@ -184,7 +184,7 @@ void ColumnLifetimeAnalyzer::Verify(LogicalOperator &op) {
 	default:
 		break;
 	}
-	// #endif
+#endif
 }
 
 void ColumnLifetimeAnalyzer::AddVerificationProjection(unique_ptr<LogicalOperator> &child) {
@@ -200,7 +200,7 @@ void ColumnLifetimeAnalyzer::AddVerificationProjection(unique_ptr<LogicalOperato
 
 	// First fill with all NULLs
 	for (idx_t col_idx = 0; col_idx < projection_column_count; col_idx++) {
-		expressions.emplace_back(make_uniq<BoundConstantExpression>(Value()));
+		expressions.emplace_back(make_uniq<BoundConstantExpression>(Value(LogicalType::UTINYINT)));
 	}
 
 	// Now place the "real" columns in their respective positions, while keeping track of which column becomes which
