@@ -16,6 +16,7 @@ class BufferManager;
 class DuckTransaction;
 class StorageCommitState;
 class WriteAheadLog;
+struct UndoBufferPointer;
 
 struct UndoBufferProperties {
 	idx_t estimated_size = 0;
@@ -26,6 +27,9 @@ struct UndoBufferProperties {
 };
 
 struct UndoBufferEntry {
+	explicit UndoBufferEntry(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {}
+
+	BufferManager &buffer_manager;
 	shared_ptr<BlockHandle> block;
 	idx_t position = 0;
 	idx_t capacity = 0;
@@ -33,22 +37,46 @@ struct UndoBufferEntry {
 	optional_ptr<UndoBufferEntry> prev;
 };
 
-struct UndoBufferPointer {
-	optional_ptr<UndoBufferEntry> entry;
-	idx_t position;
-};
-
 struct UndoBufferReference {
-	UndoBufferReference(UndoBufferEntry &entry_p, BufferHandle handle_p, idx_t position) : entry(entry_p), handle(std::move(handle_p)), position(position) {
+	UndoBufferReference() : entry(nullptr), position(0) {}
+	UndoBufferReference(UndoBufferEntry &entry_p, BufferHandle handle_p, idx_t position) : entry(&entry_p), handle(std::move(handle_p)), position(position) {
 	}
 
-	reference<UndoBufferEntry> entry;
+	optional_ptr<UndoBufferEntry> entry;
 	BufferHandle handle;
 	idx_t position;
 
 	data_ptr_t Ptr() {
 		return handle.Ptr() + position;
 	}
+	bool IsSet() const{
+		return entry;
+	}
+
+	UndoBufferPointer GetBufferPointer();
+};
+
+struct UndoBufferPointer {
+	UndoBufferPointer() : entry(nullptr), position(0) {}
+	UndoBufferPointer(UndoBufferEntry &entry_p, idx_t position) : entry(&entry_p), position(position) { }
+
+	UndoBufferEntry *entry;
+	idx_t position;
+
+	UndoBufferReference Pin() const;
+	bool IsSet() const {
+		return entry;
+	}
+};
+
+struct UndoBufferAllocator {
+	explicit UndoBufferAllocator(BufferManager &buffer_manager);
+
+	UndoBufferReference Allocate(idx_t alloc_len);
+
+	BufferManager &buffer_manager;
+	unique_ptr<UndoBufferEntry> head;
+	optional_ptr<UndoBufferEntry> tail;
 };
 
 //! The undo buffer of a transaction is used to hold previous versions of tuples
@@ -86,9 +114,7 @@ public:
 
 private:
 	DuckTransaction &transaction;
-	BufferManager &buffer_manager;
-	unique_ptr<UndoBufferEntry> head;
-	optional_ptr<UndoBufferEntry> tail;
+	UndoBufferAllocator allocator;
 
 private:
 	template <class T>

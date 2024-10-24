@@ -117,16 +117,12 @@ void DuckTransaction::PushAppend(DataTable &table, idx_t start_row, idx_t row_co
 	append_info->count = row_count;
 }
 
-UpdateInfo *DuckTransaction::CreateUpdateInfo(idx_t type_size, idx_t entries) {
-	throw InvalidInputException("FIXME: push CreateUpdateInfo into undo buffer");
-	idx_t alloc_size = sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE;
+UndoBufferReference DuckTransaction::CreateUpdateInfo(idx_t type_size, idx_t entries) {
+	idx_t alloc_size = UpdateInfo::GetAllocSize(type_size);
 	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::UPDATE_TUPLE, alloc_size);
-	auto update_info = reinterpret_cast<UpdateInfo *>(undo_entry.Ptr());
-	update_info->max = STANDARD_VECTOR_SIZE;
-	update_info->tuples = reinterpret_cast<sel_t *>(undo_entry.Ptr() + sizeof(UpdateInfo));
-	update_info->tuple_data = undo_entry.Ptr() + sizeof(UpdateInfo) + sizeof(sel_t) * update_info->max;
-	update_info->version_number = transaction_id;
-	return update_info;
+	auto &update_info = UpdateInfo::Get(undo_entry);
+	UpdateInfo::Initialize(update_info, transaction_id);
+	return undo_entry;
 }
 
 void DuckTransaction::PushSequenceUsage(SequenceCatalogEntry &sequence, const SequenceData &data) {
