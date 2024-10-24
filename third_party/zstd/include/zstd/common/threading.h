@@ -14,6 +14,9 @@
 #ifndef THREADING_H_938743
 #define THREADING_H_938743
 
+// DuckDB: just enable everything for amalgamation
+#define ZSTD_MULTITHREAD
+
 #include "zstd/common/debug.h"
 
 #if defined(ZSTD_MULTITHREAD) && defined(_WIN32)
