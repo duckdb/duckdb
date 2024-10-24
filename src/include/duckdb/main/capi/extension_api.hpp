@@ -426,6 +426,13 @@ typedef struct {
 	                                        duckdb_arrow_schema arrow_schema, duckdb_arrow_array arrow_array,
 	                                        duckdb_arrow_stream *out_stream);
 	duckdb_data_chunk (*duckdb_stream_fetch_chunk)(duckdb_result result);
+	// dev
+	// WARNING! the functions below are not (yet) stable
+
+	duckdb_vector (*duckdb_map_vector_get_keys)(duckdb_vector vector);
+	duckdb_vector (*duckdb_map_vector_get_values)(duckdb_vector vector);
+	duckdb_vector (*duckdb_union_vector_get_tags)(duckdb_vector vector);
+	duckdb_vector (*duckdb_union_vector_get_member)(duckdb_vector vector, idx_t tag);
 } duckdb_ext_api_v0;
 
 //===--------------------------------------------------------------------===//
@@ -808,6 +815,10 @@ inline duckdb_ext_api_v0 CreateAPIv0() {
 	result.duckdb_arrow_scan = duckdb_arrow_scan;
 	result.duckdb_arrow_array_scan = duckdb_arrow_array_scan;
 	result.duckdb_stream_fetch_chunk = duckdb_stream_fetch_chunk;
+	result.duckdb_map_vector_get_keys = duckdb_map_vector_get_keys;
+	result.duckdb_map_vector_get_values = duckdb_map_vector_get_values;
+	result.duckdb_union_vector_get_tags = duckdb_union_vector_get_tags;
+	result.duckdb_union_vector_get_member = duckdb_union_vector_get_member;
 	return result;
 }
 

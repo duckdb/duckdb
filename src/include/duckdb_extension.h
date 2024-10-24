@@ -230,6 +230,10 @@ typedef struct {
 	duckdb_state (*duckdb_list_vector_reserve)(duckdb_vector vector, idx_t required_capacity);
 	duckdb_vector (*duckdb_struct_vector_get_child)(duckdb_vector vector, idx_t index);
 	duckdb_vector (*duckdb_array_vector_get_child)(duckdb_vector vector);
+	duckdb_vector (*duckdb_map_vector_get_keys)(duckdb_vector vector);
+	duckdb_vector (*duckdb_map_vector_get_values)(duckdb_vector vector);
+	duckdb_vector (*duckdb_union_vector_get_tags)(duckdb_vector vector);
+	duckdb_vector (*duckdb_union_vector_get_member)(duckdb_vector vector, idx_t tag);
 	bool (*duckdb_validity_row_is_valid)(uint64_t *validity, idx_t row);
 	void (*duckdb_validity_set_row_validity)(uint64_t *validity, idx_t row, bool valid);
 	void (*duckdb_validity_set_row_invalid)(uint64_t *validity, idx_t row);
@@ -486,6 +490,15 @@ typedef struct {
 	duckdb_data_chunk (*duckdb_stream_fetch_chunk)(duckdb_result result);
 #endif
 
+#ifdef DUCKDB_EXTENSION_API_VERSION_DEV // dev
+	// WARNING! the functions below are not (yet) stable
+
+	duckdb_vector (*duckdb_map_vector_get_keys)(duckdb_vector vector);
+	duckdb_vector (*duckdb_map_vector_get_values)(duckdb_vector vector);
+	duckdb_vector (*duckdb_union_vector_get_tags)(duckdb_vector vector);
+	duckdb_vector (*duckdb_union_vector_get_member)(duckdb_vector vector, idx_t tag);
+#endif
+
 } duckdb_ext_api_v0;
 
 //===--------------------------------------------------------------------===//
@@ -713,6 +726,10 @@ typedef struct {
 #define duckdb_list_vector_reserve                     duckdb_ext_api.duckdb_list_vector_reserve
 #define duckdb_struct_vector_get_child                 duckdb_ext_api.duckdb_struct_vector_get_child
 #define duckdb_array_vector_get_child                  duckdb_ext_api.duckdb_array_vector_get_child
+#define duckdb_map_vector_get_keys                     duckdb_ext_api.duckdb_map_vector_get_keys
+#define duckdb_map_vector_get_values                   duckdb_ext_api.duckdb_map_vector_get_values
+#define duckdb_union_vector_get_tags                   duckdb_ext_api.duckdb_union_vector_get_tags
+#define duckdb_union_vector_get_member                 duckdb_ext_api.duckdb_union_vector_get_member
 #define duckdb_validity_row_is_valid                   duckdb_ext_api.duckdb_validity_row_is_valid
 #define duckdb_validity_set_row_validity               duckdb_ext_api.duckdb_validity_set_row_validity
 #define duckdb_validity_set_row_invalid                duckdb_ext_api.duckdb_validity_set_row_invalid
@@ -864,6 +881,12 @@ typedef struct {
 #define duckdb_cast_function_set_row_error          duckdb_ext_api.duckdb_cast_function_set_row_error
 #define duckdb_register_cast_function               duckdb_ext_api.duckdb_register_cast_function
 #define duckdb_destroy_cast_function                duckdb_ext_api.duckdb_destroy_cast_function
+
+// Version dev
+#define duckdb_map_vector_get_keys     duckdb_ext_api.duckdb_map_vector_get_keys
+#define duckdb_map_vector_get_values   duckdb_ext_api.duckdb_map_vector_get_values
+#define duckdb_union_vector_get_tags   duckdb_ext_api.duckdb_union_vector_get_tags
+#define duckdb_union_vector_get_member duckdb_ext_api.duckdb_union_vector_get_member
 
 //===--------------------------------------------------------------------===//
 // Struct Global Macros
