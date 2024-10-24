@@ -1,5 +1,0 @@
-# name: test/sql/alter/add_pk/test_add_pk_reclaim_storage.test
-# description: Test that we reclaim the storage after adding and dropping a PK.
-# group: [add_pk]
-
-# TODO.

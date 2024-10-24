@@ -29,11 +29,13 @@
 
 namespace duckdb {
 
-IndexStorageInfo GetIndexInfo(IndexConstraintType type, const string &table, const column_defs_t &columns) {
+IndexStorageInfo GetIndexInfo(IndexConstraintType type, const string &table, const ColumnList &columns,
+                              const vector<LogicalIndex> &column_indexes) {
 	auto name = EnumUtil::ToString(type);
 	string column_names;
-	for (const auto &col : columns) {
-		column_names += "_" + col.get().Name();
+	for (const auto &idx : column_indexes) {
+		auto &col = columns.GetColumn(idx);
+		column_names += "_" + col.Name();
 	}
 	return IndexStorageInfo(name + "_" + table + column_names);
 }
@@ -673,15 +675,21 @@ void DataTable::AddAndCreateIndex(LocalStorage &local_storage, DataTable &parent
 	auto &unique = constraint.Cast<BoundUniqueConstraint>();
 	auto constraint_type = unique.is_primary_key ? IndexConstraintType::PRIMARY : IndexConstraintType::UNIQUE;
 
-	vector<reference<const ColumnDefinition>> columns;
-	columns.reserve(unique.keys.size());
-	for (const auto &key : unique.keys) {
-		columns.push_back(column_definitions[key.index]);
+	vector<ColumnDefinition> col_def_copies;
+	for (const auto &col_def : column_definitions) {
+		col_def_copies.push_back(col_def.Copy());
+	}
+	ColumnList column_list(std::move(col_def_copies));
+
+	vector<LogicalIndex> column_indexes;
+	for (const auto &physical_index : unique.keys) {
+		auto &col = column_list.GetColumn(physical_index);
+		column_indexes.push_back(col.Logical());
 	}
 
 	auto initialize_data = false;
 	if (!unique.info.IsValid()) {
-		unique.info = GetIndexInfo(constraint_type, info->table, columns);
+		unique.info = GetIndexInfo(constraint_type, info->table, column_list, column_indexes);
 		initialize_data = true;
 	}
 	D_ASSERT(!unique.info.name.empty());
@@ -696,21 +704,22 @@ void DataTable::AddAndCreateIndex(LocalStorage &local_storage, DataTable &parent
 	});
 
 	// Fetch the column types and create bound column reference expressions.
-	vector<column_t> column_ids;
+	vector<column_t> physical_ids;
 	vector<unique_ptr<Expression>> global_expressions;
 	vector<unique_ptr<Expression>> local_expressions;
 
-	for (const auto &column : columns) {
-		auto binding = ColumnBinding(0, column_ids.size());
-		auto ref = make_uniq<BoundColumnRefExpression>(column.get().Name(), column.get().Type(), binding);
+	for (const auto &logical_index : column_indexes) {
+		auto binding = ColumnBinding(0, physical_ids.size());
+		auto &col = column_list.GetColumn(logical_index);
+		auto ref = make_uniq<BoundColumnRefExpression>(col.Name(), col.Type(), binding);
 		global_expressions.push_back(ref->Copy());
 		local_expressions.push_back(ref->Copy());
-		column_ids.push_back(column.get().Physical().index);
+		physical_ids.push_back(col.Physical().index);
 	}
 
 	// Create the global index.
 	auto &io_manager = TableIOManager::Get(*this);
-	auto global_art = make_uniq<ART>(unique.info.name, constraint_type, column_ids, io_manager,
+	auto global_art = make_uniq<ART>(unique.info.name, constraint_type, physical_ids, io_manager,
 	                                 std::move(global_expressions), db, nullptr, unique.info);
 
 	// If this is a WAL replay, then we only create the global index and return.
@@ -724,7 +733,7 @@ void DataTable::AddAndCreateIndex(LocalStorage &local_storage, DataTable &parent
 
 	// Otherwise, we also create the local index.
 	auto local_art =
-	    make_uniq<ART>(unique.info.name, constraint_type, column_ids, io_manager, std::move(local_expressions), db);
+	    make_uniq<ART>(unique.info.name, constraint_type, physical_ids, io_manager, std::move(local_expressions), db);
 	local_storage.AppendToIndex(parent, *local_art);
 	local_storage.AddIndex(parent, std::move(local_art));
 }
@@ -1542,27 +1551,28 @@ vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo() {
 //===--------------------------------------------------------------------===//
 // Index Constraint Creation
 //===--------------------------------------------------------------------===//
-void DataTable::AddIndex(const column_defs_t &columns, const IndexConstraintType type,
-                         const IndexStorageInfo &index_info) {
+void DataTable::AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes,
+                         const IndexConstraintType type, const IndexStorageInfo &index_info) {
 	if (!IsRoot()) {
 		throw TransactionException("cannot add an index to a table that has been altered!");
 	}
 
 	// Fetch the column types and create bound column reference expressions.
-	vector<column_t> column_ids;
+	vector<column_t> physical_ids;
 	vector<unique_ptr<Expression>> expressions;
 
-	for (const auto &column : columns) {
-		auto binding = ColumnBinding(0, column_ids.size());
-		auto ref = make_uniq<BoundColumnRefExpression>(column.get().Name(), column.get().Type(), binding);
+	for (const auto column_index : column_indexes) {
+		auto binding = ColumnBinding(0, physical_ids.size());
+		auto &col = columns.GetColumn(column_index);
+		auto ref = make_uniq<BoundColumnRefExpression>(col.Name(), col.Type(), binding);
 		expressions.push_back(std::move(ref));
-		column_ids.push_back(column.get().Physical().index);
+		physical_ids.push_back(col.Physical().index);
 	}
 
 	// Create an ART around the expressions.
 	auto &io_manager = TableIOManager::Get(*this);
-	auto art =
-	    make_uniq<ART>(index_info.name, type, column_ids, io_manager, std::move(expressions), db, nullptr, index_info);
+	auto art = make_uniq<ART>(index_info.name, type, physical_ids, io_manager, std::move(expressions), db, nullptr,
+	                          index_info);
 	info->indexes.AddIndex(std::move(art));
 }
 

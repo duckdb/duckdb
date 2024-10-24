@@ -38,16 +38,17 @@ IndexStorageInfo GetIndexInfo(const IndexConstraintType &constraint_type, const 
 	return info;
 }
 
-column_defs_t GetUniqueConstraintKeys(const ColumnList &cols, const UniqueConstraint &constraint) {
-	column_defs_t key_ids;
+vector<LogicalIndex> GetConstraintIndexes(const ColumnList &cols, const UniqueConstraint &constraint) {
 	if (constraint.HasIndex()) {
-		key_ids.push_back(cols.GetColumn(constraint.GetIndex()));
-	} else {
-		for (auto &keyname : constraint.GetColumnNames()) {
-			key_ids.push_back(cols.GetColumn(keyname));
-		}
+		return {constraint.GetIndex()};
 	}
-	return key_ids;
+
+	vector<LogicalIndex> logical_columns;
+	for (auto name : constraint.GetColumnNames()) {
+		auto idx = cols.GetColumnIndex(name);
+		logical_columns.push_back(idx);
+	}
+	return logical_columns;
 }
 
 DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
@@ -63,12 +64,12 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 	}
 
 	// create the physical storage
-	vector<ColumnDefinition> storage_columns;
+	vector<ColumnDefinition> column_defs;
 	for (auto &col_def : columns.Physical()) {
-		storage_columns.push_back(col_def.Copy());
+		column_defs.push_back(col_def.Copy());
 	}
 	storage = make_shared_ptr<DataTable>(catalog.GetAttached(), StorageManager::Get(catalog).GetTableIOManager(&info),
-	                                     schema.name, name, std::move(storage_columns), std::move(info.data));
+	                                     schema.name, name, std::move(column_defs), std::move(info.data));
 
 	// Create the unique indexes for the UNIQUE, PRIMARY KEY, and FOREIGN KEY constraints.
 	idx_t indexes_idx = 0;
@@ -83,10 +84,10 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				constraint_type = IndexConstraintType::PRIMARY;
 			}
 
-			auto key_ids = GetUniqueConstraintKeys(columns, unique);
+			auto column_indexes = GetConstraintIndexes(columns, unique);
 			if (info.indexes.empty()) {
 				auto index_info = GetIndexInfo(constraint_type, false, info.base, i);
-				storage->AddIndex(key_ids, constraint_type, index_info);
+				storage->AddIndex(columns, column_indexes, constraint_type, index_info);
 				continue;
 			}
 
@@ -97,26 +98,26 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 			}
 
 			// Now we can add the index.
-			storage->AddIndex(key_ids, constraint_type, info.indexes[indexes_idx++]);
+			storage->AddIndex(columns, column_indexes, constraint_type, info.indexes[indexes_idx++]);
 			continue;
 		}
 
 		if (constraint->type == ConstraintType::FOREIGN_KEY) {
-			// foreign key constraint: create a foreign key index
+			// Create a FOREIGN KEY index.
 			auto &bfk = constraint->Cast<ForeignKeyConstraint>();
 			if (bfk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE ||
 			    bfk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
 
-				column_defs_t idx_columns;
-				idx_columns.reserve(bfk.info.fk_keys.size());
-				for (const auto &key : bfk.info.fk_keys) {
-					idx_columns.push_back(columns.GetColumn(key));
+				vector<LogicalIndex> column_indexes;
+				for (const auto &physical_index : bfk.info.fk_keys) {
+					auto &col = columns.GetColumn(physical_index);
+					column_indexes.push_back(col.Logical());
 				}
 
 				if (info.indexes.empty()) {
 					auto constraint_type = IndexConstraintType::FOREIGN;
 					auto index_info = GetIndexInfo(constraint_type, false, info.base, i);
-					storage->AddIndex(idx_columns, constraint_type, index_info);
+					storage->AddIndex(columns, column_indexes, constraint_type, index_info);
 					continue;
 				}
 
@@ -127,7 +128,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				}
 
 				// Now we can add the index.
-				storage->AddIndex(idx_columns, IndexConstraintType::FOREIGN, info.indexes[indexes_idx++]);
+				storage->AddIndex(columns, column_indexes, IndexConstraintType::FOREIGN, info.indexes[indexes_idx++]);
 			}
 		}
 	}
