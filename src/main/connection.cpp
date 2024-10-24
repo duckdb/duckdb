@@ -321,7 +321,11 @@ uint64_t Connection::GetSnapshotId() {
   return context->GetSnapshotId();
 }
 
-unique_ptr<QueryResult> Connection::CreateSnapshot() {
+void Connection::RemoveSnapshot(const char *snapshot_file_name) {
+  context->RemoveSnapshot(snapshot_file_name);
+}
+
+pair<string, unique_ptr<QueryResult>> Connection::CreateSnapshot() {
   auto result = context->CreateSnapshot();
   return result;
 }

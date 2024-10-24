@@ -195,7 +195,8 @@ public:
 	DUCKDB_API bool ExecutionIsFinished();
 
         DUCKDB_API uint64_t GetSnapshotId();
-        DUCKDB_API unique_ptr<QueryResult> CreateSnapshot();
+        DUCKDB_API pair<string, unique_ptr<QueryResult>> CreateSnapshot();
+        DUCKDB_API void RemoveSnapshot(const char *snapshot_file_name);
 	//! Process an error for display to the user
 	DUCKDB_API void ProcessError(ErrorData &error, const string &query) const;
 
