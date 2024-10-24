@@ -1057,6 +1057,80 @@ def ltrim(col: "ColumnOrName") -> Column:
     return _invoke_function_over_columns("ltrim", col)
 
 
+def endswith(str: "ColumnOrName", suffix: "ColumnOrName") -> Column:
+    """
+    Returns a boolean. The value is True if str ends with suffix.
+    Returns NULL if either input expression is NULL. Otherwise, returns False.
+    Both str or suffix must be of STRING or BINARY type.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    str : :class:`~pyspark.sql.Column` or str
+        A column of string.
+    suffix : :class:`~pyspark.sql.Column` or str
+        A column of string, the suffix.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([("Spark SQL", "Spark",)], ["a", "b"])
+    >>> df.select(endswith(df.a, df.b).alias('r')).collect()
+    [Row(r=False)]
+
+    >>> df = spark.createDataFrame([("414243", "4243",)], ["e", "f"])
+    >>> df = df.select(to_binary("e").alias("e"), to_binary("f").alias("f"))
+    >>> df.printSchema()
+    root
+     |-- e: binary (nullable = true)
+     |-- f: binary (nullable = true)
+    >>> df.select(endswith("e", "f"), endswith("f", "e")).show()
+    +--------------+--------------+
+    |endswith(e, f)|endswith(f, e)|
+    +--------------+--------------+
+    |          true|         false|
+    +--------------+--------------+
+    """
+    return _invoke_function_over_columns("suffix", str, suffix)
+
+
+def startswith(str: "ColumnOrName", prefix: "ColumnOrName") -> Column:
+    """
+    Returns a boolean. The value is True if str starts with prefix.
+    Returns NULL if either input expression is NULL. Otherwise, returns False.
+    Both str or prefix must be of STRING or BINARY type.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    str : :class:`~pyspark.sql.Column` or str
+        A column of string.
+    prefix : :class:`~pyspark.sql.Column` or str
+        A column of string, the prefix.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([("Spark SQL", "Spark",)], ["a", "b"])
+    >>> df.select(startswith(df.a, df.b).alias('r')).collect()
+    [Row(r=True)]
+
+    >>> df = spark.createDataFrame([("414243", "4142",)], ["e", "f"])
+    >>> df = df.select(to_binary("e").alias("e"), to_binary("f").alias("f"))
+    >>> df.printSchema()
+    root
+     |-- e: binary (nullable = true)
+     |-- f: binary (nullable = true)
+    >>> df.select(startswith("e", "f"), startswith("f", "e")).show()
+    +----------------+----------------+
+    |startswith(e, f)|startswith(f, e)|
+    +----------------+----------------+
+    |            true|           false|
+    +----------------+----------------+
+    """
+    return _invoke_function_over_columns("starts_with", str, prefix)
+
+
 def length(col: "ColumnOrName") -> Column:
     """Computes the character length of string data or number of bytes of binary data.
     The length of character data includes the trailing spaces. The length of binary data
@@ -1832,3 +1906,470 @@ def acos(col: "ColumnOrName") -> Column:
     +--------+
     """
     return _invoke_function_over_columns("acos", col)
+
+
+def call_function(funcName: str, *cols: "ColumnOrName") -> Column:
+    """
+    Call a SQL function.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    funcName : str
+        function name that follows the SQL identifier syntax (can be quoted, can be qualified)
+    cols : :class:`~pyspark.sql.Column` or str
+        column names or :class:`~pyspark.sql.Column`\\s to be used in the function
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        result of executed function.
+
+    Examples
+    --------
+    >>> from pyspark.sql.functions import call_udf, col
+    >>> from pyspark.sql.types import IntegerType, StringType
+    >>> df = spark.createDataFrame([(1, "a"),(2, "b"), (3, "c")],["id", "name"])
+    >>> _ = spark.udf.register("intX2", lambda i: i * 2, IntegerType())
+    >>> df.select(call_function("intX2", "id")).show()
+    +---------+
+    |intX2(id)|
+    +---------+
+    |        2|
+    |        4|
+    |        6|
+    +---------+
+    >>> _ = spark.udf.register("strX2", lambda s: s * 2, StringType())
+    >>> df.select(call_function("strX2", col("name"))).show()
+    +-----------+
+    |strX2(name)|
+    +-----------+
+    |         aa|
+    |         bb|
+    |         cc|
+    +-----------+
+    >>> df.select(call_function("avg", col("id"))).show()
+    +-------+
+    |avg(id)|
+    +-------+
+    |    2.0|
+    +-------+
+    >>> _ = spark.sql("CREATE FUNCTION custom_avg AS 'test.org.apache.spark.sql.MyDoubleAvg'")
+    ... # doctest: +SKIP
+    >>> df.select(call_function("custom_avg", col("id"))).show()
+    ... # doctest: +SKIP
+    +------------------------------------+
+    |spark_catalog.default.custom_avg(id)|
+    +------------------------------------+
+    |                               102.0|
+    +------------------------------------+
+    >>> df.select(call_function("spark_catalog.default.custom_avg", col("id"))).show()
+    ... # doctest: +SKIP
+    +------------------------------------+
+    |spark_catalog.default.custom_avg(id)|
+    +------------------------------------+
+    |                               102.0|
+    +------------------------------------+
+    """
+    return _invoke_function_over_columns(funcName, *cols)
+
+
+def covar_pop(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
+    """Returns a new :class:`~pyspark.sql.Column` for the population covariance of ``col1`` and
+    ``col2``.
+
+    .. versionadded:: 2.0.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col1 : :class:`~pyspark.sql.Column` or str
+        first column to calculate covariance.
+    col1 : :class:`~pyspark.sql.Column` or str
+        second column to calculate covariance.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        covariance of these two column values.
+
+    Examples
+    --------
+    >>> a = [1] * 10
+    >>> b = [1] * 10
+    >>> df = spark.createDataFrame(zip(a, b), ["a", "b"])
+    >>> df.agg(covar_pop("a", "b").alias('c')).collect()
+    [Row(c=0.0)]
+    """
+    return _invoke_function_over_columns("covar_pop", col1, col2)
+
+
+def covar_samp(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
+    """Returns a new :class:`~pyspark.sql.Column` for the sample covariance of ``col1`` and
+    ``col2``.
+
+    .. versionadded:: 2.0.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col1 : :class:`~pyspark.sql.Column` or str
+        first column to calculate covariance.
+    col1 : :class:`~pyspark.sql.Column` or str
+        second column to calculate covariance.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        sample covariance of these two column values.
+
+    Examples
+    --------
+    >>> a = [1] * 10
+    >>> b = [1] * 10
+    >>> df = spark.createDataFrame(zip(a, b), ["a", "b"])
+    >>> df.agg(covar_samp("a", "b").alias('c')).collect()
+    [Row(c=0.0)]
+    """
+    return _invoke_function_over_columns("covar_samp", col1, col2)
+
+
+def exp(col: "ColumnOrName") -> Column:
+    """
+    Computes the exponential of the given value.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        column to calculate exponential for.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        exponential of the given value.
+
+    Examples
+    --------
+    >>> df = spark.range(1)
+    >>> df.select(exp(lit(0))).show()
+    +------+
+    |EXP(0)|
+    +------+
+    |   1.0|
+    +------+
+    """
+    return _invoke_function_over_columns("exp", col)
+
+
+def factorial(col: "ColumnOrName") -> Column:
+    """
+    Computes the factorial of the given value.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        a column to calculate factorial for.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        factorial of given value.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(5,)], ['n'])
+    >>> df.select(factorial(df.n).alias('f')).collect()
+    [Row(f=120)]
+    """
+    return _invoke_function_over_columns("factorial", col)
+
+
+def log2(col: "ColumnOrName") -> Column:
+    """Returns the base-2 logarithm of the argument.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        a column to calculate logariphm for.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        logariphm of given value.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(4,)], ['a'])
+    >>> df.select(log2('a').alias('log2')).show()
+    +----+
+    |log2|
+    +----+
+    | 2.0|
+    +----+
+    """
+    return _invoke_function_over_columns("log2", col)
+
+
+def ln(col: "ColumnOrName") -> Column:
+    """Returns the natural logarithm of the argument.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        a column to calculate logariphm for.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        natural logarithm of given value.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(4,)], ['a'])
+    >>> df.select(ln('a')).show()
+    +------------------+
+    |             ln(a)|
+    +------------------+
+    |1.3862943611198906|
+    +------------------+
+    """
+    return _invoke_function_over_columns("ln", col)
+
+
+def degrees(col: "ColumnOrName") -> Column:
+    """
+    Converts an angle measured in radians to an approximately equivalent angle
+    measured in degrees.
+
+    .. versionadded:: 2.1.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        angle in radians
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        angle in degrees, as if computed by `java.lang.Math.toDegrees()`
+
+    Examples
+    --------
+    >>> import math
+    >>> df = spark.range(1)
+    >>> df.select(degrees(lit(math.pi))).first()
+    Row(DEGREES(3.14159...)=180.0)
+    """
+    return _invoke_function_over_columns("degrees", col)
+
+
+
+def radians(col: "ColumnOrName") -> Column:
+    """
+    Converts an angle measured in degrees to an approximately equivalent angle
+    measured in radians.
+
+    .. versionadded:: 2.1.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        angle in degrees
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        angle in radians, as if computed by `java.lang.Math.toRadians()`
+
+    Examples
+    --------
+    >>> df = spark.range(1)
+    >>> df.select(radians(lit(180))).first()
+    Row(RADIANS(180)=3.14159...)
+    """
+    return _invoke_function_over_columns("radians", col)
+
+
+def atan(col: "ColumnOrName") -> Column:
+    """
+    Compute inverse tangent of the input column.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        inverse tangent of `col`, as if computed by `java.lang.Math.atan()`
+
+    Examples
+    --------
+    >>> df = spark.range(1)
+    >>> df.select(atan(df.id)).show()
+    +--------+
+    |ATAN(id)|
+    +--------+
+    |     0.0|
+    +--------+
+    """
+    return _invoke_function_over_columns("atan", col)
+
+
+def atan2(col1: Union["ColumnOrName", float], col2: Union["ColumnOrName", float]) -> Column:
+    """
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col1 : str, :class:`~pyspark.sql.Column` or float
+        coordinate on y-axis
+    col2 : str, :class:`~pyspark.sql.Column` or float
+        coordinate on x-axis
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the `theta` component of the point
+        (`r`, `theta`)
+        in polar coordinates that corresponds to the point
+        (`x`, `y`) in Cartesian coordinates,
+        as if computed by `java.lang.Math.atan2()`
+
+    Examples
+    --------
+    >>> df = spark.range(1)
+    >>> df.select(atan2(lit(1), lit(2))).first()
+    Row(ATAN2(1, 2)=0.46364...)
+    """
+    def lit_or_column(x: Union["ColumnOrName", float]) -> Column:
+        if isinstance(x, (int, float)):
+            return lit(x)
+        return x
+    return _invoke_function_over_columns("atan2", lit_or_column(col1), lit_or_column(col2))
+
+
+def tan(col: "ColumnOrName") -> Column:
+    """
+    Computes tangent of the input column.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        angle in radians
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        tangent of the given value, as if computed by `java.lang.Math.tan()`
+
+    Examples
+    --------
+    >>> import math
+    >>> df = spark.range(1)
+    >>> df.select(tan(lit(math.radians(45)))).first()
+    Row(TAN(0.78539...)=0.99999...)
+    """
+    return _invoke_function_over_columns("tan", col)
+
+
+def round(col: "ColumnOrName", scale: int = 0) -> Column:
+    """
+    Round the given value to `scale` decimal places using HALF_UP rounding mode if `scale` >= 0
+    or at integral part when `scale` < 0.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        input column to round.
+    scale : int optional default 0
+        scale value.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        rounded values.
+
+    Examples
+    --------
+    >>> spark.createDataFrame([(2.5,)], ['a']).select(round('a', 0).alias('r')).collect()
+    [Row(r=3.0)]
+    """
+    return _invoke_function_over_columns("round", col, lit(scale))
+
+
+def bround(col: "ColumnOrName", scale: int = 0) -> Column:
+    """
+    Round the given value to `scale` decimal places using HALF_EVEN rounding mode if `scale` >= 0
+    or at integral part when `scale` < 0.
+
+    .. versionadded:: 2.0.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        input column to round.
+    scale : int optional default 0
+        scale value.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        rounded values.
+
+    Examples
+    --------
+    >>> spark.createDataFrame([(2.5,)], ['a']).select(bround('a', 0).alias('r')).collect()
+    [Row(r=2.0)]
+    """
+    return _invoke_function_over_columns("round_even", col, lit(scale))
