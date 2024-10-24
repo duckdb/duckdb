@@ -1,4 +1,6 @@
 #include "duckdb/function/function_list.hpp"
+
+#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/scalar/compressed_materialization_functions.hpp"
 #include "duckdb/function/scalar/date_functions.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
@@ -66,6 +68,8 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(InternalDecompressIntegralUsmallintFun),
 	DUCKDB_SCALAR_FUNCTION_SET(InternalDecompressStringFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(AddFun),
+	DUCKDB_AGGREGATE_FUNCTION_SET(AnyValueFun),
+	DUCKDB_AGGREGATE_FUNCTION_SET_ALIAS(ArbitraryFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayCatFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayConcatFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayContainsFun),
@@ -84,13 +88,17 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION(ConcatWsFun),
 	DUCKDB_SCALAR_FUNCTION(ConstantOrNullFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ContainsFun),
+	DUCKDB_AGGREGATE_FUNCTION_SET(CountFun),
+	DUCKDB_AGGREGATE_FUNCTION(CountStarFun),
 	DUCKDB_SCALAR_FUNCTION(CreateSortKeyFun),
 	DUCKDB_SCALAR_FUNCTION(CurrvalFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(DivideFun),
 	DUCKDB_SCALAR_FUNCTION(ErrorFun),
 	DUCKDB_SCALAR_FUNCTION(FinalizeFun),
+	DUCKDB_AGGREGATE_FUNCTION_SET(FirstFun),
 	DUCKDB_SCALAR_FUNCTION(GetVariableFun),
 	DUCKDB_SCALAR_FUNCTION(IlikeEscapeFun),
+	DUCKDB_AGGREGATE_FUNCTION_SET(LastFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(LcaseFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(LenFun),
 	DUCKDB_SCALAR_FUNCTION_SET(LengthFun),
@@ -110,8 +118,10 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION(ListZipFun),
 	DUCKDB_SCALAR_FUNCTION(LowerFun),
 	DUCKDB_SCALAR_FUNCTION(MapContainsFun),
+	DUCKDB_AGGREGATE_FUNCTION_SET(MaxFun),
 	DUCKDB_SCALAR_FUNCTION_SET(MD5Fun),
 	DUCKDB_SCALAR_FUNCTION_SET(MD5NumberFun),
+	DUCKDB_AGGREGATE_FUNCTION_SET(MinFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ModFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(MultiplyFun),
 	DUCKDB_SCALAR_FUNCTION(NextvalFun),

@@ -94,8 +94,6 @@ void BuiltinFunctions::Initialize() {
 	RegisterTableFunctions();
 	RegisterArrowFunctions();
 
-	RegisterDistributiveAggregates();
-
 	RegisterPragmaFunctions();
 
 	// initialize collations
