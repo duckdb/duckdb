@@ -668,7 +668,7 @@
       },
       {"id": 105,
         "name": "maximum_line_size",
-        "type": "idx_t"
+        "type": "CSVOption<idx_t>"
       },
       {"id": 106,
         "name": "normalize_names",
@@ -704,7 +704,7 @@
       },
       {"id": 114,
         "name": "buffer_size",
-        "type": "idx_t"
+        "type": "CSVOption<idx_t>"
       },
       {"id": 115,
         "name": "file_options",

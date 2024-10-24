@@ -126,7 +126,7 @@ query IIIIIIIII rowsort
 SElECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
 ----
 0	4	89	138	2	age	CAST	oogie boogieoogie boogieoogie boogieoogie boogie,bla, 2023-01-03, 4	Error when converting column "age". Could not convert string "bla" to 'INTEGER'
-0	4	89	89	NULL	NULL	LINE SIZE OVER MAXIMUM	oogie boogieoogie boogieoogie boogieoogie boogie,bla, 2023-01-03, 4	Maximum line size of 40 bytes exceeded. Actual Size:68 bytes.
+0	4	89	89	NULL	NULL	LINE SIZE OVER MAXIMUM	oogie boogieoogie boogieoogie boogieoogie boogie,bla, 2023-01-03, 4	Maximum line size of 40 bytes exceeded. Actual Size:67 bytes.
 
 statement ok
 DROP TABLE reject_errors;
@@ -145,7 +145,7 @@ oogie boogie	3	2023-01-02	5
 query IIIIIIIII
 SElECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY byte_position;
 ----
-0	4	89	89	NULL	NULL	LINE SIZE OVER MAXIMUM	oogie boogieoogie boogieoogie boogieoogie boogie,bla, 2023-01-03	Maximum line size of 40 bytes exceeded. Actual Size:65 bytes.
+0	4	89	89	NULL	NULL	LINE SIZE OVER MAXIMUM	oogie boogieoogie boogieoogie boogieoogie boogie,bla, 2023-01-03	Maximum line size of 40 bytes exceeded. Actual Size:64 bytes.
 0	4	89	138	2	age	CAST	oogie boogieoogie boogieoogie boogieoogie boogie,bla, 2023-01-03	Error when converting column "age". Could not convert string "bla" to 'INTEGER'
 0	4	89	153	3	barks	MISSING COLUMNS	oogie boogieoogie boogieoogie boogieoogie boogie,bla, 2023-01-03	Expected Number of Columns: 4 Found: 3
 
@@ -168,7 +168,7 @@ SElECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY byte_position;
 ----
 0	4	89	138	2	age	CAST	oogie boogieoogie boogieoogie boogieoogie boogie,bla, 2023-01-03,4, bla	Error when converting column "age". Could not convert string "bla" to 'INTEGER'
 0	4	89	155	5	NULL	TOO MANY COLUMNS	oogie boogieoogie boogieoogie boogieoogie boogie,bla, 2023-01-03,4, bla	Expected Number of Columns: 4 Found: 5
-0	4	89	89	NULL	NULL	LINE SIZE OVER MAXIMUM	oogie boogieoogie boogieoogie boogieoogie boogie,bla, 2023-01-03,4, bla	Maximum line size of 40 bytes exceeded. Actual Size:72 bytes.
+0	4	89	89	NULL	NULL	LINE SIZE OVER MAXIMUM	oogie boogieoogie boogieoogie boogieoogie boogie,bla, 2023-01-03,4, bla	Maximum line size of 40 bytes exceeded. Actual Size:71 bytes.
 
 statement ok
 DROP TABLE reject_errors;
@@ -229,7 +229,7 @@ query IIIIIIIII rowsort
 SElECT * EXCLUDE (scan_id)  FROM reject_errors ORDER BY byte_position;
 ----
 0	3	59	59	1	name	UNQUOTED VALUE	"oogie boogieoogie boogieoogie boogieoogie boogie"bla,4, 2023-01-02, 5	Value with unterminated quote found.
-0	3	59	59	NULL	NULL	LINE SIZE OVER MAXIMUM	"oogie boogieoogie boogieoogie boogieoogie boogie"bla,4, 2023-01-02, 5	Maximum line size of 40 bytes exceeded. Actual Size:71 bytes.
+0	3	59	59	NULL	NULL	LINE SIZE OVER MAXIMUM	"oogie boogieoogie boogieoogie boogieoogie boogie"bla,4, 2023-01-02, 5	Maximum line size of 40 bytes exceeded. Actual Size:70 bytes.
 
 
 statement ok
@@ -310,7 +310,7 @@ SElECT * EXCLUDE (scan_id)  FROM reject_errors ORDER BY byte_position, error_mes
 ----
 0	3	59	125	5	NULL	TOO MANY COLUMNS	oogie bo??gieoogie boogieoogie boogieoogie boogie,3, 2023-01-01, 2, 5	Expected Number of Columns: 4 Found: 5
 0	3	59	59	1	name	INVALID UNICODE	oogie bo??gieoogie boogieoogie boogieoogie boogie,3, 2023-01-01, 2, 5	Invalid unicode (byte sequence mismatch) detected.
-0	3	59	59	NULL	NULL	LINE SIZE OVER MAXIMUM	oogie bo??gieoogie boogieoogie boogieoogie boogie,3, 2023-01-01, 2, 5	Maximum line size of 40 bytes exceeded. Actual Size:70 bytes.
+0	3	59	59	NULL	NULL	LINE SIZE OVER MAXIMUM	oogie bo??gieoogie boogieoogie boogieoogie boogie,3, 2023-01-01, 2, 5	Maximum line size of 40 bytes exceeded. Actual Size:69 bytes.
 
 statement ok
 DROP TABLE reject_errors;
@@ -378,6 +378,6 @@ SELECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
 0	6	152	183	3	barks	MISSING COLUMNS	"oogie boogie"bla,3, 2023-01-04	Expected Number of Columns: 4 Found: 3
 0	7	184	199	3	current_day	CAST	oogie boogie,3, bla	Error when converting column "current_day". Could not convert string " bla" to 'DATE'
 0	7	184	203	3	barks	MISSING COLUMNS	oogie boogie,3, bla	Expected Number of Columns: 4 Found: 3
-0	8	204	204	NULL	NULL	LINE SIZE OVER MAXIMUM	oogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogie,3, bla	Maximum line size of 40 bytes exceeded. Actual Size:92 bytes.
+0	8	204	204	NULL	NULL	LINE SIZE OVER MAXIMUM	oogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogie,3, bla	Maximum line size of 40 bytes exceeded. Actual Size:91 bytes.
 0	8	204	291	3	current_day	CAST	oogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogie,3, bla	Error when converting column "current_day". Could not convert string " bla" to 'DATE'
 0	8	204	295	3	barks	MISSING COLUMNS	oogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogie,3, bla	Expected Number of Columns: 4 Found: 3

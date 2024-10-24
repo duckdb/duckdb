@@ -24,7 +24,7 @@ struct DialectOptions {
 	CSVStateMachineOptions state_machine_options;
 	//! Expected number of columns
 	idx_t num_cols = 0;
-	//! Whether or not the file has a header line
+	//! Whether the file has a header line
 	CSVOption<bool> header = false;
 	//! The date format to use (if any is specified)
 	map<LogicalTypeId, CSVOption<StrpTimeFormat>> date_format = {{LogicalTypeId::DATE, {}},
@@ -85,8 +85,9 @@ struct CSVReaderOptions {
 	//===--------------------------------------------------------------------===//
 	//! Maximum CSV line size: specified because if we reach this amount, we likely have wrong delimiters (default: 2MB)
 	//! note that this is the guaranteed line length that will succeed, longer lines may be accepted if slightly above
-	idx_t maximum_line_size = 2097152;
-	//! Whether or not header names shall be normalized
+	static constexpr idx_t max_line_size_default = 2097152;
+	CSVOption<idx_t> maximum_line_size = max_line_size_default;
+	//! Whether header names shall be normalized
 	bool normalize_names = false;
 	//! True, if column with that index must skip null check
 	unordered_set<string> force_not_null_names;
@@ -105,7 +106,7 @@ struct CSVReaderOptions {
 	//! Multi-file reader options
 	MultiFileReaderOptions file_options;
 	//! Buffer Size (Parallel Scan)
-	idx_t buffer_size = CSVBuffer::CSV_BUFFER_SIZE;
+	CSVOption<idx_t> buffer_size = CSVBuffer::ROWS_PER_BUFFER * max_line_size_default;
 	//! Decimal separator when reading as numeric
 	string decimal_separator = ".";
 	//! Whether  to pad rows that do not have enough columns with NULL values
