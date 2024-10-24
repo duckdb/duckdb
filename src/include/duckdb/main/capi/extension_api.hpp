@@ -168,10 +168,6 @@ typedef struct {
 	duckdb_state (*duckdb_list_vector_reserve)(duckdb_vector vector, idx_t required_capacity);
 	duckdb_vector (*duckdb_struct_vector_get_child)(duckdb_vector vector, idx_t index);
 	duckdb_vector (*duckdb_array_vector_get_child)(duckdb_vector vector);
-	duckdb_vector (*duckdb_map_vector_get_keys)(duckdb_vector vector);
-	duckdb_vector (*duckdb_map_vector_get_values)(duckdb_vector vector);
-	duckdb_vector (*duckdb_union_vector_get_tags)(duckdb_vector vector);
-	duckdb_vector (*duckdb_union_vector_get_member)(duckdb_vector vector, idx_t tag);
 	bool (*duckdb_validity_row_is_valid)(uint64_t *validity, idx_t row);
 	void (*duckdb_validity_set_row_validity)(uint64_t *validity, idx_t row, bool valid);
 	void (*duckdb_validity_set_row_invalid)(uint64_t *validity, idx_t row);
@@ -426,13 +422,6 @@ typedef struct {
 	                                        duckdb_arrow_schema arrow_schema, duckdb_arrow_array arrow_array,
 	                                        duckdb_arrow_stream *out_stream);
 	duckdb_data_chunk (*duckdb_stream_fetch_chunk)(duckdb_result result);
-	// dev
-	// WARNING! the functions below are not (yet) stable
-
-	duckdb_vector (*duckdb_map_vector_get_keys)(duckdb_vector vector);
-	duckdb_vector (*duckdb_map_vector_get_values)(duckdb_vector vector);
-	duckdb_vector (*duckdb_union_vector_get_tags)(duckdb_vector vector);
-	duckdb_vector (*duckdb_union_vector_get_member)(duckdb_vector vector, idx_t tag);
 } duckdb_ext_api_v0;
 
 //===--------------------------------------------------------------------===//
@@ -584,10 +573,6 @@ inline duckdb_ext_api_v0 CreateAPIv0() {
 	result.duckdb_list_vector_reserve = duckdb_list_vector_reserve;
 	result.duckdb_struct_vector_get_child = duckdb_struct_vector_get_child;
 	result.duckdb_array_vector_get_child = duckdb_array_vector_get_child;
-	result.duckdb_map_vector_get_keys = duckdb_map_vector_get_keys;
-	result.duckdb_map_vector_get_values = duckdb_map_vector_get_values;
-	result.duckdb_union_vector_get_tags = duckdb_union_vector_get_tags;
-	result.duckdb_union_vector_get_member = duckdb_union_vector_get_member;
 	result.duckdb_validity_row_is_valid = duckdb_validity_row_is_valid;
 	result.duckdb_validity_set_row_validity = duckdb_validity_set_row_validity;
 	result.duckdb_validity_set_row_invalid = duckdb_validity_set_row_invalid;
@@ -815,10 +800,6 @@ inline duckdb_ext_api_v0 CreateAPIv0() {
 	result.duckdb_arrow_scan = duckdb_arrow_scan;
 	result.duckdb_arrow_array_scan = duckdb_arrow_array_scan;
 	result.duckdb_stream_fetch_chunk = duckdb_stream_fetch_chunk;
-	result.duckdb_map_vector_get_keys = duckdb_map_vector_get_keys;
-	result.duckdb_map_vector_get_values = duckdb_map_vector_get_values;
-	result.duckdb_union_vector_get_tags = duckdb_union_vector_get_tags;
-	result.duckdb_union_vector_get_member = duckdb_union_vector_get_member;
 	return result;
 }
 
