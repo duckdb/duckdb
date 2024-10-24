@@ -111,7 +111,7 @@ public:
 	void PushOutputMode();
 	void PopOutputMode();
 	void OutputCSV(const char *z, int bSep);
-	void PrintRowSeparator(int nArg, const char *zSep, const vector<idx_t> &actualWidth);
+	void PrintRowSeparator(idx_t nArg, const char *zSep, const vector<idx_t> &actualWidth);
 	void PrintMarkdownSeparator(idx_t nArg, const char *zSep, const vector<int> &colTypes,
 	                              const vector<idx_t> &actualWidth);
 	void OutputCString(const char *z);
@@ -123,7 +123,7 @@ public:
 	void PrintOptionallyQuotedIdentifier(const char *z);
 	bool IsNumber(const char *z, int *realnum);
 	void OutputJSONString(const char *z, int n);
-	void PrintDashes(int N);
+	void PrintDashes(idx_t N);
 	void UTF8WidthPrint(FILE *pOut, idx_t w, const string &str, bool right_align);
 	bool SetOutputMode(const char *mode, const char *tbl_name);
 	bool ImportData(const char **azArg, idx_t nArg);
@@ -134,11 +134,11 @@ public:
 	MetadataResult DisplayEntries(const char **azArg, idx_t nArg, char type);
 	void ShowConfiguration();
 
-	int RenderLength(const char *z);
-	int RenderLength(const string &str);
+	idx_t RenderLength(const char *z);
+	idx_t RenderLength(const string &str);
 	void SetBinaryMode();
 	void SetTextMode();
-	static int StringLength(const char *z);
+	static idx_t StringLength(const char *z);
 	void SetTableName(const char *zName);
 	int RunTableDumpQuery(const char *zSelect);
 	void PrintValue(const char *str);

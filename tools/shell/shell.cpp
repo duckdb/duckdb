@@ -577,26 +577,14 @@ bool ShellState::IsNumber(const char *z, int *realnum) {
 ** Compute a string length that is limited to what can be stored in
 ** lower 30 bits of a 32-bit signed integer.
 */
-int strlen30(const char *z) {
-	const char *z2 = z;
-	while (*z2) {
-		z2++;
-	}
-	return 0x3fffffff & (int)(z2 - z);
-}
-
-/*
-** Compute a string length that is limited to what can be stored in
-** lower 30 bits of a 32-bit signed integer.
-*/
-int ShellState::StringLength(const char *z) {
-	return strlen30(z);
+idx_t ShellState::StringLength(const char *z) {
+	return strlen(z);
 }
 
 /*
 ** Return the length of a string in characters.
 */
-int ShellState::RenderLength(const char *z) {
+idx_t ShellState::RenderLength(const char *z) {
 #ifdef HAVE_LINENOISE
 	return linenoiseComputeRenderWidth(z, strlen(z));
 #else
@@ -609,7 +597,7 @@ int ShellState::RenderLength(const char *z) {
 #endif
 }
 
-int ShellState::RenderLength(const string &str) {
+idx_t ShellState::RenderLength(const string &str) {
 	return RenderLength(str.c_str());
 }
 
@@ -1203,9 +1191,9 @@ void ShellState::PrintSchemaLineN(char *z, int n, const char *zTail) {
 /*
 ** Print N dashes
 */
-void ShellState::PrintDashes(int N) {
+void ShellState::PrintDashes(idx_t N) {
 	const char zDash[] = "--------------------------------------------------";
-	const int nDash = sizeof(zDash) - 1;
+	const idx_t nDash = sizeof(zDash) - 1;
 	while (N > nDash) {
 		fputs(zDash, out);
 		N -= nDash;
@@ -1216,7 +1204,7 @@ void ShellState::PrintDashes(int N) {
 /*
 ** Print a markdown or table-style row separator using ascii-art
 */
-void ShellState::PrintRowSeparator(int nArg, const char *zSep, const vector<idx_t> &actualWidth) {
+void ShellState::PrintRowSeparator(idx_t nArg, const char *zSep, const vector<idx_t> &actualWidth) {
 	int i;
 	if (nArg > 0) {
 		fputs(zSep, out);
@@ -1289,33 +1277,35 @@ static int callback(void *pArg, int nArg, char **azArg, char **azCol) {
 ** table name.
 */
 void ShellState::SetTableName(const char *zName) {
-	int i, n;
-	char cQuote;
-	char *z;
-
 	if (zDestTable) {
 		free(zDestTable);
-		zDestTable = 0;
+		zDestTable = nullptr;
 	}
-	if (zName == 0)
+	if (!zName) {
 		return;
-	cQuote = quoteChar(zName);
-	n = strlen30(zName);
-	if (cQuote)
-		n += n + 2;
-	z = zDestTable = (char *)malloc(n + 1);
-	if (z == 0)
-		shell_out_of_memory();
-	n = 0;
-	if (cQuote)
-		z[n++] = cQuote;
-	for (i = 0; zName[i]; i++) {
-		z[n++] = zName[i];
-		if (zName[i] == cQuote)
-			z[n++] = cQuote;
 	}
-	if (cQuote)
+	auto cQuote = quoteChar(zName);
+	idx_t n = StringLength(zName);
+	if (cQuote) {
+		n += n + 2;
+	}
+	auto z = zDestTable = (char *)malloc(n + 1);
+	if (!z) {
+		shell_out_of_memory();
+	}
+	n = 0;
+	if (cQuote) {
 		z[n++] = cQuote;
+	}
+	for (idx_t i = 0; zName[i]; i++) {
+		z[n++] = zName[i];
+		if (zName[i] == cQuote) {
+			z[n++] = cQuote;
+		}
+	}
+	if (cQuote) {
+		z[n++] = cQuote;
+	}
 	z[n] = 0;
 }
 
@@ -1332,29 +1322,29 @@ void ShellState::SetTableName(const char *zName) {
 int ShellState::RunTableDumpQuery(const char *zSelect /* SELECT statement to extract content */
 ) {
 	sqlite3_stmt *pSelect;
-	int rc;
-	int nResult;
-	int i;
 	const char *z;
-	rc = sqlite3_prepare_v2(db, zSelect, -1, &pSelect, 0);
+	int rc = sqlite3_prepare_v2(db, zSelect, -1, &pSelect, 0);
 	if (rc != SQLITE_OK || !pSelect) {
 		utf8_printf(out, "/**** ERROR: (%d) %s *****/\n", rc, sqlite3_errmsg(db));
-		if ((rc & 0xff) != SQLITE_CORRUPT)
+		if ((rc & 0xff) != SQLITE_CORRUPT) {
 			nErr++;
+		}
 		return rc;
 	}
 	rc = sqlite3_step(pSelect);
-	nResult = sqlite3_column_count(pSelect);
+	idx_t nResult = sqlite3_column_count(pSelect);
 	while (rc == SQLITE_ROW) {
 		z = (const char *)sqlite3_column_text(pSelect, 0);
-		utf8_printf(out, "%s", z);
-		for (i = 1; i < nResult; i++) {
-			utf8_printf(out, ",%s", sqlite3_column_text(pSelect, i));
+		Print(z);
+		for (idx_t i = 1; i < nResult; i++) {
+			Print((const char *) sqlite3_column_text(pSelect, static_cast<int>(i)));
 		}
-		if (z == 0)
+		if (!z) {
 			z = "";
-		while (z[0] && (z[0] != '-' || z[1] != '-'))
+		}
+		while (z[0] && (z[0] != '-' || z[1] != '-')) {
 			z++;
+		}
 		if (z[0]) {
 			raw_printf(out, "\n;\n");
 		} else {
@@ -1365,8 +1355,9 @@ int ShellState::RunTableDumpQuery(const char *zSelect /* SELECT statement to ext
 	rc = sqlite3_finalize(pSelect);
 	if (rc != SQLITE_OK) {
 		utf8_printf(out, "/**** ERROR: (%d) %s *****/\n", rc, sqlite3_errmsg(db));
-		if ((rc & 0xff) != SQLITE_CORRUPT)
+		if ((rc & 0xff) != SQLITE_CORRUPT) {
 			nErr++;
+		}
 	}
 	return rc;
 }
@@ -1374,34 +1365,17 @@ int ShellState::RunTableDumpQuery(const char *zSelect /* SELECT statement to ext
 /*
 ** Allocate space and save off current error string.
 */
-static char *save_err_msg(sqlite3 *db /* Database to query */
-) {
-	int nErrMsg = 1 + strlen30(sqlite3_errmsg(db));
-	char *zErrMsg = (char *)sqlite3_malloc64(nErrMsg);
+static char *SaveErrorMessage(sqlite3 *db) {
+	idx_t nErrMsg = 1 + ShellState::StringLength(sqlite3_errmsg(db));
+	auto zErrMsg = (char *)sqlite3_malloc64(nErrMsg);
 	if (zErrMsg) {
 		memcpy(zErrMsg, sqlite3_errmsg(db), nErrMsg);
 	}
 	return zErrMsg;
 }
 
-/*
-** Bind parameters on a prepared statement.
-**
-** Parameter bindings are taken from a TEMP table of the form:
-**
-**    CREATE TEMP TABLE sqlite_parameters(key TEXT PRIMARY KEY, value)
-**    WITHOUT ROWID;
-**
-** No bindings occur if this table does not exist.  The name of the table
-** begins with "sqlite_" so that it will not collide with ordinary application
-** tables.  The table must be in the TEMP schema.
-*/
-static void bind_prepared_stmt(ShellState *pArg, sqlite3_stmt *pStmt) {
-	return;
-}
-
 string ShellState::strdup_handle_newline(const char *z) {
-	static constexpr int MAX_SIZE = 80;
+	static constexpr idx_t MAX_SIZE = 80;
 	if (!z) {
 		return nullValue;
 	}
@@ -1409,7 +1383,7 @@ string ShellState::strdup_handle_newline(const char *z) {
 		return z;
 	}
 	string result;
-	int count = 0;
+	idx_t count = 0;
 	bool interrupted = false;
 	for (const char *s = z; *s; s++) {
 		if (*s == '\n') {
@@ -1513,8 +1487,7 @@ ColumnarResult ShellState::ExecuteColumnar(sqlite3_stmt *pStmt) {
 ** first, in order to determine column widths, before providing
 ** any output.
 */
-void ShellState::ExecutePreparedStatementColumnar(sqlite3_stmt *pStmt /* Statment to run */
-) {
+void ShellState::ExecutePreparedStatementColumnar(sqlite3_stmt *pStmt) {
 	auto result = ExecuteColumnar(pStmt);
 	if (seenInterrupt) {
 		utf8_printf(out, "Interrupt\n");
@@ -1662,7 +1635,7 @@ int ShellState::ExecuteSQL(const char *zSql, /* SQL to be evaluated */
 		rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, &zLeftover);
 		if (SQLITE_OK != rc) {
 			if (pzErrMsg) {
-				*pzErrMsg = save_err_msg(db);
+				*pzErrMsg = SaveErrorMessage(db);
 			}
 		} else {
 			if (!pStmt) {
@@ -1691,7 +1664,6 @@ int ShellState::ExecuteSQL(const char *zSql, /* SQL to be evaluated */
 				cMode = RenderMode::EXPLAIN;
 			}
 
-			bind_prepared_stmt(this, pStmt);
 			ExecutePreparedStatement(pStmt);
 
 			/* Finalize the statement just executed. If this fails, save a
@@ -1705,7 +1677,7 @@ int ShellState::ExecuteSQL(const char *zSql, /* SQL to be evaluated */
 				while (IsSpace(zSql[0]))
 					zSql++;
 			} else if (pzErrMsg) {
-				*pzErrMsg = save_err_msg(db);
+				*pzErrMsg = SaveErrorMessage(db);
 			}
 
 			/* clear saved stmt handle */
@@ -1720,8 +1692,7 @@ int ShellState::ExecuteSQL(const char *zSql, /* SQL to be evaluated */
 ** Release memory previously allocated by tableColumnList().
 */
 static void freeColumnList(char **azCol) {
-	int i;
-	for (i = 1; azCol[i]; i++) {
+	for (idx_t i = 1; azCol[i]; i++) {
 		sqlite3_free(azCol[i]);
 	}
 	/* azCol[0] is a static string */
@@ -3030,8 +3001,8 @@ MetadataResult SetRowRendering(ShellState &state, const char **azArg, idx_t nArg
 }
 
 bool ShellState::SetOutputMode(const char *mode_str, const char *tbl_name) {
-	int n2 = strlen30(mode_str);
-	int c2 = mode_str[0];
+	idx_t n2 = StringLength(mode_str);
+	char c2 = mode_str[0];
 	if (c2 == 'l' && n2 > 2 && strncmp(mode_str, "lines", n2) == 0) {
 		mode = RenderMode::LINE;
 		rowSeparator = SEP_Row;
@@ -3120,9 +3091,9 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 		return false;
 	}
 	int rc;
-	const char *zTable = 0;                    /* Insert data into this table */
-	const char *zFile = 0;                     /* Name of file to extra content from */
-	sqlite3_stmt *pStmt = NULL;                /* A statement */
+	const char *zTable = nullptr;              /* Insert data into this table */
+	const char *zFile = nullptr;               /* Name of file to extra content from */
+	sqlite3_stmt *pStmt = nullptr;             /* A statement */
 	int nCol;                                  /* Number of columns in the table */
 	int nByte;                                 /* Number of bytes in an SQL string */
 	int j;                                     /* Loop counters */
@@ -3255,7 +3226,7 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 		import_cleanup(&sCtx);
 		shell_out_of_memory();
 	}
-	nByte = strlen30(zSql);
+	nByte = StringLength(zSql);
 	rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, 0);
 	import_append_char(&sCtx, 0); /* To ensure sCtx.z is allocated */
 	if (rc && sqlite3_strglob("Catalog Error: Table with name *", sqlite3_errmsg(db)) == 0) {
@@ -3305,7 +3276,7 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 		shell_out_of_memory();
 	}
 	sqlite3_snprintf(nByte + 20, zSql, "INSERT INTO \"%w\" VALUES(?", zTable);
-	j = strlen30(zSql);
+	j = StringLength(zSql);
 	for (int i = 1; i < nCol; i++) {
 		zSql[j++] = ',';
 		zSql[j++] = '?';

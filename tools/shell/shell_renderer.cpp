@@ -35,8 +35,8 @@ void ColumnRenderer::RenderFooter(ColumnarResult &result) {
 }
 
 void ColumnRenderer::RenderAlignedValue(ColumnarResult &result, idx_t i) {
-	int w = result.column_width[i];
-	int n = state.RenderLength(result.data[i]);
+	idx_t w = result.column_width[i];
+	idx_t n = state.RenderLength(result.data[i]);
 	state.PrintPadded("", (w - n) / 2);
 	state.Print(result.data[i]);
 	state.PrintPadded("", (w - n + 1) / 2);
@@ -291,7 +291,7 @@ public:
 			// determine the render width by going over the column names
 			header_width = 5;
 			for (idx_t i = 0; i < col_names.size(); i++) {
-				int len = ShellState::StringLength(col_names[i] ? col_names[i] : "");
+				auto len = ShellState::StringLength(col_names[i] ? col_names[i] : "");
 				if (len > header_width) {
 					header_width = len;
 				}
@@ -315,7 +315,7 @@ public:
 		}
 	}
 
-	int header_width = 0;
+	idx_t header_width = 0;
 };
 
 class ModeExplainRenderer : public RowRenderer {
@@ -775,18 +775,21 @@ public:
 	** Return true if string z[] has nothing but whitespace and comments to the
 	** end of the first line.
 	*/
-	static int wsToEol(const char *z) {
+	static bool wsToEol(const char *z) {
 		int i;
 		for (i = 0; z[i]; i++) {
-			if (z[i] == '\n')
-				return 1;
-			if (IsSpace(z[i]))
+			if (z[i] == '\n') {
+				return true;
+			}
+			if (IsSpace(z[i])) {
 				continue;
-			if (z[i] == '-' && z[i + 1] == '-')
-				return 1;
-			return 0;
+			}
+			if (z[i] == '-' && z[i + 1] == '-') {
+				return true;
+			}
+			return false;
 		}
-		return 1;
+		return true;
 	}
 };
 
