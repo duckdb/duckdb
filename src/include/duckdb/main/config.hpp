@@ -391,6 +391,9 @@ public:
 	}
 
 	bool CanAccessFile(const string &path);
+	void AddAllowedDirectory(const string &path);
+	void AddAllowedPath(const string &path);
+	string SanitizeAllowedPath(const string &path) const;
 
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;

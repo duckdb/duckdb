@@ -402,8 +402,8 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (database_path) {
 		config.options.database_path = database_path;
 		if (!config.options.enable_external_access) {
-			config.options.allowed_paths.insert(database_path);
-			config.options.allowed_paths.insert(database_path + string(".wal"));
+			config.AddAllowedPath(database_path);
+			config.AddAllowedPath(database_path + string(".wal"));
 		}
 	} else {
 		config.options.database_path.clear();

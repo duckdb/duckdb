@@ -571,17 +571,38 @@ const string DBConfig::UserAgent() const {
 	return user_agent;
 }
 
+string DBConfig::SanitizeAllowedPath(const string &path) const {
+	auto path_sep = file_system->PathSeparator(path);
+	if (path_sep != "/") {
+		// allowed_directories/allowed_path always uses forward slashes regardless of the OS
+		return StringUtil::Replace(path, path_sep, "/");
+	}
+	return path;
+}
+
+void DBConfig::AddAllowedDirectory(const string &path) {
+	auto allowed_directory = SanitizeAllowedPath(path);
+	if (allowed_directory.empty()) {
+		throw InvalidInputException("Cannot provide an empty string for allowed_directory");
+	}
+	// ensure the directory ends with a path separator
+	if (!StringUtil::EndsWith(allowed_directory, "/")) {
+		allowed_directory += "/";
+	}
+	options.allowed_directories.insert(allowed_directory);
+}
+
+void DBConfig::AddAllowedPath(const string &path) {
+	auto allowed_path = SanitizeAllowedPath(path);
+	options.allowed_paths.insert(allowed_path);
+}
+
 bool DBConfig::CanAccessFile(const string &input_path) {
 	if (options.enable_external_access) {
 		// all external access is allowed
 		return true;
 	}
-	auto path_sep = file_system->PathSeparator(input_path);
-	string path = input_path;
-	if (path_sep != "/") {
-		// allowed_directories/allowed_path always uses forward slashes regardless of the OS
-		path = StringUtil::Replace(path, path_sep, "/");
-	}
+	string path = SanitizeAllowedPath(input_path);
 	if (options.allowed_paths.count(path) > 0) {
 		// path is explicitly allowed
 		return true;
@@ -607,16 +628,15 @@ bool DBConfig::CanAccessFile(const string &input_path) {
 		// no common prefix found - path is not inside an allowed directory
 		return false;
 	}
-	D_ASSERT(StringUtil::EndsWith(prefix, path_sep));
+	D_ASSERT(StringUtil::EndsWith(prefix, "/"));
 	// path is inside an allowed directory - HOWEVER, we could still exit the allowed directory using ".."
 	// we check if we ever exit the allowed directory using ".." by looking at the path fragments
-	D_ASSERT(path_sep.size() == 1);
 	idx_t directory_level = 0;
 	idx_t current_pos = prefix.size();
 	for (; current_pos < path.size(); current_pos++) {
 		idx_t dir_begin = current_pos;
 		// find either the end of the path or the directory separator
-		for (; path[current_pos] != path_sep[0] && current_pos < path.size(); current_pos++) {
+		for (; path[current_pos] != '/' && current_pos < path.size(); current_pos++) {
 		}
 		idx_t path_length = current_pos - dir_begin;
 		if (path_length == 2 && path[dir_begin] == '.' && path[dir_begin + 1] == '.') {

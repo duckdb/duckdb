@@ -196,20 +196,7 @@ void AllowedDirectoriesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 	config.options.allowed_directories.clear();
 	auto &list = ListValue::GetChildren(input);
 	for (auto &val : list) {
-		auto allowed_directory = val.GetValue<string>();
-		if (allowed_directory.empty()) {
-			throw InvalidInputException("Cannot provide an empty string for allowed_directory");
-		}
-		// ensure the directory ends with a path separator
-		auto path_sep = config.file_system->PathSeparator(allowed_directory);
-		if (!StringUtil::EndsWith(allowed_directory, path_sep)) {
-			allowed_directory += path_sep;
-		}
-		// make sure allowed_directory always uses forward slashes regardless of the OS
-		if (path_sep != "/") {
-			allowed_directory = StringUtil::Replace(allowed_directory, path_sep, "/");
-		}
-		config.options.allowed_directories.insert(allowed_directory);
+		config.AddAllowedDirectory(val.GetValue<string>());
 	}
 }
 
@@ -239,13 +226,7 @@ void AllowedPathsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, cons
 	config.options.allowed_paths.clear();
 	auto &list = ListValue::GetChildren(input);
 	for (auto &val : list) {
-		auto allowed_path = val.GetValue<string>();
-		auto path_sep = config.file_system->PathSeparator(allowed_path);
-		// make sure allowed_path always uses forward slashes regardless of the OS
-		if (path_sep != "/") {
-			allowed_path = StringUtil::Replace(allowed_path, path_sep, "/");
-		}
-		config.options.allowed_paths.insert(allowed_path);
+		config.AddAllowedPath(val.GetValue<string>());
 	}
 }
 
@@ -611,8 +592,8 @@ bool EnableExternalAccessSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &co
 		auto &db_manager = DatabaseManager::Get(*db);
 		auto attached_paths = db_manager.GetAttachedDatabasePaths();
 		for (auto &path : attached_paths) {
-			config.options.allowed_paths.insert(path);
-			config.options.allowed_paths.insert(path + ".wal");
+			config.AddAllowedPath(path);
+			config.AddAllowedPath(path + ".wal");
 		}
 	}
 	return true;
