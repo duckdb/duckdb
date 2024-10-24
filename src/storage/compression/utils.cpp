@@ -3,7 +3,7 @@
 namespace duckdb {
 
 void AnalyzeSamplingState::SetSampler(analyze_sample_func_t func) {
-	sampler = func;
+	sampler = std::move(func);
 }
 
 bool AnalyzeSamplingState::Sample(Vector &vec, idx_t count) {
