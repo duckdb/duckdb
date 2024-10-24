@@ -1205,11 +1205,10 @@ void ShellState::PrintDashes(idx_t N) {
 ** Print a markdown or table-style row separator using ascii-art
 */
 void ShellState::PrintRowSeparator(idx_t nArg, const char *zSep, const vector<idx_t> &actualWidth) {
-	int i;
 	if (nArg > 0) {
 		fputs(zSep, out);
 		PrintDashes(actualWidth[0] + 2);
-		for (i = 1; i < nArg; i++) {
+		for (idx_t i = 1; i < nArg; i++) {
 			fputs(zSep, out);
 			PrintDashes(actualWidth[i] + 2);
 		}
