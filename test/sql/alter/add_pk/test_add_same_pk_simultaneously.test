@@ -17,10 +17,12 @@ ALTER TABLE test ADD PRIMARY KEY (j)
 statement ok tran2
 BEGIN TRANSACTION
 
+# This exception triggers first - later, we also trigger a Catalog write-write conflict.
+
 statement error tran2
 ALTER TABLE test ADD PRIMARY KEY (j)
 ----
-<REGEX>:TransactionContext Error.*Catalog write-write conflict on alter with "test".*
+<REGEX>:Catalog Error.*index with that name already exists for this table.*
 
 statement ok tran3
 BEGIN TRANSACTION

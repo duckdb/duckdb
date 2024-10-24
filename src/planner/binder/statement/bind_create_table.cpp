@@ -56,10 +56,11 @@ vector<unique_ptr<BoundConstraint>> Binder::BindNewConstraints(vector<unique_ptr
                                                                const string &table_name, const ColumnList &columns) {
 	auto bound_constraints = BindConstraints(constraints, table_name, columns);
 
-	// handle primary keys/not null constraints
+	// Handle PK and NOT NULL constraints.
 	bool has_primary_key = false;
 	physical_index_set_t not_null_columns;
 	vector<PhysicalIndex> primary_keys;
+
 	for (const auto &bound_constr : bound_constraints) {
 		switch (bound_constr->type) {
 		case ConstraintType::NOT_NULL: {
@@ -70,7 +71,6 @@ vector<unique_ptr<BoundConstraint>> Binder::BindNewConstraints(vector<unique_ptr
 		case ConstraintType::UNIQUE: {
 			const auto &unique = bound_constr->Cast<BoundUniqueConstraint>();
 			if (unique.is_primary_key) {
-				// we can only have one primary key per table
 				if (has_primary_key) {
 					throw ParserException("table \"%s\" has more than one primary key", table_name);
 				}
@@ -85,12 +85,12 @@ vector<unique_ptr<BoundConstraint>> Binder::BindNewConstraints(vector<unique_ptr
 	}
 
 	if (has_primary_key) {
-		// if there is a primary key index, also create a NOT NULL constraint for each of the columns
+		// Create a PK constraint, and a NOT NULL constraint for each indexed column.
 		for (auto &column_index : primary_keys) {
-			if (not_null_columns.count(column_index)) {
-				//! No need to create a NotNullConstraint, it's already present
+			if (not_null_columns.count(column_index) != 0) {
 				continue;
 			}
+
 			auto logical_index = columns.PhysicalToLogical(column_index);
 			constraints.push_back(make_uniq<NotNullConstraint>(logical_index));
 			bound_constraints.push_back(make_uniq<BoundNotNullConstraint>(column_index));
@@ -143,8 +143,12 @@ unique_ptr<BoundConstraint> BindUniqueConstraint(Constraint &constraint, const s
 		if (!columns.ColumnExists(keyname)) {
 			throw CatalogException("table \"%s\" does not have a column named \"%s\"", table, keyname);
 		}
-		auto &column = columns.GetColumn(keyname);
-		auto column_index = column.Physical();
+		auto &col = columns.GetColumn(keyname);
+		if (col.Generated()) {
+			throw BinderException("cannot create a PRIMARY KEY on a generated column: %s", col.GetName());
+		}
+
+		auto column_index = col.Physical();
 		if (key_set.find(column_index) != key_set.end()) {
 			throw ParserException("column \"%s\" appears twice in primary key constraint", keyname);
 		}

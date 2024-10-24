@@ -377,7 +377,8 @@ void ReplayWithoutIndex(ClientContext &context, Catalog &catalog, AlterInfo &inf
 	catalog.Alter(context, info);
 }
 
-void ReplayIndexData(AttachedDatabase &db, BinaryDeserializer &deserializer, IndexStorageInfo &info) {
+void ReplayIndexData(AttachedDatabase &db, BinaryDeserializer &deserializer, IndexStorageInfo &info,
+                     const bool deserialize_only) {
 	D_ASSERT(info.IsValid() && !info.name.empty());
 
 	auto &storage_manager = db.GetStorageManager();
@@ -399,9 +400,11 @@ void ReplayIndexData(AttachedDatabase &db, BinaryDeserializer &deserializer, Ind
 			list.ReadElement<bool>(data_ptr, data_info.allocation_sizes[j]);
 
 			// Convert the buffer handle to a persistent block and store the block id.
-			auto block_id = block_manager->GetFreeBlockId();
-			block_manager->ConvertToPersistent(block_id, std::move(block_handle));
-			data_info.block_pointers[j].block_id = block_id;
+			if (!deserialize_only) {
+				auto block_id = block_manager->GetFreeBlockId();
+				block_manager->ConvertToPersistent(block_id, std::move(block_handle));
+				data_info.block_pointers[j].block_id = block_id;
+			}
 		}
 	});
 }
@@ -432,7 +435,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	constraint_info.constraint->info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
 	auto &index_info = constraint_info.constraint->info;
 
-	ReplayIndexData(db, deserializer, index_info);
+	ReplayIndexData(db, deserializer, index_info, DeserializeOnly());
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -599,11 +602,12 @@ void WriteAheadLogDeserializer::ReplayDropTableMacro() {
 void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	auto create_info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "index_catalog_entry");
 	auto index_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
-	ReplayIndexData(db, deserializer, index_info);
 
+	ReplayIndexData(db, deserializer, index_info, DeserializeOnly());
 	if (DeserializeOnly()) {
 		return;
 	}
+
 	auto &info = create_info->Cast<CreateIndexInfo>();
 
 	// Ensure that the index type exists.

@@ -590,9 +590,7 @@ void CatalogSet::Undo(CatalogEntry &entry) {
 
 	// i.e. we have to place (entry) as (entry->parent) again
 	auto &to_be_removed_node = entry.Parent();
-	if (to_be_removed_node.rollback) {
-		to_be_removed_node.rollback(to_be_removed_node, entry);
-	}
+	to_be_removed_node.Rollback(entry);
 
 	D_ASSERT(StringUtil::CIEquals(entry.name, to_be_removed_node.name));
 	if (!to_be_removed_node.HasParent()) {

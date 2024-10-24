@@ -781,9 +781,16 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropForeignKeyConstraint(ClientContext 
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
 }
 
-void RollbackAddIndex(CatalogEntry &rollback_entry, CatalogEntry &entry) {
-	auto &rollback_table = rollback_entry.Cast<DuckTableEntry>();
-	auto &table = entry.Cast<DuckTableEntry>();
+void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
+	if (prev_entry.type != CatalogType::TABLE_ENTRY) {
+		return;
+	}
+
+	// Rolls back any physical index creation.
+	// FIXME: Currently only works for PKs.
+	// FIXME: Should be changed to work for any index-based constraint.
+
+	auto &table = prev_entry.Cast<DuckTableEntry>();
 	auto &info = table.GetStorage().GetDataTableInfo();
 	auto &indexes = info->GetIndexes();
 
@@ -801,7 +808,7 @@ void RollbackAddIndex(CatalogEntry &rollback_entry, CatalogEntry &entry) {
 		}
 	}
 
-	for (const auto &constraint : rollback_table.GetConstraints()) {
+	for (const auto &constraint : GetConstraints()) {
 		if (constraint->type != ConstraintType::UNIQUE) {
 			continue;
 		}
@@ -825,7 +832,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 		create_info->constraints.push_back(constraint->Copy());
 	}
 
-	bool add_index_rollback = false;
+	bool alter_pk = false;
 	if (info.constraint->type == ConstraintType::UNIQUE) {
 		const auto &unique = info.constraint->Cast<UniqueConstraint>();
 		const auto existing_pk = GetPrimaryKey();
@@ -837,7 +844,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 		create_info->constraints.push_back(info.constraint->Copy());
 
 		if (unique.is_primary_key) {
-			add_index_rollback = true;
+			alter_pk = true;
 		}
 	} else {
 		throw InternalException("unsupported constraint type in ALTER TABLE statement");
@@ -851,8 +858,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 	auto new_storage = make_shared_ptr<DataTable>(context, *storage, *bound_constraint);
 	auto new_entry = make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
 
-	if (add_index_rollback) {
-		new_entry->rollback = RollbackAddIndex;
+	if (alter_pk) {
 		for (auto &constraint : new_entry->GetConstraints()) {
 			if (constraint->type != ConstraintType::UNIQUE) {
 				continue;

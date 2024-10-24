@@ -9,15 +9,14 @@ IndexDataTableInfo::IndexDataTableInfo(shared_ptr<DataTableInfo> info_p, const s
     : info(std::move(info_p)), index_name(index_name_p) {
 }
 
-void RollbackDuckIndexEntry(CatalogEntry &rollback_entry, CatalogEntry &) {
-	auto &index_entry = rollback_entry.Cast<DuckIndexEntry>();
-	if (!index_entry.info) {
+void DuckIndexEntry::Rollback(CatalogEntry &) {
+	if (!info) {
 		return;
 	}
-	if (!index_entry.info->info) {
+	if (!info->info) {
 		return;
 	}
-	index_entry.info->info->GetIndexes().RemoveIndex(index_entry.name);
+	info->info->GetIndexes().RemoveIndex(name);
 }
 
 DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &create_info,
@@ -27,7 +26,6 @@ DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, Cre
 	auto &table = table_p.Cast<DuckTableEntry>();
 	auto &storage = table.GetStorage();
 	info = make_shared_ptr<IndexDataTableInfo>(storage.GetDataTableInfo(), name);
-	rollback = RollbackDuckIndexEntry;
 }
 
 DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &create_info,
@@ -59,7 +57,9 @@ DataTableInfo &DuckIndexEntry::GetDataTableInfo() const {
 
 void DuckIndexEntry::CommitDrop() {
 	D_ASSERT(info);
-	GetDataTableInfo().GetIndexes().CommitDrop(name);
+	auto &indexes = GetDataTableInfo().GetIndexes();
+	indexes.CommitDrop(name);
+	indexes.RemoveIndex(name);
 }
 
 } // namespace duckdb

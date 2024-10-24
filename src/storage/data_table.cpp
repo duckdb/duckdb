@@ -686,6 +686,15 @@ void DataTable::AddAndCreateIndex(LocalStorage &local_storage, DataTable &parent
 	}
 	D_ASSERT(!unique.info.name.empty());
 
+	// Ensure that there are no other indexes with that name on this table.
+	auto &indexes = info->GetIndexes();
+	indexes.Scan([&](Index &index) {
+		if (index.GetIndexName() == unique.info.name) {
+			throw CatalogException("an index with that name already exists for this table: %s", unique.info.name);
+		}
+		return false;
+	});
+
 	// Fetch the column types and create bound column reference expressions.
 	vector<column_t> column_ids;
 	vector<unique_ptr<Expression>> global_expressions;

@@ -11,7 +11,7 @@ namespace duckdb {
 
 CatalogEntry::CatalogEntry(CatalogType type, string name_p, idx_t oid)
     : oid(oid), type(type), set(nullptr), name(std::move(name_p)), deleted(false), temporary(false), internal(false),
-      rollback(nullptr), parent(nullptr) {
+      parent(nullptr) {
 }
 
 CatalogEntry::CatalogEntry(CatalogType type, Catalog &catalog, string name_p)
@@ -107,6 +107,9 @@ unique_ptr<CreateInfo> CatalogEntry::Deserialize(Deserializer &deserializer) {
 }
 
 void CatalogEntry::Verify(Catalog &catalog_p) {
+}
+
+void CatalogEntry::Rollback(CatalogEntry &prev_entry) {
 }
 
 InCatalogEntry::InCatalogEntry(CatalogType type, Catalog &catalog, string name)
