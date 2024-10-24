@@ -11,6 +11,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/transaction/undo_buffer_allocator.hpp"
 #include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
