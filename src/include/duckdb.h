@@ -1476,6 +1476,8 @@ Returns the parameter logical type for the parameter at the given index.
 
 Returns `nullptr` if the parameter index is out of range or the statement was not successfully prepared.
 
+The return type of this call should be destroyed with `duckdb_destroy_logical_type`.
+
 * @param prepared_statement The prepared statement.
 * @param param_idx The parameter index.
 * @return The parameter logical type
