@@ -825,7 +825,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 		create_info->constraints.push_back(constraint->Copy());
 	}
 
-	bool set_add_index_rollback = false;
+	bool add_index_rollback = false;
 	if (info.constraint->type == ConstraintType::UNIQUE) {
 		const auto &unique = info.constraint->Cast<UniqueConstraint>();
 		const auto existing_pk = GetPrimaryKey();
@@ -837,7 +837,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 		create_info->constraints.push_back(info.constraint->Copy());
 
 		if (unique.is_primary_key) {
-			set_add_index_rollback = true;
+			add_index_rollback = true;
 		}
 	} else {
 		throw InternalException("unsupported constraint type in ALTER TABLE statement");
@@ -851,7 +851,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 	auto new_storage = make_shared_ptr<DataTable>(context, *storage, *bound_constraint);
 	auto new_entry = make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
 
-	if (set_add_index_rollback) {
+	if (add_index_rollback) {
 		new_entry->rollback = RollbackAddIndex;
 		for (auto &constraint : new_entry->GetConstraints()) {
 			if (constraint->type != ConstraintType::UNIQUE) {

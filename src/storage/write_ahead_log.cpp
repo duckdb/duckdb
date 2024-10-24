@@ -264,7 +264,7 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 
 void SerializeIndex(AttachedDatabase &db, WriteAheadLogSerializer &serializer, TableIndexList &list,
                     const string &name) {
-	auto db_options = db.GetDatabase().config.options;
+	const auto &db_options = db.GetDatabase().config.options;
 	auto v1_0_0_storage = db_options.serialization_compatibility.serialization_version < 3;
 	case_insensitive_map_t<Value> options;
 	if (!v1_0_0_storage) {
