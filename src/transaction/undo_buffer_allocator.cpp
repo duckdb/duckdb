@@ -57,4 +57,4 @@ UndoBufferReference UndoBufferAllocator::Allocate(idx_t alloc_len) {
 	return UndoBufferReference(*head, std::move(handle), current_position);
 }
 
-}
+} // namespace duckdb

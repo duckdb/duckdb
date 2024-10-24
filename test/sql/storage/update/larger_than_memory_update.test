@@ -1,0 +1,41 @@
+# name: test/sql/storage/update/larger_than_memory_update.test
+# description: Test larger than memory updates
+# group: [update]
+
+require skip_reload
+
+require noforcestorage
+
+statement ok
+ATTACH '__TEST_DIR__/larger_than_memory_update.db'
+
+statement ok
+CREATE TABLE integers AS FROM range(1000000) t(i);
+
+statement ok
+SET memory_limit='8MB';
+
+query II
+SELECT COUNT(*), SUM(i) FROM integers
+----
+1000000	499999500000
+
+query I
+UPDATE integers SET i=i+1;
+----
+1000000
+
+query II
+SELECT COUNT(*), SUM(i) FROM integers
+----
+1000000	500000500000
+
+query I
+UPDATE integers SET i=i+1 WHERE i%2=0;
+----
+500000
+
+query II
+SELECT COUNT(*), SUM(i) FROM integers
+----
+1000000	500001000000

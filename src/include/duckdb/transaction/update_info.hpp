@@ -17,6 +17,11 @@ namespace duckdb {
 class UpdateSegment;
 struct DataTableInfo;
 
+//! UpdateInfo is a class that represents a set of updates applied to a single vector.
+//! The UpdateInfo struct contains metadata associated with the update.
+//! After the UpdateInfo, we must ALWAYS allocate the list of tuples and the data as contiguous arrays:
+//! [UpdateInfo][TUPLES (sel_t[max])][DATA (T[max])]
+//! The required allocation size can be obtained using UpdateInfo::GetAllocSize
 struct UpdateInfo {
 	//! The update segment that this update info affects
 	UpdateSegment *segment;
@@ -30,14 +35,21 @@ struct UpdateInfo {
 	sel_t N; // NOLINT
 	//! The maximum amount of tuples that can fit into this UpdateInfo
 	sel_t max;
-	//! The row ids of the tuples that have been updated. This should always be kept sorted!
-	sel_t *tuples;
-	//! The data of the tuples
-	data_ptr_t tuple_data;
 	//! The previous update info (or nullptr if it is the base)
 	UndoBufferPointer prev;
 	//! The next update info in the chain (or nullptr if it is the last)
 	UndoBufferPointer next;
+
+	//! The row ids of the tuples that have been updated. This should always be kept sorted!
+	sel_t *GetTuples();
+
+	//! The update values
+	data_ptr_t GetValues();
+
+	template <class T>
+	T *GetData() {
+		return reinterpret_cast<T *>(GetValues());
+	}
 
 	bool AppliesToTransaction(transaction_t start_time, transaction_t transaction_id) {
 		// these tuples were either committed AFTER this transaction started or are not committed yet, use

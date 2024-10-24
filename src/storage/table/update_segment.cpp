@@ -47,6 +47,7 @@ UpdateSegment::~UpdateSegment() {
 Value UpdateInfo::GetValue(idx_t index) {
 	auto &type = segment->column_data.type;
 
+	auto tuple_data = GetValues();
 	switch (type.id()) {
 	case LogicalTypeId::VALIDITY:
 		return Value::BOOLEAN(reinterpret_cast<bool *>(tuple_data)[index]);
@@ -65,6 +66,7 @@ string UpdateInfo::ToString() {
 	auto &type = segment->column_data.type;
 	string result = "Update Info [" + type.ToString() + ", Count: " + to_string(N) +
 	                ", Transaction Id: " + to_string(version_number) + "]\n";
+	auto tuples = GetTuples();
 	for (idx_t i = 0; i < N; i++) {
 		result += to_string(tuples[i]) + ": " + GetValue(i).ToString() + "\n";
 	}
@@ -73,6 +75,14 @@ string UpdateInfo::ToString() {
 		result += "\nChild Segment: " + Get(next_pin).ToString();
 	}
 	return result;
+}
+
+sel_t *UpdateInfo::GetTuples() {
+	return reinterpret_cast<sel_t *>(data_ptr_cast(this) + sizeof(UpdateInfo));
+}
+
+data_ptr_t UpdateInfo::GetValues() {
+	return reinterpret_cast<data_ptr_t>(data_ptr_cast(this) + sizeof(UpdateInfo) + sizeof(sel_t) * max);
 }
 
 UpdateInfo &UpdateInfo::Get(UndoBufferReference &entry) {
@@ -93,10 +103,7 @@ idx_t UpdateInfo::GetAllocSize(idx_t type_size) {
 }
 
 void UpdateInfo::Initialize(UpdateInfo &info, transaction_t transaction_id) {
-	auto ptr = reinterpret_cast<data_ptr_t>(&info);
 	info.max = STANDARD_VECTOR_SIZE;
-	info.tuples = reinterpret_cast<sel_t *>(ptr + sizeof(UpdateInfo));
-	info.tuple_data = ptr + sizeof(UpdateInfo) + sizeof(sel_t) * info.max;
 	info.version_number = transaction_id;
 	info.segment = nullptr;
 	info.prev.entry = nullptr;
@@ -105,6 +112,7 @@ void UpdateInfo::Initialize(UpdateInfo &info, transaction_t transaction_id) {
 
 void UpdateInfo::Verify() {
 #ifdef DEBUG
+	auto tuples = GetTuples();
 	for (idx_t i = 1; i < N; i++) {
 		D_ASSERT(tuples[i] > tuples[i - 1] && tuples[i] < STANDARD_VECTOR_SIZE);
 	}
@@ -115,9 +123,10 @@ void UpdateInfo::Verify() {
 // Update Fetch
 //===--------------------------------------------------------------------===//
 static void MergeValidityInfo(UpdateInfo &current, ValidityMask &result_mask) {
-	auto info_data = reinterpret_cast<bool *>(current.tuple_data);
+	auto tuples = current.GetTuples();
+	auto info_data = current.GetData<bool>();
 	for (idx_t i = 0; i < current.N; i++) {
-		result_mask.Set(current.tuples[i], info_data[i]);
+		result_mask.Set(tuples[i], info_data[i]);
 	}
 }
 
@@ -130,7 +139,8 @@ static void UpdateMergeValidity(transaction_t start_time, transaction_t transact
 
 template <class T>
 static void MergeUpdateInfo(UpdateInfo &current, T *result_data) {
-	auto info_data = reinterpret_cast<T *>(current.tuple_data);
+	auto tuples = current.GetTuples();
+	auto info_data = current.GetData<T>();
 	if (current.N == STANDARD_VECTOR_SIZE) {
 		// special case: update touches ALL tuples of this vector
 		// in this case we can just memcpy the data
@@ -138,7 +148,7 @@ static void MergeUpdateInfo(UpdateInfo &current, T *result_data) {
 		memcpy(result_data, info_data, sizeof(T) * current.N);
 	} else {
 		for (idx_t i = 0; i < current.N; i++) {
-			result_data[current.tuples[i]] = info_data[i];
+			result_data[tuples[i]] = info_data[i];
 		}
 	}
 }
@@ -285,9 +295,10 @@ void UpdateSegment::FetchCommitted(idx_t vector_index, Vector &result) {
 //===--------------------------------------------------------------------===//
 static void MergeUpdateInfoRangeValidity(UpdateInfo &current, idx_t start, idx_t end, idx_t result_offset,
                                          ValidityMask &result_mask) {
-	auto info_data = reinterpret_cast<bool *>(current.tuple_data);
+	auto tuples = current.GetTuples();
+	auto info_data = current.GetData<bool>();
 	for (idx_t i = 0; i < current.N; i++) {
-		auto tuple_idx = current.tuples[i];
+		auto tuple_idx = tuples[i];
 		if (tuple_idx < start) {
 			continue;
 		} else if (tuple_idx >= end) {
@@ -305,9 +316,10 @@ static void FetchCommittedRangeValidity(UpdateInfo &info, idx_t start, idx_t end
 
 template <class T>
 static void MergeUpdateInfoRange(UpdateInfo &current, idx_t start, idx_t end, idx_t result_offset, T *result_data) {
-	auto info_data = reinterpret_cast<T *>(current.tuple_data);
+	auto tuples = current.GetTuples();
+	auto info_data = current.GetData<T>();
 	for (idx_t i = 0; i < current.N; i++) {
-		auto tuple_idx = current.tuples[i];
+		auto tuple_idx = tuples[i];
 		if (tuple_idx < start) {
 			continue;
 		} else if (tuple_idx >= end) {
@@ -398,13 +410,14 @@ static void FetchRowValidity(transaction_t start_time, transaction_t transaction
                              Vector &result, idx_t result_idx) {
 	auto &result_mask = FlatVector::Validity(result);
 	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo &current) {
-		auto info_data = reinterpret_cast<bool *>(current.tuple_data);
+		auto info_data = current.GetData<bool>();
+		auto tuples = current.GetTuples();
 		// FIXME: we could do a binary search in here
 		for (idx_t i = 0; i < current.N; i++) {
-			if (current.tuples[i] == row_idx) {
+			if (tuples[i] == row_idx) {
 				result_mask.Set(result_idx, info_data[i]);
 				break;
-			} else if (current.tuples[i] > row_idx) {
+			} else if (tuples[i] > row_idx) {
 				break;
 			}
 		}
@@ -416,13 +429,14 @@ static void TemplatedFetchRow(transaction_t start_time, transaction_t transactio
                               Vector &result, idx_t result_idx) {
 	auto result_data = FlatVector::GetData<T>(result);
 	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo &current) {
-		auto info_data = (T *)current.tuple_data;
+		auto info_data = current.GetData<T>();
+		auto tuples = current.GetTuples();
 		// FIXME: we could do a binary search in here
 		for (idx_t i = 0; i < current.N; i++) {
-			if (current.tuples[i] == row_idx) {
+			if (tuples[i] == row_idx) {
 				result_data[result_idx] = info_data[i];
 				break;
-			} else if (current.tuples[i] > row_idx) {
+			} else if (tuples[i] > row_idx) {
 				break;
 			}
 		}
@@ -484,12 +498,14 @@ void UpdateSegment::FetchRow(TransactionData transaction, idx_t row_id, Vector &
 //===--------------------------------------------------------------------===//
 template <class T>
 static void RollbackUpdate(UpdateInfo &base_info, UpdateInfo &rollback_info) {
-	auto base_data = (T *)base_info.tuple_data;
-	auto rollback_data = (T *)rollback_info.tuple_data;
+	auto base_data = base_info.GetData<T>();
+	auto base_tuples = base_info.GetTuples();
+	auto rollback_data = rollback_info.GetData<T>();
+	auto rollback_tuples = rollback_info.GetTuples();
 	idx_t base_offset = 0;
 	for (idx_t i = 0; i < rollback_info.N; i++) {
-		auto id = rollback_info.tuples[i];
-		while (base_info.tuples[base_offset] < id) {
+		auto id = rollback_tuples[i];
+		while (base_tuples[base_offset] < id) {
 			base_offset++;
 			D_ASSERT(base_offset < base_info.N);
 		}
@@ -581,38 +597,37 @@ void UpdateSegment::CleanupUpdate(UpdateInfo &info) {
 //===--------------------------------------------------------------------===//
 static void CheckForConflicts(UndoBufferPointer next_ptr, TransactionData transaction, row_t *ids,
                               const SelectionVector &sel, idx_t count, row_t offset, UndoBufferReference &node_ref) {
-	if (!next_ptr.IsSet()) {
-		return;
-	}
-	auto pin = next_ptr.Pin();
-	auto &info = UpdateInfo::Get(pin);
-	if (info.version_number == transaction.transaction_id) {
-		// this UpdateInfo belongs to the current transaction, set it in the node
-		node_ref = std::move(pin);
-	} else if (info.version_number > transaction.start_time) {
-		// potential conflict, check that tuple ids do not conflict
-		// as both ids and info->tuples are sorted, this is similar to a merge join
-		idx_t i = 0, j = 0;
-		while (true) {
-			auto id = ids[sel.get_index(i)] - offset;
-			if (id == info.tuples[j]) {
-				throw TransactionException("Conflict on update!");
-			} else if (id < info.tuples[j]) {
-				// id < the current tuple in info, move to next id
-				i++;
-				if (i == count) {
-					break;
-				}
-			} else {
-				// id > the current tuple, move to next tuple in info
-				j++;
-				if (j == info.N) {
-					break;
+	while (next_ptr.IsSet()) {
+		auto pin = next_ptr.Pin();
+		auto &info = UpdateInfo::Get(pin);
+		auto tuples = info.GetTuples();
+		if (info.version_number == transaction.transaction_id) {
+			// this UpdateInfo belongs to the current transaction, set it in the node
+			node_ref = std::move(pin);
+		} else if (info.version_number > transaction.start_time) {
+			// potential conflict, check that tuple ids do not conflict
+			// as both ids and info->tuples are sorted, this is similar to a merge join
+			idx_t i = 0, j = 0;
+			while (true) {
+				auto id = ids[sel.get_index(i)] - offset;
+				if (id == tuples[j]) {
+					throw TransactionException("Conflict on update!");
+				} else if (id < tuples[j]) {
+					// id < the current tuple in info, move to next id
+					i++;
+					if (i == count) {
+						break;
+					}
+				} else {
+					// id > the current tuple, move to next tuple in info
+					j++;
+					if (j == info.N) {
+						break;
+					}
 				}
 			}
 		}
 	}
-	CheckForConflicts(info.next, transaction, ids, sel, count, offset, node_ref);
 }
 
 //===--------------------------------------------------------------------===//
@@ -627,18 +642,19 @@ void UpdateSegment::InitializeUpdateInfo(UpdateInfo &info, row_t *ids, const Sel
 
 	// set up the tuple ids
 	info.N = UnsafeNumericCast<sel_t>(count);
+	auto tuples = info.GetTuples();
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		auto id = ids[idx];
 		D_ASSERT(idx_t(id) >= vector_offset && idx_t(id) < vector_offset + STANDARD_VECTOR_SIZE);
-		info.tuples[i] = NumericCast<sel_t>(NumericCast<idx_t>(id) - vector_offset);
+		tuples[i] = NumericCast<sel_t>(NumericCast<idx_t>(id) - vector_offset);
 	};
 }
 
 static void InitializeUpdateValidity(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info, Vector &update,
                                      const SelectionVector &sel) {
 	auto &update_mask = FlatVector::Validity(update);
-	auto tuple_data = reinterpret_cast<bool *>(update_info.tuple_data);
+	auto tuple_data = update_info.GetData<bool>();
 
 	if (!update_mask.AllValid()) {
 		for (idx_t i = 0; i < update_info.N; i++) {
@@ -652,10 +668,11 @@ static void InitializeUpdateValidity(UpdateInfo &base_info, Vector &base_data, U
 	}
 
 	auto &base_mask = FlatVector::Validity(base_data);
-	auto base_tuple_data = reinterpret_cast<bool *>(base_info.tuple_data);
+	auto base_tuple_data = base_info.GetData<bool>();
+	auto base_tuples = base_info.GetTuples();
 	if (!base_mask.AllValid()) {
 		for (idx_t i = 0; i < base_info.N; i++) {
-			base_tuple_data[i] = base_mask.RowIsValidUnsafe(base_info.tuples[i]);
+			base_tuple_data[i] = base_mask.RowIsValidUnsafe(base_tuples[i]);
 		}
 	} else {
 		for (idx_t i = 0; i < base_info.N; i++) {
@@ -680,7 +697,7 @@ template <class T>
 static void InitializeUpdateData(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info, Vector &update,
                                  const SelectionVector &sel) {
 	auto update_data = FlatVector::GetData<T>(update);
-	auto tuple_data = (T *)update_info.tuple_data;
+	auto tuple_data = update_info.GetData<T>();
 
 	for (idx_t i = 0; i < update_info.N; i++) {
 		auto idx = sel.get_index(i);
@@ -689,9 +706,10 @@ static void InitializeUpdateData(UpdateInfo &base_info, Vector &base_data, Updat
 
 	auto base_array_data = FlatVector::GetData<T>(base_data);
 	auto &base_validity = FlatVector::Validity(base_data);
-	auto base_tuple_data = (T *)base_info.tuple_data;
+	auto base_tuple_data = base_info.GetData<T>();
+	auto base_tuples = base_info.GetTuples();
 	for (idx_t i = 0; i < base_info.N; i++) {
-		auto base_idx = base_info.tuples[i];
+		auto base_idx = base_tuples[i];
 		if (!base_validity.RowIsValid(base_idx)) {
 			continue;
 		}
@@ -809,8 +827,10 @@ static void MergeUpdateLoopInternal(UpdateInfo &base_info, V *base_table_data, U
 	// and potentially, this transaction already has updates present (update_info)
 	// we need to merge these all together so that the latest updates get merged into base_info
 	// and the "old" values (fetched from EITHER base_info OR from base_data) get placed into update_info
-	auto base_info_data = (T *)base_info.tuple_data;
-	auto update_info_data = (T *)update_info.tuple_data;
+	auto base_info_data = base_info.GetData<T>();
+	auto base_tuples = base_info.GetTuples();
+	auto update_info_data = update_info.GetData<T>();
+	auto update_tuples = update_info.GetTuples();
 
 	// we first do the merging of the old values
 	// what we are trying to do here is update the "update_info" of this transaction with all the old data we require
@@ -829,26 +849,26 @@ static void MergeUpdateLoopInternal(UpdateInfo &base_info, V *base_table_data, U
 		// we have to merge the info for "ids[i]"
 		auto update_id = UnsafeNumericCast<idx_t>(ids[idx]) - base_id;
 
-		while (update_info_offset < update_info.N && update_info.tuples[update_info_offset] < update_id) {
+		while (update_info_offset < update_info.N && update_tuples[update_info_offset] < update_id) {
 			// old id comes before the current id: write it
 			result_values[result_offset] = update_info_data[update_info_offset];
-			result_ids[result_offset++] = update_info.tuples[update_info_offset];
+			result_ids[result_offset++] = update_tuples[update_info_offset];
 			update_info_offset++;
 		}
 		// write the new id
-		if (update_info_offset < update_info.N && update_info.tuples[update_info_offset] == update_id) {
+		if (update_info_offset < update_info.N && update_tuples[update_info_offset] == update_id) {
 			// we have an id that is equivalent in the current update info: write the update info
 			result_values[result_offset] = update_info_data[update_info_offset];
-			result_ids[result_offset++] = update_info.tuples[update_info_offset];
+			result_ids[result_offset++] = update_tuples[update_info_offset];
 			update_info_offset++;
 			continue;
 		}
 
 		/// now check if we have the current update_id in the base_info, or if we should fetch it from the base data
-		while (base_info_offset < base_info.N && base_info.tuples[base_info_offset] < update_id) {
+		while (base_info_offset < base_info.N && base_tuples[base_info_offset] < update_id) {
 			base_info_offset++;
 		}
-		if (base_info_offset < base_info.N && base_info.tuples[base_info_offset] == update_id) {
+		if (base_info_offset < base_info.N && base_tuples[base_info_offset] == update_id) {
 			// it is! we have to move the tuple from base_info->ids[base_info_offset] to update_info
 			result_values[result_offset] = base_info_data[base_info_offset];
 		} else {
@@ -861,13 +881,13 @@ static void MergeUpdateLoopInternal(UpdateInfo &base_info, V *base_table_data, U
 	// write any remaining entries from the old updates
 	while (update_info_offset < update_info.N) {
 		result_values[result_offset] = update_info_data[update_info_offset];
-		result_ids[result_offset++] = update_info.tuples[update_info_offset];
+		result_ids[result_offset++] = update_tuples[update_info_offset];
 		update_info_offset++;
 	}
 	// now copy them back
 	update_info.N = UnsafeNumericCast<sel_t>(result_offset);
 	memcpy(update_info_data, result_values, result_offset * sizeof(T));
-	memcpy(update_info.tuples, result_ids, result_offset * sizeof(sel_t));
+	memcpy(update_tuples, result_ids, result_offset * sizeof(sel_t));
 
 	// now we merge the new values into the base_info
 	result_offset = 0;
@@ -885,11 +905,11 @@ static void MergeUpdateLoopInternal(UpdateInfo &base_info, V *base_table_data, U
 	auto merge = [&](idx_t id, idx_t aidx, idx_t bidx, idx_t count) {
 		pick_new(id, aidx, count);
 	};
-	MergeLoop(ids, base_info.tuples, count, base_info.N, base_id, merge, pick_new, pick_old, sel);
+	MergeLoop(ids, base_tuples, count, base_info.N, base_id, merge, pick_new, pick_old, sel);
 
 	base_info.N = UnsafeNumericCast<sel_t>(result_offset);
 	memcpy(base_info_data, result_values, result_offset * sizeof(T));
-	memcpy(base_info.tuples, result_ids, result_offset * sizeof(sel_t));
+	memcpy(base_tuples, result_ids, result_offset * sizeof(sel_t));
 }
 
 static void MergeValidityLoop(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info, Vector &update,
@@ -1112,15 +1132,9 @@ static idx_t SortSelectionVector(SelectionVector &sel, idx_t count, row_t *ids) 
 
 UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, idx_t type_size, idx_t count,
                                   unsafe_unique_array<char> &data) {
-	data = make_unsafe_uniq_array_uninitialized<char>(sizeof(UpdateInfo) +
-	                                                  (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
+	data = make_unsafe_uniq_array_uninitialized<char>(UpdateInfo::GetAllocSize(type_size));
 	auto update_info = reinterpret_cast<UpdateInfo *>(data.get());
-	update_info->max = STANDARD_VECTOR_SIZE;
-	update_info->tuples = reinterpret_cast<sel_t *>((data_ptr_cast(update_info)) + sizeof(UpdateInfo));
-	update_info->tuple_data = (data_ptr_cast(update_info)) + sizeof(UpdateInfo) + sizeof(sel_t) * update_info->max;
-	update_info->version_number = transaction.transaction_id;
-	update_info->prev = UndoBufferPointer();
-	update_info->next = UndoBufferPointer();
+	UpdateInfo::Initialize(*update_info, transaction.transaction_id);
 	return update_info;
 }
 

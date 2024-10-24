@@ -76,5 +76,4 @@ struct UndoBufferAllocator {
 	optional_ptr<UndoBufferEntry> tail;
 };
 
-
 } // namespace duckdb
