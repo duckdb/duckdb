@@ -571,10 +571,16 @@ const string DBConfig::UserAgent() const {
 	return user_agent;
 }
 
-bool DBConfig::CanAccessFile(const string &path) {
+bool DBConfig::CanAccessFile(const string &input_path) {
 	if (options.enable_external_access) {
 		// all external access is allowed
 		return true;
+	}
+	auto path_sep = file_system->PathSeparator(input_path);
+	string path = input_path;
+	if (path_sep != "/") {
+		// allowed_directories/allowed_path always uses forward slashes regardless of the OS
+		path = StringUtil::Replace(path, path_sep, "/");
 	}
 	if (options.allowed_paths.count(path) > 0) {
 		// path is explicitly allowed
@@ -601,7 +607,6 @@ bool DBConfig::CanAccessFile(const string &path) {
 		// no common prefix found - path is not inside an allowed directory
 		return false;
 	}
-	auto path_sep = file_system->PathSeparator(path);
 	D_ASSERT(StringUtil::EndsWith(prefix, path_sep));
 	// path is inside an allowed directory - HOWEVER, we could still exit the allowed directory using ".."
 	// we check if we ever exit the allowed directory using ".." by looking at the path fragments

@@ -205,6 +205,10 @@ void AllowedDirectoriesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 		if (!StringUtil::EndsWith(allowed_directory, path_sep)) {
 			allowed_directory += path_sep;
 		}
+		// make sure allowed_directory always uses forward slashes regardless of the OS
+		if (path_sep != "/") {
+			allowed_directory = StringUtil::Replace(allowed_directory, path_sep, "/");
+		}
 		config.options.allowed_directories.insert(allowed_directory);
 	}
 }
@@ -235,7 +239,13 @@ void AllowedPathsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, cons
 	config.options.allowed_paths.clear();
 	auto &list = ListValue::GetChildren(input);
 	for (auto &val : list) {
-		config.options.allowed_paths.insert(val.GetValue<string>());
+		auto allowed_path = val.GetValue<string>();
+		auto path_sep = config.file_system->PathSeparator(allowed_path);
+		// make sure allowed_path always uses forward slashes regardless of the OS
+		if (path_sep != "/") {
+			allowed_path = StringUtil::Replace(allowed_path, path_sep, "/");
+		}
+		config.options.allowed_paths.insert(allowed_path);
 	}
 }
 
