@@ -9,6 +9,9 @@ loop x 0 10
 statement ok
 CREATE TABLE strings(s VARCHAR);
 
+statement ok
+pragma force_compression='uncompressed'
+
 # load large strings into the table iteratively
 loop it 0 10
 
@@ -29,11 +32,15 @@ CHECKPOINT;
 
 endloop
 
+# And verify that no other compression is used
 query I
-SELECT segment_info FROM pragma_storage_info('strings');
+SELECT compression FROM pragma_storage_info('strings') WHERE segment_type == 'VARCHAR' AND compression != 'Uncompressed';
 ----
-(empty)
-(empty)
+
+query I
+SELECT EXISTS (SELECT * FROM pragma_storage_info('strings') WHERE contains(segment_info, 'Overflow String'));
+----
+true
 
 # ensure that the expected total storage size is the same as in the first iteration of the loop
 

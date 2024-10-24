@@ -138,6 +138,15 @@ struct ZSTDStorage {
 	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
 	static void StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
 	                           idx_t result_idx);
+
+	// Segment state metadata
+	// Required because we are creating additional pages that have to be cleaned up
+
+	static unique_ptr<CompressedSegmentState> StringInitSegment(ColumnSegment &segment, block_id_t block_id,
+	                                                            optional_ptr<ColumnSegmentState> segment_state);
+	static unique_ptr<ColumnSegmentState> SerializeState(ColumnSegment &segment);
+	static unique_ptr<ColumnSegmentState> DeserializeState(Deserializer &deserializer);
+	static void CleanupState(ColumnSegment &segment);
 };
 
 //===--------------------------------------------------------------------===//
@@ -528,6 +537,8 @@ public:
 	block_id_t FinalizePage() {
 		auto &block_manager = partial_block_manager.GetBlockManager();
 		auto new_id = block_manager.GetFreeBlockId();
+		auto &state = segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
+		state.RegisterBlock(block_manager, new_id);
 
 		D_ASSERT(GetCurrentOffset() <= GetWritableSpace());
 
@@ -744,7 +755,8 @@ public:
 struct ZSTDScanState : public SegmentScanState {
 public:
 	ZSTDScanState(ColumnSegment &segment)
-	    : block_manager(segment.GetBlockManager()), buffer_manager(BufferManager::GetBufferManager(segment.db)),
+	    : state(segment.GetSegmentState()->Cast<UncompressedStringSegmentState>()),
+	      block_manager(segment.GetBlockManager()), buffer_manager(BufferManager::GetBufferManager(segment.db)),
 	      decompression_dict(nullptr), segment_block_offset(segment.GetBlockOffset()) {
 		decompression_context = duckdb_zstd::ZSTD_createDCtx();
 		segment_handle = buffer_manager.Pin(segment.block);
@@ -807,15 +819,7 @@ public:
 	}
 
 	shared_ptr<BlockHandle> LoadPage(block_id_t block_id) {
-		D_ASSERT(block_id != INVALID_BLOCK);
-		lock_guard<mutex> lock(block_lock);
-		auto entry = handles.find(block_id);
-		if (entry != handles.end()) {
-			return entry->second;
-		}
-		auto result = block_manager.RegisterBlock(block_id);
-		handles.insert(make_pair(block_id, result));
-		return result;
+		return state.GetHandle(block_manager, block_id);
 	}
 
 	bool UseVectorStateCache(idx_t vector_idx, idx_t internal_offset) {
@@ -1001,10 +1005,9 @@ public:
 	}
 
 public:
+	UncompressedStringSegmentState &state;
 	BlockManager &block_manager;
 	BufferManager &buffer_manager;
-	mutex block_lock;
-	unordered_map<block_id_t, shared_ptr<BlockHandle>> handles;
 
 	DictBuffer dict;
 	duckdb_zstd::ZSTD_DCtx *decompression_context = nullptr;
@@ -1063,15 +1066,57 @@ void ZSTDStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 }
 
 //===--------------------------------------------------------------------===//
+// Serialization & Cleanup
+//===--------------------------------------------------------------------===//
+
+unique_ptr<CompressedSegmentState> ZSTDStorage::StringInitSegment(ColumnSegment &segment, block_id_t block_id,
+                                                                  optional_ptr<ColumnSegmentState> segment_state) {
+	auto result = make_uniq<UncompressedStringSegmentState>();
+	if (segment_state) {
+		auto &serialized_state = segment_state->Cast<SerializedStringSegmentState>();
+		result->on_disk_blocks = std::move(serialized_state.blocks);
+	}
+	return std::move(result);
+}
+
+unique_ptr<ColumnSegmentState> ZSTDStorage::SerializeState(ColumnSegment &segment) {
+	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
+	if (state.on_disk_blocks.empty()) {
+		// no on-disk blocks - nothing to write
+		return nullptr;
+	}
+	return make_uniq<SerializedStringSegmentState>(state.on_disk_blocks);
+}
+
+unique_ptr<ColumnSegmentState> ZSTDStorage::DeserializeState(Deserializer &deserializer) {
+	auto result = make_uniq<SerializedStringSegmentState>();
+	deserializer.ReadProperty(1, "overflow_blocks", result->blocks);
+	return std::move(result);
+}
+
+void ZSTDStorage::CleanupState(ColumnSegment &segment) {
+	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
+	auto &block_manager = segment.GetBlockManager();
+	for (auto &block_id : state.on_disk_blocks) {
+		block_manager.MarkBlockAsModified(block_id);
+	}
+}
+
+//===--------------------------------------------------------------------===//
 // Get Function
 //===--------------------------------------------------------------------===//
 CompressionFunction ZSTDFun::GetFunction(PhysicalType data_type) {
 	D_ASSERT(data_type == PhysicalType::VARCHAR);
-	return CompressionFunction(CompressionType::COMPRESSION_ZSTD, data_type, ZSTDStorage::StringInitAnalyze,
-	                           ZSTDStorage::StringAnalyze, ZSTDStorage::StringFinalAnalyze,
-	                           ZSTDStorage::InitCompression, ZSTDStorage::Compress, ZSTDStorage::FinalizeCompress,
-	                           ZSTDStorage::StringInitScan, ZSTDStorage::StringScan, ZSTDStorage::StringScanPartial,
-	                           ZSTDStorage::StringFetchRow, UncompressedFunctions::EmptySkip);
+	auto zstd = CompressionFunction(
+	    CompressionType::COMPRESSION_ZSTD, data_type, ZSTDStorage::StringInitAnalyze, ZSTDStorage::StringAnalyze,
+	    ZSTDStorage::StringFinalAnalyze, ZSTDStorage::InitCompression, ZSTDStorage::Compress,
+	    ZSTDStorage::FinalizeCompress, ZSTDStorage::StringInitScan, ZSTDStorage::StringScan,
+	    ZSTDStorage::StringScanPartial, ZSTDStorage::StringFetchRow, UncompressedFunctions::EmptySkip);
+	zstd.init_segment = ZSTDStorage::StringInitSegment;
+	zstd.serialize_state = ZSTDStorage::SerializeState;
+	zstd.deserialize_state = ZSTDStorage::DeserializeState;
+	zstd.cleanup_state = ZSTDStorage::CleanupState;
+	return zstd;
 }
 
 bool ZSTDFun::TypeIsSupported(PhysicalType type) {
