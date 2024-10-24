@@ -242,6 +242,79 @@
                 },
                 "return_value": "The child vector"
             }
+        },
+        {
+            "name": "duckdb_map_vector_get_keys",
+            "return_type": "duckdb_vector",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "vector"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the keys vector of a map vector.\n\nThe resulting vector is valid as long as the parent vector is valid.\n\n",
+                "param_comments": {
+                    "vector": "The vector"
+                },
+                "return_value": "The keys vector"
+            }
+        },
+        {
+            "name": "duckdb_map_vector_get_values",
+            "return_type": "duckdb_vector",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "vector"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the values vector of a map vector.\n\nThe resulting vector is valid as long as the parent vector is valid.\n\n",
+                "param_comments": {
+                    "vector": "The vector"
+                },
+                "return_value": "The values vector"
+            }
+        },
+        {
+            "name": "duckdb_union_vector_get_tags",
+            "return_type": "duckdb_vector",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "vector"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the tags vector of a union vector.\n\nThe resulting vector is valid as long as the parent vector is valid.\n\n",
+                "param_comments": {
+                    "vector": "The vector"
+                },
+                "return_value": "The tags vector"
+            }
+        },
+        {
+            "name": "duckdb_union_vector_get_member",
+            "return_type": "duckdb_vector",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "vector"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "tag"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the member vector of a union vector.\n\nThe resulting vector is valid as long as the parent vector is valid.\n\n",
+                "param_comments": {
+                    "vector": "The vector",
+                    "tag": "The tag of the member"
+                },
+                "return_value": "The member vector"
+            }
         }
     ]
 }
