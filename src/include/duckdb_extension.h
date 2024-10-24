@@ -486,6 +486,15 @@ typedef struct {
 	duckdb_data_chunk (*duckdb_stream_fetch_chunk)(duckdb_result result);
 #endif
 
+#ifdef DUCKDB_EXTENSION_API_VERSION_DEV // dev
+	// WARNING! the functions below are not (yet) stable
+
+	duckdb_vector (*duckdb_map_vector_get_keys)(duckdb_vector vector);
+	duckdb_vector (*duckdb_map_vector_get_values)(duckdb_vector vector);
+	duckdb_vector (*duckdb_union_vector_get_tags)(duckdb_vector vector);
+	duckdb_vector (*duckdb_union_vector_get_member)(duckdb_vector vector, idx_t tag);
+#endif
+
 } duckdb_ext_api_v0;
 
 //===--------------------------------------------------------------------===//
@@ -864,6 +873,12 @@ typedef struct {
 #define duckdb_cast_function_set_row_error          duckdb_ext_api.duckdb_cast_function_set_row_error
 #define duckdb_register_cast_function               duckdb_ext_api.duckdb_register_cast_function
 #define duckdb_destroy_cast_function                duckdb_ext_api.duckdb_destroy_cast_function
+
+// Version dev
+#define duckdb_map_vector_get_keys     duckdb_ext_api.duckdb_map_vector_get_keys
+#define duckdb_map_vector_get_values   duckdb_ext_api.duckdb_map_vector_get_values
+#define duckdb_union_vector_get_tags   duckdb_ext_api.duckdb_union_vector_get_tags
+#define duckdb_union_vector_get_member duckdb_ext_api.duckdb_union_vector_get_member
 
 //===--------------------------------------------------------------------===//
 // Struct Global Macros

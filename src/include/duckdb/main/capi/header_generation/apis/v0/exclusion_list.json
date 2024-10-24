@@ -2,10 +2,6 @@
     "exclusion_list": [
         {
             "entries": [
-                "duckdb_map_vector_get_keys",
-                "duckdb_map_vector_get_values",
-                "duckdb_union_vector_get_tags",
-                "duckdb_union_vector_get_member"
             ]
         }
     ]
