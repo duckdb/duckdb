@@ -18,18 +18,18 @@ class CSVDecoder {
 public:
 	explicit CSVDecoder(CSVEncoding encoding);
 	bool IsUTF8() const;
-	idx_t Decode(FileHandle &file_handle, void *buffer, const idx_t nr_bytes);
+	idx_t Decode(FileHandle &file_handle, void *buffer, const idx_t nr_bytes) const;
 
 private:
 	CSVEncoding encoding;
 	idx_t GetRatio() const;
-	void DecodeInternal(char *encoded_buffer, idx_t encoded_buffer_size, char *decoded_buffer,
-	                    idx_t &decoded_buffer_start);
+	void DecodeInternal(const char *encoded_buffer, idx_t encoded_buffer_size, char *decoded_buffer,
+	                    idx_t &decoded_buffer_start) const;
 
 	//! Actual decoding functions
-	void DecodeUTF16(char *encoded_buffer, idx_t encoded_buffer_size, char *decoded_buffer,
-	                 idx_t &decoded_buffer_start);
-	void DecodeLatin1(char *encoded_buffer, idx_t encoded_buffer_size, char *decoded_buffer,
-	                  idx_t &decoded_buffer_start);
+	static void DecodeUTF16(const char *encoded_buffer, idx_t encoded_buffer_size, char *decoded_buffer,
+	                        idx_t &decoded_buffer_start);
+	static void DecodeLatin1(const char *encoded_buffer, idx_t encoded_buffer_size, char *decoded_buffer,
+	                         idx_t &decoded_buffer_start);
 };
 } // namespace duckdb

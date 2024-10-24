@@ -31,3 +31,58 @@ statement error
 COPY test TO 'data/csv/test/test.csv' (encoding 'utf-16');
 ----
 Unrecognized option CSV writer "encoding"
+
+statement error
+FROM read_csv('data/csv/encodings/latin1.csv')
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+query II
+FROM read_csv('data/csv/encodings/latin1.csv', encoding = 'latin-1')
+----
+José Álvarez	30
+Müller	25
+François Dupont	45
+Björn Andersson	50
+Søren Kierkegaard	42
+García López	38
+Élodie Moreau	33
+Håkon Lindberg	28
+Brontë Johnson	47
+Zoë Robinson	21
+André Lefèvre	36
+Léonard Dubois	29
+
+statement error
+FROM read_csv('data/csv/encodings/utf16.csv')
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+query II
+FROM read_csv('data/csv/encodings/utf16.csv', encoding = 'utf-16')
+----
+José Álvarez	30
+Müller	25
+François Dupont	45
+Björn Andersson	50
+Søren Kierkegaard	42
+García López	38
+Élodie Moreau	33
+Håkon Lindberg	28
+Brontë Johnson	47
+Zoë Robinson	21
+André Lefèvre	36
+Léonard Dubois	29
+Dvořák Novak	60
+Iván García	34
+Łukasz Kowalski	27
+Renée Martin	41
+Øystein Olsen	39
+Anaïs Dupuis	24
+Sigurður Jónsson	55
+Krystýna Novák	23
+
+statement error
+FROM read_csv('data/csv/encodings/shift_jis.csv', encoding = 'utf-16')
+----
+CSV File is not utf-16 encoded
