@@ -68,8 +68,8 @@ struct UndoBufferPointer {
 };
 
 struct UndoBufferAllocator {
-	UndoBufferAllocator(BufferManager &buffer_manager,
-	                    idx_t initial_capacity = ArenaAllocator::ARENA_ALLOCATOR_INITIAL_CAPACITY);
+	explicit UndoBufferAllocator(BufferManager &buffer_manager,
+	                             idx_t initial_capacity = ArenaAllocator::ARENA_ALLOCATOR_INITIAL_CAPACITY);
 
 	UndoBufferReference Allocate(idx_t alloc_len);
 
