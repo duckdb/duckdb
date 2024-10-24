@@ -54,6 +54,11 @@ AttachOptions::AttachOptions(const unique_ptr<AttachInfo> &info, const AccessMod
 			continue;
 		}
 
+		if (entry.first == "default_table") {
+			default_table = QualifiedName::Parse(StringValue::Get(entry.second.DefaultCastAs(LogicalType::VARCHAR)));
+			continue;
+		}
+
 		options[entry.first] = entry.second;
 	}
 }
