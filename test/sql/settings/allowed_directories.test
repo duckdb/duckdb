@@ -4,6 +4,13 @@
 
 require skip_reload
 
+# enable_external_access = false disables extension loading
+require no_extension_autoloading
+
+require parquet
+
+require json
+
 # we can set allowed_directories as much as we want
 statement ok
 SET allowed_directories=['data/csv/glob']
@@ -173,10 +180,7 @@ IMPORT DATABASE 'export_test'
 ----
 Permission Error
 
-
 # we can read parquet/json files
-require parquet
-
 query II
 SELECT * FROM 'data/parquet-testing/glob/t1.parquet'
 ----
@@ -186,8 +190,6 @@ statement error
 SELECT * FROM 'data/parquet-testing/aws2.parquet'
 ----
 Permission Error
-
-require json
 
 query II
 SELECT * FROM 'data/parquet-testing/glob/t1.parquet'

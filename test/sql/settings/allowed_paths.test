@@ -4,6 +4,9 @@
 
 require skip_reload
 
+# enable_external_access = false disables extension loading
+require no_extension_autoloading
+
 # we can set allowed_directories as much as we want
 statement ok
 SET allowed_paths=['data/csv/glob/f_1.csv']
