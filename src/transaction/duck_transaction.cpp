@@ -61,17 +61,18 @@ void DuckTransaction::PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_dat
 		alloc_size += extra_data_size + sizeof(idx_t);
 	}
 
-	auto baseptr = undo_buffer.CreateEntry(UndoFlags::CATALOG_ENTRY, alloc_size);
+	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::CATALOG_ENTRY, alloc_size);
+	auto ptr = undo_entry.Ptr();
 	// store the pointer to the catalog entry
-	Store<CatalogEntry *>(&entry, baseptr);
+	Store<CatalogEntry *>(&entry, ptr);
 	if (extra_data_size > 0) {
 		// copy the extra data behind the catalog entry pointer (if any)
-		baseptr += sizeof(CatalogEntry *);
+		ptr += sizeof(CatalogEntry *);
 		// first store the extra data size
-		Store<idx_t>(extra_data_size, baseptr);
-		baseptr += sizeof(idx_t);
+		Store<idx_t>(extra_data_size, ptr);
+		ptr += sizeof(idx_t);
 		// then copy over the actual data
-		memcpy(baseptr, extra_data, extra_data_size);
+		memcpy(ptr, extra_data, extra_data_size);
 	}
 }
 
@@ -91,7 +92,8 @@ void DuckTransaction::PushDelete(DataTable &table, RowVersionManager &info, idx_
 		alloc_size += sizeof(uint16_t) * count;
 	}
 
-	auto delete_info = reinterpret_cast<DeleteInfo *>(undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, alloc_size));
+	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, alloc_size);
+	auto delete_info = reinterpret_cast<DeleteInfo *>(undo_entry.Ptr());
 	delete_info->version_info = &info;
 	delete_info->vector_idx = vector_idx;
 	delete_info->table = &table;
@@ -108,20 +110,21 @@ void DuckTransaction::PushDelete(DataTable &table, RowVersionManager &info, idx_
 }
 
 void DuckTransaction::PushAppend(DataTable &table, idx_t start_row, idx_t row_count) {
-	auto append_info =
-	    reinterpret_cast<AppendInfo *>(undo_buffer.CreateEntry(UndoFlags::INSERT_TUPLE, sizeof(AppendInfo)));
+	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::INSERT_TUPLE, sizeof(AppendInfo));
+	auto append_info = reinterpret_cast<AppendInfo *>(undo_entry.Ptr());
 	append_info->table = &table;
 	append_info->start_row = start_row;
 	append_info->count = row_count;
 }
 
 UpdateInfo *DuckTransaction::CreateUpdateInfo(idx_t type_size, idx_t entries) {
-	data_ptr_t base_info = undo_buffer.CreateEntry(
-	    UndoFlags::UPDATE_TUPLE, sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
-	auto update_info = reinterpret_cast<UpdateInfo *>(base_info);
+	throw InvalidInputException("FIXME: push CreateUpdateInfo into undo buffer");
+	idx_t alloc_size = sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE;
+	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::UPDATE_TUPLE, alloc_size);
+	auto update_info = reinterpret_cast<UpdateInfo *>(undo_entry.Ptr());
 	update_info->max = STANDARD_VECTOR_SIZE;
-	update_info->tuples = reinterpret_cast<sel_t *>(base_info + sizeof(UpdateInfo));
-	update_info->tuple_data = base_info + sizeof(UpdateInfo) + sizeof(sel_t) * update_info->max;
+	update_info->tuples = reinterpret_cast<sel_t *>(undo_entry.Ptr() + sizeof(UpdateInfo));
+	update_info->tuple_data = undo_entry.Ptr() + sizeof(UpdateInfo) + sizeof(sel_t) * update_info->max;
 	update_info->version_number = transaction_id;
 	return update_info;
 }
@@ -130,8 +133,8 @@ void DuckTransaction::PushSequenceUsage(SequenceCatalogEntry &sequence, const Se
 	lock_guard<mutex> l(sequence_lock);
 	auto entry = sequence_usage.find(sequence);
 	if (entry == sequence_usage.end()) {
-		auto sequence_ptr = undo_buffer.CreateEntry(UndoFlags::SEQUENCE_VALUE, sizeof(SequenceValue));
-		auto sequence_info = reinterpret_cast<SequenceValue *>(sequence_ptr);
+		auto undo_entry = undo_buffer.CreateEntry(UndoFlags::SEQUENCE_VALUE, sizeof(SequenceValue));
+		auto sequence_info = reinterpret_cast<SequenceValue *>(undo_entry.Ptr());
 		sequence_info->entry = &sequence;
 		sequence_info->usage_count = data.usage_count;
 		sequence_info->counter = data.counter;

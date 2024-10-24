@@ -13,33 +13,61 @@
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/transaction/wal_write_state.hpp"
 #include "duckdb/transaction/delete_info.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
 
 UndoBuffer::UndoBuffer(DuckTransaction &transaction_p, ClientContext &context_p)
-    : transaction(transaction_p), allocator(BufferAllocator::Get(context_p)) {
+    : transaction(transaction_p), buffer_manager(BufferManager::GetBufferManager(context_p)) {
 }
 
-data_ptr_t UndoBuffer::CreateEntry(UndoFlags type, idx_t len) {
-	D_ASSERT(len <= NumericLimits<uint32_t>::Maximum());
-	len = AlignValue(len);
-	idx_t needed_space = len + UNDO_ENTRY_HEADER_SIZE;
-	auto data = allocator.Allocate(needed_space);
+UndoBufferReference UndoBuffer::CreateEntry(UndoFlags type, idx_t len) {
+	D_ASSERT(!head || head->position <= head->capacity);
+	BufferHandle handle;
+	idx_t alloc_len = len + UNDO_ENTRY_HEADER_SIZE;
+	if (!head || head->position + alloc_len > head->capacity) {
+		// no space in current head - allocate a new block
+		idx_t capacity = Storage::DEFAULT_BLOCK_SIZE;
+		if (capacity < alloc_len) {
+			capacity = NextPowerOfTwo(alloc_len);
+		}
+		auto entry = make_uniq<UndoBufferEntry>();
+		handle = buffer_manager.Allocate(MemoryTag::TRANSACTION, capacity, false);
+		entry->block = handle.GetBlockHandle();
+		entry->capacity = capacity;
+		entry->position = 0;
+		// add block to the chain
+		if (head) {
+			head->prev = entry.get();
+			entry->next = std::move(head);
+		} else {
+			tail = entry.get();
+		}
+		head = std::move(entry);
+	} else {
+		handle = buffer_manager.Pin(head->block);
+	}
+	auto data = handle.Ptr() + head->position;
+	// write the udno entry metadata
 	Store<UndoFlags>(type, data);
 	data += sizeof(UndoFlags);
 	Store<uint32_t>(UnsafeNumericCast<uint32_t>(len), data);
-	data += sizeof(uint32_t);
-	return data;
+	// store the current position of the entry (past the metadata)
+	auto current_position = head->position + UNDO_ENTRY_HEADER_SIZE;
+	// increment the position of the header
+	head->position += alloc_len;
+	return UndoBufferReference(*head, std::move(handle), current_position);
 }
 
 template <class T>
 void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, T &&callback) {
 	// iterate in insertion order: start with the tail
-	state.current = allocator.GetTail();
+	state.current = tail.get();
 	while (state.current) {
-		state.start = state.current->data.get();
-		state.end = state.start + state.current->current_position;
+		state.handle = buffer_manager.Pin(state.current->block);
+		state.start = state.handle.Ptr();
+		state.end = state.start + state.current->position;
 		while (state.start < state.end) {
 			UndoFlags type = Load<UndoFlags>(state.start);
 			state.start += sizeof(UndoFlags);
@@ -56,11 +84,12 @@ void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, T &&callback) 
 template <class T>
 void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, UndoBuffer::IteratorState &end_state, T &&callback) {
 	// iterate in insertion order: start with the tail
-	state.current = allocator.GetTail();
+	state.current = tail.get();
 	while (state.current) {
-		state.start = state.current->data.get();
+		state.handle = buffer_manager.Pin(state.current->block);
+		state.start = state.handle.Ptr();
 		state.end =
-		    state.current == end_state.current ? end_state.start : state.start + state.current->current_position;
+		    state.current == end_state.current ? end_state.start : state.start + state.current->position;
 		while (state.start < state.end) {
 			auto type = Load<UndoFlags>(state.start);
 			state.start += sizeof(UndoFlags);
@@ -80,10 +109,11 @@ void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, UndoBuffer::It
 template <class T>
 void UndoBuffer::ReverseIterateEntries(T &&callback) {
 	// iterate in reverse insertion order: start with the head
-	auto current = allocator.GetHead();
+	auto current = head.get();
 	while (current) {
-		data_ptr_t start = current->data.get();
-		data_ptr_t end = start + current->current_position;
+		auto handle = buffer_manager.Pin(current->block);
+		data_ptr_t start = handle.Ptr();
+		data_ptr_t end = start + current->position;
 		// create a vector with all nodes in this chunk
 		vector<pair<UndoFlags, data_ptr_t>> nodes;
 		while (start < end) {
@@ -104,7 +134,7 @@ void UndoBuffer::ReverseIterateEntries(T &&callback) {
 
 bool UndoBuffer::ChangesMade() {
 	// we need to search for any index creation entries
-	return !allocator.IsEmpty();
+	return head.get();
 }
 
 UndoBufferProperties UndoBuffer::GetProperties() {
@@ -112,9 +142,9 @@ UndoBufferProperties UndoBuffer::GetProperties() {
 	if (!ChangesMade()) {
 		return properties;
 	}
-	auto node = allocator.GetHead();
+	auto node = head.get();
 	while (node) {
-		properties.estimated_size += node->current_position;
+		properties.estimated_size += node->position;
 		node = node->next.get();
 	}
 

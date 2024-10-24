@@ -10,9 +10,9 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/undo_flags.hpp"
-#include "duckdb/storage/arena_allocator.hpp"
 
 namespace duckdb {
+class BufferManager;
 class DuckTransaction;
 class StorageCommitState;
 class WriteAheadLog;
@@ -25,13 +25,40 @@ struct UndoBufferProperties {
 	bool has_dropped_entries = false;
 };
 
+struct UndoBufferEntry {
+	shared_ptr<BlockHandle> block;
+	idx_t position = 0;
+	idx_t capacity = 0;
+	unique_ptr<UndoBufferEntry> next;
+	optional_ptr<UndoBufferEntry> prev;
+};
+
+struct UndoBufferPointer {
+	optional_ptr<UndoBufferEntry> entry;
+	idx_t position;
+};
+
+struct UndoBufferReference {
+	UndoBufferReference(UndoBufferEntry &entry_p, BufferHandle handle_p, idx_t position) : entry(entry_p), handle(std::move(handle_p)), position(position) {
+	}
+
+	reference<UndoBufferEntry> entry;
+	BufferHandle handle;
+	idx_t position;
+
+	data_ptr_t Ptr() {
+		return handle.Ptr() + position;
+	}
+};
+
 //! The undo buffer of a transaction is used to hold previous versions of tuples
 //! that might be required in the future (because of rollbacks or previous
 //! transactions accessing them)
 class UndoBuffer {
 public:
 	struct IteratorState {
-		ArenaChunk *current;
+		BufferHandle handle;
+		optional_ptr<UndoBufferEntry> current;
 		data_ptr_t start;
 		data_ptr_t end;
 	};
@@ -39,9 +66,8 @@ public:
 public:
 	explicit UndoBuffer(DuckTransaction &transaction, ClientContext &context);
 
-	//! Reserve space for an entry of the specified type and length in the undo
-	//! buffer
-	data_ptr_t CreateEntry(UndoFlags type, idx_t len);
+	//! Write a specified entry to the undo buffer
+	UndoBufferReference CreateEntry(UndoFlags type, idx_t len);
 
 	bool ChangesMade();
 	UndoBufferProperties GetProperties();
@@ -60,7 +86,9 @@ public:
 
 private:
 	DuckTransaction &transaction;
-	ArenaAllocator allocator;
+	BufferManager &buffer_manager;
+	unique_ptr<UndoBufferEntry> head;
+	optional_ptr<UndoBufferEntry> tail;
 
 private:
 	template <class T>
