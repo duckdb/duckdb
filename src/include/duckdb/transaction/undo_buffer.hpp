@@ -27,7 +27,8 @@ struct UndoBufferProperties {
 };
 
 struct UndoBufferEntry {
-	explicit UndoBufferEntry(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {}
+	explicit UndoBufferEntry(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
+	}
 
 	BufferManager &buffer_manager;
 	shared_ptr<BlockHandle> block;
@@ -38,8 +39,10 @@ struct UndoBufferEntry {
 };
 
 struct UndoBufferReference {
-	UndoBufferReference() : entry(nullptr), position(0) {}
-	UndoBufferReference(UndoBufferEntry &entry_p, BufferHandle handle_p, idx_t position) : entry(&entry_p), handle(std::move(handle_p)), position(position) {
+	UndoBufferReference() : entry(nullptr), position(0) {
+	}
+	UndoBufferReference(UndoBufferEntry &entry_p, BufferHandle handle_p, idx_t position)
+	    : entry(&entry_p), handle(std::move(handle_p)), position(position) {
 	}
 
 	optional_ptr<UndoBufferEntry> entry;
@@ -49,7 +52,7 @@ struct UndoBufferReference {
 	data_ptr_t Ptr() {
 		return handle.Ptr() + position;
 	}
-	bool IsSet() const{
+	bool IsSet() const {
 		return entry;
 	}
 
@@ -57,8 +60,10 @@ struct UndoBufferReference {
 };
 
 struct UndoBufferPointer {
-	UndoBufferPointer() : entry(nullptr), position(0) {}
-	UndoBufferPointer(UndoBufferEntry &entry_p, idx_t position) : entry(&entry_p), position(position) { }
+	UndoBufferPointer() : entry(nullptr), position(0) {
+	}
+	UndoBufferPointer(UndoBufferEntry &entry_p, idx_t position) : entry(&entry_p), position(position) {
+	}
 
 	UndoBufferEntry *entry;
 	idx_t position;

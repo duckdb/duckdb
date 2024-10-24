@@ -22,7 +22,6 @@ UndoBuffer::UndoBuffer(DuckTransaction &transaction_p, ClientContext &context_p)
     : transaction(transaction_p), allocator(BufferManager::GetBufferManager(context_p)) {
 }
 
-
 UndoBufferPointer UndoBufferReference::GetBufferPointer() {
 	return UndoBufferPointer(*entry, position);
 }
@@ -38,7 +37,6 @@ UndoBufferReference UndoBufferPointer::Pin() const {
 
 UndoBufferAllocator::UndoBufferAllocator(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
 }
-
 
 UndoBufferReference UndoBufferAllocator::Allocate(idx_t alloc_len) {
 	D_ASSERT(!head || head->position <= head->capacity);
@@ -71,13 +69,13 @@ UndoBufferReference UndoBufferAllocator::Allocate(idx_t alloc_len) {
 }
 
 UndoBufferReference UndoBuffer::CreateEntry(UndoFlags type, idx_t len) {
-	idx_t alloc_len = len + UNDO_ENTRY_HEADER_SIZE;
+	idx_t alloc_len = AlignValue<idx_t>(len + UNDO_ENTRY_HEADER_SIZE);
 	auto handle = allocator.Allocate(alloc_len);
 	auto data = handle.Ptr();
 	// write the undo entry metadata
 	Store<UndoFlags>(type, data);
 	data += sizeof(UndoFlags);
-	Store<uint32_t>(UnsafeNumericCast<uint32_t>(len), data);
+	Store<uint32_t>(UnsafeNumericCast<uint32_t>(alloc_len - UNDO_ENTRY_HEADER_SIZE), data);
 	// increment the position of the header past the undo entry metadata
 	handle.position += UNDO_ENTRY_HEADER_SIZE;
 	return handle;
@@ -111,8 +109,7 @@ void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, UndoBuffer::It
 	while (state.current) {
 		state.handle = allocator.buffer_manager.Pin(state.current->block);
 		state.start = state.handle.Ptr();
-		state.end =
-		    state.current == end_state.current ? end_state.start : state.start + state.current->position;
+		state.end = state.current == end_state.current ? end_state.start : state.start + state.current->position;
 		while (state.start < state.end) {
 			auto type = Load<UndoFlags>(state.start);
 			state.start += sizeof(UndoFlags);

@@ -88,7 +88,7 @@ bool UpdateInfo::HasNext() const {
 }
 
 idx_t UpdateInfo::GetAllocSize(idx_t type_size) {
-	return sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE;
+	return AlignValue<idx_t>(sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
 }
 
 void UpdateInfo::Initialize(UpdateInfo &info, transaction_t transaction_id) {
@@ -209,9 +209,11 @@ void UpdateSegment::FetchUpdates(TransactionData transaction, idx_t vector_index
 	fetch_update_function(transaction.start_time, transaction.transaction_id, UpdateInfo::Get(pin), result);
 }
 
-UpdateNode::UpdateNode(BufferManager &manager) : allocator(manager) {}
+UpdateNode::UpdateNode(BufferManager &manager) : allocator(manager) {
+}
 
-UpdateNode::~UpdateNode() {}
+UpdateNode::~UpdateNode() {
+}
 
 //===--------------------------------------------------------------------===//
 // Fetch Committed
@@ -576,8 +578,8 @@ void UpdateSegment::CleanupUpdate(UpdateInfo &info) {
 //===--------------------------------------------------------------------===//
 // Check for conflicts in update
 //===--------------------------------------------------------------------===//
-static void CheckForConflicts(UndoBufferPointer next_ptr, TransactionData transaction, row_t *ids, const SelectionVector &sel,
-                              idx_t count, row_t offset, UndoBufferReference &node_ref) {
+static void CheckForConflicts(UndoBufferPointer next_ptr, TransactionData transaction, row_t *ids,
+                              const SelectionVector &sel, idx_t count, row_t offset, UndoBufferReference &node_ref) {
 	if (!next_ptr.IsSet()) {
 		return;
 	}
@@ -1176,7 +1178,8 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		auto &base_info = UpdateInfo::Get(root_pin);
 
 		UndoBufferReference node_ref;
-		CheckForConflicts(base_info.next, transaction, ids, sel, count, UnsafeNumericCast<row_t>(vector_offset), node_ref);
+		CheckForConflicts(base_info.next, transaction, ids, sel, count, UnsafeNumericCast<row_t>(vector_offset),
+		                  node_ref);
 
 		// there are no conflicts - continue with the update
 		unsafe_unique_array<char> update_info_data;
