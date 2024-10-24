@@ -5,7 +5,9 @@
 #include "duckdb/function/scalar/list_functions.hpp"
 #include "duckdb/function/scalar/map_functions.hpp"
 #include "duckdb/function/scalar/operator_functions.hpp"
+#include "duckdb/function/scalar/sequence_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/function/scalar/system_functions.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
@@ -83,6 +85,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION(ConstantOrNullFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ContainsFun),
 	DUCKDB_SCALAR_FUNCTION(CreateSortKeyFun),
+	DUCKDB_SCALAR_FUNCTION(CurrvalFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(DivideFun),
 	DUCKDB_SCALAR_FUNCTION(ErrorFun),
 	DUCKDB_SCALAR_FUNCTION(FinalizeFun),
@@ -111,6 +114,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(MD5NumberFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ModFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(MultiplyFun),
+	DUCKDB_SCALAR_FUNCTION(NextvalFun),
 	DUCKDB_SCALAR_FUNCTION(NFCNormalizeFun),
 	DUCKDB_SCALAR_FUNCTION(NotIlikeEscapeFun),
 	DUCKDB_SCALAR_FUNCTION(NotLikeEscapeFun),
@@ -123,6 +127,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(RegexpMatchesFun),
 	DUCKDB_SCALAR_FUNCTION_SET(RegexpReplaceFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(RegexpSplitToArrayFun),
+	DUCKDB_SCALAR_FUNCTION(RowFun),
 	DUCKDB_SCALAR_FUNCTION_SET(SHA1Fun),
 	DUCKDB_SCALAR_FUNCTION_SET(SHA256Fun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(SplitFun),
@@ -136,6 +141,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION(StrlenFun),
 	DUCKDB_SCALAR_FUNCTION_SET(StrpTimeFun),
 	DUCKDB_SCALAR_FUNCTION_SET(StructExtractFun),
+	DUCKDB_SCALAR_FUNCTION(StructPackFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(SubstrFun),
 	DUCKDB_SCALAR_FUNCTION_SET(SubstringFun),
 	DUCKDB_SCALAR_FUNCTION_SET(SubstringGraphemeFun),

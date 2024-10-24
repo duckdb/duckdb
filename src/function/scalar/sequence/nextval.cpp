@@ -1,4 +1,5 @@
 #include "duckdb/function/scalar/sequence_functions.hpp"
+#include "duckdb/function/scalar/sequence_utils.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
@@ -129,7 +130,7 @@ void NextValModifiedDatabases(ClientContext &context, FunctionModifiedDatabasesI
 	input.properties.RegisterDBModify(seq.sequence.ParentCatalog(), context);
 }
 
-void NextvalFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunction NextvalFun::GetFunction() {
 	ScalarFunction next_val("nextval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                        NextValFunction<NextSequenceValueOperator>, NextValBind, NextValDependency);
 	next_val.stability = FunctionStability::VOLATILE;
@@ -137,17 +138,17 @@ void NextvalFun::RegisterFunction(BuiltinFunctions &set) {
 	next_val.deserialize = Deserialize;
 	next_val.get_modified_databases = NextValModifiedDatabases;
 	next_val.init_local_state = NextValLocalFunction;
-	set.AddFunction(next_val);
+	return next_val;
 }
 
-void CurrvalFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunction CurrvalFun::GetFunction() {
 	ScalarFunction curr_val("currval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                        NextValFunction<CurrentSequenceValueOperator>, NextValBind, NextValDependency);
 	curr_val.stability = FunctionStability::VOLATILE;
 	curr_val.serialize = Serialize;
 	curr_val.deserialize = Deserialize;
 	curr_val.init_local_state = NextValLocalFunction;
-	set.AddFunction(curr_val);
+	return curr_val;
 }
 
 } // namespace duckdb
