@@ -254,6 +254,7 @@ protected:
 			} break;
 			case CSVState::ESCAPE:
 			case CSVState::UNQUOTED_ESCAPE:
+			case CSVState::ESCAPED_RETURN:
 				T::SetEscaped(result);
 				iterator.pos.buffer_pos++;
 				break;

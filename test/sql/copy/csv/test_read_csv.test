@@ -26,7 +26,7 @@ value1;value2;value3
 value1;value2;value3
 
 query III
-FROM read_csv('data/csv/quoted_values_delimited.csv', quote = '', escape = '')
+FROM read_csv('data/csv/quoted_values_delimited.csv', quote = '')
 ----
 "value1	value2	value3"
 "value1	value2	value3"

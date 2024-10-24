@@ -7,7 +7,7 @@ PRAGMA enable_verification
 
 query III
 SELECT
-    hamming(string_agg(w, '|' ORDER BY y), E'\\|,|\t|\n'),
+    hamming(string_agg(w, '|' ORDER BY y), E'\\|,|"|\n'),
     hamming(string_agg(z, '|' ORDER BY y), '"|"a"|"b|c"'),
     bool_and(x = concat(w, '"', w))::int
 FROM read_csv('data/csv/unquoted_escape/mixed.csv', quote = '"', escape = '\', sep = ',');

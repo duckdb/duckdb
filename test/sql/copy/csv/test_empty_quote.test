@@ -24,7 +24,7 @@ h'ow do you	do"
 
 # empty quote in read_csv function
 query TT
-SELECT * FROM read_csv('data/csv/no_quote.csv', auto_detect=1, quote='', escape='');
+SELECT * FROM read_csv('data/csv/no_quote.csv', auto_detect=1, quote='');
 ----
 "hello	world
 h'ow do you	do"

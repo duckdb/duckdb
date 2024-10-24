@@ -119,9 +119,7 @@ class TestReadCSV(object):
             rel = duckdb_cursor.read_csv(TestFile('category.csv'), compression='gzip')
 
     def test_quotechar(self, duckdb_cursor):
-        rel =
-        duckdb_cursor.read_csv(TestFile('unquote_without_delimiter.csv'),
-                               quotechar="", escapechar="", header=False)
+        rel = duckdb_cursor.read_csv(TestFile('unquote_without_delimiter.csv'), quotechar="", header=False)
         res = rel.fetchone()
         print(res)
         assert res == ('"AAA"BB',)

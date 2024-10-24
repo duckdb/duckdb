@@ -1139,6 +1139,7 @@ void StringValueScanner::ProcessExtraRow() {
 			break;
 		case CSVState::ESCAPE:
 		case CSVState::UNQUOTED_ESCAPE:
+		case CSVState::ESCAPED_RETURN:
 			result.SetEscaped(result);
 			iterator.pos.buffer_pos++;
 			break;
