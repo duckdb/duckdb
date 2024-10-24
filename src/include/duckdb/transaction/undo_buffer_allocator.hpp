@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
 
 namespace duckdb {
 class BufferManager;
@@ -67,13 +68,15 @@ struct UndoBufferPointer {
 };
 
 struct UndoBufferAllocator {
-	explicit UndoBufferAllocator(BufferManager &buffer_manager);
+	UndoBufferAllocator(BufferManager &buffer_manager,
+	                    idx_t initial_capacity = ArenaAllocator::ARENA_ALLOCATOR_INITIAL_CAPACITY);
 
 	UndoBufferReference Allocate(idx_t alloc_len);
 
 	BufferManager &buffer_manager;
 	unique_ptr<UndoBufferEntry> head;
 	optional_ptr<UndoBufferEntry> tail;
+	idx_t allocate_capacity;
 };
 
 } // namespace duckdb

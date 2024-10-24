@@ -24,7 +24,8 @@ UndoBufferReference UndoBufferPointer::Pin() const {
 	return UndoBufferReference(*entry, std::move(handle), position);
 }
 
-UndoBufferAllocator::UndoBufferAllocator(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
+UndoBufferAllocator::UndoBufferAllocator(BufferManager &buffer_manager, idx_t initial_capacity)
+    : buffer_manager(buffer_manager), allocate_capacity(initial_capacity) {
 }
 
 UndoBufferReference UndoBufferAllocator::Allocate(idx_t alloc_len) {
@@ -32,13 +33,22 @@ UndoBufferReference UndoBufferAllocator::Allocate(idx_t alloc_len) {
 	BufferHandle handle;
 	if (!head || head->position + alloc_len > head->capacity) {
 		// no space in current head - allocate a new block
-		idx_t capacity = Storage::DEFAULT_BLOCK_SIZE;
+		idx_t capacity = allocate_capacity;
 		if (capacity < alloc_len) {
 			capacity = NextPowerOfTwo(alloc_len);
 		}
+		auto block_size = buffer_manager.GetBlockSize();
+		// double the allocate capacity, but not past the block size
+		allocate_capacity =
+		    MinValue<idx_t>(buffer_manager.GetBlockSize(), MaxValue<idx_t>(capacity, allocate_capacity * 2));
 		auto entry = make_uniq<UndoBufferEntry>(buffer_manager);
-		handle = buffer_manager.Allocate(MemoryTag::TRANSACTION, capacity, false);
-		entry->block = handle.GetBlockHandle();
+		if (capacity < block_size) {
+			entry->block = buffer_manager.RegisterSmallMemory(MemoryTag::TRANSACTION, capacity);
+			handle = buffer_manager.Pin(entry->block);
+		} else {
+			handle = buffer_manager.Allocate(MemoryTag::TRANSACTION, capacity, false);
+			entry->block = handle.GetBlockHandle();
+		}
 		entry->capacity = capacity;
 		entry->position = 0;
 		// add block to the chain

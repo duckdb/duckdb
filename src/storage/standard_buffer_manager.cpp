@@ -123,24 +123,23 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(const idx
 	// Otherwise, any non-default block size would register as small memory, causing problems when
 	// trying to convert that memory to consistent blocks later on.
 	if (size < block_size) {
-		return RegisterSmallMemory(size);
+		return RegisterSmallMemory(MemoryTag::IN_MEMORY_TABLE, size);
 	}
 
 	auto buffer_handle = Allocate(MemoryTag::IN_MEMORY_TABLE, size, false);
 	return buffer_handle.GetBlockHandle();
 }
 
-shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(const idx_t size) {
+shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(MemoryTag tag, const idx_t size) {
 	D_ASSERT(size < GetBlockSize());
-	auto reservation = EvictBlocksOrThrow(MemoryTag::BASE_TABLE, size, nullptr, "could not allocate block of size %s%s",
+	auto reservation = EvictBlocksOrThrow(tag, size, nullptr, "could not allocate block of size %s%s",
 	                                      StringUtil::BytesToHumanReadableString(size));
 
 	auto buffer = ConstructManagedBuffer(size, nullptr, FileBufferType::TINY_BUFFER);
 
 	// Create a new block pointer for this block.
-	auto result =
-	    make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, MemoryTag::BASE_TABLE, std::move(buffer),
-	                                 DestroyBufferUpon::BLOCK, size, std::move(reservation));
+	auto result = make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, tag, std::move(buffer),
+	                                           DestroyBufferUpon::BLOCK, size, std::move(reservation));
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	// Initialize the memory with garbage data
 	WriteGarbageIntoBuffer(*result->buffer);
