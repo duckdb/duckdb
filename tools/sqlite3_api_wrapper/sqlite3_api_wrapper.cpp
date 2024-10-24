@@ -210,9 +210,12 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		//	     therefore we simply "lazily" prepare here.
 		stmt->statement = std::move(statements.back());
 		stmt->current_row = -1;
-		for (idx_t i = 0; i < stmt->prepared->named_param_map.size(); i++) {
-			stmt->bound_names.push_back("$" + to_string(i + 1));
-			stmt->bound_values.push_back(Value());
+
+		if (stmt->prepared) {
+			for (idx_t i = 0; i < stmt->prepared->named_param_map.size(); i++) {
+				stmt->bound_names.push_back("$" + to_string(i + 1));
+				stmt->bound_values.push_back(Value());
+			}
 		}
 
 		// extract the remainder of the query and assign it to the pzTail

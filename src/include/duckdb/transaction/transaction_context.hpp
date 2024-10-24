@@ -60,8 +60,6 @@ public:
 private:
 	ClientContext &context;
 	bool auto_commit;
-	// When true, auto-commit transactions are not automatically committed on query end
-	bool requires_explicit_auto_commit;
 
 	unique_ptr<MetaTransaction> current_transaction;
 

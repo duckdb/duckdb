@@ -671,20 +671,21 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &
 	return res;
 }
 
-unique_ptr<QueryResult> ClientContext::PrepareAndExecuteInternal(ClientContextLock &lock,
-                                                                 unique_ptr<SQLStatement> statement,
-                                                                 case_insensitive_map_t<BoundParameterData> &values,
-                                                                 bool allow_stream_result) {
+unique_ptr<PendingQueryResult> ClientContext::PendingQueryWithParametersInternal(ClientContextLock &lock,
+																 unique_ptr<SQLStatement> statement,
+																 case_insensitive_map_t<BoundParameterData> &values,
+																 bool allow_stream_result) {
 	// Prepare, but leaving the transaction open on success to ensure we run the query in the same transaction avoiding
 	// unnecessary rebinds
 	auto prepare_result = PrepareInternal(lock, std::move(statement), true);
 
+	// TODO: can we prevent open_autocommit_transaction from staying open here?
 	if (prepare_result->HasError()) {
 		if (transaction.open_autocommit_transaction) {
 			transaction.Rollback(nullptr);
 			transaction.open_autocommit_transaction = false;
 		}
-		return make_uniq<MaterializedQueryResult>(ErrorData(prepare_result->GetError()));
+		return make_uniq<PendingQueryResult>(ErrorData(prepare_result->GetError()));
 	}
 
 	PendingQueryParameters params;
@@ -692,15 +693,10 @@ unique_ptr<QueryResult> ClientContext::PrepareAndExecuteInternal(ClientContextLo
 	params.parameters = values;
 
 	auto pending_query = PendingQueryPreparedInternal(lock, prepare_result->query, prepare_result->data, params);
-	if (pending_query->HasError()) {
-		if (transaction.open_autocommit_transaction) {
-			transaction.Rollback(nullptr);
-			transaction.open_autocommit_transaction = false;
-		}
-		return make_uniq<MaterializedQueryResult>(pending_query->GetErrorObject());
-	}
 
-	return pending_query->ExecuteInternal(lock);
+	transaction.open_autocommit_transaction = false;
+
+	return pending_query;
 }
 
 unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> statement) {
@@ -732,42 +728,6 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(const string &query) {
 		return PrepareInternal(*lock, std::move(statements[0]));
 	} catch (std::exception &ex) {
 		return ErrorResult<PreparedStatement>(ErrorData(ex), query);
-	}
-}
-
-unique_ptr<QueryResult> ClientContext::PrepareAndExecute(const string &query,
-                                                         case_insensitive_map_t<BoundParameterData> &values,
-                                                         bool allow_stream_result) {
-	auto lock = LockContext();
-	// prepare the query
-	try {
-		InitialCleanup(*lock);
-
-		// first parse the query
-		auto statements = ParseStatementsInternal(*lock, query);
-		if (statements.empty()) {
-			throw InvalidInputException("No statement to prepare!");
-		}
-		if (statements.size() > 1) {
-			throw InvalidInputException("Cannot prepare multiple statements at once!");
-		}
-		return PrepareAndExecuteInternal(*lock, std::move(statements[0]), values, allow_stream_result);
-	} catch (std::exception &ex) {
-		return make_uniq<MaterializedQueryResult>(ErrorData(ex));
-	}
-}
-
-unique_ptr<QueryResult> ClientContext::PrepareAndExecute(unique_ptr<SQLStatement> statement,
-                                                         case_insensitive_map_t<BoundParameterData> &values,
-                                                         bool allow_stream_result) {
-	auto lock = LockContext();
-	// prepare the query
-	auto query = statement->query;
-	try {
-		InitialCleanup(*lock);
-		return PrepareAndExecuteInternal(*lock, std::move(statement), values, allow_stream_result);
-	} catch (std::exception &ex) {
-		return make_uniq<MaterializedQueryResult>(ErrorData(ex));
 	}
 }
 
@@ -1085,6 +1045,55 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStateme
 	PendingQueryParameters parameters;
 	parameters.allow_stream_result = allow_stream_result;
 	return PendingQueryInternal(*lock, std::move(statement), parameters);
+}
+
+unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query,
+                                                    case_insensitive_map_t<BoundParameterData> &values,
+                                                    bool allow_stream_result) {
+	auto lock = LockContext();
+	// prepare the query
+	try {
+		InitialCleanup(*lock);
+
+		// first parse the query
+		auto statements = ParseStatementsInternal(*lock, query);
+		if (statements.empty()) {
+			throw InvalidInputException("No statement to prepare!");
+		}
+		if (statements.size() > 1) {
+			throw InvalidInputException("Cannot prepare multiple statements at once!");
+		}
+
+		PendingQueryParameters params;
+		params.allow_stream_result = allow_stream_result;
+		params.parameters = values;
+
+		// TODO: shouldn't this also work?
+		// return PendingQueryInternal(*lock, std::move(statements[0]), params);
+		return PendingQueryWithParametersInternal(*lock, std::move(statements[0]), values, allow_stream_result);
+	} catch (std::exception &ex) {
+		return make_uniq<PendingQueryResult>(ErrorData(ex));
+	}
+}
+
+unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStatement> statement,
+                                                    case_insensitive_map_t<BoundParameterData> &values,
+                                                    bool allow_stream_result) {
+	auto lock = LockContext();
+	// prepare the query
+	auto query = statement->query;
+	try {
+		InitialCleanup(*lock);
+
+		PendingQueryParameters params;
+		params.allow_stream_result = allow_stream_result;
+		params.parameters = values;
+		// TODO: shouldn't this also work?
+		// return PendingQueryInternal(*lock, std::move(statement), params);
+		return PendingQueryWithParametersInternal(*lock, std::move(statement), values, allow_stream_result);
+	} catch (std::exception &ex) {
+		return make_uniq<PendingQueryResult>(ErrorData(ex));
+	}
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContextLock &lock,

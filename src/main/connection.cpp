@@ -140,6 +140,28 @@ unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement>
 	return context->PendingQuery(std::move(statement), allow_stream_result);
 }
 
+unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query,
+                                                        vector<Value> &values,
+                                                        bool allow_stream_result) {
+	case_insensitive_map_t<BoundParameterData> named_values;
+	for (idx_t i = 0; i < values.size(); i++) {
+		auto &val = values[i];
+		named_values[std::to_string(i + 1)] = BoundParameterData(val);
+	}
+	return context->PendingQuery(query, named_values, allow_stream_result);
+}
+
+unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement,
+														vector<Value> &values,
+                                                        bool allow_stream_result) {
+	case_insensitive_map_t<BoundParameterData> named_values;
+	for (idx_t i = 0; i < values.size(); i++) {
+		auto &val = values[i];
+		named_values[std::to_string(i + 1)] = BoundParameterData(val);
+	}
+	return context->PendingQuery(std::move(statement), named_values, allow_stream_result);
+}
+
 unique_ptr<PreparedStatement> Connection::Prepare(const string &query) {
 	return context->Prepare(query);
 }
@@ -148,35 +170,9 @@ unique_ptr<PreparedStatement> Connection::Prepare(unique_ptr<SQLStatement> state
 	return context->Prepare(std::move(statement));
 }
 
-unique_ptr<QueryResult> Connection::PrepareAndExecute(const string &query, vector<Value> &values,
-                                                      bool allow_stream_result) {
-	case_insensitive_map_t<BoundParameterData> named_values;
-	for (idx_t i = 0; i < values.size(); i++) {
-		auto &val = values[i];
-		named_values[std::to_string(i + 1)] = BoundParameterData(val);
-	}
-	return context->PrepareAndExecute(query, named_values, allow_stream_result);
-}
-
-unique_ptr<QueryResult> Connection::PrepareAndExecute(unique_ptr<SQLStatement> statement, vector<Value> &values,
-                                                      bool allow_stream_result) {
-	case_insensitive_map_t<BoundParameterData> named_values;
-	for (idx_t i = 0; i < values.size(); i++) {
-		auto &val = values[i];
-		named_values[std::to_string(i + 1)] = BoundParameterData(val);
-	}
-	return context->PrepareAndExecute(std::move(statement), named_values, allow_stream_result);
-}
-
-unique_ptr<QueryResult> Connection::PrepareAndExecute(unique_ptr<SQLStatement> statement,
-                                                      case_insensitive_map_t<BoundParameterData> &named_values,
-                                                      bool allow_stream_result) {
-	return context->PrepareAndExecute(std::move(statement), named_values, allow_stream_result);
-}
-
 unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, vector<Value> &values) {
-
-	return PrepareAndExecute(query, values, false);
+	auto pending = PendingQuery(query, values, false);
+	return pending->Execute();
 }
 
 unique_ptr<TableDescription> Connection::TableInfo(const string &database_name, const string &schema_name,

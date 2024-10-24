@@ -15,29 +15,40 @@ static void ModifySimpleTable(Connection &con) {
 }
 
 static void CheckSimpleQueryPrepareExecute(Connection &con) {
-	auto statements = con.ExtractStatements("SELECT COUNT(*) FROM a WHERE i=?");
+	auto statements = con.ExtractStatements("SELECT COUNT(*) FROM a WHERE i=12");
 	REQUIRE(statements.size() == 1);
 	duckdb::vector<Value> values = {Value(12)};
-	auto result = con.PrepareAndExecute(std::move(statements[0]), values, true);
+	case_insensitive_map_t<BoundParameterData> params;
+	auto pending_result = con.PendingQuery("SELECT COUNT(*) FROM a WHERE i=?", values, true);
+	// auto pending_result = con.PendingQuery("SELECT COUNT(*) FROM a WHERE i=?", values, true);
+	// auto pending_result = con.PendingQuery(std::move(statements[0]), true);
+	REQUIRE(!pending_result->HasError());
+	auto result = pending_result->Execute();
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
 
 static void CheckCatalogErrorQuery(Connection &con) {
 	duckdb::vector<Value> values = {Value(12)};
-	auto result = con.PrepareAndExecute("SELECT COUNT(*) FROM b WHERE i=?", values, true);
+	auto pending_result = con.PendingQuery("SELECT COUNT(*) FROM b WHERE i=?", values, true);
+	REQUIRE(!pending_result->HasError());
+	auto result = pending_result->Execute();
 	D_ASSERT(result->HasError() && result->GetErrorType() == ExceptionType::CATALOG);
 }
 
 static void CheckConversionErrorQuery(Connection &con) {
 	// Check query with invalid prepared value
 	duckdb::vector<Value> values = {Value("fawakaaniffoo")};
-	auto result = con.PrepareAndExecute("SELECT COUNT(*) FROM a WHERE i=?", values, true);
+	auto pending_result = con.PendingQuery("SELECT COUNT(*) FROM a WHERE i=?", values, true);
+	REQUIRE(!pending_result->HasError());
+	auto result = pending_result->Execute();
 	D_ASSERT(result->HasError() && result->GetErrorType() == ExceptionType::CONVERSION);
 }
 
 static void CheckSimpleQueryPrepareExecuteAfterModification(Connection &con) {
 	duckdb::vector<Value> values = {Value(14)};
-	auto result = con.PrepareAndExecute("SELECT COUNT(*) FROM a WHERE i=?", values, true);
+	auto pending_result = con.PendingQuery("SELECT COUNT(*) FROM a WHERE i=?", values, true);
+	REQUIRE(!pending_result->HasError());
+	auto result = pending_result->Execute();
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
 
@@ -89,7 +100,8 @@ TEST_CASE("PrepareExecute with transactions", "[api]") {
 	CheckConversionErrorQuery(con1);
 
 	// Begin a transaction in the PrepareAndExecute
-	auto result1 = con1.PrepareAndExecute("BEGIN TRANSACTION", empty_values, false);
+	auto pending_result1 = con1.PendingQuery("BEGIN TRANSACTION", empty_values, true);
+	auto result1 = pending_result1->Execute();
 	REQUIRE(!result1->HasError());
 	CheckSimpleQueryPrepareExecute(con1);
 
@@ -107,7 +119,8 @@ TEST_CASE("PrepareExecute with transactions", "[api]") {
 	CheckSimpleQueryPrepareExecute(con1);
 
 	// con 1 commits
-	auto result2 = con1.PrepareAndExecute("COMMIT", empty_values, true);
+	auto pending_result2 = con1.PendingQuery("COMMIT", empty_values, true);
+	auto result2 = pending_result2->Execute();
 	REQUIRE(!result2->HasError());
 
 	// now con1 should see changes from con2

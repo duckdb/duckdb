@@ -612,7 +612,10 @@ unique_ptr<QueryResult> DuckDBPyConnection::PrepareAndExecuteInternal(unique_ptr
 		py::gil_scoped_release release;
 		unique_lock<std::mutex> lock(py_connection_lock);
 
-		res = con.GetConnection().PrepareAndExecute(std::move(statement), named_values, true);
+		auto pending = con.GetConnection().PendingQuery(std::move(statement), named_values, true);
+
+		res = CompletePendingQuery(*pending);
+
 		if (res->HasError()) {
 			res->ThrowError();
 		}

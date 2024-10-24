@@ -115,6 +115,14 @@ public:
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement,
 	                                                       bool allow_stream_result);
 
+	//! Create a pending query with a list of parameters
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement,
+							     case_insensitive_map_t<BoundParameterData> &values,
+							     bool allow_stream_result);
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query,
+							     case_insensitive_map_t<BoundParameterData> &values,
+							     bool allow_stream_result);
+
 	//! Destroy the client context
 	DUCKDB_API void Destroy();
 
@@ -142,13 +150,6 @@ public:
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(const string &query);
 	//! Directly prepare a SQL statement
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(unique_ptr<SQLStatement> statement);
-
-	DUCKDB_API unique_ptr<QueryResult> PrepareAndExecute(unique_ptr<SQLStatement> statement,
-	                                                     case_insensitive_map_t<BoundParameterData> &values,
-	                                                     bool allow_stream_result = true);
-	DUCKDB_API unique_ptr<QueryResult> PrepareAndExecute(const string &query,
-	                                                     case_insensitive_map_t<BoundParameterData> &values,
-	                                                     bool allow_stream_result = true);
 
 	//! Create a pending query result from a prepared statement with the given name and set of parameters
 	//! It is possible that the prepared statement will be re-bound. This will generally happen if the catalog is
@@ -254,14 +255,15 @@ private:
 	unique_ptr<PendingQueryResult> PendingStatementInternal(ClientContextLock &lock, const string &query,
 	                                                        unique_ptr<SQLStatement> statement,
 	                                                        const PendingQueryParameters &parameters);
+	unique_ptr<PendingQueryResult> PendingQueryWithParametersInternal(ClientContextLock &lock,
+																 unique_ptr<SQLStatement> statement,
+																 case_insensitive_map_t<BoundParameterData> &values,
+																 bool allow_stream_result);
 	unique_ptr<QueryResult> RunStatementInternal(ClientContextLock &lock, const string &query,
 	                                             unique_ptr<SQLStatement> statement, bool allow_stream_result,
 	                                             bool verify = true);
 	unique_ptr<PreparedStatement> PrepareInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
 	                                              bool leave_autocommit_open = false);
-	unique_ptr<QueryResult> PrepareAndExecuteInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
-	                                                  case_insensitive_map_t<BoundParameterData> &values,
-	                                                  bool allow_stream_result);
 	void LogQueryInternal(ClientContextLock &lock, const string &query);
 
 	unique_ptr<QueryResult> FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending);
