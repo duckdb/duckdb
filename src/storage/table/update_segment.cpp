@@ -6,6 +6,7 @@
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/update_info.hpp"
+#include "duckdb/transaction/undo_buffer.hpp"
 
 #include <algorithm>
 

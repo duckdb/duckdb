@@ -1,0 +1,60 @@
+#include "duckdb/transaction/undo_buffer_allocator.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+
+namespace duckdb {
+
+UndoBufferEntry::~UndoBufferEntry() {
+	if (next) {
+		auto current_next = std::move(next);
+		while (current_next) {
+			current_next = std::move(current_next->next);
+		}
+	}
+}
+UndoBufferPointer UndoBufferReference::GetBufferPointer() {
+	return UndoBufferPointer(*entry, position);
+}
+
+UndoBufferReference UndoBufferPointer::Pin() const {
+	if (!entry) {
+		throw InternalException("UndoBufferPointer::Pin called but no entry was found");
+	}
+	D_ASSERT(entry->capacity >= position);
+	auto handle = entry->buffer_manager.Pin(entry->block);
+	return UndoBufferReference(*entry, std::move(handle), position);
+}
+
+UndoBufferAllocator::UndoBufferAllocator(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
+}
+
+UndoBufferReference UndoBufferAllocator::Allocate(idx_t alloc_len) {
+	D_ASSERT(!head || head->position <= head->capacity);
+	BufferHandle handle;
+	if (!head || head->position + alloc_len > head->capacity) {
+		// no space in current head - allocate a new block
+		idx_t capacity = Storage::DEFAULT_BLOCK_SIZE;
+		if (capacity < alloc_len) {
+			capacity = NextPowerOfTwo(alloc_len);
+		}
+		auto entry = make_uniq<UndoBufferEntry>(buffer_manager);
+		handle = buffer_manager.Allocate(MemoryTag::TRANSACTION, capacity, false);
+		entry->block = handle.GetBlockHandle();
+		entry->capacity = capacity;
+		entry->position = 0;
+		// add block to the chain
+		if (head) {
+			head->prev = entry.get();
+			entry->next = std::move(head);
+		} else {
+			tail = entry.get();
+		}
+		head = std::move(entry);
+	} else {
+		handle = buffer_manager.Pin(head->block);
+	}
+	idx_t current_position = head->position;
+	head->position += alloc_len;
+	return UndoBufferReference(*head, std::move(handle), current_position);
+}
+
+}

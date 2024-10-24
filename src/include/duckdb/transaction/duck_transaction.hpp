@@ -11,6 +11,7 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/error_data.hpp"
+#include "duckdb/transaction/undo_buffer.hpp"
 
 namespace duckdb {
 class CheckpointLock;

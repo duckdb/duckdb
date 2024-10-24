@@ -12,6 +12,7 @@
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/common/types/string_heap.hpp"
+#include "duckdb/transaction/undo_buffer_allocator.hpp"
 
 namespace duckdb {
 class ColumnData;
