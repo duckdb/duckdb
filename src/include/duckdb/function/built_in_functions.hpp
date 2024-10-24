@@ -58,7 +58,6 @@ private:
 	void RegisterDistributiveAggregates();
 
 	// scalar functions
-	void RegisterOperators();
 	void RegisterNestedFunctions();
 	void RegisterSequenceFunctions();
 
