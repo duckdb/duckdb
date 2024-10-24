@@ -224,12 +224,18 @@ def require():
 # By making the scope 'function' we ensure that a new connection gets created for every function that uses the fixture
 @pytest.fixture(scope='function')
 def spark():
+    from spark_namespace import USE_ACTUAL_SPARK
+
     if not hasattr(spark, 'session'):
         # Cache the import
-        from duckdb.experimental.spark.sql import SparkSession as session
+        from spark_namespace.sql import SparkSession as session
 
         spark.session = session
-    return spark.session.builder.master(':memory:').appName('pyspark').getOrCreate()
+
+    if USE_ACTUAL_SPARK:
+        return spark.session.builder.appName('pyspark').getOrCreate()
+    else:
+        return spark.session.builder.master(':memory:').appName('pyspark').getOrCreate()
 
 
 @pytest.fixture(scope='function')

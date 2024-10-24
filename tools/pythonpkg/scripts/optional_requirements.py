@@ -20,7 +20,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Failing to install this package does not constitute a build failure
-    OPTIONAL_PACKAGES = ["pyarrow", "torch", "polars", "adbc_driver_manager", "tensorflow"]
+    OPTIONAL_PACKAGES = ["pyarrow", "torch", "polars", "adbc_driver_manager", "tensorflow", "pyspark"]
 
     for package in args.exclude:
         if package not in OPTIONAL_PACKAGES:

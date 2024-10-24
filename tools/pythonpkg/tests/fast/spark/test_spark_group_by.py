@@ -2,7 +2,8 @@ import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
-from duckdb.experimental.spark.sql.types import (
+from spark_namespace import USE_ACTUAL_SPARK
+from spark_namespace.sql.types import (
     LongType,
     StructType,
     BooleanType,
@@ -14,8 +15,8 @@ from duckdb.experimental.spark.sql.types import (
     ArrayType,
     MapType,
 )
-from duckdb.experimental.spark.sql.functions import col, struct, when, lit, array_contains
-from duckdb.experimental.spark.sql.functions import (
+from spark_namespace.sql.functions import col, struct, when, lit, array_contains
+from spark_namespace.sql.functions import (
     sum,
     avg,
     max,
@@ -81,10 +82,10 @@ class TestDataFrameGroupBy(object):
 
         df2 = df.groupBy("department").mean("salary").sort("department")
         res = df2.collect()
-        assert (
-            str(res)
-            == "[Row(department='Finance', mean(salary)=87750.0), Row(department='Marketing', mean(salary)=85500.0), Row(department='Sales', mean(salary)=85666.66666666667)]"
-        )
+        expected_res_str = "[Row(department='Finance', mean(salary)=87750.0), Row(department='Marketing', mean(salary)=85500.0), Row(department='Sales', mean(salary)=85666.66666666667)]"
+        if USE_ACTUAL_SPARK:
+            expected_res_str = expected_res_str.replace("mean(", "avg(")
+        assert str(res) == expected_res_str
 
         df2 = df.groupBy("department", "state").sum("salary", "bonus").sort("department", "state")
         res = df2.collect()

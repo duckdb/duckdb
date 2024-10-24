@@ -1,8 +1,8 @@
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
-from duckdb.experimental.spark.sql import functions as F
-from duckdb.experimental.spark.sql.types import Row
+from spark_namespace.sql import functions as F
+from spark_namespace.sql.types import Row
 
 
 class TestSparkFunctionsNumeric(object):
@@ -86,7 +86,7 @@ class TestSparkFunctionsNumeric(object):
 
     def test_cos(self, spark):
         data = [
-            (0,),
+            (0.0,),
             (3.14159,),
         ]
         df = spark.createDataFrame(data, ["firstColumn"])
