@@ -18,27 +18,8 @@ public:
 	virtual FileSystem &GetFileSystem() const = 0;
 	virtual optional_ptr<FileOpener> GetOpener() const = 0;
 
-	void VerifyNoOpener(optional_ptr<FileOpener> opener) {
-		if (opener) {
-			throw InternalException("OpenerFileSystem cannot take an opener - the opener is pushed automatically");
-		}
-	}
-
-	void VerifyFSAccessAllowed(const string &path) {
-		auto opener = GetOpener();
-		if (!opener) {
-			return;
-		}
-		auto db = opener->TryGetDatabase();
-		if (!db) {
-			return;
-		}
-		auto &config = db->config;
-		if (!config.CanAccessFile(path)) {
-			throw PermissionException(
-			    "Cannot access file \"%s\" - file system operations are disabled by configuration", path);
-		}
-	}
+	void VerifyNoOpener(optional_ptr<FileOpener> opener);
+	void VerifyFSAccessAllowed(const string &path);
 
 	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
 	                                optional_ptr<FileOpener> opener = nullptr) override {
