@@ -1,0 +1,49 @@
+# name: test/sql/transactions/test_alter_sequence_ownership_conflict2.test
+# description: Test DROP and OWNED BY transactionality | ownership commits first
+# group: [transactions]
+
+require noforcestorage
+
+load __TEST_DIR__/alter_sequence_ownership2.db;
+
+statement ok
+CREATE TABLE tbl1 (
+	id INT
+);
+
+statement ok
+CREATE SEQUENCE seq;
+
+statement ok con1
+START TRANSACTION;
+
+# drop 'tbl1' in a transaction
+statement ok con1
+DROP TABLE tbl1 CASCADE;
+
+statement ok con2
+START TRANSACTION;
+
+# change ownership of 'seq' to 'tbl1' in a transaction
+statement ok con2
+ALTER SEQUENCE seq OWNED BY tbl1;
+
+# commit the ownership change
+statement ok con2
+COMMIT;
+
+# This should no longer be able to commit
+# New dependencies were introduced on 'tbl1'
+statement error con1
+COMMIT;
+----
+Could not commit DROP of "tbl1"
+
+statement ok
+drop table tbl1
+
+# tbl1 owns 'seq', so it was already dropped
+statement error
+drop sequence seq
+----
+Sequence with name seq does not exist
