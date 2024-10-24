@@ -233,10 +233,10 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		transition_array[delimiter][static_cast<uint8_t>(CSVState::ESCAPED_RETURN)] = CSVState::DELIMITER;
 		if (new_line_id == NewLineIdentifier::CARRY_ON) {
 			transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::ESCAPED_RETURN)] =
-				CSVState::CARRIAGE_RETURN;
+			    CSVState::CARRIAGE_RETURN;
 		} else {
 			transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::ESCAPED_RETURN)] =
-				CSVState::RECORD_SEPARATOR;
+			    CSVState::RECORD_SEPARATOR;
 		}
 		if (comment != '\0') {
 			transition_array[comment][static_cast<uint8_t>(CSVState::ESCAPED_RETURN)] = CSVState::COMMENT;
