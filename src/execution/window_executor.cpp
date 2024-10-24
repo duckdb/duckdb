@@ -473,32 +473,6 @@ static idx_t FindOrderedRangeBound(WindowCursor &over, const OrderType range_sen
 }
 
 struct WindowBoundariesState {
-	static inline bool IsScalar(const unique_ptr<Expression> &expr) {
-		return !expr || expr->IsScalar();
-	}
-
-	static inline bool BoundaryNeedsPeer(const WindowBoundary &boundary) {
-		switch (boundary) {
-		case WindowBoundary::CURRENT_ROW_RANGE:
-		case WindowBoundary::EXPR_PRECEDING_RANGE:
-		case WindowBoundary::EXPR_FOLLOWING_RANGE:
-			return true;
-		default:
-			return false;
-		}
-	}
-
-	static inline bool ExpressionNeedsPeer(const ExpressionType &type) {
-		switch (type) {
-		case ExpressionType::WINDOW_RANK:
-		case ExpressionType::WINDOW_RANK_DENSE:
-		case ExpressionType::WINDOW_PERCENT_RANK:
-		case ExpressionType::WINDOW_CUME_DIST:
-			return true;
-		default:
-			return false;
-		}
-	}
 
 	WindowBoundariesState(const BoundWindowExpression &wexpr, const idx_t input_size);
 
@@ -922,8 +896,8 @@ void WindowBoundariesState::FrameBegin(DataChunk &bounds, idx_t row_idx, const i
 	switch (start_boundary) {
 	case WindowBoundary::UNBOUNDED_PRECEDING:
 		bounds.data[FRAME_BEGIN].Reference(bounds.data[PARTITION_BEGIN]);
-		frame_begin_data = partition_begin_data;
-		break;
+		// No need to clamp
+		return;
 	case WindowBoundary::CURRENT_ROW_ROWS:
 		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
 			frame_begin_data[chunk_idx] = row_idx;
@@ -1015,8 +989,8 @@ void WindowBoundariesState::FrameEnd(DataChunk &bounds, idx_t row_idx, const idx
 		break;
 	case WindowBoundary::UNBOUNDED_FOLLOWING:
 		bounds.data[FRAME_END].Reference(bounds.data[PARTITION_END]);
-		frame_end_data = partition_end_data;
-		break;
+		// No need to clamp
+		return;
 	case WindowBoundary::EXPR_PRECEDING_ROWS: {
 		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
 			int64_t computed_start;
