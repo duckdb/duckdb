@@ -2723,6 +2723,47 @@ The resulting vector has the size of the parent vector multiplied by the array s
 */
 DUCKDB_API duckdb_vector duckdb_array_vector_get_child(duckdb_vector vector);
 
+/*!
+Retrieves the key vector of a map vector.
+
+The resulting vector is valid as long as the parent vector is valid.
+
+* @param vector The vector
+* @return The key vector
+*/
+DUCKDB_API duckdb_vector duckdb_map_vector_get_keys(duckdb_vector vector);
+
+/*!
+Retrieves the value vector of a map vector.
+
+The resulting vector is valid as long as the parent vector is valid.
+
+* @param vector The vector
+* @return The value vector
+*/
+DUCKDB_API duckdb_vector duckdb_map_vector_get_values(duckdb_vector vector);
+
+/*!
+Retrieves the tag vector of a union vector.
+
+The resulting vector is valid as long as the parent vector is valid.
+
+* @param vector The vector
+* @return The tag vector
+*/
+DUCKDB_API duckdb_vector duckdb_union_vector_get_tags(duckdb_vector vector);
+
+/*!
+Retrieves the member vector of a union vector.
+
+The resulting vector is valid as long as the parent vector is valid.
+
+* @param vector The vector
+* @param tag The tag to retrieve the member vector for
+* @return The member vector
+*/
+DUCKDB_API duckdb_vector duckdb_union_vector_get_member(duckdb_vector vector, idx_t tag);
+
 //===--------------------------------------------------------------------===//
 // Validity Mask Functions
 //===--------------------------------------------------------------------===//
