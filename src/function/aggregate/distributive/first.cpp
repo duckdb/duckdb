@@ -299,6 +299,12 @@ AggregateFunction FirstFun::GetFunction(const LogicalType &type) {
 	return fun;
 }
 
+AggregateFunction LastFun::GetFunction(const LogicalType &type) {
+	auto fun = GetFirstFunction<true, false>(type);
+	fun.name = "last";
+	return fun;
+}
+
 template <bool LAST, bool SKIP_NULLS>
 unique_ptr<FunctionData> BindDecimalFirst(ClientContext &context, AggregateFunction &function,
                                           vector<unique_ptr<Expression>> &arguments) {
