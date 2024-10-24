@@ -34,6 +34,8 @@ struct DialectOptions {
 	idx_t rows_until_header = 0;
 };
 
+enum class CSVEncoding : uint8_t { UTF_8 = 0, UTF_16 = 1, LATIN_1 = 2 };
+
 struct CSVReaderOptions {
 	//===--------------------------------------------------------------------===//
 	// CommonCSVOptions
@@ -113,6 +115,8 @@ struct CSVReaderOptions {
 	//! If we should attempt to run parallel scanning over one file
 	bool parallel = true;
 
+	// By default, our encoding is always UTF-8
+	CSVEncoding encoding = CSVEncoding::UTF_8;
 	//! User defined parameters for the csv function concatenated on a string
 	string user_defined_parameters;
 
@@ -168,6 +172,7 @@ struct CSVReaderOptions {
 	void SetReadOption(const string &loption, const Value &value, vector<string> &expected_names);
 	void SetWriteOption(const string &loption, const Value &value);
 	void SetDateFormat(LogicalTypeId type, const string &format, bool read_format);
+	void SetEncoding(const string &encoding);
 	void ToNamedParameters(named_parameter_map_t &out) const;
 	void FromNamedParameters(const named_parameter_map_t &in, ClientContext &context);
 	//! Verify options are not conflicting

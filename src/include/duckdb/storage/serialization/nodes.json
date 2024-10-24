@@ -808,6 +808,11 @@
         "name": "dialect_options.rows_until_header",
         "type": "idx_t"
       }
+      ,
+      {"id": 139,
+        "name": "encoding",
+        "type": "CSVEncoding"
+      }
     ],
     "pointer_type": "none"
   },
