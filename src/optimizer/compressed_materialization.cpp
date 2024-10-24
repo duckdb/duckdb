@@ -333,7 +333,7 @@ static Value GetIntegralRangeValue(ClientContext &context, const LogicalType &ty
 	vector<unique_ptr<Expression>> arguments;
 	arguments.emplace_back(make_uniq<BoundConstantExpression>(max));
 	arguments.emplace_back(make_uniq<BoundConstantExpression>(min));
-	BoundFunctionExpression sub(type, SubtractFun::GetFunction(type, type), std::move(arguments), nullptr);
+	BoundFunctionExpression sub(type, SubtractFunction::GetFunction(type, type), std::move(arguments), nullptr);
 
 	Value result;
 	if (ExpressionExecutor::TryEvaluateScalar(context, sub, result)) {

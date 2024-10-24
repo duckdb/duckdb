@@ -46,6 +46,8 @@ struct AttachOptions {
 	string db_type;
 	//! Set of remaining (key, value) options
 	unordered_map<string, Value> options;
+	//! (optionally) a catalog can be provided with a default table
+	QualifiedName default_table;
 };
 
 //! The AttachedDatabase represents an attached database instance.

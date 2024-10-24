@@ -14,28 +14,14 @@
 
 namespace duckdb {
 
-struct AddFun {
+struct AddFunction {
 	static ScalarFunction GetFunction(const LogicalType &type);
 	static ScalarFunction GetFunction(const LogicalType &left_type, const LogicalType &right_type);
-	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct SubtractFun {
+struct SubtractFunction {
 	static ScalarFunction GetFunction(const LogicalType &type);
 	static ScalarFunction GetFunction(const LogicalType &left_type, const LogicalType &right_type);
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct MultiplyFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct DivideFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct ModFun {
-	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 } // namespace duckdb
