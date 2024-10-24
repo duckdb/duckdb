@@ -109,6 +109,9 @@ unique_ptr<CreateInfo> CatalogEntry::Deserialize(Deserializer &deserializer) {
 void CatalogEntry::Verify(Catalog &catalog_p) {
 }
 
+void CatalogEntry::Rollback(CatalogEntry &prev_entry) {
+}
+
 InCatalogEntry::InCatalogEntry(CatalogType type, Catalog &catalog, string name)
     : CatalogEntry(type, catalog, std::move(name)), catalog(catalog) {
 }

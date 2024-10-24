@@ -19,7 +19,7 @@ RollbackState::RollbackState(DuckTransaction &transaction_p) : transaction(trans
 void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {
-		// undo this catalog entry
+		// Load and undo the catalog entry.
 		auto catalog_entry = Load<CatalogEntry *>(data);
 		D_ASSERT(catalog_entry->set);
 		catalog_entry->set->Undo(*catalog_entry);

@@ -53,6 +53,7 @@ class Binder;
 class BoundFunctionExpression;
 class LogicalDependencyList;
 class ScalarFunctionCatalogEntry;
+
 struct StatementProperties;
 
 struct FunctionStatisticsInput {

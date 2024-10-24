@@ -9,11 +9,8 @@
 #pragma once
 
 #include "duckdb/common/enums/index_constraint_type.hpp"
-#include "duckdb/common/enums/scan_options.hpp"
-#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/unique_ptr.hpp"
-#include "duckdb/storage/block.hpp"
 #include "duckdb/storage/index.hpp"
 #include "duckdb/storage/statistics/column_statistics.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
@@ -25,6 +22,7 @@
 #include "duckdb/transaction/local_storage.hpp"
 
 namespace duckdb {
+
 class BoundForeignKeyConstraint;
 class ClientContext;
 class ColumnDataCollection;
@@ -46,6 +44,8 @@ struct ConstraintState;
 struct TableUpdateState;
 enum class VerifyExistenceType : uint8_t;
 
+typedef vector<reference<const ColumnDefinition>> column_defs_t;
+
 //! DataTable represents a physical table on disk
 class DataTable {
 public:
@@ -61,7 +61,7 @@ public:
 	DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
 	          const vector<column_t> &bound_columns, Expression &cast_expr);
 	//! Constructs a DataTable as a delta on an existing data table but with one column added new constraint
-	explicit DataTable(ClientContext &context, DataTable &parent, unique_ptr<BoundConstraint> constraint);
+	DataTable(ClientContext &context, DataTable &parent, BoundConstraint &constraint);
 
 	//! A reference to the database instance
 	AttachedDatabase &db;
@@ -174,6 +174,7 @@ public:
 	void SetAsRoot() {
 		this->is_root = true;
 	}
+
 	bool IsRoot() {
 		return this->is_root;
 	}
@@ -215,7 +216,6 @@ public:
 
 	void InitializeIndexes(ClientContext &context);
 	bool HasIndexes() const;
-	void AddIndex(unique_ptr<Index> index);
 	bool HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKeyType type);
 	void SetIndexStorageInfo(vector<IndexStorageInfo> index_storage_info);
 	void VacuumIndexes();
@@ -228,13 +228,23 @@ public:
 
 	idx_t GetRowGroupSize() const;
 
-public:
 	static void VerifyUniqueIndexes(TableIndexList &indexes, ClientContext &context, DataChunk &chunk,
 	                                optional_ptr<ConflictManager> conflict_manager);
 
+	//! AddIndex initializes an index and adds it to the table's index list.
+	//! It is either empty, or initialized via its index storage information.
+	void AddIndex(const column_defs_t &columns, const IndexConstraintType type, const IndexStorageInfo &info);
+	//! AddIndex moves an index to this table's index list.
+	void AddIndex(unique_ptr<Index> index);
+
 private:
+	//! AddAndCreateIndex initializes an index both for the global and local table storage.
+	//! Then, it scans both the global and local storage, and appends the respective values to the index.
+	void AddAndCreateIndex(LocalStorage &local_storage, DataTable &parent, BoundConstraint &constraint);
+
 	//! Verify the new added constraints against current persistent&local data
 	void VerifyNewConstraint(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint);
+
 	//! Verify constraints with a chunk from the Update containing only the specified column_ids
 	void VerifyUpdateConstraints(ConstraintState &state, ClientContext &context, DataChunk &chunk,
 	                             const vector<PhysicalIndex> &column_ids);
