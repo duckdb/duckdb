@@ -1,0 +1,7 @@
+# name: benchmark/hep_benchmarks/q07.benchmark
+# description: Q7 - Plot the scalar sum in each event of the 𝑝𝑇 of the jets with 𝑝𝑇 30 GeV that are not within 0.4 in 𝑅 of any light lepton (i.e., electron or muon) with 𝑝𝑇 10 GeV.
+# group: [hep_benchmarks]
+
+template benchmark/hep_benchmarks/hep.benchmark.in
+QUERY_NUMBER=7
+QUERY_NUMBER_PADDED=07

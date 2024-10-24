@@ -1,0 +1,13 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [hep]
+
+require httpfs
+
+cache hep_singleMu.duckdb
+
+load benchmark/hep_benchmarks/load.sql
+
+run benchmark/hep_benchmarks/queries/q${QUERY_NUMBER_PADDED}.sql
+
+result benchmark/hep_benchmarks/answers/q${QUERY_NUMBER_PADDED}.csv
