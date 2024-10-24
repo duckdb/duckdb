@@ -105,6 +105,7 @@ else()
       duckdb_fastpforlib
       duckdb_skiplistlib
       duckdb_mbedtls
+      duckdb_zstd
       duckdb_yyjson)
 
   add_library(duckdb SHARED ${ALL_OBJECT_FILES})

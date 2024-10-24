@@ -62,6 +62,8 @@ if(NOT CLANG_TIDY)
       ../../third_party/zstd/compress/zstd_lazy.cpp
       ../../third_party/zstd/compress/zstd_ldm.cpp
       ../../third_party/zstd/compress/zstd_opt.cpp
+      ../../third_party/zstd/dict/divsufsort.cpp
+      ../../third_party/zstd/dict/zdict.cpp
       ../../third_party/brotli/enc/dictionary_hash.cpp
       ../../third_party/brotli/enc/backward_references_hq.cpp
       ../../third_party/brotli/enc/histogram.cpp
