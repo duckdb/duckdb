@@ -501,7 +501,7 @@ void ShellState::PrintPadded(const char *str, idx_t len) {
 ** in bytes.  This is different from the %*.*s specification in printf
 ** since with %*.*s the width is measured in bytes, not characters.
 */
-void ShellState::utf8_width_print(FILE *pOut, idx_t w, const string &str, bool right_align) {
+void ShellState::UTF8WidthPrint(FILE *pOut, idx_t w, const string &str, bool right_align) {
 	auto zUtf = str.c_str();
 	int i;
 	int n;
@@ -536,11 +536,11 @@ void ShellState::utf8_width_print(FILE *pOut, idx_t w, const string &str, bool r
 /*
 ** Determines if a string is a number of not.
 */
-int ShellState::isNumber(const char *z, int *realnum) {
+bool ShellState::IsNumber(const char *z, int *realnum) {
 	if (*z == '-' || *z == '+')
 		z++;
 	if (!IsDigit(*z)) {
-		return 0;
+		return false;
 	}
 	z++;
 	if (realnum)
@@ -551,7 +551,7 @@ int ShellState::isNumber(const char *z, int *realnum) {
 	if (*z == '.') {
 		z++;
 		if (!IsDigit(*z))
-			return 0;
+			return false;
 		while (IsDigit(*z)) {
 			z++;
 		}
@@ -563,7 +563,7 @@ int ShellState::isNumber(const char *z, int *realnum) {
 		if (*z == '+' || *z == '-')
 			z++;
 		if (!IsDigit(*z))
-			return 0;
+			return false;
 		while (IsDigit(*z)) {
 			z++;
 		}
@@ -596,7 +596,7 @@ int ShellState::StringLength(const char *z) {
 /*
 ** Return the length of a string in characters.
 */
-int ShellState::strlenChar(const char *z) {
+int ShellState::RenderLength(const char *z) {
 #ifdef HAVE_LINENOISE
 	return linenoiseComputeRenderWidth(z, strlen(z));
 #else
@@ -609,8 +609,8 @@ int ShellState::strlenChar(const char *z) {
 #endif
 }
 
-int ShellState::strlenChar(const string &str) {
-	return strlenChar(str.c_str());
+int ShellState::RenderLength(const string &str) {
+	return RenderLength(str.c_str());
 }
 
 /*
@@ -868,14 +868,14 @@ static void shellLog(void *pArg, int iErrCode, const char *zMsg) {
 /*
 ** Save or restore the current output mode
 */
-void ShellState::outputModePush() {
+void ShellState::PushOutputMode() {
 	modePrior = mode;
 	priorShFlgs = shellFlgs;
 	colSepPrior = colSeparator;
 	rowSepPrior = rowSeparator;
 }
 
-void ShellState::outputModePop() {
+void ShellState::PopOutputMode() {
 	mode = modePrior;
 	shellFlgs = priorShFlgs;
 	colSeparator = colSepPrior;
@@ -885,7 +885,7 @@ void ShellState::outputModePop() {
 /*
 ** Output the given string as a hex-encoded blob (eg. X'1234' )
 */
-void ShellState::output_hex_blob(const void *pBlob, int nBlob) {
+void ShellState::OutputHexBlob(const void *pBlob, int nBlob) {
 	int i;
 	char *zBlob = (char *)pBlob;
 	raw_printf(out, "X'");
@@ -922,7 +922,7 @@ static const char *unused_string(const char *z,                  /* Result must 
 **
 ** See also: output_quoted_escaped_string()
 */
-void ShellState::output_quoted_string(const char *z) {
+void ShellState::OutputQuotedString(const char *z) {
 	int i;
 	char c;
 	SetBinaryMode();
@@ -964,7 +964,7 @@ void ShellState::output_quoted_string(const char *z) {
 ** This is like output_quoted_string() but with the addition of the \r\n
 ** escape mechanism.
 */
-void ShellState::output_quoted_escaped_string(const char *z) {
+void ShellState::OutputQuotedEscapedString(const char *z) {
 	int i;
 	char c;
 	setBinaryMode(out, 1);
@@ -1030,7 +1030,7 @@ void ShellState::output_quoted_escaped_string(const char *z) {
 /*
 ** Output the given string as a quoted according to C or TCL quoting rules.
 */
-void ShellState::output_c_string(const char *z) {
+void ShellState::OutputCString(const char *z) {
 	unsigned int c;
 	fputc('"', out);
 	while ((c = *(z++)) != 0) {
@@ -1061,7 +1061,7 @@ void ShellState::output_c_string(const char *z) {
 /*
 ** Output the given string as a quoted according to JSON quoting rules.
 */
-void ShellState::output_json_string(const char *z, int n) {
+void ShellState::OutputJSONString(const char *z, int n) {
 	unsigned int c;
 	if (n < 0)
 		n = (int)strlen(z);
@@ -1123,7 +1123,7 @@ void ShellState::PrintOptionallyQuotedIdentifier(const char *input) {
 ** the null value.  Strings are quoted if necessary.  The separator
 ** is only issued if bSep is true.
 */
-void ShellState::output_csv(const char *z, int bSep) {
+void ShellState::OutputCSV(const char *z, int bSep) {
 	if (!z) {
 		Print(nullValue);
 	} else {
@@ -1183,7 +1183,7 @@ static BOOL WINAPI ConsoleCtrlHandler(DWORD dwCtrlType /* One of the CTRL_*_EVEN
 ** This routine converts some CREATE TABLE statements for shadow tables
 ** in FTS3/4/5 into CREATE TABLE IF NOT EXISTS statements.
 */
-void ShellState::printSchemaLine(const char *z, const char *zTail) {
+void ShellState::PrintSchemaLine(const char *z, const char *zTail) {
 	if (!z || !zTail) {
 		return;
 	}
@@ -1193,17 +1193,17 @@ void ShellState::printSchemaLine(const char *z, const char *zTail) {
 		utf8_printf(out, "%s%s", z, zTail);
 	}
 }
-void ShellState::printSchemaLineN(char *z, int n, const char *zTail) {
+void ShellState::PrintSchemaLineN(char *z, int n, const char *zTail) {
 	char c = z[n];
 	z[n] = 0;
-	printSchemaLine(z, zTail);
+	PrintSchemaLine(z, zTail);
 	z[n] = c;
 }
 
 /*
 ** Print N dashes
 */
-void ShellState::print_dashes(int N) {
+void ShellState::PrintDashes(int N) {
 	const char zDash[] = "--------------------------------------------------";
 	const int nDash = sizeof(zDash) - 1;
 	while (N > nDash) {
@@ -1216,31 +1216,31 @@ void ShellState::print_dashes(int N) {
 /*
 ** Print a markdown or table-style row separator using ascii-art
 */
-void ShellState::print_row_separator(int nArg, const char *zSep, const vector<idx_t> &actualWidth) {
+void ShellState::PrintRowSeparator(int nArg, const char *zSep, const vector<idx_t> &actualWidth) {
 	int i;
 	if (nArg > 0) {
 		fputs(zSep, out);
-		print_dashes(actualWidth[0] + 2);
+		PrintDashes(actualWidth[0] + 2);
 		for (i = 1; i < nArg; i++) {
 			fputs(zSep, out);
-			print_dashes(actualWidth[i] + 2);
+			PrintDashes(actualWidth[i] + 2);
 		}
 		fputs(zSep, out);
 	}
 	fputs("\n", out);
 }
 
-void ShellState::print_markdown_separator(idx_t nArg, const char *zSep, const vector<int> &colTypes,
+void ShellState::PrintMarkdownSeparator(idx_t nArg, const char *zSep, const vector<int> &colTypes,
                                           const vector<idx_t> &actualWidth) {
 	if (nArg > 0) {
 		for (idx_t i = 0; i < nArg; i++) {
 			Print(zSep);
 			if (colTypes[i] == SQLITE_INTEGER || colTypes[i] == SQLITE_FLOAT) {
 				// right-align numerics in tables
-				print_dashes(actualWidth[i] + 1);
+				PrintDashes(actualWidth[i] + 1);
 				Print(":");
 			} else {
-				print_dashes(actualWidth[i] + 2);
+				PrintDashes(actualWidth[i] + 2);
 			}
 		}
 		Print(zSep);
@@ -1259,10 +1259,11 @@ void ShellState::SetTextMode() {
 ** This is the callback routine that the shell
 ** invokes for each row of a query result.
 */
-int ShellState::shell_callback(RowRenderer &renderer, RowResult &result) {
+int ShellState::RenderRow(RowRenderer &renderer, RowResult &result) {
 	auto &data = result.data;
-	if (data.empty())
+	if (data.empty()) {
 		return 0;
+	}
 	renderer.Render(result);
 	return 0;
 }
@@ -1279,7 +1280,7 @@ static int callback(void *pArg, int nArg, char **azArg, char **azCol) {
 		result.column_names.push_back(azCol[i]);
 		result.data.push_back(azArg[i]);
 	}
-	return renderer->state.shell_callback(*renderer, result);
+	return renderer->state.RenderRow(*renderer, result);
 }
 
 /*
@@ -1287,7 +1288,7 @@ static int callback(void *pArg, int nArg, char **azArg, char **azCol) {
 ** the name of the table given.  Escape any quote characters in the
 ** table name.
 */
-void ShellState::set_table_name(const char *zName) {
+void ShellState::SetTableName(const char *zName) {
 	int i, n;
 	char cQuote;
 	char *z;
@@ -1328,7 +1329,7 @@ void ShellState::set_table_name(const char *zName) {
 ** "--" comment occurs at the end of the statement, the comment
 ** won't consume the semicolon terminator.
 */
-int ShellState::run_table_dump_query(const char *zSelect /* SELECT statement to extract content */
+int ShellState::RunTableDumpQuery(const char *zSelect /* SELECT statement to extract content */
 ) {
 	sqlite3_stmt *pSelect;
 	int rc;
@@ -1429,7 +1430,7 @@ string ShellState::strdup_handle_newline(const char *z) {
 	return result;
 }
 
-bool ShellState::column_type_is_integer(const char *type) {
+bool ShellState::ColumnTypeIsInteger(const char *type) {
 	if (!type) {
 		return false;
 	}
@@ -1493,7 +1494,7 @@ ColumnarResult ShellState::ExecuteColumnar(sqlite3_stmt *pStmt) {
 		result.column_width.push_back(static_cast<idx_t>(w));
 	}
 	for (idx_t i = 0; i < result.data.size(); i++) {
-		idx_t width = strlenChar(result.data[i]);
+		idx_t width = RenderLength(result.data[i]);
 		idx_t column_idx = i % result.column_count;
 		if (width > result.column_width[column_idx]) {
 			result.column_width[column_idx] = width;
@@ -1512,7 +1513,7 @@ ColumnarResult ShellState::ExecuteColumnar(sqlite3_stmt *pStmt) {
 ** first, in order to determine column widths, before providing
 ** any output.
 */
-void ShellState::exec_prepared_stmt_columnar(sqlite3_stmt *pStmt /* Statment to run */
+void ShellState::ExecutePreparedStatementColumnar(sqlite3_stmt *pStmt /* Statment to run */
 ) {
 	auto result = ExecuteColumnar(pStmt);
 	if (seenInterrupt) {
@@ -1536,7 +1537,7 @@ void ShellState::exec_prepared_stmt_columnar(sqlite3_stmt *pStmt /* Statment to 
 		}
 		idx_t w = result.column_width[j];
 		bool right_align = result.right_align[j];
-		utf8_width_print(out, w, result.data[i], right_align);
+		UTF8WidthPrint(out, w, result.data[i], right_align);
 		if (j == result.column_count - 1) {
 			Print(rowSep);
 			j = -1;
@@ -1561,7 +1562,7 @@ extern char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t 
 /*
 ** Run a prepared statement
 */
-void ShellState::exec_prepared_stmt(sqlite3_stmt *pStmt /* Statment to run */
+void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt /* Statment to run */
 ) {
 	if (cMode == RenderMode::DUCKBOX) {
 		size_t max_rows = outfile.empty() || outfile[0] == '|' ? this->max_rows : (size_t)-1;
@@ -1575,7 +1576,7 @@ void ShellState::exec_prepared_stmt(sqlite3_stmt *pStmt /* Statment to run */
 	}
 
 	if (ShellRenderer::IsColumnar(cMode)) {
-		exec_prepared_stmt_columnar(pStmt);
+		ExecutePreparedStatementColumnar(pStmt);
 		return;
 	}
 
@@ -1622,7 +1623,7 @@ void ShellState::exec_prepared_stmt(sqlite3_stmt *pStmt /* Statment to run */
 		/* if data and types extracted successfully... */
 		if (SQLITE_ROW == rc) {
 			/* call the supplied callback with the result row data */
-			if (renderer && shell_callback(*renderer, result)) {
+			if (renderer && RenderRow(*renderer, result)) {
 				rc = SQLITE_ABORT;
 			} else {
 				rc = sqlite3_step(pStmt);
@@ -1644,7 +1645,7 @@ void ShellState::exec_prepared_stmt(sqlite3_stmt *pStmt /* Statment to run */
 ** function except it takes a slightly different callback
 ** and callback data argument.
 */
-int ShellState::shell_exec(const char *zSql, /* SQL to be evaluated */
+int ShellState::ExecuteSQL(const char *zSql, /* SQL to be evaluated */
                            char **pzErrMsg   /* Error msg written here */
 ) {
 	sqlite3_stmt *pStmt = NULL; /* Statement to execute. */
@@ -1691,7 +1692,7 @@ int ShellState::shell_exec(const char *zSql, /* SQL to be evaluated */
 			}
 
 			bind_prepared_stmt(this, pStmt);
-			exec_prepared_stmt(pStmt);
+			ExecutePreparedStatement(pStmt);
 
 			/* Finalize the statement just executed. If this fails, save a
 			** copy of the error message. Otherwise, set zSql to point to the
@@ -1740,7 +1741,7 @@ static void freeColumnList(char **azCol) {
 ** The first regular column in the table is azCol[1].  The list is terminated
 ** by an entry with azCol[i]==0.
 */
-char **ShellState::tableColumnList(const char *zTab) {
+char **ShellState::TableColumnList(const char *zTab) {
 	char **azCol = 0;
 	sqlite3_stmt *pStmt;
 	char *zSql;
@@ -1882,7 +1883,7 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed) {
 		sqlite3_free(zIns);
 		return 0;
 	} else {
-		p->printSchemaLine(zSql, ";\n");
+		p->PrintSchemaLine(zSql, ";\n");
 	}
 
 	if (strcmp(zType, "table") == 0) {
@@ -1893,7 +1894,7 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed) {
 		char *savedDestTable;
 		RenderMode savedMode;
 
-		azCol = p->tableColumnList(zTable);
+		azCol = p->TableColumnList(zTable);
 		if (azCol == 0) {
 			p->nErr++;
 			return 0;
@@ -1936,11 +1937,11 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed) {
 		savedMode = p->mode;
 		p->zDestTable = (char *)sTable.c_str();
 		p->mode = p->cMode = RenderMode::INSERT;
-		rc = p->shell_exec(sSelect.c_str(), 0);
+		rc = p->ExecuteSQL(sSelect.c_str(), 0);
 		if ((rc & 0xff) == SQLITE_CORRUPT) {
 			raw_printf(p->out, "/****** CORRUPTION ERROR *******/\n");
 			toggleSelectOrder(p->db);
-			p->shell_exec(sSelect.c_str(), 0);
+			p->ExecuteSQL(sSelect.c_str(), 0);
 			toggleSelectOrder(p->db);
 		}
 		p->zDestTable = savedDestTable;
@@ -1958,7 +1959,7 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed) {
 ** If we get a SQLITE_CORRUPT error, rerun the query after appending
 ** "ORDER BY rowid DESC" to the end.
 */
-int ShellState::run_schema_dump_query(const char *zQuery) {
+int ShellState::RunSchemaDumpQuery(const char *zQuery) {
 	int rc;
 	char *zErr = 0;
 	rc = sqlite3_exec(db, zQuery, dump_callback, this, &zErr);
@@ -2226,7 +2227,7 @@ int deduceDatabaseType(const char *zName, int dfltZip) {
 ** Make sure the database is open.  If it is not, then open it.  If
 ** the database fails to open, print an error message and exit.
 */
-void ShellState::open_db(int flags) {
+void ShellState::OpenDB(int flags) {
 	if (db == 0) {
 		if (openMode == SHELL_OPEN_UNSPEC) {
 			if (zDbFilename.empty()) {
@@ -2480,7 +2481,7 @@ static bool booleanValue(const char *zArg) {
 /*
 ** Set or clear a shell flag according to a boolean value.
 */
-void ShellState::setOrClearFlag(unsigned mFlag, const char *zArg) {
+void ShellState::SetOrClearFlag(unsigned mFlag, const char *zArg) {
 	if (booleanValue(zArg)) {
 		ShellSetFlag(mFlag);
 	} else {
@@ -2692,7 +2693,7 @@ static char *SQLITE_CDECL ascii_read_one_field(ImportCtx *p) {
 ** redirected to a temporary file named by p->zTempFile.  In that case,
 ** launch start/open/xdg-open on that temporary file.
 */
-void ShellState::output_reset() {
+void ShellState::ResetOutput() {
 	if (outfile.size() > 1 && outfile[0] == '|') {
 #ifndef SQLITE_OMIT_POPEN
 		pclose(out);
@@ -2720,7 +2721,7 @@ void ShellState::output_reset() {
 				sqlite3_sleep(2000);
 			}
 			sqlite3_free(zCmd);
-			outputModePop();
+			PopOutputMode();
 			doXdgOpen = 0;
 		}
 #endif /* !defined(SQLITE_NOHAVE_SYSTEM) */
@@ -2778,7 +2779,7 @@ int shellDeleteFile(const char *zFilename) {
 ** Try to delete the temporary file (if there is one) and free the
 ** memory used to hold the name of the temp file.
 */
-void ShellState::clearTempFile() {
+void ShellState::ClearTempFile() {
 	if (zTempFile == 0)
 		return;
 	if (doXdgOpen)
@@ -2792,8 +2793,8 @@ void ShellState::clearTempFile() {
 /*
 ** Create a new temp file name with the given suffix.
 */
-void ShellState::newTempFile(const char *zSuffix) {
-	clearTempFile();
+void ShellState::NewTempFile(const char *zSuffix) {
+	ClearTempFile();
 	sqlite3_free(zTempFile);
 	zTempFile = 0;
 	if (db) {
@@ -2873,13 +2874,13 @@ MetadataResult ChangeDirectory(ShellState &state, const char **azArg, idx_t nArg
 }
 
 MetadataResult ToggleChanges(ShellState &state, const char **azArg, idx_t nArg) {
-	state.setOrClearFlag(SHFLG_CountChanges, azArg[1]);
+	state.SetOrClearFlag(SHFLG_CountChanges, azArg[1]);
 	return MetadataResult::SUCCESS;
 }
 
 MetadataResult ShowDatabases(ShellState &state, const char **azArg, idx_t nArg) {
 	char *zErrMsg = 0;
-	state.open_db(0);
+	state.OpenDB(0);
 
 	auto renderer = state.GetRowRenderer(RenderMode::LIST);
 	renderer->show_header = false;
@@ -2918,7 +2919,7 @@ MetadataResult DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
 		}
 	}
 
-	state.open_db(0);
+	state.OpenDB(0);
 
 	/* When playing back a "dump", the content might appear in an order
 	** which causes immediate foreign key constraints to be violated.
@@ -2933,13 +2934,13 @@ MetadataResult DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
 	                       "  AND sql NOT NULL"
 	                       " ORDER BY tbl_name='sqlite_sequence'",
 	                       zLike);
-	state.run_schema_dump_query(zSql);
+	state.RunSchemaDumpQuery(zSql);
 	sqlite3_free(zSql);
 	zSql = sqlite3_mprintf("SELECT sql FROM sqlite_schema "
 	                       "WHERE (%s) AND sql NOT NULL"
 	                       "  AND type IN ('index','trigger','view')",
 	                       zLike);
-	state.run_table_dump_query(zSql);
+	state.RunTableDumpQuery(zSql);
 	sqlite3_free(zSql);
 	sqlite3_free(zLike);
 	raw_printf(state.out, state.nErr ? "ROLLBACK; -- due to errors\n" : "COMMIT;\n");
@@ -2949,7 +2950,7 @@ MetadataResult DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
 }
 
 MetadataResult ToggleEcho(ShellState &state, const char **azArg, idx_t nArg) {
-	state.setOrClearFlag(SHFLG_Echo, azArg[1]);
+	state.SetOrClearFlag(SHFLG_Echo, azArg[1]);
 	return MetadataResult::SUCCESS;
 }
 
@@ -3059,7 +3060,7 @@ bool ShellState::SetOutputMode(const char *mode_str, const char *tbl_name) {
 		colSeparator = SEP_Tab;
 	} else if (c2 == 'i' && strncmp(mode_str, "insert", n2) == 0) {
 		mode = RenderMode::INSERT;
-		set_table_name(tbl_name ? tbl_name : "table");
+		SetTableName(tbl_name ? tbl_name : "table");
 	} else if (c2 == 'q' && strncmp(mode_str, "quote", n2) == 0) {
 		mode = RenderMode::QUOTE;
 		colSeparator = SEP_Comma;
@@ -3179,7 +3180,7 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 		return false;
 	}
 	seenInterrupt = 0;
-	open_db(0);
+	OpenDB(0);
 	if (useOutputMode) {
 		/* If neither the --csv or --ascii options are specified, then set
 		** the column and row separator characters from the output mode. */
@@ -3239,10 +3240,10 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 		zSep[1] = 0;
 		zSep[0] = sCtx.cColSep;
 		utf8_printf(out, "Column separator ");
-		output_c_string(zSep);
+		OutputCString(zSep);
 		utf8_printf(out, ", row separator ");
 		zSep[0] = sCtx.cRowSep;
-		output_c_string(zSep);
+		OutputCString(zSep);
 		utf8_printf(out, "\n");
 	}
 	while ((nSkip--) > 0) {
@@ -3435,7 +3436,7 @@ bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
 		}
 		zDbFilename = zNewFilename;
 		sqlite3_free(zNewFilename);
-		open_db(OPEN_DB_KEEPALIVE);
+		OpenDB(OPEN_DB_KEEPALIVE);
 		if (!db) {
 			utf8_printf(stderr, "Error: cannot open '%s'\n", zNewFilename);
 		}
@@ -3443,7 +3444,7 @@ bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
 	if (!db) {
 		/* As a fall-back open a TEMP database */
 		zDbFilename = string();
-		open_db(0);
+		OpenDB(0);
 	}
 	return true;
 }
@@ -3546,21 +3547,21 @@ bool ShellState::SetOutputFile(const char **azArg, idx_t nArg, char output_mode)
 	} else {
 		outCount = 0;
 	}
-	output_reset();
+	ResetOutput();
 #ifndef SQLITE_NOHAVE_SYSTEM
 	if (eMode == 'e' || eMode == 'x') {
 		doXdgOpen = 1;
-		outputModePush();
+		PushOutputMode();
 		if (eMode == 'x') {
 			/* spreadsheet mode.  Output as CSV. */
-			newTempFile("csv");
+			NewTempFile("csv");
 			ShellClearFlag(SHFLG_Echo);
 			mode = RenderMode::CSV;
 			colSeparator = SEP_Comma;
 			rowSeparator = SEP_CrLf;
 		} else {
 			/* text editor mode */
-			newTempFile("txt");
+			NewTempFile("txt");
 			bTxtMode = 1;
 		}
 		zFile = zTempFile;
@@ -3635,7 +3636,7 @@ bool ShellState::ReadFromFile(const string &file) {
 		utf8_printf(stderr, "Error: cannot open \"%s\"\n", file.c_str());
 		rc = 1;
 	} else {
-		rc = process_input();
+		rc = ProcessInput();
 		fclose(in);
 	}
 	in = inSaved;
@@ -3658,7 +3659,7 @@ bool ShellState::DisplaySchemas(const char **azArg, idx_t nArg) {
 	int bDebug = 0;
 	int rc;
 
-	open_db(0);
+	OpenDB(0);
 
 	RenderMode mode = RenderMode::SEMI;
 	for (idx_t ii = 1; ii < nArg; ii++) {
@@ -3749,14 +3750,14 @@ void ShellState::ShowConfiguration() {
 	utf8_printf(out, "%12.12s: %s\n", "headers", showHeader ? "on" : "off");
 	utf8_printf(out, "%12.12s: %s\n", "mode", modeDescr[int(mode)]);
 	utf8_printf(out, "%12.12s: ", "nullvalue");
-	output_c_string(nullValue.c_str());
+	OutputCString(nullValue.c_str());
 	raw_printf(out, "\n");
 	utf8_printf(out, "%12.12s: %s\n", "output", !outfile.empty() ? outfile.c_str() : "stdout");
 	utf8_printf(out, "%12.12s: ", "colseparator");
-	output_c_string(colSeparator.c_str());
+	OutputCString(colSeparator.c_str());
 	raw_printf(out, "\n");
 	utf8_printf(out, "%12.12s: ", "rowseparator");
-	output_c_string(rowSeparator.c_str());
+	OutputCString(rowSeparator.c_str());
 	raw_printf(out, "\n");
 	utf8_printf(out, "%12.12s: ", "width");
 	for (auto w : colWidth) {
@@ -3809,7 +3810,7 @@ MetadataResult ShellState::DisplayEntries(const char **azArg, idx_t nArg, char t
 	int nRow, nAlloc;
 	int ii;
 	string s;
-	open_db(0);
+	OpenDB(0);
 	//    rc = sqlite3_prepare_v2(db, "PRAGMA database_list", -1, &pStmt, 0);
 	//    if( rc ){
 	//      sqlite3_finalize(pStmt);
@@ -3984,7 +3985,7 @@ static const MetadataCommand metadata_commands[] = {
 **
 ** Return 1 on error, 2 to exit, and 0 otherwise.
 */
-int ShellState::do_meta_command(char *zLine) {
+int ShellState::DoMetaCommand(char *zLine) {
 	int h = 1;
 	int nArg = 0;
 	int n, c;
@@ -4031,7 +4032,7 @@ int ShellState::do_meta_command(char *zLine) {
 		}
 	n = strlen30(azArg[0]);
 	c = azArg[0][0];
-	clearTempFile();
+	ClearTempFile();
 
 	bool found_argument = false;
 	for (idx_t command_idx = 0; metadata_commands[command_idx].command; command_idx++) {
@@ -4079,7 +4080,7 @@ int ShellState::do_meta_command(char *zLine) {
 	if (outCount) {
 		outCount--;
 		if (outCount == 0)
-			output_reset();
+			ResetOutput();
 	}
 	return rc;
 }
@@ -4144,11 +4145,11 @@ static bool _all_whitespace(const char *z) {
 /*
 ** Run a single line of SQL.  Return the number of errors.
 */
-int ShellState::runOneSqlLine(char *zSql, int startline) {
+int ShellState::RunOneSqlLine(char *zSql, int startline) {
 	int rc;
 	char *zErrMsg = nullptr;
 
-	open_db(0);
+	OpenDB(0);
 	if (ShellHasFlag(SHFLG_Backslash)) {
 		resolve_backslashes(zSql);
 	}
@@ -4158,7 +4159,7 @@ int ShellState::runOneSqlLine(char *zSql, int startline) {
 	}
 #endif
 	BEGIN_TIMER;
-	rc = shell_exec(zSql, &zErrMsg);
+	rc = ExecuteSQL(zSql, &zErrMsg);
 	END_TIMER;
 	if (rc || zErrMsg) {
 		if (zErrMsg != 0) {
@@ -4184,7 +4185,7 @@ int ShellState::runOneSqlLine(char *zSql, int startline) {
 **
 ** Return the number of errors.
 */
-int ShellState::process_input() {
+int ShellState::ProcessInput() {
 	char *zLine = nullptr;   /* A single input line */
 	char *zSql = nullptr;    /* Accumulated SQL text */
 	int nLine;               /* Length of current line */
@@ -4243,7 +4244,7 @@ int ShellState::process_input() {
 				if (zLine && *zLine && *zLine != '\3')
 					shell_add_history(zLine);
 #endif
-				rc = do_meta_command(zLine);
+				rc = DoMetaCommand(zLine);
 				if (rc == 2) { /* exit requested */
 					break;
 				} else if (rc) {
@@ -4275,13 +4276,13 @@ int ShellState::process_input() {
 			nSql += nLine;
 		}
 		if (nSql && line_contains_semicolon(&zSql[nSqlPrior], nSql - nSqlPrior) && sqlite3_complete(zSql)) {
-			errCnt += runOneSqlLine(zSql, startline);
+			errCnt += RunOneSqlLine(zSql, startline);
 			nSql = 0;
 			if (outCount) {
-				output_reset();
+				ResetOutput();
 				outCount = 0;
 			} else {
-				clearTempFile();
+				ClearTempFile();
 			}
 		} else if (nSql && _all_whitespace(zSql)) {
 			if (ShellHasFlag(SHFLG_Echo)) {
@@ -4291,7 +4292,7 @@ int ShellState::process_input() {
 		}
 	}
 	if (nSql && !_all_whitespace(zSql)) {
-		errCnt += runOneSqlLine(zSql, startline);
+		errCnt += RunOneSqlLine(zSql, startline);
 	}
 	free(zSql);
 	free(zLine);
@@ -4377,7 +4378,7 @@ static char *find_home_dir(int clearFlag) {
 **
 ** Returns the number of errors.
 */
-void ShellState::process_sqliterc(const char *sqliterc_override) {
+void ShellState::ProcessDuckDBRC(const char *sqliterc_override) {
 	const char *sqliterc = sqliterc_override;
 	char *zBuf = nullptr;
 	FILE *inSaved = in;
@@ -4398,7 +4399,7 @@ void ShellState::process_sqliterc(const char *sqliterc_override) {
 		if (stdin_is_interactive) {
 			utf8_printf(stderr, "-- Loading resources from %s\n", sqliterc);
 		}
-		process_input();
+		ProcessInput();
 		fclose(in);
 	}
 	in = inSaved;
@@ -4696,14 +4697,14 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 	** to the sqlite command-line tool.
 	*/
 	if (access(data.zDbFilename.c_str(), 0) == 0) {
-		data.open_db(0);
+		data.OpenDB(0);
 	}
 
 	/* Process the initialization file if there is one.  If no -init option
 	** is given on the command line, look for a file named ~/.sqliterc and
 	** try to process it.
 	*/
-	data.process_sqliterc(zInitFile);
+	data.ProcessDuckDBRC(zInitFile);
 
 	/* Make a second pass through the command-line argument and set
 	** options.  This second pass is delayed until after the initialization
@@ -4793,14 +4794,14 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 				break;
 			z = cmdline_option_value(argc, argv, ++i);
 			if (z[0] == '.') {
-				rc = data.do_meta_command(z);
+				rc = data.DoMetaCommand(z);
 				if (rc && bail_on_error) {
 					free(azCmd);
 					return rc == 2 ? 0 : rc;
 				}
 			} else {
-				data.open_db(0);
-				rc = data.shell_exec(z, &zErrMsg);
+				data.OpenDB(0);
+				rc = data.ExecuteSQL(z, &zErrMsg);
 				if (zErrMsg != 0) {
 					printDatabaseError(zErrMsg);
 					sqlite3_free(zErrMsg);
@@ -4834,14 +4835,14 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 		*/
 		for (i = 0; i < nCmd; i++) {
 			if (azCmd[i][0] == '.') {
-				rc = data.do_meta_command(azCmd[i]);
+				rc = data.DoMetaCommand(azCmd[i]);
 				if (rc) {
 					free(azCmd);
 					return rc == 2 ? 0 : rc;
 				}
 			} else {
-				data.open_db(0);
-				rc = data.shell_exec(azCmd[i], &zErrMsg);
+				data.OpenDB(0);
+				rc = data.ExecuteSQL(azCmd[i], &zErrMsg);
 				if (zErrMsg != 0) {
 					printDatabaseError(zErrMsg);
 					sqlite3_free(zErrMsg);
@@ -4889,7 +4890,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			linenoiseSetCompletionCallback(linenoise_completion);
 #endif
 			data.in = 0;
-			rc = data.process_input();
+			rc = data.ProcessInput();
 			if (zHistory) {
 				shell_stifle_history(2000);
 				shell_write_history(zHistory);
@@ -4897,17 +4898,17 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			}
 		} else {
 			data.in = stdin;
-			rc = data.process_input();
+			rc = data.ProcessInput();
 		}
 	}
-	data.set_table_name(0);
+	data.SetTableName(0);
 	if (data.db) {
 		close_db(data.db);
 	}
 	find_home_dir(1);
-	data.output_reset();
+	data.ResetOutput();
 	data.doXdgOpen = 0;
-	data.clearTempFile();
+	data.ClearTempFile();
 #if !SQLITE_SHELL_IS_UTF8
 	for (i = 0; i < argcToFree; i++)
 		free(argvToFree[i]);
