@@ -16,7 +16,18 @@ from spark_namespace.sql.types import (
     MapType,
 )
 from spark_namespace.sql.functions import col, struct, when, lit, array_contains
-from spark_namespace.sql.functions import sum, avg, max, min, mean, count, any_value, approx_count_distinct, covar_pop,covar_samp
+from spark_namespace.sql.functions import (
+    sum,
+    avg,
+    max,
+    min,
+    mean,
+    count,
+    any_value,
+    approx_count_distinct,
+    covar_pop,
+    covar_samp,
+)
 
 
 class TestDataFrameGroupBy(object):
