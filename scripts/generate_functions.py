@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 function_groups = {
-    ('src', 'include/duckdb', 'function'): ['scalar'],
+    ('src', 'include/duckdb', 'function'): ['scalar', 'aggregate'],
     ('extension', 'core_functions/include', 'core_functions'): ['scalar', 'aggregate'],
 }
 

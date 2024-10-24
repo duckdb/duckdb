@@ -1,7 +1,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
@@ -492,7 +492,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 				// but also push a first(x) aggregate in case x is selected (uncollated)
 				info.collated_groups[i] = result->aggregates.size();
 
-				auto first_fun = FirstFun::GetFunction(bound_expr_ref.return_type);
+				auto first_fun = FirstFunctionGetter::GetFunction(bound_expr_ref.return_type);
 				vector<unique_ptr<Expression>> first_children;
 				// FIXME: would be better to just refer to this expression, but for now we copy
 				first_children.push_back(bound_expr_ref.Copy());

@@ -146,18 +146,9 @@ struct ArrayResizeFun {
 
 struct ArrayExtractFun {
 	static constexpr const char *Name = "array_extract";
-	static constexpr const char *Parameters = "array_extract(list,index)";
+	static constexpr const char *Parameters = "list,index";
 	static constexpr const char *Description = "Extract the indexth (1-based) value from the array.";
 	static constexpr const char *Example = "array_extract('DuckDB', 2)";
-
-	static ScalarFunctionSet GetFunctions();
-};
-
-struct StructExtractFun {
-	static constexpr const char *Name = "struct_extract";
-	static constexpr const char *Parameters = "struct_extract(list,'entry')";
-	static constexpr const char *Description = "Extract the named entry from the STRUCT.";
-	static constexpr const char *Example = "struct_extract({'i': 3, 'v2': 3, 'v3': 0}, 'i')";
 
 	static ScalarFunctionSet GetFunctions();
 };

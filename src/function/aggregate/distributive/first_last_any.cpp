@@ -1,6 +1,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/planner/expression.hpp"
 
@@ -293,7 +294,7 @@ static AggregateFunction GetFirstFunction(const LogicalType &type) {
 	}
 }
 
-AggregateFunction FirstFun::GetFunction(const LogicalType &type) {
+AggregateFunction FirstFunctionGetter::GetFunction(const LogicalType &type) {
 	auto fun = GetFirstFunction<false, false>(type);
 	fun.name = "first";
 	return fun;
@@ -340,22 +341,22 @@ static void AddFirstOperator(AggregateFunctionSet &set) {
 	                                  nullptr, BindFirst<LAST, SKIP_NULLS>));
 }
 
-void FirstFun::RegisterFunction(BuiltinFunctions &set) {
+AggregateFunctionSet FirstFun::GetFunctions() {
 	AggregateFunctionSet first("first");
-	AggregateFunctionSet last("last");
-	AggregateFunctionSet any_value("any_value");
-
 	AddFirstOperator<false, false>(first);
+	return first;
+}
+
+AggregateFunctionSet LastFun::GetFunctions() {
+	AggregateFunctionSet last("last");
 	AddFirstOperator<true, false>(last);
+	return last;
+}
+
+AggregateFunctionSet AnyValueFun::GetFunctions() {
+	AggregateFunctionSet any_value("any_value");
 	AddFirstOperator<false, true>(any_value);
-
-	set.AddFunction(first);
-	first.name = "arbitrary";
-	set.AddFunction(first);
-
-	set.AddFunction(last);
-
-	set.AddFunction(any_value);
+	return any_value;
 }
 
 } // namespace duckdb
