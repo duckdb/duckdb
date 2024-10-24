@@ -12,15 +12,17 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/execution/operator/csv_scanner/encode/csv_encoding.hpp"
+#include "duckdb/execution/operator/csv_scanner/encode/csv_decoder.hpp"
 
 namespace duckdb {
 class Allocator;
 class FileSystem;
 
-struct CSVFileHandle {
+class CSVFileHandle {
 public:
 	CSVFileHandle(FileSystem &fs, Allocator &allocator, unique_ptr<FileHandle> file_handle_p, const string &path_p,
-	              FileCompressionType compression);
+	              FileCompressionType compression, CSVEncoding encoding);
 
 	mutex main_mutex;
 
@@ -44,13 +46,14 @@ public:
 	static unique_ptr<FileHandle> OpenFileHandle(FileSystem &fs, Allocator &allocator, const string &path,
 	                                             FileCompressionType compression);
 	static unique_ptr<CSVFileHandle> OpenFile(FileSystem &fs, Allocator &allocator, const string &path,
-	                                          FileCompressionType compression);
+	                                          FileCompressionType compression, CSVEncoding encoding);
 	FileCompressionType compression_type;
 
 	double GetProgress();
 
 private:
 	unique_ptr<FileHandle> file_handle;
+	CSVDecoder decoder;
 	string path;
 	bool can_seek = false;
 	bool on_disk_file = false;

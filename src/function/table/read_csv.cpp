@@ -30,10 +30,10 @@
 namespace duckdb {
 
 unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const string &file_path, FileCompressionType compression,
-                                           ClientContext &context) {
+                                           ClientContext &context, CSVEncoding encoding) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto &allocator = BufferAllocator::Get(context);
-	return CSVFileHandle::OpenFile(fs, allocator, file_path, compression);
+	return CSVFileHandle::OpenFile(fs, allocator, file_path, compression, encoding);
 }
 
 ReadCSVData::ReadCSVData() {

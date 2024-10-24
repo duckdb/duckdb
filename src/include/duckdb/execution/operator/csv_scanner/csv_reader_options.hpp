@@ -17,6 +17,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/multi_file_reader_options.hpp"
+#include "duckdb/execution/operator/csv_scanner/encode/csv_encoding.hpp"
 
 namespace duckdb {
 
@@ -33,8 +34,6 @@ struct DialectOptions {
 	CSVOption<idx_t> skip_rows = 0;
 	idx_t rows_until_header = 0;
 };
-
-enum class CSVEncoding : uint8_t { UTF_8 = 0, UTF_16 = 1, LATIN_1 = 2 };
 
 struct CSVReaderOptions {
 	//===--------------------------------------------------------------------===//

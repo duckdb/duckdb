@@ -26,9 +26,9 @@ static bool ParseBoolean(const Value &value, const string &loption) {
 		return ParseBoolean(children, loption);
 	}
 	if (value.type() == LogicalType::FLOAT || value.type() == LogicalType::DOUBLE ||
-		value.type().id() == LogicalTypeId::DECIMAL) {
+	    value.type().id() == LogicalTypeId::DECIMAL) {
 		throw BinderException("\"%s\" expects a boolean value (e.g. TRUE or 1)", loption);
-		}
+	}
 	return BooleanValue::Get(value.DefaultCastAs(LogicalType::BOOLEAN));
 }
 
@@ -179,7 +179,7 @@ void CSVReaderOptions::SetEncoding(const string &encoding_value) {
 	auto encoding_string = StringUtil::Lower(encoding_value);
 	if (encoding_value == "utf-8" || encoding_value == "utf8") {
 		encoding = CSVEncoding::UTF_8;
-	} else if (encoding_value == "utf-16"|| encoding_value == "utf16") {
+	} else if (encoding_value == "utf-16" || encoding_value == "utf16") {
 		encoding = CSVEncoding::UTF_16;
 	} else if (encoding_value == "latin-1" || encoding_value == "latin1") {
 		encoding = CSVEncoding::LATIN_1;

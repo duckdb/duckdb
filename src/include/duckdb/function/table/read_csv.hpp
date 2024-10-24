@@ -26,7 +26,7 @@ class StringValueScanner;
 class ReadCSV {
 public:
 	static unique_ptr<CSVFileHandle> OpenCSV(const string &file_path, FileCompressionType compression,
-	                                         ClientContext &context);
+	                                         ClientContext &context, CSVEncoding encoding);
 };
 
 struct BaseCSVData : public TableFunctionData {

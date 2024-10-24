@@ -7,8 +7,8 @@
 namespace duckdb {
 
 CSVFileHandle::CSVFileHandle(FileSystem &fs, Allocator &allocator, unique_ptr<FileHandle> file_handle_p,
-                             const string &path_p, FileCompressionType compression)
-    : compression_type(compression), file_handle(std::move(file_handle_p)), path(path_p) {
+                             const string &path_p, FileCompressionType compression, CSVEncoding encoding)
+    : compression_type(compression), file_handle(std::move(file_handle_p)), path(path_p), decoder(encoding) {
 	can_seek = file_handle->CanSeek();
 	on_disk_file = file_handle->OnDiskFile();
 	file_size = file_handle->GetFileSize();
@@ -26,9 +26,9 @@ unique_ptr<FileHandle> CSVFileHandle::OpenFileHandle(FileSystem &fs, Allocator &
 }
 
 unique_ptr<CSVFileHandle> CSVFileHandle::OpenFile(FileSystem &fs, Allocator &allocator, const string &path,
-                                                  FileCompressionType compression) {
-	auto file_handle = CSVFileHandle::OpenFileHandle(fs, allocator, path, compression);
-	return make_uniq<CSVFileHandle>(fs, allocator, std::move(file_handle), path, compression);
+                                                  FileCompressionType compression, CSVEncoding encoding) {
+	auto file_handle = OpenFileHandle(fs, allocator, path, compression);
+	return make_uniq<CSVFileHandle>(fs, allocator, std::move(file_handle), path, compression, encoding);
 }
 
 double CSVFileHandle::GetProgress() {
@@ -74,7 +74,13 @@ bool CSVFileHandle::FinishedReading() {
 idx_t CSVFileHandle::Read(void *buffer, idx_t nr_bytes) {
 	requested_bytes += nr_bytes;
 	// if this is a plain file source OR we can seek we are not caching anything
-	auto bytes_read = file_handle->Read(buffer, nr_bytes);
+	idx_t bytes_read = 0;
+	if (decoder.IsUTF8()) {
+		bytes_read = file_handle->Read(buffer, nr_bytes);
+	} else {
+		bytes_read = decoder.Decode(*file_handle, buffer, nr_bytes);
+	}
+
 	if (!finished) {
 		finished = bytes_read == 0;
 	}
