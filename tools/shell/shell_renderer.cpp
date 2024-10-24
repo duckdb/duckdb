@@ -52,7 +52,7 @@ public:
 			return;
 		}
 		for (idx_t i = 0; i < result.column_count; i++) {
-			state.utf8_width_print(state.out, result.column_width[i], result.data[i]);
+			state.utf8_width_print(state.out, result.column_width[i], result.data[i], result.right_align[i]);
 			state.Print(i == result.column_count - 1 ? "\n" : "  ");
 		}
 		for (idx_t i = 0; i < result.column_count; i++) {
@@ -180,9 +180,9 @@ private:
 	/* Draw horizontal line N characters long using unicode box
 	** characters
 	*/
-	void print_box_line(int N) {
+	void print_box_line(idx_t N) {
 		string box_line;
-		for (int i = 0; i < N; i++) {
+		for (idx_t i = 0; i < N; i++) {
 			box_line += BOX_24;
 		}
 		state.Print(box_line);
@@ -192,7 +192,7 @@ private:
 	** Draw a horizontal separator for a RenderMode::Box table.
 	*/
 	void print_box_row_separator(int nArg, const char *zSep1, const char *zSep2, const char *zSep3,
-	                             const vector<int> &actualWidth) {
+	                             const vector<idx_t> &actualWidth) {
 		int i;
 		if (nArg > 0) {
 			state.Print(zSep1);

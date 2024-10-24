@@ -75,7 +75,6 @@ enum class RenderMode : uint32_t {
 */
 struct ShellState {
 	sqlite3 *db = nullptr;                    /* The database */
-	uint8_t autoExplain = 0;                  /* Automatically turn on .explain mode */
 	uint8_t openMode = 0;                     /* SHELL_OPEN_NORMAL, _APPENDVFS, or _ZIPFILE */
 	uint8_t doXdgOpen = 0;                    /* Invoke start/open/xdg-open in output_reset() */
 	int outCount = 0;                         /* Revert to stdout when reaching zero */
@@ -88,7 +87,7 @@ struct ShellState {
 	RenderMode modePrior = RenderMode::LINE;  /* Saved mode */
 	RenderMode cMode = RenderMode::LINE;      /* temporary output mode for the current query */
 	RenderMode normalMode = RenderMode::LINE; /* Output mode before ".explain on" */
-	int showHeader = 0;                       /* True to show column names in List or Column mode */
+	bool showHeader = false;                  /* True to show column names in List or Column mode */
 	unsigned shellFlgs = 0;                   /* Various flags */
 	unsigned priorShFlgs = 0;                 /* Saved copy of flags */
 	int64_t szMax = 0;                        /* --maxsize argument to .open */
@@ -112,9 +111,9 @@ public:
 	void outputModePush();
 	void outputModePop();
 	void output_csv(const char *z, int bSep);
-	void print_row_separator(int nArg, const char *zSep, const vector<int> &actualWidth);
-	void print_markdown_separator(int nArg, const char *zSep, const vector<int> &colTypes,
-	                              const vector<int> &actualWidth);
+	void print_row_separator(int nArg, const char *zSep, const vector<idx_t> &actualWidth);
+	void print_markdown_separator(idx_t nArg, const char *zSep, const vector<int> &colTypes,
+	                              const vector<idx_t> &actualWidth);
 	void output_c_string(const char *z);
 	void output_quoted_string(const char *z);
 	void output_quoted_escaped_string(const char *z);
@@ -125,7 +124,7 @@ public:
 	int isNumber(const char *z, int *realnum);
 	void output_json_string(const char *z, int n);
 	void print_dashes(int N);
-	void utf8_width_print(FILE *pOut, int w, const string &str);
+	void utf8_width_print(FILE *pOut, idx_t w, const string &str, bool right_align);
 	bool SetOutputMode(const char *mode, const char *tbl_name);
 	bool ImportData(const char **azArg, idx_t nArg);
 	bool OpenDatabase(const char **azArg, idx_t nArg);

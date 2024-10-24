@@ -225,14 +225,15 @@ static void setTextMode(FILE *file, int isOutput) {
 #endif
 
 /* True if the timer is enabled */
-static int enableTimer = 0;
+static bool enableTimer = false;
 
 /* Return the current wall-clock time */
 static sqlite3_int64 timeOfDay(void) {
-	static sqlite3_vfs *clockVfs = 0;
+	static sqlite3_vfs *clockVfs = nullptr;
 	sqlite3_int64 t;
-	if (clockVfs == 0)
+	if (!clockVfs) {
 		clockVfs = sqlite3_vfs_find(0);
+	}
 	if (clockVfs->iVersion >= 2 && clockVfs->xCurrentTimeInt64 != 0) {
 		clockVfs->xCurrentTimeInt64(clockVfs, &t);
 	} else {
@@ -386,27 +387,27 @@ static void endTimer(void) {
 ** If the following flag is set, then command execution stops
 ** at an error if we are not interactive.
 */
-static int bail_on_error = 0;
+static bool bail_on_error = false;
 
 /*
 ** Treat stdin as an interactive input if the following variable
 ** is true.  Otherwise, assume stdin is connected to a file or pipe.
 */
-static int stdin_is_interactive = 1;
+static bool stdin_is_interactive = true;
 
 /*
 ** On Windows systems we have to know if standard output is a console
 ** in order to translate UTF-8 into MBCS.  The following variable is
 ** true if translation is required.
 */
-static int stdout_is_console = 1;
+static bool stdout_is_console = true;
 
 /*
 ** The following is the open SQLite database.  We make a pointer
 ** to this database a static variable so that it can be accessed
 ** by the SIGINT handler to interrupt database processing.
 */
-static sqlite3 *globalDb = 0;
+static sqlite3 *globalDb = nullptr;
 
 /*
 ** True if an interrupt (Control-C) has been received.
@@ -417,7 +418,7 @@ static volatile int seenInterrupt = 0;
 ** This is the name of our program. It is set in main(), used
 ** in a number of other places, mostly for error messages.
 */
-static char *Argv0;
+static const char *program_name;
 
 /*
 ** Whether or not we are running in safe mode
@@ -500,7 +501,7 @@ void ShellState::PrintPadded(const char *str, idx_t len) {
 ** in bytes.  This is different from the %*.*s specification in printf
 ** since with %*.*s the width is measured in bytes, not characters.
 */
-void ShellState::utf8_width_print(FILE *pOut, int w, const string &str) {
+void ShellState::utf8_width_print(FILE *pOut, idx_t w, const string &str, bool right_align) {
 	auto zUtf = str.c_str();
 	int i;
 	int n;
@@ -525,7 +526,7 @@ void ShellState::utf8_width_print(FILE *pOut, int w, const string &str) {
 		}
 	if (n >= aw) {
 		utf8_printf(pOut, "%.*s", i, zUtf);
-	} else if (w < 0) {
+	} else if (right_align) {
 		utf8_printf(pOut, "%*s%s", aw - n, "", zUtf);
 	} else {
 		utf8_printf(pOut, "%s%*s", zUtf, aw - n, "");
@@ -1154,10 +1155,12 @@ void ShellState::output_csv(const char *z, int bSep) {
 static void interrupt_handler(int NotUsed) {
 	UNUSED_PARAMETER(NotUsed);
 	seenInterrupt++;
-	if (seenInterrupt > 2)
+	if (seenInterrupt > 2) {
 		exit(1);
-	if (globalDb)
+	}
+	if (globalDb) {
 		sqlite3_interrupt(globalDb);
+	}
 }
 
 #if (defined(_WIN32) || defined(WIN32)) && !defined(_WIN32_WCE)
@@ -1181,10 +1184,9 @@ static BOOL WINAPI ConsoleCtrlHandler(DWORD dwCtrlType /* One of the CTRL_*_EVEN
 ** in FTS3/4/5 into CREATE TABLE IF NOT EXISTS statements.
 */
 void ShellState::printSchemaLine(const char *z, const char *zTail) {
-	if (z == 0)
+	if (!z || !zTail) {
 		return;
-	if (zTail == 0)
-		return;
+	}
 	if (sqlite3_strglob("CREATE TABLE ['\"]*", z) == 0) {
 		utf8_printf(out, "CREATE TABLE IF NOT EXISTS %s%s", z + 13, zTail);
 	} else {
@@ -1214,7 +1216,7 @@ void ShellState::print_dashes(int N) {
 /*
 ** Print a markdown or table-style row separator using ascii-art
 */
-void ShellState::print_row_separator(int nArg, const char *zSep, const vector<int> &actualWidth) {
+void ShellState::print_row_separator(int nArg, const char *zSep, const vector<idx_t> &actualWidth) {
 	int i;
 	if (nArg > 0) {
 		fputs(zSep, out);
@@ -1228,11 +1230,10 @@ void ShellState::print_row_separator(int nArg, const char *zSep, const vector<in
 	fputs("\n", out);
 }
 
-void ShellState::print_markdown_separator(int nArg, const char *zSep, const vector<int> &colTypes,
-                                          const vector<int> &actualWidth) {
-	int i;
+void ShellState::print_markdown_separator(idx_t nArg, const char *zSep, const vector<int> &colTypes,
+                                          const vector<idx_t> &actualWidth) {
 	if (nArg > 0) {
-		for (i = 0; i < nArg; i++) {
+		for (idx_t i = 0; i < nArg; i++) {
 			Print(zSep);
 			if (colTypes[i] == SQLITE_INTEGER || colTypes[i] == SQLITE_FLOAT) {
 				// right-align numerics in tables
@@ -1460,8 +1461,9 @@ ColumnarResult ShellState::ExecuteColumnar(sqlite3_stmt *pStmt) {
 	ColumnarResult result;
 
 	int rc = sqlite3_step(pStmt);
-	if (rc != SQLITE_ROW)
+	if (rc != SQLITE_ROW) {
 		return result;
+	}
 	// fetch the column count, column names and types
 	result.column_count = sqlite3_column_count(pStmt);
 	result.data.reserve(result.column_count * 4);
@@ -1482,15 +1484,20 @@ ColumnarResult ShellState::ExecuteColumnar(sqlite3_stmt *pStmt) {
 	// compute the column widths
 	for (idx_t i = 0; i < result.column_count; i++) {
 		int w = i < colWidth.size() ? colWidth[i] : 0;
-		if (w < 0)
+		if (w < 0) {
+			result.right_align.push_back(true);
 			w = -w;
-		result.column_width.push_back(w);
+		} else {
+			result.right_align.push_back(false);
+		}
+		result.column_width.push_back(static_cast<idx_t>(w));
 	}
 	for (idx_t i = 0; i < result.data.size(); i++) {
 		idx_t width = strlenChar(result.data[i]);
 		idx_t column_idx = i % result.column_count;
-		if (static_cast<int>(width) > result.column_width[column_idx])
+		if (width > result.column_width[column_idx]) {
 			result.column_width[column_idx] = width;
+		}
 	}
 	return result;
 }
@@ -1528,9 +1535,8 @@ void ShellState::exec_prepared_stmt_columnar(sqlite3_stmt *pStmt /* Statment to 
 			Print(row_start);
 		}
 		idx_t w = result.column_width[j];
-		if (w < 0)
-			w = -w;
-		utf8_width_print(out, w, result.data[i]);
+		bool right_align = result.right_align[j];
+		utf8_width_print(out, w, result.data[i], right_align);
 		if (j == result.column_count - 1) {
 			Print(rowSep);
 			j = -1;
@@ -1680,16 +1686,8 @@ int ShellState::shell_exec(const char *zSql, /* SQL to be evaluated */
 			}
 
 			cMode = mode;
-			if (autoExplain) {
-				if (sqlite3_stmt_isexplain(pStmt) == 1) {
-					cMode = RenderMode::EXPLAIN;
-				}
-
-				/* If the shell is currently in ".explain" mode, gather the extra
-				** data required to add indents to the output.*/
-				// if( pArg->cMode==RenderMode::Explain ){
-				//   explain_data_prepare(pArg, pStmt);
-				// }
+			if (sqlite3_stmt_isexplain(pStmt) == 1) {
+				cMode = RenderMode::EXPLAIN;
 			}
 
 			bind_prepared_stmt(this, pStmt);
@@ -2458,8 +2456,8 @@ static void resolve_backslashes(char *z) {
 ** Interpret zArg as either an integer or a boolean value.  Return 1 or 0
 ** for TRUE and FALSE.  Return the integer value if appropriate.
 */
-static int booleanValue(const char *zArg) {
-	int i;
+static bool booleanValue(const char *zArg) {
+	idx_t i;
 	if (zArg[0] == '0' && zArg[1] == 'x') {
 		for (i = 2; hexDigitValue(zArg[i]) >= 0; i++) {
 		}
@@ -2468,15 +2466,15 @@ static int booleanValue(const char *zArg) {
 		}
 	}
 	if (i > 0 && zArg[i] == 0)
-		return (int)(integerValue(zArg) & 0xffffffff);
+		return bool(integerValue(zArg) & 0xffffffff);
 	if (sqlite3_stricmp(zArg, "on") == 0 || sqlite3_stricmp(zArg, "yes") == 0) {
-		return 1;
+		return true;
 	}
 	if (sqlite3_stricmp(zArg, "off") == 0 || sqlite3_stricmp(zArg, "no") == 0) {
-		return 0;
+		return false;
 	}
 	utf8_printf(stderr, "ERROR: Not a boolean value: \"%s\". Assuming \"no\".\n", zArg);
-	return 0;
+	return false;
 }
 
 /*
@@ -2898,7 +2896,7 @@ MetadataResult ShowDatabases(ShellState &state, const char **azArg, idx_t nArg) 
 MetadataResult DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
 	char *zLike = 0;
 	char *zSql;
-	int savedShowHeader = state.showHeader;
+	bool savedShowHeader = state.showHeader;
 	int savedShellFlags = state.shellFlgs;
 	state.ShellClearFlag(SHFLG_PreserveRowid | SHFLG_Newlines | SHFLG_Echo);
 	for (idx_t i = 1; i < nArg; i++) {
@@ -3039,7 +3037,7 @@ bool ShellState::SetOutputMode(const char *mode_str, const char *tbl_name) {
 	} else if (c2 == 'c' && strncmp(mode_str, "columns", n2) == 0) {
 		mode = RenderMode::COLUMN;
 		if ((shellFlgs & SHFLG_HeaderSet) == 0) {
-			showHeader = 1;
+			showHeader = true;
 		}
 		rowSeparator = SEP_Row;
 	} else if (c2 == 'l' && n2 > 2 && strncmp(mode_str, "list", n2) == 0) {
@@ -3406,11 +3404,11 @@ bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
 	}
 	char *zNewFilename; /* Name of the database file to open */
 	idx_t iName = 1;    /* Index in azArg[] of the filename */
-	int newFlag = 0;    /* True to delete file before opening */
+	bool newFlag = false;    /* True to delete file before opening */
 	/* Close the existing database */
 	close_db(db);
-	db = 0;
-	globalDb = 0;
+	db = nullptr;
+	globalDb = nullptr;
 	zDbFilename = string();
 	openMode = SHELL_OPEN_UNSPEC;
 	openFlags = openFlags & ~(SQLITE_OPEN_NOFOLLOW); // don't overwrite settings loaded in the command line
@@ -3419,7 +3417,7 @@ bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
 	for (idx_t iName = 1; iName < nArg && azArg[iName][0] == '-'; iName++) {
 		const char *z = azArg[iName];
 		if (optionMatch(z, "new")) {
-			newFlag = 1;
+			newFlag = true;
 		} else if (optionMatch(z, "readonly")) {
 			openMode = SHELL_OPEN_READONLY;
 		} else if (optionMatch(z, "nofollow")) {
@@ -3432,8 +3430,9 @@ bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
 	/* If a filename is specified, try to open it first */
 	zNewFilename = nArg > iName ? sqlite3_mprintf("%s", azArg[iName]) : 0;
 	if (zNewFilename || openMode == SHELL_OPEN_HEXDB) {
-		if (newFlag)
+		if (newFlag) {
 			shellDeleteFile(zNewFilename);
+		}
 		zDbFilename = zNewFilename;
 		sqlite3_free(zNewFilename);
 		open_db(OPEN_DB_KEEPALIVE);
@@ -3500,10 +3499,10 @@ bool ShellState::SetOutputFile(const char **azArg, idx_t nArg, char output_mode)
 		utf8_printf(stderr, ".output/.once/.excel cannot be used in -safe mode\n");
 		return false;
 	}
-	const char *zFile = 0;
+	const char *zFile = nullptr;
 	int bTxtMode = 0;
 	int eMode = 0;
-	int bBOM = 0;
+	bool bBOM = false;
 	int bOnce = 0; /* 0: .output, 1: .once, 2: .excel */
 
 	if (output_mode == 'e') {
@@ -3517,10 +3516,11 @@ bool ShellState::SetOutputFile(const char **azArg, idx_t nArg, char output_mode)
 	for (idx_t i = 1; i < nArg; i++) {
 		const char *z = azArg[i];
 		if (z[0] == '-') {
-			if (z[1] == '-')
+			if (z[1] == '-') {
 				z++;
+			}
 			if (strcmp(z, "-bom") == 0) {
-				bBOM = 1;
+				bBOM = true;
 			} else if (output_mode != 'e' && strcmp(z, "-x") == 0) {
 				eMode = 'x'; /* spreadsheet */
 			} else if (output_mode != 'e' && strcmp(z, "-e") == 0) {
@@ -3530,7 +3530,7 @@ bool ShellState::SetOutputFile(const char **azArg, idx_t nArg, char output_mode)
 				showHelp(out, azArg[0]);
 				return false;
 			}
-		} else if (zFile == 0) {
+		} else if (!zFile) {
 			zFile = z;
 		} else {
 			utf8_printf(out, "ERROR: extra parameter: \"%s\".  Usage:\n", azArg[i]);
@@ -3538,7 +3538,7 @@ bool ShellState::SetOutputFile(const char **azArg, idx_t nArg, char output_mode)
 			return false;
 		}
 	}
-	if (zFile == 0) {
+	if (!zFile) {
 		zFile = "stdout";
 	}
 	if (bOnce) {
@@ -3578,22 +3578,24 @@ bool ShellState::SetOutputFile(const char **azArg, idx_t nArg, char output_mode)
 			out = stdout;
 			return false;
 		} else {
-			if (bBOM)
+			if (bBOM) {
 				fprintf(out, "\357\273\277");
+			}
 			outfile = zFile;
 		}
 #endif
 	} else {
 		out = output_file_open(zFile, bTxtMode);
-		if (out == 0) {
+		if (!out) {
 			if (strcmp(zFile, "off") != 0) {
 				utf8_printf(stderr, "Error: cannot write to \"%s\"\n", zFile);
 			}
 			out = stdout;
 			return false;
 		} else {
-			if (bBOM)
+			if (bBOM) {
 				fprintf(out, "\357\273\277");
+			}
 			outfile = zFile;
 		}
 	}
@@ -3743,10 +3745,8 @@ MetadataResult RunShellCommand(ShellState &state, const char **azArg, idx_t nArg
 }
 
 void ShellState::ShowConfiguration() {
-	static const char *azBool[] = {"off", "on", "trigger", "full"};
-	utf8_printf(out, "%12.12s: %s\n", "echo", azBool[ShellHasFlag(SHFLG_Echo)]);
-	utf8_printf(out, "%12.12s: %s\n", "explain", mode == RenderMode::EXPLAIN ? "on" : autoExplain ? "auto" : "off");
-	utf8_printf(out, "%12.12s: %s\n", "headers", azBool[showHeader != 0]);
+	utf8_printf(out, "%12.12s: %s\n", "echo", ShellHasFlag(SHFLG_Echo) ? "on" : "off");
+	utf8_printf(out, "%12.12s: %s\n", "headers", showHeader ? "on" : "off");
 	utf8_printf(out, "%12.12s: %s\n", "mode", modeDescr[int(mode)]);
 	utf8_printf(out, "%12.12s: ", "nullvalue");
 	output_c_string(nullValue.c_str());
@@ -3775,7 +3775,7 @@ MetadataResult ToggleTimer(ShellState &state, const char **azArg, idx_t nArg) {
 	enableTimer = booleanValue(azArg[1]);
 	if (enableTimer && !HAS_TIMER) {
 		raw_printf(stderr, "Error: timer not available on this system.\n");
-		enableTimer = 0;
+		enableTimer = false;
 	}
 	return MetadataResult::SUCCESS;
 }
@@ -3842,13 +3842,14 @@ MetadataResult ShellState::DisplayEntries(const char **azArg, idx_t nArg, char t
 	//    rc = sqlite3_finalize(pStmt);
 	appendText(s, " ORDER BY 1", 0);
 	int rc = sqlite3_prepare_v2(db, s.c_str(), -1, &pStmt, 0);
-	if (rc)
+	if (rc) {
 		return MetadataResult::FAIL;
+	}
 
 	/* Run the SQL statement prepared by the above block. Store the results
 	** as an array of nul-terminated strings in azResult[].  */
 	nRow = nAlloc = 0;
-	azResult = 0;
+	azResult = nullptr;
 	if (nArg > 1) {
 		sqlite3_bind_text(pStmt, 1, azArg[1], -1, SQLITE_TRANSIENT);
 	} else {
@@ -3896,8 +3897,9 @@ MetadataResult ShellState::DisplayEntries(const char **azArg, idx_t nArg, char t
 		}
 	}
 
-	for (ii = 0; ii < nRow; ii++)
+	for (ii = 0; ii < nRow; ii++) {
 		sqlite3_free(azResult[ii]);
+	}
 	sqlite3_free(azResult);
 	return rc == 0 ? MetadataResult::SUCCESS : MetadataResult::FAIL;
 }
@@ -4024,8 +4026,9 @@ int ShellState::do_meta_command(char *zLine) {
 
 	/* Process the input line.
 	 */
-	if (nArg == 0)
+	if (nArg == 0) {
 		return 0; /* no tokens, no error */
+		}
 	n = strlen30(azArg[0]);
 	c = azArg[0][0];
 	clearTempFile();
@@ -4085,29 +4088,32 @@ int ShellState::do_meta_command(char *zLine) {
 ** Return TRUE if a semicolon occurs anywhere in the first N characters
 ** of string z[].
 */
-static int line_contains_semicolon(const char *z, int N) {
+static bool line_contains_semicolon(const char *z, int N) {
 	int i;
 	for (i = 0; i < N; i++) {
-		if (z[i] == ';')
-			return 1;
+		if (z[i] == ';') {
+			return true;
+		}
 	}
-	return 0;
+	return false;
 }
 
 /*
 ** Test to see if a line consists entirely of whitespace.
 */
-static int _all_whitespace(const char *z) {
+static bool _all_whitespace(const char *z) {
 	for (; *z; z++) {
-		if (IsSpace(z[0]))
+		if (IsSpace(z[0])) {
 			continue;
+		}
 		if (*z == '/' && z[1] == '*') {
 			z += 2;
 			while (*z && (*z != '*' || z[1] != '/')) {
 				z++;
 			}
-			if (*z == 0)
-				return 0;
+			if (*z == 0) {
+				return false;
+			}
 			z++;
 			continue;
 		}
@@ -4117,31 +4123,12 @@ static int _all_whitespace(const char *z) {
 				z++;
 			}
 			if (*z == 0)
-				return 1;
+				return true;
 			continue;
 		}
-		return 0;
+		return false;
 	}
-	return 1;
-}
-
-/*
-** Return TRUE if the line typed in is an SQL command terminator other
-** than a semi-colon.  The SQL Server style "go" command is understood
-** as is the Oracle "/".
-*/
-static int line_is_command_terminator(const char *zLine) {
-	while (IsSpace(zLine[0])) {
-		zLine++;
-	};
-	// if( zLine[0]=='/' && _all_whitespace(&zLine[1]) ){
-	//   return 1;  /* Oracle */
-	// }
-	// if( ToLower(zLine[0])=='g' && ToLower(zLine[1])=='o'
-	//        && _all_whitespace(&zLine[2]) ){
-	//   return 1;  /* SQL Server */
-	// }
-	return 0;
+	return true;
 }
 
 /*
@@ -4155,33 +4142,20 @@ static int line_is_command_terminator(const char *zLine) {
 #endif
 
 /*
-** Return true if zSql is a complete SQL statement.  Return false if it
-** ends in the middle of a string literal or C-style comment.
-*/
-static int line_is_complete(char *zSql, int nSql) {
-	int rc;
-	if (zSql == 0)
-		return 1;
-	zSql[nSql] = ';';
-	zSql[nSql + 1] = 0;
-	rc = sqlite3_complete(zSql);
-	zSql[nSql] = 0;
-	return rc;
-}
-
-/*
 ** Run a single line of SQL.  Return the number of errors.
 */
 int ShellState::runOneSqlLine(char *zSql, int startline) {
 	int rc;
-	char *zErrMsg = 0;
+	char *zErrMsg = nullptr;
 
 	open_db(0);
-	if (ShellHasFlag(SHFLG_Backslash))
+	if (ShellHasFlag(SHFLG_Backslash)) {
 		resolve_backslashes(zSql);
+	}
 #ifndef SHELL_USE_LOCAL_GETLINE
-	if (zSql && *zSql && *zSql != '\3')
+	if (zSql && *zSql && *zSql != '\3') {
 		shell_add_history(zSql);
+	}
 #endif
 	BEGIN_TIMER;
 	rc = shell_exec(zSql, &zErrMsg);
@@ -4211,24 +4185,25 @@ int ShellState::runOneSqlLine(char *zSql, int startline) {
 ** Return the number of errors.
 */
 int ShellState::process_input() {
-	char *zLine = 0;   /* A single input line */
-	char *zSql = 0;    /* Accumulated SQL text */
-	int nLine;         /* Length of current line */
-	int nSql = 0;      /* Bytes of zSql[] used */
-	int nAlloc = 0;    /* Allocated zSql[] space */
-	int nSqlPrior = 0; /* Bytes of zSql[] used by prior line */
-	int rc;            /* Error code */
-	int errCnt = 0;    /* Number of errors seen */
-	int startline = 0; /* Line number for start of current input */
+	char *zLine = nullptr;   /* A single input line */
+	char *zSql = nullptr;    /* Accumulated SQL text */
+	int nLine;               /* Length of current line */
+	int nSql = 0;            /* Bytes of zSql[] used */
+	int nAlloc = 0;          /* Allocated zSql[] space */
+	int nSqlPrior = 0;       /* Bytes of zSql[] used by prior line */
+	int rc;                  /* Error code */
+	int errCnt = 0;          /* Number of errors seen */
+	int startline = 0;       /* Line number for start of current input */
 	int numCtrlC = 0;
 	lineno = 0;
 	while (errCnt == 0 || !bail_on_error || (in == 0 && stdin_is_interactive)) {
 		fflush(out);
 		zLine = one_input_line(in, zLine, nSql > 0);
-		if (zLine == 0) {
+		if (!zLine) {
 			/* End of input */
-			if (in == 0 && stdin_is_interactive)
+			if (!in && stdin_is_interactive) {
 				printf("\n");
+			}
 			break;
 		}
 		if (*zLine == '\3') {
@@ -4247,19 +4222,22 @@ int ShellState::process_input() {
 			numCtrlC = 0;
 		}
 		if (seenInterrupt) {
-			if (in != 0)
+			if (in) {
 				break;
+			}
 			seenInterrupt = 0;
 		}
 		lineno++;
 		if (nSql == 0 && _all_whitespace(zLine)) {
-			if (ShellHasFlag(SHFLG_Echo))
+			if (ShellHasFlag(SHFLG_Echo)) {
 				printf("%s\n", zLine);
+			}
 			continue;
 		}
 		if (zLine && (zLine[0] == '.' || zLine[0] == '#') && nSql == 0) {
-			if (ShellHasFlag(SHFLG_Echo))
+			if (ShellHasFlag(SHFLG_Echo)) {
 				printf("%s\n", zLine);
+			}
 			if (zLine[0] == '.') {
 #ifndef SHELL_USE_LOCAL_GETLINE
 				if (zLine && *zLine && *zLine != '\3')
@@ -4274,22 +4252,20 @@ int ShellState::process_input() {
 			}
 			continue;
 		}
-		if (line_is_command_terminator(zLine) && line_is_complete(zSql, nSql)) {
-			memcpy(zLine, ";", 2);
-		}
 		nLine = strlen30(zLine);
 		if (nSql + nLine + 2 >= nAlloc) {
 			nAlloc = nSql + nLine + 100;
 			zSql = (char *)realloc(zSql, nAlloc);
-			if (zSql == 0)
+			if (!zSql) {
 				shell_out_of_memory();
+			}
 		}
 		nSqlPrior = nSql;
 		if (nSql == 0) {
 			int i;
 			for (i = 0; zLine[i] && IsSpace(zLine[i]); i++) {
 			}
-			assert(nAlloc > 0 && zSql != 0);
+			assert(nAlloc > 0 && zSql);
 			memcpy(zSql, zLine + i, nLine + 1 - i);
 			startline = lineno;
 			nSql = nLine - i;
@@ -4308,8 +4284,9 @@ int ShellState::process_input() {
 				clearTempFile();
 			}
 		} else if (nSql && _all_whitespace(zSql)) {
-			if (ShellHasFlag(SHFLG_Echo))
+			if (ShellHasFlag(SHFLG_Echo)) {
 				printf("%s\n", zSql);
+			}
 			nSql = 0;
 		}
 	}
@@ -4326,14 +4303,15 @@ int ShellState::process_input() {
 ** 0 return indicates an error of some kind.
 */
 static char *find_home_dir(int clearFlag) {
-	static char *home_dir = NULL;
+	static char *home_dir = nullptr;
 	if (clearFlag) {
 		free(home_dir);
-		home_dir = 0;
-		return 0;
+		home_dir = nullptr;
+		return nullptr;
 	}
-	if (home_dir)
+	if (home_dir) {
 		return home_dir;
+	}
 
 #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN32_WCE) && !defined(__RTP__) && !defined(_WRS_KERNEL)
 	{
@@ -4384,8 +4362,9 @@ static char *find_home_dir(int clearFlag) {
 	if (home_dir) {
 		int n = strlen30(home_dir) + 1;
 		char *z = (char *)malloc(n);
-		if (z)
+		if (z) {
 			memcpy(z, home_dir, n);
+		}
 		home_dir = z;
 	}
 
@@ -4399,15 +4378,14 @@ static char *find_home_dir(int clearFlag) {
 ** Returns the number of errors.
 */
 void ShellState::process_sqliterc(const char *sqliterc_override) {
-	char *home_dir = NULL;
 	const char *sqliterc = sqliterc_override;
-	char *zBuf = 0;
+	char *zBuf = nullptr;
 	FILE *inSaved = in;
 	int savedLineno = lineno;
 
-	if (sqliterc == NULL) {
-		home_dir = find_home_dir(0);
-		if (home_dir == 0) {
+	if (!sqliterc) {
+		auto home_dir = find_home_dir(0);
+		if (!home_dir) {
 			raw_printf(stderr, "-- warning: cannot find home directory;"
 			                   " cannot read ~/.duckdbrc\n");
 			return;
@@ -4450,7 +4428,6 @@ static const char zOptions[] = "   -ascii               set output mode to 'asci
                                "   -list                set output mode to 'list'\n"
                                "   -markdown            set output mode to 'markdown'\n"
                                "   -newline SEP         set output row separator. Default: '\\n'\n"
-                               "   -nofollow            refuse to open symbolic links to database files\n"
                                "   -no-stdin            exit after processing options instead of reading stdin\n"
                                "   -nullvalue TEXT      set text string for NULL values. Default ''\n"
                                "   -quote               set output mode to 'quote'\n"
@@ -4467,7 +4444,7 @@ static void usage(int showDetail) {
 	            "Usage: %s [OPTIONS] FILENAME [SQL]\n"
 	            "FILENAME is the name of an DuckDB database. A new database is created\n"
 	            "if the file does not previously exist.\n",
-	            Argv0);
+	            program_name);
 	if (showDetail) {
 		utf8_printf(stderr, "OPTIONS include:\n%s", zOptions);
 	} else {
@@ -4493,10 +4470,9 @@ static void verify_uninitialized(void) {
 static void main_init(ShellState *data) {
 	data->normalMode = data->cMode = data->mode = RenderMode::DUCKBOX;
 	data->max_rows = 40;
-	data->autoExplain = 1;
 	data->colSeparator = SEP_Column;
 	data->rowSeparator = SEP_Row;
-	data->showHeader = 1;
+	data->showHeader = true;
 	data->shellFlgs = SHFLG_Lookaside;
 	verify_uninitialized();
 	sqlite3_config(SQLITE_CONFIG_URI, 1);
@@ -4558,15 +4534,15 @@ int SQLITE_CDECL main(int argc, char **argv) {
 int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 	char **argv;
 #endif
-	char *zErrMsg = 0;
+	char *zErrMsg = nullptr;
 	ShellState data;
-	const char *zInitFile = 0;
+	const char *zInitFile = nullptr;
 	int i;
 	int rc = 0;
-	int warnInmemoryDb = 0;
-	int readStdin = 1;
+	bool warnInmemoryDb = false;
+	bool readStdin = true;
 	int nCmd = 0;
-	char **azCmd = 0;
+	char **azCmd = nullptr;
 #if !SQLITE_SHELL_IS_UTF8
 	char **argvToFree = 0;
 	int argcToFree = 0;
@@ -4616,7 +4592,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 #endif
 
 	assert(argc >= 1 && argv && argv[0]);
-	Argv0 = argv[0];
+	program_name = argv[0];
 
 	/* Make sure we have a valid signal handler early, before anything
 	** else is done.
@@ -4635,7 +4611,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 		** applications. */
 		extern void SQLITE_SHELL_DBNAME_PROC(const char **);
 		SQLITE_SHELL_DBNAME_PROC(&data.zDbFilename);
-		warnInmemoryDb = 0;
+		warnInmemoryDb = false;
 	}
 #endif
 
@@ -4654,11 +4630,12 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			} else {
 				/* Excesss arguments are interpreted as SQL (or dot-commands) and
 				** mean that nothing is read from stdin */
-				readStdin = 0;
+				readStdin = false;
 				nCmd++;
 				azCmd = (char **)realloc(azCmd, sizeof(azCmd[0]) * nCmd);
-				if (azCmd == 0)
+				if (azCmd == 0) {
 					shell_out_of_memory();
+				}
 				azCmd[nCmd - 1] = z;
 			}
 		}
@@ -4674,48 +4651,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			** informational messages (like from process_sqliterc) before
 			** we do the actual processing of arguments later in a second pass.
 			*/
-			stdin_is_interactive = 0;
-		} else if (strcmp(z, "-heap") == 0) {
-#if defined(SQLITE_ENABLE_MEMSYS3) || defined(SQLITE_ENABLE_MEMSYS5)
-			const char *zSize;
-			sqlite3_int64 szHeap;
-
-			zSize = cmdline_option_value(argc, argv, ++i);
-			szHeap = integerValue(zSize);
-			if (szHeap > 0x7fff0000)
-				szHeap = 0x7fff0000;
-			sqlite3_config(SQLITE_CONFIG_HEAP, malloc((int)szHeap), (int)szHeap, 64);
-#else
-			(void)cmdline_option_value(argc, argv, ++i);
-#endif
-		} else if (strcmp(z, "-pagecache") == 0) {
-			int n, sz;
-			sz = (int)integerValue(cmdline_option_value(argc, argv, ++i));
-			if (sz > 70000)
-				sz = 70000;
-			if (sz < 0)
-				sz = 0;
-			n = (int)integerValue(cmdline_option_value(argc, argv, ++i));
-			sqlite3_config(SQLITE_CONFIG_PAGECACHE, (n > 0 && sz > 0) ? malloc(n * sz) : 0, sz, n);
-			data.shellFlgs |= SHFLG_Pagecache;
-		} else if (strcmp(z, "-lookaside") == 0) {
-			int n, sz;
-			sz = (int)integerValue(cmdline_option_value(argc, argv, ++i));
-			if (sz < 0)
-				sz = 0;
-			n = (int)integerValue(cmdline_option_value(argc, argv, ++i));
-			if (n < 0)
-				n = 0;
-			sqlite3_config(SQLITE_CONFIG_LOOKASIDE, sz, n);
-			if (sz * n == 0)
-				data.shellFlgs &= ~SHFLG_Lookaside;
-		} else if (strcmp(z, "-mmap") == 0) {
-			sqlite3_int64 sz = integerValue(cmdline_option_value(argc, argv, ++i));
-			sqlite3_config(SQLITE_CONFIG_MMAP_SIZE, sz, sz);
+			stdin_is_interactive = false;
 		} else if (strcmp(z, "-readonly") == 0) {
 			data.openMode = SHELL_OPEN_READONLY;
-		} else if (strcmp(z, "-nofollow") == 0) {
-			data.openFlags = SQLITE_OPEN_NOFOLLOW;
 		} else if (strcmp(z, "-unredacted") == 0) {
 			data.openFlags |= DUCKDB_UNREDACTED_SECRETS;
 		} else if (strcmp(z, "-unsigned") == 0) {
@@ -4746,7 +4684,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 		data.zDbFilename = ":memory:";
 		warnInmemoryDb = argc == 1;
 #else
-		utf8_printf(stderr, "%s: Error: no database filename specified\n", Argv0);
+		utf8_printf(stderr, "%s: Error: no database filename specified\n", program_name);
 		return 1;
 #endif
 	}
@@ -4774,8 +4712,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 	*/
 	for (i = 1; i < argc; i++) {
 		char *z = argv[i];
-		if (z[0] != '-')
+		if (z[0] != '-') {
 			continue;
+		}
 		if (z[1] == '-') {
 			z++;
 		}
@@ -4808,8 +4747,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			data.colSeparator = ",";
 		} else if (strcmp(z, "-readonly") == 0) {
 			data.openMode = SHELL_OPEN_READONLY;
-		} else if (strcmp(z, "-nofollow") == 0) {
-			data.openFlags |= SQLITE_OPEN_NOFOLLOW;
 		} else if (strcmp(z, "-ascii") == 0) {
 			data.mode = RenderMode::ASCII;
 			data.colSeparator = SEP_Unit;
@@ -4830,42 +4767,23 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			data.openFlags |= DUCKDB_UNSIGNED_EXTENSIONS;
 		} else if (strcmp(z, "-unredacted") == 0) {
 			data.openFlags |= DUCKDB_UNREDACTED_SECRETS;
-		} else if (strcmp(z, "-backslash") == 0) {
-			/* Undocumented command-line option: -backslash
-			** Causes C-style backslash escapes to be evaluated in SQL statements
-			** prior to sending the SQL into SQLite.  Useful for injecting
-			** crazy bytes in the middle of SQL statements for testing and debugging.
-			*/
-			data.ShellSetFlag(SHFLG_Backslash);
 		} else if (strcmp(z, "-bail") == 0) {
-			bail_on_error = 1;
+			bail_on_error = true;
 		} else if (strcmp(z, "-version") == 0) {
 			printf("%s %s\n", sqlite3_libversion(), sqlite3_sourceid());
 			free(azCmd);
 			return 0;
 		} else if (strcmp(z, "-interactive") == 0) {
-			stdin_is_interactive = 1;
+			stdin_is_interactive = true;
 		} else if (strcmp(z, "-batch") == 0) {
-			stdin_is_interactive = 0;
-		} else if (strcmp(z, "-heap") == 0) {
-			i++;
-		} else if (strcmp(z, "-pagecache") == 0) {
-			i += 2;
-		} else if (strcmp(z, "-lookaside") == 0) {
-			i += 2;
-		} else if (strcmp(z, "-mmap") == 0) {
-			i++;
-		} else if (strcmp(z, "-memtrace") == 0) {
-			i++;
-		} else if (strcmp(z, "-vfs") == 0) {
-			i++;
+			stdin_is_interactive = false;
 		} else if (strcmp(z, "-help") == 0) {
 			usage(1);
 		} else if (strcmp(z, "-no-stdin") == 0) {
-			readStdin = 0;
+			readStdin = false;
 		} else if (strcmp(z, "-cmd") == 0 || strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
 			if (strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
-				readStdin = 0;
+				readStdin = false;
 			}
 			/* Run commands that follow -cmd first and separately from commands
 			** that simply appear on the command-line.  This seems goofy.  It would
@@ -4901,7 +4819,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 		} else if (strcmp(z, "-safe") == 0) {
 			// safe mode has been set before
 		} else {
-			utf8_printf(stderr, "%s: Error: unknown option: %s\n", Argv0, z);
+			utf8_printf(stderr, "%s: Error: unknown option: %s\n", program_name, z);
 			raw_printf(stderr, "Use -help for a list of options.\n");
 			free(azCmd);
 			return 1;
