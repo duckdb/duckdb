@@ -308,9 +308,9 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 		return NumericLimits<idx_t>::Maximum();
 	}
 
-	double compression_ratio = (double)state.sampling_state.total_sample_size / compressed_size;
+	double compression_ratio = (double)state.sampling_state.total_sample_size / (double)compressed_size;
 	// Check what the size of the data would be if all of it would be compressed at this compression ratio.
-	idx_t expected_compressed_size = LossyNumericCast<idx_t>(state.total_size / compression_ratio);
+	idx_t expected_compressed_size = LossyNumericCast<idx_t>((double)state.total_size / compression_ratio);
 	state.sampling_state.Reset();
 
 	idx_t estimated_size = 0;
@@ -323,7 +323,7 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	// we only use zstd if it is at least 1.3 times better than the alternative
 	auto zstd_penalty_factor = 1.3;
 
-	return LossyNumericCast<idx_t>(estimated_size * zstd_penalty_factor);
+	return LossyNumericCast<idx_t>((double)estimated_size * zstd_penalty_factor);
 }
 
 //===--------------------------------------------------------------------===//
@@ -892,8 +892,8 @@ public:
 			    "(ZSTDScanState::LoadNextPageForVector) Trying to load the next page before consuming the current one");
 		}
 		// Read the next block id from the end of the page
-		auto next_id_ptr =
-		    reinterpret_cast<data_ptr_t>(const_cast<void *>(scan_state.in_buffer.src)) + scan_state.in_buffer.size;
+		auto next_id_ptr = reinterpret_cast<data_ptr_t>(const_cast<void *>(scan_state.in_buffer.src)) +
+		                   scan_state.in_buffer.size; // NOLINT: const cast
 		block_id_t next_id = Load<block_id_t>(next_id_ptr);
 
 		// Load the next page
