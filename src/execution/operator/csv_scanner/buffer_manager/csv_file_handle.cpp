@@ -31,15 +31,15 @@ unique_ptr<CSVFileHandle> CSVFileHandle::OpenFile(FileSystem &fs, Allocator &all
 	return make_uniq<CSVFileHandle>(fs, allocator, std::move(file_handle), path, compression, encoding);
 }
 
-double CSVFileHandle::GetProgress() {
+double CSVFileHandle::GetProgress() const {
 	return static_cast<double>(file_handle->GetProgress());
 }
 
-bool CSVFileHandle::CanSeek() {
+bool CSVFileHandle::CanSeek() const {
 	return can_seek;
 }
 
-void CSVFileHandle::Seek(idx_t position) {
+void CSVFileHandle::Seek(const idx_t position) const {
 	if (!can_seek) {
 		if (is_pipe) {
 			throw InternalException("Trying to seek a piped CSV File.");
@@ -49,7 +49,7 @@ void CSVFileHandle::Seek(idx_t position) {
 	file_handle->Seek(position);
 }
 
-bool CSVFileHandle::OnDiskFile() {
+bool CSVFileHandle::OnDiskFile() const {
 	return on_disk_file;
 }
 
@@ -59,15 +59,15 @@ void CSVFileHandle::Reset() {
 	requested_bytes = 0;
 }
 
-bool CSVFileHandle::IsPipe() {
+bool CSVFileHandle::IsPipe() const {
 	return is_pipe;
 }
 
-idx_t CSVFileHandle::FileSize() {
+idx_t CSVFileHandle::FileSize() const {
 	return file_size;
 }
 
-bool CSVFileHandle::FinishedReading() {
+bool CSVFileHandle::FinishedReading() const {
 	return finished;
 }
 

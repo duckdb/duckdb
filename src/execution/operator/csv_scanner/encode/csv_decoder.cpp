@@ -3,7 +3,8 @@
 
 namespace duckdb {
 
-CSVDecoder::CSVDecoder(const CSVEncoding encoding_p) : encoding(encoding_p) {};
+CSVDecoder::CSVDecoder(const CSVEncoding encoding_p) : encoding(encoding_p) {
+}
 
 bool CSVDecoder::IsUTF8() const {
 	return encoding == CSVEncoding::UTF_8;
@@ -50,6 +51,9 @@ void CSVDecoder::DecodeLatin1(const char *encoded_buffer, const idx_t encoded_bu
                               idx_t &decoded_buffer_start) {
 	for (size_t i = 0; i < encoded_buffer_size; i++) {
 		const unsigned char ch = static_cast<unsigned char>(encoded_buffer[i]);
+		if (ch > 0x7F && ch <= 0x9F) {
+			throw InvalidInputException("CSV File is not latin-1 encoded");
+		}
 		if (ch <= 0x7F) {
 			// ASCII: 1 byte in UTF-8
 			decoded_buffer[decoded_buffer_start++] = static_cast<char>(ch);
@@ -63,7 +67,6 @@ void CSVDecoder::DecodeLatin1(const char *encoded_buffer, const idx_t encoded_bu
 
 void CSVDecoder::DecodeInternal(const char *encoded_buffer, const idx_t encoded_buffer_size, char *decoded_buffer,
                                 idx_t &decoded_buffer_start) const {
-
 	switch (encoding) {
 	case CSVEncoding::UTF_8:
 		throw InternalException("DecodeInternal() should not be called with UTF-8");

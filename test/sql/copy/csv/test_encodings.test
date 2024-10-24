@@ -86,3 +86,8 @@ statement error
 FROM read_csv('data/csv/encodings/shift_jis.csv', encoding = 'utf-16')
 ----
 CSV File is not utf-16 encoded
+
+statement error
+FROM read_csv('data/csv/encodings/shift_jis.csv', encoding = 'latin-1')
+----
+CSV File is not latin-1 encoded

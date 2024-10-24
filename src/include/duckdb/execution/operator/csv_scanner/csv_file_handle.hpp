@@ -26,16 +26,16 @@ public:
 
 	mutex main_mutex;
 
-	bool CanSeek();
-	void Seek(idx_t position);
-	bool OnDiskFile();
-	bool IsPipe();
+	bool CanSeek() const;
+	void Seek(idx_t position) const;
+	bool OnDiskFile() const;
+	bool IsPipe() const;
 
 	void Reset();
 
-	idx_t FileSize();
+	idx_t FileSize() const;
 
-	bool FinishedReading();
+	bool FinishedReading() const;
 
 	idx_t Read(void *buffer, idx_t nr_bytes);
 
@@ -49,7 +49,7 @@ public:
 	                                          FileCompressionType compression, CSVEncoding encoding);
 	FileCompressionType compression_type;
 
-	double GetProgress();
+	double GetProgress() const;
 
 private:
 	unique_ptr<FileHandle> file_handle;
