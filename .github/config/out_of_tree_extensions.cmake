@@ -15,6 +15,13 @@
 #  VCPKG_TOOLCHAIN_PATH=~/vcpkg/scripts/buildsystems/vcpkg.cmake
 #  VCPKG_TARGET_TRIPLET=arm64-osx
 
+################# HTTPFS
+duckdb_extension_load(httpfs
+    GIT_URL https://github.com/carlopi/duckdb_httpfs
+    GIT_TAG efc4e87b9cea861b057f59968a746fd48b0d82f3
+    INCLUDE_DIR extension/httpfs/include
+    )
+
 ################# ARROW
 if (NOT MINGW)
     duckdb_extension_load(arrow
