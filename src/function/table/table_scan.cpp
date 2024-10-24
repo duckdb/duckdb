@@ -73,7 +73,7 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &
 		auto storage_idx = GetStorageIndex(bind_data.table, col);
 		col = storage_idx;
 	}
-	result->scan_state.Initialize(std::move(column_ids), input.filters.get());
+	result->scan_state.Initialize(std::move(column_ids), input.filters.get(), input.sample_options.get());
 	TableScanParallelStateNext(context.client, input.bind_data.get(), result.get(), gstate);
 	if (input.CanRemoveFilterColumns()) {
 		auto &tsgs = gstate->Cast<TableScanGlobalState>();
@@ -349,8 +349,8 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 			if (index_state != nullptr) {
 
 				auto &db_config = DBConfig::GetConfig(context);
-				auto index_scan_percentage = db_config.options.index_scan_percentage;
-				auto index_scan_max_count = db_config.options.index_scan_max_count;
+				auto index_scan_percentage = db_config.GetSetting<IndexScanPercentageSetting>(context);
+				auto index_scan_max_count = db_config.GetSetting<IndexScanMaxCountSetting>(context);
 
 				auto total_rows = storage.GetTotalRows();
 				auto total_rows_from_percentage = LossyNumericCast<idx_t>(double(total_rows) * index_scan_percentage);
@@ -439,6 +439,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;
 	scan_function.filter_prune = true;
+	scan_function.sampling_pushdown = true;
 	scan_function.serialize = TableScanSerialize;
 	scan_function.deserialize = TableScanDeserialize;
 	return scan_function;

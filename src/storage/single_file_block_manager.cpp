@@ -376,8 +376,9 @@ void SingleFileBlockManager::MarkBlockAsUsed(block_id_t block_id) {
 		}
 		max_block++;
 	} else if (free_list.find(block_id) != free_list.end()) {
-		// block is currently int he free list - erase
+		// block is currently in the free list - erase
 		free_list.erase(block_id);
+		newly_freed_list.erase(block_id);
 	} else {
 		// block is already in use - increase reference count
 		IncreaseBlockReferenceCountInternal(block_id);

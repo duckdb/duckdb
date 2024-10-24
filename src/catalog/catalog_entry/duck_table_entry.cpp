@@ -630,11 +630,23 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, Dro
 unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info) {
 	auto binder = Binder::CreateBinder(context);
 	binder->BindLogicalType(info.target_type, &catalog, schema.name);
+
 	auto change_idx = GetColumnIndex(info.column_name);
 	auto create_info = make_uniq<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
 	create_info->comment = comment;
 	create_info->tags = tags;
+
+	// Bind the USING expression.
+	vector<LogicalIndex> bound_columns;
+	AlterBinder expr_binder(*binder, context, *this, bound_columns, info.target_type);
+	auto expression = info.expression->Copy();
+	auto bound_expression = expr_binder.Bind(expression);
+
+	// Infer the target_type from the USING expression, if not set explicitly.
+	if (info.target_type == LogicalType::UNKNOWN) {
+		info.target_type = bound_expression->return_type;
+	}
 
 	auto bound_constraints = binder->BindConstraints(constraints, name, columns);
 	for (auto &col : columns.Logical()) {
@@ -682,8 +694,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 			if (bfk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
 				key_set = bfk.fk_key_set;
 			} else if (bfk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
-				for (idx_t i = 0; i < bfk.info.fk_keys.size(); i++) {
-					key_set.insert(bfk.info.fk_keys[i]);
+				for (idx_t j = 0; j < bfk.info.fk_keys.size(); j++) {
+					key_set.insert(bfk.info.fk_keys[j]);
 				}
 			}
 			if (key_set.find(columns.LogicalToPhysical(change_idx)) != key_set.end()) {
@@ -697,12 +709,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 		create_info->constraints.push_back(std::move(constraint));
 	}
 
-	// bind the specified expression
-	vector<LogicalIndex> bound_columns;
-	AlterBinder expr_binder(*binder, context, *this, bound_columns, info.target_type);
-	auto expression = info.expression->Copy();
-	auto bound_expression = expr_binder.Bind(expression);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
+
 	vector<column_t> storage_oids;
 	for (idx_t i = 0; i < bound_columns.size(); i++) {
 		storage_oids.push_back(columns.LogicalToPhysical(bound_columns[i]).index);

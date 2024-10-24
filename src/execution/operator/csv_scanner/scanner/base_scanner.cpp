@@ -1,6 +1,6 @@
 #include "duckdb/execution/operator/csv_scanner/base_scanner.hpp"
 
-#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/skip_scanner.hpp"
 
 namespace duckdb {

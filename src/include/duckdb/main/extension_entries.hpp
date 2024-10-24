@@ -1036,8 +1036,10 @@ static constexpr ExtensionEntry EXTENSION_FILE_CONTAINS[] = {{".parquet?", "parq
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
-    {"s3", "httpfs"},   {"r2", "httpfs"},          {"gcs", "httpfs"},
-    {"azure", "azure"}, {"huggingface", "httpfs"}, {"bearer", "httpfs"}}; // EXTENSION_SECRET_TYPES
+    {"s3", "httpfs"},           {"r2", "httpfs"},
+    {"gcs", "httpfs"},          {"azure", "azure"},
+    {"huggingface", "httpfs"},  {"bearer", "httpfs"},
+    {"mysql", "mysql_scanner"}, {"postgres", "postgres_scanner"}}; // EXTENSION_SECRET_TYPES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
@@ -1054,12 +1056,13 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
     {"azure/service_principal", "azure"},
     {"huggingface/config", "httfps"},
     {"huggingface/credential_chain", "httpfs"},
-    {"bearer/config", "httpfs"}}; // EXTENSION_SECRET_PROVIDERS
+    {"bearer/config", "httpfs"},
+    {"mysql/config", "mysql_scanner"},
+    {"postgres/config", "postgres_scanner"}}; // EXTENSION_SECRET_PROVIDERS
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
-    "aws",   "azure",   "autocomplete",   "core_functions", "delta",
-    "excel", "fts",     "httpfs",         "inet",           "icu",
-    "json",  "parquet", "sqlite_scanner", "sqlsmith",       "postgres_scanner",
+    "aws",   "azure", "autocomplete", "core_functions", "delta",   "excel",          "fts",      "httpfs",
+    "inet",  "icu",   "json",         "mysql_scanner",  "parquet", "sqlite_scanner", "sqlsmith", "postgres_scanner",
     "tpcds", "tpch"}; // END_OF_AUTOLOADABLE_EXTENSIONS
 
 } // namespace duckdb
