@@ -38,9 +38,8 @@ if(NOT CLANG_TIDY)
       ../../third_party/snappy/snappy.cc
       ../../third_party/snappy/snappy-sinksource.cc)
   # lz4
-  set(PARQUET_EXTENSION_FILES
-      ${PARQUET_EXTENSION_FILES}
-      ../../third_party/lz4/lz4.cpp)
+  set(PARQUET_EXTENSION_FILES ${PARQUET_EXTENSION_FILES}
+                              ../../third_party/lz4/lz4.cpp)
   # zstd
   set(PARQUET_EXTENSION_FILES
       ${PARQUET_EXTENSION_FILES}
