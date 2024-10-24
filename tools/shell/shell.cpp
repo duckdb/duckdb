@@ -669,7 +669,7 @@ static char *local_getline(char *zLine, FILE *in) {
 	if (is_stdin && !is_utf8) {
 		char *zTrans = sqlite3_win32_mbcs_to_utf8_v2(zLine, 0);
 		if (zTrans) {
-			int nTrans = StringLength(zTrans) + 1;
+			int nTrans = ShellState::StringLength(zTrans) + 1;
 			if (nTrans > nLine) {
 				zLine = (char *)realloc(zLine, nTrans);
 				if (zLine == 0)
@@ -4316,7 +4316,7 @@ static char *find_home_dir(int clearFlag) {
 		zDrive = getenv("HOMEDRIVE");
 		zPath = getenv("HOMEPATH");
 		if (zDrive && zPath) {
-			n = StringLength(zDrive) + StringLength(zPath) + 1;
+			n = ShellState::StringLength(zDrive) + ShellState::StringLength(zPath) + 1;
 			home_dir = (char *)malloc(n);
 			if (home_dir == 0)
 				return 0;
