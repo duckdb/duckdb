@@ -113,7 +113,7 @@ public:
 	void OutputCSV(const char *z, int bSep);
 	void PrintRowSeparator(idx_t nArg, const char *zSep, const vector<idx_t> &actualWidth);
 	void PrintMarkdownSeparator(idx_t nArg, const char *zSep, const vector<int> &colTypes,
-	                              const vector<idx_t> &actualWidth);
+	                            const vector<idx_t> &actualWidth);
 	void OutputCString(const char *z);
 	void OutputQuotedString(const char *z);
 	void OutputQuotedEscapedString(const char *z);
@@ -180,7 +180,7 @@ public:
 	void NewTempFile(const char *zSuffix);
 	int DoMetaCommand(char *zLine);
 
-	int RunOneSqlLine(char *zSql, int startline);
+	int RunOneSqlLine(char *zSql);
 	void ProcessDuckDBRC(const char *sqliterc_override);
 	int ProcessInput();
 };

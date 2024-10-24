@@ -669,7 +669,7 @@ static char *local_getline(char *zLine, FILE *in) {
 	if (is_stdin && !is_utf8) {
 		char *zTrans = sqlite3_win32_mbcs_to_utf8_v2(zLine, 0);
 		if (zTrans) {
-			int nTrans = strlen30(zTrans) + 1;
+			int nTrans = StringLength(zTrans) + 1;
 			if (nTrans > nLine) {
 				zLine = (char *)realloc(zLine, nTrans);
 				if (zLine == 0)
@@ -1198,7 +1198,7 @@ void ShellState::PrintDashes(idx_t N) {
 		fputs(zDash, out);
 		N -= nDash;
 	}
-	raw_printf(out, "%.*s", N, zDash);
+	raw_printf(out, "%.*s", static_cast<int>(N), zDash);
 }
 
 /*
@@ -1219,7 +1219,7 @@ void ShellState::PrintRowSeparator(idx_t nArg, const char *zSep, const vector<id
 }
 
 void ShellState::PrintMarkdownSeparator(idx_t nArg, const char *zSep, const vector<int> &colTypes,
-                                          const vector<idx_t> &actualWidth) {
+                                        const vector<idx_t> &actualWidth) {
 	if (nArg > 0) {
 		for (idx_t i = 0; i < nArg; i++) {
 			Print(zSep);
@@ -1337,7 +1337,7 @@ int ShellState::RunTableDumpQuery(const char *zSelect /* SELECT statement to ext
 		z = (const char *)sqlite3_column_text(pSelect, 0);
 		Print(z);
 		for (idx_t i = 1; i < nResult; i++) {
-			Print((const char *) sqlite3_column_text(pSelect, static_cast<int>(i)));
+			Print((const char *)sqlite3_column_text(pSelect, static_cast<int>(i)));
 		}
 		if (!z) {
 			z = "";
@@ -1936,7 +1936,7 @@ int ShellState::RunSchemaDumpQuery(const char *zQuery) {
 	rc = sqlite3_exec(db, zQuery, dump_callback, this, &zErr);
 	if (rc == SQLITE_CORRUPT) {
 		char *zQ2;
-		int len = strlen30(zQuery);
+		int len = StringLength(zQuery);
 		raw_printf(out, "/****** CORRUPTION ERROR *******/\n");
 		if (zErr) {
 			utf8_printf(out, "/****** %s ******/\n", zErr);
@@ -2296,14 +2296,15 @@ static char **readline_completion(const char *zText, int iStart, int iEnd) {
 ** Linenoise completion callback
 */
 static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
-	int nLine = strlen30(zLine);
+	idx_t nLine = ShellState::StringLength(zLine);
 	int copiedSuggestion = 0;
 	sqlite3_stmt *pStmt = 0;
 	char *zSql;
 	char zBuf[1000];
 
-	if (nLine > int(sizeof(zBuf) - 30))
+	if (nLine > sizeof(zBuf) - 30) {
 		return;
+	}
 	if (zLine[0] == '.') {
 		// auto-complete dot command
 		// look for all completions in the help file
@@ -2317,21 +2318,22 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 			size_t line_pos;
 			for (line_pos = 0; !IsSpace(line[line_pos]) && line[line_pos] && line_pos + 1 < sizeof(zBuf); line_pos++) {
 				zBuf[line_pos] = line[line_pos];
-				if (int(line_pos) < nLine && line[line_pos] != zLine[line_pos]) {
+				if (line_pos < nLine && line[line_pos] != zLine[line_pos]) {
 					// only match prefixes for auto-completion, i.e. ".sh" matches ".shell"
 					found_match = 0;
 					break;
 				}
 			}
 			zBuf[line_pos] = '\0';
-			if (found_match && int(line_pos) >= nLine) {
+			if (found_match && line_pos >= nLine) {
 				linenoiseAddCompletion(lc, zBuf);
 			}
 		}
 		return;
 	}
-	if (zLine[0] == '#')
+	if (zLine[0] == '#') {
 		return;
+	}
 	//  if( i==nLine-1 ) return;
 	zSql = sqlite3_mprintf("CALL sql_auto_complete(%Q)", zLine);
 	sqlite3 *localDb = NULL;
@@ -3374,9 +3376,9 @@ bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
 		utf8_printf(stderr, ".open cannot be used in -safe mode\n");
 		return false;
 	}
-	char *zNewFilename; /* Name of the database file to open */
-	idx_t iName = 1;    /* Index in azArg[] of the filename */
-	bool newFlag = false;    /* True to delete file before opening */
+	char *zNewFilename;   /* Name of the database file to open */
+	idx_t iName = 1;      /* Index in azArg[] of the filename */
+	bool newFlag = false; /* True to delete file before opening */
 	/* Close the existing database */
 	close_db(db);
 	db = nullptr;
@@ -3852,7 +3854,7 @@ MetadataResult ShellState::DisplayEntries(const char **azArg, idx_t nArg, char t
 		int i, j;
 		int nPrintCol, nPrintRow;
 		for (i = 0; i < nRow; i++) {
-			len = strlen30(azResult[i]);
+			len = StringLength(azResult[i]);
 			if (len > maxlen)
 				maxlen = len;
 		}
@@ -4000,8 +4002,8 @@ int ShellState::DoMetaCommand(char *zLine) {
 	 */
 	if (nArg == 0) {
 		return 0; /* no tokens, no error */
-		}
-	n = strlen30(azArg[0]);
+	}
+	n = StringLength(azArg[0]);
 	c = azArg[0][0];
 	ClearTempFile();
 
@@ -4060,9 +4062,8 @@ int ShellState::DoMetaCommand(char *zLine) {
 ** Return TRUE if a semicolon occurs anywhere in the first N characters
 ** of string z[].
 */
-static bool line_contains_semicolon(const char *z, int N) {
-	int i;
-	for (i = 0; i < N; i++) {
+static bool line_contains_semicolon(const char *z, idx_t N) {
+	for (idx_t i = 0; i < N; i++) {
 		if (z[i] == ';') {
 			return true;
 		}
@@ -4116,7 +4117,7 @@ static bool _all_whitespace(const char *z) {
 /*
 ** Run a single line of SQL.  Return the number of errors.
 */
-int ShellState::RunOneSqlLine(char *zSql, int startline) {
+int ShellState::RunOneSqlLine(char *zSql) {
 	int rc;
 	char *zErrMsg = nullptr;
 
@@ -4157,18 +4158,17 @@ int ShellState::RunOneSqlLine(char *zSql, int startline) {
 ** Return the number of errors.
 */
 int ShellState::ProcessInput() {
-	char *zLine = nullptr;   /* A single input line */
-	char *zSql = nullptr;    /* Accumulated SQL text */
-	int nLine;               /* Length of current line */
-	int nSql = 0;            /* Bytes of zSql[] used */
-	int nAlloc = 0;          /* Allocated zSql[] space */
-	int nSqlPrior = 0;       /* Bytes of zSql[] used by prior line */
-	int rc;                  /* Error code */
-	int errCnt = 0;          /* Number of errors seen */
-	int startline = 0;       /* Line number for start of current input */
-	int numCtrlC = 0;
+	char *zLine = nullptr; /* A single input line */
+	char *zSql = nullptr;  /* Accumulated SQL text */
+	idx_t nLine;           /* Length of current line */
+	idx_t nSql = 0;        /* Bytes of zSql[] used */
+	idx_t nAlloc = 0;      /* Allocated zSql[] space */
+	idx_t nSqlPrior = 0;   /* Bytes of zSql[] used by prior line */
+	int rc;                /* Error code */
+	idx_t errCnt = 0;      /* Number of errors seen */
+	idx_t numCtrlC = 0;
 	lineno = 0;
-	while (errCnt == 0 || !bail_on_error || (in == 0 && stdin_is_interactive)) {
+	while (errCnt == 0 || !bail_on_error || (!in && stdin_is_interactive)) {
 		fflush(out);
 		zLine = one_input_line(in, zLine, nSql > 0);
 		if (!zLine) {
@@ -4224,7 +4224,7 @@ int ShellState::ProcessInput() {
 			}
 			continue;
 		}
-		nLine = strlen30(zLine);
+		nLine = StringLength(zLine);
 		if (nSql + nLine + 2 >= nAlloc) {
 			nAlloc = nSql + nLine + 100;
 			zSql = (char *)realloc(zSql, nAlloc);
@@ -4239,7 +4239,6 @@ int ShellState::ProcessInput() {
 			}
 			assert(nAlloc > 0 && zSql);
 			memcpy(zSql, zLine + i, nLine + 1 - i);
-			startline = lineno;
 			nSql = nLine - i;
 		} else {
 			zSql[nSql++] = '\n';
@@ -4247,7 +4246,7 @@ int ShellState::ProcessInput() {
 			nSql += nLine;
 		}
 		if (nSql && line_contains_semicolon(&zSql[nSqlPrior], nSql - nSqlPrior) && sqlite3_complete(zSql)) {
-			errCnt += RunOneSqlLine(zSql, startline);
+			errCnt += RunOneSqlLine(zSql);
 			nSql = 0;
 			if (outCount) {
 				ResetOutput();
@@ -4263,7 +4262,7 @@ int ShellState::ProcessInput() {
 		}
 	}
 	if (nSql && !_all_whitespace(zSql)) {
-		errCnt += RunOneSqlLine(zSql, startline);
+		errCnt += RunOneSqlLine(zSql);
 	}
 	free(zSql);
 	free(zLine);
@@ -4318,7 +4317,7 @@ static char *find_home_dir(int clearFlag) {
 		zDrive = getenv("HOMEDRIVE");
 		zPath = getenv("HOMEPATH");
 		if (zDrive && zPath) {
-			n = strlen30(zDrive) + strlen30(zPath) + 1;
+			n = StringLength(zDrive) + StringLength(zPath) + 1;
 			home_dir = (char *)malloc(n);
 			if (home_dir == 0)
 				return 0;
@@ -4332,7 +4331,7 @@ static char *find_home_dir(int clearFlag) {
 #endif /* !_WIN32_WCE */
 
 	if (home_dir) {
-		int n = strlen30(home_dir) + 1;
+		int n = ShellState::StringLength(home_dir) + 1;
 		char *z = (char *)malloc(n);
 		if (z) {
 			memcpy(z, home_dir, n);
@@ -4847,7 +4846,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			if (zHistory) {
 				zHistory = strdup(zHistory);
 			} else if ((zHome = find_home_dir(0)) != 0) {
-				nHistory = strlen30(zHome) + 20;
+				nHistory = ShellState::StringLength(zHome) + 20;
 				if ((zHistory = (char *)malloc(nHistory)) != 0) {
 					sqlite3_snprintf(nHistory, zHistory, "%s/.duckdb_history", zHome);
 				}
