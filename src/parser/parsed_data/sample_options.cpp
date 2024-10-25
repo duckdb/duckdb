@@ -50,9 +50,6 @@ void SampleOptions::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<SampleMethod>(102, "method", method);
 
 	if (seed.IsValid()) {
-		if (seed.GetIndex() == 3) {
-			auto break_here = 0;
-		}
 		serializer.WriteProperty<int64_t>(103, "seed", static_cast<int64_t>(seed.GetIndex()));
 	} else {
 		serializer.WriteProperty<int64_t>(103, "seed", -1);
@@ -68,8 +65,6 @@ unique_ptr<SampleOptions> SampleOptions::Deserialize(Deserializer &deserializer)
 	deserializer.ReadProperty<int64_t>(103, "seed", seed);
 	if (seed != -1) {
 		result->seed = static_cast<idx_t>(seed);
-	} else {
-		result->seed.SetInvalid();
 	}
 	return result;
 }

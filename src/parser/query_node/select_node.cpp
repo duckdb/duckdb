@@ -101,8 +101,9 @@ string SelectNode::ToString() const {
 			result += "%";
 		}
 		result += " (" + EnumUtil::ToString(sample->method);
-		D_ASSERT(sample->seed.IsValid());
-		result += ", " + std::to_string(sample->seed.GetIndex());
+		if (sample->seed.IsValid()) {
+			result += ", " + std::to_string(sample->seed.GetIndex());
+		}
 		result += ")";
 	}
 	return result + ResultModifiersToString();
