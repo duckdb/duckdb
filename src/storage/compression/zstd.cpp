@@ -506,9 +506,11 @@ public:
 				// Finished
 				break;
 			}
-			// FIXME: will 'pos' in the out_buffer always reach 'size' or could the library refuse to fully utilize the
-			// buffer ?? if that is the case, we should somehow serialize how many bytes are utilized for each page
-			D_ASSERT(out_buffer.pos == out_buffer.size);
+			if (out_buffer.pos != out_buffer.size) {
+				throw InternalException("Expected ZSTD_compressStream2 to fully utilize the current buffer, but pos is "
+				                        "%d, while size is %d",
+				                        out_buffer.pos, out_buffer.size);
+			}
 			NewPage();
 		}
 	}
