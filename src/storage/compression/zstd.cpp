@@ -1016,10 +1016,11 @@ public:
 			auto &scan_state = LoadVector(vector_idx, internal_offset);
 			idx_t remaining_in_vector = scan_state.metadata.count - scan_state.scanned_count;
 			idx_t to_scan = MinValue<idx_t>(remaining, remaining_in_vector);
-			ScanInternal(scan_state, to_scan, result, offset);
+			ScanInternal(scan_state, to_scan, result, offset + scanned);
 			remaining -= to_scan;
 			scanned += to_scan;
 		}
+		D_ASSERT(scanned == count);
 	}
 
 public:
