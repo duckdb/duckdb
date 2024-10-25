@@ -485,7 +485,7 @@ public:
 			return;
 		}
 		uncompressed_size += string.GetSize();
-		const auto end_mode = end_of_vector ? duckdb_zstd::ZSTD_e_end : duckdb_zstd::ZSTD_e_flush;
+		const auto end_mode = end_of_vector ? duckdb_zstd::ZSTD_e_end : duckdb_zstd::ZSTD_e_continue;
 
 		size_t compress_result;
 		while (true) {
