@@ -3,12 +3,14 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/compressed_file_system.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 
 namespace duckdb {
 
 CSVFileHandle::CSVFileHandle(FileSystem &fs, Allocator &allocator, unique_ptr<FileHandle> file_handle_p,
-                             const string &path_p, FileCompressionType compression, CSVEncoding encoding)
-    : compression_type(compression), file_handle(std::move(file_handle_p)), decoder(encoding), path(path_p) {
+                             const string &path_p, const CSVReaderOptions &options)
+    : compression_type(options.compression), file_handle(std::move(file_handle_p)),
+      decoder(options.encoding, options.buffer_size), path(path_p) {
 	can_seek = file_handle->CanSeek();
 	on_disk_file = file_handle->OnDiskFile();
 	file_size = file_handle->GetFileSize();
@@ -26,9 +28,9 @@ unique_ptr<FileHandle> CSVFileHandle::OpenFileHandle(FileSystem &fs, Allocator &
 }
 
 unique_ptr<CSVFileHandle> CSVFileHandle::OpenFile(FileSystem &fs, Allocator &allocator, const string &path,
-                                                  FileCompressionType compression, CSVEncoding encoding) {
-	auto file_handle = OpenFileHandle(fs, allocator, path, compression);
-	return make_uniq<CSVFileHandle>(fs, allocator, std::move(file_handle), path, compression, encoding);
+                                                  const CSVReaderOptions &options) {
+	auto file_handle = OpenFileHandle(fs, allocator, path, options.compression);
+	return make_uniq<CSVFileHandle>(fs, allocator, std::move(file_handle), path, options);
 }
 
 double CSVFileHandle::GetProgress() const {
@@ -78,7 +80,7 @@ idx_t CSVFileHandle::Read(void *buffer, idx_t nr_bytes) {
 	if (decoder.IsUTF8()) {
 		bytes_read = static_cast<idx_t>(file_handle->Read(buffer, nr_bytes));
 	} else {
-		bytes_read = decoder.Decode(*file_handle, buffer, nr_bytes);
+		bytes_read = decoder.Decode(*file_handle, static_cast<char *>(buffer), nr_bytes);
 	}
 
 	if (!finished) {
