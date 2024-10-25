@@ -62,11 +62,8 @@ namespace duckdb {
 
 static constexpr idx_t ZSTD_SAMPLE_MIN_SIZE = 8;
 
-static void IterateThroughVector(Vector &vec, idx_t count, const std::function<void(const string_t &val)> &callback) {
-	UnifiedVectorFormat vdata;
-	vec.ToUnifiedFormat(count, vdata);
-
-	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
+static void IterateThroughVector(UnifiedVectorFormat &vdata, const string_t *data, idx_t count,
+                                 const std::function<void(const string_t &val)> &callback) {
 	for (idx_t j = 0; j < count; j++) {
 		auto idx = vdata.sel->get_index(j);
 		if (!vdata.validity.RowIsValid(idx)) {
@@ -81,13 +78,18 @@ static void IterateThroughVector(Vector &vec, idx_t count, const std::function<v
 }
 
 static void SampleVector(ZSTDSamplingState &state, Vector &vec, idx_t count) {
+	UnifiedVectorFormat vdata;
+	vec.ToUnifiedFormat(count, vdata);
+
+	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
+
 	idx_t sum = 0;
 	auto collect_string_sizes = [&sum, &state](const string_t &str) {
 		auto string_size = str.GetSize();
 		sum += string_size;
 		state.sample_sizes.push_back(string_size);
 	};
-	IterateThroughVector(vec, count, collect_string_sizes);
+	IterateThroughVector(vdata, data, count, collect_string_sizes);
 
 	auto &total_sample_size = state.total_sample_size;
 	auto &sample_buffer = state.sample_buffer;
@@ -108,7 +110,7 @@ static void SampleVector(ZSTDSamplingState &state, Vector &vec, idx_t count) {
 		memcpy(sample_buffer.get() + total_sample_size, str.GetData(), string_size);
 		total_sample_size += string_size;
 	};
-	IterateThroughVector(vec, count, copy_into_samples);
+	IterateThroughVector(vdata, data, count, copy_into_samples);
 }
 
 ZSTDSamplingState::ZSTDSamplingState() {
