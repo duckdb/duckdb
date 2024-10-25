@@ -100,8 +100,8 @@ void InterpretedBenchmark::ReadResultFromFile(BenchmarkFileReader &reader, const
 	// read the results from the file
 	DuckDB db;
 	Connection con(db);
-	auto result =
-	    con.Query("SELECT * FROM read_csv_auto('" + file + "', delim='|', header=1, nullstr='NULL', all_varchar=1)");
+	auto result = con.Query("FROM read_csv('" + file +
+	                        "', delim='|', header=1, nullstr='NULL', all_varchar=1, quote ='\"', escape ='\"')");
 	result_column_count = result->ColumnCount();
 	for (auto &row : *result) {
 		vector<string> row_values;

@@ -36,7 +36,7 @@ struct CountStarFunction : public BaseCountFunction {
 	template <typename RESULT_TYPE>
 	static void Window(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition, const_data_ptr_t,
 	                   data_ptr_t l_state, const SubFrames &frames, Vector &result, idx_t rid) {
-		D_ASSERT(partition.inputs == nullptr);
+		D_ASSERT(partition.column_ids.empty());
 
 		auto data = FlatVector::GetData<RESULT_TYPE>(result);
 		RESULT_TYPE total = 0;

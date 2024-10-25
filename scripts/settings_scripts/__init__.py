@@ -1,0 +1,4 @@
+from .parse_and_sort_settings_in_json import add_all_settings_to_global_list as parse_and_sort_json_file
+from .update_settings_header_file import generate as update_header_file
+from .update_settings_scopes import generate as update_scopes
+from .update_settings_src_code import generate as update_src_code

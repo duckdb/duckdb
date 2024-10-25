@@ -1,0 +1,74 @@
+[
+    {
+        "name": "list_select",
+        "parameters": "value_list,index_list",
+        "description": "Returns a list based on the elements selected by the index_list.",
+        "example": "list_select([10, 20, 30, 40], [1, 4])",
+        "type": "scalar_function",
+        "aliases": ["array_select"]
+    },
+    {
+        "name": "list_where",
+        "parameters": "value_list,mask_list",
+        "description": "Returns a list with the BOOLEANs in mask_list applied as a mask to the value_list.",
+        "example": "list_where([10, 20, 30, 40], [true, false, false, true])",
+        "type": "scalar_function",
+        "aliases": ["array_where"]
+    },
+    {
+        "name": "list_contains",
+        "parameters": "list,element",
+        "description": "Returns true if the list contains the element.",
+        "example": "list_contains([1, 2, NULL], 1)",
+        "type": "scalar_function",
+        "aliases": ["array_contains", "list_has", "array_has"]
+    },
+    {
+        "name": "list_position",
+        "parameters": "list,element",
+        "description": "Returns the index of the element if the list contains the element. If the element is not found, it returns NULL.",
+        "example": "list_position([1, 2, NULL], 2)",
+        "type": "scalar_function",
+        "aliases": ["list_indexof", "array_position", "array_indexof"]
+    },
+    {
+        "name": "list_zip",
+        "parameters": "list1,list2,...",
+        "description": "Zips k LISTs to a new LIST whose length will be that of the longest list. Its elements are structs of k elements from each list list_1, …, list_k, missing elements are replaced with NULL. If truncate is set, all lists are truncated to the smallest list length.",
+        "example": "list_zip([1, 2], [3, 4], [5, 6])",
+        "type": "scalar_function",
+        "aliases": ["array_zip"]
+    },
+    {
+        "name": "list_extract",
+        "parameters": "list,index",
+        "description": "Extract the indexth (1-based) value from the list.",
+        "example": "list_extract([4, 5, 6], 3)",
+        "type": "scalar_function_set",
+        "aliases": ["list_element"]
+    },
+    {
+        "name": "list_resize",
+        "parameters": "list,size[,value]",
+        "description": "Resizes the list to contain size elements. Initializes new elements with value or NULL if value is not set.",
+        "example": "list_resize([1, 2, 3], 5, 0)",
+        "type": "scalar_function_set",
+        "aliases": ["array_resize"]
+    },
+    {
+        "name": "array_extract",
+        "parameters": "array_extract(list,index)",
+        "description": "Extract the indexth (1-based) value from the array.",
+        "example": "array_extract('DuckDB', 2)",
+        "type": "scalar_function_set",
+        "aliases": []
+    },
+    {
+        "name": "struct_extract",
+        "parameters": "struct_extract(list,'entry')",
+        "description": "Extract the named entry from the STRUCT.",
+        "example": "struct_extract({'i': 3, 'v2': 3, 'v3': 0}, 'i')",
+        "type": "scalar_function_set",
+        "aliases": []
+    }
+]
