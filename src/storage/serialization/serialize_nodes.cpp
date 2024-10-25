@@ -13,7 +13,6 @@
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
-#include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/common/queue.hpp"
 #include "duckdb/parser/tableref/pivotref.hpp"
@@ -526,22 +525,6 @@ unique_ptr<BlockingSample> ReservoirSamplePercentage::Deserialize(Deserializer &
 	auto result = duckdb::unique_ptr<ReservoirSamplePercentage>(new ReservoirSamplePercentage(sample_percentage));
 	deserializer.ReadPropertyWithDefault<idx_t>(201, "reservoir_sample_size", result->reservoir_sample_size);
 	return std::move(result);
-}
-
-void SampleOptions::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty<Value>(100, "sample_size", sample_size);
-	serializer.WritePropertyWithDefault<bool>(101, "is_percentage", is_percentage);
-	serializer.WriteProperty<SampleMethod>(102, "method", method);
-	serializer.WriteProperty<optional_idx>(103, "seed", seed);
-}
-
-unique_ptr<SampleOptions> SampleOptions::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<SampleOptions>(new SampleOptions());
-	deserializer.ReadProperty<Value>(100, "sample_size", result->sample_size);
-	deserializer.ReadPropertyWithDefault<bool>(101, "is_percentage", result->is_percentage);
-	deserializer.ReadProperty<SampleMethod>(102, "method", result->method);
-	deserializer.ReadProperty<optional_idx>(103, "seed", result->seed);
-	return result;
 }
 
 void StrpTimeFormat::Serialize(Serializer &serializer) const {

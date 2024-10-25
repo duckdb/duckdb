@@ -54,7 +54,7 @@ unique_ptr<SampleOptions> Transformer::TransformSampleOptions(optional_ptr<duckd
 		result->method = GetSampleMethod(sample_options.method);
 	}
 	if (sample_options.has_seed) {
-		result->seed = sample_options.seed;
+		result->seed = static_cast<idx_t>(sample_options.seed);
 	}
 	return result;
 }
