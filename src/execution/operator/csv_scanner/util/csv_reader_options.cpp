@@ -692,7 +692,6 @@ void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) co
 		named_params["column_names"] = StringVectorToValue(name_list);
 	}
 	named_params["all_varchar"] = Value::BOOLEAN(all_varchar);
-	named_params["maximum_line_size"] = Value::BIGINT(NumericCast<int64_t>(maximum_line_size.GetValue()));
 }
 
 } // namespace duckdb
