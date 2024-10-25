@@ -43,12 +43,8 @@ jobs:
       CXX: g++-10
       GEN: ninja
       BUILD_BENCHMARK: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_HTTPFS: 1
       BUILD_JEMALLOC: 1
-      BUILD_JSON: 1
-      CORE_EXTENSIONS: "inet"
+      CORE_EXTENSIONS: "json;tpch;tpcds;httpfs;inet"
 
     steps:
       - uses: actions/checkout@v4
@@ -148,8 +144,7 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
+      CORE_EXTENSIONS: "tpch;tpcds"
 
     steps:
       - uses: actions/checkout@v4
@@ -229,10 +224,7 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_JSON: 1
-      BUILD_PARQUET: 1
+      CORE_EXTENSIONS: "tpch;tpcds;json;parquet"
       EXTENSION_STATIC_BUILD: 1
     steps:
       - uses: actions/checkout@v4
@@ -274,8 +266,7 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
-      BUILD_TPCH: 1
-      BUILD_HTTPFS: 1
+      CORE_EXTENSIONS: "tpch;httpfs"
 
     steps:
       - uses: actions/checkout@v4
