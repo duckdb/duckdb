@@ -892,8 +892,9 @@ public:
 			    "(ZSTDScanState::LoadNextPageForVector) Trying to load the next page before consuming the current one");
 		}
 		// Read the next block id from the end of the page
-		auto next_id_ptr = reinterpret_cast<data_ptr_t>(const_cast<void *>(scan_state.in_buffer.src)) +
-		                   scan_state.in_buffer.size; // NOLINT: const cast
+		auto base_ptr =
+		    reinterpret_cast<data_ptr_t>(const_cast<void *>(scan_state.in_buffer.src)); // NOLINT: const cast
+		auto next_id_ptr = base_ptr + scan_state.in_buffer.size;
 		block_id_t next_id = Load<block_id_t>(next_id_ptr);
 
 		// Load the next page
