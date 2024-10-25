@@ -57,17 +57,9 @@
     },
     {
         "name": "array_extract",
-        "parameters": "array_extract(list,index)",
+        "parameters": "list,index",
         "description": "Extract the indexth (1-based) value from the array.",
         "example": "array_extract('DuckDB', 2)",
-        "type": "scalar_function_set",
-        "aliases": []
-    },
-    {
-        "name": "struct_extract",
-        "parameters": "struct_extract(list,'entry')",
-        "description": "Extract the named entry from the STRUCT.",
-        "example": "struct_extract({'i': 3, 'v2': 3, 'v3': 0}, 'i')",
         "type": "scalar_function_set",
         "aliases": []
     }
