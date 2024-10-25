@@ -54,6 +54,8 @@ static int32_t GetCompressionLevel() {
 	return duckdb_zstd::ZSTD_defaultCLevel();
 }
 
+static constexpr idx_t ZSTD_VECTOR_SIZE = 2048;
+
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -172,8 +174,8 @@ public:
 		total_size += string_size;
 	}
 	inline idx_t GetVectorCount() const {
-		idx_t vector_count = count / STANDARD_VECTOR_SIZE;
-		vector_count += (count % STANDARD_VECTOR_SIZE) != 0;
+		idx_t vector_count = count / ZSTD_VECTOR_SIZE;
+		vector_count += (count % ZSTD_VECTOR_SIZE) != 0;
 		return vector_count;
 	}
 
@@ -399,13 +401,15 @@ public:
 		current_buffer_ptr = handle.Ptr();
 	}
 
-	BufferHandle &GetExtraPageBuffer(block_id_t current_block_id, bool additional_data_page) {
+	BufferHandle &GetExtraPageBuffer(block_id_t current_block_id) {
 		auto &block_manager = partial_block_manager.GetBlockManager();
 		auto &buffer_manager = block_manager.buffer_manager;
 
 		optional_ptr<BufferHandle> to_use;
 
-		if (additional_data_page) {
+		if (in_vector) {
+			// Currently in a Vector, we have to be mindful of the buffer that the string_lengths lives on
+			// as that will have to stay writable until the Vector is finished
 			bool already_separated = current_buffer != vector_lengths_buffer;
 			if (already_separated) {
 				// Already separated, can keep using the other buffer (flush it first)
@@ -416,6 +420,7 @@ public:
 				to_use = current_buffer == &extra_pages[0] ? &extra_pages[1] : &extra_pages[0];
 			}
 		} else {
+			// Start of a new Vector, the string_lengths did not fit on the previous page
 			bool previous_page_is_segment = current_buffer == &segment_handle;
 			if (!previous_page_is_segment) {
 				// We're asking for a fresh buffer to start the vectors data
@@ -436,10 +441,11 @@ public:
 	}
 
 	void InitializeVector() {
+		D_ASSERT(!in_vector);
 		if (vector_count + 1 >= total_vector_count) {
-			vector_size = analyze_state->count - (STANDARD_VECTOR_SIZE * vector_count);
+			vector_size = analyze_state->count - (ZSTD_VECTOR_SIZE * vector_count);
 		} else {
-			vector_size = STANDARD_VECTOR_SIZE;
+			vector_size = ZSTD_VECTOR_SIZE;
 		}
 		auto current_offset = GetCurrentOffset();
 		current_offset = UnsafeNumericCast<page_offset_t>(
@@ -449,7 +455,7 @@ public:
 		uncompressed_size = 0;
 
 		if (current_offset + (vector_size * sizeof(string_length_t)) >= GetWritableSpace()) {
-			NewPage(false);
+			NewPage();
 		}
 		current_offset = GetCurrentOffset();
 		starting_offset = current_offset;
@@ -467,6 +473,7 @@ public:
 		duckdb_zstd::ZSTD_CCtx_refCDict(analyze_state->context, analyze_state->compression_dict);
 		duckdb_zstd::ZSTD_CCtx_setParameter(analyze_state->context, duckdb_zstd::ZSTD_c_compressionLevel,
 		                                    GetCompressionLevel());
+		in_vector = true;
 	}
 
 	void CompressString(const string_t &string, bool end_of_vector) {
@@ -502,7 +509,7 @@ public:
 			// FIXME: will 'pos' in the out_buffer always reach 'size' or could the library refuse to fully utilize the
 			// buffer ?? if that is the case, we should somehow serialize how many bytes are utilized for each page
 			D_ASSERT(out_buffer.pos == out_buffer.size);
-			NewPage(true);
+			NewPage();
 		}
 	}
 
@@ -531,7 +538,7 @@ public:
 	void NewPage(bool additional_data_page = false) {
 		block_id_t new_id = FinalizePage();
 		block_id_t current_block_id = block_id;
-		auto &buffer = GetExtraPageBuffer(current_block_id, additional_data_page);
+		auto &buffer = GetExtraPageBuffer(current_block_id);
 		block_id = new_id;
 		SetCurrentBuffer(buffer);
 		ResetOutBuffer();
@@ -572,6 +579,7 @@ public:
 		compressed_sizes[vector_count] = compressed_size;
 		uncompressed_sizes[vector_count] = uncompressed_size;
 		vector_count++;
+		in_vector = false;
 
 		const bool is_last_vector = vector_count == total_vector_count;
 		tuple_count = 0;
@@ -672,6 +680,8 @@ public:
 	idx_t vector_count = 0;
 	//! The amount of vectors we're writing
 	idx_t total_vector_count = 0;
+	//! Whether we are currently in a Vector
+	bool in_vector = false;
 	//! The compression context indicating where we are in the output buffer
 	duckdb_zstd::ZSTD_outBuffer out_buffer;
 	idx_t uncompressed_size = 0;
@@ -680,7 +690,7 @@ public:
 
 	//! Amount of tuples we have seen for the current vector
 	idx_t tuple_count = 0;
-	//! The expected size of this vector (STANDARD_VECTOR_SIZE except for the last one)
+	//! The expected size of this vector (ZSTD_VECTOR_SIZE except for the last one)
 	idx_t vector_size;
 };
 
@@ -775,8 +785,7 @@ public:
 		offset += sizeof(dict_size_t) + dict.Size();
 
 		segment_count = segment.count.load();
-		idx_t amount_of_vectors =
-		    (segment_count / STANDARD_VECTOR_SIZE) + ((segment_count % STANDARD_VECTOR_SIZE) != 0);
+		idx_t amount_of_vectors = (segment_count / ZSTD_VECTOR_SIZE) + ((segment_count % ZSTD_VECTOR_SIZE) != 0);
 
 		// Set pointers to the Vector Metadata
 		offset = AlignValue<idx_t, sizeof(page_id_t)>(offset);
@@ -804,14 +813,14 @@ public:
 
 public:
 	idx_t GetVectorIndex(idx_t start_index, idx_t &offset) {
-		idx_t vector_idx = start_index / STANDARD_VECTOR_SIZE;
-		offset = start_index % STANDARD_VECTOR_SIZE;
+		idx_t vector_idx = start_index / ZSTD_VECTOR_SIZE;
+		offset = start_index % ZSTD_VECTOR_SIZE;
 		return vector_idx;
 	}
 
 	ZSTDVectorScanMetadata GetVectorMetadata(idx_t vector_idx) {
-		idx_t previous_value_count = vector_idx * STANDARD_VECTOR_SIZE;
-		idx_t value_count = MinValue<idx_t>(segment_count - previous_value_count, STANDARD_VECTOR_SIZE);
+		idx_t previous_value_count = vector_idx * ZSTD_VECTOR_SIZE;
+		idx_t value_count = MinValue<idx_t>(segment_count - previous_value_count, ZSTD_VECTOR_SIZE);
 
 		return ZSTDVectorScanMetadata {/* vector_idx = */ vector_idx,
 		                               /* block_id = */ page_ids[vector_idx],
@@ -994,7 +1003,7 @@ public:
 	}
 
 	void ScanPartial(idx_t start_idx, Vector &result, idx_t offset, idx_t count) {
-		D_ASSERT(offset + count <= STANDARD_VECTOR_SIZE);
+		D_ASSERT(offset + count <= ZSTD_VECTOR_SIZE);
 
 		idx_t remaining = count;
 		idx_t scanned = 0;
