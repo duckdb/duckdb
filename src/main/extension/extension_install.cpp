@@ -131,13 +131,12 @@ bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &me
 		candidates.emplace_back(ExtensionHelper::GetExtensionAlias(i).alias);
 	}
 	auto closest_extensions = StringUtil::TopNJaroWinkler(candidates, lowercase_extension_name);
-	message = StringUtil::CandidatesMessage(closest_extensions, "Candidate extensions");
 	for (auto &closest : closest_extensions) {
 		if (closest == lowercase_extension_name) {
-			message = "Extension \"" + extension_name + "\" is an existing extension.\n";
 			return true;
 		}
 	}
+	message = StringUtil::CandidatesMessage(closest_extensions, "Candidate extensions");
 	return false;
 }
 
