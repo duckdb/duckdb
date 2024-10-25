@@ -1395,7 +1395,9 @@ void StringValueResult::RemoveLastLine() {
 	cur_col_id = 0;
 	chunk_col_id = 0;
 	// decrement row counter
-	number_of_rows--;
+	if (number_of_rows > 0) {
+		number_of_rows--;
+	}
 }
 bool StringValueResult::PrintErrorLine() const {
 	// To print a lint, result size must be different, than one (i.e., this is a SetStart() trying to figure out new

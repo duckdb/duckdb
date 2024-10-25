@@ -5,6 +5,17 @@
 statement ok
 PRAGMA enable_verification
 
+query II
+from read_csv('data/csv/segfault.csv',
+   header=false,
+   quote='"',
+   escape = '"',
+   sep=',',
+   ignore_errors=true);
+----
+
+
+
 statement error
 from 'data/csv/fuzzing/0.csv'
 ----
