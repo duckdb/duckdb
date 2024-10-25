@@ -77,13 +77,14 @@ idx_t CSVDecoder::MaxDecodedBytesPerIteration() const {
 void CSVDecoder::DecodeUTF16(char *decoded_buffer, idx_t &decoded_buffer_start, const idx_t decoded_buffer_size) {
 	const auto encoded_buffer_ptr = encoded_buffer.Ptr();
 
-	for (; encoded_buffer.cur_pos < encoded_buffer.GetSize(); encoded_buffer.cur_pos+=2)  {
+	for (; encoded_buffer.cur_pos < encoded_buffer.GetSize(); encoded_buffer.cur_pos += 2) {
 		if (decoded_buffer_start == decoded_buffer_size) {
 			// We are done
 			return;
 		}
-		const uint16_t ch = static_cast<uint16_t>(static_cast<unsigned char>(encoded_buffer_ptr[encoded_buffer.cur_pos]) |
-		                                          (static_cast<unsigned char>(encoded_buffer_ptr[encoded_buffer.cur_pos + 1]) << 8));
+		const uint16_t ch =
+		    static_cast<uint16_t>(static_cast<unsigned char>(encoded_buffer_ptr[encoded_buffer.cur_pos]) |
+		                          (static_cast<unsigned char>(encoded_buffer_ptr[encoded_buffer.cur_pos + 1]) << 8));
 		if (ch >= 0xD800 && ch <= 0xDFFF) {
 			throw InvalidInputException("CSV File is not utf-16 encoded");
 		}
@@ -95,7 +96,7 @@ void CSVDecoder::DecodeUTF16(char *decoded_buffer, idx_t &decoded_buffer_start, 
 			decoded_buffer[decoded_buffer_start++] = static_cast<char>(0xC0 | (ch >> 6));
 			if (decoded_buffer_start == decoded_buffer_size) {
 				// We are done, but we have to store one byte for the next chunk!
-				encoded_buffer.cur_pos+=2;
+				encoded_buffer.cur_pos += 2;
 				remaining_bytes_buffer.Ptr()[0] = static_cast<char>(0x80 | (ch & 0x3F));
 				remaining_bytes_buffer.SetSize(1);
 				return;
@@ -106,7 +107,7 @@ void CSVDecoder::DecodeUTF16(char *decoded_buffer, idx_t &decoded_buffer_start, 
 			decoded_buffer[decoded_buffer_start++] = static_cast<char>(0xE0 | (ch >> 12));
 			if (decoded_buffer_start == decoded_buffer_size) {
 				// We are done, but we have to store two bytes for the next chunk!
-				encoded_buffer.cur_pos+=2;
+				encoded_buffer.cur_pos += 2;
 				remaining_bytes_buffer.Ptr()[0] = static_cast<char>(0x80 | ((ch >> 6) & 0x3F));
 				remaining_bytes_buffer.Ptr()[1] = static_cast<char>(0x80 | (ch & 0x3F));
 				remaining_bytes_buffer.SetSize(2);
@@ -115,7 +116,7 @@ void CSVDecoder::DecodeUTF16(char *decoded_buffer, idx_t &decoded_buffer_start, 
 			decoded_buffer[decoded_buffer_start++] = static_cast<char>(0x80 | ((ch >> 6) & 0x3F));
 			if (decoded_buffer_start == decoded_buffer_size) {
 				// We are done, but we have to store one byte for the next chunk!
-				encoded_buffer.cur_pos+=2;
+				encoded_buffer.cur_pos += 2;
 				remaining_bytes_buffer.Ptr()[0] = static_cast<char>(0x80 | (ch & 0x3F));
 				remaining_bytes_buffer.SetSize(1);
 				return;
@@ -141,15 +142,15 @@ void CSVDecoder::DecodeLatin1(char *decoded_buffer, idx_t &decoded_buffer_start,
 			decoded_buffer[decoded_buffer_start++] = static_cast<char>(ch);
 		} else {
 			// Non-ASCII: 2 bytes in UTF-8
-			decoded_buffer[decoded_buffer_start++] = static_cast<char>(0xC0 | (ch >> 6));
+			decoded_buffer[decoded_buffer_start++] = static_cast<char>(0xc2 + (ch > 0xbf));
 			if (decoded_buffer_start == decoded_buffer_size) {
 				// We are done, but we have to store one byte for the next chunk!
 				encoded_buffer.cur_pos++;
-				remaining_bytes_buffer.Ptr()[0] = static_cast<char>(0x80 | (ch & 0x3F));
+				remaining_bytes_buffer.Ptr()[0] = static_cast<char>((ch & 0x3f) + 0x80);
 				remaining_bytes_buffer.SetSize(1);
 				return;
 			}
-			decoded_buffer[decoded_buffer_start++] = static_cast<char>(0x80 | (ch & 0x3F));
+			decoded_buffer[decoded_buffer_start++] = static_cast<char>((ch & 0x3f) + 0x80);
 		}
 	}
 }
