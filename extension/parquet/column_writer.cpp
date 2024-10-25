@@ -913,8 +913,8 @@ public:
 template <class T>
 class StandardWriterPageState : public ColumnWriterPageState {
 public:
-	explicit StandardWriterPageState(const idx_t total_value_count, const unordered_map<T, uint32_t> &dictionary_p)
-	    : dbp_encoder(total_value_count), encoding(Encoding::RLE_DICTIONARY), dictionary(dictionary_p),
+	explicit StandardWriterPageState(const idx_t total_value_count, Encoding::type encoding_p, const unordered_map<T, uint32_t> &dictionary_p)
+	    : dbp_encoder(total_value_count), encoding(encoding_p), dictionary(dictionary_p),
 	      written_value(false), bit_width(RleBpDecoder::ComputeBitWidth(dictionary.size())), dict_encoder(bit_width),
 	      initialized(false) {
 	}
@@ -950,9 +950,7 @@ public:
 	unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state_p) override {
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
 
-		// TODO move the dict in the constructor?
-		auto result = make_uniq<StandardWriterPageState<SRC>>(state.total_value_count, state.dictionary);
-		result->encoding = state.encoding;
+		auto result = make_uniq<StandardWriterPageState<SRC>>(state.total_value_count, state.encoding, state.dictionary);
 		return std::move(result);
 	}
 
@@ -967,7 +965,7 @@ public:
 			break;
 		case Encoding::RLE_DICTIONARY:
 			if (page_state.bit_width == 0) {
-				// TODO does this ever happen?
+				// TODO does this ever happen? Only NULLs?
 				return;
 			}
 			if (!page_state.written_value) {
@@ -1162,7 +1160,7 @@ public:
 		// bloom filter will be queued for writing in ParquetWriter::BufferBloomFilter one level up
 	}
 
-	//	TODO what on earth is this used for??
+	// TODO this now vastly over-estimates the page size
 	idx_t GetRowSize(const Vector &vector, const idx_t index, const BasicColumnWriterState &state_p) const override {
 		return sizeof(TGT);
 	}
