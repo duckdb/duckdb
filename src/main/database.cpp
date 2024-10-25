@@ -401,10 +401,6 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 
 	if (database_path) {
 		config.options.database_path = database_path;
-		if (!config.options.enable_external_access) {
-			config.AddAllowedPath(database_path);
-			config.AddAllowedPath(database_path + string(".wal"));
-		}
 	} else {
 		config.options.database_path.clear();
 	}
@@ -421,6 +417,10 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		config.file_system = std::move(new_config.file_system);
 	} else {
 		config.file_system = make_uniq<VirtualFileSystem>();
+	}
+	if (database_path && !config.options.enable_external_access) {
+		config.AddAllowedPath(database_path);
+		config.AddAllowedPath(database_path + string(".wal"));
 	}
 	if (new_config.secret_manager) {
 		config.secret_manager = std::move(new_config.secret_manager);
