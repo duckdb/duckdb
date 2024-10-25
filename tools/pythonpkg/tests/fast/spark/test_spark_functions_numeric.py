@@ -111,7 +111,7 @@ class TestSparkFunctionsNumeric(object):
     def test_exp(self, spark):
         data = [
             (0.693,),
-            (0,),
+            (0.0,),
         ]
         df = spark.createDataFrame(data, ["firstColumn"])
         df = df.withColumn("exp_value", F.exp(F.col("firstColumn")))
@@ -148,7 +148,7 @@ class TestSparkFunctionsNumeric(object):
     def test_ln(self, spark):
         data = [
             (2.718,),
-            (1,),
+            (1.0,),
         ]
         df = spark.createDataFrame(data, ["firstColumn"])
         df = df.withColumn("ln_value", F.ln(F.col("firstColumn")))
@@ -159,7 +159,7 @@ class TestSparkFunctionsNumeric(object):
     def test_degrees(self, spark):
         data = [
             (3.14159,),
-            (0,),
+            (0.0,),
         ]
         df = spark.createDataFrame(data, ["firstColumn"])
         df = df.withColumn("degrees_value", F.degrees(F.col("firstColumn")))
