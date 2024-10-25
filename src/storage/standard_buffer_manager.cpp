@@ -30,6 +30,9 @@ struct BufferAllocatorData : PrivateAllocatorData {
 unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,
                                                                      FileBufferType type) {
 	unique_ptr<FileBuffer> result;
+	if (type == FileBufferType::BLOCK) {
+		throw InternalException("ConstructManagedBuffer cannot be used to construct blocks");
+	}
 	if (source) {
 		auto tmp = std::move(source);
 		D_ASSERT(tmp->AllocSize() == BufferManager::GetAllocSize(size));
@@ -365,8 +368,15 @@ void StandardBufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) 
 
 void StandardBufferManager::VerifyZeroReaders(shared_ptr<BlockHandle> &handle) {
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
-	auto replacement_buffer = make_uniq<FileBuffer>(Allocator::Get(db), handle->buffer->type,
-	                                                handle->memory_usage - Storage::DEFAULT_BLOCK_HEADER_SIZE);
+	unique_ptr<FileBuffer> replacement_buffer;
+	auto &allocator = Allocator::Get(db);
+	auto alloc_size = handle->memory_usage - Storage::DEFAULT_BLOCK_HEADER_SIZE;
+	if (handle->buffer->type == FileBufferType::BLOCK) {
+		auto block = reinterpret_cast<Block *>(handle->buffer.get());
+		replacement_buffer = make_uniq<Block>(allocator, block->id, alloc_size);
+	} else {
+		replacement_buffer = make_uniq<FileBuffer>(allocator, handle->buffer->type, alloc_size);
+	}
 	memcpy(replacement_buffer->buffer, handle->buffer->buffer, handle->buffer->size);
 	WriteGarbageIntoBuffer(*handle->buffer);
 	handle->buffer = std::move(replacement_buffer);

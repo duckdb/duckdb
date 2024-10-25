@@ -12,8 +12,9 @@ SET threads=1
 statement ok
 CREATE TABLE integers AS FROM range(10000000) t(i);
 
+# 10M bigints is ~75MB uncompressed
 statement ok
-SET memory_limit='12MB';
+SET memory_limit='16MB';
 
 statement ok con1
 BEGIN

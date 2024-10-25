@@ -10,6 +10,7 @@ CREATE TABLE integers AS FROM range(10000000) t(i);
 statement ok
 SET threads=1
 
+# 10M bigints is ~75MB uncompressed
 statement ok
 SET memory_limit='8MB';
 
@@ -37,3 +38,14 @@ query II
 SELECT COUNT(*), SUM(i) FROM integers
 ----
 10000000	50000010000000
+
+statement ok
+BEGIN
+
+query I
+UPDATE integers SET i=i+1;
+----
+10000000
+
+statement ok
+ROLLBACK
