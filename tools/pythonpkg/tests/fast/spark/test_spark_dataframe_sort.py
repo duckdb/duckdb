@@ -8,7 +8,6 @@ from spark_namespace.errors import PySparkTypeError, PySparkValueError
 from spark_namespace import USE_ACTUAL_SPARK
 
 
-
 class TestDataFrameSort(object):
     data = [(56, "Carol"), (20, "Alice"), (3, "Dave"), (3, "Anna"), (1, "Ben")]
 
@@ -69,7 +68,8 @@ class TestDataFrameSort(object):
     # See https://github.com/apache/spark/commit/0193d0f88a953063c41c41042fb58bd0badc155c
     # for the PR which added that error to PySpark
     @pytest.mark.skipif(
-        USE_ACTUAL_SPARK and not hasattr(spark_namespace.errors, "PySparkIndexError"), reason="PySparkIndexError is only introduced in PySpark 4.0.0"
+        USE_ACTUAL_SPARK and not hasattr(spark_namespace.errors, "PySparkIndexError"),
+        reason="PySparkIndexError is only introduced in PySpark 4.0.0",
     )
     def test_sort_zero_index(self, spark):
         df = spark.createDataFrame(self.data, ["age", "name"])

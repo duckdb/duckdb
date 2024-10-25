@@ -46,6 +46,7 @@ class TestDataFrame(object):
 
         if USE_ACTUAL_SPARK:
             from py4j.protocol import Py4JJavaError
+
             with pytest.raises(Py4JJavaError):
                 df = spark.createDataFrame(address, ["id", "address", "state"])
                 df.collect()
