@@ -232,10 +232,7 @@ def spark():
 
         spark.session = session
 
-    if USE_ACTUAL_SPARK:
-        return spark.session.builder.appName('pyspark').getOrCreate()
-    else:
-        return spark.session.builder.master(':memory:').appName('pyspark').getOrCreate()
+    return spark.session.builder.appName('pyspark').getOrCreate()
 
 
 @pytest.fixture(scope='function')
