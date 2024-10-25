@@ -3,6 +3,8 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/main/connection_manager.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 
 #include <chrono>
 #include <thread>
@@ -17,6 +19,18 @@ TEST_CASE("Test comment in CPP API", "[api]") {
 	con.SendQuery("--ups");
 	//! Should not crash
 	REQUIRE(1);
+}
+
+TEST_CASE("Test StarExpression replace_list parameter", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto sql = "select * replace(i * $n as i) from range(1, 10) t(i)";
+	auto stmts = con.ExtractStatements(sql);
+
+	auto &select_stmt = stmts[0]->Cast<SelectStatement>();
+	auto &select_node = select_stmt.node->Cast<SelectNode>();
+
+	REQUIRE(select_node.select_list[0]->HasParameter());
 }
 
 TEST_CASE("Test using connection after database is gone", "[api]") {
