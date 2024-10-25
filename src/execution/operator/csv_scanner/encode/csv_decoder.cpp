@@ -3,7 +3,13 @@
 
 namespace duckdb {
 
-CSVDecoder::CSVDecoder(const CSVEncoding encoding_p) : encoding(encoding_p) {
+CSVDecoder::CSVDecoder(const CSVEncoding encoding_p, idx_t buffer_size) : encoding(encoding_p) {
+	// Let's enforce that the encoded buffer size is divisible by 2, makes life easier.
+	encoded_buffer_size = buffer_size/GetRatio();
+	if (encoded_buffer_size %2 != 0) {
+		encoded_buffer_size = encoded_buffer_size -1;
+	}
+	D_ASSERT(encoded_buffer_size > 0);
 }
 
 bool CSVDecoder::IsUTF8() const {
@@ -19,6 +25,19 @@ idx_t CSVDecoder::GetRatio() const {
 		return 2;
 	default:
 		throw NotImplementedException("GetRatio() is not implemented for given CSVEncoding type");
+	}
+}
+
+idx_t CSVDecoder::MaxDecodedBytesPerIteration() const {
+	switch (encoding) {
+	case CSVEncoding::UTF_8:
+		return 1;
+	case CSVEncoding::LATIN_1:
+		return 2;
+	case CSVEncoding::UTF_16:
+		return 3;
+	default:
+		throw NotImplementedException("MaxDecodedBytesPerIteration() is not implemented for given CSVEncoding type");
 	}
 }
 
@@ -89,6 +108,7 @@ idx_t CSVDecoder::Decode(FileHandle &file_handle, void *buffer, const idx_t nr_b
 	while (decoded_buffer_start < nr_bytes) {
 		idx_t current_decoded_buffer_start = decoded_buffer_start;
 		encoded_bytes_to_read = (nr_bytes - decoded_buffer_start) / ratio;
+		encoded_bytes_to_read = encoded_bytes_to_read == 0 ? 1 : encoded_bytes_to_read;
 		auto actual_encoded_bytes = static_cast<idx_t>(file_handle.Read(encoded_buffer.get(), encoded_bytes_to_read));
 		DecodeInternal(encoded_buffer.get(), actual_encoded_bytes, static_cast<char *>(buffer), decoded_buffer_start);
 		if (decoded_buffer_start == current_decoded_buffer_start) {
