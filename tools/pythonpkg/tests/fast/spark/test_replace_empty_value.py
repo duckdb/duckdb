@@ -1,6 +1,8 @@
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
+
+from spark_namespace import USE_ACTUAL_SPARK
 from spark_namespace.sql.types import Row
 
 
@@ -30,16 +32,23 @@ class TestReplaceEmpty(object):
         df2 = df.select([when(col(c) == "", None).otherwise(col(c)).alias(c) for c in df.columns])
         assert df2.columns == ['name', 'state']
         key_f = lambda x: x.name or x.state
-        res = df2.collect()
-        assert sorted(res, key=key_f) == sorted(
-            [
+        res = df2.sort("name", "state").collect()
+        # FIXME: Null-handling in sort is different in DuckDB and Spark
+        if USE_ACTUAL_SPARK:
+            expected_res = [
                 Row(name=None, state='CA'),
+                Row(name=None, state='NJ'),
                 Row(name='Julia', state=None),
                 Row(name='Robert', state=None),
+            ]
+        else:
+            expected_res = [
+                Row(name='Julia', state=None),
+                Row(name='Robert', state=None),
+                Row(name=None, state='CA'),
                 Row(name=None, state='NJ'),
-            ],
-            key=key_f,
-        )
+            ]
+        assert res == expected_res
 
         # On selection of columns
         # Replace empty string with None on selected columns

@@ -1,10 +1,12 @@
 import pytest
 
+_ = pytest.importorskip("duckdb.experimental.spark")
+
+import spark_namespace.errors
 from spark_namespace.sql.types import Row
 from spark_namespace.errors import PySparkTypeError, PySparkValueError
 from spark_namespace import USE_ACTUAL_SPARK
 
-_ = pytest.importorskip("duckdb.experimental.spark")
 
 
 class TestDataFrameSort(object):
@@ -67,7 +69,7 @@ class TestDataFrameSort(object):
     # See https://github.com/apache/spark/commit/0193d0f88a953063c41c41042fb58bd0badc155c
     # for the PR which added that error to PySpark
     @pytest.mark.skipif(
-        USE_ACTUAL_SPARK, reason="PySparkIndexError is only introduced in PySpark 4.0.0 which is not yet available"
+        USE_ACTUAL_SPARK and not hasattr(spark_namespace.errors, "PySparkIndexError"), reason="PySparkIndexError is only introduced in PySpark 4.0.0"
     )
     def test_sort_zero_index(self, spark):
         df = spark.createDataFrame(self.data, ["age", "name"])

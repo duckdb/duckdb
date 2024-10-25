@@ -43,9 +43,13 @@ class TestDataFrame(object):
 
         # Tuples of different sizes
         address = [(1, "14851 Jeffrey Rd", "DE"), (2, "43421 Margarita St", "NY"), (3, "13111 Siemon Ave")]
-        if not USE_ACTUAL_SPARK:
-            # Unclear why but Spark does only raise such an error, within Java,
-            # once .collect is called.
+
+        if USE_ACTUAL_SPARK:
+            from py4j.protocol import Py4JJavaError
+            with pytest.raises(Py4JJavaError):
+                df = spark.createDataFrame(address, ["id", "address", "state"])
+                df.collect()
+        else:
             with pytest.raises(PySparkTypeError, match="LENGTH_SHOULD_BE_THE_SAME"):
                 df = spark.createDataFrame(address, ["id", "address", "state"])
 
@@ -59,7 +63,7 @@ class TestDataFrame(object):
 
         # Empty list
         if not USE_ACTUAL_SPARK:
-            # Spark raises PySparkValueError [CANNOT_INFER_EMPTY_SCHEMA]
+            # FIXME: Spark raises PySparkValueError [CANNOT_INFER_EMPTY_SCHEMA]
             df = spark.createDataFrame([], ["id", "address", "test"])
             res = df.collect()
             assert res == []
@@ -78,7 +82,7 @@ class TestDataFrame(object):
 
         # Not enough column names
         if not USE_ACTUAL_SPARK:
-            # Spark does not raise this error
+            # FIXME: Spark does not raise this error
             with pytest.raises(PySparkValueError, match="number of columns in the DataFrame don't match"):
                 df = spark.createDataFrame(address, ["id", "address"])
 
