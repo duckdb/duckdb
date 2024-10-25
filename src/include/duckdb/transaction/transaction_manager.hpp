@@ -36,7 +36,7 @@ public:
 	//! Commit the given transaction. Returns a non-empty error message on failure.
 	virtual ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) = 0;
 	//! Rollback the given transaction
-	virtual ErrorData RollbackTransaction(Transaction &transaction) = 0;
+	virtual void RollbackTransaction(Transaction &transaction) = 0;
 
 	virtual void Checkpoint(ClientContext &context, bool force = false) = 0;
 
