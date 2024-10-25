@@ -31,7 +31,7 @@ public:
 	//! Commit the given transaction
 	ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) override;
 	//! Rollback the given transaction
-	void RollbackTransaction(Transaction &transaction) override;
+	ErrorData RollbackTransaction(Transaction &transaction) override;
 
 	void Checkpoint(ClientContext &context, bool force = false) override;
 

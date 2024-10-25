@@ -199,7 +199,7 @@ void UndoBuffer::RevertCommit(UndoBuffer::IteratorState &end_state, transaction_
 	IterateEntries(start_state, end_state, [&](UndoFlags type, data_ptr_t data) { state.RevertCommit(type, data); });
 }
 
-void UndoBuffer::Rollback() noexcept {
+void UndoBuffer::Rollback() {
 	// rollback needs to be performed in reverse
 	RollbackState state(transaction);
 	ReverseIterateEntries([&](UndoFlags type, data_ptr_t data) { state.RollbackEntry(type, data); });

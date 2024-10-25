@@ -262,7 +262,11 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		// commit unsuccessful: rollback the transaction instead
 		checkpoint_decision = CheckpointDecision(error.Message());
 		transaction.commit_id = 0;
-		transaction.Rollback();
+		error = transaction.Rollback();
+		if (error.HasError()) {
+			throw FatalException("Failed to rollback transaction. Cannot continue operation.\nError: %s",
+			                     error.Message());
+		}
 	} else {
 		// check if catalog changes were made
 		if (transaction.catalog_version >= TRANSACTION_ID_START) {
@@ -296,17 +300,22 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	return error;
 }
 
-void DuckTransactionManager::RollbackTransaction(Transaction &transaction_p) {
+ErrorData DuckTransactionManager::RollbackTransaction(Transaction &transaction_p) {
 	auto &transaction = transaction_p.Cast<DuckTransaction>();
 	// obtain the transaction lock during this function
 	lock_guard<mutex> lock(transaction_lock);
 
 	// rollback the transaction
-	transaction.Rollback();
+	auto error = transaction.Rollback();
+	if (error.HasError()) {
+		throw FatalException("Failed to rollback transaction. Cannot continue operation.\nError: %s", error.Message());
+	}
 
 	// remove the transaction id from the list of active transactions
 	// potentially resulting in garbage collection
 	RemoveTransaction(transaction);
+
+	return error;
 }
 
 void DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction) noexcept {

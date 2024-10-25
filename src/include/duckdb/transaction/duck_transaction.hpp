@@ -59,7 +59,7 @@ public:
 	bool AutomaticCheckpoint(AttachedDatabase &db, const UndoBufferProperties &properties);
 
 	//! Rollback
-	void Rollback() noexcept;
+	ErrorData Rollback();
 	//! Cleanup the undo buffer
 	void Cleanup(transaction_t lowest_active_transaction);
 

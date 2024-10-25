@@ -58,7 +58,7 @@ public:
 	void RevertCommit(UndoBuffer::IteratorState &iterator_state, transaction_t transaction_id);
 	//! Rollback the changes made in this UndoBuffer: should be called on
 	//! rollback
-	void Rollback() noexcept;
+	void Rollback();
 
 private:
 	DuckTransaction &transaction;

@@ -247,9 +247,14 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit
 	}
 }
 
-void DuckTransaction::Rollback() noexcept {
-	storage->Rollback();
-	undo_buffer.Rollback();
+ErrorData DuckTransaction::Rollback() {
+	try {
+		storage->Rollback();
+		undo_buffer.Rollback();
+		return ErrorData();
+	} catch (std::exception &ex) {
+		return ErrorData(ex);
+	}
 }
 
 void DuckTransaction::Cleanup(transaction_t lowest_active_transaction) {
