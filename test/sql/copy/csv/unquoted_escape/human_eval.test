@@ -48,10 +48,12 @@ CREATE TABLE human_eval_tsv(task_id TEXT, prompt TEXT, entry_point TEXT, canonic
 
 statement ok
 INSERT INTO human_eval_csv
+SELECT replace(COLUMNS(*), E'\r\n', E'\n')
 FROM read_csv('data/csv/unquoted_escape/human_eval.csv', quote = '', escape = '\', sep = ',', header = false);
 
 statement ok
 INSERT INTO human_eval_tsv
+SELECT replace(COLUMNS(*), E'\r\n', E'\n')
 FROM read_csv('data/csv/unquoted_escape/human_eval.tsv', quote = '', escape = '\', sep = '\t', header = false);
 
 # Verify that the three copies are the same
