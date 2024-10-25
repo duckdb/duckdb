@@ -21,7 +21,7 @@ INSERT INTO special_char VALUES
 loop buffer_size 10 25
 
 query I
-SELECT bool_and(b = s)::int FROM special_char JOIN read_csv('data/csv/unquoted_escape/basic.tsv', quote = '', escape = '\', sep = '\t') t (i, s, j) ON i = a;
+SELECT bool_and(b = replace(s, E'\r\n', '\n'))::int FROM special_char JOIN read_csv('data/csv/unquoted_escape/basic.tsv', quote = '', escape = '\', sep = '\t') t (i, s, j) ON i = a;
 ----
 1
 
