@@ -992,13 +992,14 @@ public:
 		auto empty_string = StringVector::EmptyString(result, uncompressed_length);
 		auto uncompressed_data = empty_string.GetDataWriteable();
 		auto string_data = FlatVector::GetData<string_t>(result);
-		for (idx_t i = 0; i < count; i++) {
-			data_ptr_t start_of_uncompressed_string = reinterpret_cast<data_ptr_t>(uncompressed_data);
-			DecompressString(scan_state, start_of_uncompressed_string, string_lengths[i]);
 
-			uncompressed_data += string_lengths[i];
-			string_data[result_offset + i] =
-			    string_t(reinterpret_cast<const char *>(start_of_uncompressed_string), string_lengths[i]);
+		DecompressString(scan_state, reinterpret_cast<data_ptr_t>(uncompressed_data), uncompressed_length);
+
+		idx_t offset = 0;
+		auto uncompressed_data_const = empty_string.GetData();
+		for (idx_t i = 0; i < count; i++) {
+			string_data[result_offset + i] = string_t(uncompressed_data_const + offset, string_lengths[i]);
+			offset += string_lengths[i];
 		}
 		scan_state.scanned_count += count;
 		scanned_count += count;
