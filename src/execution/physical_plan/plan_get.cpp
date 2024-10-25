@@ -159,7 +159,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		vector<unique_ptr<Expression>> expressions;
 		for (auto &column_id : column_ids) {
 			if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
-				types.emplace_back(LogicalType::BIGINT);
+				types.emplace_back(LogicalType::ROW_TYPE);
 				expressions.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(0)));
 			} else {
 				auto type = op.returned_types[column_id];

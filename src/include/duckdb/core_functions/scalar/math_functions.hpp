@@ -427,7 +427,7 @@ struct AcoshFun {
 	static constexpr const char *Name = "acosh";
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Computes the inverse hyperbolic cos of x";
-	static constexpr const char *Example = "acosh(0.5)";
+	static constexpr const char *Example = "acosh(2.3)";
 
 	static ScalarFunction GetFunction();
 };
