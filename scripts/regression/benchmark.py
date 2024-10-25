@@ -31,7 +31,6 @@ class BenchmarkRunnerConfig:
     benchmark_file: str
     verbose: bool = False
     threads: Optional[int] = None
-    no_regression_fail: bool = False
     disable_timeout: bool = False
     max_timeout: int = MAX_TIMEOUT
     root_dir: str = ""
@@ -40,7 +39,6 @@ class BenchmarkRunnerConfig:
     def from_params(cls, benchmark_runner, benchmark_file, **kwargs) -> "BenchmarkRunnerConfig":
         verbose = kwargs.get("verbose", False)
         threads = kwargs.get("threads", None)
-        no_regression_fail = kwargs.get("no_regression_fail", False)
         disable_timeout = kwargs.get("disable_timeout", False)
         max_timeout = kwargs.get("max_timeout", MAX_TIMEOUT)
         root_dir = kwargs.get("root_dir", "")
@@ -50,7 +48,6 @@ class BenchmarkRunnerConfig:
             benchmark_file=benchmark_file,
             verbose=verbose,
             threads=threads,
-            no_regression_fail=no_regression_fail,
             disable_timeout=disable_timeout,
             max_timeout=max_timeout,
             root_dir=root_dir,
@@ -66,7 +63,6 @@ class BenchmarkRunnerConfig:
         parser.add_argument("--benchmarks", type=str, help="Path to the benchmark file.", required=True)
         parser.add_argument("--verbose", action="store_true", help="Enable verbose output.")
         parser.add_argument("--threads", type=int, help="Number of threads to use.")
-        parser.add_argument("--nofail", action="store_true", help="Do not fail on regression.")
         parser.add_argument("--disable-timeout", action="store_true", help="Disable timeout.")
         parser.add_argument(
             "--max-timeout", type=int, default=3600, help="Set maximum timeout in seconds (default: 3600)."
@@ -82,7 +78,6 @@ class BenchmarkRunnerConfig:
             benchmark_file=parsed_args.benchmarks,
             verbose=parsed_args.verbose,
             threads=parsed_args.threads,
-            no_regression_fail=parsed_args.nofail,
             disable_timeout=parsed_args.disable_timeout,
             max_timeout=parsed_args.max_timeout,
             root_dir=parsed_args.root_dir,

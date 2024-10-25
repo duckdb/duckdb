@@ -4,7 +4,7 @@ import functools
 import shutil
 from benchmark import BenchmarkRunner, BenchmarkRunnerConfig
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import Optional, List, Union
 
 print = functools.partial(print, flush=True)
 
@@ -82,10 +82,8 @@ benchmark_list = old_runner.benchmark_list
 @dataclass
 class BenchmarkResult:
     benchmark: str
-    old_result: Optional[float] = None
-    old_error: Optional[str] = None
-    new_result: Optional[float] = None
-    new_error: Optional[str] = None
+    old_result: Union[float, str]
+    new_result: Union[float, str]
 
 
 multiply_percentage = 1.0 + REGRESSION_THRESHOLD_PERCENTAGE
@@ -111,13 +109,13 @@ for i in range(NUMBER_REPETITIONS):
         new_res = new_results[benchmark]
         if isinstance(old_res, str) or isinstance(new_res, str):
             # benchmark failed to run - always a regression
-            error_list.append(BenchmarkResult(benchmark, old_error=old_res, new_error=new_res))
+            error_list.append(BenchmarkResult(benchmark, old_res, new_res))
         elif (no_regression_fail == False) and (
             (old_res + REGRESSION_THRESHOLD_SECONDS) * multiply_percentage < new_res
         ):
-            regression_list.append(BenchmarkResult(benchmark, old_result=old_res, new_result=new_res))
+            regression_list.append(BenchmarkResult(benchmark, old_res, new_res))
         else:
-            other_results.append(BenchmarkResult(benchmark, old_result=old_res, new_result=new_res))
+            other_results.append(BenchmarkResult(benchmark, old_res, new_res))
     benchmark_list = [res.benchmark for res in regression_list]
 
 exit_code = 0
