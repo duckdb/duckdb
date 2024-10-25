@@ -3150,7 +3150,8 @@ DUCKDB_API duckdb_data_chunk duckdb_fetch_chunk(duckdb_result result);
 DUCKDB_API uint64_t duckdb_get_hlc_timestamp();
 DUCKDB_API void duckdb_set_hlc_timestamp(uint64_t ts);
 DUCKDB_API uint64_t duckdb_get_snapshot_id(duckdb_connection con);
-DUCKDB_API duckdb_state duckdb_create_snapshot(duckdb_connection con, duckdb_result *out_result);
+DUCKDB_API duckdb_state duckdb_create_snapshot(duckdb_connection con, duckdb_result *out_result, char **out_snapshot_file_name);
+DUCKDB_API void duckdb_remove_snapshot(duckdb_connection con, const char *snapshot_file_name);
 #ifdef __cplusplus
 }
 #endif

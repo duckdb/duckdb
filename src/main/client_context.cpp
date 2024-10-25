@@ -1397,14 +1397,14 @@ uint64_t ClientContext::GetSnapshotId() {
   return result;
 }
 
-unique_ptr<QueryResult> ClientContext::CreateSnapshot() {
+pair<string, unique_ptr<QueryResult>> ClientContext::CreateSnapshot() {
   string snapshot_file;
   RunFunctionInTransaction([&]() {
     snapshot_file = transaction.Snapshot();
   });
 
   if (snapshot_file.length() == 0) {
-    return unique_ptr<QueryResult>(nullptr);
+    return make_pair(snapshot_file, unique_ptr<QueryResult>(nullptr));
   }
   
   StatementType statement_type = StatementType::SELECT_STATEMENT;
@@ -1422,7 +1422,13 @@ unique_ptr<QueryResult> ClientContext::CreateSnapshot() {
 					     names, client_properties,
 					     buffered_data);
   SetActiveResult(*lock, *result);
-  return std::move(result);
+  return make_pair(snapshot_file, std::move(result));
 }
 
+void ClientContext::RemoveSnapshot(const char *snapshot_file_name) {
+  FileSystem &fs = FileSystem::GetFileSystem(*this);
+  string file_name(snapshot_file_name);
+  fs.RemoveFile(file_name);
+}
+  
 } // namespace duckdb

@@ -93,8 +93,8 @@ TEST_CASE("Test snapshot api on persistent db", "[persistence][.]") {
 		uint64_t sid_next = con.GetSnapshotId();
 		REQUIRE(sid_next == (sid + 1));
 		auto result = con.CreateSnapshot();
-		REQUIRE(result->type == QueryResultType::STREAM_RESULT);
-		std::unique_ptr<DataChunk> chunk = result->Fetch();
+		REQUIRE(result.second->type == QueryResultType::STREAM_RESULT);
+		std::unique_ptr<DataChunk> chunk = result.second->Fetch();
 		REQUIRE(chunk->ColumnCount() == 1);
 		REQUIRE(chunk->size());
 		string snapshot = chunk->GetValue(0,0).GetValue<string>();

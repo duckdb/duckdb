@@ -162,8 +162,9 @@ TEST_CASE("Test Snapshot in C API", "[capi]") {
 	
 	// For in memory databases, snapshot id == 0 and it is an error to create a snapshot
 	REQUIRE(duckdb_get_snapshot_id(con) == 0);
-	REQUIRE(duckdb_create_snapshot(con, &result) == DuckDBError);
-
+        char *snapshot_file_name;
+	REQUIRE(duckdb_create_snapshot(con, &result, &snapshot_file_name) == DuckDBError);
+        duckdb_free(snapshot_file_name);
 	duckdb_disconnect(&con);
 	duckdb_close(&db);
 }

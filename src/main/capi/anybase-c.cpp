@@ -27,14 +27,22 @@ uint64_t duckdb_get_snapshot_id(duckdb_connection connection)
   return conn->GetSnapshotId();
 }
 
-duckdb_state duckdb_create_snapshot(duckdb_connection connection, duckdb_result *out_result)
+duckdb_state duckdb_create_snapshot(duckdb_connection connection, duckdb_result *out_result, char **out_snapshot_file_name)
 {
   Connection *conn = reinterpret_cast<Connection *>(connection);
   auto result = conn->CreateSnapshot();
-  if (! result) {
+  if (! result.second) {
     return DuckDBError;
   }
-  return DuckDBTranslateResult(std::move(result), out_result);
+  *out_snapshot_file_name = (char *)duckdb_malloc(result.first.length() + 1);
+  memcpy(*out_snapshot_file_name, result.first.c_str(), result.first.length() + 1);
+  return DuckDBTranslateResult(std::move(result.second), out_result);
+}
+
+void duckdb_remove_snapshot(duckdb_connection connection, const char *snapshot_file_name)
+{
+  Connection *conn = reinterpret_cast<Connection *>(connection);
+  conn->RemoveSnapshot(snapshot_file_name);
 }
 
 duckdb_state duckdb_result_to_arrow(duckdb_result result, duckdb_arrow_array *out_array) {
