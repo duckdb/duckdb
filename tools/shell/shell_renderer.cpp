@@ -35,8 +35,8 @@ void ColumnRenderer::RenderFooter(ColumnarResult &result) {
 }
 
 void ColumnRenderer::RenderAlignedValue(ColumnarResult &result, idx_t i) {
-	int w = result.column_width[i];
-	int n = state.strlenChar(result.data[i]);
+	idx_t w = result.column_width[i];
+	idx_t n = state.RenderLength(result.data[i]);
 	state.PrintPadded("", (w - n) / 2);
 	state.Print(result.data[i]);
 	state.PrintPadded("", (w - n + 1) / 2);
@@ -52,11 +52,11 @@ public:
 			return;
 		}
 		for (idx_t i = 0; i < result.column_count; i++) {
-			state.utf8_width_print(state.out, result.column_width[i], result.data[i]);
+			state.UTF8WidthPrint(state.out, result.column_width[i], result.data[i], result.right_align[i]);
 			state.Print(i == result.column_count - 1 ? "\n" : "  ");
 		}
 		for (idx_t i = 0; i < result.column_count; i++) {
-			state.print_dashes(result.column_width[i]);
+			state.PrintDashes(result.column_width[i]);
 			state.Print(i == result.column_count - 1 ? "\n" : "  ");
 		}
 	}
@@ -75,17 +75,17 @@ public:
 	}
 
 	void RenderHeader(ColumnarResult &result) override {
-		state.print_row_separator(result.column_count, "+", result.column_width);
+		state.PrintRowSeparator(result.column_count, "+", result.column_width);
 		state.Print("| ");
 		for (idx_t i = 0; i < result.column_count; i++) {
 			RenderAlignedValue(result, i);
 			state.Print(i == result.column_count - 1 ? " |\n" : " | ");
 		}
-		state.print_row_separator(result.column_count, "+", result.column_width);
+		state.PrintRowSeparator(result.column_count, "+", result.column_width);
 	}
 
 	void RenderFooter(ColumnarResult &result) override {
-		state.print_row_separator(result.column_count, "+", result.column_width);
+		state.PrintRowSeparator(result.column_count, "+", result.column_width);
 	}
 
 	const char *GetColumnSeparator() override {
@@ -108,7 +108,7 @@ public:
 		for (idx_t i = 0; i < result.column_count; i++) {
 			RenderAlignedValue(result, i);
 		}
-		state.print_markdown_separator(result.column_count, "|", result.types, result.column_width);
+		state.PrintMarkdownSeparator(result.column_count, "|", result.types, result.column_width);
 	}
 
 	const char *GetColumnSeparator() override {
@@ -180,9 +180,9 @@ private:
 	/* Draw horizontal line N characters long using unicode box
 	** characters
 	*/
-	void print_box_line(int N) {
+	void print_box_line(idx_t N) {
 		string box_line;
-		for (int i = 0; i < N; i++) {
+		for (idx_t i = 0; i < N; i++) {
 			box_line += BOX_24;
 		}
 		state.Print(box_line);
@@ -192,7 +192,7 @@ private:
 	** Draw a horizontal separator for a RenderMode::Box table.
 	*/
 	void print_box_row_separator(int nArg, const char *zSep1, const char *zSep2, const char *zSep3,
-	                             const vector<int> &actualWidth) {
+	                             const vector<idx_t> &actualWidth) {
 		int i;
 		if (nArg > 0) {
 			state.Print(zSep1);
@@ -215,7 +215,7 @@ public:
 	void RenderHeader(ColumnarResult &result) override {
 		state.Print("\\begin{tabular}{|");
 		for (idx_t i = 0; i < result.column_count; i++) {
-			if (state.column_type_is_integer(result.type_names[i])) {
+			if (state.ColumnTypeIsInteger(result.type_names[i])) {
 				state.Print("r");
 			} else {
 				state.Print("l");
@@ -291,7 +291,7 @@ public:
 			// determine the render width by going over the column names
 			header_width = 5;
 			for (idx_t i = 0; i < col_names.size(); i++) {
-				int len = ShellState::StringLength(col_names[i] ? col_names[i] : "");
+				auto len = ShellState::StringLength(col_names[i] ? col_names[i] : "");
 				if (len > header_width) {
 					header_width = len;
 				}
@@ -315,7 +315,7 @@ public:
 		}
 	}
 
-	int header_width = 0;
+	idx_t header_width = 0;
 };
 
 class ModeExplainRenderer : public RowRenderer {
@@ -454,7 +454,7 @@ public:
 			if (i > 0) {
 				state.Print(col_sep);
 			}
-			state.output_c_string(col_names[i] ? col_names[i] : "");
+			state.OutputCString(col_names[i] ? col_names[i] : "");
 		}
 		state.Print(row_sep);
 	}
@@ -465,7 +465,7 @@ public:
 			if (i > 0) {
 				state.Print(col_sep);
 			}
-			state.output_c_string(data[i] ? data[i] : state.nullValue.c_str());
+			state.OutputCString(data[i] ? data[i] : state.nullValue.c_str());
 		}
 		state.Print(row_sep);
 	}
@@ -487,7 +487,7 @@ public:
 		}
 		auto &col_names = result.column_names;
 		for (idx_t i = 0; i < col_names.size(); i++) {
-			state.output_csv(col_names[i] ? col_names[i] : "", i < col_names.size() - 1);
+			state.OutputCSV(col_names[i] ? col_names[i] : "", i < col_names.size() - 1);
 		}
 		state.Print(row_sep);
 	}
@@ -495,7 +495,7 @@ public:
 	void RenderRow(RowResult &result) override {
 		auto &data = result.data;
 		for (idx_t i = 0; i < data.size(); i++) {
-			state.output_csv(data[i], i < data.size() - 1);
+			state.OutputCSV(data[i], i < data.size() - 1);
 		}
 		state.Print(row_sep);
 	}
@@ -546,7 +546,7 @@ public:
 			if (i > 0) {
 				state.Print(col_sep);
 			}
-			state.output_quoted_string(col_names[i]);
+			state.OutputQuotedString(col_names[i]);
 		}
 		state.Print(row_sep);
 	}
@@ -560,13 +560,13 @@ public:
 			if ((data[i] == 0) || (!types.empty() && types[i] == SQLITE_NULL)) {
 				state.Print("NULL");
 			} else if (!types.empty() && (types[i] == SQLITE_TEXT || types[i] == SQLITE_BLOB)) {
-				state.output_quoted_string(data[i]);
+				state.OutputQuotedString(data[i]);
 			} else if (!types.empty() && (types[i] == SQLITE_INTEGER || types[i] == SQLITE_FLOAT)) {
 				state.Print(data[i]);
-			} else if (state.isNumber(data[i], 0)) {
+			} else if (state.IsNumber(data[i], 0)) {
 				state.Print(data[i]);
 			} else {
-				state.output_quoted_string(data[i]);
+				state.OutputQuotedString(data[i]);
 			}
 		}
 		state.Print(row_sep);
@@ -604,7 +604,7 @@ public:
 			if (i > 0) {
 				state.Print(",");
 			}
-			state.output_json_string(col_names[i], -1);
+			state.OutputJSONString(col_names[i], -1);
 			state.Print(":");
 			if ((data[i] == 0) || (!types.empty() && types[i] == SQLITE_NULL)) {
 				state.Print("null");
@@ -619,9 +619,9 @@ public:
 			} else if (!types.empty() && types[i] == SQLITE_BLOB && result.pStmt) {
 				const void *pBlob = sqlite3_column_blob(result.pStmt, i);
 				int nBlob = sqlite3_column_bytes(result.pStmt, i);
-				state.output_json_string((const char *)pBlob, nBlob);
+				state.OutputJSONString((const char *)pBlob, nBlob);
 			} else if (!types.empty() && types[i] == SQLITE_TEXT) {
-				state.output_json_string(data[i], -1);
+				state.OutputJSONString(data[i], -1);
 			} else {
 				state.Print(data[i]);
 			}
@@ -666,12 +666,12 @@ public:
 			state.Print(i > 0 ? "," : " VALUES(");
 			if ((data[i] == 0) || (!types.empty() && types[i] == SQLITE_NULL)) {
 				state.Print("NULL");
-			} else if (state.isNumber(data[i], nullptr)) {
+			} else if (state.IsNumber(data[i], nullptr)) {
 				state.Print(data[i]);
 			} else if (state.ShellHasFlag(SHFLG_Newlines)) {
-				state.output_quoted_string(data[i]);
+				state.OutputQuotedString(data[i]);
 			} else {
-				state.output_quoted_escaped_string(data[i]);
+				state.OutputQuotedEscapedString(data[i]);
 			}
 		}
 		state.Print(");\n");
@@ -685,7 +685,7 @@ public:
 
 	void RenderRow(RowResult &result) override {
 		/* .schema and .fullschema output */
-		state.printSchemaLine(result.data[0], "\n");
+		state.PrintSchemaLine(result.data[0], "\n");
 	}
 };
 
@@ -749,7 +749,7 @@ public:
 				} else if (c == ')') {
 					nParen--;
 					if (nLine > 0 && nParen == 0 && j > 0) {
-						state.printSchemaLineN(z, j, "\n");
+						state.PrintSchemaLineN(z, j, "\n");
 						j = 0;
 					}
 				}
@@ -757,7 +757,7 @@ public:
 				if (nParen == 1 && cEnd == 0 && (c == '(' || c == '\n' || (c == ',' && !wsToEol(z + i + 1)))) {
 					if (c == '\n')
 						j--;
-					state.printSchemaLineN(z, j, "\n  ");
+					state.PrintSchemaLineN(z, j, "\n  ");
 					j = 0;
 					nLine++;
 					while (IsSpace(z[i + 1])) {
@@ -767,7 +767,7 @@ public:
 			}
 			z[j] = 0;
 		}
-		state.printSchemaLine(z, ";\n");
+		state.PrintSchemaLine(z, ";\n");
 		sqlite3_free(z);
 	}
 
@@ -775,18 +775,21 @@ public:
 	** Return true if string z[] has nothing but whitespace and comments to the
 	** end of the first line.
 	*/
-	static int wsToEol(const char *z) {
+	static bool wsToEol(const char *z) {
 		int i;
 		for (i = 0; z[i]; i++) {
-			if (z[i] == '\n')
-				return 1;
-			if (IsSpace(z[i]))
+			if (z[i] == '\n') {
+				return true;
+			}
+			if (IsSpace(z[i])) {
 				continue;
-			if (z[i] == '-' && z[i + 1] == '-')
-				return 1;
-			return 0;
+			}
+			if (z[i] == '-' && z[i + 1] == '-') {
+				return true;
+			}
+			return false;
 		}
-		return 1;
+		return true;
 	}
 };
 
