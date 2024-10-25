@@ -102,7 +102,7 @@ Permission Error
 
 # we can also glob allowed directories
 query I
-SELECT * FROM glob('data/csv/glob/*.csv')
+SELECT replace(fname, '\', '/') as fname FROM glob('data/csv/glob/*.csv') t(fname)
 ----
 data/csv/glob/f_1.csv
 data/csv/glob/f_2.csv
