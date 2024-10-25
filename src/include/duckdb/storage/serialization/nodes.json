@@ -175,34 +175,6 @@
     "pointer_type": "none"
   },
   {
-    "class": "SampleOptions",
-    "includes": [
-      "duckdb/parser/parsed_data/sample_options.hpp"
-    ],
-    "members": [
-      {
-        "id": 100,
-        "name": "sample_size",
-        "type": "Value"
-      },
-      {
-        "id": 101,
-        "name": "is_percentage",
-        "type": "bool"
-      },
-      {
-        "id": 102,
-        "name": "method",
-        "type": "SampleMethod"
-      },
-      {
-        "id": 103,
-        "name": "seed",
-        "type": "int64_t"
-      }
-    ]
-  },
-  {
     "class": "BaseReservoirSampling",
     "includes": [
       "duckdb/execution/reservoir_sample.hpp",
