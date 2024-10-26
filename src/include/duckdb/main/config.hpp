@@ -390,7 +390,7 @@ public:
 		return OP::GetSetting(context);
 	}
 
-	bool CanAccessFile(const string &path);
+	bool CanAccessFile(const string &path, FileType type);
 	void AddAllowedDirectory(const string &path);
 	void AddAllowedPath(const string &path);
 	string SanitizeAllowedPath(const string &path) const;

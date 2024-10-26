@@ -597,7 +597,7 @@ void DBConfig::AddAllowedPath(const string &path) {
 	options.allowed_paths.insert(allowed_path);
 }
 
-bool DBConfig::CanAccessFile(const string &input_path) {
+bool DBConfig::CanAccessFile(const string &input_path, FileType type) {
 	if (options.enable_external_access) {
 		// all external access is allowed
 		return true;
@@ -610,6 +610,12 @@ bool DBConfig::CanAccessFile(const string &input_path) {
 	if (options.allowed_directories.empty()) {
 		// no prefix directories specified
 		return false;
+	}
+	if (type == FileType::FILE_TYPE_DIR) {
+		// make sure directories end with a /
+		if (!StringUtil::EndsWith(path, "/")) {
+			path += "/";
+		}
 	}
 	auto start_bound = options.allowed_directories.lower_bound(path);
 	if (start_bound != options.allowed_directories.begin()) {

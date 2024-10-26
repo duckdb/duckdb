@@ -596,6 +596,10 @@ bool EnableExternalAccessSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &co
 			config.AddAllowedPath(path + ".wal");
 		}
 	}
+	if (config.options.use_temporary_directory && !config.options.temporary_directory.empty()) {
+		// if temp directory is enabled we can also write there
+		config.AddAllowedDirectory(config.options.temporary_directory);
+	}
 	return true;
 }
 
@@ -1142,6 +1146,9 @@ Value StreamingBufferSizeSetting::GetSetting(const ClientContext &context) {
 // Temp Directory
 //===----------------------------------------------------------------------===//
 void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (!config.options.enable_external_access) {
+		throw PermissionException("Modifying the temp_directory has been disabled by configuration");
+	}
 	config.options.temporary_directory = input.ToString();
 	config.options.use_temporary_directory = !config.options.temporary_directory.empty();
 	if (db) {
@@ -1151,6 +1158,9 @@ void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, con
 }
 
 void TempDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (!config.options.enable_external_access) {
+		throw PermissionException("Modifying the temp_directory has been disabled by configuration");
+	}
 	config.SetDefaultTempDirectory();
 	config.options.use_temporary_directory = DBConfig().options.use_temporary_directory;
 	if (db) {
