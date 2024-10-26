@@ -389,11 +389,12 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	auto ref = make_uniq<BoundReferenceExpression>(order1.expression->return_type, 0U);
 	vector<BoundOrderByNode> orders;
 	orders.emplace_back(order1.type, order1.null_order, std::move(ref));
-	// our target is to make i (from left table) < j (from right table) if value[i] and value[j] match the condition 1
-	// add a column from_left to solve the problem when exists multiple equal values
-	// in l1 if the operator is loose inequality, let the left index (from_left is true) in front of right index
-	// otherwise, let the left index (from_left is true) in behind of left index (from_left is false)
-	// for example, t1.time <= t2.time
+	// The goal is to make i (from the left table) < j (from the right table).
+	// If value[i] and value[j] match the condition 1,
+	// add a column from_left to solve the problem when there exist multiple equal values in l1.
+	// If the operator is loose inequality, make t1.from_left (== true) sort BEFORE t2.from_left (== false).
+	// Otherwise, make t1.from_left sort (== true) sort AFTER t2.from_left (== false).
+	// For example, if t1.time <= t2.time
 	// | value     | 1     | 1     | 1     | 1     |
 	// | --------- | ----- | ----- | ----- | ----- |
 	// | from_left | T(l2) | T(l2) | F(r1) | F(r2) |
@@ -401,8 +402,8 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	// | value     | 1     | 1     | 1     | 1     |
 	// | --------- | ----- | ----- | ----- | ----- |
 	// | from_left | F(r2) | F(r1) | T(l2) | T(l1) |
-	// according to this order request, if i < j then value\[i\](from left table) and value\[j\](from right table) match
-	// the condition(t1.time <= t2.time or t1.time < t2.time)
+	// Using this OrderType, if i < j then value[i] (from left table) and value[j] (from right table) match
+	// the condition (t1.time <= t2.time or t1.time < t2.time), then from_left will force them into the correct order.
 	auto from_left = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
 	orders.emplace_back(SBIterator::ComparisonValue(cmp1) == 0 ? OrderType::DESCENDING : OrderType::ASCENDING,
 	                    OrderByNullType::ORDER_DEFAULT, std::move(from_left));
