@@ -32,14 +32,25 @@ UndoBufferReference UndoBufferAllocator::Allocate(idx_t alloc_len) {
 	BufferHandle handle;
 	if (!head || head->position + alloc_len > head->capacity) {
 		// no space in current head - allocate a new block
-		// FIXME: we might want to allocate less than the block size in initial allocations
-		idx_t capacity = buffer_manager.GetBlockSize();
+		auto block_size = buffer_manager.GetBlockSize();
+		;
+		idx_t capacity;
+		if (!head && alloc_len <= 4096) {
+			capacity = 4096;
+		} else {
+			capacity = block_size;
+		}
 		if (capacity < alloc_len) {
 			capacity = NextPowerOfTwo(alloc_len);
 		}
 		auto entry = make_uniq<UndoBufferEntry>(buffer_manager);
-		handle = buffer_manager.Allocate(MemoryTag::TRANSACTION, capacity, false);
-		entry->block = handle.GetBlockHandle();
+		if (capacity < block_size) {
+			entry->block = buffer_manager.RegisterSmallMemory(MemoryTag::TRANSACTION, capacity);
+			handle = buffer_manager.Pin(entry->block);
+		} else {
+			handle = buffer_manager.Allocate(MemoryTag::TRANSACTION, capacity, false);
+			entry->block = handle.GetBlockHandle();
+		}
 		entry->capacity = capacity;
 		entry->position = 0;
 		// add block to the chain
