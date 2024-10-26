@@ -389,9 +389,9 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	auto ref = make_uniq<BoundReferenceExpression>(order1.expression->return_type, 0U);
 	vector<BoundOrderByNode> orders;
 	orders.emplace_back(order1.type, order1.null_order, std::move(ref));
-	// The goal is to make i (from the left table) < j (from the right table).
-	// If value[i] and value[j] match the condition 1,
-	// add a column from_left to solve the problem when there exist multiple equal values in l1.
+	// The goal is to make i (from the left table) < j (from the right table),
+	// if value[i] and value[j] match the condition 1.
+	// Add a column from_left to solve the problem when there exist multiple equal values in l1.
 	// If the operator is loose inequality, make t1.from_left (== true) sort BEFORE t2.from_left (== false).
 	// Otherwise, make t1.from_left sort (== true) sort AFTER t2.from_left (== false).
 	// For example, if t1.time <= t2.time
