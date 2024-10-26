@@ -1,0 +1,76 @@
+# name: test/sql/types/varint/test_varint_boundaries.test
+# description: Boundary testing for varint type
+# group: [varint]
+
+statement ok
+PRAGMA enable_verification
+
+# Test All Integers
+query IIIIIIIIII
+select tinyint::varchar::varint = tinyint::varint,
+smallint::varchar::varint = smallint::varint,
+int::varchar::varint = int::varint,
+bigint::varchar::varint = bigint::varint,
+hugeint::varchar::varint = hugeint::varint,
+uhugeint::varchar::varint = uhugeint::varint,
+utinyint::varchar::varint = utinyint::varint,
+usmallint::varchar::varint = usmallint::varint,
+uint::varchar::varint = uint::varint,
+ubigint::varchar::varint = ubigint::varint
+FROM test_all_types()
+where tinyint is not null;
+----
+true	true	true	true	true	true	true	true	true	true
+true	true	true	true	true	true	true	true	true	true
+
+
+query IIIIIIIIII
+select tinyint::varchar = tinyint::varint::varchar ,
+smallint::varchar = smallint::varint::varchar ,
+int::varchar = int::varint::varchar ,
+bigint::varchar = bigint::varint::varchar ,
+hugeint::varchar = hugeint::varint::varchar ,
+uhugeint::varchar = uhugeint::varint::varchar ,
+utinyint::varchar = utinyint::varint::varchar ,
+usmallint::varchar = usmallint::varint::varchar ,
+uint::varchar = uint::varint::varchar ,
+ubigint::varchar::varint = ubigint::varint::varchar
+FROM test_all_types()
+where tinyint is not null;
+----
+true	true	true	true	true	true	true	true	true	true
+true	true	true	true	true	true	true	true	true	true
+
+# Floats and doubles have more complicated string coversions, hence the tests are separated
+
+# Boundary tests for double
+query I
+select 1.7976931348623157E+308::double::varint = '179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368'::varint
+----
+true
+
+query I
+select (-1.7976931348623157E+308)::double::varint = '-179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368'::varint
+----
+true
+
+query I
+select '179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368'::varint::double = '1.7976931348623157E+308'::double
+----
+true
+
+query I
+select '-179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368'::varint::double = '-1.7976931348623157E+308'::double
+----
+true
+
+# Boundary tests for float
+query I
+select 3.4028235E+38::float::varint = '340282346638528859811704183484516925440'::varint
+----
+true
+
+query I
+select (-3.4028235E+38)::float::varint = '-340282346638528859811704183484516925440'::varint
+----
+true

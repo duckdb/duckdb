@@ -11,6 +11,7 @@
 #include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 
@@ -25,6 +26,8 @@ public:
 	TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTypeInfo &info);
 
 	LogicalType user_type;
+
+	bind_type_modifiers_function_t bind_modifiers;
 
 public:
 	unique_ptr<CreateInfo> GetInfo() const override;

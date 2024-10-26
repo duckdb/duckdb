@@ -47,7 +47,7 @@ unique_ptr<LogicalOperator> LogicalVacuum::Deserialize(Deserializer &deserialize
 		auto binder = Binder::CreateBinder(context);
 		auto bound_table = binder->Bind(*info.ref);
 		if (bound_table->type != TableReferenceType::BASE_TABLE) {
-			throw InvalidInputException("Can only vacuum/analyze base tables!");
+			throw InvalidInputException("can only vacuum or analyze base tables");
 		}
 		auto ref = unique_ptr_cast<BoundTableRef, BoundBaseTableRef>(std::move(bound_table));
 		auto &table = ref->table;

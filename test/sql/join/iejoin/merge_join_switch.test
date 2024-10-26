@@ -1,0 +1,36 @@
+# name: test/sql/join/iejoin/merge_join_switch.test
+# description: Test switching between merge joins/IE joins/nested loop joins based on settings
+# group: [iejoin]
+
+statement ok
+CREATE TABLE bigtbl AS FROM range(1000) t(i);
+
+statement ok
+CREATE TABLE smalltbl AS SELECT i AS low, i + 1 AS high FROM range(100) t(i);
+
+statement ok
+PRAGMA explain_output = 'PHYSICAL_ONLY';
+
+statement ok
+SET merge_join_threshold=0
+
+query II
+EXPLAIN SELECT COUNT(*) FROM bigtbl JOIN smalltbl ON (bigtbl.i BETWEEN low AND high)
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
+statement ok
+SET merge_join_threshold=1000
+
+query II
+EXPLAIN SELECT COUNT(*) FROM bigtbl JOIN smalltbl ON (bigtbl.i BETWEEN low AND high)
+----
+physical_plan	<REGEX>:.*MERGE_JOIN.*
+
+statement ok
+SET nested_loop_join_threshold=1000
+
+query II
+EXPLAIN SELECT COUNT(*) FROM bigtbl JOIN smalltbl ON (bigtbl.i BETWEEN low AND high)
+----
+physical_plan	<REGEX>:.*NESTED_LOOP_JOIN.*

@@ -91,9 +91,14 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 			if (!stmt.targetList) {
 				throw ParserException("SELECT clause without selection list");
 			}
-			// select list
-			TransformExpressionList(*stmt.targetList, result.select_list);
-			result.from_table = TransformFrom(stmt.fromClause);
+			// transform in the specified order to ensure positional parameters are correctly set
+			if (stmt.from_first) {
+				result.from_table = TransformFrom(stmt.fromClause);
+				TransformExpressionList(*stmt.targetList, result.select_list);
+			} else {
+				TransformExpressionList(*stmt.targetList, result.select_list);
+				result.from_table = TransformFrom(stmt.fromClause);
+			}
 		}
 
 		// where

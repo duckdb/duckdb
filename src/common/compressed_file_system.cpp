@@ -8,7 +8,6 @@ StreamWrapper::~StreamWrapper() {
 
 CompressedFile::CompressedFile(CompressedFileSystem &fs, unique_ptr<FileHandle> child_handle_p, const string &path)
     : FileHandle(fs, path), compressed_fs(fs), child_handle(std::move(child_handle_p)) {
-	D_ASSERT(child_handle->SeekPosition() == 0);
 }
 
 CompressedFile::~CompressedFile() {
@@ -32,6 +31,10 @@ void CompressedFile::Initialize(bool write) {
 	stream_wrapper->Initialize(*this, write);
 }
 
+idx_t CompressedFile::GetProgress() {
+	return current_position;
+}
+
 int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
 	idx_t total_read = 0;
 	while (true) {
@@ -46,7 +49,7 @@ int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
 			// increment the total read variables as required
 			stream_data.out_buff_start += available;
 			total_read += available;
-			remaining -= available;
+			remaining = UnsafeNumericCast<int64_t>(UnsafeNumericCast<idx_t>(remaining) - available);
 			if (remaining == 0) {
 				// done! read enough
 				return UnsafeNumericCast<int64_t>(total_read);
@@ -55,7 +58,7 @@ int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
 		if (!stream_wrapper) {
 			return UnsafeNumericCast<int64_t>(total_read);
 		}
-
+		current_position += static_cast<idx_t>(stream_data.in_buff_end - stream_data.in_buff_start);
 		// ran out of buffer: read more data from the child stream
 		stream_data.out_buff_start = stream_data.out_buff.get();
 		stream_data.out_buff_end = stream_data.out_buff.get();

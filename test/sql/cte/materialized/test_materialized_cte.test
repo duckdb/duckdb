@@ -75,3 +75,12 @@ WITH t(x) AS MATERIALIZED (SELECT 1),
 ----
 2
 1
+
+statement error
+WITH t0(x) AS MATERIALIZED (
+  SELECT x FROM t1
+), t1(x) AS MATERIALIZED (
+  SELECT 1
+)
+SELECT * FROM t0;
+----

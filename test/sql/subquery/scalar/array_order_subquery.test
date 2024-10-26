@@ -19,7 +19,6 @@ select
 ----
 [4, 3, 2, 1]	[4, 3, 2, 1]	[4, 3, 2, 1]
 
-
 # correlated
 query I
 select array(select unnest(l) AS i order by i desc nulls last) as a from (values ([NULL, 1, 2, 3, 4]), ([5, 6, NULL, 7, 8]), ([]), ([10, 11, 12])) t(l);
@@ -46,6 +45,25 @@ SELECT ARRAY
    ORDER by 1) AS new_array;
 ----
 [1, 2, 3]
+
+# qualified names
+query I
+select
+  array(select distinct i from t order by t.i desc) as a
+----
+[4, 3, 2, 1]
+
+query I
+select
+  array(select distinct i from t union all select distinct i from t order by t.i desc) as a
+----
+[4, 4, 3, 3, 2, 2, 1, 1]
+
+statement error
+select
+  array(select distinct i from t order by x.i desc) as a
+----
+Referenced table "x" not found
 
 query I
 SELECT ARRAY
@@ -74,9 +92,11 @@ SELECT ARRAY
 ----
 ORDER term out of range
 
-statement ok
+statement error
 SELECT ARRAY
   (SELECT 1 UNION ALL
    SELECT 2 UNION ALL
    SELECT 3
    ORDER by 'hello world') AS new_array;
+----
+ORDER BY non-integer literal has no effect

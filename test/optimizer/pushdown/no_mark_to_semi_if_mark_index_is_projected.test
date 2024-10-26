@@ -1,0 +1,101 @@
+# name: test/optimizer/pushdown/no_mark_to_semi_if_mark_index_is_projected.test
+# description: No mark to semi conversion if the mark join index is projected
+# group: [pushdown]
+
+statement ok
+CREATE OR REPLACE TABLE BaseData AS (
+    SELECT
+      '10' AS my_key,
+      '20' AS parent_key,
+      '30' AS payload,
+      '40' as foo,
+      '50' as foo2,
+      '60' as foo3
+);
+
+
+# Original query
+query III
+WITH
+Example AS (
+    SELECT
+        c.my_key,
+        (c.parent_key IN (SELECT my_key FROM BaseData)) AS parentExists,
+        p.my_key IS NOT NULL AS parentExists2,
+    FROM BaseData AS c
+    LEFT JOIN BaseData AS p ON c.parent_key = p.my_key
+)
+SELECT *
+FROM Example
+WHERE parentExists
+----
+
+# original query no CTE
+query III
+SELECT
+	 c.my_key,
+	 (c.parent_key IN (SELECT my_key FROM BaseData)) AS parentExists,
+	 p.my_key IS NOT NULL AS parentExists2,
+FROM BaseData AS c
+LEFT JOIN BaseData AS p ON c.parent_key = p.my_key
+WHERE parentExists;
+----
+
+# original query but the CTE is a subquery
+query III
+SELECT *
+FROM (SELECT
+             c.my_key,
+             (c.parent_key IN (SELECT my_key FROM BaseData)) AS parentExists,
+             p.my_key IS NOT NULL AS parentExists2,
+         FROM BaseData AS c
+         LEFT JOIN BaseData AS p ON c.parent_key = p.my_key
+)
+WHERE parentExists;
+----
+
+statement ok
+PRAGMA explain_output='optimized_only'
+
+query II
+EXPLAIN
+WITH Example AS (
+	SELECT
+		c.my_key,
+		(c.parent_key IN (SELECT my_key FROM BaseData)) AS parentExists,
+		p.my_key IS NOT NULL AS parentExists2,
+	FROM BaseData AS c
+	LEFT JOIN BaseData AS p ON c.parent_key = p.my_key
+)
+SELECT *
+FROM Example
+WHERE parentExists
+----
+logical_opt	<REGEX>:.*MARK.*
+
+query II
+EXPLAIN
+WITH Example AS (
+	SELECT
+		c.my_key,
+		(c.parent_key IN (SELECT my_key FROM BaseData)) AS parentExists,
+		p.my_key IS NOT NULL AS parentExists2,
+	FROM BaseData AS c
+	LEFT JOIN BaseData AS p ON c.parent_key = p.my_key
+)
+SELECT *
+FROM Example
+WHERE parentExists
+----
+logical_opt	<!REGEX>:.*SEMI.*
+
+statement ok
+create table t0 as select range a from range(300);
+
+statement ok
+create table t2 as select range b from range(50000);
+
+query I
+select sum(in_alias::INT) FROM (select a in (select b from t2) as in_alias from t0) where in_alias;
+----
+300

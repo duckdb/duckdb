@@ -64,6 +64,6 @@ VALUES (*)
 not supported
 
 statement error
-FROM range(*, *);
+FROM read_csv(*, *);
 ----
 not supported

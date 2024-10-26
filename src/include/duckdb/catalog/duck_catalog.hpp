@@ -59,6 +59,8 @@ public:
 	DUCKDB_API bool InMemory() override;
 	DUCKDB_API string GetDBPath() override;
 
+	DUCKDB_API optional_idx GetCatalogVersion(ClientContext &context) override;
+
 private:
 	DUCKDB_API void DropSchema(CatalogTransaction transaction, DropInfo &info);
 	DUCKDB_API void DropSchema(ClientContext &context, DropInfo &info) override;

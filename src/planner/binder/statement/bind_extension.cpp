@@ -23,9 +23,9 @@ BoundStatement Binder::Bind(ExtensionStatement &stmt) {
 	auto &get = result.plan->Cast<LogicalGet>();
 	result.names = get.names;
 	result.types = get.returned_types;
-	get.column_ids.clear();
+	get.ClearColumnIds();
 	for (idx_t i = 0; i < get.returned_types.size(); i++) {
-		get.column_ids.push_back(i);
+		get.AddColumnId(i);
 	}
 	return result;
 }

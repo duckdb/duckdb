@@ -1,0 +1,153 @@
+# name: test/sql/copy/row_groups_per_file.test
+# description: test ROW_GROUPS_PER_FILE parameter for parquet COPY
+# group: [copy]
+
+require parquet
+
+require vector_size 2048
+
+statement ok
+CREATE TABLE bigdata AS SELECT i AS col_a, i AS col_b FROM range(0,10000) tbl(i);
+
+statement ok
+set threads=1
+
+# creates a new file after every chunk, 5 chunks in total, so 5 parquet files
+statement ok
+COPY bigdata TO '__TEST_DIR__/row_groups_per_file1' (FORMAT PARQUET, ROW_GROUP_SIZE 2000, ROW_GROUPS_PER_FILE 1)
+
+query I
+SELECT count(*) FROM '__TEST_DIR__/row_groups_per_file1/*.parquet'
+----
+10000
+
+query I
+SELECT count(*) FROM glob('__TEST_DIR__/row_groups_per_file1/*.parquet')
+----
+5
+
+# new file after every other chunk, 3 in total
+statement ok
+COPY bigdata TO '__TEST_DIR__/row_groups_per_file2' (FORMAT PARQUET, ROW_GROUP_SIZE 4000, ROW_GROUPS_PER_FILE 1)
+
+query I
+SELECT count(*) FROM '__TEST_DIR__/row_groups_per_file2/*.parquet'
+----
+10000
+
+query I
+SELECT count(*) FROM glob('__TEST_DIR__/row_groups_per_file2/*.parquet')
+----
+3
+
+# new row group after every chunk, new file after every 2 row groups, again 3 in total
+statement ok
+COPY bigdata TO '__TEST_DIR__/row_groups_per_file3' (FORMAT PARQUET, ROW_GROUP_SIZE 2000, ROW_GROUPS_PER_FILE 2)
+
+query I
+SELECT count(*) FROM '__TEST_DIR__/row_groups_per_file3/*.parquet'
+----
+10000
+
+query I
+SELECT count(*) FROM glob('__TEST_DIR__/row_groups_per_file3/*.parquet')
+----
+3
+
+# now we crank up the threads
+statement ok
+PRAGMA verify_parallelism
+
+statement ok
+set threads=4
+
+# with multiple threads writing to the same file this is best-effort
+statement ok
+COPY bigdata TO '__TEST_DIR__/row_groups_per_file4' (FORMAT PARQUET, ROW_GROUP_SIZE 2000, ROW_GROUPS_PER_FILE 1)
+
+query I
+SELECT count(*) FROM '__TEST_DIR__/row_groups_per_file4/*.parquet'
+----
+10000
+
+query I
+SELECT count(*) BETWEEN 1 and 10 FROM glob('__TEST_DIR__/row_groups_per_file4/*.parquet')
+----
+true
+
+statement ok
+COPY bigdata TO '__TEST_DIR__/row_groups_per_file5' (FORMAT PARQUET, ROW_GROUP_SIZE 4000, ROW_GROUPS_PER_FILE 1)
+
+query I
+SELECT count(*) FROM '__TEST_DIR__/row_groups_per_file5/*.parquet'
+----
+10000
+
+query I
+SELECT count(*) BETWEEN 1 and 10 FROM glob('__TEST_DIR__/row_groups_per_file5/*.parquet')
+----
+true
+
+statement ok
+COPY bigdata TO '__TEST_DIR__/row_groups_per_file6' (FORMAT PARQUET, ROW_GROUP_SIZE 2000, ROW_GROUPS_PER_FILE 2)
+
+query I
+SELECT count(*) FROM '__TEST_DIR__/row_groups_per_file6/*.parquet'
+----
+10000
+
+query I
+SELECT count(*) BETWEEN 1 and 10 FROM glob('__TEST_DIR__/row_groups_per_file6/*.parquet')
+----
+true
+
+# should work nicely with PER_THREAD_OUTPUT
+statement ok
+COPY bigdata TO '__TEST_DIR__/row_groups_per_file7' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE, ROW_GROUP_SIZE 2000, ROW_GROUPS_PER_FILE 1)
+
+query I
+SELECT count(*) FROM '__TEST_DIR__/row_groups_per_file7/*.parquet'
+----
+10000
+
+query I
+SELECT count(*) BETWEEN 1 AND 10 FROM glob('__TEST_DIR__/row_groups_per_file7/*.parquet')
+----
+true
+
+statement ok
+COPY bigdata TO '__TEST_DIR__/row_groups_per_file8' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE, ROW_GROUP_SIZE 4000, ROW_GROUPS_PER_FILE 1)
+
+query I
+SELECT count(*) FROM '__TEST_DIR__/row_groups_per_file8/*.parquet'
+----
+10000
+
+query I
+SELECT count(*) BETWEEN 1 AND 10 FROM glob('__TEST_DIR__/row_groups_per_file8/*.parquet')
+----
+true
+
+statement ok
+COPY bigdata TO '__TEST_DIR__/row_groups_per_file9' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE, ROW_GROUP_SIZE 2000, ROW_GROUPS_PER_FILE 2)
+
+query I
+SELECT count(*) FROM '__TEST_DIR__/row_groups_per_file9/*.parquet'
+----
+10000
+
+query I
+SELECT count(*) BETWEEN 1 AND 10 FROM glob('__TEST_DIR__/row_groups_per_file9/*.parquet')
+----
+true
+
+# doesn't work in combination with certain params
+statement error
+COPY bigdata TO '__TEST_DIR__/row_groups_per_file_error' (FORMAT PARQUET, ROW_GROUPS_PER_FILE 1, USE_TMP_FILE TRUE);
+----
+Not implemented Error
+
+statement error
+COPY bigdata TO '__TEST_DIR__/row_groups_per_file_error' (FORMAT PARQUET, ROW_GROUPS_PER_FILE 1, PARTITION_BY col_a);
+----
+Not implemented Error

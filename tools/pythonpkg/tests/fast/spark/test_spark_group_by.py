@@ -15,7 +15,18 @@ from duckdb.experimental.spark.sql.types import (
     MapType,
 )
 from duckdb.experimental.spark.sql.functions import col, struct, when, lit, array_contains
-from duckdb.experimental.spark.sql.functions import sum, avg, max, min, mean, count
+from duckdb.experimental.spark.sql.functions import (
+    sum,
+    avg,
+    max,
+    min,
+    mean,
+    count,
+    any_value,
+    approx_count_distinct,
+    covar_pop,
+    covar_samp,
+)
 
 
 class TestDataFrameGroupBy(object):
@@ -44,7 +55,7 @@ class TestDataFrameGroupBy(object):
         res = df2.collect()
         assert (
             str(res)
-            == "[Row(department='Finance', count_star()=4), Row(department='Marketing', count_star()=2), Row(department='Sales', count_star()=3)]"
+            == "[Row(department='Finance', count=4), Row(department='Marketing', count=2), Row(department='Sales', count=3)]"
         )
 
         df2 = df.groupBy("department").min("salary").sort("department")
@@ -89,13 +100,15 @@ class TestDataFrameGroupBy(object):
                 avg("salary").alias("avg_salary"),
                 sum("bonus").alias("sum_bonus"),
                 max("bonus").alias("max_bonus"),
+                any_value("state").alias("any_state"),
+                approx_count_distinct("state").alias("distinct_state"),
             )
             .sort("department")
         )
         res = df2.collect()
         assert (
             str(res)
-            == "[Row(department='Finance', sum_salary=351000, avg_salary=87750.0, sum_bonus=81000, max_bonus=24000), Row(department='Marketing', sum_salary=171000, avg_salary=85500.0, sum_bonus=39000, max_bonus=21000), Row(department='Sales', sum_salary=257000, avg_salary=85666.66666666667, sum_bonus=53000, max_bonus=23000)]"
+            == "[Row(department='Finance', sum_salary=351000, avg_salary=87750.0, sum_bonus=81000, max_bonus=24000, any_state='CA', distinct_state=2), Row(department='Marketing', sum_salary=171000, avg_salary=85500.0, sum_bonus=39000, max_bonus=21000, any_state='CA', distinct_state=2), Row(department='Sales', sum_salary=257000, avg_salary=85666.66666666667, sum_bonus=53000, max_bonus=23000, any_state='NY', distinct_state=2)]"
         )
 
         df2 = (
@@ -105,6 +118,7 @@ class TestDataFrameGroupBy(object):
                 avg("salary").alias("avg_salary"),
                 sum("bonus").alias("sum_bonus"),
                 max("bonus").alias("max_bonus"),
+                any_value("state").alias("any_state"),
             )
             .where(col("sum_bonus") >= 50000)
             .sort("department")
@@ -113,5 +127,38 @@ class TestDataFrameGroupBy(object):
         print(str(res))
         assert (
             str(res)
-            == "[Row(department='Finance', sum_salary=351000, avg_salary=87750.0, sum_bonus=81000, max_bonus=24000), Row(department='Sales', sum_salary=257000, avg_salary=85666.66666666667, sum_bonus=53000, max_bonus=23000)]"
+            == "[Row(department='Finance', sum_salary=351000, avg_salary=87750.0, sum_bonus=81000, max_bonus=24000, any_state='CA'), Row(department='Sales', sum_salary=257000, avg_salary=85666.66666666667, sum_bonus=53000, max_bonus=23000, any_state='NY')]"
         )
+
+        df = spark.createDataFrame(
+            [
+                (1, 1, "a"),
+                (2, 2, "a"),
+                (2, 3, "a"),
+                (5, 4, "a"),
+            ],
+            schema=["age", "other_variable", "group"],
+        )
+        df2 = df.groupBy("group").agg(
+            covar_pop("age", "other_variable").alias("covar_pop"),
+            covar_samp("age", "other_variable").alias("covar_samp"),
+        )
+        res = df2.collect()
+        assert str(res) == "[Row(group='a', covar_pop=1.5, covar_samp=2.0)]"
+
+    def test_group_by_empty(self, spark):
+        df = spark.createDataFrame(
+            [(2, 1.0, "1"), (2, 2.0, "2"), (2, 3.0, "3"), (5, 4.0, "4")], schema=["age", "extra", "name"]
+        )
+
+        res = df.groupBy().avg().collect()
+        assert str(res) == "[Row(avg(age)=2.75, avg(extra)=2.5)]"
+
+        res = df.groupBy(["name", "age"]).count().sort("name").collect()
+        assert (
+            str(res)
+            == "[Row(name='1', age=2, count=1), Row(name='2', age=2, count=1), Row(name='3', age=2, count=1), Row(name='4', age=5, count=1)]"
+        )
+
+        res = df.groupBy("name").count().columns
+        assert res == ['name', 'count']

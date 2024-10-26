@@ -68,11 +68,14 @@ void Command::RestartDatabase(ExecuteContext &context, Connection *&connection, 
 		query_fail = true;
 	}
 	bool can_restart = true;
-	for (auto &conn : connection->context->db->GetConnectionManager().connections) {
-		if (!conn.first->client_data->prepared_statements.empty()) {
+	auto &connection_manager = connection->context->db->GetConnectionManager();
+	auto &connection_list = connection_manager.GetConnectionListReference();
+	for (auto &conn_ref : connection_list) {
+		auto &conn = conn_ref.first.get();
+		if (!conn.client_data->prepared_statements.empty()) {
 			can_restart = false;
 		}
-		if (conn.first->transaction.HasActiveTransaction()) {
+		if (conn.transaction.HasActiveTransaction()) {
 			can_restart = false;
 		}
 	}
@@ -228,6 +231,10 @@ UnzipCommand::UnzipCommand(SQLLogicTestRunner &runner, string &input, string &ou
     : Command(runner), input_path(input), extraction_path(output) {
 }
 
+LoadCommand::LoadCommand(SQLLogicTestRunner &runner, string dbpath_p, bool readonly)
+    : Command(runner), dbpath(std::move(dbpath_p)), readonly(readonly) {
+}
+
 struct ParallelExecuteContext {
 	ParallelExecuteContext(SQLLogicTestRunner &runner, const vector<duckdb::unique_ptr<Command>> &loop_commands,
 	                       LoopDefinition definition)
@@ -362,6 +369,9 @@ void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 	if (context.is_parallel) {
 		throw std::runtime_error("Cannot restart database in parallel");
 	}
+	if (runner.dbpath.empty()) {
+		throw std::runtime_error("cannot restart an in-memory database, did you forget to call \"load\"?");
+	}
 	// We save the main connection configurations to pass it to the new connection
 	runner.config->options = runner.con->context->db->config.options;
 	auto client_config = runner.con->context->config;
@@ -482,14 +492,6 @@ void UnzipCommand::ExecuteInternal(ExecuteContext &context) const {
 		throw CatalogException("Cannot open the file \"%s\"", input_path);
 	}
 
-	// read the compressed data from the file
-	int64_t file_size = vfs.GetFileSize(*compressed_file_handle);
-	std::unique_ptr<char[]> compressed_buffer(new char[BUFFER_SIZE]);
-	int64_t bytes_read = vfs.Read(*compressed_file_handle, compressed_buffer.get(), BUFFER_SIZE);
-	if (bytes_read < file_size) {
-		throw CatalogException("Cannot read the file \"%s\"", input_path);
-	}
-
 	// output
 	FileOpenFlags out_flags(FileOpenFlags::FILE_FLAGS_FILE_CREATE | FileOpenFlags::FILE_FLAGS_WRITE);
 	auto output_file = vfs.OpenFile(extraction_path, out_flags);
@@ -497,10 +499,36 @@ void UnzipCommand::ExecuteInternal(ExecuteContext &context) const {
 		throw CatalogException("Cannot open the file \"%s\"", extraction_path);
 	}
 
-	int64_t bytes_written = vfs.Write(*output_file, compressed_buffer.get(), BUFFER_SIZE);
-	if (bytes_written < file_size) {
-		throw CatalogException("Cannot write the file \"%s\"", extraction_path);
+	// read the compressed data from the file
+	while (true) {
+		std::unique_ptr<char[]> compressed_buffer(new char[BUFFER_SIZE]);
+		int64_t bytes_read = vfs.Read(*compressed_file_handle, compressed_buffer.get(), BUFFER_SIZE);
+		if (bytes_read == 0) {
+			break;
+		}
+
+		vfs.Write(*output_file, compressed_buffer.get(), bytes_read);
 	}
+}
+
+void LoadCommand::ExecuteInternal(ExecuteContext &context) const {
+	auto resolved_path = SQLLogicTestRunner::LoopReplacement(dbpath, context.running_loops);
+	if (!readonly) {
+		// delete the target database file, if it exists
+		DeleteDatabase(resolved_path);
+	}
+	runner.dbpath = resolved_path;
+
+	// set up the config file
+	if (readonly) {
+		runner.config->options.use_temporary_directory = false;
+		runner.config->options.access_mode = AccessMode::READ_ONLY;
+	} else {
+		runner.config->options.use_temporary_directory = true;
+		runner.config->options.access_mode = AccessMode::AUTOMATIC;
+	}
+	// now create the database file
+	runner.LoadDatabase(resolved_path, true);
 }
 
 } // namespace duckdb

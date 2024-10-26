@@ -23,16 +23,17 @@ public:
 	ValidityColumnData validity;
 
 public:
-	bool HasUpdates() const override;
-
 	void SetStart(idx_t new_start) override;
-	bool CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
 
+	ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) override;
+	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) override;
 	void InitializeScan(ColumnScanState &state) override;
 	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
 
-	idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) override;
-	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) override;
+	idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+	           idx_t target_count) override;
+	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
+	                    idx_t target_count) override;
 	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count) override;
 
 	void InitializeAppend(ColumnAppendState &state) override;
@@ -58,7 +59,9 @@ public:
 	void GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,
 	                          vector<duckdb::ColumnSegmentInfo> &result) override;
 
-	void DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) override;
+	bool IsPersistent() override;
+	PersistentColumnData Serialize() override;
+	void InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) override;
 
 	void Verify(RowGroup &parent) override;
 };

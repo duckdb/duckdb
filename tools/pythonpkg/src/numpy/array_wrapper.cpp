@@ -373,23 +373,7 @@ struct MapConvert {
 	static py::dict ConvertValue(Vector &input, idx_t chunk_offset, NumpyAppendData &append_data) {
 		auto &client_properties = append_data.client_properties;
 		auto val = input.GetValue(chunk_offset);
-		auto &list_children = ListValue::GetChildren(val);
-
-		auto &key_type = MapType::KeyType(input.GetType());
-		auto &val_type = MapType::ValueType(input.GetType());
-
-		py::list keys;
-		py::list values;
-		for (auto &list_elem : list_children) {
-			auto &struct_children = StructValue::GetChildren(list_elem);
-			keys.append(PythonObject::FromValue(struct_children[0], key_type, client_properties));
-			values.append(PythonObject::FromValue(struct_children[1], val_type, client_properties));
-		}
-
-		py::dict py_struct;
-		py_struct["key"] = keys;
-		py_struct["value"] = values;
-		return py_struct;
+		return PythonObject::FromValue(val, input.GetType(), client_properties);
 	}
 };
 
@@ -681,7 +665,8 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t source_size
 		} else {
 			throw InternalException("Size not supported on ENUM types");
 		}
-	} break;
+		break;
+	}
 	case LogicalTypeId::BOOLEAN:
 		may_have_null = ConvertColumnRegular<bool>(append_data);
 		break;

@@ -3,7 +3,9 @@
 #endif
 #define JEMALLOC_INTERNAL_TSD_WIN_H
 
-namespace duckdb_jemalloc {
+#include "jemalloc/internal/jemalloc_preamble.h"
+#include "jemalloc/internal/tsd_internals.h"
+#include "jemalloc/internal/tsd_types.h"
 
 typedef struct {
 	bool initialized;
@@ -41,7 +43,7 @@ JEMALLOC_ALWAYS_INLINE void
 tsd_wrapper_set(tsd_wrapper_t *wrapper) {
 	if (!TlsSetValue(tsd_tsd, (void *)wrapper)) {
 		malloc_write("<jemalloc>: Error setting TSD\n");
-		jemalloc_abort();
+		abort();
 	}
 }
 
@@ -56,7 +58,7 @@ tsd_wrapper_get(bool init) {
 		    malloc_tsd_malloc(sizeof(tsd_wrapper_t));
 		if (wrapper == NULL) {
 			malloc_write("<jemalloc>: Error allocating TSD\n");
-			jemalloc_abort();
+			abort();
 		} else {
 			wrapper->initialized = false;
 			/* MSVC is finicky about aggregate initialization. */
@@ -87,7 +89,7 @@ tsd_boot1(void) {
 	    malloc_tsd_malloc(sizeof(tsd_wrapper_t));
 	if (wrapper == NULL) {
 		malloc_write("<jemalloc>: Error allocating TSD\n");
-		jemalloc_abort();
+		abort();
 	}
 	tsd_boot_wrapper.initialized = false;
 	tsd_cleanup(&tsd_boot_wrapper.val);
@@ -139,5 +141,3 @@ tsd_set(tsd_t *val) {
 	}
 	wrapper->initialized = true;
 }
-
-} // namespace duckdb_jemalloc

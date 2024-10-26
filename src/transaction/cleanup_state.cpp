@@ -1,6 +1,7 @@
 #include "duckdb/transaction/cleanup_state.hpp"
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/update_info.hpp"
+#include "duckdb/transaction/append_info.hpp"
 
 #include "duckdb/storage/data_table.hpp"
 
@@ -12,7 +13,8 @@
 
 namespace duckdb {
 
-CleanupState::CleanupState() : current_table(nullptr), count(0) {
+CleanupState::CleanupState(transaction_t lowest_active_transaction)
+    : lowest_active_transaction(lowest_active_transaction), current_table(nullptr), count(0) {
 }
 
 CleanupState::~CleanupState() {
@@ -27,6 +29,12 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 		auto &entry = *catalog_entry;
 		D_ASSERT(entry.set);
 		entry.set->CleanupEntry(entry);
+		break;
+	}
+	case UndoFlags::INSERT_TUPLE: {
+		auto info = reinterpret_cast<AppendInfo *>(data);
+		// mark the tuples as committed
+		info->table->CleanupAppend(lowest_active_transaction, info->start_row, info->count);
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {

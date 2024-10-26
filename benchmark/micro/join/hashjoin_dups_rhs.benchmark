@@ -1,0 +1,16 @@
+# name: benchmark/micro/join/hashjoin_dups_rhs.benchmark
+# description: Inner hash join using string comparisons with 4x duplicates on the rhs and 4096x duplicates on the lhs
+# group: [join]
+
+name Inner Join (dups on rhs)
+group join
+
+load
+create table t1 as select 'verylargestring' || range % 32768 i from range(131072);
+create table t2 as select 'verylargestring' || range % 32768 i from range(134217728);
+
+run
+select count(*) from t1 join t2 using (i)
+
+result I
+536870912

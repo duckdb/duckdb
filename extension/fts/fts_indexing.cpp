@@ -73,7 +73,7 @@ static string IndexingScript(ClientContext &context, QualifiedName &qname, const
 	if (lower) {
 		tokenize = "lower(" + tokenize + ")";
 	}
-	tokenize = "regexp_replace(" + tokenize + ", '" + ignore + "', " + "' ', 'g')";
+	tokenize = "regexp_replace(" + tokenize + ", $$" + ignore + "$$, " + "' ', 'g')";
 	tokenize = "string_split_regex(" + tokenize + ", '\\s+')";
 	result += "CREATE MACRO %fts_schema%.tokenize(s) AS " + tokenize + ";";
 
@@ -149,7 +149,7 @@ static string IndexingScript(ClientContext &context, QualifiedName &qname, const
             FROM %fts_schema%.docs AS docs
         );
 
-        CREATE MACRO %fts_schema%.match_bm25(docname, query_string, fields := NULL, k := 1.2, b := 0.75, conjunctive := 0) AS (
+        CREATE MACRO %fts_schema%.match_bm25(docname, query_string, fields := NULL, k := 1.2, b := 0.75, conjunctive := false) AS (
             WITH tokens AS (
                 SELECT DISTINCT stem(unnest(%fts_schema%.tokenize(query_string)), '%stemmer%') AS t
             ),
@@ -191,7 +191,7 @@ static string IndexingScript(ClientContext &context, QualifiedName &qname, const
                        term_tf.termid,
                        tf,
                        df,
-                       (log(((SELECT num_docs FROM %fts_schema%.stats) - df + 0.5) / (df + 0.5))* ((tf * (k + 1)/(tf + k * (1 - b + b * (len / (SELECT avgdl FROM %fts_schema%.stats))))))) AS subscore
+                       (log(((SELECT num_docs FROM %fts_schema%.stats) - df + 0.5) / (df + 0.5) + 1) * ((tf * (k + 1)/(tf + k * (1 - b + b * (len / (SELECT avgdl FROM %fts_schema%.stats))))))) AS subscore
                 FROM term_tf,
 					 cdocs,
 					 %fts_schema%.docs AS docs,

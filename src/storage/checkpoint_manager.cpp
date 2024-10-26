@@ -28,8 +28,9 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 
 namespace duckdb {
 
@@ -149,6 +150,15 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// we scan the set of committed schemas
 	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
 	catalog.ScanSchemas([&](SchemaCatalogEntry &entry) { schemas.push_back(entry); });
+
+	catalog_entry_vector_t catalog_entries;
+	D_ASSERT(catalog.IsDuckCatalog());
+
+	auto &duck_catalog = catalog.Cast<DuckCatalog>();
+	auto &dependency_manager = duck_catalog.GetDependencyManager();
+	catalog_entries = GetCatalogEntries(schemas);
+	dependency_manager.ReorderEntries(catalog_entries);
+
 	// write the actual data into the database
 
 	// Create a serializer to write the checkpoint data
@@ -169,8 +179,11 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	        ]
 	    }
 	 */
-	auto catalog_entries = GetCatalogEntries(schemas);
-	BinarySerializer serializer(*metadata_writer);
+	SerializationOptions serialization_options;
+
+	serialization_options.serialization_compatibility = config.options.serialization_compatibility;
+
+	BinarySerializer serializer(*metadata_writer, serialization_options);
 	serializer.Begin();
 	serializer.WriteList(100, "catalog_entries", catalog_entries.size(), [&](Serializer::List &list, idx_t i) {
 		auto &entry = catalog_entries[i];
@@ -186,9 +199,9 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// WAL we write an entry CHECKPOINT "meta_block_id" into the WAL upon loading, if we see there is an entry
 	// CHECKPOINT "meta_block_id", and the id MATCHES the head idin the file we know that the database was successfully
 	// checkpointed, so we know that we should avoid replaying the WAL to avoid duplicating data
-	auto wal = storage_manager.GetWriteAheadLog();
-	bool wal_is_empty = wal->GetWALSize() == 0;
+	bool wal_is_empty = storage_manager.GetWALSize() == 0;
 	if (!wal_is_empty) {
+		auto wal = storage_manager.GetWAL();
 		wal->WriteCheckpoint(meta_block);
 		wal->Flush();
 	}
@@ -200,9 +213,37 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// finally write the updated header
 	DatabaseHeader header;
 	header.meta_block = meta_block.block_pointer;
-	header.block_size = Storage::BLOCK_ALLOC_SIZE;
+	header.block_alloc_size = block_manager.GetBlockAllocSize();
 	header.vector_size = STANDARD_VECTOR_SIZE;
 	block_manager.WriteHeader(header);
+
+#ifdef DUCKDB_BLOCK_VERIFICATION
+	// extend verify_block_usage_count
+	auto metadata_info = storage_manager.GetMetadataInfo();
+	for (auto &info : metadata_info) {
+		verify_block_usage_count[info.block_id]++;
+	}
+	for (auto &entry_ref : catalog_entries) {
+		auto &entry = entry_ref.get();
+		if (entry.type == CatalogType::TABLE_ENTRY) {
+			auto &table = entry.Cast<DuckTableEntry>();
+			auto &storage = table.GetStorage();
+			auto segment_info = storage.GetColumnSegmentInfo();
+			for (auto &segment : segment_info) {
+				verify_block_usage_count[segment.block_id]++;
+				if (StringUtil::Contains(segment.segment_info, "Overflow String Block Ids: ")) {
+					auto overflow_blocks = StringUtil::Replace(segment.segment_info, "Overflow String Block Ids: ", "");
+					auto splits = StringUtil::Split(overflow_blocks, ", ");
+					for (auto &split : splits) {
+						auto overflow_block_id = std::stoll(split);
+						verify_block_usage_count[overflow_block_id]++;
+					}
+				}
+			}
+		}
+	}
+	block_manager.VerifyBlocks(verify_block_usage_count);
+#endif
 
 	if (config.options.checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE) {
 		throw FatalException("Checkpoint aborted before truncate because of PRAGMA checkpoint_abort flag");
@@ -213,15 +254,15 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 
 	// truncate the WAL
 	if (!wal_is_empty) {
-		wal->Truncate(0);
+		storage_manager.ResetWAL();
 	}
 }
 
-void CheckpointReader::LoadCheckpoint(ClientContext &context, MetadataReader &reader) {
+void CheckpointReader::LoadCheckpoint(CatalogTransaction transaction, MetadataReader &reader) {
 	BinaryDeserializer deserializer(reader);
 	deserializer.Begin();
 	deserializer.ReadList(100, "catalog_entries", [&](Deserializer::List &list, idx_t i) {
-		return list.ReadObject([&](Deserializer &obj) { ReadEntry(context, obj); });
+		return list.ReadObject([&](Deserializer &obj) { ReadEntry(transaction, obj); });
 	});
 	deserializer.End();
 }
@@ -230,7 +271,7 @@ MetadataManager &SingleFileCheckpointReader::GetMetadataManager() {
 	return storage.block_manager->GetMetadataManager();
 }
 
-void SingleFileCheckpointReader::LoadFromStorage(optional_ptr<ClientContext> context) {
+void SingleFileCheckpointReader::LoadFromStorage() {
 	auto &block_manager = *storage.block_manager;
 	auto &metadata_manager = GetMetadataManager();
 	MetaBlockPointer meta_block(block_manager.GetMetaBlock(), 0);
@@ -239,24 +280,16 @@ void SingleFileCheckpointReader::LoadFromStorage(optional_ptr<ClientContext> con
 		return;
 	}
 
-	if (context) {
-		auto &meta_transaction = MetaTransaction::Get(*context);
-		meta_transaction.ModifyDatabase(catalog.GetAttached());
-		// create the MetadataReader to read from the storage
-		MetadataReader reader(metadata_manager, meta_block);
-		//	reader.SetContext(*con.context);
-		LoadCheckpoint(*context, reader);
-	} else {
-		Connection con(storage.GetDatabase());
-		con.BeginTransaction();
-		auto &meta_transaction = MetaTransaction::Get(*con.context);
-		meta_transaction.ModifyDatabase(catalog.GetAttached());
-		// create the MetadataReader to read from the storage
-		MetadataReader reader(metadata_manager, meta_block);
-		//	reader.SetContext(*con.context);
-		LoadCheckpoint(*con.context, reader);
-		con.Commit();
+	if (block_manager.IsRemote()) {
+		auto metadata_blocks = metadata_manager.GetBlocks();
+		auto &buffer_manager = BufferManager::GetBufferManager(storage.GetDatabase());
+		buffer_manager.Prefetch(metadata_blocks);
 	}
+
+	// create the MetadataReader to read from the storage
+	MetadataReader reader(metadata_manager, meta_block);
+	auto transaction = CatalogTransaction::GetSystemTransaction(catalog.GetDatabase());
+	LoadCheckpoint(transaction, reader);
 }
 
 void CheckpointWriter::WriteEntry(CatalogEntry &entry, Serializer &serializer) {
@@ -316,40 +349,40 @@ void CheckpointWriter::WriteSchema(SchemaCatalogEntry &schema, Serializer &seria
 	serializer.WriteProperty(100, "schema", &schema);
 }
 
-void CheckpointReader::ReadEntry(ClientContext &context, Deserializer &deserializer) {
+void CheckpointReader::ReadEntry(CatalogTransaction transaction, Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<CatalogType>(99, "type");
 
 	switch (type) {
 	case CatalogType::SCHEMA_ENTRY: {
-		ReadSchema(context, deserializer);
+		ReadSchema(transaction, deserializer);
 		break;
 	}
 	case CatalogType::TYPE_ENTRY: {
-		ReadType(context, deserializer);
+		ReadType(transaction, deserializer);
 		break;
 	}
 	case CatalogType::SEQUENCE_ENTRY: {
-		ReadSequence(context, deserializer);
+		ReadSequence(transaction, deserializer);
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {
-		ReadTable(context, deserializer);
+		ReadTable(transaction, deserializer);
 		break;
 	}
 	case CatalogType::VIEW_ENTRY: {
-		ReadView(context, deserializer);
+		ReadView(transaction, deserializer);
 		break;
 	}
 	case CatalogType::MACRO_ENTRY: {
-		ReadMacro(context, deserializer);
+		ReadMacro(transaction, deserializer);
 		break;
 	}
 	case CatalogType::TABLE_MACRO_ENTRY: {
-		ReadTableMacro(context, deserializer);
+		ReadTableMacro(transaction, deserializer);
 		break;
 	}
 	case CatalogType::INDEX_ENTRY: {
-		ReadIndex(context, deserializer);
+		ReadIndex(transaction, deserializer);
 		break;
 	}
 	default:
@@ -357,14 +390,14 @@ void CheckpointReader::ReadEntry(ClientContext &context, Deserializer &deseriali
 	}
 }
 
-void CheckpointReader::ReadSchema(ClientContext &context, Deserializer &deserializer) {
+void CheckpointReader::ReadSchema(CatalogTransaction transaction, Deserializer &deserializer) {
 	// Read the schema and create it in the catalog
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "schema");
 	auto &schema_info = info->Cast<CreateSchemaInfo>();
 
 	// we set create conflict to IGNORE_ON_CONFLICT, so that we can ignore a failure when recreating the main schema
 	schema_info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
-	catalog.CreateSchema(context, schema_info);
+	catalog.CreateSchema(transaction, schema_info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -374,10 +407,10 @@ void CheckpointWriter::WriteView(ViewCatalogEntry &view, Serializer &serializer)
 	serializer.WriteProperty(100, "view", &view);
 }
 
-void CheckpointReader::ReadView(ClientContext &context, Deserializer &deserializer) {
+void CheckpointReader::ReadView(CatalogTransaction transaction, Deserializer &deserializer) {
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "view");
 	auto &view_info = info->Cast<CreateViewInfo>();
-	catalog.CreateView(context, view_info);
+	catalog.CreateView(transaction, view_info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -387,10 +420,10 @@ void CheckpointWriter::WriteSequence(SequenceCatalogEntry &seq, Serializer &seri
 	serializer.WriteProperty(100, "sequence", &seq);
 }
 
-void CheckpointReader::ReadSequence(ClientContext &context, Deserializer &deserializer) {
+void CheckpointReader::ReadSequence(CatalogTransaction transaction, Deserializer &deserializer) {
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "sequence");
 	auto &sequence_info = info->Cast<CreateSequenceInfo>();
-	catalog.CreateSequence(context, sequence_info);
+	catalog.CreateSequence(transaction, sequence_info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -404,8 +437,7 @@ void CheckpointWriter::WriteIndex(IndexCatalogEntry &index_catalog_entry, Serial
 	serializer.WriteProperty(100, "index", &index_catalog_entry);
 }
 
-void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deserializer) {
-
+void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &deserializer) {
 	// we need to keep the tag "index", even though it is slightly misleading.
 	auto create_info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "index");
 	auto &info = create_info->Cast<CreateIndexInfo>();
@@ -413,13 +445,13 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	// also, we have to read the root_block_pointer, which will not be valid for newer storage versions.
 	// This leads to different code paths in this function.
 	auto root_block_pointer =
-	    deserializer.ReadPropertyWithDefault<BlockPointer>(101, "root_block_pointer", BlockPointer());
+	    deserializer.ReadPropertyWithExplicitDefault<BlockPointer>(101, "root_block_pointer", BlockPointer());
 
 	// create the index in the catalog
 
 	// look for the table in the catalog
-	auto &table =
-	    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, create_info->schema, info.table).Cast<DuckTableEntry>();
+	auto &schema = catalog.GetSchema(transaction, create_info->schema);
+	auto &table = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, info.table)->Cast<DuckTableEntry>();
 
 	// we also need to make sure the index type is loaded
 	// backwards compatability:
@@ -429,27 +461,19 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	}
 
 	// now we can look for the index in the catalog and assign the table info
-	auto &index = catalog.CreateIndex(context, info)->Cast<DuckIndexEntry>();
-	auto data_table_info = table.GetStorage().GetDataTableInfo();
-	index.info = make_shared_ptr<IndexDataTableInfo>(data_table_info, info.index_name);
-
-	// insert the parsed expressions into the index so that we can (de)serialize them during consecutive checkpoints
-	for (auto &parsed_expr : info.parsed_expressions) {
-		index.parsed_expressions.push_back(parsed_expr->Copy());
-	}
-	D_ASSERT(!info.parsed_expressions.empty());
+	auto &index = schema.CreateIndex(transaction, info, table)->Cast<DuckIndexEntry>();
 	auto &data_table = table.GetStorage();
 
 	IndexStorageInfo index_storage_info;
 	if (root_block_pointer.IsValid()) {
-		// this code path is necessary to read older duckdb files
-		index_storage_info.name = info.index_name;
+		// Read older duckdb files.
+		index_storage_info.name = index.name;
 		index_storage_info.root_block_ptr = root_block_pointer;
 
 	} else {
-		// get the matching index storage info
+		// Read the matching index storage info.
 		for (auto const &elem : data_table.GetDataTableInfo()->GetIndexStorageInfo()) {
-			if (elem.name == info.index_name) {
+			if (elem.name == index.name) {
 				index_storage_info = elem;
 				break;
 			}
@@ -458,10 +482,9 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 
 	D_ASSERT(index_storage_info.IsValid() && !index_storage_info.name.empty());
 
-	// Create an unbound index and add it to the table
+	// Create an unbound index and add it to the table.
 	auto unbound_index = make_uniq<UnboundIndex>(std::move(create_info), index_storage_info,
 	                                             TableIOManager::Get(data_table), data_table.db);
-
 	data_table.GetDataTableInfo()->GetIndexes().AddIndex(std::move(unbound_index));
 }
 
@@ -472,10 +495,10 @@ void CheckpointWriter::WriteType(TypeCatalogEntry &type, Serializer &serializer)
 	serializer.WriteProperty(100, "type", &type);
 }
 
-void CheckpointReader::ReadType(ClientContext &context, Deserializer &deserializer) {
+void CheckpointReader::ReadType(CatalogTransaction transaction, Deserializer &deserializer) {
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "type");
 	auto &type_info = info->Cast<CreateTypeInfo>();
-	catalog.CreateType(context, type_info);
+	catalog.CreateType(transaction, type_info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -485,20 +508,20 @@ void CheckpointWriter::WriteMacro(ScalarMacroCatalogEntry &macro, Serializer &se
 	serializer.WriteProperty(100, "macro", &macro);
 }
 
-void CheckpointReader::ReadMacro(ClientContext &context, Deserializer &deserializer) {
+void CheckpointReader::ReadMacro(CatalogTransaction transaction, Deserializer &deserializer) {
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "macro");
 	auto &macro_info = info->Cast<CreateMacroInfo>();
-	catalog.CreateFunction(context, macro_info);
+	catalog.CreateFunction(transaction, macro_info);
 }
 
 void CheckpointWriter::WriteTableMacro(TableMacroCatalogEntry &macro, Serializer &serializer) {
 	serializer.WriteProperty(100, "table_macro", &macro);
 }
 
-void CheckpointReader::ReadTableMacro(ClientContext &context, Deserializer &deserializer) {
+void CheckpointReader::ReadTableMacro(CatalogTransaction transaction, Deserializer &deserializer) {
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "table_macro");
 	auto &macro_info = info->Cast<CreateMacroInfo>();
-	catalog.CreateFunction(context, macro_info);
+	catalog.CreateFunction(transaction, macro_info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -518,39 +541,43 @@ void SingleFileCheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer
 	partial_block_manager.FlushPartialBlocks();
 }
 
-void CheckpointReader::ReadTable(ClientContext &context, Deserializer &deserializer) {
+void CheckpointReader::ReadTable(CatalogTransaction transaction, Deserializer &deserializer) {
 	// deserialize the table meta data
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "table");
-	auto binder = Binder::CreateBinder(context);
-	auto &schema = catalog.GetSchema(context, info->schema);
-	auto bound_info = binder->BindCreateTableInfo(std::move(info), schema);
+	auto &schema = catalog.GetSchema(transaction, info->schema);
+	auto bound_info = Binder::BindCreateTableCheckpoint(std::move(info), schema);
+
+	for (auto &dep : bound_info->Base().dependencies.Set()) {
+		bound_info->dependencies.AddDependency(dep);
+	}
 
 	// now read the actual table data and place it into the CreateTableInfo
-	ReadTableData(context, deserializer, *bound_info);
+	ReadTableData(transaction, deserializer, *bound_info);
 
 	// finally create the table in the catalog
-	catalog.CreateTable(context, *bound_info);
+	catalog.CreateTable(transaction, *bound_info);
 }
 
-void CheckpointReader::ReadTableData(ClientContext &context, Deserializer &deserializer,
+void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserializer &deserializer,
                                      BoundCreateTableInfo &bound_info) {
 
 	// written in "SingleFileTableDataWriter::FinalizeTable"
 	auto table_pointer = deserializer.ReadProperty<MetaBlockPointer>(101, "table_pointer");
 	auto total_rows = deserializer.ReadProperty<idx_t>(102, "total_rows");
 
-	// old file read
-	auto index_pointers = deserializer.ReadPropertyWithDefault<vector<BlockPointer>>(103, "index_pointers", {});
-	// new file read
+	// Cover reading old storage files.
+	auto index_pointers = deserializer.ReadPropertyWithExplicitDefault<vector<BlockPointer>>(103, "index_pointers", {});
+	// Cover reading new storage files.
 	auto index_storage_infos =
-	    deserializer.ReadPropertyWithDefault<vector<IndexStorageInfo>>(104, "index_storage_infos", {});
+	    deserializer.ReadPropertyWithExplicitDefault<vector<IndexStorageInfo>>(104, "index_storage_infos", {});
 
 	if (!index_storage_infos.empty()) {
 		bound_info.indexes = index_storage_infos;
 
 	} else {
-		// old duckdb file containing index pointers
+		// This is an old duckdb file containing index pointers and deprecated storage.
 		for (idx_t i = 0; i < index_pointers.size(); i++) {
+			// Deprecated storage is always true for old duckdb files.
 			IndexStorageInfo index_storage_info;
 			index_storage_info.root_block_ptr = index_pointers[i];
 			bound_info.indexes.push_back(index_storage_info);

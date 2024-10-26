@@ -52,6 +52,9 @@ static unique_ptr<FunctionData> DuckDBTypesBind(ClientContext &context, TableFun
 	names.emplace_back("comment");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("tags");
+	return_types.emplace_back(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
+
 	names.emplace_back("internal");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
@@ -167,6 +170,8 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		output.SetValue(col++, count, category.empty() ? Value() : Value(category));
 		// comment, VARCHAR
 		output.SetValue(col++, count, Value(type_entry.comment));
+		// tags, MAP
+		output.SetValue(col++, count, Value::MAP(type_entry.tags));
 		// internal, BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(type_entry.internal));
 		// labels, VARCHAR[]

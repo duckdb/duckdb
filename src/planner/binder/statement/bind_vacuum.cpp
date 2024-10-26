@@ -17,7 +17,7 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 	D_ASSERT(vacuum.column_id_map.empty());
 	auto bound_table = Bind(*info.ref);
 	if (bound_table->type != TableReferenceType::BASE_TABLE) {
-		throw InvalidInputException("Can only vacuum/analyze base tables!");
+		throw InvalidInputException("can only vacuum or analyze base tables");
 	}
 	auto ref = unique_ptr_cast<BoundTableRef, BoundBaseTableRef>(std::move(bound_table));
 	auto &table = ref->table;
@@ -35,7 +35,8 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 	vector<string> non_generated_column_names;
 	for (auto &col_name : columns) {
 		if (column_name_set.count(col_name) > 0) {
-			throw BinderException("Vacuum the same column twice(same name in column name list)");
+			throw BinderException("cannot vacuum or analyze the same column twice, i.e., there is a duplicate entry in "
+			                      "the list of column names");
 		}
 		column_name_set.insert(col_name);
 		if (!table.ColumnExists(col_name)) {
@@ -63,10 +64,11 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 
 	auto &get = table_scan->Cast<LogicalGet>();
 
-	D_ASSERT(select_list.size() == get.column_ids.size());
-	D_ASSERT(info.columns.size() == get.column_ids.size());
-	for (idx_t i = 0; i < get.column_ids.size(); i++) {
-		vacuum.column_id_map[i] = table.GetColumns().LogicalToPhysical(LogicalIndex(get.column_ids[i])).index;
+	auto &column_ids = get.GetColumnIds();
+	D_ASSERT(select_list.size() == column_ids.size());
+	D_ASSERT(info.columns.size() == column_ids.size());
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		vacuum.column_id_map[i] = table.GetColumns().LogicalToPhysical(LogicalIndex(column_ids[i])).index;
 	}
 
 	auto projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(select_list));

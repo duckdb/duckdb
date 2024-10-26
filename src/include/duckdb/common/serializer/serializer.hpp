@@ -10,6 +10,7 @@
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
+#include "duckdb/common/serializer/serialization_data.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
@@ -19,17 +20,29 @@
 #include "duckdb/common/optionally_owned_ptr.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/common/insertion_order_preserving_map.hpp"
 
 namespace duckdb {
 
-class Serializer {
-protected:
+class SerializationOptions {
+public:
 	bool serialize_enum_as_string = false;
 	bool serialize_default_values = false;
+	SerializationCompatibility serialization_compatibility = SerializationCompatibility::Default();
+};
+
+class Serializer {
+protected:
+	SerializationOptions options;
+	SerializationData data;
 
 public:
 	virtual ~Serializer() {
+	}
+
+	bool ShouldSerialize(idx_t version_added) {
+		return options.serialization_compatibility.Compare(version_added);
 	}
 
 	class List {
@@ -54,6 +67,14 @@ public:
 	};
 
 public:
+	SerializationData &GetSerializationData() {
+		return data;
+	}
+
+	void SetSerializationData(const SerializationData &other) {
+		data = other;
+	}
+
 	// Serialize a value
 	template <class T>
 	void WriteProperty(const field_id_t field_id, const char *tag, const T &value) {
@@ -66,7 +87,7 @@ public:
 	template <class T>
 	void WritePropertyWithDefault(const field_id_t field_id, const char *tag, const T &value) {
 		// If current value is default, don't write it
-		if (!serialize_default_values && SerializationDefaultValue::IsDefault<T>(value)) {
+		if (!options.serialize_default_values && SerializationDefaultValue::IsDefault<T>(value)) {
 			OnOptionalPropertyBegin(field_id, tag, false);
 			OnOptionalPropertyEnd(false);
 			return;
@@ -79,7 +100,7 @@ public:
 	template <class T>
 	void WritePropertyWithDefault(const field_id_t field_id, const char *tag, const T &value, const T &&default_value) {
 		// If current value is default, don't write it
-		if (!serialize_default_values && (value == default_value)) {
+		if (!options.serialize_default_values && (value == default_value)) {
 			OnOptionalPropertyBegin(field_id, tag, false);
 			OnOptionalPropertyEnd(false);
 			return;
@@ -94,7 +115,7 @@ public:
 	void WritePropertyWithDefault(const field_id_t field_id, const char *tag, const CSVOption<T> &value,
 	                              const T &&default_value) {
 		// If current value is default, don't write it
-		if (!serialize_default_values && (value == default_value)) {
+		if (!options.serialize_default_values && (value == default_value)) {
 			OnOptionalPropertyBegin(field_id, tag, false);
 			OnOptionalPropertyEnd(false);
 			return;
@@ -136,7 +157,7 @@ public:
 protected:
 	template <typename T>
 	typename std::enable_if<std::is_enum<T>::value, void>::type WriteValue(const T value) {
-		if (serialize_enum_as_string) {
+		if (options.serialize_enum_as_string) {
 			// Use the enum serializer to lookup tostring function
 			auto str = EnumUtil::ToChars(value);
 			WriteValue(str);

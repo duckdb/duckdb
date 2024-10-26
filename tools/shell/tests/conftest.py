@@ -36,16 +36,22 @@ class TestResult:
         assert self.status_code == 0
         assert expected in self.stdout
 
+    def check_not_exist(self, not_exist: Union[str, List[str], bytes]):
+        if isinstance(not_exist, list):
+            not_exist = '\n'.join(not_exist)
+        assert self.status_code == 0
+        assert not_exist not in self.stdout
+
     def check_stderr(self, expected: str):
         assert expected in self.stderr
 
 
 class ShellTest:
-    def __init__(self, shell):
+    def __init__(self, shell, arguments=[]):
         if not shell:
             raise ValueError("Please provide a shell binary")
         self.shell = shell
-        self.arguments = [shell, '--batch', '--init', '/dev/null']
+        self.arguments = [shell, '--batch', '--init', '/dev/null'] + arguments
         self.statements: List[str] = []
         self.input = None
         self.output = None

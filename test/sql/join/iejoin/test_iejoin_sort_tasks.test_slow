@@ -10,6 +10,9 @@ require 64bit
 statement ok
 PRAGMA verify_parallelism
 
+statement ok
+SET merge_join_threshold=0
+
 # Stream tables with minimal overlap that require merge tasks on both sides.
 query II
 SELECT lhs.begin, rhs.begin

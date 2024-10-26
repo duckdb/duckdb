@@ -16,15 +16,18 @@
 #include <queue>
 #endif
 
+#if defined(_WIN32)
+#include <windows.h>
+#elif defined(__GNUC__)
+#include <sched.h>
+#include <unistd.h>
+#endif
+
 namespace duckdb {
 
 struct SchedulerThread {
 #ifndef DUCKDB_NO_THREADS
 	explicit SchedulerThread(unique_ptr<thread> thread_p) : internal_thread(std::move(thread_p)) {
-	}
-
-	~SchedulerThread() {
-		Allocator::ThreadFlush(0);
 	}
 
 	unique_ptr<thread> internal_thread;
@@ -66,7 +69,7 @@ bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task>
 
 #else
 struct ConcurrentQueue {
-	std::queue<shared_ptr<Task>> q;
+	reference_map_t<QueueProducerToken, std::queue<shared_ptr<Task>>> q;
 	mutex qlock;
 
 	void Enqueue(ProducerToken &token, shared_ptr<Task> task);
@@ -75,22 +78,35 @@ struct ConcurrentQueue {
 
 void ConcurrentQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
 	lock_guard<mutex> lock(qlock);
-	q.push(std::move(task));
+	q[std::ref(*token.token)].push(std::move(task));
 }
 
 bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
 	lock_guard<mutex> lock(qlock);
-	if (q.empty()) {
+	D_ASSERT(!q.empty());
+
+	const auto it = q.find(std::ref(*token.token));
+	if (it == q.end() || it->second.empty()) {
 		return false;
 	}
-	task = std::move(q.front());
-	q.pop();
+
+	task = std::move(it->second.front());
+	it->second.pop();
+
 	return true;
 }
 
 struct QueueProducerToken {
-	QueueProducerToken(ConcurrentQueue &queue) {
+	explicit QueueProducerToken(ConcurrentQueue &queue) : queue(&queue) {
 	}
+
+	~QueueProducerToken() {
+		lock_guard<mutex> lock(queue->qlock);
+		queue->q.erase(*this);
+	}
+
+private:
+	ConcurrentQueue *queue;
 };
 #endif
 
@@ -103,8 +119,10 @@ ProducerToken::~ProducerToken() {
 
 TaskScheduler::TaskScheduler(DatabaseInstance &db)
     : db(db), queue(make_uniq<ConcurrentQueue>()),
-      allocator_flush_threshold(db.config.options.allocator_flush_threshold), requested_thread_count(0),
+      allocator_flush_threshold(db.config.options.allocator_flush_threshold),
+      allocator_background_threads(db.config.options.allocator_background_threads), requested_thread_count(0),
       current_thread_count(1) {
+	SetAllocatorBackgroundThreads(db.config.options.allocator_background_threads);
 }
 
 TaskScheduler::~TaskScheduler() {
@@ -141,11 +159,32 @@ bool TaskScheduler::GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &
 
 void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 #ifndef DUCKDB_NO_THREADS
+	static constexpr const int64_t INITIAL_FLUSH_WAIT = 500000; // initial wait time of 0.5s (in mus) before flushing
+
 	shared_ptr<Task> task;
 	// loop until the marker is set to false
 	while (*marker) {
-		// wait for a signal with a timeout
-		queue->semaphore.wait();
+		if (!Allocator::SupportsFlush()) {
+			// allocator can't flush, just start an untimed wait
+			queue->semaphore.wait();
+		} else if (!queue->semaphore.wait(INITIAL_FLUSH_WAIT)) {
+			// allocator can flush, we flush this threads outstanding allocations after it was idle for 0.5s
+			Allocator::ThreadFlush(allocator_background_threads, allocator_flush_threshold,
+			                       NumericCast<idx_t>(requested_thread_count.load()));
+			auto decay_delay = Allocator::DecayDelay();
+			if (!decay_delay.IsValid()) {
+				// no decay delay specified - just wait
+				queue->semaphore.wait();
+			} else {
+				if (!queue->semaphore.wait(UnsafeNumericCast<int64_t>(decay_delay.GetIndex()) * 1000000 -
+				                           INITIAL_FLUSH_WAIT)) {
+					// in total, the thread was idle for the entire decay delay (note: seconds converted to mus)
+					// mark it as idle and start an untimed wait
+					Allocator::ThreadIdle();
+					queue->semaphore.wait();
+				}
+			}
+		}
 		if (queue->q.try_dequeue(task)) {
 			auto execute_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
 
@@ -161,10 +200,12 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 				task.reset();
 				break;
 			}
-
-			// Flushes the outstanding allocator's outstanding allocations
-			Allocator::ThreadFlush(allocator_flush_threshold);
 		}
+	}
+	// this thread will exit, flush all of its outstanding allocations
+	if (Allocator::SupportsFlush()) {
+		Allocator::ThreadFlush(allocator_background_threads, 0, NumericCast<idx_t>(requested_thread_count.load()));
+		Allocator::ThreadIdle();
 	}
 #else
 	throw NotImplementedException("DuckDB was compiled without threads! Background thread loop is not allowed.");
@@ -261,6 +302,12 @@ void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
 }
 
 void TaskScheduler::SetAllocatorFlushTreshold(idx_t threshold) {
+	allocator_flush_threshold = threshold;
+}
+
+void TaskScheduler::SetAllocatorBackgroundThreads(bool enable) {
+	allocator_background_threads = enable;
+	Allocator::SetBackgroundThreads(enable);
 }
 
 void TaskScheduler::Signal(idx_t n) {
@@ -273,6 +320,43 @@ void TaskScheduler::Signal(idx_t n) {
 void TaskScheduler::YieldThread() {
 #ifndef DUCKDB_NO_THREADS
 	std::this_thread::yield();
+#endif
+}
+
+idx_t TaskScheduler::GetEstimatedCPUId() {
+#if defined(EMSCRIPTEN)
+	// FIXME: Wasm + multithreads can likely be implemented as
+	//   return return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
+	return 0;
+#else
+	// this code comes from jemalloc
+#if defined(_WIN32)
+	return (idx_t)GetCurrentProcessorNumber();
+#elif defined(_GNU_SOURCE)
+	auto cpu = sched_getcpu();
+	if (cpu < 0) {
+#ifndef DUCKDB_NO_THREADS
+		// fallback to thread id
+		return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
+#else
+
+		return 0;
+#endif
+	}
+	return (idx_t)cpu;
+#elif defined(__aarch64__) && defined(__APPLE__)
+	/* Other oses most likely use tpidr_el0 instead */
+	uintptr_t c;
+	asm volatile("mrs %x0, tpidrro_el0" : "=r"(c)::"memory");
+	return (idx_t)(c & (1 << 3) - 1);
+#else
+#ifndef DUCKDB_NO_THREADS
+	// fallback to thread id
+	return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
+#else
+	return 0;
+#endif
+#endif
 #endif
 }
 
@@ -325,6 +409,9 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 		}
 	}
 	current_thread_count = NumericCast<int32_t>(threads.size() + config.options.external_threads);
+	if (Allocator::SupportsFlush()) {
+		Allocator::FlushAll();
+	}
 #endif
 }
 

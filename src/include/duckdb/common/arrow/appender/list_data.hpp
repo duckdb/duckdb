@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/common/arrow/appender/append_data.hpp"
+#include "duckdb/common/arrow/arrow_appender.hpp"
 
 namespace duckdb {
 
@@ -9,7 +10,7 @@ struct ArrowListData {
 public:
 	static void Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {
 		auto &child_type = ListType::GetChildType(type);
-		result.main_buffer.reserve((capacity + 1) * sizeof(BUFTYPE));
+		result.GetMainBuffer().reserve((capacity + 1) * sizeof(BUFTYPE));
 		auto child_buffer = ArrowAppender::InitializeChild(child_type, capacity, result.options);
 		result.child_data.push_back(std::move(child_buffer));
 	}
@@ -34,7 +35,7 @@ public:
 
 	static void Finalize(ArrowAppendData &append_data, const LogicalType &type, ArrowArray *result) {
 		result->n_buffers = 2;
-		result->buffers[1] = append_data.main_buffer.data();
+		result->buffers[1] = append_data.GetMainBuffer().data();
 
 		auto &child_type = ListType::GetChildType(type);
 		ArrowAppender::AddChildren(append_data, 1);
@@ -48,9 +49,11 @@ public:
 	                          vector<sel_t> &child_sel) {
 		// resize the offset buffer - the offset buffer holds the offsets into the child array
 		idx_t size = to - from;
-		append_data.main_buffer.resize(append_data.main_buffer.size() + sizeof(BUFTYPE) * (size + 1));
+		auto &main_buffer = append_data.GetMainBuffer();
+
+		main_buffer.resize(main_buffer.size() + sizeof(BUFTYPE) * (size + 1));
 		auto data = UnifiedVectorFormat::GetData<list_entry_t>(format);
-		auto offset_data = append_data.main_buffer.GetData<BUFTYPE>();
+		auto offset_data = main_buffer.GetData<BUFTYPE>();
 		if (append_data.row_count == 0) {
 			// first entry
 			offset_data[0] = 0;
@@ -72,7 +75,8 @@ public:
 			    (uint64_t)last_offset + list_length > NumericLimits<int32_t>::Maximum()) {
 				throw InvalidInputException(
 				    "Arrow Appender: The maximum combined list offset for regular list buffers is "
-				    "%u but the offset of %lu exceeds this.",
+				    "%u but the offset of %lu exceeds this.\n* SET arrow_large_buffer_size=true to use large list "
+				    "buffers",
 				    NumericLimits<int32_t>::Maximum(), last_offset);
 			}
 			last_offset += list_length;

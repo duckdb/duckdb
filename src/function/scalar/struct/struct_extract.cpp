@@ -1,5 +1,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
@@ -92,13 +93,13 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 		for (auto &struct_child : struct_children) {
 			candidates.push_back(struct_child.first);
 		}
-		auto closest_settings = StringUtil::TopNLevenshtein(candidates, key);
+		auto closest_settings = StringUtil::TopNJaroWinkler(candidates, key);
 		auto message = StringUtil::CandidatesMessage(closest_settings, "Candidate Entries");
 		throw BinderException("Could not find key \"%s\" in struct\n%s", key, message);
 	}
 
 	bound_function.return_type = std::move(return_type);
-	return make_uniq<StructExtractBindData>(key_index);
+	return GetBindData(key_index);
 }
 
 static unique_ptr<FunctionData> StructExtractBindIndex(ClientContext &context, ScalarFunction &bound_function,
@@ -134,7 +135,7 @@ static unique_ptr<FunctionData> StructExtractBindIndex(ClientContext &context, S
 		                      index, struct_children.size());
 	}
 	bound_function.return_type = struct_children[NumericCast<idx_t>(index - 1)].second;
-	return make_uniq<StructExtractBindData>(NumericCast<idx_t>(index - 1));
+	return GetBindData(NumericCast<idx_t>(index - 1));
 }
 
 static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &context, FunctionStatisticsInput &input) {
@@ -146,26 +147,26 @@ static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &con
 	return struct_child_stats[info.index].ToUnique();
 }
 
-ScalarFunction StructExtractFun::KeyExtractFunction() {
+unique_ptr<FunctionData> GetBindData(idx_t index) {
+	return make_uniq<StructExtractBindData>(index);
+}
+
+ScalarFunction GetKeyExtractFunction() {
 	return ScalarFunction("struct_extract", {LogicalTypeId::STRUCT, LogicalType::VARCHAR}, LogicalType::ANY,
 	                      StructExtractFunction, StructExtractBind, nullptr, PropagateStructExtractStats);
 }
 
-ScalarFunction StructExtractFun::IndexExtractFunction() {
+ScalarFunction GetIndexExtractFunction() {
 	return ScalarFunction("struct_extract", {LogicalTypeId::STRUCT, LogicalType::BIGINT}, LogicalType::ANY,
 	                      StructExtractFunction, StructExtractBindIndex);
 }
 
 ScalarFunctionSet StructExtractFun::GetFunctions() {
-	ScalarFunctionSet functions("struct_extract");
-	functions.AddFunction(KeyExtractFunction());
-	functions.AddFunction(IndexExtractFunction());
-	return functions;
-}
-
-void StructExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	set.AddFunction(GetFunctions());
+	ScalarFunctionSet struct_extract_set("struct_extract");
+	struct_extract_set.AddFunction(GetKeyExtractFunction());
+	struct_extract_set.AddFunction(GetIndexExtractFunction());
+	return struct_extract_set;
 }
 
 } // namespace duckdb

@@ -23,7 +23,6 @@ public:
 	DUCKDB_API TableFunctionRef();
 
 	unique_ptr<ParsedExpression> function;
-	vector<string> column_name_alias;
 
 	// if the function takes a subquery as argument its in here
 	unique_ptr<SelectStatement> subquery;

@@ -1,0 +1,12 @@
+# name: benchmark/tpch/aggregate/top_n_in_group_agg.benchmark
+# group: [aggregate]
+
+require tpch
+
+cache tpch_sf5.duckdb
+
+load
+CALL dbgen(sf=5);
+
+run
+SELECT max(l_extendedprice, 3) FROM lineitem GROUP BY l_suppkey ORDER BY ALL;

@@ -1,0 +1,39 @@
+# name: test/sql/function/string/test_url_encode.test
+# description: Test url_encode/url_decode
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+query II
+SELECT url_encode(''), url_decode('')
+----
+(empty)	(empty)
+
+query II
+SELECT url_encode(NULL), url_decode(NULL)
+----
+NULL	NULL
+
+query I
+SELECT url_decode(url_encode('http://www.google.com/this is a long url'))
+----
+http://www.google.com/this is a long url
+
+# verify round trips
+query I
+SELECT COUNT(*) from range(1000) t(n) WHERE url_decode(url_encode(chr(n::INT))) = chr(n::INT)
+----
+1000
+
+# partial escapes and invalid escapes are included as literals
+query IIII
+SELECT url_decode('%'), url_decode('%5'), url_decode('%X'), url_decode('%%')
+----
+%	%5	%X	%%
+
+# check invalid UTF8
+statement error
+select url_decode('%FF%FF%FF');
+----
+decoded value is invalid UTF8

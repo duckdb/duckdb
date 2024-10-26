@@ -141,6 +141,19 @@ FROM (
 ----
 [true, true, true]
 
+# Array lists
+query I
+SELECT approx_quantile(col, [0.5, 0.4, 0.1]) AS percentile 
+FROM VALUES (0), (1), (2), (10) AS tab(col);
+----
+[2, 1, 0]
+
+query I
+SELECT approx_quantile(col, ARRAY_VALUE(0.5, 0.4, 0.1)) AS percentile 
+FROM VALUES (0), (1), (2), (10) AS tab(col);
+----
+[2, 1, 0]
+
 # Errors
 statement error
 SELECT approx_quantile(r, -0.1) FROM quantile

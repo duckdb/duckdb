@@ -15,43 +15,69 @@
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 
 namespace duckdb {
 
 const uint64_t WAL_VERSION_NUMBER = 2;
 
-WriteAheadLog::WriteAheadLog(AttachedDatabase &database, const string &path) : skip_writing(false), database(database) {
-	wal_path = path;
-	writer = make_uniq<BufferedFileWriter>(FileSystem::Get(database), path,
-	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
-	                                           FileFlags::FILE_FLAGS_APPEND);
+WriteAheadLog::WriteAheadLog(AttachedDatabase &database, const string &wal_path)
+    : database(database), wal_path(wal_path), wal_size(0), initialized(false) {
 }
 
 WriteAheadLog::~WriteAheadLog() {
 }
 
-int64_t WriteAheadLog::GetWALSize() {
-	D_ASSERT(writer);
-	return writer->GetFileSize();
+BufferedFileWriter &WriteAheadLog::Initialize() {
+	if (initialized) {
+		return *writer;
+	}
+	lock_guard<mutex> lock(wal_lock);
+	if (!writer) {
+		writer = make_uniq<BufferedFileWriter>(FileSystem::Get(database), wal_path,
+		                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
+		                                           FileFlags::FILE_FLAGS_APPEND);
+		wal_size = writer->GetFileSize();
+		initialized = true;
+	}
+	return *writer;
+}
+
+//! Gets the total bytes written to the WAL since startup
+idx_t WriteAheadLog::GetWALSize() {
+	if (!Initialized()) {
+		auto &fs = FileSystem::Get(database);
+		if (!fs.FileExists(wal_path)) {
+			return 0;
+		}
+		Initialize();
+	}
+	return wal_size;
 }
 
 idx_t WriteAheadLog::GetTotalWritten() {
-	D_ASSERT(writer);
+	if (!Initialized()) {
+		return 0;
+	}
 	return writer->GetTotalWritten();
 }
 
-void WriteAheadLog::Truncate(int64_t size) {
+void WriteAheadLog::Truncate(idx_t size) {
+	if (!Initialized()) {
+		return;
+	}
 	writer->Truncate(size);
+	wal_size = writer->GetFileSize();
 }
 
 void WriteAheadLog::Delete() {
-	if (!writer) {
+	if (!Initialized()) {
 		return;
 	}
 	writer.reset();
-
 	auto &fs = FileSystem::Get(database);
 	fs.RemoveFile(wal_path);
+	wal_size = 0;
 }
 
 //===--------------------------------------------------------------------===//
@@ -59,46 +85,42 @@ void WriteAheadLog::Delete() {
 //===--------------------------------------------------------------------===//
 class ChecksumWriter : public WriteStream {
 public:
-	explicit ChecksumWriter(WriteAheadLog &wal) : wal(wal), stream(wal.GetWriter()) {
+	explicit ChecksumWriter(WriteAheadLog &wal) : wal(wal) {
 	}
 
 	void WriteData(const_data_ptr_t buffer, idx_t write_size) override {
-		if (wal.skip_writing) {
-			return;
-		}
 		// buffer data into the memory stream
 		memory_stream.WriteData(buffer, write_size);
 	}
 
 	void Flush() {
-		if (wal.skip_writing) {
-			return;
+		if (!stream) {
+			stream = wal.Initialize();
 		}
 		auto data = memory_stream.GetData();
 		auto size = memory_stream.GetPosition();
 		// compute the checksum over the entry
 		auto checksum = Checksum(data, size);
 		// write the checksum and the length of the entry
-		stream.Write<uint64_t>(size);
-		stream.Write<uint64_t>(checksum);
+		stream->Write<uint64_t>(size);
+		stream->Write<uint64_t>(checksum);
 		// write data to the underlying stream
-		stream.WriteData(memory_stream.GetData(), memory_stream.GetPosition());
+		stream->WriteData(memory_stream.GetData(), memory_stream.GetPosition());
 		// rewind the buffer
 		memory_stream.Rewind();
 	}
 
 private:
 	WriteAheadLog &wal;
-	WriteStream &stream;
+	optional_ptr<WriteStream> stream;
 	MemoryStream memory_stream;
 };
 
 class WriteAheadLogSerializer {
 public:
-	WriteAheadLogSerializer(WriteAheadLog &wal, WALType wal_type)
-	    : wal(wal), checksum_writer(wal), serializer(checksum_writer) {
-		if (wal.skip_writing) {
-			return;
+	WriteAheadLogSerializer(WriteAheadLog &wal, WALType wal_type) : checksum_writer(wal), serializer(checksum_writer) {
+		if (!wal.Initialized()) {
+			wal.Initialize();
 		}
 		// write a version marker if none has been written yet
 		wal.WriteVersion();
@@ -107,31 +129,21 @@ public:
 	}
 
 	void End() {
-		if (wal.skip_writing) {
-			return;
-		}
 		serializer.End();
 		checksum_writer.Flush();
 	}
 
 	template <class T>
 	void WriteProperty(const field_id_t field_id, const char *tag, const T &value) {
-		if (wal.skip_writing) {
-			return;
-		}
 		serializer.WriteProperty(field_id, tag, value);
 	}
 
 	template <class FUNC>
 	void WriteList(const field_id_t field_id, const char *tag, idx_t count, FUNC func) {
-		if (wal.skip_writing) {
-			return;
-		}
 		serializer.WriteList(field_id, tag, count, func);
 	}
 
 private:
-	WriteAheadLog &wal;
 	ChecksumWriter checksum_writer;
 	BinarySerializer serializer;
 };
@@ -140,6 +152,7 @@ private:
 // Write Entries
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteVersion() {
+	D_ASSERT(writer);
 	if (writer->GetFileSize() > 0) {
 		// already written - no need to write a version marker
 		return;
@@ -246,11 +259,12 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 // Indexes
 //===--------------------------------------------------------------------===//
 
-void SerializeIndexToWAL(WriteAheadLogSerializer &serializer, const unique_ptr<Index> &index) {
+void SerializeIndexToWAL(WriteAheadLogSerializer &serializer, Index &index,
+                         const case_insensitive_map_t<Value> &options) {
 
 	// We will never write an index to the WAL that is not bound
-	D_ASSERT(index->IsBound());
-	auto index_storage_info = index->Cast<BoundIndex>().GetStorageInfo(true);
+	D_ASSERT(index.IsBound());
+	const auto index_storage_info = index.Cast<BoundIndex>().GetStorageInfo(options, true);
 	serializer.WriteProperty(102, "index_storage_info", index_storage_info);
 
 	serializer.WriteList(103, "index_storage", index_storage_info.buffers.size(), [&](Serializer::List &list, idx_t i) {
@@ -262,25 +276,27 @@ void SerializeIndexToWAL(WriteAheadLogSerializer &serializer, const unique_ptr<I
 }
 
 void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
-	if (skip_writing) {
-		return;
-	}
-
 	WriteAheadLogSerializer serializer(*this, WALType::CREATE_INDEX);
 	serializer.WriteProperty(101, "index_catalog_entry", &entry);
 
-	// now serialize the index data to the persistent storage and write the index metadata
-	auto &duck_index_entry = entry.Cast<DuckIndexEntry>();
-	auto &indexes = duck_index_entry.GetDataTableInfo().GetIndexes().Indexes();
-
-	// get the matching index and serialize its storage info
-	for (auto const &index : indexes) {
-		if (duck_index_entry.name == index->GetIndexName()) {
-			SerializeIndexToWAL(serializer, index);
-			break;
-		}
+	auto db_options = database.GetDatabase().config.options;
+	auto v1_0_0_storage = db_options.serialization_compatibility.serialization_version < 3;
+	case_insensitive_map_t<Value> options;
+	if (!v1_0_0_storage) {
+		options.emplace("v1_0_0_storage", v1_0_0_storage);
 	}
 
+	// now serialize the index data to the persistent storage and write the index metadata
+	auto &duck_index_entry = entry.Cast<DuckIndexEntry>();
+	auto &table_idx_list = duck_index_entry.GetDataTableInfo().GetIndexes();
+
+	table_idx_list.Scan([&](Index &index) {
+		if (duck_index_entry.name == index.GetIndexName()) {
+			SerializeIndexToWAL(serializer, index, options);
+			return true;
+		}
+		return false;
+	});
 	serializer.End();
 }
 
@@ -351,6 +367,14 @@ void WriteAheadLog::WriteInsert(DataChunk &chunk) {
 	serializer.End();
 }
 
+void WriteAheadLog::WriteRowGroupData(const PersistentCollectionData &data) {
+	D_ASSERT(!data.row_group_data.empty());
+
+	WriteAheadLogSerializer serializer(*this, WALType::ROW_GROUP_DATA);
+	serializer.WriteProperty(101, "row_group_data", data);
+	serializer.End();
+}
+
 void WriteAheadLog::WriteDelete(DataChunk &chunk) {
 	D_ASSERT(chunk.size() > 0);
 	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].GetType() == LogicalType::ROW_TYPE);
@@ -386,7 +410,7 @@ void WriteAheadLog::WriteAlter(const AlterInfo &info) {
 // FLUSH
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::Flush() {
-	if (skip_writing) {
+	if (!writer) {
 		return;
 	}
 
@@ -396,6 +420,7 @@ void WriteAheadLog::Flush() {
 
 	// flushes all changes made to the WAL to disk
 	writer->Sync();
+	wal_size = writer->GetFileSize();
 }
 
 } // namespace duckdb

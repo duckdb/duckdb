@@ -204,7 +204,7 @@ template struct std::atomic<uint64_t>;
 #endif
 
 template class std::bitset<STANDARD_VECTOR_SIZE>;
-template class std::unordered_map<PhysicalOperator *, QueryProfiler::TreeNode *>;
+template class std::unordered_map<PhysicalOperator *, ProfilingNode *>;
 template class std::stack<PhysicalOperator *>;
 
 /* -pedantic does not like this

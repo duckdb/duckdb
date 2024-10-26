@@ -1,0 +1,25 @@
+[
+    {
+        "name": "histogram",
+        "parameters": "arg",
+        "description": "Returns a LIST of STRUCTs with the fields bucket and count.",
+        "example": "histogram(A)",
+        "type": "aggregate_function_set",
+        "extra_functions": ["static AggregateFunction GetHistogramUnorderedMap(LogicalType &type);", "static AggregateFunction BinnedHistogramFunction();"]
+    },
+    {
+        "name": "histogram_exact",
+        "parameters": "arg,bins",
+        "description": "Returns a LIST of STRUCTs with the fields bucket and count matching the buckets exactly.",
+        "example": "histogram_exact(A, [0, 1, 2])",
+        "type": "aggregate_function"
+    },
+    {
+        "name": "list",
+        "parameters": "arg",
+        "description": "Returns a LIST containing all the values of a column.",
+        "example": "list(A)",
+        "type": "aggregate_function",
+        "aliases": ["array_agg"]
+    }
+]

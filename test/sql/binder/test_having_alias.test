@@ -46,15 +46,20 @@ SELECT COUNT(i) AS j FROM integers HAVING j=5;
 ----
 5
 
-# These don't work since i in HAVING refers the column instead of the alias
-# (SQLite says: 'Error: a GROUP BY clause is required before HAVING')
-statement error
+
+query I
 SELECT COUNT(i) AS i FROM integers HAVING i=5;
 ----
+5
 
-statement error
+query I
+SELECT COUNT(i) AS i FROM integers GROUP BY i HAVING i=5;
+----
+
+query I
 SELECT COUNT(i) AS i FROM integers HAVING i=5 ORDER BY i;
 ----
+5
 
 # use the same alias multiple times
 query I

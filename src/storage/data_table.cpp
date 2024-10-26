@@ -50,8 +50,8 @@ DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_m
       column_definitions(std::move(column_definitions_p)), is_root(true) {
 	// initialize the table with the existing data from disk, if any
 	auto types = GetTypes();
-	this->row_groups =
-	    make_shared_ptr<RowGroupCollection>(info, TableIOManager::Get(*this).GetBlockManagerForRowData(), types, 0);
+	auto &io_manager = TableIOManager::Get(*this);
+	this->row_groups = make_shared_ptr<RowGroupCollection>(info, io_manager, types, 0);
 	if (data && data->row_group_count > 0) {
 		this->row_groups->Initialize(*data);
 	} else {
@@ -223,29 +223,29 @@ TableIOManager &TableIOManager::Get(DataTable &table) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-void DataTable::InitializeScan(TableScanState &state, const vector<column_t> &column_ids,
-                               TableFilterSet *table_filters) {
-	state.checkpoint_lock = info->checkpoint_lock.GetSharedLock();
-	state.Initialize(column_ids, table_filters);
-	row_groups->InitializeScan(state.table_state, column_ids, table_filters);
-}
-
 void DataTable::InitializeScan(DuckTransaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
                                TableFilterSet *table_filters) {
+	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	auto &local_storage = LocalStorage::Get(transaction);
-	InitializeScan(state, column_ids, table_filters);
+	state.Initialize(column_ids, table_filters);
+	row_groups->InitializeScan(state.table_state, column_ids, table_filters);
 	local_storage.InitializeScan(*this, state.local_state, table_filters);
 }
 
-void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids, idx_t start_row,
-                                         idx_t end_row) {
-	state.checkpoint_lock = info->checkpoint_lock.GetSharedLock();
+void DataTable::InitializeScanWithOffset(DuckTransaction &transaction, TableScanState &state,
+                                         const vector<column_t> &column_ids, idx_t start_row, idx_t end_row) {
+	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	state.Initialize(column_ids);
 	row_groups->InitializeScanWithOffset(state.table_state, column_ids, start_row, end_row);
 }
 
-idx_t DataTable::MaxThreads(ClientContext &context) {
-	idx_t parallel_scan_vector_count = Storage::ROW_GROUP_VECTOR_COUNT;
+idx_t DataTable::GetRowGroupSize() const {
+	return row_groups->GetRowGroupSize();
+}
+
+idx_t DataTable::MaxThreads(ClientContext &context) const {
+	idx_t row_group_size = GetRowGroupSize();
+	idx_t parallel_scan_vector_count = row_group_size / STANDARD_VECTOR_SIZE;
 	if (ClientConfig::GetConfig(context).verify_parallelism) {
 		parallel_scan_vector_count = 1;
 	}
@@ -255,7 +255,8 @@ idx_t DataTable::MaxThreads(ClientContext &context) {
 
 void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScanState &state) {
 	auto &local_storage = LocalStorage::Get(context, db);
-	state.checkpoint_lock = info->checkpoint_lock.GetSharedLock();
+	auto &transaction = DuckTransaction::Get(context, db);
+	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	row_groups->InitializeParallelScan(state.scan_state);
 
 	local_storage.InitializeParallelScan(*this, state.local_state);
@@ -324,6 +325,10 @@ void DataTable::VacuumIndexes() {
 		}
 		return false;
 	});
+}
+
+void DataTable::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
+	row_groups->CleanupAppend(lowest_transaction, start, count);
 }
 
 bool DataTable::IndexNameIsUnique(const string &name) {
@@ -515,7 +520,7 @@ void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk,
 	}
 
 	auto &table_entry_ptr =
-	    Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, bfk.info.schema, bfk.info.table);
+	    Catalog::GetEntry<TableCatalogEntry>(context, db.GetName(), bfk.info.schema, bfk.info.table);
 	// make the data chunk to check
 	vector<LogicalType> types;
 	for (auto &col : table_entry_ptr.GetColumns().Physical()) {
@@ -881,7 +886,8 @@ void DataTable::FinalizeAppend(DuckTransaction &transaction, TableAppendState &s
 	row_groups->FinalizeAppend(transaction, state);
 }
 
-void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::function<void(DataChunk &chunk)> &function) {
+void DataTable::ScanTableSegment(DuckTransaction &transaction, idx_t row_start, idx_t count,
+                                 const std::function<void(DataChunk &chunk)> &function) {
 	if (count == 0) {
 		return;
 	}
@@ -899,7 +905,7 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 
 	CreateIndexScanState state;
 
-	InitializeScanWithOffset(state, column_ids, row_start, row_start + count);
+	InitializeScanWithOffset(transaction, state, column_ids, row_start, row_start + count);
 	auto row_start_aligned = state.table_state.row_group->start + state.table_state.vector_index * STANDARD_VECTOR_SIZE;
 
 	idx_t current_row = row_start_aligned;
@@ -935,17 +941,35 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 	}
 }
 
-void DataTable::MergeStorage(RowGroupCollection &data, TableIndexList &indexes) {
-	row_groups->MergeStorage(data);
+void DataTable::MergeStorage(RowGroupCollection &data, TableIndexList &,
+                             optional_ptr<StorageCommitState> commit_state) {
+	row_groups->MergeStorage(data, this, commit_state);
 	row_groups->Verify();
 }
 
-void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count) {
-	if (log.skip_writing) {
-		return;
-	}
+void DataTable::WriteToLog(DuckTransaction &transaction, WriteAheadLog &log, idx_t row_start, idx_t count,
+                           optional_ptr<StorageCommitState> commit_state) {
 	log.WriteSetTable(info->schema, info->table);
-	ScanTableSegment(row_start, count, [&](DataChunk &chunk) { log.WriteInsert(chunk); });
+	if (commit_state) {
+		idx_t optimistic_count = 0;
+		auto entry = commit_state->GetRowGroupData(*this, row_start, optimistic_count);
+		if (entry) {
+			D_ASSERT(optimistic_count > 0);
+			log.WriteRowGroupData(*entry);
+			if (optimistic_count > count) {
+				throw InternalException(
+				    "Optimistically written count cannot exceed actual count (got %llu, but expected count is %llu)",
+				    optimistic_count, count);
+			}
+			// write any remaining (non-optimistically written) rows to the WAL normally
+			row_start += optimistic_count;
+			count -= optimistic_count;
+			if (count == 0) {
+				return;
+			}
+		}
+	}
+	ScanTableSegment(transaction, row_start, count, [&](DataChunk &chunk) { log.WriteInsert(chunk); });
 }
 
 void DataTable::CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count) {
@@ -959,7 +983,7 @@ void DataTable::RevertAppendInternal(idx_t start_row) {
 	row_groups->RevertAppendInternal(start_row);
 }
 
-void DataTable::RevertAppend(idx_t start_row, idx_t count) {
+void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_t count) {
 	lock_guard<mutex> lock(append_lock);
 
 	// revert any appends to indexes
@@ -968,7 +992,7 @@ void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 		row_t row_data[STANDARD_VECTOR_SIZE];
 		Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_data));
 		idx_t scan_count = MinValue<idx_t>(count, row_groups->GetTotalRows() - start_row);
-		ScanTableSegment(start_row, scan_count, [&](DataChunk &chunk) {
+		ScanTableSegment(transaction, start_row, scan_count, [&](DataChunk &chunk) {
 			for (idx_t i = 0; i < chunk.size(); i++) {
 				row_data[i] = NumericCast<row_t>(current_row_base + i);
 			}
@@ -1334,13 +1358,14 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, Vector &
 
 	// otherwise global storage
 	if (n_global_update > 0) {
+		auto &transaction = DuckTransaction::Get(context, db);
 		updates_slice.Slice(updates, sel_global_update, n_global_update);
 		updates_slice.Flatten();
 		row_ids_slice.Slice(row_ids, sel_global_update, n_global_update);
 		row_ids_slice.Flatten(n_global_update);
 
-		row_groups->Update(DuckTransaction::Get(context, db), FlatVector::GetData<row_t>(row_ids_slice), column_ids,
-		                   updates_slice);
+		transaction.UpdateCollection(row_groups);
+		row_groups->Update(transaction, FlatVector::GetData<row_t>(row_ids_slice), column_ids, updates_slice);
 	}
 }
 
@@ -1433,6 +1458,7 @@ void DataTable::CommitDropTable() {
 // GetColumnSegmentInfo
 //===--------------------------------------------------------------------===//
 vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo() {
+	auto lock = GetSharedCheckpointLock();
 	return row_groups->GetColumnSegmentInfo();
 }
 

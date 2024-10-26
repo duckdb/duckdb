@@ -5,7 +5,7 @@
 statement error
 LOAD 'README.md';
 ----
-Invalid Input Error: Extension "README.md" does not have metadata compatible with the DuckDB loading it
+The file is not a DuckDB extension. The metadata at the end of the file is invalid
 
 statement ok
 SET allow_extensions_metadata_mismatch=true;
@@ -19,7 +19,7 @@ Error: Extension "README.md" could not be loaded
 statement error
 LOAD 'data/csv/no_opt.csv';
 ----
-File size in particular is lower than minimum threshold of 1024
+is not a DuckDB extension. Valid DuckDB extensions must be at least 512 bytes
 
 statement ok
 SET allow_unsigned_extensions=false;
@@ -27,4 +27,4 @@ SET allow_unsigned_extensions=false;
 statement error
 LOAD 'README.md';
 ----
-IO Error: Extension "README.md" could not be loaded because its signature is either missing or invalid and unsigned extensions are disabled by configuration
+The file is not a DuckDB extension. The metadata at the end of the file is invalid

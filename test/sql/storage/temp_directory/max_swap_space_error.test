@@ -1,9 +1,16 @@
 # name: test/sql/storage/temp_directory/max_swap_space_error.test
+# description: Test the maximum swap space.
 # group: [temp_directory]
 
 require skip_reload
 
 require noforcestorage
+
+# This test performs comparisons against the DEFAULT_BLOCK_ALLOC_SIZE of 256KiB.
+require block_size 262144
+
+# The temporary directory usage changes with the vector size.
+require vector_size 2048
 
 # Set a temp_directory to offload data
 statement ok
@@ -67,7 +74,7 @@ CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(300000);
 failed to offload data block
 
 query I
-select "size" from duckdb_temporary_files()
+SELECT "size" FROM duckdb_temporary_files();
 ----
 1572864
 

@@ -9,13 +9,17 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/map.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
-#include "duckdb/execution/adaptive_filter.hpp"
+#include "duckdb/common/random_engine.hpp"
 #include "duckdb/storage/table/segment_lock.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/parser/parsed_data/sample_options.hpp"
 
 namespace duckdb {
+class AdaptiveFilter;
 class ColumnSegment;
 class LocalTableStorage;
 class CollectionScanState;
@@ -31,7 +35,10 @@ class TableFilterSet;
 class ColumnData;
 class DuckTransaction;
 class RowGroupSegmentTree;
+class TableFilter;
+struct AdaptiveFilterState;
 struct TableScanOptions;
+struct ScanSamplingInfo;
 
 struct SegmentScanState {
 	virtual ~SegmentScanState() {
@@ -109,6 +116,60 @@ struct ColumnFetchState {
 	BufferHandle &GetOrInsertHandle(ColumnSegment &segment);
 };
 
+struct ScanFilter {
+	ScanFilter(idx_t index, const vector<column_t> &column_ids, TableFilter &filter);
+
+	idx_t scan_column_index;
+	idx_t table_column_index;
+	TableFilter &filter;
+	bool always_true;
+
+	bool IsAlwaysTrue() const {
+		return always_true;
+	}
+};
+
+class ScanFilterInfo {
+public:
+	~ScanFilterInfo();
+
+	void Initialize(TableFilterSet &filters, const vector<column_t> &column_ids);
+
+	const vector<ScanFilter> &GetFilterList() const {
+		return filter_list;
+	}
+
+	optional_ptr<AdaptiveFilter> GetAdaptiveFilter();
+	AdaptiveFilterState BeginFilter() const;
+	void EndFilter(AdaptiveFilterState state);
+
+	//! Whether or not there is any filter we need to execute
+	bool HasFilters() const;
+
+	//! Whether or not there is a filter we need to execute for this column currently
+	bool ColumnHasFilters(idx_t col_idx);
+
+	//! Resets any SetFilterAlwaysTrue flags
+	void CheckAllFilters();
+	//! Labels the filters for this specific column as always true
+	//! We do not need to execute them anymore until CheckAllFilters is called
+	void SetFilterAlwaysTrue(idx_t filter_idx);
+
+private:
+	//! The table filters (if any)
+	optional_ptr<TableFilterSet> table_filters;
+	//! Adaptive filter info (if any)
+	unique_ptr<AdaptiveFilter> adaptive_filter;
+	//! The set of filters
+	vector<ScanFilter> filter_list;
+	//! Whether or not the column has a filter active right now
+	unsafe_vector<bool> column_has_filter;
+	//! Whether or not the column has a filter active at all
+	unsafe_vector<bool> base_column_has_filter;
+	//! The amount of filters that are always true currently
+	idx_t always_true_filters = 0;
+};
+
 class CollectionScanState {
 public:
 	explicit CollectionScanState(TableScanState &parent_p);
@@ -127,12 +188,16 @@ public:
 	idx_t max_row;
 	//! The current batch index
 	idx_t batch_index;
+	//! The valid selection
+	SelectionVector valid_sel;
+
+	RandomEngine random;
 
 public:
 	void Initialize(const vector<LogicalType> &types);
 	const vector<storage_t> &GetColumnIds();
-	TableFilterSet *GetFilters();
-	AdaptiveFilter *GetAdaptiveFilter();
+	ScanFilterInfo &GetFilterInfo();
+	ScanSamplingInfo &GetSamplingInfo();
 	TableScanOptions &GetOptions();
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
 	bool ScanCommitted(DataChunk &result, TableScanType type);
@@ -142,14 +207,31 @@ private:
 	TableScanState &parent;
 };
 
+struct ScanSamplingInfo {
+	//! Whether or not to do a system sample during scanning
+	bool do_system_sample = false;
+	//! The sampling rate to use
+	double sample_rate;
+};
+
 struct TableScanOptions {
-	//! Test config that forces fetching rows one by one instead of regular scans
+	//! Fetch rows one-at-a-time instead of using the regular scans.
 	bool force_fetch_row = false;
+};
+
+class CheckpointLock {
+public:
+	explicit CheckpointLock(unique_ptr<StorageLockKey> lock_p) : lock(std::move(lock_p)) {
+	}
+
+private:
+	unique_ptr<StorageLockKey> lock;
 };
 
 class TableScanState {
 public:
-	TableScanState() : table_state(*this), local_state(*this), table_filters(nullptr) {};
+	TableScanState();
+	~TableScanState();
 
 	//! The underlying table scan state
 	CollectionScanState table_state;
@@ -158,22 +240,25 @@ public:
 	//! Options for scanning
 	TableScanOptions options;
 	//! Shared lock over the checkpoint to prevent checkpoints while reading
-	unique_ptr<StorageLockKey> checkpoint_lock;
+	shared_ptr<CheckpointLock> checkpoint_lock;
+	//! Filter info
+	ScanFilterInfo filters;
+	//! Sampling info
+	ScanSamplingInfo sampling_info;
 
 public:
-	void Initialize(vector<storage_t> column_ids, TableFilterSet *table_filters = nullptr);
+	void Initialize(vector<storage_t> column_ids, optional_ptr<TableFilterSet> table_filters = nullptr,
+	                optional_ptr<SampleOptions> table_sampling = nullptr);
 
 	const vector<storage_t> &GetColumnIds();
-	TableFilterSet *GetFilters();
-	AdaptiveFilter *GetAdaptiveFilter();
+
+	ScanFilterInfo &GetFilterInfo();
+
+	ScanSamplingInfo &GetSamplingInfo();
 
 private:
 	//! The column identifiers of the scan
 	vector<storage_t> column_ids;
-	//! The table filters (if any)
-	TableFilterSet *table_filters;
-	//! Adaptive filter info (if any)
-	unique_ptr<AdaptiveFilter> adaptive_filter;
 };
 
 struct ParallelCollectionScanState {
@@ -195,7 +280,15 @@ struct ParallelTableScanState {
 	//! Parallel scan state for the transaction-local state
 	ParallelCollectionScanState local_state;
 	//! Shared lock over the checkpoint to prevent checkpoints while reading
-	unique_ptr<StorageLockKey> checkpoint_lock;
+	shared_ptr<CheckpointLock> checkpoint_lock;
+};
+
+struct PrefetchState {
+	~PrefetchState();
+
+	void AddBlock(shared_ptr<BlockHandle> block);
+
+	vector<shared_ptr<BlockHandle>> blocks;
 };
 
 class CreateIndexScanState : public TableScanState {

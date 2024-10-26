@@ -48,7 +48,6 @@ static LogicalType BindColumn(PandasBindColumn &column_p, PandasColumnBindData &
 	LogicalType column_type;
 	auto &column = column_p.handle;
 
-	auto &config = DBConfig::GetConfig(context);
 	bind_data.numpy_type = ConvertNumpyType(column_p.type);
 	bool column_has_mask = py::hasattr(column.attr("array"), "_mask");
 
@@ -107,7 +106,7 @@ static LogicalType BindColumn(PandasBindColumn &column_p, PandasColumnBindData &
 	}
 	// Analyze the inner data type of the 'object' column
 	if (bind_data.numpy_type.type == NumpyNullableType::OBJECT) {
-		PandasAnalyzer analyzer(config);
+		PandasAnalyzer analyzer(context);
 		if (analyzer.Analyze(column)) {
 			column_type = analyzer.AnalyzedType();
 		}

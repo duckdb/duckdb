@@ -21,12 +21,14 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_EXPLAIN;
 
 public:
-	LogicalExplain(unique_ptr<LogicalOperator> plan, ExplainType explain_type)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXPLAIN), explain_type(explain_type) {
+	LogicalExplain(unique_ptr<LogicalOperator> plan, ExplainType explain_type, ExplainFormat explain_format)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXPLAIN), explain_type(explain_type),
+	      explain_format(explain_format) {
 		children.push_back(std::move(plan));
 	}
 
 	ExplainType explain_type;
+	ExplainFormat explain_format;
 	string physical_plan;
 	string logical_plan_unopt;
 	string logical_plan_opt;

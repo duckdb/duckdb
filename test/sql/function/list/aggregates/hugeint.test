@@ -27,4 +27,3 @@ query IIIII
 SELECT list_min(h), list_max(h), list_sum(h), list_first(h), list_last(h) FROM hugeints;
 ----
 -439847238974238975238975	1267650600228229401496703205376	1267650160380990427257727966431	42	-12
-

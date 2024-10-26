@@ -15,10 +15,6 @@ namespace duckdb {
 
 template <class VALUE_TYPE>
 struct TemplatedParquetValueConversion {
-	static VALUE_TYPE DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
-		D_ASSERT(offset < dict.len / sizeof(VALUE_TYPE));
-		return ((VALUE_TYPE *)dict.ptr)[offset];
-	}
 
 	static VALUE_TYPE PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
 		return plain_data.read<VALUE_TYPE>();
@@ -26,6 +22,18 @@ struct TemplatedParquetValueConversion {
 
 	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
 		plain_data.inc(sizeof(VALUE_TYPE));
+	}
+
+	static bool PlainAvailable(const ByteBuffer &plain_data, const idx_t count) {
+		return plain_data.check_available(count * sizeof(VALUE_TYPE));
+	}
+
+	static VALUE_TYPE UnsafePlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
+		return plain_data.unsafe_read<VALUE_TYPE>();
+	}
+
+	static void UnsafePlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
+		plain_data.unsafe_inc(sizeof(VALUE_TYPE));
 	}
 };
 
@@ -50,31 +58,7 @@ public:
 		}
 	}
 
-	void Dictionary(shared_ptr<ResizeableBuffer> data, idx_t num_entries) override {
-		dict = std::move(data);
-	}
-
-	void Offsets(uint32_t *offsets, uint8_t *defines, uint64_t num_values, parquet_filter_t &filter,
-	             idx_t result_offset, Vector &result) override {
-		auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
-		auto &result_mask = FlatVector::Validity(result);
-
-		idx_t offset_idx = 0;
-		for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {
-			if (HasDefines() && defines[row_idx + result_offset] != max_define) {
-				result_mask.SetInvalid(row_idx + result_offset);
-				continue;
-			}
-			if (filter[row_idx + result_offset]) {
-				VALUE_TYPE val = VALUE_CONVERSION::DictRead(*dict, offsets[offset_idx++], *this);
-				result_ptr[row_idx + result_offset] = val;
-			} else {
-				offset_idx++;
-			}
-		}
-	}
-
-	void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, uint64_t num_values, parquet_filter_t &filter,
+	void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, uint64_t num_values, parquet_filter_t *filter,
 	           idx_t result_offset, Vector &result) override {
 		PlainTemplated<VALUE_TYPE, VALUE_CONVERSION>(std::move(plain_data), defines, num_values, filter, result_offset,
 		                                             result);
@@ -84,9 +68,6 @@ public:
 template <class PARQUET_PHYSICAL_TYPE, class DUCKDB_PHYSICAL_TYPE,
           DUCKDB_PHYSICAL_TYPE (*FUNC)(const PARQUET_PHYSICAL_TYPE &input)>
 struct CallbackParquetValueConversion {
-	static DUCKDB_PHYSICAL_TYPE DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
-		return TemplatedParquetValueConversion<DUCKDB_PHYSICAL_TYPE>::DictRead(dict, offset, reader);
-	}
 
 	static DUCKDB_PHYSICAL_TYPE PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
 		return FUNC(plain_data.read<PARQUET_PHYSICAL_TYPE>());
@@ -94,6 +75,18 @@ struct CallbackParquetValueConversion {
 
 	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
 		plain_data.inc(sizeof(PARQUET_PHYSICAL_TYPE));
+	}
+
+	static bool PlainAvailable(const ByteBuffer &plain_data, const idx_t count) {
+		return plain_data.check_available(count * sizeof(PARQUET_PHYSICAL_TYPE));
+	}
+
+	static DUCKDB_PHYSICAL_TYPE UnsafePlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
+		return FUNC(plain_data.unsafe_read<PARQUET_PHYSICAL_TYPE>());
+	}
+
+	static void UnsafePlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
+		plain_data.unsafe_inc(sizeof(PARQUET_PHYSICAL_TYPE));
 	}
 };
 

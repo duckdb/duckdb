@@ -1,0 +1,25 @@
+# name: test/sql/storage/compact_block_size/mixed_block_sizes.test
+# description: Tests queries with mixed block sizes.
+# group: [compact_block_size]
+
+require noforcestorage
+
+require skip_reload
+
+statement ok
+ATTACH '__TEST_DIR__/small.db' (BLOCK_SIZE 16384);
+
+statement ok
+CREATE TABLE small.tbl AS SELECT range AS i FROM range(10000);
+
+statement ok
+ATTACH '__TEST_DIR__/large.db' (BLOCK_SIZE 262144);
+
+statement ok
+CREATE TABLE large.tbl AS SELECT range AS i FROM range(10000);
+
+query I
+SELECT list_sum(LIST(t1.i) || LIST(t2.i))
+FROM large.tbl AS t1 JOIN small.tbl AS t2 ON t1.i = t2.i;
+----
+99990000

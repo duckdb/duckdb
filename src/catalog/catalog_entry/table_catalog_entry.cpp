@@ -23,14 +23,16 @@ TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
     : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.table), columns(std::move(info.columns)),
       constraints(std::move(info.constraints)) {
 	this->temporary = info.temporary;
+	this->dependencies = info.dependencies;
 	this->comment = info.comment;
+	this->tags = info.tags;
 }
 
 bool TableCatalogEntry::HasGeneratedColumns() const {
 	return columns.LogicalColumnCount() != columns.PhysicalColumnCount();
 }
 
-LogicalIndex TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exists) {
+LogicalIndex TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exists) const {
 	auto entry = columns.GetColumnIndex(column_name);
 	if (!entry.IsValid()) {
 		if (if_exists) {
@@ -41,15 +43,15 @@ LogicalIndex TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exis
 	return entry;
 }
 
-bool TableCatalogEntry::ColumnExists(const string &name) {
+bool TableCatalogEntry::ColumnExists(const string &name) const {
 	return columns.ColumnExists(name);
 }
 
-const ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) {
+const ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) const {
 	return columns.GetColumn(name);
 }
 
-vector<LogicalType> TableCatalogEntry::GetTypes() {
+vector<LogicalType> TableCatalogEntry::GetTypes() const {
 	vector<LogicalType> types;
 	for (auto &col : columns.Physical()) {
 		types.push_back(col.Type());
@@ -64,9 +66,11 @@ unique_ptr<CreateInfo> TableCatalogEntry::GetInfo() const {
 	result->table = name;
 	result->columns = columns.Copy();
 	result->constraints.reserve(constraints.size());
+	result->dependencies = dependencies;
 	std::for_each(constraints.begin(), constraints.end(),
 	              [&result](const unique_ptr<Constraint> &c) { result->constraints.emplace_back(c->Copy()); });
 	result->comment = comment;
+	result->tags = tags;
 	return std::move(result);
 }
 
@@ -172,6 +176,24 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 	return ss.str();
 }
 
+string TableCatalogEntry::ColumnNamesToSQL(const ColumnList &columns) {
+	if (columns.empty()) {
+		return "";
+	}
+
+	std::stringstream ss;
+	ss << "(";
+
+	for (auto &column : columns.Logical()) {
+		if (column.Oid() > 0) {
+			ss << ", ";
+		}
+		ss << KeywordHelper::WriteOptionallyQuoted(column.Name()) << " ";
+	}
+	ss << ")";
+	return ss.str();
+}
+
 string TableCatalogEntry::ToSQL() const {
 	auto create_info = GetInfo();
 	return create_info->ToString();
@@ -181,7 +203,7 @@ const ColumnList &TableCatalogEntry::GetColumns() const {
 	return columns;
 }
 
-const ColumnDefinition &TableCatalogEntry::GetColumn(LogicalIndex idx) {
+const ColumnDefinition &TableCatalogEntry::GetColumn(LogicalIndex idx) const {
 	return columns.GetColumn(idx);
 }
 
@@ -222,8 +244,8 @@ static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalP
 			update.expressions.push_back(make_uniq<BoundColumnRefExpression>(
 			    column.Type(), ColumnBinding(proj.table_index, proj.expressions.size())));
 			proj.expressions.push_back(make_uniq<BoundColumnRefExpression>(
-			    column.Type(), ColumnBinding(get.table_index, get.column_ids.size())));
-			get.column_ids.push_back(check_column_id.index);
+			    column.Type(), ColumnBinding(get.table_index, get.GetColumnIds().size())));
+			get.AddColumnId(check_column_id.index);
 			update.columns.push_back(check_column_id);
 		}
 	}

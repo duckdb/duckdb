@@ -2,7 +2,6 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
-#include "duckdb/common/http_state.hpp"
 #include "duckdb/common/opener_file_system.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
@@ -39,12 +38,13 @@ ClientData::ClientData(ClientContext &context) : catalog_search_path(make_uniq<C
 	profiler = make_shared_ptr<QueryProfiler>(context);
 	http_logger = make_shared_ptr<HTTPLogger>(context);
 	temporary_objects = make_shared_ptr<AttachedDatabase>(db, AttachedDatabaseType::TEMP_DATABASE);
-	temporary_objects->oid = DatabaseManager::Get(db).ModifyCatalog();
+	temporary_objects->oid = DatabaseManager::Get(db).NextOid();
 	random_engine = make_uniq<RandomEngine>();
 	file_opener = make_uniq<ClientContextFileOpener>(context);
 	client_file_system = make_uniq<ClientFileSystem>(context);
 	temporary_objects->Initialize();
 }
+
 ClientData::~ClientData() {
 }
 

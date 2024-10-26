@@ -170,10 +170,16 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression
 void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
 #ifdef DEBUG
-	// the result vector has to be used for the first time or has to be reset
-	// otherwise, the validity mask might contain previous (now incorrect) data
+	// The result vector must be used for the first time, or must be reset.
+	// Otherwise, the validity mask can contain previous (now incorrect) data.
 	if (result.GetVectorType() == VectorType::FLAT_VECTOR) {
-		D_ASSERT(FlatVector::Validity(result).CheckAllValid(count));
+
+		// We do not initialize vector caches for these expressions.
+		if (expr.GetExpressionClass() != ExpressionClass::BOUND_REF &&
+		    expr.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT &&
+		    expr.GetExpressionClass() != ExpressionClass::BOUND_PARAMETER) {
+			D_ASSERT(FlatVector::Validity(result).CheckAllValid(count));
+		}
 	}
 #endif
 
@@ -230,8 +236,10 @@ idx_t ExpressionExecutor::Select(const Expression &expr, ExpressionState *state,
 	D_ASSERT(true_sel || false_sel);
 	D_ASSERT(expr.return_type.id() == LogicalTypeId::BOOLEAN);
 	switch (expr.expression_class) {
+#ifndef DUCKDB_SMALLER_BINARY
 	case ExpressionClass::BOUND_BETWEEN:
 		return Select(expr.Cast<BoundBetweenExpression>(), state, sel, count, true_sel, false_sel);
+#endif
 	case ExpressionClass::BOUND_COMPARISON:
 		return Select(expr.Cast<BoundComparisonExpression>(), state, sel, count, true_sel, false_sel);
 	case ExpressionClass::BOUND_CONJUNCTION:
@@ -249,7 +257,7 @@ static inline idx_t DefaultSelectLoop(const SelectionVector *bsel, const uint8_t
 	for (idx_t i = 0; i < count; i++) {
 		auto bidx = bsel->get_index(i);
 		auto result_idx = sel->get_index(i);
-		if (bdata[bidx] > 0 && (NO_NULL || mask.RowIsValid(bidx))) {
+		if ((NO_NULL || mask.RowIsValid(bidx)) && bdata[bidx] > 0) {
 			if (HAS_TRUE_SEL) {
 				true_sel->set_index(true_count++, result_idx);
 			}

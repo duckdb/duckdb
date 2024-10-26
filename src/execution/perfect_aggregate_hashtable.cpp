@@ -1,4 +1,5 @@
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
+
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -25,11 +26,11 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(ClientContext &context, All
 	tuple_size = layout.GetRowWidth();
 
 	// allocate and null initialize the data
-	owned_data = make_unsafe_uniq_array<data_t>(tuple_size * total_groups);
+	owned_data = make_unsafe_uniq_array_uninitialized<data_t>(tuple_size * total_groups);
 	data = owned_data.get();
 
 	// set up the empty payloads for every tuple, and initialize the "occupied" flag to false
-	group_is_set = make_unsafe_uniq_array<bool>(total_groups);
+	group_is_set = make_unsafe_uniq_array_uninitialized<bool>(total_groups);
 	memset(group_is_set.get(), 0, total_groups * sizeof(bool));
 
 	// initialize the hash table for each entry
@@ -129,7 +130,12 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 	// compute the actual pointer to the data by adding it to the base HT pointer and multiplying by the tuple size
 	for (idx_t i = 0; i < groups.size(); i++) {
 		const auto group = address_data[i];
-		D_ASSERT(group < total_groups);
+		if (group >= total_groups) {
+			throw InvalidInputException("Perfect hash aggregate: aggregate group %llu exceeded total groups %llu. This "
+			                            "likely means that the statistics in your data source are corrupt.\n* PRAGMA "
+			                            "disable_optimizer to disable optimizations that rely on correct statistics",
+			                            group, total_groups);
+		}
 		group_is_set[group] = true;
 		address_data[i] = uintptr_t(data) + group * tuple_size;
 	}

@@ -1,0 +1,147 @@
+# name: test/sql/aggregate/aggregates/test_arg_min_max_nested.test_slow
+# description: Test arg_min/arg_max with nested types
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
+
+statement ok
+SELECT SETSEED(0.8675309);
+
+statement ok
+CREATE TABLE tbl(
+	"DATE" DATE,
+	"TIMESTAMP" TIMESTAMP,
+	"INTEGER" INTEGER,
+	"BIGINT" BIGINT,
+	"DOUBLE" DOUBLE,
+	"VARCHAR" VARCHAR);
+
+# fill up the table with some random gunk in the middle
+statement ok
+INSERT INTO tbl
+	SELECT
+		DATE '1992-01-02' + INTERVAL ((RANDOM() * 300)::INT) DAYS d,
+		TIMESTAMP '1992-01-02 23:20:11' + INTERVAL ((RANDOM() * 300)::INT) DAYS + INTERVAL ((RANDOM() * 60 * 60)::INT) SECONDS ts,
+		50 + (RANDOM() * 6000)::INT i,
+		10 + (RANDOM() * 899999999)::BIGINT bi,
+		1 + RANDOM() * 99 dbl,
+		concat(chr(98 + (RANDOM() * 24)::INT), chr(98 + (RANDOM() * 24)::INT), chr(98 + (RANDOM() * 24)::INT), chr(98 + (RANDOM() * 24)::INT), repeat(chr(98 + (RANDOM() * 24)::INT), 29)) str
+	FROM
+		range(10000);
+
+# insert the min and the max values
+statement ok
+INSERT INTO tbl VALUES (
+	DATE '1992-01-01',
+	TIMESTAMP '1992-01-01 23:20:11',
+	42,
+	0,
+	0.5,
+	'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+)
+
+statement ok
+INSERT INTO tbl VALUES (
+	DATE '1993-01-01',
+	TIMESTAMP '1993-01-01 23:20:11',
+	8400,
+	999999999,
+	100.5,
+	'zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz'
+)
+
+#
+# STRUCTs
+#
+
+# By VARCHAR
+query I
+SELECT arg_min({d: "DATE", ts: "TIMESTAMP", i: "INTEGER", b: "BIGINT", f: "DOUBLE"}, "VARCHAR")
+FROM tbl;
+----
+{'d': 1992-01-01, 'ts': 1992-01-01 23:20:11, 'i': 42, 'b': 0, 'f': 0.5}
+
+query I
+SELECT arg_max({d: "DATE", ts: "TIMESTAMP", i: "INTEGER", b: "BIGINT", f: "DOUBLE"}, "VARCHAR")
+FROM tbl;
+----
+{'d': 1993-01-01, 'ts': 1993-01-01 23:20:11, 'i': 8400, 'b': 999999999, 'f': 100.5}
+
+# By Scalar
+query I
+SELECT arg_min({d: "DATE", ts: "TIMESTAMP", i: "INTEGER", b: "BIGINT", s: "VARCHAR"}, "DOUBLE")
+FROM tbl;
+----
+{'d': 1992-01-01, 'ts': 1992-01-01 23:20:11, 'i': 42, 'b': 0, 's': aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
+
+query I
+SELECT arg_max({d: "DATE", ts: "TIMESTAMP", i: "INTEGER", b: "BIGINT", s: "VARCHAR"}, "DOUBLE")
+FROM tbl;
+----
+{'d': 1993-01-01, 'ts': 1993-01-01 23:20:11, 'i': 8400, 'b': 999999999, 's': zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz}
+
+#
+# Lists
+#
+
+# By VARCHAR
+query I
+SELECT arg_min(["DATE", "DATE" + INTERVAL 1 DAY, NULL, "TIMESTAMP"], "VARCHAR")
+FROM tbl;
+----
+[1992-01-01 00:00:00, 1992-01-02 00:00:00, NULL, 1992-01-01 23:20:11]
+
+query I
+SELECT arg_max(["DATE", "DATE" + INTERVAL 1 DAY, NULL, "TIMESTAMP"], "VARCHAR")
+FROM tbl;
+----
+[1993-01-01 00:00:00, 1993-01-02 00:00:00, NULL, 1993-01-01 23:20:11]
+
+
+# By Scalar
+query I
+SELECT arg_min(["DATE", "DATE" + INTERVAL 1 DAY, NULL, "TIMESTAMP"], "DOUBLE")
+FROM tbl;
+----
+[1992-01-01 00:00:00, 1992-01-02 00:00:00, NULL, 1992-01-01 23:20:11]
+
+query I
+SELECT arg_max(["DATE", "DATE" + INTERVAL 1 DAY, NULL, "TIMESTAMP"], "DOUBLE")
+FROM tbl;
+----
+[1993-01-01 00:00:00, 1993-01-02 00:00:00, NULL, 1993-01-01 23:20:11]
+
+#
+# Nested
+#
+
+# By VARCHAR
+query I
+SELECT arg_min({l: ["DATE", "DATE" + INTERVAL 1 DAY, NULL, "TIMESTAMP"], i: "INTEGER", b: "BIGINT", f: "DOUBLE"}, "VARCHAR")
+FROM tbl;
+----
+{'l': [1992-01-01 00:00:00, 1992-01-02 00:00:00, NULL, 1992-01-01 23:20:11], 'i': 42, 'b': 0, 'f': 0.5}
+
+query I
+SELECT arg_max({l: ["DATE", "DATE" + INTERVAL 1 DAY, NULL, "TIMESTAMP"], i: "INTEGER", b: "BIGINT", f: "DOUBLE"}, "VARCHAR")
+FROM tbl;
+----
+{'l': [1993-01-01 00:00:00, 1993-01-02 00:00:00, NULL, 1993-01-01 23:20:11], 'i': 8400, 'b': 999999999, 'f': 100.5}
+
+
+# By Scalar
+query I
+SELECT arg_min({l: ["DATE", "DATE" + INTERVAL 1 DAY, NULL, "TIMESTAMP"], i: "INTEGER", b: "BIGINT", s: "VARCHAR"}, "DOUBLE")
+FROM tbl;
+----
+{'l': [1992-01-01 00:00:00, 1992-01-02 00:00:00, NULL, 1992-01-01 23:20:11], 'i': 42, 'b': 0, 's': aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
+
+query I
+SELECT arg_max({l: ["DATE", "DATE" + INTERVAL 1 DAY, NULL, "TIMESTAMP"], i: "INTEGER", b: "BIGINT", s: "VARCHAR"}, "DOUBLE")
+FROM tbl;
+----
+{'l': [1993-01-01 00:00:00, 1993-01-02 00:00:00, NULL, 1993-01-01 23:20:11], 'i': 8400, 'b': 999999999, 's': zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz}

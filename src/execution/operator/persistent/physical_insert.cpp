@@ -446,21 +446,36 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 			gstate.initialized = true;
 		}
 
-		if (return_chunk) {
+		if (action_type != OnConflictAction::NOTHING && return_chunk) {
+			// If the action is UPDATE or REPLACE, we will always create either an APPEND or an INSERT
+			// for NOTHING we don't create either an APPEND or an INSERT for the tuple
+			// so it should not be added to the RETURNING chunk
 			gstate.return_collection.Append(lstate.insert_chunk);
 		}
 		idx_t updated_tuples = OnConflictHandling(table, context, lstate);
+		if (action_type == OnConflictAction::NOTHING && return_chunk) {
+			// Because we didn't add to the RETURNING chunk yet
+			// we add the tuples that did not get filtered out now
+			gstate.return_collection.Append(lstate.insert_chunk);
+		}
 		gstate.insert_count += lstate.insert_chunk.size();
 		gstate.insert_count += updated_tuples;
 		storage.LocalAppend(gstate.append_state, table, context.client, lstate.insert_chunk, true);
+
+		// We finalize the local append to write the segment node count.
+		if (action_type != OnConflictAction::THROW) {
+			storage.FinalizeLocalAppend(gstate.append_state);
+			gstate.initialized = false;
+		}
+
 	} else {
 		D_ASSERT(!return_chunk);
 		// parallel append
 		if (!lstate.local_collection) {
 			lock_guard<mutex> l(gstate.lock);
 			auto table_info = storage.GetDataTableInfo();
-			auto &block_manager = TableIOManager::Get(storage).GetBlockManagerForRowData();
-			lstate.local_collection = make_uniq<RowGroupCollection>(std::move(table_info), block_manager, insert_types,
+			auto &io_manager = TableIOManager::Get(table.GetStorage());
+			lstate.local_collection = make_uniq<RowGroupCollection>(std::move(table_info), io_manager, insert_types,
 			                                                        NumericCast<idx_t>(MAX_ROW_ID));
 			lstate.local_collection->InitializeEmpty();
 			lstate.local_collection->InitializeAppend(lstate.local_append_state);
@@ -481,12 +496,16 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 	auto &gstate = input.global_state.Cast<InsertGlobalState>();
 	auto &lstate = input.local_state.Cast<InsertLocalState>();
 	auto &client_profiler = QueryProfiler::Get(context.client);
-	context.thread.profiler.Flush(*this, lstate.default_executor, "default_executor", 1);
+	context.thread.profiler.Flush(*this);
 	client_profiler.Flush(context.thread.profiler);
 
 	if (!parallel || !lstate.local_collection) {
 		return SinkCombineResultType::FINISHED;
 	}
+
+	auto &table = gstate.table;
+	auto &storage = table.GetStorage();
+	const idx_t row_group_size = storage.GetRowGroupSize();
 
 	// parallel append: finalize the append
 	TransactionData tdata(0, 0);
@@ -496,10 +515,8 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 
 	lock_guard<mutex> lock(gstate.lock);
 	gstate.insert_count += append_count;
-	if (append_count < Storage::ROW_GROUP_SIZE) {
+	if (append_count < row_group_size) {
 		// we have few rows - append to the local storage directly
-		auto &table = gstate.table;
-		auto &storage = table.GetStorage();
 		storage.InitializeLocalAppend(gstate.append_state, table, context.client, bound_constraints);
 		auto &transaction = DuckTransaction::Get(context.client, table.catalog);
 		lstate.local_collection->Scan(transaction, [&](DataChunk &insert_chunk) {

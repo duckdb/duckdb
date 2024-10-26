@@ -29,8 +29,8 @@ enum class JoinType : uint8_t {
 	             // (and NULL if no partner is found)
 	RIGHT_SEMI = 9, // RIGHT SEMI join is created by the optimizer when the children of a semi join need to be switched
 	                // so that the build side can be the smaller table
-	RIGHT_ANTI = 10 // RIGHT ANTI join is created by the optimizer when the children of an anti join need to be switched
-	                // so that the build side can be the smaller table
+	RIGHT_ANTI = 10 // RIGHT ANTI join is created by the optimizer when the children of an anti join need to be
+	                // switched so that the build side can be the smaller table
 };
 
 //! True if join is left or full outer join

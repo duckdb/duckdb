@@ -1,12 +1,12 @@
 #ifndef JEMALLOC_INTERNAL_EXTENT_H
 #define JEMALLOC_INTERNAL_EXTENT_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/ecache.h"
 #include "jemalloc/internal/ehooks.h"
+#include "jemalloc/internal/pac.h"
 #include "jemalloc/internal/ph.h"
 #include "jemalloc/internal/rtree.h"
-
-namespace duckdb_jemalloc {
 
 /*
  * This module contains the page-level allocator.  It chooses the addresses that
@@ -45,8 +45,6 @@ void extent_dalloc_wrapper(tsdn_t *tsdn, pac_t *pac, ehooks_t *ehooks,
 void extent_destroy_wrapper(tsdn_t *tsdn, pac_t *pac, ehooks_t *ehooks,
     edata_t *edata);
 bool extent_commit_wrapper(tsdn_t *tsdn, ehooks_t *ehooks, edata_t *edata,
-    size_t offset, size_t length);
-bool extent_decommit_wrapper(tsdn_t *tsdn, ehooks_t *ehooks, edata_t *edata,
     size_t offset, size_t length);
 bool extent_purge_lazy_wrapper(tsdn_t *tsdn, ehooks_t *ehooks, edata_t *edata,
     size_t offset, size_t length);
@@ -135,7 +133,5 @@ extent_can_acquire_neighbor(edata_t *edata, rtree_contents_t contents,
 
 	return true;
 }
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_EXTENT_H */

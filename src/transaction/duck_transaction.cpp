@@ -17,6 +17,8 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/storage/storage_lock.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
 
@@ -28,10 +30,10 @@ TransactionData::TransactionData(transaction_t transaction_id_p, transaction_t s
 }
 
 DuckTransaction::DuckTransaction(DuckTransactionManager &manager, ClientContext &context_p, transaction_t start_time,
-                                 transaction_t transaction_id)
+                                 transaction_t transaction_id, idx_t catalog_version_p)
     : Transaction(manager, context_p), start_time(start_time), transaction_id(transaction_id), commit_id(0),
-      highest_active_query(0), transaction_manager(manager), undo_buffer(context_p),
-      storage(make_uniq<LocalStorage>(context_p, *this)) {
+      highest_active_query(0), catalog_version(catalog_version_p), transaction_manager(manager),
+      undo_buffer(*this, context_p), storage(make_uniq<LocalStorage>(context_p, *this)) {
 }
 
 DuckTransaction::~DuckTransaction() {
@@ -142,6 +144,16 @@ void DuckTransaction::PushSequenceUsage(SequenceCatalogEntry &sequence, const Se
 	}
 }
 
+void DuckTransaction::UpdateCollection(shared_ptr<RowGroupCollection> &collection) {
+	auto collection_ref = reference<RowGroupCollection>(*collection);
+	auto entry = updated_collections.find(collection_ref);
+	if (entry != updated_collections.end()) {
+		// already exists
+		return;
+	}
+	updated_collections.insert(make_pair(collection_ref, collection));
+}
+
 bool DuckTransaction::ChangesMade() {
 	return undo_buffer.ChangesMade() || storage->ChangesMade();
 }
@@ -165,7 +177,47 @@ bool DuckTransaction::AutomaticCheckpoint(AttachedDatabase &db, const UndoBuffer
 	return storage_manager.AutomaticCheckpoint(storage->EstimatedSize() + properties.estimated_size);
 }
 
-ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit_id, bool checkpoint) noexcept {
+bool DuckTransaction::ShouldWriteToWAL(AttachedDatabase &db) {
+	if (!ChangesMade()) {
+		return false;
+	}
+	if (db.IsSystem()) {
+		return false;
+	}
+	auto &storage_manager = db.GetStorageManager();
+	auto log = storage_manager.GetWAL();
+	if (!log) {
+		return false;
+	}
+	return true;
+}
+
+ErrorData DuckTransaction::WriteToWAL(AttachedDatabase &db, unique_ptr<StorageCommitState> &commit_state) noexcept {
+	try {
+		D_ASSERT(ShouldWriteToWAL(db));
+		auto &storage_manager = db.GetStorageManager();
+		auto log = storage_manager.GetWAL();
+		commit_state = storage_manager.GenStorageCommitState(*log);
+		storage->Commit(commit_state.get());
+		undo_buffer.WriteToWAL(*log, commit_state.get());
+		if (commit_state->HasRowGroupData()) {
+			// if we have optimistically written any data AND we are writing to the WAL, we have written references to
+			// optimistically written blocks
+			// hence we need to ensure those optimistically written blocks are persisted
+			storage_manager.GetBlockManager().FileSync();
+		}
+	} catch (std::exception &ex) {
+		if (commit_state) {
+			commit_state->RevertCommit();
+			commit_state.reset();
+		}
+		return ErrorData(ex);
+	}
+	return ErrorData();
+}
+
+ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit_id,
+                                  unique_ptr<StorageCommitState> commit_state) noexcept {
 	// "checkpoint" parameter indicates if the caller will checkpoint. If checkpoint ==
 	//    true: Then this function will NOT write to the WAL or flush/persist.
 	//          This method only makes commit in memory, expecting caller to checkpoint/flush.
@@ -178,25 +230,20 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit
 	D_ASSERT(db.IsSystem() || db.IsTemporary() || !IsReadOnly());
 
 	UndoBuffer::IteratorState iterator_state;
-	LocalStorage::CommitState commit_state;
-	unique_ptr<StorageCommitState> storage_commit_state;
-	optional_ptr<WriteAheadLog> log;
-	if (!db.IsSystem()) {
-		auto &storage_manager = db.GetStorageManager();
-		log = storage_manager.GetWriteAheadLog();
-		storage_commit_state = storage_manager.GenStorageCommitState(*this, checkpoint);
-	} else {
-		log = nullptr;
-	}
 	try {
-		storage->Commit(commit_state, *this);
-		undo_buffer.Commit(iterator_state, log, commit_id);
-		if (storage_commit_state) {
-			storage_commit_state->FlushCommit();
+		storage->Commit(commit_state.get());
+		undo_buffer.Commit(iterator_state, commit_id);
+		if (commit_state) {
+			// if we have written to the WAL - flush after the commit has been successful
+			commit_state->FlushCommit();
 		}
 		return ErrorData();
 	} catch (std::exception &ex) {
 		undo_buffer.RevertCommit(iterator_state, this->transaction_id);
+		if (commit_state) {
+			// if we have written to the WAL - truncate the WAL on failure
+			commit_state->RevertCommit();
+		}
 		return ErrorData(ex);
 	}
 }
@@ -206,8 +253,8 @@ void DuckTransaction::Rollback() noexcept {
 	undo_buffer.Rollback();
 }
 
-void DuckTransaction::Cleanup() {
-	undo_buffer.Cleanup();
+void DuckTransaction::Cleanup(transaction_t lowest_active_transaction) {
+	undo_buffer.Cleanup(lowest_active_transaction);
 }
 
 void DuckTransaction::SetReadWrite() {
@@ -221,6 +268,28 @@ unique_ptr<StorageLockKey> DuckTransaction::TryGetCheckpointLock() {
 		throw InternalException("TryUpgradeCheckpointLock - but thread has no shared lock!?");
 	}
 	return transaction_manager.TryUpgradeCheckpointLock(*write_lock);
+}
+
+shared_ptr<CheckpointLock> DuckTransaction::SharedLockTable(DataTableInfo &info) {
+	unique_lock<mutex> transaction_lock(active_locks_lock);
+	auto entry = active_locks.find(info);
+	if (entry == active_locks.end()) {
+		entry = active_locks.insert(entry, make_pair(std::ref(info), make_uniq<ActiveTableLock>()));
+	}
+	auto &active_table_lock = *entry->second;
+	transaction_lock.unlock(); // release transaction-level lock before acquiring table-level lock
+	lock_guard<mutex> table_lock(active_table_lock.checkpoint_lock_mutex);
+	auto checkpoint_lock = active_table_lock.checkpoint_lock.lock();
+	// check if it is expired (or has never been acquired yet)
+	if (checkpoint_lock) {
+		// not expired - return it
+		return checkpoint_lock;
+	}
+	// no existing lock - obtain it
+	checkpoint_lock = make_shared_ptr<CheckpointLock>(info.GetSharedLock());
+	// store it for future reference
+	active_table_lock.checkpoint_lock = checkpoint_lock;
+	return checkpoint_lock;
 }
 
 } // namespace duckdb

@@ -10,6 +10,7 @@
 
 #include "duckdb_python/numpy/numpy_result_conversion.hpp"
 #include "duckdb.hpp"
+#include "duckdb/main/chunk_scan_state.hpp"
 #include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb_python/python_objects.hpp"
 #include "duckdb_python/pybind11/dataframe.hpp"
@@ -43,7 +44,9 @@ public:
 
 	py::dict FetchTF();
 
-	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t rows_per_batch);
+	ArrowArrayStream FetchArrowArrayStream(idx_t rows_per_batch = 1000000);
+	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t rows_per_batch = 1000000);
+	py::object FetchArrowCapsule(idx_t rows_per_batch = 1000000);
 
 	static py::list GetDescription(const vector<string> &names, const vector<LogicalType> &types);
 
@@ -57,11 +60,7 @@ public:
 	const vector<LogicalType> &GetTypes();
 
 private:
-	py::list FetchAllArrowChunks(idx_t rows_per_batch, bool to_polars);
-
 	void FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name);
-
-	bool FetchArrowChunk(ChunkScanState &scan_state, py::list &batches, idx_t rows_per_batch, bool to_polars);
 
 	PandasDataFrame FrameFromNumpy(bool date_as_object, const py::handle &o);
 

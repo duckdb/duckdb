@@ -27,6 +27,7 @@ enum class PhysicalOperatorType : uint8_t {
 	UNGROUPED_AGGREGATE,
 	HASH_GROUP_BY,
 	PERFECT_HASH_GROUP_BY,
+	PARTITIONED_AGGREGATE,
 	FILTER,
 	PROJECTION,
 	COPY_TO_FILE,
@@ -107,12 +108,14 @@ enum class PhysicalOperatorType : uint8_t {
 	VACUUM,
 	EXPORT,
 	SET,
+	SET_VARIABLE,
 	LOAD,
 	INOUT_FUNCTION,
 	RESULT_COLLECTOR,
 	RESET,
 	EXTENSION,
 	VERIFY_VECTOR,
+	UPDATE_EXTENSIONS,
 
 	// -----------------------------
 	// Secret

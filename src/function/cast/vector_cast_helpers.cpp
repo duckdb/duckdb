@@ -4,7 +4,9 @@ namespace duckdb {
 
 // ------- Helper functions for splitting string nested types  -------
 static bool IsNull(const char *buf, idx_t start_pos, Vector &child, idx_t row_idx) {
-	if (buf[start_pos] == 'N' && buf[start_pos + 1] == 'U' && buf[start_pos + 2] == 'L' && buf[start_pos + 3] == 'L') {
+	if ((buf[start_pos] == 'N' || buf[start_pos] == 'n') && (buf[start_pos + 1] == 'U' || buf[start_pos + 1] == 'u') &&
+	    (buf[start_pos + 2] == 'L' || buf[start_pos + 2] == 'l') &&
+	    (buf[start_pos + 3] == 'L' || buf[start_pos + 3] == 'l')) {
 		FlatVector::SetNull(child, row_idx, true);
 		return true;
 	}

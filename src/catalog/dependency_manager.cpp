@@ -349,6 +349,90 @@ void DependencyManager::CleanupDependencies(CatalogTransaction transaction, Cata
 	}
 }
 
+static string EntryToString(CatalogEntryInfo &info) {
+	auto type = info.type;
+	switch (type) {
+	case CatalogType::TABLE_ENTRY: {
+		return StringUtil::Format("table \"%s\"", info.name);
+	}
+	case CatalogType::SCHEMA_ENTRY: {
+		return StringUtil::Format("schema \"%s\"", info.name);
+	}
+	case CatalogType::VIEW_ENTRY: {
+		return StringUtil::Format("view \"%s\"", info.name);
+	}
+	case CatalogType::INDEX_ENTRY: {
+		return StringUtil::Format("index \"%s\"", info.name);
+	}
+	case CatalogType::SEQUENCE_ENTRY: {
+		return StringUtil::Format("index \"%s\"", info.name);
+	}
+	case CatalogType::COLLATION_ENTRY: {
+		return StringUtil::Format("collation \"%s\"", info.name);
+	}
+	case CatalogType::TYPE_ENTRY: {
+		return StringUtil::Format("type \"%s\"", info.name);
+	}
+	case CatalogType::TABLE_FUNCTION_ENTRY: {
+		return StringUtil::Format("table function \"%s\"", info.name);
+	}
+	case CatalogType::SCALAR_FUNCTION_ENTRY: {
+		return StringUtil::Format("scalar function \"%s\"", info.name);
+	}
+	case CatalogType::AGGREGATE_FUNCTION_ENTRY: {
+		return StringUtil::Format("aggregate function \"%s\"", info.name);
+	}
+	case CatalogType::PRAGMA_FUNCTION_ENTRY: {
+		return StringUtil::Format("pragma function \"%s\"", info.name);
+	}
+	case CatalogType::COPY_FUNCTION_ENTRY: {
+		return StringUtil::Format("copy function \"%s\"", info.name);
+	}
+	case CatalogType::MACRO_ENTRY: {
+		return StringUtil::Format("macro function \"%s\"", info.name);
+	}
+	case CatalogType::TABLE_MACRO_ENTRY: {
+		return StringUtil::Format("table macro function \"%s\"", info.name);
+	}
+	case CatalogType::SECRET_ENTRY: {
+		return StringUtil::Format("secret \"%s\"", info.name);
+	}
+	case CatalogType::SECRET_TYPE_ENTRY: {
+		return StringUtil::Format("secret type \"%s\"", info.name);
+	}
+	case CatalogType::SECRET_FUNCTION_ENTRY: {
+		return StringUtil::Format("secret function \"%s\"", info.name);
+	}
+	default:
+		throw InternalException("CatalogType not handled in EntryToString (DependencyManager) for %s",
+		                        CatalogTypeToString(type));
+	};
+}
+
+string DependencyManager::CollectDependents(CatalogTransaction transaction, catalog_entry_set_t &entries,
+                                            CatalogEntryInfo &info) {
+	string result;
+	for (auto &entry : entries) {
+		D_ASSERT(!IsSystemEntry(entry.get()));
+		auto other_info = GetLookupProperties(entry);
+		result += StringUtil::Format("%s depends on %s.\n", EntryToString(other_info), EntryToString(info));
+		catalog_entry_set_t entry_dependents;
+		ScanDependents(transaction, other_info, [&](DependencyEntry &dep) {
+			auto child = LookupEntry(transaction, dep);
+			if (!child) {
+				return;
+			}
+			if (!CascadeDrop(false, dep.Dependent().flags)) {
+				entry_dependents.insert(*child);
+			}
+		});
+		if (!entry_dependents.empty()) {
+			result += CollectDependents(transaction, entry_dependents, other_info);
+		}
+	}
+	return result;
+}
+
 void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade) {
 	if (IsSystemEntry(object)) {
 		// Don't do anything for this
@@ -358,6 +442,8 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 	auto info = GetLookupProperties(object);
 	// Check if there are any entries that block the DROP because they still depend on the object
 	catalog_entry_set_t to_drop;
+
+	catalog_entry_set_t blocking_dependents;
 	ScanDependents(transaction, info, [&](DependencyEntry &dep) {
 		// It makes no sense to have a schema depend on anything
 		D_ASSERT(dep.EntryInfo().type != CatalogType::SCHEMA_ENTRY);
@@ -368,12 +454,19 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 
 		if (!CascadeDrop(cascade, dep.Dependent().flags)) {
 			// no cascade and there are objects that depend on this object: throw error
-			throw DependencyException("Cannot drop entry \"%s\" because there are entries that "
-			                          "depend on it. Use DROP...CASCADE to drop all dependents.",
-			                          object.name);
+			blocking_dependents.insert(*entry);
+		} else {
+			to_drop.insert(*entry);
 		}
-		to_drop.insert(*entry);
 	});
+	if (!blocking_dependents.empty()) {
+		string error_string =
+		    StringUtil::Format("Cannot drop entry \"%s\" because there are entries that depend on it.\n", object.name);
+		error_string += CollectDependents(transaction, blocking_dependents, info);
+		error_string += "Use DROP...CASCADE to drop all dependents.";
+		throw DependencyException(error_string);
+	}
+
 	ScanSubjects(transaction, info, [&](DependencyEntry &dep) {
 		auto flags = dep.Subject().flags;
 		if (flags.IsOwnership()) {
@@ -390,6 +483,54 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 		D_ASSERT(set);
 		set->DropEntry(transaction, entry.get().name, cascade);
 	}
+}
+
+void DependencyManager::ReorderEntries(catalog_entry_vector_t &entries, ClientContext &context) {
+	auto transaction = catalog.GetCatalogTransaction(context);
+	// Read all the entries visible to this snapshot
+	ReorderEntries(entries, transaction);
+}
+
+void DependencyManager::ReorderEntries(catalog_entry_vector_t &entries) {
+	// Read all committed entries
+	CatalogTransaction transaction(catalog.GetDatabase(), TRANSACTION_ID_START - 1, TRANSACTION_ID_START - 1);
+	ReorderEntries(entries, transaction);
+}
+
+void DependencyManager::ReorderEntry(CatalogTransaction transaction, CatalogEntry &entry, catalog_entry_set_t &visited,
+                                     catalog_entry_vector_t &order) {
+	auto &catalog_entry = *LookupEntry(transaction, entry);
+	// We use this in CheckpointManager, it has the highest commit ID, allowing us to read any committed data
+	bool allow_internal = transaction.start_time == TRANSACTION_ID_START - 1;
+	if (visited.count(catalog_entry) || (!allow_internal && catalog_entry.internal)) {
+		// Already seen and ordered appropriately
+		return;
+	}
+
+	// Check if there are any entries that this entry depends on, those are written first
+	catalog_entry_vector_t dependents;
+	auto info = GetLookupProperties(entry);
+	ScanSubjects(transaction, info, [&](DependencyEntry &dep) { dependents.push_back(dep); });
+	for (auto &dep : dependents) {
+		ReorderEntry(transaction, dep, visited, order);
+	}
+
+	// Then write the entry
+	visited.insert(catalog_entry);
+	order.push_back(catalog_entry);
+}
+
+void DependencyManager::ReorderEntries(catalog_entry_vector_t &entries, CatalogTransaction transaction) {
+	catalog_entry_vector_t reordered;
+	catalog_entry_set_t visited;
+	for (auto &entry : entries) {
+		ReorderEntry(transaction, entry, visited, reordered);
+	}
+	// If this would fail, that means there are more entries that we somehow reached through the dependency manager
+	// but those entries should not actually be visible to this transaction
+	D_ASSERT(entries.size() == reordered.size());
+	entries.clear();
+	entries = reordered;
 }
 
 void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj,
@@ -420,9 +561,18 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 				disallow_alter = false;
 				break;
 			}
+			case AlterTableType::ADD_COLUMN: {
+				disallow_alter = false;
+				break;
+			}
 			default:
 				break;
 			}
+			break;
+		}
+		case AlterType::SET_COLUMN_COMMENT:
+		case AlterType::SET_COMMENT: {
+			disallow_alter = false;
 			break;
 		}
 		default:

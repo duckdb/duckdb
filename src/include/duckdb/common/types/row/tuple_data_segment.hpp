@@ -32,7 +32,9 @@ public:
 	TupleDataChunkPart(TupleDataChunkPart &&other) noexcept;
 	TupleDataChunkPart &operator=(TupleDataChunkPart &&) noexcept;
 
-	static constexpr const uint32_t INVALID_INDEX = (uint32_t)-1;
+public:
+	//! Mark heap as empty
+	void SetHeapEmpty();
 
 public:
 	//! Index/offset of the row block
@@ -48,6 +50,10 @@ public:
 	uint32_t count;
 	//! Lock for recomputing heap pointers (owned by TupleDataChunk)
 	reference<mutex> lock;
+
+private:
+	//! Marker for empty heaps
+	static constexpr const uint32_t INVALID_INDEX = (uint32_t)-1;
 };
 
 struct TupleDataChunk {

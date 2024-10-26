@@ -1,0 +1,37 @@
+# name: test/sql/window/test_custom_spooling.test_slow
+# description: Validate spooling of custom window functions.
+# group: [window]
+
+require tpch
+
+statement ok
+call dbgen(sf=0.1);
+
+statement ok
+PRAGMA temp_directory='__TEST_DIR__/window_spooling'
+
+# Force paging
+statement ok
+PRAGMA memory_limit='50MB'
+
+statement ok
+PRAGMA enable_verification
+
+# MODE is very unstable on this data
+query IIII
+SELECT SUM(s), SUM(q), SUM(m), ROUND(SUM(d), -4)
+FROM (
+	SELECT
+		SUM(l_extendedprice) OVER w AS s,
+		QUANTILE(l_extendedprice, 0.5) OVER w AS q,
+		MAD(l_extendedprice) OVER w AS m,
+		MODE(l_quantity) OVER w AS d,
+	FROM lineitem
+	WINDOW w AS (
+		PARTITION BY (l_linenumber = 1) 
+		ORDER BY l_orderkey, l_linenumber 
+		ROWS BETWEEN 20 PRECEDING AND 20 FOLLOWING
+	)
+) t;
+----
+886221884732.62	20709502135.61	9898471727.97	15330000

@@ -1,22 +1,11 @@
 import pytest
 
-_ = pytest.importorskip("duckdb.experimental.spark")
 
 from duckdb.experimental.spark.sql.types import (
-    LongType,
-    StructType,
-    BooleanType,
-    StructField,
-    StringType,
-    IntegerType,
-    LongType,
     Row,
-    ArrayType,
-    MapType,
 )
-from duckdb.experimental.spark.sql.functions import col, struct, when, lit, array_contains
-import duckdb
-import re
+
+_ = pytest.importorskip("duckdb.experimental.spark")
 
 
 class TestDataFrameDropDuplicates(object):
@@ -61,9 +50,38 @@ class TestDataFrameDropDuplicates(object):
         res2 = df2.collect()
         assert res2 == res
 
-        with pytest.raises(NotImplementedError):
-            # DuckDBPyRelation does not have 'distinct_on' support yet
-            dropDisDF = df.dropDuplicates(["department", "salary"])
-            print("Distinct count of department & salary : " + str(dropDisDF.count()))
-            res = dropDisDF.collect()
-            print(res)
+        expected_subset = [
+            Row(department='Finance', salary=3000),
+            Row(department='Finance', salary=3300),
+            Row(department='Finance', salary=3900),
+            Row(department='Marketing', salary=2000),
+            Row(department='Marketing', salary=3000),
+            Row(epartment='Sales', salary=3000),
+            Row(department='Sales', salary=4100),
+            Row(department='Sales', salary=4600),
+        ]
+
+        dropDisDF = df.dropDuplicates(["department", "salary"]).sort("department", "salary")
+        assert dropDisDF.columns == ["employee_name", "department", "salary"]
+        assert dropDisDF.count() == len(expected_subset)
+        res = dropDisDF.select("department", "salary").collect()
+        assert res == expected_subset
+
+    def test_spark_drop_duplicates_with_keywords_cols(self, spark):
+        data = [
+            ("abc", 1, ""),
+            ("abc", 1, ""),
+            ("def", 2, ""),
+            ("def", 2, ""),
+            ("def", 2, ""),
+            ("def", 3, ""),
+            ("def", 3, ""),
+            ("def", 3, ""),
+            ("def", 3, ""),
+        ]
+
+        columns = ["table", "min", "null"]
+        df = spark.createDataFrame(data=data, schema=columns)
+
+        dropDisDF = df.dropDuplicates(["table", "min"]).sort("table", "min")
+        assert dropDisDF.count() == 3

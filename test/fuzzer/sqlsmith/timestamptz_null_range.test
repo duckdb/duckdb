@@ -6,7 +6,10 @@ require icu
 
 require no_extension_autoloading
 
-statement error
+statement ok
+PRAGMA enable_verification
+
+query I
 SELECT NULL FROM (
 	SELECT 4767 
 	FROM generate_series(CAST('290309-12-22 (BC) 00:00:00+00' AS TIMESTAMP WITH TIME ZONE), NULL, NULL) 
@@ -14,4 +17,3 @@ SELECT NULL FROM (
 	) 
 	AS t64
 ----
-RANGE with NULL bounds is not supported

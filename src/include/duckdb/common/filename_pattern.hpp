@@ -30,6 +30,10 @@ public:
 	void Serialize(Serializer &serializer) const;
 	static FilenamePattern Deserialize(Deserializer &deserializer);
 
+	bool HasUUID() const {
+		return uuid;
+	}
+
 private:
 	string base;
 	idx_t pos;

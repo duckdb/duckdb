@@ -5,15 +5,17 @@
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/http_state.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
+#include "http_state.hpp"
 #endif
 
-#include <duckdb/function/scalar/string_functions.hpp>
-#include <duckdb/main/secret/secret_manager.hpp>
-#include <duckdb/storage/buffer_manager.hpp>
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+
 #include <iostream>
 #include <thread>
 
@@ -99,47 +101,11 @@ static duckdb::unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_heade
 }
 
 string S3FileSystem::UrlDecode(string input) {
-	string result;
-	result.reserve(input.size());
-	char ch;
-	replace(input.begin(), input.end(), '+', ' ');
-	for (idx_t i = 0; i < input.length(); i++) {
-		if (int(input[i]) == 37) {
-			unsigned int ii;
-			sscanf(input.substr(i + 1, 2).c_str(), "%x", &ii);
-			ch = static_cast<char>(ii);
-			result += ch;
-			i += 2;
-		} else {
-			result += input[i];
-		}
-	}
-	return result;
+	return StringUtil::URLDecode(input, true);
 }
 
 string S3FileSystem::UrlEncode(const string &input, bool encode_slash) {
-	// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
-	static const char *hex_digit = "0123456789ABCDEF";
-	string result;
-	result.reserve(input.size());
-	for (idx_t i = 0; i < input.length(); i++) {
-		char ch = input[i];
-		if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' ||
-		    ch == '-' || ch == '~' || ch == '.') {
-			result += ch;
-		} else if (ch == '/') {
-			if (encode_slash) {
-				result += string("%2F");
-			} else {
-				result += ch;
-			}
-		} else {
-			result += string("%");
-			result += hex_digit[static_cast<unsigned char>(ch) >> 4];
-			result += hex_digit[static_cast<unsigned char>(ch) & 15];
-		}
-	}
-	return result;
+	return StringUtil::URLEncode(input, encode_slash);
 }
 
 void AWSEnvironmentCredentialsProvider::SetExtensionOptionValue(string key, const char *env_var_name) {
@@ -180,99 +146,52 @@ S3AuthParams AWSEnvironmentCredentialsProvider::CreateParams() {
 	return params;
 }
 
-unique_ptr<S3AuthParams> S3AuthParams::ReadFromStoredCredentials(optional_ptr<FileOpener> opener, string path) {
-	if (!opener) {
-		return nullptr;
-	}
-	auto db = opener->TryGetDatabase();
-	if (!db) {
-		return nullptr;
-	}
-	auto &secret_manager = db->GetSecretManager();
-	auto context = opener->TryGetClientContext();
-	auto transaction = context ? CatalogTransaction::GetSystemCatalogTransaction(*context)
-	                           : CatalogTransaction::GetSystemTransaction(*db);
-
-	auto secret_match = secret_manager.LookupSecret(transaction, path, "s3");
-	if (!secret_match.HasMatch()) {
-		secret_match = secret_manager.LookupSecret(transaction, path, "r2");
-	}
-	if (!secret_match.HasMatch()) {
-		secret_match = secret_manager.LookupSecret(transaction, path, "gcs");
-	}
-	if (!secret_match.HasMatch()) {
-		return nullptr;
-	}
-
-	// Return the stored credentials
-	const auto &secret = secret_match.GetSecret();
-	const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(secret);
-
-	return make_uniq<S3AuthParams>(S3SecretHelper::GetParams(kv_secret));
-}
-
 S3AuthParams S3AuthParams::ReadFrom(optional_ptr<FileOpener> opener, FileOpenerInfo &info) {
-	S3AuthParams result;
-	Value value;
+	auto result = S3AuthParams();
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_region", value, info)) {
-		result.region = value.ToString();
+	// Without a FileOpener we can not access settings nor secrets: return empty auth params
+	if (!opener) {
+		return result;
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_access_key_id", value, info)) {
-		result.access_key_id = value.ToString();
-	}
+	const char *secret_types[] = {"s3", "r2", "gcs"};
+	idx_t secret_types_len = sizeof(secret_types) / sizeof(const char *);
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_secret_access_key", value, info)) {
-		result.secret_access_key = value.ToString();
-	}
+	KeyValueSecretReader secret_reader(*opener, info, secret_types, secret_types_len);
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_session_token", value, info)) {
-		result.session_token = value.ToString();
-	}
+	// These settings we just set or leave to their S3AuthParams default value
+	secret_reader.TryGetSecretKeyOrSetting("region", "s3_region", result.region);
+	secret_reader.TryGetSecretKeyOrSetting("key_id", "s3_access_key_id", result.access_key_id);
+	secret_reader.TryGetSecretKeyOrSetting("secret", "s3_secret_access_key", result.secret_access_key);
+	secret_reader.TryGetSecretKeyOrSetting("session_token", "s3_session_token", result.session_token);
+	secret_reader.TryGetSecretKeyOrSetting("region", "s3_region", result.region);
+	secret_reader.TryGetSecretKeyOrSetting("use_ssl", "s3_use_ssl", result.use_ssl);
+	secret_reader.TryGetSecretKeyOrSetting("s3_url_compatibility_mode", "s3_url_compatibility_mode",
+	                                       result.s3_url_compatibility_mode);
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_endpoint", value, info)) {
-		if (value.ToString().empty()) {
-			if (StringUtil::StartsWith(info.file_path, "gcs://") || StringUtil::StartsWith(info.file_path, "gs://")) {
-				result.endpoint = "storage.googleapis.com";
-			} else {
-				result.endpoint = "s3.amazonaws.com";
-			}
-		} else {
-			result.endpoint = value.ToString();
+	// Endpoint and url style are slightly more complex and require special handling for gcs and r2
+	auto endpoint_result = secret_reader.TryGetSecretKeyOrSetting("endpoint", "s3_endpoint", result.endpoint);
+	auto url_style_result = secret_reader.TryGetSecretKeyOrSetting("url_style", "s3_url_style", result.url_style);
+
+	if (StringUtil::StartsWith(info.file_path, "gcs://") || StringUtil::StartsWith(info.file_path, "gs://")) {
+		// For GCS urls we force the endpoint and vhost path style, allowing only to be overridden by secrets
+		if (result.endpoint.empty() || endpoint_result.GetScope() != SettingScope::SECRET) {
+			result.endpoint = "storage.googleapis.com";
 		}
-	} else {
+		if (result.url_style.empty() || url_style_result.GetScope() != SettingScope::SECRET) {
+			result.url_style = "path";
+		}
+	}
+
+	if (result.endpoint.empty()) {
 		result.endpoint = "s3.amazonaws.com";
-	}
-
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_url_style", value, info)) {
-		auto val_str = value.ToString();
-		if (!(val_str == "vhost" || val_str != "path" || !val_str.empty())) {
-			throw std::runtime_error(
-			    "Incorrect setting found for s3_url_style, allowed values are: 'path' and 'vhost'");
-		}
-		result.url_style = val_str;
-	} else {
-		result.url_style = "vhost";
-	}
-
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_use_ssl", value, info)) {
-		result.use_ssl = value.GetValue<bool>();
-	} else {
-		result.use_ssl = true;
-	}
-
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_url_compatibility_mode", value, info)) {
-		result.s3_url_compatibility_mode = value.GetValue<bool>();
-	} else {
-		result.s3_url_compatibility_mode = true;
 	}
 
 	return result;
 }
 
-unique_ptr<KeyValueSecret> S3SecretHelper::CreateSecret(vector<string> &prefix_paths_p, string &type, string &provider,
-                                                        string &name, S3AuthParams &params) {
+unique_ptr<KeyValueSecret> CreateSecret(vector<string> &prefix_paths_p, string &type, string &provider, string &name,
+                                        S3AuthParams &params) {
 	auto return_value = make_uniq<KeyValueSecret>(prefix_paths_p, type, provider, name);
 
 	//! Set key value map
@@ -291,37 +210,16 @@ unique_ptr<KeyValueSecret> S3SecretHelper::CreateSecret(vector<string> &prefix_p
 	return return_value;
 }
 
-S3AuthParams S3SecretHelper::GetParams(const KeyValueSecret &secret) {
-	S3AuthParams params;
-	if (!secret.TryGetValue("region").IsNull()) {
-		params.region = secret.TryGetValue("region").ToString();
-	}
-	if (!secret.TryGetValue("key_id").IsNull()) {
-		params.access_key_id = secret.TryGetValue("key_id").ToString();
-	}
-	if (!secret.TryGetValue("secret").IsNull()) {
-		params.secret_access_key = secret.TryGetValue("secret").ToString();
-	}
-	if (!secret.TryGetValue("session_token").IsNull()) {
-		params.session_token = secret.TryGetValue("session_token").ToString();
-	}
-	if (!secret.TryGetValue("endpoint").IsNull()) {
-		params.endpoint = secret.TryGetValue("endpoint").ToString();
-	}
-	if (!secret.TryGetValue("url_style").IsNull()) {
-		params.url_style = secret.TryGetValue("url_style").ToString();
-	}
-	if (!secret.TryGetValue("use_ssl").IsNull()) {
-		params.use_ssl = secret.TryGetValue("use_ssl").GetValue<bool>();
-	}
-	if (!secret.TryGetValue("s3_url_compatibility_mode").IsNull()) {
-		params.s3_url_compatibility_mode = secret.TryGetValue("s3_url_compatibility_mode").GetValue<bool>();
-	}
-	return params;
-}
-
 S3FileHandle::~S3FileHandle() {
-	Close();
+	if (Exception::UncaughtException()) {
+		// We are in an exception, don't do anything
+		return;
+	}
+
+	try {
+		Close();
+	} catch (...) { // NOLINT
+	}
 }
 
 S3ConfigParams S3ConfigParams::ReadFrom(optional_ptr<FileOpener> opener) {
@@ -361,11 +259,11 @@ void S3FileHandle::Close() {
 	}
 }
 
-void S3FileHandle::InitializeClient(optional_ptr<ClientContext> client_context) {
+unique_ptr<duckdb_httplib_openssl::Client> S3FileHandle::CreateClient(optional_ptr<ClientContext> client_context) {
 	auto parsed_url = S3FileSystem::S3UrlParse(path, this->auth_params);
 
 	string proto_host_port = parsed_url.http_proto + parsed_url.host;
-	http_client = HTTPFileSystem::GetClient(this->http_params, proto_host_port.c_str(), this);
+	return HTTPFileSystem::GetClient(this->http_params, proto_host_port.c_str(), this);
 }
 
 // Opens the multipart upload and returns the ID
@@ -782,20 +680,13 @@ unique_ptr<ResponseWrapper> S3FileSystem::GetRangeRequest(FileHandle &handle, st
 unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const string &path, FileOpenFlags flags,
                                                       optional_ptr<FileOpener> opener) {
 	FileOpenerInfo info = {path};
-
-	S3AuthParams auth_params;
-	auto registered_params = S3AuthParams::ReadFromStoredCredentials(opener, path);
-	if (registered_params) {
-		auth_params = *registered_params;
-	} else {
-		auth_params = S3AuthParams::ReadFrom(opener, info);
-	}
+	S3AuthParams auth_params = S3AuthParams::ReadFrom(opener, info);
 
 	// Scan the query string for any s3 authentication parameters
 	auto parsed_s3_url = S3UrlParse(path, auth_params);
 	ReadQueryParams(parsed_s3_url.query_param, auth_params);
 
-	return duckdb::make_uniq<S3FileHandle>(*this, path, flags, HTTPParams::ReadFrom(opener), auth_params,
+	return duckdb::make_uniq<S3FileHandle>(*this, path, flags, HTTPParams::ReadFrom(opener, info), auth_params,
 	                                       S3ConfigParams::ReadFrom(opener));
 }
 
@@ -903,8 +794,9 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
 		auto required_part_size = config_params.max_file_size / max_part_count;
 		auto minimum_part_size = MaxValue<idx_t>(aws_minimum_part_size, required_part_size);
 
-		// Round part size up to multiple of BLOCK_SIZE
-		part_size = ((minimum_part_size + Storage::BLOCK_SIZE - 1) / Storage::BLOCK_SIZE) * Storage::BLOCK_SIZE;
+		// Round part size up to multiple of Storage::DEFAULT_BLOCK_SIZE
+		part_size = ((minimum_part_size + Storage::DEFAULT_BLOCK_SIZE - 1) / Storage::DEFAULT_BLOCK_SIZE) *
+		            Storage::DEFAULT_BLOCK_SIZE;
 		D_ASSERT(part_size * max_part_count >= config_params.max_file_size);
 
 		multipart_upload_id = s3fs.InitializeMultipartUpload(*this);
@@ -977,7 +869,7 @@ static bool Match(vector<string>::const_iterator key, vector<string>::const_iter
 			}
 			return false;
 		}
-		if (!LikeFun::Glob(key->data(), key->length(), pattern->data(), pattern->length())) {
+		if (!Glob(key->data(), key->length(), pattern->data(), pattern->length())) {
 			return false;
 		}
 		key++;
@@ -994,13 +886,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 	FileOpenerInfo info = {glob_pattern};
 
 	// Trim any query parameters from the string
-	S3AuthParams s3_auth_params;
-	auto registered_params = S3AuthParams::ReadFromStoredCredentials(opener, glob_pattern);
-	if (registered_params) {
-		s3_auth_params = *registered_params;
-	} else {
-		s3_auth_params = S3AuthParams::ReadFrom(opener, info);
-	}
+	S3AuthParams s3_auth_params = S3AuthParams::ReadFrom(opener, info);
 
 	// In url compatibility mode, we ignore globs allowing users to query files with the glob chars
 	if (s3_auth_params.s3_url_compatibility_mode) {
@@ -1017,7 +903,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 	}
 
 	string shared_path = parsed_glob_url.substr(0, first_wildcard_pos);
-	auto http_params = HTTPParams::ReadFrom(opener);
+	auto http_params = HTTPParams::ReadFrom(opener, info);
 
 	ReadQueryParams(parsed_s3_url.query_param, s3_auth_params);
 

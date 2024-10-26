@@ -55,6 +55,8 @@ public:
 	TupleDataAllocator(BufferManager &buffer_manager, const TupleDataLayout &layout);
 	TupleDataAllocator(TupleDataAllocator &allocator);
 
+	~TupleDataAllocator();
+
 	//! Get the buffer manager
 	BufferManager &GetBufferManager();
 	//! Get the buffer allocator
@@ -65,6 +67,8 @@ public:
 	idx_t RowBlockCount() const;
 	//! Number of heap blocks
 	idx_t HeapBlockCount() const;
+	//! Sets the partition index of this tuple data allocator
+	void SetPartitionIndex(idx_t index);
 
 public:
 	//! Builds out the chunks for next append, given the metadata in the append state
@@ -81,6 +85,8 @@ public:
 	                           bool release_heap);
 	//! Releases or stores ALL handles in the management state
 	void ReleaseOrStoreHandles(TupleDataPinState &state, TupleDataSegment &segment);
+	//! Sets 'can_destroy' to true for all blocks so they aren't added to the eviction queue
+	void SetDestroyBufferUponUnpin();
 
 private:
 	//! Builds out a single part (grabs the lock)
@@ -109,6 +115,8 @@ private:
 	BufferManager &buffer_manager;
 	//! The layout of the data
 	const TupleDataLayout layout;
+	//! Partition index (optional, if partitioned)
+	optional_idx partition_index;
 	//! Blocks storing the fixed-size rows
 	unsafe_vector<TupleDataBlock> row_blocks;
 	//! Blocks storing the variable-size data of the fixed-size rows (e.g., string, list)

@@ -124,12 +124,15 @@ public:
 	idx_t max_depth = NumericLimits<idx_t>::Maximum();
 	//! We divide the number of appearances of each JSON field by the auto-detection sample size
 	//! If the average over the fields of an object is less than this threshold,
-	//! we default to the JSON type for this object rather than the shredded type
+	//! we default to the MAP type with value type of merged field types
 	double field_appearance_threshold = 0.1;
 	//! The maximum number of files we sample to sample sample_size rows
 	idx_t maximum_sample_files = 32;
 	//! Whether we auto-detect and convert JSON strings to integers
 	bool convert_strings_to_integers = false;
+	//! If a struct contains more fields than this threshold with at least 80% similar types,
+	//! we infer it as MAP type
+	idx_t map_inference_threshold = 25;
 
 	//! All column names (in order)
 	vector<string> names;
@@ -237,7 +240,8 @@ private:
 
 	void SkipOverArrayStart();
 
-	void ReadAndAutoDetect(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index);
+	void ReadAndAutoDetect(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index,
+	                       bool &file_done);
 	bool ReconstructFirstObject(JSONScanGlobalState &gstate);
 	void ParseNextChunk(JSONScanGlobalState &gstate);
 
@@ -305,8 +309,7 @@ public:
 
 	static double ScanProgress(ClientContext &context, const FunctionData *bind_data_p,
 	                           const GlobalTableFunctionState *global_state);
-	static idx_t GetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-	                           LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state);
+	static OperatorPartitionData GetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input);
 	static unique_ptr<NodeStatistics> Cardinality(ClientContext &context, const FunctionData *bind_data);
 	static void ComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
 	                                  vector<unique_ptr<Expression>> &filters);

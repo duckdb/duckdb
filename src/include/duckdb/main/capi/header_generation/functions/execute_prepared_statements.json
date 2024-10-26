@@ -1,0 +1,51 @@
+{
+    "group": "execute_prepared_statements",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_execute_prepared",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "duckdb_result *",
+                    "name": "out_result"
+                }
+            ],
+            "comment": {
+                "description": "Executes the prepared statement with the given bound parameters, and returns a materialized query result.\n\nThis method can be called multiple times for each prepared statement, and the parameters can be modified\nbetween calls to this function.\n\nNote that the result must be freed with `duckdb_destroy_result`.\n\n",
+                "param_comments": {
+                    "prepared_statement": "The prepared statement to execute.",
+                    "out_result": "The query result."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_execute_prepared_streaming",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "duckdb_result *",
+                    "name": "out_result"
+                }
+            ],
+            "deprecated": true,
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nExecutes the prepared statement with the given bound parameters, and returns an optionally-streaming query result.\nTo determine if the resulting query was in fact streamed, use `duckdb_result_is_streaming`\n\nThis method can be called multiple times for each prepared statement, and the parameters can be modified\nbetween calls to this function.\n\nNote that the result must be freed with `duckdb_destroy_result`.\n\n",
+                "param_comments": {
+                    "prepared_statement": "The prepared statement to execute.",
+                    "out_result": "The query result."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        }
+    ]
+}

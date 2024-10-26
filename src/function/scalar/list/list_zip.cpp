@@ -1,5 +1,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/function/scalar/list_functions.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
@@ -138,13 +140,17 @@ static unique_ptr<FunctionData> ListZipBind(ClientContext &context, ScalarFuncti
 		auto &child = arguments[i];
 		switch (child->return_type.id()) {
 		case LogicalTypeId::LIST:
+		case LogicalTypeId::ARRAY:
+			child = BoundCastExpression::AddArrayCastToList(context, std::move(child));
 			struct_children.push_back(make_pair(string(), ListType::GetChildType(child->return_type)));
 			break;
 		case LogicalTypeId::SQLNULL:
 			struct_children.push_back(make_pair(string(), LogicalTypeId::SQLNULL));
 			break;
-		default:
+		case LogicalTypeId::UNKNOWN:
 			throw ParameterNotResolvedException();
+		default:
+			throw BinderException("Parameter type needs to be List");
 		}
 	}
 	bound_function.return_type = LogicalType::LIST(LogicalType::STRUCT(struct_children));
@@ -159,7 +165,4 @@ ScalarFunction ListZipFun::GetFunction() {
 	return fun;
 }
 
-void ListZipFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"list_zip", "array_zip"}, GetFunction());
-}
 } // namespace duckdb

@@ -13,9 +13,10 @@ statement error
 SELECT cast('AAAA' as interval)
 ----
 
-statement error
+query I
 SELECT cast('00:00:' as interval)
 ----
+00:00:00
 
 statement error
 SELECT cast('3 doopiedoos' as interval)
@@ -47,7 +48,7 @@ NULL
 query I
 SELECT try_cast('00:00:' as interval)
 ----
-NULL
+00:00:00
 
 query I
 SELECT try_cast('3 doopiedoos' as interval)

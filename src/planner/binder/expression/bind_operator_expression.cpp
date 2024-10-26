@@ -1,9 +1,9 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
@@ -18,7 +18,7 @@ LogicalType ExpressionBinder::ResolveNotType(OperatorExpression &op, vector<uniq
 	return LogicalType(LogicalTypeId::BOOLEAN);
 }
 
-LogicalType ExpressionBinder::ResolveInType(OperatorExpression &op, vector<unique_ptr<Expression>> &children) {
+LogicalType ExpressionBinder::ResolveCoalesceType(OperatorExpression &op, vector<unique_ptr<Expression>> &children) {
 	if (children.empty()) {
 		throw InternalException("IN requires at least a single child node");
 	}
@@ -50,11 +50,10 @@ LogicalType ExpressionBinder::ResolveInType(OperatorExpression &op, vector<uniqu
 		child = BoundCastExpression::AddCastToType(context, std::move(child), max_type);
 		if (is_in_operator) {
 			// If it's IN/NOT_IN operator, push collation functions.
-			ExpressionBinder::PushCollation(context, child, max_type, true);
+			ExpressionBinder::PushCollation(context, child, max_type);
 		}
 	}
-	// (NOT) IN always returns a boolean
-	return LogicalType::BOOLEAN;
+	return max_type;
 }
 
 LogicalType ExpressionBinder::ResolveOperatorType(OperatorExpression &op, vector<unique_ptr<Expression>> &children) {
@@ -68,10 +67,11 @@ LogicalType ExpressionBinder::ResolveOperatorType(OperatorExpression &op, vector
 		return LogicalType::BOOLEAN;
 	case ExpressionType::COMPARE_IN:
 	case ExpressionType::COMPARE_NOT_IN:
-		return ResolveInType(op, children);
+		ResolveCoalesceType(op, children);
+		// (NOT) IN always returns a boolean
+		return LogicalType::BOOLEAN;
 	case ExpressionType::OPERATOR_COALESCE: {
-		ResolveInType(op, children);
-		return children[0]->return_type;
+		return ResolveCoalesceType(op, children);
 	}
 	case ExpressionType::OPERATOR_NOT:
 		return ResolveNotType(op, children);
@@ -135,13 +135,16 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		auto &name_exp = BoundExpression::GetExpression(*op.children[1]);
 		const auto &extract_expr_type = extract_exp->return_type;
 		if (extract_expr_type.id() != LogicalTypeId::STRUCT && extract_expr_type.id() != LogicalTypeId::UNION &&
-		    extract_expr_type.id() != LogicalTypeId::SQLNULL && !extract_expr_type.IsJSONType()) {
+		    extract_expr_type.id() != LogicalTypeId::MAP && extract_expr_type.id() != LogicalTypeId::SQLNULL &&
+		    !extract_expr_type.IsJSONType()) {
 			return BindResult(StringUtil::Format(
-			    "Cannot extract field %s from expression \"%s\" because it is not a struct, union, or json",
+			    "Cannot extract field %s from expression \"%s\" because it is not a struct, union, map, or json",
 			    name_exp->ToString(), extract_exp->ToString()));
 		}
 		if (extract_expr_type.id() == LogicalTypeId::UNION) {
 			function_name = "union_extract";
+		} else if (extract_expr_type.id() == LogicalTypeId::MAP) {
+			function_name = "map_extract";
 		} else if (extract_expr_type.IsJSONType()) {
 			function_name = "json_extract";
 			// Make sure we only extract fields, not array elements, by adding $. syntax

@@ -13,8 +13,7 @@ CREATE TABLE right_table (a INTEGER, b INTEGER);
 
 # insert 2x values into right table. This means it will be forced to be the probe side
 statement ok
-INSERT INTO right_table select 41, range as b from range(100);
-
+INSERT INTO right_table select 41, range as b from range(375);
 
 query II
 EXPLAIN ANALYZE SELECT * FROM left_table ANTI JOIN right_table ON left_table.a = right_table.a;
@@ -27,7 +26,7 @@ explain analyze SELECT * FROM left_table ANTI JOIN right_table ON left_table.a =
 ----
 analyzed_plan	<REGEX>:.*RIGHT_ANTI.*
 
-# still flips with equality condition on tuples 
+# still flips with equality condition on tuples
 query II
 explain analyze SELECT * FROM left_table ANTI JOIN right_table ON ([left_table.a, left_table.b] = [right_table.a, right_table.b]);
 ----
@@ -57,10 +56,11 @@ ON left_table.a = joined_right_table.a;
 ----
 analyzed_plan	<REGEX>:.*RIGHT_ANTI.*
 
+
 statement ok
 DELETE FROM left_table where c=5;
 
-# USING COLUMNS also works, 
+# USING COLUMNS also works,
 query II
 EXPLAIN ANALYZE SELECT * FROM left_table ANTI JOIN right_table USING (a);
 ----
@@ -116,6 +116,23 @@ analyzed_plan	<!REGEX>:.*RIGHT_ANTI.*
 
 # correlated subqueries can flip
 query II
+explain analyze SELECT a as outer_a, (SELECT MAX(right_table.b) FROM right_table where right_table.a != outer_a) right_table_b FROM left_table ANTI JOIN right_table ON (left_table.a = right_table.a) Order by outer_a, right_table_b;
+----
+analyzed_plan	<REGEX>:.*RIGHT_ANTI.*
+
+statement ok
+INSERT INTO right_table VALUES (1, 20);
+
+# correlated subqueries
+query II
+explain analyze SELECT a as outer_a, (SELECT MAX(b) FROM right_table where right_table.a != outer_a) right_table_b FROM left_table ANTI JOIN right_table ON (left_table.a = right_table.a) Order by outer_a, right_table_b;
+----
+analyzed_plan	<REGEX>:.*RIGHT_ANTI.*
+
+statement ok
+SET scalar_subquery_error_on_multiple_rows=false
+
+query II
 explain analyze SELECT a as outer_a, (SELECT right_table.b FROM right_table where right_table.a != outer_a) right_table_b FROM left_table ANTI JOIN right_table ON (left_table.a = right_table.a) Order by outer_a, right_table_b;
 ----
 analyzed_plan	<REGEX>:.*RIGHT_ANTI.*
@@ -128,4 +145,5 @@ query II
 explain analyze SELECT a as outer_a, (SELECT b FROM right_table where right_table.a != outer_a) right_table_b FROM left_table ANTI JOIN right_table ON (left_table.a = right_table.a) Order by outer_a, right_table_b;
 ----
 analyzed_plan	<REGEX>:.*RIGHT_ANTI.*
+
 

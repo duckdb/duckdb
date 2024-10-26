@@ -134,6 +134,7 @@ class QueryResult:
     def row_count(self) -> int:
         return self._row_count
 
+    @property
     def column_count(self) -> int:
         assert self._column_count != 0
         return self._column_count
@@ -163,7 +164,7 @@ class QueryResult:
             context.fail(self.get_error())
 
         row_count = self.row_count()
-        column_count = self.column_count()
+        column_count = self.column_count
         total_value_count = row_count * column_count
 
         if len(values) == 1 and result_is_hash(values[0]):
@@ -179,7 +180,7 @@ class QueryResult:
             logger.output_result(self, result_values_string)
 
         if sort_style == SortStyle.ROW_SORT:
-            ncols = self.column_count()
+            ncols = self.column_count
             nrows = int(total_value_count / ncols)
             rows = [result_values_string[i * ncols : (i + 1) * ncols] for i in range(nrows)]
 
@@ -233,8 +234,8 @@ class QueryResult:
             original_expected_columns = expected_column_count
             column_count_mismatch = False
 
-            if expected_column_count != self.column_count():
-                expected_column_count = self.column_count()
+            if expected_column_count != self.column_count:
+                expected_column_count = self.column_count
                 column_count_mismatch = True
 
             expected_rows = len(comparison_values) / expected_column_count
@@ -249,7 +250,7 @@ class QueryResult:
                 row_wise = True
             elif len(comparison_values) % expected_column_count != 0:
                 if column_count_mismatch:
-                    logger.column_count_mismatch(self, query.values, original_expected_columns, row_wise)
+                    logger.column_count_mismatch(self, values, original_expected_columns, row_wise)
                 else:
                     logger.not_cleanly_divisible(expected_column_count, len(comparison_values))
                 # FIXME: the logger should just create the strings to send to self.fail()/self.skip()
@@ -257,7 +258,7 @@ class QueryResult:
 
             if expected_rows != self.row_count():
                 if column_count_mismatch:
-                    logger.column_count_mismatch(self, query.values, original_expected_columns, row_wise)
+                    logger.column_count_mismatch(self, values, original_expected_columns, row_wise)
                 else:
                     logger.wrong_row_count(
                         expected_rows, result_values_string, comparison_values, expected_column_count, row_wise
@@ -270,7 +271,7 @@ class QueryResult:
                     splits = [x for x in val.split("\t") if x != '']
                     if len(splits) != expected_column_count:
                         if column_count_mismatch:
-                            logger.column_count_mismatch(self, query.values, original_expected_columns, row_wise)
+                            logger.column_count_mismatch(self, values, original_expected_columns, row_wise)
                         logger.split_mismatch(i + 1, expected_column_count, len(splits))
                         context.fail("")
                     for c, split_val in enumerate(splits):
@@ -404,6 +405,8 @@ class SQLLogicDatabase:
 
         # Now re-open the current database
         read_only = 'access_mode' in self.config and self.config['access_mode'] == 'read_only'
+        if 'access_mode' not in self.config:
+            self.config['access_mode'] = 'automatic'
         self.database = duckdb.connect(path, read_only, self.config)
 
         # Load any previously loaded extensions again
@@ -432,24 +435,37 @@ class SQLLogicDatabase:
         return SQLLogicConnectionPool(self.database.cursor())
 
 
+def is_regex(input: str) -> bool:
+    return input.startswith("<REGEX>:") or input.startswith("<!REGEX>:")
+
+
+def matches_regex(input: str, actual_str: str) -> bool:
+    if input.startswith("<REGEX>:"):
+        should_match = True
+        regex_str = input.replace("<REGEX>:", "")
+    else:
+        should_match = False
+        regex_str = input.replace("<!REGEX>:", "")
+    # The exact match will never be the same, allow leading and trailing messages
+    if regex_str[:2] != '.*':
+        regex_str = ".*" + regex_str
+    if regex_str[-2:] != '.*':
+        regex_str = regex_str + '.*'
+
+    re_options = re.DOTALL
+    re_pattern = re.compile(regex_str, re_options)
+    regex_matches = bool(re_pattern.fullmatch(actual_str))
+    return regex_matches == should_match
+
+
 def compare_values(result: QueryResult, actual_str, expected_str, current_column):
     error = False
 
     if actual_str == expected_str:
         return True
 
-    if expected_str.startswith("<REGEX>:") or expected_str.startswith("<!REGEX>:"):
-        if expected_str.startswith("<REGEX>:"):
-            should_match = True
-            regex_str = expected_str.replace("<REGEX>:", "")
-        else:
-            should_match = False
-            regex_str = expected_str.replace("<!REGEX>:", "")
-        re_options = re.DOTALL
-        re_pattern = re.compile(regex_str, re_options)
-        regex_matches = bool(re_pattern.fullmatch(actual_str))
-        if regex_matches == should_match:
-            return True
+    if is_regex(expected_str):
+        return matches_regex(expected_str, actual_str)
 
     sql_type = result.types[current_column]
 
@@ -521,7 +537,7 @@ def result_is_file(result: str):
 def load_result_from_file(fname, result: QueryResult):
     con = duckdb.connect()
     con.execute(f"PRAGMA threads={os.cpu_count()}")
-    column_count = result.column_count()
+    column_count = result.column_count
 
     fname = fname.replace("<FILE>:", "")
 
@@ -579,7 +595,7 @@ def sql_logic_test_convert_value(value, sql_type, is_sqlite_test: bool) -> str:
 def duck_db_convert_result(result: QueryResult, is_sqlite_test: bool) -> List[str]:
     out_result = []
     row_count = result.row_count()
-    column_count = result.column_count()
+    column_count = result.column_count
 
     for r in range(row_count):
         for c in range(column_count):
@@ -767,7 +783,9 @@ class SQLLogicContext:
 
     def execute_load(self, load: Load):
         if self.in_loop():
-            self.fail("load cannot be called in a loop")
+            # FIXME: should add support for this, the CPP tester supports this
+            self.skiptest("load cannot be called in a loop")
+            # self.fail("load cannot be called in a loop")
 
         readonly = load.readonly
 
@@ -779,6 +797,7 @@ class SQLLogicContext:
                 self.runner.delete_database(dbpath)
         else:
             dbpath = ""
+        self.runner.loaded_databases.add(dbpath)
 
         # set up the config file
         additional_config = {}
@@ -819,27 +838,34 @@ class SQLLogicContext:
                     if 'returning' not in sql_query.lower():
                         return False
                     return True
+                if statement.type in [duckdb.StatementType.COPY]:
+                    if 'return_files' not in sql_query.lower():
+                        return False
+                    return True
                 return len(statement.expected_result_type) == 1
 
             if is_query_result(sql_query, statement):
                 original_rel = conn.query(sql_query)
-                original_types = original_rel.types
-                # We create new names for the columns, because they might be duplicated
-                aliased_columns = [f'c{i}' for i in range(len(original_types))]
+                if original_rel is None:
+                    query_result = QueryResult([(0,)], ['BIGINT'])
+                else:
+                    original_types = original_rel.types
+                    # We create new names for the columns, because they might be duplicated
+                    aliased_columns = [f'c{i}' for i in range(len(original_types))]
 
-                expressions = [f'"{name}"::VARCHAR' for name, sql_type in zip(aliased_columns, original_types)]
-                aliased_table = ", ".join(aliased_columns)
-                expression_list = ", ".join(expressions)
-                try:
-                    # Select from the result, converting the Values to the right type for comparison
-                    transformed_query = (
-                        f"select {expression_list} from original_rel unnamed_subquery_blabla({aliased_table})"
-                    )
-                    stringified_rel = conn.query(transformed_query)
-                except duckdb.Error as e:
-                    self.fail(f"Could not select from the ValueRelation: {str(e)}")
-                result = stringified_rel.fetchall()
-                query_result = QueryResult(result, original_types)
+                    expressions = [f'"{name}"::VARCHAR' for name, sql_type in zip(aliased_columns, original_types)]
+                    aliased_table = ", ".join(aliased_columns)
+                    expression_list = ", ".join(expressions)
+                    try:
+                        # Select from the result, converting the Values to the right type for comparison
+                        transformed_query = (
+                            f"select {expression_list} from original_rel unnamed_subquery_blabla({aliased_table})"
+                        )
+                        stringified_rel = conn.query(transformed_query)
+                    except duckdb.Error as e:
+                        self.fail(f"Could not select from the ValueRelation: {str(e)}")
+                    result = stringified_rel.fetchall()
+                    query_result = QueryResult(result, original_types)
             elif duckdb.ExpectedResultType.CHANGED_ROWS in statement.expected_result_type:
                 conn.execute(sql_query)
                 result = conn.fetchall()
@@ -969,13 +995,19 @@ class SQLLogicContext:
             if expected_result.lines == None:
                 return
             expected = '\n'.join(expected_result.lines)
-            # Sanitize the expected error
-            if expected.startswith('Dependency Error: '):
-                expected = expected.split('Dependency Error: ')[1]
-            if expected not in str(e):
-                self.fail(
-                    f"Query failed, but did not produce the right error: {expected}\nInstead it produced: {str(e)}"
-                )
+            if is_regex(expected):
+                if not matches_regex(expected, str(e)):
+                    self.fail(
+                        f"Query failed, but did not produce the right error: {expected}\nInstead it produced: {str(e)}"
+                    )
+            else:
+                # Sanitize the expected error
+                if expected.startswith('Dependency Error: '):
+                    expected = expected.split('Dependency Error: ')[1]
+                if expected not in str(e):
+                    self.fail(
+                        f"Query failed, but did not produce the right error: {expected}\nInstead it produced: {str(e)}"
+                    )
 
     def check_require(self, statement: Require) -> RequireResult:
         not_an_extension = [
@@ -992,7 +1024,7 @@ class SQLLogicContext:
             "exact_vector_size",
             "block_size",
             "skip_reload",
-            "noalternativeverify",
+            "no_alternative_verify",
         ]
         param = statement.header.parameters[0].lower()
         if param in not_an_extension:
@@ -1003,7 +1035,9 @@ class SQLLogicContext:
                 return RequireResult.PRESENT
             if param == 'exact_vector_size':
                 required_vector_size = int(statement.header.parameters[1])
-                return duckdb.__standard_vector_size__ == required_vector_size
+                if duckdb.__standard_vector_size__ == required_vector_size:
+                    return RequireResult.PRESENT
+                return RequireResult.MISSING
             if param == 'skip_reload':
                 self.runner.skip_reload = True
                 return RequireResult.PRESENT
@@ -1115,7 +1149,10 @@ class SQLLogicContext:
                     context.remove_keyword(key)
 
             loop_context = SQLLogicContext(self.pool, self.runner, statements, self.keywords.copy(), update_value)
-            loop_context.execute()
+            try:
+                loop_context.execute()
+            except TestException:
+                self.error = loop_context.error
         else:
             contexts: Dict[Tuple[str, int], Any] = {}
             for val in range(loop.start, loop.end):
@@ -1247,6 +1284,8 @@ class SQLLogicContext:
                     if self.runner.skip_active() and statement.__class__ != Unskip:
                         # Keep skipping until Unskip is found
                         continue
+                    if statement.get_decorators() != []:
+                        self.skiptest("Decorators are not supported yet")
                     method = self.STATEMENTS.get(statement.__class__)
                     if not method:
                         self.skiptest("Not supported by the runner")

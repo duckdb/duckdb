@@ -73,7 +73,8 @@ struct AlpRDCompression {
 	                                      uint64_t sample_count) {
 		double exceptions_size =
 		    exceptions_count * ((AlpRDConstants::EXCEPTION_POSITION_SIZE + AlpRDConstants::EXCEPTION_SIZE) * 8);
-		double estimated_size = right_bit_width + left_bit_width + (exceptions_size / sample_count);
+		double estimated_size =
+		    right_bit_width + left_bit_width + (exceptions_size / static_cast<double>(sample_count));
 		return estimated_size;
 	}
 
@@ -106,7 +107,7 @@ struct AlpRDCompression {
 		uint64_t actual_dictionary_size =
 		    MinValue<uint64_t>(AlpRDConstants::MAX_DICTIONARY_SIZE, left_parts_sorted_repetitions.size());
 		uint8_t left_bit_width =
-		    MaxValue<uint8_t>(1, NumericCast<uint8_t>(std::ceil(std::log2(actual_dictionary_size))));
+		    MaxValue<uint8_t>(1, ExactNumericCast<uint8_t>(std::ceil(std::log2(actual_dictionary_size))));
 
 		if (PERSIST_DICT) {
 			for (idx_t dict_idx = 0; dict_idx < actual_dictionary_size; dict_idx++) {

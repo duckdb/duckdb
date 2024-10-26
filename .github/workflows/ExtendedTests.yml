@@ -32,18 +32,16 @@ jobs:
        CXX: clang++
        GEN: ninja
        BUILD_BENCHMARK: 1
-       BUILD_TPCH: 1
-       BUILD_TPCDS: 1
-       BUILD_HTTPFS: 1
+       CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
      steps:
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
 
      - uses: actions/setup-python@v5
        with:
-         python-version: '3.7'
+         python-version: '3.12'
 
      - name: Install
        shell: bash
@@ -114,18 +112,16 @@ jobs:
        CXX: clang++
        GEN: ninja
        BUILD_BENCHMARK: 1
-       BUILD_TPCH: 1
-       BUILD_TPCDS: 1
-       BUILD_HTTPFS: 1
+       CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
      steps:
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
 
      - uses: actions/setup-python@v5
        with:
-         python-version: '3.7'
+         python-version: '3.12'
 
      - name: Install
        shell: bash
@@ -140,7 +136,7 @@ jobs:
      - name: Build
        shell: bash
        run: |
-         CMAKE_LLVM_PATH='/usr/local/opt/llvm' make
+         CMAKE_LLVM_PATH='/opt/homebrew/opt/llvm' make
          git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
          cd duckdb
          make
@@ -195,19 +191,17 @@ jobs:
        CXX: g++
        GEN: ninja
        BUILD_BENCHMARK: 1
-       BUILD_TPCH: 1
-       BUILD_TPCDS: 1
-       BUILD_HTTPFS: 1
        BUILD_JEMALLOC: 1
+       CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
      steps:
-       - uses: actions/checkout@v3
+       - uses: actions/checkout@v4
          with:
            fetch-depth: 0
 
        - uses: actions/setup-python@v5
          with:
-           python-version: '3.7'
+           python-version: '3.12'
 
        - name: Install
          shell: bash
@@ -282,19 +276,17 @@ jobs:
        CXX: g++
        GEN: ninja
        BUILD_BENCHMARK: 1
-       BUILD_TPCH: 1
-       BUILD_TPCDS: 1
-       BUILD_HTTPFS: 1
        BUILD_JEMALLOC: 1
+       CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
      steps:
-       - uses: actions/checkout@v3
+       - uses: actions/checkout@v4
          with:
            fetch-depth: 0
 
        - uses: actions/setup-python@v5
          with:
-           python-version: '3.7'
+           python-version: '3.12'
 
        - name: Install
          shell: bash

@@ -28,6 +28,6 @@ public:
 	TableFunctionSet functions;
 
 public:
-	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo &info) override;
+	unique_ptr<CatalogEntry> AlterEntry(CatalogTransaction transaction, AlterInfo &info) override;
 };
 } // namespace duckdb

@@ -1,7 +1,7 @@
 #include "duckdb/optimizer/compressed_materialization.hpp"
 
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/function/scalar/compressed_materialization_functions.hpp"
+#include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
@@ -81,6 +81,7 @@ void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op) {
 
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_DISTINCT:
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		break;
@@ -94,6 +95,9 @@ void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		CompressAggregate(op);
 		break;
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+		CompressComparisonJoin(op);
+		break;
 	case LogicalOperatorType::LOGICAL_DISTINCT:
 		CompressDistinct(op);
 		break;
@@ -101,7 +105,7 @@ void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op) {
 		CompressOrder(op);
 		break;
 	default:
-		return;
+		break;
 	}
 }
 
@@ -168,6 +172,9 @@ void CompressedMaterialization::CreateCompressProjection(unique_ptr<LogicalOpera
 	}
 	const auto table_index = optimizer.binder.GenerateTableIndex();
 	auto compress_projection = make_uniq<LogicalProjection>(table_index, std::move(projections));
+	if (child_op->has_estimated_cardinality) {
+		compress_projection->SetEstimatedCardinality(child_op->estimated_cardinality);
+	}
 	compress_projection->ResolveOperatorTypes();
 
 	compress_projection->children.emplace_back(std::move(child_op));
@@ -254,6 +261,9 @@ void CompressedMaterialization::CreateDecompressProjection(unique_ptr<LogicalOpe
 	// Replace op with a projection
 	const auto table_index = optimizer.binder.GenerateTableIndex();
 	auto decompress_projection = make_uniq<LogicalProjection>(table_index, std::move(decompress_exprs));
+	if (op->has_estimated_cardinality) {
+		decompress_projection->SetEstimatedCardinality(op->estimated_cardinality);
+	}
 
 	decompress_projection->children.emplace_back(std::move(op));
 	op = std::move(decompress_projection);
@@ -323,7 +333,7 @@ static Value GetIntegralRangeValue(ClientContext &context, const LogicalType &ty
 	vector<unique_ptr<Expression>> arguments;
 	arguments.emplace_back(make_uniq<BoundConstantExpression>(max));
 	arguments.emplace_back(make_uniq<BoundConstantExpression>(min));
-	BoundFunctionExpression sub(type, SubtractFun::GetFunction(type, type), std::move(arguments), nullptr);
+	BoundFunctionExpression sub(type, SubtractFunction::GetFunction(type, type), std::move(arguments), nullptr);
 
 	Value result;
 	if (ExpressionExecutor::TryEvaluateScalar(context, sub, result)) {
@@ -391,7 +401,7 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetStringCompress(uniq
 
 	const auto max_string_length = StringStats::MaxStringLength(stats);
 	LogicalType cast_type = LogicalType::INVALID;
-	for (const auto &compressed_type : CompressedMaterializationFunctions::StringTypes()) {
+	for (const auto &compressed_type : CMUtils::StringTypes()) {
 		if (max_string_length < GetTypeIdSize(compressed_type.InternalType())) {
 			cast_type = compressed_type;
 			break;

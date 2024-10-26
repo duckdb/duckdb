@@ -33,6 +33,7 @@ EXECUTE v
 statement error con2
 DROP TABLE integers CASCADE
 ----
+Catalog write-write conflict on alter
 
 # now we rollback
 statement ok con2

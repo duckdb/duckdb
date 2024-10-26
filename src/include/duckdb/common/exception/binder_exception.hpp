@@ -46,6 +46,7 @@ public:
 	                                      QueryErrorContext context = QueryErrorContext());
 	static BinderException NoMatchingFunction(const string &name, const vector<LogicalType> &arguments,
 	                                          const vector<string> &candidates);
+	static BinderException Unsupported(ParsedExpression &expr, const string &message);
 };
 
 } // namespace duckdb

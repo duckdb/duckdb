@@ -1,0 +1,45 @@
+# name: test/sql/copy/csv/test_sniffer_tab_delimiter.test
+# description: Test sniff_csv function with user set options
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select columns from sniff_csv('data/csv/test_apple_financial.csv.gz', header = 1, skip=3, delim = '\t')
+----
+[{'name': Transaction Date, 'type': DATE}, {'name': Settlement Date, 'type': DATE}, {'name': Apple Identifier, 'type': BIGINT}, {'name': SKU, 'type': VARCHAR}, {'name': Title, 'type': VARCHAR}, {'name': Developer Name, 'type': VARCHAR}, {'name': Product Type Identifier, 'type': VARCHAR}, {'name': Country of Sale, 'type': VARCHAR}, {'name': Quantity, 'type': BIGINT}, {'name': Partner Share, 'type': DOUBLE}, {'name': Extended Partner Share, 'type': DOUBLE}, {'name': Partner Share Currency, 'type': VARCHAR}, {'name': Customer Price, 'type': DOUBLE}, {'name': Customer Currency, 'type': VARCHAR}, {'name': Sale or Return, 'type': VARCHAR}, {'name': Promo Code, 'type': VARCHAR}, {'name': Order Type, 'type': VARCHAR}, {'name': Region, 'type': VARCHAR}]
+
+query I
+select columns from sniff_csv('data/csv/test_apple_financial.csv.gz', skip=3, delim = '\t')
+----
+[{'name': Transaction Date, 'type': DATE}, {'name': Settlement Date, 'type': DATE}, {'name': Apple Identifier, 'type': BIGINT}, {'name': SKU, 'type': VARCHAR}, {'name': Title, 'type': VARCHAR}, {'name': Developer Name, 'type': VARCHAR}, {'name': Product Type Identifier, 'type': VARCHAR}, {'name': Country of Sale, 'type': VARCHAR}, {'name': Quantity, 'type': BIGINT}, {'name': Partner Share, 'type': DOUBLE}, {'name': Extended Partner Share, 'type': DOUBLE}, {'name': Partner Share Currency, 'type': VARCHAR}, {'name': Customer Price, 'type': DOUBLE}, {'name': Customer Currency, 'type': VARCHAR}, {'name': Sale or Return, 'type': VARCHAR}, {'name': Promo Code, 'type': VARCHAR}, {'name': Order Type, 'type': VARCHAR}, {'name': Region, 'type': VARCHAR}]
+
+query I
+select columns from sniff_csv('data/csv/test_apple_financial.csv.gz', skip=3)
+----
+[{'name': Transaction Date, 'type': DATE}, {'name': Settlement Date, 'type': DATE}, {'name': Apple Identifier, 'type': BIGINT}, {'name': SKU, 'type': VARCHAR}, {'name': Title, 'type': VARCHAR}, {'name': Developer Name, 'type': VARCHAR}, {'name': Product Type Identifier, 'type': VARCHAR}, {'name': Country of Sale, 'type': VARCHAR}, {'name': Quantity, 'type': BIGINT}, {'name': Partner Share, 'type': DOUBLE}, {'name': Extended Partner Share, 'type': DOUBLE}, {'name': Partner Share Currency, 'type': VARCHAR}, {'name': Customer Price, 'type': DOUBLE}, {'name': Customer Currency, 'type': VARCHAR}, {'name': Sale or Return, 'type': VARCHAR}, {'name': Promo Code, 'type': VARCHAR}, {'name': Order Type, 'type': VARCHAR}, {'name': Region, 'type': VARCHAR}]
+
+query I
+select columns from sniff_csv('data/csv/test_apple_financial.csv.gz')
+----
+[{'name': Transaction Date, 'type': DATE}, {'name': Settlement Date, 'type': DATE}, {'name': Apple Identifier, 'type': BIGINT}, {'name': SKU, 'type': VARCHAR}, {'name': Title, 'type': VARCHAR}, {'name': Developer Name, 'type': VARCHAR}, {'name': Product Type Identifier, 'type': VARCHAR}, {'name': Country of Sale, 'type': VARCHAR}, {'name': Quantity, 'type': BIGINT}, {'name': Partner Share, 'type': DOUBLE}, {'name': Extended Partner Share, 'type': DOUBLE}, {'name': Partner Share Currency, 'type': VARCHAR}, {'name': Customer Price, 'type': DOUBLE}, {'name': Customer Currency, 'type': VARCHAR}, {'name': Sale or Return, 'type': VARCHAR}, {'name': Promo Code, 'type': VARCHAR}, {'name': Order Type, 'type': VARCHAR}, {'name': Region, 'type': VARCHAR}]
+
+
+query IIIIIIIIIIIIIIIIII
+FROM read_csv('data/csv/test_apple_financial.csv.gz', header = 1, skip=3)
+----
+2024-06-19	2024-06-22	1435055555	monthly_full_subscription	Monthly Subscription	NULL	XXX	XX	1	99.99	99.99	XXD	99.99	XXD	S	NULL	NULL	NULL
+2024-06-14	2024-06-14	1435055555	monthly_full_subscription	Monthly Subscription	NULL	XXX	XX	2	99.99	99.99	XXD	99.99	XXD	S	NULL	NULL	NULL
+
+query IIIIIIIIIIIIIIIIII
+FROM read_csv('data/csv/test_apple_financial.csv.gz',  skip=3)
+----
+2024-06-19	2024-06-22	1435055555	monthly_full_subscription	Monthly Subscription	NULL	XXX	XX	1	99.99	99.99	XXD	99.99	XXD	S	NULL	NULL	NULL
+2024-06-14	2024-06-14	1435055555	monthly_full_subscription	Monthly Subscription	NULL	XXX	XX	2	99.99	99.99	XXD	99.99	XXD	S	NULL	NULL	NULL
+
+query IIIIIIIIIIIIIIIIII
+FROM read_csv('data/csv/test_apple_financial.csv.gz')
+----
+2024-06-19	2024-06-22	1435055555	monthly_full_subscription	Monthly Subscription	NULL	XXX	XX	1	99.99	99.99	XXD	99.99	XXD	S	NULL	NULL	NULL
+2024-06-14	2024-06-14	1435055555	monthly_full_subscription	Monthly Subscription	NULL	XXX	XX	2	99.99	99.99	XXD	99.99	XXD	S	NULL	NULL	NULL

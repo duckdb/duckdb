@@ -1,0 +1,79 @@
+# name: test/optimizer/pushdown/timestamp_to_date_pushdown.test
+# description: Test Tpushdown of timestamp to date filters
+# group: [pushdown]
+
+require icu
+
+foreach timezone UTC ECT
+
+statement ok
+set TimeZone='${timezone}';
+
+statement ok
+create or replace table t1 (ts timestamp, i int);
+
+statement ok
+insert into t1 select '2024-05-01 00:00:00'::timestamp, i from generate_series(1, 2000) g(i);
+
+statement ok
+insert into t1 select '2024-05-02 00:00:00'::timestamp, i from generate_series(1, 1000) g(i);
+
+statement ok
+insert into t1 select '2024-05-02 00:22:00'::timestamp, i from generate_series(1, 1000) g(i);
+
+statement ok
+insert into t1 select '2024-05-03 00:00:00'::timestamp, i from generate_series(1, 2000) g(i);
+
+query II
+explain select * from t1 where ts::date == '2024-05-02';
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Filters:.*
+
+query II
+explain select * from t1 where '2024-05-02' == ts::date;
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Filters:.*
+
+
+statement ok
+pragma disable_optimizer;
+
+query II nosort no_opt_result
+select * from t1 where ts::date == '2024-05-02';
+----
+
+statement ok
+pragma enable_optimizer;
+
+query II nosort no_opt_result
+select * from t1 where ts::date == '2024-05-02';
+----
+
+# pattern is still recognized in conjunction
+query II
+explain select count(*) from t1 where ts::date == '2024-05-02' and i > 122880/2;
+----
+physical_plan	<!REGEX>:.*FILTER.*SEQ_SCAN:.*
+
+
+query I
+select count(*) from t1 where ts::date == '2024-05-02' and i > 1000;
+----
+0
+
+query I
+select count(*) from t1 where ts::date == '2024-05-02' and i <= 500;
+----
+1000
+
+endloop
+
+query I
+select count(*) from t1 where ts::date == '2024-05-01' and i <= 500;
+----
+500
+
+query I
+select count(*) from t1 where ts::date == '2024-05-03';
+----
+2000

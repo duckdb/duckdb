@@ -14,8 +14,29 @@ idx_t ColumnDataCollectionSegment::GetDataSize(idx_t type_size) {
 	return AlignValue(type_size * STANDARD_VECTOR_SIZE);
 }
 
-validity_t *ColumnDataCollectionSegment::GetValidityPointer(data_ptr_t base_ptr, idx_t type_size) {
+validity_t *ColumnDataCollectionSegment::GetValidityPointerForWriting(data_ptr_t base_ptr, idx_t type_size) {
 	return reinterpret_cast<validity_t *>(base_ptr + GetDataSize(type_size));
+}
+
+validity_t *ColumnDataCollectionSegment::GetValidityPointer(data_ptr_t base_ptr, idx_t type_size, idx_t count) {
+	auto validity_mask = reinterpret_cast<validity_t *>(base_ptr + GetDataSize(type_size));
+
+	// Optimized check to see if all entries are valid
+	for (idx_t i = 0; i < (count / ValidityMask::BITS_PER_VALUE); i++) {
+		if (!ValidityMask::AllValid(validity_mask[i])) {
+			return validity_mask;
+		}
+	}
+
+	if ((count % ValidityMask::BITS_PER_VALUE) != 0) {
+		// Create a mask with the lower `bits_to_check` bits set to 1
+		validity_t mask = (1ULL << (count % ValidityMask::BITS_PER_VALUE)) - 1;
+		if ((validity_mask[(count / ValidityMask::BITS_PER_VALUE)] & mask) != mask) {
+			return validity_mask;
+		}
+	}
+	// All entries are valid, no need to initialize the validity mask
+	return nullptr;
 }
 
 VectorDataIndex ColumnDataCollectionSegment::AllocateVectorInternal(const LogicalType &type, ChunkMetaData &chunk_meta,
@@ -24,9 +45,9 @@ VectorDataIndex ColumnDataCollectionSegment::AllocateVectorInternal(const Logica
 	meta_data.count = 0;
 
 	auto internal_type = type.InternalType();
-	auto type_size = ((internal_type == PhysicalType::STRUCT) || (internal_type == PhysicalType::ARRAY))
-	                     ? 0
-	                     : GetTypeIdSize(internal_type);
+	auto struct_or_array = internal_type == PhysicalType::STRUCT || internal_type == PhysicalType::ARRAY;
+	auto type_size = struct_or_array ? 0 : GetTypeIdSize(internal_type);
+
 	allocator->AllocateData(GetDataSize(type_size) + ValidityMask::STANDARD_MASK_SIZE, meta_data.block_id,
 	                        meta_data.offset, chunk_state);
 	if (allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR ||
@@ -77,7 +98,6 @@ VectorDataIndex ColumnDataCollectionSegment::AllocateStringHeap(idx_t size, Chun
 
 	VectorMetaData meta_data;
 	meta_data.count = 0;
-
 	allocator->AllocateData(AlignValue(size), meta_data.block_id, meta_data.offset, &append_state.current_chunk_state);
 	chunk_meta.block_ids.insert(meta_data.block_id);
 
@@ -142,7 +162,7 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 	auto &vdata = GetVectorData(vector_index);
 
 	auto base_ptr = allocator->GetDataPointer(state, vdata.block_id, vdata.offset);
-	auto validity_data = GetValidityPointer(base_ptr, type_size);
+	auto validity_data = GetValidityPointer(base_ptr, type_size, vdata.count);
 	if (!vdata.next_data.IsValid() && state.properties != ColumnDataScanProperties::DISALLOW_ZERO_COPY) {
 		// no next data, we can do a zero-copy read of this vector
 		FlatVector::SetData(result, base_ptr);
@@ -170,7 +190,7 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 	while (next_index.IsValid()) {
 		auto &current_vdata = GetVectorData(next_index);
 		base_ptr = allocator->GetDataPointer(state, current_vdata.block_id, current_vdata.offset);
-		validity_data = GetValidityPointer(base_ptr, type_size);
+		validity_data = GetValidityPointer(base_ptr, type_size, current_vdata.count);
 		if (type_size > 0) {
 			memcpy(target_data + current_offset * type_size, base_ptr, current_vdata.count * type_size);
 		}

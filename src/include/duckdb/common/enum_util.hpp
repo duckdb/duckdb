@@ -60,6 +60,8 @@ enum class ArrowDateTimeType : uint8_t;
 
 enum class ArrowOffsetSize : uint8_t;
 
+enum class ArrowTypeInfoType : uint8_t;
+
 enum class ArrowVariableSizeType : uint8_t;
 
 enum class BinderType : uint8_t;
@@ -98,6 +100,12 @@ enum class ConflictManagerMode : uint8_t;
 
 enum class ConstraintType : uint8_t;
 
+enum class CopyFunctionReturnType : uint8_t;
+
+enum class CopyOverwriteMode : uint8_t;
+
+enum class CopyToType : uint8_t;
+
 enum class DataFileType : uint8_t;
 
 enum class DatePartSpecifier : uint8_t;
@@ -110,6 +118,8 @@ enum class DependencyEntryType : uint8_t;
 
 enum class DeprecatedIndexType : uint8_t;
 
+enum class DestroyBufferUpon : uint8_t;
+
 enum class DistinctType : uint8_t;
 
 enum class ErrorType : uint16_t;
@@ -118,15 +128,25 @@ enum class ExceptionFormatValueType : uint8_t;
 
 enum class ExceptionType : uint8_t;
 
+enum class ExplainFormat : uint8_t;
+
 enum class ExplainOutputType : uint8_t;
 
 enum class ExplainType : uint8_t;
+
+enum class ExponentType : uint8_t;
 
 enum class ExpressionClass : uint8_t;
 
 enum class ExpressionType : uint8_t;
 
+enum class ExtensionABIType : uint8_t;
+
+enum class ExtensionInstallMode : uint8_t;
+
 enum class ExtensionLoadResult : uint8_t;
+
+enum class ExtensionUpdateResultTag : uint8_t;
 
 enum class ExtraDropInfoType : uint8_t;
 
@@ -149,6 +169,8 @@ enum class ForeignKeyType : uint8_t;
 enum class FunctionNullHandling : uint8_t;
 
 enum class FunctionStability : uint8_t;
+
+enum class GateStatus : uint8_t;
 
 enum class HLLStorageType : uint8_t;
 
@@ -179,6 +201,10 @@ enum class MacroType : uint8_t;
 enum class MapInvalidReason : uint8_t;
 
 enum class MemoryTag : uint8_t;
+
+enum class MetaPipelineType : uint8_t;
+
+enum class MetricsType : uint8_t;
 
 enum class NType : uint8_t;
 
@@ -286,11 +312,15 @@ enum class StatsInfo : uint8_t;
 
 enum class StrTimeSpecifier : uint8_t;
 
+enum class StreamExecutionResult : uint8_t;
+
 enum class SubqueryType : uint8_t;
 
 enum class TableColumnType : uint8_t;
 
 enum class TableFilterType : uint8_t;
+
+enum class TablePartitionInfo : uint8_t;
 
 enum class TableReferenceType : uint8_t;
 
@@ -301,6 +331,8 @@ enum class TaskExecutionMode : uint8_t;
 enum class TaskExecutionResult : uint8_t;
 
 enum class TimestampCastResult : uint8_t;
+
+enum class TransactionModifierType : uint8_t;
 
 enum class TransactionType : uint8_t;
 
@@ -372,6 +404,9 @@ template<>
 const char* EnumUtil::ToChars<ArrowOffsetSize>(ArrowOffsetSize value);
 
 template<>
+const char* EnumUtil::ToChars<ArrowTypeInfoType>(ArrowTypeInfoType value);
+
+template<>
 const char* EnumUtil::ToChars<ArrowVariableSizeType>(ArrowVariableSizeType value);
 
 template<>
@@ -429,6 +464,15 @@ template<>
 const char* EnumUtil::ToChars<ConstraintType>(ConstraintType value);
 
 template<>
+const char* EnumUtil::ToChars<CopyFunctionReturnType>(CopyFunctionReturnType value);
+
+template<>
+const char* EnumUtil::ToChars<CopyOverwriteMode>(CopyOverwriteMode value);
+
+template<>
+const char* EnumUtil::ToChars<CopyToType>(CopyToType value);
+
+template<>
 const char* EnumUtil::ToChars<DataFileType>(DataFileType value);
 
 template<>
@@ -447,6 +491,9 @@ template<>
 const char* EnumUtil::ToChars<DeprecatedIndexType>(DeprecatedIndexType value);
 
 template<>
+const char* EnumUtil::ToChars<DestroyBufferUpon>(DestroyBufferUpon value);
+
+template<>
 const char* EnumUtil::ToChars<DistinctType>(DistinctType value);
 
 template<>
@@ -459,10 +506,16 @@ template<>
 const char* EnumUtil::ToChars<ExceptionType>(ExceptionType value);
 
 template<>
+const char* EnumUtil::ToChars<ExplainFormat>(ExplainFormat value);
+
+template<>
 const char* EnumUtil::ToChars<ExplainOutputType>(ExplainOutputType value);
 
 template<>
 const char* EnumUtil::ToChars<ExplainType>(ExplainType value);
+
+template<>
+const char* EnumUtil::ToChars<ExponentType>(ExponentType value);
 
 template<>
 const char* EnumUtil::ToChars<ExpressionClass>(ExpressionClass value);
@@ -471,7 +524,16 @@ template<>
 const char* EnumUtil::ToChars<ExpressionType>(ExpressionType value);
 
 template<>
+const char* EnumUtil::ToChars<ExtensionABIType>(ExtensionABIType value);
+
+template<>
+const char* EnumUtil::ToChars<ExtensionInstallMode>(ExtensionInstallMode value);
+
+template<>
 const char* EnumUtil::ToChars<ExtensionLoadResult>(ExtensionLoadResult value);
+
+template<>
+const char* EnumUtil::ToChars<ExtensionUpdateResultTag>(ExtensionUpdateResultTag value);
 
 template<>
 const char* EnumUtil::ToChars<ExtraDropInfoType>(ExtraDropInfoType value);
@@ -505,6 +567,9 @@ const char* EnumUtil::ToChars<FunctionNullHandling>(FunctionNullHandling value);
 
 template<>
 const char* EnumUtil::ToChars<FunctionStability>(FunctionStability value);
+
+template<>
+const char* EnumUtil::ToChars<GateStatus>(GateStatus value);
 
 template<>
 const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value);
@@ -550,6 +615,12 @@ const char* EnumUtil::ToChars<MapInvalidReason>(MapInvalidReason value);
 
 template<>
 const char* EnumUtil::ToChars<MemoryTag>(MemoryTag value);
+
+template<>
+const char* EnumUtil::ToChars<MetaPipelineType>(MetaPipelineType value);
+
+template<>
+const char* EnumUtil::ToChars<MetricsType>(MetricsType value);
 
 template<>
 const char* EnumUtil::ToChars<NType>(NType value);
@@ -711,6 +782,9 @@ template<>
 const char* EnumUtil::ToChars<StrTimeSpecifier>(StrTimeSpecifier value);
 
 template<>
+const char* EnumUtil::ToChars<StreamExecutionResult>(StreamExecutionResult value);
+
+template<>
 const char* EnumUtil::ToChars<SubqueryType>(SubqueryType value);
 
 template<>
@@ -718,6 +792,9 @@ const char* EnumUtil::ToChars<TableColumnType>(TableColumnType value);
 
 template<>
 const char* EnumUtil::ToChars<TableFilterType>(TableFilterType value);
+
+template<>
+const char* EnumUtil::ToChars<TablePartitionInfo>(TablePartitionInfo value);
 
 template<>
 const char* EnumUtil::ToChars<TableReferenceType>(TableReferenceType value);
@@ -733,6 +810,9 @@ const char* EnumUtil::ToChars<TaskExecutionResult>(TaskExecutionResult value);
 
 template<>
 const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value);
+
+template<>
+const char* EnumUtil::ToChars<TransactionModifierType>(TransactionModifierType value);
 
 template<>
 const char* EnumUtil::ToChars<TransactionType>(TransactionType value);
@@ -817,6 +897,9 @@ template<>
 ArrowOffsetSize EnumUtil::FromString<ArrowOffsetSize>(const char *value);
 
 template<>
+ArrowTypeInfoType EnumUtil::FromString<ArrowTypeInfoType>(const char *value);
+
+template<>
 ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *value);
 
 template<>
@@ -874,6 +957,15 @@ template<>
 ConstraintType EnumUtil::FromString<ConstraintType>(const char *value);
 
 template<>
+CopyFunctionReturnType EnumUtil::FromString<CopyFunctionReturnType>(const char *value);
+
+template<>
+CopyOverwriteMode EnumUtil::FromString<CopyOverwriteMode>(const char *value);
+
+template<>
+CopyToType EnumUtil::FromString<CopyToType>(const char *value);
+
+template<>
 DataFileType EnumUtil::FromString<DataFileType>(const char *value);
 
 template<>
@@ -892,6 +984,9 @@ template<>
 DeprecatedIndexType EnumUtil::FromString<DeprecatedIndexType>(const char *value);
 
 template<>
+DestroyBufferUpon EnumUtil::FromString<DestroyBufferUpon>(const char *value);
+
+template<>
 DistinctType EnumUtil::FromString<DistinctType>(const char *value);
 
 template<>
@@ -904,10 +999,16 @@ template<>
 ExceptionType EnumUtil::FromString<ExceptionType>(const char *value);
 
 template<>
+ExplainFormat EnumUtil::FromString<ExplainFormat>(const char *value);
+
+template<>
 ExplainOutputType EnumUtil::FromString<ExplainOutputType>(const char *value);
 
 template<>
 ExplainType EnumUtil::FromString<ExplainType>(const char *value);
+
+template<>
+ExponentType EnumUtil::FromString<ExponentType>(const char *value);
 
 template<>
 ExpressionClass EnumUtil::FromString<ExpressionClass>(const char *value);
@@ -916,7 +1017,16 @@ template<>
 ExpressionType EnumUtil::FromString<ExpressionType>(const char *value);
 
 template<>
+ExtensionABIType EnumUtil::FromString<ExtensionABIType>(const char *value);
+
+template<>
+ExtensionInstallMode EnumUtil::FromString<ExtensionInstallMode>(const char *value);
+
+template<>
 ExtensionLoadResult EnumUtil::FromString<ExtensionLoadResult>(const char *value);
+
+template<>
+ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const char *value);
 
 template<>
 ExtraDropInfoType EnumUtil::FromString<ExtraDropInfoType>(const char *value);
@@ -950,6 +1060,9 @@ FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *valu
 
 template<>
 FunctionStability EnumUtil::FromString<FunctionStability>(const char *value);
+
+template<>
+GateStatus EnumUtil::FromString<GateStatus>(const char *value);
 
 template<>
 HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value);
@@ -995,6 +1108,12 @@ MapInvalidReason EnumUtil::FromString<MapInvalidReason>(const char *value);
 
 template<>
 MemoryTag EnumUtil::FromString<MemoryTag>(const char *value);
+
+template<>
+MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value);
+
+template<>
+MetricsType EnumUtil::FromString<MetricsType>(const char *value);
 
 template<>
 NType EnumUtil::FromString<NType>(const char *value);
@@ -1156,6 +1275,9 @@ template<>
 StrTimeSpecifier EnumUtil::FromString<StrTimeSpecifier>(const char *value);
 
 template<>
+StreamExecutionResult EnumUtil::FromString<StreamExecutionResult>(const char *value);
+
+template<>
 SubqueryType EnumUtil::FromString<SubqueryType>(const char *value);
 
 template<>
@@ -1163,6 +1285,9 @@ TableColumnType EnumUtil::FromString<TableColumnType>(const char *value);
 
 template<>
 TableFilterType EnumUtil::FromString<TableFilterType>(const char *value);
+
+template<>
+TablePartitionInfo EnumUtil::FromString<TablePartitionInfo>(const char *value);
 
 template<>
 TableReferenceType EnumUtil::FromString<TableReferenceType>(const char *value);
@@ -1178,6 +1303,9 @@ TaskExecutionResult EnumUtil::FromString<TaskExecutionResult>(const char *value)
 
 template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value);
+
+template<>
+TransactionModifierType EnumUtil::FromString<TransactionModifierType>(const char *value);
 
 template<>
 TransactionType EnumUtil::FromString<TransactionType>(const char *value);

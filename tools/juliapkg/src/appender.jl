@@ -1,6 +1,8 @@
 using Dates
 
 """
+    Appender(db_connection, table, [schema])
+    
 An appender object that can be used to append rows to an existing table.
 
 * DateTime objects in Julia are stored in milliseconds since the Unix epoch but are converted to microseconds when stored in duckdb.
@@ -38,9 +40,9 @@ DuckDB.close(appender)
 mutable struct Appender
     handle::duckdb_appender
 
-    function Appender(con::Connection, table::AbstractString)
+    function Appender(con::Connection, table::AbstractString, schema::Union{AbstractString, Nothing} = nothing)
         handle = Ref{duckdb_appender}()
-        if duckdb_appender_create(con.handle, C_NULL, table, handle) != DuckDBSuccess
+        if duckdb_appender_create(con.handle, something(schema, C_NULL), table, handle) != DuckDBSuccess
             error_ptr = duckdb_appender_error(handle)
             if error_ptr == C_NULL
                 error_message = string("Opening of Appender for table \"", table, "\" failed: unknown error")
@@ -54,8 +56,8 @@ mutable struct Appender
         finalizer(_close_appender, con)
         return con
     end
-    function Appender(db::DB, table::AbstractString)
-        return Appender(db.main_connection, table)
+    function Appender(db::DB, table::AbstractString, schema::Union{AbstractString, Nothing} = nothing)
+        return Appender(db.main_connection, table, schema)
     end
 end
 
@@ -78,6 +80,8 @@ append(appender::Appender, val::Int8) = duckdb_append_int8(appender.handle, val)
 append(appender::Appender, val::Int16) = duckdb_append_int16(appender.handle, val);
 append(appender::Appender, val::Int32) = duckdb_append_int32(appender.handle, val);
 append(appender::Appender, val::Int64) = duckdb_append_int64(appender.handle, val);
+append(appender::Appender, val::Int128) = duckdb_append_hugeint(appender.handle, val);
+append(appender::Appender, val::UInt128) = duckdb_append_uhugeint(appender.handle, val);
 append(appender::Appender, val::UInt8) = duckdb_append_uint8(appender.handle, val);
 append(appender::Appender, val::UInt16) = duckdb_append_uint16(appender.handle, val);
 append(appender::Appender, val::UInt32) = duckdb_append_uint32(appender.handle, val);
@@ -86,7 +90,9 @@ append(appender::Appender, val::Float32) = duckdb_append_float(appender.handle, 
 append(appender::Appender, val::Float64) = duckdb_append_double(appender.handle, val);
 append(appender::Appender, ::Union{Missing, Nothing}) = duckdb_append_null(appender.handle);
 append(appender::Appender, val::AbstractString) = duckdb_append_varchar(appender.handle, val);
+append(appender::Appender, val::Base.UUID) = append(appender, string(val));
 append(appender::Appender, val::Vector{UInt8}) = duckdb_append_blob(appender.handle, val, sizeof(val));
+append(appender::Appender, val::FixedDecimal) = append(appender, string(val));
 # append(appender::Appender, val::WeakRefString{UInt8}) = duckdb_append_varchar(stmt.handle, i, val.ptr, val.len);
 append(appender::Appender, val::Date) =
     duckdb_append_date(appender.handle, Dates.date2epochdays(val) - ROUNDING_EPOCH_TO_UNIX_EPOCH_DAYS);

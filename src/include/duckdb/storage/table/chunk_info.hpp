@@ -45,6 +45,7 @@ public:
 	virtual bool Fetch(TransactionData transaction, row_t row) = 0;
 	virtual void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) = 0;
 	virtual idx_t GetCommittedDeletedCount(idx_t max_count) = 0;
+	virtual bool Cleanup(transaction_t lowest_transaction, unique_ptr<ChunkInfo> &result) const;
 
 	virtual bool HasDeletes() const = 0;
 
@@ -86,6 +87,7 @@ public:
 	bool Fetch(TransactionData transaction, row_t row) override;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
 	idx_t GetCommittedDeletedCount(idx_t max_count) override;
+	bool Cleanup(transaction_t lowest_transaction, unique_ptr<ChunkInfo> &result) const override;
 
 	bool HasDeletes() const override;
 
@@ -122,6 +124,7 @@ public:
 	                            SelectionVector &sel_vector, idx_t max_count) override;
 	bool Fetch(TransactionData transaction, row_t row) override;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
+	bool Cleanup(transaction_t lowest_transaction, unique_ptr<ChunkInfo> &result) const override;
 	idx_t GetCommittedDeletedCount(idx_t max_count) override;
 
 	void Append(idx_t start, idx_t end, transaction_t commit_id);

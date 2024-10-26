@@ -1,5 +1,7 @@
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
@@ -10,7 +12,7 @@ namespace duckdb {
 struct StandardCharacterReader {
 	static void NextCharacter(const char *sdata, idx_t slen, idx_t &sidx) {
 		sidx++;
-		while (sidx < slen && !LengthFun::IsCharacter(sdata[sidx])) {
+		while (sidx < slen && !IsCharacter(sdata[sidx])) {
 			sidx++;
 		}
 	}
@@ -26,7 +28,7 @@ struct ASCIILCaseReader {
 	}
 
 	static char Operation(const char *data, idx_t pos) {
-		return (char)LowerFun::ASCII_TO_LOWER_MAP[(uint8_t)data[pos]];
+		return (char)StringUtil::ASCII_TO_LOWER_MAP[(uint8_t)data[pos]];
 	}
 };
 
@@ -116,8 +118,8 @@ struct LikeMatcher : public FunctionData {
 		for (; segment_idx < end_idx; segment_idx++) {
 			auto &segment = segments[segment_idx];
 			// find the pattern of the current segment
-			idx_t next_offset = ContainsFun::Find(str_data, str_len, const_uchar_ptr_cast(segment.pattern.c_str()),
-			                                      segment.pattern.size());
+			idx_t next_offset =
+			    FindStrInStr(str_data, str_len, const_uchar_ptr_cast(segment.pattern.c_str()), segment.pattern.size());
 			if (next_offset == DConstants::INVALID_INDEX) {
 				// could not find this pattern in the string: no match
 				return false;
@@ -141,8 +143,8 @@ struct LikeMatcher : public FunctionData {
 		} else {
 			auto &segment = segments.back();
 			// find the pattern of the current segment
-			idx_t next_offset = ContainsFun::Find(str_data, str_len, const_uchar_ptr_cast(segment.pattern.c_str()),
-			                                      segment.pattern.size());
+			idx_t next_offset =
+			    FindStrInStr(str_data, str_len, const_uchar_ptr_cast(segment.pattern.c_str()), segment.pattern.size());
 			return next_offset != DConstants::INVALID_INDEX;
 		}
 	}
@@ -228,7 +230,7 @@ bool LikeOperatorFunction(string_t &s, string_t &pat, char escape) {
 	return LikeOperatorFunction(s.GetData(), s.GetSize(), pat.GetData(), pat.GetSize(), escape);
 }
 
-bool LikeFun::Glob(const char *string, idx_t slen, const char *pattern, idx_t plen, bool allow_question_mark) {
+bool Glob(const char *string, idx_t slen, const char *pattern, idx_t plen, bool allow_question_mark) {
 	idx_t sidx = 0;
 	idx_t pidx = 0;
 main_loop : {
@@ -250,7 +252,7 @@ main_loop : {
 			}
 			// recursively match the remainder of the pattern
 			for (; sidx < slen; sidx++) {
-				if (LikeFun::Glob(string + sidx, slen - sidx, pattern + pidx, plen - pidx)) {
+				if (Glob(string + sidx, slen - sidx, pattern + pidx, plen - pidx)) {
 					return true;
 				}
 			}
@@ -402,13 +404,13 @@ bool ILikeOperatorFunction(string_t &str, string_t &pattern, char escape = '\0')
 	auto pat_size = pattern.GetSize();
 
 	// lowercase both the str and the pattern
-	idx_t str_llength = LowerFun::LowerLength(str_data, str_size);
-	auto str_ldata = make_unsafe_uniq_array<char>(str_llength);
-	LowerFun::LowerCase(str_data, str_size, str_ldata.get());
+	idx_t str_llength = LowerLength(str_data, str_size);
+	auto str_ldata = make_unsafe_uniq_array_uninitialized<char>(str_llength);
+	LowerCase(str_data, str_size, str_ldata.get());
 
-	idx_t pat_llength = LowerFun::LowerLength(pat_data, pat_size);
-	auto pat_ldata = make_unsafe_uniq_array<char>(pat_llength);
-	LowerFun::LowerCase(pat_data, pat_size, pat_ldata.get());
+	idx_t pat_llength = LowerLength(pat_data, pat_size);
+	auto pat_ldata = make_unsafe_uniq_array_uninitialized<char>(pat_llength);
+	LowerCase(pat_data, pat_size, pat_ldata.get());
 	string_t str_lcase(str_ldata.get(), UnsafeNumericCast<uint32_t>(str_llength));
 	string_t pat_lcase(pat_ldata.get(), UnsafeNumericCast<uint32_t>(pat_llength));
 	return LikeOperatorFunction(str_lcase, pat_lcase, escape);
@@ -468,7 +470,7 @@ struct NotILikeOperatorASCII {
 struct GlobOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA str, TB pattern) {
-		return LikeFun::Glob(str.GetData(), str.GetSize(), pattern.GetData(), pattern.GetSize());
+		return Glob(str.GetData(), str.GetSize(), pattern.GetData(), pattern.GetSize());
 	}
 };
 
@@ -510,45 +512,51 @@ static void RegularLikeFunction(DataChunk &input, ExpressionState &state, Vector
 		                                                              input.size());
 	}
 }
-void LikeFun::RegisterFunction(BuiltinFunctions &set) {
-	// like
-	set.AddFunction(GetLikeFunction());
-	// not like
-	set.AddFunction(ScalarFunction("!~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                               RegularLikeFunction<NotLikeOperator, true>, LikeBindFunction));
-	// glob
-	set.AddFunction(ScalarFunction("~~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, GlobOperator>));
-	// ilike
-	set.AddFunction(ScalarFunction("~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, ILikeOperator>, nullptr,
-	                               nullptr, ILikePropagateStats<ILikeOperatorASCII>));
-	// not ilike
-	set.AddFunction(ScalarFunction("!~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, NotILikeOperator>, nullptr,
-	                               nullptr, ILikePropagateStats<NotILikeOperatorASCII>));
+
+ScalarFunction NotLikeFun::GetFunction() {
+	return ScalarFunction("!~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	                      RegularLikeFunction<NotLikeOperator, true>, LikeBindFunction);
 }
 
-ScalarFunction LikeFun::GetLikeFunction() {
+ScalarFunction GlobPatternFun::GetFunction() {
+	return ScalarFunction("~~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, GlobOperator>);
+}
+
+ScalarFunction ILikeFun::GetFunction() {
+	return ScalarFunction("~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, ILikeOperator>, nullptr, nullptr,
+	                      ILikePropagateStats<ILikeOperatorASCII>);
+}
+
+ScalarFunction NotILikeFun::GetFunction() {
+	return ScalarFunction("!~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, NotILikeOperator>, nullptr, nullptr,
+	                      ILikePropagateStats<NotILikeOperatorASCII>);
+}
+
+ScalarFunction LikeFun::GetFunction() {
 	return ScalarFunction("~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                      RegularLikeFunction<LikeOperator, false>, LikeBindFunction);
 }
 
-void LikeEscapeFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetLikeEscapeFun());
-	set.AddFunction({"not_like_escape"},
-	                ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                               LogicalType::BOOLEAN, LikeEscapeFunction<NotLikeEscapeOperator>));
-
-	set.AddFunction({"ilike_escape"}, ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                                 LogicalType::BOOLEAN, LikeEscapeFunction<ILikeEscapeOperator>));
-	set.AddFunction({"not_ilike_escape"},
-	                ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                               LogicalType::BOOLEAN, LikeEscapeFunction<NotILikeEscapeOperator>));
+ScalarFunction NotLikeEscapeFun::GetFunction() {
+	return ScalarFunction("not_like_escape", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                      LogicalType::BOOLEAN, LikeEscapeFunction<NotLikeEscapeOperator>);
 }
 
-ScalarFunction LikeEscapeFun::GetLikeEscapeFun() {
+ScalarFunction IlikeEscapeFun::GetFunction() {
+	return ScalarFunction("ilike_escape", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                      LogicalType::BOOLEAN, LikeEscapeFunction<ILikeEscapeOperator>);
+}
+
+ScalarFunction NotIlikeEscapeFun::GetFunction() {
+	return ScalarFunction("not_ilike_escape", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                      LogicalType::BOOLEAN, LikeEscapeFunction<NotILikeEscapeOperator>);
+}
+ScalarFunction LikeEscapeFun::GetFunction() {
 	return ScalarFunction("like_escape", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                      LogicalType::BOOLEAN, LikeEscapeFunction<LikeEscapeOperator>);
 }
+
 } // namespace duckdb

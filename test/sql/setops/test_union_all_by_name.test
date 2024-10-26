@@ -64,10 +64,10 @@ NULL	5
 3	NULL
 
 
-# Ambiguous name
 statement error
 SELECT x AS a FROM t1 UNION ALL BY NAME SELECT x AS b FROM t1 ORDER BY t1.x;
 ----
+<REGEX>:Binder Error.*Ambiguous reference to column.*
 
 # Error: Binder Error: Ambiguous name in ORDER BY!
 query II
@@ -131,10 +131,10 @@ SELECT x, y FROM t1 UNION ALL BY NAME SELECT y, z FROM t2 ORDER BY 3;
 NULL	2	2
 NULL	4	4
 
-# Error: Binder Error: ORDER term out of range - should be between 1 and 3
 statement error
 SELECT x, y FROM t1 UNION ALL BY NAME SELECT y, z FROM t2 ORDER BY 4;
 ----
+<REGEX>:Binder Error.*ORDER term out of range.*
 
 query II
 (SELECT x FROM t1 ORDER BY y) UNION ALL BY NAME (SELECT y FROM t2 ORDER BY z) ORDER BY x DESC;
@@ -165,11 +165,11 @@ SELECT 1, 2 FROM t1 UNION SELECT x, y FROM t1 UNION ALL BY NAME SELECT y, z FROM
 NULL	NULL	2	2
 NULL	NULL	4	4
 
-# Error: Binder Error: Set operations can only apply to expressions with the same 
-# number of result columns
+
 statement error
 SELECT 1, 2 FROM t1 UNION (SELECT x, y FROM t1 UNION ALL BY NAME SELECT y, z FROM t2);
 ----
+<REGEX>:Binder Error:.*Set operations can only apply.*
 
 query III
 SELECT x, y FROM t1 UNION ALL BY NAME SELECT y, z FROM t2 INTERSECT SELECT 2, 2 FROM t1;
@@ -178,10 +178,10 @@ SELECT x, y FROM t1 UNION ALL BY NAME SELECT y, z FROM t2 INTERSECT SELECT 2, 2 
 1	1	NULL
 NULL	2	2
 
-#Error: Binder Error: Set operations can only apply to expressions with the same number of result columns
 statement error
 SELECT x, y FROM t1 UNION ALL BY NAME SELECT y, z FROM t2 EXCEPT SELECT 2, 2 FROM t1;
 ----
+<REGEX>:Binder Error:.*Set operations can only apply.*
 
 # have to sort here too because EXCEPT does not preserve order
 query III sort
@@ -194,10 +194,10 @@ NULL	4	4
 
 ########## same name in select list
 
-# Error: Binder Error: UNION ALL BY NAME operation doesn't support same name in SELECT list
 statement error
 SELECT x, x FROM t1 UNION ALL BY NAME SELECT y FROM t2;
 ----
+<REGEX>:Binder Error:.*doesn't support duplicate names.*
 
 query III
 SELECT x, x as a FROM t1 UNION ALL BY NAME SELECT y FROM t2;
@@ -245,6 +245,3 @@ SELECT * FROM new_table;
 1	1	NULL
 NULL	2	2
 NULL	4	4
-
-
-

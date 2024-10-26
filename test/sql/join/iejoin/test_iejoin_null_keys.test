@@ -6,6 +6,9 @@ statement ok
 pragma enable_verification
 
 statement ok
+SET merge_join_threshold=0
+
+statement ok
 create table tt (x int, y int, z int);
 
 statement ok

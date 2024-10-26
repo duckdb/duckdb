@@ -104,6 +104,8 @@ private:
 	unique_ptr<ParsedExpression> expression;
 	//! Comment on this column
 	Value comment;
+	//! Tags on this column
+	unordered_map<string, string> tags;
 };
 
 } // namespace duckdb

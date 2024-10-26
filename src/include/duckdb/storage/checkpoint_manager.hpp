@@ -60,18 +60,19 @@ protected:
 	Catalog &catalog;
 
 protected:
-	virtual void LoadCheckpoint(ClientContext &context, MetadataReader &reader);
-	virtual void ReadEntry(ClientContext &context, Deserializer &deserializer);
-	virtual void ReadSchema(ClientContext &context, Deserializer &deserializer);
-	virtual void ReadTable(ClientContext &context, Deserializer &deserializer);
-	virtual void ReadView(ClientContext &context, Deserializer &deserializer);
-	virtual void ReadSequence(ClientContext &context, Deserializer &deserializer);
-	virtual void ReadMacro(ClientContext &context, Deserializer &deserializer);
-	virtual void ReadTableMacro(ClientContext &context, Deserializer &deserializer);
-	virtual void ReadIndex(ClientContext &context, Deserializer &deserializer);
-	virtual void ReadType(ClientContext &context, Deserializer &deserializer);
+	virtual void LoadCheckpoint(CatalogTransaction transaction, MetadataReader &reader);
+	virtual void ReadEntry(CatalogTransaction transaction, Deserializer &deserializer);
+	virtual void ReadSchema(CatalogTransaction transaction, Deserializer &deserializer);
+	virtual void ReadTable(CatalogTransaction transaction, Deserializer &deserializer);
+	virtual void ReadView(CatalogTransaction transaction, Deserializer &deserializer);
+	virtual void ReadSequence(CatalogTransaction transaction, Deserializer &deserializer);
+	virtual void ReadMacro(CatalogTransaction transaction, Deserializer &deserializer);
+	virtual void ReadTableMacro(CatalogTransaction transaction, Deserializer &deserializer);
+	virtual void ReadIndex(CatalogTransaction transaction, Deserializer &deserializer);
+	virtual void ReadType(CatalogTransaction transaction, Deserializer &deserializer);
 
-	virtual void ReadTableData(ClientContext &context, Deserializer &deserializer, BoundCreateTableInfo &bound_info);
+	virtual void ReadTableData(CatalogTransaction transaction, Deserializer &deserializer,
+	                           BoundCreateTableInfo &bound_info);
 };
 
 class SingleFileCheckpointReader final : public CheckpointReader {
@@ -80,7 +81,7 @@ public:
 	    : CheckpointReader(Catalog::GetCatalog(storage.GetAttached())), storage(storage) {
 	}
 
-	void LoadFromStorage(optional_ptr<ClientContext> context = nullptr);
+	void LoadFromStorage();
 	MetadataManager &GetMetadataManager();
 
 	//! The database
@@ -124,6 +125,8 @@ private:
 	PartialBlockManager partial_block_manager;
 	//! Checkpoint type
 	CheckpointType checkpoint_type;
+	//! Block usage count for verification purposes
+	unordered_map<block_id_t, idx_t> verify_block_usage_count;
 };
 
 } // namespace duckdb

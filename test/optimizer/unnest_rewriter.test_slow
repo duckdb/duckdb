@@ -1,0 +1,215 @@
+# name: test/optimizer/unnest_rewriter.test_slow
+# description: Test the UnnestRewriter optimizer
+# group: [optimizer]
+
+require parquet
+
+# first test that the output is correct
+
+query II
+SELECT * FROM (VALUES ([1, 2, 3]), ([4, 5])) t(i), (SELECT UNNEST(i)) t2(j) ORDER BY 1, 2;
+----
+[1, 2, 3]	1
+[1, 2, 3]	2
+[1, 2, 3]	3
+[4, 5]	4
+[4, 5]	5
+
+query IIII
+SELECT * FROM (VALUES (3, [1, 2, 3], 'hi'), (8, [4, 5], 'hi')) t(a, i, k), (SELECT UNNEST(i)) t2(j) ORDER BY 1, 2, 3, 4;
+----
+3	[1, 2, 3]	hi	1
+3	[1, 2, 3]	hi	2
+3	[1, 2, 3]	hi	3
+8	[4, 5]	hi	4
+8	[4, 5]	hi	5
+
+query I
+SELECT UNNEST(j) FROM (VALUES ([[1, 2, 3]]), ([[4, 5]])) t(i), (SELECT UNNEST(i)) t2(j);
+----
+1
+2
+3
+4
+5
+
+query I
+with stage1 as (
+  SELECT r, md5(r::varchar) as h, gen_random_uuid() as id
+  FROM (SELECT UNNEST(GENERATE_SERIES(1,10,1)) r ))
+, stage2 as (
+  SELECT a.*, list({r:b.r, h:b.h, id: gen_random_uuid()}) as sub
+  FROM stage1 as a, stage1 as b
+  GROUP BY ALL)
+, stage3 as (
+  SELECT a.r, a.h, list({r:b.r, h:b.h, sub:b.sub, id: gen_random_uuid()}) as sub
+  FROM stage1 as a, stage2 as b
+  GROUP BY ALL)
+SELECT count(*) as r
+FROM stage3,
+  (SELECT UNNEST(stage3.sub) sub) as s1(sub),
+  (SELECT UNNEST(s1.sub.sub) sub) as s2(sub);
+----
+1000
+
+query III
+SELECT hits_0.access.page."pageTitle" as "pageTitle",
+COUNT(DISTINCT CONCAT(ga_sessions."__distinct_key", 'x', hits_0.__row_id)) as "hits_count",
+COUNT(DISTINCT CASE WHEN product_0.access."productQuantity">0 THEN CONCAT(ga_sessions."__distinct_key", 'x', hits_0."__row_id") END) as "sold_count"
+FROM (SELECT GEN_RANDOM_UUID() as __distinct_key, * FROM 'data/parquet-testing/test_unnest_rewriter.parquet' as x) as ga_sessions,
+(SELECT GEN_RANDOM_UUID() as __row_id, x.access FROM (SELECT UNNEST(ga_sessions.hits)) as x(access)) as hits_0,
+(SELECT GEN_RANDOM_UUID() as __row_id, x.access FROM (SELECT UNNEST(hits_0.access.product)) as x(access)) as product_0
+GROUP BY 1 ORDER BY 1, 2, 3 LIMIT 2;
+----
+Accessories | Electronics | Google Merchandise Store	1	0
+Accessories | Google Merchandise Store	1	0
+
+# now test that the unnest optimizer rewrote the plan
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY
+
+query II
+EXPLAIN SELECT * FROM (VALUES ([1, 2, 3]), ([4, 5])) t(i), (SELECT UNNEST(i)) t2(j) ORDER BY 1, 2;
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*
+
+# additional LHS columns
+query II
+EXPLAIN SELECT * FROM (VALUES (3, [1, 2, 3], 'hi'), (8, [4, 5], 'hi')) t(a, i, k), (SELECT UNNEST(i)) t2(j) ORDER BY 1, 2, 3, 4;
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*
+
+query II
+EXPLAIN SELECT UNNEST(j) FROM (VALUES ([[1, 2, 3]]), ([[4, 5]])) t(i), (SELECT UNNEST(i)) t2(j);
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*
+
+# nested DELIM JOINs
+query II
+EXPLAIN SELECT hits_0.access.page."pageTitle" as "pageTitle",
+COUNT(DISTINCT CONCAT(ga_sessions."__distinct_key", 'x', hits_0.__row_id)) as "hits_count",
+COUNT(DISTINCT CASE WHEN product_0.access."productQuantity">0 THEN CONCAT(ga_sessions."__distinct_key", 'x', hits_0."__row_id") END) as "sold_count"
+FROM (SELECT GEN_RANDOM_UUID() as __distinct_key, * FROM 'data/parquet-testing/test_unnest_rewriter.parquet' as x) as ga_sessions,
+(SELECT GEN_RANDOM_UUID() as __row_id, x.access FROM (SELECT UNNEST(ga_sessions.hits)) as x(access)) as hits_0,
+(SELECT GEN_RANDOM_UUID() as __row_id, x.access FROM (SELECT UNNEST(hits_0.access.product)) as x(access)) as product_0
+GROUP BY 1 LIMIT 2;
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*
+
+query II
+EXPLAIN with stage1 as (
+  SELECT r, md5(r::VARCHAR) as h, gen_random_uuid() as id
+  FROM (SELECT UNNEST(GENERATE_SERIES(1,10,1)) r ))
+, stage2 as (
+  SELECT a.*, list({r:b.r, h:b.h, id: gen_random_uuid()}) as sub
+  FROM stage1 as a, stage1 as b
+  GROUP BY ALL)
+, stage3 as (
+  SELECT a.r, a.h, list({r:b.r, h:b.h, sub:b.sub, id: gen_random_uuid()}) as sub
+  FROM stage1 as a, stage2 as b
+  GROUP BY ALL)
+SELECT count(*) as r
+FROM stage3,
+  (SELECT UNNEST(stage3.sub) sub) as s1(sub),
+  (SELECT UNNEST(s1.sub.sub) sub) as s2(sub);
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*
+
+# make sure that these plans are not rewritten
+
+query II
+EXPLAIN SELECT (SELECT UNNEST(i)) FROM (VALUES ([])) tbl(i);
+----
+logical_opt	<REGEX>:.*DELIM_JOIN.*SINGLE.*
+
+query II
+EXPLAIN select * from (select [42, 43, 44]) t(a), (select unnest(t.a)) t2(b) where b=43;
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*
+
+# test issue #7444
+
+statement ok
+CREATE TABLE with_array(foo INT, arr DOUBLE[]);
+
+statement ok
+INSERT INTO with_array VALUES(1, [1,2,3]), (2, [4,5,6]);
+
+query IIII
+SELECT foo, arr, u1, u2 FROM with_array,
+(SELECT UNNEST(with_array.arr) AS u1,
+UNNEST(generate_series(1, len(with_array.arr), 1)) AS u2)
+ORDER BY foo, u2;
+----
+1	[1.0, 2.0, 3.0]	1.0	1
+1	[1.0, 2.0, 3.0]	2.0	2
+1	[1.0, 2.0, 3.0]	3.0	3
+2	[4.0, 5.0, 6.0]	4.0	1
+2	[4.0, 5.0, 6.0]	5.0	2
+2	[4.0, 5.0, 6.0]	6.0	3
+
+# test issue 7733
+
+statement ok
+CREATE TABLE tbl_ints AS SELECT ARRAY[1, 2, 3] AS col_a, ARRAY[6] AS col_b;
+
+statement ok
+INSERT INTO tbl_ints VALUES (ARRAY[4, 5], ARRAY[7, 8]);
+
+query II
+SELECT new_a, new_b
+FROM tbl_ints, LATERAL (SELECT UNNEST(col_a) new_a, UNNEST(col_b) new_b FROM tbl_ints) g
+ORDER BY 1, 2
+----
+1	6
+1	6
+2	NULL
+2	NULL
+3	NULL
+3	NULL
+4	7
+4	7
+5	8
+5	8
+
+query II
+SELECT new_a, new_b
+FROM tbl_ints, LATERAL (SELECT UNNEST(col_a) new_a, UNNEST(col_b) new_b) g
+ORDER BY 1
+----
+1	6
+2	NULL
+3	NULL
+4	7
+5	8
+
+statement ok
+CREATE TABLE tbl_mix AS SELECT ARRAY[1, 2, 3] AS col_a, ARRAY['a'] AS col_b;
+
+statement ok
+INSERT INTO tbl_mix VALUES (ARRAY[4, 5], ARRAY['b', 'c']);
+
+query IIII
+SELECT * FROM tbl_mix, LATERAL (SELECT UNNEST(tbl_mix.col_a) new_a, UNNEST(tbl_mix.col_b) new_b) g
+ORDER BY new_a;
+----
+[1, 2, 3]	[a]	1	a
+[1, 2, 3]	[a]	2	NULL
+[1, 2, 3]	[a]	3	NULL
+[4, 5]	[b, c]	4	b
+[4, 5]	[b, c]	5	c
+
+# test issue 7792
+
+query III
+WITH tbl AS (SELECT [{'a': 1, 'b': 'oh no!'}] AS c)
+SELECT a, b, c FROM tbl, (SELECT UNNEST(c, recursive := TRUE));
+----
+1	oh no!	[{'a': 1, 'b': oh no!}]
+
+query III
+WITH tbl AS (SELECT [{'a': 1, 'b': 2}] as c)
+SELECT a, b, c FROM tbl, (SELECT UNNEST(c, recursive := TRUE));
+----
+1	2	[{'a': 1, 'b': 2}]

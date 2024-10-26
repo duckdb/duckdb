@@ -15,12 +15,12 @@
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 #include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_validator.hpp"
 
 namespace duckdb {
 
 //! CSV Global State is used in the CSV Reader Table Function, it controls what each thread
 struct CSVGlobalState : public GlobalTableFunctionState {
-public:
 	CSVGlobalState(ClientContext &context, const shared_ptr<CSVBufferManager> &buffer_manager_p,
 	               const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files,
 	               vector<column_t> column_ids_p, const ReadCSVData &bind_data);
@@ -41,8 +41,8 @@ public:
 
 	//! Calculates the Max Threads that will be used by this CSV Reader
 	idx_t MaxThreads() const override;
-	//! We hold information on the current scanner boundary
-	CSVIterator current_boundary;
+
+	bool IsDone() const;
 
 private:
 	//! Reference to the client context that created this scan
@@ -67,7 +67,7 @@ private:
 
 	const ReadCSVData &bind_data;
 
-	vector<LogicalType> file_schema;
+	CSVSchema file_schema;
 
 	bool single_threaded = false;
 
@@ -77,6 +77,10 @@ private:
 	shared_ptr<CSVBufferUsage> current_buffer_in_use;
 
 	unordered_map<idx_t, idx_t> threads_per_file;
+	//! We hold information on the current scanner boundary
+	CSVIterator current_boundary;
+
+	CSVValidator validator;
 };
 
 } // namespace duckdb

@@ -12,9 +12,9 @@ namespace duckdb {
 
 PhysicalRightDelimJoin::PhysicalRightDelimJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> original_join,
                                                vector<const_reference<PhysicalOperator>> delim_scans,
-                                               idx_t estimated_cardinality)
+                                               idx_t estimated_cardinality, optional_idx delim_idx)
     : PhysicalDelimJoin(PhysicalOperatorType::RIGHT_DELIM_JOIN, std::move(types), std::move(original_join),
-                        std::move(delim_scans), estimated_cardinality) {
+                        std::move(delim_scans), estimated_cardinality, delim_idx) {
 	D_ASSERT(join->children.size() == 2);
 	// now for the original join
 	// we take its right child, this is the side that we will duplicate eliminate
@@ -77,6 +77,11 @@ SinkCombineResultType PhysicalRightDelimJoin::Combine(ExecutionContext &context,
 	distinct->Combine(context, distinct_combine_input);
 
 	return SinkCombineResultType::FINISHED;
+}
+
+void PhysicalRightDelimJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &sink_state) const {
+	join->PrepareFinalize(context, *join->sink_state);
+	distinct->PrepareFinalize(context, *distinct->sink_state);
 }
 
 SinkFinalizeType PhysicalRightDelimJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &client,

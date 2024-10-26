@@ -38,8 +38,9 @@ struct string_location_t { // NOLINT
 	}
 	string_location_t() {
 	}
-	bool IsValid() {
-		return offset < int32_t(Storage::BLOCK_SIZE) && (block_id == INVALID_BLOCK || block_id >= MAXIMUM_BLOCK);
+	bool IsValid(const idx_t block_size) {
+		auto cast_block_size = NumericCast<int32_t>(block_size);
+		return offset < cast_block_size && (block_id == INVALID_BLOCK || block_id >= MAXIMUM_BLOCK);
 	}
 	block_id_t block_id;
 	int32_t offset;

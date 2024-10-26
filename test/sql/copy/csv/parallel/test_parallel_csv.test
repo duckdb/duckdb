@@ -5,6 +5,7 @@
 statement ok
 PRAGMA enable_verification
 
+
 query III
 select * from read_csv_auto('data/csv/dirty_line.csv',  skip = 1)
 ----
@@ -138,12 +139,12 @@ require httpfs
 query II
 select * from read_csv_auto("https://duckdb-public-gzip-test.s3.us-east-2.amazonaws.com/test.csv", header = 0);
 ----
-'foo'	'bar'
+foo	bar
 foo	bar
 
 
 query II
 from read_csv_auto("https://duckdb-public-gzip-test.s3.us-east-2.amazonaws.com/test.csv.gz", header = 0);
 ----
-'foo'	'bar'
+foo	bar
 foo	bar

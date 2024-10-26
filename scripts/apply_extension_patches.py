@@ -13,11 +13,11 @@ patches = glob.glob(patch_pattern)
 
 
 def raise_error(error_msg):
-    sys.stderr.write(error_message + '\n')
+    sys.stderr.write(error_msg + '\n')
     sys.exit(1)
 
 
-patches = os.listdir(directory)
+patches = sorted(os.listdir(directory))
 for patch in patches:
     if not patch.endswith('.patch'):
         raise_error(
@@ -36,10 +36,9 @@ if not patches:
 
 print(f"Resetting patches in {directory}\n")
 subprocess.run(["git", "log"], check=True)
+subprocess.run(["git", "clean", "-f"], check=True)
 subprocess.run(["git", "reset", "--hard", "HEAD"], check=True)
-# Apply each patch file using git apply
+# Apply each patch file using patch
 for patch in patches:
     print(f"Applying patch: {patch}\n")
-    subprocess.run(
-        ["git", "apply", "--ignore-space-change", "--ignore-whitespace", os.path.join(directory, patch)], check=True
-    )
+    subprocess.run(["patch", "-p1", "--forward", "-i", os.path.join(directory, patch)], check=True)

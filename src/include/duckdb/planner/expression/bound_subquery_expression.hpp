@@ -22,7 +22,7 @@ public:
 public:
 	explicit BoundSubqueryExpression(LogicalType return_type);
 
-	bool IsCorrelated() {
+	bool IsCorrelated() const {
 		return !binder->correlated_columns.empty();
 	}
 
@@ -57,7 +57,7 @@ public:
 
 	bool Equals(const BaseExpression &other) const override;
 
-	unique_ptr<Expression> Copy() override;
+	unique_ptr<Expression> Copy() const override;
 
 	bool PropagatesNullValues() const override;
 };

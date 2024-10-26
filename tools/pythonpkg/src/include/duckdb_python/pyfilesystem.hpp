@@ -34,18 +34,14 @@ class PythonFileHandle : public FileHandle {
 public:
 	PythonFileHandle(FileSystem &file_system, const string &path, const py::object &handle);
 	~PythonFileHandle() override;
-	void Close() override {
-		PythonGILWrapper gil;
-		handle.attr("close")();
-	}
+	void Close() override;
 
-	static const py::object &GetHandle(const FileHandle &handle) {
-		return ((const PythonFileHandle &)handle).handle;
-	}
+	static const py::object &GetHandle(const FileHandle &handle);
 
 private:
 	py::object handle;
 };
+
 class PythonFilesystem : public FileSystem {
 private:
 	const vector<string> protocols;

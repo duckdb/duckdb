@@ -37,9 +37,9 @@ struct compatible_with_t : std::is_convertible<U *, T *> {}; // NOLINT: invalid 
 
 } // namespace duckdb
 
-#include "duckdb/common/shared_ptr.ipp"
-#include "duckdb/common/weak_ptr.ipp"
-#include "duckdb/common/enable_shared_from_this.ipp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/weak_ptr_ipp.hpp"
+#include "duckdb/common/enable_shared_from_this_ipp.hpp"
 
 namespace duckdb {
 

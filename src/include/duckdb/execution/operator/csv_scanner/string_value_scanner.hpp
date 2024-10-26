@@ -12,7 +12,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/execution/operator/csv_scanner/scanner_boundary.hpp"
 #include "duckdb/execution/operator/csv_scanner/base_scanner.hpp"
-
+#include "duckdb/execution/operator/csv_scanner/csv_validator.hpp"
 namespace duckdb {
 
 struct CSVBufferUsage {
@@ -36,7 +36,7 @@ public:
 	    : buffer_pos(buffer_pos_p), buffer_size(buffer_size_p), buffer_idx(buffer_idx_p) {
 	}
 
-	idx_t operator-(const LinePosition &other) {
+	idx_t operator-(const LinePosition &other) const {
 		if (other.buffer_idx == buffer_idx) {
 			return buffer_pos - other.buffer_pos;
 		}
@@ -47,7 +47,7 @@ public:
 		return buffer_pos == other.buffer_pos && buffer_idx == other.buffer_idx && buffer_size == other.buffer_size;
 	}
 
-	idx_t GetGlobalPosition(idx_t requested_buffer_size, bool first_char_nl = false) {
+	idx_t GetGlobalPosition(idx_t requested_buffer_size, bool first_char_nl = false) const {
 		return requested_buffer_size * buffer_idx + buffer_pos + first_char_nl;
 	}
 	idx_t buffer_pos = 0;
@@ -64,17 +64,27 @@ public:
 
 	//! Reconstructs the current line to be used in error messages
 	string ReconstructCurrentLine(bool &first_char_nl,
-	                              unordered_map<idx_t, shared_ptr<CSVBufferHandle>> &buffer_handles);
+	                              unordered_map<idx_t, shared_ptr<CSVBufferHandle>> &buffer_handles,
+	                              bool reconstruct_line) const;
 };
+
+class StringValueResult;
 
 class CurrentError {
 public:
-	CurrentError(CSVErrorType type, idx_t col_idx_p, LinePosition error_position_p)
-	    : type(type), col_idx(col_idx_p), error_position(error_position_p) {};
-
+	CurrentError(CSVErrorType type, idx_t col_idx_p, idx_t chunk_idx_p, const LinePosition &error_position_p,
+	             idx_t current_line_size_p)
+	    : type(type), col_idx(col_idx_p), chunk_idx(chunk_idx_p), current_line_size(current_line_size_p),
+	      error_position(error_position_p) {};
+	//! Error Type (e.g., Cast, Wrong # of columns, ...)
 	CSVErrorType type;
+	//! Column index related to the CSV File columns
 	idx_t col_idx;
+	//! Column index related to the produced chunk (i.e., with projection applied)
+	idx_t chunk_idx;
+	//! Current CSV Line size in Bytes
 	idx_t current_line_size;
+	//! Error Message produced
 	string error_message;
 	//! Exact Position where the error happened
 	LinePosition error_position;
@@ -84,12 +94,78 @@ public:
 	}
 };
 
+class LineError {
+public:
+	explicit LineError(bool ignore_errors_p) : is_error_in_line(false), ignore_errors(ignore_errors_p) {};
+	//! We clear up our CurrentError Vector
+	void Reset() {
+		current_errors.clear();
+		is_error_in_line = false;
+	}
+	void Insert(const CSVErrorType &type, const idx_t &col_idx, const idx_t &chunk_idx,
+	            const LinePosition &error_position, const idx_t current_line_size = 0) {
+		is_error_in_line = true;
+		if (!ignore_errors) {
+			// We store it for later
+			current_errors.push_back({type, col_idx, chunk_idx, error_position, current_line_size});
+			current_errors.back().current_line_size = current_line_size;
+		}
+	}
+	//! Set that we currently have an error, but don't really store them
+	void SetError() {
+		is_error_in_line = true;
+	}
+	//! Dirty hack for adding cast message
+	void ModifyErrorMessageOfLastError(string error_message) {
+		D_ASSERT(!current_errors.empty() && current_errors.back().type == CSVErrorType::CAST_ERROR);
+		current_errors.back().error_message = std::move(error_message);
+	}
+
+	bool HasErrorType(CSVErrorType type) const {
+		for (auto &error : current_errors) {
+			if (type == error.type) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool HandleErrors(StringValueResult &result);
+
+	bool HasError() const {
+		return !current_errors.empty();
+	}
+
+private:
+	vector<CurrentError> current_errors;
+	bool is_error_in_line;
+	bool ignore_errors;
+};
+
+struct ParseTypeInfo {
+	ParseTypeInfo() {};
+	ParseTypeInfo(const LogicalType &type, bool validate_utf_8_p) : validate_utf8(validate_utf_8_p) {
+		type_id = type.id();
+		internal_type = type.InternalType();
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			// We only care about these if we have a decimal value
+			type.GetDecimalProperties(width, scale);
+		}
+	}
+
+	bool validate_utf8;
+	LogicalTypeId type_id;
+	PhysicalType internal_type;
+	uint8_t scale;
+	uint8_t width;
+};
 class StringValueResult : public ScannerResult {
 public:
 	StringValueResult(CSVStates &states, CSVStateMachine &state_machine,
-	                  const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator, idx_t result_size,
-	                  idx_t buffer_position, CSVErrorHandler &error_handler, CSVIterator &iterator,
-	                  bool store_line_size, shared_ptr<CSVFileScan> csv_file_scan, idx_t &lines_read, bool sniffing);
+	                  const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator,
+	                  idx_t result_size_p, idx_t buffer_position, CSVErrorHandler &error_handler, CSVIterator &iterator,
+	                  bool store_line_size, shared_ptr<CSVFileScan> csv_file_scan, idx_t &lines_read, bool sniffing,
+	                  string path);
 
 	~StringValueResult();
 
@@ -101,6 +177,7 @@ public:
 	LinePosition last_position;
 	char *buffer_ptr;
 	idx_t buffer_size;
+	idx_t position_before_comment;
 
 	//! CSV Options that impact the parsing
 	const uint32_t number_of_columns;
@@ -115,7 +192,7 @@ public:
 	DataChunk parse_chunk;
 	idx_t number_of_rows = 0;
 	idx_t cur_col_id = 0;
-	idx_t result_size;
+	bool figure_out_new_line = false;
 	//! Information to properly handle errors
 	CSVErrorHandler &error_handler;
 	CSVIterator &iterator;
@@ -127,7 +204,7 @@ public:
 	bool added_last_line = false;
 	bool quoted_new_line = false;
 
-	unsafe_unique_array<std::pair<LogicalTypeId, bool>> parse_types;
+	unsafe_unique_array<ParseTypeInfo> parse_types;
 	vector<string> names;
 
 	shared_ptr<CSVFileScan> csv_file_scan;
@@ -144,9 +221,21 @@ public:
 	idx_t requested_size;
 
 	//! Errors happening in the current line (if any)
-	vector<CurrentError> current_errors;
+	LineError current_errors;
 	StrpTimeFormat date_format, timestamp_format;
 	bool sniffing;
+
+	char decimal_separator;
+
+	//! We store borked rows so we can generate multiple errors during flushing
+	unordered_set<idx_t> borked_rows;
+
+	const string path;
+
+	//! Variable used when trying to figure out where a new segment starts, we must always start from a Valid
+	//! (i.e., non-comment) line.
+	bool first_line_is_comment = false;
+
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Adds a Value to the result
@@ -157,34 +246,56 @@ public:
 	static inline void InvalidState(StringValueResult &result);
 	//! Handles QuotedNewline State
 	static inline void QuotedNewLine(StringValueResult &result);
-	void NullPaddingQuotedNewlineCheck();
+	void NullPaddingQuotedNewlineCheck() const;
 	//! Handles EmptyLine states
 	static inline bool EmptyLine(StringValueResult &result, const idx_t buffer_pos);
 	inline bool AddRowInternal();
 	//! Force the throw of a unicode error
 	void HandleUnicodeError(idx_t col_idx, LinePosition &error_position);
 	bool HandleTooManyColumnsError(const char *value_ptr, const idx_t size);
-	//! Certain errors should only be handled when adding the line, to ensure proper error propagation.
-	bool HandleError();
-
 	inline void AddValueToVector(const char *value_ptr, const idx_t size, bool allocate = false);
+	static inline void SetComment(StringValueResult &result, idx_t buffer_pos);
+	static inline bool UnsetComment(StringValueResult &result, idx_t buffer_pos);
 
 	DataChunk &ToChunk();
 	//! Resets the state of the result
 	void Reset();
+
+	//! BOM skipping (https://en.wikipedia.org/wiki/Byte_order_mark)
+	void SkipBOM() const;
+	//! If we should Print Error Lines
+	//! We only really care about error lines if we are going to error or store them in a rejects table
+	bool PrintErrorLine() const;
+	//! Removes last added line, usually because we figured out later on that it's an ill-formed line
+	//! or that it does not fit our schema
+	void RemoveLastLine();
 };
 
+struct ValidRowInfo {
+	ValidRowInfo(bool is_valid_p, idx_t start_pos_p, idx_t end_buffer_idx_p, idx_t end_pos_p, bool last_state_quote_p)
+	    : is_valid(is_valid_p), start_pos(start_pos_p), end_buffer_idx(end_buffer_idx_p), end_pos(end_pos_p),
+	      last_state_quote(last_state_quote_p) {};
+	ValidRowInfo() : is_valid(false), start_pos(0), end_buffer_idx(0), end_pos(0) {};
+
+	bool is_valid;
+	idx_t start_pos;
+	idx_t end_buffer_idx;
+	idx_t end_pos;
+	bool last_state_quote = false;
+};
 //! Our dialect scanner basically goes over the CSV and actually parses the values to a DuckDB vector of string_t
 class StringValueScanner : public BaseScanner {
 public:
 	StringValueScanner(idx_t scanner_idx, const shared_ptr<CSVBufferManager> &buffer_manager,
 	                   const shared_ptr<CSVStateMachine> &state_machine,
 	                   const shared_ptr<CSVErrorHandler> &error_handler, const shared_ptr<CSVFileScan> &csv_file_scan,
-	                   bool sniffing = false, CSVIterator boundary = {}, idx_t result_size = STANDARD_VECTOR_SIZE);
+	                   bool sniffing = false, const CSVIterator &boundary = {},
+	                   idx_t result_size = STANDARD_VECTOR_SIZE);
 
 	StringValueScanner(const shared_ptr<CSVBufferManager> &buffer_manager,
 	                   const shared_ptr<CSVStateMachine> &state_machine,
-	                   const shared_ptr<CSVErrorHandler> &error_handler);
+	                   const shared_ptr<CSVErrorHandler> &error_handler, idx_t result_size = STANDARD_VECTOR_SIZE,
+	                   const CSVIterator &boundary = {});
 
 	StringValueResult &ParseChunk() override;
 
@@ -194,13 +305,16 @@ public:
 	//! Function that creates and returns a non-boundary CSV Scanner, can be used for internal csv reading.
 	static unique_ptr<StringValueScanner> GetCSVScanner(ClientContext &context, CSVReaderOptions &options);
 
-	bool FinishedIterator();
+	bool FinishedIterator() const;
 
 	//! Creates a new string with all escaped values removed
 	static string_t RemoveEscape(const char *str_ptr, idx_t end, char escape, Vector &vector);
 
 	//! If we can directly cast the type when consuming the CSV file, or we have to do it later
-	static bool CanDirectlyCast(const LogicalType &type);
+	static bool CanDirectlyCast(const LogicalType &type, bool icu_loaded);
+
+	//! Gets validation line information
+	ValidatorLine GetValidationLine();
 
 	const idx_t scanner_idx;
 
@@ -213,26 +327,28 @@ private:
 	void FinalizeChunkProcess() override;
 
 	//! Function used to process values that go over the first buffer, extra allocation might be necessary
-	void ProcessOverbufferValue();
+	void ProcessOverBufferValue();
 
 	void ProcessExtraRow();
 	//! Function used to move from one buffer to the other, if necessary
 	bool MoveToNextBuffer();
 
-	//! BOM skipping (https://en.wikipedia.org/wiki/Byte_order_mark)
-	void SkipBOM();
-
-	//! Skips Notes, notes are dirty lines on top of the file, before the actual data
-	void SkipCSVRows();
-
-	void SkipUntilNewLine();
-
+	//! -------- Functions used to figure out where lines start ---------!//
+	//! Main function, sets the correct start
 	void SetStart();
+	//! From a given initial state, it skips until we reach the until_state
+	bool SkipUntilState(CSVState initial_state, CSVState until_state, CSVIterator &current_iterator,
+	                    bool &quoted) const;
+	//! If the current row we found is valid
+	bool IsRowValid(CSVIterator &current_iterator) const;
+	ValidRowInfo TryRow(CSVState state, idx_t start_pos, idx_t end_pos) const;
+	bool FirstValueEndsOnQuote(CSVIterator iterator) const;
 
 	StringValueResult result;
 	vector<LogicalType> types;
-
-	//! Pointer to the previous buffer handle, necessary for overbuffer values
+	//! True Position where this scanner started scanning(i.e., after figuring out where the first line starts)
+	idx_t start_pos;
+	//! Pointer to the previous buffer handle, necessary for over-buffer values
 	shared_ptr<CSVBufferHandle> previous_buffer_handle;
 };
 

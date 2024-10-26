@@ -1,0 +1,23 @@
+# name: test/sql/function/array/array_and_map.test
+# description: Test flattening ARRAY types inside the MAP function.
+# group: [array]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT MAP([MAP([ARRAY_VALUE('1', NULL), ARRAY_VALUE(NULL, '2')], [1, 2])], [1]);
+----
+{{[1, NULL]=1, [NULL, 2]=2}=1}
+
+query I
+SELECT MAP([2], [{'key1': MAP([ARRAY_VALUE('1', NULL), ARRAY_VALUE(NULL, '2')], [1, 2])}]);
+----
+{2={'key1': {[1, NULL]=1, [NULL, 2]=2}}}
+
+# Issue https://github.com/duckdb/duckdb/issues/12007.
+
+query I
+SELECT [MAP([2], [{'key1': MAP([ARRAY_VALUE('1', NULL), ARRAY_VALUE(NULL, '2')], [1, 2]), 'key2': 2}])];
+----
+[{2={'key1': {[1, NULL]=1, [NULL, 2]=2}, 'key2': 2}}]

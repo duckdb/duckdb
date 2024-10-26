@@ -24,9 +24,23 @@ void ListColumnData::SetStart(idx_t new_start) {
 	validity.SetStart(new_start);
 }
 
-bool ListColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
+FilterPropagateResult ListColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
 	// table filters are not supported yet for list columns
-	return false;
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+}
+
+void ListColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
+	ColumnData::InitializePrefetch(prefetch_state, scan_state, rows);
+	validity.InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
+
+	// we can't know how many rows we need to prefetch for the child of this list without looking at the actual data
+	// we make an estimation by looking at how many rows the child column has versus this column
+	// e.g if the child column has 10K rows, and we have 1K rows, we estimate that each list has 10 elements
+	idx_t rows_per_list = 1;
+	if (child_column->count > this->count && this->count > 0) {
+		rows_per_list = child_column->count / this->count;
+	}
+	child_column->InitializePrefetch(prefetch_state, scan_state.child_states[1], rows * rows_per_list);
 }
 
 void ListColumnData::InitializeScan(ColumnScanState &state) {
@@ -70,12 +84,14 @@ void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_
 	state.last_offset = child_offset;
 }
 
-idx_t ListColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
-	return ScanCount(state, result, STANDARD_VECTOR_SIZE);
+idx_t ListColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                           idx_t scan_count) {
+	return ScanCount(state, result, scan_count);
 }
 
-idx_t ListColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
-	return ScanCount(state, result, STANDARD_VECTOR_SIZE);
+idx_t ListColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
+                                    idx_t scan_count) {
+	return ScanCount(state, result, scan_count);
 }
 
 idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
@@ -86,7 +102,7 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	D_ASSERT(!updates);
 
 	Vector offset_vector(LogicalType::UBIGINT, count);
-	idx_t scan_count = ScanVector(state, offset_vector, count, false);
+	idx_t scan_count = ScanVector(state, offset_vector, count, ScanVectorType::SCAN_FLAT_VECTOR);
 	D_ASSERT(scan_count > 0);
 	validity.ScanCount(state.child_states[0], result, count);
 
@@ -133,7 +149,7 @@ void ListColumnData::Skip(ColumnScanState &state, idx_t count) {
 	// note that we only need to read the first and last entry
 	// however, let's just read all "count" entries for now
 	Vector offset_vector(LogicalType::UBIGINT, count);
-	idx_t scan_count = ScanVector(state, offset_vector, count, false);
+	idx_t scan_count = ScanVector(state, offset_vector, count, ScanVectorType::SCAN_FLAT_VECTOR);
 	D_ASSERT(scan_count > 0);
 
 	UnifiedVectorFormat offsets;
@@ -324,12 +340,11 @@ public:
 		return stats.ToUnique();
 	}
 
-	void WriteDataPointers(RowGroupWriter &writer, Serializer &serializer) override {
-		ColumnCheckpointState::WriteDataPointers(writer, serializer);
-		serializer.WriteObject(101, "validity",
-		                       [&](Serializer &serializer) { validity_state->WriteDataPointers(writer, serializer); });
-		serializer.WriteObject(102, "child_column",
-		                       [&](Serializer &serializer) { child_state->WriteDataPointers(writer, serializer); });
+	PersistentColumnData ToPersistentData() override {
+		auto data = ColumnCheckpointState::ToPersistentData();
+		data.child_columns.push_back(validity_state->ToPersistentData());
+		data.child_columns.push_back(child_state->ToPersistentData());
+		return data;
 	}
 };
 
@@ -350,16 +365,22 @@ unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group
 	return base_state;
 }
 
-void ListColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) {
-	ColumnData::DeserializeColumn(deserializer, target_stats);
+bool ListColumnData::IsPersistent() {
+	return ColumnData::IsPersistent() && validity.IsPersistent() && child_column->IsPersistent();
+}
 
-	deserializer.ReadObject(
-	    101, "validity", [&](Deserializer &deserializer) { validity.DeserializeColumn(deserializer, target_stats); });
+PersistentColumnData ListColumnData::Serialize() {
+	auto persistent_data = ColumnData::Serialize();
+	persistent_data.child_columns.push_back(validity.Serialize());
+	persistent_data.child_columns.push_back(child_column->Serialize());
+	return persistent_data;
+}
 
+void ListColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
+	ColumnData::InitializeColumn(column_data, target_stats);
+	validity.InitializeColumn(column_data.child_columns[0], target_stats);
 	auto &child_stats = ListStats::GetChildStats(target_stats);
-	deserializer.ReadObject(102, "child_column", [&](Deserializer &deserializer) {
-		child_column->DeserializeColumn(deserializer, child_stats);
-	});
+	child_column->InitializeColumn(column_data.child_columns[1], child_stats);
 }
 
 void ListColumnData::GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,

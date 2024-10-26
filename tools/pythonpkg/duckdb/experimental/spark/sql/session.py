@@ -6,7 +6,6 @@ if TYPE_CHECKING:
     from pandas.core.frame import DataFrame as PandasDataFrame
 
 from ..exception import ContributionsAcceptedError
- 
 from .types import StructType, AtomicType, DataType
 from ..conf import SparkConf
 from .dataframe import DataFrame
@@ -191,9 +190,20 @@ class SparkSession:
         return SparkSession(self._context)
 
     def range(
-        self, start: int, end: Optional[int] = None, step: int = 1, numPartitions: Optional[int] = None
+        self,
+        start: int,
+        end: Optional[int] = None,
+        step: int = 1,
+        numPartitions: Optional[int] = None,
     ) -> "DataFrame":
-        raise ContributionsAcceptedError
+        if numPartitions:
+            raise ContributionsAcceptedError
+
+        if end is None:
+            end = start
+            start = 0
+
+        return DataFrame(self.conn.table_function("range", parameters=[start, end, step]),self)
 
     def sql(self, sqlQuery: str, **kwargs: Any) -> DataFrame:
         if kwargs:
@@ -241,7 +251,7 @@ class SparkSession:
 
     @property
     def udf(self) -> UDFRegistration:
-        return UDFRegistration()
+        return UDFRegistration(self)
 
     @property
     def version(self) -> str:

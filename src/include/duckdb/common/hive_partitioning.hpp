@@ -14,28 +14,37 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/table_filter.hpp"
-#include "re2/re2.h"
 
 #include <iostream>
 #include <sstream>
 
 namespace duckdb {
+struct MultiFilePushdownInfo;
+
+struct HivePartitioningFilterInfo {
+	unordered_map<string, column_t> column_map;
+	bool hive_enabled;
+	bool filename_enabled;
+};
 
 class HivePartitioning {
 public:
 	//! Parse a filename that follows the hive partitioning scheme
 	DUCKDB_API static std::map<string, string> Parse(const string &filename);
-	DUCKDB_API static std::map<string, string> Parse(const string &filename, duckdb_re2::RE2 &regex);
 	//! Prunes a list of filenames based on a set of filters, can be used by TableFunctions in the
 	//! pushdown_complex_filter function to skip files with filename-based filters. Also removes the filters that always
 	//! evaluate to true.
 	DUCKDB_API static void ApplyFiltersToFileList(ClientContext &context, vector<string> &files,
 	                                              vector<unique_ptr<Expression>> &filters,
-	                                              unordered_map<string, column_t> &column_map, LogicalGet &get,
-	                                              bool hive_enabled, bool filename_enabled);
+	                                              const HivePartitioningFilterInfo &filter_info,
+	                                              MultiFilePushdownInfo &info);
 
-	//! Returns the compiled regex pattern to match hive partitions
-	DUCKDB_API static const string &RegexString();
+	DUCKDB_API static Value GetValue(ClientContext &context, const string &key, const string &value,
+	                                 const LogicalType &type);
+	//! Escape a hive partition key or value using URL encoding
+	DUCKDB_API static string Escape(const string &input);
+	//! Unescape a hive partition key or value encoded using URL encoding
+	DUCKDB_API static string Unescape(const string &input);
 };
 
 struct HivePartitionKey {

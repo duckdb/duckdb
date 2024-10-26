@@ -1,0 +1,66 @@
+# name: test/sql/insert/insert_non_order_preserving.test_slow
+# description: Test parallel non order-preserving insert
+# group: [insert]
+
+statement ok
+PRAGMA preserve_insertion_order=false
+
+query I
+CREATE TABLE integers AS SELECT * FROM range(1000000) tbl(i);
+----
+1000000
+
+query I
+CREATE TABLE integers2 AS SELECT * FROM integers
+----
+1000000
+
+query I
+SELECT SUM(i) FROM integers
+----
+499999500000
+
+query I
+SELECT SUM(i) FROM integers2
+----
+499999500000
+
+statement ok
+DROP TABLE integers
+
+statement ok
+DROP TABLE integers2
+
+# now with null values
+statement ok
+CREATE TABLE integers AS SELECT case when i%2=0 then null else i end AS i  FROM range(1000000) tbl(i);
+
+statement ok
+CREATE TABLE integers2 AS SELECT * FROM integers
+
+query I
+SELECT SUM(i) FROM integers
+----
+250000000000
+
+query I
+SELECT SUM(i) FROM integers2
+----
+250000000000
+
+# varchars
+statement ok
+CREATE TABLE varchars AS SELECT case when i%2=0 then null else concat('thisismyvarchar-', i//4) end AS v  FROM range(1000000) tbl(i);
+
+statement ok
+CREATE TABLE varchars2 AS SELECT * FROM varchars
+
+query IIIII
+SELECT MIN(v), MAX(v), COUNT(*), COUNT(v), COUNT(DISTINCT v) FROM varchars
+----
+thisismyvarchar-0	thisismyvarchar-99999	1000000	500000	250000
+
+query IIIII
+SELECT MIN(v), MAX(v), COUNT(*), COUNT(v), COUNT(DISTINCT v) FROM varchars2
+----
+thisismyvarchar-0	thisismyvarchar-99999	1000000	500000	250000

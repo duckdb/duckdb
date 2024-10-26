@@ -1,16 +1,14 @@
 #ifndef JEMALLOC_INTERNAL_BIT_UTIL_H
 #define JEMALLOC_INTERNAL_BIT_UTIL_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/assert.h"
-#include "jemalloc/internal/util.h"
 
 /* Sanity check. */
 #if !defined(JEMALLOC_INTERNAL_FFSLL) || !defined(JEMALLOC_INTERNAL_FFSL) \
     || !defined(JEMALLOC_INTERNAL_FFS)
 #  error JEMALLOC_INTERNAL_FFS{,L,LL} should have been defined by configure
 #endif
-
-namespace duckdb_jemalloc {
 
 /*
  * Unlike the builtins and posix ffs functions, our ffs requires a non-zero
@@ -343,7 +341,6 @@ ffs_u32(uint32_t x) {
 #else
 #error No implementation for 32-bit ffs()
 #endif
-	return ffs_u(x);
 }
 
 static inline unsigned
@@ -353,7 +350,6 @@ fls_u32(uint32_t x) {
 #else
 #error No implementation for 32-bit fls()
 #endif
-	return fls_u(x);
 }
 
 static inline uint64_t
@@ -421,7 +417,5 @@ lg_ceil(size_t x) {
 #endif
 
 #define LG_CEIL(x) (LG_FLOOR(x) + (((x) & ((x) - 1)) == 0 ? 0 : 1))
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_BIT_UTIL_H */

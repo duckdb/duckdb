@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 2.8.12...3.29)
 
 project(HTTPFsExtension)
 
@@ -11,9 +11,11 @@ build_static_extension(
   hffs.cpp
   s3fs.cpp
   httpfs.cpp
+  http_state.cpp
   crypto.cpp
   create_secret_functions.cpp
   httpfs_extension.cpp)
+
 set(PARAMETERS "-warnings")
 build_loadable_extension(
   httpfs
@@ -21,6 +23,7 @@ build_loadable_extension(
   hffs.cpp
   s3fs.cpp
   httpfs.cpp
+  http_state.cpp
   crypto.cpp
   create_secret_functions.cpp
   httpfs_extension.cpp)

@@ -19,6 +19,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/main/query_result.hpp"
 
 namespace duckdb {
@@ -289,6 +290,9 @@ void ExtractPivotAggregates(BoundTableRef &node, vector<unique_ptr<Expression>> 
 	}
 	auto &select2 = subq2.subquery->Cast<BoundSelectNode>();
 	for (auto &aggr : select2.aggregates) {
+		if (aggr->alias == "__collated_group") {
+			continue;
+		}
 		aggregates.push_back(aggr->Copy());
 	}
 }
@@ -378,7 +382,9 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 	idx_t total_pivots = 1;
 	for (auto &pivot : ref.pivots) {
 		if (!pivot.pivot_enum.empty()) {
-			auto type = Catalog::GetType(context, INVALID_CATALOG, INVALID_SCHEMA, pivot.pivot_enum);
+			auto &type_entry =
+			    Catalog::GetEntry<TypeCatalogEntry>(context, INVALID_CATALOG, INVALID_SCHEMA, pivot.pivot_enum);
+			auto type = type_entry.user_type;
 			if (type.id() != LogicalTypeId::ENUM) {
 				throw BinderException(ref, "Pivot must reference an ENUM type: \"%s\" is of type \"%s\"",
 				                      pivot.pivot_enum, type.ToString());
@@ -534,6 +540,9 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 	vector<UnpivotEntry> unpivot_entries;
 	for (auto &entry : unpivot.entries) {
 		ExtractUnpivotEntries(child_binder, entry, unpivot_entries);
+	}
+	if (unpivot_entries.empty()) {
+		throw BinderException(ref, "UNPIVOT clause must unpivot on at least one column - zero were provided");
 	}
 
 	case_insensitive_set_t handled_columns;

@@ -62,15 +62,15 @@ public:
 	DUCKDB_API bool HasGeneratedColumns() const;
 
 	//! Returns whether or not a column with the given name exists
-	DUCKDB_API bool ColumnExists(const string &name);
+	DUCKDB_API bool ColumnExists(const string &name) const;
 	//! Returns a reference to the column of the specified name. Throws an
 	//! exception if the column does not exist.
-	DUCKDB_API const ColumnDefinition &GetColumn(const string &name);
+	DUCKDB_API const ColumnDefinition &GetColumn(const string &name) const;
 	//! Returns a reference to the column of the specified logical index. Throws an
 	//! exception if the column does not exist.
-	DUCKDB_API const ColumnDefinition &GetColumn(LogicalIndex idx);
+	DUCKDB_API const ColumnDefinition &GetColumn(LogicalIndex idx) const;
 	//! Returns a list of types of the table, excluding generated columns
-	DUCKDB_API vector<LogicalType> GetTypes();
+	DUCKDB_API vector<LogicalType> GetTypes() const;
 	//! Returns a list of the columns of the table
 	DUCKDB_API const ColumnList &GetColumns() const;
 	//! Returns the underlying storage of the table
@@ -87,7 +87,7 @@ public:
 	//! If the column does not exist:
 	//! If if_column_exists is true, returns DConstants::INVALID_INDEX
 	//! If if_column_exists is false, throws an exception
-	DUCKDB_API LogicalIndex GetColumnIndex(string &name, bool if_exists = false);
+	DUCKDB_API LogicalIndex GetColumnIndex(string &name, bool if_exists = false) const;
 
 	//! Returns the scan function that can be used to scan the given table
 	virtual TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) = 0;
@@ -97,6 +97,9 @@ public:
 	}
 
 	DUCKDB_API static string ColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints);
+
+	//! Returns the expression string list of the column names e.g. (col1, col2, col3)
+	static string ColumnNamesToSQL(const ColumnList &columns);
 
 	//! Returns a list of segment information for this table, if exists
 	virtual vector<ColumnSegmentInfo> GetColumnSegmentInfo();

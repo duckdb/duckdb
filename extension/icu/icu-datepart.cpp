@@ -587,7 +587,7 @@ struct ICUDatePart : public ICUDateFunc {
 	                                      const LogicalType &result_type = LogicalType::BIGINT) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetUnaryPartCodeFunction<timestamp_t, RESULT_TYPE>(LogicalType::TIMESTAMP_TZ, result_type));
-		ExtensionUtil::AddFunctionOverload(db, set);
+		ExtensionUtil::RegisterFunction(db, set);
 	}
 
 	template <typename INPUT_TYPE, typename RESULT_TYPE>
@@ -610,7 +610,7 @@ struct ICUDatePart : public ICUDateFunc {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetBinaryPartCodeFunction<timestamp_t, int64_t>(LogicalType::TIMESTAMP_TZ));
 		set.AddFunction(GetStructFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
-		ExtensionUtil::AddFunctionOverload(db, set);
+		ExtensionUtil::RegisterFunction(db, set);
 	}
 
 	static duckdb::unique_ptr<FunctionData> BindLastDate(ClientContext &context, ScalarFunction &bound_function,
@@ -627,7 +627,7 @@ struct ICUDatePart : public ICUDateFunc {
 	static void AddLastDayFunctions(const string &name, DatabaseInstance &db) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetLastDayFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
-		ExtensionUtil::AddFunctionOverload(db, set);
+		ExtensionUtil::RegisterFunction(db, set);
 	}
 
 	static unique_ptr<FunctionData> BindMonthName(ClientContext &context, ScalarFunction &bound_function,
@@ -644,7 +644,7 @@ struct ICUDatePart : public ICUDateFunc {
 	static void AddMonthNameFunctions(const string &name, DatabaseInstance &db) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetMonthNameFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
-		ExtensionUtil::AddFunctionOverload(db, set);
+		ExtensionUtil::RegisterFunction(db, set);
 	}
 
 	static unique_ptr<FunctionData> BindDayName(ClientContext &context, ScalarFunction &bound_function,
@@ -661,7 +661,7 @@ struct ICUDatePart : public ICUDateFunc {
 	static void AddDayNameFunctions(const string &name, DatabaseInstance &db) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetDayNameFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
-		ExtensionUtil::AddFunctionOverload(db, set);
+		ExtensionUtil::RegisterFunction(db, set);
 	}
 };
 

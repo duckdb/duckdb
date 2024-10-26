@@ -148,20 +148,7 @@ static bool UpgradeType(LogicalType &left, const LogicalType &right) {
 		return true;
 	}
 	case LogicalTypeId::ARRAY: {
-		if (right.id() != left.id()) {
-			// Not both sides are ARRAY, not compatible
-			// FIXME: maybe compatible with LIST type??
-			return false;
-		}
-		LogicalType child_type = LogicalType::SQLNULL;
-		if (!UpgradeType(child_type, ArrayType::GetChildType(left))) {
-			return false;
-		}
-		if (!UpgradeType(child_type, ArrayType::GetChildType(right))) {
-			return false;
-		}
-		left = LogicalType::ARRAY(child_type);
-		return true;
+		throw InternalException("ARRAY types are not being detected yet, this should never happen");
 	}
 	case LogicalTypeId::STRUCT: {
 		if (right.id() == LogicalTypeId::STRUCT) {
@@ -205,7 +192,7 @@ static bool UpgradeType(LogicalType &left, const LogicalType &right) {
 		return true;
 	}
 	case LogicalTypeId::UNION: {
-		throw NotImplementedException("Converting to UNION type is not supported yet");
+		throw InternalException("UNION types are not being detected yet, this should never happen");
 	}
 	case LogicalTypeId::MAP: {
 		if (right.id() == LogicalTypeId::MAP) {
@@ -246,7 +233,6 @@ static bool UpgradeType(LogicalType &left, const LogicalType &right) {
 		return true;
 	}
 	}
-	return true;
 }
 
 LogicalType PandasAnalyzer::GetListType(py::object &ele, bool &can_convert) {
@@ -446,7 +432,7 @@ LogicalType PandasAnalyzer::GetItemType(py::object ele, bool &can_convert) {
 		LogicalType ltype;
 		ltype = NumpyToLogicalType(extended_type);
 		if (extended_type.type == NumpyNullableType::OBJECT) {
-			LogicalType converted_type = InnerAnalyze(ele, can_convert, false, 1);
+			LogicalType converted_type = InnerAnalyze(ele, can_convert, 1);
 			if (can_convert) {
 				ltype = converted_type;
 			}
@@ -464,26 +450,18 @@ LogicalType PandasAnalyzer::GetItemType(py::object ele, bool &can_convert) {
 
 //! Get the increment for the given sample size
 uint64_t PandasAnalyzer::GetSampleIncrement(idx_t rows) {
-	D_ASSERT(sample_size != 0);
 	//! Apply the maximum
 	auto sample = sample_size;
 	if (sample > rows) {
 		sample = rows;
 	}
+	if (sample == 0) {
+		return rows;
+	}
 	return rows / sample;
 }
 
-static py::object FindFirstNonNull(const py::handle &row, idx_t offset, idx_t range) {
-	for (idx_t i = 0; i < range; i++) {
-		auto obj = row(offset + i);
-		if (!obj.is_none()) {
-			return obj;
-		}
-	}
-	return py::none();
-}
-
-LogicalType PandasAnalyzer::InnerAnalyze(py::object column, bool &can_convert, bool sample, idx_t increment) {
+LogicalType PandasAnalyzer::InnerAnalyze(py::object column, bool &can_convert, idx_t increment) {
 	idx_t rows = py::len(column);
 
 	if (rows == 0) {
@@ -500,14 +478,10 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::object column, bool &can_convert, b
 	}
 	auto row = column.attr("__getitem__");
 
-	if (sample) {
-		increment = GetSampleIncrement(rows);
-	}
 	LogicalType item_type = LogicalType::SQLNULL;
 	vector<LogicalType> types;
 	for (idx_t i = 0; i < rows; i += increment) {
-		auto range = MinValue(increment, rows - i);
-		auto obj = FindFirstNonNull(row, i, range);
+		auto obj = row(i);
 		auto next_item_type = GetItemType(obj, can_convert);
 		types.push_back(next_item_type);
 
@@ -530,7 +504,20 @@ bool PandasAnalyzer::Analyze(py::object column) {
 		return false;
 	}
 	bool can_convert = true;
-	LogicalType type = InnerAnalyze(std::move(column), can_convert);
+	idx_t increment = GetSampleIncrement(py::len(column));
+	LogicalType type = InnerAnalyze(column, can_convert, increment);
+
+	if (type == LogicalType::SQLNULL && increment > 1) {
+		// We did not see the whole dataset, hence we are not sure if nulls are really nulls
+		// as a fallback we try to identify this specific type
+		auto first_valid_index = column.attr("first_valid_index")();
+		if (GetPythonObjectType(first_valid_index) != PythonObjectType::None) {
+			// This means we do have a value that is not null, figure out its type
+			auto row = column.attr("__getitem__");
+			auto obj = row(first_valid_index);
+			type = GetItemType(obj, can_convert);
+		}
+	}
 	if (can_convert) {
 		analyzed_type = type;
 	}

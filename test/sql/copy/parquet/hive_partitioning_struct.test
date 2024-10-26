@@ -1,0 +1,27 @@
+# name: test/sql/copy/parquet/hive_partitioning_struct.test
+# description: Test hive partitioning and struct pushdown
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+COPY (SELECT i//50 id, {'a': i} s FROM range(100) t(i)) TO '__TEST_DIR__/hive_partitioned_struct_col' (FORMAT PARQUET, PARTITION_BY (id))
+
+query II
+SELECT * FROM read_parquet('__TEST_DIR__/hive_partitioned_struct_col/**/*.parquet', hive_partitioning=1) WHERE s.a=42
+----
+{'a': 42}	0
+
+# what if the hive types themselves are structs?
+statement ok
+COPY (SELECT i id, {'a': i//2} s FROM range(100) t(i)) TO '__TEST_DIR__/hive_partitioned_struct' (FORMAT PARQUET, PARTITION_BY (s))
+
+query II
+SELECT * FROM read_parquet('__TEST_DIR__/hive_partitioned_struct/**/*.parquet', hive_partitioning=1, hive_types={'s': 'STRUCT(a INT)'}) WHERE s.a=42 ORDER BY ALL
+----
+84	{'a': 42}
+85	{'a': 42}
+

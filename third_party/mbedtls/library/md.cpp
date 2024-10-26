@@ -263,7 +263,7 @@ void mbedtls_md_free( mbedtls_md_context_t *ctx )
 #endif
 #if defined(MBEDTLS_SHA1_C)
             case MBEDTLS_MD_SHA1:
-                mbedtls_sha1_free( ctx->md_ctx );
+                mbedtls_sha1_free((mbedtls_sha1_context *) ctx->md_ctx );
                 break;
 #endif
 #if defined(MBEDTLS_SHA224_C)
@@ -327,7 +327,7 @@ int mbedtls_md_clone( mbedtls_md_context_t *dst,
 #endif
 #if defined(MBEDTLS_SHA1_C)
         case MBEDTLS_MD_SHA1:
-            mbedtls_sha1_clone( dst->md_ctx, src->md_ctx );
+            mbedtls_sha1_clone((mbedtls_sha1_context *) dst->md_ctx, (mbedtls_sha1_context *)src->md_ctx );
             break;
 #endif
 #if defined(MBEDTLS_SHA224_C)
@@ -447,7 +447,7 @@ int mbedtls_md_starts( mbedtls_md_context_t *ctx )
 #endif
 #if defined(MBEDTLS_SHA1_C)
         case MBEDTLS_MD_SHA1:
-            return( mbedtls_sha1_starts( ctx->md_ctx ) );
+            return( mbedtls_sha1_starts( (mbedtls_sha1_context *)ctx->md_ctx ) );
 #endif
 #if defined(MBEDTLS_SHA224_C)
         case MBEDTLS_MD_SHA224:
@@ -487,7 +487,7 @@ int mbedtls_md_update( mbedtls_md_context_t *ctx, const unsigned char *input, si
 #endif
 #if defined(MBEDTLS_SHA1_C)
         case MBEDTLS_MD_SHA1:
-            return( mbedtls_sha1_update( ctx->md_ctx, input, ilen ) );
+            return( mbedtls_sha1_update( (mbedtls_sha1_context *)ctx->md_ctx, input, ilen ) );
 #endif
 #if defined(MBEDTLS_SHA224_C)
         case MBEDTLS_MD_SHA224:
@@ -527,7 +527,7 @@ int mbedtls_md_finish( mbedtls_md_context_t *ctx, unsigned char *output )
 #endif
 #if defined(MBEDTLS_SHA1_C)
         case MBEDTLS_MD_SHA1:
-            return( mbedtls_sha1_finish( ctx->md_ctx, output ) );
+            return( mbedtls_sha1_finish((mbedtls_sha1_context *) ctx->md_ctx, output ) );
 #endif
 #if defined(MBEDTLS_SHA224_C)
         case MBEDTLS_MD_SHA224:
@@ -772,7 +772,7 @@ int mbedtls_md_process( mbedtls_md_context_t *ctx, const unsigned char *data )
 #endif
 #if defined(MBEDTLS_SHA1_C)
         case MBEDTLS_MD_SHA1:
-            return( mbedtls_internal_sha1_process( ctx->md_ctx, data ) );
+            return( mbedtls_internal_sha1_process((mbedtls_sha1_context *) ctx->md_ctx, data ) );
 #endif
 #if defined(MBEDTLS_SHA224_C)
         case MBEDTLS_MD_SHA224:

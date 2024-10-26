@@ -1,0 +1,34 @@
+# name: test/sql/aggregate/aggregates/mode_tpch.test_slow
+# description: Test mode function with large data sets
+# group: [aggregates]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=1);
+
+query II
+select l_returnflag, mode(l_comment) from lineitem where l_returnflag <> 'N' group by l_returnflag;
+----
+A	 furiously
+R	 furiously
+
+# run a windowed mode
+query I
+SELECT avg(strlen(padded_mode)) FROM
+(SELECT mode(l_comment) OVER (ORDER BY rowid ROWS BETWEEN 5 PRECEDING AND 5 FOLLOWING) AS padded_mode FROM lineitem)
+----
+26.4927
+
+# mode on nested types
+query III
+SELECT mode(l_shipdate), mode([l_shipdate]), mode({'i': l_shipdate}) from lineitem;
+----
+1997-06-01	[1997-06-01]	{'i': 1997-06-01}
+
+query IIII
+SELECT l_returnflag, mode(l_shipdate), mode([l_shipdate]), mode({'i': l_shipdate}) from lineitem group by l_returnflag order by l_returnflag
+----
+A	1995-03-24	[1995-03-24]	{'i': 1995-03-24}
+N	1997-06-01	[1997-06-01]	{'i': 1997-06-01}
+R	1994-08-23	[1994-08-23]	{'i': 1994-08-23}

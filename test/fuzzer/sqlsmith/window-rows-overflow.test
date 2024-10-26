@@ -3,7 +3,7 @@
 # group: [sqlsmith]
 
 statement ok
-create table all_types as 
+create table all_types as
 	select * exclude(
 		small_enum,
 		medium_enum,
@@ -11,7 +11,7 @@ create table all_types as
 	)
 from test_all_types();
 
-statement error
+query I
 SELECT nth_value(1929, 42) OVER (
 	PARTITION BY (
 		"usmallint" > "smallint"
@@ -19,9 +19,11 @@ SELECT nth_value(1929, 42) OVER (
 )
 FROM all_types;
 ----
-Out of Range Error: Overflow computing ROWS PRECEDING start
+NULL
+NULL
+NULL
 
-statement error
+query I
 SELECT nth_value(1929, 42) OVER (
 	PARTITION BY (
 		"usmallint" > "smallint"
@@ -29,9 +31,11 @@ SELECT nth_value(1929, 42) OVER (
 )
 FROM all_types;
 ----
-Out of Range Error: Overflow computing ROWS PRECEDING end
+NULL
+NULL
+NULL
 
-statement error
+query I
 SELECT nth_value(1929, 42) OVER (
 	PARTITION BY (
 		"usmallint" > "smallint"
@@ -39,9 +43,11 @@ SELECT nth_value(1929, 42) OVER (
 )
 FROM all_types;
 ----
-Out of Range Error: Overflow computing ROWS FOLLOWING start
+NULL
+NULL
+NULL
 
-statement error
+query I
 SELECT nth_value(1929, 42) OVER (
 	PARTITION BY (
 		"usmallint" > "smallint"
@@ -49,4 +55,6 @@ SELECT nth_value(1929, 42) OVER (
 )
 FROM all_types;
 ----
-Out of Range Error: Overflow computing ROWS FOLLOWING end
+NULL
+NULL
+NULL

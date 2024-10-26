@@ -9,4 +9,4 @@ PRAGMA enable_verification
 statement error
 SELECT SIN(1e1000);
 ----
-
+<REGEX>:Out of Range Error.*for numeric function.*

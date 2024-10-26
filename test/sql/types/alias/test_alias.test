@@ -12,6 +12,7 @@ CREATE TYPE alias AS VARCHAR;
 statement error
 CREATE TYPE alias AS INTEGER;
 ----
+<REGEX>:Catalog Error.*Type with name.*already exists!.*
 
 # Delete ALIASs
 statement ok
@@ -21,6 +22,7 @@ DROP TYPE alias;
 statement error
 DROP TYPE alias;
 ----
+<REGEX>:Catalog Error.*Type with name.*does not exist!.*
 
 # We can create alias again
 statement ok
@@ -45,3 +47,4 @@ DROP TYPE IF EXISTS alias;
 statement error
 CREATE TYPE alias as BLOBL;
 ----
+<REGEX>:Catalog Error.*Type with name.*does not exist!.*

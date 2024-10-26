@@ -15,7 +15,7 @@ BoundColumnRefExpression::BoundColumnRefExpression(LogicalType type, ColumnBindi
     : BoundColumnRefExpression(string(), std::move(type), binding, depth) {
 }
 
-unique_ptr<Expression> BoundColumnRefExpression::Copy() {
+unique_ptr<Expression> BoundColumnRefExpression::Copy() const {
 	return make_uniq<BoundColumnRefExpression>(alias, return_type, binding, depth);
 }
 
