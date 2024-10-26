@@ -156,6 +156,15 @@ enum WindowBounds : uint8_t {
 	FRAME_END
 };
 
+// C++ 11 won't do this automatically...
+struct WindowBoundsHash {
+	inline uint64_t operator()(const WindowBounds &value) const {
+		return value;
+	}
+};
+
+using WindowBoundsSet = unordered_set<WindowBounds, WindowBoundsHash>;
+
 //! A shared set of expressions
 struct WindowSharedExpressions {
 	struct Shared {

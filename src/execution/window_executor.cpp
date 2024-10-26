@@ -506,7 +506,7 @@ struct WindowBoundariesState {
 	            const ValidityMask &partition_mask, const ValidityMask &order_mask);
 
 	// Cached lookups
-	unordered_set<WindowBounds> required;
+	WindowBoundsSet required;
 	const ExpressionType type;
 	const idx_t input_size;
 	const WindowBoundary start_boundary;
@@ -539,11 +539,11 @@ static bool HasFollowingRange(const BoundWindowExpression &wexpr) {
 	return (wexpr.start == WindowBoundary::EXPR_FOLLOWING_RANGE || wexpr.end == WindowBoundary::EXPR_FOLLOWING_RANGE);
 }
 
-static unordered_set<WindowBounds> GetWindowBounds(const BoundWindowExpression &wexpr) {
+static WindowBoundsSet GetWindowBounds(const BoundWindowExpression &wexpr) {
 	const auto partition_count = wexpr.partitions.size();
 	const auto order_count = wexpr.orders.size();
 
-	unordered_set<WindowBounds> result;
+	WindowBoundsSet result;
 	switch (wexpr.type) {
 	case ExpressionType::WINDOW_ROW_NUMBER:
 		result.insert(PARTITION_BEGIN);
