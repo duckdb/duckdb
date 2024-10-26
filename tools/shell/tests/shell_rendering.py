@@ -30,3 +30,13 @@ def test_right_align(shell):
 
     result = test.run()
     result.check_stdout("│   100 │")
+
+def test_markdown(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode markdown")
+        .statement("select 42 a, 'hello' str")
+    )
+
+    result = test.run()
+    result.check_stdout("| a  |  str  |")
