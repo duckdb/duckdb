@@ -39,8 +39,10 @@ unique_ptr<LogicalOperator> CTEFilterPusher::Optimize(unique_ptr<LogicalOperator
 void CTEFilterPusher::FindCandidates(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
 		// We encountered a new CTE, add it to the map
-		cte_info_map.insert(to_string(op.Cast<LogicalMaterializedCTE>().table_index),
-		                    make_uniq<MaterializedCTEInfo>(op));
+		auto key = to_string(op.Cast<LogicalMaterializedCTE>().table_index);
+		auto value = make_uniq<MaterializedCTEInfo>(op);
+
+		cte_info_map.insert(key, std::move(value));
 	} else if (op.type == LogicalOperatorType::LOGICAL_FILTER &&
 	           op.children[0]->type == LogicalOperatorType::LOGICAL_CTE_REF) {
 		// We encountered a filtered CTE ref, update the according CTE info
