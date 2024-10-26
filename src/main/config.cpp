@@ -345,7 +345,9 @@ void DBConfig::SetDefaultMaxMemory() {
 }
 
 void DBConfig::SetDefaultTempDirectory() {
-	if (DBConfig::IsInMemoryDatabase(options.database_path.c_str())) {
+	if (!options.use_temporary_directory) {
+		options.temporary_directory = string();
+	} else if (DBConfig::IsInMemoryDatabase(options.database_path.c_str())) {
 		options.temporary_directory = ".tmp";
 	} else {
 		options.temporary_directory = options.database_path + ".tmp";
