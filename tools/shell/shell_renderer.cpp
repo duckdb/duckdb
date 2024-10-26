@@ -105,9 +105,14 @@ public:
 	}
 
 	void RenderHeader(ColumnarResult &result) override {
+		state.Print(GetRowStart());
 		for (idx_t i = 0; i < result.column_count; i++) {
+			if (i > 0) {
+				state.Print(GetColumnSeparator());
+			}
 			RenderAlignedValue(result, i);
 		}
+		state.Print(GetRowSeparator());
 		state.PrintMarkdownSeparator(result.column_count, "|", result.types, result.column_width);
 	}
 
