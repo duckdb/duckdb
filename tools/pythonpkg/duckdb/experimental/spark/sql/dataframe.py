@@ -12,6 +12,7 @@ from typing import (
     overload,
 )
 import uuid
+from keyword import iskeyword
 
 import duckdb
 from duckdb import ColumnExpression, Expression, StarExpression
@@ -564,6 +565,11 @@ class DataFrame:
         # Provides tab-completion for column names in PySpark DataFrame
         # when accessed in bracket notation, e.g. df['<TAB>]
         return self.columns
+
+    def __dir__(self) -> List[str]:
+        out = set(super().__dir__())
+        out.update(c for c in self.columns if c.isidentifier() and not iskeyword(c))
+        return sorted(out)
 
     def join(
         self,
