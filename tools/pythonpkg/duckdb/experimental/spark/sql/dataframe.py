@@ -560,6 +560,11 @@ class DataFrame:
         """
         return [f.name for f in self.schema.fields]
 
+    def _ipython_key_completions_(self) -> List[str]:
+        # Provides tab-completion for column names in PySpark DataFrame
+        # when accessed in bracket notation, e.g. df['<TAB>]
+        return self.columns
+
     def join(
         self,
         other: "DataFrame",
@@ -786,7 +791,7 @@ class DataFrame:
                 raise PySparkTypeError(
                     error_class="NOT_COLUMN_OR_STR",
                     message_parameters={"arg_name": "col", "arg_type": type(col).__name__},
-                )           
+                )
         # Filter out the columns that don't exist in the relation
         exclude = [x for x in exclude if x in self.relation.columns]
         expr = StarExpression(exclude=exclude)
