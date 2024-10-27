@@ -15,13 +15,6 @@
 #  VCPKG_TOOLCHAIN_PATH=~/vcpkg/scripts/buildsystems/vcpkg.cmake
 #  VCPKG_TARGET_TRIPLET=arm64-osx
 
-################# HTTPFS
-duckdb_extension_load(httpfs
-    GIT_URL https://github.com/duckdb/duckdb_httpfs
-    GIT_TAG 3491b7a5f7c488f79873263f34a5ba7e47f273c6
-    INCLUDE_DIR extension/httpfs/include
-    )
-
 ################# ARROW
 if (NOT MINGW)
     duckdb_extension_load(arrow
@@ -69,6 +62,14 @@ duckdb_extension_load(excel
     GIT_URL https://github.com/duckdb/duckdb_excel
     GIT_TAG 0e99dc789038c7af658e30d579b818473a6d6ea8
     INCLUDE_DIR extension/excel/include
+    )
+
+################# HTTPFS
+duckdb_extension_load(httpfs
+    GIT_URL https://github.com/duckdb/duckdb_httpfs
+    GIT_TAG 5546f3a06b31fdf4ca8372fe73415a48ac51e7bc
+    INCLUDE_DIR extension/httpfs/include
+    APPLY_PATCHES
     )
 
 ################# ICEBERG
