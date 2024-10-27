@@ -77,6 +77,20 @@
         ]
     },
     {
+        "name": "allowed_directories",
+        "description": "List of directories/prefixes that are ALWAYS allowed to be queried - even when enable_external_access is false",
+        "type": "VARCHAR[]",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "allowed_paths",
+        "description": "List of files that are ALWAYS allowed to be queried - even when enable_external_access is false",
+        "type": "VARCHAR[]",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "arrow_large_buffer_size",
         "description": "If arrow buffers for strings, blobs, uuids and bits should be exported using large buffers",
         "type": "BOOLEAN",
