@@ -6,8 +6,8 @@ require httpfs
 
 cache hep_singleMu.duckdb
 
-load benchmark/hep_benchmarks/load.sql
+load benchmark/realnest/hep/load.sql
 
-run benchmark/hep_benchmarks/queries/q${QUERY_NUMBER_PADDED}.sql
+run benchmark/realnest/hep/queries/q${QUERY_NUMBER_PADDED}.sql
 
-result benchmark/hep_benchmarks/answers/q${QUERY_NUMBER_PADDED}.csv
+result benchmark/realnest/hep/answers/q${QUERY_NUMBER_PADDED}.csv

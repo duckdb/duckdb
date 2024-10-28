@@ -1,6 +1,6 @@
 WITH xyze_jets AS (
   SELECT
-    event,
+    rowid,
     list_transform(JET,
               j -> CAST(ROW(j.btag,
                             j.btag * cos(j.phi),
@@ -12,7 +12,7 @@ WITH xyze_jets AS (
 ),
 tri_jets AS (
   WITH m as (select unnest(Jet) as m from hep_singleMu)
-    SELECT event, m1, m2, m3
+    SELECT rowid, m1, m2, m3
     FROM xyze_jets
     CROSS JOIN (
       SELECT row_number() OVER () idx1, unnest(jet) as m1
@@ -30,7 +30,7 @@ tri_jets AS (
 ),
 condensed_tri_jet AS (
   SELECT
-    event, m1, m2, m3,
+    rowid, m1, m2, m3,
     m1.x + m2.x + m3.x AS x,
     m1.y + m2.y + m3.y AS y,
     m1.z + m2.z + m3.z AS z,
@@ -43,13 +43,13 @@ condensed_tri_jet AS (
 ),
 singular_system AS (
   SELECT
-    event,
+    rowid,
     min_by(
       sqrt(x2 + y2),
       abs(172.5 - sqrt(e2 - x2 - y2 - z2))
     ) AS btag
   FROM condensed_tri_jet
-  GROUP BY event
+  GROUP BY rowid
 )
 SELECT
   FLOOR((

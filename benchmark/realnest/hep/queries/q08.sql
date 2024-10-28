@@ -1,6 +1,6 @@
 WITH uniform_structure_leptons AS (
   SELECT
-    event,
+    rowid,
     MET,
     list_distinct(
       list_concat(
@@ -45,7 +45,7 @@ lepton_pairs AS (
 ),
 processed_pairs AS (
   SELECT
-    event,
+    rowid,
     min_by(
       ROW(
         l1_idx,
@@ -57,17 +57,17 @@ processed_pairs AS (
       abs(91.2 - sqrt(l.e * l.e - l.x * l.x - l.y * l.y - l.z * l.z))
     ) AS system
   FROM lepton_pairs
-  GROUP BY event
+  GROUP BY rowid
 ),
 other_max_pt AS (
-  SELECT event, CAST(max_by(sqrt(2 * system[4] * l.pt * (1.0 - cos((system[5]- l.phi + pi()) % (2 * pi()) - pi()))), l.pt) AS REAL) AS pt
+  SELECT rowid, CAST(max_by(sqrt(2 * system[4] * l.pt * (1.0 - cos((system[5]- l.phi + pi()) % (2 * pi()) - pi()))), l.pt) AS REAL) AS pt
   FROM processed_pairs
   CROSS JOIN (
     SELECT row_number() over () idx, unnest(system[3]) as l
     FROM processed_pairs
   )
   WHERE idx != system[1] AND idx != system[2]
-  GROUP BY event
+  GROUP BY rowid
 )
 SELECT
   FLOOR((

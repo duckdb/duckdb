@@ -2,6 +2,6 @@
 # description: Q2 - Plot the transverse momentum of all jets in all events.
 # group: [hep]
 
-template benchmark/hep_benchmarks/hep.benchmark.in
+template benchmark/realnest/hep/hep.benchmark.in
 QUERY_NUMBER=2
 QUERY_NUMBER_PADDED=02

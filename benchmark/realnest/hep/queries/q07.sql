@@ -1,5 +1,5 @@
 WITH matching_jets AS (
-  SELECT event, SUM(j.pt) AS pt_sum
+  SELECT rowid, SUM(j.pt) AS pt_sum
   FROM hep_singleMu
   CROSS JOIN UNNEST(Jet) AS _j(j)
   WHERE
@@ -16,7 +16,7 @@ WITH matching_jets AS (
             x -> x.pt > 10 AND
                  sqrt( (j.eta - x.eta) * (j.eta - x.eta) +
                        pow( (j.phi - x.phi + pi()) % (2 * pi()) - pi(), 2) ) < 0.4)) = 0
-  GROUP BY event
+  GROUP BY rowid
 )
 SELECT
   FLOOR((
