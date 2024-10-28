@@ -1,0 +1,96 @@
+# name: test/sql/storage/compression/zstd/zstd_compression_ratio.test_slow
+# description: Assert bitpacking compression ratio is within reasonable margins for each mode
+# group: [zstd]
+
+require block_size 262144
+
+load __TEST_DIR__/test_zstd_compression_ratio.db
+
+statement ok
+PRAGMA force_compression='zstd'
+
+statement ok
+select setseed(0.42);
+
+statement ok
+set variable dataset_size = 100_000;
+
+# strings between 1800 and 5400 characters created from uuid(), making them semi-random
+statement ok
+create table test_compressed as (
+	with cte as (
+		select list_reduce([uuid()::varchar for x in range((50 + (100 * random()))::BIGINT)], (x, y) -> concat(x, y)) str
+		from range(getvariable('dataset_size'))
+	)
+	select
+		str
+	from cte
+);
+
+statement ok
+checkpoint
+
+statement ok
+PRAGMA force_compression='uncompressed'
+
+statement ok
+select setseed(0.42);
+
+statement ok
+CREATE TABLE test_uncompressed as (
+	with cte as (
+		select list_reduce([uuid()::varchar for x in range((50 + (100 * random()))::BIGINT)], (x, y) -> concat(x, y)) str
+		from range(getvariable('dataset_size'))
+	)
+	select
+		str
+	from cte
+);
+
+statement ok
+checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('test_compressed') WHERE segment_type != 'VALIDITY' AND compression != 'ZSTD';
+----
+
+query I
+SELECT compression FROM pragma_storage_info('test_uncompressed') WHERE segment_type != 'VALIDITY' AND compression != 'Uncompressed';
+----
+
+statement ok
+CREATE TYPE test_result AS UNION (
+    ok BOOL,
+    err STRUCT(
+        uncompressed BIGINT,
+        compressed BIGINT,
+        allowed_minimum_ratio INT,
+        allowed_maximum_ratio INT,
+        actual_ratio FLOAT
+    )
+);
+
+statement ok
+set variable min_ratio = 700;
+set variable max_ratio = 850;
+
+query I
+SELECT
+    CASE 
+        WHEN (uncompressed::FLOAT / compressed::FLOAT) > getvariable('min_ratio') AND (uncompressed::FLOAT / compressed::FLOAT) < getvariable('max_ratio')
+            THEN True::test_result
+        ELSE {
+            'uncompressed': uncompressed,
+            'compressed': compressed,
+            'allowed_minimum_ratio': getvariable('min_ratio'),
+            'allowed_maximum_ratio': getvariable('max_ratio'),
+            'actual_ratio': uncompressed::FLOAT / compressed::FLOAT
+        }::test_result
+    END
+FROM (
+    SELECT
+        (SELECT COUNT(DISTINCT block_id) FROM pragma_storage_info('test_compressed') WHERE segment_type NOT IN ('VALIDITY')) AS compressed,
+        (SELECT COUNT(DISTINCT block_id) FROM pragma_storage_info('test_uncompressed') WHERE segment_type NOT IN ('VALIDITY')) AS uncompressed
+) AS blocks_tbl;
+----
+true
