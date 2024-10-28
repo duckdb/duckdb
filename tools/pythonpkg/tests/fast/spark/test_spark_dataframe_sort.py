@@ -1,9 +1,11 @@
 import pytest
 
-from duckdb.experimental.spark.sql.types import Row
-from duckdb.experimental.spark.errors import PySparkTypeError, PySparkValueError, PySparkIndexError
-
 _ = pytest.importorskip("duckdb.experimental.spark")
+
+import spark_namespace.errors
+from spark_namespace.sql.types import Row
+from spark_namespace.errors import PySparkTypeError, PySparkValueError
+from spark_namespace import USE_ACTUAL_SPARK
 
 
 class TestDataFrameSort(object):
@@ -25,8 +27,10 @@ class TestDataFrameSort(object):
         df = df.sort("age", "name")
         assert df.collect() == expected
 
-        df = df.sort(1, 2)
-        assert df.collect() == expected
+        if not USE_ACTUAL_SPARK:
+            # Spark does not support passing integers
+            df = df.sort(1, 2)
+            assert df.collect() == expected
 
     def test_sort_descending(self, spark):
         df = spark.createDataFrame(self.data, ["age", "name"])
@@ -44,8 +48,10 @@ class TestDataFrameSort(object):
         df = df.sort("name", "age")
         assert df.collect() == expected
 
-        df = df.sort(2, 1)
-        assert df.collect() == expected
+        if not USE_ACTUAL_SPARK:
+            # Spark does not support passing integers
+            df = df.sort(2, 1)
+            assert df.collect() == expected
 
     def test_sort_wrong_asc_params(self, spark):
         df = spark.createDataFrame(self.data, ["age", "name"])
@@ -59,8 +65,16 @@ class TestDataFrameSort(object):
         with pytest.raises(PySparkValueError):
             df = df.sort()
 
+    # See https://github.com/apache/spark/commit/0193d0f88a953063c41c41042fb58bd0badc155c
+    # for the PR which added that error to PySpark
+    @pytest.mark.skipif(
+        USE_ACTUAL_SPARK and not hasattr(spark_namespace.errors, "PySparkIndexError"),
+        reason="PySparkIndexError is only introduced in PySpark 4.0.0",
+    )
     def test_sort_zero_index(self, spark):
         df = spark.createDataFrame(self.data, ["age", "name"])
+
+        from spark_namespace.errors import PySparkIndexError
 
         with pytest.raises(PySparkIndexError):
             df = df.sort(0)
