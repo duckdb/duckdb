@@ -4,6 +4,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/aggregate/ungrouped_aggregate_state.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/query_profiler.hpp"
@@ -262,7 +263,7 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			delim_payload_types.push_back(aggr->return_type);
 			info.correlated_aggregates.push_back(std::move(aggr));
 
-			auto count_fun = CountFun::GetFunction();
+			auto count_fun = CountFunctionBase::GetFunction();
 			vector<unique_ptr<Expression>> children;
 			// this is a dummy but we need it to make the hash table understand whats going on
 			children.push_back(make_uniq_base<Expression, BoundReferenceExpression>(count_fun.return_type, 0U));

@@ -275,11 +275,6 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	create_api_v0 = CreateAPIv0Wrapper;
 
-	if (user_config && !user_config->options.use_temporary_directory) {
-		// temporary directories explicitly disabled
-		config.options.temporary_directory = string();
-	}
-
 	db_file_system = make_uniq<DatabaseFileSystem>(*this);
 	db_manager = make_uniq<DatabaseManager>(*this);
 	if (config.buffer_manager) {
@@ -417,6 +412,13 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		config.file_system = std::move(new_config.file_system);
 	} else {
 		config.file_system = make_uniq<VirtualFileSystem>();
+	}
+	if (database_path && !config.options.enable_external_access) {
+		config.AddAllowedPath(database_path);
+		config.AddAllowedPath(database_path + string(".wal"));
+		if (!config.options.temporary_directory.empty()) {
+			config.AddAllowedDirectory(config.options.temporary_directory);
+		}
 	}
 	if (new_config.secret_manager) {
 		config.secret_manager = std::move(new_config.secret_manager);

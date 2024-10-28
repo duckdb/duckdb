@@ -18,10 +18,8 @@ jobs:
     CXX: g++-10
     GEN: ninja
     BUILD_BENCHMARK: 1
-    BUILD_TPCH: 1
-    BUILD_TPCDS: 1
-    BUILD_HTTPFS: 1
     BUILD_JEMALLOC: 1
+    CORE_EXTENSIONS: "tpcd;tpcds;httpfs"
 
   steps:
     - uses: actions/checkout@v4
