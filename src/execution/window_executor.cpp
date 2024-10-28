@@ -1791,7 +1791,15 @@ public:
 	      child_idx(executor.child_idx) {
 	}
 
+	void Finalize(CollectionPtr collection) {
+		if (child_idx != DConstants::INVALID_INDEX && executor.wexpr.ignore_nulls) {
+			lock_guard<mutex> ingore_nulls_guard(lock);
+			ignore_nulls = &collection->validities[child_idx];
+		}
+	}
+
 	// IGNORE NULLS
+	mutex lock;
 	ValidityMask all_valid;
 	optional_ptr<ValidityMask> ignore_nulls;
 
@@ -1877,10 +1885,8 @@ unique_ptr<WindowExecutorGlobalState> WindowValueExecutor::GetGlobalState(const 
 
 void WindowValueExecutor::Finalize(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                    CollectionPtr collection) const {
-	if (child_idx != DConstants::INVALID_INDEX && wexpr.ignore_nulls) {
-		auto &gvstate = gstate.Cast<WindowValueGlobalState>();
-		gvstate.ignore_nulls = &collection->validities[child_idx];
-	}
+	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
+	gvstate.Finalize(collection);
 
 	WindowExecutor::Finalize(gstate, lstate, collection);
 }
