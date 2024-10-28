@@ -3,6 +3,8 @@ import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
+from spark_namespace import USE_ACTUAL_SPARK
+
 
 class TestWithColumnsRenamed(object):
     def test_with_columns_renamed(self, spark):
@@ -13,7 +15,7 @@ class TestWithColumnsRenamed(object):
             (('Maria', 'Anne', 'Jones'), '1967-12-01', 'F', 4000),
             (('Jen', 'Mary', 'Brown'), '1980-02-17', 'F', -1),
         ]
-        from duckdb.experimental.spark.sql.types import StructType, StructField, StringType, IntegerType
+        from spark_namespace.sql.types import StructType, StructField, StringType, IntegerType
 
         schema = StructType(
             [
@@ -36,15 +38,17 @@ class TestWithColumnsRenamed(object):
         df = spark.createDataFrame(data=dataDF, schema=schema)
 
         df2 = df.withColumnsRenamed({"dob": "DateOfBirth", "salary": "salary_amount"})
-        assert 'dob' not in df2
-        assert 'salary' not in df2
-        assert 'DateOfBirth' in df2
-        assert 'salary_amount' in df2
+        assert 'dob' not in df2.columns
+        assert 'salary' not in df2.columns
+        assert 'DateOfBirth' in df2.columns
+        assert 'salary_amount' in df2.columns
 
         df2 = df.withColumnsRenamed({"name": "full name"})
-        assert 'name' not in df2
-        assert 'full name' in df2
-        assert 'firstname' in df2.schema['full name'].dataType
+        assert 'name' not in df2.columns
+        assert 'full name' in df2.columns
+        assert 'firstname' in df2.schema['full name'].dataType.fieldNames()
 
-        with pytest.raises(ValueError, match=re.escape("DataFrame does not contain column(s): unknown col")):
-            df2.withColumnsRenamed({"unknown col": "new name", "full name": "name"})
+        # PySpark does not raise an error. This is a convenience we provide in DuckDB.
+        if not USE_ACTUAL_SPARK:
+            with pytest.raises(ValueError, match=re.escape("DataFrame does not contain column(s): unknown col")):
+                df2.withColumnsRenamed({"unknown col": "new name", "full name": "name"})

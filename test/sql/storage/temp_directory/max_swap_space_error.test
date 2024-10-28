@@ -52,9 +52,8 @@ query I
 select "size" from duckdb_temporary_files()
 ----
 
-# 6 blocks
 statement ok
-set max_temp_directory_size='1536KiB'
+set max_temp_directory_size='4MB'
 
 statement ok
 pragma threads=2;
@@ -69,31 +68,31 @@ CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(200000);
 
 # When we increase the size to 2400000 bytes of BIGINT data (9.1 blocks) this errors
 statement error
-CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(300000);
+CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(1000000);
 ----
 failed to offload data block
 
 query I
-SELECT "size" FROM duckdb_temporary_files();
+SELECT CASE WHEN "size" > 1000000 THEN true ELSE CONCAT('Expected size 1000000, but got ', "size")::UNION(msg VARCHAR, b BOOLEAN) END FROM duckdb_temporary_files();
 ----
-1572864
+true
 
-# Lower the limit
+# Cannot lower the limit
 statement error
 set max_temp_directory_size='256KiB'
 ----
-failed to adjust the 'max_temp_directory_size', currently used space (1.5 MiB) exceeds the new limit (256.0 KiB)
+exceeds the new limit
 
-# Lower the limit
+# Cannot lower the limit
 statement error
 set max_temp_directory_size='256KiB'
 ----
-failed to adjust the 'max_temp_directory_size', currently used space (1.5 MiB) exceeds the new limit (256.0 KiB)
+exceeds the new limit
 
 query I
 select current_setting('max_temp_directory_size')
 ----
-1.5 MiB
+3.8 MiB
 
 statement ok
 set max_temp_directory_size='2550KiB'

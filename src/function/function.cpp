@@ -96,9 +96,6 @@ void BuiltinFunctions::Initialize() {
 
 	RegisterDistributiveAggregates();
 
-	RegisterSequenceFunctions();
-	RegisterNestedFunctions();
-
 	RegisterPragmaFunctions();
 
 	// initialize collations

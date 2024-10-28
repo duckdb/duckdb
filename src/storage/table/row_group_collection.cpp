@@ -311,7 +311,8 @@ void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, c
 // Append
 //===--------------------------------------------------------------------===//
 TableAppendState::TableAppendState()
-    : row_group_append_state(*this), total_append_count(0), start_row_group(nullptr), transaction(0, 0) {
+    : row_group_append_state(*this), total_append_count(0), start_row_group(nullptr), transaction(0, 0),
+      hashes(LogicalType::HASH) {
 }
 
 TableAppendState::~TableAppendState() {
@@ -399,7 +400,8 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 	state.current_row += row_t(total_append_count);
 	auto local_stats_lock = state.stats.GetLock();
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
-		state.stats.GetStats(*local_stats_lock, col_idx).UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
+		auto &column_stats = state.stats.GetStats(*local_stats_lock, col_idx);
+		column_stats.UpdateDistinctStatistics(chunk.data[col_idx], chunk.size(), state.hashes);
 	}
 	return new_row_group;
 }
