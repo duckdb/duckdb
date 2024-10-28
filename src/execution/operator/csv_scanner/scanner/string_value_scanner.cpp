@@ -1043,15 +1043,15 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 	}
 	if (!result.borked_rows.empty()) {
 		// We must remove the borked lines from our chunk
-		SelectionVector succesful_rows(parse_chunk.size());
+		SelectionVector successful_rows(parse_chunk.size());
 		idx_t sel_idx = 0;
 		for (idx_t row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
 			if (result.borked_rows.find(row_idx) == result.borked_rows.end()) {
-				succesful_rows.set_index(sel_idx++, row_idx);
+				successful_rows.set_index(sel_idx++, row_idx);
 			}
 		}
 		// Now we slice the result
-		insert_chunk.Slice(succesful_rows, sel_idx);
+		insert_chunk.Slice(successful_rows, sel_idx);
 	}
 }
 

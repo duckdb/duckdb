@@ -412,7 +412,7 @@ struct DatePart {
 			D_ASSERT(input.ColumnCount() == 1);
 
 			UnaryExecutor::Execute<int64_t, timestamp_t>(input.data[0], result, input.size(), [&](int64_t input) {
-				// milisecond amounts provided to epoch_ms should never be considered infinite
+				// millisecond amounts provided to epoch_ms should never be considered infinite
 				// instead such values will just throw when converted to microseconds
 				return Timestamp::FromEpochMsPossiblyInfinite(input);
 			});

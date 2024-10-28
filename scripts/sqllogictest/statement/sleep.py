@@ -13,12 +13,12 @@ class SleepUnit(Enum):
 
 def get_sleep_unit(unit):
     seconds = ["second", "seconds", "sec"]
-    miliseconds = ["millisecond", "milliseconds", "milli"]
+    milliseconds = ["millisecond", "milliseconds", "milli"]
     microseconds = ["microsecond", "microseconds", "micro"]
     nanoseconds = ["nanosecond", "nanoseconds", "nano"]
     if unit in seconds:
         return SleepUnit.SECOND
-    elif unit in miliseconds:
+    elif unit in milliseconds:
         return SleepUnit.MILLISECOND
     elif unit in microseconds:
         return SleepUnit.MICROSECOND
