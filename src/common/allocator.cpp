@@ -247,8 +247,8 @@ static void MallocTrim(idx_t pad) {
 	if (current_timestamp_ms - last_trim_timestamp_ms < TRIM_INTERVAL_MS) {
 		return; // We trimmed less than TRIM_INTERVAL_MS ago
 	}
-	if (!LAST_TRIM_TIMESTAMP_MS.atomic_compare_exchange_strong(last_trim_timestamp_ms, current_timestamp_ms,
-	                                                           std::memory_order_acquire, std::memory_order_relaxed)) {
+	if (!LAST_TRIM_TIMESTAMP_MS.compare_exchange_strong(last_trim_timestamp_ms, current_timestamp_ms,
+	                                                    std::memory_order_acquire, std::memory_order_relaxed)) {
 		return; // Another thread has updated LAST_TRIM_TIMESTAMP_MS since we loaded it
 	}
 
