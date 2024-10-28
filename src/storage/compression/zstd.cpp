@@ -54,7 +54,7 @@ static int32_t GetCompressionLevel() {
 	return duckdb_zstd::ZSTD_defaultCLevel();
 }
 
-static constexpr idx_t ZSTD_VECTOR_SIZE = 2048;
+static constexpr idx_t ZSTD_VECTOR_SIZE = STANDARD_VECTOR_SIZE > 2048 ? STANDARD_VECTOR_SIZE : 2048;
 
 namespace duckdb {
 
@@ -301,13 +301,12 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	    duckdb_zstd::ZSTD_createCDict_byReference(state.dict.Buffer(), state.dict.Size(), GetCompressionLevel());
 
 	auto required_space = duckdb_zstd::ZSTD_compressBound(state.sampling_state.total_sample_size);
-	auto dst = malloc(required_space);
+	auto dst = make_unsafe_uniq_array_uninitialized<data_t>(required_space);
 	// FIXME: use streaming compression ? both to simulate the real compression better and to reduce the amount of space
 	// we have to allocate here
 	auto compressed_size = duckdb_zstd::ZSTD_compress_usingCDict(
-	    state.context, dst, required_space, state.sampling_state.sample_buffer.get(),
+	    state.context, dst.get(), required_space, state.sampling_state.sample_buffer.get(),
 	    state.sampling_state.total_sample_size, state.compression_dict);
-	free(dst);
 	if (duckdb_zstd::ZSTD_isError(compressed_size)) {
 		return NumericLimits<idx_t>::Maximum();
 	}
