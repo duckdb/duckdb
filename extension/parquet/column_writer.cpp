@@ -812,7 +812,7 @@ struct BaseParquetOperator {
 	}
 
 	template <class SRC, class TGT>
-static void WriteToStream(const TGT &input, WriteStream &ser) {
+	static void WriteToStream(const TGT &input, WriteStream &ser) {
 		ser.WriteData(const_data_ptr_cast(&input), sizeof(TGT));
 	}
 
@@ -827,7 +827,6 @@ struct ParquetCastOperator : public BaseParquetOperator {
 	static TGT Operation(SRC input) {
 		return TGT(input);
 	}
-
 };
 
 struct ParquetTimestampNSOperator : public BaseParquetOperator {
@@ -835,7 +834,6 @@ struct ParquetTimestampNSOperator : public BaseParquetOperator {
 	static TGT Operation(SRC input) {
 		return TGT(input);
 	}
-
 };
 
 struct ParquetTimestampSOperator : public BaseParquetOperator {
@@ -843,7 +841,6 @@ struct ParquetTimestampSOperator : public BaseParquetOperator {
 	static TGT Operation(SRC input) {
 		return Timestamp::FromEpochSecondsPossiblyInfinite(input).value;
 	}
-
 };
 
 class StringStatisticsState : public ColumnWriterStatistics {
@@ -936,10 +933,9 @@ struct ParquetTimeTZOperator : public BaseParquetOperator {
 	static TGT Operation(SRC input) {
 		return input.time().micros;
 	}
-
 };
 
-struct ParquetHugeintOperator: public BaseParquetOperator  {
+struct ParquetHugeintOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
 		return Hugeint::Cast<double>(input);
@@ -953,10 +949,9 @@ struct ParquetHugeintOperator: public BaseParquetOperator  {
 	template <class SRC, class TGT>
 	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
 	}
-
 };
 
-struct ParquetUhugeintOperator: public BaseParquetOperator  {
+struct ParquetUhugeintOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
 		return Uhugeint::Cast<double>(input);
@@ -970,7 +965,6 @@ struct ParquetUhugeintOperator: public BaseParquetOperator  {
 	template <class SRC, class TGT>
 	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
 	}
-
 };
 
 template <class SRC, class TGT, class OP = ParquetCastOperator>
@@ -1179,27 +1173,27 @@ public:
 			auto &encoder = page_state.dbp_encoder;
 			idx_t r = chunk_start;
 			if (!page_state.initialized) {
-			    // find first non-null value
-			    for (; r < chunk_end; r++) {
-			        if (!mask.RowIsValid(r)) {
-			            continue;
-			        }
-			        const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
-			        OP::template HandleStats<SRC, TGT>(stats, target_value);
-			        encoder.BeginWrite(temp_writer, target_value);
-			        page_state.initialized = true;
-			        r++; // skip over
-			        break;
-			    }
+				// find first non-null value
+				for (; r < chunk_end; r++) {
+					if (!mask.RowIsValid(r)) {
+						continue;
+					}
+					const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
+					OP::template HandleStats<SRC, TGT>(stats, target_value);
+					encoder.BeginWrite(temp_writer, target_value);
+					page_state.initialized = true;
+					r++; // skip over
+					break;
+				}
 			}
 
 			for (; r < chunk_end; r++) {
-			    if (!mask.RowIsValid(r)) {
-			        continue;
-			    }
-			    const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
-			    OP::template HandleStats<SRC, TGT>(stats, target_value);
-			    encoder.WriteValue(temp_writer, target_value);
+				if (!mask.RowIsValid(r)) {
+					continue;
+				}
+				const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
+				OP::template HandleStats<SRC, TGT>(stats, target_value);
+				encoder.WriteValue(temp_writer, target_value);
 			}
 			break;
 		}
@@ -1537,59 +1531,57 @@ public:
 	}
 };
 
+//===--------------------------------------------------------------------===//
+// WKB Column Writer
+//===--------------------------------------------------------------------===//
+// Used to store the metadata for a WKB-encoded geometry column when writing
+// GeoParquet files.
+class WKBColumnWriterState final : public StandardColumnWriterState<string_t> {
+public:
+	WKBColumnWriterState(ClientContext &context, duckdb_parquet::RowGroup &row_group, idx_t col_idx)
+	    : StandardColumnWriterState(row_group, col_idx), geo_data(), geo_data_writer(context) {
+	}
 
-//
-// //===--------------------------------------------------------------------===//
-// // WKB Column Writer
-// //===--------------------------------------------------------------------===//
-// // Used to store the metadata for a WKB-encoded geometry column when writing
-// // GeoParquet files.
-// class WKBColumnWriterState final : public StringColumnWriterState {
-// public:
-// 	WKBColumnWriterState(ClientContext &context, duckdb_parquet::RowGroup &row_group, idx_t col_idx)
-// 	    : StringColumnWriterState(row_group, col_idx), geo_data(), geo_data_writer(context) {
-// 	}
-//
-// 	GeoParquetColumnMetadata geo_data;
-// 	GeoParquetColumnMetadataWriter geo_data_writer;
-// };
-//
-// class WKBColumnWriter final : public StringColumnWriter {
-// public:
-// 	WKBColumnWriter(ClientContext &context_p, ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p,
-// 	                idx_t max_repeat, idx_t max_define, bool can_have_nulls, string name)
-// 	    : StringColumnWriter(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define, can_have_nulls),
-// 	      column_name(std::move(name)), context(context_p) {
-//
-// 		this->writer.GetGeoParquetData().RegisterGeometryColumn(column_name);
-// 	}
-//
-// 	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) override {
-// 		auto result = make_uniq<WKBColumnWriterState>(context, row_group, row_group.columns.size());
-// 		RegisterToRowGroup(row_group);
-// 		return std::move(result);
-// 	}
-// 	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override {
-// 		StringColumnWriter::Write(state, vector, count);
-//
-// 		auto &geo_state = state.Cast<WKBColumnWriterState>();
-// 		geo_state.geo_data_writer.Update(geo_state.geo_data, vector, count);
-// 	}
-//
-// 	void FinalizeWrite(ColumnWriterState &state) override {
-// 		StringColumnWriter::FinalizeWrite(state);
-//
-// 		// Add the geodata object to the writer
-// 		const auto &geo_state = state.Cast<WKBColumnWriterState>();
-//
-// 		// Merge this state's geo column data with the writer's geo column data
-// 		writer.GetGeoParquetData().FlushColumnMeta(column_name, geo_state.geo_data);
-// 	}
-//
-// private:
-// 	string column_name;
-// 	ClientContext &context;
-// };
+	GeoParquetColumnMetadata geo_data;
+	GeoParquetColumnMetadataWriter geo_data_writer;
+};
+
+class WKBColumnWriter final : public StandardColumnWriter<string_t, string_t, ParquetStringOperator> {
+public:
+	WKBColumnWriter(ClientContext &context_p, ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p,
+	                idx_t max_repeat, idx_t max_define, bool can_have_nulls, string name)
+	    : StandardColumnWriter(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define, can_have_nulls),
+	      column_name(std::move(name)), context(context_p) {
+
+		this->writer.GetGeoParquetData().RegisterGeometryColumn(column_name);
+	}
+
+	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) override {
+		auto result = make_uniq<WKBColumnWriterState>(context, row_group, row_group.columns.size());
+		RegisterToRowGroup(row_group);
+		return std::move(result);
+	}
+	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override {
+		StandardColumnWriter::Write(state, vector, count);
+
+		auto &geo_state = state.Cast<WKBColumnWriterState>();
+		geo_state.geo_data_writer.Update(geo_state.geo_data, vector, count);
+	}
+
+	void FinalizeWrite(ColumnWriterState &state) override {
+		StandardColumnWriter::FinalizeWrite(state);
+
+		// Add the geodata object to the writer
+		const auto &geo_state = state.Cast<WKBColumnWriterState>();
+
+		// Merge this state's geo column data with the writer's geo column data
+		writer.GetGeoParquetData().FlushColumnMeta(column_name, geo_state.geo_data);
+	}
+
+private:
+	string column_name;
+	ClientContext &context;
+};
 
 //===--------------------------------------------------------------------===//
 // Enum Column Writer
@@ -2259,12 +2251,11 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 	ParquetWriter::SetSchemaProperties(type, schema_element);
 	schemas.push_back(std::move(schema_element));
 	schema_path.push_back(name);
-	// FIXME
-	// if (type.id() == LogicalTypeId::BLOB && type.GetAlias() == "WKB_BLOB" &&
-	//     GeoParquetFileMetadata::IsGeoParquetConversionEnabled(context)) {
-	// 	return make_uniq<WKBColumnWriter>(context, writer, schema_idx, std::move(schema_path), max_repeat, max_define,
-	// 	                                  can_have_nulls, name);
-	// }
+	if (type.id() == LogicalTypeId::BLOB && type.GetAlias() == "WKB_BLOB" &&
+	    GeoParquetFileMetadata::IsGeoParquetConversionEnabled(context)) {
+		return make_uniq<WKBColumnWriter>(context, writer, schema_idx, std::move(schema_path), max_repeat, max_define,
+		                                  can_have_nulls, name);
+	}
 
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
