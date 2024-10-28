@@ -31,7 +31,8 @@ struct ColumnarResult {
 	idx_t column_count = 0;
 	vector<string> data;
 	vector<int> types;
-	vector<int> column_width;
+	vector<idx_t> column_width;
+	vector<bool> right_align;
 	vector<const char *> type_names;
 };
 
