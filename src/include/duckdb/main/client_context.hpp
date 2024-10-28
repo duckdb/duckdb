@@ -229,7 +229,8 @@ private:
 	vector<unique_ptr<SQLStatement>> ParseStatementsInternal(ClientContextLock &lock, const string &query);
 	//! Perform aggressive query verification of a SELECT statement. Only called when query_verification_enabled is
 	//! true.
-	ErrorData VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement);
+	ErrorData VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
+		optional_ptr<case_insensitive_map_t<BoundParameterData>> values = nullptr);
 
 	void InitialCleanup(ClientContextLock &lock);
 	//! Internal clean up, does not lock. Caller must hold the context_lock.
@@ -261,7 +262,7 @@ private:
 																 bool allow_stream_result);
 	unique_ptr<QueryResult> RunStatementInternal(ClientContextLock &lock, const string &query,
 	                                             unique_ptr<SQLStatement> statement, bool allow_stream_result,
-	                                             bool verify = true);
+	                                             optional_ptr<case_insensitive_map_t<BoundParameterData>> params, bool verify = true);
 	unique_ptr<PreparedStatement> PrepareInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
 	                                              bool leave_autocommit_open = false);
 	void LogQueryInternal(ClientContextLock &lock, const string &query);

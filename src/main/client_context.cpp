@@ -347,6 +347,7 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const st
 	result->properties = planner.properties;
 	result->names = planner.names;
 	result->types = planner.types;
+	// Todo this is supposed to hold the value map for the prepared statement values???
 	result->value_map = std::move(planner.value_map);
 	if (!planner.properties.bound_all_parameters) {
 		return result;
@@ -670,8 +671,8 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &
 	transaction.open_autocommit_transaction = requires_new_transaction && transaction.HasActiveTransaction();
 	return res;
 }
-
 unique_ptr<PendingQueryResult> ClientContext::PendingQueryWithParametersInternal(ClientContextLock &lock,
+
 																 unique_ptr<SQLStatement> statement,
 																 case_insensitive_map_t<BoundParameterData> &values,
 																 bool allow_stream_result) {
@@ -772,6 +773,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
                                                                        unique_ptr<SQLStatement> statement,
                                                                        const PendingQueryParameters &parameters) {
 	// prepare the query for execution
+	// This thing seems to nuke the prepared params
 	auto prepared = CreatePreparedStatement(lock, query, std::move(statement), parameters.parameters,
 	                                        PreparedStatementMode::PREPARE_AND_EXECUTE);
 	idx_t parameter_count = !parameters.parameters ? 0 : parameters.parameters->size();
@@ -790,9 +792,11 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
 
 unique_ptr<QueryResult> ClientContext::RunStatementInternal(ClientContextLock &lock, const string &query,
                                                             unique_ptr<SQLStatement> statement,
-                                                            bool allow_stream_result, bool verify) {
+                                                            bool allow_stream_result, optional_ptr<case_insensitive_map_t<BoundParameterData>> params,
+                                                            bool verify) {
 	PendingQueryParameters parameters;
 	parameters.allow_stream_result = allow_stream_result;
+	parameters.parameters = params;
 	auto pending = PendingQueryInternal(lock, std::move(statement), parameters, verify);
 	if (pending->HasError()) {
 		return ErrorResult<MaterializedQueryResult>(pending->GetErrorObject());
@@ -826,7 +830,9 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			// in case this is a select query, we verify the original statement
 			ErrorData error;
 			try {
-				error = VerifyQuery(lock, query, std::move(statement));
+				//if (parameters.parameters->empty()) {
+					error = VerifyQuery(lock, query, std::move(statement), parameters.parameters);
+				//}
 			} catch (std::exception &ex) {
 				error = ErrorData(ex);
 			}
@@ -1069,8 +1075,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query,
 		params.parameters = values;
 
 		// TODO: shouldn't this also work?
-		// return PendingQueryInternal(*lock, std::move(statements[0]), params);
-		return PendingQueryWithParametersInternal(*lock, std::move(statements[0]), values, allow_stream_result);
+		return PendingQueryInternal(*lock, std::move(statements[0]), params, true);
+		// return PendingQueryWithParametersInternal(*lock, std::move(statements[0]), values, allow_stream_result);
 	} catch (std::exception &ex) {
 		return make_uniq<PendingQueryResult>(ErrorData(ex));
 	}
@@ -1089,7 +1095,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStateme
 		params.allow_stream_result = allow_stream_result;
 		params.parameters = values;
 		// TODO: shouldn't this also work?
-		// return PendingQueryInternal(*lock, std::move(statement), params);
+		return PendingQueryInternal(*lock, std::move(statement), params, true);
 		return PendingQueryWithParametersInternal(*lock, std::move(statement), values, allow_stream_result);
 	} catch (std::exception &ex) {
 		return make_uniq<PendingQueryResult>(ErrorData(ex));
@@ -1102,6 +1108,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContext
                                                                    bool verify) {
 	auto query = statement->query;
 	shared_ptr<PreparedStatementData> prepared;
+
+	// TODO: whats the difference when this is called directly vs when we are going through a verify step
 	if (verify) {
 		return PendingStatementOrPreparedStatementInternal(lock, query, std::move(statement), prepared, parameters);
 	} else {
@@ -1298,7 +1306,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContext
 			// verify read only statements by running a select statement
 			auto select = make_uniq<SelectStatement>();
 			select->node = relation->GetQueryNode();
-			RunStatementInternal(lock, query, std::move(select), false);
+			RunStatementInternal(lock, query, std::move(select), false, nullptr);
 		}
 	}
 
