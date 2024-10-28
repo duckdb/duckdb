@@ -32,6 +32,8 @@
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/parser/parsed_data/exported_table_data.hpp"
+#include "duckdb/parser/parsed_data/exported_table_data.hpp"
 
 namespace duckdb {
 
@@ -340,6 +342,34 @@ void CommonTableExpressionMap::Serialize(Serializer &serializer) const {
 CommonTableExpressionMap CommonTableExpressionMap::Deserialize(Deserializer &deserializer) {
 	CommonTableExpressionMap result;
 	deserializer.ReadPropertyWithDefault<InsertionOrderPreservingMap<unique_ptr<CommonTableExpressionInfo>>>(100, "map", result.map);
+	return result;
+}
+
+void ExportedTableData::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(1, "table_name", table_name);
+	serializer.WritePropertyWithDefault<string>(2, "schema_name", schema_name);
+	serializer.WritePropertyWithDefault<string>(3, "database_name", database_name);
+	serializer.WritePropertyWithDefault<string>(4, "file_path", file_path);
+	serializer.WritePropertyWithDefault<vector<string>>(5, "not_null_columns", not_null_columns);
+}
+
+ExportedTableData ExportedTableData::Deserialize(Deserializer &deserializer) {
+	ExportedTableData result;
+	deserializer.ReadPropertyWithDefault<string>(1, "table_name", result.table_name);
+	deserializer.ReadPropertyWithDefault<string>(2, "schema_name", result.schema_name);
+	deserializer.ReadPropertyWithDefault<string>(3, "database_name", result.database_name);
+	deserializer.ReadPropertyWithDefault<string>(4, "file_path", result.file_path);
+	deserializer.ReadPropertyWithDefault<vector<string>>(5, "not_null_columns", result.not_null_columns);
+	return result;
+}
+
+void ExportedTableInfo::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty<ExportedTableData>(1, "table_data", table_data);
+}
+
+ExportedTableInfo ExportedTableInfo::Deserialize(Deserializer &deserializer) {
+	auto table_data = deserializer.ReadProperty<ExportedTableData>(1, "table_data");
+	ExportedTableInfo result(deserializer.Get<ClientContext &>(), table_data);
 	return result;
 }
 
