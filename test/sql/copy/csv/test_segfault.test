@@ -16,7 +16,7 @@ from read_csv('data/csv/segfault.csv',
 
 # Also try with multiple ignored lines
 query I
-from read_csv('/Users/holanda/Documents/Projects/duckdb/data/csv/venue_pipe.csv',
+from read_csv('data/csv/venue_pipe.csv',
    header=false,
    quote='"',
    escape = '"',
