@@ -12,7 +12,7 @@ copy (select
     r::float r_float,
     'string_' || r::VARCHAR r_string,
     ('blob_' || r::VARCHAR)::BLOB r_blob
-from range(100) r1, range(1000) order by r) to '__TEST_DIR__/bloom1.parquet' (format parquet, ROW_GROUP_SIZE 10000);
+from range(100) r1, range(1000) order by r) to '__TEST_DIR__/bloom1.parquet' (format parquet, ROW_GROUP_SIZE 10000, dictionary_size_limit 1000);
 
 # we don't check the actual offsets since they might change due to filters being moved around
 query III
@@ -114,3 +114,50 @@ query I
 FROM assert_bloom_filter_hit('__TEST_DIR__/bloom1.parquet', 'r_blob', 'blob_200'::BLOB);
 ----
 true
+
+
+
+# some tests for dictionary_size_limit
+
+# no bloom filter, dict limit too low
+statement ok
+copy (select (r1.range*10)::BIGINT r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom2.parquet' (format parquet, ROW_GROUP_SIZE 10000, dictionary_size_limit 10);
+
+query III
+select row_group_id, bloom_filter_offset IS NOT NULL, bloom_filter_length IS NOT NULL from parquet_metadata('__TEST_DIR__/bloom2.parquet') order by row_group_id;
+----
+0	false	false
+
+
+# still no bloom filter, limit off-by-one
+statement ok
+copy (select (r1.range*10)::BIGINT r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom3.parquet' (format parquet, ROW_GROUP_SIZE 10000, dictionary_size_limit 99);
+
+query III
+select row_group_id, bloom_filter_offset  IS NOT NULL, bloom_filter_length  IS NOT NULL  from parquet_metadata('__TEST_DIR__/bloom3.parquet') order by row_group_id;
+----
+0	false	false
+
+
+# should have a filter here!
+statement ok
+copy (select (r1.range*10)::BIGINT r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom4.parquet' (format parquet, ROW_GROUP_SIZE 10000, dictionary_size_limit 100);
+
+query III
+select row_group_id, bloom_filter_offset IS NOT NULL, bloom_filter_length  IS NOT NULL  from parquet_metadata('__TEST_DIR__/bloom4.parquet') order by row_group_id;
+----
+0	true	true
+
+
+# should have a filter here, too
+statement ok
+copy (select (r1.range*10)::BIGINT r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom5.parquet' (format parquet, ROW_GROUP_SIZE 10000, dictionary_size_limit 1000);
+
+query III
+select row_group_id, bloom_filter_offset IS NOT NULL, bloom_filter_length  IS NOT NULL  from parquet_metadata('__TEST_DIR__/bloom5.parquet') order by row_group_id;
+----
+0	true	true

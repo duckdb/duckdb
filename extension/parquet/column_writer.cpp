@@ -913,10 +913,10 @@ public:
 template <class T>
 class StandardWriterPageState : public ColumnWriterPageState {
 public:
-	explicit StandardWriterPageState(const idx_t total_value_count, Encoding::type encoding_p, const unordered_map<T, uint32_t> &dictionary_p)
-	    : dbp_encoder(total_value_count), encoding(encoding_p), dictionary(dictionary_p),
-	      written_value(false), bit_width(RleBpDecoder::ComputeBitWidth(dictionary.size())), dict_encoder(bit_width),
-	      initialized(false) {
+	explicit StandardWriterPageState(const idx_t total_value_count, Encoding::type encoding_p,
+	                                 const unordered_map<T, uint32_t> &dictionary_p)
+	    : dbp_encoder(total_value_count), encoding(encoding_p), dictionary(dictionary_p), written_value(false),
+	      bit_width(RleBpDecoder::ComputeBitWidth(dictionary.size())), dict_encoder(bit_width), initialized(false) {
 	}
 	DbpEncoder dbp_encoder;
 
@@ -950,7 +950,8 @@ public:
 	unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state_p) override {
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
 
-		auto result = make_uniq<StandardWriterPageState<SRC>>(state.total_value_count, state.encoding, state.dictionary);
+		auto result =
+		    make_uniq<StandardWriterPageState<SRC>>(state.total_value_count, state.encoding, state.dictionary);
 		return std::move(result);
 	}
 
@@ -1011,7 +1012,7 @@ public:
 				continue;
 			}
 			if (validity.RowIsValid(vector_index)) {
-				if (state.dictionary.size() < writer.DictionarySizeLimit()) {
+				if (state.dictionary.size() <= writer.DictionarySizeLimit()) {
 					const auto &src_value = data_ptr[vector_index];
 					// Try to insert into the dictionary. If it's not there yet, we get .second = true
 					auto found = state.dictionary.insert(pair<SRC, uint32_t>(src_value, new_value_index));
@@ -1029,7 +1030,7 @@ public:
 		const auto type = writer.GetType(schema_idx);
 
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
-		if (state.dictionary.size() >= writer.DictionarySizeLimit()) {
+		if (state.dictionary.size() > writer.DictionarySizeLimit()) {
 			// special handling for int column: dpb, otherwise plain
 			state.encoding = (type == Type::type::INT32 || type == Type::type::INT64) ? Encoding::DELTA_BINARY_PACKED
 			                                                                          : Encoding::PLAIN;

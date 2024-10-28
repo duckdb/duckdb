@@ -1287,6 +1287,12 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 				throw BinderException("dictionary_size_limit must be greater than 0 or 0 to disable");
 			}
 			bind_data->dictionary_size_limit = val;
+		} else if (loption == "bloom_filter_false_positive_ratio") {
+			auto val = option.second[0].GetValue<double>();
+			if (val < 0) {
+				throw BinderException("bloom_filter_false_positive_ratio must be greater than 0");
+			}
+			bind_data->bloom_filter_false_positive_ratio = val;
 		} else if (loption == "debug_use_openssl") {
 			auto val = StringUtil::Lower(option.second[0].GetValue<std::string>());
 			if (val == "false") {
@@ -1326,7 +1332,8 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 	global_state->writer = make_uniq<ParquetWriter>(
 	    context, fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec,
 	    parquet_bind.field_ids.Copy(), parquet_bind.kv_metadata, parquet_bind.encryption_config,
-	    parquet_bind.dictionary_size_limit, parquet_bind.compression_level, parquet_bind.debug_use_openssl);
+	    parquet_bind.dictionary_size_limit, parquet_bind.bloom_filter_false_positive_ratio,
+	    parquet_bind.compression_level, parquet_bind.debug_use_openssl);
 	return std::move(global_state);
 }
 

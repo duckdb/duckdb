@@ -74,7 +74,7 @@ public:
 	              vector<string> names, duckdb_parquet::CompressionCodec::type codec, ChildFieldIDs field_ids,
 	              const vector<pair<string, string>> &kv_metadata,
 	              shared_ptr<ParquetEncryptionConfig> encryption_config, idx_t dictionary_size_limit,
-	              optional_idx compression_level, bool debug_use_openssl);
+	              double bloom_filter_false_positive_ratio, optional_idx compression_level, bool debug_use_openssl);
 
 public:
 	void PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result);
@@ -107,6 +107,9 @@ public:
 	idx_t DictionarySizeLimit() const {
 		return dictionary_size_limit;
 	}
+	double BloomFilterFalsePositiveRatio() const {
+		return bloom_filter_false_positive_ratio;
+	}
 	optional_idx CompressionLevel() const {
 		return compression_level;
 	}
@@ -133,6 +136,7 @@ private:
 	ChildFieldIDs field_ids;
 	shared_ptr<ParquetEncryptionConfig> encryption_config;
 	idx_t dictionary_size_limit;
+	double bloom_filter_false_positive_ratio;
 	optional_idx compression_level;
 	bool debug_use_openssl;
 	shared_ptr<EncryptionUtil> encryption_util;
