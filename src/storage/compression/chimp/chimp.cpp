@@ -10,7 +10,7 @@ namespace duckdb {
 template <class T>
 CompressionFunction GetChimpFunction(PhysicalType data_type) {
 	return CompressionFunction(CompressionType::COMPRESSION_CHIMP, data_type, ChimpInitAnalyze<T>, ChimpAnalyze<T>,
-	                           ChimpFinalAnalyze<T>, ChimpInitCompression<T>, ChimpCompress<T>,
+	                           ChimpFinalAnalyze<T>, nullptr, ChimpInitCompression<T>, ChimpCompress<T>,
 	                           ChimpFinalizeCompress<T>, ChimpInitScan<T>, ChimpScan<T>, ChimpScanPartial<T>,
 	                           ChimpFetchRow<T>, ChimpSkip<T>);
 }

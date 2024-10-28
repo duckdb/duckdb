@@ -146,6 +146,7 @@ typedef idx_t (*compression_final_analyze_t)(AnalyzeState &state);
 //===--------------------------------------------------------------------===//
 // Compress
 //===--------------------------------------------------------------------===//
+typedef void (*compression_prepare_compress_t)(AnalyzeState &state, Vector &input, idx_t count);
 typedef unique_ptr<CompressionState> (*compression_init_compression_t)(ColumnDataCheckpointer &checkpointer,
                                                                        unique_ptr<AnalyzeState> state);
 typedef void (*compression_compress_data_t)(CompressionState &state, Vector &scan_vector, idx_t count);
@@ -193,26 +194,25 @@ typedef void (*compression_cleanup_state_t)(ColumnSegment &segment);
 
 class CompressionFunction {
 public:
-	CompressionFunction(CompressionType type, PhysicalType data_type, compression_init_analyze_t init_analyze,
-	                    compression_analyze_t analyze, compression_final_analyze_t final_analyze,
-	                    compression_init_compression_t init_compression, compression_compress_data_t compress,
-	                    compression_compress_finalize_t compress_finalize, compression_init_segment_scan_t init_scan,
-	                    compression_scan_vector_t scan_vector, compression_scan_partial_t scan_partial,
-	                    compression_fetch_row_t fetch_row, compression_skip_t skip,
-	                    compression_init_segment_t init_segment = nullptr,
-	                    compression_init_append_t init_append = nullptr, compression_append_t append = nullptr,
-	                    compression_finalize_append_t finalize_append = nullptr,
-	                    compression_revert_append_t revert_append = nullptr,
-	                    compression_serialize_state_t serialize_state = nullptr,
-	                    compression_deserialize_state_t deserialize_state = nullptr,
-	                    compression_cleanup_state_t cleanup_state = nullptr,
-	                    compression_init_prefetch_t init_prefetch = nullptr)
+	CompressionFunction(
+	    CompressionType type, PhysicalType data_type, compression_init_analyze_t init_analyze,
+	    compression_analyze_t analyze, compression_final_analyze_t final_analyze,
+	    compression_prepare_compress_t prepare_compress, compression_init_compression_t init_compression,
+	    compression_compress_data_t compress, compression_compress_finalize_t compress_finalize,
+	    compression_init_segment_scan_t init_scan, compression_scan_vector_t scan_vector,
+	    compression_scan_partial_t scan_partial, compression_fetch_row_t fetch_row, compression_skip_t skip,
+	    compression_init_segment_t init_segment = nullptr, compression_init_append_t init_append = nullptr,
+	    compression_append_t append = nullptr, compression_finalize_append_t finalize_append = nullptr,
+	    compression_revert_append_t revert_append = nullptr, compression_serialize_state_t serialize_state = nullptr,
+	    compression_deserialize_state_t deserialize_state = nullptr,
+	    compression_cleanup_state_t cleanup_state = nullptr, compression_init_prefetch_t init_prefetch = nullptr)
 	    : type(type), data_type(data_type), init_analyze(init_analyze), analyze(analyze), final_analyze(final_analyze),
-	      init_compression(init_compression), compress(compress), compress_finalize(compress_finalize),
-	      init_prefetch(init_prefetch), init_scan(init_scan), scan_vector(scan_vector), scan_partial(scan_partial),
-	      fetch_row(fetch_row), skip(skip), init_segment(init_segment), init_append(init_append), append(append),
-	      finalize_append(finalize_append), revert_append(revert_append), serialize_state(serialize_state),
-	      deserialize_state(deserialize_state), cleanup_state(cleanup_state) {
+	      prepare_compress(prepare_compress), init_compression(init_compression), compress(compress),
+	      compress_finalize(compress_finalize), init_prefetch(init_prefetch), init_scan(init_scan),
+	      scan_vector(scan_vector), scan_partial(scan_partial), fetch_row(fetch_row), skip(skip),
+	      init_segment(init_segment), init_append(init_append), append(append), finalize_append(finalize_append),
+	      revert_append(revert_append), serialize_state(serialize_state), deserialize_state(deserialize_state),
+	      cleanup_state(cleanup_state) {
 	}
 
 	//! Compression type
@@ -232,6 +232,9 @@ public:
 	//! this is not required/enforced: it can be an estimate as well
 	//! also this function can return DConstants::INVALID_INDEX to skip this compression method
 	compression_final_analyze_t final_analyze;
+
+	//! (Optional) preparation step before compressing
+	compression_prepare_compress_t prepare_compress;
 
 	//! Compression step: actually compress the data
 	//! init_compression is called once to set up the comperssion state

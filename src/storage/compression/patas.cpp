@@ -16,7 +16,7 @@ CompressionFunction GetPatasFunction(PhysicalType data_type) {
 template <>
 CompressionFunction GetPatasFunction<float>(PhysicalType data_type) {
 	return CompressionFunction(CompressionType::COMPRESSION_PATAS, data_type, PatasInitAnalyze<float>,
-	                           PatasAnalyze<float>, PatasFinalAnalyze<float>, PatasInitCompression<float>,
+	                           PatasAnalyze<float>, PatasFinalAnalyze<float>, nullptr, PatasInitCompression<float>,
 	                           PatasCompress<float>, PatasFinalizeCompress<float>, PatasInitScan<float>,
 	                           PatasScan<float>, PatasScanPartial<float>, PatasFetchRow<float>, PatasSkip<float>);
 }
@@ -24,7 +24,7 @@ CompressionFunction GetPatasFunction<float>(PhysicalType data_type) {
 template <>
 CompressionFunction GetPatasFunction<double>(PhysicalType data_type) {
 	return CompressionFunction(CompressionType::COMPRESSION_PATAS, data_type, PatasInitAnalyze<double>,
-	                           PatasAnalyze<double>, PatasFinalAnalyze<double>, PatasInitCompression<double>,
+	                           PatasAnalyze<double>, PatasFinalAnalyze<double>, nullptr, PatasInitCompression<double>,
 	                           PatasCompress<double>, PatasFinalizeCompress<double>, PatasInitScan<double>,
 	                           PatasScan<double>, PatasScanPartial<double>, PatasFetchRow<double>, PatasSkip<double>);
 }

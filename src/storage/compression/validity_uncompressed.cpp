@@ -469,7 +469,7 @@ void ValidityRevertAppend(ColumnSegment &segment, idx_t start_row) {
 CompressionFunction ValidityUncompressed::GetFunction(PhysicalType data_type) {
 	D_ASSERT(data_type == PhysicalType::BIT);
 	return CompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, data_type, ValidityInitAnalyze,
-	                           ValidityAnalyze, ValidityFinalAnalyze, UncompressedFunctions::InitCompression,
+	                           ValidityAnalyze, ValidityFinalAnalyze, nullptr, UncompressedFunctions::InitCompression,
 	                           UncompressedFunctions::Compress, UncompressedFunctions::FinalizeCompress,
 	                           ValidityInitScan, ValidityScan, ValidityScanPartial, ValidityFetchRow,
 	                           UncompressedFunctions::EmptySkip, ValidityInitSegment, ValidityInitAppend,

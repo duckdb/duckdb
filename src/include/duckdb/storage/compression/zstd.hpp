@@ -10,28 +10,9 @@
 
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/storage/compression/utils.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
-
-class ZSTDSamplingState {
-public:
-	ZSTDSamplingState();
-
-public:
-	void Sample(Vector &vec, idx_t count) {
-		sampling_state.Sample(vec, count);
-	}
-	void Reset();
-
-public:
-	AnalyzeSamplingState sampling_state;
-
-	idx_t total_sample_size = 0;
-	AllocatedData sample_buffer;
-	vector<idx_t> sample_sizes;
-};
 
 class DictBuffer {
 public:

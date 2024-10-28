@@ -15,7 +15,6 @@ add_library_unity(
   bitpacking_hugeint.cpp
   patas.cpp
   zstd.cpp
-  utils.cpp
   alprd.cpp
   fsst.cpp)
 set(ALL_OBJECT_FILES

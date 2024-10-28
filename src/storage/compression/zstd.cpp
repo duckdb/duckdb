@@ -5,7 +5,6 @@
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/constants.hpp"
-#include "duckdb/storage/compression/utils.hpp"
 #include "zstd_wrapper.hpp"
 #include "duckdb/storage/compression/zstd.hpp"
 #include "duckdb/common/allocator.hpp"
@@ -55,83 +54,21 @@ static int32_t GetCompressionLevel() {
 }
 
 static constexpr idx_t ZSTD_VECTOR_SIZE = STANDARD_VECTOR_SIZE > 2048 ? STANDARD_VECTOR_SIZE : 2048;
+//! The combined string length of a vector required for ZSTD to be effective (1Kb)
+static constexpr idx_t MINIMUM_AVERAGE_VECTOR_STRING_LENGTH = 1 << 10;
+//! The minimum size for a string to be used as a sample
+static constexpr idx_t ZSTD_SAMPLE_MIN_SIZE = 8;
+//! The minimum amount of samples needed to train a dictionary
+static constexpr idx_t ZSTD_MIN_SAMPLE_COUNT = 10;
 
 namespace duckdb {
-
-//===--------------------------------------------------------------------===//
-// (Sampling) Analyze
-//===--------------------------------------------------------------------===//
-
-static constexpr idx_t ZSTD_SAMPLE_MIN_SIZE = 8;
-
-static void IterateThroughVector(UnifiedVectorFormat &vdata, const string_t *data, idx_t count,
-                                 const std::function<void(const string_t &val)> &callback) {
-	for (idx_t j = 0; j < count; j++) {
-		auto idx = vdata.sel->get_index(j);
-		if (!vdata.validity.RowIsValid(idx)) {
-			continue;
-		}
-		auto &str = data[idx];
-		if (str.GetSize() < ZSTD_SAMPLE_MIN_SIZE) {
-			continue;
-		}
-		callback(str);
-	}
-}
-
-static void SampleVector(ZSTDSamplingState &state, Vector &vec, idx_t count) {
-	UnifiedVectorFormat vdata;
-	vec.ToUnifiedFormat(count, vdata);
-
-	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
-
-	idx_t sum = 0;
-	auto collect_string_sizes = [&sum, &state](const string_t &str) {
-		auto string_size = str.GetSize();
-		sum += string_size;
-		state.sample_sizes.push_back(string_size);
-	};
-	IterateThroughVector(vdata, data, count, collect_string_sizes);
-
-	auto &total_sample_size = state.total_sample_size;
-	auto &sample_buffer = state.sample_buffer;
-
-	// Grow the sample_buffer if necessary
-	idx_t required_size = NextPowerOfTwo(total_sample_size + sum);
-	required_size = MaxValue<idx_t>(required_size, Storage::DEFAULT_BLOCK_SIZE);
-	if (required_size > sample_buffer.GetSize()) {
-		auto new_buffer = Allocator::DefaultAllocator().Allocate(required_size);
-		if (total_sample_size) {
-			memcpy(new_buffer.get(), sample_buffer.get(), total_sample_size);
-		}
-		sample_buffer = std::move(new_buffer);
-	}
-
-	auto copy_into_samples = [&total_sample_size, &sample_buffer](const string_t &str) {
-		auto string_size = str.GetSize();
-		memcpy(sample_buffer.get() + total_sample_size, str.GetData(), string_size);
-		total_sample_size += string_size;
-	};
-	IterateThroughVector(vdata, data, count, copy_into_samples);
-}
-
-ZSTDSamplingState::ZSTDSamplingState() {
-	auto &zstd_sample_state = *this;
-	sampling_state.SetSampler(
-	    [&zstd_sample_state](Vector &vec, idx_t count) { SampleVector(zstd_sample_state, vec, count); });
-}
-
-void ZSTDSamplingState::Reset() {
-	sample_sizes.clear();
-	total_sample_size = 0;
-	sampling_state = AnalyzeSamplingState();
-}
 
 struct ZSTDStorage {
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
 	static bool StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count);
 	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
 
+	static void PrepareCompress(AnalyzeState &state_p, Vector &input, idx_t count);
 	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointer &checkpointer,
 	                                                    unique_ptr<AnalyzeState> analyze_state_p);
 	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count);
@@ -157,6 +94,28 @@ struct ZSTDStorage {
 //===--------------------------------------------------------------------===//
 // Analyze
 //===--------------------------------------------------------------------===//
+
+struct ZSTDPrepareState {
+public:
+	ZSTDPrepareState() {
+	}
+
+public:
+	AllocatedData sample_buffer;
+	//! Whether all strings of a vector should be combined into a single sample
+	bool combine_vectors = false;
+	vector<idx_t> sample_sizes;
+	//! The size that we have determined can be utilized by the dictionary buffer
+	idx_t dict_size = 0;
+	//! The dictionary trained from the samples
+	DictBuffer dict;
+	//! The current offset into the sample_buffer;
+	idx_t sample_buffer_offset = 0;
+	//! The amount of values already processed by prepare compress
+	idx_t prepare_count = 0;
+	bool finished = false;
+};
+
 struct ZSTDAnalyzeState : public AnalyzeState {
 public:
 	ZSTDAnalyzeState(CompressionInfo &info, DBConfig &config)
@@ -198,15 +157,17 @@ public:
 
 public:
 	DBConfig &config;
-	ZSTDSamplingState sampling_state;
 
 	//! The trained 'dictBuffer' (populated in FinalAnalyze)
 	DictBuffer dict;
 	duckdb_zstd::ZSTD_CDict *compression_dict;
 
 	duckdb_zstd::ZSTD_CCtx *context;
+	//! The combined string lengths for all values in the segment
 	idx_t total_size = 0;
+	//! The total amount of values in the segment
 	idx_t count = 0;
+	ZSTDPrepareState prepare_state;
 };
 
 unique_ptr<AnalyzeState> ZSTDStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
@@ -218,7 +179,6 @@ unique_ptr<AnalyzeState> ZSTDStorage::StringInitAnalyze(ColumnData &col_data, Ph
 	return make_uniq<ZSTDAnalyzeState>(info, config);
 }
 
-// Determines wether compression is possible and calculates sizes for the FinalAnalyze
 bool ZSTDStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
 	auto &state = state_p.Cast<ZSTDAnalyzeState>();
 	UnifiedVectorFormat vdata;
@@ -234,34 +194,30 @@ bool ZSTDStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t coun
 		auto string_size = str.GetSize();
 		state.total_size += string_size;
 	}
-	state.sampling_state.Sample(input, count);
 	state.count += count;
 	return true;
 }
 
-DictBuffer CreateDictFromSamples(ZSTDAnalyzeState &state) {
-	auto &sampling_state = state.sampling_state;
-
+optional_idx GetMaximumDictSize(ZSTDAnalyzeState &state) {
 	auto space_required = state.GetVectorMetadataSize();
 	space_required += sizeof(block_id_t);
 	space_required += sizeof(dict_size_t);
 	if (space_required >= state.info.GetBlockSize()) {
-		// FIXME: allow vector metadata to spill over to the next page
-		return DictBuffer();
+		return optional_idx();
 	}
 	space_required = AlignValue<idx_t>(space_required);
 	auto remaining_size = state.info.GetBlockSize() - space_required;
 	if (remaining_size < ZDICT_DICTSIZE_MIN) {
 		// Not enough room to fit the metadata + the dictionary on the page
-		return DictBuffer();
+		return optional_idx();
 	}
 
-	if (sampling_state.sample_sizes.size() < 10) {
+	if (state.count < ZSTD_MIN_SAMPLE_COUNT) {
 		// Not enough samples to train a dictionary
-		return DictBuffer();
+		return optional_idx();
 	}
 
-	idx_t dict_buffer_size = MaxValue<idx_t>(sampling_state.total_sample_size / 100, ZDICT_DICTSIZE_MIN);
+	idx_t dict_buffer_size = MaxValue<idx_t>(state.total_size / 100, ZDICT_DICTSIZE_MIN);
 	if (dict_buffer_size > remaining_size) {
 		// FIXME: perhaps we want to spill this to a separate page instead then?
 		dict_buffer_size = remaining_size;
@@ -271,15 +227,19 @@ DictBuffer CreateDictFromSamples(ZSTDAnalyzeState &state) {
 		// useful for testing how big amounts of compressed data behaves when it crosses page boundaries
 		dict_buffer_size = ZDICT_DICTSIZE_MIN;
 	}
+	return dict_buffer_size;
+}
 
+DictBuffer CreateDictFromSamples(idx_t dict_buffer_size, const vector<idx_t> &sample_sizes,
+                                 AllocatedData &sample_buffer) {
 	DictBuffer buffer(UnsafeNumericCast<dict_size_t>(dict_buffer_size));
 	if (!buffer.Buffer()) {
 		return DictBuffer();
 	}
 
-	auto res = duckdb_zstd::ZDICT_trainFromBuffer(
-	    buffer.Buffer(), buffer.Capacity(), sampling_state.sample_buffer.get(),
-	    (size_t *)sampling_state.sample_sizes.data(), UnsafeNumericCast<uint32_t>(sampling_state.sample_sizes.size()));
+	auto res = duckdb_zstd::ZDICT_trainFromBuffer(buffer.Buffer(), buffer.Capacity(), sample_buffer.get(),
+	                                              (size_t *)sample_sizes.data(),
+	                                              UnsafeNumericCast<uint32_t>(sample_sizes.size()));
 	if (duckdb_zstd::ZSTD_isError(res)) {
 		return DictBuffer();
 	}
@@ -291,34 +251,27 @@ DictBuffer CreateDictFromSamples(ZSTDAnalyzeState &state) {
 idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	auto &state = state_p.Cast<ZSTDAnalyzeState>();
 
-	state.dict = CreateDictFromSamples(state);
-	if (!state.dict) {
-		// Training the dictionary failed for some reason
+	if ((state.total_size / state.count) * ZSTD_VECTOR_SIZE < MINIMUM_AVERAGE_VECTOR_STRING_LENGTH) {
+		// Compressing this with ZSTD won't be effective as the block sizes are too small
+		return NumericLimits<idx_t>::Maximum();
+	}
+	if (state.count < ZSTD_MIN_SAMPLE_COUNT) {
+		// Not enough values to train a dictionary
 		return NumericLimits<idx_t>::Maximum();
 	}
 
-	state.compression_dict =
-	    duckdb_zstd::ZSTD_createCDict_byReference(state.dict.Buffer(), state.dict.Size(), GetCompressionLevel());
-
-	auto required_space = duckdb_zstd::ZSTD_compressBound(state.sampling_state.total_sample_size);
-	auto dst = make_unsafe_uniq_array_uninitialized<data_t>(required_space);
-	// FIXME: use streaming compression ? both to simulate the real compression better and to reduce the amount of space
-	// we have to allocate here
-	auto compressed_size = duckdb_zstd::ZSTD_compress_usingCDict(
-	    state.context, dst.get(), required_space, state.sampling_state.sample_buffer.get(),
-	    state.sampling_state.total_sample_size, state.compression_dict);
-	if (duckdb_zstd::ZSTD_isError(compressed_size)) {
+	auto required_size = GetMaximumDictSize(state);
+	if (!required_size.IsValid()) {
 		return NumericLimits<idx_t>::Maximum();
 	}
+	state.prepare_state.dict_size = required_size.GetIndex();
 
-	double compression_ratio = (double)state.sampling_state.total_sample_size / (double)compressed_size;
-	// Check what the size of the data would be if all of it would be compressed at this compression ratio.
-	idx_t expected_compressed_size = LossyNumericCast<idx_t>((double)state.total_size / compression_ratio);
-	state.sampling_state.Reset();
+	auto expected_compressed_size = (double)state.total_size / 2.0;
 
 	idx_t estimated_size = 0;
-	estimated_size += state.dict.Size();
-	estimated_size += expected_compressed_size;
+	estimated_size += MinValue<idx_t>(
+	    state.total_size / 100, required_size.GetIndex()); // expected dictionary size is 100x smaller than the input
+	estimated_size += LossyNumericCast<idx_t>(expected_compressed_size);
 
 	estimated_size += state.count * sizeof(string_length_t);
 	estimated_size += state.GetVectorMetadataSize();
@@ -346,7 +299,7 @@ public:
 		vector_count = 0;
 		tuple_count = 0;
 
-		auto &dict = analyze_state->dict;
+		auto &dict = analyze_state->prepare_state.dict;
 		// Write the dictionary to the start of the segment
 		D_ASSERT(dict.Size() <= (info.GetBlockSize() - sizeof(block_id_t) - sizeof(dict_size_t) -
 		                         analyze_state->GetVectorMetadataSize()));
@@ -694,6 +647,61 @@ public:
 	//! The expected size of this vector (ZSTD_VECTOR_SIZE except for the last one)
 	idx_t vector_size;
 };
+
+// Iterate through the vectors of the segment again, performing more expensive calculations
+// since this will only be run when the compression algorithm has already been chosen
+void ZSTDStorage::PrepareCompress(AnalyzeState &analyze_state, Vector &input, idx_t count) {
+	auto &state = analyze_state.Cast<ZSTDAnalyzeState>();
+	auto &prepare = state.prepare_state;
+
+	if (!prepare.sample_buffer) {
+		prepare.sample_buffer = Allocator::DefaultAllocator().Allocate(prepare.dict_size * 100);
+		prepare.combine_vectors = (state.count / ZSTD_VECTOR_SIZE) > ZSTD_MIN_SAMPLE_COUNT;
+	}
+
+	if (prepare.finished) {
+		return;
+	}
+
+	UnifiedVectorFormat vdata;
+	input.ToUnifiedFormat(count, vdata);
+
+	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
+	idx_t sum = 0;
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = vdata.sel->get_index(i);
+		if (!vdata.validity.RowIsValid(idx)) {
+			continue;
+		}
+		auto &str = data[idx];
+		auto string_size = str.GetSize();
+		sum += string_size;
+		if (prepare.sample_buffer_offset + string_size >= prepare.sample_buffer.GetSize()) {
+			prepare.finished = true;
+			break;
+		}
+		memcpy(prepare.sample_buffer.get() + prepare.sample_buffer_offset, str.GetData(), string_size);
+		if (!prepare.combine_vectors) {
+			prepare.sample_sizes.push_back(string_size);
+		}
+		prepare.sample_buffer_offset += string_size;
+	}
+
+	if (prepare.combine_vectors) {
+		prepare.sample_sizes.push_back(sum);
+	}
+
+	prepare.prepare_count += count;
+	if (prepare.prepare_count >= state.count) {
+		prepare.finished = true;
+	}
+	if (prepare.finished) {
+		//! Train the dictionary on the collected samples
+		prepare.dict = CreateDictFromSamples(prepare.dict_size, prepare.sample_sizes, prepare.sample_buffer);
+		prepare.sample_sizes.clear();
+		prepare.sample_buffer.Reset();
+	}
+}
 
 unique_ptr<CompressionState> ZSTDStorage::InitCompression(ColumnDataCheckpointer &checkpointer,
                                                           unique_ptr<AnalyzeState> analyze_state_p) {
@@ -1127,8 +1135,8 @@ CompressionFunction ZSTDFun::GetFunction(PhysicalType data_type) {
 	D_ASSERT(data_type == PhysicalType::VARCHAR);
 	auto zstd = CompressionFunction(
 	    CompressionType::COMPRESSION_ZSTD, data_type, ZSTDStorage::StringInitAnalyze, ZSTDStorage::StringAnalyze,
-	    ZSTDStorage::StringFinalAnalyze, ZSTDStorage::InitCompression, ZSTDStorage::Compress,
-	    ZSTDStorage::FinalizeCompress, ZSTDStorage::StringInitScan, ZSTDStorage::StringScan,
+	    ZSTDStorage::StringFinalAnalyze, ZSTDStorage::PrepareCompress, ZSTDStorage::InitCompression,
+	    ZSTDStorage::Compress, ZSTDStorage::FinalizeCompress, ZSTDStorage::StringInitScan, ZSTDStorage::StringScan,
 	    ZSTDStorage::StringScanPartial, ZSTDStorage::StringFetchRow, UncompressedFunctions::EmptySkip);
 	zstd.init_segment = ZSTDStorage::StringInitSegment;
 	zstd.serialize_state = ZSTDStorage::SerializeState;
