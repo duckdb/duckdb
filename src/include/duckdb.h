@@ -244,7 +244,6 @@ typedef enum duckdb_table_filter_type {
 //! An enum over DuckDB's different table filter comparison types.
 typedef enum duckdb_table_filter_comparison_type {
 	DUCKDB_TABLE_FILTER_COMPARE_EQUAL = 0,
-	DUCKDB_TABLE_FILTER_COMPARE_BOUNDARY_START = 0,
 	DUCKDB_TABLE_FILTER_COMPARE_NOTEQUAL = 1,
 	DUCKDB_TABLE_FILTER_COMPARE_LESSTHAN = 2,
 	DUCKDB_TABLE_FILTER_COMPARE_GREATERTHAN = 3,
@@ -256,9 +255,10 @@ typedef enum duckdb_table_filter_comparison_type {
 	DUCKDB_TABLE_FILTER_COMPARE_BETWEEN = 9,
 	DUCKDB_TABLE_FILTER_COMPARE_NOT_BETWEEN = 10,
 	DUCKDB_TABLE_FILTER_COMPARE_NOT_DISTINCT_FROM = 11,
-	DUCKDB_TABLE_FILTER_COMPARE_BOUNDARY_END = 11,
 	DUCKDB_TABLE_FILTER_COMPARE_INVALID = 12
 } duckdb_table_filter_comparison_type;
+#define DUCKDB_TABLE_FILTER_COMPARE_BOUNDARY_START DUCKDB_TABLE_FILTER_COMPARE_EQUAL
+#define DUCKDB_TABLE_FILTER_COMPARE_BOUNDARY_END   DUCKDB_TABLE_FILTER_COMPARE_NOT_DISTINCT_FROM
 
 //===--------------------------------------------------------------------===//
 // General type definitions
