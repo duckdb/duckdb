@@ -512,9 +512,19 @@ bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filte
 	return ApplyBloomFilter(duckdb_filter, bloom_filter);
 }
 
-ParquetBloomFilter::ParquetBloomFilter(idx_t num_blocks) {
-	D_ASSERT(IsPowerOfTwo(num_blocks));
-	data = make_uniq<ResizeableBuffer>(Allocator::DefaultAllocator(), sizeof(ParquetBloomBlock) * num_blocks);
+ParquetBloomFilter::ParquetBloomFilter(idx_t num_entries, double bloom_filter_false_positive_ratio) {
+
+	// aim for hit ratio of 0.01%
+	// see http://tfk.mit.edu/pdf/bloom.pdf
+	double f = bloom_filter_false_positive_ratio;
+	double k = 8.0;
+	double n = num_entries;
+	double m = -k * n / std::log(1 - std::pow(f, 1 / k));
+	auto b = MaxValue<idx_t>(NextPowerOfTwo(m / k) / 32, 1);
+
+	D_ASSERT(b > 0 && IsPowerOfTwo(b));
+
+	data = make_uniq<ResizeableBuffer>(Allocator::DefaultAllocator(), sizeof(ParquetBloomBlock) * b);
 	data->zero();
 	block_count = data->len / sizeof(ParquetBloomBlock);
 	D_ASSERT(data->len % sizeof(ParquetBloomBlock) == 0);
@@ -538,30 +548,6 @@ bool ParquetBloomFilter::FilterCheck(uint64_t x) {
 	auto blocks = (ParquetBloomBlock *)(data->ptr);
 	auto i = ((x >> 32) * block_count) >> 32;
 	return ParquetBloomBlock::BlockCheck(blocks[i], x);
-}
-
-void ParquetBloomFilter::Shrink(idx_t new_block_count) {
-	D_ASSERT(block_count >= new_block_count);
-	D_ASSERT(IsPowerOfTwo(block_count));
-	D_ASSERT(IsPowerOfTwo(new_block_count));
-
-	ParquetBloomFilter new_bloom_filter(new_block_count);
-
-	uint8_t shift = log2(block_count) - log2(new_block_count);
-	auto old_blocks = (ParquetBloomBlock *)(data->ptr);
-	auto new_blocks = (ParquetBloomBlock *)(new_bloom_filter.data->ptr);
-
-	for (idx_t block_idx = 0; block_idx < block_count; block_idx++) {
-		auto new_idx = block_idx >> shift;
-		auto &old_block = old_blocks[block_idx];
-		auto &new_block = new_blocks[new_idx];
-		for (idx_t word_idx = 0; word_idx < 8; word_idx++) {
-			new_block.block[word_idx] |= old_block.block[word_idx];
-		}
-	}
-
-	data = std::move(new_bloom_filter.data);
-	block_count = new_block_count;
 }
 
 // compiler optimizes this into a single instruction (popcnt)

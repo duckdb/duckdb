@@ -13,6 +13,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/types/hash.hpp"
 
 #include <cstring>
 #include <algorithm>
@@ -234,3 +235,10 @@ private:
 };
 
 } // namespace duckdb
+
+template <>
+struct std::hash<duckdb::string_t> {
+	inline size_t operator()(const duckdb::string_t &val) const {
+		return Hash(val);
+	}
+};

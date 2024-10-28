@@ -1289,7 +1289,7 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 			bind_data->dictionary_size_limit = val;
 		} else if (loption == "bloom_filter_false_positive_ratio") {
 			auto val = option.second[0].GetValue<double>();
-			if (val < 0) {
+			if (val <= 0) {
 				throw BinderException("bloom_filter_false_positive_ratio must be greater than 0");
 			}
 			bind_data->bloom_filter_false_positive_ratio = val;

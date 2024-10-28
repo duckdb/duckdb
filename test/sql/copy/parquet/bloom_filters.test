@@ -161,3 +161,69 @@ query III
 select row_group_id, bloom_filter_offset IS NOT NULL, bloom_filter_length  IS NOT NULL  from parquet_metadata('__TEST_DIR__/bloom5.parquet') order by row_group_id;
 ----
 0	true	true
+
+
+# lets mess with the false positive ratio and measue bf size
+
+# the default 0.01
+statement ok
+copy (select (r1.range*10)::BIGINT r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom6.parquet' (format parquet, ROW_GROUP_SIZE 10000, dictionary_size_limit 1000, bloom_filter_false_positive_ratio 0.01);
+
+
+query II
+select row_group_id, bloom_filter_length from parquet_metadata('__TEST_DIR__/bloom6.parquet') order by row_group_id;
+----
+0	144
+
+
+# higher prob: 0.5 should lead to a smaller filter
+statement ok
+copy (select (r1.range*10)::BIGINT r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom7.parquet' (format parquet, ROW_GROUP_SIZE 10000, dictionary_size_limit 1000, bloom_filter_false_positive_ratio 0.5);
+
+
+query II
+select row_group_id, bloom_filter_length from parquet_metadata('__TEST_DIR__/bloom7.parquet') order by row_group_id;
+----
+0	80
+
+
+# lower prob: 0.001 should lead to a bigger filter
+statement ok
+copy (select (r1.range*10)::BIGINT r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom8.parquet' (format parquet, ROW_GROUP_SIZE 10000, dictionary_size_limit 1000, bloom_filter_false_positive_ratio 0.001);
+
+
+query II
+select row_group_id, bloom_filter_length from parquet_metadata('__TEST_DIR__/bloom8.parquet') order by row_group_id;
+----
+0	272
+
+
+# even lower prob: 0.0001 should lead to an even bigger filter
+statement ok
+copy (select (r1.range*10)::BIGINT r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom8.parquet' (format parquet, ROW_GROUP_SIZE 10000, dictionary_size_limit 1000, bloom_filter_false_positive_ratio 0.0001);
+
+
+query II
+select row_group_id, bloom_filter_length from parquet_metadata('__TEST_DIR__/bloom8.parquet') order by row_group_id;
+----
+0	528
+
+
+# some error cases for the new parameters
+
+statement error
+copy (select (r1.range*10)::BIGINT r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom8.parquet' (format parquet, ROW_GROUP_SIZE 10000, dictionary_size_limit -1, bloom_filter_false_positive_ratio 0.0001);
+----
+dictionary_size_limit must be greater than 0
+
+
+statement error
+copy (select (r1.range*10)::BIGINT r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom8.parquet' (format parquet, ROW_GROUP_SIZE 10000, dictionary_size_limit 1000, bloom_filter_false_positive_ratio 0);
+----
+bloom_filter_false_positive_ratio must be greater than 0

@@ -72,6 +72,14 @@ public:
 		}
 	}
 
+	// only here for template expansion ^^
+	void BeginWrite(WriteStream &writer, const string_t first_value) {
+		throw InternalException("Can't write string_t to DELTA_BINARY_PACKED column");
+	}
+	void WriteValue(WriteStream &writer, const string_t &value) {
+		throw InternalException("Can't write string_t to DELTA_BINARY_PACKED column");
+	}
+
 	void FinishWrite(WriteStream &writer) {
 		if (count + block_count != total_value_count) {
 			throw InternalException("value count mismatch when writing DELTA_BINARY_PACKED");

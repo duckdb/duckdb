@@ -39,7 +39,7 @@ class ParquetBloomFilter {
 	static constexpr const idx_t DEFAULT_BLOCK_COUNT = 32; // 4k filter
 
 public:
-	ParquetBloomFilter(idx_t num_blocks = DEFAULT_BLOCK_COUNT);
+	ParquetBloomFilter(idx_t num_entries, double bloom_filter_false_positive_ratio);
 	ParquetBloomFilter(unique_ptr<ResizeableBuffer> data_p);
 	void FilterInsert(uint64_t x);
 	bool FilterCheck(uint64_t x);

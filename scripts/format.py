@@ -22,7 +22,7 @@ except Exception as e:
     exit(-1)
 
 try:
-    ver = subprocess.check_output(('clang-format', '--version'), text=True)
+    ver = subprocess.check_output(('clang-format-11', '--version'), text=True)
     if '11.' not in ver:
         print('you need to run `pip install clang_format==11.0.1 - `', ver)
         exit(-1)
