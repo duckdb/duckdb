@@ -258,7 +258,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 							// We check for a weird case, where we ignore an extra value, if it is a null value
 							return;
 						}
-						validity_mask[chunk_col_id]->SetInvalid(number_of_rows);
+						validity_mask[chunk_col_id]->SetInvalid(static_cast<idx_t>(number_of_rows));
 					}
 					cur_col_id++;
 					chunk_col_id++;
@@ -447,7 +447,11 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 }
 
 DataChunk &StringValueResult::ToChunk() {
-	parse_chunk.SetCardinality(number_of_rows);
+	if (number_of_rows < 0) {
+		throw InternalException("CSVScanner: ToChunk() function. Has a negative number of rows, this indicates an "
+		                        "issue with the error handler.");
+	}
+	parse_chunk.SetCardinality(static_cast<idx_t>(number_of_rows));
 	return parse_chunk;
 }
 
@@ -658,7 +662,7 @@ bool LineError::HandleErrors(StringValueResult &result) {
 			result.RemoveLastLine();
 		} else {
 			// Otherwise, we add it to the borked rows to remove it later and just cleanup the column variables.
-			result.borked_rows.insert(result.number_of_rows);
+			result.borked_rows.insert(static_cast<idx_t>(result.number_of_rows));
 			result.cur_col_id = 0;
 			result.chunk_col_id = 0;
 		}
@@ -740,9 +744,9 @@ bool StringValueResult::AddRowInternal() {
 	}
 
 	if (current_errors.HandleErrors(*this)) {
-		line_positions_per_row[number_of_rows] = current_line_position;
+		line_positions_per_row[static_cast<idx_t>(number_of_rows)] = current_line_position;
 		number_of_rows++;
-		if (number_of_rows >= result_size) {
+		if (static_cast<idx_t>(number_of_rows) >= result_size) {
 			// We have a full chunk
 			return true;
 		}
@@ -769,7 +773,7 @@ bool StringValueResult::AddRowInternal() {
 				if (empty) {
 					static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = string_t();
 				} else {
-					validity_mask[chunk_col_id]->SetInvalid(number_of_rows);
+					validity_mask[chunk_col_id]->SetInvalid(static_cast<idx_t>(number_of_rows));
 				}
 				cur_col_id++;
 				chunk_col_id++;
@@ -799,11 +803,11 @@ bool StringValueResult::AddRowInternal() {
 			RemoveLastLine();
 		}
 	}
-	line_positions_per_row[number_of_rows] = current_line_position;
+	line_positions_per_row[static_cast<idx_t>(number_of_rows)] = current_line_position;
 	cur_col_id = 0;
 	chunk_col_id = 0;
 	number_of_rows++;
-	if (number_of_rows >= result_size) {
+	if (static_cast<idx_t>(number_of_rows) >= result_size) {
 		// We have a full chunk
 		return true;
 	}
@@ -861,12 +865,12 @@ bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_
 				if (empty) {
 					static_cast<string_t *>(result.vector_ptr[0])[result.number_of_rows] = string_t();
 				} else {
-					result.validity_mask[0]->SetInvalid(result.number_of_rows);
+					result.validity_mask[0]->SetInvalid(static_cast<idx_t>(result.number_of_rows));
 				}
 				result.number_of_rows++;
 			}
 		}
-		if (result.number_of_rows >= result.result_size) {
+		if (static_cast<idx_t>(result.number_of_rows) >= result.result_size) {
 			// We have a full chunk
 			return true;
 		}
@@ -1389,15 +1393,13 @@ void StringValueResult::SkipBOM() const {
 void StringValueResult::RemoveLastLine() {
 	// potentially de-nullify values
 	for (idx_t i = 0; i < chunk_col_id; i++) {
-		validity_mask[i]->SetValid(number_of_rows);
+		validity_mask[i]->SetValid(static_cast<idx_t>(number_of_rows));
 	}
 	// reset column trackers
 	cur_col_id = 0;
 	chunk_col_id = 0;
 	// decrement row counter
-	if (number_of_rows > 0) {
-		number_of_rows--;
-	}
+	number_of_rows--;
 }
 bool StringValueResult::PrintErrorLine() const {
 	// To print a lint, result size must be different, than one (i.e., this is a SetStart() trying to figure out new
@@ -1522,7 +1524,7 @@ void StringValueScanner::SetStart() {
 }
 
 void StringValueScanner::FinalizeChunkProcess() {
-	if (result.number_of_rows >= result.result_size || iterator.done) {
+	if (static_cast<idx_t>(result.number_of_rows) >= result.result_size || iterator.done) {
 		// We are done
 		if (!sniffing) {
 			if (csv_file_scan) {
@@ -1560,14 +1562,18 @@ void StringValueScanner::FinalizeChunkProcess() {
 			if (result.current_errors.HasErrorType(UNTERMINATED_QUOTES)) {
 				has_unterminated_quotes = true;
 			}
-			result.current_errors.HandleErrors(result);
+			if (result.current_errors.HandleErrors(result)) {
+				result.number_of_rows++;
+			}
 		}
 		if (states.IsQuotedCurrent() && !has_unterminated_quotes) {
 			// If we finish the execution of a buffer, and we end in a quoted state, it means we have unterminated
 			// quotes
 			result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id,
 			                             result.last_position);
-			result.current_errors.HandleErrors(result);
+			if (result.current_errors.HandleErrors(result)) {
+				result.number_of_rows++;
+			}
 		}
 		if (!iterator.done) {
 			if (iterator.pos.buffer_pos >= iterator.GetEndPos() || iterator.pos.buffer_idx > iterator.GetBufferIdx() ||
@@ -1578,9 +1584,9 @@ void StringValueScanner::FinalizeChunkProcess() {
 	} else {
 		// 2) If a boundary is not set
 		// We read until the chunk is complete, or we have nothing else to read.
-		while (!FinishedFile() && result.number_of_rows < result.result_size) {
+		while (!FinishedFile() && static_cast<idx_t>(result.number_of_rows) < result.result_size) {
 			MoveToNextBuffer();
-			if (result.number_of_rows >= result.result_size) {
+			if (static_cast<idx_t>(result.number_of_rows) >= result.result_size) {
 				return;
 			}
 			if (cur_buffer_handle) {
@@ -1590,7 +1596,7 @@ void StringValueScanner::FinalizeChunkProcess() {
 		iterator.done = FinishedFile();
 		if (result.null_padding && result.number_of_rows < STANDARD_VECTOR_SIZE && result.chunk_col_id > 0) {
 			while (result.chunk_col_id < result.parse_chunk.ColumnCount()) {
-				result.validity_mask[result.chunk_col_id++]->SetInvalid(result.number_of_rows);
+				result.validity_mask[result.chunk_col_id++]->SetInvalid(static_cast<idx_t>(result.number_of_rows));
 				result.cur_col_id++;
 			}
 			result.number_of_rows++;
