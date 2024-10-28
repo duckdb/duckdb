@@ -1,6 +1,6 @@
-# name: benchmark/realnest/12_map_list_values.benchmark
+# name: benchmark/realnest/micro/12_map_list_values.benchmark
 # description: Map list values
-# group: [realnest]
+# group: [micro]
 
 name map_list_values
 group real_nest

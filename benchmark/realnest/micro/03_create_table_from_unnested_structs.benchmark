@@ -1,6 +1,6 @@
-# name: benchmark/realnest/03_create_table_from_unnested_structs.benchmark
+# name: benchmark/realnest/micro/03_create_table_from_unnested_structs.benchmark
 # description: Create a table by unnesting and joining the structs in a JSON file
-# group: [realnest]
+# group: [micro]
 
 name create_table_from_unnested_structs
 group real_nest

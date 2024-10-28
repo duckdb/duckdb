@@ -1,6 +1,6 @@
-# name: benchmark/realnest/05_list_filter.benchmark
+# name: benchmark/realnest/micro/05_list_filter.benchmark
 # description: Multiple list_filters
-# group: [realnest]
+# group: [micro]
 
 name list_filters
 group real_nest

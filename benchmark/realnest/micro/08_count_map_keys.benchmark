@@ -1,6 +1,6 @@
-# name: benchmark/realnest/08_count_map_keys.benchmark
+# name: benchmark/realnest/micro/08_count_map_keys.benchmark
 # description: Count map keys and aggregate them
-# group: [realnest]
+# group: [micro]
 
 name count_map_keys
 group real_nest

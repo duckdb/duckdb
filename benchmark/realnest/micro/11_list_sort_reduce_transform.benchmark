@@ -1,6 +1,6 @@
-# name: benchmark/realnest/11_list_sort_reduce_transform.benchmark
+# name: benchmark/realnest/micro/11_list_sort_reduce_transform.benchmark
 # description: Transform, aggregate, reduce and sort a list
-# group: [realnest]
+# group: [micro]
 
 name list_sort_reduce_transform
 group real_nest
