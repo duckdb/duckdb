@@ -54,9 +54,6 @@ private:
 	void RegisterArrowFunctions();
 	void RegisterSnifferFunction();
 
-	// aggregates
-	void RegisterDistributiveAggregates();
-
 	void RegisterExtensionOverloads();
 
 	// pragmas
