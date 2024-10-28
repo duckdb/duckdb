@@ -1503,8 +1503,13 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::BLOB:
 		return "'" + ToString() + "'::" + type_.ToString();
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::ENUM:
+	case LogicalTypeId::ENUM: {
+		auto str_val = ToString();
+		if (str_val.size() == 1 && str_val[0] == '\0') {
+			return "chr(0)";
+		}
 		return "'" + StringUtil::Replace(ToString(), "'", "''") + "'";
+	}
 	case LogicalTypeId::STRUCT: {
 		bool is_unnamed = StructType::IsUnnamed(type_);
 		string ret = is_unnamed ? "(" : "{";

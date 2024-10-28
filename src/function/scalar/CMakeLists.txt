@@ -3,7 +3,7 @@ add_subdirectory(date)
 add_subdirectory(generic)
 add_subdirectory(list)
 add_subdirectory(map)
-add_subdirectory(operators)
+add_subdirectory(operator)
 add_subdirectory(sequence)
 add_subdirectory(string)
 add_subdirectory(struct)
@@ -15,9 +15,7 @@ add_library_unity(
   create_sort_key.cpp
   strftime_format.cpp
   nested_functions.cpp
-  operators.cpp
-  pragma_functions.cpp
-  sequence_functions.cpp)
+  pragma_functions.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_scalar>
     PARENT_SCOPE)

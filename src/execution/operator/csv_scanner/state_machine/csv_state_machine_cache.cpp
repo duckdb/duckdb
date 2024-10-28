@@ -59,7 +59,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 			if (state == static_cast<uint8_t>(CSVState::STANDARD_NEWLINE)) {
 				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::STANDARD;
 			} else {
-				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::INVALID;
+				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::RECORD_SEPARATOR;
 			}
 		} else {
 			transition_array[static_cast<uint8_t>('\r')][state] = CSVState::RECORD_SEPARATOR;

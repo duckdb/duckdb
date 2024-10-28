@@ -80,10 +80,6 @@ vector<string> MultiFileReader::ParsePaths(const Value &input) {
 
 shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
                                                           FileGlobOptions options) {
-	auto &config = DBConfig::GetConfig(context);
-	if (!config.options.enable_external_access) {
-		throw PermissionException("Scanning %s files is disabled through configuration", function_name);
-	}
 	vector<string> result_files;
 
 	auto res = make_uniq<GlobMultiFileList>(context, paths, options);

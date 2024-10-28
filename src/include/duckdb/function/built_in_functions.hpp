@@ -57,11 +57,6 @@ private:
 	// aggregates
 	void RegisterDistributiveAggregates();
 
-	// scalar functions
-	void RegisterOperators();
-	void RegisterNestedFunctions();
-	void RegisterSequenceFunctions();
-
 	void RegisterExtensionOverloads();
 
 	// pragmas

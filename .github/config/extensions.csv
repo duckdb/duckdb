@@ -15,4 +15,4 @@ aws,https://github.com/duckdb/duckdb_aws,f7b8729f1cce5ada5d4add70e1486de50763fb9
 azure,https://github.com/duckdb/duckdb_azure,09623777a366572bfb8fa53e47acdf72133a360e,
 spatial,https://github.com/duckdb/duckdb_spatial,bb9c829693965f029eb5a312aefed4c538fad781,
 iceberg,https://github.com/duckdb/duckdb_iceberg,d89423c2ff90a0b98a093a133c8dfe2a55b9e092,
-vss,https://github.com/duckdb/duckdb_vss,9ff608f1edc6a1da2e41ee41b1ef42ba3169e71c,
+vss,https://github.com/duckdb/duckdb_vss,74137d802e0867966a604ba7dc49eefc18d1ee7f,

@@ -45,7 +45,9 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 				throw BinderException("Database \"%s\" is already attached in %s mode, cannot re-attach in %s mode",
 				                      name, existing_mode_str, attached_mode);
 			}
-
+			if (!options.default_table.name.empty()) {
+				existing_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
+			}
 			return SourceResultType::FINISHED;
 		}
 	}
@@ -71,6 +73,9 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	//! Initialize the database.
 	const auto storage_options = info->GetStorageOptions();
 	attached_db->Initialize(storage_options);
+	if (!options.default_table.name.empty()) {
+		attached_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
+	}
 	return SourceResultType::FINISHED;
 }
 

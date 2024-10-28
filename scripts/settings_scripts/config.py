@@ -100,12 +100,19 @@ class Setting:
 
     # validate and return the correct type format
     def _get_sql_type(self, sql_type) -> str:
+        if sql_type.endswith('[]'):
+            # recurse into child-element
+            sub_type = self._get_sql_type(sql_type[:-2])
+            return sql_type
         if sql_type in SQL_TYPE_MAP:
             return sql_type
         raise ValueError(f"Invalid SQL type: '{sql_type}' - supported types are {', '.join(SQL_TYPE_MAP.keys())}")
 
     # validate and return the cpp input type
     def _get_setting_type(self, type) -> str:
+        if type.endswith('[]'):
+            subtype = self._get_setting_type(type[:-2])
+            return "vector<" + subtype + ">"
         return SQL_TYPE_MAP[type]
 
     # validate and return the correct type format
