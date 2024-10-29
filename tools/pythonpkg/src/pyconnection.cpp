@@ -1495,7 +1495,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const py::object &quer
 
 	if (!relation) {
 		// Could not create a relation, resort to direct execution
-		// FIXME: use PrepareAndExecute for all
 		unique_ptr<QueryResult> res;
 
 		res = PrepareAndExecuteInternal(std::move(last_statement), std::move(params));
