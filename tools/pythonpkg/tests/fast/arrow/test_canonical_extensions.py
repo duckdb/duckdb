@@ -5,9 +5,10 @@ import json
 from uuid import UUID
 import datetime
 
-pa = pytest.importorskip('pyarrow')
+pa = pytest.importorskip('pyarrow', '18.0.0')
 
 from arrow_canonical_extensions import UHugeIntType, HugeIntType, VarIntType
+
 
 """
     These fixtures make sure that the extension_type is registered at the start of the function,
