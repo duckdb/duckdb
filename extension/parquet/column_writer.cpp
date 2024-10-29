@@ -2355,3 +2355,22 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 }
 
 } // namespace duckdb
+
+
+
+template <>
+struct std::hash<duckdb::ParquetIntervalTargetType> {
+	inline size_t operator()(const duckdb::ParquetIntervalTargetType &val) const {
+		return duckdb::Hash(duckdb::const_char_ptr_cast(val.bytes), duckdb::ParquetIntervalTargetType::PARQUET_INTERVAL_SIZE);
+	}
+};
+
+
+template <>
+struct std::hash<duckdb::ParquetUUIDTargetType> {
+	inline size_t operator()(const duckdb::ParquetUUIDTargetType &val) const {
+		return duckdb::Hash(duckdb::const_char_ptr_cast(val.bytes), duckdb::ParquetUUIDTargetType::PARQUET_UUID_SIZE);
+	}
+};
+
+
