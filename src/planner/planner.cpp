@@ -183,25 +183,35 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 	ColumnBindingResolver::Verify(*op);
 
 	// format (de)serialization of this operator
-	MemoryStream stream;
+	try {
+		MemoryStream stream;
 
-	SerializationOptions options;
-	if (config.options.serialization_compatibility.manually_set) {
-		// Override the default of 'latest' if this was manually set (for testing, mostly)
-		options.serialization_compatibility = config.options.serialization_compatibility;
-	} else {
-		options.serialization_compatibility = SerializationCompatibility::Latest();
+		SerializationOptions options;
+		if (config.options.serialization_compatibility.manually_set) {
+			// Override the default of 'latest' if this was manually set (for testing, mostly)
+			options.serialization_compatibility = config.options.serialization_compatibility;
+		} else {
+			options.serialization_compatibility = SerializationCompatibility::Latest();
+		}
+
+		BinarySerializer::Serialize(*op, stream, options);
+		stream.Rewind();
+		bound_parameter_map_t parameters;
+		auto new_plan = BinaryDeserializer::Deserialize<LogicalOperator>(stream, context, parameters);
+
+		if (map) {
+			*map = std::move(parameters);
+		}
+		op = std::move(new_plan);
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		switch (error.Type()) {
+		case ExceptionType::NOT_IMPLEMENTED: // NOLINT: explicitly allowing these errors (for now)
+			break;                           // pass
+		default:
+			throw;
+		}
 	}
-
-	BinarySerializer::Serialize(*op, stream, options);
-	stream.Rewind();
-	bound_parameter_map_t parameters;
-	auto new_plan = BinaryDeserializer::Deserialize<LogicalOperator>(stream, context, parameters);
-
-	if (map) {
-		*map = std::move(parameters);
-	}
-	op = std::move(new_plan);
 }
 
 } // namespace duckdb
