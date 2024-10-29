@@ -27,7 +27,7 @@ jobs:
     steps:
       - name: Add comment
         run: |
-          cat > needs-reproducible-example-comment.md << EOF
+          cat > needs-reproducible-example-comment.md << EOF
           Thanks for opening this issue in the DuckDB issue tracker! To resolve this issue, our team needs a reproducible example. This includes:
 
           * A source code snippet which reproduces the issue.
