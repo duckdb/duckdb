@@ -83,6 +83,8 @@ struct ZSTDStorage {
 	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
 	static void StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
 	                           idx_t result_idx);
+	static void StringSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
+	}
 
 	// Segment state metadata
 	// Required because we are creating additional pages that have to be cleaned up
@@ -1149,7 +1151,7 @@ CompressionFunction ZSTDFun::GetFunction(PhysicalType data_type) {
 	    CompressionType::COMPRESSION_ZSTD, data_type, ZSTDStorage::StringInitAnalyze, ZSTDStorage::StringAnalyze,
 	    ZSTDStorage::StringFinalAnalyze, ZSTDStorage::PrepareCompress, ZSTDStorage::InitCompression,
 	    ZSTDStorage::Compress, ZSTDStorage::FinalizeCompress, ZSTDStorage::StringInitScan, ZSTDStorage::StringScan,
-	    ZSTDStorage::StringScanPartial, ZSTDStorage::StringFetchRow, UncompressedFunctions::EmptySkip);
+	    ZSTDStorage::StringScanPartial, ZSTDStorage::StringFetchRow, ZSTDStorage::StringSkip);
 	zstd.init_segment = ZSTDStorage::StringInitSegment;
 	zstd.serialize_state = ZSTDStorage::SerializeState;
 	zstd.deserialize_state = ZSTDStorage::DeserializeState;
