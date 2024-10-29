@@ -47,7 +47,7 @@ static void RegisterFunctionList(Catalog &catalog, CatalogTransaction transactio
 }
 
 void FunctionList::RegisterFunctions(Catalog &catalog, CatalogTransaction transaction) {
-	RegisterFunctionList(catalog, transaction, FunctionList::GetInternalFunctionList()); // issue !?
+	RegisterFunctionList(catalog, transaction, FunctionList::GetInternalFunctionList());
 }
 
 } // namespace duckdb
