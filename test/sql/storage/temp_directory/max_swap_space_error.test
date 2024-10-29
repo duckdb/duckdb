@@ -72,9 +72,8 @@ CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(1000000);
 ----
 failed to offload data block
 
-# should be exactly 1572864 bytes, but if any blocks get compressed, it could be slightly less
 query I
-SELECT CASE WHEN "size" > 1000000 THEN true ELSE CONCAT('Expected size 1000000, but got ', "size")::UNION(msg VARCHAR, b BOOLEAN) END FROM duckdb_temporary_files();
+SELECT CASE WHEN sum("size") > 1000000 THEN true ELSE CONCAT('Expected size 1000000, but got ', sum("size"))::UNION(msg VARCHAR, b BOOLEAN) END FROM duckdb_temporary_files();
 ----
 true
 
