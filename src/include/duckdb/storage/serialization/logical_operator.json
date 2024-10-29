@@ -166,7 +166,8 @@
       {
         "id": 201,
         "name": "projections",
-        "type": "vector<idx_t>"
+        "type": "vector<idx_t>",
+        "property": "projection_map"
       }
     ],
     "constructor": ["orders"]

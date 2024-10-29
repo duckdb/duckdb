@@ -26,11 +26,11 @@ do
         # calculate SHA256 hash of extension binary
         cat $f > $f.append
         # 0 for custom section
-        # 113 in hex = 275 in decimal, total lenght of what follows (1 + 16 + 2 + 256)
+        # 113 in hex = 275 in decimal, total length of what follows (1 + 16 + 2 + 256)
         # [1(continuation) + 0010011(payload) = \x93, 0(continuation) + 10(payload) = \x02]
         echo -n -e '\x00' >> $f.append
         echo -n -e '\x93\x02' >> $f.append
-        # 10 in hex = 16 in decimal, lenght of name, 1 byte
+        # 10 in hex = 16 in decimal, length of name, 1 byte
         echo -n -e '\x10' >> $f.append
         echo -n -e 'duckdb_signature' >> $f.append
         # the name of the WebAssembly custom section, 16 bytes

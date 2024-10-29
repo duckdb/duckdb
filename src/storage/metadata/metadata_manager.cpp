@@ -50,7 +50,7 @@ MetadataHandle MetadataManager::AllocateHandle() {
 	return Pin(pointer);
 }
 
-MetadataHandle MetadataManager::Pin(MetadataPointer pointer) {
+MetadataHandle MetadataManager::Pin(const MetadataPointer &pointer) {
 	D_ASSERT(pointer.index < METADATA_BLOCK_COUNT);
 	auto &block = blocks[UnsafeNumericCast<int64_t>(pointer.block_index)];
 
@@ -111,7 +111,7 @@ void MetadataManager::AddAndRegisterBlock(MetadataBlock block) {
 	AddBlock(std::move(block), true);
 }
 
-MetaBlockPointer MetadataManager::GetDiskPointer(MetadataPointer pointer, uint32_t offset) {
+MetaBlockPointer MetadataManager::GetDiskPointer(const MetadataPointer &pointer, uint32_t offset) {
 	idx_t block_pointer = idx_t(pointer.block_index);
 	block_pointer |= idx_t(pointer.index) << 56ULL;
 	return MetaBlockPointer(block_pointer, offset);
