@@ -54,7 +54,7 @@ bool DBConfigOptions::debug_print_bindings = false;
 		    _PARAM::ResetLocal, _PARAM::GetSetting                                                                     \
 	}
 #define FINAL_SETTING                                                                                                  \
-	{ nullptr, nullptr, LogicalTypeId::INVALID, nullptr, nullptr, nullptr, nullptr, nullptr }
+	{ nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr }
 
 static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(AccessModeSetting),
@@ -66,6 +66,8 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(AllowPersistentSecretsSetting),
     DUCKDB_GLOBAL(AllowUnredactedSecretsSetting),
     DUCKDB_GLOBAL(AllowUnsignedExtensionsSetting),
+    DUCKDB_GLOBAL(AllowedDirectoriesSetting),
+    DUCKDB_GLOBAL(AllowedPathsSetting),
     DUCKDB_GLOBAL(ArrowLargeBufferSizeSetting),
     DUCKDB_GLOBAL(ArrowLosslessConversionSetting),
     DUCKDB_GLOBAL(ArrowOutputListViewSetting),
@@ -241,7 +243,7 @@ void DBConfig::SetOption(DatabaseInstance *db, const ConfigurationOption &option
 		throw InvalidInputException("Could not set option \"%s\" as a global option", option.name);
 	}
 	D_ASSERT(option.reset_global);
-	Value input = value.DefaultCastAs(option.parameter_type);
+	Value input = value.DefaultCastAs(ParseLogicalType(option.parameter_type));
 	option.set_global(db, *this, input);
 }
 
@@ -271,6 +273,27 @@ void DBConfig::ResetOption(const string &name) {
 		// Otherwise just remove it from the 'set_variables' map
 		options.set_variables.erase(name);
 	}
+}
+
+LogicalType DBConfig::ParseLogicalType(const string &type) {
+	if (StringUtil::EndsWith(type, "[]")) {
+		// array - recurse
+		auto child_type = ParseLogicalType(type.substr(0, type.size() - 2));
+		return LogicalType::LIST(child_type);
+	}
+	if (StringUtil::EndsWith(type, "()")) {
+		if (type != "STRUCT()") {
+			throw InternalException("Error while generating extension function overloads - expected STRUCT(), not %s",
+			                        type);
+		}
+		return LogicalType::STRUCT({});
+	}
+	auto type_id = TransformStringToLogicalTypeId(type);
+	if (type_id == LogicalTypeId::USER) {
+		throw InternalException("Error while generating extension function overloads - unrecognized logical type %s",
+		                        type);
+	}
+	return type_id;
 }
 
 void DBConfig::AddExtensionOption(const string &name, string description, LogicalType parameter,
@@ -322,7 +345,9 @@ void DBConfig::SetDefaultMaxMemory() {
 }
 
 void DBConfig::SetDefaultTempDirectory() {
-	if (DBConfig::IsInMemoryDatabase(options.database_path.c_str())) {
+	if (!options.use_temporary_directory) {
+		options.temporary_directory = string();
+	} else if (DBConfig::IsInMemoryDatabase(options.database_path.c_str())) {
 		options.temporary_directory = ".tmp";
 	} else {
 		options.temporary_directory = options.database_path + ".tmp";
@@ -546,6 +571,94 @@ const string DBConfig::UserAgent() const {
 		user_agent += " " + options.custom_user_agent;
 	}
 	return user_agent;
+}
+
+string DBConfig::SanitizeAllowedPath(const string &path) const {
+	auto path_sep = file_system->PathSeparator(path);
+	if (path_sep != "/") {
+		// allowed_directories/allowed_path always uses forward slashes regardless of the OS
+		return StringUtil::Replace(path, path_sep, "/");
+	}
+	return path;
+}
+
+void DBConfig::AddAllowedDirectory(const string &path) {
+	auto allowed_directory = SanitizeAllowedPath(path);
+	if (allowed_directory.empty()) {
+		throw InvalidInputException("Cannot provide an empty string for allowed_directory");
+	}
+	// ensure the directory ends with a path separator
+	if (!StringUtil::EndsWith(allowed_directory, "/")) {
+		allowed_directory += "/";
+	}
+	options.allowed_directories.insert(allowed_directory);
+}
+
+void DBConfig::AddAllowedPath(const string &path) {
+	auto allowed_path = SanitizeAllowedPath(path);
+	options.allowed_paths.insert(allowed_path);
+}
+
+bool DBConfig::CanAccessFile(const string &input_path, FileType type) {
+	if (options.enable_external_access) {
+		// all external access is allowed
+		return true;
+	}
+	string path = SanitizeAllowedPath(input_path);
+	if (options.allowed_paths.count(path) > 0) {
+		// path is explicitly allowed
+		return true;
+	}
+	if (options.allowed_directories.empty()) {
+		// no prefix directories specified
+		return false;
+	}
+	if (type == FileType::FILE_TYPE_DIR) {
+		// make sure directories end with a /
+		if (!StringUtil::EndsWith(path, "/")) {
+			path += "/";
+		}
+	}
+	auto start_bound = options.allowed_directories.lower_bound(path);
+	if (start_bound != options.allowed_directories.begin()) {
+		--start_bound;
+	}
+	auto end_bound = options.allowed_directories.upper_bound(path);
+
+	string prefix;
+	for (auto it = start_bound; it != end_bound; ++it) {
+		if (StringUtil::StartsWith(path, *it)) {
+			prefix = *it;
+			break;
+		}
+	}
+	if (prefix.empty()) {
+		// no common prefix found - path is not inside an allowed directory
+		return false;
+	}
+	D_ASSERT(StringUtil::EndsWith(prefix, "/"));
+	// path is inside an allowed directory - HOWEVER, we could still exit the allowed directory using ".."
+	// we check if we ever exit the allowed directory using ".." by looking at the path fragments
+	idx_t directory_level = 0;
+	idx_t current_pos = prefix.size();
+	for (; current_pos < path.size(); current_pos++) {
+		idx_t dir_begin = current_pos;
+		// find either the end of the path or the directory separator
+		for (; path[current_pos] != '/' && current_pos < path.size(); current_pos++) {
+		}
+		idx_t path_length = current_pos - dir_begin;
+		if (path_length == 2 && path[dir_begin] == '.' && path[dir_begin + 1] == '.') {
+			// go up a directory
+			if (directory_level == 0) {
+				// we cannot go up past the prefix
+				return false;
+			}
+			--directory_level;
+		} else if (path_length > 0) {
+			directory_level++;
+		}
+	}
+	return true;
 }
 
 SerializationCompatibility SerializationCompatibility::FromString(const string &input) {

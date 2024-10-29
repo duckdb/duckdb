@@ -160,7 +160,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		vector<unique_ptr<Expression>> expressions;
 		for (auto &column_id : column_ids) {
 			if (column_id.IsRowIdColumn()) {
-				types.emplace_back(LogicalType::BIGINT);
+				types.emplace_back(LogicalType::ROW_TYPE);
 				expressions.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(0)));
 			} else {
 				auto col_id = column_id.GetPrimaryIndex();

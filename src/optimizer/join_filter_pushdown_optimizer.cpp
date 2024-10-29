@@ -2,7 +2,7 @@
 
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -213,8 +213,8 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 	}
 	// set up the min/max aggregates for each of the filters
 	vector<AggregateFunction> aggr_functions;
-	aggr_functions.push_back(MinFun::GetFunction());
-	aggr_functions.push_back(MaxFun::GetFunction());
+	aggr_functions.push_back(MinFunction::GetFunction());
+	aggr_functions.push_back(MaxFunction::GetFunction());
 	for (auto &join_condition : pushdown_info->join_condition) {
 		for (auto &aggr : aggr_functions) {
 			FunctionBinder function_binder(optimizer.GetContext());

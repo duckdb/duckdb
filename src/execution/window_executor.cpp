@@ -473,44 +473,40 @@ static idx_t FindOrderedRangeBound(WindowCursor &over, const OrderType range_sen
 }
 
 struct WindowBoundariesState {
-	static inline bool IsScalar(const unique_ptr<Expression> &expr) {
-		return !expr || expr->IsScalar();
-	}
-
-	static inline bool BoundaryNeedsPeer(const WindowBoundary &boundary) {
-		switch (boundary) {
-		case WindowBoundary::CURRENT_ROW_RANGE:
-		case WindowBoundary::EXPR_PRECEDING_RANGE:
-		case WindowBoundary::EXPR_FOLLOWING_RANGE:
-			return true;
-		default:
-			return false;
-		}
-	}
-
-	static inline bool ExpressionNeedsPeer(const ExpressionType &type) {
-		switch (type) {
-		case ExpressionType::WINDOW_RANK:
-		case ExpressionType::WINDOW_RANK_DENSE:
-		case ExpressionType::WINDOW_PERCENT_RANK:
-		case ExpressionType::WINDOW_CUME_DIST:
-			return true;
-		default:
-			return false;
-		}
-	}
 
 	WindowBoundariesState(const BoundWindowExpression &wexpr, const idx_t input_size);
 
-	void Update(const idx_t row_idx, optional_ptr<WindowCursor> range_collection, const idx_t chunk_idx,
-	            WindowInputExpression &boundary_start, WindowInputExpression &boundary_end,
-	            const ValidityMask &partition_mask, const ValidityMask &order_mask);
+	// Generate the partition start indices
+	void PartitionBegin(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump,
+	                    const ValidityMask &partition_mask);
+	void PartitionEnd(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump,
+	                  const ValidityMask &partition_mask);
+	void PeerBegin(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump,
+	               const ValidityMask &partition_mask, const ValidityMask &order_mask);
+	void PeerEnd(DataChunk &bounds, idx_t row_idx, const idx_t count, const ValidityMask &partition_mask,
+	             const ValidityMask &order_mask);
+	void ValidBegin(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump,
+	                const ValidityMask &partition_mask, const ValidityMask &order_mask,
+	                optional_ptr<WindowCursor> range);
+	void ValidEnd(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump, const ValidityMask &partition_mask,
+	              const ValidityMask &order_mask, optional_ptr<WindowCursor> range);
+	void FrameBegin(DataChunk &bounds, idx_t row_idx, const idx_t count, WindowInputExpression &boundary_begin,
+	                optional_ptr<WindowCursor> range);
+	void FrameEnd(DataChunk &bounds, idx_t row_idx, const idx_t count, WindowInputExpression &boundary_end,
+	              optional_ptr<WindowCursor> range);
+
+	static void ClampFrame(const idx_t count, idx_t *values, const idx_t *begin, const idx_t *end) {
+		for (idx_t i = 0; i < count; ++i) {
+			values[i] = MinValue(MaxValue(values[i], begin[i]), end[i]);
+		}
+	}
 
 	void Bounds(DataChunk &bounds, idx_t row_idx, optional_ptr<WindowCursor> range, const idx_t count,
 	            WindowInputExpression &boundary_start, WindowInputExpression &boundary_end,
 	            const ValidityMask &partition_mask, const ValidityMask &order_mask);
 
 	// Cached lookups
+	WindowBoundsSet required;
 	const ExpressionType type;
 	const idx_t input_size;
 	const WindowBoundary start_boundary;
@@ -520,57 +516,321 @@ struct WindowBoundariesState {
 	const OrderType range_sense;
 	const bool has_preceding_range;
 	const bool has_following_range;
-	const bool needs_peer;
 
+	// Carried between chunks
 	idx_t next_pos = 0;
 	idx_t partition_start = 0;
 	idx_t partition_end = 0;
 	idx_t peer_start = 0;
-	idx_t peer_end = 0;
 	idx_t valid_start = 0;
 	idx_t valid_end = 0;
-	idx_t window_start = NumericLimits<idx_t>::Maximum();
-	idx_t window_end = NumericLimits<idx_t>::Maximum();
+
 	FrameBounds prev;
 };
 
 //===--------------------------------------------------------------------===//
 // WindowBoundariesState
 //===--------------------------------------------------------------------===//
-void WindowBoundariesState::Update(const idx_t row_idx, optional_ptr<WindowCursor> range, const idx_t chunk_idx,
-                                   WindowInputExpression &boundary_start, WindowInputExpression &boundary_end,
-                                   const ValidityMask &partition_mask, const ValidityMask &order_mask) {
+static bool HasPrecedingRange(const BoundWindowExpression &wexpr) {
+	return (wexpr.start == WindowBoundary::EXPR_PRECEDING_RANGE || wexpr.end == WindowBoundary::EXPR_PRECEDING_RANGE);
+}
 
-	if (partition_count + order_count > 0) {
+static bool HasFollowingRange(const BoundWindowExpression &wexpr) {
+	return (wexpr.start == WindowBoundary::EXPR_FOLLOWING_RANGE || wexpr.end == WindowBoundary::EXPR_FOLLOWING_RANGE);
+}
 
+static WindowBoundsSet GetWindowBounds(const BoundWindowExpression &wexpr) {
+	const auto partition_count = wexpr.partitions.size();
+	const auto order_count = wexpr.orders.size();
+
+	WindowBoundsSet result;
+	switch (wexpr.type) {
+	case ExpressionType::WINDOW_ROW_NUMBER:
+		result.insert(PARTITION_BEGIN);
+		break;
+	case ExpressionType::WINDOW_RANK_DENSE:
+	case ExpressionType::WINDOW_RANK:
+		result.insert(PARTITION_BEGIN);
+		result.insert(PEER_BEGIN);
+		break;
+	case ExpressionType::WINDOW_PERCENT_RANK:
+		result.insert(PARTITION_BEGIN);
+		result.insert(PARTITION_END);
+		result.insert(PEER_BEGIN);
+		break;
+	case ExpressionType::WINDOW_CUME_DIST:
+		result.insert(PARTITION_BEGIN);
+		result.insert(PARTITION_END);
+		result.insert(PEER_END);
+		break;
+	case ExpressionType::WINDOW_NTILE:
+	case ExpressionType::WINDOW_LEAD:
+	case ExpressionType::WINDOW_LAG:
+		result.insert(PARTITION_BEGIN);
+		result.insert(PARTITION_END);
+		break;
+	case ExpressionType::WINDOW_FIRST_VALUE:
+	case ExpressionType::WINDOW_LAST_VALUE:
+	case ExpressionType::WINDOW_NTH_VALUE:
+	case ExpressionType::WINDOW_AGGREGATE:
+		result.insert(PARTITION_BEGIN);
+		result.insert(PARTITION_END);
+		result.insert(FRAME_BEGIN);
+		result.insert(FRAME_END);
+
+		// if we have EXCLUDE GROUP / TIES, we also need peer boundaries
+		if (wexpr.exclude_clause != WindowExcludeMode::NO_OTHER) {
+			result.insert(PEER_BEGIN);
+			result.insert(PEER_END);
+		}
+
+		// If the frames are RANGE, then we need peer boundaries
+		// If they are preceding or following, we also need to know
+		// where the valid values begin or end.
+		switch (wexpr.start) {
+		case WindowBoundary::CURRENT_ROW_RANGE:
+			result.insert(PEER_BEGIN);
+			break;
+		case WindowBoundary::EXPR_PRECEDING_RANGE:
+			result.insert(PEER_BEGIN);
+			result.insert(VALID_BEGIN);
+			result.insert(VALID_END);
+			break;
+		case WindowBoundary::EXPR_FOLLOWING_RANGE:
+			result.insert(PEER_BEGIN);
+			result.insert(VALID_END);
+			break;
+		default:
+			break;
+		}
+
+		switch (wexpr.end) {
+		case WindowBoundary::CURRENT_ROW_RANGE:
+			result.insert(PEER_END);
+			break;
+		case WindowBoundary::EXPR_PRECEDING_RANGE:
+			result.insert(PEER_END);
+			result.insert(VALID_BEGIN);
+			break;
+		case WindowBoundary::EXPR_FOLLOWING_RANGE:
+			result.insert(PEER_END);
+			result.insert(VALID_BEGIN);
+			result.insert(VALID_END);
+			break;
+		default:
+			break;
+		}
+		break;
+	default:
+		throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr.type));
+	}
+
+	//	Internal dependencies
+	if (result.count(VALID_END)) {
+		result.insert(PARTITION_END);
+		if (HasFollowingRange(wexpr)) {
+			result.insert(VALID_BEGIN);
+		}
+	}
+	if (result.count(VALID_BEGIN)) {
+		result.insert(PARTITION_BEGIN);
+		result.insert(PARTITION_END);
+	}
+	if (result.count(PEER_END)) {
+		result.insert(PARTITION_END);
+		if (order_count) {
+			result.insert(PEER_BEGIN);
+		}
+	}
+	if (result.count(PARTITION_END) && (partition_count + order_count)) {
+		result.insert(PARTITION_BEGIN);
+	}
+
+	return result;
+}
+
+WindowBoundariesState::WindowBoundariesState(const BoundWindowExpression &wexpr, const idx_t input_size)
+    : required(GetWindowBounds(wexpr)), type(wexpr.type), input_size(input_size), start_boundary(wexpr.start),
+      end_boundary(wexpr.end), partition_count(wexpr.partitions.size()), order_count(wexpr.orders.size()),
+      range_sense(wexpr.orders.empty() ? OrderType::INVALID : wexpr.orders[0].type),
+      has_preceding_range(HasPrecedingRange(wexpr)), has_following_range(HasFollowingRange(wexpr)) {
+}
+
+void WindowBoundariesState::Bounds(DataChunk &bounds, idx_t row_idx, optional_ptr<WindowCursor> range,
+                                   const idx_t count, WindowInputExpression &boundary_start,
+                                   WindowInputExpression &boundary_end, const ValidityMask &partition_mask,
+                                   const ValidityMask &order_mask) {
+	bounds.Reset();
+	D_ASSERT(bounds.ColumnCount() == 8);
+
+	const auto is_jump = (next_pos != row_idx);
+	if (required.count(PARTITION_BEGIN)) {
+		PartitionBegin(bounds, row_idx, count, is_jump, partition_mask);
+	}
+	if (required.count(PARTITION_END)) {
+		PartitionEnd(bounds, row_idx, count, is_jump, partition_mask);
+	}
+	if (required.count(PEER_BEGIN)) {
+		PeerBegin(bounds, row_idx, count, is_jump, partition_mask, order_mask);
+	}
+	if (required.count(PEER_END)) {
+		PeerEnd(bounds, row_idx, count, partition_mask, order_mask);
+	}
+	if (required.count(VALID_BEGIN)) {
+		ValidBegin(bounds, row_idx, count, is_jump, partition_mask, order_mask, range);
+	}
+	if (required.count(VALID_END)) {
+		ValidEnd(bounds, row_idx, count, is_jump, partition_mask, order_mask, range);
+	}
+	if (required.count(FRAME_BEGIN)) {
+		FrameBegin(bounds, row_idx, count, boundary_start, range);
+	}
+	if (required.count(FRAME_END)) {
+		FrameEnd(bounds, row_idx, count, boundary_end, range);
+	}
+	next_pos += count;
+
+	bounds.SetCardinality(count);
+}
+
+void WindowBoundariesState::PartitionBegin(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump,
+                                           const ValidityMask &partition_mask) {
+	auto partition_begin_data = FlatVector::GetData<idx_t>(bounds.data[PARTITION_BEGIN]);
+
+	//	OVER()
+	if (partition_count + order_count == 0) {
+		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
+			partition_begin_data[chunk_idx] = 0;
+		}
+		return;
+	}
+
+	for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
 		// determine partition and peer group boundaries to ultimately figure out window size
 		const auto is_same_partition = !partition_mask.RowIsValidUnsafe(row_idx);
-		const auto is_peer = !order_mask.RowIsValidUnsafe(row_idx);
-		const auto is_jump = (next_pos != row_idx);
 
 		// when the partition changes, recompute the boundaries
 		if (!is_same_partition || is_jump) {
 			if (is_jump) {
 				idx_t n = 1;
 				partition_start = FindPrevStart(partition_mask, 0, row_idx + 1, n);
-				n = 1;
-				peer_start = FindPrevStart(order_mask, 0, row_idx + 1, n);
+				is_jump = false;
 			} else {
 				partition_start = row_idx;
-				peer_start = row_idx;
 			}
+		}
 
+		partition_begin_data[chunk_idx] = partition_start;
+	}
+}
+
+void WindowBoundariesState::PartitionEnd(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump,
+                                         const ValidityMask &partition_mask) {
+	auto partition_end_data = FlatVector::GetData<idx_t>(bounds.data[PARTITION_END]);
+
+	//	OVER()
+	if (partition_count + order_count == 0) {
+		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
+			partition_end_data[chunk_idx] = input_size;
+		}
+		return;
+	}
+
+	auto partition_begin_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
+	for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
+		// determine partition and peer group boundaries to ultimately figure out window size
+		const auto is_same_partition = !partition_mask.RowIsValidUnsafe(row_idx);
+
+		// when the partition changes, recompute the boundaries
+		if (!is_same_partition || is_jump) {
 			// find end of partition
 			partition_end = input_size;
 			if (partition_count) {
+				const auto partition_begin = partition_begin_data[chunk_idx];
 				idx_t n = 1;
-				partition_end = FindNextStart(partition_mask, partition_start + 1, input_size, n);
+				partition_end = FindNextStart(partition_mask, partition_begin + 1, input_size, n);
 			}
+			is_jump = false;
+		}
 
+		partition_end_data[chunk_idx] = partition_end;
+	}
+}
+
+void WindowBoundariesState::PeerBegin(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump,
+                                      const ValidityMask &partition_mask, const ValidityMask &order_mask) {
+
+	auto peer_begin_data = FlatVector::GetData<idx_t>(bounds.data[PEER_BEGIN]);
+
+	//	OVER()
+	if (partition_count + order_count == 0) {
+		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
+			peer_begin_data[chunk_idx] = 0;
+		}
+		return;
+	}
+
+	for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
+		// determine partition and peer group boundaries to ultimately figure out window size
+		const auto is_same_partition = !partition_mask.RowIsValidUnsafe(row_idx);
+		const auto is_peer = !order_mask.RowIsValidUnsafe(row_idx);
+
+		// when the partition changes, recompute the boundaries
+		if (!is_same_partition || is_jump) {
+			// find end of partition
+			if (is_jump) {
+				idx_t n = 1;
+				peer_start = FindPrevStart(order_mask, 0, row_idx + 1, n);
+			} else {
+				peer_start = row_idx;
+			}
+			is_jump = false;
+		} else if (!is_peer) {
+			peer_start = row_idx;
+		}
+
+		peer_begin_data[chunk_idx] = peer_start;
+	}
+}
+
+void WindowBoundariesState::PeerEnd(DataChunk &bounds, idx_t row_idx, const idx_t count,
+                                    const ValidityMask &partition_mask, const ValidityMask &order_mask) {
+	//	OVER()
+	if (!order_count) {
+		bounds.data[PEER_END].Reference(bounds.data[PARTITION_END]);
+		return;
+	}
+
+	auto partition_end_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
+	auto peer_begin_data = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);
+	auto peer_end_data = FlatVector::GetData<idx_t>(bounds.data[PEER_END]);
+	for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
+		idx_t n = 1;
+		const auto peer_start = peer_begin_data[chunk_idx];
+		const auto partition_end = partition_end_data[chunk_idx];
+		peer_end_data[chunk_idx] = FindNextStart(order_mask, peer_start + 1, partition_end, n);
+	}
+}
+
+void WindowBoundariesState::ValidBegin(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump,
+                                       const ValidityMask &partition_mask, const ValidityMask &order_mask,
+                                       optional_ptr<WindowCursor> range) {
+	auto partition_begin_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
+	auto partition_end_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
+	auto valid_begin_data = FlatVector::GetData<idx_t>(bounds.data[VALID_BEGIN]);
+
+	//	OVER()
+	D_ASSERT(partition_count + order_count != 0);
+	D_ASSERT(range);
+
+	for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
+		const auto is_same_partition = !partition_mask.RowIsValidUnsafe(row_idx);
+
+		if (!is_same_partition || is_jump) {
 			// Find valid ordering values for the new partition
 			// so we can exclude NULLs from RANGE expression computations
-			valid_start = partition_start;
-			valid_end = partition_end;
+			valid_start = partition_begin_data[chunk_idx];
+			const auto valid_end = partition_end_data[chunk_idx];
 
 			if ((valid_start < valid_end) && has_preceding_range) {
 				// Exclude any leading NULLs
@@ -579,9 +839,34 @@ void WindowBoundariesState::Update(const idx_t row_idx, optional_ptr<WindowCurso
 					valid_start = FindNextStart(order_mask, valid_start + 1, valid_end, n);
 				}
 			}
+		}
+
+		valid_begin_data[chunk_idx] = valid_start;
+	}
+}
+
+void WindowBoundariesState::ValidEnd(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump,
+                                     const ValidityMask &partition_mask, const ValidityMask &order_mask,
+                                     optional_ptr<WindowCursor> range) {
+	auto partition_end_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
+	auto valid_begin_data = FlatVector::GetData<const idx_t>(bounds.data[VALID_BEGIN]);
+	auto valid_end_data = FlatVector::GetData<idx_t>(bounds.data[VALID_END]);
+
+	//	OVER()
+	D_ASSERT(partition_count + order_count != 0);
+	D_ASSERT(range);
+
+	for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
+		const auto is_same_partition = !partition_mask.RowIsValidUnsafe(row_idx);
+
+		if (!is_same_partition || is_jump) {
+			// Find valid ordering values for the new partition
+			// so we can exclude NULLs from RANGE expression computations
+			valid_end = partition_end_data[chunk_idx];
 
 			if ((valid_start < valid_end) && has_following_range) {
 				// Exclude any trailing NULLs
+				const auto valid_start = valid_begin_data[chunk_idx];
 				if (range->CellIsNull(0, valid_end - 1)) {
 					idx_t n = 1;
 					valid_end = FindPrevStart(order_mask, valid_start, valid_end, n);
@@ -591,191 +876,179 @@ void WindowBoundariesState::Update(const idx_t row_idx, optional_ptr<WindowCurso
 				prev.start = valid_start;
 				prev.end = valid_end;
 			}
-		} else if (!is_peer) {
-			peer_start = row_idx;
 		}
 
-		if (needs_peer) {
-			peer_end = partition_end;
-			if (order_count) {
-				idx_t n = 1;
-				peer_end = FindNextStart(order_mask, peer_start + 1, partition_end, n);
-			}
-		}
-
-	} else {
-		//	OVER()
-		partition_end = input_size;
-		peer_end = partition_end;
+		valid_end_data[chunk_idx] = valid_end;
 	}
-	next_pos = row_idx + 1;
+}
 
-	// determine window boundaries depending on the type of expression
+void WindowBoundariesState::FrameBegin(DataChunk &bounds, idx_t row_idx, const idx_t count,
+                                       WindowInputExpression &boundary_begin, optional_ptr<WindowCursor> range) {
+	auto partition_begin_data = FlatVector::GetData<idx_t>(bounds.data[PARTITION_BEGIN]);
+	auto partition_end_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
+	auto peer_begin_data = FlatVector::GetData<idx_t>(bounds.data[PEER_BEGIN]);
+	auto valid_begin_data = FlatVector::GetData<const idx_t>(bounds.data[VALID_BEGIN]);
+	auto valid_end_data = FlatVector::GetData<const idx_t>(bounds.data[VALID_END]);
+	auto frame_begin_data = FlatVector::GetData<idx_t>(bounds.data[FRAME_BEGIN]);
+
+	idx_t window_start = NumericLimits<idx_t>::Maximum();
+
 	switch (start_boundary) {
 	case WindowBoundary::UNBOUNDED_PRECEDING:
-		window_start = partition_start;
-		break;
+		bounds.data[FRAME_BEGIN].Reference(bounds.data[PARTITION_BEGIN]);
+		// No need to clamp
+		return;
 	case WindowBoundary::CURRENT_ROW_ROWS:
-		window_start = row_idx;
+		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
+			frame_begin_data[chunk_idx] = row_idx;
+		}
 		break;
 	case WindowBoundary::CURRENT_ROW_RANGE:
-		window_start = peer_start;
+		bounds.data[FRAME_BEGIN].Reference(bounds.data[PEER_BEGIN]);
+		frame_begin_data = peer_begin_data;
 		break;
-	case WindowBoundary::EXPR_PRECEDING_ROWS: {
-		int64_t computed_start;
-		if (!TrySubtractOperator::Operation(static_cast<int64_t>(row_idx), boundary_start.GetCell<int64_t>(chunk_idx),
-		                                    computed_start)) {
-			window_start = partition_start;
-		} else {
-			window_start = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
+	case WindowBoundary::EXPR_PRECEDING_ROWS:
+		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
+			int64_t computed_start;
+			if (!TrySubtractOperator::Operation(static_cast<int64_t>(row_idx),
+			                                    boundary_begin.GetCell<int64_t>(chunk_idx), computed_start)) {
+				window_start = partition_begin_data[chunk_idx];
+			} else {
+				window_start = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
+			}
+			frame_begin_data[chunk_idx] = window_start;
 		}
 		break;
-	}
-	case WindowBoundary::EXPR_FOLLOWING_ROWS: {
-		int64_t computed_start;
-		if (!TryAddOperator::Operation(static_cast<int64_t>(row_idx), boundary_start.GetCell<int64_t>(chunk_idx),
-		                               computed_start)) {
-			window_start = partition_start;
-		} else {
-			window_start = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
+	case WindowBoundary::EXPR_FOLLOWING_ROWS:
+		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
+			int64_t computed_start;
+			if (!TryAddOperator::Operation(static_cast<int64_t>(row_idx), boundary_begin.GetCell<int64_t>(chunk_idx),
+			                               computed_start)) {
+				window_start = partition_begin_data[chunk_idx];
+			} else {
+				window_start = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
+			}
+			frame_begin_data[chunk_idx] = window_start;
 		}
 		break;
-	}
-	case WindowBoundary::EXPR_PRECEDING_RANGE: {
-		if (boundary_start.CellIsNull(chunk_idx)) {
-			window_start = peer_start;
-		} else {
-			prev.start = FindOrderedRangeBound<true>(*range, range_sense, valid_start, row_idx + 1, start_boundary,
-			                                         boundary_start, chunk_idx, prev);
-			window_start = prev.start;
+	case WindowBoundary::EXPR_PRECEDING_RANGE:
+		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
+			if (boundary_begin.CellIsNull(chunk_idx)) {
+				window_start = peer_begin_data[chunk_idx];
+			} else {
+				const auto valid_start = valid_begin_data[chunk_idx];
+				prev.end = valid_end_data[chunk_idx];
+				window_start = FindOrderedRangeBound<true>(*range, range_sense, valid_start, row_idx + 1,
+				                                           start_boundary, boundary_begin, chunk_idx, prev);
+				prev.start = window_start;
+			}
+			frame_begin_data[chunk_idx] = window_start;
 		}
 		break;
-	}
-	case WindowBoundary::EXPR_FOLLOWING_RANGE: {
-		if (boundary_start.CellIsNull(chunk_idx)) {
-			window_start = peer_start;
-		} else {
-			prev.start = FindOrderedRangeBound<true>(*range, range_sense, row_idx, valid_end, start_boundary,
-			                                         boundary_start, chunk_idx, prev);
-			window_start = prev.start;
+	case WindowBoundary::EXPR_FOLLOWING_RANGE:
+		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
+			if (boundary_begin.CellIsNull(chunk_idx)) {
+				window_start = peer_begin_data[chunk_idx];
+			} else {
+				const auto valid_end = valid_end_data[chunk_idx];
+				prev.end = valid_end;
+				window_start = FindOrderedRangeBound<true>(*range, range_sense, row_idx, valid_end, start_boundary,
+				                                           boundary_begin, chunk_idx, prev);
+				prev.start = window_start;
+			}
+			frame_begin_data[chunk_idx] = window_start;
 		}
 		break;
-	}
 	default:
 		throw InternalException("Unsupported window start boundary");
 	}
 
+	ClampFrame(count, frame_begin_data, partition_begin_data, partition_end_data);
+}
+
+void WindowBoundariesState::FrameEnd(DataChunk &bounds, idx_t row_idx, const idx_t count,
+                                     WindowInputExpression &boundary_end, optional_ptr<WindowCursor> range) {
+	auto partition_begin_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
+	auto partition_end_data = FlatVector::GetData<idx_t>(bounds.data[PARTITION_END]);
+	auto peer_end_data = FlatVector::GetData<idx_t>(bounds.data[PEER_END]);
+	auto valid_begin_data = FlatVector::GetData<const idx_t>(bounds.data[VALID_BEGIN]);
+	auto valid_end_data = FlatVector::GetData<const idx_t>(bounds.data[VALID_END]);
+	auto frame_end_data = FlatVector::GetData<idx_t>(bounds.data[FRAME_END]);
+
+	idx_t window_end = NumericLimits<idx_t>::Maximum();
+
 	switch (end_boundary) {
 	case WindowBoundary::CURRENT_ROW_ROWS:
-		window_end = row_idx + 1;
+		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
+			frame_end_data[chunk_idx] = row_idx + 1;
+		}
 		break;
 	case WindowBoundary::CURRENT_ROW_RANGE:
-		window_end = peer_end;
+		bounds.data[FRAME_END].Reference(bounds.data[PEER_END]);
+		frame_end_data = peer_end_data;
 		break;
 	case WindowBoundary::UNBOUNDED_FOLLOWING:
-		window_end = partition_end;
-		break;
+		bounds.data[FRAME_END].Reference(bounds.data[PARTITION_END]);
+		// No need to clamp
+		return;
 	case WindowBoundary::EXPR_PRECEDING_ROWS: {
-		int64_t computed_start;
-		if (!TrySubtractOperator::Operation(int64_t(row_idx + 1), boundary_end.GetCell<int64_t>(chunk_idx),
-		                                    computed_start)) {
-			window_end = partition_end;
-		} else {
-			window_end = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
+		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
+			int64_t computed_start;
+			if (!TrySubtractOperator::Operation(int64_t(row_idx + 1), boundary_end.GetCell<int64_t>(chunk_idx),
+			                                    computed_start)) {
+				window_end = partition_end_data[chunk_idx];
+			} else {
+				window_end = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
+			}
+			frame_end_data[chunk_idx] = window_end;
 		}
 		break;
 	}
-	case WindowBoundary::EXPR_FOLLOWING_ROWS: {
-		int64_t computed_start;
-		if (!TryAddOperator::Operation(int64_t(row_idx + 1), boundary_end.GetCell<int64_t>(chunk_idx),
-		                               computed_start)) {
-			window_end = partition_end;
-		} else {
-			window_end = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
+	case WindowBoundary::EXPR_FOLLOWING_ROWS:
+		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
+			int64_t computed_start;
+			if (!TryAddOperator::Operation(int64_t(row_idx + 1), boundary_end.GetCell<int64_t>(chunk_idx),
+			                               computed_start)) {
+				window_end = partition_end_data[chunk_idx];
+			} else {
+				window_end = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
+			}
+			frame_end_data[chunk_idx] = window_end;
 		}
 		break;
-	}
-	case WindowBoundary::EXPR_PRECEDING_RANGE: {
-		if (boundary_end.CellIsNull(chunk_idx)) {
-			window_end = peer_end;
-		} else {
-			prev.end = FindOrderedRangeBound<false>(*range, range_sense, valid_start, row_idx + 1, end_boundary,
-			                                        boundary_end, chunk_idx, prev);
-			window_end = prev.end;
+	case WindowBoundary::EXPR_PRECEDING_RANGE:
+		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
+			if (boundary_end.CellIsNull(chunk_idx)) {
+				window_end = peer_end_data[chunk_idx];
+			} else {
+				const auto valid_start = valid_begin_data[chunk_idx];
+				prev.start = valid_start;
+				window_end = FindOrderedRangeBound<false>(*range, range_sense, valid_start, row_idx + 1, end_boundary,
+				                                          boundary_end, chunk_idx, prev);
+				prev.end = window_end;
+			}
+			frame_end_data[chunk_idx] = window_end;
 		}
 		break;
-	}
-	case WindowBoundary::EXPR_FOLLOWING_RANGE: {
-		if (boundary_end.CellIsNull(chunk_idx)) {
-			window_end = peer_end;
-		} else {
-			prev.end = FindOrderedRangeBound<false>(*range, range_sense, row_idx, valid_end, end_boundary, boundary_end,
-			                                        chunk_idx, prev);
-			window_end = prev.end;
+	case WindowBoundary::EXPR_FOLLOWING_RANGE:
+		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
+			if (boundary_end.CellIsNull(chunk_idx)) {
+				window_end = peer_end_data[chunk_idx];
+			} else {
+				const auto valid_end = valid_end_data[chunk_idx];
+				prev.start = valid_begin_data[chunk_idx];
+				window_end = FindOrderedRangeBound<false>(*range, range_sense, row_idx, valid_end, end_boundary,
+				                                          boundary_end, chunk_idx, prev);
+				prev.end = window_end;
+			}
+			frame_end_data[chunk_idx] = window_end;
 		}
 		break;
-	}
 	default:
 		throw InternalException("Unsupported window end boundary");
 	}
 
-	// clamp windows to partitions if they should exceed
-	if (window_start < partition_start) {
-		window_start = partition_start;
-	}
-	if (window_start > partition_end) {
-		window_start = partition_end;
-	}
-	if (window_end < partition_start) {
-		window_end = partition_start;
-	}
-	if (window_end > partition_end) {
-		window_end = partition_end;
-	}
-}
-
-static bool HasPrecedingRange(const BoundWindowExpression &wexpr) {
-	return (wexpr.start == WindowBoundary::EXPR_PRECEDING_RANGE || wexpr.end == WindowBoundary::EXPR_PRECEDING_RANGE);
-}
-
-static bool HasFollowingRange(const BoundWindowExpression &wexpr) {
-	return (wexpr.start == WindowBoundary::EXPR_FOLLOWING_RANGE || wexpr.end == WindowBoundary::EXPR_FOLLOWING_RANGE);
-}
-
-WindowBoundariesState::WindowBoundariesState(const BoundWindowExpression &wexpr, const idx_t input_size)
-    : type(wexpr.type), input_size(input_size), start_boundary(wexpr.start), end_boundary(wexpr.end),
-      partition_count(wexpr.partitions.size()), order_count(wexpr.orders.size()),
-      range_sense(wexpr.orders.empty() ? OrderType::INVALID : wexpr.orders[0].type),
-      has_preceding_range(HasPrecedingRange(wexpr)), has_following_range(HasFollowingRange(wexpr)),
-      // if we have EXCLUDE GROUP / TIES, we also need peer boundaries
-      needs_peer(BoundaryNeedsPeer(wexpr.end) || ExpressionNeedsPeer(wexpr.type) ||
-                 wexpr.exclude_clause >= WindowExcludeMode::GROUP) {
-}
-
-void WindowBoundariesState::Bounds(DataChunk &bounds, idx_t row_idx, optional_ptr<WindowCursor> range,
-                                   const idx_t count, WindowInputExpression &boundary_start,
-                                   WindowInputExpression &boundary_end, const ValidityMask &partition_mask,
-                                   const ValidityMask &order_mask) {
-	bounds.Reset();
-	D_ASSERT(bounds.ColumnCount() == 6);
-	auto partition_begin_data = FlatVector::GetData<idx_t>(bounds.data[PARTITION_BEGIN]);
-	auto partition_end_data = FlatVector::GetData<idx_t>(bounds.data[PARTITION_END]);
-	auto peer_begin_data = FlatVector::GetData<idx_t>(bounds.data[PEER_BEGIN]);
-	auto peer_end_data = FlatVector::GetData<idx_t>(bounds.data[PEER_END]);
-	auto window_begin_data = FlatVector::GetData<int64_t>(bounds.data[WINDOW_BEGIN]);
-	auto window_end_data = FlatVector::GetData<int64_t>(bounds.data[WINDOW_END]);
-	for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
-		Update(row_idx, range, chunk_idx, boundary_start, boundary_end, partition_mask, order_mask);
-		*partition_begin_data++ = partition_start;
-		*partition_end_data++ = partition_end;
-		if (needs_peer) {
-			*peer_begin_data++ = peer_start;
-			*peer_end_data++ = peer_end;
-		}
-		*window_begin_data++ = UnsafeNumericCast<int64_t>(window_start);
-		*window_end_data++ = UnsafeNumericCast<int64_t>(window_end);
-	}
-	bounds.SetCardinality(count);
+	ClampFrame(count, frame_end_data, partition_begin_data, partition_end_data);
 }
 
 //===--------------------------------------------------------------------===//
@@ -800,7 +1073,7 @@ public:
 WindowExecutorBoundsState::WindowExecutorBoundsState(const WindowExecutorGlobalState &gstate)
     : WindowExecutorLocalState(gstate), partition_mask(gstate.partition_mask), order_mask(gstate.order_mask),
       state(gstate.executor.wexpr, gstate.payload_count) {
-	vector<LogicalType> bounds_types(6, LogicalType(LogicalTypeId::UBIGINT));
+	vector<LogicalType> bounds_types(8, LogicalType(LogicalTypeId::UBIGINT));
 	bounds.Initialize(Allocator::Get(gstate.executor.context), bounds_types);
 }
 
@@ -1518,7 +1791,15 @@ public:
 	      child_idx(executor.child_idx) {
 	}
 
+	void Finalize(CollectionPtr collection) {
+		if (child_idx != DConstants::INVALID_INDEX && executor.wexpr.ignore_nulls) {
+			lock_guard<mutex> ignore_nulls_guard(lock);
+			ignore_nulls = &collection->validities[child_idx];
+		}
+	}
+
 	// IGNORE NULLS
+	mutex lock;
 	ValidityMask all_valid;
 	optional_ptr<ValidityMask> ignore_nulls;
 
@@ -1604,10 +1885,8 @@ unique_ptr<WindowExecutorGlobalState> WindowValueExecutor::GetGlobalState(const 
 
 void WindowValueExecutor::Finalize(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                    CollectionPtr collection) const {
-	if (child_idx != DConstants::INVALID_INDEX && wexpr.ignore_nulls) {
-		auto &gvstate = gstate.Cast<WindowValueGlobalState>();
-		gvstate.ignore_nulls = &collection->validities[child_idx];
-	}
+	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
+	gvstate.Finalize(collection);
 
 	WindowExecutor::Finalize(gstate, lstate, collection);
 }
@@ -1779,8 +2058,8 @@ void WindowFirstValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstat
                                                 idx_t row_idx) const {
 	auto &lvstate = lstate.Cast<WindowValueLocalState>();
 	auto &cursor = *lvstate.cursor;
-	auto window_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_BEGIN]);
-	auto window_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_END]);
+	auto window_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[FRAME_BEGIN]);
+	auto window_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[FRAME_END]);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 
 		if (lvstate.exclusion_filter) {
@@ -1816,8 +2095,8 @@ void WindowLastValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate
                                                idx_t row_idx) const {
 	auto &lvstate = lstate.Cast<WindowValueLocalState>();
 	auto &cursor = *lvstate.cursor;
-	auto window_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_BEGIN]);
-	auto window_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_END]);
+	auto window_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[FRAME_BEGIN]);
+	auto window_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[FRAME_END]);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 
 		if (lvstate.exclusion_filter) {
@@ -1852,8 +2131,8 @@ void WindowNthValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate,
 	auto &lvstate = lstate.Cast<WindowValueLocalState>();
 	auto &cursor = *lvstate.cursor;
 	D_ASSERT(cursor.chunk.ColumnCount() == 1);
-	auto window_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_BEGIN]);
-	auto window_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_END]);
+	auto window_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[FRAME_BEGIN]);
+	auto window_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[FRAME_END]);
 	WindowInputExpression nth_col(eval_chunk, nth_idx);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 

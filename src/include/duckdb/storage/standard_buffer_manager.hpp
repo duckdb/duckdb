@@ -49,7 +49,7 @@ public:
 	//! Registers an in-memory buffer that cannot be unloaded until it is destroyed.
 	//! This buffer can be small (smaller than the block size of the temporary block manager).
 	//! Unpin and Pin are NOPs on this block of memory.
-	shared_ptr<BlockHandle> RegisterSmallMemory(const idx_t size) final;
+	shared_ptr<BlockHandle> RegisterSmallMemory(MemoryTag tag, const idx_t size) final;
 
 	idx_t GetUsedMemory() const final;
 	idx_t GetMaxMemory() const final;
@@ -76,7 +76,7 @@ public:
 	void SetMemoryLimit(idx_t limit = (idx_t)-1) final;
 	void SetSwapLimit(optional_idx limit = optional_idx()) final;
 
-	//! Returns informaton about memory usage
+	//! Returns information about memory usage
 	vector<MemoryInformation> GetMemoryUsageInfo() const override;
 
 	//! Returns a list of all temporary files

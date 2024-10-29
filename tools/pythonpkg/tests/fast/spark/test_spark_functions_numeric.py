@@ -1,8 +1,8 @@
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
-from duckdb.experimental.spark.sql import functions as F
-from duckdb.experimental.spark.sql.types import Row
+from spark_namespace.sql import functions as F
+from spark_namespace.sql.types import Row
 
 
 class TestSparkFunctionsNumeric(object):
@@ -86,7 +86,7 @@ class TestSparkFunctionsNumeric(object):
 
     def test_cos(self, spark):
         data = [
-            (0,),
+            (0.0,),
             (3.14159,),
         ]
         df = spark.createDataFrame(data, ["firstColumn"])
@@ -111,7 +111,7 @@ class TestSparkFunctionsNumeric(object):
     def test_exp(self, spark):
         data = [
             (0.693,),
-            (0,),
+            (0.0,),
         ]
         df = spark.createDataFrame(data, ["firstColumn"])
         df = df.withColumn("exp_value", F.exp(F.col("firstColumn")))
@@ -148,7 +148,7 @@ class TestSparkFunctionsNumeric(object):
     def test_ln(self, spark):
         data = [
             (2.718,),
-            (1,),
+            (1.0,),
         ]
         df = spark.createDataFrame(data, ["firstColumn"])
         df = df.withColumn("ln_value", F.ln(F.col("firstColumn")))
@@ -159,7 +159,7 @@ class TestSparkFunctionsNumeric(object):
     def test_degrees(self, spark):
         data = [
             (3.14159,),
-            (0,),
+            (0.0,),
         ]
         df = spark.createDataFrame(data, ["firstColumn"])
         df = df.withColumn("degrees_value", F.degrees(F.col("firstColumn")))
