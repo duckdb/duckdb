@@ -58,6 +58,11 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
 				columns.emplace_back(names[i], types[i]);
 			}
 		});
+	} else {
+		for (idx_t i = 0; i < csv_options.sql_type_list.size(); i++) {
+			D_ASSERT(csv_options.name_list.size() == csv_options.sql_type_list.size());
+			columns.emplace_back(csv_options.name_list[i], csv_options.sql_type_list[i]);
+		}
 	}
 
 	// After sniffing we can consider these set, so they are exported as named parameters
