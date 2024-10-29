@@ -10,7 +10,7 @@ load
 DROP TABLE IF EXISTS zstd_strings;
 PRAGMA force_compression='zstd';
 set variable my_string = (list_reduce([chr(((i % 26) + ord('a'))::INTEGER) for i in range(8000)], (x, y) -> concat(x, y)));
-create table zstd_strings as select getvariable('my_string') as data from range(10_000_000) tbl(i);
+create table zstd_strings as select getvariable('my_string') as data from range(2_500_000) tbl(i);
 checkpoint;
 
 run

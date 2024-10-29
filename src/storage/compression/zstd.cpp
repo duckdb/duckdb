@@ -9,6 +9,7 @@
 #include "duckdb/storage/compression/zstd.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/storage/segment/uncompressed.hpp"
 
 #define ZDICT_STATIC_LINKING_ONLY /* for ZDICT_DICTSIZE_MIN */
 #include "zdict.h"
@@ -60,6 +61,8 @@ static constexpr idx_t MINIMUM_AVERAGE_VECTOR_STRING_LENGTH = 1 << 10;
 static constexpr idx_t ZSTD_SAMPLE_MIN_SIZE = 8;
 //! The minimum amount of samples needed to train a dictionary
 static constexpr idx_t ZSTD_MIN_SAMPLE_COUNT = 10;
+//! The penalty we put on the analyzed compression score determined by FinalAnalyze
+static constexpr double ZSTD_DEFAULT_PENALTY_STORE = 1.3;
 
 namespace duckdb {
 
@@ -251,6 +254,18 @@ DictBuffer CreateDictFromSamples(idx_t dict_buffer_size, const vector<idx_t> &sa
 idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	auto &state = state_p.Cast<ZSTDAnalyzeState>();
 
+	double penalty;
+	idx_t average_length = state.total_size / state.count;
+	auto overflow_string_threshold = StringUncompressed::GetStringBlockLimit(state.info.GetBlockSize());
+	if (average_length < overflow_string_threshold) {
+		average_length = MaxValue<idx_t>(average_length, 200);
+		penalty = 5.0 + (overflow_string_threshold - average_length - 200) * 25;
+	} else {
+		// From this point on, ZSTD starts to beat Uncompressed scan speed by about 5x, increasing rapidly (4096 is 5x,
+		// 8000 is 15x)
+		penalty = 1.0;
+	}
+
 	if ((state.total_size / state.count) * ZSTD_VECTOR_SIZE < MINIMUM_AVERAGE_VECTOR_STRING_LENGTH) {
 		// Compressing this with ZSTD won't be effective as the block sizes are too small
 		return NumericLimits<idx_t>::Maximum();
@@ -276,10 +291,7 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	estimated_size += state.count * sizeof(string_length_t);
 	estimated_size += state.GetVectorMetadataSize();
 
-	// we only use zstd if it is at least 1.3 times better than the alternative
-	auto zstd_penalty_factor = 1.3;
-
-	return LossyNumericCast<idx_t>((double)estimated_size * zstd_penalty_factor);
+	return LossyNumericCast<idx_t>((double)estimated_size * penalty);
 }
 
 //===--------------------------------------------------------------------===//
