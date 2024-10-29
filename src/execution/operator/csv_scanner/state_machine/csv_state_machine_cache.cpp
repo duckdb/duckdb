@@ -30,7 +30,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 			InitializeTransitionArray(transition_array, cur_state, CSVState::QUOTED);
 			break;
 		case CSVState::UNQUOTED:
-			InitializeTransitionArray(transition_array, cur_state, CSVState::INVALID);
+			InitializeTransitionArray(transition_array, cur_state, CSVState::QUOTED);
 			break;
 		case CSVState::COMMENT:
 			InitializeTransitionArray(transition_array, cur_state, CSVState::COMMENT);
