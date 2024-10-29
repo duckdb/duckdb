@@ -565,7 +565,7 @@ idx_t RadixPartitionedHashTable::MaxThreads(GlobalSinkState &sink_p) const {
 	const auto partitions_fit =
 	    MaxValue<idx_t>(sink.temporary_memory_state->GetReservation() / sink.max_partition_size, 1);
 
-	// Mininum of the two
+	// Minimum of the two
 	return MinValue<idx_t>(partitions_fit, max_threads);
 }
 

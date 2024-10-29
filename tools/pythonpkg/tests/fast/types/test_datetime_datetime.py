@@ -27,7 +27,7 @@ class TestDateTimeDateTime(object):
         con = duckdb.connect()
 
         if type in ['TIMESTAMP_S', 'TIMESTAMP_MS', 'TIMESTAMP_NS']:
-            # Infinity (both positive and negative) is not supported for non-usecond timetamps
+            # Infinity (both positive and negative) is not supported for non-usecond timestamps
             return
 
         expected_val = datetime.datetime.max if positive else datetime.datetime.min

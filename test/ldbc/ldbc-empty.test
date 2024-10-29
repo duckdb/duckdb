@@ -859,7 +859,7 @@ SELECT count(*)
    AND p1.friendid = p2.personid
    AND p2.friendid = p3.personid
    AND p3.friendid = p1.personid
-    -- filter: unique trinagles only
+    -- filter: unique triangles only
    AND p1.personid < p2.personid
    AND p2.personid < p3.personid
 ;

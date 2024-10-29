@@ -1221,7 +1221,7 @@
 //         //  TODO:  Get more accurate position of the error from UnicodeSet's return info.
 //         //         UnicodeSet appears to not be reporting correctly at this time.
 //         #ifdef RBBI_DEBUG
-//             RBBIDebugPrintf("UnicodeSet parse postion.ErrorIndex = %d\n", pos.getIndex());
+//             RBBIDebugPrintf("UnicodeSet parse position.ErrorIndex = %d\n", pos.getIndex());
 //         #endif
 //         error(localStatus);
 //         delete uset;
@@ -1242,7 +1242,7 @@
 //     }
 
 
-//     // Advance the RBBI parse postion over the UnicodeSet pattern.
+//     // Advance the RBBI parse position over the UnicodeSet pattern.
 //     //   Don't just set fScanIndex because the line/char positions maintained
 //     //   for error reporting would be thrown off.
 //     i = pos.getIndex();

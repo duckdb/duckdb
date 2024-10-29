@@ -909,7 +909,7 @@ static UBool compareBinaryFiles(const char* defaultTZFileName, const char* TZFil
         if (sizeFile != tzInfo->defaultTZFileSize) {
             result = FALSE;
         } else {
-            /* Store the data from the files in seperate buffers and
+            /* Store the data from the files in separate buffers and
              * compare each byte to determine equality.
              */
             if (tzInfo->defaultTZBuffer == NULL) {
