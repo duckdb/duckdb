@@ -737,6 +737,10 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
                                                                        unique_ptr<SQLStatement> statement,
                                                                        const PendingQueryParameters &parameters) {
 	// prepare the query for execution
+	if (parameters.parameters) {
+		PreparedStatement::VerifyParameters(*parameters.parameters, statement->named_param_map);
+	}
+
 	auto prepared = CreatePreparedStatement(lock, query, std::move(statement), parameters.parameters,
 	                                        PreparedStatementMode::PREPARE_AND_EXECUTE);
 
