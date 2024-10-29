@@ -1,13 +1,15 @@
-#include "duckdb/parser/statement/alter_statement.hpp"
-#include "duckdb/parser/statement/transaction_statement.hpp"
-#include "duckdb/planner/operator/logical_simple.hpp"
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
+#include "duckdb/parser/statement/alter_statement.hpp"
+#include "duckdb/parser/statement/transaction_statement.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_create_index.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_simple.hpp"
 
 namespace duckdb {
 

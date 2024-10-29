@@ -25,17 +25,17 @@
 
 namespace duckdb {
 
-IndexStorageInfo GetIndexInfo(const IndexConstraintType &constraint_type, const bool v1_0_0_storage,
-                              unique_ptr<CreateInfo> &create_info, const idx_t identifier) {
+IndexStorageInfo GetIndexInfo(const IndexConstraintType type, const bool v1_0_0_storage, unique_ptr<CreateInfo> &info,
+                              const idx_t id) {
 
-	auto &table_info = create_info->Cast<CreateTableInfo>();
-	auto constraint_name = EnumUtil::ToString(constraint_type) + "_";
-	auto name = constraint_name + table_info.table + "_" + to_string(identifier);
-	IndexStorageInfo info(name);
+	auto &table_info = info->Cast<CreateTableInfo>();
+	auto constraint_name = EnumUtil::ToString(type) + "_";
+	auto name = constraint_name + table_info.table + "_" + to_string(id);
+	IndexStorageInfo index_info(name);
 	if (!v1_0_0_storage) {
-		info.options.emplace("v1_0_0_storage", v1_0_0_storage);
+		index_info.options.emplace("v1_0_0_storage", v1_0_0_storage);
 	}
-	return info;
+	return index_info;
 }
 
 vector<LogicalIndex> GetConstraintIndexes(const ColumnList &cols, const UniqueConstraint &constraint) {

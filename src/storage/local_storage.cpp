@@ -594,20 +594,4 @@ void LocalStorage::VerifyNewConstraint(DataTable &parent, const BoundConstraint 
 	storage->row_groups->VerifyNewConstraint(parent, constraint);
 }
 
-void LocalStorage::AppendToIndex(DataTable &parent, Index &index) {
-	auto storage = table_manager.GetStorage(parent);
-	if (!storage) {
-		return;
-	}
-	storage->row_groups->AppendToIndex(parent, index);
-}
-
-void LocalStorage::AddIndex(DataTable &parent, unique_ptr<Index> index) {
-	auto storage = table_manager.GetStorage(parent);
-	if (!storage) {
-		return;
-	}
-	storage->indexes.AddIndex(std::move(index));
-}
-
 } // namespace duckdb

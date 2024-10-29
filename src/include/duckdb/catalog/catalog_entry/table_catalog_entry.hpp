@@ -21,8 +21,6 @@
 namespace duckdb {
 
 class DataTable;
-struct CreateTableInfo;
-struct BoundCreateTableInfo;
 
 struct RenameColumnInfo;
 struct AddColumnInfo;
@@ -33,13 +31,13 @@ struct AlterForeignKeyInfo;
 struct SetNotNullInfo;
 struct DropNotNullInfo;
 struct SetColumnCommentInfo;
-struct AddConstraintInfo;
+struct CreateTableInfo;
+struct BoundCreateTableInfo;
 
 class TableFunction;
 struct FunctionData;
 
 class Binder;
-class TableColumnInfo;
 struct ColumnSegmentInfo;
 class TableStorageInfo;
 

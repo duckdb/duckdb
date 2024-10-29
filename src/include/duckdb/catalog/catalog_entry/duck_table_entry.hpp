@@ -14,6 +14,8 @@
 
 namespace duckdb {
 
+struct AddConstraintInfo;
+
 //! A table catalog entry
 class DuckTableEntry : public TableCatalogEntry {
 public:

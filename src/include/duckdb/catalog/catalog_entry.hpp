@@ -30,7 +30,6 @@ class Value;
 struct AlterInfo;
 struct CatalogTransaction;
 struct CreateInfo;
-struct FunctionData;
 
 //! Abstract base class of an entry in the catalog
 class CatalogEntry {
