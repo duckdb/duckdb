@@ -26,7 +26,7 @@ unique_ptr<TableFilterSet> CreateTableFilterSet(TableFilterSet &table_filters, c
 				break;
 			}
 		}
-		if (column_index == DConstants::INVALID_INDEX) {
+		if (!column_index.IsValid()) {
 			throw InternalException("Could not find column index for table filter");
 		}
 		table_filter_set->filters[column_index.GetIndex()] = std::move(table_filter.second);
