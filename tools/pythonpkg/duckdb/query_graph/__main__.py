@@ -167,7 +167,7 @@ def generate_tree_recursive(json_graph: object) -> str:
 def generate_timing_html(graph_json: object, query_timings: object) -> object:
     json_graph = json.loads(graph_json)
     gather_timing_information(json_graph, query_timings)
-    total_time = float(json_graph['operator_timing'])
+    total_time = float(json_graph.get('operator_timing') or json_graph.get('latency'))
     table_head = """
 	<table class=\"styled-table\"> 
 		<thead>
@@ -195,7 +195,7 @@ def generate_timing_html(graph_json: object, query_timings: object) -> object:
 	<tr>
 			<td>{phase_column}</td>
             <td>{summarized_phase.time}</td>
-            <td>{str(summarized_phase.percentage * 100)[:6]}%</td>
+            <td>{round(summarized_phase.percentage*100,4)}%</td>
     </tr>
 """
     table_body += table_end

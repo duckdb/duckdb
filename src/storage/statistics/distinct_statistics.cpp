@@ -7,14 +7,11 @@
 
 namespace duckdb {
 
-DistinctStatistics::DistinctStatistics()
-    : log(make_uniq<HyperLogLog>()), sample_count(0), total_count(0),
-      hash_vec(LogicalType::HASH, STANDARD_VECTOR_SIZE) {
+DistinctStatistics::DistinctStatistics() : log(make_uniq<HyperLogLog>()), sample_count(0), total_count(0) {
 }
 
 DistinctStatistics::DistinctStatistics(unique_ptr<HyperLogLog> log, idx_t sample_count, idx_t total_count)
-    : log(std::move(log)), sample_count(sample_count), total_count(total_count),
-      hash_vec(LogicalType::HASH, STANDARD_VECTOR_SIZE) {
+    : log(std::move(log)), sample_count(sample_count), total_count(total_count) {
 }
 
 unique_ptr<DistinctStatistics> DistinctStatistics::Copy() const {
@@ -41,6 +38,7 @@ void DistinctStatistics::Update(Vector &v, idx_t count, bool sample) {
 	sample_count += count;
 
 	lock_guard<mutex> guard(lock);
+	Vector hash_vec(LogicalType::HASH, count);
 	VectorOperations::Hash(v, hash_vec, count);
 
 	UnifiedVectorFormat vdata;
