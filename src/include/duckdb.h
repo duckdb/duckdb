@@ -3394,9 +3394,7 @@ DUCKDB_API void duckdb_table_function_set_function(duckdb_table_function table_f
 /*!
 Sets whether or not the given table function supports projection pushdown.
 
-If this is set to true, the system will provide a list of all required columns in the `init` stage through
-the `duckdb_init_get_column_count` and `duckdb_init_get_column_index` functions.
-If this is set to false (the default), the system will expect all columns to be projected.
+Set to false by default.
 
 * @param table_function The table function
 * @param pushdown True if the table function supports projection pushdown, false otherwise.
