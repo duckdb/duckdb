@@ -21,7 +21,15 @@ jobs:
         run: |
           gh issue edit --repo duckdb/duckdb ${{ github.event.issue.number }} --remove-label "needs triage"
 
-  create_or_label_issue:
+  add_needs_reproducible_example_comment:
+    if: github.event.label.name == 'needs reproducible example'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add comment
+        run: |
+          gh issue comment ${{ github.event.issue.number }} --body-file .github/workflows/needs-reproducible-example-comment.md
+
+  create_or_label_mirror_issue:
     if: github.event.label.name == 'reproduced' || github.event.label.name == 'under review'
     runs-on: ubuntu-latest
     steps:
