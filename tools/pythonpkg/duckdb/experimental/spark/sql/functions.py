@@ -183,6 +183,41 @@ def array_agg(col: "ColumnOrName") -> Column:
     return _invoke_function_over_columns("list", col)
 
 
+def array_append(col: "ColumnOrName", value: Any) -> Column:
+    """
+    Collection function: returns an array of the elements in col1 along
+    with the added element in col2 at the last of the array.
+
+    .. versionadded:: 3.4.0
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        name of column containing array
+    value :
+        a literal value, or a :class:`~pyspark.sql.Column` expression.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        an array of values from first array along with the element.
+
+    Notes
+    -----
+    Supports Spark Connect.
+
+    Examples
+    --------
+    >>> from pyspark.sql import Row
+    >>> df = spark.createDataFrame([Row(c1=["b", "a", "c"], c2="c")])
+    >>> df.select(array_append(df.c1, df.c2)).collect()
+    [Row(array_append(c1, c2)=['b', 'a', 'c', 'c'])]
+    >>> df.select(array_append(df.c1, 'x')).collect()
+    [Row(array_append(c1, x)=['b', 'a', 'c', 'x'])]
+    """
+    return _invoke_function("list_append", _to_column_expr(col), _get_expr(value))
+
+
 def array_contains(col: "ColumnOrName", value: Any) -> Column:
     """
     Collection function: returns null if the array is null, true if the array contains the
