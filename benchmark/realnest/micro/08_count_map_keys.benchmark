@@ -11,7 +11,7 @@ require httpfs
 
 cache real_nest.duckdb
 
-load benchmark/realnest/load.sql
+load benchmark/realnest/micro/load.sql
 
 run
 SELECT keys, count(*) mentions 
