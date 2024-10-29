@@ -76,6 +76,9 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	names.emplace_back("block_offset");
 	return_types.emplace_back(LogicalType::BIGINT);
 
+	names.emplace_back("additional_block_ids");
+	return_types.emplace_back(LogicalType::LIST(LogicalTypeId::BIGINT));
+
 	names.emplace_back("segment_info");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -91,6 +94,14 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 
 unique_ptr<GlobalTableFunctionState> PragmaStorageInfoInit(ClientContext &context, TableFunctionInitInput &input) {
 	return make_uniq<PragmaStorageOperatorData>();
+}
+
+static Value ValueFromBlockIdList(const vector<block_id_t> &block_ids) {
+	vector<Value> blocks;
+	for (auto &block_id : block_ids) {
+		blocks.push_back(Value::BIGINT(block_id));
+	}
+	return Value::LIST(LogicalTypeId::BIGINT, blocks);
 }
 
 static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -129,10 +140,13 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 		output.SetValue(col_idx++, count, Value::BOOLEAN(entry.persistent));
 		// block_id
 		// block_offset
+		// additional_block_ids
 		if (entry.persistent) {
 			output.SetValue(col_idx++, count, Value::BIGINT(entry.block_id));
 			output.SetValue(col_idx++, count, Value::BIGINT(NumericCast<int64_t>(entry.block_offset)));
+			output.SetValue(col_idx++, count, ValueFromBlockIdList(entry.additional_blocks));
 		} else {
+			output.SetValue(col_idx++, count, Value());
 			output.SetValue(col_idx++, count, Value());
 			output.SetValue(col_idx++, count, Value());
 		}

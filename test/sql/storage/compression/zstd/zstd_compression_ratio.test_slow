@@ -15,11 +15,11 @@ select setseed(0.42);
 statement ok
 set variable dataset_size = 100_000;
 
-# strings between 1800 and 5400 characters created from uuid(), making them semi-random
+# strings of 4096 characters, created from uuid(), making them semi-random
 statement ok
 create table test_compressed as (
 	with cte as (
-		select list_reduce([uuid()::varchar for x in range((50 + (100 * random()))::BIGINT)], (x, y) -> concat(x, y)) str
+		select list_reduce([uuid()::varchar for x in range(128)], (x, y) -> concat(x, y)) str
 		from range(getvariable('dataset_size'))
 	)
 	select
@@ -39,7 +39,7 @@ select setseed(0.42);
 statement ok
 CREATE TABLE test_uncompressed as (
 	with cte as (
-		select list_reduce([uuid()::varchar for x in range((50 + (100 * random()))::BIGINT)], (x, y) -> concat(x, y)) str
+		select list_reduce([uuid()::varchar for x in range(128)], (x, y) -> concat(x, y)) str
 		from range(getvariable('dataset_size'))
 	)
 	select
@@ -62,19 +62,35 @@ statement ok
 CREATE TYPE test_result AS UNION (
     ok BOOL,
     err STRUCT(
-        uncompressed BIGINT,
-        compressed BIGINT,
-        allowed_minimum_ratio INT,
-        allowed_maximum_ratio INT,
+        uncompressed HUGEINT,
+        compressed HUGEINT,
+        allowed_minimum_ratio DECIMAL(2,1),
+        allowed_maximum_ratio DECIMAL(2,1),
         actual_ratio FLOAT
     )
 );
 
 statement ok
-set variable min_ratio = 700;
-set variable max_ratio = 850;
+set variable min_ratio = 1.8;
+set variable max_ratio = 2.5;
 
 query I
+WITH compressed_intermediate AS (
+	SELECT
+		1 + sum(len(additional_block_ids)) as blocks
+	FROM
+		pragma_storage_info('test_compressed')
+	WHERE segment_type NOT IN ('VALIDITY')
+	GROUP BY block_id
+),
+uncompressed_intermediate AS (
+	SELECT
+		1 + sum(len(additional_block_ids)) as blocks
+	FROM
+		pragma_storage_info('test_uncompressed')
+	WHERE segment_type NOT IN ('VALIDITY')
+	GROUP BY block_id
+)
 SELECT
     CASE 
         WHEN (uncompressed::FLOAT / compressed::FLOAT) > getvariable('min_ratio') AND (uncompressed::FLOAT / compressed::FLOAT) < getvariable('max_ratio')
@@ -89,8 +105,8 @@ SELECT
     END
 FROM (
     SELECT
-        (SELECT COUNT(DISTINCT block_id) FROM pragma_storage_info('test_compressed') WHERE segment_type NOT IN ('VALIDITY')) AS compressed,
-        (SELECT COUNT(DISTINCT block_id) FROM pragma_storage_info('test_uncompressed') WHERE segment_type NOT IN ('VALIDITY')) AS uncompressed
+        (SELECT sum(blocks) FROM compressed_intermediate) as compressed,
+        (SELECT sum(blocks) FROM uncompressed_intermediate) AS uncompressed
 ) AS blocks_tbl;
 ----
 true
