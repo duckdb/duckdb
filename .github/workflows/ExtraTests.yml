@@ -60,4 +60,4 @@ jobs:
       shell: bash
       run: |
         build/release/benchmark/benchmark_runner --list > alltests.list
-        python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=alltests.list --verbose --threads=2
+        python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks alltests.list --verbose --threads 2

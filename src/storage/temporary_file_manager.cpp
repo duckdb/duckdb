@@ -153,11 +153,11 @@ void BlockIndexManager::SetMaxIndex(const idx_t new_index, const TemporaryBuffer
 	if (!manager) {
 		max_index = new_index;
 	} else {
-		const auto old = max_index;
+		auto old = max_index;
 		if (new_index < old) {
 			max_index = new_index;
-			auto difference = old - new_index;
-			auto size_on_disk = difference * temp_file_block_size;
+			const auto difference = old - new_index;
+			const auto size_on_disk = difference * temp_file_block_size;
 			manager->DecreaseSizeOnDisk(size_on_disk);
 		} else if (new_index > old) {
 			const auto difference = new_index - old;
