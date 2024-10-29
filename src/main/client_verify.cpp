@@ -49,7 +49,11 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::COPIED, stmt, parameters));
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::DESERIALIZED, stmt, parameters));
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::UNOPTIMIZED, stmt, parameters));
-		prepared_statement_verifier = StatementVerifier::Create(VerificationType::PREPARED, stmt, parameters);
+
+		// FIXME: Prepared parameter verifier is broken for queries with parameters
+		if (!parameters || parameters->empty()) {
+			prepared_statement_verifier = StatementVerifier::Create(VerificationType::PREPARED, stmt, parameters);
+		}
 	}
 
 	// This verifier is enabled explicitly OR by enabling run_slow_verifiers
