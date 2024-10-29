@@ -471,7 +471,7 @@ typedef struct {
 	duckdb_state (*duckdb_append_blob)(duckdb_appender appender, const void *data, idx_t length);
 	duckdb_state (*duckdb_append_null)(duckdb_appender appender);
 	duckdb_value (*duckdb_create_map_value)(duckdb_logical_type map_type, duckdb_value keys, duckdb_value values);
-	duckdb_value (*duckdb_create_union_value)(duckdb_logical_type union_type, duckdb_value value, idx_t tag);
+	duckdb_value (*duckdb_create_union_value)(duckdb_logical_type union_type, duckdb_value value, uint8_t tag);
 #endif
 
 // These functions have been deprecated and may be removed in future versions of DuckDB

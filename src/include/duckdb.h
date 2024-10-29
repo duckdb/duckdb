@@ -2427,7 +2427,7 @@ Must be destroyed with `duckdb_destroy_value`.
 * @param tag The tag for the union
 * @return The union value, or nullptr, if the child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`.
 */
-DUCKDB_API duckdb_value duckdb_create_union_value(duckdb_logical_type union_type, duckdb_value value, idx_t tag);
+DUCKDB_API duckdb_value duckdb_create_union_value(duckdb_logical_type union_type, duckdb_value value, uint8_t tag);
 
 /*!
 Returns the number of elements in a MAP value.

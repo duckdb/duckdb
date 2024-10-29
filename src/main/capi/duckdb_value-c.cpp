@@ -446,7 +446,7 @@ duckdb_value duckdb_create_map_value(duckdb_logical_type map_type, duckdb_value 
 	return WrapValue(map_value);
 }
 
-duckdb_value duckdb_create_union_value(duckdb_logical_type union_type, duckdb_value value, idx_t tag) {
+duckdb_value duckdb_create_union_value(duckdb_logical_type union_type, duckdb_value value, uint8_t tag) {
 	if (!union_type || !value) {
 		return nullptr;
 	}
@@ -469,7 +469,7 @@ duckdb_value duckdb_create_union_value(duckdb_logical_type union_type, duckdb_va
 	auto members = duckdb::UnionType::CopyMemberTypes(logical_type);
 	duckdb::Value *union_value = new duckdb::Value;
 	try {
-		*union_value = duckdb::Value::UNION(members, (uint8_t)tag, UnwrapValue(value));
+		*union_value = duckdb::Value::UNION(members, tag, UnwrapValue(value));
 	} catch (...) {
 		delete union_value;
 		return nullptr;
