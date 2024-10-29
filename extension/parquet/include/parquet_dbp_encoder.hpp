@@ -23,17 +23,6 @@ public:
 	}
 
 public:
-	template <class T>
-	void BeginWrite(WriteStream &writer, const T &first_value) {
-		throw InternalException("Can't write type to DELTA_BINARY_PACKED column");
-	}
-
-	template <>
-	void BeginWrite(WriteStream &writer, const int32_t &first_value) {
-		BeginWrite(writer, int64_t(first_value));
-	}
-
-	template <>
 	void BeginWrite(WriteStream &writer, const int64_t &first_value) {
 		// <block size in values> <number of miniblocks in a block> <total value count> <first value>
 
@@ -61,17 +50,6 @@ public:
 		block_count = 0;
 	}
 
-	template <class T>
-	void WriteValue(WriteStream &writer, const T &value) {
-		throw InternalException("Can't write type to DELTA_BINARY_PACKED column");
-	}
-
-	template <>
-	void WriteValue(WriteStream &writer, const int32_t &value) {
-		WriteValue(writer, int64_t(value));
-	}
-
-	template <>
 	void WriteValue(WriteStream &writer, const int64_t &value) {
 		// 1. Compute the differences between consecutive elements. For the first element in the block,
 		// use the last element in the previous block or, in the case of the first block,

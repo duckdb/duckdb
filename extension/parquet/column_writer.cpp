@@ -1085,6 +1085,38 @@ public:
 	bool initialized;
 };
 
+namespace dbp_encoder {
+template <class T>
+void BeginWrite(DbpEncoder &encoder, WriteStream &writer, const T &first_value) {
+	throw InternalException("Can't write type to DELTA_BINARY_PACKED column");
+}
+
+template <>
+void BeginWrite(DbpEncoder &encoder, WriteStream &writer, const int64_t &first_value) {
+	encoder.BeginWrite(writer, first_value);
+}
+
+template <>
+void BeginWrite(DbpEncoder &encoder, WriteStream &writer, const int32_t &first_value) {
+	BeginWrite(encoder, writer, int64_t(first_value));
+}
+
+template <class T>
+void WriteValue(DbpEncoder &encoder, WriteStream &writer, const T &value) {
+	throw InternalException("Can't write type to DELTA_BINARY_PACKED column");
+}
+
+template <>
+void WriteValue(DbpEncoder &encoder, WriteStream &writer, const int64_t &value) {
+	encoder.WriteValue(writer, value);
+}
+
+template <>
+void WriteValue(DbpEncoder &encoder, WriteStream &writer, const int32_t &value) {
+	WriteValue(encoder, writer, int64_t(value));
+}
+} // namespace dbp_encoder
+
 template <class SRC, class TGT, class OP = ParquetCastOperator>
 class StandardColumnWriter : public BasicColumnWriter {
 public:
@@ -1115,7 +1147,7 @@ public:
 		switch (page_state.encoding) {
 		case Encoding::DELTA_BINARY_PACKED:
 			if (!page_state.initialized) {
-				page_state.dbp_encoder.BeginWrite(temp_writer, 0);
+				dbp_encoder::BeginWrite<int64_t>(page_state.dbp_encoder, temp_writer, 0);
 			}
 			page_state.dbp_encoder.FinishWrite(temp_writer);
 			break;
@@ -1238,7 +1270,6 @@ public:
 
 		case Encoding::DELTA_BINARY_PACKED: {
 			// TODO make sure we're only writing 32 and 64 bit ints here
-			auto &encoder = page_state.dbp_encoder;
 			idx_t r = chunk_start;
 			if (!page_state.initialized) {
 				// find first non-null value
@@ -1248,7 +1279,7 @@ public:
 					}
 					const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
 					OP::template HandleStats<SRC, TGT>(stats, target_value);
-					encoder.BeginWrite(temp_writer, target_value);
+					dbp_encoder::BeginWrite(page_state.dbp_encoder, temp_writer, target_value);
 					page_state.initialized = true;
 					r++; // skip over
 					break;
@@ -1261,7 +1292,7 @@ public:
 				}
 				const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
 				OP::template HandleStats<SRC, TGT>(stats, target_value);
-				encoder.WriteValue(temp_writer, target_value);
+				dbp_encoder::WriteValue(page_state.dbp_encoder, temp_writer, target_value);
 			}
 			break;
 		}
