@@ -928,6 +928,83 @@ struct ParquetStringOperator : public BaseParquetOperator {
 	}
 };
 
+struct ParquetIntervalTargetType {
+	static constexpr const idx_t PARQUET_INTERVAL_SIZE = 12;
+	data_t bytes[PARQUET_INTERVAL_SIZE];
+};
+
+struct ParquetIntervalOperator : public BaseParquetOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		TGT result;
+		Store<uint32_t>(input.months, result.bytes);
+		Store<uint32_t>(input.days, result.bytes + sizeof(uint32_t));
+		Store<uint32_t>(input.micros / 1000, result.bytes + sizeof(uint32_t) * 2);
+		return result;
+	}
+
+	template <class SRC, class TGT>
+	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
+		return nullptr;
+	}
+
+	template <class SRC, class TGT>
+	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
+	}
+
+	template <class SRC, class TGT>
+	static void WriteToStream(const TGT &target_value, WriteStream &ser) {
+		ser.WriteData(target_value.bytes, ParquetIntervalTargetType::PARQUET_INTERVAL_SIZE);
+	}
+
+	template <class SRC, class TGT>
+	static uint64_t XXHash64(const TGT &target_value) {
+		return duckdb_zstd::XXH64(target_value.bytes, ParquetIntervalTargetType::PARQUET_INTERVAL_SIZE, 0);
+	}
+};
+
+struct ParquetUUIDTargetType {
+	static constexpr const idx_t PARQUET_UUID_SIZE = 16;
+	data_t bytes[PARQUET_UUID_SIZE];
+};
+
+struct ParquetUUIDOperator : public BaseParquetOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		TGT result;
+		uint64_t high_bytes = input.upper ^ (int64_t(1) << 63);
+		uint64_t low_bytes = input.lower;
+		for (idx_t i = 0; i < sizeof(uint64_t); i++) {
+			auto shift_count = (sizeof(uint64_t) - i - 1) * 8;
+			result.bytes[i] = (high_bytes >> shift_count) & 0xFF;
+		}
+		for (idx_t i = 0; i < sizeof(uint64_t); i++) {
+			auto shift_count = (sizeof(uint64_t) - i - 1) * 8;
+			result.bytes[sizeof(uint64_t) + i] = (low_bytes >> shift_count) & 0xFF;
+		}
+		return result;
+	}
+
+	template <class SRC, class TGT>
+	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
+		return nullptr;
+	}
+
+	template <class SRC, class TGT>
+	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
+	}
+
+	template <class SRC, class TGT>
+	static void WriteToStream(const TGT &target_value, WriteStream &ser) {
+		ser.WriteData(target_value.bytes, ParquetUUIDTargetType::PARQUET_UUID_SIZE);
+	}
+
+	template <class SRC, class TGT>
+	static uint64_t XXHash64(const TGT &target_value) {
+		return duckdb_zstd::XXH64(target_value.bytes, ParquetUUIDTargetType::PARQUET_UUID_SIZE, 0);
+	}
+};
+
 struct ParquetTimeTZOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
@@ -1439,95 +1516,6 @@ public:
 
 	idx_t GetRowSize(const Vector &vector, const idx_t index, const BasicColumnWriterState &state) const override {
 		return sizeof(hugeint_t);
-	}
-};
-
-//===--------------------------------------------------------------------===//
-// UUID Column Writer
-//===--------------------------------------------------------------------===//
-class UUIDColumnWriter : public BasicColumnWriter {
-	static constexpr const idx_t PARQUET_UUID_SIZE = 16;
-
-public:
-	UUIDColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, idx_t max_repeat,
-	                 idx_t max_define, bool can_have_nulls)
-	    : BasicColumnWriter(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define, can_have_nulls) {
-	}
-	~UUIDColumnWriter() override = default;
-
-public:
-	static void WriteParquetUUID(hugeint_t input, data_ptr_t result) {
-		uint64_t high_bytes = input.upper ^ (int64_t(1) << 63);
-		uint64_t low_bytes = input.lower;
-
-		for (idx_t i = 0; i < sizeof(uint64_t); i++) {
-			auto shift_count = (sizeof(uint64_t) - i - 1) * 8;
-			result[i] = (high_bytes >> shift_count) & 0xFF;
-		}
-		for (idx_t i = 0; i < sizeof(uint64_t); i++) {
-			auto shift_count = (sizeof(uint64_t) - i - 1) * 8;
-			result[sizeof(uint64_t) + i] = (low_bytes >> shift_count) & 0xFF;
-		}
-	}
-
-	void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state,
-	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
-		auto &mask = FlatVector::Validity(input_column);
-		auto *ptr = FlatVector::GetData<hugeint_t>(input_column);
-
-		data_t temp_buffer[PARQUET_UUID_SIZE];
-		for (idx_t r = chunk_start; r < chunk_end; r++) {
-			if (mask.RowIsValid(r)) {
-				WriteParquetUUID(ptr[r], temp_buffer);
-				temp_writer.WriteData(temp_buffer, PARQUET_UUID_SIZE);
-			}
-		}
-	}
-
-	idx_t GetRowSize(const Vector &vector, const idx_t index, const BasicColumnWriterState &state) const override {
-		return PARQUET_UUID_SIZE;
-	}
-};
-
-//===--------------------------------------------------------------------===//
-// Interval Column Writer
-//===--------------------------------------------------------------------===//
-class IntervalColumnWriter : public BasicColumnWriter {
-	static constexpr const idx_t PARQUET_INTERVAL_SIZE = 12;
-
-public:
-	IntervalColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, idx_t max_repeat,
-	                     idx_t max_define, bool can_have_nulls)
-	    : BasicColumnWriter(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define, can_have_nulls) {
-	}
-	~IntervalColumnWriter() override = default;
-
-public:
-	static void WriteParquetInterval(interval_t input, data_ptr_t result) {
-		if (input.days < 0 || input.months < 0 || input.micros < 0) {
-			throw IOException("Parquet files do not support negative intervals");
-		}
-		Store<uint32_t>(input.months, result);
-		Store<uint32_t>(input.days, result + sizeof(uint32_t));
-		Store<uint32_t>(input.micros / 1000, result + sizeof(uint32_t) * 2);
-	}
-
-	void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state,
-	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
-		auto &mask = FlatVector::Validity(input_column);
-		auto *ptr = FlatVector::GetData<interval_t>(input_column);
-
-		data_t temp_buffer[PARQUET_INTERVAL_SIZE];
-		for (idx_t r = chunk_start; r < chunk_end; r++) {
-			if (mask.RowIsValid(r)) {
-				WriteParquetInterval(ptr[r], temp_buffer);
-				temp_writer.WriteData(temp_buffer, PARQUET_INTERVAL_SIZE);
-			}
-		}
-	}
-
-	idx_t GetRowSize(const Vector &vector, const idx_t index, const BasicColumnWriterState &state) const override {
-		return PARQUET_INTERVAL_SIZE;
 	}
 };
 
@@ -2331,11 +2319,11 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetStringOperator>>(
 		    writer, schema_idx, std::move(schema_path), max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::UUID:
-		return make_uniq<UUIDColumnWriter>(writer, schema_idx, std::move(schema_path), max_repeat, max_define,
-		                                   can_have_nulls);
+		return make_uniq<StandardColumnWriter<hugeint_t, ParquetUUIDTargetType, ParquetUUIDOperator>>(
+		    writer, schema_idx, std::move(schema_path), max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::INTERVAL:
-		return make_uniq<IntervalColumnWriter>(writer, schema_idx, std::move(schema_path), max_repeat, max_define,
-		                                       can_have_nulls);
+		return make_uniq<StandardColumnWriter<interval_t, ParquetIntervalTargetType, ParquetIntervalOperator>>(
+		    writer, schema_idx, std::move(schema_path), max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::ENUM:
 		return make_uniq<EnumColumnWriter>(writer, type, schema_idx, std::move(schema_path), max_repeat, max_define,
 		                                   can_have_nulls);

@@ -23,7 +23,18 @@ public:
 	}
 
 public:
-	void BeginWrite(WriteStream &writer, const int64_t first_value) {
+	template <class T>
+	void BeginWrite(WriteStream &writer, const T &first_value) {
+		throw InternalException("Can't write type to DELTA_BINARY_PACKED column");
+	}
+
+	template <>
+	void BeginWrite(WriteStream &writer, const int32_t &first_value) {
+		BeginWrite(writer, int64_t(first_value));
+	}
+
+	template <>
+	void BeginWrite(WriteStream &writer, const int64_t &first_value) {
 		// <block size in values> <number of miniblocks in a block> <total value count> <first value>
 
 		// the block size is a multiple of 128; it is stored as a ULEB128 int
@@ -50,6 +61,17 @@ public:
 		block_count = 0;
 	}
 
+	template <class T>
+	void WriteValue(WriteStream &writer, const T &value) {
+		throw InternalException("Can't write type to DELTA_BINARY_PACKED column");
+	}
+
+	template <>
+	void WriteValue(WriteStream &writer, const int32_t &value) {
+		WriteValue(writer, int64_t(value));
+	}
+
+	template <>
 	void WriteValue(WriteStream &writer, const int64_t &value) {
 		// 1. Compute the differences between consecutive elements. For the first element in the block,
 		// use the last element in the previous block or, in the case of the first block,
@@ -70,14 +92,6 @@ public:
 		if (block_count == BLOCK_SIZE_IN_VALUES) {
 			WriteBlock(writer);
 		}
-	}
-
-	// only here for template expansion ^^
-	void BeginWrite(WriteStream &writer, const string_t first_value) {
-		throw InternalException("Can't write string_t to DELTA_BINARY_PACKED column");
-	}
-	void WriteValue(WriteStream &writer, const string_t &value) {
-		throw InternalException("Can't write string_t to DELTA_BINARY_PACKED column");
 	}
 
 	void FinishWrite(WriteStream &writer) {
