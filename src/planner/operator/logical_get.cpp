@@ -170,7 +170,7 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(200, "table_index", table_index);
 	serializer.WriteProperty(201, "returned_types", returned_types);
 	serializer.WriteProperty(202, "names", names);
-	serializer.WriteProperty(203, "column_ids", column_ids);
+	/* [Deleted] (vector<column_t>) "column_ids" */
 	serializer.WriteProperty(204, "projection_ids", projection_ids);
 	serializer.WriteProperty(205, "table_filters", table_filters);
 	FunctionSerializer::Serialize(serializer, function, bind_data.get());
@@ -183,14 +183,17 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 		serializer.WriteProperty(209, "input_table_names", input_table_names);
 	}
 	serializer.WriteProperty(210, "projected_input", projected_input);
+	serializer.WriteProperty(211, "column_indexes", column_ids);
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
+	vector<column_t> legacy_column_ids;
+
 	auto result = unique_ptr<LogicalGet>(new LogicalGet());
 	deserializer.ReadProperty(200, "table_index", result->table_index);
 	deserializer.ReadProperty(201, "returned_types", result->returned_types);
 	deserializer.ReadProperty(202, "names", result->names);
-	deserializer.ReadProperty(203, "column_ids", result->column_ids);
+	deserializer.ReadProperty(203, "column_ids", legacy_column_ids);
 	deserializer.ReadProperty(204, "projection_ids", result->projection_ids);
 	deserializer.ReadProperty(205, "table_filters", result->table_filters);
 	auto entry = FunctionSerializer::DeserializeBase<TableFunction, TableFunctionCatalogEntry>(
@@ -198,13 +201,25 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	result->function = entry.first;
 	auto &function = result->function;
 	auto has_serialize = entry.second;
-
-	unique_ptr<FunctionData> bind_data;
 	if (!has_serialize) {
 		deserializer.ReadProperty(206, "parameters", result->parameters);
 		deserializer.ReadProperty(207, "named_parameters", result->named_parameters);
 		deserializer.ReadProperty(208, "input_table_types", result->input_table_types);
 		deserializer.ReadProperty(209, "input_table_names", result->input_table_names);
+	}
+	deserializer.ReadProperty(210, "projected_input", result->projected_input);
+	deserializer.ReadPropertyWithDefault(211, "column_indexes", result->column_ids);
+	if (!legacy_column_ids.empty()) {
+		if (!result->column_ids.empty()) {
+			throw SerializationException("LogicalGet::Deserialize - either column_ids or column_indexes should be set - not both");
+		}
+		for(auto &col_id : legacy_column_ids) {
+			result->column_ids.emplace_back(col_id);
+		}
+	}
+
+	unique_ptr<FunctionData> bind_data;
+	if (!has_serialize) {
 		TableFunctionRef empty_ref;
 		TableFunctionBindInput input(result->parameters, result->named_parameters, result->input_table_types,
 		                             result->input_table_names, function.function_info.get(), nullptr, result->function,
@@ -236,7 +251,6 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 		bind_data = FunctionSerializer::FunctionDeserialize(deserializer, function);
 	}
 	result->bind_data = std::move(bind_data);
-	deserializer.ReadProperty(210, "projected_input", result->projected_input);
 	return std::move(result);
 }
 
