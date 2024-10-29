@@ -154,6 +154,14 @@ idx_t ColumnSegment::SegmentSize() const {
 	return segment_size;
 }
 
+idx_t ColumnSegment::BlockUsage() const {
+	return block_usage;
+}
+
+void ColumnSegment::UpdateBlockUsage(idx_t block_usage_p) {
+	block_usage = block_usage_p;
+}
+
 void ColumnSegment::Resize(idx_t new_size) {
 	D_ASSERT(new_size > segment_size);
 	D_ASSERT(offset == 0);

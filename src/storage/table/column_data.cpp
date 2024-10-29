@@ -827,6 +827,7 @@ void ColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_p
 			column_info.persistent = true;
 			column_info.block_id = segment->GetBlockId();
 			column_info.block_offset = segment->GetBlockOffset();
+			column_info.segment_size = segment->BlockUsage();
 		} else {
 			column_info.persistent = false;
 		}

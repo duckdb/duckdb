@@ -76,6 +76,9 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	names.emplace_back("block_offset");
 	return_types.emplace_back(LogicalType::BIGINT);
 
+	names.emplace_back("segment_size");
+	return_types.emplace_back(LogicalType::BIGINT);
+
 	names.emplace_back("segment_info");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -132,7 +135,9 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 		if (entry.persistent) {
 			output.SetValue(col_idx++, count, Value::BIGINT(entry.block_id));
 			output.SetValue(col_idx++, count, Value::BIGINT(NumericCast<int64_t>(entry.block_offset)));
+			output.SetValue(col_idx++, count, Value::BIGINT(NumericCast<int64_t>(entry.segment_size)));
 		} else {
+			output.SetValue(col_idx++, count, Value());
 			output.SetValue(col_idx++, count, Value());
 			output.SetValue(col_idx++, count, Value());
 		}

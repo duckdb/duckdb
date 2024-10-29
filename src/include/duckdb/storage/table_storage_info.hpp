@@ -32,6 +32,7 @@ struct ColumnSegmentInfo {
 	bool persistent;
 	block_id_t block_id;
 	idx_t block_offset;
+	idx_t segment_size;
 	string segment_info;
 };
 

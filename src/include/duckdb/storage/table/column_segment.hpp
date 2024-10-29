@@ -78,8 +78,11 @@ public:
 	//! Skip a scan forward to the row_index specified in the scan state
 	void Skip(ColumnScanState &state);
 
-	// The maximum size of the buffer (in bytes)
+	//! The maximum size of the buffer (in bytes)
 	idx_t SegmentSize() const;
+	//! The storage footprint of this segment (in bytes)
+	idx_t BlockUsage() const;
+	void UpdateBlockUsage(idx_t block_usage);
 	//! Resize the block
 	void Resize(idx_t segment_size);
 
@@ -154,6 +157,8 @@ private:
 	idx_t offset;
 	//! The allocated segment size, which is bounded by Storage::BLOCK_SIZE
 	idx_t segment_size;
+	//! The bytes of the block occupied by this segments data
+	idx_t block_usage = 0;
 	//! Storage associated with the compressed segment
 	unique_ptr<CompressedSegmentState> segment_state;
 };
