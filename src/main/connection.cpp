@@ -172,6 +172,9 @@ unique_ptr<PreparedStatement> Connection::Prepare(unique_ptr<SQLStatement> state
 
 unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, vector<Value> &values) {
 	auto pending = PendingQuery(query, values, false);
+	if (pending->HasError()) {
+		return make_uniq<MaterializedQueryResult>(pending->GetErrorObject());
+	}
 	return pending->Execute();
 }
 

@@ -237,10 +237,6 @@ char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_wid
 		if (!pStmt) {
 			return nullptr;
 		}
-		if (!pStmt->prepared) {
-			pStmt->db->last_error = ErrorData("Attempting sqlite3_step() on a non-successfully prepared statement");
-			return nullptr;
-		}
 		if (pStmt->result) {
 			pStmt->db->last_error = ErrorData("Statement has already been executed");
 			return nullptr;
@@ -262,7 +258,8 @@ char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_wid
 			return nullptr;
 		}
 		auto &materialized = (MaterializedQueryResult &)*pStmt->result;
-		auto properties = pStmt->prepared->GetStatementProperties();
+
+		auto properties = pStmt->result->properties;
 		if (properties.return_type == StatementReturnType::CHANGED_ROWS && materialized.RowCount() > 0) {
 			// update total changes
 			auto row_changes = materialized.Collection().GetRows().GetValue(0, 0);

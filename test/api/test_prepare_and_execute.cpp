@@ -34,9 +34,7 @@ static void CheckSimpleQueryPrepareExecute(Connection &con) {
 static void CheckCatalogErrorQuery(Connection &con) {
 	duckdb::vector<Value> values = {Value(12)};
 	auto pending_result = con.PendingQuery("SELECT COUNT(*) FROM b WHERE i=?", values, true);
-	REQUIRE(!pending_result->HasError());
-	auto result = pending_result->Execute();
-	D_ASSERT(result->HasError() && result->GetErrorType() == ExceptionType::CATALOG);
+	REQUIRE(pending_result->HasError() && pending_result->GetErrorType() == ExceptionType::CATALOG);
 }
 
 static void CheckConversionErrorQuery(Connection &con) {
