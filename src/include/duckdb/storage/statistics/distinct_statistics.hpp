@@ -52,8 +52,6 @@ private:
 	static constexpr double INTEGRAL_SAMPLE_RATE = 0.3;
 	//! For concurrent access
 	mutable mutex lock;
-	//! Preallocated vector for hashes
-	Vector hash_vec;
 };
 
 } // namespace duckdb

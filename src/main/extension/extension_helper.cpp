@@ -363,7 +363,7 @@ ExtensionUpdateResult ExtensionHelper::UpdateExtension(ClientContext &context, c
 		throw InvalidInputException("Failed to update the extension '%s', the extension is not installed!",
 		                            extension_name);
 	} else if (update_result.tag == ExtensionUpdateResultTag::UNKNOWN) {
-		throw InternalException("Failed to update extension '%s', an unknown error ocurred", extension_name);
+		throw InternalException("Failed to update extension '%s', an unknown error occurred", extension_name);
 	}
 	return update_result;
 }

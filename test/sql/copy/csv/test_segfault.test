@@ -5,6 +5,25 @@
 statement ok
 PRAGMA enable_verification
 
+query II
+from read_csv('data/csv/segfault.csv',
+   header=false,
+   quote='"',
+   escape = '"',
+   sep=',',
+   ignore_errors=true);
+----
+
+# Also try with multiple ignored lines
+query I
+from read_csv('data/csv/venue_pipe.csv',
+   header=false,
+   quote='"',
+   escape = '"',
+   sep='|',
+   ignore_errors=true, columns = {'a':'varchar'});
+----
+
 statement error
 from 'data/csv/fuzzing/0.csv'
 ----
