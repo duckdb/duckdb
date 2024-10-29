@@ -8,21 +8,13 @@ pd = pytest.importorskip("pandas")
 
 
 def using_table(con, to_scan, object_name):
-    local_scope = {
-        'con': con,
-        object_name: to_scan,
-        'object_name': object_name
-	}
+    local_scope = {'con': con, object_name: to_scan, 'object_name': object_name}
     exec(f"result = con.table(object_name)", globals(), local_scope)
     return local_scope["result"]
 
 
 def using_sql(con, to_scan, object_name):
-    local_scope = {
-        'con': con,
-        object_name: to_scan,
-        'object_name': object_name
-	}
+    local_scope = {'con': con, object_name: to_scan, 'object_name': object_name}
     exec(f"result = con.sql('select * from \"{object_name}\"')", globals(), local_scope)
     return local_scope["result"]
 
