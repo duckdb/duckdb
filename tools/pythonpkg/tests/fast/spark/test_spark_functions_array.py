@@ -66,3 +66,10 @@ class TestSparkFunctionsArray:
             Row(max_value=1),
             Row(max_value=2),
         ]
+
+    def test_array_agg(self, spark):
+        df = spark.createDataFrame([[1, "A"],[1, "A"],[2, "A"]], ["c", "group"])
+
+        res = df.groupBy("group").agg(F.array_agg("c").alias("r")).collect()
+
+        assert res[0] == Row(group="A", r=[1, 1, 2])
