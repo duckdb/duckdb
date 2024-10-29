@@ -4308,6 +4308,8 @@ const char* EnumUtil::ToChars<MemoryTag>(MemoryTag value) {
 		return "ALLOCATOR";
 	case MemoryTag::EXTENSION:
 		return "EXTENSION";
+	case MemoryTag::TRANSACTION:
+		return "TRANSACTION";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<MemoryTag>", value));
 	}
@@ -4350,6 +4352,9 @@ MemoryTag EnumUtil::FromString<MemoryTag>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "EXTENSION")) {
 		return MemoryTag::EXTENSION;
+	}
+	if (StringUtil::Equals(value, "TRANSACTION")) {
+		return MemoryTag::TRANSACTION;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<MemoryTag>", value));
 }

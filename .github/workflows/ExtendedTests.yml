@@ -32,9 +32,7 @@ jobs:
        CXX: clang++
        GEN: ninja
        BUILD_BENCHMARK: 1
-       BUILD_TPCH: 1
-       BUILD_TPCDS: 1
-       BUILD_HTTPFS: 1
+       CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
      steps:
      - uses: actions/checkout@v4
@@ -114,9 +112,7 @@ jobs:
        CXX: clang++
        GEN: ninja
        BUILD_BENCHMARK: 1
-       BUILD_TPCH: 1
-       BUILD_TPCDS: 1
-       BUILD_HTTPFS: 1
+       CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
      steps:
      - uses: actions/checkout@v4
@@ -195,10 +191,8 @@ jobs:
        CXX: g++
        GEN: ninja
        BUILD_BENCHMARK: 1
-       BUILD_TPCH: 1
-       BUILD_TPCDS: 1
-       BUILD_HTTPFS: 1
        BUILD_JEMALLOC: 1
+       CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
      steps:
        - uses: actions/checkout@v4
@@ -282,10 +276,8 @@ jobs:
        CXX: g++
        GEN: ninja
        BUILD_BENCHMARK: 1
-       BUILD_TPCH: 1
-       BUILD_TPCDS: 1
-       BUILD_HTTPFS: 1
        BUILD_JEMALLOC: 1
+       CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
      steps:
        - uses: actions/checkout@v4

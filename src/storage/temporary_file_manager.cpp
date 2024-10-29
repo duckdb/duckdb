@@ -212,9 +212,14 @@ unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(idx_t block_inde
 
 	const auto compressed_size = Load<idx_t>(compressed_buffer.get());
 	D_ASSERT(!duckdb_zstd::ZSTD_isError(compressed_size));
-	const auto decompressed_size = duckdb_zstd::ZSTD_decompress(
-	    buffer->InternalBuffer(), buffer->AllocSize(), compressed_buffer.get() + sizeof(idx_t), compressed_size);
+#ifdef DEBUG
+	const auto decompressed_size =
+#endif
+	    duckdb_zstd::ZSTD_decompress(buffer->InternalBuffer(), buffer->AllocSize(),
+	                                 compressed_buffer.get() + sizeof(idx_t), compressed_size);
+#ifdef DEBUG
 	D_ASSERT(!duckdb_zstd::ZSTD_isError(decompressed_size));
+#endif
 
 	D_ASSERT(decompressed_size == buffer->AllocSize());
 	return buffer;
