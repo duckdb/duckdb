@@ -119,6 +119,8 @@ protected:
 	unique_ptr<WriteAheadLog> wal;
 	//! Whether or not the database is opened in read-only mode
 	bool read_only;
+	//! Whether WAL file might exists, or it's guaranteed to not be there
+	bool wal_file_might_exists {true};
 	//! When loading a database, we do not yet set the wal-field. Therefore, GetWriteAheadLog must
 	//! return nullptr when loading a database
 	bool load_complete = false;

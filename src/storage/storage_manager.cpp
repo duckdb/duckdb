@@ -20,7 +20,7 @@
 namespace duckdb {
 
 StorageManager::StorageManager(AttachedDatabase &db, string path_p, bool read_only)
-    : db(db), path(std::move(path_p)), read_only(read_only) {
+    : db(db), path(std::move(path_p)), read_only(read_only), wal_file_might_exists(true) {
 
 	if (path.empty()) {
 		path = IN_MEMORY_PATH;
@@ -73,8 +73,14 @@ optional_ptr<WriteAheadLog> StorageManager::GetWALIfExists() {
 		return nullptr;
 	}
 
-	if (!wal) {
-		return nullptr;
+	if (!wal && wal_file_might_exists) {
+		auto wal_path = GetWALPath();
+		auto &fs = FileSystem::Get(db);
+		if (fs.FileExists(wal_path)) {
+			wal = make_uniq<WriteAheadLog>(db, wal_path);
+		} else {
+			wal_file_might_exists = false;
+		}
 	}
 	return wal.get();
 }
