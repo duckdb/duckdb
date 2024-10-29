@@ -13,6 +13,8 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/parser/column_list.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 
@@ -61,9 +63,23 @@ struct IndexStorageInfo {
 	//! The root block pointer of the index. Necessary to support older storage files.
 	BlockPointer root_block_ptr;
 
+public:
 	//! Returns true, if IndexStorageInfo holds information to deserialize an index.
 	bool IsValid() const {
 		return root_block_ptr.IsValid() || !allocator_infos.empty();
+	}
+
+	//! Returns the name of an index.
+	static string GetName(IndexConstraintType type, const string &table, const ColumnList &columns,
+	                      const vector<LogicalIndex> &indexes) {
+
+		auto type_name = EnumUtil::ToString(type);
+		string column_names;
+		for (const auto &idx : indexes) {
+			auto &col = columns.GetColumn(idx);
+			column_names += "_" + col.Name();
+		}
+		return type_name + "_" + table + column_names;
 	}
 
 	void Serialize(Serializer &serializer) const;

@@ -587,8 +587,8 @@ unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateS
 		}
 		dependencies.AddDependency(entry);
 	});
+
 	vector<unique_ptr<Expression>> expressions;
-	expressions.reserve(base.expressions.size());
 	for (auto &expr : base.expressions) {
 		expressions.push_back(index_binder.Bind(expr));
 	}
@@ -601,10 +601,12 @@ unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateS
 		}
 		create_index_info->scan_types.push_back(get.returned_types[column_id]);
 	}
+
 	create_index_info->scan_types.emplace_back(LogicalType::ROW_TYPE);
 	create_index_info->names = get.names;
 	create_index_info->column_ids = column_ids;
 	create_index_info->schema = table.schema.name;
+
 	auto &bind_data = get.bind_data->Cast<TableScanBindData>();
 	bind_data.is_create_index = true;
 	get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);

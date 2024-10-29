@@ -125,6 +125,7 @@ public:
 	                                                     vector<unique_ptr<Expression>> &bound_defaults);
 	static unique_ptr<BoundCreateTableInfo> BindCreateTableCheckpoint(unique_ptr<CreateInfo> info,
 	                                                                  SchemaCatalogEntry &schema);
+
 	static vector<unique_ptr<BoundConstraint>> BindConstraints(ClientContext &context,
 	                                                           const vector<unique_ptr<Constraint>> &constraints,
 	                                                           const string &table_name, const ColumnList &columns);
@@ -133,6 +134,7 @@ public:
 	vector<unique_ptr<BoundConstraint>> BindConstraints(const TableCatalogEntry &table);
 	vector<unique_ptr<BoundConstraint>> BindNewConstraints(vector<unique_ptr<Constraint>> &constraints,
 	                                                       const string &table_name, const ColumnList &columns);
+	BoundStatement BindAlterAddIndex(BoundStatement &result, CatalogEntry &entry, unique_ptr<AlterInfo> alter_info);
 
 	unique_ptr<BoundConstraint> BindConstraint(Constraint &constraint, const string &table, const ColumnList &columns);
 

@@ -14,15 +14,29 @@ INSERT INTO duplicates VALUES (1, 10), (2, 20), (3, 30), (1, 100)
 statement error
 ALTER TABLE duplicates ADD PRIMARY KEY (i)
 ----
-<REGEX>:Constraint Error.*PRIMARY KEY or UNIQUE constraint violated: duplicate key "1".*
+<REGEX>:Constraint Error.*contains duplicates on indexed column.*
 
 # Now test with NULLs.
 
 statement ok
-CREATE TABLE nulls (i INTEGER, j INTEGER)
+CREATE TABLE nulls (i INTEGER, j INTEGER);
 
 statement ok
-INSERT INTO nulls VALUES (1, 10), (2, 20), (NULL, 30), (3, 100)
+INSERT INTO nulls VALUES (1, 10), (2, NULL), (3, 30), (4, 40);
+
+statement error
+ALTER TABLE nulls ADD PRIMARY KEY (i, j);
+----
+<REGEX>:Constraint Error.*NOT NULL constraint failed.*
+
+statement ok
+DROP TABLE nulls;
+
+statement ok
+CREATE TABLE nulls (i INTEGER, j INTEGER);
+
+statement ok
+INSERT INTO nulls VALUES (5, 10), (NULL, 20), (7, 30), (8, 100);
 
 statement error
 ALTER TABLE nulls ADD PRIMARY KEY (i)

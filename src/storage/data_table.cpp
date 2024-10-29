@@ -29,17 +29,6 @@
 
 namespace duckdb {
 
-IndexStorageInfo GetIndexInfo(IndexConstraintType type, const string &table, const ColumnList &columns,
-                              const vector<LogicalIndex> &column_indexes) {
-	auto name = EnumUtil::ToString(type);
-	string column_names;
-	for (const auto &idx : column_indexes) {
-		auto &col = columns.GetColumn(idx);
-		column_names += "_" + col.Name();
-	}
-	return IndexStorageInfo(name + "_" + table + column_names);
-}
-
 DataTableInfo::DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, string schema,
                              string table)
     : db(db), table_io_manager(std::move(table_io_manager_p)), schema(std::move(schema)), table(std::move(table)) {
@@ -146,6 +135,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint &constraint)
     : db(parent.db), info(parent.info), row_groups(parent.row_groups), is_root(true) {
+
 	// ALTER COLUMN to add a new constraint.
 
 	// Clone the storage info vector or the table.
@@ -163,7 +153,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 	if (constraint.type != ConstraintType::UNIQUE) {
 		VerifyNewConstraint(local_storage, parent, constraint);
 	} else {
-		AddAndCreateIndex(local_storage, parent, constraint);
+		AddIndex(constraint);
 	}
 	local_storage.MoveStorage(parent, *this);
 	parent.is_root = false;
@@ -667,12 +657,14 @@ void DataTable::VerifyNewConstraint(LocalStorage &local_storage, DataTable &pare
 	local_storage.VerifyNewConstraint(parent, constraint);
 }
 
-void DataTable::AddAndCreateIndex(LocalStorage &local_storage, DataTable &parent, BoundConstraint &constraint) {
-	if (!IsRoot()) {
-		throw TransactionException("cannot add an index to a table that has been altered");
+void DataTable::AddIndex(BoundConstraint &constraint) {
+	auto &unique = constraint.Cast<BoundUniqueConstraint>();
+	if (!unique.info.IsValid()) {
+		return;
 	}
 
-	auto &unique = constraint.Cast<BoundUniqueConstraint>();
+	// WAL replay.
+	D_ASSERT(!unique.info.name.empty());
 	auto constraint_type = unique.is_primary_key ? IndexConstraintType::PRIMARY : IndexConstraintType::UNIQUE;
 
 	vector<ColumnDefinition> col_def_copies;
@@ -686,22 +678,6 @@ void DataTable::AddAndCreateIndex(LocalStorage &local_storage, DataTable &parent
 		auto &col = column_list.GetColumn(physical_index);
 		column_indexes.push_back(col.Logical());
 	}
-
-	auto initialize_data = false;
-	if (!unique.info.IsValid()) {
-		unique.info = GetIndexInfo(constraint_type, info->table, column_list, column_indexes);
-		initialize_data = true;
-	}
-	D_ASSERT(!unique.info.name.empty());
-
-	// Ensure that there are no other indexes with that name on this table.
-	auto &indexes = info->GetIndexes();
-	indexes.Scan([&](Index &index) {
-		if (index.GetIndexName() == unique.info.name) {
-			throw CatalogException("an index with that name already exists for this table: %s", unique.info.name);
-		}
-		return false;
-	});
 
 	// Fetch the column types and create bound column reference expressions.
 	vector<column_t> physical_ids;
@@ -721,21 +697,7 @@ void DataTable::AddAndCreateIndex(LocalStorage &local_storage, DataTable &parent
 	auto &io_manager = TableIOManager::Get(*this);
 	auto global_art = make_uniq<ART>(unique.info.name, constraint_type, physical_ids, io_manager,
 	                                 std::move(global_expressions), db, nullptr, unique.info);
-
-	// If this is a WAL replay, then we only create the global index and return.
-	if (!initialize_data) {
-		AddIndex(std::move(global_art));
-		return;
-	}
-
-	parent.row_groups->AppendToIndex(parent, *global_art);
 	AddIndex(std::move(global_art));
-
-	// Otherwise, we also create the local index.
-	auto local_art =
-	    make_uniq<ART>(unique.info.name, constraint_type, physical_ids, io_manager, std::move(local_expressions), db);
-	local_storage.AppendToIndex(parent, *local_art);
-	local_storage.AddIndex(parent, std::move(local_art));
 }
 
 bool HasUniqueIndexes(TableIndexList &list) {

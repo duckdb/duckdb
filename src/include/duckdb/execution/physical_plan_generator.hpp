@@ -108,7 +108,7 @@ private:
 public:
 	idx_t delim_index = 0;
 
-private:
+public:
 	ClientContext &context;
 };
 } // namespace duckdb

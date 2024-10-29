@@ -237,9 +237,8 @@ public:
 	void AddIndex(unique_ptr<Index> index);
 
 private:
-	//! AddAndCreateIndex initializes an index both for the global and local table storage.
-	//! Then, it scans both the global and local storage, and appends the respective values to the index.
-	void AddAndCreateIndex(LocalStorage &local_storage, DataTable &parent, BoundConstraint &constraint);
+	//! AddIndex adds an index to the table.
+	void AddIndex(BoundConstraint &constraint);
 
 	//! Verify the new added constraints against current persistent&local data
 	void VerifyNewConstraint(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint);

@@ -7,11 +7,114 @@
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include "duckdb/planner/binder.hpp"
-
-//! This file contains the binder definitions for statements that do not need to be bound at all and only require a
-//! straightforward conversion
+#include "duckdb/planner/operator/logical_create_index.hpp"
 
 namespace duckdb {
+
+bool UseLogicalCreateIndex(AlterInfo &alter_info) {
+	if (alter_info.type != AlterType::ALTER_TABLE) {
+		return false;
+	}
+
+	auto &table_info = alter_info.Cast<AlterTableInfo>();
+	if (table_info.alter_table_type != AlterTableType::ADD_CONSTRAINT) {
+		return false;
+	}
+
+	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
+	if (constraint_info.constraint->type != ConstraintType::UNIQUE) {
+		return false;
+	}
+
+	auto &unique_info = constraint_info.constraint->Cast<UniqueConstraint>();
+	if (!unique_info.IsPrimaryKey()) {
+		return false;
+	}
+
+	return true;
+}
+
+BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &entry,
+                                         unique_ptr<AlterInfo> alter_info) {
+	// FIXME: This function overlaps with Bind(CreateStatement &stmt), CatalogType::INDEX_ENTRY.
+	auto &table_info = alter_info->Cast<AlterTableInfo>();
+
+	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
+	auto &table = entry.Cast<DuckTableEntry>();
+	auto &column_list = table.GetColumns();
+
+	auto bound_constraint = BindUniqueConstraint(*constraint_info.constraint, table_info.name, column_list);
+	auto &bound_unique = bound_constraint->Cast<BoundUniqueConstraint>();
+
+	// Create the CreateIndexInfo.
+	auto create_index_info = make_uniq<CreateIndexInfo>();
+	create_index_info->table = table_info.name;
+	create_index_info->index_type = "ART";
+	create_index_info->constraint_type = IndexConstraintType::PRIMARY;
+
+	vector<LogicalIndex> column_indexes;
+	for (const auto &physical_index : bound_unique.keys) {
+		auto &col = column_list.GetColumn(physical_index);
+		column_indexes.push_back(col.Logical());
+
+		unique_ptr<ParsedExpression> parsed = make_uniq<ColumnRefExpression>(col.GetName(), table_info.name);
+		create_index_info->expressions.push_back(parsed->Copy());
+		create_index_info->parsed_expressions.push_back(parsed->Copy());
+	}
+
+	auto constraint_type = IndexConstraintType::PRIMARY;
+	auto index_name = IndexStorageInfo::GetName(constraint_type, table_info.name, column_list, column_indexes);
+	create_index_info->index_name = index_name;
+	constraint_info.constraint->info.name = index_name;
+	D_ASSERT(!create_index_info->index_name.empty());
+
+	// Plan the table scan.
+	auto table_ref = make_uniq<BaseTableRef>();
+	table_ref->catalog_name = table_info.catalog;
+	table_ref->schema_name = table_info.schema;
+	table_ref->table_name = table_info.name;
+
+	auto bound_table = Bind(*table_ref);
+	if (bound_table->type != TableReferenceType::BASE_TABLE) {
+		throw BinderException("can only add an index to a base table");
+	}
+	auto plan = CreatePlan(*bound_table);
+	auto &get = plan->Cast<LogicalGet>();
+
+	IndexBinder index_binder(*this, context);
+	auto &dependencies = create_index_info->dependencies;
+	auto &catalog = Catalog::GetCatalog(context, create_index_info->catalog);
+	index_binder.SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
+		if (&catalog != &entry.ParentCatalog()) {
+			return;
+		}
+		dependencies.AddDependency(entry);
+	});
+
+	vector<unique_ptr<Expression>> expressions;
+	for (auto &expr : create_index_info->expressions) {
+		expressions.push_back(index_binder.Bind(expr));
+	}
+
+	auto &column_ids = get.GetColumnIds();
+	for (auto &column_id : column_ids) {
+		create_index_info->scan_types.push_back(get.returned_types[column_id]);
+	}
+
+	create_index_info->scan_types.emplace_back(LogicalType::ROW_TYPE);
+	create_index_info->names = column_list.GetColumnNames();
+	create_index_info->column_ids = column_ids;
+	create_index_info->schema = table.schema.name;
+
+	auto &bind_data = get.bind_data->Cast<TableScanBindData>();
+	bind_data.is_create_index = true;
+	get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
+
+	result.plan = make_uniq<LogicalCreateIndex>(std::move(create_index_info), std::move(expressions), table,
+	                                            unique_ptr_cast<AlterInfo, AlterTableInfo>(std::move(alter_info)));
+	result.plan->children.push_back(std::move(plan));
+	return std::move(result);
+}
 
 BoundStatement Binder::Bind(AlterStatement &stmt) {
 	BoundStatement result;
@@ -22,37 +125,47 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 
 	optional_ptr<CatalogEntry> entry;
 	if (stmt.info->type == AlterType::SET_COLUMN_COMMENT) {
-		// for column comments we need to an extra step: they can alter a table or a view, we resolve that here.
+		// Extra step for column comments: They can alter a table or a view, and we resolve that here.
 		auto &info = stmt.info->Cast<SetColumnCommentInfo>();
 		entry = info.TryResolveCatalogEntry(entry_retriever);
+
 	} else {
-		// All other AlterTypes
+		// For any other ALTER, we retrieve the catalog entry directly.
 		entry = entry_retriever.GetEntry(stmt.info->GetCatalogType(), stmt.info->catalog, stmt.info->schema,
 		                                 stmt.info->name, stmt.info->if_not_found);
 	}
 
 	auto &properties = GetStatementProperties();
-	if (entry) {
-		D_ASSERT(!entry->deleted);
-		auto &catalog = entry->ParentCatalog();
-		if (catalog.IsSystemCatalog()) {
-			throw BinderException("Can not comment on System Catalog entries");
-		}
-		if (!entry->temporary) {
-			// we can only alter temporary tables/views in read-only mode
-			properties.RegisterDBModify(catalog, context);
-		}
-		stmt.info->catalog = catalog.GetName();
-		stmt.info->schema = entry->ParentSchema().name;
-	}
-	result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, std::move(stmt.info));
 	properties.return_type = StatementReturnType::NOTHING;
-	return result;
+	if (!entry) {
+		result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, std::move(stmt.info));
+		return result;
+	}
+
+	D_ASSERT(!entry->deleted);
+	auto &catalog = entry->ParentCatalog();
+	if (catalog.IsSystemCatalog()) {
+		throw BinderException("Can not comment on System Catalog entries");
+	}
+	if (!entry->temporary) {
+		// We can only alter temporary tables and views in read-only mode.
+		properties.RegisterDBModify(catalog, context);
+	}
+	stmt.info->catalog = catalog.GetName();
+	stmt.info->schema = entry->ParentSchema().name;
+
+	if (!UseLogicalCreateIndex(*stmt.info)) {
+		result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, std::move(stmt.info));
+		return result;
+	}
+
+	return BindAlterAddIndex(result, *entry, std::move(stmt.info));
 }
 
 BoundStatement Binder::Bind(TransactionStatement &stmt) {
 	auto &properties = GetStatementProperties();
-	// transaction statements do not require a valid transaction
+
+	// Transaction statements do not require a valid transaction.
 	properties.requires_valid_transaction = stmt.info->type == TransactionType::BEGIN_TRANSACTION;
 
 	BoundStatement result;
