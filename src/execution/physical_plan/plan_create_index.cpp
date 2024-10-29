@@ -27,6 +27,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	if (!index_type) {
 		throw BinderException("Unknown index type: " + op.info->index_type);
 	}
+	D_ASSERT(index_type->create_plan);
 
 	// table scan operator for index key columns and row IDs
 	dependencies.AddDependency(op.table);

@@ -65,8 +65,8 @@ public:
 	string name;
 
 	// Callbacks
-	index_plan_function_t create_plan;
-	index_create_function_t create_instance;
+	index_plan_function_t create_plan = nullptr;
+	index_create_function_t create_instance = nullptr;
 };
 
 } // namespace duckdb
