@@ -20,11 +20,6 @@ static void CheckSimpleQuery(Connection &con) {
 	duckdb::vector<duckdb::Value> values = {Value(12)};
 	case_insensitive_map_t<BoundParameterData> params;
 	auto pending_result = con.PendingQuery("SELECT COUNT(*) FROM a WHERE i=?", values, true);
-	// auto pending_result = con.PendingQuery("SELECT COUNT(*) FROM a WHERE i=?", values, true);
-	// auto pending_result = con.PendingQuery(std::move(statements[0]), true);
-	if (pending_result->HasError()) {
-		printf(" got error: %s\n", pending_result->GetError().c_str());
-	}
 	REQUIRE(!pending_result->HasError());
 
 	auto result = pending_result->Execute();
@@ -99,7 +94,7 @@ TEST_CASE("Pending Query with Parameters with transactions", "[api]") {
 
 	CreateSimpleTable(con1);
 
-	// CheckConversionErrorQuery(con1);
+	CheckConversionErrorQuery(con1);
 
 	// Begin a transaction in the PrepareAndExecute
 	auto pending_result1 = con1.PendingQuery("BEGIN TRANSACTION", empty_values, true);

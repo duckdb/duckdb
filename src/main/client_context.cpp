@@ -1003,11 +1003,9 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query,
                                                     case_insensitive_map_t<BoundParameterData> &values,
                                                     bool allow_stream_result) {
 	auto lock = LockContext();
-	// prepare the query
 	try {
 		InitialCleanup(*lock);
 
-		// first parse the query
 		auto statements = ParseStatementsInternal(*lock, query);
 		if (statements.empty()) {
 			throw InvalidInputException("No statement to prepare!");
@@ -1019,6 +1017,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query,
 		PendingQueryParameters params;
 		params.allow_stream_result = allow_stream_result;
 		params.parameters = values;
+
 		return PendingQueryInternal(*lock, std::move(statements[0]), params, true);
 	} catch (std::exception &ex) {
 		return make_uniq<PendingQueryResult>(ErrorData(ex));
@@ -1029,7 +1028,6 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStateme
                                                     case_insensitive_map_t<BoundParameterData> &values,
                                                     bool allow_stream_result) {
 	auto lock = LockContext();
-	// prepare the query
 	auto query = statement->query;
 	try {
 		InitialCleanup(*lock);
@@ -1037,6 +1035,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStateme
 		PendingQueryParameters params;
 		params.allow_stream_result = allow_stream_result;
 		params.parameters = values;
+
 		return PendingQueryInternal(*lock, std::move(statement), params, true);
 	} catch (std::exception &ex) {
 		return make_uniq<PendingQueryResult>(ErrorData(ex));
@@ -1049,7 +1048,6 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContext
                                                                    bool verify) {
 	auto query = statement->query;
 	shared_ptr<PreparedStatementData> prepared;
-
 	if (verify) {
 		return PendingStatementOrPreparedStatementInternal(lock, query, std::move(statement), prepared, parameters);
 	} else {
