@@ -795,6 +795,32 @@ public:
 };
 
 struct BaseParquetOperator {
+
+	template <class SRC, class TGT>
+	static void WriteToStream(const TGT &input, WriteStream &ser) {
+		ser.WriteData(const_data_ptr_cast(&input), sizeof(TGT));
+	}
+
+	template <class SRC, class TGT>
+	static uint64_t XXHash64(const TGT &target_value) {
+		return duckdb_zstd::XXH64(&target_value, sizeof(target_value), 0);
+	}
+
+	template <class SRC, class TGT>
+	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
+		return nullptr;
+	}
+
+	template <class SRC, class TGT>
+	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
+	}
+};
+
+struct ParquetCastOperator : public BaseParquetOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		return TGT(input);
+	}
 	template <class SRC, class TGT>
 	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
 		return make_uniq<NumericStatisticsState<SRC, TGT, BaseParquetOperator>>();
@@ -809,23 +835,6 @@ struct BaseParquetOperator {
 		if (GreaterThan::Operation(target_value, numeric_stats.max)) {
 			numeric_stats.max = target_value;
 		}
-	}
-
-	template <class SRC, class TGT>
-	static void WriteToStream(const TGT &input, WriteStream &ser) {
-		ser.WriteData(const_data_ptr_cast(&input), sizeof(TGT));
-	}
-
-	template <class SRC, class TGT>
-	static uint64_t XXHash64(const TGT &target_value) {
-		return duckdb_zstd::XXH64(&target_value, sizeof(target_value), 0);
-	}
-};
-
-struct ParquetCastOperator : public BaseParquetOperator {
-	template <class SRC, class TGT>
-	static TGT Operation(SRC input) {
-		return TGT(input);
 	}
 };
 
@@ -944,15 +953,6 @@ struct ParquetIntervalOperator : public BaseParquetOperator {
 	}
 
 	template <class SRC, class TGT>
-	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
-		return nullptr;
-	}
-
-	template <class SRC, class TGT>
-	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
-	}
-
-	template <class SRC, class TGT>
 	static void WriteToStream(const TGT &target_value, WriteStream &ser) {
 		ser.WriteData(target_value.bytes, ParquetIntervalTargetType::PARQUET_INTERVAL_SIZE);
 	}
@@ -983,15 +983,6 @@ struct ParquetUUIDOperator : public BaseParquetOperator {
 			result.bytes[sizeof(uint64_t) + i] = (low_bytes >> shift_count) & 0xFF;
 		}
 		return result;
-	}
-
-	template <class SRC, class TGT>
-	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
-		return nullptr;
-	}
-
-	template <class SRC, class TGT>
-	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
 	}
 
 	template <class SRC, class TGT>
