@@ -4,11 +4,14 @@
 
 namespace duckdb {
 
-ParsedStatementVerifier::ParsedStatementVerifier(unique_ptr<SQLStatement> statement_p, optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters)
+ParsedStatementVerifier::ParsedStatementVerifier(unique_ptr<SQLStatement> statement_p,
+                                                 optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters)
     : StatementVerifier(VerificationType::PARSED, "Parsed", std::move(statement_p), parameters) {
 }
 
-unique_ptr<StatementVerifier> ParsedStatementVerifier::Create(const SQLStatement &statement, optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters) {
+unique_ptr<StatementVerifier>
+ParsedStatementVerifier::Create(const SQLStatement &statement,
+                                optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters) {
 	auto query_str = statement.ToString();
 	Parser parser;
 	try {

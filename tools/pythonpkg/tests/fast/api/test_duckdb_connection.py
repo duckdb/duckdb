@@ -155,7 +155,10 @@ class TestDuckDBConnection(object):
         assert duckdb.query(statements[1]).fetchall() == [(21,)]
         assert duckdb.execute(statements[1]).fetchall() == [(21,)]
 
-        with pytest.raises(duckdb.InvalidInputException, match='Values were not provided for the following prepared statement parameters: 1'):
+        with pytest.raises(
+            duckdb.InvalidInputException,
+            match='Values were not provided for the following prepared statement parameters: 1',
+        ):
             duckdb.execute(statements[0])
         assert duckdb.execute(statements[0], {'1': 42}).fetchall() == [(42,)]
 

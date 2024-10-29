@@ -116,11 +116,10 @@ public:
 
 	//! Create a pending query with a list of parameters
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement,
-							     case_insensitive_map_t<BoundParameterData> &values,
-							     bool allow_stream_result);
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query,
-							     case_insensitive_map_t<BoundParameterData> &values,
-							     bool allow_stream_result);
+	                                                       case_insensitive_map_t<BoundParameterData> &values,
+	                                                       bool allow_stream_result);
+	DUCKDB_API unique_ptr<PendingQueryResult>
+	PendingQuery(const string &query, case_insensitive_map_t<BoundParameterData> &values, bool allow_stream_result);
 
 	//! Destroy the client context
 	DUCKDB_API void Destroy();
@@ -227,7 +226,7 @@ private:
 	//! Perform aggressive query verification of a SELECT statement. Only called when query_verification_enabled is
 	//! true.
 	ErrorData VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-		optional_ptr<case_insensitive_map_t<BoundParameterData>> values = nullptr);
+	                      optional_ptr<case_insensitive_map_t<BoundParameterData>> values = nullptr);
 
 	void InitialCleanup(ClientContextLock &lock);
 	//! Internal clean up, does not lock. Caller must hold the context_lock.
@@ -255,7 +254,8 @@ private:
 	                                                        const PendingQueryParameters &parameters);
 	unique_ptr<QueryResult> RunStatementInternal(ClientContextLock &lock, const string &query,
 	                                             unique_ptr<SQLStatement> statement, bool allow_stream_result,
-	                                             optional_ptr<case_insensitive_map_t<BoundParameterData>> params, bool verify = true);
+	                                             optional_ptr<case_insensitive_map_t<BoundParameterData>> params,
+	                                             bool verify = true);
 	unique_ptr<PreparedStatement> PrepareInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement);
 	void LogQueryInternal(ClientContextLock &lock, const string &query);
 

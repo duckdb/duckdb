@@ -511,16 +511,17 @@ py::list TransformNamedParameters(const case_insensitive_map_t<idx_t> &named_par
 	return new_params;
 }
 
-case_insensitive_map_t<BoundParameterData> TransformPreparedParameters(const py::object &params, optional_ptr<PreparedStatement> prep = {}) {
+case_insensitive_map_t<BoundParameterData> TransformPreparedParameters(const py::object &params,
+                                                                       optional_ptr<PreparedStatement> prep = {}) {
 	case_insensitive_map_t<BoundParameterData> named_values;
 	if (py::is_list_like(params)) {
 		if (prep && prep->named_param_map.size() != py::len(params)) {
 			if (py::len(params) == 0) {
 				throw InvalidInputException("Expected %d parameters, but none were supplied",
-											prep->named_param_map.size());
+				                            prep->named_param_map.size());
 			}
-			throw InvalidInputException("Prepared statement needs %d parameters, %d given", prep->named_param_map.size(),
-										py::len(params));
+			throw InvalidInputException("Prepared statement needs %d parameters, %d given",
+			                            prep->named_param_map.size(), py::len(params));
 		}
 		auto unnamed_values = DuckDBPyConnection::TransformPythonParamList(params);
 		for (idx_t i = 0; i < unnamed_values.size(); i++) {

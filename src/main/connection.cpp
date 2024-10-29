@@ -147,7 +147,7 @@ unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query,
 }
 
 unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement,
-														case_insensitive_map_t<BoundParameterData> &named_values,
+                                                        case_insensitive_map_t<BoundParameterData> &named_values,
                                                         bool allow_stream_result) {
 	return context->PendingQuery(std::move(statement), named_values, allow_stream_result);
 }
@@ -161,13 +161,14 @@ static case_insensitive_map_t<BoundParameterData> ConvertParamListToMap(vector<V
 	return named_values;
 }
 
-unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query, vector<Value> &values, bool allow_stream_result) {
+unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query, vector<Value> &values,
+                                                        bool allow_stream_result) {
 	auto named_params = ConvertParamListToMap(values);
 	return context->PendingQuery(query, named_params, allow_stream_result);
 }
 
 unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement, vector<Value> &values,
-	bool allow_stream_result) {
+                                                        bool allow_stream_result) {
 	auto named_params = ConvertParamListToMap(values);
 	return context->PendingQuery(std::move(statement), named_params, allow_stream_result);
 }

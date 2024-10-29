@@ -9,11 +9,14 @@
 
 namespace duckdb {
 
-PreparedStatementVerifier::PreparedStatementVerifier(unique_ptr<SQLStatement> statement_p, optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters)
+PreparedStatementVerifier::PreparedStatementVerifier(
+    unique_ptr<SQLStatement> statement_p, optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters)
     : StatementVerifier(VerificationType::PREPARED, "Prepared", std::move(statement_p), parameters) {
 }
 
-unique_ptr<StatementVerifier> PreparedStatementVerifier::Create(const SQLStatement &statement, optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters) {
+unique_ptr<StatementVerifier>
+PreparedStatementVerifier::Create(const SQLStatement &statement,
+                                  optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters) {
 	return make_uniq<PreparedStatementVerifier>(statement.Copy(), parameters);
 }
 
@@ -76,7 +79,8 @@ void PreparedStatementVerifier::ConvertConstants(unique_ptr<ParsedExpression> &c
 
 bool PreparedStatementVerifier::Run(
     ClientContext &context, const string &query,
-    const std::function<unique_ptr<QueryResult>(const string &, unique_ptr<SQLStatement>, optional_ptr<case_insensitive_map_t<BoundParameterData>>)> &run) {
+    const std::function<unique_ptr<QueryResult>(const string &, unique_ptr<SQLStatement>,
+                                                optional_ptr<case_insensitive_map_t<BoundParameterData>>)> &run) {
 	bool failed = false;
 	// verify that we can extract all constants from the query and run the query as a prepared statement
 	// create the PREPARE and EXECUTE statements

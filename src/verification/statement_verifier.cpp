@@ -15,20 +15,23 @@
 namespace duckdb {
 
 StatementVerifier::StatementVerifier(VerificationType type, string name, unique_ptr<SQLStatement> statement_p,
-	optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters_p)
+                                     optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters_p)
     : type(type), name(std::move(name)),
       statement(unique_ptr_cast<SQLStatement, SelectStatement>(std::move(statement_p))), parameters(parameters_p),
       select_list(statement->node->GetSelectList()) {
 }
 
-StatementVerifier::StatementVerifier(unique_ptr<SQLStatement> statement_p, optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters)
+StatementVerifier::StatementVerifier(unique_ptr<SQLStatement> statement_p,
+                                     optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters)
     : StatementVerifier(VerificationType::ORIGINAL, "Original", std::move(statement_p), parameters) {
 }
 
 StatementVerifier::~StatementVerifier() noexcept {
 }
 
-unique_ptr<StatementVerifier> StatementVerifier::Create(VerificationType type, const SQLStatement &statement_p, optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters) {
+unique_ptr<StatementVerifier>
+StatementVerifier::Create(VerificationType type, const SQLStatement &statement_p,
+                          optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters) {
 	switch (type) {
 	case VerificationType::COPIED:
 		return CopiedStatementVerifier::Create(statement_p, parameters);
@@ -105,7 +108,8 @@ void StatementVerifier::CheckExpressions() const {
 
 bool StatementVerifier::Run(
     ClientContext &context, const string &query,
-    const std::function<unique_ptr<QueryResult>(const string &, unique_ptr<SQLStatement>, optional_ptr<case_insensitive_map_t<BoundParameterData>>)> &run) {
+    const std::function<unique_ptr<QueryResult>(const string &, unique_ptr<SQLStatement>,
+                                                optional_ptr<case_insensitive_map_t<BoundParameterData>>)> &run) {
 	bool failed = false;
 
 	context.interrupted = false;

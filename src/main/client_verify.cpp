@@ -22,7 +22,7 @@ static void ThrowIfExceptionIsInternal(StatementVerifier &verifier) {
 }
 
 ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-	optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters) {
+                                     optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters) {
 	D_ASSERT(statement->type == StatementType::SELECT_STATEMENT);
 	// Aggressive query verification
 
@@ -54,7 +54,8 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 
 	// This verifier is enabled explicitly OR by enabling run_slow_verifiers
 	if (config.verify_fetch_row || (run_slow_verifiers && config.query_verification_enabled)) {
-		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::FETCH_ROW_AS_SCAN, stmt, parameters));
+		statement_verifiers.emplace_back(
+		    StatementVerifier::Create(VerificationType::FETCH_ROW_AS_SCAN, stmt, parameters));
 	}
 
 	// For the DEBUG_ASYNC build we enable this extra verifier
@@ -89,26 +90,33 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 	}
 
 	// Execute the original statement
-	bool any_failed = original->Run(*this, query, [&](const string &q, unique_ptr<SQLStatement> s, optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
-		return RunStatementInternal(lock, q, std::move(s), false, params, false);
-	});
+	bool any_failed = original->Run(*this, query,
+	                                [&](const string &q, unique_ptr<SQLStatement> s,
+	                                    optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
+		                                return RunStatementInternal(lock, q, std::move(s), false, params, false);
+	                                });
 	if (!any_failed) {
 		statement_verifiers.emplace_back(
 		    StatementVerifier::Create(VerificationType::PARSED, *statement_copy_for_explain, parameters));
 	}
 	// Execute the verifiers
 	for (auto &verifier : statement_verifiers) {
-		bool failed = verifier->Run(*this, query, [&](const string &q, unique_ptr<SQLStatement> s, optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
-			return RunStatementInternal(lock, q, std::move(s), false, params, false);
-		});
+		bool failed = verifier->Run(*this, query,
+		                            [&](const string &q, unique_ptr<SQLStatement> s,
+		                                optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
+			                            return RunStatementInternal(lock, q, std::move(s), false, params, false);
+		                            });
 		any_failed = any_failed || failed;
 	}
 
 	if (!any_failed && prepared_statement_verifier) {
 		// If none failed, we execute the prepared statement verifier
-		bool failed = prepared_statement_verifier->Run(*this, query, [&](const string &q, unique_ptr<SQLStatement> s, optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
-			return RunStatementInternal(lock, q, std::move(s), false, params, false);
-		});
+		bool failed = prepared_statement_verifier->Run(
+		    *this, query,
+		    [&](const string &q, unique_ptr<SQLStatement> s,
+		        optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
+			    return RunStatementInternal(lock, q, std::move(s), false, params, false);
+		    });
 		if (!failed) {
 			// PreparedStatementVerifier fails if it runs into a ParameterNotAllowedException, which is OK
 			statement_verifiers.push_back(std::move(prepared_statement_verifier));

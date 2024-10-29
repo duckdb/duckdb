@@ -652,16 +652,16 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 }
 
 unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &lock,
-															 unique_ptr<SQLStatement> statement) {
+                                                             unique_ptr<SQLStatement> statement) {
 	auto named_param_map = statement->named_param_map;
 	auto statement_query = statement->query;
 	shared_ptr<PreparedStatementData> prepared_data;
 	auto unbound_statement = statement->Copy();
 	RunFunctionInTransactionInternal(
-		lock, [&]() { prepared_data = CreatePreparedStatement(lock, statement_query, std::move(statement)); }, false);
+	    lock, [&]() { prepared_data = CreatePreparedStatement(lock, statement_query, std::move(statement)); }, false);
 	prepared_data->unbound_statement = std::move(unbound_statement);
 	return make_uniq<PreparedStatement>(shared_from_this(), std::move(prepared_data), std::move(statement_query),
-										std::move(named_param_map));
+	                                    std::move(named_param_map));
 }
 
 unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> statement) {
@@ -758,10 +758,10 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
 	return PendingPreparedStatementInternal(lock, std::move(prepared), parameters);
 }
 
-unique_ptr<QueryResult> ClientContext::RunStatementInternal(ClientContextLock &lock, const string &query,
-                                                            unique_ptr<SQLStatement> statement,
-                                                            bool allow_stream_result, optional_ptr<case_insensitive_map_t<BoundParameterData>> params,
-                                                            bool verify) {
+unique_ptr<QueryResult>
+ClientContext::RunStatementInternal(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
+                                    bool allow_stream_result,
+                                    optional_ptr<case_insensitive_map_t<BoundParameterData>> params, bool verify) {
 	PendingQueryParameters parameters;
 	parameters.allow_stream_result = allow_stream_result;
 	parameters.parameters = params;
@@ -1000,8 +1000,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStateme
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query,
-                                                    case_insensitive_map_t<BoundParameterData> &values,
-                                                    bool allow_stream_result) {
+                                                           case_insensitive_map_t<BoundParameterData> &values,
+                                                           bool allow_stream_result) {
 	auto lock = LockContext();
 	try {
 		InitialCleanup(*lock);
@@ -1025,8 +1025,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query,
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStatement> statement,
-                                                    case_insensitive_map_t<BoundParameterData> &values,
-                                                    bool allow_stream_result) {
+                                                           case_insensitive_map_t<BoundParameterData> &values,
+                                                           bool allow_stream_result) {
 	auto lock = LockContext();
 	auto query = statement->query;
 	try {
