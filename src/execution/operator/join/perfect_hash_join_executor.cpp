@@ -20,7 +20,7 @@ bool PerfectHashJoinExecutor::CanDoPerfectHashJoin() {
 bool PerfectHashJoinExecutor::BuildPerfectHashTable(LogicalType &key_type) {
 	// First, allocate memory for each build column
 	auto build_size = perfect_join_statistics.build_range + 1;
-	for (const auto &type : join.rhs_output_types) {
+	for (const auto &type : join.rhs_output_columns.col_types) {
 		perfect_hash_table.emplace_back(type, build_size);
 	}
 
@@ -69,7 +69,7 @@ bool PerfectHashJoinExecutor::FullScanHashTable(LogicalType &key_type) {
 
 	// Full scan the remaining build columns and fill the perfect hash table
 	const auto build_size = perfect_join_statistics.build_range + 1;
-	for (idx_t i = 0; i < join.rhs_output_types.size(); i++) {
+	for (idx_t i = 0; i < join.rhs_output_columns.col_types.size(); i++) {
 		auto &vector = perfect_hash_table[i];
 		const auto output_col_idx = ht.output_columns[i];
 		D_ASSERT(vector.GetType() == ht.layout.GetTypes()[output_col_idx]);
@@ -166,7 +166,8 @@ unique_ptr<OperatorState> PerfectHashJoinExecutor::GetOperatorState(ExecutionCon
 }
 
 OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, DataChunk &input,
-                                                                  DataChunk &result, OperatorState &state_p) {
+                                                                  DataChunk &lhs_output_columns, DataChunk &result,
+                                                                  OperatorState &state_p) {
 	auto &state = state_p.Cast<PerfectHashJoinState>();
 	// keeps track of how many probe keys have a match
 	idx_t probe_sel_count = 0;
@@ -182,14 +183,14 @@ OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionConte
 
 	// If build is dense and probe is in build's domain, just reference probe
 	if (perfect_join_statistics.is_build_dense && keys_count == probe_sel_count) {
-		result.Reference(input);
+		result.Reference(lhs_output_columns);
 	} else {
 		// otherwise, filter it out the values that do not match
-		result.Slice(input, state.probe_sel_vec, probe_sel_count, 0);
+		result.Slice(lhs_output_columns, state.probe_sel_vec, probe_sel_count, 0);
 	}
 	// on the build side, we need to fetch the data and build dictionary vectors with the sel_vec
-	for (idx_t i = 0; i < join.rhs_output_types.size(); i++) {
-		auto &result_vector = result.data[input.ColumnCount() + i];
+	for (idx_t i = 0; i < join.rhs_output_columns.col_types.size(); i++) {
+		auto &result_vector = result.data[lhs_output_columns.ColumnCount() + i];
 		D_ASSERT(result_vector.GetType() == ht.layout.GetTypes()[ht.output_columns[i]]);
 		auto &build_vec = perfect_hash_table[i];
 		result_vector.Reference(build_vec);

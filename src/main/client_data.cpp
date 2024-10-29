@@ -42,7 +42,7 @@ ClientData::ClientData(ClientContext &context) : catalog_search_path(make_uniq<C
 	random_engine = make_uniq<RandomEngine>();
 	file_opener = make_uniq<ClientContextFileOpener>(context);
 	client_file_system = make_uniq<ClientFileSystem>(context);
-	temporary_objects->Initialize(DEFAULT_BLOCK_ALLOC_SIZE);
+	temporary_objects->Initialize();
 }
 
 ClientData::~ClientData() {

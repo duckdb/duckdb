@@ -50,9 +50,9 @@ public:
 	~MetadataManager();
 
 	MetadataHandle AllocateHandle();
-	MetadataHandle Pin(MetadataPointer pointer);
+	MetadataHandle Pin(const MetadataPointer &pointer);
 
-	MetaBlockPointer GetDiskPointer(MetadataPointer pointer, uint32_t offset = 0);
+	MetaBlockPointer GetDiskPointer(const MetadataPointer &pointer, uint32_t offset = 0);
 	MetadataPointer FromDiskPointer(MetaBlockPointer pointer);
 	MetadataPointer RegisterDiskPointer(MetaBlockPointer pointer);
 

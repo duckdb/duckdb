@@ -48,7 +48,7 @@ struct ApproxTopKValue {
 	uint32_t capacity = 0;
 };
 
-struct ApproxTopKState {
+struct InternalApproxTopKState {
 	// the top-k data structure has two components
 	// a list of k values sorted on "count" (i.e. values[0] has the lowest count)
 	// a lookup map: string_t -> idx in "values" array
@@ -169,15 +169,34 @@ struct ApproxTopKState {
 	}
 };
 
+struct ApproxTopKState {
+	InternalApproxTopKState *state;
+
+	InternalApproxTopKState &GetState() {
+		if (!state) {
+			state = new InternalApproxTopKState();
+		}
+		return *state;
+	}
+
+	const InternalApproxTopKState &GetState() const {
+		if (!state) {
+			throw InternalException("No state available");
+		}
+		return *state;
+	}
+};
+
 struct ApproxTopKOperation {
 	template <class STATE>
 	static void Initialize(STATE &state) {
-		new (&state) STATE();
+		state.state = nullptr;
 	}
 
 	template <class TYPE, class STATE>
-	static void Operation(STATE &state, const TYPE &input, AggregateInputData &aggr_input, Vector &top_k_vector,
+	static void Operation(STATE &aggr_state, const TYPE &input, AggregateInputData &aggr_input, Vector &top_k_vector,
 	                      idx_t offset, idx_t count) {
+		auto &state = aggr_state.GetState();
 		if (state.values.empty()) {
 			static constexpr int64_t MAX_APPROX_K = 1000000;
 			// not initialized yet - initialize the K value and set all counters to 0
@@ -208,7 +227,13 @@ struct ApproxTopKOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input) {
+	static void Combine(const STATE &aggr_source, STATE &aggr_target, AggregateInputData &aggr_input) {
+		if (!aggr_source.state) {
+			// source state is empty
+			return;
+		}
+		auto &source = aggr_source.GetState();
+		auto &target = aggr_target.GetState();
 		if (source.values.empty()) {
 			// source is empty
 			return;
@@ -279,7 +304,7 @@ struct ApproxTopKOperation {
 
 	template <class STATE>
 	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
-		state.~STATE();
+		delete state.state;
 	}
 
 	static bool IgnoreNull() {
@@ -324,7 +349,7 @@ static void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vecto
 	idx_t new_entries = 0;
 	// figure out how much space we need
 	for (idx_t i = 0; i < count; i++) {
-		auto &state = *states[sdata.sel->get_index(i)];
+		auto &state = states[sdata.sel->get_index(i)]->GetState();
 		if (state.values.empty()) {
 			continue;
 		}
@@ -340,7 +365,7 @@ static void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vecto
 	idx_t current_offset = old_len;
 	for (idx_t i = 0; i < count; i++) {
 		const auto rid = i + offset;
-		auto &state = *states[sdata.sel->get_index(i)];
+		auto &state = states[sdata.sel->get_index(i)]->GetState();
 		if (state.values.empty()) {
 			mask.SetInvalid(rid);
 			continue;

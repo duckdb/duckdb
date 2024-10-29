@@ -1,3 +1,4 @@
+#include "duckdb/function/scalar/list_functions.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
@@ -66,11 +67,4 @@ ScalarFunction ListPositionFun::GetFunction() {
 	                      ListSearchFunction<true>, ListSearchBind);
 }
 
-void ListContainsFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"list_contains", "array_contains", "list_has", "array_has"}, GetFunction());
-}
-
-void ListPositionFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"list_position", "list_indexof", "array_position", "array_indexof"}, GetFunction());
-}
 } // namespace duckdb

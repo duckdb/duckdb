@@ -28,7 +28,8 @@ public:
 			table_filters = op.dynamic_filters->GetFinalTableFilters(op, op.table_filters.get());
 		}
 		if (op.function.init_global) {
-			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, GetTableFilters(op));
+			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, GetTableFilters(op),
+			                             op.extra_info.sample_options);
 			global_state = op.function.init_global(context, input);
 			if (global_state) {
 				max_threads = global_state->MaxThreads();
@@ -71,7 +72,7 @@ public:
 	                          const PhysicalTableScan &op) {
 		if (op.function.init_local) {
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids,
-			                             gstate.GetTableFilters(op));
+			                             gstate.GetTableFilters(op), op.extra_info.sample_options);
 			local_state = op.function.init_local(context, input, gstate.global_state.get());
 		}
 	}
@@ -193,6 +194,9 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 			}
 		}
 		result["Filters"] = filters_info;
+	}
+	if (extra_info.sample_options) {
+		result["Sample Method"] = "System: " + extra_info.sample_options->sample_size.ToString() + "%";
 	}
 	if (!extra_info.file_filters.empty()) {
 		result["File Filters"] = extra_info.file_filters;
