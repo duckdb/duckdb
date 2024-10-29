@@ -141,25 +141,35 @@ unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement>
 }
 
 unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query,
-                                                        vector<Value> &values,
+                                                        case_insensitive_map_t<BoundParameterData> &named_values,
                                                         bool allow_stream_result) {
-	case_insensitive_map_t<BoundParameterData> named_values;
-	for (idx_t i = 0; i < values.size(); i++) {
-		auto &val = values[i];
-		named_values[std::to_string(i + 1)] = BoundParameterData(val);
-	}
 	return context->PendingQuery(query, named_values, allow_stream_result);
 }
 
 unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement,
-														vector<Value> &values,
+														case_insensitive_map_t<BoundParameterData> &named_values,
                                                         bool allow_stream_result) {
+	return context->PendingQuery(std::move(statement), named_values, allow_stream_result);
+}
+
+static case_insensitive_map_t<BoundParameterData> ConvertParamListToMap(vector<Value> &param_list) {
 	case_insensitive_map_t<BoundParameterData> named_values;
-	for (idx_t i = 0; i < values.size(); i++) {
-		auto &val = values[i];
+	for (idx_t i = 0; i < param_list.size(); i++) {
+		auto &val = param_list[i];
 		named_values[std::to_string(i + 1)] = BoundParameterData(val);
 	}
-	return context->PendingQuery(std::move(statement), named_values, allow_stream_result);
+	return named_values;
+}
+
+unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query, vector<Value> &values, bool allow_stream_result) {
+	auto named_params = ConvertParamListToMap(values);
+	return context->PendingQuery(query, named_params, allow_stream_result);
+}
+
+unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement, vector<Value> &values,
+	bool allow_stream_result) {
+	auto named_params = ConvertParamListToMap(values);
+	return context->PendingQuery(std::move(statement), named_params, allow_stream_result);
 }
 
 unique_ptr<PreparedStatement> Connection::Prepare(const string &query) {
@@ -171,7 +181,8 @@ unique_ptr<PreparedStatement> Connection::Prepare(unique_ptr<SQLStatement> state
 }
 
 unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, vector<Value> &values) {
-	auto pending = PendingQuery(query, values, false);
+	auto named_params = ConvertParamListToMap(values);
+	auto pending = PendingQuery(query, named_params, false);
 	if (pending->HasError()) {
 		return make_uniq<MaterializedQueryResult>(pending->GetErrorObject());
 	}

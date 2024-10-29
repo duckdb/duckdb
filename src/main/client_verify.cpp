@@ -54,7 +54,7 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 
 	// This verifier is enabled explicitly OR by enabling run_slow_verifiers
 	if (config.verify_fetch_row || (run_slow_verifiers && config.query_verification_enabled)) {
-		// statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::FETCH_ROW_AS_SCAN, stmt, parameters));
+		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::FETCH_ROW_AS_SCAN, stmt, parameters));
 	}
 
 	// For the DEBUG_ASYNC build we enable this extra verifier

@@ -188,7 +188,7 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 		throw ErrorManager::InvalidatedDatabase(*this, ValidChecker::InvalidatedMessage(db_inst));
 	}
 	active_query = make_uniq<ActiveQueryContext>();
-	if (transaction.IsAutoCommit() && !transaction.open_autocommit_transaction) {
+	if (transaction.IsAutoCommit()) {
 		transaction.BeginTransaction();
 	}
 
@@ -219,13 +219,12 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 	try {
 		if (transaction.HasActiveTransaction()) {
 			transaction.ResetActiveQuery();
-			if (transaction.IsAutoCommit() || transaction.open_autocommit_transaction) {
+			if (transaction.IsAutoCommit()) {
 				if (success) {
 					transaction.Commit();
 				} else {
 					transaction.Rollback(previous_error);
 				}
-				transaction.open_autocommit_transaction = false;
 			} else if (invalidate_transaction) {
 				D_ASSERT(!success);
 				ValidChecker::Invalidate(ActiveTransaction(), "Failed to commit");
@@ -347,7 +346,6 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const st
 	result->properties = planner.properties;
 	result->names = planner.names;
 	result->types = planner.types;
-	// Todo this is supposed to hold the value map for the prepared statement values???
 	result->value_map = std::move(planner.value_map);
 	if (!planner.properties.bound_all_parameters) {
 		return result;
@@ -654,50 +652,16 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 }
 
 unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &lock,
-                                                             unique_ptr<SQLStatement> statement,
-                                                             bool leave_autocommit_open) {
+															 unique_ptr<SQLStatement> statement) {
 	auto named_param_map = statement->named_param_map;
 	auto statement_query = statement->query;
 	shared_ptr<PreparedStatementData> prepared_data;
 	auto unbound_statement = statement->Copy();
-
-	auto requires_new_transaction = transaction.IsAutoCommit() && !transaction.HasActiveTransaction();
 	RunFunctionInTransactionInternal(
-	    lock, [&]() { prepared_data = CreatePreparedStatement(lock, statement_query, std::move(statement)); }, false,
-	    leave_autocommit_open);
+		lock, [&]() { prepared_data = CreatePreparedStatement(lock, statement_query, std::move(statement)); }, false);
 	prepared_data->unbound_statement = std::move(unbound_statement);
-	auto res = make_uniq<PreparedStatement>(shared_from_this(), std::move(prepared_data), std::move(statement_query),
-	                                        std::move(named_param_map));
-	transaction.open_autocommit_transaction = requires_new_transaction && transaction.HasActiveTransaction();
-	return res;
-}
-unique_ptr<PendingQueryResult> ClientContext::PendingQueryWithParametersInternal(ClientContextLock &lock,
-
-																 unique_ptr<SQLStatement> statement,
-																 case_insensitive_map_t<BoundParameterData> &values,
-																 bool allow_stream_result) {
-	// Prepare, but leaving the transaction open on success to ensure we run the query in the same transaction avoiding
-	// unnecessary rebinds
-	auto prepare_result = PrepareInternal(lock, std::move(statement), true);
-
-	// TODO: can we prevent open_autocommit_transaction from staying open here?
-	if (prepare_result->HasError()) {
-		if (transaction.open_autocommit_transaction) {
-			transaction.Rollback(nullptr);
-			transaction.open_autocommit_transaction = false;
-		}
-		return make_uniq<PendingQueryResult>(ErrorData(prepare_result->GetError()));
-	}
-
-	PendingQueryParameters params;
-	params.allow_stream_result = allow_stream_result;
-	params.parameters = values;
-
-	auto pending_query = PendingQueryPreparedInternal(lock, prepare_result->query, prepare_result->data, params);
-
-	transaction.open_autocommit_transaction = false;
-
-	return pending_query;
+	return make_uniq<PreparedStatement>(shared_from_this(), std::move(prepared_data), std::move(statement_query),
+										std::move(named_param_map));
 }
 
 unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> statement) {
@@ -773,9 +737,9 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
                                                                        unique_ptr<SQLStatement> statement,
                                                                        const PendingQueryParameters &parameters) {
 	// prepare the query for execution
-	// This thing seems to nuke the prepared params
 	auto prepared = CreatePreparedStatement(lock, query, std::move(statement), parameters.parameters,
 	                                        PreparedStatementMode::PREPARE_AND_EXECUTE);
+
 	idx_t parameter_count = !parameters.parameters ? 0 : parameters.parameters->size();
 	if (prepared->properties.parameter_count > 0 && parameter_count == 0) {
 		string error_message = StringUtil::Format("Expected %lld parameters, but none were supplied",
@@ -830,9 +794,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			// in case this is a select query, we verify the original statement
 			ErrorData error;
 			try {
-				//if (parameters.parameters->empty()) {
-					error = VerifyQuery(lock, query, std::move(statement), parameters.parameters);
-				//}
+				error = VerifyQuery(lock, query, std::move(statement), parameters.parameters);
 			} catch (std::exception &ex) {
 				error = ErrorData(ex);
 			}
@@ -1023,34 +985,14 @@ bool ClientContext::ParseStatements(ClientContextLock &lock, const string &query
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query, bool allow_stream_result) {
-	auto lock = LockContext();
-
-	ErrorData error;
-	vector<unique_ptr<SQLStatement>> statements;
-	if (!ParseStatements(*lock, query, statements, error)) {
-		return ErrorResult<PendingQueryResult>(std::move(error), query);
-	}
-	if (statements.size() != 1) {
-		return ErrorResult<PendingQueryResult>(ErrorData("PendingQuery can only take a single statement"), query);
-	}
-	PendingQueryParameters parameters;
-	parameters.allow_stream_result = allow_stream_result;
-	return PendingQueryInternal(*lock, std::move(statements[0]), parameters);
+	case_insensitive_map_t<BoundParameterData> empty_param_list;
+	return PendingQuery(query, empty_param_list, allow_stream_result);
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStatement> statement,
                                                            bool allow_stream_result) {
-	auto lock = LockContext();
-
-	try {
-		InitialCleanup(*lock);
-	} catch (std::exception &ex) {
-		return ErrorResult<PendingQueryResult>(ErrorData(ex));
-	}
-
-	PendingQueryParameters parameters;
-	parameters.allow_stream_result = allow_stream_result;
-	return PendingQueryInternal(*lock, std::move(statement), parameters);
+	case_insensitive_map_t<BoundParameterData> empty_param_list;
+	return PendingQuery(std::move(statement), empty_param_list, allow_stream_result);
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query,
@@ -1073,10 +1015,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query,
 		PendingQueryParameters params;
 		params.allow_stream_result = allow_stream_result;
 		params.parameters = values;
-
-		// TODO: shouldn't this also work?
 		return PendingQueryInternal(*lock, std::move(statements[0]), params, true);
-		// return PendingQueryWithParametersInternal(*lock, std::move(statements[0]), values, allow_stream_result);
 	} catch (std::exception &ex) {
 		return make_uniq<PendingQueryResult>(ErrorData(ex));
 	}
@@ -1094,9 +1033,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStateme
 		PendingQueryParameters params;
 		params.allow_stream_result = allow_stream_result;
 		params.parameters = values;
-		// TODO: shouldn't this also work?
 		return PendingQueryInternal(*lock, std::move(statement), params, true);
-		return PendingQueryWithParametersInternal(*lock, std::move(statement), values, allow_stream_result);
 	} catch (std::exception &ex) {
 		return make_uniq<PendingQueryResult>(ErrorData(ex));
 	}
@@ -1109,7 +1046,6 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContext
 	auto query = statement->query;
 	shared_ptr<PreparedStatementData> prepared;
 
-	// TODO: whats the difference when this is called directly vs when we are going through a verify step
 	if (verify) {
 		return PendingStatementOrPreparedStatementInternal(lock, query, std::move(statement), prepared, parameters);
 	} else {
@@ -1161,7 +1097,7 @@ void ClientContext::RegisterFunction(CreateFunctionInfo &info) {
 }
 
 void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, const std::function<void(void)> &fun,
-                                                     bool requires_valid_transaction, bool dont_commit_on_success) {
+                                                     bool requires_valid_transaction) {
 	if (requires_valid_transaction && transaction.HasActiveTransaction() &&
 	    ValidChecker::IsInvalidated(ActiveTransaction())) {
 		throw TransactionException(ErrorManager::FormatException(*this, ErrorType::INVALIDATED_TRANSACTION));
@@ -1191,15 +1127,14 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 		}
 		throw;
 	}
-	if (require_new_transaction && !dont_commit_on_success) {
+	if (require_new_transaction) {
 		transaction.Commit();
 	}
 }
 
-void ClientContext::RunFunctionInTransaction(const std::function<void(void)> &fun, bool requires_valid_transaction,
-                                             bool dont_commit_on_success) {
+void ClientContext::RunFunctionInTransaction(const std::function<void(void)> &fun, bool requires_valid_transaction) {
 	auto lock = LockContext();
-	RunFunctionInTransactionInternal(*lock, fun, requires_valid_transaction, dont_commit_on_success);
+	RunFunctionInTransactionInternal(*lock, fun, requires_valid_transaction);
 }
 
 unique_ptr<TableDescription> ClientContext::TableInfo(const string &database_name, const string &schema_name,

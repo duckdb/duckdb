@@ -14,10 +14,10 @@ static void ModifySimpleTable(Connection &con) {
 	REQUIRE_NO_FAIL(con.Query("DELETE FROM a where i=12"));
 }
 
-static void CheckSimpleQueryPrepareExecute(Connection &con) {
+static void CheckSimpleQuery(Connection &con) {
 	auto statements = con.ExtractStatements("SELECT COUNT(*) FROM a WHERE i=12");
 	REQUIRE(statements.size() == 1);
-	duckdb::vector<Value> values = {Value(12)};
+	duckdb::vector<duckdb::Value> values = {Value(12)};
 	case_insensitive_map_t<BoundParameterData> params;
 	auto pending_result = con.PendingQuery("SELECT COUNT(*) FROM a WHERE i=?", values, true);
 	// auto pending_result = con.PendingQuery("SELECT COUNT(*) FROM a WHERE i=?", values, true);
@@ -46,7 +46,7 @@ static void CheckConversionErrorQuery(Connection &con) {
 	REQUIRE((result->HasError() && result->GetErrorType() == ExceptionType::CONVERSION));
 }
 
-static void CheckSimpleQueryPrepareExecuteAfterModification(Connection &con) {
+static void CheckSimpleQueryAfterModification(Connection &con) {
 	duckdb::vector<Value> values = {Value(14)};
 	auto pending_result = con.PendingQuery("SELECT COUNT(*) FROM a WHERE i=?", values, true);
 	REQUIRE(!pending_result->HasError());
@@ -54,17 +54,17 @@ static void CheckSimpleQueryPrepareExecuteAfterModification(Connection &con) {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
 
-TEST_CASE("PrepareExecute happy path", "[api]") {
+TEST_CASE("Pending Query with Parameters", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
 
 	CreateSimpleTable(con);
-	CheckSimpleQueryPrepareExecute(con);
-	CheckSimpleQueryPrepareExecute(con);
+	CheckSimpleQuery(con);
+	CheckSimpleQuery(con);
 }
 
-TEST_CASE("PrepareExecute catalog error", "[api]") {
+TEST_CASE("Pending Query with Parameters Catalog Error", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
@@ -74,10 +74,10 @@ TEST_CASE("PrepareExecute catalog error", "[api]") {
 	CheckCatalogErrorQuery(con);
 
 	// Verify things are still sane
-	CheckSimpleQueryPrepareExecute(con);
+	CheckSimpleQuery(con);
 }
 
-TEST_CASE("PrepareExecute invalid value type error", "[api]") {
+TEST_CASE("Pending Query with Parameters Type Conversion Error", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
@@ -87,10 +87,10 @@ TEST_CASE("PrepareExecute invalid value type error", "[api]") {
 	CheckConversionErrorQuery(con);
 
 	// Verify things are still sane
-	CheckSimpleQueryPrepareExecute(con);
+	CheckSimpleQuery(con);
 }
 
-TEST_CASE("PrepareExecute with transactions", "[api]") {
+TEST_CASE("Pending Query with Parameters with transactions", "[api]") {
 	DuckDB db(nullptr);
 	Connection con1(db);
 	Connection con2(db);
@@ -105,20 +105,20 @@ TEST_CASE("PrepareExecute with transactions", "[api]") {
 	auto pending_result1 = con1.PendingQuery("BEGIN TRANSACTION", empty_values, true);
 	auto result1 = pending_result1->Execute();
 	REQUIRE(!result1->HasError());
-	CheckSimpleQueryPrepareExecute(con1);
+	CheckSimpleQuery(con1);
 
 	// Modify table on other connection, leaving transaction open
 	con2.BeginTransaction();
 	ModifySimpleTable(con2);
-	CheckSimpleQueryPrepareExecuteAfterModification(con2);
+	CheckSimpleQueryAfterModification(con2);
 
 	// con1 sees nothing: both transactions are open
-	CheckSimpleQueryPrepareExecute(con1);
+	CheckSimpleQuery(con1);
 
 	con2.Commit();
 
 	// con1 still sees nothing: its transaction was started before con2's
-	CheckSimpleQueryPrepareExecute(con1);
+	CheckSimpleQuery(con1);
 
 	// con 1 commits
 	auto pending_result2 = con1.PendingQuery("COMMIT", empty_values, true);
@@ -126,6 +126,6 @@ TEST_CASE("PrepareExecute with transactions", "[api]") {
 	REQUIRE(!result2->HasError());
 
 	// now con1 should see changes from con2
-	CheckSimpleQueryPrepareExecuteAfterModification(con1);
-	CheckSimpleQueryPrepareExecuteAfterModification(con2);
+	CheckSimpleQueryAfterModification(con1);
+	CheckSimpleQueryAfterModification(con2);
 }

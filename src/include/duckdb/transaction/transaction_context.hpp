@@ -55,8 +55,6 @@ public:
 	void ResetActiveQuery();
 	void SetActiveQuery(transaction_t query_number);
 
-	bool open_autocommit_transaction = false;
-
 private:
 	ClientContext &context;
 	bool auto_commit;

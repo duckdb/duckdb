@@ -97,11 +97,14 @@ public:
 	//! Issues a query to the database and returns a Pending Query Result
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement, bool allow_stream_result = false);
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement,
-							     vector<Value> &values,
+							     case_insensitive_map_t<BoundParameterData> &named_values,
 							     bool allow_stream_result = false);
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query,
-							     vector<Value> &values,
+							     case_insensitive_map_t<BoundParameterData> &named_values,
 							     bool allow_stream_result = false);
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query, vector<Value> &values, bool allow_stream_result = false);
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement,
+														 vector<Value> &values, bool allow_stream_result = false);
 
 	//! Prepare the specified query, returning a prepared statement object
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(const string &query);

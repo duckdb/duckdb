@@ -61,10 +61,6 @@ void TransactionContext::Commit() {
 void TransactionContext::SetAutoCommit(bool value) {
 	auto_commit = value;
 
-	if (!value) {
-		open_autocommit_transaction = false;
-	}
-
 	if (!auto_commit && !current_transaction) {
 		BeginTransaction();
 	}

@@ -183,12 +183,10 @@ public:
 	//! Runs a function with a valid transaction context, potentially starting a transaction if the context is in auto
 	//! commit mode.
 	DUCKDB_API void RunFunctionInTransaction(const std::function<void(void)> &fun,
-	                                         bool requires_valid_transaction = true,
-	                                         bool dont_commit_on_success = false);
+	                                         bool requires_valid_transaction = true);
 	//! Same as RunFunctionInTransaction, but does not obtain a lock on the client context or check for validation
 	DUCKDB_API void RunFunctionInTransactionInternal(ClientContextLock &lock, const std::function<void(void)> &fun,
-	                                                 bool requires_valid_transaction = true,
-	                                                 bool dont_commit_on_success = false);
+	                                                 bool requires_valid_transaction = true);
 
 	//! Equivalent to CURRENT_SETTING(key) SQL function.
 	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const std::string &key, Value &result) const;
@@ -256,15 +254,10 @@ private:
 	unique_ptr<PendingQueryResult> PendingStatementInternal(ClientContextLock &lock, const string &query,
 	                                                        unique_ptr<SQLStatement> statement,
 	                                                        const PendingQueryParameters &parameters);
-	unique_ptr<PendingQueryResult> PendingQueryWithParametersInternal(ClientContextLock &lock,
-																 unique_ptr<SQLStatement> statement,
-																 case_insensitive_map_t<BoundParameterData> &values,
-																 bool allow_stream_result);
 	unique_ptr<QueryResult> RunStatementInternal(ClientContextLock &lock, const string &query,
 	                                             unique_ptr<SQLStatement> statement, bool allow_stream_result,
 	                                             optional_ptr<case_insensitive_map_t<BoundParameterData>> params, bool verify = true);
-	unique_ptr<PreparedStatement> PrepareInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
-	                                              bool leave_autocommit_open = false);
+	unique_ptr<PreparedStatement> PrepareInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement);
 	void LogQueryInternal(ClientContextLock &lock, const string &query);
 
 	unique_ptr<QueryResult> FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending);
