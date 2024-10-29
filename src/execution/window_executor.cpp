@@ -1793,7 +1793,7 @@ public:
 
 	void Finalize(CollectionPtr collection) {
 		if (child_idx != DConstants::INVALID_INDEX && executor.wexpr.ignore_nulls) {
-			lock_guard<mutex> ingore_nulls_guard(lock);
+			lock_guard<mutex> ignore_nulls_guard(lock);
 			ignore_nulls = &collection->validities[child_idx];
 		}
 	}
