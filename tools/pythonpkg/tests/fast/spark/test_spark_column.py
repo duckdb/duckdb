@@ -4,7 +4,7 @@ _ = pytest.importorskip("duckdb.experimental.spark")
 
 from spark_namespace import USE_ACTUAL_SPARK
 from spark_namespace.sql.column import Column
-from spark_namespace.sql.functions import struct
+from spark_namespace.sql.functions import struct, array
 from spark_namespace.sql.types import Row
 from spark_namespace.errors import PySparkTypeError
 
@@ -35,3 +35,16 @@ class TestSparkColumn(object):
             PySparkTypeError, match=re.escape("[NOT_COLUMN] Argument `col` should be a Column, got str.")
         ):
             df = df.withColumn('struct', 'yes')
+
+    def test_array_column(self, spark):
+        df = spark.createDataFrame([Row(a=1, b=2, c=3, d=4)])
+
+        df2 = df.select(array(df.col0, df.col1).alias("array"),
+                  array(df.col0).alias("array_single"),
+                  array("col1", "col2", "col3").alias("array_str")
+        )
+        res = df2.collect()
+
+        assert res[0].array == [1, 2]
+        assert res[0].array_single == [1]
+        assert res[0].array_str == [2, 3, 4]

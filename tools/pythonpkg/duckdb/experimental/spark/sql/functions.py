@@ -1,5 +1,5 @@
 import warnings
-from typing import Any, Callable, Union, overload, Optional
+from typing import Any, Callable, Union, overload, Optional, List, Tuple
 
 from duckdb import (
     CaseExpression,
@@ -79,6 +79,44 @@ def struct(*cols: Column) -> Column:
     return Column(
         FunctionExpression("struct_pack", *[_inner_expr_or_val(x) for x in cols])
     )
+
+
+def array(
+    *cols: Union["ColumnOrName", Union[List["ColumnOrName"], Tuple["ColumnOrName", ...]]]
+) -> Column:
+    """Creates a new array column.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    cols : :class:`~pyspark.sql.Column` or str
+        column names or :class:`~pyspark.sql.Column`\\s that have
+        the same data type.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        a column of array type.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([("Alice", 2), ("Bob", 5)], ("name", "age"))
+    >>> df.select(array('age', 'age').alias("arr")).collect()
+    [Row(arr=[2, 2]), Row(arr=[5, 5])]
+    >>> df.select(array([df.age, df.age]).alias("arr")).collect()
+    [Row(arr=[2, 2]), Row(arr=[5, 5])]
+    >>> df.select(array('age', 'age').alias("col")).printSchema()
+    root
+     |-- col: array (nullable = false)
+     |    |-- element: long (containsNull = true)
+    """
+    if len(cols) == 1 and isinstance(cols[0], (list, set)):
+        cols = cols[0]
+    return _invoke_function_over_columns("list_value", *cols)
 
 
 def lit(col: Any) -> Column:
