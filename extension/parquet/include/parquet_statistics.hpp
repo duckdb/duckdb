@@ -59,7 +59,7 @@ struct ParquetBloomBlock {
 		uint8_t bit_set[8] = {0};
 	};
 
-	static constexpr uint32_t parquet_bloom_salt[8] = {0x47b6137bU, 0x44974d91U, 0x8824ad5bU, 0xa2b7289dU,
+	static constexpr uint32_t parquet_bloom_salt[] = {0x47b6137bU, 0x44974d91U, 0x8824ad5bU, 0xa2b7289dU,
 	                                                   0x705495c7U, 0x2df1424bU, 0x9efc4947U, 0x5c6bfb31U};
 
 	uint32_t block[8] = {0};
