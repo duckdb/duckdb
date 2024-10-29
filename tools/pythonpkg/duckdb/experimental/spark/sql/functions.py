@@ -2373,3 +2373,40 @@ def bround(col: "ColumnOrName", scale: int = 0) -> Column:
     [Row(r=2.0)]
     """
     return _invoke_function_over_columns("round_even", col, lit(scale))
+
+
+def add_months(start: "ColumnOrName", months: Union["ColumnOrName", int]) -> Column:
+    """
+    Returns the date that is `months` months after `start`. If `months` is a negative value
+    then these amount of months will be deducted from the `start`.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    start : :class:`~pyspark.sql.Column` or str
+        date column to work on.
+    months : :class:`~pyspark.sql.Column` or str or int
+        how many months after the given date to calculate.
+        Accepts negative value as well to calculate backwards.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        a date after/before given number of months.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('2015-04-08', 2)], ['dt', 'add'])
+    >>> df.select(add_months(df.dt, 1).alias('next_month')).collect()
+    [Row(next_month=datetime.date(2015, 5, 8))]
+    >>> df.select(add_months(df.dt, df.add.cast('integer')).alias('next_month')).collect()
+    [Row(next_month=datetime.date(2015, 6, 8))]
+    >>> df.select(add_months('dt', -2).alias('prev_month')).collect()
+    [Row(prev_month=datetime.date(2015, 2, 8))]
+    """
+    months = ConstantExpression(months) if isinstance(months, int) else _to_column_expr(months)
+    return _invoke_function("date_add", _to_column_expr(start), FunctionExpression("to_months", months))
