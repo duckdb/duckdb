@@ -478,7 +478,7 @@ static void SpecializeMinMaxNFunction(AggregateFunction &function) {
 	using OP = MinMaxNOperation;
 
 	function.state_size = AggregateFunction::StateSize<STATE>;
-	function.initialize = AggregateFunction::StateInitialize<STATE, OP>;
+	function.initialize = AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>;
 	function.combine = AggregateFunction::StateCombine<STATE, OP>;
 	function.destructor = AggregateFunction::StateDestroy<STATE, OP>;
 
