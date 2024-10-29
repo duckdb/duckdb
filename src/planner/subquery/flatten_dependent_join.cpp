@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/list.hpp"
@@ -240,7 +241,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			delim_data_offset = aggr.groups.size();
 			for (idx_t i = 0; i < correlated_columns.size(); i++) {
 				auto &col = correlated_columns[i];
-				auto first_aggregate = FirstFun::GetFunction(col.type);
+				auto first_aggregate = FirstFunctionGetter::GetFunction(col.type);
 				auto colref = make_uniq<BoundColumnRefExpression>(
 				    col.name, col.type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 				vector<unique_ptr<Expression>> aggr_children;
@@ -300,7 +301,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				D_ASSERT(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 				auto &bound = aggr.expressions[i]->Cast<BoundAggregateExpression>();
 				vector<LogicalType> arguments;
-				if (bound.function == CountFun::GetFunction() || bound.function == CountStarFun::GetFunction()) {
+				if (bound.function == CountFunctionBase::GetFunction() ||
+				    bound.function == CountStarFun::GetFunction()) {
 					// have to replace this ColumnBinding with the CASE expression
 					replacement_map[ColumnBinding(aggr.aggregate_index, i)] = i;
 				}
