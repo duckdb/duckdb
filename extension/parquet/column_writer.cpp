@@ -1117,7 +1117,7 @@ public:
 		const auto type = writer.GetType(schema_idx);
 
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
-		if (state.dictionary.size() > writer.DictionarySizeLimit()) {
+		if (state.dictionary.size() == 0 || state.dictionary.size() > writer.DictionarySizeLimit()) {
 			// special handling for int column: dpb, otherwise plain
 			state.encoding = (type == Type::type::INT32 || type == Type::type::INT64) ? Encoding::DELTA_BINARY_PACKED
 			                                                                          : Encoding::PLAIN;
