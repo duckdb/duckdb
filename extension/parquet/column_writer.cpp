@@ -1306,8 +1306,7 @@ public:
 		}
 	}
 
-	void FlushDictionary(BasicColumnWriterState &state_p, ColumnWriterStatistics *stats_p) override {
-		auto &stats = stats_p->Cast<NumericStatisticsState<SRC, TGT, OP>>();
+	void FlushDictionary(BasicColumnWriterState &state_p, ColumnWriterStatistics *stats) override {
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
 
 		D_ASSERT(state.encoding == Encoding::RLE_DICTIONARY);
@@ -1327,7 +1326,7 @@ public:
 		for (idx_t r = 0; r < values.size(); r++) {
 			const TGT target_value = OP::template Operation<SRC, TGT>(values[r]);
 			// update the statistics
-			OP::template HandleStats<SRC, TGT>(&stats, target_value);
+			OP::template HandleStats<SRC, TGT>(stats, target_value);
 			// update the bloom filter
 			auto hash = OP::template XXHash64<SRC, TGT>(target_value);
 			state.bloom_filter->FilterInsert(hash);
