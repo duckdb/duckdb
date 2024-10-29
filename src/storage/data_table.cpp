@@ -152,8 +152,6 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 
 	if (constraint.type != ConstraintType::UNIQUE) {
 		VerifyNewConstraint(local_storage, parent, constraint);
-	} else {
-		AddIndex(constraint);
 	}
 	local_storage.MoveStorage(parent, *this);
 	parent.is_root = false;
@@ -655,49 +653,6 @@ void DataTable::VerifyNewConstraint(LocalStorage &local_storage, DataTable &pare
 
 	parent.row_groups->VerifyNewConstraint(parent, constraint);
 	local_storage.VerifyNewConstraint(parent, constraint);
-}
-
-void DataTable::AddIndex(BoundConstraint &constraint) {
-	auto &unique = constraint.Cast<BoundUniqueConstraint>();
-	if (!unique.info.IsValid()) {
-		return;
-	}
-
-	// WAL replay.
-	D_ASSERT(!unique.info.name.empty());
-	auto constraint_type = unique.is_primary_key ? IndexConstraintType::PRIMARY : IndexConstraintType::UNIQUE;
-
-	vector<ColumnDefinition> col_def_copies;
-	for (const auto &col_def : column_definitions) {
-		col_def_copies.push_back(col_def.Copy());
-	}
-	ColumnList column_list(std::move(col_def_copies));
-
-	vector<LogicalIndex> column_indexes;
-	for (const auto &physical_index : unique.keys) {
-		auto &col = column_list.GetColumn(physical_index);
-		column_indexes.push_back(col.Logical());
-	}
-
-	// Fetch the column types and create bound column reference expressions.
-	vector<column_t> physical_ids;
-	vector<unique_ptr<Expression>> global_expressions;
-	vector<unique_ptr<Expression>> local_expressions;
-
-	for (const auto &logical_index : column_indexes) {
-		auto binding = ColumnBinding(0, physical_ids.size());
-		auto &col = column_list.GetColumn(logical_index);
-		auto ref = make_uniq<BoundColumnRefExpression>(col.Name(), col.Type(), binding);
-		global_expressions.push_back(ref->Copy());
-		local_expressions.push_back(ref->Copy());
-		physical_ids.push_back(col.Physical().index);
-	}
-
-	// Create the global index.
-	auto &io_manager = TableIOManager::Get(*this);
-	auto global_art = make_uniq<ART>(unique.info.name, constraint_type, physical_ids, io_manager,
-	                                 std::move(global_expressions), db, nullptr, unique.info);
-	AddIndex(std::move(global_art));
 }
 
 bool HasUniqueIndexes(TableIndexList &list) {

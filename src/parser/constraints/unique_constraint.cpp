@@ -8,10 +8,10 @@ namespace duckdb {
 UniqueConstraint::UniqueConstraint() : Constraint(ConstraintType::UNIQUE), index(DConstants::INVALID_INDEX) {
 }
 
-UniqueConstraint::UniqueConstraint(LogicalIndex index, bool is_primary_key)
+UniqueConstraint::UniqueConstraint(const LogicalIndex index, const bool is_primary_key)
     : Constraint(ConstraintType::UNIQUE), index(index), is_primary_key(is_primary_key) {
 }
-UniqueConstraint::UniqueConstraint(vector<string> columns, bool is_primary_key)
+UniqueConstraint::UniqueConstraint(vector<string> columns, const bool is_primary_key)
     : Constraint(ConstraintType::UNIQUE), index(DConstants::INVALID_INDEX), columns(std::move(columns)),
       is_primary_key(is_primary_key) {
 }

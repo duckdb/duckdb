@@ -237,9 +237,6 @@ public:
 	void AddIndex(unique_ptr<Index> index);
 
 private:
-	//! AddIndex adds an index to the table.
-	void AddIndex(BoundConstraint &constraint);
-
 	//! Verify the new added constraints against current persistent&local data
 	void VerifyNewConstraint(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint);
 

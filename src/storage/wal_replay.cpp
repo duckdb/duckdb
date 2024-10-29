@@ -432,13 +432,49 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 		return ReplayWithoutIndex(context, catalog, alter_info, DeserializeOnly());
 	}
 
-	constraint_info.constraint->info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
-	auto &index_info = constraint_info.constraint->info;
-
-	ReplayIndexData(db, deserializer, index_info, DeserializeOnly());
+	auto index_storage_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
+	ReplayIndexData(db, deserializer, index_storage_info, DeserializeOnly());
 	if (DeserializeOnly()) {
 		return;
 	}
+
+	// FIXME: Unify this code with ReplayCreateIndex.
+
+	auto &table =
+	    catalog.GetEntry<TableCatalogEntry>(context, table_info.schema, table_info.name).Cast<DuckTableEntry>();
+	auto &column_list = table.GetColumns();
+
+	// Add the table to the bind context to bind the parsed expressions.
+	auto binder = Binder::CreateBinder(context);
+	vector<LogicalType> column_types;
+	vector<string> column_names;
+	for (auto &col : column_list.Logical()) {
+		column_types.push_back(col.Type());
+		column_names.push_back(col.Name());
+	}
+
+	// Create a binder to bind the parsed expressions.
+	vector<column_t> column_ids;
+	binder->bind_context.AddBaseTable(0, string(), column_names, column_types, column_ids, table);
+	IndexBinder idx_binder(*binder, context);
+
+	// Bind the parsed expressions to create unbound expressions.
+	vector<unique_ptr<Expression>> unbound_expressions;
+	auto logical_indexes = unique_info.GetLogicalIndexes(column_list);
+	for (const auto &logical_index : logical_indexes) {
+		auto &col = column_list.GetColumn(logical_index);
+		unique_ptr<ParsedExpression> parsed = make_uniq<ColumnRefExpression>(col.GetName(), table_info.name);
+		unbound_expressions.push_back(idx_binder.Bind(parsed));
+	}
+
+	auto &storage = table.GetStorage();
+	CreateIndexInput input(TableIOManager::Get(storage), storage.db, IndexConstraintType::PRIMARY,
+	                       index_storage_info.name, column_ids, unbound_expressions, index_storage_info,
+	                       index_storage_info.options);
+
+	auto index_type = context.db->config.GetIndexTypes().FindByName(ART::TYPE_NAME);
+	auto index_instance = index_type->create_instance(input);
+	storage.AddIndex(std::move(index_instance));
 	catalog.Alter(context, alter_info);
 }
 

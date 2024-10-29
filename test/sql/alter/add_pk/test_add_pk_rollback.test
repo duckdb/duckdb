@@ -2,10 +2,8 @@
 # description: Test invalidating the constraint with uncommitted changes.
 # group: [add_pk]
 
-# TODO: works without enable_verification.
-
-#statement ok
-#PRAGMA enable_verification;
+statement ok
+PRAGMA enable_verification;
 
 statement ok
 CREATE TABLE test (i INTEGER, j INTEGER);

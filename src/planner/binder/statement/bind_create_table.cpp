@@ -123,41 +123,38 @@ unique_ptr<BoundConstraint> BindUniqueConstraint(Constraint &constraint, const s
 	auto &unique = constraint.Cast<UniqueConstraint>();
 
 	// Resolve the columns.
-	vector<PhysicalIndex> keys;
-	physical_index_set_t key_set;
+	vector<PhysicalIndex> indexes;
+	physical_index_set_t index_set;
 
 	// HasIndex refers to a column index, not an index(-structure).
 	// If set, then the UNIQUE constraint is defined on a single column.
 	if (unique.HasIndex()) {
-		D_ASSERT(unique.GetIndex().index < columns.LogicalColumnCount());
 		auto &col = columns.GetColumn(unique.GetIndex());
 		unique.SetColumnName(col.Name());
-		keys.push_back(col.Physical());
-		key_set.insert(col.Physical());
-		return make_uniq<BoundUniqueConstraint>(std::move(keys), std::move(key_set), unique.IsPrimaryKey(),
-		                                        constraint.info);
+		indexes.push_back(col.Physical());
+		index_set.insert(col.Physical());
+		return make_uniq<BoundUniqueConstraint>(std::move(indexes), std::move(index_set), unique.IsPrimaryKey());
 	}
 
 	// The UNIQUE constraint is defined on a list of columns.
-	for (auto &keyname : unique.GetColumnNames()) {
-		if (!columns.ColumnExists(keyname)) {
-			throw CatalogException("table \"%s\" does not have a column named \"%s\"", table, keyname);
+	for (auto &col_name : unique.GetColumnNames()) {
+		if (!columns.ColumnExists(col_name)) {
+			throw CatalogException("table \"%s\" does not have a column named \"%s\"", table, col_name);
 		}
-		auto &col = columns.GetColumn(keyname);
+		auto &col = columns.GetColumn(col_name);
 		if (col.Generated()) {
 			throw BinderException("cannot create a PRIMARY KEY on a generated column: %s", col.GetName());
 		}
 
-		auto column_index = col.Physical();
-		if (key_set.find(column_index) != key_set.end()) {
-			throw ParserException("column \"%s\" appears twice in primary key constraint", keyname);
+		auto physical_index = col.Physical();
+		if (index_set.find(physical_index) != index_set.end()) {
+			throw ParserException("column \"%s\" appears twice in primary key constraint", col_name);
 		}
-		keys.push_back(column_index);
-		key_set.insert(column_index);
+		indexes.push_back(physical_index);
+		index_set.insert(physical_index);
 	}
 
-	return make_uniq<BoundUniqueConstraint>(std::move(keys), std::move(key_set), unique.IsPrimaryKey(),
-	                                        constraint.info);
+	return make_uniq<BoundUniqueConstraint>(std::move(indexes), std::move(index_set), unique.IsPrimaryKey());
 }
 
 unique_ptr<BoundConstraint> BindForeignKey(Constraint &constraint) {

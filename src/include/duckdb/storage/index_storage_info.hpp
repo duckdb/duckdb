@@ -69,19 +69,6 @@ public:
 		return root_block_ptr.IsValid() || !allocator_infos.empty();
 	}
 
-	//! Returns the name of an index.
-	static string GetName(IndexConstraintType type, const string &table, const ColumnList &columns,
-	                      const vector<LogicalIndex> &indexes) {
-
-		auto type_name = EnumUtil::ToString(type);
-		string column_names;
-		for (const auto &idx : indexes) {
-			auto &col = columns.GetColumn(idx);
-			column_names += "_" + col.Name();
-		}
-		return type_name + "_" + table + column_names;
-	}
-
 	void Serialize(Serializer &serializer) const;
 	static IndexStorageInfo Deserialize(Deserializer &deserializer);
 };

@@ -1,15 +1,19 @@
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include "duckdb/parser/statement/alter_statement.hpp"
 #include "duckdb/parser/statement/transaction_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/constraints/bound_unique_constraint.hpp"
+#include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 
 namespace duckdb {
 
@@ -51,23 +55,19 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 	// Create the CreateIndexInfo.
 	auto create_index_info = make_uniq<CreateIndexInfo>();
 	create_index_info->table = table_info.name;
-	create_index_info->index_type = "ART";
+	create_index_info->index_type = ART::TYPE_NAME;
 	create_index_info->constraint_type = IndexConstraintType::PRIMARY;
 
-	vector<LogicalIndex> column_indexes;
 	for (const auto &physical_index : bound_unique.keys) {
 		auto &col = column_list.GetColumn(physical_index);
-		column_indexes.push_back(col.Logical());
-
 		unique_ptr<ParsedExpression> parsed = make_uniq<ColumnRefExpression>(col.GetName(), table_info.name);
 		create_index_info->expressions.push_back(parsed->Copy());
 		create_index_info->parsed_expressions.push_back(parsed->Copy());
 	}
 
-	auto constraint_type = IndexConstraintType::PRIMARY;
-	auto index_name = IndexStorageInfo::GetName(constraint_type, table_info.name, column_list, column_indexes);
+	auto unique_constraint = constraint_info.constraint->Cast<UniqueConstraint>();
+	auto index_name = unique_constraint.GetName(table_info.name, column_list);
 	create_index_info->index_name = index_name;
-	constraint_info.constraint->info.name = index_name;
 	D_ASSERT(!create_index_info->index_name.empty());
 
 	// Plan the table scan.
