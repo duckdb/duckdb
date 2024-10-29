@@ -76,7 +76,7 @@ public:
 	void SetMemoryLimit(idx_t limit = (idx_t)-1) final;
 	void SetSwapLimit(optional_idx limit = optional_idx()) final;
 
-	//! Returns informaton about memory usage
+	//! Returns information about memory usage
 	vector<MemoryInformation> GetMemoryUsageInfo() const override;
 
 	//! Returns a list of all temporary files

@@ -145,7 +145,7 @@ string PragmaImportDatabase(ClientContext &context, const FunctionParameters &pa
 	auto &fs = FileSystem::GetFileSystem(context);
 
 	string final_query;
-	// read the "shema.sql" and "load.sql" files
+	// read the "schema.sql" and "load.sql" files
 	vector<string> files = {"schema.sql", "load.sql"};
 	for (auto &file : files) {
 		auto file_path = fs.JoinPath(parameters.values[0].ToString(), file);
