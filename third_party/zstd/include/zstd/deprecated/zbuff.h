@@ -22,7 +22,7 @@
 /* *************************************
 *  Dependencies
 ***************************************/
-// DuckDB: just enable everything for amalgamation
+// DuckDB: just enable everything
 #define ZSTD_STATIC_LINKING_ONLY
 
 #include <stddef.h>      /* size_t */

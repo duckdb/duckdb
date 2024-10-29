@@ -21,9 +21,6 @@
 *  Dependencies
 ******************************************/
 
-// DuckDB: just enable everything for amalgamation
-#define FSE_STATIC_LINKING_ONLY
-
 #include "zstd/common/zstd_deps.h"    /* size_t, ptrdiff_t */
 
 namespace duckdb_zstd {

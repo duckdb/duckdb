@@ -36,6 +36,7 @@
 #define ZSTD_DEPS_NEED_IO
 #define ZSTD_DEPS_NEED_STDINT
 #define ZSTD_MULTITHREAD
+#define FSE_STATIC_LINKING_ONLY
 #endif
 
 #if defined(__GNUC__) && __GNUC__ >= 4
