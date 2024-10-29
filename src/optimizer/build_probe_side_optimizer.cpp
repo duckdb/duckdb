@@ -16,7 +16,14 @@ static void GetRowidBindings(LogicalOperator &op, vector<ColumnBinding> &binding
 		auto &get = op.Cast<LogicalGet>();
 		auto get_bindings = get.GetColumnBindings();
 		auto &column_ids = get.GetColumnIds();
-		if (std::find(column_ids.begin(), column_ids.end(), DConstants::INVALID_INDEX) != column_ids.end()) {
+		bool has_row_id = false;
+		for(auto &col_id : column_ids) {
+			if (col_id.IsRowIdColumn()) {
+				has_row_id = true;
+				break;
+			}
+		}
+		if (has_row_id) {
 			for (auto &binding : get_bindings) {
 				bindings.push_back(binding);
 			}

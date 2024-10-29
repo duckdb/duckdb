@@ -251,6 +251,15 @@ unique_ptr<UpdateSetInfo> CreateSetInfoForReplace(TableCatalogEntry &table, Inse
 	return set_info;
 }
 
+vector<column_t> GetColumnsToFetch(const TableBinding &binding) {
+	auto &bound_columns = binding.GetBoundColumnIds();
+	vector<column_t> result;
+	for(auto &col : bound_columns) {
+		result.push_back(col.GetPrimaryIndex());
+	}
+	return result;
+}
+
 void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &table, InsertStatement &stmt) {
 	if (!stmt.on_conflict_info) {
 		insert.action_type = OnConflictAction::THROW;
@@ -422,7 +431,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 		// of the original table, to execute the expressions
 		D_ASSERT(original_binding->binding_type == BindingType::TABLE);
 		auto &table_binding = original_binding->Cast<TableBinding>();
-		insert.columns_to_fetch = table_binding.GetBoundColumnIds();
+		insert.columns_to_fetch = GetColumnsToFetch(table_binding);
 		return;
 	}
 
@@ -448,7 +457,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 	// of the original table, to execute the expressions
 	D_ASSERT(original_binding->binding_type == BindingType::TABLE);
 	auto &table_binding = original_binding->Cast<TableBinding>();
-	insert.columns_to_fetch = table_binding.GetBoundColumnIds();
+	insert.columns_to_fetch = GetColumnsToFetch(table_binding);
 
 	// Replace the column bindings to refer to the child operator
 	for (auto &expr : insert.expressions) {

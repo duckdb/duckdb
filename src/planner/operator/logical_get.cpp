@@ -67,23 +67,23 @@ InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
 	return result;
 }
 
-void LogicalGet::SetColumnIds(vector<column_t> &&column_ids) {
+void LogicalGet::SetColumnIds(vector<ColumnIndex> &&column_ids) {
 	this->column_ids = std::move(column_ids);
 }
 
 void LogicalGet::AddColumnId(column_t column_id) {
-	column_ids.push_back(column_id);
+	column_ids.emplace_back(column_id);
 }
 
 void LogicalGet::ClearColumnIds() {
 	column_ids.clear();
 }
 
-const vector<column_t> &LogicalGet::GetColumnIds() const {
+const vector<ColumnIndex> &LogicalGet::GetColumnIds() const {
 	return column_ids;
 }
 
-vector<column_t> &LogicalGet::GetMutableColumnIds() {
+vector<ColumnIndex> &LogicalGet::GetMutableColumnIds() {
 	return column_ids;
 }
 
@@ -116,24 +116,24 @@ vector<ColumnBinding> LogicalGet::GetColumnBindings() {
 
 void LogicalGet::ResolveTypes() {
 	if (column_ids.empty()) {
-		column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+		column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
 	}
 	types.clear();
 	if (projection_ids.empty()) {
 		for (auto &index : column_ids) {
-			if (index == COLUMN_IDENTIFIER_ROW_ID) {
+			if (index.IsRowIdColumn()) {
 				types.emplace_back(LogicalType::ROW_TYPE);
 			} else {
-				types.push_back(returned_types[index]);
+				types.push_back(returned_types[index.GetPrimaryIndex()]);
 			}
 		}
 	} else {
 		for (auto &proj_index : projection_ids) {
 			auto &index = column_ids[proj_index];
-			if (index == COLUMN_IDENTIFIER_ROW_ID) {
+			if (index .IsRowIdColumn()) {
 				types.emplace_back(LogicalType::ROW_TYPE);
 			} else {
-				types.push_back(returned_types[index]);
+				types.push_back(returned_types[index.GetPrimaryIndex()]);
 			}
 		}
 	}
@@ -218,16 +218,17 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 		bind_data = function.bind(deserializer.Get<ClientContext &>(), input, bind_return_types, bind_names);
 
 		for (auto &col_id : result->column_ids) {
-			if (IsRowIdColumnId(col_id)) {
+			if (col_id.IsRowIdColumn()) {
 				// rowid
 				continue;
 			}
-			auto &ret_type = result->returned_types[col_id];
-			auto &col_name = result->names[col_id];
-			if (bind_return_types[col_id] != ret_type) {
+			auto idx = col_id.GetPrimaryIndex();
+			auto &ret_type = result->returned_types[idx];
+			auto &col_name = result->names[idx];
+			if (bind_return_types[idx] != ret_type) {
 				throw SerializationException("Table function deserialization failure in function \"%s\" - column with "
 				                             "name %s was serialized with type %s, but now has type %s",
-				                             function.name, col_name, ret_type, bind_return_types[col_id]);
+				                             function.name, col_name, ret_type, bind_return_types[idx]);
 			}
 		}
 		result->returned_types = std::move(bind_return_types);

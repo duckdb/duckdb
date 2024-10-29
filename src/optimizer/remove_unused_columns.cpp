@@ -226,7 +226,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			for (auto &filter : get.table_filters.filters) {
 				optional_idx index;
 				for (idx_t i = 0; i < final_column_ids.size(); i++) {
-					if (final_column_ids[i] == filter.first) {
+					if (final_column_ids[i].GetPrimaryIndex() == filter.first) {
 						index = i;
 						break;
 					}
@@ -244,10 +244,10 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			ClearUnusedExpressions(col_sel, get.table_index);
 
 			// Now set the column ids in the LogicalGet using the "selection vector"
-			vector<column_t> column_ids;
+			vector<ColumnIndex> column_ids;
 			column_ids.reserve(col_sel.size());
 			for (auto col_sel_idx : col_sel) {
-				column_ids.push_back(final_column_ids[col_sel_idx]);
+				column_ids.emplace_back(final_column_ids[col_sel_idx]);
 			}
 			get.SetColumnIds(std::move(column_ids));
 
