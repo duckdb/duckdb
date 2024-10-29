@@ -33,7 +33,6 @@
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
-#include "duckdb/parser/parsed_data/exported_table_data.hpp"
 
 namespace duckdb {
 
