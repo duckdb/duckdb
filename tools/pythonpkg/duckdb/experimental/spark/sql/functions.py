@@ -1,3 +1,4 @@
+import warnings
 from typing import Any, Callable, Union, overload, Optional
 
 from duckdb import (
@@ -559,6 +560,18 @@ def approx_count_distinct(col: "ColumnOrName", rsd: Optional[float] = None) -> C
     return _invoke_function_over_columns("approx_count_distinct", col)
 
 
+def approxCountDistinct(col: "ColumnOrName", rsd: Optional[float] = None) -> Column:
+    """
+    .. versionadded:: 1.3.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    .. deprecated:: 2.1.0
+        Use :func:`approx_count_distinct` instead.
+    """
+    warnings.warn("Deprecated in 2.1, use approx_count_distinct instead.", FutureWarning)
+    return approx_count_distinct(col, rsd)
 
 
 @overload
